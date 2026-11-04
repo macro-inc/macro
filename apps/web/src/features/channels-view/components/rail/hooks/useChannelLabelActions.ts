@@ -231,16 +231,29 @@ export function useChannelLabelActions(options: ChannelLabelActionsOptions) {
     }
 
     const scope = scopeForLabel(label);
-    const save = ({ name, rule }: { name: string; rule?: ChannelLabelRule }) =>
+    const save = ({
+      name,
+      rule,
+      scope: nextScope = scope,
+    }: {
+      name: string;
+      rule?: ChannelLabelRule;
+      scope?: ChannelLabelScopeSelection;
+    }) =>
       Telemetry.span('channels.section.update', async (span) => {
         span.setAttr('section.id', label.id);
         span.setAttr('section.scope', scope);
         span.setAttr('section.smart', Boolean(rule));
+        span.setAttr('section.target_scope', nextScope);
+
+        const current = labels().find((item) => item.id === label.id);
 
         if (
           actorId !== userId() ||
           sectionMode !== sectionsEnabled() ||
           !channelTagsEnabled() ||
+          !current ||
+          scopeForLabel(current) !== scope ||
           !labelsAvailable()
         ) {
           throw new Error(t('channelSections.unavailable'));
@@ -250,6 +263,7 @@ export function useChannelLabelActions(options: ChannelLabelActionsOptions) {
           labelId: label.id,
           name,
           rule,
+          targetScope: nextScope === scope ? undefined : nextScope,
           actorId,
         });
 
@@ -265,7 +279,7 @@ export function useChannelLabelActions(options: ChannelLabelActionsOptions) {
         {
           scope,
           canShare: sharedLabels(),
-          initial: { name: label.name, rule: label.rule ?? undefined },
+          initial: label,
           onConfirm: save,
         },
         { owner: labelDialogOwner() }

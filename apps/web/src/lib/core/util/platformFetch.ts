@@ -5,7 +5,46 @@ import { isTauri } from './platform';
 const nativeServices = NATIVE_SESSION_SERVICE_URLS.map((url) => new URL(url));
 let originalFetch: typeof fetch | undefined;
 
-/** Called by the entry point before installing the desktop global override. */
+// Third-party APIs that allow any origin and require requests from the user's
+// browser. The native HTTP client's scope doesn't list them and rejects them.
+const WEBVIEW_FETCH_HOSTS = new Set(['api.klipy.com']);
+
+/**
+ * Called once by the entry point: routes Tauri's global fetch through the
+ * native transport. Localhost requests (dev server) skip it to keep HMR working.
+ */
+export function installPlatformFetch() {
+  if (!isTauri()) return;
+
+  const browserFetch = window.fetch;
+  // The global override must call the transport, never `platformFetch`: that
+  // reads the global back and would recurse until the stack overflows.
+  const nativeFetch = initializePlatformFetch(browserFetch);
+  window.fetch = new Proxy(browserFetch, {
+    apply: (target, thisArg, args: Parameters<typeof fetch>) => {
+      const url = args[0];
+      // Resolve bundled asset paths before checking the existing localhost bypass.
+      let resolvedUrl: URL;
+      try {
+        resolvedUrl = new URL(
+          url instanceof Request ? url.url : String(url),
+          document.baseURI
+        );
+      } catch (error) {
+        return Promise.reject(error);
+      }
+      if (
+        resolvedUrl.href.includes('localhost') ||
+        WEBVIEW_FETCH_HOSTS.has(resolvedUrl.hostname)
+      ) {
+        return target.apply(thisArg, args);
+      }
+      return nativeFetch.apply(thisArg, args);
+    },
+  });
+}
+
+/** Exported for tests; production calls it through `installPlatformFetch`. */
 export function initializePlatformFetch(
   webviewFetch: typeof fetch
 ): typeof fetch {

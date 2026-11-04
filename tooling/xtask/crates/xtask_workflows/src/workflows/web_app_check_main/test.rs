@@ -18,8 +18,11 @@ fn android_native_check_is_an_unconditional_required_merge_check() {
         "the base is the merge commit's first parent, not the event payload: {android}"
     );
     assert!(android.contains("bun scripts/android-version-check.mjs"));
-    assert!(android.contains("bun scripts/android-play-status.mjs --version-code"));
-    assert!(android.contains("id-token: write"));
+    // The gate runs the PR's code, so it reads the watcher's commit status
+    // instead of signing in to Google Play.
+    assert!(android.contains("pr_commit_statuses android-play/live"));
+    assert!(android.contains("statuses: read"));
+    assert!(!android.contains("id-token"));
     // skip-android-update bypasses the bump too, like skip-ios-update: the
     // labels are read first, and the version check only runs without it.
     let labels = android.find("id: labels").expect("labels step");
@@ -205,6 +208,8 @@ fn generated_code_checks_every_rust_generated_artifact_in_one_job() {
         "git status --porcelain -- apps/docs",
         "just gen-agent-fold-types",
         "just gen-database-sql-types",
+        "just gen-dynamic-ui-types",
+        "just gen-agent-review-types",
     ];
     let positions: Vec<usize> = order
         .iter()

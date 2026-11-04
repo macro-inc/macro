@@ -473,14 +473,21 @@ the engine directly from its multi-threaded runtime, and unbounded on wasm.
 
 ### 4.5 urql exchange semantics
 
-- On operation: RPC `readQuery` → full hit: emit (stale-flagged if
-  `cache-and-network`, then forward to network); partial/miss: forward.
-- On network result: RPC `writeQuery`; normalization captures every record the
+- On operation: read the cache and emit a full hit; partial/miss: forward.
+  `cache-and-network` starts the cache read and network request concurrently,
+  emitting a still-current cache hit as stale while the request is pending.
+- On network result: publish foreground data before the ordered RPC `writeQuery`;
+  normalization captures every record the
   response traverses and installs the active operation's dependencies in the
   same write. Complete responses register exact keys; uncertain responses are
   conservatively affected by every visible change until a later exact read or
-  write. No post-write denormalizing read is performed. The engine returns the
-  changed record keys and the exchange re-executes affected active operations.
+  write. Persistence acknowledges a revision without replaying the response.
+- Initial and affected cache reads share a version guard: a newer published
+  result, cache read, teardown, or generation change supersedes an older read.
+  A late affected read must not restore old message membership after a fresh
+  thread response. Hosts with watched queries reconcile pending local edits
+  against the new server snapshot after persistence, including hosts whose watch
+  endpoint falls back to a full read.
 - Hydration-only operations skip cache reads and active-operation registration.
   Client-only `@cacheOnly` fields are fetched and normalized but omitted from
   the result returned across the worker/Tauri boundary. The directive is
@@ -488,7 +495,7 @@ the engine directly from its multi-threaded runtime, and unbounded on wasm.
   from the validated response during the write, avoiding a denormalizing read.
 - On teardown: unregister operation (unpins dependencies).
 - Cross-context: engine broadcasts changed-keys; every context's exchange
-  re-executes its own affected active operations.
+  rereads its own affected active operations, preserving mounted live queries.
 
 ### 4.6 Coexistence with normy / tanstack
 
@@ -584,7 +591,7 @@ apps/web/src/lib/graphql-cache/ # JS glue
   Locks / BroadcastChannel machinery. DB at
   `{app_data_dir}/graphql-cache/cache.turso`.
   JS side: `createTauriCacheHost` (`host/tauri-host.ts`) — invoke-based
-  RPC with the same 10s timeout + Error-normalized rejections, event
+  RPC with the same read-only 10s timeout + Error-normalized rejections, event
   subscription filtered by clientId prefix; `isTauri()` selects it in
   `graphql-soup.ts`.
 
@@ -1189,12 +1196,12 @@ unrelated queued hydration just like other authoritative writes.
 
 `graphql.subscription.cache_queue` times preceding effects from the same
 subscription operation. `graphql.subscription.cache_apply` starts afterward
-and includes host readiness, IPC, engine admission and persistence. Native IPC
-has a 10-second request deadline, so a 10-second apply duration alone does not
-prove successful engine work. Apply/write/delete spans carry `cache.failure`
-from the bounded cache error classifier; use it with `cache.effects_applied`
-to distinguish timeouts from successful slow applies. Native engine admission
-has a `graphql_cache.native.lock` phase, emitted once by `EngineAccess`
+and includes host readiness, IPC, engine admission and persistence. Native
+writes and deletes have no IPC deadline (see Native IPC transport), so a long
+apply is a slow engine queue, not a timeout. Apply/write/delete spans carry
+`cache.failure` from the bounded cache error classifier; use it with
+`cache.effects_applied` to separate engine failures from slow applies. Native
+engine admission has a `graphql_cache.native.lock` phase, emitted once by `EngineAccess`
 for each foreground or hydrate acquisition. Its `graphql_cache.lock.wait_ms`
 includes waiting until admission or supersession, not time holding the lock. Native scheduling changes require a
 rebuilt native binary; older installed binaries retain their scheduling.
@@ -1210,6 +1217,23 @@ cache changes (including resets), hydration or mutation settlements, the host
 flushes earlier invalidations so other observers cannot overtake them. Disposal
 drops pending callbacks.
 
+Tauri cannot cancel a command, and the engine runs commands one at a time, so a
+caller that stops waiting only loses the outcome of work that still happens.
+As in worker-host, only reads and initialization have the ten-second deadline:
+a read falls back to the network, and every request waits behind init. Writes,
+hydration, queue claims and settlements, deletes, invalidations, teardown and
+clear wait for the engine's answer. A timeout would report a failure for a
+commit that still lands, and callers act on it: the mutation queue runner holds
+later edits for its five-minute lease after an unconfirmed commit, and a failed
+logout clear rotates the cache scope, which the running native engine refuses
+with `graphql cache scope mismatch`.
+
+The deadline counts only time the page runs on time. When the page itself
+stalls (an occluded or napping macOS window, a long task), the overdue timer
+would otherwise run before an answer the engine already sent and fail every
+request in flight at once, so a timer that fires more than a second late starts
+a new window.
+
 Native live views advertise a specification-bound registration token. The host
 retains at most 32 descriptors and resumes an unchanged specification from its
 id, token and revision; a missing registration triggers a full request. Changed
@@ -1218,7 +1242,8 @@ installed binaries omit the token and keep receiving full requests. Empty record
 selections fetch only the current revision, with no unused fragment.
 
 `graphql_cache.ipc.request` is a `perf`-class span (`sampling: 'perf'`) that
-records command and outcome. The webview does not re-encode read
+records command and outcome, plus `graphql_cache.ipc.page_stall_ms` when a page
+stall extended its deadline. The webview does not re-encode read
 arguments to count bytes or create spans for notification callbacks.
 `graphql_cache.ipc.notification` in the native emitter measures serialization and
 emission, recording the single serialized payload's byte count. Native read, watch,

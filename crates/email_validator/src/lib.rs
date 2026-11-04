@@ -113,3 +113,14 @@ mod tests {
         }
     }
 }
+
+/// An address that passes [`is_valid_email`]; decoding rejects any other string.
+#[nutype::nutype(
+    validate(predicate = |address| is_valid_email(address)),
+    derive(Debug, Clone, PartialEq, Eq, Hash, AsRef, Display, Serialize, Deserialize),
+    derive_unchecked(schemars::JsonSchema, specta::Type)
+)]
+pub struct EmailAddress(String);
+
+#[cfg(test)]
+mod test;

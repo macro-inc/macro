@@ -466,6 +466,15 @@ pub trait AgentSessionRepo: Send + Sync + 'static {
         prompter: &TurnPrompter,
     ) -> impl Future<Output = Result<()>> + Send;
 
+    /// Record that `user` prompted the session `id` directly, from the
+    /// session itself, so a hidden session lists for them. Idempotent; grants
+    /// nothing.
+    fn add_follower(
+        &self,
+        id: AgentSessionId,
+        user: &MacroUserIdStr<'static>,
+    ) -> impl Future<Output = Result<()>> + Send;
+
     /// Who prompted the turn `id` is running or last ran; `None` before its
     /// first dispatch.
     fn turn_prompter(

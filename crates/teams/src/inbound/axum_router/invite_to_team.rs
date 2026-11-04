@@ -28,6 +28,10 @@ pub struct InviteToTeamRequest {
     /// and the request answers 409.
     #[serde(default)]
     pub team_id: Option<uuid::Uuid>,
+    /// Invite these addresses as agents: an address with no account signs up
+    /// as an agent and joins the team when it first signs in.
+    #[serde(default)]
+    pub is_agent: bool,
 }
 
 /// Error type for the invite to team handler
@@ -114,7 +118,7 @@ pub async fn handler<T: TeamService, Eas: EntityAccessService, Auth: MacroAuthor
 
     let team_invites = state
         .service
-        .invite_users_to_team(access.entity_access_receipt, invites)
+        .invite_users_to_team(access.entity_access_receipt, invites, req.is_agent)
         .await
         .map_err(InviteToTeamError::InviteUsersToTeamError)?;
 

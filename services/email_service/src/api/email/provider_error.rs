@@ -29,8 +29,8 @@ pub(crate) fn provider_error_status(error: &EmailApiError) -> StatusCode {
         EmailApiError::NotFound => StatusCode::NOT_FOUND,
         EmailApiError::Conflict | EmailApiError::OutdatedCursor => StatusCode::CONFLICT,
         EmailApiError::SendRejected { .. } => StatusCode::BAD_REQUEST,
-        EmailApiError::Transient { .. } | EmailApiError::Permanent { .. } => {
-            StatusCode::INTERNAL_SERVER_ERROR
-        }
+        EmailApiError::Transient { .. }
+        | EmailApiError::CredentialsUnavailable { .. }
+        | EmailApiError::Permanent { .. } => StatusCode::INTERNAL_SERVER_ERROR,
     }
 }

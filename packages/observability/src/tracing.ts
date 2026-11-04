@@ -2,6 +2,7 @@ import {
   type Context,
   context,
   type Span as OtelSpan,
+  propagation,
   ROOT_CONTEXT,
   SpanKind,
   trace,
@@ -52,6 +53,11 @@ export class Tracing {
 
   captureContext(): TraceContext {
     const parent = context.active();
+    return { run: (operation) => context.with(parent, operation) };
+  }
+
+  remoteContext(traceparent: string): TraceContext {
+    const parent = propagation.extract(ROOT_CONTEXT, { traceparent });
     return { run: (operation) => context.with(parent, operation) };
   }
 

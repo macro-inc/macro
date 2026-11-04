@@ -9,6 +9,9 @@ tools/HTTP/GraphQL surfaces over them.
 ## Start here
 
 - `src/domain/service.rs`, `src/domain/pipelines.rs`: core use cases.
+- `src/domain/pipelines/requirements.rs`: stage-entry rules keyed by column and
+  option IDs. `apply_ops` validates every pipeline write under the pipeline write
+  guard; agent/CSV workflows use the same service. Deletions cascade rules.
 - `src/domain/pipeline_workflows/`: pipeline entry/field/record ops built on
   the shared `databases` engine (Sales pipelines are a `databases` consumer).
 - `src/domain/crm_csv.rs`, `src/domain/crm_transfer.rs`: CSV import/export for
@@ -31,7 +34,7 @@ tools/HTTP/GraphQL surfaces over them.
 
 - Cargo features gate what's pulled in: `lookup` and `search` are read-only,
   sqlx-only slices for other domains to depend on without pulling in
-  `reqwest`/`axum`; pick the narrowest feature for a new caller.
+  `unfurl`/`axum`; pick the narrowest feature for a new caller.
 - Depends on: `entity_access` (ports-and-adapters base), `databases` (ports),
   `filter_ast`, `item_filters`, `macro_authorization`, `properties`.
 - Used by: `email`, `memory`, `ai_tools`, `soup`/`models_soup`, `graphql_crm`,
@@ -61,6 +64,9 @@ tools/HTTP/GraphQL surfaces over them.
 
 ## Gotchas
 
+- Pipeline board-position reads require a pipeline View receipt, hold its live
+  lifecycle guard, and scope the view to its backing table/database through
+  `DatabaseStorage::storage_view_positions`.
 - `src/domain/generic_email_domains.rs` filters both manual company creation
   and email-driven contact population. Cover legitimate company-domain
   exceptions with regression tests when correcting the blocklist.
@@ -76,6 +82,8 @@ tools/HTTP/GraphQL surfaces over them.
 - Keep CRM write locks ordered: domain advisory locks, parent team `KEY SHARE`,
   settings `SHARE`, then company/contact rows. Hold them through commit so
   disable/purge and team deletion cannot race creation.
+- Bound pipeline read- and write-guard waits with a transaction-local five-second
+  timeout so waiters release pool connections needed by the holder's storage work.
 - When depopulating an email, prefer its domain-linked contact over a manual
   unfiled record so mailbox-source teardown reaches the synced contact.
 - Serialize domain visibility updates on the owning company row before reading
@@ -84,11 +92,15 @@ tools/HTTP/GraphQL surfaces over them.
   them; continue valid rows, but propagate lookup storage and authorization failures.
 
 - Company names/logos live in the global `crm_domain_directory`. Only the
-  email pubsub workers carry a real `CompanyMetadataResolver`; every other
+  email pubsub workers carry a real `CompanyMetadataResolver`, using public
+  homepage metadata through `unfurl`; every other
   binary uses `NoOpCompanyMetadataResolver`, which leaves a pending entry
   (NULL `enriched_at`) that `CrmServiceImpl::enrich_pending_domains` resolves
   later with bounded retries. Never store an empty entry for a domain no
   resolver answered for: resolved entries are permanent.
+- Apollo enrichment has been removed. Historical provider fields in the
+  directory remain readable; do not clear existing metadata or drop columns
+  as part of provider removal.
 - Contacts carry their own `team_id`; `company_id` and `email` are optional.
   Scope contact reads by `ct.team_id` and LEFT JOIN the company for its
   `hidden` flag and name. Email sync files personal-provider addresses

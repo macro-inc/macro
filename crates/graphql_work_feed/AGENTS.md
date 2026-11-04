@@ -13,19 +13,22 @@ subscription.
 - `src/objects.rs`: `GraphqlWorkFeedPage`, `GraphqlWorkFeedEntry`,
   `GraphqlWorkFeedItem`, `GraphqlWorkFeedStack`, `GraphqlWorkFeedPatch`.
 - `src/mutations.rs`: mark-done / undo-done mutations.
-- `src/subscriptions.rs`: `WorkFeedSubscriptionRoot` — realtime patches.
-- `src/context.rs`: `WorkFeedGraphqlContext`, `WorkFeedViewerResolver`.
+- `src/subscriptions.rs`: `WorkFeedSubscriptionRoot` — realtime patches,
+  batched by `attention_feed`'s `live::coalesce`.
+- `src/context.rs`: `WorkFeedGraphqlContext`, built with the shared
+  `FeedTriggers` and `FeedViewerResolver`.
 
 ## Scope
 
 - Owns: GraphQL types/resolvers/subscription for the work feed page.
-- Not here: feed composition and item ranking → `crates/work_feed`;
+- Not here: feed composition and item ranking → `crates/work_feed`; shared
+  keys, tokens, triggers and viewer lookup → `crates/attention_feed`;
   notification content → `crates/graphql_notification`.
 
 ## Boundaries
 
-- Depends on: `work_feed`, `graphql_notification`, `graphql_soup`,
-  `entity_access` (inbound feature), `graphql_common`.
+- Depends on: `work_feed`, `attention_feed` (inbound feature),
+  `graphql_notification`, `graphql_soup`, `graphql_common`.
 - Used by: `complete_graph` (schema composition).
 
 ## Recipes

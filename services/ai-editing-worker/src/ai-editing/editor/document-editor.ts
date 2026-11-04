@@ -3,6 +3,7 @@
 // or the AI's editor surface won't reflect your edits.
 import { EditError } from './errors';
 import type {
+  DatabaseQueryView,
   DocumentOp,
   Format,
   ListKind,
@@ -735,6 +736,70 @@ export class DocumentEditor {
   public setDate(id: NodeId, date: string, displayFormat?: string): this {
     this.requireId(id);
     return this.push({ kind: 'setDate', node: id, date, displayFormat });
+  }
+
+  private requireQueryBlock(query: string): void {
+    if (typeof query !== 'string' || !query.includes('<m-db-query>')) {
+      throw new EditError(
+        "pass the saved question's <m-db-query>…</m-db-query> block from the request, verbatim"
+      );
+    }
+  }
+
+  /** A saved database question (`<m-db-query>` block) as a live number, table, or chart. */
+  public insertDatabaseQueryAfter(id: NodeId, query: string): Ref {
+    this.requireQueryBlock(query);
+    return this.insert({ block: 'database-query', query }, { after: id });
+  }
+
+  public insertDatabaseQueryBefore(id: NodeId, query: string): Ref {
+    this.requireQueryBlock(query);
+    return this.insert({ block: 'database-query', query }, { before: id });
+  }
+
+  public appendDatabaseQuery(query: string): Ref {
+    this.requireQueryBlock(query);
+    return this.insert(
+      { block: 'database-query', query },
+      { appendToRoot: true }
+    );
+  }
+
+  /** A scalar answer inside a sentence, at character offset `at`. */
+  public insertInlineDatabaseQuery(
+    blockId: NodeId,
+    at: number,
+    query: string
+  ): Ref {
+    this.requireQueryBlock(query);
+    return this.insertInline(blockId, at, { inline: 'database-query', query });
+  }
+
+  public setDatabaseQueryView(id: NodeId, view: DatabaseQueryView): this {
+    this.requireId(id);
+    if (!view || typeof view !== 'object' || !Object.keys(view).length) {
+      throw new EditError(
+        'pass at least one of displayMode, title, chart, or height'
+      );
+    }
+    return this.push({ kind: 'setDatabaseQueryView', node: id, view });
+  }
+
+  /** Show another table (and optionally view) of an embedded database card. */
+  public setDatabaseLocation(
+    id: NodeId,
+    location: { tableId: string; viewId?: string }
+  ): this {
+    this.requireId(id);
+    if (typeof location?.tableId !== 'string' || !location.tableId) {
+      throw new EditError('setDatabaseLocation needs a tableId');
+    }
+    return this.push({
+      kind: 'setDatabaseLocation',
+      node: id,
+      tableId: location.tableId,
+      viewId: location.viewId,
+    });
   }
 }
 

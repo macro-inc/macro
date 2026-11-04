@@ -1023,6 +1023,21 @@
           },
           {
             "type": "object",
+            "description": "Fires once at `at`, or as soon as it is saved when `at` has passed.",
+            "required": ["at", "type"],
+            "properties": {
+              "at": {
+                "type": "string",
+                "format": "date-time"
+              },
+              "type": {
+                "type": "string",
+                "enum": ["once"]
+              }
+            }
+          },
+          {
+            "type": "object",
             "required": ["triggers", "type"],
             "properties": {
               "triggers": {
@@ -1194,6 +1209,17 @@
               "$ref": "#/components/schemas/PayloadCondition"
             },
             "description": "Exact tests on the payload, all of which must pass."
+          },
+          "property": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/PropertySelector",
+                "description": "The task property that must have changed, and the values it must gain."
+              }
+            ]
           }
         }
       },
@@ -1417,6 +1443,25 @@
         ],
         "description": "A JSON text, number, boolean or null that payload values are compared with."
       },
+      "PropertySelector": {
+        "type": "object",
+        "description": "Narrows a task property change filter to one property and, optionally, the\nvalues it must gain.",
+        "required": ["definitionId"],
+        "properties": {
+          "definitionId": {
+            "type": "string",
+            "description": "The property definition that must have changed."
+          },
+          "values": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "Select option ids or referenced entity ids, one of which the change must\nadd. Any change to the property matches when empty."
+          }
+        },
+        "additionalProperties": false
+      },
       "RoutineModelId": {
         "type": "string",
         "description": "A nonblank model identifier. Runtime catalogs, not the scheduler, own availability."
@@ -1508,6 +1553,21 @@
               "type": {
                 "type": "string",
                 "enum": ["events"]
+              }
+            }
+          },
+          {
+            "type": "object",
+            "description": "Fires once at `at`, or as soon as it is saved when `at` has passed.",
+            "required": ["at", "type"],
+            "properties": {
+              "at": {
+                "type": "string",
+                "format": "date-time"
+              },
+              "type": {
+                "type": "string",
+                "enum": ["once"]
               }
             }
           }

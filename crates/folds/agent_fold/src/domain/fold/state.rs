@@ -17,6 +17,7 @@ use agent_client_protocol::schema::v1::{
 use agent_client_protocol::{JsonRpcMessage, RawJsonRpcMessage, RawJsonRpcParams};
 use agent_runtime_protocol::domain::action::AgentAction;
 use agent_runtime_protocol::domain::context::ContextSummaryNotification;
+use agent_runtime_protocol::domain::review::ReviewUpdatedNotification;
 use agent_runtime_protocol::domain::schema::v0::{SystemEvent, ToRuntimeMessage, ToServerMessage};
 use agent_runtime_protocol::domain::tool_approval::TOOL_APPROVAL_METHOD;
 use serde::Deserialize;
@@ -373,6 +374,12 @@ impl FoldState {
                         .map_or_else(Vec::new, |(message, metadata)| {
                             Self::message_and_metadata(message, metadata)
                         })
+                }
+                // A saved review moved to a new revision.
+                RawJsonRpcMessage::Notification(notification)
+                    if ReviewUpdatedNotification::matches_method(&notification.method) =>
+                {
+                    StepChange::metadata(self.record_review_update(notification.params.as_ref()))
                 }
                 // The agent reporting that a URL interaction finished.
                 RawJsonRpcMessage::Notification(notification)

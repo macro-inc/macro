@@ -182,6 +182,14 @@ impl AgentSessionRepo for StubSessions {
         unimplemented!("this adapter does not dispatch turns")
     }
 
+    async fn add_follower(
+        &self,
+        _id: AgentSessionId,
+        _user: &macro_user_id::user_id::MacroUserIdStr<'static>,
+    ) -> SessionResult<()> {
+        unimplemented!("this adapter does not dispatch turns")
+    }
+
     async fn turn_prompter(
         &self,
         _id: AgentSessionId,

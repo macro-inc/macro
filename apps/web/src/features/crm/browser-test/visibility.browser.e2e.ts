@@ -25,15 +25,19 @@ for (const device of [
       await page.route('**/__macro_dev/**', (route) => route.abort());
     });
 
-    for (const kind of ['company', 'contact']) {
-      test(`${kind} removal can cancel, retry and restore`, async ({
+    for (const { kind, grouped } of [
+      { kind: 'company', grouped: false },
+      { kind: 'contact', grouped: false },
+      { kind: 'contact', grouped: true },
+    ]) {
+      test(`${kind}${grouped ? ' grouped' : ''} removal can cancel, retry and restore`, async ({
         page,
       }, testInfo) => {
         await page.goto(
-          `/src/features/crm/browser-test/visibility.html?kind=${kind}`
+          `/src/features/crm/browser-test/visibility.html?kind=${kind}&grouped=${grouped}`
         );
         const remove = page.getByRole('button', {
-          name: 'Remove from CRM',
+          name: 'Archive',
           exact: true,
         });
         await remove.click();
@@ -43,6 +47,7 @@ for (const device of [
         await expect(dialog).not.toHaveAttribute('data-transitioning');
         await page.keyboard.press('Escape');
         await expect(dialog).not.toBeVisible();
+        if (kind === 'contact') await expect(remove).toBeFocused();
         await expect(page.getByLabel('Visibility writes')).toHaveText('0');
 
         await remove.click();
@@ -52,7 +57,7 @@ for (const device of [
           path: testInfo.outputPath(`${kind}-${device.name}.png`),
         });
         const confirm = dialog.getByRole('button', {
-          name: 'Remove from CRM',
+          name: 'Archive',
           exact: true,
         });
         await confirm.click();
@@ -66,19 +71,24 @@ for (const device of [
         await expect(page.getByLabel('Visibility writes')).toHaveText('2');
 
         await page
-          .getByRole('button', { name: 'Restore to CRM', exact: true })
+          .getByRole('button', { name: 'Restore', exact: true })
           .click();
-        await expect(dialog).toBeInViewport({ ratio: 1 });
-        await expect(dialog).not.toHaveAttribute('data-transitioning');
-        await dialog
-          .getByRole('button', { name: 'Restore to CRM', exact: true })
-          .click();
+        if (kind === 'company') {
+          await expect(dialog).toBeInViewport({ ratio: 1 });
+          await expect(dialog).not.toHaveAttribute('data-transitioning');
+          await dialog
+            .getByRole('button', { name: 'Restore', exact: true })
+            .click();
+        }
         await page.evaluate(() => window.finishVisibilitySave(true));
         await expect(dialog).not.toBeVisible();
         await expect(remove).toBeEnabled();
         await expect(page.getByLabel('Visibility writes')).toHaveText('3');
         await page.getByRole('button', { name: 'Toggle admin role' }).click();
         await expect(remove).toBeDisabled();
+        await expect(remove).toHaveAccessibleDescription(
+          'Ask a team admin or owner to archive or restore this record.'
+        );
       });
     }
 
@@ -86,9 +96,7 @@ for (const device of [
       page,
     }) => {
       await page.goto('/src/features/crm/browser-test/visibility.html');
-      await page
-        .getByRole('button', { name: 'Remove from CRM', exact: true })
-        .click();
+      await page.getByRole('button', { name: 'Archive', exact: true }).click();
       await expect(page.getByRole('dialog')).toBeVisible();
       await page.evaluate(() => window.switchVisibilityRecord());
       await expect(page.getByRole('dialog')).not.toBeVisible();

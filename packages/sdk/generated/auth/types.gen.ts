@@ -24,6 +24,21 @@ export type AgentApiKey = {
 export type AgentApiKeyProvider = 'anthropic' | 'openai';
 
 /**
+ * What an agent needs to start using the SDK.
+ */
+export type AgentSetupResponse = {
+    /**
+     * The agent's API key. Shown only here; repeating setup revokes it.
+     */
+    api_key: string;
+    /**
+     * Whether joining the inviting team failed. The invite stays pending:
+     * repeating setup tries again, and the invite link works after confirming.
+     */
+    team_join_failed: boolean;
+};
+
+/**
  * Error response body.
  */
 export type AiBillingErrorBody = {
@@ -328,6 +343,17 @@ export type CreatePortalSessionRequest = {
      * The URL to redirect to after leaving the portal
      */
     returnUrl: string;
+};
+
+export type CreateProfilePictureUploadRequest = {
+    /**
+     * Mime type of the image.
+     */
+    content_type: string;
+    /**
+     * File name, such as `avatar.png`.
+     */
+    file_name: string;
 };
 
 /**
@@ -688,6 +714,10 @@ export type GetLegacyUserPermissionsResponse = {
      * Whether the user has trialed through stripe
      */
     hasTrialed: boolean;
+    /**
+     * Whether this is an agent account rather than a person
+     */
+    isAgent: boolean;
     /**
      * The user's license status
      */
@@ -1209,6 +1239,11 @@ export type InviteToTeamRequest = {
      */
     invites: Array<InviteEntry>;
     /**
+     * Invite these addresses as agents: an address with no account signs up
+     * as an agent and joins the team when it first signs in.
+     */
+    is_agent?: boolean;
+    /**
      * The team the caller means to invite to. Invites always go to the
      * caller's current team; when this names another team, nothing is sent
      * and the request answers 409.
@@ -1294,6 +1329,12 @@ export type PasswordlessRequest = {
      * The email to initiate passwordless authentication for
      */
     email: string;
+    /**
+     * Create an agent account if this address has no account yet. Otherwise
+     * `true` has no effect, and `false` reverts an agent flag nobody has proven:
+     * see `revert_unconfirmed_agent`.
+     */
+    is_agent?: boolean;
     /**
      * The redirect uri to redirect to after login
      */
@@ -1515,6 +1556,20 @@ export type ProfilePictureQueryParams = {
     url: string;
 };
 
+/**
+ * Where to upload a new profile picture, and the file id to set afterwards.
+ */
+export type ProfilePictureUpload = {
+    /**
+     * Id to pass to `PUT /user/profile_picture/file` once uploaded.
+     */
+    file_id: string;
+    /**
+     * Expiring URL to `PUT` the image bytes to.
+     */
+    upload_url: string;
+};
+
 export type ProfilePictures = {
     pictures: Array<UserProfilePicture>;
 };
@@ -1567,6 +1622,13 @@ export type PutCursorDefaultModelRequest = {
      * fall back to the deployment default.
      */
     modelId?: string | null;
+};
+
+export type PutProfilePictureFileRequest = {
+    /**
+     * Id of an image the caller uploaded to static file storage.
+     */
+    file_id: string;
 };
 
 export type PutUserNameQueryParams = {
@@ -1861,6 +1923,10 @@ export type TeamInviteDetails = {
      * The user who sent the invitation
      */
     invited_by: string;
+    /**
+     * Whether the invite creates an agent account
+     */
+    is_agent: boolean;
     /**
      * When the invite was last sent
      */
@@ -2182,6 +2248,10 @@ export type UserLinkResponse = {
 export type UserName = {
     first_name?: string | null;
     id: string;
+    /**
+     * Whether this is an agent account rather than a person.
+     */
+    is_agent?: boolean;
     last_name?: string | null;
 };
 
@@ -3488,6 +3558,10 @@ export type SsoLoginData = {
          * **OPTIONAL**. If the user opened a link with a referral code.
          */
         referral_code: string;
+        /**
+         * **OPTIONAL**. If the sign-in started on the agent signup page. A new account becomes an agent.
+         */
+        is_agent: boolean;
     };
     url: '/login/sso';
 };
@@ -4353,6 +4427,34 @@ export type GetUserInvitesResponses = {
 
 export type GetUserInvitesResponse = GetUserInvitesResponses[keyof GetUserInvitesResponses];
 
+export type AgentSetupData = {
+    body?: never;
+    path?: never;
+    query?: never;
+    url: '/user/agent_setup';
+};
+
+export type AgentSetupErrors = {
+    401: string;
+    /**
+     * The account is not an agent
+     */
+    403: ErrorResponse;
+    /**
+     * Setup is already confirmed
+     */
+    409: ErrorResponse;
+    500: ErrorResponse;
+};
+
+export type AgentSetupError = AgentSetupErrors[keyof AgentSetupErrors];
+
+export type AgentSetupResponses = {
+    200: AgentSetupResponse;
+};
+
+export type AgentSetupResponse2 = AgentSetupResponses[keyof AgentSetupResponses];
+
 export type GetUserNamesData = {
     body: PostGetNamesRequestBody;
     path?: never;
@@ -4666,6 +4768,58 @@ export type PutProfilePictureResponses = {
 };
 
 export type PutProfilePictureResponse = PutProfilePictureResponses[keyof PutProfilePictureResponses];
+
+export type CreateProfilePictureUploadData = {
+    body: CreateProfilePictureUploadRequest;
+    path?: never;
+    query?: never;
+    url: '/user/profile_picture/file';
+};
+
+export type CreateProfilePictureUploadErrors = {
+    /**
+     * Not a supported image type
+     */
+    400: ErrorResponse;
+    401: string;
+    500: ErrorResponse;
+};
+
+export type CreateProfilePictureUploadError = CreateProfilePictureUploadErrors[keyof CreateProfilePictureUploadErrors];
+
+export type CreateProfilePictureUploadResponses = {
+    200: ProfilePictureUpload;
+};
+
+export type CreateProfilePictureUploadResponse = CreateProfilePictureUploadResponses[keyof CreateProfilePictureUploadResponses];
+
+export type PutProfilePictureFileData = {
+    body: PutProfilePictureFileRequest;
+    path?: never;
+    query?: never;
+    url: '/user/profile_picture/file';
+};
+
+export type PutProfilePictureFileErrors = {
+    /**
+     * The file is not a supported image
+     */
+    400: ErrorResponse;
+    401: string;
+    /**
+     * The caller has no such file
+     */
+    404: ErrorResponse;
+    500: ErrorResponse;
+};
+
+export type PutProfilePictureFileError = PutProfilePictureFileErrors[keyof PutProfilePictureFileErrors];
+
+export type PutProfilePictureFileResponses = {
+    200: EmptyResponse;
+};
+
+export type PutProfilePictureFileResponse = PutProfilePictureFileResponses[keyof PutProfilePictureFileResponses];
 
 export type PostProfilePicturesData = {
     body: GetProfilePicturesRequestBody;

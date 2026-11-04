@@ -167,6 +167,7 @@ export function EmailMessageView(props: EmailMessageViewProps) {
             message={props.message}
             currentUserEmail={props.viewerEmail}
             avatar={props.renderAvatar?.(props.message)}
+            isTouch={props.isTouch}
           />
         }
       >

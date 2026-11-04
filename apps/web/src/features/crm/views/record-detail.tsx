@@ -1,5 +1,4 @@
 import { ViewBreadcrumbs } from '@app/components/view-shell';
-import { HeaderActionGroup } from '@components/app/HeaderActionGroup';
 import { SidePanel } from '@components/app/side-panel';
 import { EntityIcon } from '@core/component/EntityIcon';
 import {
@@ -38,7 +37,7 @@ import {
 } from '../core/record';
 import { Company } from './company-detail';
 import { Contact } from './contact-detail';
-import { CrmCopyLinkButton } from './copy-link-button';
+import { RecordHeaderActions } from './record-header-actions';
 import { useCompanyQuery, useContactQuery } from './use-crm';
 
 const recordKey = (record: CrmRecordRef) => `${record.type}:${record.id}`;
@@ -203,16 +202,7 @@ export function CrmRecordDetail(props: {
                 />
               </Show>
             </div>
-            <div class="ml-auto flex shrink-0 items-center gap-2 touch:gap-1">
-              <HeaderActionGroup label="Sharing">
-                <CrmCopyLinkButton
-                  grouped
-                  type={current().type}
-                  id={current().id}
-                />
-              </HeaderActionGroup>
-              <SidePanel.Toggle />
-            </div>
+            <RecordHeaderActions record={current()} />
           </div>
           <div class="relative min-h-0 min-w-0 flex-1 touch:[--mobile-content-inset-top:0px]">
             <Show when={current()} keyed>
@@ -230,7 +220,6 @@ export function CrmRecordDetail(props: {
                         companyId={record.id}
                         section={companySection()}
                         headerToggle={false}
-                        onHidden={back}
                         onOpenPipeline={props.onOpenPipeline}
                         onOpenContact={(contact) =>
                           open({

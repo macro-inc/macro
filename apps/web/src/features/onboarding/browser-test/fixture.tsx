@@ -126,6 +126,7 @@ function Fixture() {
             onGoogle={signUpWithGoogle}
             onBackFromEmail={() => {}}
             onSignIn={() => land({ t: 'sign-in' })}
+            onAgentSignup={() => {}}
             showingEmail={false}
           />
         </Match>

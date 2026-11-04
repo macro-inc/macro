@@ -39,7 +39,7 @@ Add one `defineFlag` next to its neighbors. Do not add `ENABLE_*_FLAG` /
   (`DEV_MODE_ENV || undefined`), not the boolean itself. If it must stay off in
   dev, say why in a comment above it. On a remote flag, `false` is a real
   override and **skips PostHog**. On-in-local only is
-  `LOCAL_ONLY || undefined`.
+  `LOCAL_ONLY || undefined` (the Vite dev server and `just stack` bundles).
 - Never invert on the flag object. If the product question is "disable X",
   invert at the call site (`!isFeatureEnabled(disableX)`).
 - Env-only exports that are used as `if (ENABLE_FOO)` must be the boolean:

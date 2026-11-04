@@ -9,6 +9,7 @@ import type { EventFilterCondition } from './eventFilterCondition';
 import type { EventFilterGithub } from './eventFilterGithub';
 import type { EventFilterIds } from './eventFilterIds';
 import type { EventFilterMatch } from './eventFilterMatch';
+import type { EventFilterProperty } from './eventFilterProperty';
 import type { EventName } from './eventName';
 
 /**
@@ -32,4 +33,5 @@ invoice?". The routine runs only when the answer is yes.
   ids?: EventFilterIds;
   /** Exact tests on the payload, all of which must pass. */
   match?: EventFilterMatch;
+  property?: EventFilterProperty;
 }

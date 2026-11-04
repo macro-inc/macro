@@ -241,7 +241,8 @@ pub enum CodeGuideTopic {
 impl CodeGuideTopic {
     fn markdown(self) -> &'static str {
         match self {
-            Self::Search => include_str!("toolset/guides/search.md"),
+            // The search guide is the `core` entity's `@agent` guidance.
+            Self::Search => crate::domain::search_guide(),
             Self::Ai => include_str!("toolset/guides/ai.md"),
             Self::Templates => include_str!("toolset/guides/templates.md"),
             Self::Examples => include_str!("../../SKILL.md"),
@@ -380,6 +381,7 @@ impl DescribeCodeTools {
                 .iter()
                 .map(|doc| CodeToolDescription {
                     index: None,
+                    guide: None,
                     ..doc.clone()
                 })
                 .collect()

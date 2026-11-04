@@ -1,15 +1,19 @@
 import { analytics } from '@app/lib/analytics';
 
 /**
- * This constant reflects whether the app is running locally with hot reload enabled
+ * This constant reflects whether the app is running locally: under the Vite
+ * dev server with hot reload (`just run_local`, `bun run dev`), or as the
+ * bundle `just stack` builds, which sets `VITE_LOCAL_ONLY` so a headless
+ * stack gets the same local-only flags, routes and tools.
  *
- * @returns true in bun run dev, false otherwise
+ * @returns true in bun run dev and `just stack` bundles, false otherwise
  *
  * Distinct from `import.meta.env.DEV` (true under vite serve *and* local-backend
- * static bundles) and `DEV_MODE_ENV` (true whenever MODE=development, including
- * dev.macro.com).
+ * static bundles, including test builds) and `DEV_MODE_ENV` (true whenever
+ * MODE=development, including dev.macro.com).
  */
-export const LOCAL_ONLY = !!import.meta.hot;
+export const LOCAL_ONLY =
+  !!import.meta.hot || import.meta.env.VITE_LOCAL_ONLY === 'true';
 
 const parseBooleanOverride = (value: unknown): boolean | undefined =>
   value === 'true' ? true : value === 'false' ? false : undefined;
@@ -542,6 +546,13 @@ export const enableProjects = defineFlag({
   default: onInDev,
 });
 
+/** Prefill the editable Source property from contextual task actions. */
+export const enableTaskSourceProperty = defineFlag({
+  key: 'enable-task-source-property',
+  env: 'ENABLE_TASK_SOURCE_PROPERTY',
+  default: onInDev,
+});
+
 // Email snooze: the "Remind me" action, its 'h' shortcut, and the shared
 // time-selection command menu.
 // Every surface routes through `makeCreateReminderAction().canExecute`, so this
@@ -830,6 +841,16 @@ export const enableEntityActivitySection = defineFlag({
 export const enableActivityFeed = defineFlag({
   key: 'enable-activity-feed',
   env: 'ENABLE_ACTIVITY_FEED',
+  default: onInDev,
+});
+
+// The unified notifications view: the /notifications route (redirects to Home
+// when off), the rail bell, its go-to hotkey, and the mobile dock bell's
+// target. PostHog-gated with a dev-mode default; override with
+// VITE_ENABLE_UNIFIED_NOTIFICATIONS.
+export const enableUnifiedNotifications = defineFlag({
+  key: 'enable-unified-notifications',
+  env: 'ENABLE_UNIFIED_NOTIFICATIONS',
   default: onInDev,
 });
 
