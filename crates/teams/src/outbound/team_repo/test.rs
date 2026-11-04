@@ -1111,6 +1111,12 @@ async fn test_rollback_accept_team_invite(pool: Pool<Postgres>) -> anyhow::Resul
     let team_invite_id = macro_uuid::string_to_uuid("22222222-2222-2222-2222-222222222222")?;
     let user_id = MacroUserIdStr::parse_from_str("macro|user3@user.com")?;
 
+    // A rolled-back agent invite must stay one, or the retry never joins.
+    sqlx::query("UPDATE team_invite SET is_agent = TRUE WHERE id = $1")
+        .bind(team_invite_id)
+        .execute(&pool)
+        .await?;
+
     let accepted_invite = team_repo
         .accept_team_invite(&team_invite_id, &user_id)
         .await?;
@@ -1134,7 +1140,7 @@ async fn test_rollback_accept_team_invite(pool: Pool<Postgres>) -> anyhow::Resul
 
     let invite = sqlx::query(
         r#"
-        SELECT email, team_role
+        SELECT email, team_role, is_agent
         FROM team_invite
         WHERE id = $1
         "#,
@@ -1142,6 +1148,7 @@ async fn test_rollback_accept_team_invite(pool: Pool<Postgres>) -> anyhow::Resul
     .bind(team_invite_id)
     .fetch_one(&pool)
     .await?;
+    assert!(invite.try_get::<bool, _>("is_agent")?);
     assert_eq!(invite.try_get::<String, _>("email")?, "user3@user.com");
     assert_eq!(
         invite.try_get::<TeamRole, _>("team_role")?,

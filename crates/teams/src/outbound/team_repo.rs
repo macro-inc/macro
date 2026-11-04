@@ -901,7 +901,7 @@ impl TeamRepository for TeamRepositoryImpl {
         // Get invite data before deleting it so the accept can be rolled back later.
         let invite = sqlx::query(
             r#"
-            SELECT id, email, team_role, team_id, invited_by, created_at, last_sent_at
+            SELECT id, email, team_role, team_id, invited_by, created_at, last_sent_at, is_agent
             FROM team_invite
             WHERE id = $1 AND email = $2
             "#,
@@ -931,6 +931,7 @@ impl TeamRepository for TeamRepositoryImpl {
                 invite.try_get("last_sent_at")?,
                 chrono::Utc,
             ),
+            is_agent: invite.try_get("is_agent")?,
         };
 
         // Assign user to team_user
@@ -1012,8 +1013,8 @@ impl TeamRepository for TeamRepositoryImpl {
         sqlx::query(
             r#"
             INSERT INTO team_invite
-                (id, team_id, email, team_role, invited_by, created_at, last_sent_at)
-            VALUES ($1, $2, $3, $4, $5, $6, $7)
+                (id, team_id, email, team_role, invited_by, created_at, last_sent_at, is_agent)
+            VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
             ON CONFLICT DO NOTHING
             "#,
         )
@@ -1024,6 +1025,7 @@ impl TeamRepository for TeamRepositoryImpl {
         .bind(accepted_invite.invite.invited_by.as_ref())
         .bind(accepted_invite.invite.created_at.naive_utc())
         .bind(accepted_invite.invite.last_sent_at.naive_utc())
+        .bind(accepted_invite.invite.is_agent)
         .execute(&mut *transaction)
         .await?;
 

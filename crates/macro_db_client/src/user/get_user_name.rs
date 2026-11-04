@@ -11,7 +11,14 @@ pub async fn get_user_name(db: &sqlx::PgPool, macro_user_id: &str) -> anyhow::Re
     let macro_user_id = macro_uuid::string_to_uuid(macro_user_id)?;
     let name: Option<UserName> = sqlx::query!(
         r#"
-            SELECT macro_user_id, first_name, last_name FROM macro_user_info WHERE macro_user_id = $1
+            SELECT
+                u.macro_user_id,
+                mui.first_name as "first_name?",
+                mui.last_name as "last_name?",
+                u."isAgent" as is_agent
+            FROM "User" u
+            LEFT JOIN macro_user_info mui ON mui.macro_user_id = u.macro_user_id
+            WHERE u.macro_user_id = $1
         "#,
         &macro_user_id
     )
@@ -19,7 +26,7 @@ pub async fn get_user_name(db: &sqlx::PgPool, macro_user_id: &str) -> anyhow::Re
         id: row.macro_user_id.to_string(), // TODO: this may mess up FE?
         first_name: row.first_name,
         last_name: row.last_name,
-        is_agent: false,
+        is_agent: row.is_agent,
     })
     .fetch_optional(db)
     .await?;

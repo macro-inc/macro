@@ -649,6 +649,8 @@ pub struct TeamInviteSnapshot<'a> {
     pub created_at: DateTime<Utc>,
     /// When the invite was last sent
     pub last_sent_at: DateTime<Utc>,
+    /// Whether the invite creates an agent account
+    pub is_agent: bool,
 }
 
 /// Result of accepting a team invite, including the data needed to roll it back.

@@ -1842,6 +1842,7 @@ fn make_accepted_invite(
                 .into_owned(),
             created_at: chrono::Utc::now(),
             last_sent_at: chrono::Utc::now(),
+            is_agent: false,
         },
     }
 }
