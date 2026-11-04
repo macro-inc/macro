@@ -1,3 +1,4 @@
+import accountManager from './en/account-manager';
 import agentAutoArchive from './en/agent-auto-archive';
 import agentSetup from './en/agent-setup';
 import calls from './en/calls';
@@ -25,6 +26,7 @@ import viewMenus from './en/view-menus';
  */
 export default {
   agentAutoArchive,
+  accountManager,
   agentSetup,
   calls,
   channelComposer,

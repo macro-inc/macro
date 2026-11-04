@@ -10,6 +10,444 @@
     "version": "0.1.0"
   },
   "paths": {
+    "/account-managers": {
+      "get": {
+        "tags": ["account-managers"],
+        "summary": "List the managers of the caller's account.",
+        "operationId": "list_account_managers",
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AccountManagersList"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "tags": ["account-managers"],
+        "summary": "Ask another account for manager access, in your DM with them.",
+        "operationId": "request_account_manager",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RequestAccountManagerBody"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AccountManagerGrant"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/account-managers/{id}": {
+      "get": {
+        "tags": ["account-managers"],
+        "summary": "Read a grant the caller is part of.",
+        "operationId": "get_account_manager_grant",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "description": "Grant id.",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AccountManagerGrant"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      },
+      "delete": {
+        "tags": ["account-managers"],
+        "summary": "End a grant. Either side may withdraw it.",
+        "operationId": "revoke_account_manager_grant",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "description": "Grant id.",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AccountManagerGrant"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/account-managers/{id}/response": {
+      "post": {
+        "tags": ["account-managers"],
+        "summary": "Approve or decline a request the caller didn't make.",
+        "operationId": "respond_to_account_manager_request",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "description": "Grant id.",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RespondToAccountManagerRequestBody"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AccountManagerGrant"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/account-managers/{id}/token": {
+      "post": {
+        "tags": ["account-managers"],
+        "summary": "Issue the credential to the manager. Works once. A POST, so link previews\nand crawlers can't use it up.",
+        "operationId": "claim_account_manager_token",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "description": "Grant id.",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ClaimedAccountManagerToken"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/agents": {
       "get": {
         "tags": ["agents"],
@@ -20486,6 +20924,97 @@
         ],
         "description": "Metadata together with the caller's effective grant."
       },
+      "AccountManagerDecision": {
+        "type": "string",
+        "description": "A response to a request.",
+        "enum": ["approve", "decline"]
+      },
+      "AccountManagerGrant": {
+        "type": "object",
+        "description": "A request for manager access and what became of it.",
+        "required": [
+          "id",
+          "managedUserId",
+          "managerUserId",
+          "requestedBy",
+          "status",
+          "createdAt"
+        ],
+        "properties": {
+          "claimedAt": {
+            "type": ["string", "null"],
+            "format": "date-time",
+            "description": "When the manager claimed the credential."
+          },
+          "createdAt": {
+            "type": "string",
+            "format": "date-time",
+            "description": "When the request was made."
+          },
+          "expiresAt": {
+            "type": ["string", "null"],
+            "format": "date-time",
+            "description": "When the pending request or unclaimed approval stops being usable."
+          },
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "description": "Grant id."
+          },
+          "lastUsedAt": {
+            "type": ["string", "null"],
+            "format": "date-time",
+            "description": "When the credential was last used, to the minute."
+          },
+          "managedUserId": {
+            "type": "string",
+            "description": "The account being managed."
+          },
+          "managerUserId": {
+            "type": "string",
+            "description": "The agent account doing the managing."
+          },
+          "requestedBy": {
+            "$ref": "#/components/schemas/AccountManagerRole",
+            "description": "The side that asked."
+          },
+          "status": {
+            "$ref": "#/components/schemas/AccountManagerGrantStatus",
+            "description": "Lifecycle status."
+          }
+        }
+      },
+      "AccountManagerGrantStatus": {
+        "type": "string",
+        "description": "Where a grant is in its lifecycle.",
+        "enum": [
+          "pending",
+          "approved",
+          "declined",
+          "active",
+          "revoked",
+          "expired"
+        ]
+      },
+      "AccountManagerRole": {
+        "type": "string",
+        "description": "One side of a grant.",
+        "enum": ["managed", "manager"]
+      },
+      "AccountManagersList": {
+        "type": "object",
+        "description": "The managers of the caller's account.",
+        "required": ["grants"],
+        "properties": {
+          "grants": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/AccountManagerGrant"
+            },
+            "description": "Approved and active grants on the caller's account."
+          }
+        }
+      },
       "ActiveCallSummary": {
         "type": "object",
         "description": "A currently active call, as returned by the batch active-calls listing.",
@@ -24977,6 +25506,21 @@
           "device_secret": {
             "type": "string",
             "description": "The claim credential returned when the pairing was created."
+          }
+        }
+      },
+      "ClaimedAccountManagerToken": {
+        "type": "object",
+        "description": "The credential, returned only by the claim that issued it.",
+        "required": ["grant", "token"],
+        "properties": {
+          "grant": {
+            "$ref": "#/components/schemas/AccountManagerGrant",
+            "description": "The grant, now active."
+          },
+          "token": {
+            "type": "string",
+            "description": "The secret. Shown only once."
           }
         }
       },
@@ -39560,6 +40104,21 @@
           }
         }
       },
+      "RequestAccountManagerBody": {
+        "type": "object",
+        "description": "Request body for asking for a grant.",
+        "required": ["counterpartyId", "callerRole"],
+        "properties": {
+          "callerRole": {
+            "$ref": "#/components/schemas/AccountManagerRole",
+            "description": "The side the caller takes."
+          },
+          "counterpartyId": {
+            "type": "string",
+            "description": "The other account (`macro|...`)."
+          }
+        }
+      },
       "RequestStatus": {
         "type": "string",
         "description": "Durable outcome; reading a notification never changes it.",
@@ -39698,6 +40257,17 @@
             "type": "integer",
             "format": "int32",
             "description": "Request revision being reviewed."
+          }
+        }
+      },
+      "RespondToAccountManagerRequestBody": {
+        "type": "object",
+        "description": "Request body for responding to a request.",
+        "required": ["decision"],
+        "properties": {
+          "decision": {
+            "$ref": "#/components/schemas/AccountManagerDecision",
+            "description": "The response."
           }
         }
       },

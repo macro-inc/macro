@@ -7,6 +7,7 @@ import {
   PriorityCollapseOverflowSensor,
 } from '@app/components/priority-collapse/PriorityCollapseOverflowSensor';
 import { ViewShell } from '@app/components/view-shell';
+import { AccountManagerRequestButton } from '@app/features/account-manager/account-manager-request-button';
 import { ChatWithAgentButton } from '@app/features/chat/ChatWithAgentButton';
 import { useAnalytics } from '@app/lib/analytics/analytics-context';
 import { TraceFlow } from '@app/observability/flow';
@@ -39,6 +40,7 @@ import {
 } from '@core/context/channels';
 import { createMethodRegistration } from '@core/orchestrator';
 import { lazyNamed } from '@core/util/lazyNamed';
+import { ChannelType } from '@service-storage/generated/schemas/channelType';
 import { Tabs } from '@ui';
 import {
   type Accessor,
@@ -199,6 +201,11 @@ export function ChannelDetailActions(props: ChannelDetailHeaderProps) {
           )}
         </Show>
       </HeaderActionGroup>
+      <Show when={channelType() === ChannelType.direct_message}>
+        <DebugSuspense name="ChannelDetail.account-manager">
+          <AccountManagerRequestButton channelId={props.channelId} />
+        </DebugSuspense>
+      </Show>
       <DebugSuspense name="ChannelDetail.invite">
         <ChannelInviteButton
           channelId={props.channelId}

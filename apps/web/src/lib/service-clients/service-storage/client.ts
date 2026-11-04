@@ -32,6 +32,9 @@ import type { ApiChannelListPage } from './channel-list-types';
 import { fetchDatabaseOps } from './databases';
 import type { AccessiblePipeline as PipelineResponse } from './generated/schemas/accessiblePipeline';
 import type { AccessLevel } from './generated/schemas/accessLevel';
+import type { AccountManagerDecision } from './generated/schemas/accountManagerDecision';
+import type { AccountManagerGrant } from './generated/schemas/accountManagerGrant';
+import type { AccountManagersList } from './generated/schemas/accountManagersList';
 import type { AddFavoriteRequest } from './generated/schemas/addFavoriteRequest';
 import type { AddParticipantsRequest } from './generated/schemas/addParticipantsRequest';
 import type { AddPinRequest } from './generated/schemas/addPinRequest';
@@ -58,6 +61,7 @@ import type { ChannelLabelRule } from './generated/schemas/channelLabelRule';
 import type { ChannelLabelScopeSelection } from './generated/schemas/channelLabelScopeSelection';
 import type { ChannelLabelsList } from './generated/schemas/channelLabelsList';
 import { ChannelType } from './generated/schemas/channelType';
+import type { ClaimedAccountManagerToken } from './generated/schemas/claimedAccountManagerToken';
 import {
   type CloudStorageItemType,
   CloudStorageItemType as CloudStorageItemTypeMap,
@@ -157,6 +161,7 @@ import type { RenameChannelLabelRequest } from './generated/schemas/renameChanne
 import type { ReorderFavoritesRequest } from './generated/schemas/reorderFavoritesRequest';
 import type { ReorderPinRequest } from './generated/schemas/reorderPinRequest';
 import type { ReplaceCrmStagesRequest } from './generated/schemas/replaceCrmStagesRequest';
+import type { RequestAccountManagerBody } from './generated/schemas/requestAccountManagerBody';
 import type { SaveDocumentResponseData } from './generated/schemas/saveDocumentResponseData';
 import type { SearchContactsParams } from './generated/schemas/searchContactsParams';
 import type { SearchContactsResponse } from './generated/schemas/searchContactsResponse';
@@ -938,6 +943,52 @@ export const storageServiceClient = {
     return await dssFetch(`/bots/${args.bot_id}/tokens/${args.token_id}`, {
       method: 'DELETE',
     });
+  },
+
+  async listAccountManagers() {
+    return (
+      await dssFetch<AccountManagersList>(`/account-managers`, {
+        method: 'GET',
+      })
+    ).map((result) => result.grants);
+  },
+
+  async getAccountManagerGrant(args: { id: string }) {
+    return await dssFetch<AccountManagerGrant>(
+      `/account-managers/${encodeURIComponent(args.id)}`,
+      { method: 'GET' }
+    );
+  },
+
+  async requestAccountManager(args: RequestAccountManagerBody) {
+    return await dssFetch<AccountManagerGrant>(`/account-managers`, {
+      method: 'POST',
+      body: JSON.stringify(args),
+    });
+  },
+
+  async respondToAccountManagerRequest(args: {
+    id: string;
+    decision: AccountManagerDecision;
+  }) {
+    return await dssFetch<AccountManagerGrant>(
+      `/account-managers/${encodeURIComponent(args.id)}/response`,
+      { method: 'POST', body: JSON.stringify({ decision: args.decision }) }
+    );
+  },
+
+  async claimAccountManagerToken(args: { id: string }) {
+    return await dssFetch<ClaimedAccountManagerToken>(
+      `/account-managers/${encodeURIComponent(args.id)}/token`,
+      { method: 'POST' }
+    );
+  },
+
+  async revokeAccountManagerGrant(args: { id: string }) {
+    return await dssFetch<AccountManagerGrant>(
+      `/account-managers/${encodeURIComponent(args.id)}`,
+      { method: 'DELETE' }
+    );
   },
 
   async listUserApiKeys() {

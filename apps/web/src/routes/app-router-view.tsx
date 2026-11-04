@@ -84,6 +84,7 @@ import {
   WelcomePage,
 } from './pages';
 import {
+  accountManagerRoute,
   activityRoute,
   agentChatsRoute,
   agentSetupDoneRoute,
@@ -175,6 +176,10 @@ import {
   withMeetingShell,
 } from './shells';
 
+const AccountManagerPage = lazyNamed(
+  () => import('@app/features/account-manager/account-manager-page'),
+  'AccountManagerPage'
+);
 const AgentSetupPage = lazyNamed(
   () => import('@app/features/agent-setup/agent-setup-page'),
   'AgentSetupPage'
@@ -266,6 +271,10 @@ export function AppRouterView() {
         <Route definition={taskSlugRoute} component={TaskSlugPage} />
         <Route definition={signupRoute} component={SignupPage} />
         <Route definition={agentSignupRoute} component={AgentSignup} />
+        <Route
+          definition={accountManagerRoute}
+          component={AccountManagerPage}
+        />
         <Route definition={agentSetupRoute} component={AgentSetupPage} />
         <Route
           definition={agentSetupDoneRoute}

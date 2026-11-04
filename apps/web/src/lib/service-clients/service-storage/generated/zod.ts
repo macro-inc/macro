@@ -7,6 +7,273 @@
 import * as zod from 'zod';
 
 /**
+ * @summary List the managers of the caller's account.
+ */
+export const listAccountManagersResponse = zod
+  .object({
+    grants: zod
+      .array(
+        zod
+          .object({
+            claimedAt: zod.iso
+              .datetime({})
+              .nullish()
+              .describe('When the manager claimed the credential.'),
+            createdAt: zod.iso
+              .datetime({})
+              .describe('When the request was made.'),
+            expiresAt: zod.iso
+              .datetime({})
+              .nullish()
+              .describe(
+                'When the pending request or unclaimed approval stops being usable.'
+              ),
+            id: zod.uuid().describe('Grant id.'),
+            lastUsedAt: zod.iso
+              .datetime({})
+              .nullish()
+              .describe('When the credential was last used, to the minute.'),
+            managedUserId: zod.string().describe('The account being managed.'),
+            managerUserId: zod
+              .string()
+              .describe('The agent account doing the managing.'),
+            requestedBy: zod
+              .enum(['managed', 'manager'])
+              .describe('One side of a grant.'),
+            status: zod
+              .enum([
+                'pending',
+                'approved',
+                'declined',
+                'active',
+                'revoked',
+                'expired',
+              ])
+              .describe('Where a grant is in its lifecycle.'),
+          })
+          .describe('A request for manager access and what became of it.')
+      )
+      .describe("Approved and active grants on the caller's account."),
+  })
+  .describe("The managers of the caller's account.");
+
+/**
+ * @summary Ask another account for manager access, in your DM with them.
+ */
+export const requestAccountManagerBody = zod
+  .object({
+    callerRole: zod
+      .enum(['managed', 'manager'])
+      .describe('One side of a grant.'),
+    counterpartyId: zod.string().describe('The other account (`macro|...`).'),
+  })
+  .describe('Request body for asking for a grant.');
+
+export const requestAccountManagerResponse = zod
+  .object({
+    claimedAt: zod.iso
+      .datetime({})
+      .nullish()
+      .describe('When the manager claimed the credential.'),
+    createdAt: zod.iso.datetime({}).describe('When the request was made.'),
+    expiresAt: zod.iso
+      .datetime({})
+      .nullish()
+      .describe(
+        'When the pending request or unclaimed approval stops being usable.'
+      ),
+    id: zod.uuid().describe('Grant id.'),
+    lastUsedAt: zod.iso
+      .datetime({})
+      .nullish()
+      .describe('When the credential was last used, to the minute.'),
+    managedUserId: zod.string().describe('The account being managed.'),
+    managerUserId: zod
+      .string()
+      .describe('The agent account doing the managing.'),
+    requestedBy: zod
+      .enum(['managed', 'manager'])
+      .describe('One side of a grant.'),
+    status: zod
+      .enum(['pending', 'approved', 'declined', 'active', 'revoked', 'expired'])
+      .describe('Where a grant is in its lifecycle.'),
+  })
+  .describe('A request for manager access and what became of it.');
+
+/**
+ * @summary Read a grant the caller is part of.
+ */
+export const getAccountManagerGrantParams = zod.object({
+  id: zod.uuid().describe('Grant id.'),
+});
+
+export const getAccountManagerGrantResponse = zod
+  .object({
+    claimedAt: zod.iso
+      .datetime({})
+      .nullish()
+      .describe('When the manager claimed the credential.'),
+    createdAt: zod.iso.datetime({}).describe('When the request was made.'),
+    expiresAt: zod.iso
+      .datetime({})
+      .nullish()
+      .describe(
+        'When the pending request or unclaimed approval stops being usable.'
+      ),
+    id: zod.uuid().describe('Grant id.'),
+    lastUsedAt: zod.iso
+      .datetime({})
+      .nullish()
+      .describe('When the credential was last used, to the minute.'),
+    managedUserId: zod.string().describe('The account being managed.'),
+    managerUserId: zod
+      .string()
+      .describe('The agent account doing the managing.'),
+    requestedBy: zod
+      .enum(['managed', 'manager'])
+      .describe('One side of a grant.'),
+    status: zod
+      .enum(['pending', 'approved', 'declined', 'active', 'revoked', 'expired'])
+      .describe('Where a grant is in its lifecycle.'),
+  })
+  .describe('A request for manager access and what became of it.');
+
+/**
+ * @summary End a grant. Either side may withdraw it.
+ */
+export const revokeAccountManagerGrantParams = zod.object({
+  id: zod.uuid().describe('Grant id.'),
+});
+
+export const revokeAccountManagerGrantResponse = zod
+  .object({
+    claimedAt: zod.iso
+      .datetime({})
+      .nullish()
+      .describe('When the manager claimed the credential.'),
+    createdAt: zod.iso.datetime({}).describe('When the request was made.'),
+    expiresAt: zod.iso
+      .datetime({})
+      .nullish()
+      .describe(
+        'When the pending request or unclaimed approval stops being usable.'
+      ),
+    id: zod.uuid().describe('Grant id.'),
+    lastUsedAt: zod.iso
+      .datetime({})
+      .nullish()
+      .describe('When the credential was last used, to the minute.'),
+    managedUserId: zod.string().describe('The account being managed.'),
+    managerUserId: zod
+      .string()
+      .describe('The agent account doing the managing.'),
+    requestedBy: zod
+      .enum(['managed', 'manager'])
+      .describe('One side of a grant.'),
+    status: zod
+      .enum(['pending', 'approved', 'declined', 'active', 'revoked', 'expired'])
+      .describe('Where a grant is in its lifecycle.'),
+  })
+  .describe('A request for manager access and what became of it.');
+
+/**
+ * @summary Approve or decline a request the caller didn't make.
+ */
+export const respondToAccountManagerRequestParams = zod.object({
+  id: zod.uuid().describe('Grant id.'),
+});
+
+export const respondToAccountManagerRequestBody = zod
+  .object({
+    decision: zod
+      .enum(['approve', 'decline'])
+      .describe('A response to a request.'),
+  })
+  .describe('Request body for responding to a request.');
+
+export const respondToAccountManagerRequestResponse = zod
+  .object({
+    claimedAt: zod.iso
+      .datetime({})
+      .nullish()
+      .describe('When the manager claimed the credential.'),
+    createdAt: zod.iso.datetime({}).describe('When the request was made.'),
+    expiresAt: zod.iso
+      .datetime({})
+      .nullish()
+      .describe(
+        'When the pending request or unclaimed approval stops being usable.'
+      ),
+    id: zod.uuid().describe('Grant id.'),
+    lastUsedAt: zod.iso
+      .datetime({})
+      .nullish()
+      .describe('When the credential was last used, to the minute.'),
+    managedUserId: zod.string().describe('The account being managed.'),
+    managerUserId: zod
+      .string()
+      .describe('The agent account doing the managing.'),
+    requestedBy: zod
+      .enum(['managed', 'manager'])
+      .describe('One side of a grant.'),
+    status: zod
+      .enum(['pending', 'approved', 'declined', 'active', 'revoked', 'expired'])
+      .describe('Where a grant is in its lifecycle.'),
+  })
+  .describe('A request for manager access and what became of it.');
+
+/**
+ * @summary Issue the credential to the manager. Works once. A POST, so link previews
+and crawlers can't use it up.
+ */
+export const claimAccountManagerTokenParams = zod.object({
+  id: zod.uuid().describe('Grant id.'),
+});
+
+export const claimAccountManagerTokenResponse = zod
+  .object({
+    grant: zod
+      .object({
+        claimedAt: zod.iso
+          .datetime({})
+          .nullish()
+          .describe('When the manager claimed the credential.'),
+        createdAt: zod.iso.datetime({}).describe('When the request was made.'),
+        expiresAt: zod.iso
+          .datetime({})
+          .nullish()
+          .describe(
+            'When the pending request or unclaimed approval stops being usable.'
+          ),
+        id: zod.uuid().describe('Grant id.'),
+        lastUsedAt: zod.iso
+          .datetime({})
+          .nullish()
+          .describe('When the credential was last used, to the minute.'),
+        managedUserId: zod.string().describe('The account being managed.'),
+        managerUserId: zod
+          .string()
+          .describe('The agent account doing the managing.'),
+        requestedBy: zod
+          .enum(['managed', 'manager'])
+          .describe('One side of a grant.'),
+        status: zod
+          .enum([
+            'pending',
+            'approved',
+            'declined',
+            'active',
+            'revoked',
+            'expired',
+          ])
+          .describe('Where a grant is in its lifecycle.'),
+      })
+      .describe('A request for manager access and what became of it.'),
+    token: zod.string().describe('The secret. Shown only once.'),
+  })
+  .describe('The credential, returned only by the claim that issued it.');
+
+/**
  * @summary Handler for `GET /agents`.
  */
 export const listAgentsResponseItem = zod
