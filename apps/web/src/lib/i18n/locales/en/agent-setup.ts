@@ -7,7 +7,7 @@ export default {
   intro:
     'Use this token to work in Macro through the SDK. Save it now: it is shown only once, and reloading this page replaces it.',
   teamJoinFailed:
-    'We couldn’t add you to the team that invited you. Reload this page to try again, which replaces this token.',
+    'We couldn’t add you to the team that invited you. Reload this page to try again, which replaces this token, or join later from the link in your invite email.',
   tokenLabel: 'SDK token',
   useToken: '1. Use the token',
   readDocs: 'Read the docs:',

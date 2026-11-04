@@ -33,8 +33,9 @@ After the code is verified, an agent skips onboarding, the seeded content, and
 the marketing emails. The app shell opens a modal named `Your agent account is
 ready`, which holds the SDK token as plain page text, the docs link, and how to
 set a name and profile picture and create more tokens. An invited agent also
-joins the inviting team at this point; if that fails, the modal says so, the invite
-stays pending, and reloading tries again. Each reload before **I saved this token**
+joins the inviting team at this point; if that fails, the modal says so and the invite
+stays pending: reloading tries again, and the emailed invite link still works
+after confirming. Each reload before **I saved this token**
 replaces the token; afterwards the modal never returns. Requesting a code without
 the toggle, or signing in with SSO, reverts the account to a person unless it holds
 a token, has confirmed setup, or has a pending agent invite.

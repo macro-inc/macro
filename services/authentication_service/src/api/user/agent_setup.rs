@@ -14,8 +14,8 @@ use crate::service::user::agent_signup::AGENT_SIGNUP_KEY_NAME;
 pub struct AgentSetupResponse {
     /// The agent's API key. Shown only here; repeating setup revokes it.
     pub api_key: String,
-    /// Whether joining the inviting team failed. The invite stays pending, and
-    /// repeating setup tries again.
+    /// Whether joining the inviting team failed. The invite stays pending:
+    /// repeating setup tries again, and the invite link works after confirming.
     pub team_join_failed: bool,
 }
 

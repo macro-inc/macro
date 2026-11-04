@@ -6519,7 +6519,7 @@
           },
           "team_join_failed": {
             "type": "boolean",
-            "description": "Whether joining the inviting team failed. The invite stays pending, and\nrepeating setup tries again."
+            "description": "Whether joining the inviting team failed. The invite stays pending:\nrepeating setup tries again, and the invite link works after confirming."
           }
         }
       },
