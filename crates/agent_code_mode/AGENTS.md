@@ -59,6 +59,9 @@ session presentation. Never replay an uncertain submitted action.
 
 ## Tool contracts
 
+- `PresentReview` advertises `{review: {kind, title, drafts, executionId?}}` so
+  its typed alternatives stay below the tool schema root. Previously advertised
+  flat arguments remain accepted during rollouts; SDK and HTTP review inputs stay flat.
 - Keep native `NameSearch` and `ListEntities` available for session-aware discovery; agent SDK documentation excludes legacy chats and workspace feeds.
 
 Reviews write `review.decided` and `review.settled` through the injected
