@@ -5,7 +5,8 @@ export type ClientOptions = {
 };
 
 /**
- * Canonical client configuration. Ownership and execution state are server-owned.
+ * Client configuration, the create body. Ownership and execution state are
+ * server-owned.
  */
 export type ActionConfiguration = {
     enabled: boolean;
@@ -22,7 +23,7 @@ export type ActionConfiguration = {
 };
 
 /**
- * Canonical configuration replacement. Activation has its own endpoint, so
+ * Configuration replacement, the update body. Activation has its own endpoint, so
  * omitting `enabled` keeps the stored value; omitting `run_visibility` keeps
  * it too, so clients that predate the setting do not reset it.
  */
@@ -144,11 +145,6 @@ export type ConditionResult = {
 };
 
 /**
- * Exactly one representation is accepted, even if mixed fields agree or are null.
- */
-export type CreateScheduledAction = ActionConfiguration | LegacyActionConfiguration;
-
-/**
  * Empty response is required due to custom fetch forcing `response.json()`
  */
 export type EmptyResponse = {
@@ -245,17 +241,11 @@ export type InProgressExecution = {
 };
 
 /**
- * Deprecated cron-only input, accepted during the compatibility rollout.
+ * How a routine's most recent finished run went, so lists can flag failures.
  */
-export type LegacyActionConfiguration = {
-    enabled: boolean;
-    kind: ActionKind;
-    name: string;
-    schedule: Schedule;
-    task: {
-        [key: string]: unknown;
-    };
-    timezone: string;
+export type LastRun = {
+    end_time: string;
+    is_success: boolean;
 };
 
 /**
@@ -404,6 +394,7 @@ export type ScheduledAction = {
  * responses omit legacy fields rather than inventing a schedule or timezone.
  */
 export type ScheduledActionResponse = ScheduledAction & {
+    last_run?: null | LastRun;
     /**
      * Deprecated: use `trigger.schedule`. Present only for cron actions.
      *
@@ -478,11 +469,6 @@ export type TemplateVariable = {
 };
 
 /**
- * Full replacement of client configuration, not of server-owned action state.
- */
-export type UpdateScheduledAction = ActionConfigurationUpdate | LegacyActionConfiguration;
-
-/**
  * How a variable is filled when someone activates the template.
  */
 export type VariableFill = 'activator' | 'shared' | 'choice';
@@ -530,7 +516,7 @@ export type ListScheduledActionsResponses = {
 export type ListScheduledActionsResponse = ListScheduledActionsResponses[keyof ListScheduledActionsResponses];
 
 export type CreateScheduledActionData = {
-    body: CreateScheduledAction;
+    body: ActionConfiguration;
     path?: never;
     query?: never;
     url: '/scheduled-actions';
@@ -604,7 +590,7 @@ export type GetScheduledActionResponses = {
 export type GetScheduledActionResponse = GetScheduledActionResponses[keyof GetScheduledActionResponses];
 
 export type UpdateScheduledActionData = {
-    body: UpdateScheduledAction;
+    body: ActionConfigurationUpdate;
     path: {
         /**
          * ID of the scheduled action
@@ -813,7 +799,7 @@ export type ShareScheduledActionTemplateResponses = {
 export type ShareScheduledActionTemplateResponse = ShareScheduledActionTemplateResponses[keyof ShareScheduledActionTemplateResponses];
 
 export type ActivateScheduledActionTemplateData = {
-    body: CreateScheduledAction;
+    body: ActionConfiguration;
     path: {
         /**
          * ID of the shared routine

@@ -92,13 +92,14 @@ Create a channel. The caller becomes the owner.
 
 ### list()
 
-> **list**(): `Promise`\<[`Channel`](../../channel/classes/Channel.md)[]\>
+> **list**(): `AsyncGenerator`\<[`Channel`](../../channel/classes/Channel.md)\>
 
-All channels the authenticated user is a member of.
+Every channel the authenticated user is a member of, auto-paginated.
+Iterate with `for await`; collect with `Array.fromAsync`.
 
 #### Returns
 
-`Promise`\<[`Channel`](../../channel/classes/Channel.md)[]\>
+`AsyncGenerator`\<[`Channel`](../../channel/classes/Channel.md)\>
 
 ***
 
@@ -124,8 +125,8 @@ Open (creating if needed) the private group channel with a set of users.
 
 > **search**(`query`, `opts?`): `AsyncGenerator`\<[`Channel`](../../channel/classes/Channel.md)\>
 
-Search channels by name (client-side fuzzy filter on the full channel list)
-or by content (server-side unified search).
+Search channels by name (case-insensitive substring match over every
+channel the user is a member of) or by content (server-side unified search).
 
 #### Parameters
 

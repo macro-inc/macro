@@ -6,6 +6,7 @@ mod contacts;
 mod drafts;
 mod invitations;
 mod messages;
+mod route;
 mod rules;
 mod sync;
 mod transport;
@@ -22,7 +23,10 @@ use url::Url;
 use crate::domain::models::EmailApiError;
 use crate::domain::{
     models::MailboxAccess,
-    ports::{MailboxRejectedTokenRefresh, MailboxRequestGate, ScopedMailboxRepository},
+    ports::{
+        MailboxRejectedTokenRefresh, MailboxRequestCount, MailboxRequestGate,
+        ScopedMailboxRepository,
+    },
 };
 use std::sync::Arc;
 
@@ -84,6 +88,12 @@ impl OutlookApiClientRepository {
     #[cfg(test)]
     fn for_test(root: &str) -> Self {
         Self::with_root(Url::parse(root).unwrap()).unwrap()
+    }
+}
+
+impl MailboxRequestCount for OutlookApiClientRepository {
+    async fn admitted_requests(&self, mailbox: MailboxAccess) -> Option<u64> {
+        self.gate.as_ref()?.admitted(mailbox).await
     }
 }
 

@@ -77,6 +77,10 @@ that listener is ready. Cancellation can stop the gate before startup finishes.
   `RoutineSessions::prepare` checks again on every run, then adds them to an
   agent limited to selected apps. An update that omits the key is rejected
   when the stored task has apps (`require_explicit_selection`).
+- An agent target is any agent the owner may run: built in, their own, or
+  one on a self-hosted runtime. `TargetValidation` authorizes it on save
+  without contacting the runtime; `RoutineSessions::prepare` reauthorizes on
+  every run, and an offline runtime fails that run in its history.
 - Macro events store only ids, plus the GitHub pull request and account behind
   a task status change (`change_source`), and are read again, as the owner, at
   dispatch.
@@ -103,6 +107,15 @@ that listener is ready. Cancellation can stop the gate before startup finishes.
   updates sent on its in-process `DispatchEvent` channel. Every harness instance
   runs a dispatcher beside the API, so the instance that saved a near-term
   routine runs it within about a second; the claim stays fenced to `next_run_at`.
+- Create and update bodies are `ActionConfiguration` and
+  `ActionConfigurationUpdate`, with `trigger` required; the cron-only body with a
+  top-level `schedule` is gone. Rejections return serde's message, which names
+  the field. Cron schedules have 6 or 7 fields.
+- The list response carries each routine's `last_run` (latest finished run)
+  so clients can flag failures; single reads omit it. Every finished run is
+  reported to the owner by the host's `RoutineRunObserver`
+  (`services/agent_harness_service/src/scheduling/routine_run_notifications.rs`)
+  as an inbox-only `routine_run_finished` notification.
 - `template_id` is a plain pointer, not a foreign key: activated routines keep
   it after the template is unshared or its source routine is deleted.
 - `run_visibility` is copied onto each run's agent session when the run is

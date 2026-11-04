@@ -17,6 +17,7 @@ import {
   useNavigate,
   useParams,
 } from '@app/lib/split-router';
+import { usePending } from '@app/observability/flow';
 import { reviewsPrRoute, reviewsSplitRoute } from '@app/routes/routes';
 import { PR_ORIGIN_TOOLS } from '@block-pr/data/pr-origin';
 import {
@@ -177,6 +178,7 @@ function ReviewsRoot() {
     }),
     listEnabled
   );
+  usePending('reviews.items', source.isLoading);
   const facets = useReviewsFacetsQuery();
   const changeFilter = (
     group: ReviewsFilterId,

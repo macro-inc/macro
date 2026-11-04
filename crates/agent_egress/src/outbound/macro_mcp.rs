@@ -264,16 +264,19 @@ impl MacroApiTokenSigner {
         owner: &MacroUserIdStr<'static>,
         lifetime_seconds: usize,
     ) -> Result<String, EgressError> {
-        self.mint_for_agent(owner, lifetime_seconds, None).await
+        self.mint_for_agent(owner, lifetime_seconds, None, None)
+            .await
     }
 
-    /// Mint an owner credential with signed agent attribution for SDK messages.
-    #[tracing::instrument(skip_all, err, fields(?agent_id))]
+    /// Mint an owner credential with signed agent attribution for SDK messages,
+    /// and the client label (`agent_via`) the agent's posts are shown under.
+    #[tracing::instrument(skip_all, err, fields(?agent_id, ?agent_via))]
     pub async fn mint_for_agent(
         &self,
         owner: &MacroUserIdStr<'static>,
         lifetime_seconds: usize,
         agent_id: Option<macro_uuid::Uuid>,
+        agent_via: Option<String>,
     ) -> Result<String, EgressError> {
         if !(1..=MINTED_TOKEN_LIFETIME_SECONDS).contains(&lifetime_seconds) {
             return Err(EgressError::Internal(rootcause::report!(
@@ -315,6 +318,7 @@ impl MacroApiTokenSigner {
             private_key: self.private_key.clone(),
             expiry_seconds: lifetime_seconds,
             agent_id,
+            agent_via,
         })
         .map_err(|error| {
             EgressError::Internal(rootcause::report!(
@@ -330,7 +334,12 @@ impl MacroApiTokens for MacroApiTokenSigner {
         owner: &MacroUserIdStr<'static>,
         agent: BotId,
     ) -> Result<String, EgressError> {
-        self.mint_for_agent(owner, MINTED_TOKEN_LIFETIME_SECONDS, Some(agent.as_uuid()))
-            .await
+        self.mint_for_agent(
+            owner,
+            MINTED_TOKEN_LIFETIME_SECONDS,
+            Some(agent.as_uuid()),
+            None,
+        )
+        .await
     }
 }

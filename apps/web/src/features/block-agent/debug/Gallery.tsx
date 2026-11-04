@@ -4,11 +4,13 @@
  * `/component/agent-ui`.
  */
 
+import { AgentActivity } from '@app/features/agent-activity/agent-activity';
 import { PermissionCard } from '@app/features/agent-interactions/components/PermissionCard';
 import {
   initialValues,
   validate,
 } from '@app/features/agent-interactions/state/elicitation-form';
+import type { View } from '@app/features/dynamic-ui/view';
 import { StaticMarkdownContext } from '@core/component/LexicalMarkdown/component/core/StaticMarkdown';
 import { MagicChipView } from '@core/component/LexicalMarkdown/component/decorator/MagicChip/MagicChipView';
 import type { MagicChipPresentation } from '@core/component/LexicalMarkdown/component/decorator/MagicChip/presentation';
@@ -477,37 +479,8 @@ function DisplayResultsDemo() {
         name: { kind: 'mcp', server: 'macro', tool: 'DisplayResults' },
         status: pending() ? 'running' : 'completed',
         detail: {
-          kind: 'macro',
-          input: {
-            view: {
-              title: 'Launch overview',
-              widgets: [
-                {
-                  type: 'md',
-                  markdown:
-                    'The checklist is ready. **Two steps remain before launch.**',
-                },
-                {
-                  type: 'timeline',
-                  events: [
-                    {
-                      time: 'Today',
-                      title: 'Review launch checklist',
-                      description:
-                        'Confirm the release notes and rollout plan.',
-                    },
-                    {
-                      time: 'Tomorrow',
-                      title: 'Launch',
-                      description: 'Publish the release after checks pass.',
-                      future: true,
-                    },
-                  ],
-                },
-              ],
-            },
-          },
-          output: null,
+          kind: 'view',
+          view: pending() ? null : PRESENTED_VIEW,
           error: null,
         },
       },
@@ -525,6 +498,93 @@ function DisplayResultsDemo() {
         DisplayResults in progress
       </label>
       <Message message={message()} inFlight={pending()} />
+    </div>
+  );
+}
+
+const PRESENTED_VIEW: View = {
+  title: 'Launch overview',
+  widgets: [
+    {
+      type: 'md',
+      markdown: 'The checklist is ready. **Two steps remain before launch.**',
+    },
+    {
+      type: 'timeline',
+      events: [
+        {
+          time: 'Today',
+          title: 'Review launch checklist',
+          description: 'Confirm the release notes and rollout plan.',
+        },
+        {
+          time: 'Tomorrow',
+          title: 'Launch',
+          description: 'Publish the release after checks pass.',
+          future: true,
+        },
+      ],
+    },
+  ],
+};
+
+/** The PresentView call the harness presents (`view_<id>`) for
+ * `execution.views.present`. */
+function presentViewPart(id: string): MessagePart {
+  return {
+    kind: 'tool_use',
+    id,
+    name: { kind: 'mcp', server: 'macro_internal', tool: 'PresentView' },
+    status: 'completed',
+    detail: { kind: 'view', view: PRESENTED_VIEW, error: null },
+  };
+}
+
+/** The call the harness presents draws the view between collapsed runs. */
+function PresentViewDemo() {
+  const message: FoldedMessage = {
+    agentSessionId: 'present-view-demo',
+    requestId: null,
+    pending: false,
+    segments: [],
+    phase: null,
+    postedAt: null,
+    turn: 0,
+    author: { kind: 'agent' },
+    stop: { kind: 'end_turn' },
+    parts: [
+      ...TOOL_REPLAY_PARTS.slice(0, 2),
+      { kind: 'text', text: 'Here is where the launch stands:' },
+      presentViewPart('view_present-view-demo'),
+    ],
+  };
+  return (
+    <div data-testid="present-view-demo">
+      <Message message={message} inFlight={false} />
+    </div>
+  );
+}
+
+/** The same view in a DM reply: stored with its run, drawn under its steps. */
+function PresentViewDmDemo() {
+  return (
+    <div data-testid="present-view-dm-demo">
+      <AgentActivity
+        agentSessionId="present-view-dm-demo"
+        turn={0}
+        segment={0}
+        sealed
+        rows={[
+          { id: 'search', label: 'Searched', status: 'completed' },
+          {
+            id: 'view_present-view-demo',
+            label: 'Present view',
+            detail: 'Launch overview',
+            status: 'completed',
+            card: { kind: 'view', view: PRESENTED_VIEW },
+          },
+        ]}
+      />
     </div>
   );
 }
@@ -1089,6 +1149,12 @@ export default function AgentUiGallery() {
 
           <Item label="DisplayResults (inline between groups)">
             <DisplayResultsDemo />
+          </Item>
+          <Item label="Presented view">
+            <PresentViewDemo />
+          </Item>
+          <Item label="PresentView in a DM reply">
+            <PresentViewDmDemo />
           </Item>
           <Item label="ElicitationForm (live validation)">
             <ElicitationFormDemo />

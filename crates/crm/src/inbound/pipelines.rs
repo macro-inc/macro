@@ -74,6 +74,10 @@ where
         .route("/{id}", get(read::<P, E, A>))
         .route("/{id}/table", get(table::<P, E, A>))
         .route(
+            "/{id}/views/{view}/positions",
+            get(view_positions::<P, E, A>),
+        )
+        .route(
             "/{id}/rows",
             get(rows::<P, E, A>).post(query_rows::<P, E, A>),
         )
@@ -167,6 +171,29 @@ pub async fn table<P: PipelineService, E: EntityAccessService, A: MacroAuthoriza
         state
             .service
             .table(receipt::<ViewAccessLevel, _, _>(&*state.access, auth, id).await?)
+            .await?,
+    ))
+}
+
+/// Read saved board positions through pipeline access.
+#[utoipa::path(get, path = "/crm/pipelines/{id}/views/{view}/positions", operation_id = "get_crm_pipeline_view_positions",
+    params(("id" = Uuid, Path), ("view" = Uuid, Path)), responses((status = 200, body = Vec<databases::domain::models::CardPosition>)))]
+pub async fn view_positions<
+    P: PipelineService,
+    E: EntityAccessService,
+    A: MacroAuthorizationService,
+>(
+    auth: MacroAuthorizationExtractor<A, UserOrInternal>,
+    State(state): State<PipelineRouterState<P, E, A>>,
+    Path((id, view)): Path<(Uuid, Uuid)>,
+) -> Result<Json<Vec<databases::domain::models::CardPosition>>, PipelineError> {
+    Ok(Json(
+        state
+            .service
+            .view_positions(
+                receipt::<ViewAccessLevel, _, _>(&*state.access, auth, id).await?,
+                models_databases::ViewId::from_uuid(view),
+            )
             .await?,
     ))
 }

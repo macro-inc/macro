@@ -164,7 +164,7 @@ describe('TypeDoc documentation packaging', () => {
     };
     expect(entity('agentSessions')).toContain('### SessionReview');
     expect(entity('agentSessions')).toContain('`SessionReview.submitAll`');
-    expect(docs.symbols.ReviewRecord).toContain('presentedAt');
+    expect(docs.symbols.ReviewRecord_Serialize).toContain('presentedAt');
     expect(docs.symbols.SessionReview).not.toContain('property-parent');
     expect(docs.symbols.SessionReview).not.toContain('property-client');
     expect(docs.symbols.SessionReview).not.toContain('private constructor');

@@ -64,6 +64,39 @@ it('plays the sound chosen for the notification category', () => {
   expect(soundForNotification('new_email', settings)).toBeNull();
 });
 
+it('stays quiet during quiet hours and plays again outside them', () => {
+  const settings = parseNotificationSoundSettings(
+    JSON.stringify({
+      enabled: true,
+      quietHours: {
+        enabled: true,
+        startMinutes: 22 * 60,
+        endMinutes: 8 * 60,
+        days: ['tue'],
+        timeZone: 'UTC',
+      },
+    })
+  );
+
+  expect(
+    soundForNotification(
+      'channel_mention',
+      settings,
+      new Date('2026-11-03T23:30:00Z')
+    )
+  ).toBeNull();
+  expect(
+    soundForNotification(
+      'channel_mention',
+      settings,
+      new Date('2026-11-03T12:00:00Z')
+    )
+  ).toBe('ding');
+  expect(parseNotificationSoundSettings('{"enabled":true}').quietHours).toEqual(
+    DEFAULT_NOTIFICATION_SOUND_SETTINGS.quietHours
+  );
+});
+
 it('stays quiet for calls, muted volume, and unknown events', () => {
   const settings = parseNotificationSoundSettings(
     JSON.stringify({ enabled: true })

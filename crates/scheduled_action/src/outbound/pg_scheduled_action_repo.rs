@@ -12,13 +12,14 @@ use model_entity::EntityType;
 use model_owner::Owner;
 use serde_json::Value;
 use sqlx::PgPool;
+use std::collections::HashMap;
 use std::str::FromStr;
 
 use crate::domain::event_runs::{ClaimToken, ConfigurationRevision};
 use crate::domain::event_trigger::ActionTrigger;
 use crate::domain::models::{
-    ActionExecutionRecord, ActionKind, ActionPolicyError, AlreadyRunningError, MAX_ACTION_TIME,
-    Schedule, ScheduledAction,
+    ActionExecutionRecord, ActionKind, ActionPolicyError, AlreadyRunningError, LastRun,
+    MAX_ACTION_TIME, Schedule, ScheduledAction,
 };
 use crate::domain::ports::ScheduledActionRepo;
 
@@ -496,6 +497,31 @@ impl<B: BotFacts + 'static> ScheduledActionRepo for PgScheduledActionRepo<B> {
                 is_success: row.is_success,
                 result: row.result,
                 created_at: row.created_at,
+            })
+            .collect())
+    }
+
+    async fn last_runs(&self, action_ids: &[Uuid]) -> Result<HashMap<Uuid, LastRun>> {
+        let rows = sqlx::query!(
+            r#"
+            SELECT DISTINCT ON (action_id) action_id, end_time, is_success
+            FROM action_execution_record
+            WHERE action_id = ANY($1)
+            ORDER BY action_id, end_time DESC
+            "#,
+            action_ids,
+        )
+        .fetch_all(&self.pool)
+        .await?;
+
+        Ok(rows
+            .into_iter()
+            .map(|row| {
+                let last_run = LastRun {
+                    end_time: row.end_time,
+                    is_success: row.is_success,
+                };
+                (row.action_id, last_run)
             })
             .collect())
     }

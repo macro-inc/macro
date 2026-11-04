@@ -862,3 +862,74 @@ fn permission_answers_speculate_once_and_promote_on_the_agents_request_id() {
     assert!(fold.metadata().pending_interactions.is_empty());
     assert_eq!(fold.metadata().turn, TurnState::Running);
 }
+
+/// A model switch on a disconnected session: the harness wakes the runtime
+/// (`initialize`, `session/load` and its replay) and only then logs the
+/// change. The speculated control must promote and settle, or the composer
+/// reads the switch as forever in flight.
+#[test]
+fn a_model_change_that_wakes_the_runtime_settles_after_the_load() {
+    let mut fold = settled();
+    let disconnected =
+        parse_log(r#"{"direction":"to_server","content":{"type":"event","event":"disconnected"}}"#)
+            .remove(0);
+    fold.push(FoldInput::Confirmed(cursor(90), disconnected))
+        .unwrap();
+
+    let id = AgentActionId::mint();
+    let change = AgentAction::set_model("gpt");
+    fold.push(speculation(change.clone(), id)).unwrap();
+
+    let options = |current: &str| {
+        format!(
+            r#"{{"configOptions":[{{"id":"model","name":"Model","type":"select","category":"model","currentValue":"{current}","options":[{{"name":"Claude","value":"claude"}},{{"name":"GPT","value":"gpt"}}]}}]}}"#
+        )
+    };
+    let wake = [
+        r#"{"direction":"to_runtime","content":{"type":"acp","jsonrpc":"2.0","id":"wake:0","method":"initialize","params":{"protocolVersion":1}}}"#.to_owned(),
+        r#"{"direction":"to_server","content":{"type":"acp","jsonrpc":"2.0","id":"wake:0","result":{"protocolVersion":1,"agentCapabilities":{"loadSession":true}}}}"#.to_owned(),
+        r#"{"direction":"to_runtime","content":{"type":"acp","jsonrpc":"2.0","id":"wake:1","method":"session/load","params":{"sessionId":"s1","cwd":"/","mcpServers":[]}}}"#.to_owned(),
+        r#"{"direction":"to_server","content":{"type":"acp","jsonrpc":"2.0","method":"session/update","params":{"sessionId":"s1","update":{"sessionUpdate":"user_message_chunk","content":{"type":"text","text":"list the examples and write a file"}}}}}"#.to_owned(),
+        r#"{"direction":"to_server","content":{"type":"acp","jsonrpc":"2.0","method":"session/update","params":{"sessionId":"s1","update":{"sessionUpdate":"agent_message_chunk","content":{"type":"text","text":"Done."}}}}}"#.to_owned(),
+        r#"{"direction":"to_server","content":{"type":"acp","jsonrpc":"2.0","method":"_session/turn_complete","params":{"sessionId":"s1","outcome":{"kind":"finished"}}}}"#.to_owned(),
+        format!(
+            r#"{{"direction":"to_server","content":{{"type":"acp","jsonrpc":"2.0","id":"wake:1","result":{}}}}}"#,
+            options("claude")
+        ),
+    ];
+    for (index, line) in wake.iter().enumerate() {
+        fold.push(FoldInput::Confirmed(
+            cursor(100 + index),
+            parse_log(line).remove(0),
+        ))
+        .unwrap();
+    }
+    fold.push(FoldInput::Confirmed(cursor(200), logged(&change, id)))
+        .unwrap();
+    let answer = format!(
+        r#"{{"direction":"to_server","content":{{"type":"acp","jsonrpc":"2.0","id":"{}","result":{}}}}}"#,
+        id.to_request_id(),
+        options("gpt")
+    );
+    fold.push(FoldInput::Confirmed(
+        cursor(201),
+        parse_log(&answer).remove(0),
+    ))
+    .unwrap();
+
+    assert_eq!(fold.pending().count(), 0);
+    assert_eq!(fold.metadata().model.as_deref(), Some("gpt"));
+    let control = fold
+        .messages()
+        .iter()
+        .rev()
+        .find_map(|message| match message.parts.first() {
+            Some(MessagePart::Control {
+                control: Control::SetModel { model },
+                outcome,
+            }) => Some((model.clone(), outcome.clone(), message.pending)),
+            _ => None,
+        })
+        .expect("the model change is shown");
+    assert_eq!(control, ("gpt".to_owned(), ControlOutcome::Accepted, false));
+}

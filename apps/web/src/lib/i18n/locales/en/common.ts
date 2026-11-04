@@ -20,10 +20,13 @@ export default {
   changePriority: 'Change priority',
   cancel: 'Cancel',
   close: 'Close',
+  dismiss: 'Dismiss',
+  loading: 'Loading…',
   delete: 'Delete',
   rename: 'Rename',
   more: 'More',
   search: 'Search',
   selectItem: 'Select item',
+  contactsAndCompanies: 'Contacts & Companies',
   settings: 'Settings',
 };

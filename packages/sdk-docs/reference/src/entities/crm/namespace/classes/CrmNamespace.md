@@ -24,6 +24,39 @@
 
 ## Methods
 
+### blockDomain()
+
+> **blockDomain**(`domain`): `Promise`\<`void`\>
+
+Block a domain (like `acme.com`): email sync skips it, and the company
+that owns it, that company's contacts, and contacts without a company at
+the domain are hidden. A contact attached to another company follows that
+company's domains. Requires a team admin or owner.
+
+#### Parameters
+
+| Parameter | Type |
+| ------ | ------ |
+| `domain` | `string` |
+
+#### Returns
+
+`Promise`\<`void`\>
+
+***
+
+### blockedDomains()
+
+> **blockedDomains**(): `Promise`\<`string`[]\>
+
+The domains the caller's current team keeps out of email sync.
+
+#### Returns
+
+`Promise`\<`string`[]\>
+
+***
+
 ### companyById()
 
 > **companyById**(`id`): [`Company`](../../company/classes/Company.md)
@@ -93,6 +126,26 @@ Create a CRM company for the caller's current team.
 #### Returns
 
 `Promise`\<[`Company`](../../company/classes/Company.md)\>
+
+***
+
+### createContact()
+
+> **createContact**(`opts`): `Promise`\<[`Contact`](../../contact/classes/Contact.md)\>
+
+Create a contact without a company for the caller's current team. The
+email is optional and may be at any domain. To add someone to a company,
+use [Company.createContact](../../company/classes/Company.md#createcontact).
+
+#### Parameters
+
+| Parameter | Type |
+| ------ | ------ |
+| `opts` | [`CreateCrmTeamContactRequest`](../../../../../generated/storage/types.gen/type-aliases/CreateCrmTeamContactRequest.md) |
+
+#### Returns
+
+`Promise`\<[`Contact`](../../contact/classes/Contact.md)\>
 
 ***
 
@@ -175,6 +228,28 @@ The caller's current team's CRM settings.
 #### Returns
 
 `Promise`\<[`CrmTeamSettingsResponse`](../../../../../generated/storage/types.gen/type-aliases/CrmTeamSettingsResponse.md)\>
+
+***
+
+### unblockDomain()
+
+> **unblockDomain**(`domain`): `Promise`\<`void`\>
+
+Unblock a domain: email sync resumes for addresses the team's
+personal-email and generic-provider filters allow. Contacts without a
+company at this domain are shown again. Its company and attached contacts
+stay hidden until the company's last blocked domain is removed, then are
+shown even if hidden by hand before blocking. Requires a team admin or owner.
+
+#### Parameters
+
+| Parameter | Type |
+| ------ | ------ |
+| `domain` | `string` |
+
+#### Returns
+
+`Promise`\<`void`\>
 
 ***
 
