@@ -54,10 +54,16 @@ tools — hexagonal, heavily feature-gated.
 
 ## Gotchas
 
-- `Subject` is a message-level filter literal with no index pushdown, so
-  `has_thread_literals` mirrors it in the candidate stage; otherwise a page's
-  LIMIT counts threads the lateral drops. `Attachment(kind)` reads the
-  denormalized thread flags `email_db_client` maintains.
+- `Subject` is a message-level filter literal. With a top-level subject
+  term, each owned inbox gets a bound (not `unnest`) two-step subscan: threads
+  in order with only the trigram-indexed subject match, then the full match
+  (mailbox facts) per thread until LIMIT. Keep the `OFFSET 0` fences and the
+  absence of an outer sort, or the planner joins every hit to its facts
+  first; binding the inbox gives it that inbox's statistics instead of the
+  average one. Other subject trees keep the `has_thread_literals` mirror, so
+  a page's LIMIT never counts threads the lateral drops. Match the bare
+  `subject` column so the planner keeps its statistics. `Attachment(kind)`
+  reads the denormalized thread flags `email_db_client` maintains.
 - Treat DATE property literals as non-matches; apply ordinary boolean negation and keep non-date email filtering unchanged.
 - All Mail excludes present messages in spam/junk or trash before pagination;
   canonical cached previews and non-draft baselines use the same rule for Gmail
