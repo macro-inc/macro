@@ -12,6 +12,11 @@
 //!   highest of mention, reply, plain message or comment, then document
 //!   mention. The others are hidden in that row, so completing the row
 //!   acknowledges them too.
+//! - **One top-level message, one stack.** Everything about a top-level
+//!   channel message stacks on its thread row once there is more than one
+//!   thing: replies, mentions in them, and reactions to the message itself.
+//! - **One entity, one stack of comments.** All of an entity's comments stack
+//!   on one row, whichever thread they are in.
 //! - **Noise is hidden in its natural row:** calls starting, successful
 //!   pull request checks, reminders for events that have ended, and document
 //!   mentions of documents the viewer does not own.
@@ -82,8 +87,9 @@ struct Placed {
     notification: FeedNotification,
     slot: Slot,
     shown: bool,
-    /// A mention of the root message or comment of the row's thread.
-    root_mention: bool,
+    /// A mention that makes its row a mention row: of a channel thread's
+    /// root message, or anywhere in an entity's comments.
+    mention: bool,
 }
 
 /// What a notification says about a channel message or discussion comment,
@@ -113,7 +119,10 @@ enum ChannelKind<'a> {
         own_document: bool,
     },
     /// A reaction to one of the viewer's messages.
-    Reaction { thread_id: Option<&'a str> },
+    Reaction {
+        message_id: &'a str,
+        thread_id: Option<&'a str>,
+    },
     /// An invite to the channel.
     Invite,
     /// Anything else filed under the channel, such as a call starting.
@@ -155,6 +164,7 @@ fn channel_view<'a>(
             own_document: mention.owner == viewer.clone().into(),
         },
         NotifEvent::ChannelMessageReaction(reaction) => ChannelKind::Reaction {
+            message_id: &reaction.message_id,
             thread_id: reaction
                 .thread_id
                 .as_deref()
@@ -185,7 +195,7 @@ fn place_channel(
         .collect();
 
     // Threads with replies or mentions in their replies absorb their root.
-    let active: HashSet<&str> = views
+    let mut active: HashSet<&str> = views
         .iter()
         .filter_map(|view| match view.kind {
             ChannelKind::Message {
@@ -224,11 +234,30 @@ fn place_channel(
         }
     }
 
+    // A top-level message with a reaction and anything else about it is a
+    // stack of its own, so its reactions don't land on the channel's row.
+    let mut reactions: HashMap<&str, usize> = HashMap::new();
+    for view in &views {
+        if let ChannelKind::Reaction {
+            message_id,
+            thread_id: None,
+        } = view.kind
+        {
+            *reactions.entry(message_id).or_default() += 1;
+        }
+    }
+    active.extend(
+        reactions
+            .iter()
+            .filter(|(message, count)| **count > 1 || speakers.contains_key(*message))
+            .map(|(message, _)| *message),
+    );
+
     let thread = |root: &str| Slot::Thread(root.to_string());
     views
         .iter()
         .map(|view| {
-            let (slot, shown, root_mention) = match view.kind {
+            let (slot, shown, mention) = match view.kind {
                 ChannelKind::Message {
                     message_id,
                     own_document,
@@ -244,15 +273,20 @@ fn place_channel(
                     let speaks = speaker.notification_id == view.notification.notification_id;
                     let shown =
                         speaks && (speaker.role != MessageRole::DocumentMention || own_document);
-                    let root_mention = speaks
+                    let mention = speaks
                         && speaker.role == MessageRole::Mention
                         && speaker.thread_id.is_none();
-                    (slot, shown, root_mention)
+                    (slot, shown, mention)
                 }
                 ChannelKind::Reaction {
                     thread_id: Some(root),
+                    ..
                 } => (thread(root), true, false),
-                ChannelKind::Reaction { thread_id: None } | ChannelKind::Invite => {
+                ChannelKind::Reaction {
+                    message_id,
+                    thread_id: None,
+                } if active.contains(message_id) => (thread(message_id), true, false),
+                ChannelKind::Reaction { .. } | ChannelKind::Invite => {
                     (Slot::TopLevel, true, false)
                 }
                 ChannelKind::Quiet => (Slot::TopLevel, false, false),
@@ -261,19 +295,17 @@ fn place_channel(
                 notification: view.notification.clone(),
                 slot,
                 shown,
-                root_mention,
+                mention,
             }
         })
         .collect()
 }
 
-/// A discussion notification, normalized: its comment, thread root and
-/// role.
+/// A discussion notification, normalized: its comment and role.
 struct DiscussionView<'a> {
     notification: &'a FeedNotification,
     role: MessageRole,
     comment_id: String,
-    thread_id: String,
 }
 
 fn discussion_view(notification: &FeedNotification) -> Option<DiscussionView<'_>> {
@@ -284,24 +316,20 @@ fn discussion_view(notification: &FeedNotification) -> Option<DiscussionView<'_>
             MessageRole::Reply
         }
     };
-    let (role, comment_id, thread_id) = match &notification.notification_metadata {
+    let (role, comment_id) = match &notification.notification_metadata {
         NotifEvent::CommentedOnDocument(comment) => {
             let (comment_id, thread_id) = (
                 comment.comment_id.to_string(),
                 comment.thread_id.to_string(),
             );
-            (comment_role(&comment_id, &thread_id), comment_id, thread_id)
+            (comment_role(&comment_id, &thread_id), comment_id)
         }
-        NotifEvent::RepliedToDocumentCommentThread(reply) => (
-            MessageRole::Reply,
-            reply.comment_id.to_string(),
-            reply.thread_id.to_string(),
-        ),
-        NotifEvent::MentionedInDocumentComment(mention) => (
-            MessageRole::Mention,
-            mention.comment_id.to_string(),
-            mention.thread_id.to_string(),
-        ),
+        NotifEvent::RepliedToDocumentCommentThread(reply) => {
+            (MessageRole::Reply, reply.comment_id.to_string())
+        }
+        NotifEvent::MentionedInDocumentComment(mention) => {
+            (MessageRole::Mention, mention.comment_id.to_string())
+        }
         NotifEvent::InitiativeDiscussion(discussion) => {
             let (comment_id, thread_id) = (
                 discussion.message_id.to_string(),
@@ -311,7 +339,7 @@ fn discussion_view(notification: &FeedNotification) -> Option<DiscussionView<'_>
                 InitiativeDiscussionReason::Mention => MessageRole::Mention,
                 _ => comment_role(&comment_id, &thread_id),
             };
-            (role, comment_id, thread_id)
+            (role, comment_id)
         }
         NotifEvent::CrmDiscussion(discussion) => {
             let (comment_id, thread_id) = (
@@ -322,7 +350,7 @@ fn discussion_view(notification: &FeedNotification) -> Option<DiscussionView<'_>
                 CrmDiscussionReason::Mention => MessageRole::Mention,
                 _ => comment_role(&comment_id, &thread_id),
             };
-            (role, comment_id, thread_id)
+            (role, comment_id)
         }
         _ => return None,
     };
@@ -330,19 +358,11 @@ fn discussion_view(notification: &FeedNotification) -> Option<DiscussionView<'_>
         notification,
         role,
         comment_id,
-        thread_id,
     })
 }
 
-/// Place an entity's discussion notifications: one row per active thread,
-/// one for its other top-level comments.
+/// Place an entity's discussion notifications on its one row of comments.
 fn place_discussions(views: Vec<DiscussionView<'_>>) -> Vec<Placed> {
-    // Threads with activity beyond their root absorb the root.
-    let active: HashSet<&str> = views
-        .iter()
-        .filter(|view| view.comment_id != view.thread_id)
-        .map(|view| view.thread_id.as_str())
-        .collect();
     let mut speakers: HashMap<&str, (MessageRole, Uuid)> = HashMap::new();
     for view in &views {
         let candidate = (view.role, view.notification.notification_id);
@@ -359,19 +379,12 @@ fn place_discussions(views: Vec<DiscussionView<'_>>) -> Vec<Placed> {
         .iter()
         .map(|view| {
             let (role, speaker) = speakers[view.comment_id.as_str()];
-            let root = view.comment_id == view.thread_id;
-            let threaded =
-                !root || role == MessageRole::Mention || active.contains(view.thread_id.as_str());
             let speaks = speaker == view.notification.notification_id;
             Placed {
                 notification: view.notification.clone(),
-                slot: if threaded {
-                    Slot::Thread(view.thread_id.clone())
-                } else {
-                    Slot::TopLevel
-                },
+                slot: Slot::TopLevel,
                 shown: speaks,
-                root_mention: speaks && root && role == MessageRole::Mention,
+                mention: speaks && role == MessageRole::Mention,
             }
         })
         .collect()
@@ -439,10 +452,11 @@ fn place_event(notification: &FeedNotification, now: DateTime<Utc>) -> Option<(S
     })
 }
 
-fn row_type(slot: &Slot, channel: bool, root_mention: bool) -> InboxRowType {
-    match (slot, channel, root_mention) {
+fn row_type(slot: &Slot, channel: bool, mention: bool) -> InboxRowType {
+    match (slot, channel, mention) {
         (Slot::TopLevel, true, _) => InboxRowType::ChannelMessages,
-        (Slot::TopLevel, false, _) => InboxRowType::DiscussionMessages,
+        (Slot::TopLevel, false, true) => InboxRowType::DiscussionMention,
+        (Slot::TopLevel, false, false) => InboxRowType::DiscussionMessages,
         (Slot::Thread(_), true, true) => InboxRowType::ChannelMention,
         (Slot::Thread(_), true, false) => InboxRowType::ChannelThread,
         (Slot::Thread(_), false, true) => InboxRowType::DiscussionMention,
@@ -547,7 +561,7 @@ pub fn rows(
                 notification: notification.clone(),
                 slot,
                 shown,
-                root_mention: false,
+                mention: false,
             })
         }));
         placed
@@ -571,7 +585,7 @@ pub fn rows(
             let group_slot = by_slot
                 .remove(&slot)
                 .expect("every ordered slot has a group");
-            let root_mention = group_slot.iter().any(|placed| placed.root_mention);
+            let mention = group_slot.iter().any(|placed| placed.mention);
             let (shown, hidden): (Vec<Placed>, Vec<Placed>) =
                 group_slot.into_iter().partition(|placed| placed.shown);
             if shown.is_empty() {
@@ -600,7 +614,7 @@ pub fn rows(
                 _ => notifications.iter().any(|n| counts_as_unseen(n)),
             };
             Some(InboxRow {
-                row_type: row_type(&slot, channel, root_mention),
+                row_type: row_type(&slot, channel, mention),
                 actor: actor(&notifications[0]),
                 actions: actions(&slot, &notifications),
                 thread_id: match &slot {

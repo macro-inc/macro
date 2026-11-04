@@ -198,53 +198,117 @@ fn calls_alone_list_nothing() {
 }
 
 #[test]
-fn discussions_split_into_mentions_threads_and_top_level_comments() {
+fn an_entitys_comments_stack_on_one_row() {
     let doc = group(EntityType::Document, DOC);
     let listed = rows_of(
         &doc,
         &[
-            // Thread A: a root comment that mentions you, then a reply.
-            doc_comment_mention(1, DOC, 0xA0, 0xA0, 1),
-            doc_reply(2, DOC, 0xA1, 0xA0, 2),
             // Thread B: a reply to a thread you are in.
             doc_reply(3, DOC, 0xB1, 0xB0, 3),
-            // Threads C and D: lone root comments share the top-level row.
+            // Threads C and D: lone root comments.
             doc_comment(4, DOC, 0xC0, 0xC0, 4),
             doc_comment(5, DOC, 0xD0, 0xD0, 5),
-            // A mention in a reply of thread B shadows its comment.
-            doc_comment(6, DOC, 0xB2, 0xB0, 6),
-            doc_comment_mention(7, DOC, 0xB2, 0xB0, 6),
         ],
     );
     assert_eq!(
         shape(&listed),
-        vec![
-            (
-                InboxRowType::DiscussionThread,
-                vec![uuid(7), uuid(3)],
-                vec![uuid(6)]
-            ),
-            (
-                InboxRowType::DiscussionMessages,
-                vec![uuid(5), uuid(4)],
-                vec![]
-            ),
-            (
-                InboxRowType::DiscussionMention,
-                vec![uuid(2), uuid(1)],
-                vec![]
-            ),
-        ]
+        vec![(
+            InboxRowType::DiscussionMessages,
+            vec![uuid(5), uuid(4), uuid(3)],
+            vec![]
+        )]
     );
     assert_eq!(
         listed[0].id.id(),
-        format!("document:{}#thread:{}", uuid(DOC), uuid(0xB0))
-    );
-    assert_eq!(listed[0].thread_id, Some(uuid(0xB0).to_string()));
-    assert_eq!(
-        listed[1].id.id(),
         format!("document:{}#top_level", uuid(DOC))
     );
+    assert_eq!(listed[0].thread_id, None);
+}
+
+#[test]
+fn a_mention_makes_an_entitys_comments_a_mention_row_with_the_same_id() {
+    let doc = group(EntityType::Document, DOC);
+    let comments = [
+        doc_comment_mention(1, DOC, 0xA0, 0xA0, 1),
+        doc_reply(2, DOC, 0xA1, 0xA0, 2),
+        doc_comment(4, DOC, 0xC0, 0xC0, 4),
+        // A mention in a reply shadows the same comment's plain notification.
+        doc_comment(6, DOC, 0xB2, 0xB0, 6),
+        doc_comment_mention(7, DOC, 0xB2, 0xB0, 6),
+    ];
+    let listed = rows_of(&doc, &comments);
+    assert_eq!(
+        shape(&listed),
+        vec![(
+            InboxRowType::DiscussionMention,
+            vec![uuid(7), uuid(4), uuid(2), uuid(1)],
+            vec![uuid(6)]
+        )]
+    );
+
+    let without_mentions = rows_of(&doc, &[doc_comment(4, DOC, 0xC0, 0xC0, 4)]);
+    assert_eq!(
+        without_mentions[0].row_type,
+        InboxRowType::DiscussionMessages
+    );
+    assert_eq!(without_mentions[0].id, listed[0].id);
+}
+
+#[test]
+fn a_lone_reaction_stays_on_the_channels_row() {
+    assert_eq!(
+        shape(&channel_rows(&[
+            channel_send(1, CHANNEL, 0x100, 1),
+            channel_reaction(2, CHANNEL, ROOT, None, 2),
+        ])),
+        vec![(InboxRowType::ChannelMessages, vec![uuid(2), uuid(1)], vec![])]
+    );
+}
+
+#[test]
+fn reactions_to_one_top_level_message_stack_on_it() {
+    let listed = channel_rows(&[
+        channel_send(1, CHANNEL, 0x100, 1),
+        channel_reaction(2, CHANNEL, ROOT, None, 2),
+        channel_reaction(3, CHANNEL, ROOT, None, 3),
+    ]);
+    assert_eq!(
+        shape(&listed),
+        vec![
+            (InboxRowType::ChannelThread, vec![uuid(3), uuid(2)], vec![]),
+            (InboxRowType::ChannelMessages, vec![uuid(1)], vec![]),
+        ]
+    );
+    assert_eq!(listed[0].thread_id, Some(uuid(ROOT).to_string()));
+}
+
+#[test]
+fn a_reaction_joins_its_messages_replies() {
+    let listed = channel_rows(&[
+        channel_send(1, CHANNEL, ROOT, 1),
+        channel_reply(2, CHANNEL, ROOT, 0x101, 2),
+        channel_reaction(3, CHANNEL, ROOT, None, 3),
+    ]);
+    assert_eq!(
+        shape(&listed),
+        vec![(
+            InboxRowType::ChannelThread,
+            vec![uuid(3), uuid(2), uuid(1)],
+            vec![]
+        )]
+    );
+}
+
+#[test]
+fn a_reaction_joins_the_mention_it_reacts_to() {
+    let mention = channel_mention(1, CHANNEL, ROOT, None, 1);
+    let alone = channel_rows(std::slice::from_ref(&mention));
+    let listed = channel_rows(&[mention, channel_reaction(2, CHANNEL, ROOT, None, 2)]);
+    assert_eq!(
+        shape(&listed),
+        vec![(InboxRowType::ChannelMention, vec![uuid(2), uuid(1)], vec![])]
+    );
+    assert_eq!(listed[0].id, alone[0].id);
 }
 
 fn project_discussion(
@@ -272,21 +336,36 @@ fn project_discussion(
 }
 
 #[test]
-fn project_discussions_follow_their_reason() {
+fn project_discussions_stack_on_one_row() {
+    let project = group(EntityType::Initiative, 0x1A);
     assert_eq!(
         shape(&rows_of(
-            &group(EntityType::Initiative, 0x1A),
+            &project,
             &[
                 project_discussion(1, "mention", 0xA0, 0xA0, 1),
                 project_discussion(2, "owner", 0xB0, 0xB0, 2),
                 project_discussion(3, "reply", 0xC1, 0xC0, 3),
             ],
         )),
-        vec![
-            (InboxRowType::DiscussionThread, vec![uuid(3)], vec![]),
-            (InboxRowType::DiscussionMessages, vec![uuid(2)], vec![]),
-            (InboxRowType::DiscussionMention, vec![uuid(1)], vec![]),
-        ]
+        vec![(
+            InboxRowType::DiscussionMention,
+            vec![uuid(3), uuid(2), uuid(1)],
+            vec![]
+        )]
+    );
+    assert_eq!(
+        shape(&rows_of(
+            &project,
+            &[
+                project_discussion(2, "owner", 0xB0, 0xB0, 2),
+                project_discussion(3, "reply", 0xC1, 0xC0, 3),
+            ],
+        )),
+        vec![(
+            InboxRowType::DiscussionMessages,
+            vec![uuid(3), uuid(2)],
+            vec![]
+        )]
     );
 }
 

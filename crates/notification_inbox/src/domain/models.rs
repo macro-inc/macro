@@ -22,16 +22,17 @@ pub enum InboxRowType {
     Email,
     /// A top-level channel message that mentions the viewer, with its thread.
     ChannelMention,
-    /// A channel's top-level messages, reactions to them and invites.
+    /// A channel's top-level messages, a lone reaction to one, and invites.
     ChannelMessages,
-    /// A channel thread's replies, mentions and reactions.
+    /// A channel thread's replies, mentions and reactions, with its root
+    /// message and the reactions to it.
     ChannelThread,
-    /// A top-level discussion comment that mentions the viewer, with its
-    /// thread.
+    /// An entity's discussion comments, when one of them mentions the viewer.
     DiscussionMention,
-    /// An entity's top-level discussion comments.
+    /// An entity's discussion comments.
     DiscussionMessages,
-    /// One discussion thread's replies.
+    /// One discussion thread's replies. No longer listed, since an entity's
+    /// comments share one row; kept because row kinds only grow.
     DiscussionThread,
     /// A task assigned to the viewer.
     Task,
