@@ -1,0 +1,91 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            SELECT f.thread_id, f.category, f.importance, f.classified_at,\n                   now_state.earned OR now_state.waiting OR now_state.calendar_held\n                       AS \"is_focus!\",\n                   (now_state.earned OR now_state.calendar_held)\n                       AND (f.needs_reply OR f.needs_follow_up)\n                       AND NOT now_state.owner_latest\n                       AS \"needs_reply!\",\n                   ((now_state.earned OR now_state.calendar_held)\n                       AND f.needs_follow_up\n                       AND now_state.owner_latest)\n                       OR now_state.waiting\n                       AS \"needs_follow_up!\",\n                   now_state.waiting AS \"waiting!\",\n                   now_state.calendar_held AS \"calendar_held!\",\n                   f.classified_message_ts,\n                   f.importance_rate,\n                   now_state.untouched AS \"untouched!\"\n            FROM email_thread_focus f\n            JOIN email_threads t ON t.id = f.thread_id AND t.link_id = f.link_id\n            LEFT JOIN LATERAL (\n                SELECT COALESCE(m.internal_date_ts, m.created_at) AS at, m.is_sent\n                FROM email_messages m\n                WHERE m.thread_id = t.id\n                  AND NOT m.is_draft\n                  AND EXISTS (\n                      SELECT 1 FROM email_message_mailbox_facts facts\n                      WHERE facts.id = m.id AND facts.is_present AND NOT facts.in_trash\n                  )\n                ORDER BY COALESCE(m.internal_date_ts, m.created_at) DESC, m.id DESC\n                LIMIT 1\n            ) latest ON TRUE\n            CROSS JOIN LATERAL (\n                SELECT COALESCE(latest.is_sent, false) AS owner_latest,\n                       f.is_focus AND (t.is_signal OR f.pinned) AS earned,\n                       f.awaiting_reply\n                           AND t.inbox_visible\n                           AND COALESCE(latest.is_sent AND latest.at <= $3, false) AS waiting,\n                       t.inbox_visible\n                           AND COALESCE(\n                               f.calendar_hold_until > $4\n                                   AND latest.at <= f.classified_message_ts,\n                               false\n                           ) AS calendar_held,\n                       COALESCE(latest.at <= f.classified_message_ts, false) AS untouched\n            ) now_state\n            WHERE f.thread_id = ANY($1)\n              AND f.link_id IN (\n                  SELECT el.id FROM email_links el WHERE el.macro_id = $2\n                  UNION\n                  SELECT mul.link_id FROM macro_user_links mul WHERE mul.primary_macro_id = $2\n              )\n            ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "thread_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 1,
+        "name": "category",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 2,
+        "name": "importance",
+        "type_info": "Int2"
+      },
+      {
+        "ordinal": 3,
+        "name": "classified_at",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 4,
+        "name": "is_focus!",
+        "type_info": "Bool"
+      },
+      {
+        "ordinal": 5,
+        "name": "needs_reply!",
+        "type_info": "Bool"
+      },
+      {
+        "ordinal": 6,
+        "name": "needs_follow_up!",
+        "type_info": "Bool"
+      },
+      {
+        "ordinal": 7,
+        "name": "waiting!",
+        "type_info": "Bool"
+      },
+      {
+        "ordinal": 8,
+        "name": "calendar_held!",
+        "type_info": "Bool"
+      },
+      {
+        "ordinal": 9,
+        "name": "classified_message_ts",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 10,
+        "name": "importance_rate",
+        "type_info": "Int2"
+      },
+      {
+        "ordinal": 11,
+        "name": "untouched!",
+        "type_info": "Bool"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "UuidArray",
+        "Text",
+        "Timestamptz",
+        "Timestamptz"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      false,
+      false,
+      null,
+      null,
+      null,
+      null,
+      null,
+      false,
+      false,
+      null
+    ]
+  },
+  "hash": "63deb805bba2ed683c2f38b1aa16bb1095a8dbdcaf6b933d67d4b9a0ef454f21"
+}

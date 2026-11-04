@@ -1,6 +1,7 @@
 use serde_json::json;
 
 use super::*;
+use crate::error::TransportFailure;
 
 fn args() -> ReconcileAgentSessionArgs {
     ReconcileAgentSessionArgs {
@@ -71,8 +72,12 @@ fn index_override_selects_a_physical_backfill_index() {
     );
 }
 
-/// Capture actual HTTP requests so both index and bulk serialization are covered.
-async fn capture_reconcile_requests(index_override: Option<&str>) -> Vec<String> {
+/// Answer the parent, bulk, and prune requests in turn with each status and
+/// body, capturing the actual HTTP requests so their serialization is covered.
+async fn serve_reconcile(
+    responses: [(&'static str, &'static str); 3],
+    index_override: Option<&str>,
+) -> (Vec<String>, Result<()>) {
     use std::io::{BufRead, Read, Write};
     use std::net::TcpListener;
     use std::time::Duration;
@@ -81,11 +86,7 @@ async fn capture_reconcile_requests(index_override: Option<&str>) -> Vec<String>
     let address = listener.local_addr().unwrap();
     let server = std::thread::spawn(move || {
         let mut requests = Vec::new();
-        for body in [
-            r#"{}"#,
-            r#"{"errors":false}"#,
-            r#"{"failures":[],"timed_out":false}"#,
-        ] {
+        for (status, body) in responses {
             let (mut stream, _) = listener.accept().unwrap();
             stream
                 .set_read_timeout(Some(Duration::from_secs(5)))
@@ -106,7 +107,7 @@ async fn capture_reconcile_requests(index_override: Option<&str>) -> Vec<String>
                 }
             }
             reader.read_exact(&mut vec![0; content_length]).unwrap();
-            write!(stream, "HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{body}", body.len()).unwrap();
+            write!(stream, "HTTP/1.1 {status}\r\nContent-Type: application/json\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{body}", body.len()).unwrap();
         }
         requests
     });
@@ -115,13 +116,21 @@ async fn capture_reconcile_requests(index_override: Option<&str>) -> Vec<String>
     let result = client
         .reconcile_agent_session(&args(), index_override)
         .await;
-    result.unwrap();
-    server.join().unwrap()
+    (server.join().unwrap(), result)
 }
 
 #[tokio::test]
 async fn normal_parent_and_bulk_writes_require_an_alias() {
-    let requests = capture_reconcile_requests(None).await;
+    let (requests, result) = serve_reconcile(
+        [
+            ("200 OK", r#"{}"#),
+            ("200 OK", r#"{"errors":false}"#),
+            ("200 OK", r#"{"failures":[],"timed_out":false}"#),
+        ],
+        None,
+    )
+    .await;
+    result.unwrap();
     assert!(
         requests[0].starts_with("POST /agent_sessions/_doc/session-1?"),
         "{requests:?}"
@@ -134,7 +143,16 @@ async fn normal_parent_and_bulk_writes_require_an_alias() {
 
 #[tokio::test]
 async fn explicit_backfill_overrides_allow_a_physical_index() {
-    let requests = capture_reconcile_requests(Some("scratch-index")).await;
+    let (requests, result) = serve_reconcile(
+        [
+            ("200 OK", r#"{}"#),
+            ("200 OK", r#"{"errors":false}"#),
+            ("200 OK", r#"{"failures":[],"timed_out":false}"#),
+        ],
+        Some("scratch-index"),
+    )
+    .await;
+    result.unwrap();
     assert!(
         requests[0].starts_with("POST /scratch-index/_doc/session-1?"),
         "{requests:?}"
@@ -143,6 +161,78 @@ async fn explicit_backfill_overrides_allow_a_physical_index() {
     for request in &requests[..2] {
         assert!(request.contains("require_alias=false"), "{request}");
     }
+}
+
+#[tokio::test]
+async fn a_load_balancer_error_page_on_prune_is_reported_with_its_body() {
+    let (_, result) = serve_reconcile(
+        [
+            ("200 OK", r#"{}"#),
+            ("200 OK", r#"{"errors":false}"#),
+            (
+                "502 Bad Gateway",
+                "<html><head><title>502 Bad Gateway</title></head></html>",
+            ),
+        ],
+        None,
+    )
+    .await;
+
+    let Err(OpensearchClientError::Unknown { details, operation }) = result else {
+        panic!("expected the 502 page to be reported, got {result:?}");
+    };
+    assert_eq!(operation, OpensearchOperation::ReconcileAgentSessionPrune);
+    assert!(details.contains("502 Bad Gateway"), "{details}");
+}
+
+#[tokio::test]
+async fn a_connection_closed_without_a_response_reports_the_transport_cause() {
+    use std::io::{BufRead, Read};
+    use std::net::TcpListener;
+
+    let listener = TcpListener::bind("127.0.0.1:0").unwrap();
+    let address = listener.local_addr().unwrap();
+    let server = std::thread::spawn(move || {
+        let (mut stream, _) = listener.accept().unwrap();
+        let mut reader = std::io::BufReader::new(&mut stream);
+        let mut content_length = 0;
+        loop {
+            let mut line = String::new();
+            reader.read_line(&mut line).unwrap();
+            if line == "\r\n" {
+                break;
+            }
+            if let Some(value) = line.to_ascii_lowercase().strip_prefix("content-length:") {
+                content_length = value.trim().parse::<usize>().unwrap();
+            }
+        }
+        reader.read_exact(&mut vec![0; content_length]).unwrap();
+        // Dropping the stream closes the connection before any response.
+    });
+    let client =
+        crate::OpensearchClient::new(format!("http://{address}"), "".into(), "".into()).unwrap();
+    let result = client.reconcile_agent_session(&args(), None).await;
+    server.join().unwrap();
+
+    let Err(OpensearchClientError::RequestFailed {
+        details,
+        cause,
+        operation,
+    }) = result
+    else {
+        panic!("expected a request failure, got {result:?}");
+    };
+    assert_eq!(operation, OpensearchOperation::ReconcileAgentSessionParent);
+    assert_eq!(cause, TransportFailure::ConnectionClosed);
+    assert!(
+        details.contains("connection closed before message completed"),
+        "{details}"
+    );
+    assert_eq!(
+        details.matches("error sending request").count(),
+        1,
+        "{details}"
+    );
 }
 
 /// Uses only a uniquely named scratch index; never changes application indices.

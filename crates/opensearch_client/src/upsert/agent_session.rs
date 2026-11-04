@@ -2,7 +2,12 @@ use models_opensearch::SearchIndex;
 use opensearch::BulkParts;
 use serde::Serialize;
 
-use crate::{Result, date_format::EpochMillis, error::OpensearchClientError};
+use crate::{
+    Result,
+    agent_session::response_error,
+    date_format::EpochMillis,
+    error::{OpensearchClientError, OpensearchOperation},
+};
 
 #[cfg(test)]
 mod test;
@@ -132,30 +137,14 @@ fn child_document<'a>(
     }
 }
 
-fn serialization_error(method: &str, error: impl std::fmt::Display) -> OpensearchClientError {
-    OpensearchClientError::DeserializationFailed {
+fn serialization_error(
+    operation: OpensearchOperation,
+    error: serde_json::Error,
+) -> OpensearchClientError {
+    OpensearchClientError::SerializationFailed {
         details: error.to_string(),
-        method: Some(method.to_owned()),
+        operation,
     }
-}
-
-async fn response_error(
-    response: opensearch::http::response::Response,
-    method: &str,
-) -> Result<()> {
-    let status_code = response.status_code();
-    if status_code.is_success() {
-        return Ok(());
-    }
-    let body = response
-        .text()
-        .await
-        .map_err(|error| serialization_error(method, error))?;
-    tracing::error!(%status_code, %body, "agent-session OpenSearch operation failed");
-    Err(OpensearchClientError::Unknown {
-        details: body,
-        method: Some(method.to_owned()),
-    })
 }
 
 /// Write the current parent and children, then remove documents from older
@@ -181,8 +170,13 @@ pub(crate) async fn reconcile_agent_session(
         .refresh(opensearch::params::Refresh::WaitFor)
         .send()
         .await
-        .map_err(|error| serialization_error("reconcile_agent_session_parent", error))?;
-    response_error(parent, "reconcile_agent_session_parent").await?;
+        .map_err(|error| {
+            OpensearchClientError::request_failed(
+                OpensearchOperation::ReconcileAgentSessionParent,
+                &error,
+            )
+        })?;
+    response_error(parent, OpensearchOperation::ReconcileAgentSessionParent).await?;
 
     if !args.messages.is_empty() {
         let mut body = Vec::with_capacity(args.messages.len() * 2);
@@ -194,11 +188,14 @@ pub(crate) async fn reconcile_agent_session(
                         "routing": routing,
                     }
                 }))
-                .map_err(|error| serialization_error("reconcile_agent_session_bulk", error))?,
+                .map_err(|error| {
+                    serialization_error(OpensearchOperation::ReconcileAgentSessionBulk, error)
+                })?,
             );
             body.push(
-                serde_json::to_string(&child_document(args, message))
-                    .map_err(|error| serialization_error("reconcile_agent_session_bulk", error))?,
+                serde_json::to_string(&child_document(args, message)).map_err(|error| {
+                    serialization_error(OpensearchOperation::ReconcileAgentSessionBulk, error)
+                })?,
             );
         }
 
@@ -209,20 +206,26 @@ pub(crate) async fn reconcile_agent_session(
             .refresh(opensearch::params::Refresh::WaitFor)
             .send()
             .await
-            .map_err(|error| serialization_error("reconcile_agent_session_bulk", error))?;
-        let status_code = response.status_code();
-        if !status_code.is_success() {
-            return response_error(response, "reconcile_agent_session_bulk").await;
+            .map_err(|error| {
+                OpensearchClientError::request_failed(
+                    OpensearchOperation::ReconcileAgentSessionBulk,
+                    &error,
+                )
+            })?;
+        if !response.status_code().is_success() {
+            return response_error(response, OpensearchOperation::ReconcileAgentSessionBulk).await;
         }
-        let response_body: serde_json::Value = response
-            .json()
-            .await
-            .map_err(|error| serialization_error("reconcile_agent_session_bulk", error))?;
+        let response_body: serde_json::Value = response.json().await.map_err(|error| {
+            OpensearchClientError::deserialization_failed(
+                OpensearchOperation::ReconcileAgentSessionBulk,
+                &error,
+            )
+        })?;
         if response_body["errors"].as_bool() == Some(true) {
             tracing::error!(body=?response_body, "agent-session bulk reconcile had failed items");
             return Err(OpensearchClientError::Unknown {
                 details: response_body.to_string(),
-                method: Some("reconcile_agent_session_bulk".to_owned()),
+                operation: OpensearchOperation::ReconcileAgentSessionBulk,
             });
         }
     }
@@ -245,6 +248,15 @@ pub(crate) async fn reconcile_agent_session(
         .refresh(true)
         .send()
         .await
-        .map_err(|error| serialization_error("reconcile_agent_session_prune", error))?;
-    crate::agent_session::check_delete_response(response, "reconcile_agent_session_prune").await
+        .map_err(|error| {
+            OpensearchClientError::request_failed(
+                OpensearchOperation::ReconcileAgentSessionPrune,
+                &error,
+            )
+        })?;
+    crate::agent_session::check_delete_response(
+        response,
+        OpensearchOperation::ReconcileAgentSessionPrune,
+    )
+    .await
 }

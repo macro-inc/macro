@@ -59,10 +59,7 @@ import { CrmCreateMenu } from '../components/crm-create-menu';
 import { CrmMobileTabs } from '../components/crm-mobile-tabs';
 import { CrmSidebar } from '../components/crm-sidebar';
 import { CrmListError, CrmListSkeleton } from '../components/list-state';
-import {
-  PeopleDisplayMenu,
-  RemovedPeopleNotice,
-} from '../components/people-display-menu';
+import { PeopleDisplayMenu } from '../components/people-display-menu';
 import { PipelineDialog } from '../components/pipeline-dialog';
 import { PipelineSidebar } from '../components/pipeline-sidebar';
 import { useCrmContext } from '../context/crm-context';
@@ -431,10 +428,7 @@ export function CrmWorkspaceView(props: {
   const title = () =>
     sequencesShown()
       ? t('sequences.title')
-      : ((view.peopleVisibility.showRemoved()
-          ? t('viewMenus.removedPeople')
-          : undefined) ??
-        activeList()?.name ??
+      : (activeList()?.name ??
         [...CRM_RECORDS, ...CRM_ACTIVITY_TABS].find(
           (record) => record.id === activeRecord()
         )?.label ??
@@ -843,14 +837,16 @@ export function CrmWorkspaceView(props: {
             <Show
               when={!isTouchDevice()}
               fallback={
-                <Show when={peopleActive()}>
-                  <ViewShell.Header class="touch:pt-0">
-                    <div class="flex min-w-0 items-center justify-between gap-3">
+                <ViewShell.Header class="touch:pt-0">
+                  <div class="flex min-w-0 items-center justify-between gap-3">
+                    <Show when={peopleActive()}>
                       <PeopleSearchBar
                         value={peopleSearch()}
                         onValueChange={searchPeople}
                       />
-                      <PeopleDisplayMenu visibility={view.peopleVisibility} />
+                    </Show>
+                    <PeopleDisplayMenu visibility={view.peopleVisibility} />
+                    <Show when={peopleActive()}>
                       <Button
                         variant="secondary"
                         class="ml-auto shrink-0"
@@ -859,9 +855,9 @@ export function CrmWorkspaceView(props: {
                         <PlusIcon class="size-4" />
                         New contact
                       </Button>
-                    </div>
-                  </ViewShell.Header>
-                </Show>
+                    </Show>
+                  </div>
+                </ViewShell.Header>
               }
             >
               <ListHeader
@@ -897,9 +893,7 @@ export function CrmWorkspaceView(props: {
                     </Show>
                   </HeaderActionGroup>
                 </Show>
-                <Show when={peopleActive()}>
-                  <PeopleDisplayMenu visibility={view.peopleVisibility} />
-                </Show>
+                <PeopleDisplayMenu visibility={view.peopleVisibility} />
                 {toolbarCreateMenu()}
                 <CrmHeaderSearch
                   label={peopleActive() ? 'Search people' : 'Search companies'}
@@ -916,11 +910,6 @@ export function CrmWorkspaceView(props: {
                   <CrmFilterChips onReset={() => navigate(active())} />
                 </Suspense>
               </Show>
-            </Show>
-            <Show when={view.peopleVisibility.showRemoved()}>
-              <RemovedPeopleNotice
-                onShowActive={() => view.peopleVisibility.setShowRemoved(false)}
-              />
             </Show>
             {/* The header above already clears the status bar on touch. */}
             <div class="flex min-h-0 min-w-0 flex-1 flex-col [--mobile-content-inset-top:0px]">

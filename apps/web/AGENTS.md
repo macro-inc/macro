@@ -1,4 +1,5 @@
 ## Development Commands
+
 - Use `bun` as the package manager and script runner (`bun run build`, `bunx tsc`).
 - `bun run test`: run tests 
 - `bun run check`: check typescript changes 
@@ -86,8 +87,10 @@ searches, and picks by keyboard:
 Focus rows have a backend-free browser regression over the real row and mapping
 at wide, one-line, stacked, phone, and tablet widths: one reason per row, no
 extra height or lost subject, touch rows of at least 44px, and the importance
-meter only under its sort:
+meter only under its sort, with the direction in its label while importance moves:
 `bunx playwright test --config src/features/email-view/browser-test/playwright.config.ts`.
+The fixture has its own sort buttons: the real touch layouts have no sort menu, so
+that coverage proves the meter's layout there, not that touch users can reach it.
 
 Discussion link scrolling has a backend-free browser regression:
 `bunx playwright test --config src/lib/core/messages/browser-test/playwright.config.ts`.
@@ -170,6 +173,9 @@ boosts (Cmd+K's channel and DM boosts) order rows within those groups and never
 lift a row past a better name match. The one exception: Cmd+K then keeps Macro
 users and DMs ahead of CRM contacts across the people positions, whatever their
 match. Tune name relevance there for every menu.
+Soup's local search pool (`createSearchState`) stays lazy: it builds only when
+local search has text. Measure Quick Access ranking at scale with the
+[scale fixture](src/features/command/browser-test/README.md).
 Cmd+K and mobile name search widen the first group: a query equal to the first
 word of a DM or person name counts as exact, so a person's first name reaches
 their full-name DM. `commaSeparatedChannelMatch` (Cmd+K, mobile name search,
@@ -200,6 +206,9 @@ Channel composer draft persistence has a backend-free browser regression:
 It checks draft blank lines across remounts, that a sent message renders its
 lines with the spacing the draft showed, and pending sends on desktop and phone: clear immediately, restore failed sends, and preserve a new draft typed during delivery.
 It also pastes a Macro link and Markdown into a code block, which must keep both as literal text.
+Its phone formatting regression opens the ribbon from the add drawer in the
+production message editor, removes selected strikethrough, and saves; keep
+the ribbon horizontally scrollable and preserve editor focus on its controls.
 
 Shared GraphQL query metadata has a backend-free desktop and iPhone WebKit regression:
 `bunx playwright test --config src/lib/urql-solid/browser-test/playwright.config.ts`.
@@ -424,17 +433,20 @@ resolved session ID; keep the existing `AgentSessionProvider` subscription to
   Record search fills the row beside filters with header spacing; section creation
   replaces the default floating dock action through FloatRegion. See
   `src/features/crm/README.md` and `docs/agent-guide/crm.md` at the repo root.
-  Keep record Remove/Restore actions out of the information panel: contact Sharing
-  is absent, and company Sharing contains only permission-gated Sync Emails.
-  Company Team lists exclude hidden contacts for every role; keep authorized
-  detail/restore access and invalidate embedded company contacts on hide/restore.
-  People display options expose removed records only after an explicit admin/owner
-  choice scoped to the current team; query hidden state on the server before
-  pagination, reset the choice on session/team/role/list changes, and refresh
-  mounted GraphQL contact readers after visibility mutations. Exercise discovery
-  with `bunx playwright test --config src/features/crm/browser-test/people/playwright.config.ts`.
-  The backend-free desktop/phone regression uses real CRM query adapters:
-  `bunx playwright test --config src/features/crm/browser-test/team/playwright.config.ts`.
+  Put Archive beside Copy link for visible CRM records; put the Archived chip and
+  separate borderless Restore action in the identity heading for archived records.
+  Keep explanations on the chip and retain company-only Email sharing controls.
+  Use the explicit Visible/Archived filter for People, Companies and company Team;
+  reset its admin-only choice on account/team/role/list changes and preserve search.
+  Apply confirmed visibility changes to detail, list and normalized search caches;
+  fence in-flight pre-write responses and refresh only affected CRM readers.
+  Declare CRM membership dependencies from each Soup query's initial filter scope
+  on every page so empty late responses are fenced without refreshing excluded types.
+  Recover missing dependencies before forwarding durable/imperative revalidations;
+  a later observer may share an in-flight request without forwarding its context.
+  Preserve company cascade semantics and require company restoration before a person.
+  Run desktop/phone controls with `bunx playwright test --config src/features/crm/browser-test/archive/playwright.config.ts`;
+  `browser-test/people` and `browser-test/team` additionally cover synthetic query adapters.
 - Main Tasks mounts reusable GraphQL saved views; keep embedded Project/CRM task lists unchanged. Read `src/features/tasks-view/AGENTS.md` for filter, draft, navigation, and browser checks.
 - Enable persisted email/calendar review controls only for the review’s saved acting account; historical reviews fall back to the session owner. Require session edit access on desktop and mobile.
 - Email draft reads compare server generations before choosing cached delivery state over a restored working copy; only a definitive first-submission rejection permits local send recovery without server cancellation.
@@ -472,6 +484,12 @@ resolved session ID; keep the existing `AgentSessionProvider` subscription to
 - Leave the login hint (`syncLoginStorage(true)`) before a full-page hosted
   SSO redirect; the callback sets only HttpOnly cookies, and a load without the
   hint never checks identity, so the returning user sees sign-in again.
+- Hold automatic reloads (`holdAutomaticReload`) across anything a reload would
+  lose. `createNativeAuthSession` holds them for the sheet: its result reaches
+  only the JavaScript that opened it, and leaving the app for a sign-in code
+  hides the page, the moment OTA bundles apply. Holds also reach the native
+  updater, whose foreground handler never asks the page. See
+  [reload diagnostics](tauri/src-tauri/README.md#diagnosing-unexpected-webview-reloads).
 - Disable GraphQL cache sessions and clear login hints on confirmed auth 401s,
   even with retained user data; preserve session state on transient failures.
 - Treat a repeated worker-ready frame as a coordinator restart: retire the old
@@ -591,6 +609,10 @@ resolved session ID; keep the existing `AgentSessionProvider` subscription to
   calls open their record; ongoing channel and scheduled calls return to the
   channel and Calendar. Leaving from a channel's Call tab stays in the channel. Preserve the session ID and send the server leave before media
   teardown; once the last participant drops, the server ends the call first.
+- Keep active phone calls viewport-filling with visible header islands and idle
+  controls below the video; Back dismisses without leaving, while setup and
+  tablet/desktop chrome stay unchanged.
+  See [Calls](../../docs/agent-guide/calls.md).
 - Diagnose browser call media with `call.media.*` spans and the `meeting.setup.id`
   on `meeting.join`; keep provider messages, device labels/IDs, and call-link
   tokens out of telemetry. See [call diagnostics](../../docs/agent-guide/calls.md#browser-call-diagnostics).
@@ -643,9 +665,9 @@ resolved session ID; keep the existing `AgentSessionProvider` subscription to
   for a notification (Home, Inbox) wait for it to choose a target.
 - Gate the Chat redesign with `enable-chat-sidebar-sections`; wait for its result, restore the tabbed rail when off, and keep mobile unchanged.
   Keep the original rail renderer and label dialogs in `components/rail/`; build the redesigned rail and section dialogs in `components/rail/next/`, with shared controller, context, and row primitives outside `next/`.
-  Default desktop Chat to Favorites, Direct messages, the team's channels, custom sections, then All channels; preserve personal section reordering and keep public/private channels in All channels regardless of custom-section assignments.
-  Keep resize and reorder grips keyboard-accessible; reveal bare reorder grips only on header hover or keyboard focus, keep them fixed in the left gutter without shifting section names, and include them within the drag highlight. Allow dragging from the whole heading while preserving normal collapse clicks and excluding action buttons. Preserve personal section heights/order, compensate resize drags for scrolling, disable stack scroll anchoring only during resizing, and route list navigation through the sectioned renderer's scroll handle. Scroll keyboard targets immediately without animation, keeping two rows of context on either side, clamped to the viewport.
-  Cap section heights at measured list content and available pane space; hide resize grips for two or fewer items and default Favorites and DMs to four rows. Let final All channels fill its content by default, but preserve saved heights and cap it normally when another section follows. Use TanStack Virtual for the redesigned section stack, channel rows, and search results; keep full-height channel rows virtualized against the outer viewport and retain stable keys, focused rows, and drag sources.
+  Default desktop Chat to Favorites, Direct messages, the team's channels, then custom sections; preserve personal section reordering and omit All channels. Keep joined public/private conversations outside these sections available through sidebar search.
+  Keep resize and reorder grips keyboard-accessible; reveal bare reorder grips only on header hover or keyboard focus, keep them fixed in the left gutter without shifting section names, and include them within the drag highlight. Allow dragging from the whole heading while preserving normal collapse clicks and excluding action buttons. Preserve personal section heights/order, edge-scroll the sidebar while resizing and compensate resize drags for scrolling, disable stack scroll anchoring only during resizing, and route list navigation through the sectioned renderer's scroll handle. Scroll keyboard targets immediately without animation, keeping two rows of context on either side, clamped to the viewport.
+  Cap section heights at measured list content and available pane space; keep each list independently scrollable, hide resize grips for two or fewer items, and default Favorites and DMs to four rows. Use TanStack Virtual for the redesigned section stack, channel rows, and search results; snapshot its index-reconciled rows before keying by identity, and retain focused rows and drag sources.
   Mobile retains the recent feed. Keep New channel and New direct message on their separate existing creation flows, independent of the sidebar flag; size the sidebar's New dropdown to its trigger width.
   Use `--sidebar-gutter` for the outer section, DM, and search containers; shared headings and rows provide their own item padding.
   Indent section rows by 8px; style empty states like saved views with a padded, bordered surface and secondary actions, without the extra row indentation. Keep unsectioned search results unindented.
@@ -656,7 +678,7 @@ resolved session ID; keep the existing `AgentSessionProvider` subscription to
   Keep every joined team channel in the team section regardless of custom-section assignments; use the same complete membership for bulk notification actions.
   Keep available channel rows visible during section hydration and refetches; key virtualized rows by stable IDs so data updates cannot interrupt a click. Pass server-returned member IDs to `queries/channel/by-ids`, whose single Soup owner selects cached rows and fetches missing records. Keep entity-ID hydration generic in Soup, with channel identities, batching, and unread refreshes in the channel query layer; append per-section skeletons only while unresolved members load.
   Show lock icons for private conversations and visible per-section options; keep empty sections usable as drop targets without an all-sections management menu.
-  Create all section types through New → New section in a wider dialog with Smart in the body and Shared in the footer; keep collapse on the header and style deletion as destructive.
+  Create all section types through New → New section in a wider dialog with Smart in the body and Shared in the footer; explain team visibility and team-only channels in hover/tap-accessible sharing help, show the warning-colored Team channels only hint only while sharing is on, keep collapse on the header and style deletion as destructive. Editing can change sharing only after complete membership eligibility checks; preserve section identity, confirm unsharing, and reconcile both scope caches after success.
   Offer Add channels on manual-section headers and empty states; keep the picker scoped to eligible joined channels, explain scope and assignment moves in concise helper text, and leave smart membership rule-driven.
   Place the smart rule Input below Name contains; show a match count with hover/focus channel preview, and keep preview queries reactive to the selected scope without briefly reporting pending matches as empty.
   Keep per-section sorting and unread filters personal, and filter after membership assignment so hidden rows never leak into another section.
@@ -725,6 +747,12 @@ resolved session ID; keep the existing `AgentSessionProvider` subscription to
 - Memory tool results use expandable rows on desktop and mobile; explicit preferences and activity reports remain inspectable after each tool call.
 
 ## Rules
+
+- Channel Delete actions use the channel owner or admin/owner of the channel's
+  exact team (`channelType === 'team'`); pass the channel's `teamId` to the team
+  admin predicate. Keep rail/title menus, mobile long-press, and hotkeys on the
+  shared delete action and bulk mutation. Preserve confirmed deletions when
+  another item in the bulk deletion fails.
 
 - Pass persistent touch row controls through `ListEntity.touchActions`; hover actions are hidden on touch, and the narrow inbox layout must retain the touch controls.
 
@@ -1078,6 +1106,20 @@ Use the shared scoped drag helpers and overlayIcon for the tag chip.
 The backend-free browser regression is
 `bunx playwright test --config src/features/property/tags/browser-test/playwright.config.ts`.
 
+### Senders in email rows
+
+Sender names in Mail rows and collapsed thread messages keep their person card
+on hover; clicking the name or anywhere else on the row opens the email.
+`HoverCard` keeps the portal's placeholder inside its own `display: contents`
+wrapper: opening or closing the card otherwise changes the trigger's siblings,
+Solid can then detach and reinsert the trigger, and a press that closes the
+card loses its click. Cards opened from a row use `isolateClicks`, because
+Solid delivers portaled events through the component tree and a click on the
+card would also open the row. On touch, a collapsed message's picture lets the
+tap through to the row. The backend-free desktop/phone regression, over rows
+with two senders, is
+`bunx playwright test --config src/features/entity/browser-test/playwright.config.ts`.
+
 ### Enter on a property pill
 
 A document control owns Enter unless a press focused it, including one given
@@ -1103,7 +1145,9 @@ Keep collaborative drafts as cursor-based overlays outside the shared editor tre
 Flush pending text, catch up missing server history before publication, then
 publish the mark from an isolated peer with `PeerCommentUpdate`,
 and post the message only after acknowledgement. Refused operations never enter
-the editor's WAL. Preserve input on failure. Cancelled publications retry mark
+the editor's WAL, so a session without edit access writes nothing to Loro, not
+even state its editor derives; only editors remove a deleted comment's mark.
+Preserve input on failure. Cancelled publications retry mark
 cleanup from the user/document-scoped IndexedDB queue; preserve marks when a
 message request's outcome is uncertain. Keep failed cleanup entries queued without
 blocking later entries. Overlapping comments must retain each
@@ -1112,8 +1156,8 @@ Comment controls preserve editor focus on both pointerdown and mousedown.
 The backend-free browser regression is
 `bunx playwright test --config src/features/block-md/comments/browser-test/playwright.config.ts`.
 It exercises selection, press, cancel, retry, and repeated posting in editor and
-commenter modes. The collaboration fixture includes concurrent remote edits and
-rejected updates; provider tests cover message metadata arriving on either side
+commenter modes. The collaboration fixture includes concurrent remote edits,
+rejected updates, and a server that refuses a commenter's non-comment updates; provider tests cover message metadata arriving on either side
 of posting, multi-paragraph anchors, saved ranges, and cancellation during posting.
 
 ## Performance
@@ -1145,3 +1189,10 @@ of posting, multi-paragraph anchors, saved ranges, and cancellation during posti
   static `data-input-surface` categories on editor/field owners, never caller
   labels.
 - Keep record names, addresses, answers and query text out of attributes.
+
+### Entity rows
+
+- Keep `ListEntity` layout fields independently reactive (getters, not a
+  dynamic object spread); a spread makes a selection change revisit every
+  unrelated layout input. Profile with the
+  [entity collection fixture](src/features/entity/browser-test/README.md).

@@ -682,7 +682,7 @@ fn code_mode_retains_direct_lifecycles_and_hides_sdk_methods_from_lazy_discovery
     let direct = tools_for_agent_code_mode();
     let sdk = code_mode_tools();
     assert!(direct.toolset.tools.len() < standard.toolset.tools.len());
-    for name in ["ReadContent"] {
+    for name in ["ReadContent", "EditDocument"] {
         assert!(standard.toolset.tools.contains_key(name), "{name}");
         assert!(sdk.tools.contains_key(name), "{name}");
         assert!(!direct.toolset.tools.contains_key(name), "{name}");
@@ -704,7 +704,6 @@ fn code_mode_retains_direct_lifecycles_and_hides_sdk_methods_from_lazy_discovery
         "ApplyCanvasEdits",
         "EditCanvas",
         "EditPresentation",
-        "EditDocument",
         "Subagent",
         "SearchTools",
         "LoadTools",
@@ -737,12 +736,7 @@ fn code_mode_retains_direct_lifecycles_and_hides_sdk_methods_from_lazy_discovery
     );
     let deferred = DeferredToolSet::new(direct.toolset.clone(), direct.deferred.clone());
     let eager = deferred.request_schemas().unwrap();
-    for name in [
-        "ListEntities",
-        "NameSearch",
-        "ContentSearch",
-        "EditDocument",
-    ] {
+    for name in ["ListEntities", "NameSearch", "ContentSearch"] {
         assert!(eager.iter().any(|schema| schema.name == name), "{name}");
     }
     for name in ["SendEmail", "CreateCalendarEvent"] {
@@ -851,4 +845,28 @@ fn conversation_tools_only_advertise_new_sessions() {
         }
     }
     assert!(!subagent_toolset().tools.contains_key("ReadChat"));
+}
+
+#[test]
+fn unrouted_prompts_inline_the_sdk_area_guidance_and_routed_ones_leave_it_to_the_turn() {
+    use agent_code_mode::domain::{GuideHost, inline_guides};
+    let code = tools_for_agent_code_mode();
+    let unrouted = code.prompt.to_string();
+    let routed = code.routed_prompt.to_string();
+    assert!(unrouted.contains(inline_guides(GuideHost::Code)));
+    assert!(!routed.contains("How Macro databases work"));
+    assert_eq!(
+        unrouted.replacen(inline_guides(GuideHost::Code), "", 1),
+        routed
+    );
+    for host in [AiHost::AgentSession, AiHost::Chat, AiHost::ChannelBot] {
+        let tools = tools_for(host);
+        let prompt = tools.prompt.to_string();
+        assert!(
+            prompt.contains(inline_guides(GuideHost::Direct)),
+            "{host:?}"
+        );
+        assert!(prompt.contains("DispatchCodingAgent"), "{host:?}");
+        assert_eq!(prompt, tools.routed_prompt.to_string(), "{host:?}");
+    }
 }

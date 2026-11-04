@@ -31,7 +31,7 @@ use entity_access::{
     domain::{
         models::{
             AccessError, AccessLevel, EntityAccessReceipt, EntityType, MemberParticipantRole,
-            OwnerParticipantRole, RequiredPermission, ViewOnly,
+            RequiredPermission, ViewOnly,
         },
         ports::EntityAccessService,
     },
@@ -393,7 +393,7 @@ pub async fn delete_channel_handler<
     Auth: MacroAuthorizationService,
 >(
     State(state): State<ChannelsRouterState<S, Svc, Auth>>,
-    access: ChannelAccessLevelExtractor<OwnerParticipantRole, Svc, Auth>,
+    access: ChannelAccessLevelExtractor<ViewOnly, Svc, Auth>,
 ) -> Result<(StatusCode, String), ChannelsHandlerErr> {
     let channel_id = channel_id_from_receipt(&access.entity_access_receipt)?;
     let actor = user_actor_from_receipt(&access.entity_access_receipt)?;

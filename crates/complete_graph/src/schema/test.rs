@@ -53,6 +53,7 @@ mod database_view_rows;
 mod email_archive;
 mod form_activity;
 mod initiative;
+mod notification_inbox;
 mod scheduled_actions;
 mod soup_patches;
 mod stale_client;

@@ -3,6 +3,7 @@ import { calendarPath } from '@app/features/calendar-view/calendar-url';
 import { t } from '@app/lib/i18n';
 import type { SidebarItem } from '@components/app/app-sidebar/sidebar';
 import { TOKENS } from '@core/hotkey/tokens';
+import BellFillIcon from '@icon/system/fill/bell-fill.svg';
 import BuildingsFillIcon from '@icon/system/fill/buildings-fill.svg';
 import CalendarBlankFillIcon from '@icon/system/fill/calendar-blank-fill.svg';
 import ChatsCircleFillIcon from '@icon/system/fill/chats-circle-fill.svg';
@@ -14,6 +15,7 @@ import ListChecksFillIcon from '@icon/system/fill/list-checks-fill.svg';
 import PhoneCallFillIcon from '@icon/system/fill/phone-call-fill.svg';
 import PlugFillIcon from '@icon/system/fill/plug-fill.svg';
 import AgentFillIcon from '@icon/system/fill/sparkle-fill.svg';
+import BellIcon from '@icon/system/regular/bell.svg';
 import BuildingsIcon from '@icon/system/regular/buildings.svg';
 import CalendarBlankIcon from '@icon/system/regular/calendar-blank.svg';
 import CalendarCheckIcon from '@icon/system/regular/calendar-check.svg';
@@ -71,6 +73,17 @@ export const SIDEBAR_NEXT_NAV_ITEMS = [
     iconActive: HouseFillIcon,
     hotkey: 'h',
     hotkeyToken: TOKENS.sidebar.goTo.home,
+  },
+  {
+    id: 'notifications',
+    get label() {
+      return t('nav.notifications');
+    },
+    href: '/notifications',
+    icon: BellIcon,
+    iconActive: BellFillIcon,
+    hotkey: 'i',
+    hotkeyToken: TOKENS.sidebar.goTo.notifications,
   },
   {
     id: 'documents',
@@ -204,6 +217,7 @@ export const SIDEBAR_NEXT_NAV_ITEMS = [
 
 /** Feature flag gates for sidebar destinations. */
 export type NavItemGates = {
+  showNotifications: boolean;
   showCalendar: boolean;
   showScheduling: boolean;
   showCustomers: boolean;
@@ -220,6 +234,7 @@ export const isNavItemAvailable = (
   item: SidebarNextNavItem,
   gates: NavItemGates
 ): boolean => {
+  if (item.id === 'notifications') return gates.showNotifications;
   if (item.id === 'calendar') return gates.showCalendar;
   if (item.id === 'booking-links') return gates.showScheduling;
   if (item.id === 'companies') return gates.showCustomers;

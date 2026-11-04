@@ -22,6 +22,36 @@ export function selectThreadSender(
 }
 
 /**
+ * Everyone the thread's sent and received messages were from, to or cc'd,
+ * earliest first and each address once, without the viewer's own addresses.
+ * Bcc stays out: those recipients were hidden from the others.
+ */
+export function selectThreadParticipants(
+  thread: EmailThread,
+  ...viewerEmails: (string | undefined)[]
+) {
+  const participants = new Map<string, string>();
+  for (const message of selectThreadMessages(thread).filtered) {
+    for (const contact of [
+      ...(message.from ? [message.from] : []),
+      ...message.to,
+      ...message.cc,
+    ]) {
+      const key = contact.email.toLowerCase();
+      if (
+        !contact.email ||
+        participants.has(key) ||
+        viewerEmails.some((email) => isViewerAddress(contact.email, email))
+      ) {
+        continue;
+      }
+      participants.set(key, contact.email);
+    }
+  }
+  return [...participants.values()];
+}
+
+/**
  * The message a thread downloads as `.eml`: the newest one sent or received,
  * which quotes the conversation before it. Drafts and sends still on their
  * way have no provider copy yet.

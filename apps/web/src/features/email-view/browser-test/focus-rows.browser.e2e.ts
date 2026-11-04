@@ -121,37 +121,70 @@ for (const size of WIDTHS) {
       expect(horizontalOverflow).toBe(false);
     });
 
-    test('the meter shows only under the importance sort, and quietly', async ({
+    test('the meter shows only under the importance sort, in its band color', async ({
       page,
     }) => {
       await open(page);
-      const meters = page.getByRole('img', { name: /^Importance \d+ of 100$/ });
+      const meters = page.getByRole('img', {
+        name: /^Importance \d+ of 100(, (rising|falling))?$/,
+      });
       await expect(meters).toHaveCount(0);
 
       await page.getByRole('button', { name: 'Importance' }).click();
       await expect(meters).toHaveCount(Object.keys(REASONS).length);
       const reply = page.getByTestId('row-reply');
       await expect(
-        reply.getByRole('img', { name: 'Importance 92 of 100' })
+        reply.getByRole('img', { name: 'Importance 92 of 100, rising' })
       ).toBeVisible();
-      // The value lives in the label, not on screen.
-      await expect(reply).not.toContainText('92');
+      await expect(reply).toContainText('92');
 
-      // No color per band: each meter's first bar is lit or unlit, nothing else.
+      // Each band has its own color; the lowest score leaves the first bar unlit.
       const firstBarColors = await page.evaluate(() => {
         const colors = new Set<string>();
         for (const meter of document.querySelectorAll(
           '[role="img"][aria-label^="Importance"]'
         )) {
-          const first = meter.firstElementChild;
+          const first = meter.lastElementChild?.firstElementChild;
           if (first) colors.add(getComputedStyle(first).backgroundColor);
         }
         return [...colors];
       });
-      expect(firstBarColors).toHaveLength(2);
+      expect(firstBarColors).toHaveLength(6);
 
       await page.getByRole('button', { name: 'Most recent' }).click();
       await expect(meters).toHaveCount(0);
+    });
+
+    test('the label says which way importance is moving, with no icon', async ({
+      page,
+    }) => {
+      await open(page);
+      await page.getByRole('button', { name: 'Importance' }).click();
+      const labels: Record<string, string> = {
+        reply: 'Importance 92 of 100, rising',
+        'follow-up': 'Importance 71 of 100, falling',
+        contact: 'Importance 22 of 100',
+        // A trend from a newer server reads as flat.
+        unknown: 'Importance 2 of 100',
+      };
+      for (const [id, label] of Object.entries(labels)) {
+        const meter = page
+          .getByTestId(`row-${id}`)
+          .getByRole('img', { name: label, exact: true });
+        await expect(meter).toBeVisible();
+        await expect(meter.locator('svg')).toHaveCount(0);
+      }
+
+      // The tooltip says the same. Touch has no tooltips.
+      if (!size.touch) {
+        await page
+          .getByTestId('row-follow-up')
+          .getByRole('img', { name: 'Importance 71 of 100, falling' })
+          .hover();
+        await expect(page.getByRole('tooltip')).toHaveText(
+          'Importance 71 of 100, falling'
+        );
+      }
     });
   });
 }

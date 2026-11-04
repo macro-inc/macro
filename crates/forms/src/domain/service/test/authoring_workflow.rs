@@ -8,7 +8,7 @@ use crate::domain::authoring::{
 use crate::domain::collaboration;
 use serde_json::json;
 
-struct Access(Shared);
+pub(super) struct Access(pub(super) Shared);
 impl AuthoringAccess for Access {
     async fn receipt<L: RequiredPermission>(
         &self,
@@ -743,6 +743,7 @@ async fn review_regression_metadata_edit_preserves_human_reference_questions_and
                             required: false,
                             widget: None,
                         }],
+                        show_when: None,
                     },
                     FormSection::Gate {
                         id: FormSectionId::new(),
@@ -833,6 +834,7 @@ async fn review_regression_sharing_preserves_human_reference_questions_and_empty
                             required: false,
                             widget: None,
                         }],
+                        show_when: None,
                     },
                     FormSection::Gate {
                         id: FormSectionId::new(),
@@ -1240,7 +1242,7 @@ async fn crdt_merge_refuses_to_strand_a_concurrently_added_screening_rule() {
 }
 
 /// Test codec; production uses the Cloudflare worker through the same port.
-struct Editor;
+pub(super) struct Editor;
 impl crate::domain::authoring::ports::AuthoringEditor for Editor {
     async fn prepare_edit(
         &self,
@@ -1284,6 +1286,7 @@ async fn crdt_merge_revalidates_authoring_limits_after_a_concurrent_addition() {
         title: String::new(),
         description: String::new(),
         questions: vec![],
+        show_when: None,
     };
     let mut human = saved.layout.clone();
     human.sections.push(section());
