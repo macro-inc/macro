@@ -16,6 +16,8 @@ pub mod ports;
 pub mod schema;
 /// The log frame an MCP tool call held for the owner's approval leaves.
 pub mod tool_approval;
+/// The log frame a saved review leaves each time it changes.
+pub mod review;
 
 /// Agent-neutral reconstructed turn lifecycle.
 pub mod turn;
