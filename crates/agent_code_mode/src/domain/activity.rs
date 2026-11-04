@@ -4,7 +4,7 @@ use serde::Deserialize;
 use std::{collections::BTreeMap, sync::LazyLock};
 
 static OPERATIONS: LazyLock<BTreeMap<String, String>> = LazyLock::new(|| {
-    serde_json::from_str(include_str!("operations.json")).expect("generated operation catalog")
+    serde_json::from_str(code_mode_assets::OPERATIONS).expect("generated operation catalog")
 });
 
 #[derive(Deserialize)]

@@ -16,6 +16,7 @@ import { useMessageTimelineQuery } from '@queries/messages/timeline';
 import { timelineMessages } from '@queries/messages/timeline-entries';
 import type { MessageParent } from '@service-storage/messages';
 import { createMemo, createSignal, For, Show } from 'solid-js';
+import { MessageLoadError } from './MessageLoadError';
 import { MessageThread } from './MessageThread';
 import type { MessageData } from './types';
 
@@ -61,6 +62,8 @@ export function EntityConversation(props: {
   /** Delete comments the caller did not write. Document owners set this. */
   canModerate?: boolean;
   targetId?: string | null;
+  /** Re-aim the same linked comment without remounting the conversation. */
+  targetRequestKey?: string | number;
   /** The linked view stays around `targetId`, but its message is no longer highlighted. */
   targetCleared?: boolean;
   onClearTarget?: () => void;
@@ -88,6 +91,8 @@ export function EntityConversation(props: {
         thrownResultErrorHasCode(query.error, code) ||
         (code !== 'NOT_FOUND' && thrownResultErrorHasCode(target.error(), code))
     );
+  const missingParent = () =>
+    thrownResultErrorHasCode(query.error, 'NOT_FOUND');
   // Until the link resolves, the shared latest page would flash before the window jumps.
   const messages = () =>
     target.resolved() && !query.isPending && !unavailable()
@@ -105,7 +110,14 @@ export function EntityConversation(props: {
     () => new Map(messages().map((message) => [message.id, message]))
   );
   return (
-    <Show when={!props.hideWhenEmpty || messages().length > 0}>
+    <Show
+      when={
+        !props.hideWhenEmpty ||
+        messages().length > 0 ||
+        query.isError ||
+        unavailable()
+      }
+    >
       <section class="mt-3 pb-12" data-entity-conversation>
         <button
           type="button"
@@ -125,15 +137,25 @@ export function EntityConversation(props: {
               <p class="text-xs text-ink-muted">Loading comments...</p>
             </Show>
             <Show when={query.isError || unavailable()}>
-              <button
-                onClick={() => {
-                  fireAndForget(query.refetch(), 'entity-conversation');
-                  if (props.targetId)
-                    fireAndForget(target.refetch(), 'entity-conversation');
-                }}
+              <MessageLoadError
+                retrying={query.isFetching}
+                onRetry={
+                  missingParent()
+                    ? undefined
+                    : () => {
+                        fireAndForget(query.refetch(), 'entity-conversation');
+                        if (props.targetId)
+                          fireAndForget(
+                            target.refetch(),
+                            'entity-conversation'
+                          );
+                      }
+                }
               >
-                Could not load comments. Retry
-              </button>
+                {missingParent()
+                  ? 'Comments are unavailable for this item.'
+                  : 'Could not load comments.'}
+              </MessageLoadError>
             </Show>
             <Show when={!unavailable() && query.hasNextPage}>
               <button
@@ -152,6 +174,7 @@ export function EntityConversation(props: {
                   data={messagesById().get(id)!}
                   canWrite={props.canWrite}
                   canModerate={props.canModerate}
+                  targetRequestKey={props.targetRequestKey}
                   targetId={
                     target.rootId() === id && !props.targetCleared
                       ? target.messageId()

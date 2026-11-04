@@ -8,9 +8,8 @@ plain-English entity guide, and complete API reference, served by the SDK docs W
 - **`src/`**: a hand-written ergonomic SDK layer that provides an "orm"-y API.
 
 The [SDK reference build](../sdk-docs/README.md) uses TypeDoc to generate linked
-Markdown and HTML from these sources. The [generated Markdown](../sdk-docs/reference/README.md)
-is checked in alongside SDK changes; the HTML can be served with the included
-static docs Worker.
+Markdown and HTML from these sources at build time; the HTML is served with the
+included static docs Worker.
 
 ## Usage
 
@@ -60,6 +59,15 @@ const macro = new Macro({
 ```
 
 An API key always acts as the user who minted it. `requestedAs` is bot-only.
+
+#### Agent accounts
+
+An agent has its own account and seat. Invite one with
+`(await macro.teams.current()).invite('agent@example.com', { agent: true })`, or sign
+up at https://macro.com/app/signup/agent. After signing in, the agent sees its API key once in the
+web app and uses it like any other key. It can set up its profile with
+`macro.me.update({ name, profilePicture: await macro.me.uploadProfilePicture(bytes, options) })`
+and mint more keys with `macro.apiKeys.create(name)`.
 
 #### Bot token
 
@@ -483,6 +491,9 @@ returns thread handles alongside reminder snapshots.
 permissions and trash operations live on the pipeline. `pipeline.table()` returns
 its table handle, with column and row handles. `rows()` and `queryRows({ rows, query })`
 fetch through the pipeline's authorization boundary and auto-paginate.
+`(await pipeline.table()).views()` returns scoped `PipelineView` handles;
+`view.detail()` reads its definition and `view.positions()` reads its saved board
+order through pipeline permissions.
 `pipeline.applyOps(ops, { baseVersions: [{ table, version }] })` accepts the generated
 atomic database operation contract, including batch-local UUIDs, like
 `Database.applyOps`. Table and column reads share a schema cache invalidated by
@@ -529,14 +540,6 @@ when mutations invalidate metadata. `update`, `cancel`, `invite(email)`,
 `teamOutOfOffice(viewport)` reports `hasMore` when its bounded results are truncated.
 `availabilityCalendars`, `calendar.setContributesToAvailability`, `teamSharing` and
 `setTeamSharing` manage availability and sharing preferences.
-
-`calendar.noteDocuments(query)` suggests owned markdown and optional team handles.
-Use `event.linkNote(document, occurrence, { team })` to grant meeting viewers view
-access; omit `team` for meeting access only. One-time notes follow reschedules;
-recurring notes stay on the selected occurrence. `event.notes(occurrence)` returns
-`CalendarNote` handles with `setTeam(team?)` and `unlink()`. Existing editing and
-other document sharing stay unchanged. Owners can discover every durable grant
-through `document.meetingNotes()` and unlink it even when the meeting is unavailable.
 
 ### Document lifecycle and other resources
 

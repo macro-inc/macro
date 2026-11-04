@@ -83,7 +83,11 @@ rows, initiatives, ...) and get back a single unified, paginated result.
 - Agent sessions named by id (an `Id` literal in `cursor_soup`, which GraphQL
   `agentSession` and its log use, and `by_ids`) also accept a grant on the
   document or call whose live thread the session runs in, matching
-  `entity_access`. Broad lists use session grants only.
+  `entity_access`. Broad lists use session grants only, and leave out
+  `hidden` sessions (thread-started, DM contexts) except for their followers
+  (`agent_session_follower`, people who prompted the session from the session
+  itself), who may also read them through the thread's parent. The notified
+  and work feeds share that rule through `notified::agent_session_gate`.
 - `expanded/` vs `unexpanded/` queries exist because hydrating full entities
   is expensive — don't widen `unexpanded` to return hydrated data; add a new
   `expanded` path instead.

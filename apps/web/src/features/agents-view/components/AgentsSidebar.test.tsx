@@ -15,12 +15,21 @@ import {
 } from '../core/conversation-filters';
 import {
   type AgentConversationEntity,
+  conversationMode,
   partitionArchived,
 } from '../core/recent-conversations';
 import { AgentsSidebar } from './AgentsSidebar';
 
 const openWithSplit = vi.fn();
 const unreadFilter = vi.hoisted(() => vi.fn(() => false));
+const sidebarState = vi.hoisted(() => ({ agentUpdates: false, touch: false }));
+vi.mock('@app/lib/analytics/posthog', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@app/lib/analytics/posthog')>()),
+  useFeatureFlag: () => () => ({ enabled: sidebarState.agentUpdates }),
+}));
+vi.mock('@core/mobile/isTouchDevice', () => ({
+  isTouchDevice: () => sidebarState.touch,
+}));
 vi.mock('@components/app/split-layout/layout', () => ({
   useSplitLayout: () => ({ openWithSplit }),
 }));
@@ -63,6 +72,8 @@ beforeEach(() => {
 afterEach(() => {
   cleanup();
   unreadFilter.mockReturnValue(false);
+  sidebarState.agentUpdates = false;
+  sidebarState.touch = false;
 });
 
 vi.mock('@solid-primitives/resize-observer', () => ({
@@ -75,8 +86,16 @@ vi.mock('@components/app/split-layout/layoutUtils', () => ({
   }),
 }));
 vi.mock('@app/features/next-soup/actions', () => ({
-  toEntityActionListState: () => ({
-    focus: { set: vi.fn() },
+  toEntityActionListState: (options: {
+    controller: { items: { all: () => { id: string }[] } };
+  }) => ({
+    focus: {
+      set: (id: string) => {
+        if (!options.controller.items.all().some((item) => item.id === id)) {
+          throw new Error(`Missing action row: ${id}`);
+        }
+      },
+    },
   }),
 }));
 vi.mock('@app/features/soup', () => ({
@@ -86,6 +105,7 @@ vi.mock('@app/features/soup', () => ({
     children: JSX.Element;
     entity: { id: string };
     extraItems?: JSX.Element;
+    onOpenChange?: (open: boolean) => void;
   }) => {
     const [open, setOpen] = createSignal(false);
     return (
@@ -94,6 +114,7 @@ vi.mock('@app/features/soup', () => ({
         onContextMenu={(event) => {
           event.preventDefault();
           setOpen(true);
+          props.onOpenChange?.(true);
         }}
       >
         {props.children}
@@ -122,7 +143,7 @@ describe('mixed Agents sidebar', () => {
         id: 'code',
         name: 'Fix build',
         ownerId: 'me',
-        isArchived: false,
+        archivedBy: null,
         botId: 'cursor',
         status: 'acp_ready',
         turnState: 'blocked',
@@ -133,7 +154,7 @@ describe('mixed Agents sidebar', () => {
         id: 'archived-code',
         name: 'Old spike',
         ownerId: 'me',
-        isArchived: true,
+        archivedBy: 'user',
         botId: 'cursor',
         status: 'disconnected',
       },
@@ -279,7 +300,7 @@ describe('mixed Agents sidebar', () => {
             id: 'run',
             name: 'Morning digest',
             ownerId: 'me',
-            isArchived: false,
+            archivedBy: null,
             botId: 'macro',
             status: 'acp_ready',
             source: 'routine',
@@ -289,7 +310,7 @@ describe('mixed Agents sidebar', () => {
             id: 'mine',
             name: 'Plan launch',
             ownerId: 'me',
-            isArchived: false,
+            archivedBy: null,
             botId: 'macro',
             status: 'acp_ready',
           },
@@ -349,7 +370,7 @@ describe('mixed Agents sidebar', () => {
             id: 'code',
             name: 'Fix build',
             ownerId: 'me',
-            isArchived: false,
+            archivedBy: null,
             botId: 'cursor',
             status: 'acp_ready',
           },
@@ -358,7 +379,7 @@ describe('mixed Agents sidebar', () => {
             id: 'archived',
             name: 'Old session',
             ownerId: 'me',
-            isArchived: true,
+            archivedBy: 'user',
             botId: 'cursor',
             status: 'disconnected',
           },
@@ -406,13 +427,172 @@ describe('mixed Agents sidebar', () => {
   });
 });
 
+describe('Open PRs sidebar section', () => {
+  const open: AgentConversationEntity = {
+    type: 'agent_session',
+    id: 'open-pr',
+    name: 'Fix build',
+    ownerId: 'me',
+    botId: 'cursor',
+    harness: 'cursor',
+    status: 'acp_ready',
+    turnState: 'running',
+    updatedAt: '2026-10-29T10:00:00Z',
+    pullRequestState: 'open',
+    pullRequestUrl: 'https://github.com/macro-inc/macro/pull/42',
+    repoUrl: 'https://github.com/macro-inc/macro.git',
+    workingBranch: 'fix/build',
+  };
+  const draft: AgentConversationEntity = {
+    ...open,
+    id: 'draft-pr',
+    name: 'Add tests',
+    updatedAt: '2026-10-30T10:00:00Z',
+    pullRequestState: 'draft',
+    pullRequestUrl: 'https://github.com/macro-inc/macro/pull/43',
+  };
+  const conversations: AgentConversationEntity[] = [
+    open,
+    { ...open, id: 'merged-pr', name: 'Merged PR', pullRequestState: 'merged' },
+    { ...open, id: 'closed-pr', name: 'Closed PR', pullRequestState: 'closed' },
+    { ...open, id: 'archived-pr', name: 'Archived PR', archivedBy: 'user' },
+    {
+      ...open,
+      id: 'chat-mode-pr',
+      name: 'Chat mode PR',
+      harness: 'in-memory',
+    },
+    { type: 'chat', id: 'chat', name: 'Plain chat', ownerId: 'me' },
+    draft,
+  ];
+
+  function renderSidebar(
+    items: AgentConversationEntity[],
+    filters: ConversationFilters = EMPTY_CONVERSATION_FILTERS
+  ) {
+    const onOpenConversation = vi.fn();
+    render(() => (
+      <AgentsSidebar
+        filters={filters}
+        grouping="none"
+        onFilterChange={vi.fn()}
+        onClearFilters={vi.fn()}
+        onGroupingChange={vi.fn()}
+        activePage="new"
+        onOpenPage={vi.fn()}
+        conversations={items}
+        archived={[]}
+        modeForConversation={(conversation) =>
+          conversationMode(conversation, () => 'agent')
+        }
+        activeConversationId="open-pr"
+        search=""
+        loading={false}
+        error={false}
+        hasNextPage={false}
+        loadingNextPage={false}
+        onSearchChange={vi.fn()}
+        onOpenConversation={onOpenConversation}
+        onRetry={vi.fn()}
+        onLoadMore={vi.fn()}
+        onCreateAgent={vi.fn()}
+        onCreateRoutine={vi.fn()}
+        showUnlistedRuns={false}
+        onShowUnlistedRunsChange={vi.fn()}
+      />
+    ));
+    return onOpenConversation;
+  }
+
+  it('shows open and draft coding PRs in update order with the existing rows and navigation', () => {
+    sidebarState.agentUpdates = true;
+    const onOpenConversation = renderSidebar(conversations);
+    const section = screen.getByRole('navigation', {
+      name: 'Open pull requests',
+    });
+    expect(screen.getByRole('button', { name: 'Open PRs 2' })).toBeTruthy();
+    expect(
+      within(section)
+        .getAllByRole('button')
+        .map((row) => row.getAttribute('aria-label'))
+    ).toEqual(['Add tests', 'Fix build']);
+    expect(within(section).getByText('#42')).toBeTruthy();
+    expect(
+      within(section).getAllByText('macro-inc/macro · fix/build')
+    ).toHaveLength(2);
+    expect(
+      section.querySelectorAll('[data-agent-status-indicator]')
+    ).toHaveLength(2);
+    expect(
+      within(section)
+        .getByRole('button', { name: 'Fix build' })
+        .getAttribute('aria-current')
+    ).toBe('page');
+    for (const name of [
+      'Merged PR',
+      'Closed PR',
+      'Archived PR',
+      'Chat mode PR',
+      'Plain chat',
+    ]) {
+      expect(within(section).queryByRole('button', { name })).toBeNull();
+    }
+    expect(
+      within(
+        screen.getByRole('navigation', { name: 'Recent conversations' })
+      ).getByRole('button', { name: 'Fix build' })
+    ).toBeTruthy();
+
+    const draftRow = within(section).getByRole('button', { name: 'Add tests' });
+    expect(draftRow.closest('[data-entity-context-menu]')).not.toBeNull();
+    fireEvent.click(draftRow);
+    expect(onOpenConversation).toHaveBeenCalledWith(draft, expect.anything());
+  });
+
+  it('hides the section when the flag is off or there are no matching sessions', () => {
+    renderSidebar(conversations);
+    expect(screen.queryByText('Open PRs')).toBeNull();
+    cleanup();
+
+    sidebarState.agentUpdates = true;
+    renderSidebar(
+      conversations.filter(
+        (conversation) =>
+          conversation.id !== 'open-pr' && conversation.id !== 'draft-pr'
+      )
+    );
+    expect(screen.queryByText('Open PRs')).toBeNull();
+  });
+
+  it('keeps PR context actions available when conversation filters exclude the row', () => {
+    sidebarState.agentUpdates = true;
+    renderSidebar([open], { ...EMPTY_CONVERSATION_FILTERS, type: ['chat'] });
+    const section = screen.getByRole('navigation', {
+      name: 'Open pull requests',
+    });
+    const row = within(section).getByRole('button', { name: 'Fix build' });
+    expect(row.closest('[data-entity-context-menu]')).not.toBeNull();
+  });
+
+  it('uses the same PR rows in the touch list view', () => {
+    sidebarState.agentUpdates = true;
+    sidebarState.touch = true;
+    const onOpenConversation = renderSidebar([open]);
+    const section = screen.getByRole('navigation', {
+      name: 'Open pull requests',
+    });
+    fireEvent.click(within(section).getByRole('button', { name: 'Fix build' }));
+    expect(onOpenConversation).toHaveBeenCalledWith(open, expect.anything());
+  });
+});
+
 describe.each(['home', 'sidebar'] as const)('%s agent rows', (surface) => {
   const conversation: AgentConversationEntity = {
     type: 'agent_session',
     id: 'coding-session',
     name: 'Fix build',
     ownerId: 'me',
-    isArchived: false,
+    archivedBy: null,
     botId: 'cursor',
     harness: 'cursor',
     status: 'acp_ready',

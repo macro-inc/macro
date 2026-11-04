@@ -30,8 +30,12 @@ export const descriptions: Record<string, string> = {
   pins: 'Manage pinned entities.',
   projects: 'Organize entities into projects.',
   properties: 'Read and update entity properties.',
+  referrals:
+    "Share the caller's referral link and email people invites to join Macro.",
   tasks: 'Search, create, and update tasks.',
-  teams: 'Manage teams and membership.',
-  users: 'Look up users and their profiles.',
+  teams:
+    'Manage teams and membership: invite people to the team by email, list and revoke pending invites.',
+  users:
+    'Look up users and their profiles; set your own name and picture (`macro.me.update`).',
   webhooks: 'Manage API webhook subscriptions.',
 };

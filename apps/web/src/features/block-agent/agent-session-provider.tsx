@@ -1,3 +1,4 @@
+import { usePending } from '@app/observability/flow';
 /** App-facing composition for the agent session and its controllers. */
 
 import { createInteractionController } from '@app/features/agent-interactions/primitives/create-interaction-controller';
@@ -50,13 +51,19 @@ export function AgentSessionProvider(
     acquired,
   } = resolveSessionId(() => props.blockId);
 
+  usePending('agent.provision', pending);
+
   createEffect(() => {
     const id = sessionId();
     if (id && id !== props.blockId) props.onSessionId?.(id);
   });
 
   const userId = useUserId();
-  const live = createAgentSession(sessionId, { userId, onAcquire: acquired });
+  const live = createAgentSession(sessionId, {
+    userId,
+    provisioning: pending,
+    onAcquire: acquired,
+  });
   // A block opened by sending a first prompt shows that prompt, and the
   // working line under it, from its very first paint. Nothing else can: the
   // session does not exist until `POST /agent-sessions` answers, and the
@@ -74,6 +81,7 @@ export function AgentSessionProvider(
     return [
       {
         agentSessionId: sessionId() ?? props.blockId,
+        key: '0:user',
         turn: 0,
         author: { kind: 'user', userId: userId() ?? null },
         requestId: null,
@@ -181,7 +189,6 @@ export function AgentSessionProvider(
           turn,
           issue: live.issue,
           selectModel: live.selectModel,
-          sendNext: steering.sendNext,
           steer: steering.steer,
           steerFailed: steering.failed,
           interactions,

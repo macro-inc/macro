@@ -3,6 +3,7 @@ import {
   formatTimeLabel,
   getDefaultTimezone,
 } from '@core/util/cron';
+import { SYSTEM_PROPERTY_IDS } from '@property/identifiers';
 import { match } from 'ts-pattern';
 import { z } from 'zod';
 
@@ -46,6 +47,14 @@ export type GithubRepositoryOptions = {
   error: boolean;
 };
 
+/** One task property a trigger watches; empty values match any change to it. */
+export const propertySelectorSchema = z.object({
+  definitionId: z.guid(),
+  /** Option ids or referenced entity ids, one of which the change must add. */
+  values: z.array(z.string()),
+});
+export type PropertySelectorDraft = z.infer<typeof propertySelectorSchema>;
+
 export const routineTriggerSchema = z.discriminatedUnion('kind', [
   scheduleTriggerSchema,
   z.object({
@@ -78,6 +87,8 @@ export const routineTriggerSchema = z.discriminatedUnion('kind', [
     github: githubSelectorSchema.optional(),
     /** Only for `github`: payload tests that must all pass. */
     match: z.array(payloadTestSchema).optional(),
+    /** Only for task property change events. */
+    property: propertySelectorSchema.optional(),
     /** Yes/no question the event's content must answer with yes. */
     condition: z.string().optional(),
   }),
@@ -95,17 +106,21 @@ export const routineEventGroups = [
   'GitHub',
 ] as const;
 export type RoutineEventGroup = (typeof routineEventGroups)[number];
-type ExternalPreset = Pick<EventTriggerDraft, 'github' | 'match'>;
+type TriggerPreset = Pick<EventTriggerDraft, 'github' | 'match' | 'property'>;
 
 function github(
   events: string[],
   actions: string[] = [],
   match?: PayloadTestDraft[]
-): ExternalPreset {
+): TriggerPreset {
   return {
     github: { events, actions, repositories: [], includeBots: false },
     ...(match ? { match } : {}),
   };
+}
+
+function taskProperty(definitionId: string): TriggerPreset {
+  return { property: { definitionId, values: [] } };
 }
 
 export const routineEvents: {
@@ -113,8 +128,8 @@ export const routineEvents: {
   label: string;
   group: RoutineEventGroup;
   description: string;
-  /** What choosing this item fills in, for events from outside Macro. */
-  preset?: ExternalPreset;
+  /** What choosing this item fills in. */
+  preset?: TriggerPreset;
 }[] = [
   {
     value: 'channel.created',
@@ -157,20 +172,50 @@ export const routineEvents: {
     value: 'task.status_changed',
     label: 'Status changed',
     group: 'Tasks',
-    description: 'The status of a selected task changes.',
+    description:
+      'A task’s status changes. Choose statuses like Completed to run only on those.',
   },
   {
     value: 'task.priority_changed',
     label: 'Priority changed',
     group: 'Tasks',
-    description: 'The priority of a selected task changes.',
+    description:
+      'A task’s priority changes. Choose priorities like Urgent to run only on those.',
+  },
+  {
+    value: 'task.property_changed',
+    label: 'Assignees changed',
+    group: 'Tasks',
+    description: 'Someone is assigned to a task, or its assignees change.',
+    preset: taskProperty(SYSTEM_PROPERTY_IDS.ASSIGNEES),
+  },
+  {
+    value: 'task.property_changed',
+    label: 'Due date changed',
+    group: 'Tasks',
+    description: 'A task’s due date is set, moved, or cleared.',
+    preset: taskProperty(SYSTEM_PROPERTY_IDS.DUE_DATE),
+  },
+  {
+    value: 'task.property_changed',
+    label: 'Project changed',
+    group: 'Tasks',
+    description: 'A task moves to a project, or out of one.',
+    preset: taskProperty(SYSTEM_PROPERTY_IDS.PROJECT),
+  },
+  {
+    value: 'task.property_changed',
+    label: 'Effort changed',
+    group: 'Tasks',
+    description: 'A task’s effort estimate changes.',
+    preset: taskProperty(SYSTEM_PROPERTY_IDS.EFFORT),
   },
   {
     value: 'task.property_changed',
     label: 'Any property changed',
     group: 'Tasks',
     description:
-      'Any property on a selected task changes, including status and priority.',
+      'Any property on a task changes, including status and priority.',
   },
   {
     value: 'email.message_received',
@@ -293,10 +338,97 @@ export const routineEvents: {
 // Preserve saved selectors while keeping the creation menu focused on the
 // supported product catalog. Editing another field must not drop old triggers.
 const legacyEventLabels: Partial<Record<RoutineEventName, string>> = {
+  'task.property_changed': 'Property changed',
   'document.updated': 'Document details changed',
   'channel.message_patched': 'Message edited',
   'channel.message_attachment_created': 'Attachment added',
 };
+
+/** How a trigger's panel offers the values of a task property. */
+export type TaskTriggerProperty = {
+  definitionId: string;
+  anyLabel: string;
+} & (
+  | { kind: 'options' }
+  | {
+      kind: 'entities';
+      entityType: 'USER' | 'INITIATIVE';
+      specificLabel: string;
+      placeholder: string;
+    }
+  | { kind: 'none' }
+);
+
+const TASK_TRIGGER_PROPERTIES: TaskTriggerProperty[] = [
+  {
+    definitionId: SYSTEM_PROPERTY_IDS.STATUS,
+    anyLabel: 'Any status',
+    kind: 'options',
+  },
+  {
+    definitionId: SYSTEM_PROPERTY_IDS.PRIORITY,
+    anyLabel: 'Any priority',
+    kind: 'options',
+  },
+  {
+    definitionId: SYSTEM_PROPERTY_IDS.EFFORT,
+    anyLabel: 'Any effort',
+    kind: 'options',
+  },
+  {
+    definitionId: SYSTEM_PROPERTY_IDS.ASSIGNEES,
+    anyLabel: 'Anyone',
+    kind: 'entities',
+    entityType: 'USER',
+    specificLabel: 'Specific people',
+    placeholder: 'Search people…',
+  },
+  {
+    definitionId: SYSTEM_PROPERTY_IDS.PROJECT,
+    anyLabel: 'Any project',
+    kind: 'entities',
+    entityType: 'INITIATIVE',
+    specificLabel: 'Specific projects',
+    placeholder: 'Search projects…',
+  },
+  {
+    definitionId: SYSTEM_PROPERTY_IDS.DUE_DATE,
+    anyLabel: 'Any date',
+    kind: 'none',
+  },
+];
+
+/** The property a status or priority event reports on its own. */
+function eventPropertyId(events: readonly RoutineEventName[]) {
+  if (events.length !== 1) return undefined;
+  return match(events[0])
+    .with('task.status_changed', () => SYSTEM_PROPERTY_IDS.STATUS)
+    .with('task.priority_changed', () => SYSTEM_PROPERTY_IDS.PRIORITY)
+    .otherwise(() => undefined);
+}
+
+export function taskTriggerProperty(
+  trigger: EventTriggerDraft
+): TaskTriggerProperty | undefined {
+  const definitionId =
+    trigger.property?.definitionId ?? eventPropertyId(trigger.events);
+  return TASK_TRIGGER_PROPERTIES.find(
+    (property) => property.definitionId === definitionId
+  );
+}
+
+/** The trigger narrowed to `values`, kept off the wire when its event already says it all. */
+export function withPropertyValues(
+  trigger: EventTriggerDraft,
+  definitionId: string,
+  values: string[]
+): EventTriggerDraft {
+  const implied = eventPropertyId(trigger.events) === definitionId;
+  return {
+    ...trigger,
+    property: implied && !values.length ? undefined : { definitionId, values },
+  };
+}
 
 export type EventScopeKind =
   | 'TASK'
@@ -373,6 +505,18 @@ function githubTriggerLabel(selector: GithubSelectorDraft | undefined) {
   return `GitHub ${selector.events.join(', ')}`;
 }
 
+/** The menu item for one of a Macro trigger's events. */
+function routineEventItem(trigger: EventTriggerDraft, name: RoutineEventName) {
+  const property =
+    name === 'task.property_changed'
+      ? trigger.property?.definitionId
+      : undefined;
+  return routineEvents.find(
+    (item) =>
+      item.value === name && item.preset?.property?.definitionId === property
+  );
+}
+
 /** What the trigger's events are, for its settings panel. */
 export function eventTriggerDescription(trigger: EventTriggerDraft) {
   if (trigger.events.includes('github')) {
@@ -384,9 +528,7 @@ export function eventTriggerDescription(trigger: EventTriggerDraft) {
     )?.description;
   }
   return trigger.events
-    .map(
-      (name) => routineEvents.find((item) => item.value === name)?.description
-    )
+    .map((name) => routineEventItem(trigger, name)?.description)
     .join(' ');
 }
 
@@ -396,7 +538,7 @@ export function eventTriggerLabel(trigger: EventTriggerDraft) {
   return trigger.events
     .map(
       (event) =>
-        routineEvents.find((item) => item.value === event)?.label ??
+        routineEventItem(trigger, event)?.label ??
         legacyEventLabels[event] ??
         event
     )
@@ -436,6 +578,8 @@ function validateEventTrigger(
     return 'Choose at least one item for this event trigger.';
   if ((trigger.ids?.length ?? 0) > 100)
     return 'Choose up to 100 items per event trigger.';
+  if ((trigger.property?.values.length ?? 0) > 100)
+    return 'Choose up to 100 values per event trigger.';
   if ([...(trigger.condition?.trim() ?? '')].length > MAX_CONDITION_CHARS)
     return `Keep the condition under ${MAX_CONDITION_CHARS} characters.`;
   return (

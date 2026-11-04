@@ -39,6 +39,7 @@ impl databases::domain::ports::TableEventPublisher for Unheard {
         &self,
         _: DatabaseId,
         _: &MacroUserIdStr<'_>,
+        _: bool,
         _: &databases::domain::models::Awareness,
     ) -> Result<(), Self::Error> {
         Ok(())

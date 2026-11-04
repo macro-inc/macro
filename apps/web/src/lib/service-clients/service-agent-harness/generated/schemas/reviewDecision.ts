@@ -5,13 +5,13 @@
  * OpenAPI spec version: 0.1.0
  */
 import type { ReviewDecisionOneOf } from './reviewDecisionOneOf';
-import type { ReviewDecisionOneOfFive } from './reviewDecisionOneOfFive';
-import type { ReviewDecisionOneOfThree } from './reviewDecisionOneOfThree';
+import type { ReviewDecisionOneOfFour } from './reviewDecisionOneOfFour';
+import type { ReviewDecisionOneOfSix } from './reviewDecisionOneOfSix';
 
 /**
  * One atomic user decision against the displayed revision.
  */
 export type ReviewDecision =
   | ReviewDecisionOneOf
-  | ReviewDecisionOneOfThree
-  | ReviewDecisionOneOfFive;
+  | ReviewDecisionOneOfFour
+  | ReviewDecisionOneOfSix;

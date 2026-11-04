@@ -18,12 +18,14 @@
 //! session-scoped request or notification matches the session holding that ACP
 //! session id, and system events belong to the connection itself.
 
-use std::collections::HashMap;
-use std::sync::atomic::{AtomicBool, Ordering};
+use std::collections::{HashMap, HashSet};
 use std::sync::{Arc, OnceLock};
 
-use agent_client_protocol::RawJsonRpcMessage;
-use agent_client_protocol::schema::v1::{McpServer, RequestId, Response, SessionId};
+use agent_client_protocol::schema::v1::{
+    InitializeResponse, ListSessionsRequest, ListSessionsResponse, McpServer, RequestId, Response,
+    SessionId,
+};
+use agent_client_protocol::{JsonRpcMessage, RawJsonRpcMessage};
 use agent_runtime_protocol::domain::ports::{
     Transport, TransportError, TransportReceiver, TransportSender,
 };
@@ -31,11 +33,13 @@ use agent_runtime_protocol::domain::schema::v0::{
     AcpMessage, ModelProbeResult, SystemEvent, ToRuntimeMessage, ToServerMessage,
 };
 use dashmap::DashMap;
-use tokio::sync::{Mutex, mpsc, watch};
+use tokio::sync::{Mutex, mpsc, oneshot, watch};
 use tokio_util::sync::CancellationToken;
 
 use crate::domain::model::{AgentSessionId, SessionClaim};
-use crate::domain::session::{HandshakeStatus, PermissionPolicy};
+use crate::domain::session::{
+    HandshakeStatus, InitializationContext, PermissionPolicy, SessionRestoreSupport,
+};
 
 #[cfg(test)]
 mod test;
@@ -59,6 +63,8 @@ pub(crate) enum Routed {
     Connection,
     /// A connection-level model probe response, never session traffic.
     Probe,
+    /// The answer to a request the connection itself sent.
+    Answer,
     /// Nothing owns it. Kept as its own answer rather than folded into
     /// `Connection` so it can be counted and logged as the anomaly it is.
     Orphan,
@@ -70,6 +76,7 @@ pub(crate) enum Routed {
 #[derive(Debug, Default)]
 pub(crate) struct Routes {
     requests: HashMap<RequestId, AgentSessionId>,
+    connection_requests: HashSet<RequestId>,
     acp_sessions: HashMap<SessionId, AgentSessionId>,
 }
 
@@ -77,6 +84,11 @@ impl Routes {
     /// Remember that `session` is awaiting an answer to `request`.
     pub(crate) fn expect_response(&mut self, request: RequestId, session: AgentSessionId) {
         self.requests.insert(request, session);
+    }
+
+    /// Remember that the connection itself is awaiting an answer to `request`.
+    pub(crate) fn expect_connection_response(&mut self, request: RequestId) {
+        self.connection_requests.insert(request);
     }
 
     /// Remember that `acp_session` is `session`'s session on the agent.
@@ -104,10 +116,13 @@ impl Routes {
         };
 
         if let Some(id) = frame.response_id() {
-            return match self.requests.remove(id) {
-                Some(session) => Routed::Session(session),
-                None => Routed::Orphan,
-            };
+            if let Some(session) = self.requests.remove(id) {
+                return Routed::Session(session);
+            }
+            if self.connection_requests.remove(id) {
+                return Routed::Answer;
+            }
+            return Routed::Orphan;
         }
 
         match acp_session_of(frame).and_then(|acp| self.acp_sessions.get(&acp)) {
@@ -260,12 +275,15 @@ pub struct RuntimeConnection<Sender> {
     /// sessions that need it mostly do not exist yet: a runtime dials, says
     /// ready, and only then does someone mention the bot. A session binding
     /// afterwards has to be able to learn it happened.
-    runtime_ready: AtomicBool,
+    runtime_ready: watch::Sender<bool>,
     bound: Bound,
     /// Answers to model probes, broadcast rather than correlated: every probe
     /// on this connection asks the same parameterless question, so any answer
     /// serves any waiter.
     probe_answers: ProbeAnswers,
+    /// Waiters for answers to requests the connection itself sent: its
+    /// `initialize` and `session/list`.
+    answers: DashMap<RequestId, oneshot::Sender<RawJsonRpcMessage>>,
     routes: Mutex<Routes>,
     router: OnceLock<tokio::task::AbortHandle>,
     /// Cancelled once this connection's transport has ended.
@@ -295,9 +313,10 @@ where
         let connection = Arc::new(Self {
             outbound,
             handshake,
-            runtime_ready: AtomicBool::new(false),
+            runtime_ready: watch::channel(false).0,
             bound: DashMap::new(),
             probe_answers: watch::channel(None).0,
+            answers: DashMap::new(),
             routes: Mutex::new(Routes::default()),
             router: OnceLock::new(),
             closed: CancellationToken::new(),
@@ -310,6 +329,7 @@ where
     /// Stop serving this connection: it has been displaced by a newer dial.
     pub fn evict(&self) {
         self.bound.clear();
+        self.answers.clear();
         // Nothing will answer a probe on a connection that is no longer served.
         let _ = self.probe_answers.send(None);
         if let Some(router) = self.router.get() {
@@ -361,6 +381,174 @@ where
             Some(ModelProbeResult::Available { config_options }) => Ok(config_options),
             Some(ModelProbeResult::Error { message }) => Err(ModelProbeError::Runtime(message)),
             None => Err(ModelProbeError::Closed),
+        }
+    }
+
+    /// Initialize the connection and list the ACP sessions its agent serves.
+    ///
+    /// Asked of every new connection: agents that outlived the previous one
+    /// keep working, and nothing else would load their sessions until someone
+    /// prompted them. Waits for the runtime to report ready, then runs the
+    /// connection's one `initialize` and publishes it through the handshake
+    /// every session shares - or, when a session already claimed it, waits
+    /// for that one. An agent that does not advertise
+    /// `sessionCapabilities.list` lists nothing. The caller owns the deadline.
+    pub async fn list_sessions(&self) -> Result<Vec<SessionId>, ListSessionsError> {
+        let mut ready = self.runtime_ready.subscribe();
+        tokio::select! {
+            ready = ready.wait_for(|ready| *ready) => {
+                ready.map_err(|_| ListSessionsError::Closed)?;
+            }
+            () = self.closed.cancelled() => return Err(ListSessionsError::Closed),
+        }
+        let initialized = if self.claim_handshake() {
+            let mut claim = HandshakeClaim {
+                connection: self,
+                held: true,
+            };
+            let initialized = self.initialize().await?;
+            claim.held = false;
+            initialized
+        } else {
+            self.shared_initialize().await?
+        };
+        if initialized
+            .agent_capabilities
+            .session_capabilities
+            .list
+            .is_none()
+        {
+            return Ok(Vec::new());
+        }
+        let mut sessions = Vec::new();
+        let mut cursor = None;
+        for _ in 0..MAX_SESSION_LIST_PAGES {
+            let (method, params) = ListSessionsRequest::new()
+                .cursor(cursor)
+                .to_untyped_message()
+                .map_err(|error| ListSessionsError::Runtime(error.to_string()))?
+                .into_parts();
+            let (_, result) = self.request(method, params).await?;
+            let page = serde_json::from_value::<ListSessionsResponse>(result)
+                .map_err(|error| ListSessionsError::Runtime(error.to_string()))?;
+            sessions.extend(page.sessions.into_iter().map(|session| session.session_id));
+            match page.next_cursor {
+                Some(next) => cursor = Some(next),
+                None => return Ok(sessions),
+            }
+        }
+        Err(ListSessionsError::Runtime(
+            "session/list did not end its pages".to_owned(),
+        ))
+    }
+
+    /// Send this connection's `initialize` and publish its answer to every
+    /// session on the connection, as a session that initialized would.
+    async fn initialize(&self) -> Result<InitializeResponse, ListSessionsError> {
+        let id = connection_request_id();
+        let request = crate::domain::session::initialize_request(id.clone())
+            .map_err(|error| ListSessionsError::Runtime(error.to_string()))?;
+        let (response, result) = self.send_request(id, request.clone()).await?;
+        let initialized = serde_json::from_value::<InitializeResponse>(result)
+            .map_err(|error| ListSessionsError::Runtime(error.to_string()))?;
+        self.handshake
+            .send_replace(HandshakeStatus::ReadyWithContext {
+                restore: SessionRestoreSupport::of(&initialized),
+                context: Arc::new(InitializationContext {
+                    request: ToRuntimeMessage::Acp(AcpMessage(request)),
+                    response: ToServerMessage::Acp(AcpMessage(response)),
+                }),
+            });
+        Ok(initialized)
+    }
+
+    /// The `initialize` answer a session on this connection received.
+    async fn shared_initialize(&self) -> Result<InitializeResponse, ListSessionsError> {
+        let mut handshake = self.handshake.subscribe();
+        let context = tokio::select! {
+            status = handshake.wait_for(|status| matches!(status, HandshakeStatus::ReadyWithContext { .. })) => {
+                let status = status.map_err(|_| ListSessionsError::Closed)?;
+                let HandshakeStatus::ReadyWithContext { context, .. } = &*status else {
+                    unreachable!("waited for a ready handshake")
+                };
+                Arc::clone(context)
+            }
+            () = self.closed.cancelled() => return Err(ListSessionsError::Closed),
+        };
+        let ToServerMessage::Acp(AcpMessage(RawJsonRpcMessage::Response(Response::Result {
+            result,
+            ..
+        }))) = &context.response
+        else {
+            return Err(ListSessionsError::Runtime(
+                "the shared handshake has no initialize result".to_owned(),
+            ));
+        };
+        serde_json::from_value::<InitializeResponse>(result.clone())
+            .map_err(|error| ListSessionsError::Runtime(error.to_string()))
+    }
+
+    /// Send a request of the connection's own and await its result.
+    async fn request(
+        &self,
+        method: String,
+        params: serde_json::Value,
+    ) -> Result<(RawJsonRpcMessage, serde_json::Value), ListSessionsError> {
+        let id = connection_request_id();
+        let request = RawJsonRpcMessage::request(method, params, id.clone())
+            .map_err(|error| ListSessionsError::Runtime(error.to_string()))?;
+        self.send_request(id, request).await
+    }
+
+    async fn send_request(
+        &self,
+        id: RequestId,
+        request: RawJsonRpcMessage,
+    ) -> Result<(RawJsonRpcMessage, serde_json::Value), ListSessionsError> {
+        let (answered, answer) = oneshot::channel();
+        self.answers.insert(id.clone(), answered);
+        self.routes
+            .lock()
+            .await
+            .expect_connection_response(id.clone());
+        if let Err(error) = self
+            .outbound
+            .send(ToRuntimeMessage::Acp(AcpMessage(request)))
+            .await
+        {
+            self.answers.remove(&id);
+            return Err(ListSessionsError::Transport(error));
+        }
+        let answer = tokio::select! {
+            answer = answer => answer.map_err(|_| ListSessionsError::Closed)?,
+            () = self.closed.cancelled() => return Err(ListSessionsError::Closed),
+        };
+        match &answer {
+            RawJsonRpcMessage::Response(Response::Result { result, .. }) => {
+                let result = result.clone();
+                Ok((answer, result))
+            }
+            RawJsonRpcMessage::Response(Response::Error { error, .. }) => {
+                Err(ListSessionsError::Runtime(error.message.clone()))
+            }
+            _ => Err(ListSessionsError::Runtime("not a response".to_owned())),
+        }
+    }
+
+    /// Give a handshake this connection claimed but did not finish back to
+    /// the sessions: the first one bound takes it over, as on readiness.
+    fn release_handshake(&self) {
+        self.handshake.send_replace(HandshakeStatus::Pending);
+        let waiting = self.bound.iter().next().map(|entry| entry.value().clone());
+        if let Some(inbound) = waiting
+            && self.claim_handshake()
+            && inbound
+                .try_send(ToServerMessage::Event {
+                    event: SystemEvent::AcpReady,
+                })
+                .is_err()
+        {
+            tracing::warn!("a session could not take over this connection's handshake");
         }
     }
 
@@ -468,6 +656,7 @@ where
                 Routed::Session(session) => self.deliver(session, message).await,
                 Routed::Connection => self.on_connection_message(message).await,
                 Routed::Probe => self.answer_probes(message),
+                Routed::Answer => self.answer(message),
                 Routed::Orphan => {
                     tracing::warn!(
                         frame = ?message,
@@ -477,7 +666,20 @@ where
             }
         }
         self.bound.clear();
+        self.answers.clear();
         self.closed.cancel();
+    }
+
+    /// Hand an answer to the connection request waiting for it.
+    fn answer(&self, message: ToServerMessage) {
+        let ToServerMessage::Acp(AcpMessage(frame)) = message else {
+            tracing::error!("dropping a connection answer that is not an ACP response");
+            return;
+        };
+        let Some((_, waiter)) = frame.response_id().and_then(|id| self.answers.remove(id)) else {
+            return;
+        };
+        let _ = waiter.send(frame);
     }
 
     /// Hand one answer to every probe waiting on this connection. An answer
@@ -517,7 +719,7 @@ where
             return;
         }
 
-        self.runtime_ready.store(true, Ordering::Release);
+        self.runtime_ready.send_replace(true);
         let waiting = self
             .bound
             .iter()
@@ -538,7 +740,7 @@ where
     /// The move from `Pending` to `InFlight` is the claim itself, so two
     /// sessions binding at once cannot both decide they are the one.
     fn claim_handshake(&self) -> bool {
-        if !self.runtime_ready.load(Ordering::Acquire) {
+        if !*self.runtime_ready.borrow() {
             return false;
         }
         let mut claimed = false;
@@ -563,6 +765,52 @@ where
             if inbound.send(message.clone()).await.is_err() {
                 self.bound.remove(&session);
             }
+        }
+    }
+}
+
+/// Why a runtime could not list the sessions it serves.
+#[derive(Debug, thiserror::Error)]
+#[non_exhaustive]
+pub enum ListSessionsError {
+    /// Sending a request over the runtime transport failed.
+    #[error("could not ask the runtime for its sessions: {0}")]
+    Transport(#[source] TransportError),
+    /// The runtime connection closed before answering.
+    #[error("runtime connection closed before listing its sessions")]
+    Closed,
+    /// The runtime refused or answered something unreadable.
+    #[error("runtime could not list its sessions: {0}")]
+    Runtime(String),
+}
+
+/// Pages of `session/list` read before an agent is assumed to loop.
+const MAX_SESSION_LIST_PAGES: usize = 100;
+
+fn connection_request_id() -> RequestId {
+    RequestId::Str(format!(
+        "macro-connection-{}",
+        macro_uuid::generate_uuid_v7()
+    ))
+}
+
+/// A handshake [`RuntimeConnection::list_sessions`] claimed; given back to
+/// the sessions if the initialize it started never finishes.
+struct HandshakeClaim<'connection, Sender>
+where
+    Sender: TransportSender<ToRuntimeMessage>,
+{
+    connection: &'connection RuntimeConnection<Sender>,
+    held: bool,
+}
+
+impl<Sender> Drop for HandshakeClaim<'_, Sender>
+where
+    Sender: TransportSender<ToRuntimeMessage>,
+{
+    fn drop(&mut self) {
+        if self.held {
+            self.connection.release_handshake();
         }
     }
 }

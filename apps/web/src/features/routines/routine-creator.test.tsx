@@ -1,5 +1,5 @@
 import type {
-  CreateScheduledAction,
+  ActionConfiguration,
   ScheduledAction,
 } from '@service-scheduled-action/generated/schemas';
 import {
@@ -20,7 +20,7 @@ import { onceFromCron } from './queries/routine-trigger-mapping';
 import { RoutineCreator } from './routine-creator';
 
 const host = vi.hoisted(() => ({
-  create: vi.fn<(body: CreateScheduledAction) => Promise<ScheduledAction>>(),
+  create: vi.fn<(body: ActionConfiguration) => Promise<ScheduledAction>>(),
   openWithSplit: vi.fn(),
   created: vi.fn(),
   success: vi.fn(),
@@ -265,7 +265,7 @@ async function addDocumentEvent() {
   await waitFor(() => expect(add.getAttribute('aria-expanded')).toBe('false'));
 }
 
-function created(body: CreateScheduledAction): ScheduledAction {
+function created(body: ActionConfiguration): ScheduledAction {
   if (!('trigger' in body)) throw new Error('Expected a tagged trigger');
   return {
     ...body,
@@ -509,6 +509,10 @@ describe('routine composer execution selection', () => {
       'Task created',
       'Status changed',
       'Priority changed',
+      'Assignees changed',
+      'Due date changed',
+      'Project changed',
+      'Effort changed',
       'Any property changed',
       'New email received',
     ]) {

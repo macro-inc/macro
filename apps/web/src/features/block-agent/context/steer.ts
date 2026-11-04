@@ -1,8 +1,7 @@
 /**
- * Force-sending queued messages: Steer on a row, and Send next for the
- * oldest one. Each press shows its message as sent at once and asks the
- * server to run it next - the server moves that entry to the front and
- * cancels the turn in flight. The dispatched row arrives under the same id
+ * Force-sending queued messages with Steer on a row. Each press shows its
+ * message as sent at once and asks the server to run it next - the server
+ * moves that entry to the front and cancels the turn in flight. The dispatched row arrives under the same id
  * and promotes the speculation in place.
  *
  * Presses never wait on each other in the UI, but their steers go out one
@@ -32,8 +31,6 @@ export function actionForQueuedEntry(
 export type Steering = {
   /** Force-send this queued entry. */
   steer: (actionId: string) => void;
-  /** Force-send the oldest entry the composer still shows as queued. */
-  sendNext: () => void;
   /** Entries whose last force-send the server refused; they stay queued. */
   failed: Accessor<ReadonlySet<string>>;
 };
@@ -101,12 +98,5 @@ export function createSteering(session: {
     setBacklog((current) => [...current, actionId]);
   };
 
-  return {
-    steer,
-    sendNext: () => {
-      const head = session.entries()[0];
-      if (head) steer(head.actionId);
-    },
-    failed,
-  };
+  return { steer, failed };
 }

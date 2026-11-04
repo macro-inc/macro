@@ -62,7 +62,7 @@ const LAUNCH: RowId = RowId::from_uuid(Uuid::from_u128(0xe004));
 /// `Offsite.Guests` (relating to `Venues.Halls`) and `Venues` are the
 /// owner's; the viewer can read `Offsite`; `Secret.Plans` is the
 /// stranger's alone.
-fn world() -> Shared {
+pub(crate) fn world() -> Shared {
     let reference = |id: &str| {
         PropertyValue::EntityRef(vec![EntityReference {
             entity_id: id.to_string(),
@@ -79,6 +79,7 @@ fn world() -> Shared {
                     owner_id: OWNER.to_string(),
                     created_at: Utc::now(),
                     trashed_at: None,
+                    project_id: None,
                 },
                 grant: AccessLevel::Owner,
                 tables: vec![TableDetail {
@@ -248,6 +249,7 @@ fn world() -> Shared {
                     owner_id: OWNER.to_string(),
                     created_at: Utc::now(),
                     trashed_at: None,
+                    project_id: None,
                 },
                 grant: AccessLevel::Owner,
                 tables: vec![TableDetail {
@@ -300,6 +302,7 @@ fn world() -> Shared {
                     owner_id: OWNER.to_string(),
                     created_at: Utc::now(),
                     trashed_at: None,
+                    project_id: None,
                 },
                 grant: AccessLevel::Owner,
                 tables: vec![TableDetail {

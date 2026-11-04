@@ -25,9 +25,6 @@ pub mod meeting_links;
 pub mod models;
 /// User-initiated calendar mutation policy.
 pub mod mutations;
-/// Markdown documents linked to a meeting occurrence.
-#[cfg(feature = "notes")]
-pub mod notes;
 /// Domain ports.
 pub mod ports;
 /// Calendar reminder dispatch policy.

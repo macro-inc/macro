@@ -74,11 +74,6 @@ export type AgentSessionState = {
   /** Resolve only after the runtime confirms the selected model and effort. */
   selectModel: (model: string, effort?: EffortSelection) => Promise<void>;
   /**
-   * Force-send the oldest queued message: the same as {@link steer} on the
-   * queue head. No-op with nothing queued.
-   */
-  sendNext: () => void;
-  /**
    * Force-send one queued message: show it as sent at once, move it to the
    * front of the queue, and cancel the turn in flight so it runs next.
    * Consecutive presses all apply at once and steer in press order.

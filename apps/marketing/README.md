@@ -15,9 +15,15 @@ Cream slab typography adds 45 to the base font weight; utility-class slab text
 uses weight 360, and the Tasks founder heading uses 445.
 Slab display copy uses warm near-black (`#1d1c1a`) in the cream palette.
 
+Every page's HTML starts with a visually hidden notice telling AI agents to use
+`/app/signup/agent` (`#agent-signup-notice`, in both `index.html` and `start.html`,
+which builds the homepage). It stays in the
+accessibility tree and page text, because that is what agents read; do not hide it
+with `display: none`.
+
 Public calls to action use the shared `site-nav-start` treatment: warm white,
 soft pill corners, a fine border, and a 2px arrow shift on hover. `Book a demo` is a
-soft grey secondary action; the header's `Open app` uses a warm-white fill with
+soft grey secondary action; the header's `Sign Up` uses a warm-white fill with
 near-black text, a fine border, and no arrow. Its fill fades with the header label during
 the footer transition. As it lands in the footer, the same link reveals the
 original wider white pill, glass rim, and arrow. It follows the existing scroll
@@ -30,7 +36,7 @@ track the pointer. Mobile header actions retain 44px touch targets. The homepage
 16px arrow inside a 44px button, inset 20px from the bottom while respecting safe areas.
 
 The homepage keeps the original colored constellation and grainy demo backdrop,
-with “with Macro” in the unification heading. The original sample workspace is
+with “with one system” in the unification heading. The original sample workspace is
 embedded at `/demo?embedded=true`; shared UI fixes and corrected sample names
 remain in place. Compact arrows and dots sit above the original, fuller captions
 at the bottom of the frame. Slide selection is manual: arrows, dots, caption
@@ -224,7 +230,7 @@ Verified direct installer URLs remain usable while loading and if the API fails;
 update these fallbacks in `desktopDownloads.ts` when retiring older installers.
 The separate “All releases” link opens GitHub, with the selected installer's
 release version displayed beneath it.
-The page hides the header's Open app action, has no web-app download option,
+The page hides the header's Sign Up action, has no web-app download option,
 and has no header/footer navigation entry.
 Check the installer link, keyboard navigation, and desktop/mobile layouts.
 
@@ -994,15 +1000,17 @@ mounted. Chat and Docs retain equal-width source panes; when a pane would be
 narrower than 240px, they use the existing single-pane navigation. Verify opening
 and closing sources at desktop and phone widths, without remounting the original
 conversation or document. Display names use first names. All product pages use
-`HomepageClosing` for the bottom Open app CTA and the shared feature heading styles.
+`HomepageClosing` for the bottom Sign Up CTA and the shared feature heading styles.
 
-Chat sidebar parity: `workspace/ChatSidebar.tsx` adapts the app's
-`channels-view/components/rail/ExpandedChannelsRail.tsx` with local fixtures.
-It uses the shared Tabs and ViewSidebar controls, 32px section headers and a 4px
-header-to-list gap. Channels and DMs scroll independently. Verify search,
-section collapse, Threads navigation, and opening a mentioned source after
-switching channels. Message text uses the app's 15px/24px reading size; dark
-surface and edge tokens are frozen from `apps/web/src/index.css`.
+Chat sidebar demo: `workspace/ChatSidebar.tsx` retains the earlier
+All/Recent/Threads layout with local fixtures, shared Tabs and ViewSidebar
+controls, 32px section headers, and a 4px header-to-list gap. It is not the current
+app's sidebar parity target: `channels-view/components/rail/ExpandedChannelsRail.tsx`
+uses Favorites, Team channels, and custom sections in one scrolling list, with a
+sticky collapsible DM panel and no view tabs. Verify the demo's search, section
+collapse, thread navigation, and opening a mentioned source after switching
+channels. Message text uses the app's 15px/24px reading size; dark surface and edge
+tokens are frozen from `apps/web/src/index.css`.
 
 Keep Merge/Merged and Open session actions in the shared agent chip at the same
 24px height and pill radius, with touch resizing disabled for both.
@@ -1059,7 +1067,7 @@ footer rule. The homepage document frame is 420px tall below 700px because its
 version-history band is hidden there; avoid retaining empty desktop fade space
 between the document and its Learn more links.
 
-The travelling Open app CTA switches to native footer dimensions, text, and SVG
+The travelling Sign Up CTA switches to native footer dimensions, text, and SVG
 sizes after its landing transition settles, removing the compositor scale to
 avoid Safari retaining an enlarged low-resolution text layer. Reverse scrolling
 restores compact dimensions before the header reappears; keep one app link.

@@ -48,6 +48,7 @@ const RETRYABLE_WEBSOCKET_CLOSE_CODES = new Set([
   1013, // try again later
   1014, // bad gateway
   4408, // connection initialisation timeout
+  4499, // terminated by the client, as a socket that stopped answering
   4504, // connection acknowledgement timeout
 ]);
 
@@ -111,6 +112,81 @@ export function waitToRetryGraphqlSoupWebSocket(
     const timer = setTimeout(finish, delay);
     const stopListening = onReconnectOpportunity(finish);
   });
+}
+
+/** How long a socket checked by {@link createGraphqlSoupWebSocketLiveness} has to answer. */
+export const GRAPHQL_SOUP_WEBSOCKET_PONG_TIMEOUT_MS = 5_000;
+
+type LivenessSocket = { readonly readyState: number; send(data: string): void };
+
+/** graphql-ws reports the socket it built with `webSocketImpl` as `unknown`. */
+function isLivenessSocket(value: unknown): value is LivenessSocket {
+  return (
+    value !== null &&
+    typeof value === 'object' &&
+    'readyState' in value &&
+    typeof value.readyState === 'number' &&
+    'send' in value &&
+    typeof value.send === 'function'
+  );
+}
+
+/**
+ * Pings the connected socket when the app returns to the foreground or
+ * regains connectivity, and terminates it when the server does not answer.
+ *
+ * A phone that sleeps with the app open can wake to a socket the network
+ * dropped without a close frame. It still reads as open, so graphql-ws never
+ * reconnects it: subscriptions hear nothing, and nothing that refetches on a
+ * reconnect runs. Terminating it lets graphql-ws reconnect, and the reconnect
+ * tells every follower to refetch what it missed.
+ */
+export function createGraphqlSoupWebSocketLiveness(terminate: () => void): {
+  connected(socket: unknown): void;
+  pong(received: boolean): void;
+  closed(): void;
+} {
+  let socket: LivenessSocket | undefined;
+  let stopListening: (() => void) | undefined;
+  let waiting:
+    | { timeout: ReturnType<typeof setTimeout>; span: Span }
+    | undefined;
+
+  const settle = (outcome: 'answered' | 'closed' | 'terminated') => {
+    if (!waiting) return;
+    clearTimeout(waiting.timeout);
+    waiting.span.setAttr('websocket.outcome', outcome);
+    waiting.span.end();
+    waiting = undefined;
+  };
+  const check = () => {
+    if (!socket || socket.readyState !== WebSocket.OPEN || waiting) return;
+    const span = Telemetry.span('graphql_soup.websocket.liveness_check');
+    socket.send(JSON.stringify({ type: 'ping' }));
+    waiting = {
+      span,
+      timeout: setTimeout(() => {
+        settle('terminated');
+        terminate();
+      }, GRAPHQL_SOUP_WEBSOCKET_PONG_TIMEOUT_MS),
+    };
+  };
+
+  return {
+    connected(next) {
+      socket = isLivenessSocket(next) ? next : undefined;
+      stopListening ??= onReconnectOpportunity(check);
+    },
+    pong(received) {
+      if (received) settle('answered');
+    },
+    closed() {
+      socket = undefined;
+      settle('closed');
+      stopListening?.();
+      stopListening = undefined;
+    },
+  };
 }
 
 /** Converts a DSS HTTP origin into its Soup GraphQL websocket endpoint. */

@@ -17,7 +17,11 @@ import {
   type PersistedAgentLike,
   type RuntimeLike,
 } from '../core/roster';
-import { NEW_CONVERSATION_ATTACHMENTS_KEY } from '../primitives/composer-draft';
+import {
+  createPersistedComposerDraft,
+  HOME_CONVERSATION_ATTACHMENTS_KEY,
+  NEW_CONVERSATION_ATTACHMENTS_KEY,
+} from '../primitives/composer-draft';
 import { createPreferredRepository } from '../primitives/preferred-repository';
 import { AgentPicker } from './AgentPicker';
 import { NewChatPage } from './NewChatPage';
@@ -649,6 +653,81 @@ describe('agent-led new conversation', () => {
     expect(
       (screen.getByRole('textbox', { name: 'Draft' }) as HTMLInputElement).value
     ).toBe('Keep this prompt');
+  });
+  it('restores a parent-owned Agents draft and its attachments after remount', () => {
+    mocks.attachments = [
+      { id: 'kept-file', name: 'notes.txt', kind: 'document' },
+    ];
+    localStorage.setItem(
+      `${NEW_CONVERSATION_ATTACHMENTS_KEY}:user`,
+      JSON.stringify(mocks.attachments)
+    );
+    const host = () => {
+      const persisted = createPersistedComposerDraft(undefined, () => 'user');
+      return (
+        <NewChatPage
+          draft={persisted.draft()}
+          onDraftChange={persisted.setDraft}
+          roster={buildAgentRoster({
+            agents: [],
+            runtimes: [],
+            cursorConnected: true,
+            cursorNeedsConnection: false,
+            macroDefaultModel: 'chat-default',
+            cursorDefaultModel: 'cursor-default',
+          })}
+          rosterLoading={false}
+          onStart={vi.fn()}
+          onOpenRoster={vi.fn()}
+        />
+      );
+    };
+    render(host);
+    fireEvent.input(screen.getByRole('textbox', { name: 'Draft' }), {
+      target: { value: 'Keep the Agents prompt' },
+    });
+    expect(screen.getByTestId('attachments').textContent).toBe('notes.txt');
+    cleanup();
+    render(host);
+    expect(
+      (screen.getByRole('textbox', { name: 'Draft' }) as HTMLInputElement).value
+    ).toBe('Keep the Agents prompt');
+    expect(screen.getByTestId('attachments').textContent).toBe('notes.txt');
+  });
+  it('keeps Home attachments off the Agents store when the parent owns the draft', () => {
+    mocks.attachments = [
+      { id: 'home-file', name: 'home-only.txt', kind: 'document' },
+    ];
+    localStorage.setItem(
+      `${HOME_CONVERSATION_ATTACHMENTS_KEY}:user`,
+      JSON.stringify(mocks.attachments)
+    );
+    localStorage.setItem(
+      `${NEW_CONVERSATION_ATTACHMENTS_KEY}:user`,
+      JSON.stringify([{ id: 'agents-file', name: 'agents.txt', kind: 'file' }])
+    );
+    render(() => {
+      const persisted = createPersistedComposerDraft(undefined, () => 'user');
+      return (
+        <NewChatPage
+          draft={persisted.draft()}
+          onDraftChange={persisted.setDraft}
+          attachmentsKey={HOME_CONVERSATION_ATTACHMENTS_KEY}
+          roster={buildAgentRoster({
+            agents: [],
+            runtimes: [],
+            cursorConnected: true,
+            cursorNeedsConnection: false,
+            macroDefaultModel: 'chat-default',
+            cursorDefaultModel: 'cursor-default',
+          })}
+          rosterLoading={false}
+          onStart={vi.fn()}
+          onOpenRoster={vi.fn()}
+        />
+      );
+    });
+    expect(screen.getByTestId('attachments').textContent).toBe('home-only.txt');
   });
   it('starts a new conversation on Auto-detect, not the last used one', async () => {
     mocks.recentIds = [CURSOR_BOT_ID];

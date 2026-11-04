@@ -14,7 +14,7 @@ import {
   EmailThread,
   type EmailThreadProps,
 } from '@app/features/email-thread/email-thread';
-import { useQuickCallsFlag } from '@app/features/meetings/use-quick-calls-flag';
+import { taskSourceComposerContext } from '@app/features/task-composer/source-context';
 import { useUniversalInputEnabled } from '@app/features/universal-input/use-universal-input';
 import { HeaderActionGroup } from '@components/app/HeaderActionGroup';
 import { SidePanel } from '@components/app/side-panel';
@@ -24,6 +24,8 @@ import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import { fireAndForget } from '@core/util/fireAndForget';
 import { buildMentionMarkdownString } from '@macro-inc/lexical-core';
 import { useInboxEmail } from '@queries/email/inbox-email';
+import { useEmailLinksQuery } from '@queries/email/link';
+import { queryReadyGate } from '@queries/gate';
 import type { Accessor, JSX } from 'solid-js';
 import { Show } from 'solid-js';
 import { QueuedSendStatus } from '../email-compose/queued-send-status';
@@ -63,6 +65,10 @@ export function EmailThreadHostView(props: EmailThreadHostViewProps) {
       type: 'component',
       id: 'task-compose',
       params: {
+        composerContext: taskSourceComposerContext({
+          entity_type: 'THREAD',
+          entity_id: props.threadId(),
+        }),
         initialContent: buildMentionMarkdownString({
           type: 'document',
           documentId: props.threadId(),
@@ -74,24 +80,24 @@ export function EmailThreadHostView(props: EmailThreadHostViewProps) {
 
   const calendarEnabled = useCalendarUiFlag();
   const extractionEnabled = useUniversalInputEnabled();
-  const quickCalls = useQuickCallsFlag();
   const openEventComposer = useOpenEventComposer();
+  const emailLinks = useEmailLinksQuery();
   const viewerEmail = useInboxEmail(() => props.source.thread()?.link_id);
   const loginEmail = useEmail();
-  const canCreateEvent = () => calendarEnabled() && !!props.source.thread();
+  // Until the inbox addresses load, the viewer's own alias would be invited.
+  const canCreateEvent = () =>
+    calendarEnabled() && !!props.source.thread() && queryReadyGate(emailLinks);
   const createEvent = () => {
     const thread = props.source.thread();
-    if (!thread || !calendarEnabled()) return false;
+    if (!thread || !canCreateEvent()) return false;
     const title = isPlaceholderSubject(props.title) ? '' : props.title;
     openEventComposer({
       suggestedValues: extractionEnabled()
         ? suggestThreadEvent(thread, title)
         : undefined,
       initialValues: {
-        ...defaultEditorInitialValues(
-          new Date(),
-          quickCalls().enabled && !quickCalls().loading
-        ),
+        // The composer settles the Macro call default once its flag loads.
+        ...defaultEditorInitialValues(new Date(), true),
         title,
         guests: selectThreadParticipants(
           thread,

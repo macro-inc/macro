@@ -4,6 +4,7 @@ import {
   createSplitRouter,
   type Entry,
   type SplitLocation,
+  type SplitRouter,
   type SplitRoutes,
 } from '@app/lib/split-router';
 import { paneRoute } from '@app/routes/app-route';
@@ -54,6 +55,15 @@ export function createRoutedSplitLayout(
   url: string,
   stacked = false
 ): SplitManager {
+  return createRoutedSplitLayoutWithRouter(orchestrator, url, stacked).manager;
+}
+
+/** `createRoutedSplitLayout`, with the router underneath it. */
+export function createRoutedSplitLayoutWithRouter(
+  orchestrator: BlockOrchestrator,
+  url: string,
+  stacked = false
+): { manager: SplitManager; router: SplitRouter } {
   let manager: SplitManager | undefined;
   const router = createSplitRouter({
     routes,
@@ -72,5 +82,5 @@ export function createRoutedSplitLayout(
     toContent: splitContentFromLocation,
     stacked: () => stacked,
   });
-  return manager;
+  return { manager, router };
 }
