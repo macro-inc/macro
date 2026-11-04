@@ -24,6 +24,7 @@ import type {
   AutoArchivePreferencesBody,
   ClassifyInputRequest,
   ClassifyInputResponse,
+  CodingAgentsResponse,
   CodingPreferencesBody,
   ControlRequest,
   ControlResponse,
@@ -3432,6 +3433,62 @@ export const presentSessionView = async (
     status: res.status,
     headers: res.headers,
   } as presentSessionViewResponse;
+};
+
+/**
+ * @summary List the coding agents the caller can start a session as: the same
+personas the `ListCodingAgents` tool offers, including built-in ones whose
+runtime the caller has connected (Cursor once its key is saved).
+ */
+export type listCodingAgentsResponse200 = {
+  data: CodingAgentsResponse;
+  status: 200;
+};
+
+export type listCodingAgentsResponse401 = {
+  data: void;
+  status: 401;
+};
+
+export type listCodingAgentsResponse500 = {
+  data: void;
+  status: 500;
+};
+
+export type listCodingAgentsResponseSuccess = listCodingAgentsResponse200 & {
+  headers: Headers;
+};
+export type listCodingAgentsResponseError = (
+  | listCodingAgentsResponse401
+  | listCodingAgentsResponse500
+) & {
+  headers: Headers;
+};
+
+export type listCodingAgentsResponse =
+  | listCodingAgentsResponseSuccess
+  | listCodingAgentsResponseError;
+
+export const getListCodingAgentsUrl = () => {
+  return `/coding-agents`;
+};
+
+export const listCodingAgents = async (
+  options?: RequestInit
+): Promise<listCodingAgentsResponse> => {
+  const res = await fetch(getListCodingAgentsUrl(), {
+    ...options,
+    method: 'GET',
+  });
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+
+  const data: listCodingAgentsResponse['data'] = body ? JSON.parse(body) : {};
+  return {
+    data,
+    status: res.status,
+    headers: res.headers,
+  } as listCodingAgentsResponse;
 };
 
 /**

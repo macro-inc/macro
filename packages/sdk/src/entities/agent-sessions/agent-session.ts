@@ -95,8 +95,8 @@ export type SelectableRepository = {
 /** What a managed session is created with. */
 export type CreateManagedSessionOptions = {
   /**
-   * Persona the session runs as, from {@link AgentNamespace.list} or
-   * {@link Agent.byId}. The caller must be able to use it. Omitted, the
+   * Persona the session runs as, from {@link AgentNamespace.coding} or
+   * {@link AgentNamespace.list}. The caller must be able to use it. Omitted, the
    * deployment's default coding persona, or Cursor when `repoUrl` is set.
    * Its harness, instructions and model apply unless `instructions` or
    * `model` override them.
