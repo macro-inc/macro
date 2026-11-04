@@ -200,6 +200,8 @@ export type QuickAccessListOptions<
   /** Person scoring policy, applied before the native window limit. */
   peopleMode?: PeopleSearch['mode'];
   excludeSelf?: boolean;
+  /** Explicit scoped participants/guests excluded from personal suggestions. */
+  excludedPeople?: Accessor<ReadonlySet<string>>;
 };
 
 export type QuickAccessContextValue = {

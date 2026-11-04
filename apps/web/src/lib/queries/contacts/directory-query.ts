@@ -229,6 +229,9 @@ export function createContactDirectoryWindow(
     return true;
   };
   return {
+    /** Stable across pages, but changes with eligibility, scope and activation. */
+    inputKey: () =>
+      hashKey([generation(), input().query, input().policyKey, input().active]),
     search,
     setSearch: (value: string) => {
       setCursor(undefined);

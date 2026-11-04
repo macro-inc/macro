@@ -26,10 +26,7 @@ import { buildRecurrenceLines } from '../../calendar/utils/recurrence';
 import type { InputDisplay } from '../context/capabilities';
 import { parseRecurrenceDraft } from '../core/recurrence';
 import type { UniversalInputController } from '../primitives/universal-input';
-import {
-  composerRecipientOptions,
-  composerRecipients,
-} from '../queries/composer-recipients';
+import { composerRecipients } from '../queries/composer-recipients';
 
 /** Reuse the calendar composer's date/time menus and editable property pills. */
 export function CalendarDraft(props: {
@@ -51,9 +48,7 @@ export function CalendarDraft(props: {
     composerRecipients(s.fields().guests, a.people())
   );
   const options = createMemo(() =>
-    composerRecipientOptions(a.people()).filter(
-      (person) => person.kind !== 'custom'
-    )
+    guests().filter((person) => person.kind !== 'custom')
   );
   const recurrenceValues = (): EventEditorInitialValues => {
     const fields = s.fields();

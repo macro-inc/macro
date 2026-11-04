@@ -20,6 +20,15 @@ query state and exact selection resolver over stand-in transport/profile service
 It covers selected names outside the page, unknown/custom emails, broader server
 matches, page replacement, input focus and arrow navigation on desktop/phone.
 
+`/?calendar-guests=edit` and `/?calendar-guests=add` mount the real guest editor,
+property selector and directory-window lifecycle over a virtual 100k source.
+Desktop/phone cases cover the tail of each window, page replacement/scroll reset,
+late and broader source matches, case-insensitive existing-guest exclusions,
+selected-name preservation, fast custom-address entry and address/display-name
+collisions. Closing/reopening retains selections without a directory catalog.
+Event-details permissions and invitation/forwarding remain covered separately in
+`features/calendar-view/browser-test`.
+
 `/?list-filters=drive` and `/?list-filters=notes` mount the production Drive/CRM
 filter models and desktop/mobile controls over bounded contact stand-ins. They
 check lazy loading, Me, persisted unavailable IDs, broader-than-substring matches,

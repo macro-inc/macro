@@ -97,6 +97,15 @@ resolved separately; their header menu remains team-only. Keep No owner/Unassign
 out of contact lookups through the shared empty-value adapter. Wait for the virtual
 list's initial viewport measurement before focus scrolling; otherwise the pending
 correction can snap a user's scroll back to the first selected row.
+Calendar guest editors (including event invitations and AI drafts) keep event-owned
+addresses/names as scoped extras and use bounded personal property windows.
+`PropertyEntitySelector.onUserSelected` carries UI-only chosen metadata separately
+from persisted entity-reference payloads. Preserve guest ID/address representations
+while comparing eligibility case-insensitively. A complete guest address is an
+identity, never another person's display-name alias. Do not re-cap or locally discard
+already matched person pages; expose continuation even for an empty window. Keep
+Quick Access list factory setup untracked so loading/paging cannot reconstruct its
+owner at page one. An in-flight multi-window advance stops when `inputKey` changes.
 Universal task inference resolves only current person-valued fields through
 `useContactReferences` (`anyName`), not a people catalog or suggestion page.
 Keep incomplete/ambiguous evidence unresolved, preserve model term boundaries,

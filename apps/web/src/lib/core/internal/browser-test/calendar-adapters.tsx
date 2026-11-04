@@ -13,6 +13,7 @@ export const useQueryAccount = () => () => ({
   session: 0,
 });
 export const emailToId = (email: string) => `macro|${email}`;
+export const idToEmail = (id: string) => id.replace(/^macro\|/, '');
 export const useUserId = () => () => 'macro|viewer@example.com';
 export const useIsAuthenticated = () => () => true;
 export const useUserContext = () => ({ userId: useUserId() });

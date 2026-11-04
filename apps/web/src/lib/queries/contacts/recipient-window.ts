@@ -4,12 +4,10 @@ import type {
   RecipientSource,
   RecipientSourceInput,
 } from '@core/user/recipient-source';
-import { MAX_PEOPLE_BATCH } from '@graphql-cache/people/generated';
-import { hashKey } from '@tanstack/solid-query';
 import { createMemo } from 'solid-js';
-import { canonicalContactUserId } from './contact-user-id';
 import { readContactDirectory } from './directory';
 import { createContactDirectoryWindow } from './directory-query';
+import { createContactExclusions } from './exclusions';
 
 /** A selector's query, exclusions and domain reach the ranker before its limit. */
 export function createContactRecipientSource(
@@ -18,31 +16,16 @@ export function createContactRecipientSource(
   isSecondaryInbox: (id: string) => boolean,
   reader: typeof readContactDirectory = readContactDirectory
 ): RecipientSource<'user'> {
-  const excluded = createMemo(() => {
-    const ids = new Set<string>();
-    const self = input.selfId();
-    if (self && !input.includeSelf()) ids.add(self);
-    for (const value of input.excludedIds?.() ?? []) {
-      const id = canonicalContactUserId(value);
-      if (id) ids.add(id);
-    }
-    return ids;
-  });
-  const nativeExclusions = createMemo(() => {
-    const ids: string[] = [];
-    for (const id of excluded()) {
-      if (ids.length === MAX_PEOPLE_BATCH) break;
-      ids.push(id);
-    }
-    return ids;
-  });
-  const exclusionKey = createMemo(() => hashKey([[...excluded()].sort()]));
+  const exclusions = createContactExclusions(
+    () => input.excludedIds?.() ?? [],
+    () => (input.includeSelf() ? undefined : input.selfId())
+  );
   const directory = createContactDirectoryWindow(scope, reader, input.enabled, {
     search: input.search,
-    resetKey: exclusionKey,
+    resetKey: exclusions.key,
     policy: () => ({
       mode: 'recipient',
-      excluded: nativeExclusions(),
+      excluded: exclusions.native(),
       senderDomain: input.senderDomain(),
     }),
   });
@@ -54,7 +37,7 @@ export function createContactRecipientSource(
         // window; retain its continuation rather than accumulating more rows.
         .filter(
           (user) =>
-            !excluded().has(user.id) &&
+            !exclusions.ids().has(user.id) &&
             !isSecondaryInbox(user.id) &&
             (!isAutomatedAddress(user.email) ||
               input.search().trim().toLowerCase() === user.email.toLowerCase())

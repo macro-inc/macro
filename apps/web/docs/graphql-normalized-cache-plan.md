@@ -1294,7 +1294,12 @@ threads retain scoped addresses, not an address book. Channel invitations and
 participant pickers also use those sources, with existing roster IDs excluded and
 empty continuations retained when a roster exceeds the native exclusion budget.
 Remaining Universal Input recipient/search/guest and AI-filter planner pools retain
-legacy sources. Universal task-property inference now uses complete
+legacy sources. Calendar create/edit, event-detail guest actions and AI-draft
+composers now use bounded property windows with event-owned guest extras. Chosen
+names stay in selection metadata rather than a directory map, and person pages
+are not truncated again by the property UI. Shared scoped exclusions bind the
+full roster while capping native IPC; continuations retain oversized-roster gaps.
+Universal task-property inference now uses complete
 per-label reference evidence instead of the shared pool, with ambiguous/incomplete
 names unresolved and manual properties taking precedence. Its other composer
 modes still retain that pool; whole-app memory completion and bounded shared name

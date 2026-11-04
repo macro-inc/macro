@@ -16,6 +16,21 @@ export default defineConfig({
       enforce: 'pre',
       resolveId(source, importer) {
         if (
+          importer?.endsWith(
+            '/property/editors/selectors/PropertyEntitySelector.tsx'
+          )
+        ) {
+          if (['@entity', '@queries/soup/search'].includes(source))
+            return `${directory}/property-user-adapters.tsx`;
+          if (source === '@property/utils')
+            return `${webDirectory}/src/features/property/utils/focus.ts`;
+        }
+        if (
+          importer?.endsWith('/property/editors/selectors/entityUtils.ts') &&
+          source === '@core/context/quickAccess'
+        )
+          return `${webDirectory}/src/lib/core/context/quickAccess/context.ts`;
+        if (
           importer?.endsWith('/crm/filter-adapter.tsx') &&
           [
             '@app/preferences/make-flagged-persisted',
