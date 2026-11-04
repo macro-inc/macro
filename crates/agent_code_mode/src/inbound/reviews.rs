@@ -45,16 +45,9 @@ pub struct PresentReview {
 // Only the named property is advertised by JsonSchema.
 impl<'de> Deserialize<'de> for PresentReview {
     fn deserialize<D: serde::Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
-        #[derive(Deserialize)]
-        #[serde(untagged)]
-        enum Input {
-            Wrapped { review: CreateReview },
-            Flat(CreateReview),
-        }
-
-        let review = match Input::deserialize(deserializer)? {
-            Input::Wrapped { review } | Input::Flat(review) => review,
-        };
+        let input = Value::deserialize(deserializer)?;
+        let review = input.get("review").unwrap_or(&input);
+        let review = CreateReview::deserialize(review).map_err(serde::de::Error::custom)?;
         Ok(Self { review })
     }
 }

@@ -34,3 +34,17 @@ fn present_review_accepts_named_and_previously_advertised_flat_arguments() {
         );
     }
 }
+
+#[test]
+fn present_review_preserves_missing_field_errors() {
+    let review = json!({"kind": "import", "drafts": [{"source": "notion"}]});
+    for input in [review.clone(), json!({"review": review})] {
+        let error = serde_json::from_value::<PresentReview>(input)
+            .err()
+            .unwrap();
+        assert!(
+            error.to_string().contains("missing field `title`"),
+            "{error}"
+        );
+    }
+}
