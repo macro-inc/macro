@@ -20,7 +20,7 @@ describe('emailFocusReason', () => {
     );
   });
 
-  it('shows one reason for an older row with both flags set', () => {
+  it('shows one reason if a row ever has both flags set', () => {
     expect(label({ needsReply: true, needsFollowUp: true })).toBe(
       'Reply needed'
     );

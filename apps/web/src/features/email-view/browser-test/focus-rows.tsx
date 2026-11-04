@@ -133,7 +133,7 @@ const ROWS = mapEmailFocus({
         importance: 71,
         needsFollowUp: true,
       }),
-      thread('both', 'Casey Moore', 'Written before the flags were exclusive', {
+      thread('both', 'Casey Moore', 'Both flags set', {
         category: 'KNOWN',
         importance: 64,
         needsReply: true,
