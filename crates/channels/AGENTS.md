@@ -81,6 +81,10 @@ DMs, and the shared message store other domains discuss things on.
   user's notifications (`= ANY(ARRAY(...))`). A per-channel `EXISTS` or plain
   `IN` walks every candidate channel's notification history; that was ~24% of
   the prod read replica's buffer hits.
+- Notification filters read `user_notification`'s copied entity columns, not a
+  `notification` join, and compare `c.id` as a uuid so the channel primary key
+  stays usable. Web Home sends `(unseen OR seen) AND unseen`;
+  `drop_implied_notification_conjuncts` folds that to one notification read.
 
 ## Related
 
