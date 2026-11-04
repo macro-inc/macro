@@ -2270,6 +2270,7 @@ dependencies = [
  "upstream_error",
  "url",
  "urlencoding",
+ "user_hotkey_profiles",
  "user_language",
  "user_quota",
  "utoipa",
@@ -21400,6 +21401,26 @@ dependencies = [
  "tracing",
  "utoipa",
  "uuid",
+ "workspace-hack",
+]
+
+[[package]]
+name = "user_hotkey_profiles"
+version = "0.1.0"
+dependencies = [
+ "axum",
+ "macro_authorization",
+ "macro_db_migrator",
+ "macro_user_id",
+ "model-error-response",
+ "rootcause",
+ "serde",
+ "sqlx",
+ "strum 0.27.2",
+ "thiserror 2.0.18",
+ "tokio",
+ "tracing",
+ "utoipa",
  "workspace-hack",
 ]
 

@@ -15,6 +15,7 @@ import {
 import { activeScope, hotkeyScopeTree } from '@core/hotkey/state';
 import { TOKENS } from '@core/hotkey/tokens';
 import type { HotkeyCommand, ValidHotkey } from '@core/hotkey/types';
+import { compareCommandPrecedence } from '@core/hotkey/utils';
 import type { TimestampedItem } from '@core/util/freshSort';
 import { mergeSortedArrays } from '@core/util/list';
 import type { CrmContactEntity } from '@entity';
@@ -280,6 +281,32 @@ function useCommandsList(
     hideCommandsWithoutHotkeys: false,
     ignoreInputFocused: true,
   });
+  // A turned-on hotkey profile's keys run its own commands; they're listed
+  // hidden when they only run an existing action under another key.
+  const profileCommands = getActiveCommandsFromScope(scopeId, {
+    hideCommandsWithoutHotkeys: true,
+    ignoreInputFocused: true,
+    includeHidden: true,
+  }).filter((command) => command.profile);
+  const keysTakenByProfile = (command: CommandWithInfo) => {
+    const token = command.hotkeyToken;
+    // The token display shows the profile's key for an action it runs.
+    if (
+      command.profile ||
+      (token && profileCommands.some((p) => p.aliasOf?.includes(token)))
+    ) {
+      return false;
+    }
+    return Boolean(
+      command.hotkeys?.length &&
+        command.hotkeys.every((key) =>
+          profileCommands.some(
+            (p) =>
+              p.scopeLevel <= command.scopeLevel && p.hotkeys?.includes(key)
+          )
+        )
+    );
+  };
   const goToCommands = getActiveCommandsFromScope(GO_TO_COMMAND_SCOPE, {
     sortByScopeLevel: false,
     hideShadowedCommands: false,
@@ -290,9 +317,7 @@ function useCommandsList(
   // The command each go-to letter runs: a focused view's letter (Email's g t
   // Sent) runs before the app's, which then shows no keys.
   const goToKeyOwners = new Map<ValidHotkey, CommandWithInfo>();
-  for (const command of [...goToCommands].sort(
-    (a, b) => (b.handlerPriority ?? 0) - (a.handlerPriority ?? 0)
-  )) {
+  for (const command of [...goToCommands].sort(compareCommandPrecedence)) {
     for (const hotkey of command.hotkeys ?? []) {
       if (!goToKeyOwners.has(hotkey)) goToKeyOwners.set(hotkey, command);
     }
@@ -337,6 +362,7 @@ function useCommandsList(
         {
           displayHotkeySequence: (command) =>
             surfacedHotkeySequences.get(command),
+          hideHotkey: keysTakenByProfile,
         }
       ),
       ...availableItems(goToCommands, {

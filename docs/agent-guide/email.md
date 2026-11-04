@@ -55,17 +55,32 @@ shows `Connect your email`; Gmail/Google Workspace and enabled Outlook connectio
 use provider consent. Most functionality needs a connected account. Search is `Ctrl+F` or `/` within the surface.
 
 Mail-client keys work in the list, the reading pane, and the open thread while
-Email is focused: `s` star, `z` undo the last action, and `g` then a letter
+Email is focused: `s` star, `u` mark read or unread, `z` undo the last
+action, and `g` then a letter
 for a tab (`i` Signal, `o` Noise, `s` Favorites, `t` Sent, `d` Drafts, `e`
 Archived, `a` All). These letters replace the app-wide `g` targets only inside
 Email (`g t` is still Tasks elsewhere); `g h` still goes Home. `Escape` in a
 list with nothing selected returns to Signal; in the reading pane it first
 hands the keyboard back to the list. `?` lists every shortcut for the focused
 view. `Shift+M` mutes the selected rows or the open thread, and `S` and
-`Shift+M` also work on a thread opened in its own split. In a thread, `O` opens
+`Shift+M` also work on a thread opened in its own split. In a thread, `R`
+replies to the sender and `Enter` or `Option+R` replies to all, `O` opens
 or closes the selected message (the latest when none is selected), `Shift+O`
 opens every message including the collapsed middle run, and `N`/`P` step
 messages like the arrows. `Cmd+Up`/`Cmd+Down` jump to either end of a list.
+With **Superhuman shortcuts in Email** on (Settings → Keyboard shortcuts, flag
+`enable-hotkey-profiles`), Superhuman's keys take over Macro's on the same keys
+while Email is focused: `C` composes instead of opening the Create menu,
+`Shift+C` composes in a new split, `Shift+U` shows unread only,
+`Shift+S`/`Shift+I` go to Favorites/Signal, `L` edits tags, `V` moves to a
+folder, `g h` goes to Reminders, `Ctrl+1`–`9` shows one account and `Ctrl+/`
+copies the link. `?` labels the profile's keys
+and lists what they replaced. Turn it off and every key is Macro's again.
+In every composer `Cmd+Shift+O` and `Cmd+Shift+S` focus To and Subject (a
+reply shows its Subject row for it), and `Escape`, even while typing, closes
+it: a reply hands the keyboard back to its thread, and a new email saves its
+draft and goes back to what it replaced, or closes its own split. An open
+recipient suggestion list or `@` menu closes first.
 In every composer `Cmd+Shift+.`, `Cmd+Shift+,` and `Cmd+Shift+D` discard the
 draft exactly like its trash button, `Cmd+Shift+U` opens the attach picker, and
 `Cmd+Shift+X`, `7`, `8` and `9` apply strikethrough, numbered list, bulleted
@@ -915,8 +930,10 @@ or using a reply shortcut.
 Sending a new email opens its thread with the message already shown as sent; it
 must not show the draft or **Loading draft…** first.
 
-After a send is queued, its notice offers `Undo`. Undo restores the
-sent envelope and editable content, including when the reply used another inbox;
+After a send is queued, its notice offers `Undo`. Until the undo window
+ends, `z` in Email and `Cmd+Z` anywhere undo the send too, even after
+another notice replaces it. Undo restores the sent envelope and editable
+content, including when the reply used another inbox;
 a slow background refresh must not keep the restored editor disabled. A rejected
 send reports failure and restores its original reply editor if it is still mounted.
 A failure from an older, unmounted editor must not overwrite a newer edited reply.

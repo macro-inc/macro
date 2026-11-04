@@ -117,6 +117,7 @@ import type {
   UpdateOverageRequest,
   UpstreamErrorResponse,
   UsageSnapshot,
+  UserHotkeyProfiles,
   UserLanguage,
   UserLinkResponse,
   UserName,
@@ -6131,6 +6132,136 @@ export const patchUserGroup = async (
     status: res.status,
     headers: res.headers,
   } as patchUserGroupResponse;
+};
+
+/**
+ * @summary Get the caller's keyboard shortcut layouts.
+ */
+export type getUserHotkeyProfilesResponse200 = {
+  data: UserHotkeyProfiles;
+  status: 200;
+};
+
+export type getUserHotkeyProfilesResponse401 = {
+  data: ErrorResponse;
+  status: 401;
+};
+
+export type getUserHotkeyProfilesResponse500 = {
+  data: ErrorResponse;
+  status: 500;
+};
+
+export type getUserHotkeyProfilesResponseSuccess =
+  getUserHotkeyProfilesResponse200 & {
+    headers: Headers;
+  };
+export type getUserHotkeyProfilesResponseError = (
+  | getUserHotkeyProfilesResponse401
+  | getUserHotkeyProfilesResponse500
+) & {
+  headers: Headers;
+};
+
+export type getUserHotkeyProfilesResponse =
+  | getUserHotkeyProfilesResponseSuccess
+  | getUserHotkeyProfilesResponseError;
+
+export const getGetUserHotkeyProfilesUrl = () => {
+  return `/user/hotkey-profiles`;
+};
+
+export const getUserHotkeyProfiles = async (
+  options?: RequestInit
+): Promise<getUserHotkeyProfilesResponse> => {
+  const res = await fetch(getGetUserHotkeyProfilesUrl(), {
+    ...options,
+    method: 'GET',
+  });
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+
+  const data: getUserHotkeyProfilesResponse['data'] = body
+    ? JSON.parse(body)
+    : {};
+  return {
+    data,
+    status: res.status,
+    headers: res.headers,
+  } as getUserHotkeyProfilesResponse;
+};
+
+/**
+ * @summary Replace the caller's keyboard shortcut layouts. A `null` layout keeps
+Macro's own shortcuts in that area.
+ */
+export type putUserHotkeyProfilesResponse200 = {
+  data: UserHotkeyProfiles;
+  status: 200;
+};
+
+export type putUserHotkeyProfilesResponse400 = {
+  data: ErrorResponse;
+  status: 400;
+};
+
+export type putUserHotkeyProfilesResponse401 = {
+  data: ErrorResponse;
+  status: 401;
+};
+
+export type putUserHotkeyProfilesResponse404 = {
+  data: ErrorResponse;
+  status: 404;
+};
+
+export type putUserHotkeyProfilesResponse500 = {
+  data: ErrorResponse;
+  status: 500;
+};
+
+export type putUserHotkeyProfilesResponseSuccess =
+  putUserHotkeyProfilesResponse200 & {
+    headers: Headers;
+  };
+export type putUserHotkeyProfilesResponseError = (
+  | putUserHotkeyProfilesResponse400
+  | putUserHotkeyProfilesResponse401
+  | putUserHotkeyProfilesResponse404
+  | putUserHotkeyProfilesResponse500
+) & {
+  headers: Headers;
+};
+
+export type putUserHotkeyProfilesResponse =
+  | putUserHotkeyProfilesResponseSuccess
+  | putUserHotkeyProfilesResponseError;
+
+export const getPutUserHotkeyProfilesUrl = () => {
+  return `/user/hotkey-profiles`;
+};
+
+export const putUserHotkeyProfiles = async (
+  userHotkeyProfiles: UserHotkeyProfiles,
+  options?: RequestInit
+): Promise<putUserHotkeyProfilesResponse> => {
+  const res = await fetch(getPutUserHotkeyProfilesUrl(), {
+    ...options,
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(userHotkeyProfiles),
+  });
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+
+  const data: putUserHotkeyProfilesResponse['data'] = body
+    ? JSON.parse(body)
+    : {};
+  return {
+    data,
+    status: res.status,
+    headers: res.headers,
+  } as putUserHotkeyProfilesResponse;
 };
 
 /**

@@ -71,6 +71,9 @@ vi.mock('@ui', () => ({
   Button: (props: JSX.ButtonHTMLAttributes<HTMLButtonElement>) => (
     <button {...props} />
   ),
+  SendButton: (props: JSX.ButtonHTMLAttributes<HTMLButtonElement>) => (
+    <button {...props} />
+  ),
 }));
 vi.mock('../components/mobile-reply-toolbar', () => ({
   MobileReplyToolbar: (props: ComponentProps<typeof MobileReplyToolbar>) => (
@@ -93,6 +96,7 @@ vi.mock('../components/draft-sync-status', () => ({
 }));
 vi.mock('../components/email-schedule-summary', () => ({
   EmailScheduleSummary: () => null,
+  EmailScheduleBar: () => null,
 }));
 vi.mock('./reply-envelope', () => ({ ReplyEnvelope: () => null }));
 vi.mock('@core/component/FileDropOverlay', () => ({
@@ -108,7 +112,12 @@ afterEach(() => {
   vi.clearAllMocks();
 });
 
-function mount(draftId?: string, text = '', context = createComposeContext()) {
+function mount(
+  draftId?: string,
+  text = '',
+  context = createComposeContext(),
+  options: { desktop?: boolean } = {}
+) {
   fixture.text = text;
   context.presentation.isTouch = () => true;
   context.presentation.scheduleEnabled = false;
@@ -149,11 +158,11 @@ function mount(draftId?: string, text = '', context = createComposeContext()) {
           exitToThread,
           replyRequest: { replyType: () => undefined, clear() {} },
         }}
-        mobileCompose={{
-          portalMount: () => undefined,
-          onClose,
-          registerClose() {},
-        }}
+        mobileCompose={
+          options.desktop
+            ? undefined
+            : { portalMount: () => undefined, onClose, registerClose() {} }
+        }
       />
     </EmailFormContextProvider>
   ));
@@ -173,6 +182,21 @@ it('routes the composer Escape hotkey through the mobile draft choices', () => {
   shortcut?.keyDownHandler?.(new KeyboardEvent('keydown', { key: 'Escape' }));
   expect(screen.queryByRole('button', { name: 'Save Draft' })).toBeNull();
   expect(state.onClose).not.toHaveBeenCalled();
+});
+
+it('closes a desktop reply on Escape while its body has focus', () => {
+  const state = mount('draft', 'Unsent reply', createComposeContext(), {
+    desktop: true,
+  });
+  const shortcut = vi
+    .mocked(registerHotkey)
+    .mock.calls.find(([options]) => options.hotkey === 'escape')?.[0];
+
+  expect(shortcut?.runWithInputFocused).toBe(true);
+  expect(
+    shortcut?.keyDownHandler?.(new KeyboardEvent('keydown', { key: 'Escape' }))
+  ).toBe(true);
+  expect(state.exitToThread).toHaveBeenCalledWith('selected');
 });
 
 it('keeps the mobile reply open when saving its working copy fails', async () => {

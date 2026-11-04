@@ -70,6 +70,9 @@ export function removeCommandsFromTokenMap(
  * from the newest override onward is effective. Eclipsed commands stay
  * registered — disposing the commands that eclipse them makes them effective
  * again (e.g. a block taking over a split-scope key returns it on unmount).
+ * Profile commands sit outside this: they never eclipse, so the defaults run
+ * while the profile is off, and are never eclipsed, so a view part that
+ * registers later can't hide them.
  */
 export function getEffectiveCommands(
   commands: HotkeyCommand[] | undefined
@@ -77,11 +80,30 @@ export function getEffectiveCommands(
   if (!commands || commands.length === 0) return [];
   for (let i = commands.length - 1; i >= 0; i--) {
     const command = commands[i];
-    if (command && (command.registrationType ?? 'override') === 'override') {
-      return commands.slice(i);
+    if (
+      command &&
+      !command.profile &&
+      (command.registrationType ?? 'override') === 'override'
+    ) {
+      return commands.filter((c, index) => index >= i || c.profile);
     }
   }
   return commands;
+}
+
+/**
+ * The order commands on one key run in within a scope: profile commands
+ * first, then by handler priority. Use it with a stable sort, so equal
+ * commands keep registration order.
+ */
+export function compareCommandPrecedence(
+  a: HotkeyCommand,
+  b: HotkeyCommand
+): number {
+  return (
+    Number(Boolean(b.profile)) - Number(Boolean(a.profile)) ||
+    (b.handlerPriority ?? 0) - (a.handlerPriority ?? 0)
+  );
 }
 
 /**
@@ -446,11 +468,75 @@ function _getHotkeyCommandByToken(token: HotkeyToken) {
   return command;
 }
 
+/**
+ * The profile commands that could run now: registered in the active branch,
+ * nearest scope first, with passing conditions.
+ */
+function activeProfileCommands(): HotkeyCommand[] {
+  const commands: HotkeyCommand[] = [];
+  for (const scopeId of activeScopeBranch()) {
+    for (const command of hotkeyScopeTree.get(scopeId)?.commands ?? []) {
+      if (command.profile && (!command.condition || command.condition())) {
+        commands.push(command);
+      }
+    }
+  }
+  return commands;
+}
+
+/**
+ * The key to show for a token: a turned-on profile's key for its action,
+ * else the action's own first key that no profile has taken.
+ */
+function getDisplayHotkeyByToken(token: HotkeyToken): ValidHotkey | undefined {
+  const keys = hotkeyTokenMap().get(token)?.at(0)?.hotkeys;
+  const profileCommands = activeProfileCommands();
+  if (profileCommands.length === 0) return keys?.[0];
+  const alias = profileCommands.find((command) =>
+    command.aliasOf?.includes(token)
+  );
+  if (alias?.hotkeys?.[0]) return alias.hotkeys[0];
+  const taken = new Set(profileCommands.flatMap((c) => c.hotkeys ?? []));
+  return keys?.find((key) => !taken.has(key));
+}
+
 // Helper function to get the primary hotkey string for a given token, pretty printed.
 export function getPrettyHotkeyStringByToken(token: HotkeyToken) {
-  const hotkey = hotkeyTokenMap().get(token)?.at(0)?.hotkeys?.[0];
+  const hotkey = getDisplayHotkeyByToken(token);
   if (!hotkey) return undefined;
   return prettyPrintHotkeyString(hotkey);
+}
+
+/**
+ * Runs the nearest command registered for one of these tokens that can run
+ * now: in the active branch, not eclipsed, with a passing condition. A
+ * profile key uses it to run an existing action, and a list of tokens makes
+ * a toggle (mark unread, else mark read). Returns whether one ran.
+ */
+export function runTokenCommand(
+  tokens: HotkeyToken[],
+  e?: KeyboardEvent
+): boolean {
+  for (const scopeId of activeScopeBranch()) {
+    const scopeNode = hotkeyScopeTree.get(scopeId);
+    if (!scopeNode) continue;
+    for (const token of tokens) {
+      for (const command of hotkeyTokenMap().get(token) ?? []) {
+        if (command.scopeId !== scopeId) continue;
+        const effective =
+          !command.hotkeys ||
+          command.hotkeys.some((hotkey) =>
+            getCommandsForHotkey(scopeNode, hotkey).includes(command)
+          );
+        if (!effective) continue;
+        if (command.condition && !command.condition()) continue;
+        if (runCommand(command, e, undefined, scopeId).commandCaptured) {
+          return true;
+        }
+      }
+    }
+  }
+  return false;
 }
 
 /**

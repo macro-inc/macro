@@ -532,6 +532,11 @@ export type EmailConnectionProviders = {
 };
 
 /**
+ * A keyboard shortcut layout for Email, modelled on another email app.
+ */
+export type EmailHotkeyProfile = 'superhuman';
+
+/**
  * Empty response is required due to custom fetch forcing `response.json()`
  */
 export type EmptyResponse = {
@@ -1809,6 +1814,11 @@ export type SystemStatusHistory = {
 };
 
 /**
+ * A keyboard shortcut layout for Tasks, modelled on another task app.
+ */
+export type TasksHotkeyProfile = 'linear';
+
+/**
  * The Team struct
  */
 export type Team = {
@@ -2162,6 +2172,15 @@ export type UsageSnapshot = {
      * AI used by this user this period, in cents at provider cost.
      */
     used_cents: number;
+};
+
+/**
+ * The keyboard shortcut layouts a user picked per area of the app. `None`
+ * keeps Macro's own shortcuts there.
+ */
+export type UserHotkeyProfiles = {
+    email: null | EmailHotkeyProfile;
+    tasks: null | TasksHotkeyProfile;
 };
 
 /**
@@ -4414,6 +4433,48 @@ export type PatchUserGroupResponses = {
 };
 
 export type PatchUserGroupResponse = PatchUserGroupResponses[keyof PatchUserGroupResponses];
+
+export type GetUserHotkeyProfilesData = {
+    body?: never;
+    path?: never;
+    query?: never;
+    url: '/user/hotkey-profiles';
+};
+
+export type GetUserHotkeyProfilesErrors = {
+    401: ErrorResponse;
+    500: ErrorResponse;
+};
+
+export type GetUserHotkeyProfilesError = GetUserHotkeyProfilesErrors[keyof GetUserHotkeyProfilesErrors];
+
+export type GetUserHotkeyProfilesResponses = {
+    200: UserHotkeyProfiles;
+};
+
+export type GetUserHotkeyProfilesResponse = GetUserHotkeyProfilesResponses[keyof GetUserHotkeyProfilesResponses];
+
+export type PutUserHotkeyProfilesData = {
+    body: UserHotkeyProfiles;
+    path?: never;
+    query?: never;
+    url: '/user/hotkey-profiles';
+};
+
+export type PutUserHotkeyProfilesErrors = {
+    400: ErrorResponse;
+    401: ErrorResponse;
+    404: ErrorResponse;
+    500: ErrorResponse;
+};
+
+export type PutUserHotkeyProfilesError = PutUserHotkeyProfilesErrors[keyof PutUserHotkeyProfilesErrors];
+
+export type PutUserHotkeyProfilesResponses = {
+    200: UserHotkeyProfiles;
+};
+
+export type PutUserHotkeyProfilesResponse = PutUserHotkeyProfilesResponses[keyof PutUserHotkeyProfilesResponses];
 
 export type GetUserLanguageData = {
     body?: never;

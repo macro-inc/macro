@@ -29,7 +29,8 @@ key issuance, and account merge/link flows.
 - Not here: authorization/permission decisions on other entities →
   `crates/macro_authorization`; metered AI credits → `crates/ai_billing`;
   team lifecycle and seats → `crates/teams`; a person's interface language
-  (`/user/language`) → `crates/user_language`.
+  (`/user/language`) → `crates/user_language`; their keyboard shortcut
+  layouts (`/user/hotkey-profiles`) → `crates/user_hotkey_profiles`.
 
 ## Recipes
 

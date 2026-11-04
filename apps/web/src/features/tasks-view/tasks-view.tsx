@@ -12,6 +12,7 @@ import { useSplitLayout } from '@components/app/split-layout/layout';
 import { useSplitPanelOrThrow } from '@components/app/split-layout/layoutUtils';
 import { SplitPanel } from '@components/app/split-panel';
 import { useUserId } from '@core/context/user';
+import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import { fireAndForget } from '@core/util/fireAndForget';
 import { ListEntityMetadataQueryProvider } from '@entity';
 import { queryReadyGate } from '@queries/gate';
@@ -32,6 +33,7 @@ import { TasksContent, TasksLoading } from './tasks-content';
 import { TasksViewProvider, useTasksView } from './tasks-view-context';
 import { tasksTour } from './tour';
 import type { TasksViewStateOptions } from './types';
+import { useLinearHotkeys } from './use-linear-hotkeys';
 import {
   TaskSavedViewFailure,
   TaskSavedViewWarning,
@@ -110,6 +112,11 @@ function TasksViewRoot() {
   };
 
   onMount(() => panel.handle.setDisplayName('Tasks'));
+
+  useLinearHotkeys({
+    scopeId: panel.splitHotkeyScope,
+    enabled: () => panel.isPanelActive() && !isTouchDevice(),
+  });
 
   const taskList = () => (
     <>

@@ -1,3 +1,5 @@
+import { HotkeyProfilesSettings } from '@app/features/hotkey-profiles/views/hotkey-profiles-settings';
+import { inEnglish, t } from '@app/lib/i18n';
 import { IS_MAC } from '@core/constant/isMac';
 import { cn, Hotkey } from '@ui';
 import { createMemo, createSignal, For, Index, type JSX, Show } from 'solid-js';
@@ -879,227 +881,387 @@ function Keyboard(props: { keys?: string[] }): JSX.Element {
 
 const shortcutSections: ShortcutSection[] = [
   {
-    title: 'Core',
+    get title() {
+      return t('settingsShortcuts.sectionCore');
+    },
     items: [
       {
         keys: [`${cmdOrCtrl}+k`],
         codes: [CmdOrCtrl, 'KeyK'],
-        description: 'Open the command menu',
+        get description() {
+          return t('settingsShortcuts.openTheCommandMenu');
+        },
       },
       {
         keys: [`${cmdOrCtrl}+f`],
         codes: [CmdOrCtrl, 'KeyF'],
-        description: 'Search in current view',
+        get description() {
+          return t('settingsShortcuts.searchInCurrentView');
+        },
       },
-      { keys: ['c'], codes: ['KeyC'], description: 'Open the create menu' },
+      {
+        keys: ['c'],
+        codes: ['KeyC'],
+        get description() {
+          return t('settingsShortcuts.openTheCreateMenu');
+        },
+      },
       {
         keys: [`${cmdOrCtrl}+;`],
         codes: [CmdOrCtrl, 'Semicolon'],
-        description: 'Open settings panel',
+        get description() {
+          return t('settingsShortcuts.openSettingsPanel');
+        },
       },
-      { keys: ['/'], codes: ['Slash'], description: 'Go to search view' },
+      {
+        keys: ['/'],
+        codes: ['Slash'],
+        get description() {
+          return t('settingsShortcuts.goToSearchView');
+        },
+      },
       {
         keys: [`${cmdOrCtrl}+j`],
         codes: [CmdOrCtrl, 'KeyJ'],
-        description: 'Focus AI chat',
-      },
-      { keys: ['g'], codes: ['KeyG'], description: 'Go to a view' },
-      {
-        keys: ['?'],
-        codes: ['ShiftLeft', 'Slash'],
-        description: 'Show shortcuts for the current view',
-      },
-    ],
-  },
-  {
-    title: 'Splits',
-    items: [
-      {
-        keys: ['opt+['],
-        codes: ['AltLeft', 'BracketLeft'],
-        description: 'Go back in current split',
-      },
-      {
-        keys: ['opt+]'],
-        codes: ['AltLeft', 'BracketRight'],
-        description: 'Go forward in current split',
-      },
-      {
-        keys: ['shift+arrowleft'],
-        codes: ['ShiftLeft', 'ArrowLeft'],
-        description: 'Focus split to the left',
-      },
-      {
-        keys: ['shift+arrowright'],
-        codes: ['ShiftLeft', 'ArrowRight'],
-        description: 'Focus split to the right',
-      },
-      {
-        keys: ['cmd+escape'],
-        codes: ['MetaLeft', 'Escape'],
-        description: 'Back to list / close split',
-      },
-      {
-        keys: ['shift+escape'],
-        codes: ['ShiftLeft', 'Escape'],
-        description: 'Spotlight split',
-      },
-      { keys: ['\\'], codes: ['Backslash'], description: 'Create a split' },
-      {
-        keys: ['|'],
-        codes: ['ShiftLeft', 'Backslash'],
-        description: 'Create a split below',
-      },
-    ],
-  },
-  {
-    title: 'Unified List',
-    items: [
-      {
-        keys: ['enter'],
-        codes: ['Enter'],
-        description: 'Open item in current split',
-      },
-      {
-        keys: ['shift+enter'],
-        codes: ['ShiftLeft', 'Enter'],
-        description: 'Open item in a new split',
-      },
-      {
-        keys: ['opt+enter'],
-        codes: ['AltLeft', 'Enter'],
-        description: 'Open item in place of the preview',
-      },
-      { keys: ['arrowup'], codes: ['ArrowUp'], description: 'Move up' },
-      { keys: ['arrowdown'], codes: ['ArrowDown'], description: 'Move down' },
-      {
-        keys: ['shift+arrowup'],
-        codes: ['ShiftLeft', 'ArrowUp'],
-        description: 'Select up',
-      },
-      {
-        keys: ['shift+arrowdown'],
-        codes: ['ShiftLeft', 'ArrowDown'],
-        description: 'Select down',
-      },
-      {
-        keys: ['arrowleft'],
-        codes: ['ArrowLeft'],
-        description: 'Collapse item',
-      },
-      {
-        keys: ['arrowright'],
-        codes: ['ArrowRight'],
-        description: 'Expand item',
-      },
-      { keys: ['space'], codes: ['Space'], description: 'Preview item' },
-      { keys: ['f'], codes: ['KeyF'], description: 'Open filter menu' },
-      { keys: ['x'], codes: ['KeyX'], description: 'Select items' },
-      { keys: ['e'], codes: ['KeyE'], description: 'Mark done' },
-      { keys: ['u'], codes: ['KeyU'], description: 'Mark unread' },
-      {
-        keys: ['shift+u'],
-        codes: ['ShiftLeft', 'KeyU'],
-        description: 'Mark read',
-      },
-      {
-        keys: ['#'],
-        codes: ['ShiftLeft', 'Digit3'],
-        description: 'Delete email',
-      },
-    ],
-  },
-  {
-    title: 'Email',
-    items: [
-      { keys: ['/'], codes: ['Slash'], description: 'Search email' },
-      { keys: ['s'], codes: ['KeyS'], description: 'Star or unstar' },
-      {
-        keys: ['shift+m'],
-        codes: ['ShiftLeft', 'KeyM'],
-        description: 'Mute or unmute',
-      },
-      { keys: ['z'], codes: ['KeyZ'], description: 'Undo the last action' },
-      {
-        keys: ['escape'],
-        codes: ['Escape'],
-        description: 'Back to the list, then to Signal',
+        get description() {
+          return t('settingsShortcuts.focusAiChat');
+        },
       },
       {
         keys: ['g'],
         codes: ['KeyG'],
-        description:
-          'Then i Signal, o Noise, s Favorites, t Sent, d Drafts, e Archived, a All',
+        get description() {
+          return t('settingsShortcuts.goToAView');
+        },
       },
       {
-        keys: ['n', 'arrowdown'],
-        codes: ['KeyN'],
-        description: 'Next message',
-      },
-      {
-        keys: ['p', 'arrowup'],
-        codes: ['KeyP'],
-        description: 'Previous message',
-      },
-      {
-        keys: ['o'],
-        codes: ['KeyO'],
-        description: 'Expand or collapse message',
-      },
-      {
-        keys: ['shift+o'],
-        codes: ['ShiftLeft', 'KeyO'],
-        description: 'Expand all messages',
-      },
-      {
-        keys: [`${cmdOrCtrl}+arrowup`],
-        codes: [CmdOrCtrl, 'ArrowUp'],
-        description: 'Jump to top of list',
-      },
-      {
-        keys: [`${cmdOrCtrl}+arrowdown`],
-        codes: [CmdOrCtrl, 'ArrowDown'],
-        description: 'Jump to bottom of list',
-      },
-      {
-        keys: ['shift+v'],
-        codes: ['ShiftLeft', 'KeyV'],
-        description: 'Show or hide the reading pane',
+        keys: ['?'],
+        codes: ['ShiftLeft', 'Slash'],
+        get description() {
+          return t('settingsShortcuts.showShortcutsForTheCurrentView');
+        },
       },
     ],
   },
   {
-    title: 'Email drafts',
+    get title() {
+      return t('settingsShortcuts.sectionSplits');
+    },
+    items: [
+      {
+        keys: ['opt+['],
+        codes: ['AltLeft', 'BracketLeft'],
+        get description() {
+          return t('settingsShortcuts.goBackInCurrentSplit');
+        },
+      },
+      {
+        keys: ['opt+]'],
+        codes: ['AltLeft', 'BracketRight'],
+        get description() {
+          return t('settingsShortcuts.goForwardInCurrentSplit');
+        },
+      },
+      {
+        keys: ['shift+arrowleft'],
+        codes: ['ShiftLeft', 'ArrowLeft'],
+        get description() {
+          return t('settingsShortcuts.focusSplitToTheLeft');
+        },
+      },
+      {
+        keys: ['shift+arrowright'],
+        codes: ['ShiftLeft', 'ArrowRight'],
+        get description() {
+          return t('settingsShortcuts.focusSplitToTheRight');
+        },
+      },
+      {
+        keys: ['cmd+escape'],
+        codes: ['MetaLeft', 'Escape'],
+        get description() {
+          return t('settingsShortcuts.backToListCloseSplit');
+        },
+      },
+      {
+        keys: ['shift+escape'],
+        codes: ['ShiftLeft', 'Escape'],
+        get description() {
+          return t('settingsShortcuts.spotlightSplit');
+        },
+      },
+      {
+        keys: ['\\'],
+        codes: ['Backslash'],
+        get description() {
+          return t('settingsShortcuts.createASplit');
+        },
+      },
+      {
+        keys: ['|'],
+        codes: ['ShiftLeft', 'Backslash'],
+        get description() {
+          return t('settingsShortcuts.createASplitBelow');
+        },
+      },
+    ],
+  },
+  {
+    get title() {
+      return t('settingsShortcuts.sectionUnifiedList');
+    },
+    items: [
+      {
+        keys: ['enter'],
+        codes: ['Enter'],
+        get description() {
+          return t('settingsShortcuts.openItemInCurrentSplit');
+        },
+      },
+      {
+        keys: ['shift+enter'],
+        codes: ['ShiftLeft', 'Enter'],
+        get description() {
+          return t('settingsShortcuts.openItemInANewSplit');
+        },
+      },
+      {
+        keys: ['opt+enter'],
+        codes: ['AltLeft', 'Enter'],
+        get description() {
+          return t('settingsShortcuts.openItemInPlaceOfPreview');
+        },
+      },
+      {
+        keys: ['arrowup'],
+        codes: ['ArrowUp'],
+        get description() {
+          return t('settingsShortcuts.moveUp');
+        },
+      },
+      {
+        keys: ['arrowdown'],
+        codes: ['ArrowDown'],
+        get description() {
+          return t('settingsShortcuts.moveDown');
+        },
+      },
+      {
+        keys: ['shift+arrowup'],
+        codes: ['ShiftLeft', 'ArrowUp'],
+        get description() {
+          return t('settingsShortcuts.selectUp');
+        },
+      },
+      {
+        keys: ['shift+arrowdown'],
+        codes: ['ShiftLeft', 'ArrowDown'],
+        get description() {
+          return t('settingsShortcuts.selectDown');
+        },
+      },
+      {
+        keys: ['arrowleft'],
+        codes: ['ArrowLeft'],
+        get description() {
+          return t('settingsShortcuts.collapseItem');
+        },
+      },
+      {
+        keys: ['arrowright'],
+        codes: ['ArrowRight'],
+        get description() {
+          return t('settingsShortcuts.expandItem');
+        },
+      },
+      {
+        keys: ['space'],
+        codes: ['Space'],
+        get description() {
+          return t('settingsShortcuts.previewItem');
+        },
+      },
+      {
+        keys: ['f'],
+        codes: ['KeyF'],
+        get description() {
+          return t('settingsShortcuts.openFilterMenu');
+        },
+      },
+      {
+        keys: ['x'],
+        codes: ['KeyX'],
+        get description() {
+          return t('settingsShortcuts.selectItems');
+        },
+      },
+      {
+        keys: ['e'],
+        codes: ['KeyE'],
+        get description() {
+          return t('settingsShortcuts.markDone');
+        },
+      },
+      {
+        keys: ['u'],
+        codes: ['KeyU'],
+        get description() {
+          return t('settingsShortcuts.markReadOrUnread');
+        },
+      },
+      {
+        keys: ['#'],
+        codes: ['ShiftLeft', 'Digit3'],
+        get description() {
+          return t('settingsShortcuts.deleteEmail');
+        },
+      },
+    ],
+  },
+  {
+    get title() {
+      return t('settingsShortcuts.sectionEmail');
+    },
+    items: [
+      {
+        keys: ['/'],
+        codes: ['Slash'],
+        get description() {
+          return t('settingsShortcuts.searchEmail');
+        },
+      },
+      {
+        keys: ['s'],
+        codes: ['KeyS'],
+        get description() {
+          return t('settingsShortcuts.starOrUnstar');
+        },
+      },
+      {
+        keys: ['shift+m'],
+        codes: ['ShiftLeft', 'KeyM'],
+        get description() {
+          return t('settingsShortcuts.muteOrUnmute');
+        },
+      },
+      {
+        keys: ['z'],
+        codes: ['KeyZ'],
+        get description() {
+          return t('settingsShortcuts.undoTheLastAction');
+        },
+      },
+      {
+        keys: ['escape'],
+        codes: ['Escape'],
+        get description() {
+          return t('settingsShortcuts.backToListThenSignal');
+        },
+      },
+      {
+        keys: ['g'],
+        codes: ['KeyG'],
+        get description() {
+          return t('settingsShortcuts.emailGoToLetters');
+        },
+      },
+      {
+        keys: ['n', 'arrowdown'],
+        codes: ['KeyN'],
+        get description() {
+          return t('settingsShortcuts.nextMessage');
+        },
+      },
+      {
+        keys: ['p', 'arrowup'],
+        codes: ['KeyP'],
+        get description() {
+          return t('settingsShortcuts.previousMessage');
+        },
+      },
+      {
+        keys: ['o'],
+        codes: ['KeyO'],
+        get description() {
+          return t('settingsShortcuts.expandOrCollapseMessage');
+        },
+      },
+      {
+        keys: ['shift+o'],
+        codes: ['ShiftLeft', 'KeyO'],
+        get description() {
+          return t('settingsShortcuts.expandAllMessages');
+        },
+      },
+      {
+        keys: [`${cmdOrCtrl}+arrowup`],
+        codes: [CmdOrCtrl, 'ArrowUp'],
+        get description() {
+          return t('settingsShortcuts.jumpToTopOfList');
+        },
+      },
+      {
+        keys: [`${cmdOrCtrl}+arrowdown`],
+        codes: [CmdOrCtrl, 'ArrowDown'],
+        get description() {
+          return t('settingsShortcuts.jumpToBottomOfList');
+        },
+      },
+      {
+        keys: ['shift+v'],
+        codes: ['ShiftLeft', 'KeyV'],
+        get description() {
+          return t('settingsShortcuts.showOrHideTheReadingPane');
+        },
+      },
+    ],
+  },
+  {
+    get title() {
+      return t('settingsShortcuts.sectionEmailDrafts');
+    },
     items: [
       {
         keys: [`shift+${cmdOrCtrl}+.`, `shift+${cmdOrCtrl}+d`],
         codes: ['ShiftLeft', CmdOrCtrl, 'Period'],
-        description: 'Discard draft',
+        get description() {
+          return t('settingsShortcuts.discardDraft');
+        },
       },
       {
         keys: [`shift+${cmdOrCtrl}+u`],
         codes: ['ShiftLeft', CmdOrCtrl, 'KeyU'],
-        description: 'Attach files',
+        get description() {
+          return t('settingsShortcuts.attachFiles');
+        },
       },
       {
         keys: [`shift+${cmdOrCtrl}+x`],
         codes: ['ShiftLeft', CmdOrCtrl, 'KeyX'],
-        description: 'Strikethrough',
+        get description() {
+          return t('settingsShortcuts.strikethrough');
+        },
       },
       {
         keys: [`shift+${cmdOrCtrl}+7`],
         codes: ['ShiftLeft', CmdOrCtrl, 'Digit7'],
-        description: 'Numbered list',
+        get description() {
+          return t('settingsShortcuts.numberedList');
+        },
       },
       {
         keys: [`shift+${cmdOrCtrl}+8`],
         codes: ['ShiftLeft', CmdOrCtrl, 'Digit8'],
-        description: 'Bulleted list',
+        get description() {
+          return t('settingsShortcuts.bulletedList');
+        },
       },
       {
         keys: [`shift+${cmdOrCtrl}+9`],
         codes: ['ShiftLeft', CmdOrCtrl, 'Digit9'],
-        description: 'Quote',
+        get description() {
+          return t('settingsShortcuts.quote');
+        },
       },
     ],
   },
@@ -1148,10 +1310,16 @@ function ShortcutRow(props: { item: ShortcutItem; spacer?: string }) {
 
 function ShortcutSectionComponent(props: { section: ShortcutSection }) {
   return (
-    <SettingsSection title={props.section.title}>
+    // Settings search targets sections by their English title.
+    <SettingsSection
+      title={props.section.title}
+      target={inEnglish(() => props.section.title)}
+    >
       <div class="divide-y divide-ink/5">
         <For each={props.section.items}>
-          {(item) => <ShortcutRow item={item} spacer="or" />}
+          {(item) => (
+            <ShortcutRow item={item} spacer={t('shortcuts.sheetOr')} />
+          )}
         </For>
       </div>
     </SettingsSection>
@@ -1161,12 +1329,15 @@ function ShortcutSectionComponent(props: { section: ShortcutSection }) {
 export function Shortcuts() {
   return (
     <SettingsPage
-      title="Keyboard shortcuts"
-      description="Quick ways to navigate, search, and work in Macro."
+      title={t('settingsNav.tabShortcuts')}
+      description={t('settingsShortcuts.pageDescription')}
     >
+      <HotkeyProfilesSettings />
       <SettingsSurface class="px-5 py-4">
         <details>
-          <summary class="text-sm text-ink/60">Keyboard preview</summary>
+          <summary class="text-sm text-ink/60">
+            {t('settingsShortcuts.keyboardPreview')}
+          </summary>
           <div class="pt-4">
             <Keyboard keys={hoveredCodes()} />
           </div>

@@ -1107,6 +1107,20 @@ Click or tap the linked comment to clear its highlight; the loaded discussion
 and expanded replies stay in place. Following another comment link highlights
 its target again.
 
+## Linear shortcuts
+
+With **Linear shortcuts in Tasks** on (Settings → Keyboard shortcuts, flag
+`enable-hotkey-profiles`), Linear's keys take over Macro's on the same keys in
+the main Tasks view (list and open task; Projects and CRM task lists keep
+Macro's keys). `C` creates a task, `S`/`P`/`A`/`L` open status, priority,
+assignee and tags (replacing Sort and expand group), `I` assigns to me,
+`Cmd+Opt+1`–`5` set a status, `Shift+D`/`Cmd+Shift+D` set or clear the due
+date, `Shift+E` story points, `m` then `b` dependencies (replacing Move to
+folder), `Cmd+Shift+O` a sub-task, `Shift+P` adds to a project, `Esc` closes an
+open task, and `g a`/`g b`/`g e`/`g x`/`g d` go to My tasks, the backlog (my
+tasks not started), All tasks, completed and canceled tasks, and the board.
+`?` labels the profile's keys and lists what they replaced.
+
 ## Bulk delete
 
 Select task rows with their leading checkboxes, choose **Actions → Delete items**,

@@ -89,6 +89,7 @@ import {
   useUnscheduleMessageMutation,
 } from '@queries/email/thread';
 import { invalidateSoupEntity, refetchSoupEntity } from '@queries/soup/cache';
+import { useMutationUndoContext } from '@queries/undo';
 import type { ApiThread } from '@service-email/generated/schemas';
 import type { InfiniteData } from '@tanstack/solid-query';
 import { confirmDialog } from '@ui';
@@ -176,6 +177,7 @@ export function createEmailComposeContext(
   const removeAttachment = useRemoveDraftAttachmentMutation();
   const removeForwarded = useRemoveForwardedAttachmentMutation();
   const unschedule = useUnscheduleMessageMutation();
+  const undoList = useMutationUndoContext();
   const { users } = useCombinedRecipients();
   const notice = (options?: ComposeNoticeOptions) => ({
     ...options,
@@ -309,6 +311,7 @@ export function createEmailComposeContext(
         alert: (message, options) => toast.alert(message, notice(options)),
         dismiss: toast.dismiss,
       },
+      pushUndo: (undo) => undoList.pushUndo({ undo }),
       async blockingNotice({ title, body }) {
         await confirmDialog(
           { title, body, confirmLabel: 'OK' },

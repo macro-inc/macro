@@ -332,7 +332,13 @@ built-in integration is a result that highlights its Integrations row. Try
 focuses the first result; Tab moves through controls normally. Escape in the
 search field clears the query. Clearing search restores the grouped navigation. Keyboard shortcuts are listed
 by category with the action on the left and keys on the right; expand **Keyboard
-preview** for the visual key map.
+preview** for the visual key map. **Shortcut profiles** at the top (flag
+`enable-hotkey-profiles`) turn on Superhuman's keys in Email or Linear's in
+Tasks, saved to the account so every device follows. Each toggle's **Show
+shortcuts** lists every vendor key that works in Macro, including the ones that
+already match, in two columns of the vendor's sections, each key on its own cap
+and each takeover marked with the Macro shortcut it replaces. **Search
+shortcuts** above it filters by name or by the replaced shortcut.
 Appearance starts with visual **System**, **Light**, and **Dark** mode choices.
 The previews use the saved themes; System follows the device and exposes both
 per-mode theme selectors. Light or Dark shows its own theme selector. Each selector

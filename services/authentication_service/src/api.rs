@@ -120,12 +120,21 @@ fn api_router(state: ApiContext) -> Router<ApiContext> {
         .nest("/oauth2", oauth2::router())
         .nest(
             "/user",
-            user::router().merge(user_language::inbound::axum_router::user_language_router(
-                user_language::inbound::axum_router::UserLanguageRouterState::new(
-                    state.user_language_service.clone(),
-                    state.authorization_state.clone(),
+            user::router()
+                .merge(user_language::inbound::axum_router::user_language_router(
+                    user_language::inbound::axum_router::UserLanguageRouterState::new(
+                        state.user_language_service.clone(),
+                        state.authorization_state.clone(),
+                    ),
+                ))
+                .merge(
+                    user_hotkey_profiles::inbound::axum_router::user_hotkey_profiles_router(
+                        user_hotkey_profiles::inbound::axum_router::UserHotkeyProfilesRouterState::new(
+                            state.user_hotkey_profiles_service.clone(),
+                            state.authorization_state.clone(),
+                        ),
+                    ),
                 ),
-            )),
         )
         .nest("/link", link::router())
         .nest("/cursor-api-key", cursor_api_key::router())

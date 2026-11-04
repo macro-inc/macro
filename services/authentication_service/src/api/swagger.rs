@@ -73,6 +73,9 @@ use model::user::{
     Language, ProfilePictureQueryParams, ProfilePictures, PutUserNameQueryParams, UserLanguage,
     UserName, UserNames, UserProfilePicture,
 };
+use user_hotkey_profiles::domain::models::{
+    EmailHotkeyProfile, TasksHotkeyProfile, UserHotkeyProfiles,
+};
 
 #[derive(OpenApi)]
 #[openapi(
@@ -209,6 +212,9 @@ use model::user::{
                 /// /user/language
                 user_language::inbound::axum_router::get_user_language_handler::<crate::api::context::UserLanguageServiceType, crate::api::context::AuthorizationService>,
                 user_language::inbound::axum_router::put_user_language_handler::<crate::api::context::UserLanguageServiceType, crate::api::context::AuthorizationService>,
+                /// /user/hotkey-profiles
+                user_hotkey_profiles::inbound::axum_router::get_user_hotkey_profiles_handler::<crate::api::context::UserHotkeyProfilesServiceType, crate::api::context::AuthorizationService>,
+                user_hotkey_profiles::inbound::axum_router::put_user_hotkey_profiles_handler::<crate::api::context::UserHotkeyProfilesServiceType, crate::api::context::AuthorizationService>,
                 /// /referral
                 referral::inbound::axum_router::get_referral_code_handler::<crate::api::context::ReferralServiceType, crate::api::context::RateLimiter, crate::api::context::AuthorizationService>,
                 referral::inbound::axum_router::post_referral_invite_handler::<crate::api::context::ReferralServiceType, crate::api::context::RateLimiter, crate::api::context::AuthorizationService>,
@@ -250,6 +256,9 @@ use model::user::{
                         UserName,
                         UserLanguage,
                         Language,
+                        UserHotkeyProfiles,
+                        EmailHotkeyProfile,
+                        TasksHotkeyProfile,
                         UserNames,
                         GetNamesWithEmailRequestBody,
                         PostGetNamesRequestBody,

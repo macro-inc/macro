@@ -81,6 +81,7 @@ function RecoveryEditor() {
           return undefined;
         },
       },
+      pushUndo: () => ({ dispose: () => {} }),
       blockingNotice: async () => {},
       confirm: async () => false,
       reportError: () => {},

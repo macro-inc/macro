@@ -275,9 +275,10 @@ export const useEntityActionHotkeys = (
     tags: [HotkeyTags.SelectionModification],
   }).withGroup(group);
 
-  // Mark read - 'shift+u', email selections with at least one unread thread
+  // Mark read - 'u' too, so u toggles: email selections with at least one
+  // unread thread, which Mark unread never matches.
   registerHotkey({
-    hotkey: ['shift+u'],
+    hotkey: ['u'],
     hotkeyToken: TOKENS.entity.action.markRead,
     scopeId,
     description: () => t('entityActions.markReadCommand'),
@@ -300,6 +301,7 @@ export const useEntityActionHotkeys = (
     },
     displayPriority: 9,
     tags: [HotkeyTags.SelectionModification],
+    registrationType: 'add',
   }).withGroup(group);
 
   // Discard draft - the composer's discard keys, on rows with a draft. The

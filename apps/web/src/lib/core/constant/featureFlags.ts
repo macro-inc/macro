@@ -556,6 +556,14 @@ export const enableReminders = defineFlag({
   default: onInDev,
 });
 
+// Shortcut profiles: another app's keyboard shortcuts in one view (Superhuman
+// keys in Email, Linear keys in Tasks), chosen in Settings → Keyboard shortcuts.
+export const enableHotkeyProfiles = defineFlag({
+  key: 'enable-hotkey-profiles',
+  env: 'ENABLE_HOTKEY_PROFILES',
+  default: onInDev,
+});
+
 // The Focus tab in Mail: signal threads the email focus worker classified as
 // worth the owner's attention. Only allowlisted inboxes are classified, so the
 // tab is empty for everyone else.

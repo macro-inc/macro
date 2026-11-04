@@ -60,6 +60,10 @@ use system_status::{
     },
 };
 use tokio_util::task::TaskTracker;
+use user_hotkey_profiles::{
+    domain::service::UserHotkeyProfilesServiceImpl,
+    outbound::pg_user_hotkey_profiles_repo::PgUserHotkeyProfilesRepo,
+};
 use user_language::{
     domain::service::UserLanguageServiceImpl, outbound::pg_user_language_repo::PgUserLanguageRepo,
 };
@@ -160,6 +164,9 @@ pub(crate) type UserLanguageServiceType = UserLanguageServiceImpl<PgUserLanguage
 pub(crate) type SystemStatusServiceType =
     SystemStatusServiceImpl<PgSystemStatusRepo, ConnectionGatewayStatusBroadcaster>;
 
+pub(crate) type UserHotkeyProfilesServiceType =
+    UserHotkeyProfilesServiceImpl<PgUserHotkeyProfilesRepo>;
+
 pub(crate) type GithubLinkServiceType = GithubLinkServiceImpl<
     PgGithubRepo,
     GithubOauthImpl,
@@ -258,6 +265,7 @@ pub(crate) struct ApiContext {
     pub referral_service: Arc<ReferralServiceType>,
     pub gtm_invite_service: Arc<GtmInviteServiceType>,
     pub user_language_service: Arc<UserLanguageServiceType>,
+    pub user_hotkey_profiles_service: Arc<UserHotkeyProfilesServiceType>,
     pub system_status_service: Arc<SystemStatusServiceType>,
     pub rate_limit_service: RateLimiter,
     /// The stripe price ids for each paid plan's seat

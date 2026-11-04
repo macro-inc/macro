@@ -2487,6 +2487,7 @@
       "crates/trigger_context",
       "crates/unfurl",
       "crates/upstream_error",
+      "crates/user_hotkey_profiles",
       "crates/user_language",
       "crates/user_quota",
       "crates/workspace-hack",
@@ -14603,6 +14604,23 @@
       "crates/model_user",
       "crates/remote_env_var",
       "crates/user_api_key",
+      "crates/workspace-hack"
+    ],
+    "user_hotkey_profiles": [
+      "crates/bot_id",
+      "crates/bot_token",
+      "crates/cowlike",
+      "crates/harness_id",
+      "crates/harness_token",
+      "crates/macro_auth",
+      "crates/macro_authorization",
+      "crates/macro_env",
+      "crates/macro_env_var",
+      "crates/macro_user_id",
+      "crates/model-error-response",
+      "crates/model_user",
+      "crates/remote_env_var",
+      "crates/user_hotkey_profiles",
       "crates/workspace-hack"
     ],
     "user_language": [

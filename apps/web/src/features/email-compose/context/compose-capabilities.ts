@@ -355,6 +355,8 @@ export interface EmailComposeFeedback {
     alert(message: string, options?: ComposeNoticeOptions): void;
     dismiss(id: number): void;
   };
+  /** Lets the app's undo keys (z, ⌘Z) run `undo` until it is disposed. */
+  pushUndo(undo: () => void): { dispose(): void };
   /** A modal notice with a single acknowledgement; resolves when dismissed. */
   blockingNotice(input: { title: string; body: string }): Promise<void>;
   /** A modal choice; resolves true only when the user confirms. */
@@ -448,6 +450,8 @@ export interface EmailComposeHost {
   /** The draft a reload should reopen, or undefined when there is none. */
   recordDraft?: (draftId: string | undefined) => void;
   goBack?: () => void;
+  /** Leaves the composer: back to what it replaced, or closes its own split. */
+  close?: () => void;
   registerBack?: (handler: () => boolean) => void;
 }
 export interface EmailUndoHandle {

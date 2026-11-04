@@ -49,6 +49,7 @@ export function ScheduleRecoveryFixture() {
         dismiss: () => {},
       },
       reportError: () => {},
+      pushUndo: () => ({ dispose: () => {} }),
       blockingNotice: async () => {},
     },
     reconcile: async () => {

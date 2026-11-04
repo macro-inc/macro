@@ -7,6 +7,8 @@ import type {
 /**
  * Tells the user only what a queued send has done. Undo stays on offer until
  * the server's own deadline, and the send is called sent once it is delivered.
+ * Until then the undo keys (z, ⌘Z) undo it too, even after another notice
+ * replaces this one.
  */
 export function announceQueuedSend(options: {
   notices: EmailComposeFeedback;
@@ -16,56 +18,70 @@ export function announceQueuedSend(options: {
   undo: (() => void) | undefined;
   /** The send failed or was cancelled, so nothing was delivered. */
   onUndelivered?: () => void;
-}): void {
+}): {
+  /**
+   * Puts the send back on top of the undo list, above work the send caused
+   * (marking its thread done), so the undo keys reach the send first.
+   */
+  raiseUndo(): void;
+} {
   const { notices, undo } = options;
   let undoNotice: number | undefined;
+  let undoEntry: { dispose(): void } | undefined;
   let undoRequested = false;
   let accepted = false;
   const withdrawUndo = () => {
     if (undoNotice != null) notices.feedback.dismiss(undoNotice);
     undoNotice = undefined;
   };
+  const closeUndoWindow = () => {
+    withdrawUndo();
+    undoEntry?.dispose();
+    undoEntry = undefined;
+  };
+  const requestUndo = () => {
+    undoRequested = true;
+    closeUndoWindow();
+    undo?.();
+  };
   const offerUndo = (message: string, duration?: number) => {
     try {
       undoNotice = notices.feedback.success(message, {
-        actions: undo
-          ? [
-              {
-                label: 'Undo',
-                onClick: () => {
-                  undoRequested = true;
-                  withdrawUndo();
-                  undo();
-                },
-              },
-            ]
-          : undefined,
+        actions: undo ? [{ label: 'Undo', onClick: requestUndo }] : undefined,
         duration,
       });
     } catch (error) {
       notices.reportError(error);
     }
   };
+  const raiseUndo = () => {
+    if (!undoEntry) return;
+    undoEntry.dispose();
+    undoEntry = notices.pushUndo(requestUndo);
+  };
   offerUndo(options.queuedOffline ? 'Email queued to send' : 'Sending…');
-  if (!options.sendAttemptId) return;
+  if (!options.sendAttemptId) return { raiseUndo };
+  // Only a tracked send has a known end to its undo window.
+  if (undo) undoEntry = notices.pushUndo(requestUndo);
   options.delivery.watchSend?.(options.sendAttemptId, (progress) =>
     match(progress)
       .with({ state: 'pending' }, () => {
         // After acceptance, pending means delivery or cancellation has begun.
-        if (accepted) withdrawUndo();
+        if (accepted) closeUndoWindow();
       })
       .with({ state: 'accepted' }, ({ undoUntil }) => {
         accepted = true;
         const remaining = Date.parse(undoUntil) - Date.now();
         withdrawUndo();
-        if (!undoRequested && remaining > 0) offerUndo('Sending…', remaining);
+        if (undoRequested || remaining <= 0) closeUndoWindow();
+        else offerUndo('Sending…', remaining);
       })
       .with({ state: 'sent' }, () => {
-        withdrawUndo();
+        closeUndoWindow();
         notices.feedback.success('Email sent');
       })
       .with({ state: 'failed' }, () => {
-        withdrawUndo();
+        closeUndoWindow();
         notices.feedback.failure('Email failed to send', {
           subtext:
             'Open its conversation or Drafts and choose Cancel to recover the draft.',
@@ -74,16 +90,17 @@ export function announceQueuedSend(options: {
         options.onUndelivered?.();
       })
       .with({ state: 'cancelled' }, () => {
-        withdrawUndo();
+        closeUndoWindow();
         options.onUndelivered?.();
       })
       .with({ state: 'unconfirmed' }, () => {
-        withdrawUndo();
+        closeUndoWindow();
         notices.feedback.alert('Delivery unconfirmed', {
           subtext: 'Check your sent mail. We will not resend automatically.',
         });
       })
-      .with({ state: 'untracked' }, withdrawUndo)
+      .with({ state: 'untracked' }, closeUndoWindow)
       .exhaustive()
   );
+  return { raiseUndo };
 }

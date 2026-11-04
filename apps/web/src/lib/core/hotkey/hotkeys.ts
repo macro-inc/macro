@@ -36,6 +36,7 @@ import {
 } from './types';
 import {
   activateClosestDOMScope,
+  compareCommandPrecedence,
   findClosestParentScopeElement,
   findClosestParentScopeId,
   getCommandsForHotkey,
@@ -141,6 +142,8 @@ export function registerHotkey(
     surfaceNestedCommands,
     shouldReturnFocusOnClose,
     proxiedHotkey,
+    profile,
+    aliasOf,
     disposeWithOwner,
   } = args;
 
@@ -252,6 +255,8 @@ export function registerHotkey(
     surfaceNestedCommands,
     shouldReturnFocusOnClose,
     proxiedHotkey,
+    profile,
+    aliasOf,
   };
 
   // An override re-registration of the same logical command — same token in
@@ -735,10 +740,7 @@ export function useHotKeyRoot() {
     while (scopeNode) {
       const commands = getCommandsForHotkey(scopeNode, pressedKeysString);
       if (commands.length > 0) {
-        // Sort commands by handlerPriority (higher priority first)
-        const sortedCommands = [...commands].sort(
-          (a, b) => (b.handlerPriority ?? 0) - (a.handlerPriority ?? 0)
-        );
+        const sortedCommands = [...commands].sort(compareCommandPrecedence);
 
         // Run handlers in priority order
         for (const command of sortedCommands) {

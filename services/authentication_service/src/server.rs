@@ -82,6 +82,10 @@ use system_status::{
         pg_system_status_repo::PgSystemStatusRepo,
     },
 };
+use user_hotkey_profiles::{
+    domain::service::UserHotkeyProfilesServiceImpl,
+    outbound::pg_user_hotkey_profiles_repo::PgUserHotkeyProfilesRepo,
+};
 use user_language::{
     domain::service::UserLanguageServiceImpl, outbound::pg_user_language_repo::PgUserLanguageRepo,
 };
@@ -528,6 +532,9 @@ pub async fn run() -> anyhow::Result<()> {
     let user_language_service = Arc::new(UserLanguageServiceImpl::new(PgUserLanguageRepo::new(
         db.clone(),
     )));
+    let user_hotkey_profiles_service = Arc::new(UserHotkeyProfilesServiceImpl::new(
+        PgUserHotkeyProfilesRepo::new(db.clone()),
+    ));
 
     // Invites that turn into teammates and referrals that sign up earn the
     // inviter AI credit (or more free allowance).
@@ -804,6 +811,7 @@ pub async fn run() -> anyhow::Result<()> {
             entity_access_service: entity_access_service_impl,
             referral_service: Arc::new(referral_service),
             user_language_service,
+            user_hotkey_profiles_service,
             gtm_invite_service,
             system_status_service,
             native_app_service: Arc::new(NativeAppServiceImpl {

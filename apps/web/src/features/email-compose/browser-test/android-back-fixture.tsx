@@ -67,6 +67,7 @@ function MobileComposePanel(props: { onLeave: () => void }) {
         alert: () => undefined,
         dismiss: () => {},
       },
+      pushUndo: () => ({ dispose: () => {} }),
       blockingNotice: async () => {},
       confirm: async () => false,
       reportError: () => {},
