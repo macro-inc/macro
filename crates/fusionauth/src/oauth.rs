@@ -105,7 +105,7 @@ async fn complete(
 
 impl FusionAuthClient {
     /// Completes the OAuth2 authorization code grant flow.
-    #[tracing::instrument(skip(self), fields(application_id=%self.client_id, fusion_auth_base_url=%self.fusion_auth_base_url))]
+    #[tracing::instrument(skip(self, code), fields(application_id=%self.client_id, fusion_auth_base_url=%self.fusion_auth_base_url))]
     pub async fn complete_authorization_code_grant(&self, code: &str) -> Result<OAuth2Grant> {
         complete(
             &self.unauth_client,
@@ -122,7 +122,7 @@ impl FusionAuthClient {
     }
 
     /// complete the OAuth2 Refresh token grant flow.
-    #[tracing::instrument(skip(self), fields(application_id=%self.client_id, fusion_auth_base_url=%self.fusion_auth_base_url))]
+    #[tracing::instrument(skip(self, refresh_token), fields(application_id=%self.client_id, fusion_auth_base_url=%self.fusion_auth_base_url))]
     pub async fn complete_refresh_token_grant(&self, refresh_token: &str) -> Result<OAuth2Grant> {
         complete(
             &self.unauth_client,

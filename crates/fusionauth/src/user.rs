@@ -123,7 +123,7 @@ impl FusionAuthClient {
     }
 
     /// Verifies a user's email with the given verification ID.
-    #[tracing::instrument(skip(self), fields(application_id=%self.client_id, fusion_auth_base_url=%self.fusion_auth_base_url))]
+    #[tracing::instrument(skip(self, verification_id), fields(application_id=%self.client_id, fusion_auth_base_url=%self.fusion_auth_base_url))]
     pub async fn verify_email(&self, verification_id: &str, client_ip: IpAddr) -> Result<()> {
         verify::verify_email(
             &self.auth_client,

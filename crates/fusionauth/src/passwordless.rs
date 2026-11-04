@@ -198,7 +198,7 @@ impl FusionAuthClient {
     }
 
     /// Sends the passwordless login code to the user.
-    #[tracing::instrument(skip(self), fields(application_id=%self.client_id, fusion_auth_base_url=%self.fusion_auth_base_url))]
+    #[tracing::instrument(skip(self, code), fields(application_id=%self.client_id, fusion_auth_base_url=%self.fusion_auth_base_url))]
     pub async fn send_passwordless_login(&self, code: &str) -> Result<()> {
         send(
             &self.auth_client,
