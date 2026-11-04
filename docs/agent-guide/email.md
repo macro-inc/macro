@@ -151,6 +151,14 @@ query: load more threads from the same address, then check that existing row
 names and their hover cards do not change. Repeat with a text query to exercise
 the search-service results.
 
+Hovering a sender's name in a Mail row or a collapsed thread message shows the
+sender's card. Clicking the name, or anywhere else on the row, opens that email
+or message; clicking inside the card (its actions, padding, or name) never
+opens the row underneath. On touch, tapping a collapsed message's sender
+picture opens the message. The backend-free desktop/phone regression is
+`bunx playwright test --config src/features/entity/browser-test/playwright.config.ts`
+from `apps/web`.
+
 `Favorites`, directly below Inbox on desktop, lists starred Macro emails across
 Signal, Noise, and archived mail. It respects the selected inboxes and filters; search
 within the tab is also restricted to favorites. Removing a star removes the row
