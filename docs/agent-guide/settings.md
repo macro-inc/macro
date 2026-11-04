@@ -60,8 +60,10 @@ live-backend release gates and documents staging retention and recovery.
 
 ### Email signatures
 
-Open **Settings → Email → Signatures**. Each owned inbox opens in **Preview**,
-using the same isolated HTML renderer as the email composer. **HTML** lets you
+Open **Settings → Email → Signatures**. Each inbox you can send from, shared
+inboxes included, opens in **Preview**, using the same isolated HTML renderer
+as the email composer. A shared inbox has one signature, so its row says it is
+shared and a save changes the signature for everyone who sends from it. **HTML** lets you
 paste or edit a custom signature without flattening its tables or spacing.
 **Rich text** offers text formatting, links, and image uploads; opening a custom
 HTML layout there asks before converting it. Switching views alone never changes
@@ -197,7 +199,9 @@ another team are told to leave it first. Team admins and owners also see
 **Reset link** (the old link stops working and a new one is copied) and
 **Turn off**, each behind a confirmation. Anyone who may invite can copy the
 link or create the first one. Below it, **Invite by email** sends invitations
-as before. Each email says what joining gives: **Pro is included** when joining
+as before; **Invite as agent** invites every address in the dialog as an agent,
+and its email and **Copy link** go to `/app/signup/agent?team_invite=<id>` (see
+[agent accounts](login.md#agent-accounts)). Each email says what joining gives: **Pro is included** when joining
 grants a Pro seat (an enterprise team, or one with a subscription), otherwise
 **Free to join**. Examples: [desktop](media/team-invite-email/desktop.png) and
 [mobile](media/team-invite-email/mobile.png).
@@ -712,6 +716,11 @@ mention picker; select text to open the formatting menu. Saved instructions
 retain mention identities using the shared editor's Markdown format and reopen
 with their formatting intact. Enter adds a new paragraph; use `Create agent` or
 `Save changes` to submit. The form also includes runtime selectors.
+Under `In Macro`, an Anthropic or OpenAI model shows an optional
+`<Provider> API key · Optional` row with `Add key`; the agent runs on Macro
+usage without one. `Add key` reveals the write-only field (`Cancel` hides it
+again); a saved key starts expanded with `Remove`. On plans without agent keys
+the row only explains that keys are part of Premium and Max.
 `Advanced` starts collapsed on desktop and mobile, showing only its heading,
 summary, and `Show` action, without an empty card beneath it. `Show` reveals the
 settings; `Hide` collapses them again and preserves the selected options.

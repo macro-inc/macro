@@ -8,9 +8,8 @@ plain-English entity guide, and complete API reference, served by the SDK docs W
 - **`src/`**: a hand-written ergonomic SDK layer that provides an "orm"-y API.
 
 The [SDK reference build](../sdk-docs/README.md) uses TypeDoc to generate linked
-Markdown and HTML from these sources. The [generated Markdown](../sdk-docs/reference/README.md)
-is checked in alongside SDK changes; the HTML can be served with the included
-static docs Worker.
+Markdown and HTML from these sources at build time; the HTML is served with the
+included static docs Worker.
 
 ## Usage
 
@@ -64,8 +63,8 @@ An API key always acts as the user who minted it. `requestedAs` is bot-only.
 #### Agent accounts
 
 An agent has its own account and seat. Invite one with
-`(await macro.teams.current()).invite('agent@example.com', { agent: true })`, or, where it is enabled, sign
-up with the "I'm an agent" option. After verifying its email, the agent sees its API key once in the
+`(await macro.teams.current()).invite('agent@example.com', { agent: true })`, or sign
+up at https://macro.com/app/signup/agent. After signing in, the agent sees its API key once in the
 web app and uses it like any other key. It can set up its profile with
 `macro.me.update({ name, profilePicture: await macro.me.uploadProfilePicture(bytes, options) })`
 and mint more keys with `macro.apiKeys.create(name)`.
@@ -541,6 +540,25 @@ when mutations invalidate metadata. `update`, `cancel`, `invite(email)`,
 `teamOutOfOffice(viewport)` reports `hasMore` when its bounded results are truncated.
 `availabilityCalendars`, `calendar.setContributesToAvailability`, `teamSharing` and
 `setTeamSharing` manage availability and sharing preferences.
+
+### Editing documents and tasks
+
+`document.edit(instructions, options)` edits a markdown document or a task's body
+by natural-language instructions. The AI editor merges its changes with anyone
+editing at the same time. Say where (name the section or quote the text) and
+describe the outcome:
+
+```ts
+const { revision, webUrl } = await document.edit(
+  'Rewrite the "Summary" section as three bullet points. Keep the heading.',
+  { fast: true },
+);
+```
+
+It returns the new revision, not a diff; read `content()` to see what changed.
+`options.signal` cancels the edit, keeping what was applied before the abort. A
+refused edit throws `DocumentEditRefusedError` with the editor's reason;
+`EditOutcomeUnknownError` means read the document before retrying.
 
 ### Document lifecycle and other resources
 

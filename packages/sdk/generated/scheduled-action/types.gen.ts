@@ -73,6 +73,9 @@ export type ActionTrigger = {
     filters: EventFilters;
     type: 'events';
 } | {
+    at: string;
+    type: 'once';
+} | {
     triggers: RoutineTriggers;
     type: 'multiple';
 };
@@ -170,6 +173,7 @@ export type EventFilter = {
      * Exact tests on the payload, all of which must pass.
      */
     match?: Array<PayloadCondition> | null;
+    property?: null | PropertySelector;
 };
 
 /**
@@ -280,6 +284,22 @@ export type PayloadCondition = {
 export type PayloadScalar = null | boolean | number | string;
 
 /**
+ * Narrows a task property change filter to one property and, optionally, the
+ * values it must gain.
+ */
+export type PropertySelector = {
+    /**
+     * The property definition that must have changed.
+     */
+    definitionId: string;
+    /**
+     * Select option ids or referenced entity ids, one of which the change must
+     * add. Any change to the property matches when empty.
+     */
+    values?: Array<string>;
+};
+
+/**
  * A nonblank model identifier. Runtime catalogs, not the scheduler, own availability.
  */
 export type RoutineModelId = string;
@@ -321,6 +341,9 @@ export type RoutineTrigger = {
 } | {
     filters: EventFilters;
     type: 'events';
+} | {
+    at: string;
+    type: 'once';
 };
 
 /**

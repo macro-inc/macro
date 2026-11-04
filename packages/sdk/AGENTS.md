@@ -61,6 +61,12 @@ the existing gateway prefixes.
 
 ## Gotchas
 
+- Every entity's namespace class carries one `@routing` sentence ("Use when …;
+  not …") that agents route on, and may carry an `@agent` block: how that area
+  of Macro works, for agents only. Both are stripped from the public
+  reference, and code-mode generation fails without the routing sentence. Put
+  an area's rules there, never in `crates/prompt`; cross-namespace search
+  guidance lives on the `search.ts` module comment.
 - Code mode puts each relevant entity's index in the agent turn, at most 48
   KiB: a method's signature and the first sentence of its doc, cut at 160
   characters. Anything else reaches an agent only through `ReadCodeDocs`, which
@@ -84,11 +90,10 @@ the existing gateway prefixes.
   bun run generate`; do not copy deployed schemas over a local API change.
 - Run `bun run generate` to regenerate SDK clients and normalize whitespace-only
   lines; do not hand-edit generated output to satisfy whitespace checks.
-- Regenerate `../sdk-docs/reference` after SDK source or generated type changes;
-  run that package's checks because web CI verifies the reference is current.
-  Also run `bun packages/code-mode-sdk/scripts/generate.ts` from the root and
-  commit `crates/agent_code_mode/src/domain/documentation.json`; CI's Typecheck
-  fails when it is stale.
+- The SDK reference (`../sdk-docs`) and the code-mode bundle and documentation
+  (`crates/code_mode_assets`) are generated from this source at build time and
+  never committed; run `bun run test` in `../sdk-docs` and `../code-mode-sdk`
+  after changing public API or comments.
 - `generated/agent-fold/` is not from OpenAPI: `cargo run -p agent_fold --bin
   export_types` writes it, and `foldedLog()` casts the opaque wire schema to it.
 - System events project separately in fold metadata and never appear as user

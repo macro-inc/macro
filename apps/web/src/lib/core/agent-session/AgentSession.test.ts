@@ -1237,6 +1237,7 @@ describe('AgentSession', () => {
       live.rendered('fetched', [
         {
           agentSessionId: SESSION,
+          key: '0:user',
           turn: 0,
           author: { kind: 'user', userId: null },
           requestId: null,
@@ -1249,6 +1250,7 @@ describe('AgentSession', () => {
         },
         {
           agentSessionId: SESSION,
+          key: '0:agent',
           turn: 0,
           author: { kind: 'agent' },
           requestId: null,
@@ -1380,6 +1382,7 @@ describe('AgentSession', () => {
           kind: 'update',
           message: {
             agentSessionId: SESSION,
+            key: '1:user',
             turn: 1,
             author: { kind: 'user', userId: 'macro|wolf@macro.com' },
             requestId: actionId,
@@ -1395,6 +1398,7 @@ describe('AgentSession', () => {
           kind: 'new',
           message: {
             agentSessionId: SESSION,
+            key: '1:agent',
             turn: 1,
             author: { kind: 'agent' },
             requestId: null,
@@ -1446,6 +1450,7 @@ describe('AgentSession', () => {
           kind: 'update',
           message: {
             agentSessionId: SESSION,
+            key: '1:agent',
             turn: 1,
             author: { kind: 'agent' },
             requestId: null,

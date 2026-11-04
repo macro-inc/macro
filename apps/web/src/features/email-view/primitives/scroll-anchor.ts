@@ -11,8 +11,9 @@ const ANCHOR_CANDIDATES = 3;
  */
 const TOUCH_SCROLL_SETTLE_MS = 150;
 
+// Threads only: a pinned date header stays put whatever moves under it.
 const rowElements = (scroller: HTMLElement) => [
-  ...scroller.querySelectorAll<HTMLElement>('[role="row"][id]'),
+  ...scroller.querySelectorAll<HTMLElement>('[data-soup-entity][id]'),
 ];
 
 /**

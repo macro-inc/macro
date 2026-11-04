@@ -90,6 +90,7 @@ function pollDetail(
           gateRules: null,
           gateMessage: '',
           bookingTarget: null,
+          showWhen: null,
           questions: [
             {
               id: 'question',
