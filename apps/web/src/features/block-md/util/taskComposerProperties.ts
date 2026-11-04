@@ -124,6 +124,7 @@ export async function createTaskWithProperties(
   >,
   upsertToHistory: (params: { itemId: string; itemType: 'document' }) => void,
   options?: {
+    pinnedPropertyDefinitionIds?: string[];
     revalidateSoup?: boolean;
     shareWithTeam?: boolean;
     /** Disable when the caller provides its own recovery notification. */
@@ -157,6 +158,7 @@ export async function createTaskWithProperties(
     title: taskTitle,
     content: taskContent,
     propertyValues: propertyValues.length > 0 ? propertyValues : undefined,
+    pinnedPropertyDefinitionIds: options?.pinnedPropertyDefinitionIds,
   });
 
   if (!createdTask) {

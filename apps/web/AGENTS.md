@@ -608,6 +608,7 @@ resolved session ID; keep the existing `AgentSessionProvider` subscription to
   move between inboxes).
 - Keep email card resize motion on its content wrapper so message and inline
   reply transitions preserve the card's focus target and return to natural height.
+- Capture the composer's visible property definitions with its values at submission; pass them as initial pins so empty custom fields remain editable below the new task title.
 - Task composer submissions retain an account/context-scoped local copy until
   the create response confirms success; never clear newer composer input from a
   late callback or automatically retry an uncertain create. Keep recovery copies

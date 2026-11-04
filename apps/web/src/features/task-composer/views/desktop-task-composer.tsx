@@ -1,3 +1,4 @@
+import { TaskTemplateControls } from '@app/features/task-templates/task-template-controls';
 import { EntityComposer } from '@ui';
 import type { TaskComposerController } from '../primitives/task-composer';
 import { TaskComposer } from './task-composer-parts';
@@ -9,8 +10,9 @@ export function DesktopTaskComposer(props: {
   return (
     <TaskComposer.Root composer={props.composer}>
       <EntityComposer.Header>
-        <div class="flex-1 flex items-center">
+        <div class="flex-1 flex items-center gap-1">
           <TaskComposer.ContinueInSplit />
+          <TaskTemplateControls composer={props.composer} />
         </div>
         <TaskComposer.ClearDraft />
         <TaskComposer.Close />

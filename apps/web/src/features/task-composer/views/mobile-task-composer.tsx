@@ -1,3 +1,4 @@
+import { TaskTemplateControls } from '@app/features/task-templates/task-template-controls';
 import { onElementConnect } from '@core/util/onElementConnect';
 import { Property } from '@property';
 import { InlineTagsSheetPill } from '@property/tags';
@@ -53,8 +54,9 @@ export function MobileTaskComposer(props: {
           headerPinned() && 'bg-menu'
         )}
       >
-        <div class="flex-1 flex items-center">
+        <div class="flex-1 flex items-center gap-1">
           <TaskComposer.ContinueInSplit />
+          <TaskTemplateControls composer={props.composer} compact />
         </div>
         {/* Far enough from Create Task that a tap meant for one cannot land
             on the other. */}

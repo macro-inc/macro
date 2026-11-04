@@ -338,3 +338,16 @@ it('lets the composer own failed-create feedback without silencing other callers
   expect(await create()).toBeNull();
   expect(mock.failure).toHaveBeenCalledExactlyOnceWith('Failed to create Task');
 });
+
+it('sends creation-time pin definitions without assigning empty properties', async () => {
+  mock.create.mockResolvedValue({ documentId: 'task' });
+  await createTaskWithProperties('Blank field', '', [], new Map(), vi.fn(), {
+    pinnedPropertyDefinitionIds: ['empty-custom-definition'],
+  });
+  expect(mock.create).toHaveBeenCalledWith(
+    expect.objectContaining({
+      pinnedPropertyDefinitionIds: ['empty-custom-definition'],
+      propertyValues: undefined,
+    })
+  );
+});

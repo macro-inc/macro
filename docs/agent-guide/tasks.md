@@ -239,6 +239,9 @@ stay unchanged. Unpinning a default preserves the other pins, and clearing all p
 stays cleared after reopening. The empty Project placeholder can also be pinned or
 unpinned without creating an assignment; its pin follows the real assignment when
 one is saved. Builtin task properties cannot be deleted from the title or side panel.
+At creation, the first shared task snapshot pins the visible composer fields and default task pins,
+including custom fields with no value. Empty custom fields appear as editable placeholders
+below the created task title; assigning one resolves its pending pin to the saved property.
 
 Property edits should update the visible task before the save finishes. To verify,
 delay the GraphQL mutation and change Status, an existing Priority, and an unset

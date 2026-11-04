@@ -1,4 +1,8 @@
 import {
+  fillTaskTemplate,
+  type TaskTemplateContents,
+} from '@app/features/task-templates/core/template';
+import {
   createTaskComposerProperties,
   createTaskWithProperties,
   DEFAULT_TASK_COMPOSER_PROPERTY_IDS,
@@ -24,14 +28,20 @@ import { COMPOSER_STORAGE_CLEARED } from '@core/auth/clear-composer-storage';
 import { buildConfig } from '@core/component/LexicalMarkdown/builder/MarkdownConfigBuilder';
 import { addMediaFromFile } from '@core/component/LexicalMarkdown/plugins/media';
 import type { MentionLinkResolver } from '@core/component/LexicalMarkdown/plugins/text-paste/textPastePlugin';
-import { initializeEditorEmpty } from '@core/component/LexicalMarkdown/utils';
+import {
+  initializeEditorEmpty,
+  setEditorStateFromMarkdown,
+} from '@core/component/LexicalMarkdown/utils';
 import type { PortalScope } from '@core/component/ScopedPortal';
 import { toast } from '@core/component/Toast/Toast';
 import { registerHotkey, useHotkeyDOMScope } from '@core/hotkey/hotkeys';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import { fireAndForget } from '@core/util/fireAndForget';
 import { Telemetry } from '@macro-inc/observability';
-import { SYSTEM_PROPERTY_IDS } from '@property/constants';
+import {
+  getDefaultPinnedProperties,
+  SYSTEM_PROPERTY_IDS,
+} from '@property/constants';
 import type { PropertyApiValues } from '@property/types';
 import { queryReadyGate } from '@queries/gate';
 import { useUpsertToHistoryMutation } from '@queries/history/history';
@@ -48,6 +58,7 @@ import {
 } from 'solid-js';
 import { reconcile, unwrap } from 'solid-js/store';
 import { tabbable } from 'tabbable';
+import { initialTaskPinDefinitionIds } from '../core/initial-pins';
 import type { ComposeTaskProps, ComposeTaskSuccess } from '../core/types';
 import { showTaskCreatedToast } from './taskCreatedToast';
 
@@ -371,6 +382,11 @@ export function createTaskComposer(
     const properties = structuredClone(Object.entries(unwrap(propertyValues)));
     const definitions = createDefinitions();
     const snapshot = draftSnapshot();
+    const pinnedPropertyDefinitionIds = initialTaskPinDefinitionIds(
+      snapshot.visiblePropertyIds ?? visiblePropertyIds(),
+      new Set(definitions.keys()),
+      getDefaultPinnedProperties('task')
+    );
     const shareWithTeam = sharesWithTeam();
     let pendingSplit: ReturnType<typeof host.openPendingTask> | undefined;
     let started = false;
@@ -400,6 +416,7 @@ export function createTaskComposer(
             },
             {
               shareWithTeam,
+              pinnedPropertyDefinitionIds,
               showFailureToast: false,
               onCreated: confirm,
               onMutate: () => {
@@ -555,6 +572,28 @@ export function createTaskComposer(
     runWithInputFocused: true,
   });
 
+  const templateContents = (): TaskTemplateContents => ({
+    propertyIds: properties().map((property) => property.propertyDefinitionId),
+    propertyDefaults: structuredClone(unwrap(propertyValues)),
+    descriptionMarkdown: content(),
+  });
+  const applyTemplate = (template: TaskTemplateContents) => {
+    if (!draftSessionActive || currentUserId() !== draftOwner || isCreating())
+      return;
+    const current = templateContents();
+    const next = fillTaskTemplate(
+      current,
+      template,
+      new Set(availableProperties().map((definition) => definition.id))
+    );
+    setVisiblePropertyIds((ids) => [...new Set([...ids, ...next.propertyIds])]);
+    setPropertyValues(reconcile(next.propertyDefaults));
+    if (next.descriptionMarkdown !== current.descriptionMarkdown) {
+      const editor = bodyEditor();
+      if (editor) setEditorStateFromMarkdown(editor, next.descriptionMarkdown);
+    }
+  };
+
   const editorConfig = buildConfig('markdown')
     .withAppLinkResolver(host.resolveAppLink)
     .withMentions()
@@ -632,6 +671,8 @@ export function createTaskComposer(
     deleteTitleTagsAtStart,
     properties,
     setPropertyValues,
+    templateContents,
+    applyTemplate,
     availableProperties,
     addProperty,
     saveHandler,
