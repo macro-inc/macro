@@ -1184,12 +1184,14 @@ with the PR's status, title, `owner/repo#N`, and line changes. Clicking it opens
 Macro in a new split (in place on touch devices); a PR Macro has not synced yet opens on
 GitHub instead.
 
-Assignees initially lists and searches current team members and available agents.
+Assignees initially lists and searches current team members and available agents,
+with the **Search team...** placeholder.
 Selected assignees stay at the top, followed by agents, then other people. Choose
 the compact **Find other people…** action to switch directly to eligible non-team
 people from the existing contacts pool. That view excludes agents and teammates,
 including selected ones, without removing their assignments. Search changes to
-**Search other people...**; the compact footer back button returns to Assignees.
+**Search other people...**; the compact footer **Back to team** action returns to
+the team view.
 Both directions clear the query and keep search focused without animation. An
 empty pool shows **No other people available.** Selected outsiders remain visible
 and removable in the main view, including references absent from contacts. Each

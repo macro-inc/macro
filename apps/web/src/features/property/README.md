@@ -95,10 +95,10 @@ title-row tags retain their compact height.
 The system Assignees property lists selected assignees first, then available
 agents, then the current team roster. The compact **Find other people…** action
 switches directly to eligible non-team people from the existing Quick Access
-people pool, without teammates or agents. A compact footer back button restores
-the main Assignees view. The search placeholder follows the view; navigation
-clears the query without animating or remounting the focused input. Selections
-survive both directions.
+people pool, without teammates or agents. The main search says **Search team...**;
+discovery says **Search other people...**, with a compact footer **Back to team**
+action. Navigation clears the query without animating or remounting the focused
+input. Selections survive both directions.
 An empty non-team pool shows **No other people available.** Selected outsiders
 remain visible and removable in the main view, including references absent from
 contacts. Closing and reopening starts in team mode.

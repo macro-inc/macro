@@ -210,16 +210,16 @@ describe('assigning an agent through task and project properties', () => {
     async ({ Editor, search }) => {
       const onSave = setup(undefined, property, Editor);
       if (search) {
-        const input = screen.getByPlaceholderText('Search assignees...');
+        const input = screen.getByPlaceholderText('Search team...');
         fireEvent.input(input, { target: { value: 'no-match' } });
         await waitFor(() => expect(screen.queryByText('Alice')).toBeNull());
         fireEvent.input(input, { target: { value: 'a' } });
         await screen.findByText('Alice');
       }
-      fireEvent.keyDown(screen.getByPlaceholderText('Search assignees...'), {
+      fireEvent.keyDown(screen.getByPlaceholderText('Search team...'), {
         key: 'ArrowDown',
       });
-      fireEvent.keyDown(screen.getByPlaceholderText('Search assignees...'), {
+      fireEvent.keyDown(screen.getByPlaceholderText('Search team...'), {
         key: 'Enter',
       });
       fireEvent.click(
@@ -262,7 +262,7 @@ describe('assigning an agent through task and project properties', () => {
           'Agents assigned to this project automatically take on tasks created in or moved into it. Use a shared team agent for tasks added by teammates.'
         ) !== null
       ).toBe(selfFilter?.entityType === 'INITIATIVE');
-      fireEvent.input(screen.getByPlaceholderText('Search assignees...'), {
+      fireEvent.input(screen.getByPlaceholderText('Search team...'), {
         target: { value: 'research' },
       });
       await waitFor(() => expect(screen.queryByText('Alice')).toBeNull());
@@ -339,7 +339,7 @@ describe('team-first assignees', () => {
         ],
       };
       const onSave = setup(undefined, assigned, Editor);
-      const input = screen.getByPlaceholderText('Search assignees...');
+      const input = screen.getByPlaceholderText('Search team...');
       input.focus();
       expect(screen.getByText('Teammate')).toBeTruthy();
       expect(screen.queryByText('Outside')).toBeNull();
@@ -355,10 +355,8 @@ describe('team-first assignees', () => {
       });
       fireEvent.click(await screen.findByText('Outside'));
       fireEvent.input(input, { target: { value: 'outside' } });
-      fireEvent.click(
-        screen.getByRole('button', { name: 'Back to assignees' })
-      );
-      expect(screen.getByPlaceholderText('Search assignees...')).toBe(input);
+      fireEvent.click(screen.getByRole('button', { name: 'Back to team' }));
+      expect(screen.getByPlaceholderText('Search team...')).toBe(input);
       expect(document.activeElement).toBe(input);
       expect((input as HTMLInputElement).value).toBe('');
       expect(await screen.findByText('Research assistant')).toBeTruthy();
@@ -394,7 +392,7 @@ describe('team-first assignees', () => {
       expect(screen.queryByText('Teammate')).toBeNull();
       expect(screen.queryByText('Outside')).toBeNull();
     });
-    fireEvent.click(screen.getByRole('button', { name: 'Back to assignees' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Back to team' }));
     expect(await screen.findByText('Teammate')).toBeTruthy();
     expect(screen.getByText('outside@example.com')).toBeTruthy();
     fireEvent.click(screen.getByText('Dismiss'));
@@ -421,14 +419,12 @@ describe('team-first assignees', () => {
 
   it('reaches discovery with the keyboard after a team-only search has no matches', async () => {
     setup(undefined, { ...property, value: [] });
-    const input = screen.getByPlaceholderText('Search assignees...');
+    const input = screen.getByPlaceholderText('Search team...');
     fireEvent.input(input, { target: { value: 'outside' } });
     await waitFor(() => expect(screen.queryByText('Teammate')).toBeNull());
     fireEvent.keyDown(input, { key: 'Enter' });
     expect(await screen.findByText('Outside')).toBeTruthy();
-    expect(
-      screen.getByRole('button', { name: 'Back to assignees' })
-    ).toBeTruthy();
+    expect(screen.getByRole('button', { name: 'Back to team' })).toBeTruthy();
   });
 
   it('keeps custom people fields broad and company owners strictly team-only', () => {
@@ -450,7 +446,7 @@ describe('people in a picker sheet', () => {
   it('drops the picks on Escape and saves them on Done', async () => {
     const dropped = setup(undefined, property, EntitySheetEditor);
     fireEvent.click(screen.getByText('Research assistant'));
-    fireEvent.keyDown(screen.getByPlaceholderText('Search assignees...'), {
+    fireEvent.keyDown(screen.getByPlaceholderText('Search team...'), {
       key: 'Escape',
     });
     expect(screen.queryByRole('dialog')).toBeNull();
