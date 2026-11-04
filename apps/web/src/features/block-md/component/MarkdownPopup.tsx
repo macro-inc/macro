@@ -1,3 +1,4 @@
+import { taskSourceComposerContext } from '@app/features/task-composer/source-context';
 import { useFeatureFlag } from '@app/lib/analytics/posthog';
 import { useFlow } from '@app/observability/flow';
 import { globalSplitManager } from '@app/signal/splitLayout';
@@ -516,6 +517,10 @@ export function MarkdownPopup(props: {
         type: 'component',
         id: 'task-compose',
         params: {
+          composerContext: taskSourceComposerContext({
+            entity_type: 'DOCUMENT',
+            entity_id: blockId,
+          }),
           initialTitle: text.length > 70 ? `${text.slice(0, 70)}...` : text,
           initialContent: buildMentionMarkdownString({
             type: 'document',
