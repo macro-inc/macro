@@ -1,6 +1,6 @@
 import { t } from '@app/lib/i18n';
 import SlidersIcon from '@icon/system/regular/sliders-horizontal.svg';
-import { Button, Dropdown, Tooltip } from '@ui';
+import { Button, Dropdown } from '@ui';
 import { Show } from 'solid-js';
 import type { PeopleVisibility } from '../context/workspace-context';
 
@@ -8,17 +8,15 @@ export function PeopleDisplayMenu(props: { visibility: PeopleVisibility }) {
   return (
     <Show when={props.visibility.canShowRemoved()}>
       <Dropdown>
-        <Tooltip label={t('viewMenus.peopleDisplayOptions')}>
-          <Dropdown.Trigger
-            as={Button}
-            aria-label={t('viewMenus.peopleDisplayOptions')}
-            tooltip={t('viewMenus.peopleDisplayOptions')}
-            variant="ghost"
-            size="icon-md"
-          >
-            <SlidersIcon class="size-4 touch:size-6 shrink-0 pointer-events-none" />
-          </Dropdown.Trigger>
-        </Tooltip>
+        <Dropdown.Trigger
+          as={Button}
+          aria-label={t('viewMenus.peopleDisplayOptions')}
+          tooltip={t('viewMenus.peopleDisplayOptions')}
+          variant="ghost"
+          size="icon-md"
+        >
+          <SlidersIcon class="size-4 touch:size-6 shrink-0 pointer-events-none" />
+        </Dropdown.Trigger>
         <Dropdown.Content class="min-w-56 max-w-[calc(100vw-2rem)]">
           <Dropdown.CheckboxItem
             checked={props.visibility.showRemoved()}
