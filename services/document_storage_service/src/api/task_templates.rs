@@ -97,7 +97,7 @@ pub async fn get_task_template(
     ))
 }
 
-#[utoipa::path(post, path = "/task_templates", tag = "task_templates", request_body = CreateTaskTemplateRequest, responses((status = 201, body = TaskTemplate), (status = 400, body = ErrorResponse), (status = 403, body = ErrorResponse)))]
+#[utoipa::path(post, path = "/task_templates", tag = "task_templates", request_body = CreateTaskTemplateRequest, responses((status = 201, body = TaskTemplate), (status = 400, body = ErrorResponse), (status = 403, body = ErrorResponse), (status = 409, body = ErrorResponse)))]
 #[tracing::instrument(skip_all, err)]
 pub async fn create_task_template(
     State(ctx): State<ApiContext>,

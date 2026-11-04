@@ -1,3 +1,4 @@
+import { t } from '@app/lib/i18n';
 import { EditorSystemMessage } from '@block-md/component/EditorSystemMessage';
 import { InlinePropertyValue } from '@block-md/component/InlinePropertyValue';
 import { RecoverTaskDrafts } from '@block-md/component/RecoverTaskDrafts';
@@ -81,10 +82,18 @@ function Root(props: {
 function ContinueInSplit() {
   const composer = useTaskComposer();
   return (
-    <Show when={composer.isPopover()}>
+    <Show
+      when={
+        composer.isPopover() && composer.templateSelection().kind !== 'editing'
+      }
+    >
       <Button
         onMouseDown={composer.continueInSplit}
-        disabled={composer.isCreating()}
+        disabled={
+          composer.isCreating() ||
+          (composer.templateSelection().kind === 'new' &&
+            (!composer.canSubmit() || !composer.title().trim()))
+        }
         tabIndex={-1}
         tooltip="Continue editing in split"
         variant="ghost"
@@ -137,6 +146,7 @@ function Close() {
     <Show when={composer.isPopover()}>
       <Button
         onMouseDown={composer.close}
+        disabled={composer.isSavingTemplate()}
         tabIndex={-1}
         tooltip="Close"
         variant="ghost"
@@ -350,7 +360,13 @@ function ErrorMessage() {
 function ShareToggle() {
   const composer = useTaskComposer();
   return (
-    <Show when={composer.team()}>
+    <Show
+      when={
+        composer.submitKind() !== 'template' &&
+        composer.templateSelection().kind !== 'editing' &&
+        composer.team()
+      }
+    >
       {(team) => (
         <Tooltip label={composer.sharingHint()} tabIndex={0}>
           <ToggleSwitch
@@ -370,7 +386,13 @@ function ShareToggle() {
 function LinkInSourceToggle() {
   const composer = useTaskComposer();
   return (
-    <Show when={composer.props.linkInSource}>
+    <Show
+      when={
+        composer.submitKind() !== 'template' &&
+        composer.templateSelection().kind !== 'editing' &&
+        composer.props.linkInSource
+      }
+    >
       {(linkInSource) => (
         <ToggleSwitch
           labelClass="text-xs text-ink-muted font-normal whitespace-nowrap"
@@ -386,27 +408,43 @@ function LinkInSourceToggle() {
 function CreateMoreToggle() {
   const composer = useTaskComposer();
   return (
-    <ToggleSwitch
-      labelClass="text-xs text-ink-muted font-normal whitespace-nowrap"
-      onChange={composer.setCreateMore}
-      disabled={!!composer.recovered || composer.isCreating()}
-      checked={composer.createMore()}
-      label="Create More"
-    />
+    <Show when={composer.templateSelection().kind !== 'editing'}>
+      <ToggleSwitch
+        labelClass="text-xs text-ink-muted font-normal whitespace-nowrap"
+        onChange={composer.setCreateMore}
+        disabled={!!composer.recovered || composer.isCreating()}
+        checked={composer.createMore()}
+        label="Create More"
+      />
+    </Show>
   );
 }
 
 function Submit() {
   const composer = useTaskComposer();
+  const label = () => {
+    if (composer.templateSelection().kind === 'editing')
+      return t('create.taskTemplateSave');
+    const kind = composer.submitKind();
+    if (kind === 'template') return t('create.taskTemplateCreate');
+    if (kind === 'task-and-template') {
+      return composer.createMore()
+        ? t('create.taskTemplateCreateBothMore')
+        : t('create.taskTemplateCreateBoth');
+    }
+    return composer.createMore()
+      ? t('create.taskCreateMore')
+      : t('create.taskCreate');
+  };
   return (
     <EntityComposer.Submit
       variant="primary"
       size="sm"
       onClick={composer.createTask}
-      disabled={composer.title().trim().length === 0 || composer.isCreating()}
-      hasContent={composer.title().trim().length > 0}
+      disabled={!composer.canSubmit() || composer.isCreating()}
+      hasContent={composer.canSubmit()}
     >
-      Create Task
+      {label()}
     </EntityComposer.Submit>
   );
 }

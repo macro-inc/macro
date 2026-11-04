@@ -1,4 +1,5 @@
 import {
+  captureTaskTemplate,
   fillTaskTemplate,
   type TaskTemplateContents,
 } from '@app/features/task-templates/core/template';
@@ -18,9 +19,11 @@ import {
   taskComposerContextStorage,
 } from '@block-md/util/taskComposerStorage';
 import {
+  checkpointTaskTemplate,
   clearTaskSubmission,
   createTaskSubmissionList,
   submitTaskDraft,
+  TemplateCreationConflict,
   taskSubmissionDraftStorage,
   taskSubmissionKey,
 } from '@block-md/util/taskComposerSubmissions';
@@ -42,7 +45,10 @@ import {
   getDefaultPinnedProperties,
   SYSTEM_PROPERTY_IDS,
 } from '@property/constants';
-import type { PropertyApiValues } from '@property/types';
+import type {
+  PropertyApiValues,
+  PropertyDefinitionDomain,
+} from '@property/types';
 import { queryReadyGate } from '@queries/gate';
 import { useUpsertToHistoryMutation } from '@queries/history/history';
 import { useUserTeamsQuery } from '@queries/team/teams';
@@ -59,6 +65,13 @@ import {
 import { reconcile, unwrap } from 'solid-js/store';
 import { tabbable } from 'tabbable';
 import { initialTaskPinDefinitionIds } from '../core/initial-pins';
+import {
+  freshTaskFromTemplate,
+  type SavedTaskTemplate,
+  type TaskTemplateSelection,
+  type TemplateCreationRequest,
+  templateSubmitKind,
+} from '../core/template-selection';
 import type { ComposeTaskProps, ComposeTaskSuccess } from '../core/types';
 import { showTaskCreatedToast } from './taskCreatedToast';
 
@@ -71,6 +84,18 @@ type OpenableTask = { id: string; optimisticSnapshot?: Uint8Array };
 export type TaskComposerHost = {
   userId: Accessor<string | undefined>;
   resolveAppLink: MentionLinkResolver | undefined;
+  createTemplate(
+    viewerId: string,
+    selection: Extract<TaskTemplateSelection, { kind: 'new' }>,
+    contents: TaskTemplateContents,
+    definitions: readonly PropertyDefinitionDomain[]
+  ): Promise<SavedTaskTemplate>;
+  updateTemplate(
+    viewerId: string,
+    selection: Extract<TaskTemplateSelection, { kind: 'editing' }>,
+    contents: TaskTemplateContents,
+    definitions: readonly PropertyDefinitionDomain[]
+  ): Promise<SavedTaskTemplate>;
   /** Whether the composer floats over the layout rather than filling a split. */
   isPopover: Accessor<boolean>;
   /**
@@ -165,6 +190,8 @@ export function createTaskComposer(
       if (draft) {
         return {
           title: draft.title,
+          templateSelection: draft.templateSelection,
+          templateRequest: draft.templateRequest,
           content: draft.content,
           editorState: draft.editorState,
           propertyValues: withInitialProperties(draft.propertyValues),
@@ -177,6 +204,8 @@ export function createTaskComposer(
     }
     return {
       title: props.initialTitle ?? '',
+      templateSelection: undefined,
+      templateRequest: undefined,
       content: props.initialContent ?? '',
       editorState: undefined,
       propertyValues: withInitialProperties(getDefaultPropertyValues()),
@@ -187,6 +216,29 @@ export function createTaskComposer(
 
   const initialState = initializeFromDraft();
   const [title, setTitle] = createSignal(initialState.title);
+  // The durable checkpoint takes precedence over an older editing draft.
+  const [templateSelection, setTemplateSelection] =
+    createSignal<TaskTemplateSelection>(
+      recovered?.draft.templateSelection?.kind === 'saved'
+        ? recovered.draft.templateSelection
+        : (initialState.templateSelection ?? { kind: 'none' })
+    );
+  let templateRequest: TemplateCreationRequest | undefined =
+    recovered?.draft.templateRequest ?? initialState.templateRequest;
+  const [isSavingTemplate, setIsSavingTemplate] = createSignal(false);
+  const submitKind = () => templateSubmitKind(templateSelection(), title());
+  const canSubmit = () => {
+    const selection = templateSelection();
+    return (
+      !isCreating() &&
+      ((selection.kind !== 'new' && selection.kind !== 'editing') ||
+        (Boolean(selection.name.trim()) &&
+          (selection.kind !== 'new' ||
+            !selection.teamId ||
+            selection.teamId === team()?.id))) &&
+      (submitKind() === 'template' || Boolean(title().trim()))
+    );
+  };
   const [content, setContent] = createSignal(initialState.content);
   const [bodyEditor, setBodyEditor] = createSignal<LexicalEditor>();
   const [containerRef, setContainerRef] = createSignal<HTMLDivElement>();
@@ -251,6 +303,7 @@ export function createTaskComposer(
   let baselineVisiblePropertyIds = JSON.stringify(visiblePropertyIds());
   const hasDraftChanges = () =>
     !!title() ||
+    templateSelection().kind !== 'none' ||
     !!content() ||
     isDraftLoaded() ||
     JSON.stringify(propertyValues) !== baselinePropertyValues ||
@@ -281,6 +334,8 @@ export function createTaskComposer(
   );
   const draftSnapshot = () => ({
     title: title(),
+    templateSelection: structuredClone(templateSelection()),
+    templateRequest: templateRequest && structuredClone(templateRequest),
     content: content(),
     editorState: bodyEditor()?.getEditorState().toJSON(),
     propertyValues: structuredClone(unwrap(propertyValues)),
@@ -305,6 +360,7 @@ export function createTaskComposer(
 
   createEffect(() => {
     const currentTitle = title();
+    const currentSelection = structuredClone(templateSelection());
     const currentContent = content();
     // Deeply read propertyValues so this effect subscribes to any property
     // change (e.g. setting a due date). unwrap()'d access doesn't subscribe,
@@ -324,6 +380,8 @@ export function createTaskComposer(
 
     debouncedSave({
       title: currentTitle,
+      templateSelection: currentSelection,
+      templateRequest: templateRequest && structuredClone(templateRequest),
       content: currentContent,
       editorState: bodyEditor()?.getEditorState().toJSON(),
       propertyValues: currentProperties,
@@ -356,6 +414,52 @@ export function createTaskComposer(
     });
   };
 
+  const resetForMore = (available: readonly PropertyDefinitionDomain[]) => {
+    submittedInput = false;
+    skipNextDraftSave = true;
+    setTitle('');
+    const selected = templateSelection();
+    if (selected.kind === 'saved') {
+      const fresh = freshTaskFromTemplate(
+        {
+          propertyIds:
+            props.composerContext?.visiblePropertyIds ??
+            DEFAULT_TASK_COMPOSER_PROPERTY_IDS,
+          propertyDefaults: withInitialProperties(getDefaultPropertyValues()),
+          descriptionMarkdown: '',
+        },
+        selected.template.contents,
+        new Set(available.map((definition) => definition.id)),
+        new Set([
+          SYSTEM_PROPERTY_IDS.SOURCE,
+          ...(props.initialProjectId ||
+          props.composerContext?.initialPropertyValues?.[
+            SYSTEM_PROPERTY_IDS.PROJECT
+          ]
+            ? [SYSTEM_PROPERTY_IDS.PROJECT]
+            : []),
+          ...(props.initialDueDate ||
+          props.composerContext?.initialPropertyValues?.[
+            SYSTEM_PROPERTY_IDS.DUE_DATE
+          ]
+            ? [SYSTEM_PROPERTY_IDS.DUE_DATE]
+            : []),
+        ])
+      );
+      setPropertyValues(reconcile(fresh.propertyDefaults));
+      setVisiblePropertyIds(fresh.propertyIds);
+      setContent(fresh.descriptionMarkdown);
+      const editor = bodyEditor();
+      if (editor) setEditorStateFromMarkdown(editor, fresh.descriptionMarkdown);
+    } else {
+      setContent('');
+      const editor = bodyEditor();
+      if (editor) initializeEditorEmpty(editor);
+    }
+    setIsDraftLoaded(false);
+    requestAnimationFrame(() => titleEditorRoot?.focus());
+  };
+
   const submit = async (inSplit: boolean) => {
     if (
       !draftSessionActive ||
@@ -366,10 +470,32 @@ export function createTaskComposer(
       return;
     const taskTitle = title().trim();
     const taskContent = content().trim();
-    if (!inSplit && !taskTitle) {
+    const selection = structuredClone(templateSelection());
+    const kind = templateSubmitKind(selection, taskTitle);
+    if (
+      selection.kind === 'new' &&
+      selection.teamId &&
+      selection.teamId !== team()?.id
+    ) {
+      setErrorMessage('Select your current team or a personal template');
+      return;
+    }
+    if (
+      (selection.kind === 'new' || selection.kind === 'editing') &&
+      !selection.name.trim()
+    ) {
+      setErrorMessage('Please give this template a name');
+      return;
+    }
+    if (
+      !taskTitle &&
+      ((!inSplit && kind !== 'template') ||
+        (inSplit && selection.kind === 'new'))
+    ) {
       setErrorMessage('Please give this task a title');
       return;
     }
+    if (selection.kind === 'editing' && inSplit) return;
     const id = recovered?.id ?? crypto.randomUUID();
     if (
       queryClient.isMutating({ mutationKey: taskSubmissionKey(draftOwner, id) })
@@ -379,31 +505,121 @@ export function createTaskComposer(
     setIsCreating(true);
     const keepOpen = createMore() && !inSplit && !recovered;
     submittedInput = true;
-    const properties = structuredClone(Object.entries(unwrap(propertyValues)));
-    const definitions = createDefinitions();
+    const available = availableProperties();
+    if (selection.kind === 'new') {
+      const contents = captureTaskTemplate(
+        {
+          propertyIds: [...visiblePropertyIds()],
+          propertyDefaults: structuredClone(unwrap(propertyValues)),
+          descriptionMarkdown: content(),
+        },
+        new Set(available.map((definition) => definition.id)),
+        new Set([SYSTEM_PROPERTY_IDS.SOURCE])
+      );
+      const request = {
+        creationId: selection.creationId,
+        name: selection.name.trim(),
+        teamId: selection.teamId,
+        contents,
+      };
+      if (
+        templateRequest?.creationId === request.creationId &&
+        JSON.stringify(request) !== JSON.stringify(templateRequest)
+      ) {
+        setErrorMessage(new TemplateCreationConflict().message);
+        setIsCreating(false);
+        return;
+      }
+      templateRequest = request;
+    }
     const snapshot = draftSnapshot();
+    const properties = structuredClone(Object.entries(snapshot.propertyValues));
+    const definitions = createDefinitions();
     const pinnedPropertyDefinitionIds = initialTaskPinDefinitionIds(
       snapshot.visiblePropertyIds ?? visiblePropertyIds(),
       new Set(definitions.keys()),
       getDefaultPinnedProperties('task')
     );
-    const shareWithTeam = sharesWithTeam();
+    const sharing = sharesWithTeam();
+    const submission = {
+      id,
+      userId: draftOwner,
+      contextKey: props.composerContext?.key,
+      draft: snapshot,
+      shareWithTeam: sharing,
+    };
     let pendingSplit: ReturnType<typeof host.openPendingTask> | undefined;
     let started = false;
+    let templateFailed = false;
     let createdTask: Awaited<ReturnType<typeof createTaskWithProperties>> =
       null;
     try {
       createdTask = await submitTaskDraft(
         queryClient,
-        {
-          id,
-          userId: draftOwner,
-          contextKey: props.composerContext?.key,
-          draft: snapshot,
-          shareWithTeam,
-        },
-        (confirm) => {
-          if (currentUserId() !== draftOwner) return Promise.resolve(null);
+        submission,
+        async (confirm) => {
+          if (!draftSessionActive || currentUserId() !== draftOwner)
+            return null;
+          if (selection.kind === 'new' || selection.kind === 'editing') {
+            setIsSavingTemplate(true);
+            try {
+              const contents =
+                selection.kind === 'new' && templateRequest
+                  ? templateRequest.contents
+                  : captureTaskTemplate(
+                      {
+                        propertyIds: [...(snapshot.visiblePropertyIds ?? [])],
+                        propertyDefaults: snapshot.propertyValues,
+                        descriptionMarkdown: snapshot.content,
+                      },
+                      new Set(available.map((definition) => definition.id)),
+                      new Set([SYSTEM_PROPERTY_IDS.SOURCE])
+                    );
+              const saved =
+                selection.kind === 'new'
+                  ? await host.createTemplate(
+                      draftOwner,
+                      { ...selection, name: selection.name.trim() },
+                      contents,
+                      available
+                    )
+                  : await host.updateTemplate(
+                      draftOwner,
+                      { ...selection, name: selection.name.trim() },
+                      contents,
+                      available
+                    );
+              // Logout clears storage; a late response must not restore it.
+              if (!draftSessionActive || currentUserId() !== draftOwner)
+                return null;
+              checkpointTaskTemplate(submission, saved);
+              templateRequest = undefined;
+              setTemplateSelection({ kind: 'saved', template: saved });
+              if (kind === 'template') {
+                clearTaskSubmission(draftOwner, id);
+                if (keepOpen && selection.kind === 'new') {
+                  discardSavedDraft();
+                  resetForMore(available);
+                  saveTaskComposerDraft(draftSnapshot(), draftStorage);
+                } else {
+                  discardSavedDraft();
+                  host.close();
+                  props.onClose?.();
+                }
+                return null;
+              }
+            } catch (error) {
+              templateFailed = true;
+              if (error instanceof TemplateCreationConflict)
+                setErrorMessage(error.message);
+              throw error;
+            } finally {
+              setIsSavingTemplate(false);
+            }
+          }
+          if (kind === 'template') return null;
+          if (!draftSessionActive || currentUserId() !== draftOwner)
+            return null;
           started = true;
           return (props.createTask ?? createTaskWithProperties)(
             taskTitle,
@@ -415,45 +631,55 @@ export function createTaskComposer(
                 upsertToHistoryMutation.mutate(params);
             },
             {
-              shareWithTeam,
+              shareWithTeam: sharing,
               pinnedPropertyDefinitionIds,
               showFailureToast: false,
               onCreated: confirm,
               onMutate: () => {
                 discardSavedDraft();
                 if (keepOpen) {
-                  submittedInput = false;
-                  skipNextDraftSave = true;
-                  setTitle('');
-                  setContent('');
-                  setIsDraftLoaded(false);
-                  const editor = bodyEditor();
-                  if (editor) initializeEditorEmpty(editor);
-                  requestAnimationFrame(() => titleEditorRoot?.focus());
+                  resetForMore(available);
                 } else {
                   host.close();
                   props.onClose?.();
-                  if (inSplit) {
-                    pendingSplit = host.openPendingTask();
-                  } else {
+                  if (inSplit) pendingSplit = host.openPendingTask();
+                  else
                     props.onCreateStart?.({
                       title: taskTitle,
                       content: taskContent,
                     });
-                  }
                 }
               },
             }
           );
-        }
+        },
+        { templateOnly: kind === 'template' }
       );
     } catch (error) {
+      if (error instanceof TemplateCreationConflict) {
+        templateFailed = true;
+        setErrorMessage(error.message);
+      }
       Telemetry.error(error, { surface: 'compose-task' });
     } finally {
+      setIsSavingTemplate(false);
       setIsCreating(false);
     }
 
-    if (currentUserId() !== draftOwner) return;
+    if (!draftSessionActive || currentUserId() !== draftOwner) return;
+    if (
+      kind === 'template' &&
+      !templateFailed &&
+      templateSelection().kind === 'saved'
+    )
+      return;
+    if (templateFailed) {
+      if (!errorMessage())
+        setErrorMessage(
+          'Unable to save the template. Keep the composer open and try again.'
+        );
+      return;
+    }
     if (!createdTask) {
       if (!started) {
         setErrorMessage(
@@ -463,26 +689,18 @@ export function createTaskComposer(
       }
       if (!inSplit && !keepOpen) props.onCreateFailure?.();
       pendingSplit?.cancel();
-      if (currentUserId() === draftOwner) {
-        toast.failure('Task creation was not confirmed', {
-          subtext:
-            'Your draft is saved on this device. Check Tasks before retrying.',
-          actions: [
-            { label: 'Recover draft', onClick: () => recoverDraft(id) },
-          ],
-        });
-      }
+      toast.failure('Task creation was not confirmed', {
+        subtext:
+          'Your draft is saved on this device. Check Tasks before retrying.',
+        actions: [{ label: 'Recover draft', onClick: () => recoverDraft(id) }],
+      });
       return;
     }
-    if (currentUserId() !== draftOwner) return;
     const { documentId, initialSnapshot } = createdTask;
     if (inSplit) {
       const task = { id: documentId, optimisticSnapshot: initialSnapshot };
-      if (pendingSplit) {
-        pendingSplit.show(task);
-      } else {
-        host.openTask(task, { newSplit: true, referredFrom: 'launcher' });
-      }
+      if (pendingSplit) pendingSplit.show(task);
+      else host.openTask(task, { newSplit: true, referredFrom: 'launcher' });
     } else if (props.onSuccess) {
       props.onSuccess({ documentId, title: taskTitle, content: taskContent });
     } else {
@@ -492,7 +710,8 @@ export function createTaskComposer(
     props.onCreateTask?.(taskTitle, taskContent);
   };
   const createTask = () => submit(false);
-  const continueInSplit = () => submit(true);
+  const continueInSplit = () =>
+    templateSelection().kind === 'editing' ? Promise.resolve() : submit(true);
 
   const close = () => {
     host.close();
@@ -513,6 +732,8 @@ export function createTaskComposer(
     skipNextDraftSave = true;
     setTitle('');
     setContent('');
+    setTemplateSelection({ kind: 'none' });
+    templateRequest = undefined;
     setPropertyValues(
       reconcile(withInitialProperties(getDefaultPropertyValues()))
     );
@@ -577,9 +798,43 @@ export function createTaskComposer(
     propertyDefaults: structuredClone(unwrap(propertyValues)),
     descriptionMarkdown: content(),
   });
+  const canChangeTemplate = () =>
+    draftSessionActive && currentUserId() === draftOwner && !isCreating();
+  const selectNoTemplate = () => {
+    if (canChangeTemplate()) setTemplateSelection({ kind: 'none' });
+  };
+  const startNewTemplate = () => {
+    if (canChangeTemplate())
+      setTemplateSelection({
+        kind: 'new',
+        name: '',
+        teamId: null,
+        creationId: crypto.randomUUID(),
+      });
+  };
+  const setTemplateName = (name: string) => {
+    if (
+      canChangeTemplate() &&
+      ['new', 'editing'].includes(templateSelection().kind)
+    )
+      setTemplateSelection((selection) =>
+        selection.kind === 'new' || selection.kind === 'editing'
+          ? { ...selection, name }
+          : selection
+      );
+  };
+  const setTemplateTeamId = (teamId: string | null) => {
+    if (
+      canChangeTemplate() &&
+      templateSelection().kind === 'new' &&
+      (!teamId || teamId === team()?.id)
+    )
+      setTemplateSelection((selection) =>
+        selection.kind === 'new' ? { ...selection, teamId } : selection
+      );
+  };
   const applyTemplate = (template: TaskTemplateContents) => {
-    if (!draftSessionActive || currentUserId() !== draftOwner || isCreating())
-      return;
+    if (!canChangeTemplate()) return;
     const current = templateContents();
     const next = fillTaskTemplate(
       current,
@@ -591,7 +846,33 @@ export function createTaskComposer(
     if (next.descriptionMarkdown !== current.descriptionMarkdown) {
       const editor = bodyEditor();
       if (editor) setEditorStateFromMarkdown(editor, next.descriptionMarkdown);
+      else setContent(next.descriptionMarkdown);
     }
+  };
+  const selectTemplate = (template: SavedTaskTemplate) => {
+    if (!canChangeTemplate()) return;
+    applyTemplate(template.contents);
+    setTemplateSelection({
+      kind: 'saved',
+      template: structuredClone(template),
+    });
+  };
+
+  const editTemplate = (template: SavedTaskTemplate) => {
+    if (!canChangeTemplate()) return;
+    // Explicit editing starts from saved defaults, not task-creation context.
+    const next = structuredClone(template.contents);
+    setTitle('');
+    setVisiblePropertyIds(next.propertyIds);
+    setPropertyValues(reconcile(next.propertyDefaults));
+    setContent(next.descriptionMarkdown);
+    const editor = bodyEditor();
+    if (editor) setEditorStateFromMarkdown(editor, next.descriptionMarkdown);
+    setTemplateSelection({
+      kind: 'editing',
+      template: structuredClone(template),
+      name: template.name,
+    });
   };
 
   const editorConfig = buildConfig('markdown')
@@ -673,6 +954,16 @@ export function createTaskComposer(
     setPropertyValues,
     templateContents,
     applyTemplate,
+    templateSelection,
+    selectNoTemplate,
+    startNewTemplate,
+    setTemplateName,
+    setTemplateTeamId,
+    editTemplate,
+    selectTemplate,
+    submitKind,
+    canSubmit,
+    isSavingTemplate,
     availableProperties,
     addProperty,
     saveHandler,

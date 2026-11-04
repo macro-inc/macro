@@ -332,6 +332,22 @@ export default {
   guideForm: 'Collect structured responses through a shareable form.',
   guideInThisFolder: 'Create one in this folder.',
   taskTemplates: 'Templates',
+  taskTemplateNone: 'No template',
+  taskTemplateNew: 'New template',
+  taskTemplateSelected: 'Template: {{name}}',
+  taskTemplateEditingNamed: 'Editing {{name}}',
+  taskTemplateComposerHint:
+    'Use the properties and description below. Add a task title to create a task too, or leave it blank to save only the template.',
+  taskTemplateEditComposerHint:
+    'Edit the template properties and description below. Saving updates the template without creating a task.',
+  taskTemplateReplaceDraftTitle: 'Edit template in this composer?',
+  taskTemplateReplaceDraftBody:
+    'This replaces the current draft with the template’s properties and description. Unsaved draft changes will be discarded.',
+  taskTemplateEdit: 'Edit template',
+  taskCreate: 'Create task',
+  taskCreateMore: 'Create & add another',
+  taskTemplateCreateBoth: 'Create task & template',
+  taskTemplateCreateBothMore: 'Create task & template, then another',
   taskTemplatePickerTitle: 'Task templates',
   taskTemplatePickerDescription:
     'Add template properties and fill blank values without replacing your current draft.',
@@ -340,10 +356,10 @@ export default {
   taskTemplateTeam: 'Team',
   taskTemplateEmpty: 'No templates yet',
   taskTemplateEmptyDescription:
-    'Create a template to reuse your task properties and description next time.',
+    'Choose New template to reuse this composer’s properties and description next time.',
   taskTemplateNoMatches: 'No templates found',
   taskTemplateNoMatchesDescription:
-    'Try another search, or create a new template from this draft.',
+    'Try another search, or choose New template to use this draft.',
   taskTemplateLoadError: 'Could not load task templates.',
   taskTemplateRetry: 'Try again',
   taskTemplateCreate: 'Create template',
@@ -355,7 +371,7 @@ export default {
   taskTemplateDescription: 'Description template',
   taskTemplateMarkdownHint:
     'Supports Markdown, including headings and checklists.',
-  taskTemplateShareWithTeam: 'Share with {{name}}',
+  taskTemplateShareWithTeam: 'Share template with {{name}}',
   taskTemplateTeamPermissions:
     'Team members can use this template. You and team admins can edit or delete it.',
   taskTemplateNamePlaceholder: 'e.g. Bug report',

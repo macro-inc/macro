@@ -4629,6 +4629,10 @@ export type CreateTaskTemplateRequest = {
      */
     configuration: TaskTemplateConfiguration;
     /**
+     * Client-generated creation identity; reuse the same ID and input when retrying.
+     */
+    id?: string | null;
+    /**
      * Template name.
      */
     name: string;
@@ -25047,6 +25051,7 @@ export type CreateTaskTemplateData = {
 export type CreateTaskTemplateErrors = {
     400: ErrorResponse;
     403: ErrorResponse;
+    409: ErrorResponse;
 };
 
 export type CreateTaskTemplateError = CreateTaskTemplateErrors[keyof CreateTaskTemplateErrors];

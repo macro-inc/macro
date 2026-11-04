@@ -1,4 +1,5 @@
 import { timeRangeFromInstants } from '@app/features/database/core/cell-date-range';
+import type { SavedTaskTemplate } from '@app/features/task-composer/core/template-selection';
 import { propertyValueToApi } from '@property/api/converters';
 import type {
   PropertyApiValues,
@@ -6,6 +7,7 @@ import type {
 } from '@property/types';
 import { toPropertyApiValue } from '@property/utils/typeGuards';
 import type { SetPropertyValue } from '@service-storage/generated/schemas/setPropertyValue';
+import type { TaskTemplate } from '@service-storage/generated/schemas/taskTemplate';
 import type { TaskTemplateConfiguration } from '@service-storage/generated/schemas/taskTemplateConfiguration';
 import type { TaskTemplateContents } from '../core/template';
 
@@ -94,4 +96,58 @@ export function taskTemplateConfiguration(
     ],
     descriptionMarkdown: contents.descriptionMarkdown,
   };
+}
+
+/** The read before an update can confirm a response lost after the write. */
+export function isConfirmedTemplateUpdate(
+  observed: TaskTemplate,
+  original: SavedTaskTemplate,
+  viewerId: string,
+  name: string,
+  requested: TaskTemplateConfiguration
+): boolean {
+  if (
+    observed.id !== original.id ||
+    observed.revision !== original.revision + 1 ||
+    !observed.canManage ||
+    observed.name !== name ||
+    (observed.teamId ?? null) !== original.teamId ||
+    (original.teamId === null && observed.userId !== viewerId) ||
+    (original.teamId !== null && observed.userId != null)
+  )
+    return false;
+
+  const normalize = (configuration: TaskTemplateConfiguration) =>
+    JSON.stringify({
+      propertyIds: configuration.propertyIds,
+      descriptionMarkdown: configuration.descriptionMarkdown,
+      defaults: (configuration.defaults ?? [])
+        .map((item) => {
+          const value = item.value;
+          if (value.type === 'date') {
+            return {
+              propertyId: item.propertyId,
+              value: {
+                type: value.type,
+                value: new Date(value.value).toISOString(),
+              },
+            };
+          }
+          if (value.type === 'date_range') {
+            return {
+              propertyId: item.propertyId,
+              value: {
+                type: value.type,
+                value: {
+                  start: new Date(value.value.start).toISOString(),
+                  end: new Date(value.value.end).toISOString(),
+                },
+              },
+            };
+          }
+          return item;
+        })
+        .sort((a, b) => a.propertyId.localeCompare(b.propertyId)),
+    });
+  return normalize(observed.configuration) === normalize(requested);
 }

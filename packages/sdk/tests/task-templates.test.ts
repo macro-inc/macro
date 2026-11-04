@@ -85,6 +85,7 @@ test('creates templates from property and team handles while retaining zero and 
     hosts: { storage: server.url.origin },
   });
   const template = await macro.taskTemplates.create({
+    idempotencyKey: '0198a4cc-e138-7670-a308-a6b766602740',
     name: 'Example template',
     team: macro.teams.byId('0198a4cc-e138-7670-a308-a6b766602750'),
     descriptionMarkdown: '- [ ] Describe the task',
@@ -112,6 +113,7 @@ test('creates templates from property and team handles while retaining zero and 
   expect(template.id).toBe(record.id);
   expect(bodies).toEqual([
     {
+      id: '0198a4cc-e138-7670-a308-a6b766602740',
       name: 'Example template',
       teamId: '0198a4cc-e138-7670-a308-a6b766602750',
       configuration: {

@@ -20,6 +20,8 @@ export interface TaskTemplateProperty {
 
 /** Content for a new personal or team-owned task template. */
 export interface CreateTaskTemplateOptions {
+  /** Client-generated UUID; reuse the key and input when retrying creation. */
+  idempotencyKey?: string;
   /** Template name. */
   name: string;
   /** Description Markdown inserted into a blank task description. */
@@ -89,6 +91,7 @@ export class TaskTemplate extends MacroEntity<TaskTemplateRecord> {
     const record = unwrap(
       await client.storage.createTaskTemplate({
         body: {
+          id: opts.idempotencyKey,
           name: opts.name,
           teamId: opts.team?.id,
           configuration: configuration(

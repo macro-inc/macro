@@ -18973,6 +18973,16 @@
                 }
               }
             }
+          },
+          "409": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
           }
         }
       }
@@ -27048,6 +27058,11 @@
           "configuration": {
             "$ref": "#/components/schemas/TaskTemplateConfiguration",
             "description": "Reusable task fields and description."
+          },
+          "id": {
+            "type": ["string", "null"],
+            "format": "uuid",
+            "description": "Client-generated creation identity; reuse the same ID and input when retrying."
           },
           "name": {
             "type": "string",

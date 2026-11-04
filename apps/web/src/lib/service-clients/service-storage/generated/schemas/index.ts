@@ -625,6 +625,7 @@ export * from './createTaskResponse';
 export * from './createTaskResponseTeamId';
 export * from './createTaskResponseTeamTaskId';
 export * from './createTaskTemplateRequest';
+export * from './createTaskTemplateRequestId';
 export * from './createTaskTemplateRequestTeamId';
 export * from './createToken';
 export * from './createUnthreadedAnchorRequest';

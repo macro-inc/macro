@@ -59696,6 +59696,12 @@ export const createTaskTemplateBody = zod
       .describe(
         'Selected fields, optional default values, and description Markdown.'
       ),
+    id: zod
+      .uuid()
+      .nullish()
+      .describe(
+        'Client-generated creation identity; reuse the same ID and input when retrying.'
+      ),
     name: zod.string().describe('Template name.'),
     teamId: zod
       .uuid()

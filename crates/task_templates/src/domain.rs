@@ -87,6 +87,8 @@ pub struct TaskTemplate {
 #[derive(Debug, Clone, Deserialize, ToSchema)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct CreateTaskTemplateRequest {
+    /// Client-generated creation identity; reuse the same ID and input when retrying.
+    pub id: Option<Uuid>,
     /// Owning team; omission creates a personal template.
     pub team_id: Option<Uuid>,
     /// Template name.
@@ -258,7 +260,7 @@ impl<R: Repository, M: Membership> Service<R, M> {
         }
         let now = Utc::now();
         let template = TaskTemplate {
-            id: macro_uuid::generate_uuid_v7(),
+            id: input.id.unwrap_or_else(macro_uuid::generate_uuid_v7),
             user_id: input.team_id.is_none().then(|| user.to_owned()),
             team_id: input.team_id,
             creator_id: Some(user.to_owned()),
@@ -270,7 +272,21 @@ impl<R: Repository, M: Membership> Service<R, M> {
             can_manage: true,
         };
         if !self.repository.create(&template).await.map_err(internal)? {
-            return Err(Error::Conflict);
+            let existing = self
+                .repository
+                .get(template.id)
+                .await
+                .map_err(internal)?
+                .ok_or(Error::Conflict)?;
+            if existing.creator_id.as_deref() != Some(user)
+                || existing.user_id != template.user_id
+                || existing.team_id != template.team_id
+                || existing.name != template.name
+                || serde_json::to_value(&existing.configuration).map_err(internal)?
+                    != serde_json::to_value(&template.configuration).map_err(internal)?
+            {
+                return Err(Error::Conflict);
+            }
         }
         self.managed(user, template.id).await
     }

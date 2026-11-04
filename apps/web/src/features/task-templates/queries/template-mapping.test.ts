@@ -3,6 +3,7 @@ import type { TaskTemplateConfiguration } from '@service-storage/generated/schem
 import { expect, it } from 'vitest';
 import { fillTaskTemplate } from '../core/template';
 import {
+  isConfirmedTemplateUpdate,
   taskTemplateConfiguration,
   taskTemplateContents,
 } from './template-mapping';
@@ -78,4 +79,104 @@ it('leaves a changed property blank and does not apply a deleted definition', ()
   );
   expect(applied.propertyIds).toEqual([definition.id]);
   expect(applied.propertyDefaults).toEqual({});
+});
+
+it('confirms exactly one lost update response only for matching content, owner and permission', () => {
+  const original = {
+    id: 'template',
+    name: 'Before',
+    teamId: null,
+    revision: 4,
+    contents: {
+      propertyIds: ['due'],
+      propertyDefaults: {},
+      descriptionMarkdown: '',
+    },
+  };
+  const request = {
+    propertyIds: ['due', 'unavailable'],
+    descriptionMarkdown: 'After',
+    defaults: [
+      {
+        propertyId: 'due',
+        value: { type: 'date' as const, value: '2026-10-22T00:00:00.000Z' },
+      },
+      {
+        propertyId: 'unavailable',
+        value: { type: 'string' as const, value: 'keep' },
+      },
+    ],
+  };
+  const observed = {
+    id: 'template',
+    revision: 5,
+    name: 'After',
+    teamId: null,
+    userId: 'viewer',
+    canManage: true,
+    creatorId: 'viewer',
+    createdAt: '',
+    updatedAt: '',
+    configuration: {
+      ...request,
+      defaults: [
+        request.defaults[1],
+        {
+          propertyId: 'due',
+          value: { type: 'date' as const, value: '2026-10-22T00:00:00Z' },
+        },
+      ],
+    },
+  };
+  expect(
+    isConfirmedTemplateUpdate(observed, original, 'viewer', 'After', request)
+  ).toBe(true);
+  expect(
+    isConfirmedTemplateUpdate(
+      { ...observed, canManage: false },
+      original,
+      'viewer',
+      'After',
+      request
+    )
+  ).toBe(false);
+  expect(
+    isConfirmedTemplateUpdate(
+      { ...observed, userId: 'other' },
+      original,
+      'viewer',
+      'After',
+      request
+    )
+  ).toBe(false);
+  expect(
+    isConfirmedTemplateUpdate(
+      { ...observed, name: 'Other' },
+      original,
+      'viewer',
+      'After',
+      request
+    )
+  ).toBe(false);
+  expect(
+    isConfirmedTemplateUpdate(
+      { ...observed, revision: 6 },
+      original,
+      'viewer',
+      'After',
+      request
+    )
+  ).toBe(false);
+  expect(
+    isConfirmedTemplateUpdate(
+      {
+        ...observed,
+        configuration: { ...request, descriptionMarkdown: 'Different' },
+      },
+      original,
+      'viewer',
+      'After',
+      request
+    )
+  ).toBe(false);
 });

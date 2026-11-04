@@ -158,3 +158,71 @@ it('preserves specific message references through draft recovery', () => {
     refs: [reference],
   });
 });
+
+it('restores template mode and scope with the edited draft', () => {
+  localStorage.clear();
+  saveTaskComposerDraft({
+    ...draft,
+    templateSelection: {
+      kind: 'new',
+      name: 'Reusable',
+      teamId: 'team-1',
+      creationId: '0195dbd0-7b5d-7000-8000-000000000001',
+    },
+  });
+  expect(loadTaskComposerDraft()?.templateSelection).toEqual({
+    kind: 'new',
+    name: 'Reusable',
+    teamId: 'team-1',
+    creationId: '0195dbd0-7b5d-7000-8000-000000000001',
+  });
+});
+
+it('restores the captured revision and edited name', () => {
+  localStorage.clear();
+  const template = {
+    id: 'saved',
+    revision: 3,
+    name: 'Before',
+    teamId: null,
+    contents: {
+      propertyIds: [],
+      propertyDefaults: {},
+      descriptionMarkdown: 'Original',
+    },
+  };
+  saveTaskComposerDraft({
+    ...draft,
+    templateSelection: { kind: 'editing', template, name: 'After' },
+  });
+  expect(loadTaskComposerDraft()?.templateSelection).toEqual({
+    kind: 'editing',
+    template,
+    name: 'After',
+  });
+});
+
+it('retains the admitted template request beside later composer edits', () => {
+  const request = {
+    creationId: '0195dbd0-7b5d-7000-8000-000000000001',
+    name: 'First',
+    teamId: null,
+    contents: {
+      propertyIds: ['due'],
+      propertyDefaults: {
+        due: {
+          valueType: 'DATE' as const,
+          value: new Date('2025-10-22T00:00:00Z'),
+        },
+      },
+      descriptionMarkdown: 'First',
+    },
+  };
+  const storage = taskComposerContextStorage('pending-template');
+  saveTaskComposerDraft(
+    { ...draft, templateRequest: request, content: 'Edited' },
+    storage
+  );
+  expect(loadTaskComposerDraft(storage)?.templateRequest).toEqual(request);
+  expect(loadTaskComposerDraft(storage)?.content).toBe('Edited');
+});

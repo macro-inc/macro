@@ -5,6 +5,7 @@
  * OpenAPI spec version: 0.1.0
  */
 
+import type { CreateTaskTemplateRequestId } from './createTaskTemplateRequestId';
 import type { CreateTaskTemplateRequestTeamId } from './createTaskTemplateRequestTeamId';
 import type { TaskTemplateConfiguration } from './taskTemplateConfiguration';
 
@@ -14,6 +15,8 @@ import type { TaskTemplateConfiguration } from './taskTemplateConfiguration';
 export interface CreateTaskTemplateRequest {
   /** Reusable task fields and description. */
   configuration: TaskTemplateConfiguration;
+  /** Client-generated creation identity; reuse the same ID and input when retrying. */
+  id?: CreateTaskTemplateRequestId;
   /** Template name. */
   name: string;
   /** Owning team; omission creates a personal template. */

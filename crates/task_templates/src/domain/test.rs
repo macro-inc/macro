@@ -112,6 +112,7 @@ async fn personal_templates_remain_private_and_owner_managed() {
         .create(
             "creator",
             CreateTaskTemplateRequest {
+                id: None,
                 team_id: None,
                 name: "  Personal template  ".into(),
                 configuration: TaskTemplateConfiguration {
@@ -183,6 +184,7 @@ async fn team_templates_require_current_membership_and_creator_or_admin_manageme
     ]);
     let service = Service::new(FakeRepository::default(), membership.clone());
     let input = CreateTaskTemplateRequest {
+        id: None,
         team_id: Some(team),
         name: "Team template".into(),
         configuration: TaskTemplateConfiguration {
@@ -292,4 +294,93 @@ fn deleted_creator_attribution_does_not_prevent_admin_management() {
     assert!(can_manage(&template, "admin", Some(TeamAccess::Admin)));
     assert!(!can_manage(&template, "member", Some(TeamAccess::Member)));
     assert!(!can_manage(&template, "former-admin", None));
+}
+
+#[tokio::test]
+async fn creation_replays_keep_one_template_and_reject_changed_input_or_actor() {
+    let repository = FakeRepository::default();
+    let service = Service::new(repository.clone(), FakeMembership::default());
+    let id = Uuid::now_v7();
+    let input = CreateTaskTemplateRequest {
+        id: Some(id),
+        team_id: None,
+        name: "Reusable checklist".into(),
+        configuration: TaskTemplateConfiguration {
+            property_ids: vec![Uuid::now_v7()],
+            defaults: vec![],
+            description_markdown: "- [ ] Check details".into(),
+        },
+    };
+    let created = service.create("creator", input.clone()).await.unwrap();
+    let replayed = service.create("creator", input.clone()).await.unwrap();
+    assert_eq!(created.id, id);
+    assert_eq!(replayed.id, id);
+    assert_eq!(replayed.revision, 1);
+    assert_eq!(replayed.created_at, created.created_at);
+    assert_eq!(repository.0.lock().unwrap().len(), 1);
+
+    let mut renamed = input.clone();
+    renamed.name = "Different checklist".into();
+    assert!(matches!(
+        service.create("creator", renamed).await,
+        Err(Error::Conflict)
+    ));
+    let mut changed = input.clone();
+    changed.configuration.description_markdown = "Different description".into();
+    assert!(matches!(
+        service.create("creator", changed).await,
+        Err(Error::Conflict)
+    ));
+    assert!(matches!(
+        service.create("other", input).await,
+        Err(Error::Conflict)
+    ));
+    assert_eq!(repository.0.lock().unwrap().len(), 1);
+}
+
+#[tokio::test]
+async fn team_creation_replays_require_original_creator_scope_and_current_membership() {
+    let team = Uuid::now_v7();
+    let other_team = Uuid::now_v7();
+    let membership = FakeMembership::default();
+    membership.0.lock().unwrap().extend([
+        (("creator".into(), team), TeamAccess::Member),
+        (("member".into(), team), TeamAccess::Member),
+        (("creator".into(), other_team), TeamAccess::Member),
+    ]);
+    let service = Service::new(FakeRepository::default(), membership.clone());
+    let input = CreateTaskTemplateRequest {
+        id: Some(Uuid::now_v7()),
+        team_id: Some(team),
+        name: "Team checklist".into(),
+        configuration: TaskTemplateConfiguration {
+            property_ids: vec![],
+            defaults: vec![],
+            description_markdown: String::new(),
+        },
+    };
+    let created = service.create("creator", input.clone()).await.unwrap();
+    assert_eq!(
+        service.create("creator", input.clone()).await.unwrap().id,
+        created.id
+    );
+    assert!(matches!(
+        service.create("member", input.clone()).await,
+        Err(Error::Conflict)
+    ));
+    let mut different_scope = input.clone();
+    different_scope.team_id = Some(other_team);
+    assert!(matches!(
+        service.create("creator", different_scope).await,
+        Err(Error::Conflict)
+    ));
+    membership
+        .0
+        .lock()
+        .unwrap()
+        .remove(&("creator".into(), team));
+    assert!(matches!(
+        service.create("creator", input).await,
+        Err(Error::Forbidden)
+    ));
 }

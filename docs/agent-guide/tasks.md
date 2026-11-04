@@ -816,16 +816,34 @@ the centered composer dialog. Both layouts are views in
 `apps/web/src/features/task-composer/views` composing the shared
 `TaskComposer` parts.
 
-Desktop places the secondary `Templates` trigger at the left of the header and
-`Continue editing in split` immediately left of Close. Templates opens an anchored
-searchable dropdown, not another dialog. `Create template` is the first option,
-separated from saved personal and team templates by a divider; it starts from the
-current draft. No saved templates and no search matches show explanatory empty
-states, while Create template remains available. ArrowDown from search enters the
-menu; Escape dismisses it. On touch, Templates keeps the picker sheet with the same
-search, first creation option, and empty states. Selecting a template fills blank
-properties and description text without replacing existing draft or contextual values.
-Verify saving, selection, creator/admin edit/delete, and empty-list/search states.
+Desktop places the secondary template selector at the left of the header and
+`Continue editing in split` immediately left of Close. The selector starts at
+`No template` and opens an anchored searchable dropdown, not another dialog.
+`No template` and `New template` appear first above a divider, followed by saved
+personal and team templates. The trigger and selection check show the active choice.
+Empty collections and unmatched searches explain the next action. ArrowDown from
+search enters the menu; Escape dismisses it. On touch, keep the picker sheet.
+Selecting a saved template fills blank fields and description without replacing
+existing draft or contextual values. Selecting No template preserves the draft.
+
+New template adds only template name and personal/team ownership controls to the
+same composer. Use its existing property picker and description editor. With no
+task title, `Create template` saves the selected fields, even when their values
+are empty, without creating a task. Adding a task title offers `Create task &
+template`. Source links are not copied into reusable defaults. `Create More`
+changes the normal task action to `Create & add another`; the first combined
+save reads `Create task & template, then another`. Each fresh task reapplies the
+selected template's saved fields, defaults, and description, discarding edits
+specific to the task just submitted. After a new template is saved, it becomes
+the selection for subsequent tasks. If task creation fails after the template
+saves, task recovery keeps the saved template identity rather than saving it again.
+
+Edit also uses the same composer. Confirm before replacing an unsaved draft,
+show the existing name, fields, defaults, and description, and keep ownership
+fixed. `Save template` updates the template without creating a task. Deleting a
+template requires confirmation and leaves existing tasks unchanged. Verify
+personal/team creation, template-only creation, combined creation, no-template
+selection, repeated Create More, editing, cancellation, conflicts, and deletion.
 
 After creation, the `Task created` toast shows an `Open` action. Touch devices
 omit `Open (New Split)`; desktop keeps both actions. Either action immediately dismisses the toast before opening

@@ -19,7 +19,10 @@ it('keeps retry reachable by menu keyboard navigation without dismissing the pic
         loading={false}
         error
         items={[]}
-        onSave={vi.fn()}
+        selectedKey="none"
+        selectedLabel="No template"
+        onSelectNone={vi.fn()}
+        onNew={vi.fn()}
         onRetry={retry}
       />
     );
@@ -27,6 +30,7 @@ it('keeps retry reachable by menu keyboard navigation without dismissing the pic
   const input = screen.getByRole('textbox');
   input.focus();
   fireEvent.keyDown(input, { key: 'ArrowDown' });
+  fireEvent.keyDown(document.activeElement!, { key: 'ArrowDown' });
   fireEvent.keyDown(document.activeElement!, { key: 'ArrowDown' });
   const retryAction = screen.getByText('create.taskTemplateRetry');
   expect(document.activeElement).toBe(retryAction);
@@ -49,21 +53,26 @@ it('searches saved templates while retaining the creation action', () => {
         { key: 'checklist', label: 'Checklist', shared: true, select },
         { key: 'issue', label: 'Issue report', shared: false, select: vi.fn() },
       ]}
-      onSave={create}
+      selectedKey="none"
+      selectedLabel="No template"
+      onSelectNone={vi.fn()}
+      onNew={create}
       onRetry={vi.fn()}
     />
   ));
   fireEvent.input(screen.getByRole('textbox'), { target: { value: 'CHECK' } });
-  expect(screen.queryByRole('menuitem', { name: 'Issue report' })).toBeNull();
-  const choice = screen.getByRole('menuitem', { name: 'Checklist' });
+  expect(
+    screen.queryByRole('menuitemradio', { name: 'Issue report' })
+  ).toBeNull();
+  const choice = screen.getByRole('menuitemradio', { name: 'Checklist' });
   choice.focus();
   fireEvent.keyDown(choice, { key: 'Enter' });
   expect(select).toHaveBeenCalledOnce();
   fireEvent.input(screen.getByRole('textbox'), {
     target: { value: 'not found' },
   });
-  const createAction = screen.getByRole('menuitem', {
-    name: 'create.taskTemplateCreate',
+  const createAction = screen.getByRole('menuitemradio', {
+    name: 'create.taskTemplateNew',
   });
   createAction.focus();
   fireEvent.keyDown(createAction, { key: 'Enter' });

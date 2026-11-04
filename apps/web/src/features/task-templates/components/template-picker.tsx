@@ -4,6 +4,7 @@ import CaretDownIcon from '@icon/system/regular/caret-down.svg';
 import CopyIcon from '@icon/system/regular/copy.svg';
 import PencilIcon from '@icon/system/regular/pencil-simple.svg';
 import PlusIcon from '@icon/system/regular/plus.svg';
+import ProhibitIcon from '@icon/system/regular/prohibit.svg';
 import TrashIcon from '@icon/system/regular/trash.svg';
 import {
   Button,
@@ -12,6 +13,7 @@ import {
   Dropdown,
   Input,
   type ManagedDialogProps,
+  SingleSelectCheck,
 } from '@ui';
 import { createSignal, For, type JSX, Match, Show, Switch } from 'solid-js';
 
@@ -29,8 +31,11 @@ type TemplateChoicesProps = {
   items: readonly TemplatePickerItem[];
   loading: boolean;
   error: boolean;
+  selectedKey: string;
+  selectedLabel: string;
+  onSelectNone(): void;
+  onNew(): void;
   onRetry(): void;
-  onSave(): void;
 };
 
 function TemplateAction(props: {
@@ -39,12 +44,13 @@ function TemplateAction(props: {
   iconOnly?: boolean;
   danger?: boolean;
   closeOnSelect?: boolean;
+  value?: string;
+  selected?: boolean;
   children: JSX.Element;
   onSelect(): void;
 }) {
   return (
-    <Show
-      when={props.menu}
+    <Switch
       fallback={
         <Button
           variant={props.danger ? 'danger-ghost' : 'ghost'}
@@ -52,25 +58,39 @@ function TemplateAction(props: {
           fullWidth={!props.iconOnly}
           class={props.iconOnly ? 'shrink-0' : 'min-w-0 justify-start'}
           aria-label={props.label}
+          aria-pressed={props.value ? props.selected : undefined}
           onClick={props.onSelect}
         >
           {props.children}
         </Button>
       }
     >
-      <Dropdown.Item
-        class={cn(
-          props.iconOnly ? 'w-7 shrink-0 justify-center' : 'min-w-0 flex-1',
-          props.danger && 'text-failure-ink'
-        )}
-        aria-label={props.label}
-        textValue={props.label}
-        onSelect={props.onSelect}
-        closeOnSelect={props.closeOnSelect}
-      >
-        {props.children}
-      </Dropdown.Item>
-    </Show>
+      <Match when={props.menu && props.value}>
+        <Dropdown.RadioItem
+          value={props.value ?? ''}
+          class="min-w-0 flex-1"
+          aria-label={props.label}
+          textValue={props.label}
+          onSelect={props.onSelect}
+        >
+          {props.children}
+        </Dropdown.RadioItem>
+      </Match>
+      <Match when={props.menu}>
+        <Dropdown.Item
+          class={cn(
+            props.iconOnly ? 'w-7 shrink-0 justify-center' : 'min-w-0 flex-1',
+            props.danger && 'text-failure-ink'
+          )}
+          aria-label={props.label}
+          textValue={props.label}
+          onSelect={props.onSelect}
+          closeOnSelect={props.closeOnSelect}
+        >
+          {props.children}
+        </Dropdown.Item>
+      </Match>
+    </Switch>
   );
 }
 
@@ -109,7 +129,9 @@ function TemplateChoices(
             if (event.key === 'ArrowDown') {
               event.preventDefault();
               choices
-                ?.querySelector<HTMLElement>('[role="menuitem"], button')
+                ?.querySelector<HTMLElement>(
+                  '[role="menuitem"], [role="menuitemradio"], button'
+                )
                 ?.focus();
             }
           }}
@@ -120,7 +142,9 @@ function TemplateChoices(
         class="flex max-h-80 min-h-0 flex-col overflow-y-auto overscroll-contain p-1.5 pt-0"
         onKeyDown={(event) => {
           if (props.menu && event.key === 'ArrowUp') {
-            const first = choices?.querySelector('[role="menuitem"]');
+            const first = choices?.querySelector(
+              '[role="menuitem"], [role="menuitemradio"]'
+            );
             if (first === event.target) {
               event.preventDefault();
               event.stopPropagation();
@@ -129,9 +153,25 @@ function TemplateChoices(
           }
         }}
       >
-        <TemplateAction menu={props.menu} onSelect={() => run(props.onSave)}>
+        <TemplateAction
+          menu={props.menu}
+          value="none"
+          selected={props.selectedKey === 'none'}
+          onSelect={() => run(props.onSelectNone)}
+        >
+          <ProhibitIcon class="size-4 shrink-0" />
+          <span class="min-w-0 flex-1">{t('create.taskTemplateNone')}</span>
+          <SingleSelectCheck active={props.selectedKey === 'none'} />
+        </TemplateAction>
+        <TemplateAction
+          menu={props.menu}
+          value="new"
+          selected={props.selectedKey === 'new'}
+          onSelect={() => run(props.onNew)}
+        >
           <PlusIcon class="size-4 shrink-0" />
-          {t('create.taskTemplateCreate')}
+          <span class="min-w-0 flex-1">{t('create.taskTemplateNew')}</span>
+          <SingleSelectCheck active={props.selectedKey === 'new'} />
         </TemplateAction>
         <hr class="my-1 border-edge-muted" />
         <Switch>
@@ -182,6 +222,8 @@ function TemplateChoices(
             <div class="flex min-w-0 items-center gap-1">
               <TemplateAction
                 menu={props.menu}
+                value={item.key}
+                selected={props.selectedKey === item.key}
                 label={item.label}
                 onSelect={() => run(item.select)}
               >
@@ -192,6 +234,7 @@ function TemplateChoices(
                     ? t('create.taskTemplateTeam')
                     : t('create.taskTemplatePersonal')}
                 </span>
+                <SingleSelectCheck active={props.selectedKey === item.key} />
               </TemplateAction>
               <Show when={item.edit}>
                 {(edit) => (
@@ -240,21 +283,31 @@ export function TemplateDropdown(
       onOpenChange={props.onOpenChange}
       placement="bottom-start"
     >
-      <Dropdown.Trigger variant="secondary" size="sm" disabled={props.disabled}>
+      <Dropdown.Trigger
+        variant="secondary"
+        size="sm"
+        disabled={props.disabled}
+        class="max-w-full min-w-0"
+        tooltip={t('create.taskTemplateSelected', {
+          name: props.selectedLabel,
+        })}
+      >
         <CopyIcon class="size-4 shrink-0" />
-        {t('create.taskTemplates')}
+        <span class="min-w-0 max-w-50 truncate">{props.selectedLabel}</span>
         <CaretDownIcon class="size-3 shrink-0" />
       </Dropdown.Trigger>
       <Dropdown.Content
-        class="w-88 max-w-[calc(100vw-2rem)] p-0"
+        class="min-w-88 max-w-[calc(100vw-2rem)] p-0"
         aria-label={t('create.taskTemplatePickerTitle')}
         onOpenAutoFocus={(event) => event.preventDefault()}
       >
-        <TemplateChoices
-          {...props}
-          menu
-          onClose={() => props.onOpenChange(false)}
-        />
+        <Dropdown.RadioGroup value={props.selectedKey}>
+          <TemplateChoices
+            {...props}
+            menu
+            onClose={() => props.onOpenChange(false)}
+          />
+        </Dropdown.RadioGroup>
       </Dropdown.Content>
     </Dropdown>
   );

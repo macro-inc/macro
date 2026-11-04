@@ -29,3 +29,4 @@ Task-template domain policy and primary PostgreSQL persistence for personal and 
 - Creator attribution uses a nullable foreign key; personal ownership cascades on account deletion and team ownership survives it.
 - Read Teams facts through the membership port; the template adapter never queries Teams-owned tables.
 - Keep revision guards in storage and management policy in the domain service.
+- Accept a replayed creation ID only for the same creator, ownership, name, and configuration; recheck current team membership.

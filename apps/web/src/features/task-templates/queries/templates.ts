@@ -1,3 +1,4 @@
+import { useUserId } from '@core/context/user';
 import { fireAndForget } from '@core/util/fireAndForget';
 import { throwOnErr } from '@core/util/result';
 import { Telemetry } from '@macro-inc/observability';
@@ -42,16 +43,20 @@ export function useTaskTemplatesQuery(scope: {
 
 export function useCreateTaskTemplate() {
   const client = useQueryClient();
+  const viewerId = useUserId();
   return useMutation(() => ({
     mutationFn: (input: {
       viewerId: string;
       body: CreateTaskTemplateRequest;
-    }) =>
-      Telemetry.span('task_template.create', async (span) => {
+    }) => {
+      if (!viewerId() || viewerId() !== input.viewerId)
+        throw new Error('Task template account changed');
+      return Telemetry.span('task_template.create', async (span) => {
         const created = await throwOnErr(() => createTaskTemplate(input.body));
         span.setAttr('task_template.id', created.id);
         return created;
-      }),
+      });
+    },
     onSuccess: (_created, input) => {
       fireAndForget(
         client.invalidateQueries({
@@ -65,16 +70,20 @@ export function useCreateTaskTemplate() {
 
 export function useUpdateTaskTemplate() {
   const client = useQueryClient();
+  const viewerId = useUserId();
   return useMutation(() => ({
     mutationFn: (input: {
       viewerId: string;
       id: string;
       body: UpdateTaskTemplateRequest;
-    }) =>
-      Telemetry.span('task_template.update', async (span) => {
+    }) => {
+      if (!viewerId() || viewerId() !== input.viewerId)
+        throw new Error('Task template account changed');
+      return Telemetry.span('task_template.update', async (span) => {
         span.setAttr('task_template.id', input.id);
         return throwOnErr(() => updateTaskTemplate(input.id, input.body));
-      }),
+      });
+    },
     onSuccess: (_updated, input) => {
       fireAndForget(
         client.invalidateQueries({
@@ -88,12 +97,16 @@ export function useUpdateTaskTemplate() {
 
 export function useDeleteTaskTemplate() {
   const client = useQueryClient();
+  const viewerId = useUserId();
   return useMutation(() => ({
-    mutationFn: (input: { viewerId: string; id: string; revision: number }) =>
-      Telemetry.span('task_template.delete', async (span) => {
+    mutationFn: (input: { viewerId: string; id: string; revision: number }) => {
+      if (!viewerId() || viewerId() !== input.viewerId)
+        throw new Error('Task template account changed');
+      return Telemetry.span('task_template.delete', async (span) => {
         span.setAttr('task_template.id', input.id);
         return throwOnErr(() => deleteTaskTemplate(input.id, input.revision));
-      }),
+      });
+    },
     onSuccess: (_deleted, input) => {
       fireAndForget(
         client.invalidateQueries({

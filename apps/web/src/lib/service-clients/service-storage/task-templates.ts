@@ -9,11 +9,20 @@ export function listTaskTemplates(teamId?: string, signal?: AbortSignal) {
   return dssFetch<TaskTemplate[]>(`/task_templates${query}`, { signal });
 }
 
+/** Read one template using current account and team permissions. */
+export function getTaskTemplate(id: string, signal?: AbortSignal) {
+  return dssFetch<TaskTemplate>(`/task_templates/${encodeURIComponent(id)}`, {
+    signal,
+    trace: { expectedStatusCodes: [404] },
+  });
+}
+
 /** Create one personal or team-owned template. */
 export function createTaskTemplate(body: CreateTaskTemplateRequest) {
   return dssFetch<TaskTemplate>('/task_templates', {
     method: 'POST',
     body: JSON.stringify(body),
+    trace: { expectedStatusCodes: [409] },
   });
 }
 

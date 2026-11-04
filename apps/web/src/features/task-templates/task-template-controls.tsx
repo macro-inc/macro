@@ -1,23 +1,14 @@
 import { t } from '@app/lib/i18n';
-import { TaskComposerPropertyEditor } from '@block-md/component/TaskComposerPropertyEditor';
-import { createTaskComposerProperties } from '@block-md/util/taskComposerProperties';
 import { toast } from '@core/component/Toast/Toast';
 import { useUserId } from '@core/context/user';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import { fireAndForget } from '@core/util/fireAndForget';
 import { thrownResultErrorHasCode } from '@core/util/result';
 import CopyIcon from '@icon/system/regular/copy.svg';
-import XIcon from '@icon/system/regular/x.svg';
-import { Property } from '@property';
-import { PropertyValuePill } from '@property/component/PropertyValuePill';
-import { PropertiesProvider } from '@property/context/PropertiesContext';
-import { SYSTEM_PROPERTY_IDS } from '@property/identifiers';
 import type { TaskTemplate } from '@service-storage/generated/schemas/taskTemplate';
-import { Key } from '@solid-primitives/keyed';
 import {
   Button,
   ConfirmDialog,
-  Dialog,
   type ManagedDialogProps,
   openDialog,
   useImperativeDialog,
@@ -31,23 +22,13 @@ import {
   onCleanup,
   Show,
 } from 'solid-js';
-import { unwrap } from 'solid-js/store';
 import type { TaskComposerController } from '../task-composer/primitives/task-composer';
-import { TemplateForm } from './components/template-form';
+import { TemplateDetails } from './components/template-details';
 import { TemplateDropdown, TemplatePicker } from './components/template-picker';
+import { taskTemplateContents } from './queries/template-mapping';
 import {
-  captureTaskTemplate,
-  type TaskTemplateContents,
-} from './core/template';
-import {
-  taskTemplateConfiguration,
-  taskTemplateContents,
-} from './queries/template-mapping';
-import {
-  useCreateTaskTemplate,
   useDeleteTaskTemplate,
   useTaskTemplatesQuery,
-  useUpdateTaskTemplate,
 } from './queries/templates';
 
 type DialogScope = ManagedDialogProps & {
@@ -72,158 +53,9 @@ function dialogLifetime(props: DialogScope) {
   return { viewer, current };
 }
 
-function mutationError(error: unknown, fallback: string) {
-  if (error === undefined) return undefined;
-  return thrownResultErrorHasCode(error, 'CONFLICT')
-    ? t('create.taskTemplateConflict')
-    : fallback;
-}
-
-function TemplateEditorDialog(
-  props: DialogScope & {
-    initial: TaskTemplateContents;
-    template?: TaskTemplate;
-    team?: { id: string; name: string };
-  }
+function DeleteTemplateDialog(
+  props: DialogScope & { template: TaskTemplate; onDeleted(): void }
 ) {
-  const lifetime = dialogLifetime(props);
-  const initialValues = structuredClone(props.initial.propertyDefaults);
-  const fields = createTaskComposerProperties({
-    initialValues,
-    initialVisiblePropertyIds: [...props.initial.propertyIds],
-    allDefinitions: true,
-  });
-  const [description, setDescription] = createSignal(
-    props.initial.descriptionMarkdown
-  );
-  const [failure, setFailure] = createSignal<unknown>();
-  const create = useCreateTaskTemplate();
-  const update = useUpdateTaskTemplate();
-  const pending = () => create.isPending || update.isPending;
-  const save = async (name: string, teamId: string | null) => {
-    if (!lifetime.current() || !lifetime.viewer || pending()) return;
-    const definitions = fields.availableProperties();
-    if (definitions.length === 0) return;
-    const contents = captureTaskTemplate(
-      {
-        propertyIds: fields
-          .properties()
-          .map((property) => property.propertyDefinitionId),
-        propertyDefaults: structuredClone(unwrap(fields.propertyValues)),
-        descriptionMarkdown: description(),
-      },
-      new Set(definitions.map((definition) => definition.id)),
-      new Set<string>()
-    );
-    const configuration = taskTemplateConfiguration(
-      contents,
-      definitions,
-      props.template?.configuration
-    );
-    setFailure(undefined);
-    try {
-      if (props.template) {
-        await update.mutateAsync({
-          viewerId: lifetime.viewer,
-          id: props.template.id,
-          body: { name, configuration, revision: props.template.revision },
-        });
-      } else {
-        await create.mutateAsync({
-          viewerId: lifetime.viewer,
-          body: { name, configuration, teamId },
-        });
-      }
-      if (lifetime.current()) {
-        props.onOpenChange(false);
-        toast.success(t('create.taskTemplateSaved'));
-      }
-    } catch (error) {
-      if (lifetime.current()) setFailure(error);
-    }
-  };
-  return (
-    <Dialog
-      open={props.open}
-      onOpenChange={(open) => {
-        if (!pending()) props.onOpenChange(open);
-      }}
-      position="center"
-      class="w-150 max-w-[calc(100vw-2rem)]"
-    >
-      <TemplateForm
-        {...props}
-        name={props.template?.name ?? ''}
-        editing={Boolean(props.template)}
-        shared={Boolean(props.template?.teamId)}
-        pending={pending()}
-        canSave={fields.availableProperties().length > 0}
-        error={mutationError(failure(), t('create.taskTemplateSaveError'))}
-        descriptionMarkdown={description()}
-        onDescriptionChange={setDescription}
-        onSave={(name, teamId) =>
-          fireAndForget(save(name, teamId), 'task-templates')
-        }
-        properties={
-          <PropertiesProvider
-            entityType="TASK"
-            canEdit={!pending()}
-            properties={fields.properties}
-            saveHandler={fields.saveHandler}
-            onRefresh={() => {}}
-            onPropertyAdded={() => {}}
-            onPropertyDeleted={() => {}}
-          >
-            <div class="flex flex-wrap items-center gap-2">
-              <Key each={fields.properties()} by="propertyDefinitionId">
-                {(property) => (
-                  <div class="flex min-w-0 items-center gap-0.5">
-                    <PropertyValuePill
-                      property={property()}
-                      canEdit={!pending()}
-                      onSave={fields.saveHandler.saveProperty}
-                      editor={
-                        isTouchDevice()
-                          ? Property.SheetEditor
-                          : Property.PopoverEditor
-                      }
-                    />
-                    <Button
-                      variant="ghost"
-                      size="icon-xs"
-                      aria-label={t('create.taskTemplateRemoveProperty', {
-                        name: property().displayName,
-                      })}
-                      disabled={pending()}
-                      onClick={() =>
-                        fields.setVisiblePropertyIds((ids) =>
-                          ids.filter(
-                            (id) => id !== property().propertyDefinitionId
-                          )
-                        )
-                      }
-                    >
-                      <XIcon class="size-3" />
-                    </Button>
-                  </div>
-                )}
-              </Key>
-              <TaskComposerPropertyEditor
-                name={props.template?.name ?? t('create.taskTemplateSaveTitle')}
-                definitions={fields.availableProperties()}
-                properties={fields.properties()}
-                onAdd={fields.addProperty}
-                onSave={(id, value) => fields.setPropertyValues(id, value)}
-              />
-            </div>
-          </PropertiesProvider>
-        }
-      />
-    </Dialog>
-  );
-}
-
-function DeleteTemplateDialog(props: DialogScope & { template: TaskTemplate }) {
   const lifetime = dialogLifetime(props);
   const mutation = useDeleteTaskTemplate();
   const [failure, setFailure] = createSignal<unknown>();
@@ -236,7 +68,10 @@ function DeleteTemplateDialog(props: DialogScope & { template: TaskTemplate }) {
         id: props.template.id,
         revision: props.template.revision,
       });
-      if (lifetime.current()) props.onOpenChange(false);
+      if (lifetime.current()) {
+        props.onDeleted();
+        props.onOpenChange(false);
+      }
     } catch (error) {
       if (lifetime.current()) setFailure(error);
     }
@@ -251,15 +86,37 @@ function DeleteTemplateDialog(props: DialogScope & { template: TaskTemplate }) {
       body={
         <div class="flex flex-col gap-2">
           <p>{t('create.taskTemplateDeleteBody')}</p>
-          <p role="alert" class="text-failure-ink">
-            {mutationError(failure(), t('create.taskTemplateDeleteError'))}
-          </p>
+          <Show when={failure()}>
+            <p role="alert" class="text-sm text-failure-ink">
+              {thrownResultErrorHasCode(failure(), 'CONFLICT')
+                ? t('create.taskTemplateConflict')
+                : t('create.taskTemplateDeleteError')}
+            </p>
+          </Show>
         </div>
       }
       confirmLabel={t('create.taskTemplateDelete')}
       tone="danger"
       pending={mutation.isPending}
       onConfirm={() => fireAndForget(remove(), 'task-templates')}
+    />
+  );
+}
+
+function ReplaceDraftDialog(props: DialogScope & { onConfirm(): void }) {
+  const lifetime = dialogLifetime(props);
+  return (
+    <ConfirmDialog
+      open={props.open}
+      onOpenChange={props.onOpenChange}
+      title={t('create.taskTemplateReplaceDraftTitle')}
+      body={t('create.taskTemplateReplaceDraftBody')}
+      confirmLabel={t('create.taskTemplateEdit')}
+      onConfirm={() => {
+        if (!lifetime.current()) return;
+        props.onOpenChange(false);
+        props.onConfirm();
+      }}
     />
   );
 }
@@ -271,7 +128,7 @@ function ScopedTemplatePicker(
   return <TemplatePicker {...props} />;
 }
 
-/** App-facing composition; templates never replace a populated composer field. */
+/** Selection belongs to the composer, not the picker presentation lifetime. */
 export function TaskTemplateControls(props: {
   composer: TaskComposerController;
   compact?: boolean;
@@ -294,58 +151,94 @@ export function TaskTemplateControls(props: {
   createEffect(() => {
     if (dropdownOpen() && !isCurrent()) setDropdownOpen(false);
   });
-  const openEditor = (template?: TaskTemplate) => {
+  const selectedKey = () => {
+    const selection = props.composer.templateSelection();
+    return selection.kind === 'saved' || selection.kind === 'editing'
+      ? selection.template.id
+      : selection.kind;
+  };
+  const selectedLabel = () => {
+    const selection = props.composer.templateSelection();
+    if (selection.kind === 'none') return t('create.taskTemplateNone');
+    if (selection.kind === 'new') return t('create.taskTemplateNew');
+    if (selection.kind === 'editing')
+      return t('create.taskTemplateEditingNamed', {
+        name: selection.template.name,
+      });
+    return selection.template.name;
+  };
+  const editableTemplate = (template: TaskTemplate) => ({
+    id: template.id,
+    name: template.name,
+    teamId: template.teamId ?? null,
+    revision: template.revision,
+    contents: taskTemplateContents(
+      template.configuration,
+      props.composer.availableProperties()
+    ),
+  });
+  const editTemplate = (template: TaskTemplate) => {
     if (!isCurrent()) return;
-    const definitions = props.composer.availableProperties();
-    const initial = template
-      ? taskTemplateContents(template.configuration, definitions)
-      : captureTaskTemplate(
-          props.composer.templateContents(),
-          new Set(definitions.map((definition) => definition.id)),
-          new Set([SYSTEM_PROPERTY_IDS.SOURCE])
-        );
-    openDialog(
-      TemplateEditorDialog,
-      { initial, template, team: team(), viewerId, isCurrent },
-      { owner }
-    );
+    const edit = () => {
+      if (isCurrent()) props.composer.editTemplate(editableTemplate(template));
+    };
+    if (props.composer.hasDraftChanges()) {
+      openDialog(
+        ReplaceDraftDialog,
+        { viewerId, isCurrent, onConfirm: edit },
+        { owner }
+      );
+    } else {
+      edit();
+    }
   };
   const pickerProps = () => ({
     loading: query.isPending,
     error: query.isError,
+    selectedKey: selectedKey(),
+    selectedLabel: selectedLabel(),
     items: (query.isSuccess ? query.data : []).map((template) => ({
       key: template.id,
       label: template.name,
       shared: Boolean(template.teamId),
       select: () => {
         if (!isCurrent()) return;
-        const definitions = props.composer.availableProperties();
+        props.composer.selectTemplate(editableTemplate(template));
         const available = new Set(
-          definitions.map((definition) => definition.id)
+          props.composer
+            .availableProperties()
+            .map((definition) => definition.id)
         );
-        props.composer.applyTemplate(
-          taskTemplateContents(template.configuration, definitions)
-        );
-        if (
-          template.configuration.propertyIds.some((id) => !available.has(id))
-        ) {
+        if (template.configuration.propertyIds.some((id) => !available.has(id)))
           toast.alert(t('create.taskTemplateUnavailableProperties'));
-        }
       },
-      edit: template.canManage ? () => openEditor(template) : undefined,
+      edit: template.canManage ? () => editTemplate(template) : undefined,
       remove: template.canManage
         ? () => {
             if (!isCurrent()) return;
             openDialog(
               DeleteTemplateDialog,
-              { template, viewerId, isCurrent },
+              {
+                template,
+                viewerId,
+                isCurrent,
+                onDeleted: () => {
+                  if (selectedKey() === template.id)
+                    props.composer.selectNoTemplate();
+                },
+              },
               { owner }
             );
           }
         : undefined,
     })),
     onRetry: () => fireAndForget(query.refetch(), 'task-templates'),
-    onSave: () => openEditor(),
+    onSelectNone: () => {
+      if (isCurrent()) props.composer.selectNoTemplate();
+    },
+    onNew: () => {
+      if (isCurrent()) props.composer.startNewTemplate();
+    },
   });
   const openPicker = () => {
     if (!canUse()) return;
@@ -367,25 +260,54 @@ export function TaskTemplateControls(props: {
           {...pickerProps()}
           open={dropdownOpen()}
           onOpenChange={changeDropdownOpen}
-          disabled={
-            !canUse() || props.composer.availableProperties().length === 0
-          }
+          disabled={!canUse()}
         />
       }
     >
       <Button
         variant="secondary"
         size={props.compact ? 'icon-sm' : 'sm'}
-        aria-label={t('create.taskTemplates')}
-        tooltip={props.compact ? t('create.taskTemplates') : undefined}
-        disabled={
-          !canUse() || props.composer.availableProperties().length === 0
-        }
+        aria-label={t('create.taskTemplateSelected', { name: selectedLabel() })}
+        tooltip={props.compact ? selectedLabel() : undefined}
+        disabled={!canUse()}
         onClick={openPicker}
       >
         <CopyIcon class="size-4 shrink-0" />
-        <Show when={!props.compact}>{t('create.taskTemplates')}</Show>
+        <Show when={!props.compact}>{selectedLabel()}</Show>
       </Button>
+    </Show>
+  );
+}
+
+/** New and edited templates reuse the task fields rendered directly below. */
+export function TaskTemplateDetails(props: {
+  composer: TaskComposerController;
+}) {
+  const details = () => {
+    const selection = props.composer.templateSelection();
+    if (selection.kind === 'new')
+      return { name: selection.name, teamId: selection.teamId, editing: false };
+    if (selection.kind === 'editing')
+      return {
+        name: selection.name,
+        teamId: selection.template.teamId,
+        editing: true,
+      };
+    return undefined;
+  };
+  return (
+    <Show when={details()}>
+      {(selection) => (
+        <TemplateDetails
+          name={selection().name}
+          teamId={selection().teamId}
+          team={props.composer.team()}
+          editing={selection().editing}
+          pending={props.composer.isCreating()}
+          onNameChange={props.composer.setTemplateName}
+          onTeamIdChange={props.composer.setTemplateTeamId}
+        />
+      )}
     </Show>
   );
 }

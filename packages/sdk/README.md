@@ -194,6 +194,10 @@ const props = await doc.properties();
 `macro.taskTemplates` manages personal and team templates. Selected fields can
 stay blank or carry a default; description Markdown fills a blank task body.
 
+Pass a client-generated UUID as `idempotencyKey` and retain it with the same input
+when retrying creation. The server returns the same template rather than creating
+a duplicate; changed content or ownership conflicts.
+
 ```ts
 const effort = macro.properties.definition('00000001-0000-0000-0000-000000000008');
 const template = await macro.taskTemplates.create({
