@@ -53,7 +53,7 @@ export default defineDoc({
   name: 'ChipCombobox',
   category: 'Inputs',
   description:
-    'A multi-value field of removable chips with suggestions and, given a parser, typed entries. Use RecipientSelector for people.',
+    'A multi-value field of removable chips with suggestions (optionally with icons) and, given a parser, typed entries. It uses the outline Input frame. Use RecipientSelector for message recipients.',
   status: 'beta',
   exports: ['ChipCombobox', 'ChipComboboxOption'],
   import: "import { ChipCombobox } from '@ui';",

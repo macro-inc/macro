@@ -42,7 +42,31 @@ describe('ChipCombobox', () => {
     await user.type(input, 'glo');
     await user.click(await screen.findByRole('option', { name: /Globex/ }));
     expect(values()).toEqual(['globex.example']);
-    expect(screen.getByText('globex.example')).toBeTruthy();
+    // Chips show the option's label.
+    expect(screen.getByRole('button', { name: 'Remove Globex' })).toBeTruthy();
+  });
+
+  it('names chips for typed values with describeValue', () => {
+    const [values, setValues] = createSignal<string[]>([]);
+    render(() => (
+      <ChipCombobox
+        values={values()}
+        onChange={setValues}
+        options={OPTIONS}
+        parseValue={(text) => `person:${text.trim()}`}
+        describeValue={(value) => ({ label: value.replace('person:', '') })}
+        addLabel={(value) => `Add ${value}`}
+        removeLabel={(label) => `Remove ${label}`}
+        aria-label="People"
+      />
+    ));
+    fireEvent.input(screen.getByRole('combobox'), {
+      target: { value: 'qa@example.com,' },
+    });
+    expect(values()).toEqual(['person:qa@example.com']);
+    expect(
+      screen.getByRole('button', { name: 'Remove qa@example.com' })
+    ).toBeTruthy();
   });
 
   it('adds typed values ended by a separator and keeps the rest typed', () => {

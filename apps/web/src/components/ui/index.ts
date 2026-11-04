@@ -52,6 +52,7 @@ export {
   SingleSelectCheck,
 } from './components/Checkbox';
 export type {
+  ChipComboboxDisplay,
   ChipComboboxOption,
   ChipComboboxProps,
 } from './components/ChipCombobox';

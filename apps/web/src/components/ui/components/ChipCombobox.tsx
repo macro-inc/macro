@@ -1,17 +1,26 @@
+import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import XIcon from '@icon/system/regular/x.svg';
 import { Combobox, useComboboxContext } from '@kobalte/core/combobox';
 import { createMemo, createSignal, For, type JSX, Show } from 'solid-js';
 import { cn } from '../utils/classname';
 import { Layer } from './Layer';
 
-/** A suggestion a ChipCombobox offers. */
-export type ChipComboboxOption = {
-  /** The stored value; chips show it. */
-  value: string;
-  /** What the suggestion row shows, e.g. a company name. */
+/** How a value reads on its suggestion row and chip. */
+export type ChipComboboxDisplay = {
+  /** What the suggestion row shows, e.g. a company or person's name. */
   label: string;
-  /** Muted text beside the label, e.g. a domain or a count. */
+  /** Muted text beside the label, e.g. a domain, an address, or a count. */
   detail?: string;
+  /** What the chip shows; defaults to the label. */
+  chipLabel?: string;
+  /** Drawn before the label on its row and chip. */
+  icon?: () => JSX.Element;
+};
+
+/** A suggestion a ChipCombobox offers; search matches its label and detail. */
+export type ChipComboboxOption = ChipComboboxDisplay & {
+  /** The stored value, unique among options. */
+  value: string;
 };
 
 export type ChipComboboxProps = {
@@ -19,12 +28,14 @@ export type ChipComboboxProps = {
   onChange: (values: string[]) => void;
   /** Suggestions, best first; the field filters them by what is typed. */
   options: readonly ChipComboboxOption[];
+  /** How a value no option describes reads, such as a typed one. Defaults to the value itself. */
+  describeValue?: (value: string) => ChipComboboxDisplay;
   /** Turns typed text into a value, or `undefined` when it isn't one. Omit to allow only suggestions. */
   parseValue?: (text: string) => string | undefined;
   /** The row that adds typed text, e.g. `Add “acme.com”`. */
   addLabel: (value: string) => string;
-  /** Accessible name of a chip's remove button. */
-  removeLabel: (value: string) => string;
+  /** Accessible name of a chip's remove button, from what the chip shows. */
+  removeLabel: (chipLabel: string) => string;
   'aria-label': string;
   placeholder?: string;
   /** Mount suggestions inside the nearest `.portal-scope`, as dialogs and drawers need. */
@@ -35,24 +46,22 @@ export type ChipComboboxProps = {
   class?: string;
 };
 
-type Item = {
-  key: string;
-  value: string;
-  label: string;
-  detail?: string;
-};
+type Item = ChipComboboxOption & { key: string };
 
 const SEPARATORS = /[,;\n]/;
 const DEFAULT_MAX_OPTIONS = 8;
 
 function Chip(props: {
-  value: string;
+  item: Item;
   removeLabel: string;
   onRemove: () => void;
 }) {
   return (
-    <span class="flex max-w-full shrink-0 items-center gap-1 overflow-hidden rounded-full bg-active py-1 pr-1 pl-2.5">
-      <span class="min-w-0 truncate text-sm">{props.value}</span>
+    <span class="flex h-6 max-w-full shrink-0 items-center gap-1 overflow-hidden rounded-full bg-active pr-0.5 pl-1.5">
+      <Show when={props.item.icon}>{(icon) => icon()()}</Show>
+      <span class="min-w-0 truncate px-0.5 text-sm">
+        {props.item.chipLabel ?? props.item.label}
+      </span>
       <button
         type="button"
         aria-label={props.removeLabel}
@@ -74,8 +83,9 @@ function Chip(props: {
  * arrow key picked a row, otherwise the top suggestion; it never submits a
  * surrounding form. Backspace in an empty field removes the last chip.
  *
- * @do Use for lists of short values chosen from suggestions or typed, such as domains.
- * @dont Do not use for people; RecipientSelector knows users, contacts, and channels.
+ * @do Use for lists of short values chosen from suggestions or typed, such as
+ *   domains, or people and companies together; give each option an icon.
+ * @dont Do not use for message recipients; RecipientSelector knows users, contacts, and channels.
  */
 export function ChipCombobox(props: ChipComboboxProps): JSX.Element {
   const [text, setText] = createSignal('');
@@ -90,16 +100,15 @@ export function ChipCombobox(props: ChipComboboxProps): JSX.Element {
   let rowPickedByKey = false;
 
   const chosen = createMemo(() => new Set(props.values));
-  const labels = createMemo(
-    () => new Map(props.options.map((option) => [option.value, option.label]))
+  const known = createMemo(
+    () => new Map(props.options.map((option) => [option.value, option]))
   );
-  const selected = createMemo((): Item[] =>
-    props.values.map((value) => ({
-      key: value,
-      value,
-      label: labels().get(value) ?? value,
-    }))
-  );
+  const describe = (value: string): Item => ({
+    ...(known().get(value) ?? props.describeValue?.(value) ?? { label: value }),
+    key: value,
+    value,
+  });
+  const selected = createMemo((): Item[] => props.values.map(describe));
   const typed = () => {
     const raw = text().trim();
     return raw ? props.parseValue?.(raw) : undefined;
@@ -111,7 +120,7 @@ export function ChipCombobox(props: ChipComboboxProps): JSX.Element {
         (option) =>
           !chosen().has(option.value) &&
           (!query ||
-            [option.value, option.label, option.detail ?? ''].some((part) =>
+            [option.label, option.detail ?? ''].some((part) =>
               part.toLowerCase().includes(query)
             ))
       )
@@ -122,7 +131,12 @@ export function ChipCombobox(props: ChipComboboxProps): JSX.Element {
     const value = typed();
     if (!value || chosen().has(value)) return undefined;
     if (suggestions().some((item) => item.value === value)) return undefined;
-    return { key: `add:${value}`, value, label: props.addLabel(value) };
+    return {
+      ...describe(value),
+      key: `add:${value}`,
+      label: props.addLabel(value),
+      detail: undefined,
+    };
   });
   // Kobalte draws chips from selected items, so they stay among the options.
   const items = createMemo(() => {
@@ -209,8 +223,10 @@ export function ChipCombobox(props: ChipComboboxProps): JSX.Element {
         shouldFocusWrap
         disabled={props.disabled}
         placeholder={props.values.length ? undefined : props.placeholder}
+        // The outline Input's frame; it grows from a pill as chips wrap.
         class={cn(
-          'w-full rounded-2xl border border-edge-muted bg-input p-2 text-base focus-within:ring-2 focus-within:ring-edge-muted',
+          'flex min-h-8 w-full items-center border border-edge-frame bg-control px-0.5 py-px text-base text-ink transition-[border-color,box-shadow] duration-120 focus-within:ring-2 focus-within:ring-edge-muted not-touch:elevated motion-reduce:transition-none',
+          isTouchDevice() ? 'rounded-lg' : 'rounded-2xl',
           props.class
         )}
         itemComponent={(itemProps) => (
@@ -218,6 +234,9 @@ export function ChipCombobox(props: ChipComboboxProps): JSX.Element {
             item={itemProps.item}
             class="flex min-h-8 items-center gap-2 rounded-lg px-2 text-sm text-ink outline-none data-highlighted:bg-hover touch:min-h-11"
           >
+            <Show when={itemProps.item.rawValue.icon}>
+              {(icon) => icon()()}
+            </Show>
             <Combobox.ItemLabel class="min-w-0 flex-1 truncate">
               {itemProps.item.rawValue.label}
             </Combobox.ItemLabel>
@@ -229,7 +248,7 @@ export function ChipCombobox(props: ChipComboboxProps): JSX.Element {
           </Combobox.Item>
         )}
       >
-        <Combobox.Control<Item> class="flex flex-wrap items-center gap-1.5">
+        <Combobox.Control<Item> class="flex min-w-0 flex-1 flex-wrap items-center gap-1">
           {(state) => {
             setKobalteInput = useComboboxContext().setInputValue;
             return (
@@ -237,8 +256,10 @@ export function ChipCombobox(props: ChipComboboxProps): JSX.Element {
                 <For each={state.selectedOptions()}>
                   {(item) => (
                     <Chip
-                      value={item.value}
-                      removeLabel={props.removeLabel(item.value)}
+                      item={item}
+                      removeLabel={props.removeLabel(
+                        item.chipLabel ?? item.label
+                      )}
                       onRemove={() => state.remove(item)}
                     />
                   )}
@@ -248,7 +269,7 @@ export function ChipCombobox(props: ChipComboboxProps): JSX.Element {
                     input = el;
                   }}
                   aria-label={props['aria-label']}
-                  class="min-h-7 min-w-32 flex-1 bg-transparent p-1 text-ink outline-none placeholder:text-ink-placeholder"
+                  class="h-7 min-w-32 flex-1 bg-transparent px-2.5 text-ink outline-none placeholder:text-ink-placeholder"
                   // Native, so it runs before Kobalte's delegated handler.
                   on:keydown={(event: KeyboardEvent) => {
                     if (event.key === 'ArrowDown' || event.key === 'ArrowUp')

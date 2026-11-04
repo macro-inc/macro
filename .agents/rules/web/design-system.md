@@ -22,7 +22,7 @@ construction. Browse them at `/app/component/ui` (Foundations → Controls).
 | Many options, or header tabs that no longer fit | `Dropdown` / `Select`, `MobileDrawer` on touch, or `Tabs iconOnly` first | Scrolling or wrapping a header tab row |
 | Create, search in a collection header | `ViewCreateButton`, `ListHeaderSearch` | One-off New or search buttons |
 | Text entry, search fields | `Input`, `InputGroup`, `SearchBar`, `settings-input` | A raw `<input>` with its own border, radius, or focus color |
-| Several short values picked from suggestions or typed (domains) | `ChipCombobox`; people use `RecipientSelector` | A comma-separated text `Input` |
+| Several short values picked from suggestions or typed (domains, people and companies) | `ChipCombobox`; message recipients use `RecipientSelector` | A comma-separated text `Input` |
 | Menu, popover, floating toolbar or editor panel | `Dropdown`, `Toolbar`, or `menu-surface` on the overlay root | A hand-built fill, border, and shadow, or `bg-menu-glass` |
 | Dialog or modal card | `Dialog`, or `elevated-surface` for a custom dialog root | `bg-dialog`/`bg-surface` with its own radius and shadow |
 | Loading placeholder, view skeleton | `ListSkeleton` (`Root`, `Row`, `Bar`); `ViewSkeleton` with the view's tabs and `controls` | `animate-pulse` boxes with their own fill |
