@@ -18,12 +18,16 @@ function byEmail({ profiles }: ThreadPersonProfiles): PersonProfilesByEmail {
   return Object.fromEntries(profiles.map((p) => [p.email_address, p]));
 }
 
-export function useThreadPersonProfilesQuery(threadId: Accessor<string>) {
-  return useQuery(() => ({
-    queryKey: emailKeys.threadPersonProfiles(threadId()).queryKey,
+function threadPersonProfilesQueryOptions(threadId: string) {
+  return {
+    queryKey: emailKeys.threadPersonProfiles(threadId).queryKey,
     queryFn: () =>
-      throwOnErr(() => emailClient.getThreadPersonProfiles(threadId())),
+      throwOnErr(() => emailClient.getThreadPersonProfiles(threadId)),
     select: byEmail,
     staleTime: STALE_TIME,
-  }));
+  };
+}
+
+export function useThreadPersonProfilesQuery(threadId: Accessor<string>) {
+  return useQuery(() => threadPersonProfilesQueryOptions(threadId()));
 }
