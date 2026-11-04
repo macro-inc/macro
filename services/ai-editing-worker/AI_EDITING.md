@@ -120,6 +120,17 @@ There are only three kinds of steps:
 
 We have an abstraction called the "executor" that ties together the animation queue and the document editor. It is what actually "plays" everything.
 
+### Database blocks
+
+The XML view shows saved database questions as `<database-query>` (queryId,
+displayMode, chart, title) and embedded databases as `<document-card
+blockName="database" blockParams=…>`. Writers insert a question only from the
+`<m-db-query>` block the caller passes (`SaveDatabaseQuery` output); `Doc`
+parses it with the shared lexical-core validator and refuses anything else,
+since the SQL lives on the server. `setDatabaseQueryView` changes presentation
+(display mode, chart, title, height) and never the question;
+`setDatabaseLocation` switches an embedded database's table or view.
+
 ### "Doc"s
 
 `Doc{Writer/Reader}` is an abstraction over the real Lexical `Document`. This makes everything much more testable. It has a minimal-ish (okay not super minimal) interface that's easy to mock and run against real lexical.

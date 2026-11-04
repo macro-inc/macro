@@ -87,6 +87,8 @@ export function NewChatPage(props: {
   workspaceId?: string;
   draft?: string;
   onDraftChange?: (draft: string) => void;
+  /** Override the New conversation attachment store. Home uses its own key. */
+  attachmentsKey?: string;
   autoFocus?: boolean;
   registerFocus?: (focus: () => void) => void;
   roster: RosterAgent[];
@@ -285,12 +287,13 @@ export function NewChatPage(props: {
 
   const attachmentTracker = createMemo(() => {
     const identity = userId();
+    const key = props.attachmentsKey ?? NEW_CONVERSATION_ATTACHMENTS_KEY;
     return createInputAttachmentTracker({
-      // Home owns its attachments; unknown identities never read shared storage.
-      persistenceKey:
-        !props.onDraftChange && identity
-          ? `${NEW_CONVERSATION_ATTACHMENTS_KEY}:${encodeURIComponent(identity)}`
-          : undefined,
+      // Unknown identities never read shared storage. Parents may own the
+      // text draft without owning files; those still persist here.
+      persistenceKey: identity
+        ? `${key}:${encodeURIComponent(identity)}`
+        : undefined,
     });
   });
   const attachFiles = (files: File[]) =>
