@@ -4517,6 +4517,12 @@ export type CreateProjectResponse = {
  */
 export type CreateSkillRequest = {
     /**
+     * When to use the skill, in one line starting "Use when", e.g. "Use when
+     * drafting release notes; not changelog entries". Agents choose skills
+     * for a request by it.
+     */
+    description: string;
+    /**
      * Markdown source text. Defaults to an empty skill document.
      */
     markdown?: string | null;
@@ -8187,6 +8193,13 @@ export type FormSection = {
      */
     questions: Array<QuestionLayout>;
     /**
+     * When to show it: the rules answers of earlier shown sections must
+     * pass, naming only their columns. A section whose rules fail is
+     * skipped: its questions are not required and their answers are
+     * not written. Absent, it is always shown.
+     */
+    showWhen?: FilterGroup;
+    /**
      * Its title; may be empty.
      */
     title: string;
@@ -8249,6 +8262,12 @@ export type FormSectionDetail = {
      * Its questions, in order.
      */
     questions: Array<FormQuestionDetail>;
+    /**
+     * When to show it, from earlier shown sections' answers; absent,
+     * it is always shown. Sent to every caller so a respondent's page
+     * can skip it.
+     */
+    showWhen?: FilterGroup;
     /**
      * Its title.
      */
@@ -9964,6 +9983,18 @@ export type LayoutProblem = {
     kind: 'gateNamesLaterColumn';
 } | {
     kind: 'gateRule';
+    /**
+     * Why.
+     */
+    reason: string;
+} | {
+    /**
+     * The column.
+     */
+    column: string;
+    kind: 'conditionNamesLaterColumn';
+} | {
+    kind: 'conditionRule';
     /**
      * Why.
      */
@@ -13000,6 +13031,17 @@ export type SetPropertyValue = {
 };
 
 /**
+ * Request body for setting a skill's routing description.
+ */
+export type SetSkillDescriptionRequest = {
+    /**
+     * When to use the skill, in one line starting "Use when", at most 300
+     * characters.
+     */
+    description: string;
+};
+
+/**
  * SHA-256 encoded as exactly 64 lowercase hexadecimal characters.
  */
 export type Sha256Digest = string;
@@ -13096,6 +13138,17 @@ export type SimpleMention = {
      * Mentioned entity type.
      */
     entity_type: string;
+};
+
+/**
+ * A skill's routing description.
+ */
+export type SkillDescriptionBody = {
+    /**
+     * When to use the skill, in one line starting "Use when". Absent for a
+     * skill created before descriptions existed.
+     */
+    description?: string | null;
 };
 
 /**
@@ -21185,6 +21238,9 @@ export type CreateSkillHandlerData = {
 };
 
 export type CreateSkillHandlerErrors = {
+    /**
+     * The description is blank, longer than one line or 300 characters, or does not start "Use when"
+     */
     400: ErrorResponse;
     401: ErrorResponse;
     500: ErrorResponse;
@@ -22053,6 +22109,62 @@ export type SimpleSaveResponses = {
 };
 
 export type SimpleSaveResponse = SimpleSaveResponses[keyof SimpleSaveResponses];
+
+export type GetSkillDescriptionData = {
+    body?: never;
+    path: {
+        /**
+         * Skill document ID
+         */
+        document_id: string;
+    };
+    query?: never;
+    url: '/documents/{document_id}/skill_description';
+};
+
+export type GetSkillDescriptionErrors = {
+    401: ErrorResponse;
+    404: ErrorResponse;
+    500: ErrorResponse;
+};
+
+export type GetSkillDescriptionError = GetSkillDescriptionErrors[keyof GetSkillDescriptionErrors];
+
+export type GetSkillDescriptionResponses = {
+    200: SkillDescriptionBody;
+};
+
+export type GetSkillDescriptionResponse = GetSkillDescriptionResponses[keyof GetSkillDescriptionResponses];
+
+export type SetSkillDescriptionData = {
+    body: SetSkillDescriptionRequest;
+    path: {
+        /**
+         * Skill document ID
+         */
+        document_id: string;
+    };
+    query?: never;
+    url: '/documents/{document_id}/skill_description';
+};
+
+export type SetSkillDescriptionErrors = {
+    /**
+     * The document is not a skill, or the description is invalid
+     */
+    400: ErrorResponse;
+    401: ErrorResponse;
+    404: ErrorResponse;
+    500: ErrorResponse;
+};
+
+export type SetSkillDescriptionError = SetSkillDescriptionErrors[keyof SetSkillDescriptionErrors];
+
+export type SetSkillDescriptionResponses = {
+    200: SkillDescriptionBody;
+};
+
+export type SetSkillDescriptionResponse = SetSkillDescriptionResponses[keyof SetSkillDescriptionResponses];
 
 export type GetDocumentTeamShareData = {
     body?: never;

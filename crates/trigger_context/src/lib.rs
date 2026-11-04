@@ -470,6 +470,11 @@ pub enum RoutineTrigger {
         /// The timezone it is read in.
         timezone: String,
     },
+    /// A single run at an exact time.
+    Once {
+        /// When it runs.
+        at: DateTime<Utc>,
+    },
     /// Events it watches.
     Events {
         /// The event names, such as `email.message_received`.

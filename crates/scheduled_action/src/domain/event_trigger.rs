@@ -9,7 +9,7 @@
 use activity::Actor;
 use call::domain::events::CallTopicEvent;
 use channels::domain::broker_events::ChannelTopicEvent;
-use chrono::{DateTime, Utc};
+use chrono::{DateTime, SubsecRound, Utc};
 use chrono_tz::Tz;
 use document_sub_type::DocumentSubType;
 use documents::domain::events::DocumentTopicEvent;
@@ -66,6 +66,11 @@ pub enum ActionTrigger {
     Events {
         filters: EventFilters,
     },
+    /// Fires once at `at`, or as soon as it is saved when `at` has passed.
+    Once {
+        #[serde(deserialize_with = "whole_seconds")]
+        at: DateTime<Utc>,
+    },
     Multiple {
         triggers: RoutineTriggers,
     },
@@ -83,6 +88,19 @@ pub enum RoutineTrigger {
     Events {
         filters: EventFilters,
     },
+    /// Fires once at `at`, or as soon as it is saved when `at` has passed.
+    Once {
+        #[serde(deserialize_with = "whole_seconds")]
+        at: DateTime<Utc>,
+    },
+}
+
+/// Once times keep whole seconds: dispatch is precise to about a second, and
+/// clients that edit a routine send its times back at that precision.
+fn whole_seconds<'de, D: serde::Deserializer<'de>>(
+    deserializer: D,
+) -> Result<DateTime<Utc>, D::Error> {
+    Ok(DateTime::<Utc>::deserialize(deserializer)?.trunc_subsecs(0))
 }
 
 /// Bounded schedules and one combined set of event filters.
@@ -135,16 +153,33 @@ impl ActionTrigger {
 
     pub fn has_schedule(&self) -> bool {
         match self {
-            Self::Cron { .. } => true,
+            Self::Cron { .. } | Self::Once { .. } => true,
             Self::Multiple { triggers } => triggers
                 .0
                 .iter()
-                .any(|t| matches!(t, RoutineTrigger::Cron { .. })),
-            _ => false,
+                .any(|t| matches!(t, RoutineTrigger::Cron { .. } | RoutineTrigger::Once { .. })),
+            Self::Events { .. } => false,
         }
     }
 
-    /// The first upcoming firing across all schedules. Simultaneous firings run once.
+    /// Every time a once trigger names.
+    pub fn once_times(&self) -> Vec<DateTime<Utc>> {
+        match self {
+            Self::Once { at } => vec![*at],
+            Self::Multiple { triggers } => triggers
+                .0
+                .iter()
+                .filter_map(|trigger| match trigger {
+                    RoutineTrigger::Once { at } => Some(*at),
+                    _ => None,
+                })
+                .collect(),
+            Self::Cron { .. } | Self::Events { .. } => Vec::new(),
+        }
+    }
+
+    /// The first upcoming firing across all schedules. Simultaneous firings
+    /// run once. A once trigger counts only while its time is still ahead.
     pub fn next_run_after(&self, after: DateTime<Utc>) -> Option<DateTime<Utc>> {
         let next = |schedule: &Schedule, timezone: Tz| {
             schedule
@@ -153,18 +188,36 @@ impl ActionTrigger {
                 .next()
                 .map(|time| time.with_timezone(&Utc))
         };
+        let once = |at: DateTime<Utc>| (at > after).then_some(at);
         match self {
             Self::Cron { schedule, timezone } => next(schedule, *timezone),
+            Self::Once { at } => once(*at),
             Self::Multiple { triggers } => triggers
                 .0
                 .iter()
                 .filter_map(|trigger| match trigger {
                     RoutineTrigger::Cron { schedule, timezone } => next(schedule, *timezone),
+                    RoutineTrigger::Once { at } => once(*at),
                     RoutineTrigger::Events { .. } => None,
                 })
                 .min(),
-            _ => None,
+            Self::Events { .. } => None,
         }
+    }
+
+    /// The first firing of this trigger as saved at `now`. A once time that
+    /// has already passed is due at once, unless `fired` says it already ran.
+    pub fn first_run_at(
+        &self,
+        now: DateTime<Utc>,
+        fired: impl Fn(DateTime<Utc>) -> bool,
+    ) -> Option<DateTime<Utc>> {
+        let overdue = self
+            .once_times()
+            .into_iter()
+            .filter(|at| *at <= now && !fired(*at))
+            .min();
+        overdue.or_else(|| self.next_run_after(now))
     }
 }
 
