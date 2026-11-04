@@ -25,6 +25,7 @@ import { useInboxPicker } from '../inbox-picker';
 import type {
   SearchableOption,
   SearchableSelectAction,
+  SearchableSelectNavigation,
 } from '../searchable-multi-select';
 import { useTagOptions } from '../tag-filter';
 import type { TagFilter } from '../tag-filter-state';
@@ -142,7 +143,8 @@ export type SearchFacetVM = FacetBase &
         preserveOrder?: boolean;
         onOnly?: (id: string) => void;
         mode?: FacetModeVM;
-        action?: Accessor<SearchableSelectAction>;
+        action?: Accessor<SearchableSelectAction | undefined>;
+        navigation?: Accessor<SearchableSelectNavigation>;
         footer?: () => JSX.Element;
         onPickerClose?: () => void;
       }
@@ -454,12 +456,20 @@ export function useSearchFacets(
       neutralLabel: 'Anyone',
       placeholder: 'Search assignees...',
       options: () =>
-        assigneePicker.options().filter((option) => option.id !== NO_ASSIGNEE),
+        assigneePicker
+          .allOptions()
+          .filter((option) => option.id !== NO_ASSIGNEE),
       activeIds: controller.taskAssignees,
       onChange: controller.setTaskAssignees,
     }),
+    options: () =>
+      assigneePicker.options().filter((option) => option.id !== NO_ASSIGNEE),
+    get placeholder() {
+      return assigneePicker.placeholder();
+    },
     preserveOrder: true,
     action: assigneePicker.action,
+    navigation: assigneePicker.navigation,
     footer: () => <AssigneeDiscoveryStatus discovery={assigneePicker} />,
     onPickerClose: () => assigneePicker.setDiscovering(false),
   };

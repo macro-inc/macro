@@ -83,12 +83,14 @@ title-row tags retain their compact height.
 ## Assignee selection
 
 The system Assignees property lists selected assignees first, then available
-agents, then the current team roster. **Find other people…** switches to eligible
-non-team people from the existing Quick Access people pool while retaining selected
-assignees and agents; **Back to team members** restores the roster without dropping
-picks. An empty non-team pool shows **No other people available.**
-Already-selected outsiders remain visible and removable, including references
-absent from contacts. Closing and reopening starts in team mode.
+agents, then the current team roster. The compact **Find other people…** action
+slides to eligible non-team people from the existing Quick Access people pool,
+without teammates or agents. A back button beside search restores the main
+Assignees view. The search placeholder follows the view; navigation clears the
+query without remounting the focused input. Selections survive both transitions.
+An empty non-team pool shows **No other people available.** Selected outsiders
+remain visible and removable in the main view, including references absent from
+contacts. Closing and reopening starts in team mode.
 
 This applies to task/project composers, property pills, side panels, bulk
 editors, and touch picker sheets. References remain `USER` values; discovery
@@ -97,8 +99,8 @@ strictly team-only, and custom people properties keep their existing pool.
 `queries/team-members.ts` shares the non-suspending roster with Assignee filters.
 The property-aware wrapper in `editors/popover/EntityEditor.tsx` owns roster and
 contacts switching, outsider retention, and roster-status UI. Keep that policy out
-of `PropertyEntitySelector`; its extension points are generic actions, empty-state
-content, and priority ids. The command-menu composer/bulk editor lives in
+of `PropertyEntitySelector`; its extension points are generic actions, navigation,
+empty-state content, and priority ids. The command-menu composer/bulk editor lives in
 `editor/entity-property-editor.tsx`; both editor compositions share
 `editors/selectors/scoped-user-options.ts`.
 Removing an outsider removes that row from team mode immediately; finding that

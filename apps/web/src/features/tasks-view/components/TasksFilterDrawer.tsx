@@ -1,11 +1,15 @@
+import type { ListControlOption } from '@app/components/view-shell/ListDropdowns';
 import { MobileFilterDrawer } from '@app/components/view-shell/MobileFilterDrawer';
-import { t } from '@app/lib/i18n';
+import { SearchableSelectView } from '@app/features/next-soup/soup-view/filters-bar/searchable-multi-select';
 import { MobileDrawer } from '@components/app/mobile/MobileDrawer';
 import { fireAndForget } from '@core/util/fireAndForget';
+import ArrowLeftIcon from '@icon/system/regular/arrow-left.svg';
 import { Accordion } from '@kobalte/core/accordion';
 import { Key } from '@solid-primitives/keyed';
 import { Button, cn, type DialogHandle, Input } from '@ui';
 import {
+  type Accessor,
+  batch,
   createMemo,
   createSignal,
   For,
@@ -28,6 +32,14 @@ export function TasksFilterDrawer() {
   const filters = useTaskFilters();
   const [open, setDrawerOpen] = createSignal(false);
   const [assigneeSearch, setAssigneeSearch] = createSignal('');
+  let assigneeInput: HTMLInputElement | undefined;
+  const navigateAssignees = (onSelect: () => void) => {
+    batch(() => {
+      setAssigneeSearch('');
+      onSelect();
+    });
+    assigneeInput?.focus();
+  };
   const setOpen = (value: boolean) => {
     if (!value) {
       filters.resetAssigneeDiscovery();
@@ -163,42 +175,28 @@ export function TasksFilterDrawer() {
           <div class="flex flex-col gap-3">
             <Key each={filters.groups()} by="id">
               {(group) => {
-                const activeCount = createMemo(
-                  () =>
-                    group().options.filter(
-                      (option) =>
-                        option.id !== group().defaultOptionId &&
-                        filters.isSelected(group().id, option.id)
-                    ).length
-                );
-
-                return (
-                  <MobileFilterDrawer.Section
-                    value={group().id}
-                    label={group().label}
-                    activeCount={activeCount()}
-                  >
-                    <Show when={group().id === 'assignees'}>
-                      <div class="px-3 pb-2">
-                        <Input
-                          aria-label={t('viewMenus.searchAssigneesLabel')}
-                          placeholder={group().searchPlaceholder}
-                          value={assigneeSearch()}
-                          onInput={(event) =>
-                            setAssigneeSearch(event.currentTarget.value)
-                          }
-                        />
-                      </div>
-                    </Show>
-                    <For
-                      each={group().options.filter(
-                        (option) =>
-                          group().id !== 'assignees' ||
-                          option.label
-                            .toLowerCase()
-                            .includes(assigneeSearch().toLowerCase())
-                      )}
-                    >
+                const activeCount = createMemo(() => {
+                  if (group().id === 'assignees')
+                    return filters.selectedIds('assignees').length;
+                  return group().options.filter(
+                    (option) =>
+                      option.id !== group().defaultOptionId &&
+                      filters.isSelected(group().id, option.id)
+                  ).length;
+                });
+                const visibleOptions = () =>
+                  group().options.filter(
+                    (option) =>
+                      group().id !== 'assignees' ||
+                      option.label
+                        .toLowerCase()
+                        .includes(assigneeSearch().toLowerCase())
+                  );
+                const renderOptions = (
+                  options: Accessor<ListControlOption<string>[]>
+                ) => (
+                  <>
+                    <For each={options()}>
                       {(option) => (
                         <MobileFilterDrawer.Option
                           selectionMode={group().selectionMode ?? 'multiple'}
@@ -217,17 +215,70 @@ export function TasksFilterDrawer() {
                         <Button
                           variant="ghost"
                           size="sm"
-                          fullWidth
                           class={cn('justify-start', action().class)}
                           onPointerDown={(event) => event.preventDefault()}
                           onMouseDown={(event) => event.preventDefault()}
-                          onClick={action().onSelect}
+                          onClick={() => navigateAssignees(action().onSelect)}
                         >
                           {action().label}
                         </Button>
                       )}
                     </Show>
                     {group().footer}
+                  </>
+                );
+
+                return (
+                  <MobileFilterDrawer.Section
+                    value={group().id}
+                    label={group().label}
+                    activeCount={activeCount()}
+                  >
+                    <Show when={group().id === 'assignees'}>
+                      <div class="flex items-center gap-2 px-3 pb-2">
+                        <Show when={group().navigation?.back}>
+                          {(back) => (
+                            <Button
+                              variant="ghost"
+                              size="icon-sm"
+                              aria-label={back().label}
+                              onPointerDown={(event) => event.preventDefault()}
+                              onMouseDown={(event) => event.preventDefault()}
+                              onClick={() => navigateAssignees(back().onSelect)}
+                            >
+                              <ArrowLeftIcon class="size-4" />
+                            </Button>
+                          )}
+                        </Show>
+                        <Input
+                          ref={assigneeInput}
+                          class="min-w-0 flex-1"
+                          aria-label={group().searchPlaceholder}
+                          placeholder={group().searchPlaceholder}
+                          value={assigneeSearch()}
+                          onInput={(event) =>
+                            setAssigneeSearch(event.currentTarget.value)
+                          }
+                        />
+                      </div>
+                    </Show>
+                    <Show
+                      when={group().navigation}
+                      fallback={renderOptions(visibleOptions)}
+                    >
+                      {(navigation) => (
+                        <SearchableSelectView view={navigation().view}>
+                          {(active) => {
+                            const options = createMemo<
+                              ListControlOption<string>[]
+                            >((previous) =>
+                              active() ? visibleOptions() : (previous ?? [])
+                            );
+                            return renderOptions(options);
+                          }}
+                        </SearchableSelectView>
+                      )}
+                    </Show>
                   </MobileFilterDrawer.Section>
                 );
               }}

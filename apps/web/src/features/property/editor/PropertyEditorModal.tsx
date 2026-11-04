@@ -9,6 +9,7 @@ import {
   useListKeyBindings,
 } from '@core/util/useListKeyBindings';
 import { type EntityData, InlineEntity, isTaskEntity } from '@entity';
+import ArrowLeftIcon from '@icon/system/regular/arrow-left.svg';
 import CircleDashedEmpty from '@icon/system/regular/circle-dashed.svg';
 import PencilIcon from '@icon/system/regular/pencil-simple.svg';
 import PropertiesIcon from '@icon/system/regular/sliders-horizontal.svg';
@@ -50,6 +51,7 @@ import type { PropertyOptionResponse } from '@service-properties/generated/schem
 import type { TagScope } from '@service-properties/generated/schemas/tagScope';
 import { mergeRefs } from '@solid-primitives/refs';
 import {
+  Button,
   CommandMenuEmptyState,
   CommandMenuList,
   CommandMenuSearchInput,
@@ -269,6 +271,14 @@ export function PropertyEditorDialog(props: {
     createSignal<string | null>(null);
   const defaultPlaceholder = 'Choose a property...';
   const [placeholder, setPlaceholder] = createSignal('');
+  const [headerAction, setHeaderAction] = createSignal<{
+    label: string;
+    onSelect: () => void;
+  }>();
+  let searchInputRef: HTMLInputElement | undefined;
+  const updateHeaderAction = (
+    action: { label: string; onSelect: () => void } | undefined
+  ) => setHeaderAction(action);
   let editorRevision = 0;
   onCleanup(() => editorRevision++);
 
@@ -347,6 +357,7 @@ export function PropertyEditorDialog(props: {
       setSearchValue('');
       setPlaceholder('');
       setInputType('text');
+      setHeaderAction(undefined);
     })
   );
 
@@ -362,11 +373,36 @@ export function PropertyEditorDialog(props: {
     >
       <CommandMenuShell depth={2} class="rounded-xl max-h-108 text-sm">
         <CommandMenuShell.Header>
-          <span class="pl-2 text-ink-extra-muted/55 pointer-events-none">
-            <PropertiesIcon class="size-3" />
-          </span>
+          <Show
+            when={headerAction()}
+            fallback={
+              <span class="pl-2 text-ink-extra-muted/55 pointer-events-none">
+                <PropertiesIcon class="size-3" />
+              </span>
+            }
+          >
+            {(action) => (
+              <Button
+                variant="ghost"
+                size="icon-sm"
+                aria-label={action().label}
+                onPointerDown={(event) => event.preventDefault()}
+                onMouseDown={(event) => event.preventDefault()}
+                onKeyDown={(event) => event.stopPropagation()}
+                onClick={() => {
+                  action().onSelect();
+                  searchInputRef?.focus();
+                }}
+              >
+                <ArrowLeftIcon class="size-4" />
+              </Button>
+            )}
+          </Show>
           <SearchInput
             placeHolder={placeholder() || defaultPlaceholder}
+            inputRef={(element) => {
+              searchInputRef = element;
+            }}
             value={searchValue}
             setValue={setSearchValue}
             focusedIndex={selectedIndex}
@@ -424,6 +460,7 @@ export function PropertyEditorDialog(props: {
                 setSelectedIndex={setSelectedIndex}
                 setKeybindings={keybindings}
                 setPlaceholder={setPlaceholder}
+                setHeaderAction={updateHeaderAction}
                 setInputType={setInputType}
                 onSave={handlePropertySave}
                 selectedEntities={props.state.selectedEntities}
@@ -466,6 +503,7 @@ function SearchInput(props: {
   setFocusedIndex: Setter<number>;
   onKeyDown?: (e: KeyboardEvent) => void;
   inputType?: 'text' | 'number';
+  inputRef?: (element: HTMLInputElement) => void;
 }) {
   let inputRef: HTMLInputElement | undefined;
 
@@ -475,7 +513,10 @@ function SearchInput(props: {
 
   return (
     <CommandMenuSearchInput
-      ref={inputRef}
+      ref={(element) => {
+        inputRef = element;
+        props.inputRef?.(element);
+      }}
       type={props.inputType ?? 'text'}
       class="text-base"
       placeholder={props.placeHolder}
@@ -1312,6 +1353,9 @@ function PropertyValueEditor(props: {
   setSelectedIndex: Setter<number>;
   setKeybindings: (binding: ListNavActions) => void;
   setPlaceholder: Setter<string>;
+  setHeaderAction: (
+    action: { label: string; onSelect: () => void } | undefined
+  ) => void;
   setInputType: Setter<'text' | 'number'>;
   onSave: (
     apiValues: PropertyApiValues,
@@ -1388,6 +1432,7 @@ function PropertyValueEditor(props: {
           onSubmit={handleSubmit}
           setKeybindings={props.setKeybindings}
           setPlaceholder={props.setPlaceholder}
+          setHeaderAction={props.setHeaderAction}
           selectedEntityCount={
             props.properties ? 1 : props.selectedEntities.length
           }

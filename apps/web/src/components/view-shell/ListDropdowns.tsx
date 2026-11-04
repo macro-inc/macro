@@ -2,7 +2,10 @@ import {
   FilterSubmenu,
   SearchableFilterSubmenu,
 } from '@app/features/next-soup/soup-view/filters-bar/filter-menu';
-import type { SearchableSelectAction } from '@app/features/next-soup/soup-view/filters-bar/searchable-multi-select';
+import type {
+  SearchableSelectAction,
+  SearchableSelectNavigation,
+} from '@app/features/next-soup/soup-view/filters-bar/searchable-multi-select';
 import { t } from '@app/lib/i18n';
 import GanttIcon from '@icon/system/regular/chart-gantt.svg';
 import CheckIcon from '@icon/system/regular/check.svg';
@@ -213,6 +216,7 @@ export type ListFilterGroup<
   /** Keep the source ordering instead of promoting selected options. */
   preserveOrder?: boolean;
   action?: SearchableSelectAction;
+  navigation?: SearchableSelectNavigation;
   /** Optional content below a searchable group's options. */
   footer?: JSX.Element;
   onOpenChange?: (open: boolean) => void;
@@ -433,6 +437,7 @@ export function ListFilterDropdown<
                   placeholder={group().searchPlaceholder}
                   preserveOrder={group().preserveOrder}
                   action={group().action}
+                  navigation={group().navigation}
                   footer={group().footer}
                   onOpenChange={group().onOpenChange}
                 />

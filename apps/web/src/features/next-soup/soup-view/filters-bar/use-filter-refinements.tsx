@@ -169,7 +169,7 @@ export function useFilterRefinements() {
         label: t('viewMenus.unassigned'),
         icon: () => <CircleDashedIcon class="size-3 text-ink-muted" />,
       });
-      for (const option of assigneePicker.options()) {
+      for (const option of assigneePicker.allOptions()) {
         map.set(option.id, { label: option.label, icon: option.icon });
       }
       return map;
@@ -609,13 +609,14 @@ export function useFilterRefinements() {
             searchableOptions: assigneePicker.options,
             preserveOptionOrder: true,
             searchAction: assigneePicker.action,
+            searchNavigation: assigneePicker.navigation,
             get searchFooter() {
               return <AssigneeDiscoveryStatus discovery={assigneePicker} />;
             },
             activeSearchableIds: assigneeFilter,
             onSearchableChange: handleAssigneeChange,
             get searchPlaceholder() {
-              return t('viewMenus.searchAssignees');
+              return assigneePicker.placeholder();
             },
             isPopupOpen,
             setPopupOpen,

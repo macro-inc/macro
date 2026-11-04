@@ -12,6 +12,7 @@ import {
   Entity,
   type EntityData,
 } from '@entity';
+import ArrowLeftIcon from '@icon/system/regular/arrow-left.svg';
 import CheckIcon from '@icon/system/regular/check.svg';
 import SearchIcon from '@icon/system/regular/magnifying-glass.svg';
 import { useSearchInputFocus } from '@property/utils';
@@ -19,8 +20,10 @@ import { useSearchSoupQuery } from '@queries/soup/search';
 import type { EntityType } from '@service-properties/generated/schemas/entityType';
 import { debounce } from '@solid-primitives/scheduled';
 import { Button, cn } from '@ui';
+import { Stepper } from '@ui/components/Stepper';
 import * as EmailValidator from 'email-validator';
 import {
+  batch,
   createEffect,
   createMemo,
   createSignal,
@@ -63,6 +66,11 @@ type EntityInputProps = {
   action?: { label: string; onSelect: () => void };
   /** Override empty-result content; null hides the default message. */
   emptyState?: JSX.Element;
+  /** Generic drill-in navigation; the search input stays mounted between views. */
+  navigation?: {
+    view: number;
+    back?: { label: string; onSelect: () => void };
+  };
 };
 
 function getEntityTypePluralLabel(
@@ -138,10 +146,19 @@ export function PropertyEntitySelector(props: EntityInputProps) {
   createEffect(() => debouncedSetSearchTerm(inputValue()));
 
   let searchInputRef!: HTMLInputElement;
-  const runAction = () => {
-    props.action?.onSelect();
-    setSelectedIndex(0);
+  const navigate = (onSelect: () => void) => {
+    debouncedSetSearchTerm.clear();
+    batch(() => {
+      setInputValue('');
+      setSearchTerm('');
+      setSelectedIndex(0);
+      onSelect();
+    });
     searchInputRef.focus();
+  };
+  const runAction = () => {
+    const action = props.action;
+    if (action) navigate(action.onSelect);
   };
 
   // Get self-filter context from config
@@ -352,16 +369,6 @@ export function PropertyEntitySelector(props: EntityInputProps) {
     getId: (e: CombinedEntity) => e.id,
   });
 
-  const shouldShowSelectedDivider = (index: number) => {
-    if (!props.config.isMultiSelect || searchTerm() || index === 0)
-      return false;
-    const items = sortedEntities();
-    return (
-      openedSelectedIds.has(items[index - 1].id) &&
-      !openedSelectedIds.has(items[index].id)
-    );
-  };
-
   const toggleEntity = (entity: CombinedEntity) => {
     const entityType = getEntityType(entity);
     if (!entityType) return;
@@ -462,10 +469,260 @@ export function PropertyEntitySelector(props: EntityInputProps) {
   const fills = () => props.config.fillHeight === true;
   const keepSearchFocus = (event: Event) => event.preventDefault();
 
+  const Results = (viewProps: { view: number }) => {
+    const active = () => viewProps.view === (props.navigation?.view ?? 0);
+    // Retain the outgoing view until Stepper finishes its exit animation.
+    const viewEntities = createMemo<CombinedEntity[]>((previous) =>
+      active() ? sortedEntities() : (previous ?? [])
+    );
+    const viewCustomEmail = createMemo<string | undefined>((previous) =>
+      active() ? customEmail() : previous
+    );
+    const viewAction = createMemo<EntityInputProps['action']>((previous) =>
+      active() ? props.action : previous
+    );
+    const viewEmptyState = createMemo<JSX.Element>((previous) =>
+      active() ? props.emptyState : previous
+    );
+    const viewResultCount = () =>
+      viewEntities().length + (viewCustomEmail() ? 1 : 0);
+    const shouldShowSelectedDivider = (index: number) => {
+      if (!props.config.isMultiSelect || searchTerm() || index === 0)
+        return false;
+      const items = viewEntities();
+      return (
+        openedSelectedIds.has(items[index - 1].id) &&
+        !openedSelectedIds.has(items[index].id)
+      );
+    };
+
+    return (
+      <div
+        class={cn(fills() && 'flex h-full min-h-0 flex-col')}
+        inert={!active()}
+        aria-hidden={!active()}
+      >
+        <Show when={viewResultCount() > 0}>
+          {/* Picking a row keeps focus in the search field: a tap that moved
+            it would drop the phone keyboard until the refocus below. iOS
+            devices still send mousedown after a cancelled pointerdown. */}
+          <div
+            class={cn('p-1.5', fills() && 'flex min-h-0 flex-1 flex-col')}
+            onPointerDown={keepSearchFocus}
+            onMouseDown={keepSearchFocus}
+          >
+            <Show when={viewEntities().length > 0}>
+              <div
+                ref={scrollContainerRef}
+                style={{
+                  'max-height': fills() ? undefined : `${MAX_LIST_HEIGHT}px`,
+                }}
+                class={cn(
+                  'overflow-y-auto overflow-x-hidden scrollbar-hidden',
+                  fills() && 'min-h-0 flex-1'
+                )}
+              >
+                <For each={viewEntities()}>
+                  {(entity, index) => {
+                    const isSelected = () =>
+                      props.selectedOptions().has(entity.id);
+                    const isKeyboardSelected = () =>
+                      index() === selectedIndex();
+
+                    return (
+                      <>
+                        <Show when={shouldShowSelectedDivider(index())}>
+                          <div class="my-1 border-t border-edge-muted" />
+                        </Show>
+                        <div
+                          data-entity-index={index()}
+                          class="group rounded-lg w-full flex items-center justify-between gap-1.5 p-1.5 px-2 text-left text-ink font-normal cursor-default min-w-0 touch:min-h-12"
+                          classList={{
+                            'bg-hover': isKeyboardSelected(),
+                          }}
+                          onClick={() => toggleEntity(entity)}
+                          onKeyDown={(e) =>
+                            e.key === 'Enter' && toggleEntity(entity)
+                          }
+                          onMouseEnter={() => {
+                            if (!keyboardMode()) {
+                              setSelectedIndex(index());
+                            }
+                          }}
+                        >
+                          <Show when={props.config.isMultiSelect}>
+                            <div class="shrink-0 flex">
+                              <OptionCheckBox
+                                checked={isSelected()}
+                                multiselect
+                                visible={props.config.visibleCheckboxes}
+                              />
+                            </div>
+                          </Show>
+                          <div class="flex items-center gap-2 flex-1 min-w-0">
+                            <div class="size-4 shrink-0 flex items-center">
+                              <Show
+                                when={entity.kind === 'entity'}
+                                fallback={
+                                  <UserIcon
+                                    id={entity.id}
+                                    size="sm"
+                                    isDeleted={false}
+                                    suppressClick={true}
+                                    photoUrl={
+                                      entity.kind === 'user'
+                                        ? entity.data.photoUrl
+                                        : undefined
+                                    }
+                                  />
+                                }
+                              >
+                                <Entity.Icon
+                                  entity={entity.data as EntityData}
+                                />
+                              </Show>
+                            </div>
+                            <span class="truncate min-w-0 max-w-full">
+                              <Show
+                                when={entity.kind === 'entity'}
+                                fallback={
+                                  <Show
+                                    when={getUserEntityParts(entity)}
+                                    fallback={getEntityName(entity)}
+                                  >
+                                    {(parts) => (
+                                      <>
+                                        {parts().name}
+                                        <Show when={parts().email}>
+                                          <span class="ml-[0.5em] opacity-50">
+                                            {parts().email}
+                                          </span>
+                                        </Show>
+                                      </>
+                                    )}
+                                  </Show>
+                                }
+                              >
+                                <Entity.Title
+                                  entity={entity.data as EntityData}
+                                />
+                              </Show>
+                            </span>
+                            <Show when={isBotPrincipalId(entity.id)}>
+                              <span class="shrink-0 text-xs text-ink-muted">
+                                Agent
+                              </span>
+                            </Show>
+                          </div>
+                          <Show
+                            when={!props.config.isMultiSelect && isSelected()}
+                          >
+                            <CheckIcon class="size-3.5 shrink-0 text-accent" />
+                          </Show>
+                        </div>
+                      </>
+                    );
+                  }}
+                </For>
+              </div>
+            </Show>
+            <Show when={viewCustomEmail()}>
+              {(email) => {
+                const rowIndex = () => viewEntities().length;
+                const entity = () => customEmailEntity();
+                return (
+                  <div
+                    class="group rounded-lg w-full flex items-center justify-between gap-1.5 p-1.5 px-2 text-left text-ink font-normal cursor-default min-w-0 touch:min-h-12"
+                    classList={{
+                      'bg-hover': rowIndex() === selectedIndex(),
+                    }}
+                    onClick={() => {
+                      const next = entity();
+                      if (next) toggleEntity(next);
+                    }}
+                    onMouseEnter={() => {
+                      if (!keyboardMode()) setSelectedIndex(rowIndex());
+                    }}
+                  >
+                    <Show when={props.config.isMultiSelect}>
+                      <div class="shrink-0">
+                        <OptionCheckBox checked={false} multiselect />
+                      </div>
+                    </Show>
+                    <div class="flex items-center gap-2 flex-1 min-w-0">
+                      <div class="size-4 shrink-0 flex items-center">
+                        <UserIcon
+                          id={emailToId(email())}
+                          size="sm"
+                          isDeleted={false}
+                          suppressClick={true}
+                        />
+                      </div>
+                      <span class="truncate min-w-0">Add {email()}</span>
+                    </div>
+                  </div>
+                );
+              }}
+            </Show>
+          </div>
+        </Show>
+
+        <Show when={viewResultCount() === 0}>
+          {viewEmptyState() !== undefined ? (
+            viewEmptyState()
+          ) : (
+            <div class="text-center py-4 text-ink-muted text-sm">
+              <Show
+                when={!isLoadingEntities()}
+                fallback={<span>Loading...</span>}
+              >
+                No {getEntityTypePluralLabel(props.config.specificEntityType)}{' '}
+                found
+              </Show>
+            </div>
+          )}
+        </Show>
+        <Show when={viewAction()}>
+          <div
+            class="shrink-0 border-t border-edge-muted p-1.5"
+            onPointerDown={keepSearchFocus}
+            onMouseDown={keepSearchFocus}
+          >
+            <Button
+              variant="ghost"
+              size="sm"
+              class={cn(selectedIndex() === viewResultCount() && 'bg-hover')}
+              onClick={runAction}
+              onMouseEnter={() => {
+                if (!keyboardMode()) setSelectedIndex(viewResultCount());
+              }}
+            >
+              {viewAction()?.label}
+            </Button>
+          </div>
+        </Show>
+      </div>
+    );
+  };
+
   return (
     <div class={cn(fills() && 'flex min-h-0 flex-1 flex-col')}>
       <div class="relative shrink-0">
         <div class="flex w-full items-center py-2 gap-2 px-2 border-b border-edge-muted">
+          <Show when={props.navigation?.back}>
+            {(back) => (
+              <Button
+                variant="ghost"
+                size="icon-sm"
+                aria-label={back().label}
+                onPointerDown={keepSearchFocus}
+                onMouseDown={keepSearchFocus}
+                onClick={() => navigate(back().onSelect)}
+              >
+                <ArrowLeftIcon class="size-4" />
+              </Button>
+            )}
+          </Show>
           <SearchIcon class="size-4 text-ink-muted" />
           <input
             class="w-full caret-accent"
@@ -485,202 +742,19 @@ export function PropertyEntitySelector(props: EntityInputProps) {
         </div>
       </div>
 
-      <Show when={resultCount() > 0}>
-        {/* Picking a row keeps focus in the search field: a tap that moved
-            it would drop the phone keyboard until the refocus below. iOS
-            devices still send mousedown after a cancelled pointerdown. */}
-        <div
-          class={cn('p-1.5', fills() && 'flex min-h-0 flex-1 flex-col')}
-          onPointerDown={keepSearchFocus}
-          onMouseDown={keepSearchFocus}
-        >
-          <Show when={sortedEntities().length > 0}>
-            <div
-              ref={scrollContainerRef}
-              style={{
-                'max-height': fills() ? undefined : `${MAX_LIST_HEIGHT}px`,
-              }}
-              class={cn(
-                'overflow-y-auto overflow-x-hidden scrollbar-hidden',
-                fills() && 'min-h-0 flex-1'
-              )}
-            >
-              <For each={sortedEntities()}>
-                {(entity, index) => {
-                  const isSelected = () =>
-                    props.selectedOptions().has(entity.id);
-                  const isKeyboardSelected = () => index() === selectedIndex();
-
-                  return (
-                    <>
-                      <Show when={shouldShowSelectedDivider(index())}>
-                        <div class="my-1 border-t border-edge-muted" />
-                      </Show>
-                      <div
-                        data-entity-index={index()}
-                        class="group rounded-lg w-full flex items-center justify-between gap-1.5 p-1.5 px-2 text-left text-ink font-normal cursor-default min-w-0 touch:min-h-12"
-                        classList={{
-                          'bg-hover': isKeyboardSelected(),
-                        }}
-                        onClick={() => toggleEntity(entity)}
-                        onKeyDown={(e) =>
-                          e.key === 'Enter' && toggleEntity(entity)
-                        }
-                        onMouseEnter={() => {
-                          if (!keyboardMode()) {
-                            setSelectedIndex(index());
-                          }
-                        }}
-                      >
-                        <Show when={props.config.isMultiSelect}>
-                          <div class="shrink-0 flex">
-                            <OptionCheckBox
-                              checked={isSelected()}
-                              multiselect
-                              visible={props.config.visibleCheckboxes}
-                            />
-                          </div>
-                        </Show>
-                        <div class="flex items-center gap-2 flex-1 min-w-0">
-                          <div class="size-4 shrink-0 flex items-center">
-                            <Show
-                              when={entity.kind === 'entity'}
-                              fallback={
-                                <UserIcon
-                                  id={entity.id}
-                                  size="sm"
-                                  isDeleted={false}
-                                  suppressClick={true}
-                                  photoUrl={
-                                    entity.kind === 'user'
-                                      ? entity.data.photoUrl
-                                      : undefined
-                                  }
-                                />
-                              }
-                            >
-                              <Entity.Icon entity={entity.data as EntityData} />
-                            </Show>
-                          </div>
-                          <span class="truncate min-w-0 max-w-full">
-                            <Show
-                              when={entity.kind === 'entity'}
-                              fallback={
-                                <Show
-                                  when={getUserEntityParts(entity)}
-                                  fallback={getEntityName(entity)}
-                                >
-                                  {(parts) => (
-                                    <>
-                                      {parts().name}
-                                      <Show when={parts().email}>
-                                        <span class="ml-[0.5em] opacity-50">
-                                          {parts().email}
-                                        </span>
-                                      </Show>
-                                    </>
-                                  )}
-                                </Show>
-                              }
-                            >
-                              <Entity.Title
-                                entity={entity.data as EntityData}
-                              />
-                            </Show>
-                          </span>
-                          <Show when={isBotPrincipalId(entity.id)}>
-                            <span class="shrink-0 text-xs text-ink-muted">
-                              Agent
-                            </span>
-                          </Show>
-                        </div>
-                        <Show
-                          when={!props.config.isMultiSelect && isSelected()}
-                        >
-                          <CheckIcon class="size-3.5 shrink-0 text-accent" />
-                        </Show>
-                      </div>
-                    </>
-                  );
-                }}
-              </For>
-            </div>
-          </Show>
-          <Show when={customEmail()}>
-            {(email) => {
-              const rowIndex = () => sortedEntities().length;
-              const entity = () => customEmailEntity();
-              return (
-                <div
-                  class="group rounded-lg w-full flex items-center justify-between gap-1.5 p-1.5 px-2 text-left text-ink font-normal cursor-default min-w-0 touch:min-h-12"
-                  classList={{
-                    'bg-hover': rowIndex() === selectedIndex(),
-                  }}
-                  onClick={() => {
-                    const next = entity();
-                    if (next) toggleEntity(next);
-                  }}
-                  onMouseEnter={() => {
-                    if (!keyboardMode()) setSelectedIndex(rowIndex());
-                  }}
-                >
-                  <Show when={props.config.isMultiSelect}>
-                    <div class="shrink-0">
-                      <OptionCheckBox checked={false} multiselect />
-                    </div>
-                  </Show>
-                  <div class="flex items-center gap-2 flex-1 min-w-0">
-                    <div class="size-4 shrink-0 flex items-center">
-                      <UserIcon
-                        id={emailToId(email())}
-                        size="sm"
-                        isDeleted={false}
-                        suppressClick={true}
-                      />
-                    </div>
-                    <span class="truncate min-w-0">Add {email()}</span>
-                  </div>
-                </div>
-              );
-            }}
-          </Show>
-        </div>
-      </Show>
-
-      <Show when={resultCount() === 0}>
-        {props.emptyState !== undefined ? (
-          props.emptyState
-        ) : (
-          <div class="text-center py-4 text-ink-muted text-sm">
-            <Show
-              when={!isLoadingEntities()}
-              fallback={<span>Loading...</span>}
-            >
-              No {getEntityTypePluralLabel(props.config.specificEntityType)}{' '}
-              found
-            </Show>
-          </div>
-        )}
-      </Show>
-      <Show when={props.action}>
-        <div
-          class="shrink-0 border-t border-edge-muted p-1.5"
-          onPointerDown={keepSearchFocus}
-          onMouseDown={keepSearchFocus}
-        >
-          <Button
-            variant="ghost"
-            size="sm"
-            class={cn(selectedIndex() === resultCount() && 'bg-hover')}
-            onClick={runAction}
-            onMouseEnter={() => {
-              if (!keyboardMode()) setSelectedIndex(resultCount());
-            }}
-          >
-            {props.action?.label}
-          </Button>
-        </div>
-      </Show>
+      <Stepper
+        step={props.navigation?.view ?? 0}
+        transition={Stepper.transitions.slide}
+        class={cn('overflow-hidden', fills() && 'min-h-0 flex-1')}
+      >
+        <For each={[props.navigation?.view ?? 0]}>
+          {(view) => (
+            <Stepper.Step index={view}>
+              <Results view={view} />
+            </Stepper.Step>
+          )}
+        </For>
+      </Stepper>
     </div>
   );
 }

@@ -1159,15 +1159,16 @@ Macro in a new split (in place on touch devices); a PR Macro has not synced yet 
 GitHub instead.
 
 Assignees initially lists and searches current team members and available agents.
-Selected assignees stay at the top, followed by agents, then other people. Choose the
-compact **Find other people…** action to switch to eligible non-team people from
-the existing contacts pool, keeping selected assignees and agents pinned. An empty
-pool shows **No other people available.** Choose **Back to team members** to return
-without losing picks. Selected outsiders stay visible and removable, even after leaving the team
-or disappearing from contacts. Each new opening starts in team mode. Discovery
-does not invite arbitrary email addresses or select CRM-only contact records.
-Removing an outsider also removes their row from team mode immediately; choose
-**Find other people…** to add that person again.
+Selected assignees stay at the top, followed by agents, then other people. Choose
+the compact **Find other people…** action to slide to eligible non-team people
+from the existing contacts pool. That view excludes agents and teammates, including
+selected ones, without removing their assignments. Search changes to **Search
+other people...**; the back arrow beside search returns to Assignees. Both
+transitions clear the query and keep search focused. An empty pool shows **No
+other people available.** Selected outsiders remain visible and removable in the
+main view, including references absent from contacts. Each opening starts in team
+mode. Discovery does not invite arbitrary emails or select CRM-only contacts.
+Removing an outsider removes their row from team mode; use discovery to add them again.
 
 The same scope applies to task/project creation and editing, bulk Set assignee,
 and desktop/mobile Assignee filters. Existing **Me** and **Unassigned** choices

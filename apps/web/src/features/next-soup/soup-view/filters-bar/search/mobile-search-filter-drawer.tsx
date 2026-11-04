@@ -1,10 +1,13 @@
 import { MobileFilterDrawer } from '@app/components/view-shell/MobileFilterDrawer';
 import { MobileDrawer } from '@components/app/mobile/MobileDrawer';
+import ArrowLeftIcon from '@icon/system/regular/arrow-left.svg';
 import ChevronDownIcon from '@icon/system/regular/caret-down.svg';
 import SearchIcon from '@icon/system/regular/magnifying-glass.svg';
 import { Accordion } from '@kobalte/core/accordion';
 import { Button, cn } from '@ui';
 import {
+  type Accessor,
+  batch,
   createMemo,
   createSignal,
   For,
@@ -14,6 +17,10 @@ import {
   Switch,
 } from 'solid-js';
 import { createStore } from 'solid-js/store';
+import {
+  type SearchableOption,
+  SearchableSelectView,
+} from '../searchable-multi-select';
 import { type SearchFacetVM, useSearchFacets } from './search-facets';
 import { createSearchFiltersController } from './search-filters-state';
 
@@ -50,6 +57,14 @@ function MultiFacetContent(props: {
 }) {
   const [localQuery, setLocalQuery] = createSignal('');
   const query = () => props.query ?? localQuery();
+  let searchInput: HTMLInputElement | undefined;
+  const navigate = (onSelect: () => void) => {
+    batch(() => {
+      (props.onQueryChange ?? setLocalQuery)('');
+      onSelect();
+    });
+    searchInput?.focus();
+  };
   onCleanup(() => {
     props.onQueryChange?.('');
     props.facet.onPickerClose?.();
@@ -71,6 +86,72 @@ function MultiFacetContent(props: {
     );
   };
 
+  const renderOptions = (options: Accessor<SearchableOption[]>) => (
+    <>
+      <div class="max-h-[calc(50*var(--dvh))] overflow-y-auto scrollbar-hidden">
+        <For each={options()}>
+          {(option) => {
+            const active = () => props.facet.activeIds().includes(option.id);
+            const isSole = () => {
+              const ids = props.facet.activeIds();
+              return ids.length === 1 && ids[0] === option.id;
+            };
+            return (
+              <div class="w-full flex items-stretch gap-1">
+                <MobileFilterDrawer.Option
+                  class="min-w-0 flex-1"
+                  checked={active()}
+                  onChange={() => toggle(option.id)}
+                  icon={option.icon?.()}
+                >
+                  {option.label}
+                </MobileFilterDrawer.Option>
+                <Show
+                  when={props.facet.onOnly && props.facet.options().length > 1}
+                >
+                  <button
+                    type="button"
+                    class="shrink-0 rounded-xl px-3 text-xs text-ink-muted hover:text-ink hover:bg-ink/6 transition-colors"
+                    aria-label={
+                      isSole()
+                        ? `Show all ${props.facet.label.toLowerCase()}`
+                        : `Show only ${option.label}`
+                    }
+                    onClick={() => props.facet.onOnly?.(option.id)}
+                  >
+                    {isSole() ? 'All' : 'Only'}
+                  </button>
+                </Show>
+              </div>
+            );
+          }}
+        </For>
+        <Show
+          when={
+            options().length === 0 &&
+            (!props.facet.navigation || query().trim())
+          }
+        >
+          <div class="px-4 py-2 text-sm text-ink-muted">No results</div>
+        </Show>
+      </div>
+      <Show when={props.facet.action?.()}>
+        {(action) => (
+          <Button
+            variant="ghost"
+            size="sm"
+            class={cn('justify-start', action().class)}
+            onPointerDown={(event) => event.preventDefault()}
+            onMouseDown={(event) => event.preventDefault()}
+            onClick={() => navigate(action().onSelect)}
+          >
+            {action().label}
+          </Button>
+        )}
+      </Show>
+      {props.facet.footer?.()}
+    </>
+  );
   return (
     <>
       {/* Any-of/all-of segment (e.g. tags), mirroring the desktop chip. */}
@@ -110,12 +191,28 @@ function MultiFacetContent(props: {
       <Show
         when={
           props.facet.action ||
+          props.facet.navigation ||
           props.facet.options().length > SEARCHABLE_OPTION_COUNT
         }
       >
         <div class="flex min-h-11 items-center gap-2 rounded-[20px] px-3 py-2 bg-ink/5 mb-1">
+          <Show when={props.facet.navigation?.().back}>
+            {(back) => (
+              <Button
+                variant="ghost"
+                size="icon-sm"
+                aria-label={back().label}
+                onPointerDown={(event) => event.preventDefault()}
+                onMouseDown={(event) => event.preventDefault()}
+                onClick={() => navigate(back().onSelect)}
+              >
+                <ArrowLeftIcon class="size-4" />
+              </Button>
+            )}
+          </Show>
           <SearchIcon class="size-3.5 text-ink-muted shrink-0" />
           <input
+            ref={searchInput}
             type="text"
             aria-label={props.facet.placeholder}
             value={query()}
@@ -128,64 +225,21 @@ function MultiFacetContent(props: {
         </div>
       </Show>
 
-      <div class="max-h-[calc(50*var(--dvh))] overflow-y-auto scrollbar-hidden">
-        <For each={filteredOptions()}>
-          {(option) => {
-            const active = () => props.facet.activeIds().includes(option.id);
-            const isSole = () => {
-              const ids = props.facet.activeIds();
-              return ids.length === 1 && ids[0] === option.id;
-            };
-            return (
-              <div class="w-full flex items-stretch gap-1">
-                <MobileFilterDrawer.Option
-                  class="min-w-0 flex-1"
-                  checked={active()}
-                  onChange={() => toggle(option.id)}
-                  icon={option.icon?.()}
-                >
-                  {option.label}
-                </MobileFilterDrawer.Option>
-                <Show
-                  when={props.facet.onOnly && props.facet.options().length > 1}
-                >
-                  <button
-                    type="button"
-                    class="shrink-0 rounded-xl px-3 text-xs text-ink-muted hover:text-ink hover:bg-ink/6 transition-colors"
-                    aria-label={
-                      isSole()
-                        ? `Show all ${props.facet.label.toLowerCase()}`
-                        : `Show only ${option.label}`
-                    }
-                    onClick={() => props.facet.onOnly?.(option.id)}
-                  >
-                    {isSole() ? 'All' : 'Only'}
-                  </button>
-                </Show>
-              </div>
-            );
-          }}
-        </For>
-        <Show when={filteredOptions().length === 0}>
-          <div class="px-4 py-2 text-sm text-ink-muted">No results</div>
-        </Show>
-      </div>
-      <Show when={props.facet.action?.()}>
-        {(action) => (
-          <Button
-            variant="ghost"
-            size="sm"
-            fullWidth
-            class={cn('justify-start', action().class)}
-            onPointerDown={(event) => event.preventDefault()}
-            onMouseDown={(event) => event.preventDefault()}
-            onClick={action().onSelect}
-          >
-            {action().label}
-          </Button>
+      <Show
+        when={props.facet.navigation}
+        fallback={renderOptions(filteredOptions)}
+      >
+        {(navigation) => (
+          <SearchableSelectView view={navigation()().view}>
+            {(active) => {
+              const options = createMemo<SearchableOption[]>((previous) =>
+                active() ? filteredOptions() : (previous ?? [])
+              );
+              return renderOptions(options);
+            }}
+          </SearchableSelectView>
         )}
       </Show>
-      {props.facet.footer?.()}
     </>
   );
 }

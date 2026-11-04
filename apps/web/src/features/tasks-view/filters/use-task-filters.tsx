@@ -179,9 +179,12 @@ export function useTaskFilters() {
       {
         id: 'assignees',
         label: 'Assignee',
-        searchPlaceholder: 'Search assignees...',
+        searchPlaceholder: assigneePicker.placeholder(),
         options: [
-          ...peopleOptions().filter((option) => option.id === TASK_VIEWER),
+          ...peopleOptions().filter(
+            (option) =>
+              !assigneePicker.discovering() && option.id === TASK_VIEWER
+          ),
           ...assigneePicker
             .options()
             .filter((option) => option.id !== NO_ASSIGNEE),
@@ -193,6 +196,7 @@ export function useTaskFilters() {
         ),
         preserveOrder: true,
         action: assigneePicker.action(),
+        navigation: assigneePicker.navigation(),
         footer: <AssigneeDiscoveryStatus discovery={assigneePicker} />,
         onOpenChange: (open) => {
           if (!open) resetAssigneeDiscovery();

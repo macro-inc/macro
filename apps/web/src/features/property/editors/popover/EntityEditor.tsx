@@ -153,6 +153,19 @@ function EntityEditorSelector(
   const showRosterStatus = () =>
     (isCompanyOwner || isAssignees) && (team.isLoading() || team.isError());
 
+  const emptyState = () => {
+    if (showRosterStatus()) return null;
+    if (!isAssignees || !findingOtherPeople()) return undefined;
+    if (peopleLoading()) {
+      return <div class="px-3 py-4 text-sm text-ink-muted">Loading...</div>;
+    }
+    if (otherPeople().length > 0) return undefined;
+    return (
+      <div role="status" class="px-3 py-4 text-sm text-ink-muted">
+        {t('viewMenus.noOtherPeople')}
+      </div>
+    );
+  };
   return (
     <>
       <Suspense
@@ -163,24 +176,41 @@ function EntityEditorSelector(
         <PropertyEntitySelector
           config={{
             isMultiSelect: property.isMultiSelect,
-            placeholder: `${property.isMultiSelect ? 'Add' : 'Change'} ${property.displayName.toLowerCase()}...`,
+            placeholder: isAssignees
+              ? t(
+                  findingOtherPeople()
+                    ? 'viewMenus.searchOtherPeople'
+                    : 'viewMenus.searchAssignees'
+                )
+              : `${property.isMultiSelect ? 'Add' : 'Change'} ${property.displayName.toLowerCase()}...`,
             specificEntityType: property.specificEntityType,
             selfFilter: props.selfFilter,
             users: isCompanyOwner || isAssignees ? users : undefined,
             fillHeight: props.fillHeight,
           }}
           priorityIds={isAssignees ? priorityIds() : undefined}
-          action={
+          navigation={
             isAssignees
               ? {
-                  label: findingOtherPeople()
-                    ? t('viewMenus.backToTeam')
-                    : t('viewMenus.findOtherPeople'),
-                  onSelect: () => setFindingOtherPeople((value) => !value),
+                  view: findingOtherPeople() ? 1 : 0,
+                  back: findingOtherPeople()
+                    ? {
+                        label: t('viewMenus.backToAssignees'),
+                        onSelect: () => setFindingOtherPeople(false),
+                      }
+                    : undefined,
                 }
               : undefined
           }
-          emptyState={showRosterStatus() ? null : undefined}
+          action={
+            isAssignees && !findingOtherPeople()
+              ? {
+                  label: t('viewMenus.findOtherPeople'),
+                  onSelect: () => setFindingOtherPeople(true),
+                }
+              : undefined
+          }
+          emptyState={emptyState()}
           selectedOptions={() =>
             entityReferencesToIdSet(props.draft.selectedRefs())
           }
@@ -207,21 +237,8 @@ function EntityEditorSelector(
       </Show>
       <Show
         when={
-          isAssignees &&
-          findingOtherPeople() &&
-          !team.isLoading() &&
-          !team.isError() &&
-          !peopleLoading() &&
-          otherPeople().length === 0
-        }
-      >
-        <div role="status" class="shrink-0 px-3 py-2 text-sm text-ink-muted">
-          {t('viewMenus.noOtherPeople')}
-        </div>
-      </Show>
-      <Show
-        when={
           props.selfFilter?.entityType === 'INITIATIVE' &&
+          !findingOtherPeople() &&
           property.propertyDefinitionId === SYSTEM_PROPERTY_IDS.ASSIGNEES
         }
       >

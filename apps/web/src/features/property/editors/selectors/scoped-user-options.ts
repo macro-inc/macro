@@ -13,29 +13,22 @@ export function nonTeamUserOptions(
   );
 }
 
-/** Switch between the roster and other people while retaining selections and agents. */
+/** Switch views without dropping selected references from the main list. */
 export function scopedUserOptions(
   users: IUser[],
   otherUsers: IUser[],
   selectedIds: ReadonlySet<string>,
   discovering: boolean
 ): IUser[] {
-  const options = new Map(
-    users
-      .filter(
-        (user) =>
-          !discovering || selectedIds.has(user.id) || isBotPrincipalId(user.id)
-      )
-      .map((user) => [user.id, user])
-  );
+  const rosterIds = new Set(users.map((user) => user.id));
   const available = discovering
     ? nonTeamUserOptions(users, otherUsers)
-    : otherUsers.filter((user) => selectedIds.has(user.id));
-  for (const user of available) {
-    if (!options.has(user.id)) options.set(user.id, user);
-  }
+    : [...users, ...otherUsers.filter((user) => selectedIds.has(user.id))];
+  const options = new Map(available.map((user) => [user.id, user]));
+
   for (const id of selectedIds) {
     if (options.has(id)) continue;
+    if (discovering && (rosterIds.has(id) || isBotPrincipalId(id))) continue;
     options.set(id, {
       id,
       email: isBotPrincipalId(id) ? '' : idToEmail(id),

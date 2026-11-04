@@ -136,6 +136,7 @@ const MultiValueSegment = (props: {
       placeholder={props.facet.placeholder}
       preserveOrder={props.facet.preserveOrder}
       action={props.facet.action?.()}
+      navigation={props.facet.navigation?.()}
       footer={props.facet.footer?.()}
       placement="bottom-start"
       open={open}

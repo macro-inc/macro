@@ -2,6 +2,7 @@ import { NO_ASSIGNEE } from '@app/features/next-soup/filters';
 import type {
   SearchableOption,
   SearchableSelectAction,
+  SearchableSelectNavigation,
 } from '@app/features/next-soup/soup-view/filters-bar/searchable-multi-select';
 import { t } from '@app/lib/i18n';
 import { UserIcon } from '@core/component/UserIcon';
@@ -43,67 +44,103 @@ export function useAssigneePicker(
     nonTeamUserOptions(team.users(), contacts())
   );
 
-  const options = createMemo(() => {
+  const buildOptions = (discovering: boolean) => {
     const uid = userId();
     const selectedIds = new Set(activeIds());
     const people = new Map<string, IUser>();
     for (const contact of contacts()) people.set(contact.id, contact);
     for (const member of team.users()) people.set(member.id, member);
     for (const agent of agents()) people.set(agent.id, agent);
-
-    const option = (id: string): SearchableOption => ({
-      id,
-      label: buildContactLabel(people.get(id) ?? { id }, uid),
-      icon: () => (
-        <UserIcon id={id} size="sm" suppressClick showTooltip={false} />
-      ),
-    });
+    const rosterIds = new Set(team.users().map((member) => member.id));
     const visible = new Set<string>();
     const result: SearchableOption[] = [];
     const add = (id: string) => {
       if (visible.has(id)) return;
       visible.add(id);
-      result.push(option(id));
+      result.push({
+        id,
+        label: buildContactLabel(people.get(id) ?? { id }, uid),
+        icon: () => (
+          <UserIcon id={id} size="sm" suppressClick showTooltip={false} />
+        ),
+      });
     };
 
-    for (const agent of agents()) add(agent.id);
-    if (uid) add(uid);
-    result.push({
-      id: NO_ASSIGNEE,
-      label: t('viewMenus.unassigned'),
-      icon: () => <CircleDashedIcon class="size-3.5 text-ink-muted" />,
-    });
-    for (const id of activeIds()) {
-      if (id !== NO_ASSIGNEE) add(id);
-    }
-    if (!discovering()) {
+    if (discovering) {
+      if (!team.isLoading() && !team.isError()) {
+        for (const contact of otherPeople()) {
+          if (contact.id !== uid) add(contact.id);
+        }
+        for (const id of activeIds()) {
+          if (
+            id !== NO_ASSIGNEE &&
+            id !== uid &&
+            !rosterIds.has(id) &&
+            !isBotPrincipalId(id)
+          )
+            add(id);
+        }
+      }
+    } else {
+      for (const agent of agents()) add(agent.id);
+      if (uid) add(uid);
+      result.push({
+        id: NO_ASSIGNEE,
+        label: t('viewMenus.unassigned'),
+        icon: () => <CircleDashedIcon class="size-3.5 text-ink-muted" />,
+      });
+      for (const id of activeIds()) {
+        if (id !== NO_ASSIGNEE) add(id);
+      }
       for (const member of team.users()) add(member.id);
-    } else if (!team.isLoading() && !team.isError()) {
-      for (const contact of otherPeople()) add(contact.id);
     }
     return result.toSorted(
       (a, b) =>
         Number(selectedIds.has(b.id)) - Number(selectedIds.has(a.id)) ||
         Number(isBotPrincipalId(b.id)) - Number(isBotPrincipalId(a.id))
     );
-  });
+  };
+  const mainOptions = createMemo(() => buildOptions(false));
+  const otherOptions = createMemo(() => buildOptions(true));
+  const allOptions = createMemo(() => [
+    ...new Map(
+      [...mainOptions(), ...otherOptions()].map((option) => [option.id, option])
+    ).values(),
+  ]);
 
   return {
-    options,
+    options: () => (discovering() ? otherOptions() : mainOptions()),
+    allOptions,
     discovering,
     setDiscovering,
-    action: (): SearchableSelectAction => ({
-      label: discovering()
-        ? t('viewMenus.backToTeam')
-        : t('viewMenus.findOtherPeople'),
-      onSelect: () => setDiscovering((value) => !value),
-      closeOnSelect: false,
-      class: 'w-fit',
+    placeholder: () =>
+      t(
+        discovering()
+          ? 'viewMenus.searchOtherPeople'
+          : 'viewMenus.searchAssignees'
+      ),
+    navigation: (): SearchableSelectNavigation => ({
+      view: discovering() ? 1 : 0,
+      back: discovering()
+        ? {
+            label: t('viewMenus.backToAssignees'),
+            onSelect: () => setDiscovering(false),
+          }
+        : undefined,
     }),
+    action: (): SearchableSelectAction | undefined =>
+      discovering()
+        ? undefined
+        : {
+            label: t('viewMenus.findOtherPeople'),
+            onSelect: () => setDiscovering(true),
+            closeOnSelect: false,
+            class: 'w-fit',
+          },
     isLoading: team.isLoading,
     isError: team.isError,
     otherPeopleEmpty: () =>
-      contactsQuery.isSuccess && otherPeople().length === 0,
+      contactsQuery.isSuccess && otherOptions().length === 0,
   };
 }
 
@@ -111,19 +148,24 @@ export type AssigneeDiscovery = ReturnType<typeof useAssigneePicker>;
 
 export function AssigneeDiscoveryControls(props: {
   discovery: AssigneeDiscovery;
+  onDiscover?: () => void;
 }) {
   return (
     <div class="border-t border-edge-muted p-1">
-      <Button
-        variant="ghost"
-        size="sm"
-        class="w-fit"
-        onPointerDown={(event) => event.preventDefault()}
-        onMouseDown={(event) => event.preventDefault()}
-        onClick={() => props.discovery.action().onSelect()}
-      >
-        {props.discovery.action().label}
-      </Button>
+      <Show when={props.discovery.action()}>
+        {(action) => (
+          <Button
+            variant="ghost"
+            size="sm"
+            class="w-fit"
+            onPointerDown={(event) => event.preventDefault()}
+            onMouseDown={(event) => event.preventDefault()}
+            onClick={props.onDiscover ?? action().onSelect}
+          >
+            {action().label}
+          </Button>
+        )}
+      </Show>
       <AssigneeDiscoveryStatus discovery={props.discovery} />
     </div>
   );

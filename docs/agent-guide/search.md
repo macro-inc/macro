@@ -77,9 +77,12 @@ type's supported filters. Task status/priority/assignee/creator filters and chan
 In/From filters use the same controls and resolution as desktop Command K.
 The task Assignee facet lists selected assignees first, then available agents,
 then team members. Selected outsiders remain removable.
-**Find other people…** switches to eligible non-team people, retaining selected
-assignees and agents. An empty pool shows **No other people available.** **Back to
-team members** preserves picks, and reopening starts in team mode. Desktop chips and the mobile filter drawer share this behavior.
+**Find other people…** slides to eligible non-team people without agents,
+teammates, or Me/Unassigned choices. The search placeholder changes to **Search
+other people...**. Use the back arrow beside search to return to Assignees;
+both transitions clear the query and preserve selections and search focus.
+An empty pool shows **No other people available.** Reopening starts in team mode.
+Desktop chips and the mobile filter drawer share this behavior.
 Created by, channel senders, and call speakers retain their existing people pools.
 The shared global-search filters and results update live above the bar. Open a
 filtered result directly; there is no separate Search submit action.
