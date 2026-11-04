@@ -333,7 +333,10 @@ A contact has the same layout with `Overview`, `Emails`, `Files`, `Tasks`, `Call
 interacted`, followed by the contact's Pipelines cards. Its Files, Tasks, Calls,
 and References show items associated with the contact itself (its `Contacts`
 property or an @mention of it), not everything associated with its company;
-Files also includes attachments of emails with its address. Tasks created from a
+Files also includes attachments of emails with its address. Contacts without an
+email still list their associated non-task files; they send no email-attachment
+participant filter. Verify both an empty list and linked files on desktop and phone.
+Tasks created from a
 contact also reference its company. The side panel contains References, with no
 empty Sharing section.
 

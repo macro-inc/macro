@@ -286,6 +286,10 @@ pub trait ReviewActions: Send + Sync + 'static {
         owner: &MacroUserIdStr<'static>,
         record: &ReviewRecord,
     ) -> Result<(), CodeModeError>;
+    /// Tell the session's viewers that `record` was saved at its current
+    /// revision, so open cards fetch it instead of polling. Carries no draft
+    /// content.
+    async fn announce_update(&self, record: &ReviewRecord) -> Result<(), CodeModeError>;
     /// Stream a checked view as a completed `PresentView` call. Nothing is
     /// saved: the presented call is the view's only record.
     async fn present_view(
@@ -521,7 +525,18 @@ impl ReviewService {
                 .map_err(|error| CodeModeError::Storage(rootcause::report!(error).into()))
             })
             .transpose()?;
-        self.store.save(previous, record, pending.as_ref()).await
+        self.store.save(previous, record, pending.as_ref()).await?;
+        // Best effort: the save stands either way, and a card that misses
+        // this revision fetches it with the next one or on reload.
+        if let Err(error) = self.actions.announce_update(record).await {
+            tracing::error!(
+                error = ?error,
+                review_id = %record.id.0,
+                revision = record.revision,
+                "could not announce a saved review"
+            );
+        }
+        Ok(())
     }
     /// Claim the exact saved revision, then complete independently of the request.
     /// Persisted submitting states become unknown after interrupted work.
