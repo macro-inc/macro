@@ -82,6 +82,8 @@ tools/HTTP/GraphQL surfaces over them.
 - Keep CRM write locks ordered: domain advisory locks, parent team `KEY SHARE`,
   settings `SHARE`, then company/contact rows. Hold them through commit so
   disable/purge and team deletion cannot race creation.
+- Bound pipeline read- and write-guard waits with a transaction-local five-second
+  timeout so waiters release pool connections needed by the holder's storage work.
 - When depopulating an email, prefer its domain-linked contact over a manual
   unfiled record so mailbox-source teardown reaches the synced contact.
 - Serialize domain visibility updates on the owning company row before reading

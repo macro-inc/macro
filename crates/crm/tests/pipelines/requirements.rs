@@ -791,3 +791,54 @@ async fn concurrent_stage_entry_and_required_field_clear_cannot_both_commit(pool
         assert_eq!(saved[0].cells[&amount], PropertyValue::Num(10.0));
     }
 }
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn contended_pipeline_guards_release_pool_connections(pool: PgPool) {
+    use crm::outbound::pipelines::PipelineRepoError;
+    use sqlx::postgres::PgPoolOptions;
+    use std::time::Duration;
+
+    let (service, _, _, team, _) = fixture(&pool).await;
+    let pipeline = create(&service, team, PipelineRecordType::Company).await;
+    let bounded = PgPoolOptions::new()
+        .max_connections(2)
+        .acquire_timeout(Duration::from_secs(2))
+        .connect_with(pool.connect_options().as_ref().clone())
+        .await
+        .unwrap();
+    let repo = PgPipelineRepo::new(
+        bounded.clone(),
+        PgCellStore::new(bounded.clone(), PropertiesPgRepo::new(bounded.clone())),
+    );
+    let holder = repo.lock_write(pipeline.id).await.unwrap().unwrap();
+
+    // The waiter uses the only remaining connection. It must release that
+    // connection while the holder still owns the row lock, so storage can run.
+    for reader in [false, true] {
+        let waiting = async {
+            if reader {
+                repo.lock_live(pipeline.id).await
+            } else {
+                repo.lock_write(pipeline.id).await
+            }
+        };
+        let failure = tokio::time::timeout(Duration::from_secs(10), waiting)
+            .await
+            .expect("a queued guard must not exhaust the pool indefinitely")
+            .unwrap_err();
+        let PipelineRepoError::Sqlx(failure) = failure else {
+            panic!("expected a PostgreSQL lock timeout");
+        };
+        assert_eq!(
+            failure
+                .as_database_error()
+                .and_then(|error| error.code())
+                .as_deref(),
+            Some("55P03")
+        );
+        let connection = bounded.acquire().await.unwrap();
+        drop(connection);
+    }
+    holder.rollback().await.unwrap();
+    assert!(repo.lock_write(pipeline.id).await.unwrap().is_some());
+}

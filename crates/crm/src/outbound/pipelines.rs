@@ -185,6 +185,10 @@ where
 
     async fn lock_live(&self, id: Uuid) -> Result<Option<Self::Guard>, Self::Error> {
         let mut tx = self.pool.begin().await?;
+        // Readers queued behind a writer also need to release pool connections.
+        sqlx::query!("SET LOCAL lock_timeout = '5s'")
+            .execute(&mut *tx)
+            .await?;
         let row = sqlx::query!(
             "SELECT id FROM crm_pipeline_entities WHERE id = $1 AND trashed_at IS NULL FOR SHARE",
             id
@@ -196,6 +200,10 @@ where
 
     async fn lock_write(&self, id: Uuid) -> Result<Option<Self::Guard>, Self::Error> {
         let mut tx = self.pool.begin().await?;
+        // Queued writers must release connections so the holder can use storage.
+        sqlx::query!("SET LOCAL lock_timeout = '5s'")
+            .execute(&mut *tx)
+            .await?;
         // Allows foreign-key checks from the storage transaction while serializing
         // all pipeline writers and holding the pipeline against trash/deletion.
         let row = sqlx::query!("SELECT id FROM crm_pipeline_entities WHERE id = $1 AND trashed_at IS NULL FOR NO KEY UPDATE", id).fetch_optional(&mut *tx).await?;
