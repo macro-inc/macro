@@ -1121,6 +1121,8 @@ lists them on Home and in Agents like the owner's own sessions. The setting
 applies to runs that start after it changes. A run that finishes normally sends
 no notification; a failed or cut-short run, a question the agent asks, a held tool
 approval, and people the routine's prompt mentions still notify.
+The prompt's `@` menu also lists agents. Mentioning one only names it for the
+routine: it doesn't start the agent or notify anyone.
 
 **Create → Routine** (U) and **Create Routine** open the same popover host as task
 and project creation. Enter a name and instructions, then choose a model or agent

@@ -20,7 +20,7 @@ pub struct DuplicateDatabaseRequest {
     responses((status = 201, body = Database), (status = 400, body = ErrorResponse),
         (status = 401, body = ErrorResponse), (status = 403, body = ErrorResponse),
         (status = 404, body = ErrorResponse), (status = 500, body = ErrorResponse)))]
-#[tracing::instrument(err, skip_all)]
+#[tracing::instrument(err, skip_all, fields(acting_bot = tracing::field::Empty))]
 pub async fn duplicate_database_handler<Service, EntityAccess, Authorization>(
     access: DatabaseAccessLevelExtractor<ViewAccessLevel, EntityAccess, Authorization>,
     State(state): State<DatabasesRouterState<Service, EntityAccess, Authorization>>,
@@ -32,11 +32,13 @@ where
     EntityAccess: EntityAccessService,
     Authorization: MacroAuthorizationService,
 {
+    let acting_bot = agent_attribution(&user);
     let copy = state
         .service
         .duplicate_database(
             access.entity_access_receipt,
             viewer_of(&user).user_id,
+            acting_bot,
             request.name,
         )
         .await?;
