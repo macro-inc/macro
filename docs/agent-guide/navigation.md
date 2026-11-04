@@ -31,6 +31,11 @@ a background tab; adding Shift also switches to it. Tabs are not draggable.
 Tabs persist per user and restore on launch. In the browser and on other
 platforms the strip does not render.
 
+An inline preview in a background tab stays open there, so selecting its entity
+from another tab switches to that tab with the entity showing. A tab that opens
+onto an entity another tab already holds shows its list instead, without moving
+you or showing a toast.
+
 Reference captures (browser fixture with the desktop gates forced):
 [a three-split tab beside a second tab](media/desktop-tabs/three-split-tab.png)
 and [tabs restored after a reload](media/desktop-tabs/restored-tabs.png).
