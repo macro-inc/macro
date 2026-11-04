@@ -130,7 +130,16 @@ impl<Context> AuthenticatedToolService<Context> {
         }
     }
 
-    async fn tool_mode(&self, user_id: &MacroUserIdStr<'static>) -> ToolMode {
+    /// The mode for one request. ChatGPT always gets the standard tools: its
+    /// plugin directory refuses generic executors, whatever the user's flag.
+    async fn tool_mode(
+        &self,
+        user_id: &MacroUserIdStr<'static>,
+        extensions: &rmcp::model::Extensions,
+    ) -> ToolMode {
+        if caller(extensions).is_ok_and(|caller| is_chatgpt(&caller)) {
+            return ToolMode::Standard;
+        }
         match &self.code_mode {
             Some(code_mode) => code_mode.selector.select(user_id).await,
             None => ToolMode::Standard,
@@ -163,6 +172,17 @@ fn caller(extensions: &rmcp::model::Extensions) -> Result<ToolCaller, rmcp::Erro
         .ok_or_else(|| {
             rmcp::ErrorData::internal_error("missing tool caller — is auth configured?", None)
         })
+}
+
+/// Whether the caller is an OAuth client registered under ChatGPT's name. The
+/// name is self-reported, which is fine here: this picks how tools are
+/// presented and grants nothing, and a client naming itself ChatGPT only loses
+/// code mode.
+fn is_chatgpt(caller: &ToolCaller) -> bool {
+    matches!(
+        caller,
+        ToolCaller::McpClient { name: Some(name) } if name.eq_ignore_ascii_case("chatgpt")
+    )
 }
 
 #[cfg(test)]
@@ -226,7 +246,7 @@ where
             context.peer.set_peer_info(request);
         }
         let mut info = self.get_info();
-        if self.tool_mode(&user_id).await == ToolMode::Code {
+        if self.tool_mode(&user_id, &context.extensions).await == ToolMode::Code {
             let base_url = self.item_base_url.trim_end_matches('/');
             info.instructions = Some(format!(
                 "{}\n\n{}",
@@ -243,7 +263,7 @@ where
         context: rmcp::service::RequestContext<rmcp::RoleServer>,
     ) -> Result<ListToolsResult, rmcp::ErrorData> {
         let user_id = Self::authenticated_user_id(&context.extensions)?;
-        let mode = self.tool_mode(&user_id).await;
+        let mode = self.tool_mode(&user_id, &context.extensions).await;
 
         Ok(ListToolsResult {
             tools: self.tool_definitions_for(mode),
@@ -306,7 +326,7 @@ where
         if let Some(code_mode) = &self.code_mode
             && code_mode.tools.tools.contains_key(request.name.as_ref())
         {
-            if self.tool_mode(&user_id).await != ToolMode::Code {
+            if self.tool_mode(&user_id, &context.extensions).await != ToolMode::Code {
                 return (
                     ToolCallOutcome::InvalidRequest,
                     Err(rmcp::ErrorData::resource_not_found(

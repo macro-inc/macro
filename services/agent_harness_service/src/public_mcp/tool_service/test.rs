@@ -509,6 +509,51 @@ mod code_mode {
         serde_json::from_slice(&bytes).unwrap()
     }
 
+    fn mcp_client(name: &str) -> Option<ToolCaller> {
+        Some(ToolCaller::McpClient {
+            name: Some(name.to_owned()),
+        })
+    }
+
+    #[tokio::test]
+    async fn chatgpt_lists_standard_tools_for_a_flagged_user() {
+        let app = app(Arc::new(Runs::default()));
+        let listed = rpc_as(
+            app.clone(),
+            FLAGGED,
+            mcp_client("ChatGPT"),
+            "tools/list",
+            serde_json::json!({}),
+        )
+        .await;
+        assert_eq!(tool_names(&listed), DIRECT_TOOLS);
+
+        let other = rpc_as(
+            app,
+            FLAGGED,
+            mcp_client("Claude"),
+            "tools/list",
+            serde_json::json!({}),
+        )
+        .await;
+        assert!(tool_names(&other).contains(&"ExecuteCode".to_owned()));
+    }
+
+    #[tokio::test]
+    async fn chatgpt_cannot_run_code_for_a_flagged_user() {
+        let runs = Arc::new(Runs::default());
+        let response = rpc_as(
+            app(runs.clone()),
+            FLAGGED,
+            mcp_client("ChatGPT"),
+            "tools/call",
+            serde_json::json!({"name": "ExecuteCode", "arguments": {"code": "1"}}),
+        )
+        .await;
+        assert!(response["error"].is_object(), "{response}");
+        assert!(runs.0.lock().unwrap().is_empty());
+    }
+
     fn tool_names(response: &serde_json::Value) -> Vec<String> {
         let mut names: Vec<String> = response["result"]["tools"]
             .as_array()
