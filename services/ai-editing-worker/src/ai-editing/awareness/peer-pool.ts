@@ -1,53 +1,39 @@
 import PQueue from 'p-queue';
 import { nextAiPeerId } from './ai-peer';
-import { AI_NAMES, aiLabel, COLORS } from './awareness-source';
+import { aiLabel, COLORS } from './awareness-source';
 
 export type Peer = { name: string; color: string; peerId: bigint };
 
 export type PeerPoolOptions = {
-  names?: string[];
   colors?: string[];
   max?: number;
-  /**
-   * Whether every outstanding peer needs its own name (default). Off, the
-   * pool cycles through `names` and lets writers share one: how a single
-   * persona edits with several cursors at once.
-   */
-  distinctNames?: boolean;
 };
 
+/**
+ * Hands out writer identities for one edit. Every writer is labelled with the
+ * editor — the agent or persona that asked for the edit — so readers see its
+ * name on each cursor; writers differ only by peer id and color.
+ */
 export class PeerPool {
-  private readonly names: string[];
+  private readonly name: string;
   private readonly colors: string[];
-  private readonly distinctNames: boolean;
   private readonly free: Peer[] = []; // released, ready to reuse
   private readonly out = new Set<Peer>();
   private readonly releasers = new Map<Peer, () => void>(); // peer → free its slot
   private readonly gate: PQueue;
 
-  constructor(opts?: PeerPoolOptions) {
-    this.names = [...(opts?.names ?? AI_NAMES)];
+  private constructor(editor: string, opts?: PeerPoolOptions) {
+    this.name = aiLabel(editor);
     this.colors = [...(opts?.colors ?? COLORS)];
-    this.distinctNames = opts?.distinctNames ?? true;
     this.gate = new PQueue({ concurrency: opts?.max ?? 6 });
   }
 
-  /**
-   * A pool whose every writer is `editor` — the agent or persona that asked for
-   * the edit — so readers see its name on each cursor, not a pooled one.
-   */
-  static forEditor(
-    editor: string,
-    opts?: Omit<PeerPoolOptions, 'names' | 'distinctNames'>
-  ): PeerPool {
-    return new PeerPool({
-      ...opts,
-      names: [aiLabel(editor)],
-      distinctNames: false,
-    });
+  /** A pool whose every writer is labelled `editor`. */
+  static forEditor(editor: string, opts?: PeerPoolOptions): PeerPool {
+    return new PeerPool(editor, opts);
   }
 
-  /** Acquire a unique identity, waiting if `max` are already out (semaphore). */
+  /** Acquire a writer identity, waiting if `max` are already out (semaphore). */
   public borrow(): Promise<Peer> {
     return new Promise<Peer>((handOut) => {
       // The queued task holds a concurrency slot until its promise resolves; we
@@ -79,34 +65,10 @@ export class PeerPool {
     return this.out.size;
   }
 
-  /** A never-before-issued identity: next unused base name, else a suffixed one. */
+  /** A never-before-issued identity: a fresh peer id and the next color. */
   private mint(): Peer {
-    const color = this.colors[this.issued() % this.colors.length] ?? '';
-    if (!this.distinctNames) {
-      const name = this.names[this.issued() % this.names.length] ?? 'AI';
-      return { name, color, peerId: nextAiPeerId() };
-    }
-
-    const used = new Set([...this.out, ...this.free].map((p) => p.name));
-    const unusedBaseName = this.names.find((name) => !used.has(name));
-    let name = unusedBaseName;
-
-    if (!name) {
-      const baseNames = this.names.length > 0 ? this.names : ['AI'];
-      let generation = Math.floor(this.issued() / baseNames.length) + 1;
-      let candidate = `${baseNames[this.issued() % baseNames.length]} ${generation}`;
-
-      while (used.has(candidate)) {
-        generation += 1;
-        candidate = `${baseNames[this.issued() % baseNames.length]} ${generation}`;
-      }
-      name = candidate;
-    }
-
-    return { name, color, peerId: nextAiPeerId() };
-  }
-
-  private issued(): number {
-    return this.out.size + this.free.length;
+    const issued = this.out.size + this.free.length;
+    const color = this.colors[issued % this.colors.length] ?? '';
+    return { name: this.name, color, peerId: nextAiPeerId() };
   }
 }

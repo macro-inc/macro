@@ -1,6 +1,5 @@
 import { ViewShell } from '@app/components/view-shell';
 import { startPendingSession } from '@app/features/block-agent/context/pending-session';
-import { markAgentSessionNotificationsSeenOnOpen } from '@app/features/block-agent/mark-session-notifications-seen';
 import { AgentSettings } from '@app/features/settings/AgentSettings';
 import { IntegrationsPage } from '@app/features/settings/IntegrationsPage';
 import { withEntityNotifications } from '@app/features/soup/entity-notifications';
@@ -22,6 +21,7 @@ import { useUserId } from '@core/context/user';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import { ListEntityMetadataQueryProvider } from '@entity';
 import SpinnerIcon from '@icon/system/regular/spinner.svg';
+import { markRowNotificationsSeenOnOpen } from '@notifications/mark-row-seen';
 import { useWarmAgentSessionQuery } from '@queries/agent-session/warm';
 import { useSoupAstItemsQuery } from '@queries/soup/items';
 import {
@@ -376,7 +376,7 @@ function AgentsWorkspace(props: { route?: AgentsRoute }) {
       showUnlistedRuns={showUnlistedRuns()}
       onShowUnlistedRunsChange={setShowUnlistedRuns}
       onOpenConversation={(conversation, event) => {
-        markAgentSessionNotificationsSeenOnOpen(conversation, notifications);
+        markRowNotificationsSeenOnOpen(conversation, notifications);
         openConversation(
           conversation,
           event,

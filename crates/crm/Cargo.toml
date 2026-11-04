@@ -49,14 +49,13 @@ outbound = [
   "dep:macro_user_id",
   "dep:models_properties",
   "dep:properties",
-  "dep:reqwest",
   "dep:sqlx",
   "dep:unfurl",
   "ports",
 ]
 ports = ["dep:bot_id", "dep:csv", "dep:databases", "dep:futures", "dep:models_databases", "dep:models_permissions", "dep:models_properties", "dep:macro_user_id", "dep:macro_uuid", "dep:rootcause", "dep:utoipa", "dep:properties", "entity_access/ports"]
 # Read-only CRM search (name/domain). Pulls only sqlx + ports — no
-# reqwest/unfurl/axum — so search consumers stay lightweight.
+# unfurl/axum — so search consumers stay lightweight.
 search = ["dep:sqlx", "ports"]
 
 [dependencies]
@@ -106,7 +105,6 @@ model-error-response = { path = "../model-error-response", optional = true }
 utoipa = { workspace = true, optional = true }
 
 # Outbound dependencies
-reqwest = { workspace = true, optional = true }
 sqlx = { workspace = true, optional = true }
 unfurl = { path = "../unfurl", features = ["ports"], optional = true }
 workspace-hack = { version = "0.1", path = "../workspace-hack" }
@@ -126,4 +124,3 @@ properties = { path = "../properties", default-features = false, features = [
 rootcause = { workspace = true }
 tokio = { workspace = true, features = ["macros"] }
 tower = { workspace = true }
-wiremock = { workspace = true }

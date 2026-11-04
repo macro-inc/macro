@@ -8,9 +8,13 @@ export function ProjectDiscussion(props: {
   projectId: string;
   canWrite: boolean;
   targetId?: string;
+  targetRequestKey?: string | number;
 }) {
   const targetId = createMemo(() => props.targetId);
-  const targetRequest = createMemo(() => ({ id: targetId() }));
+  const targetRequest = createMemo(() => ({
+    id: targetId(),
+    key: props.targetRequestKey,
+  }));
   const [clearedTarget, setClearedTarget] =
     createSignal<ReturnType<typeof targetRequest>>();
 
@@ -19,6 +23,7 @@ export function ProjectDiscussion(props: {
       parent={{ type: 'initiative', id: props.projectId }}
       canWrite={props.canWrite}
       targetId={props.targetId}
+      targetRequestKey={props.targetRequestKey}
       targetCleared={clearedTarget() === targetRequest()}
       onClearTarget={() => setClearedTarget(targetRequest())}
       buildLink={(message) =>

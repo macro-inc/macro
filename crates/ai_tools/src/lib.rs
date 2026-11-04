@@ -370,8 +370,10 @@ fn tools_for_inner(host: AiHost, code_mode_direct: bool) -> ToolSetWithPrompt {
     };
     let prompt: Box<dyn std::fmt::Display + Send + Sync> = match host {
         AiHost::Chat => Box::new(prompt::TOOL_USE_PROMPT.compose(&prompt::coding_agents::PROMPT)),
+        // Code mode hides the dispatch tools; agents start sessions through the SDK.
         AiHost::AgentSession if code_mode_direct => Box::new(
-            prompt::CODE_MODE_SESSION_TOOL_USE_PROMPT.compose(&prompt::coding_agents::PROMPT),
+            prompt::CODE_MODE_SESSION_TOOL_USE_PROMPT
+                .compose(&prompt::coding_agents::CODE_MODE_PROMPT),
         ),
         AiHost::AgentSession => {
             Box::new(prompt::SESSION_TOOL_USE_PROMPT.compose(&prompt::coding_agents::PROMPT))
@@ -379,11 +381,6 @@ fn tools_for_inner(host: AiHost, code_mode_direct: bool) -> ToolSetWithPrompt {
         AiHost::ChannelBot | AiHost::Mcp => {
             Box::new(prompt::DIRECT_TOOL_USE_PROMPT.compose(&prompt::coding_agents::PROMPT))
         }
-    };
-    let prompt: Box<dyn std::fmt::Display + Send + Sync> = if code_mode_direct {
-        Box::new(format!("{prompt}{}", prompt::tool_usage::CODE_MODE_ROUTING))
-    } else {
-        prompt
     };
     let catalog: Vec<(&str, &str)> = deferred
         .iter()

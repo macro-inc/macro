@@ -122,6 +122,29 @@ fn coding_dispatch_is_available_to_every_host_but_not_internal_subagents() {
 }
 
 #[test]
+fn code_mode_starts_agents_through_the_sdk_instead_of_dispatch_tools() {
+    let tools = tools_for_agent_code_mode();
+    let prompt = tools.prompt.to_string();
+    for name in ["ListCodingAgents", "DispatchCodingAgent"] {
+        assert!(!tools.toolset.tools.contains_key(name), "{name}");
+        assert!(
+            !tools.deferred.iter().any(|tool| tool.name == name),
+            "{name}"
+        );
+        assert!(!prompt.contains(name), "{name}");
+    }
+    assert!(tools.toolset.tools.contains_key("ListAgentUpdates"));
+    assert!(prompt.contains("macro.agents.list()"));
+    assert!(prompt.contains("macro.agentSessions.createManaged"));
+    assert!(
+        !tools_for(AiHost::AgentSession)
+            .prompt
+            .to_string()
+            .contains("createManaged")
+    );
+}
+
+#[test]
 fn project_workflows_are_available_in_every_host_alongside_folder_and_property_tools() {
     let names = [
         "ListInitiatives",
@@ -204,8 +227,8 @@ fn app_item_actions_are_available_in_every_host() {
     }
 }
 
-/// Every host reads the design files the native engines open, and its
-/// prompt says which tool reads which format.
+/// Every host reads the design files the native engines open, and each
+/// reader's description says the file is read-only to tools.
 #[test]
 fn design_file_readers_are_available_in_every_host_with_their_guidance() {
     for host in [
@@ -215,14 +238,17 @@ fn design_file_readers_are_available_in_every_host_with_their_guidance() {
         AiHost::Mcp,
     ] {
         let tools = tools_for(host);
-        let prompt = tools.prompt.to_string();
         for name in [
             "ReadDesign",
             "ReadPhotoshopDocument",
             "ReadIllustratorDocument",
         ] {
-            assert!(tools.toolset.tools.contains_key(name), "{host:?}: {name}");
-            assert!(prompt.contains(name), "{host:?}: {name}");
+            let tool = &tools.toolset.tools[name];
+            assert!(
+                tool.description
+                    .contains("describe changes for the user to make"),
+                "{host:?}: {name}"
+            );
         }
     }
     assert!(
@@ -453,7 +479,9 @@ fn every_host_exposes_skill_discovery_and_reading() {
             );
         }
         assert!(
-            tools.prompt.to_string().contains("ReadSkill"),
+            tools.toolset.tools["SearchSkills"]
+                .description
+                .contains("ReadSkill"),
             "{host:?} missing skill reading instructions"
         );
     }
@@ -645,7 +673,6 @@ fn code_mode_retains_direct_lifecycles_and_hides_sdk_methods_from_lazy_discovery
         "EditPresentation",
         "EditDocument",
         "Subagent",
-        "DispatchCodingAgent",
         "SearchTools",
         "LoadTools",
         "DiscoverConnectors",
@@ -696,11 +723,11 @@ fn code_mode_retains_direct_lifecycles_and_hides_sdk_methods_from_lazy_discovery
     assert!(!prompt.contains("you MUST use the `SendEmail` tool"));
     assert!(prompt.contains("Do not wait for the user to act on a saved review"));
     assert!(!prompt.contains("- ReadMetadata:"));
-    let routing = prompt::tool_usage::CODE_MODE_ROUTING.to_string();
-    assert!(prompt.contains(&routing));
-    assert!(!standard.prompt.to_string().contains(&routing));
+    let code_mode = prompt::code_mode::PROMPT.to_string();
+    assert!(prompt.contains(&code_mode));
+    assert!(!standard.prompt.to_string().contains(&code_mode));
     for host in [AiHost::Chat, AiHost::ChannelBot, AiHost::Mcp] {
-        assert!(!tools_for(host).prompt.to_string().contains(&routing));
+        assert!(!tools_for(host).prompt.to_string().contains(&code_mode));
     }
 }
 
