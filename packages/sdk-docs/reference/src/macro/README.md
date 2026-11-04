@@ -538,6 +538,12 @@ Re-exports [PipelineTable](../entities/crm/pipeline/classes/PipelineTable.md)
 
 ***
 
+### PipelineView
+
+Re-exports [PipelineView](../entities/crm/pipeline/classes/PipelineView.md)
+
+***
+
 ### PullRequestChangeset
 
 Re-exports [PullRequestChangeset](../entities/github-pull-requests/pull-request/classes/PullRequestChangeset.md)

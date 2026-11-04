@@ -2843,6 +2843,12 @@
     "path": "/crm/pipelines/{id}/trash",
     "write": true
   },
+  "storage.getCrmPipelineViewPositions": {
+    "label": "Get Crm Pipeline View Positions",
+    "method": "GET",
+    "path": "/crm/pipelines/{id}/views/{view}/positions",
+    "write": false
+  },
   "storage.getCrmTeamSettings": {
     "label": "Get Crm Team Settings",
     "method": "GET",

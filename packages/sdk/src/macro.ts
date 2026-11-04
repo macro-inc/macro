@@ -280,6 +280,7 @@ export {
   PipelineColumn,
   PipelineRow,
   PipelineTable,
+  PipelineView,
 } from './entities/crm/pipeline';
 export type {
   DatabaseQueryOptions,
