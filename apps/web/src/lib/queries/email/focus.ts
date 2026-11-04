@@ -34,7 +34,9 @@ export const FOCUS_WINDOW_DAYS = 30;
 export function mapEmailFocus(data: EmailFocusQuery): EmailEntity[] {
   const threads: EmailEntity[] = [];
   for (const thread of data.user.emailFocus) {
-    const item = mapGraphqlSoupItem(thread);
+    // Date rows by their latest message in either direction: the default
+    // Inbox key would leave out the owner's own replies.
+    const item = mapGraphqlSoupItem(thread, { emailView: 'ALL' });
     if (!item || !isDisplayableSoupItem(item)) continue;
     const entity = mapApiSoupItemToEntity(item);
     if (!isEmailEntity(entity) || !thread.focus) continue;
