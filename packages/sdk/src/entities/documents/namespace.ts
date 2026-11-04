@@ -135,9 +135,13 @@ export class DocumentNamespace {
    * Read a skill the request names before doing the task, and follow it for
    * that request only. `systemSkills()` lists the built-in skills, whose
    * instructions have no document; read those with the ReadSkill tool.
+   *
+   * `description` says when to use the skill, in one line starting "Use when"
+   * (at most 300 characters); agents load the skill for requests it describes.
    */
   createSkill(opts: {
     name: string;
+    description: string;
     markdown?: string;
     project?: Project;
   }): Promise<Document> {

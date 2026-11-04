@@ -10,6 +10,7 @@
 //! - `POST /github_prs/tasks` — get the tasks linked to each of a batch of GitHub pull requests
 //! - `GET /{document_id}/short_id` — get document short ID
 //! - `GET`/`PUT /{document_id}/team_share` — get/set the document's team-share state
+//! - `GET`/`PUT /{document_id}/skill_description` — get/set when to use a skill
 //! - `POST /create_markdown` — create and initialize a markdown document
 //! - `POST /create_snippet` — create and initialize a snippet document
 //! - `POST /create_skill` — create and initialize a skill document
@@ -43,6 +44,7 @@ pub mod get_short_id;
 pub mod get_text;
 pub mod put_interaction;
 pub mod put_snapshot;
+pub mod skill_description;
 pub mod sync_content_updated;
 pub mod system_skills;
 pub mod task_duplicates;
@@ -91,6 +93,7 @@ use self::{
     get_location::get_location_v3_handler,
     get_short_id::get_short_id_handler,
     put_snapshot::put_snapshot_handler,
+    skill_description::{get_skill_description_handler, set_skill_description_handler},
     system_skills::get_system_skills_handler,
     task_duplicates::{
         delete_this_duplicate_task_handler, dismiss_task_duplicates_handler,
@@ -297,6 +300,11 @@ where
             "/{document_id}/team_share",
             axum::routing::get(get_team_share_handler::<T, Svc, Auth>)
                 .put(set_team_share_handler::<T, Svc, Auth>),
+        )
+        .route(
+            "/{document_id}/skill_description",
+            axum::routing::get(get_skill_description_handler::<T, Svc, Auth>)
+                .put(set_skill_description_handler::<T, Svc, Auth>),
         );
 
     let document_id_routes = document_id_routes.layer(middleware::from_fn_with_state(

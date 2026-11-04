@@ -209,16 +209,23 @@ export class Document
 
   /**
    * Create a skill: a markdown document containing instructions that AI reads
-   * and follows when the skill is referenced in an AI input.
+   * and follows when the skill is referenced in an AI input, or when a request
+   * matches its `description`.
    */
   static async createSkill(
     client: MacroClient,
-    opts: { name: string; markdown?: string; project?: Project },
+    opts: {
+      name: string;
+      description: string;
+      markdown?: string;
+      project?: Project;
+    },
   ): Promise<Document> {
     const { documentId } = unwrap(
       await client.storage.createSkillHandler({
         body: {
           skillName: opts.name,
+          description: opts.description,
           markdown: opts.markdown ?? null,
           projectId: opts.project?.id ?? null,
         },
@@ -458,6 +465,33 @@ export class Document
       c.storage.setDocumentTeamShare({
         path: { document_id: this.id },
         body: { shareWithTeam: shared },
+      }),
+    );
+  }
+
+  /**
+   * When to use this skill: one line starting "Use when". `undefined` for a
+   * skill created before descriptions existed.
+   */
+  async skillDescription(): Promise<string | undefined> {
+    const { description } = unwrap(
+      await this.client.storage.getSkillDescription({
+        path: { document_id: this.id },
+      }),
+    );
+    return description ?? undefined;
+  }
+
+  /**
+   * Set when to use this skill: one line starting "Use when", at most 300
+   * characters, e.g. "Use when drafting release notes; not changelogs".
+   * Agents load the skill for requests it describes.
+   */
+  async setSkillDescription(description: string): Promise<void> {
+    await this.mutate((c) =>
+      c.storage.setSkillDescription({
+        path: { document_id: this.id },
+        body: { description },
       }),
     );
   }
