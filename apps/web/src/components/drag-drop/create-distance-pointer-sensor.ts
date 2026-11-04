@@ -4,13 +4,14 @@ import { onCleanup, onMount } from 'solid-js';
 /** The stock pointer sensor activates after 250ms or 10px. This one has no timer. */
 export function createDistancePointerSensor(
   distance: number,
-  onCancel: () => void
+  onCancel: () => void,
+  options: { id?: string; manual?: boolean } = {}
 ) {
   const context = useDragDropContext();
   if (!context)
     throw new Error('Distance pointer sensor requires DragDropProvider');
   const [state, actions] = context;
-  const id = 'distance-pointer-sensor';
+  const id = options.id ?? 'distance-pointer-sensor';
   let pendingId: string | number | undefined;
   let origin = { x: 0, y: 0 };
   let cancelled = false;
@@ -22,6 +23,8 @@ export function createDistancePointerSensor(
     document.removeEventListener('mousemove', move);
     document.removeEventListener('mouseup', up);
     document.removeEventListener('selectionchange', clearSelection);
+    document.removeEventListener('keydown', cancelOnEscape, true);
+    window.removeEventListener('blur', cancelOnBlur);
     attached = false;
     pendingId = undefined;
     cancelled = false;
@@ -33,6 +36,10 @@ export function createDistancePointerSensor(
     attached = true;
     document.addEventListener('mousemove', move);
     document.addEventListener('mouseup', up);
+    if (options.manual) {
+      document.addEventListener('keydown', cancelOnEscape, true);
+      window.addEventListener('blur', cancelOnBlur);
+    }
   };
   const move = (event: MouseEvent) => {
     if (cancelled) return;
@@ -85,10 +92,22 @@ export function createDistancePointerSensor(
     }
     return true;
   };
-  onMount(() => actions.addSensor({ id, activators: { mousedown: attach } }));
+  const cancelOnEscape = (event: KeyboardEvent) => {
+    if (event.key !== 'Escape' || !cancel()) return;
+    event.preventDefault();
+    event.stopPropagation();
+  };
+  const cancelOnBlur = () => cancel(true);
+
+  onMount(() =>
+    actions.addSensor({
+      id,
+      activators: options.manual ? {} : { mousedown: attach },
+    })
+  );
   onCleanup(() => {
     cancel(true);
     actions.removeSensor(id);
   });
-  return { cancel };
+  return { cancel, start: attach };
 }

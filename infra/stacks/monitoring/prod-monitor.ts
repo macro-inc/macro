@@ -24,19 +24,30 @@ export function prodMonitor(
     runbook: string;
     /** `url` of the dashboard graphing this monitor, under a `thresholdGraph` titled `title`. */
     dashboard?: pulumi.Input<string>;
+    /** Defaults to a metric `query alert`. */
+    type?: string;
+    /** Attach matching event samples. Needed for Database Monitoring attributes. */
+    enableLogsSample?: boolean;
+    /** Overrides for the state-line value text in `alertMessage`. */
+    alertDetail?: string;
+    warningDetail?: string;
+    recoveryDetail?: string;
   }
 ): datadog.Monitor {
   return new datadog.Monitor(
     name,
     {
       name: `[PROD] ${args.title}`,
-      type: 'query alert',
+      type: args.type ?? 'query alert',
       query: args.query,
       message: alertMessage({
         description: args.description,
         runbook: args.runbook,
         dashboard: args.dashboard,
         pages: args.pages,
+        alertDetail: args.alertDetail,
+        warningDetail: args.warningDetail,
+        recoveryDetail: args.recoveryDetail,
       }),
       tags: ['env:prod', `service:${args.service}`],
       priority: args.pages ? '2' : '3',
@@ -47,6 +58,9 @@ export function prodMonitor(
       onMissingData: 'default',
       includeTags: true,
       notifyAudit: false,
+      ...(args.enableLogsSample === undefined
+        ? {}
+        : { enableLogsSample: args.enableLogsSample }),
     },
     // The message mentions the GoAlert webhooks, which must exist first.
     { dependsOn: goalertWebhooks }

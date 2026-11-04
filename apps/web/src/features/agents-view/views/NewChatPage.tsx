@@ -1,5 +1,6 @@
 import { promptActionOf } from '@app/features/block-agent/component/prompt-action';
 import { createRecentAgentSelections } from '@app/features/block-agent/context/recent-agent-selections';
+import { LocalRuntimePrompt } from '@app/features/settings/components/local-runtime-prompt';
 import {
   createInputAttachmentTracker,
   type InputAttachmentData,
@@ -13,12 +14,14 @@ import {
   speedForModel,
 } from '@core/component/AI/constant/speed';
 import { fastModeEnabled } from '@core/component/AI/signal/speed';
+import { chatAttachmentMentionToMarkdown } from '@core/component/AI/util/chatAttachmentMention';
 import { ComposerGreeting } from '@core/component/ComposerGreeting';
 import { useSettingsState } from '@core/constant/SettingsState';
 import { useUserId } from '@core/context/user';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import { fireAndForget } from '@core/util/fireAndForget';
 import { uploadFile } from '@core/util/upload';
+import type { AgentSessionEntity } from '@entity';
 import ChatIcon from '@icon/system/regular/chat-circle.svg';
 import CodeIcon from '@icon/system/regular/code.svg';
 import AutoIcon from '@icon/system/regular/sparkle.svg';
@@ -29,6 +32,7 @@ import type { PromptAttachment } from '@service-agent-harness/generated/schemas'
 import { Tabs } from '@ui';
 import { tourTarget } from '@ui/components/Tour';
 import { createMemo, createSignal, Show } from 'solid-js';
+import { AgentUpdatesStack } from '../../agent-updates/views/AgentUpdatesStack';
 import { EffortSelector } from '../../block-agent/component/EffortSelector';
 import {
   type EffortChoice,
@@ -48,6 +52,7 @@ import {
   createPersistedComposerDraft,
   NEW_CONVERSATION_ATTACHMENTS_KEY,
 } from '../primitives/composer-draft';
+import { createPreferredEffort } from '../primitives/preferred-effort';
 import { createPreferredInmemModel } from '../primitives/preferred-inmem-model';
 import { createPreferredRepository } from '../primitives/preferred-repository';
 import { createRecentRepositories } from '../primitives/recent-repositories';
@@ -83,6 +88,8 @@ export function NewChatPage(props: {
   workspaceId?: string;
   draft?: string;
   onDraftChange?: (draft: string) => void;
+  /** Override the New conversation attachment store. Home uses its own key. */
+  attachmentsKey?: string;
   autoFocus?: boolean;
   registerFocus?: (focus: () => void) => void;
   roster: RosterAgent[];
@@ -98,6 +105,9 @@ export function NewChatPage(props: {
   onStart: (start: StartConversation) => void;
   /** Opens the roster page on the given kind's tab. */
   onOpenRoster: (kind: AgentKind) => void;
+  updateSessions?: readonly AgentSessionEntity[];
+  onOpenUpdateSession?: (sessionId: string) => void;
+  showUpdates?: boolean;
 }) {
   const userId = useUserId();
   const billing = useAiBillingSummaryQuery();
@@ -105,6 +115,7 @@ export function NewChatPage(props: {
   const recentAgents = createRecentAgentSelections(userId());
   const repositories = createRecentRepositories(userId());
   const preferredInmem = createPreferredInmemModel(userId());
+  const preferredEffort = createPreferredEffort(userId());
   const ownMode = createWorkspaceMode();
   const mode = () => props.mode ?? ownMode.mode();
   const auto = () => mode() === 'auto';
@@ -185,20 +196,24 @@ export function NewChatPage(props: {
     effortConfigOption(
       capabilities.isSuccess ? capabilities.data.configOptions : []
     );
-  const [effortSelection, setEffortSelection] = createSignal<{
-    target: string;
-    configId: string;
-    value: string;
-    name: string;
-  }>();
+  /** The last effort picked for the selected runtime and model, while it is still offered. */
   const selectedEffort = () => {
-    const selection = effortSelection();
-    return selection?.target === JSON.stringify(capabilityTarget())
-      ? selection
+    const target = capabilityTarget();
+    if (!target) return;
+    const choice = preferredEffort.effort(JSON.stringify(target));
+    const config = effort();
+    // Retain it while the selected model's discovery refreshes; startup
+    // revalidates against the runtime.
+    if (!choice || !config) return choice;
+    return config.id === choice.configId &&
+      config.options.some((option) => option.value === choice.value)
+      ? choice
       : undefined;
   };
-  // The submenu already validated this choice. Retain it while the selected
-  // model's discovery refreshes; startup revalidates against the runtime.
+  const rememberEffort = (choice: EffortChoice) => {
+    const target = capabilityTarget();
+    if (target) preferredEffort.remember(JSON.stringify(target), choice);
+  };
   const effortOverride = () => {
     const config = effort();
     const minimum =
@@ -278,12 +293,13 @@ export function NewChatPage(props: {
 
   const attachmentTracker = createMemo(() => {
     const identity = userId();
+    const key = props.attachmentsKey ?? NEW_CONVERSATION_ATTACHMENTS_KEY;
     return createInputAttachmentTracker({
-      // Home owns its attachments; unknown identities never read shared storage.
-      persistenceKey:
-        !props.onDraftChange && identity
-          ? `${NEW_CONVERSATION_ATTACHMENTS_KEY}:${encodeURIComponent(identity)}`
-          : undefined,
+      // Unknown identities never read shared storage. Parents may own the
+      // text draft without owning files; those still persist here.
+      persistenceKey: identity
+        ? `${key}:${encodeURIComponent(identity)}`
+        : undefined,
     });
   });
   const attachFiles = (files: File[]) =>
@@ -383,9 +399,9 @@ export function NewChatPage(props: {
           }
         : {}),
     });
-    // Macro's preferred model stays; coding-agent submenu picks are one-shot.
+    // Macro's preferred model and the picked efforts stay; coding-agent model
+    // picks are one-shot.
     setModelOverride(undefined);
-    setEffortSelection(undefined);
   };
 
   const selectAgent = (
@@ -402,14 +418,21 @@ export function NewChatPage(props: {
     } else {
       setModelOverride(model);
     }
-    setEffortSelection(
-      selection
-        ? { ...selection, target: JSON.stringify(capabilityTarget()) }
-        : undefined
-    );
+    if (selection) rememberEffort(selection);
   };
 
   let focusInput: (() => void) | undefined;
+  const chatAboutUpdate = (sessionId: string, sessionName: string) => {
+    const mention = chatAttachmentMentionToMarkdown({
+      documentId: sessionId,
+      documentName: sessionName,
+      blockName: 'agent',
+    });
+    setDraft(
+      `${draft().trim()}${draft().trim() ? '\n\n' : ''}${mention}\nAbout this update: `
+    );
+    focusInput?.();
+  };
   const restoreInputFocus = (event: Event) => {
     event.preventDefault();
     focusInput?.();
@@ -433,9 +456,8 @@ export function NewChatPage(props: {
   );
 
   const setMode = (next: ComposerMode) => {
-    // A model or effort picked for the other mode's agent does not carry over.
+    // A model picked for the other mode's agent does not carry over.
     setModelOverride(undefined);
-    setEffortSelection(undefined);
     if (props.onModeChange) props.onModeChange(next);
     else ownMode.setMode(next);
   };
@@ -511,12 +533,7 @@ export function NewChatPage(props: {
             config={effort()}
             value={effortOverride()?.value}
             disabled={Boolean(blocked())}
-            onChange={(choice) =>
-              setEffortSelection({
-                ...choice,
-                target: JSON.stringify(capabilityTarget()),
-              })
-            }
+            onChange={rememberEffort}
           />
           <Show
             when={['macro-inmem', 'in-memory'].includes(
@@ -584,9 +601,24 @@ export function NewChatPage(props: {
               data-agent-new-composer={props.workspaceId}
               class="agents-view-portal touch:px-(--mobile-chrome-gutter) pointer-events-auto min-w-0"
             >
+              <LocalRuntimePrompt />
               {composer()}
             </div>
           </FloatRegionOrInline>
+          <Show
+            when={
+              props.showUpdates &&
+              props.updateSessions &&
+              props.onOpenUpdateSession
+            }
+          >
+            <AgentUpdatesStack
+              home
+              sessions={props.updateSessions ?? []}
+              onOpenSession={(id) => props.onOpenUpdateSession?.(id)}
+              onChatAbout={chatAboutUpdate}
+            />
+          </Show>
         </div>
       </section>
     </Show>

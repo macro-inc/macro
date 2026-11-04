@@ -10,6 +10,92 @@
     "version": "0.1.0"
   },
   "paths": {
+    "/agent-auto-archive-preferences": {
+      "get": {
+        "tags": ["agent-sessions"],
+        "summary": "Read which triggers archive the caller's sessions by default.",
+        "operationId": "get_agent_auto_archive_preferences",
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AutoArchivePreferencesBody"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          }
+        }
+      },
+      "put": {
+        "tags": ["agent-sessions"],
+        "summary": "Replace which triggers archive the caller's sessions by default.",
+        "operationId": "put_agent_auto_archive_preferences",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AutoArchivePreferencesBody"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AutoArchivePreferencesBody"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/agent-capabilities/discover": {
       "post": {
         "tags": ["agent-capabilities"],
@@ -1143,6 +1229,136 @@
           },
           "409": {
             "description": "The session answers an agent conversation",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/agent-sessions/{session_id}/auto-archive": {
+      "get": {
+        "tags": ["agent-sessions"],
+        "summary": "Read a session's auto-archive settings and whether a trigger archived it.",
+        "operationId": "get_agent_session_auto_archive",
+        "parameters": [
+          {
+            "name": "session_id",
+            "in": "path",
+            "description": "ID of the agent session",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SessionAutoArchiveResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          }
+        }
+      },
+      "put": {
+        "tags": ["agent-sessions"],
+        "summary": "Replace a session's own auto-archive choices. Owner only.",
+        "operationId": "put_agent_session_auto_archive",
+        "parameters": [
+          {
+            "name": "session_id",
+            "in": "path",
+            "description": "ID of the agent session",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AutoArchiveOverridesBody"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AutoArchiveOverridesBody"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "",
             "content": {
               "text/plain": {
                 "schema": {
@@ -2731,6 +2947,45 @@
         }
       }
     },
+    "/agent-sessions/{session_id}/views": {
+      "post": {
+        "tags": ["agent-sessions"],
+        "summary": "Present a view in the session: a review with nothing saved.",
+        "operationId": "present_session_view",
+        "parameters": [
+          {
+            "name": "session_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PresentView"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "204": {
+            "description": ""
+          },
+          "400": {
+            "description": ""
+          },
+          "403": {
+            "description": ""
+          }
+        }
+      }
+    },
     "/universal_input/classify": {
       "post": {
         "tags": ["universal_input::inbound::axum_router"],
@@ -3583,7 +3838,6 @@
         "required": [
           "id",
           "name",
-          "isArchived",
           "ownerId",
           "canEdit",
           "botId",
@@ -3599,6 +3853,22 @@
           "acpSessionId": {
             "type": ["string", "null"],
             "description": "The ACP session id, if one exists."
+          },
+          "archivedAt": {
+            "type": ["string", "null"],
+            "format": "date-time",
+            "description": "When the session was archived, or `None` while it is active."
+          },
+          "archivedBy": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/ArchiveCause",
+                "description": "Who or what archived the session, or `None` while it is active. An archived session is\nread-only."
+              }
+            ]
           },
           "botId": {
             "type": "string",
@@ -3637,10 +3907,6 @@
           "instructions": {
             "type": ["string", "null"],
             "description": "Instructions the session's runtime works under, when any were stated\nat creation. Absent otherwise, so existing payloads are unchanged."
-          },
-          "isArchived": {
-            "type": "boolean",
-            "description": "Whether the session is archived and read-only."
           },
           "model": {
             "type": "string",
@@ -3798,6 +4064,40 @@
           "appSlug": {
             "type": "string",
             "description": "The Pipedream app slug the owner connected, e.g. `notion`."
+          }
+        }
+      },
+      "ArchiveCause": {
+        "type": "string",
+        "description": "Who or what archived a session.",
+        "enum": ["user", "pull_request_merged", "runtime_closed"]
+      },
+      "AutoArchiveOverridesBody": {
+        "type": "object",
+        "description": "One session's choices over its owner's defaults. `null` follows the owner.",
+        "properties": {
+          "onPullRequestMerged": {
+            "type": ["boolean", "null"],
+            "description": "Archive once the session's pull requests merge, or `null` to follow the owner."
+          },
+          "onRuntimeClosed": {
+            "type": ["boolean", "null"],
+            "description": "Archive once the session's runtime session is deliberately closed, or `null` to follow\nthe owner."
+          }
+        }
+      },
+      "AutoArchivePreferencesBody": {
+        "type": "object",
+        "description": "Which triggers archive the caller's sessions when a session has no choice of its own.",
+        "required": ["onPullRequestMerged", "onRuntimeClosed"],
+        "properties": {
+          "onPullRequestMerged": {
+            "type": "boolean",
+            "description": "Archive a session once every pull request linked to it is closed and at least one merged."
+          },
+          "onRuntimeClosed": {
+            "type": "boolean",
+            "description": "Archive a session once the runtime session backing it is deliberately closed."
           }
         }
       },
@@ -4205,12 +4505,12 @@
       },
       "CreateAgentSessionRequest": {
         "type": "object",
-        "description": "Request body for `POST /agent-sessions`.\n\nCarries two shapes, told apart by `workspace`. Naming one asks for an\nexternal session: the runtime is the bot operator's, so the caller has to\nsay which bot and which directory, and must own that bot. Omitting it asks\nfor a managed session, whose runtime this deployment provisions. A managed\nrequest may select an authorized persisted persona with `botId`; omitting\nit uses the deployment's default coding persona. Fields describing someone\nelse's runtime must still be omitted rather than quietly ignored. Mixing\nthe two shapes is refused rather than guessed at.\n\nClients serialize this, so both derives are used.",
+        "description": "Request body for `POST /agent-sessions`.\n\nCarries two shapes, told apart by `workspace`. Naming one asks for an\nexternal session: the runtime is the bot operator's, so the caller has to\nsay which bot and which directory, and must own that bot. Omitting it asks\nfor a managed session, whose runtime this deployment provisions. A managed\nrequest may select an authorized persisted persona with `botId`; omitting\nit uses the deployment's default coding persona, or Cursor when `repoUrl`\nis set. Fields describing someone else's runtime must still be omitted\nrather than quietly ignored. Mixing the two shapes is refused rather\nthan guessed at.\n\nClients serialize this, so both derives are used.",
         "properties": {
           "botId": {
             "type": ["string", "null"],
             "format": "uuid",
-            "description": "Bot the session runs for. On a managed request this optionally selects\na persisted persona the user owns, may use through team membership, or\ncan `@` mention in a shared channel; omitting it uses the deployment's\ndefault coding persona. On an external request, bot callers may omit it\n(their own identity is used) and must not name another bot; user callers\nmust supply a bot they own."
+            "description": "Bot the session runs for. On a managed request this optionally selects\na persisted persona the user owns, may use through team membership, or\ncan `@` mention in a shared channel; omitting it uses the deployment's\ndefault coding persona, or Cursor when `repoUrl` is set. On an\nexternal request, bot callers may omit it (their own identity is used)\nand must not name another bot; user callers must supply a bot they own."
           },
           "id": {
             "type": ["string", "null"],
@@ -4257,7 +4557,7 @@
           },
           "repoUrl": {
             "type": ["string", "null"],
-            "description": "Explicit GitHub repository for a managed Cursor session, as one of the\nurls `GET /agent-repositories` lists for the caller. Access is checked\nfor the session owner. For external sessions this is informational:\ncloning it is the runtime operator's job."
+            "description": "Explicit GitHub repository for a managed Cursor session, as one of the\nurls `GET /agent-repositories` lists for the caller. Access is checked\nfor the session owner. On a managed request that names no `botId`,\nthis starts the session as Cursor — the only managed persona that\nhonors a repository. For external sessions this is informational:\ncloning it is the runtime operator's job."
           },
           "thread": {
             "oneOf": [
@@ -4288,36 +4588,34 @@
         }
       },
       "CreateReview": {
-        "type": "object",
-        "description": "Review creation. Drafts are validated by the action's owning adapter.",
-        "required": ["kind", "title", "drafts"],
-        "properties": {
-          "drafts": {
-            "type": "array",
-            "items": {},
-            "description": "One to one hundred independent drafts. Email: {subject, body: Markdown,\nto: [{email, name?}], cc?: [{email, name?}], bcc?: [{email, name?}],\nreplyingToId?, attachments?: [{documentId}]}. Calendar: {title,\ntime: {kind: \"timed\", startsAt: ISO datetime, endsAt: ISO datetime,\ntimeZone?: IANA zone} or {kind: \"allDay\", startDate: ISO date,\nendDate: exclusive ISO date}, description?, location?, attendees?:\n[{email, isOptional?}]}. Import: exactly one draft {source: \"notion\" | \"linear\" | \"jira\"},\npresenting the plan ImportFromNotion, ImportFromLinear or ImportFromJira staged.\nCreating any review only presents these drafts; the user acts separately."
+        "allOf": [
+          {
+            "type": "object",
+            "description": "The review's kind (email, calendar, import) and its drafts: 1–100\nSendEmail or CreateCalendarEvent arguments, or exactly one import\nplan selection."
           },
-          "executionId": {
-            "oneOf": [
-              {
-                "type": "null"
+          {
+            "type": "object",
+            "required": ["title"],
+            "properties": {
+              "executionId": {
+                "oneOf": [
+                  {
+                    "type": "null"
+                  },
+                  {
+                    "$ref": "#/components/schemas/ExecutionId",
+                    "description": "Optional code execution that prepared these drafts."
+                  }
+                ]
               },
-              {
-                "$ref": "#/components/schemas/ExecutionId",
-                "description": "Optional code execution that prepared these drafts."
+              "title": {
+                "type": "string",
+                "description": "Stack label."
               }
-            ]
-          },
-          "kind": {
-            "$ref": "#/components/schemas/ReviewKind",
-            "description": "Existing UI and action to use."
-          },
-          "title": {
-            "type": "string",
-            "description": "Stack label."
+            }
           }
-        },
-        "additionalProperties": false
+        ],
+        "description": "Review creation. Decoding it validates every draft; creating a review only\npresents the drafts, and the account holder acts separately."
       },
       "CreateSessionThread": {
         "type": "object",
@@ -5187,6 +5485,29 @@
         ],
         "description": "The decision carried by an [`AgentPermissionAction`]."
       },
+      "PresentView": {
+        "type": "object",
+        "description": "A view to present.",
+        "required": ["view"],
+        "properties": {
+          "executionId": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/ExecutionId",
+                "description": "The code execution presenting it, when one does."
+              }
+            ]
+          },
+          "view": {
+            "type": "object",
+            "description": "A dynamic-UI view, in the format of the PresentView schema in\nExecuteCode's description."
+          }
+        },
+        "additionalProperties": false
+      },
       "PreviewAgentSessionsRequest": {
         "type": "object",
         "description": "Request body for `POST /agent-sessions/preview`.\n\nClients serialize this, so both derives are used.",
@@ -5564,7 +5885,8 @@
                 "enum": ["edit"]
               },
               "draft": {
-                "description": "Replacement action arguments."
+                "type": "object",
+                "description": "Replacement action arguments, keyed by the review's kind."
               },
               "item": {
                 "type": "string",
@@ -5662,125 +5984,81 @@
         "format": "uuid",
         "description": "Persisted review identity."
       },
-      "ReviewItem": {
-        "type": "object",
-        "description": "One editable item and its durable outcome.",
-        "required": ["id", "draft", "status"],
-        "properties": {
-          "draft": {
-            "description": "Validated arguments for the existing composer/action."
-          },
-          "edited": {
-            "type": "boolean",
-            "description": "Whether the account holder edited this draft before deciding."
-          },
-          "error": {
-            "type": ["string", "null"],
-            "description": "Failure or uncertainty description."
-          },
-          "id": {
-            "type": "string",
-            "format": "uuid",
-            "description": "Stable item identity across stack navigation and edits."
-          },
-          "result": {
-            "description": "Actual backend response, never a model assertion."
-          },
-          "status": {
-            "$ref": "#/components/schemas/ReviewItemStatus",
-            "description": "Current outcome."
-          }
-        }
-      },
-      "ReviewItemStatus": {
-        "type": "string",
-        "description": "Review item state, shared with notification consumers.",
-        "enum": ["pending", "submitting", "completed", "dismissed", "unknown"]
-      },
-      "ReviewKind": {
-        "type": "string",
-        "description": "The component and action used to finish a review.",
-        "enum": ["email", "calendar", "import"]
-      },
       "ReviewRecord": {
-        "type": "object",
-        "description": "Full UI record, fetched outside the model context.",
-        "required": [
-          "id",
-          "sessionId",
-          "kind",
-          "title",
-          "revision",
-          "updatedAt",
-          "items"
-        ],
-        "properties": {
-          "actingUser": {
-            "type": ["string", "null"],
-            "description": "Account whose email/calendar the drafts use; historical records use the session owner."
+        "allOf": [
+          {
+            "type": "object",
+            "description": "Component kind, drafts and per-item outcomes."
           },
-          "decision": {
-            "oneOf": [
-              {
-                "type": "null"
+          {
+            "type": "object",
+            "required": [
+              "id",
+              "sessionId",
+              "actingUser",
+              "title",
+              "revision",
+              "updatedAt"
+            ],
+            "properties": {
+              "actingUser": {
+                "type": "string",
+                "description": "Account whose email/calendar the drafts use."
               },
-              {
-                "$ref": "#/components/schemas/ReviewDecisionContext",
-                "description": "Current batch's authenticated decision, preserved for interrupted work."
-              }
-            ]
-          },
-          "executionId": {
-            "oneOf": [
-              {
-                "type": "null"
+              "decision": {
+                "oneOf": [
+                  {
+                    "type": "null"
+                  },
+                  {
+                    "$ref": "#/components/schemas/ReviewDecisionContext",
+                    "description": "Current batch's authenticated decision, preserved for interrupted work."
+                  }
+                ]
               },
-              {
-                "$ref": "#/components/schemas/ExecutionId",
-                "description": "Originating code execution, absent for directly presented reviews."
+              "executionId": {
+                "oneOf": [
+                  {
+                    "type": "null"
+                  },
+                  {
+                    "$ref": "#/components/schemas/ExecutionId",
+                    "description": "Originating code execution, absent for directly presented reviews."
+                  }
+                ]
+              },
+              "id": {
+                "$ref": "#/components/schemas/ReviewId",
+                "description": "Review identity."
+              },
+              "presentedAt": {
+                "type": ["integer", "null"],
+                "format": "int64",
+                "description": "Durable presentation acknowledgment, separate from user decisions."
+              },
+              "revision": {
+                "type": "integer",
+                "format": "int64",
+                "description": "Compare-and-swap revision for edits and submissions."
+              },
+              "sessionId": {
+                "type": "string",
+                "format": "uuid",
+                "description": "Owning session."
+              },
+              "title": {
+                "type": "string",
+                "description": "Stack label."
+              },
+              "updatedAt": {
+                "type": "integer",
+                "format": "int64",
+                "description": "Milliseconds since epoch of the last state change."
               }
-            ]
-          },
-          "id": {
-            "$ref": "#/components/schemas/ReviewId",
-            "description": "Review identity."
-          },
-          "items": {
-            "type": "array",
-            "items": {
-              "$ref": "#/components/schemas/ReviewItem"
-            },
-            "description": "Drafts and per-item outcomes."
-          },
-          "kind": {
-            "$ref": "#/components/schemas/ReviewKind",
-            "description": "Component kind."
-          },
-          "presentedAt": {
-            "type": ["integer", "null"],
-            "format": "int64",
-            "description": "Durable presentation acknowledgment, separate from user decisions."
-          },
-          "revision": {
-            "type": "integer",
-            "format": "int64",
-            "description": "Compare-and-swap revision for edits and submissions."
-          },
-          "sessionId": {
-            "type": "string",
-            "format": "uuid",
-            "description": "Owning session."
-          },
-          "title": {
-            "type": "string",
-            "description": "Stack label."
-          },
-          "updatedAt": {
-            "type": "integer",
-            "format": "int64",
-            "description": "Milliseconds since epoch of the last state change."
+            }
           }
-        }
+        ],
+        "description": "Full UI record, fetched outside the model context."
       },
       "SandboxSize": {
         "type": "string",
@@ -5989,6 +6267,26 @@
           "calendar"
         ]
       },
+      "SessionAutoArchiveResponse": {
+        "type": "object",
+        "description": "A session's auto-archive settings and history.",
+        "required": ["overrides", "defaults"],
+        "properties": {
+          "autoArchivedAt": {
+            "type": ["string", "null"],
+            "format": "date-time",
+            "description": "When a trigger first archived the session. Kept when a person restores it: a session\narchives itself at most once."
+          },
+          "defaults": {
+            "$ref": "#/components/schemas/AutoArchivePreferencesBody",
+            "description": "The owner's defaults, which apply where the session has no choice of its own."
+          },
+          "overrides": {
+            "$ref": "#/components/schemas/AutoArchiveOverridesBody",
+            "description": "The session's own choices."
+          }
+        }
+      },
       "SessionBot": {
         "type": "object",
         "description": "The agent behind a session, as much of it as rendering a message needs.",
@@ -6099,11 +6397,11 @@
       "SetAgentSessionArchivedRequest": {
         "type": "object",
         "description": "Request body for archiving or unarchiving an agent session.",
-        "required": ["isArchived"],
+        "required": ["archived"],
         "properties": {
-          "isArchived": {
+          "archived": {
             "type": "boolean",
-            "description": "The requested archive state."
+            "description": "Archive the session, or restore it."
           }
         }
       },

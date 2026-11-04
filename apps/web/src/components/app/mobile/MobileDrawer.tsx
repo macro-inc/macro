@@ -40,6 +40,10 @@ export function scrollToFocusedInput(e: FocusEvent, offset = 40) {
   }, 300);
 }
 
+/** Corvu's focus trap's own selector, to read the stop it would focus. */
+const FOCUSABLE_SELECTOR =
+  'a[href]:not([tabindex="-1"]), button:not([tabindex="-1"]), input:not([tabindex="-1"]), textarea:not([tabindex="-1"]), select:not([tabindex="-1"]), details:not([tabindex="-1"]), [tabindex]:not([tabindex="-1"])';
+
 /**
  * Drop-in replacement for `Drawer.Content` that handles mobile keyboard
  * behaviour automatically:
@@ -57,12 +61,18 @@ function MobileDrawerContent(
     maxHeight?: number;
     /** Initial/start height as a percentage of the viewport (vh). Clamped to 100. Fits content when omitted. */
     targetHeight?: number;
+    /**
+     * Paint the opaque menu fill instead of the default translucent glass.
+     * Use when the sheet shows a message over page text (mention previews).
+     */
+    opaque?: boolean;
   }
 ) {
   const [local, rest] = splitProps(props, [
     'class',
     'maxHeight',
     'targetHeight',
+    'opaque',
   ]);
 
   const maxHeight = () =>
@@ -89,7 +99,10 @@ function MobileDrawerContent(
         }}
         class={cn(
           'portal-scope',
-          'fixed! inset-x-2 bottom-[calc(var(--virtual-keyboard-height,0px)+8px)] z-modal mobile-sheet glass bg-menu-glass [--color-dialog:var(--color-menu-glass)] flex flex-col max-h-[min(var(--drawer-max-h),calc(100dvh-var(--safe-top,0px)-var(--virtual-keyboard-height,0px)-16px))] data-transitioning:transition-transform data-transitioning:duration-200 ease-out motion-reduce:transition-none',
+          'fixed! inset-x-2 bottom-[calc(var(--virtual-keyboard-height,0px)+8px)] z-modal mobile-sheet glass flex flex-col max-h-[min(var(--drawer-max-h),calc(100dvh-var(--safe-top,0px)-var(--virtual-keyboard-height,0px)-16px))] data-transitioning:transition-transform data-transitioning:duration-200 ease-out motion-reduce:transition-none',
+          local.opaque
+            ? 'bg-menu [--color-dialog:var(--color-menu)]'
+            : 'bg-menu-glass [--color-dialog:var(--color-menu-glass)]',
           targetHeight() != null ? 'h-(--drawer-h)' : 'h-fit',
           virtualKeyboardVisible()
             ? 'pb-4 has-[[data-drawer-scroll-body]]:pb-0'
@@ -241,7 +254,20 @@ function MobileDrawerHandle<T extends ValidComponent = 'div'>(
  * drawer as usual.
  */
 function dismissesDrawer(event: PointerEvent) {
-  return event.target !== document.documentElement;
+  if (event.target === document.documentElement) return false;
+  // A nested picker can remove its selected option during pointerup, before
+  // Corvu checks containment. The original event path still identifies the
+  // drawer that contained the tap; selecting an option must not dismiss it.
+  if (event.target instanceof Node && !event.target.isConnected) {
+    return !event
+      .composedPath()
+      .some(
+        (node) =>
+          node instanceof HTMLElement &&
+          node.hasAttribute('data-corvu-drawer-content')
+      );
+  }
+  return true;
 }
 
 /**
@@ -274,6 +300,34 @@ function swallowRestOfTap() {
 }
 
 /**
+ * A sheet opens with focus on itself unless its first tab stop is something to
+ * type into. Corvu's focus trap otherwise focuses that stop, and a browser
+ * paints the focus ring for a scripted focus arriving while nothing on the
+ * page is focused — which is every tap, since a tapped button is not focused
+ * on iOS. That ringed the first row of every sheet of rows.
+ *
+ * A text field keeps the focus: a sheet that opens for a search or a name is
+ * opened to type in. So does whatever the sheet focused itself while opening,
+ * such as the heading Settings announces when it drills in. The content
+ * element carries `tabindex="-1"`, so the trap, Escape and the sheet's own
+ * announcement all still work when the sheet holds focus itself. Sheets that
+ * want another control focused name it with `initialFocusEl` or their own
+ * `onInitialFocus`, as the comment composer and the model picker do.
+ */
+function focusSheetOverItsFirstRow(event: Event) {
+  const sheet = event.target as HTMLElement | null;
+  if (!sheet) return;
+  if (sheet.contains(document.activeElement)) {
+    // Corvu would move this to the first tab stop; the sheet chose it.
+    event.preventDefault();
+    return;
+  }
+  if (isEditableInput(sheet.querySelector(FOCUSABLE_SELECTOR))) return;
+  event.preventDefault();
+  sheet.focus();
+}
+
+/**
  * Wrapper around Corvu's Drawer for mobile. Handles styling and input/virtual keyboard behaviour.
  */
 export const MobileDrawer = Object.assign(
@@ -286,6 +340,7 @@ export const MobileDrawer = Object.assign(
     const [local, rest] = splitProps(props, [
       'onOutsidePointer',
       'onOpenChange',
+      'onInitialFocus',
     ]);
     let uncontrolledOpen = props.initialOpen ?? false;
     let disposed = false;
@@ -312,6 +367,11 @@ export const MobileDrawer = Object.assign(
           uncontrolledOpen = open;
           local.onOpenChange?.(open);
           if (!open && !closed()) setActiveSnapPoint(1);
+        }}
+        onInitialFocus={(event) => {
+          local.onInitialFocus?.(event);
+          if (event.defaultPrevented || props.initialFocusEl) return;
+          focusSheetOverItsFirstRow(event);
         }}
         onOutsidePointer={(event) => {
           if (!dismissesDrawer(event)) event.preventDefault();

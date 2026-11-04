@@ -219,6 +219,14 @@ pub trait AgentSessionService: Send + Sync + 'static {
         prompter: &TurnPrompter,
     ) -> impl Future<Output = Result<()>> + Send;
 
+    /// Record that `user` prompted the session `id` directly, from the
+    /// session itself, so a hidden session lists for them.
+    fn add_follower(
+        &self,
+        id: AgentSessionId,
+        user: &MacroUserIdStr<'static>,
+    ) -> impl Future<Output = Result<()>> + Send;
+
     /// Read the persisted identity of the current turn during recovery.
     fn turn_prompter(
         &self,
@@ -247,7 +255,7 @@ pub trait AgentSessionService: Send + Sync + 'static {
     fn set_archived(
         &self,
         access: &EntityAccessReceipt<OwnerAccessLevel>,
-        is_archived: bool,
+        archived: bool,
     ) -> impl Future<Output = Result<()>> + Send;
 
     /// A bounded batch of sessions owned by this user, including inactive sessions.
@@ -827,7 +835,7 @@ where
         if !session.owner_id.is_user(&actor) {
             return Err(AgentSessionError::Forbidden);
         }
-        if session.is_archived {
+        if session.is_archived() {
             return Err(AgentSessionError::Archived(id));
         }
         let entries = AgentSessionLogRepo::list_by_session(&self.repo, id).await?;
@@ -850,7 +858,7 @@ where
     ) -> Result<()> {
         let name = validate_agent_session_name(name)?;
         let id = owner_access_session_id(access, "rename")?;
-        if self.repo.get(id).await?.is_archived {
+        if self.repo.get(id).await?.is_archived() {
             return Err(AgentSessionError::Archived(id));
         }
         self.repo.set_name(id, name).await?;
@@ -871,16 +879,16 @@ where
     async fn set_archived(
         &self,
         access: &EntityAccessReceipt<OwnerAccessLevel>,
-        is_archived: bool,
+        archived: bool,
     ) -> Result<()> {
         let id = owner_access_session_id(access, "archive")?;
         // Every message in a conversation's channel goes to its current
         // session, and an archived session takes none. Starting fresh is how
         // a conversation retires one; the sessions it left behind archive.
-        if is_archived && self.repo.is_current_conversation_session(id).await? {
+        if archived && self.repo.is_current_conversation_session(id).await? {
             return Err(AgentSessionError::AnswersConversation(id));
         }
-        self.repo.set_archived(id, is_archived).await?;
+        self.repo.set_archived(id, archived).await?;
         self.realtime
             .publish_updated(id)
             .await
@@ -905,6 +913,10 @@ where
 
     async fn set_turn_prompter(&self, id: AgentSessionId, prompter: &TurnPrompter) -> Result<()> {
         self.repo.set_turn_prompter(id, prompter).await
+    }
+
+    async fn add_follower(&self, id: AgentSessionId, user: &MacroUserIdStr<'static>) -> Result<()> {
+        self.repo.add_follower(id, user).await
     }
 
     async fn turn_prompter(&self, id: AgentSessionId) -> Result<Option<TurnPrompter>> {
@@ -1133,7 +1145,7 @@ where
         action: AgentAction,
         action_id: AgentActionId,
     ) -> Result<()> {
-        if self.repo.get(id).await?.is_archived {
+        if self.repo.get(id).await?.is_archived() {
             return Err(AgentSessionError::Archived(id));
         }
         let initial_prompt = initial_prompt_for_rename(&self.folds, id, &action).await;
@@ -1439,6 +1451,10 @@ where
 
     fn session_stopped(&self, id: AgentSessionId, reason: SessionStopReason) {
         self.observer.session_stopped(id, reason);
+    }
+
+    fn runtime_closed(&self, id: AgentSessionId) {
+        self.observer.runtime_closed(id);
     }
 }
 
@@ -2047,6 +2063,10 @@ where
         self.repo.set_turn_prompter(id, prompter).await
     }
 
+    async fn add_follower(&self, id: AgentSessionId, user: &MacroUserIdStr<'static>) -> Result<()> {
+        self.repo.add_follower(id, user).await
+    }
+
     async fn turn_prompter(&self, id: AgentSessionId) -> Result<Option<TurnPrompter>> {
         self.repo.turn_prompter(id).await
     }
@@ -2114,8 +2134,8 @@ where
         self.repo.set_name(id, name).await
     }
 
-    async fn set_archived(&self, id: AgentSessionId, is_archived: bool) -> Result<()> {
-        self.repo.set_archived(id, is_archived).await
+    async fn set_archived(&self, id: AgentSessionId, archived: bool) -> Result<()> {
+        self.repo.set_archived(id, archived).await
     }
 
     async fn is_current_conversation_session(&self, id: AgentSessionId) -> Result<bool> {

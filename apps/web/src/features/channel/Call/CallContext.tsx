@@ -60,6 +60,7 @@ import {
   type NativeCallConnectionState,
   useMaybeNativeCallState,
 } from './native-call-state';
+import { ScreenShareError } from './screen-share-error';
 import {
   isNativeCallEnabled,
   prepareNativeCallJoin,
@@ -1580,10 +1581,27 @@ function createCallState() {
     if (!r) return;
     const newSharing = !store.isScreenSharing;
     try {
-      await r.localParticipant.setScreenShareEnabled(
-        newSharing,
-        screenShareCaptureOptions(persistedShareScreenAudio())
+      const outcome = await traceCallMedia(
+        'screen_share',
+        {
+          'call.id': store.activeCallId ?? undefined,
+          'call.media.enabled': newSharing,
+        },
+        async (span) => {
+          if (newSharing) {
+            // The picker stays out of the startup bundle CallProvider is in.
+            const { startScreenShare } = await import('./screen-share');
+            return startScreenShare(
+              r,
+              span,
+              screenShareCaptureOptions(persistedShareScreenAudio())
+            );
+          }
+          await r.localParticipant.setScreenShareEnabled(false);
+          return 'shared';
+        }
       );
+      if (outcome === 'cancelled') return;
       setStore('isScreenSharing', newSharing);
       analytics.track('call_action', {
         action: 'screen_share_toggled',
@@ -1594,6 +1612,8 @@ function createCallState() {
       });
     } catch (e) {
       console.error('failed to toggle screen share', e);
+      // The controls show it; browser picker failures include cancelling.
+      if (e instanceof ScreenShareError) throw e;
     }
   }
 

@@ -1,9 +1,14 @@
 //! Durable mailbox enumeration independent from provider-specific notifications.
 
 use email_api_client::domain::models::{
-    EmailApiError, MailFolder, MailboxChangePage, MailboxMessage, ProviderId, StreamToken,
+    EmailApiError, MailFolder, MailboxChangePage, MailboxMessage, ProviderId, StreamPosition,
+    StreamToken,
 };
+use progress::{ImportCompleted, ImportTally};
 use std::future::Future;
+use std::time::Instant;
+use telemetry::{claim_failed, elapsed_ms, record_deferred, record_done, record_failed, span_int};
+use tracing::{Instrument, Span};
 use uuid::Uuid;
 
 pub mod catalog;
@@ -15,8 +20,10 @@ pub mod gmail_history;
 pub mod health;
 pub mod initialization;
 pub mod lifecycle;
+pub mod progress;
 pub mod projection;
 pub mod settings;
+pub mod telemetry;
 #[cfg(test)]
 mod test;
 pub mod watches;
@@ -29,8 +36,47 @@ pub enum MailboxError {
     Provider(#[from] EmailApiError),
     #[error("mailbox persistence is unavailable")]
     Persistence,
+    /// A database call failed; the cause carries no row data.
+    #[error("mailbox persistence is unavailable: {0}")]
+    Database(DatabaseFailure),
+    /// A projection's downstream effect (event publishing, a queue, another
+    /// service) failed or is not ready; the effect logs its own cause.
+    #[error("a mailbox projection effect is unavailable")]
+    Effect,
     #[error("mailbox generation or worker lease changed")]
     Stale,
+    /// The provider no longer reports the message where it was; a later
+    /// attempt either finds it or settles that it is gone.
+    #[error("mailbox message location has not settled")]
+    LocationUnsettled,
+}
+
+/// What failed underneath a database call. The database's own message is
+/// left out because it can quote row data.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum DatabaseFailure {
+    /// The database rejected the statement with this SQLSTATE.
+    Sqlstate(String),
+    /// No pooled connection became free in time.
+    PoolTimedOut,
+    /// The connection failed or closed.
+    Connection,
+    /// A returned value could not be decoded.
+    Decode,
+    /// Any other driver failure.
+    Other,
+}
+
+impl std::fmt::Display for DatabaseFailure {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::Sqlstate(code) => write!(f, "sqlstate {code}"),
+            Self::PoolTimedOut => f.write_str("connection pool timed out"),
+            Self::Connection => f.write_str("connection failed"),
+            Self::Decode => f.write_str("decode failed"),
+            Self::Other => f.write_str("driver error"),
+        }
+    }
 }
 
 /// Both generations are resolved from storage, never selected by the client.
@@ -70,6 +116,15 @@ pub struct CatalogLease {
     pub fence: i64,
 }
 
+/// What a committed page changed.
+#[derive(Debug, Default)]
+pub struct CommittedPage {
+    /// Reconciliation rows the page queued or requeued.
+    pub queued: u64,
+    /// Set when this page finished the mailbox's import run.
+    pub import_completed: Option<ImportCompleted>,
+}
+
 pub enum SyncLease<'a> {
     Catalog(&'a CatalogLease),
     Stream(&'a StreamLease),
@@ -89,7 +144,7 @@ pub trait MailboxSyncRepository: Send + Sync + 'static {
         &self,
         lease: &CatalogLease,
         folders: &[MailFolder],
-    ) -> impl Future<Output = Result<(), MailboxError>> + Send;
+    ) -> impl Future<Output = Result<Option<ImportCompleted>, MailboxError>> + Send;
     fn release_catalog(
         &self,
         lease: &CatalogLease,
@@ -105,7 +160,7 @@ pub trait MailboxSyncRepository: Send + Sync + 'static {
         &self,
         lease: &StreamLease,
         page: &MailboxChangePage,
-    ) -> impl Future<Output = Result<(), MailboxError>> + Send;
+    ) -> impl Future<Output = Result<CommittedPage, MailboxError>> + Send;
     /// Reset only this expired stream; this operation never removes messages.
     fn reset_stream(
         &self,
@@ -125,10 +180,11 @@ pub trait MailboxSyncRepository: Send + Sync + 'static {
         mailbox: MailboxKey,
     ) -> impl Future<Output = Result<Vec<MailFolder>, MailboxError>> + Send;
     /// Finishes only the leased revision. A newer wakeup must remain pending.
+    /// Reports the import run this message finished, once per run.
     fn complete_message(
         &self,
         lease: &MessageLease,
-    ) -> impl Future<Output = Result<(), MailboxError>> + Send;
+    ) -> impl Future<Output = Result<Option<ImportCompleted>, MailboxError>> + Send;
     fn release_message(
         &self,
         lease: &MessageLease,
@@ -153,6 +209,8 @@ pub trait MailboxGateway: Send + Sync + 'static {
         message: &ProviderId,
         folders: &[MailFolder],
     ) -> impl Future<Output = Result<Option<MailboxMessage>, EmailApiError>> + Send;
+    /// Provider requests admitted for the mailbox's sync generation, when known.
+    fn admitted_requests(&self, mailbox: MailboxKey) -> impl Future<Output = Option<u64>> + Send;
 }
 
 /// The shared ingestion path writes content, normalized state and a projection
@@ -173,6 +231,7 @@ pub struct MailboxSyncService<R, P, I> {
     repo: R,
     provider: P,
     ingest: I,
+    imports: ImportTally,
 }
 
 impl<R, P, I> MailboxSyncService<R, P, I> {
@@ -181,7 +240,13 @@ impl<R, P, I> MailboxSyncService<R, P, I> {
             repo,
             provider,
             ingest,
+            imports: ImportTally::default(),
         }
+    }
+
+    /// The in-memory import counts the health loop flushes.
+    pub fn import_tally(&self) -> ImportTally {
+        self.imports.clone()
     }
 }
 
@@ -190,37 +255,97 @@ impl<R: MailboxSyncRepository, P: MailboxGateway, I: MailboxIngest> MailboxSyncS
         let Some(lease) = self
             .repo
             .claim_catalog(macro_uuid::generate_uuid_v7())
-            .await?
+            .await
+            .map_err(|error| claim_failed("discover", error))?
         else {
             return Ok(false);
         };
+        let span = tracing::info_span!(
+            "outlook.sync.discover",
+            mailbox.link_id = %lease.mailbox.link_id,
+            mailbox.sync_generation = lease.mailbox.sync_generation,
+            outlook.stream_kind = "folder_catalog",
+            outlook.folders = tracing::field::Empty,
+            outlook.outcome = tracing::field::Empty,
+            outlook.defer_reason = tracing::field::Empty,
+            outlook.defer_seconds = tracing::field::Empty,
+            otel.status_description = tracing::field::Empty,
+        );
+        self.discover(&lease).instrument(span).await
+    }
+
+    async fn discover(&self, lease: &CatalogLease) -> Result<bool, MailboxError> {
+        let span = Span::current();
         let outcome = maintain_lease(
             async { Ok(self.provider.folders(lease.mailbox).await?) },
-            || self.repo.renew(SyncLease::Catalog(&lease)),
+            || self.repo.renew(SyncLease::Catalog(lease)),
         )
         .await;
-        match outcome {
-            Ok(folders) => self.repo.commit_catalog(&lease, &folders).await?,
-            Err(MailboxError::Provider(error)) => {
-                self.repo
-                    .release_catalog(&lease, retry_seconds(&error))
-                    .await?;
-                return Err(error.into());
+        let result = match outcome {
+            Ok(folders) => {
+                span.record("outlook.folders", span_int(folders.len()));
+                self.repo.commit_catalog(lease, &folders).await
             }
-            Err(error) => return Err(error),
+            Err(MailboxError::Provider(error)) => {
+                let delay = retry_seconds(&error);
+                let error = MailboxError::from(error);
+                self.repo
+                    .release_catalog(lease, delay)
+                    .await
+                    .inspect_err(|release| {
+                        record_failed(&span, lease.mailbox.link_id, release);
+                    })?;
+                record_deferred(&span, lease.mailbox.link_id, &error, delay);
+                return Err(error);
+            }
+            Err(error) => Err(error),
+        };
+        match result {
+            Ok(import_completed) => {
+                record_done(&span, "imported");
+                if let Some(completed) = import_completed {
+                    self.report_import_completed(&completed).await;
+                }
+                Ok(true)
+            }
+            Err(error) => {
+                record_failed(&span, lease.mailbox.link_id, &error);
+                Err(error)
+            }
         }
-        Ok(true)
     }
+
     /// Process one bounded provider page. Notifications only make streams due;
     /// periodic polling recovers missed, duplicate and out-of-order notifications.
     pub async fn enumerate_once(&self) -> Result<bool, MailboxError> {
         let Some(lease) = self
             .repo
             .claim_stream(macro_uuid::generate_uuid_v7())
-            .await?
+            .await
+            .map_err(|error| claim_failed("enumerate", error))?
         else {
             return Ok(false);
         };
+        let span = tracing::info_span!(
+            "outlook.sync.enumerate",
+            mailbox.link_id = %lease.mailbox.link_id,
+            mailbox.sync_generation = lease.mailbox.sync_generation,
+            outlook.stream_kind = "mail_folder",
+            outlook.page_items = tracing::field::Empty,
+            outlook.rows_queued = tracing::field::Empty,
+            outlook.delta_advanced = false,
+            outlook.folder_initial_complete = lease.initial_complete,
+            outlook.cursor_reset = false,
+            outlook.outcome = tracing::field::Empty,
+            outlook.defer_reason = tracing::field::Empty,
+            outlook.defer_seconds = tracing::field::Empty,
+            otel.status_description = tracing::field::Empty,
+        );
+        self.enumerate(&lease).instrument(span).await
+    }
+
+    async fn enumerate(&self, lease: &StreamLease) -> Result<bool, MailboxError> {
+        let span = Span::current();
         let outcome = maintain_lease(
             async {
                 Ok(self
@@ -228,61 +353,151 @@ impl<R: MailboxSyncRepository, P: MailboxGateway, I: MailboxIngest> MailboxSyncS
                     .changes(lease.mailbox, &lease.folder, lease.position.as_ref())
                     .await?)
             },
-            || self.repo.renew(SyncLease::Stream(&lease)),
+            || self.repo.renew(SyncLease::Stream(lease)),
         )
         .await;
-        match outcome {
-            Ok(page) => self.repo.commit_page(&lease, &page).await?,
+        let result = match outcome {
+            Ok(page) => {
+                span.record(
+                    "outlook.page_items",
+                    span_int(page.changed.len() + page.removed.len()),
+                );
+                let checkpoint = matches!(page.position, StreamPosition::Checkpoint(_));
+                self.repo.commit_page(lease, &page).await.map(|committed| {
+                    span.record("outlook.rows_queued", span_int(committed.queued));
+                    span.record("outlook.delta_advanced", true);
+                    span.record(
+                        "outlook.folder_initial_complete",
+                        lease.initial_complete || checkpoint,
+                    );
+                    committed.import_completed
+                })
+            }
             Err(MailboxError::Provider(EmailApiError::OutdatedCursor)) => {
-                self.repo.reset_stream(&lease).await?
+                span.record("outlook.cursor_reset", true);
+                self.repo.reset_stream(lease).await.map(|()| None)
             }
             Err(MailboxError::Provider(error)) => {
+                let delay = retry_seconds(&error);
+                let error = MailboxError::from(error);
                 self.repo
-                    .release_stream(&lease, retry_seconds(&error))
-                    .await?;
-                return Err(error.into());
+                    .release_stream(lease, delay)
+                    .await
+                    .inspect_err(|release| {
+                        record_failed(&span, lease.mailbox.link_id, release);
+                    })?;
+                record_deferred(&span, lease.mailbox.link_id, &error, delay);
+                return Err(error);
             }
-            Err(error) => return Err(error),
+            Err(error) => Err(error),
+        };
+        match result {
+            Ok(import_completed) => {
+                record_done(&span, "imported");
+                if let Some(completed) = import_completed {
+                    self.report_import_completed(&completed).await;
+                }
+                Ok(true)
+            }
+            Err(error) => {
+                record_failed(&span, lease.mailbox.link_id, &error);
+                Err(error)
+            }
         }
-        Ok(true)
     }
 
     pub async fn reconcile_once(&self) -> Result<bool, MailboxError> {
         let Some(lease) = self
             .repo
             .claim_message(macro_uuid::generate_uuid_v7())
-            .await?
+            .await
+            .map_err(|error| claim_failed("reconcile", error))?
         else {
             return Ok(false);
         };
+        let span = tracing::info_span!(
+            "outlook.sync.reconcile",
+            mailbox.link_id = %lease.mailbox.link_id,
+            mailbox.sync_generation = lease.mailbox.sync_generation,
+            outlook.is_import = lease.is_import,
+            outlook.attempts = lease.attempts,
+            outlook.graph_calls = tracing::field::Empty,
+            outlook.attachments = tracing::field::Empty,
+            outlook.db_write_ms = tracing::field::Empty,
+            outlook.outcome = tracing::field::Empty,
+            outlook.defer_reason = tracing::field::Empty,
+            outlook.defer_seconds = tracing::field::Empty,
+            otel.status_description = tracing::field::Empty,
+        );
+        self.reconcile(&lease).instrument(span).await
+    }
+
+    async fn reconcile(&self, lease: &MessageLease) -> Result<bool, MailboxError> {
+        let span = Span::current();
         let operation = async {
             let folders = self.repo.folders(lease.mailbox).await?;
-            match self
-                .provider
-                .message(lease.mailbox, &lease.provider_id, &folders)
-                .await?
-            {
-                Some(snapshot) => self.ingest.ingest(&lease, snapshot).await?,
-                None if lease.attempts < 3 => {
-                    return Err(EmailApiError::Transient {
-                        message: "mailbox message location has not settled".into(),
-                    }
-                    .into());
+            let (snapshot, graph_calls) = email_api_client::domain::request_count::counted(
+                self.provider
+                    .message(lease.mailbox, &lease.provider_id, &folders),
+            )
+            .await;
+            span.record("outlook.graph_calls", i64::from(graph_calls));
+            let started = Instant::now();
+            let outcome = match snapshot? {
+                Some(snapshot) => {
+                    span.record(
+                        "outlook.attachments",
+                        span_int(snapshot.content.message.attachments.len()),
+                    );
+                    self.ingest.ingest(lease, snapshot).await?;
+                    "imported"
                 }
-                None => self.ingest.absent(&lease).await?,
-            }
-            self.repo.complete_message(&lease).await
-        };
-        let result =
-            maintain_lease(operation, || self.repo.renew(SyncLease::Message(&lease))).await;
-        if let Err(error) = &result {
-            let delay = match error {
-                MailboxError::Provider(error) => retry_seconds(error),
-                _ => 30,
+                None if lease.attempts < 3 => return Err(MailboxError::LocationUnsettled),
+                None => {
+                    self.ingest.absent(lease).await?;
+                    "absent"
+                }
             };
-            self.repo.release_message(&lease, delay).await?;
+            let import_completed = self.repo.complete_message(lease).await?;
+            span.record("outlook.db_write_ms", elapsed_ms(started));
+            Ok((outcome, import_completed))
+        };
+        let result = maintain_lease(operation, || self.repo.renew(SyncLease::Message(lease))).await;
+        let error = match result {
+            Ok((outcome, import_completed)) => {
+                record_done(&span, outcome);
+                if outcome == "imported" {
+                    self.imports
+                        .record(lease.mailbox.link_id, chrono::Utc::now());
+                }
+                if let Some(completed) = import_completed {
+                    self.report_import_completed(&completed).await;
+                }
+                return Ok(true);
+            }
+            Err(error) => error,
+        };
+        let delay = match &error {
+            MailboxError::Provider(error) => retry_seconds(error),
+            _ => 30,
+        };
+        self.repo
+            .release_message(lease, delay)
+            .await
+            .inspect_err(|release| {
+                record_failed(&span, lease.mailbox.link_id, release);
+            })?;
+        if matches!(error, MailboxError::Stale) {
+            record_failed(&span, lease.mailbox.link_id, &error);
+        } else {
+            record_deferred(&span, lease.mailbox.link_id, &error, delay);
         }
-        result.map(|()| true)
+        Err(error)
+    }
+
+    async fn report_import_completed(&self, completed: &ImportCompleted) {
+        let graph_calls = self.provider.admitted_requests(completed.mailbox).await;
+        progress::log_import_completed(completed, graph_calls);
     }
 }
 

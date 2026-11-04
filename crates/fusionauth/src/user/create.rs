@@ -14,6 +14,9 @@ pub struct User<'a> {
     pub password: Cow<'a, str>,
     /// The username of the user.
     pub username: Option<Cow<'a, str>>,
+    /// Metadata FusionAuth stores on the user and repeats in its webhooks.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub data: Option<serde_json::Value>,
 }
 
 #[derive(serde::Serialize, serde::Deserialize, Debug)]

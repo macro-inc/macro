@@ -55,10 +55,9 @@ import {
   Show,
   startTransition,
 } from 'solid-js';
-import type { VirtualizerHandle } from 'virtua/solid';
 import { useChannelsView } from '../../channels-view-context';
 import {
-  canLabelChannel,
+  canAssignChannel,
   filterChannelLabelMembers,
 } from '../../core/channel-label-eligibility';
 import { resolveChannelLabelMemberships } from '../../core/smart-tags';
@@ -143,6 +142,7 @@ export function ChannelsRail(props: ChannelsRailProps) {
     setSelectedChannel,
     setSortBy,
     setSectionPreferences,
+    setSectionOrder,
     setTab,
     tab,
     threadsEnabled,
@@ -247,10 +247,16 @@ export function ChannelsRail(props: ChannelsRailProps) {
       reportActivationError(new Error('Missing channel id'));
       return;
     }
+    // A split opens at the row's target or at latest, so nothing it needs
+    // depends on notifications. The open hydrates them to mark the read.
+    if (openInNewSplit) {
+      fireAndForget(selectChannel(channel, channelId, true), 'channels-view');
+      return;
+    }
     // A different channel owns its loading UI and notification hydration.
     // Select it before fetching so the rail and destination respond to the
     // click immediately. Re-clicks still refresh and re-aim the open channel.
-    if (!openInNewSplit && selectedChannel()?.id !== channelId) {
+    if (selectedChannel()?.id !== channelId) {
       setSelectedChannel(
         channelPreviewSelection(channelId, {
           target: channel.target
@@ -268,12 +274,12 @@ export function ChannelsRail(props: ChannelsRailProps) {
     // instances of that constructor. Detect the pending edge structurally.
     if ('then' in selection) {
       fireAndForget(
-        selectHydratedChannel(selection, request, channelId, openInNewSplit),
+        selectHydratedChannel(selection, request, channelId, false),
         'channels-view'
       );
     } else {
       fireAndForget(
-        selectChannel(selection, channelId, openInNewSplit),
+        selectChannel(selection, channelId, false),
         'channels-view'
       );
     }
@@ -289,7 +295,7 @@ export function ChannelsRail(props: ChannelsRailProps) {
 
   const [listRoot, setListRoot] = createSignal<HTMLDivElement>();
   const [virtualizers, setVirtualizers] = createSignal<
-    Partial<Record<ChannelsSourceScope, VirtualizerHandle>>
+    Partial<Record<ChannelsSourceScope, ListScrollHandle>>
   >({});
   const [browseScrollHandle, setBrowseScrollHandle] =
     createSignal<ListScrollHandle>();
@@ -373,6 +379,12 @@ export function ChannelsRail(props: ChannelsRailProps) {
     Boolean(labelsQuery.data) &&
     (!sectionsEnabled() ||
       (!personalLabelsQuery.isPending && Boolean(personalLabelsQuery.data)));
+  const labelsFailed = () =>
+    channelTagsEnabled() &&
+    !labelsAvailable() &&
+    !labelsQuery.isPending &&
+    (!sectionsEnabled() || !personalLabelsQuery.isPending) &&
+    (labelsQuery.isError || (sectionsEnabled() && personalLabelsQuery.isError));
   const labelsUnavailableReason = () => {
     if (labelsAvailable()) return '';
     if (
@@ -537,6 +549,7 @@ export function ChannelsRail(props: ChannelsRailProps) {
       channelSectionRows(),
       {
         preferences: state.sectionPreferences,
+        order: state.sectionOrder,
         channelById,
         unreadChannelIds: channelActivity.unreadChannelIds(),
         referenceStatuses: referenceStatuses(),
@@ -1023,6 +1036,7 @@ export function ChannelsRail(props: ChannelsRailProps) {
     renameLabel,
     deleteLabel,
     setChannelLabel,
+    addChannelsToLabel,
     markLabelRead,
     canLabelChannelId,
     labelChannelById,
@@ -1099,7 +1113,10 @@ export function ChannelsRail(props: ChannelsRailProps) {
       const labelId = drop.target.labelId;
       const label = labels().find((label) => label.id === labelId);
 
-      if (!label || !canLabelChannel(labelChannelById(drag.channelId), label)) {
+      if (
+        !label ||
+        !canAssignChannel(labelChannelById(drag.channelId), label)
+      ) {
         return undefined;
       }
     }
@@ -1191,7 +1208,7 @@ export function ChannelsRail(props: ChannelsRailProps) {
 
   const registerVirtualizer = (
     scope: ChannelsSourceScope,
-    handle: VirtualizerHandle
+    handle: ListScrollHandle
   ) => {
     setVirtualizers((current) => ({ ...current, [scope]: handle }));
 
@@ -1224,12 +1241,12 @@ export function ChannelsRail(props: ChannelsRailProps) {
     labels,
     labelsAvailable,
     labelsUnavailableReason,
+    labelsFailed,
     retryLabels: async () => {
-      await labelsQuery.refetch();
-
-      if (sectionsEnabled()) {
-        await personalLabelsQuery.refetch();
-      }
+      await Promise.all([
+        labelsQuery.refetch(),
+        ...(sectionsEnabled() ? [personalLabelsQuery.refetch()] : []),
+      ]);
     },
     retryReferencedChannels: nextReferencedChannels.retry,
     isLabelOpen,
@@ -1240,6 +1257,7 @@ export function ChannelsRail(props: ChannelsRailProps) {
     createSmartTag,
     editSmartTag: renameLabel,
     canShareSections: () => sharedLabels(),
+    addChannelsToLabel,
     renameLabel,
     deleteLabel,
     setChannelLabel,
@@ -1250,6 +1268,8 @@ export function ChannelsRail(props: ChannelsRailProps) {
     sectionNotificationsDisabled,
     sortBy: (group) => state.sortBy[group],
     setSortBy,
+    sectionOrder: () => state.sectionOrder,
+    setSectionOrder,
     sectionPreferences: (section) => {
       let sort: ChannelSectionPreferences['sort'];
 

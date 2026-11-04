@@ -75,10 +75,25 @@ export function EmailRowActions(props: {
   onArchive: () => void;
   onCommands: () => void;
   onFocus: () => void;
+  restore?: { label: string; run: () => void };
 }) {
   return (
     <EmailActionGroup onFocus={props.onFocus}>
-      <Show when={!props.archived || props.canUnarchive}>
+      <Show when={props.restore}>
+        {(restore) => (
+          <Button
+            aria-label={restore().label}
+            tooltip={{ content: restore().label }}
+            variant="ghost"
+            size="icon-sm"
+            disabled={props.pending}
+            onClick={() => restore().run()}
+          >
+            <ArrowCounterClockwiseIcon class="size-4" />
+          </Button>
+        )}
+      </Show>
+      <Show when={!props.restore && (!props.archived || props.canUnarchive)}>
         <Button
           aria-label={props.archived ? 'Unarchive email' : 'Archive email'}
           tooltip={{

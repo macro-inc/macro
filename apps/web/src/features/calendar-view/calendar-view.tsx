@@ -9,6 +9,7 @@ import {
   useNavigate,
   useParams,
 } from '@app/lib/split-router';
+import { usePending } from '@app/observability/flow';
 import { useGlobalNotificationSource } from '@components/app/GlobalAppState';
 import { useSplitPanelOrThrow } from '@components/app/split-layout/layoutUtils';
 import { useUserId } from '@core/context/user';
@@ -180,6 +181,7 @@ export function CalendarView(props: CalendarViewProps) {
       };
     }
   );
+  usePending('calendar.target', () => occurrencesQuery.isLoading);
   const focusTarget = createCalendarFocusTarget(
     targetRequest,
     occurrencesQuery

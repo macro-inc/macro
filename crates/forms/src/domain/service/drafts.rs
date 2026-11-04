@@ -16,7 +16,9 @@ use crate::domain::drafts::{
 use crate::domain::models::{
     Audience, Form, FormError, FormLayout, LayoutProblem, LayoutReplacement,
 };
-use crate::domain::ports::{Clock, FormAccessDirectory, FormEventPublisher, FormsRepo};
+use crate::domain::ports::{
+    Clock, FormAccessDirectory, FormEventPublisher, FormImageFiles, FormsRepo,
+};
 
 /// The layout respondents can use and any current draft validation failure.
 pub(super) struct RefreshedLayout {
@@ -49,8 +51,8 @@ fn publication_problem(error: FormError) -> FormPublicationProblem {
     }
 }
 
-impl<Repository, Databases, Access, Events, Now, Broker, Drafts>
-    FormsServiceImpl<Repository, Databases, Access, Events, Now, Broker, Drafts>
+impl<Repository, Databases, Access, Events, Now, Broker, Drafts, Images>
+    FormsServiceImpl<Repository, Databases, Access, Events, Now, Broker, Drafts, Images>
 where
     Repository: FormsRepo + FormDraftRepository,
     Databases: DatabasesService + DatabaseRowReads + DatabaseMetadataReads,
@@ -59,6 +61,7 @@ where
     Now: Clock,
     Broker: MacroEventBroker,
     Drafts: FormDraftStore,
+    Images: FormImageFiles,
 {
     pub(super) async fn ensure_draft(&self, form: &Form) -> Result<(), FormError> {
         let state = self

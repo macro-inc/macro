@@ -25,6 +25,11 @@ enum RepoCall {
         label_id: Uuid,
         name: String,
     },
+    Transfer {
+        source: ChannelLabelsScope,
+        target: ChannelLabelsScope,
+        label_id: Uuid,
+    },
     Delete {
         label_id: Uuid,
     },
@@ -143,6 +148,28 @@ impl ChannelLabelsRepo for FakeRepo {
         });
         Ok(self.rename_outcome.clone().unwrap_or_else(|| {
             LabelWriteOutcome::Written(label(scope.team_id().unwrap_or_default(), name))
+        }))
+    }
+
+    async fn transfer_label(
+        &self,
+        source: &ChannelLabelsScope,
+        target: &ChannelLabelsScope,
+        label_id: Uuid,
+        name: &str,
+        _viewer: &MacroUserIdStr<'_>,
+        _rule: Option<&ChannelLabelRule>,
+    ) -> Result<LabelWriteOutcome, Self::Err> {
+        self.record(RepoCall::Transfer {
+            source: source.clone(),
+            target: target.clone(),
+            label_id,
+        });
+        Ok(self.rename_outcome.clone().unwrap_or_else(|| {
+            let mut result = label(target.team_id().unwrap_or_default(), name);
+            result.id = label_id;
+            result.team_id = target.team_id();
+            LabelWriteOutcome::Written(result)
         }))
     }
 
@@ -587,4 +614,41 @@ fn explicit_scope_requires_verified_team_membership() {
     )
     .unwrap();
     assert!(matches!(personal.scope(), ChannelLabelsScope::User(id) if id == &actor));
+}
+
+#[tokio::test]
+async fn scope_transfer_uses_one_atomic_repo_call_and_checks_actor() {
+    let (team_id, source) = receipt();
+    let actor = MacroUserIdStr::try_from(USER_ID.to_owned()).unwrap();
+    let target = ChannelLabelsReceipt::from_access(actor, None, None).unwrap();
+    let label_id = Uuid::now_v7();
+    let repo = FakeRepo::default();
+    let service = ChannelLabelsServiceImpl::new(repo.clone());
+    let moved = service
+        .update_label(&source, Some(&target), label_id, " Private ".into(), None)
+        .await
+        .unwrap();
+    assert_eq!(moved.id, label_id);
+    assert_eq!(moved.team_id, None);
+    assert_eq!(
+        repo.calls(),
+        vec![RepoCall::Transfer {
+            source: ChannelLabelsScope::Team(team_id),
+            target: target.scope().clone(),
+            label_id,
+        }]
+    );
+    let other = ChannelLabelsReceipt::from_access(
+        MacroUserIdStr::try_from("macro|other@macro.com".to_owned()).unwrap(),
+        None,
+        None,
+    )
+    .unwrap();
+    assert!(matches!(
+        service
+            .update_label(&source, Some(&other), label_id, "Private".into(), None)
+            .await,
+        Err(ChannelLabelsError::Unauthorized)
+    ));
+    assert_eq!(repo.calls().len(), 1);
 }

@@ -40,6 +40,7 @@ vi.mock('@core/constant/featureFlags', () => ({
   isFeatureEnabled: () => true,
 }));
 vi.mock('@macro-inc/observability', () => ({
+  NOOP_SPAN: {},
   Telemetry: { error: vi.fn() },
 }));
 vi.mock('@service-storage/graphql-soup', () => ({

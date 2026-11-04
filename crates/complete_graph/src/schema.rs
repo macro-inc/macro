@@ -727,6 +727,18 @@ where
         async_graphql::ID(self.user_id.to_string())
     }
 
+    /// A page filtered and ordered across the entire authorized table.
+    async fn database_view_rows(
+        &self,
+        ctx: &Context<'_>,
+        database_id: ID,
+        input: graphql_databases::DatabaseViewRowsInput,
+    ) -> async_graphql::Result<
+        graphql_databases::DatabaseViewRowsPage<SoupEdges<NR, PR, ER, FR, AR, AcR>>,
+    > {
+        graphql_databases::resolve_database_view_rows(ctx, database_id, input).await
+    }
+
     /// One initiative accessible to the authenticated viewer.
     async fn initiative(
         &self,
@@ -926,10 +938,10 @@ where
         .await
     }
 
-    /// The viewer's Focus: signal threads in their own inboxes worth their
-    /// attention, highest priority first (importance, halved for every 2 days
-    /// since the latest inbound mail), with mail in the last `days` days
-    /// (default 30, at most 90). Each thread's `focus` field explains why.
+    /// The viewer's Focus: threads in their own inboxes worth their attention,
+    /// newest first by latest message time in either direction, with mail in
+    /// the last `days` days (default 30, at most 90). Each thread carries a
+    /// `focus` field that explains why.
     async fn email_focus(
         &self,
         ctx: &Context<'_>,

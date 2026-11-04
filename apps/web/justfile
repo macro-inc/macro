@@ -220,6 +220,17 @@ test-signup-browser *ARGS:
 test-i18n-browser *ARGS:
     env -u LD_LIBRARY_PATH bunx playwright test --config src/lib/i18n/browser-test/playwright.config.ts {{ARGS}}
 
+# Database grid layout under remote presence, in Chromium. Same
+# LD_LIBRARY_PATH caveat as the sign-up browser tests above.
+test-database-browser *ARGS:
+    env -u LD_LIBRARY_PATH bunx playwright test --config src/features/database/browser-test/playwright.config.ts {{ARGS}}
+
+# Event details placement and guest editors on desktop and phone, in Chromium
+# over preview adapters. Same LD_LIBRARY_PATH caveat as the sign-up browser
+# tests above.
+test-calendar-details-browser *ARGS:
+    env -u LD_LIBRARY_PATH bunx playwright test --config src/features/calendar-view/browser-test/playwright.config.ts {{ARGS}}
+
 # Optimistic mutations through the real worker/WASM cache in Chromium. Same
 # LD_LIBRARY_PATH caveat as the sign-up browser tests above.
 test-functional *ARGS:
@@ -459,6 +470,23 @@ ensure-ai-engine-wasm:
 gen-agent-fold-types:
     cargo run -p agent_fold --bin export_types
     bunx biome format --write {{justfile_directory()}}/src/lib/service-clients/service-agent-fold/generated/types.ts
+
+# Regenerate src/lib/service-clients/service-agent-reviews/generated/types.ts
+# (and the SDK's packages/sdk/generated/agent-reviews/index.ts) from
+# agent_code_mode's review types with specta. Run after changing a review type
+# or a type a review draft or result reuses (SendEmail, CreateCalendarEvent,
+# their responses, the import report); biome reformats specta's output for the
+# same reason as gen-agent-fold-types.
+gen-agent-review-types:
+    SQLX_OFFLINE=true cargo run -p agent_code_mode --bin export_review_types
+    bunx biome format --write {{justfile_directory()}}/src/lib/service-clients/service-agent-reviews/generated/types.ts
+
+# Regenerate the dynamic-UI view types (src/features/dynamic-ui/generated/types.ts
+# and lexical-core's copy) from `crates/dynamic_ui` with specta. Run after
+# changing a widget; biome reformats specta's output as in gen-agent-fold-types.
+gen-dynamic-ui-types:
+    cargo run -p dynamic_ui --features cli --bin export_view_types
+    bunx biome format --write {{justfile_directory()}}/src/features/dynamic-ui/generated/types.ts {{justfile_directory()}}/../../packages/lexical-core/generated/dynamic-ui.ts
 
 # Regenerate src/lib/core/database-sql/generated/types.ts from the
 # database_sql engine's wire types with specta. Run after changing any type

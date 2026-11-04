@@ -164,7 +164,7 @@ test('every prod monitor is graphed on its dashboard with its thresholds', () =>
   const prod = monitors().filter((r) =>
     r.inputs.message.includes('Runbook: https://github.com/macro-inc/macro/')
   );
-  expect(prod).toHaveLength(25);
+  expect(prod).toHaveLength(31);
   for (const monitor of prod) {
     const linked = monitor.inputs.message.match(
       /Dashboard: https:\/\/us5\.datadoghq\.com\/dashboard\/([\w-]+)\//
@@ -177,11 +177,17 @@ test('every prod monitor is graphed on its dashboard with its thresholds', () =>
           group.groupDefinition.widgets
       )
       .find(
-        (widget: { timeseriesDefinition: { title: string } }) =>
-          widget.timeseriesDefinition.title === title
+        (widget: { timeseriesDefinition?: { title: string } }) =>
+          widget.timeseriesDefinition?.title === title
       );
     const { critical, warning } = monitor.inputs.monitorThresholds;
     const anomaly = monitor.inputs.query.includes('anomalies(');
+    // The long-running transaction monitor reads DBM query samples so the
+    // notification can include the SQL. Its graph still plots xact_start_age.
+    const graphThresholds =
+      monitor.name === 'macrodb-long-transactions'
+        ? { critical: '1800', warning: '600' }
+        : { critical, warning };
     expect({
       name: monitor.name,
       markers: graph?.timeseriesDefinition.markers.map(
@@ -191,7 +197,21 @@ test('every prod monitor is graphed on its dashboard with its thresholds', () =>
       name: monitor.name,
       markers: anomaly
         ? []
-        : [`y = ${critical}`, ...(warning ? [`y = ${warning}`] : [])],
+        : [
+            `y = ${graphThresholds.critical}`,
+            ...(graphThresholds.warning
+              ? [`y = ${graphThresholds.warning}`]
+              : []),
+          ],
     });
   }
+});
+
+test('the long-running transaction alert names the SQL', () => {
+  const monitor = monitors().find(
+    (r) => r.name === 'macrodb-long-transactions'
+  );
+  expect(monitor?.inputs.type).toBe('database-monitoring alert');
+  expect(monitor?.inputs.query).toContain('by("host,@db.statement")');
+  expect(monitor?.inputs.message).toContain('{{[@db.statement].name}}');
 });

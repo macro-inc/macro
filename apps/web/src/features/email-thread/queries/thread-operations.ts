@@ -1,5 +1,7 @@
+import { fireAndForget } from '@core/util/fireAndForget';
 import { thrownResultErrorHasCode, throwOnErr } from '@core/util/result';
 import { refreshEmailThreadCache } from '@queries/email/cache-cleanup';
+import { invalidateEmailFolderQueries } from '@queries/email/folder-cache';
 import { emailKeys } from '@queries/email/keys';
 import { emailClient } from '@service-email/client';
 import type { MailboxOperation } from '@service-email/generated/schemas';
@@ -36,8 +38,10 @@ function threadOperationsQueryOptions(threadId: string, enabled: boolean) {
       const operations = await throwOnErr(() =>
         emailClient.threadOperations(threadId)
       );
-      if (wasPending && !hasPending(operations))
-        void refreshEmailThreadCache(threadId).catch(() => {});
+      if (wasPending && !hasPending(operations)) {
+        fireAndForget(refreshEmailThreadCache(threadId), 'email-operations');
+        fireAndForget(invalidateEmailFolderQueries(), 'email-operations');
+      }
       return operations;
     },
     refetchInterval: operationsPollInterval,

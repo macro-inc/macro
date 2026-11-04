@@ -1,5 +1,18 @@
 export default {
+  crmVisibility: 'Visibility',
+  crmVisible: 'Visible',
+  crmArchived: 'Archived',
+  crmArchive: 'Archive',
+  crmRestore: 'Restore',
   // View tabs
+  favorites: 'Favorites',
+  scheduled: 'Scheduled',
+  reminders: 'Reminders',
+  archived: 'Archived',
+  spam: 'Spam',
+  trash: 'Trash',
+  inbox: 'Inbox',
+  library: 'Library',
   signal: 'Signal',
   noise: 'Noise',
   all: 'All',
@@ -49,6 +62,14 @@ export default {
   priority: 'Priority',
   priorities: 'Priorities',
   assignee: 'Assignee',
+
+  // People display options
+  peopleDisplayOptions: 'People display options',
+  showRemovedPeople: 'Show removed people',
+  removedPeople: 'Removed people',
+  removedPeopleDescription:
+    'Removed people in this team. Open a person and use Restore. People in hidden companies stay removed until their company is restored.',
+  showActivePeople: 'Show active people',
 
   // List controls
   layout: 'Layout',

@@ -29,24 +29,35 @@ fn make_colleague_joined() -> ColleagueJoinedMacro {
     }
 }
 
+const COLLEAGUE_SUBJECT: &str = "A team has been created for your organization";
+
 #[test]
-fn colleague_joined_names_the_colleague_and_links_to_signup() {
+fn colleague_joined_is_an_organization_notice_that_links_to_signup() {
     let email = make_colleague_joined().format_email();
-    assert_eq!(email.subject, "Alice Example joined Macro");
+    assert_eq!(email.subject, COLLEAGUE_SUBJECT);
     assert!(
         email
             .body
-            .contains("Alice Example (alice@acme.com) joined Macro with the")
+            .contains("Alice Example (alice@acme.com) set up the")
     );
-    assert!(email.body.contains("<strong>Acme</strong> team."));
+    assert!(email.body.contains("<strong>Acme</strong> team on Macro"));
     assert!(
         email
             .body
             .contains("Sign up with <strong>bob@acme.com</strong>")
     );
+    assert!(email.body.contains("one-time notice"));
+    assert!(
+        email
+            .body
+            .contains("href=\"macro-unsubscribe:colleague_joined_macro\"")
+    );
+    assert!(email.body.contains("54 W 21st St, Suite 503, New York, NY"));
     assert!(email.body.contains("/app/signup\""));
     assert!(email.body.contains(">Join Acme</a"));
     assert!(!email.body.contains("referral_code"));
+    // The notice is not framed as someone signing up.
+    assert!(!email.body.contains("joined Macro"));
 }
 
 #[test]
@@ -57,8 +68,8 @@ fn colleague_joined_falls_back_to_the_email_without_a_usable_name() {
             ..make_colleague_joined()
         }
         .format_email();
-        assert_eq!(email.subject, "alice@acme.com joined Macro");
-        assert!(email.body.contains("alice@acme.com joined Macro with the"));
+        assert_eq!(email.subject, COLLEAGUE_SUBJECT);
+        assert!(email.body.contains("alice@acme.com set up the"));
         assert!(!email.body.contains("(alice@acme.com)"));
     }
 }
@@ -70,10 +81,11 @@ fn colleague_joined_puts_long_multiline_names_on_one_capped_line() {
         ..make_colleague_joined()
     }
     .format_email();
-    assert_eq!(
-        email.subject,
-        format!("Alice Example {} joined Macro", "x".repeat(50))
-    );
+    assert_eq!(email.subject, COLLEAGUE_SUBJECT);
+    assert!(email.body.contains(&format!(
+        "Alice Example {} (alice@acme.com)",
+        "x".repeat(50)
+    )));
 }
 
 #[test]
@@ -83,7 +95,7 @@ fn colleague_joined_escapes_the_untrusted_name_in_the_body() {
         ..make_colleague_joined()
     }
     .format_email();
-    assert_eq!(email.subject, "<b>x</b> joined Macro");
+    assert_eq!(email.subject, COLLEAGUE_SUBJECT);
     assert!(!email.body.contains("<b>x</b>"));
     assert!(
         email
@@ -120,6 +132,7 @@ fn team_invite_rate_limit_key_is_per_invite() {
         sender_profile_picture_url: None,
         invitee_plan: InviteePlan::Free,
         reminder: false,
+        is_agent: false,
     };
     let to_carol = InviteToTeamMetadata {
         team_invite_id: Uuid::from_u128(11),
@@ -308,6 +321,7 @@ fn invitation_logos_keep_the_png_aspect_ratio() {
         sender_profile_picture_url: None,
         invitee_plan: InviteePlan::Free,
         reminder: false,
+        is_agent: false,
     };
     for email in [
         make_invite().format_email(),
@@ -465,6 +479,7 @@ fn make_team_invite(invitee_plan: InviteePlan) -> InviteToTeamMetadata {
         sender_profile_picture_url: None,
         invitee_plan,
         reminder: false,
+        is_agent: false,
     }
 }
 
@@ -524,6 +539,19 @@ fn team_invite_links_the_button_and_a_pasteable_fallback() {
 }
 
 #[test]
+fn agent_team_invite_links_to_the_agent_signup_page() {
+    let invite = InviteToTeamMetadata {
+        is_agent: true,
+        ..make_team_invite(InviteePlan::Free)
+    };
+    let url = invite.invite_url().to_string();
+    let body = invite.format_email().body;
+
+    assert!(url.ends_with("/app/signup/agent?team_invite=00000000-0000-0000-0000-00000000000a"));
+    assert_eq!(body.matches(&url).count(), 3);
+}
+
+#[test]
 fn team_invite_escapes_the_team_name() {
     let invite = InviteToTeamMetadata {
         team_name: "<script>alert(1)</script>".to_string(),
@@ -575,6 +603,7 @@ fn team_invite_sent_before_plans_were_recorded_reads_as_free() {
 fn team_invite_reminder_says_so_in_the_subject() {
     let reminder = InviteToTeamMetadata {
         reminder: true,
+        is_agent: false,
         ..make_team_invite(InviteePlan::Free)
     };
     assert_eq!(

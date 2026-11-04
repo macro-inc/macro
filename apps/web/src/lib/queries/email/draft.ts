@@ -1,7 +1,7 @@
 import { DraftTransferAborted } from '@app/features/email-compose/context/compose-capabilities';
 import { fireAndForget } from '@core/util/fireAndForget';
 import { throwOnErr } from '@core/util/result';
-import { Telemetry } from '@macro-inc/observability';
+import { type Span, Telemetry } from '@macro-inc/observability';
 import { invalidateAllSoup, refetchSoupEntity } from '@queries/soup/cache';
 import { emailClient } from '@service-email/client';
 import type {
@@ -188,7 +188,7 @@ export function transferEmailDraft(input: {
     fireAndForget(
       span.span('email.draft_transfer.refresh', async (refresh) => {
         try {
-          await refreshTransferredThreads(result);
+          await refreshTransferredThreads(result, refresh);
         } catch (error) {
           refresh.error('Draft transfer refresh failed');
           throw error;
@@ -200,18 +200,23 @@ export function transferEmailDraft(input: {
   });
 }
 
-async function refreshTransferredThreads(result: TransferDraftResponse) {
+async function refreshTransferredThreads(
+  result: TransferDraftResponse,
+  parent: Span
+) {
   await getGraphqlCacheHost()?.deleteRecords([
     `GraphqlSoupEmailMessage:${result.source_id}`,
   ]);
   await Promise.all([
-    refreshEmailThreadCache(result.source_thread_id),
-    refreshEmailThreadCache(result.thread_id),
+    parent.run(() => refreshEmailThreadCache(result.source_thread_id)),
+    parent.run(() => refreshEmailThreadCache(result.thread_id)),
   ]);
   for (const threadId of [result.source_thread_id, result.thread_id]) {
-    await queryClient.invalidateQueries({
-      queryKey: emailKeys.threadMessages(threadId).queryKey,
-    });
+    await parent.run(() =>
+      queryClient.invalidateQueries({
+        queryKey: emailKeys.threadMessages(threadId).queryKey,
+      })
+    );
   }
   invalidateAllSoup();
 }

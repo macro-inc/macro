@@ -35,6 +35,7 @@ function session() {
 function message(text: string): FoldedMessage {
   return {
     agentSessionId: 'session',
+    key: '0:agent',
     turn: 0,
     author: { kind: 'agent' },
     requestId: null,

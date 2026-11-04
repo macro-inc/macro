@@ -22,7 +22,8 @@ here.
 ## Boundaries
 
 - Depends on: `macro_user_id`, `macro_authorization` (feature `inbound`).
-- Used by: `services/document_storage_service`.
+- Used by: `services/document_storage_service`,
+  `services/authentication_service` (agent setup).
 
 ## Checks
 
