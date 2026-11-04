@@ -52,8 +52,10 @@ Pulumi stacks; they do not host extra agent processes.
   `routine_run_finished` notification to the owner
   (`src/scheduling/routine_run_notifications.rs`). AI drafts routines
   (`POST /scheduled-actions/drafts`) through `src/routine_drafts.rs`: the
-  free tier's model, thinking briefly, billed as automation usage. Routine
-  code steps run through `src/routine_code.rs`,
+  free tier's model, thinking briefly, billed as automation usage. The
+  SDK reference a draft reads (entity indexes, then the symbols the model
+  names with the types they name, breadth first within 48 KB) comes from
+  `src/routine_code.rs`. Routine code steps run through `src/routine_code.rs`,
   on routines' own Deno executor (own slots, CPU limit, lower priority) and
   type checker, with a token for the owner's access attributed to Macro
   acting for them, so a step's writes don't start routines.

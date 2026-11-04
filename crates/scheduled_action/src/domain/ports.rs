@@ -470,9 +470,11 @@ pub trait RoutineCode: Send + Sync + 'static {
 
     /// The SDK reference for `symbols`, named as [`Self::reference`]'s
     /// entity indexes name them, with the types those references name, for
-    /// whoever writes code that uses them. Empty when none is known.
-    fn symbol_references(&self, symbols: &[String]) -> String {
-        let _ = symbols;
+    /// whoever writes code that uses them: also the indexes of entities
+    /// they belong to that `shown` doesn't hold, and which names the SDK
+    /// doesn't have. Empty when there's nothing to say.
+    fn symbol_references(&self, symbols: &[String], shown: &str) -> String {
+        let _ = (symbols, shown);
         String::new()
     }
 
@@ -632,9 +634,9 @@ impl<Code: RoutineCode> RoutineCode for Option<Code> {
             .unwrap_or_default()
     }
 
-    fn symbol_references(&self, symbols: &[String]) -> String {
+    fn symbol_references(&self, symbols: &[String], shown: &str) -> String {
         self.as_ref()
-            .map(|code| code.symbol_references(symbols))
+            .map(|code| code.symbol_references(symbols, shown))
             .unwrap_or_default()
     }
 

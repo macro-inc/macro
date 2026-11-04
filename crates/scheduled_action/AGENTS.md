@@ -37,7 +37,11 @@ each run.
   boxes in the web editor). It admits the work as automation usage, writes
   through the `DraftModel` port (the harness's `routine_drafts.rs`), checks
   code steps together as saving does, and has the model fix failures up to
-  three times; what's left comes back on its step. The caller sends the
+  three times; what's left comes back on its step. Before writing code, the
+  model names the SDK symbols it will use from the entity indexes, and
+  `RoutineCode::symbol_references` adds their full reference (as code mode's
+  ReadCodeDocs reads it) and the types they name; without those, nearly
+  every first draft failed the type check. The caller sends the
   names and ids the model may use (`Workspace`); saving checks every id.
 - `src/domain/code_upgrade.rs`: before a run uses code checked against an
   older version (SDK or `StepContext`), it is checked again, and rewritten by

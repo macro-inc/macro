@@ -5,8 +5,8 @@
 //! operation and how it ended, never its arguments or results.
 
 use std::{
-    collections::{BTreeMap, HashMap},
-    sync::Arc,
+    collections::{BTreeMap, HashMap, VecDeque},
+    sync::{Arc, LazyLock},
     time::{Duration, Instant},
 };
 
@@ -346,13 +346,7 @@ impl<Credentials: RoutineCredentials> RoutineCode for SdkRoutineCode<Credentials
             .entities
             .iter()
             .filter_map(|entity| entity.index.as_deref())
-            .map(|index| {
-                index
-                    .lines()
-                    .filter(|line| !line.starts_with("Read any symbol below"))
-                    .collect::<Vec<_>>()
-                    .join("\n")
-            })
+            .map(drafter_index)
             .collect::<Vec<_>>()
             .join("\n\n");
         if reference.is_empty() {
@@ -370,8 +364,8 @@ impl<Credentials: RoutineCredentials> RoutineCode for SdkRoutineCode<Credentials
         declarations_for(problems)
     }
 
-    fn symbol_references(&self, symbols: &[String]) -> String {
-        symbol_references(symbols)
+    fn symbol_references(&self, symbols: &[String], shown: &str) -> String {
+        symbol_references(symbols, shown)
     }
 
     async fn rewrite(
@@ -444,24 +438,41 @@ fn declarations_for(problems: &[String]) -> String {
         .collect()
 }
 
-/// The SDK reference for `symbols`, as code mode's ReadCodeDocs reads them,
-/// then for the types their references name, once each, until the budget
-/// is spent; unknown names are skipped.
-fn symbol_references(symbols: &[String]) -> String {
-    let requested: Vec<&str> = symbols
+/// The SDK reference a draft's writer asked for by symbol: the indexes of the
+/// entities those symbols belong to that `shown` doesn't hold, each
+/// symbol's reference as code mode's ReadCodeDocs reads it, then the types
+/// those references name and the types those name, nearest first and once
+/// each, until the budget is spent; and the names the SDK doesn't have, so
+/// the writer doesn't use them.
+fn symbol_references(symbols: &[String], shown: &str) -> String {
+    let symbols: Vec<&str> = symbols.iter().map(|symbol| symbol.trim()).collect();
+    let (known, unknown): (Vec<&str>, Vec<&str>) = symbols
         .iter()
-        .map(|symbol| symbol.trim())
-        .filter(|symbol| symbol_reference(symbol).is_some())
-        .collect();
-    let named: Vec<&str> = requested
-        .iter()
-        .filter_map(|symbol| symbol_reference(symbol))
-        .flat_map(backticked)
-        .filter(|name| symbol_reference(name).is_some())
-        .collect();
-    let mut read: Vec<&str> = Vec::new();
+        .partition(|symbol| symbol_reference(symbol).is_some());
     let mut output = String::new();
-    for symbol in requested.into_iter().chain(named) {
+    // A class's entity lists what it has, which the writer may have guessed
+    // without seeing.
+    let mut indexes: Vec<&str> = Vec::new();
+    for symbol in &symbols {
+        let class = symbol.split('.').next().unwrap_or_default();
+        let Some(index) = entity_index(class) else {
+            continue;
+        };
+        if !indexes.contains(&index) && !shown.contains(index) {
+            indexes.push(index);
+        }
+    }
+    for index in indexes {
+        if output.len() + index.len() <= DRAFT_REFERENCE_BYTES {
+            output.push_str(index);
+            output.push_str("\n\n");
+        }
+    }
+    // Breadth first, nearest types first: a method's options and result
+    // types, then the types those name, such as a property value's union.
+    let mut queue: VecDeque<&str> = known.iter().copied().collect();
+    let mut read: Vec<&str> = Vec::new();
+    while let Some(symbol) = queue.pop_front() {
         let Some(reference) = symbol_reference(symbol) else {
             continue;
         };
@@ -471,8 +482,59 @@ fn symbol_references(symbols: &[String]) -> String {
         read.push(symbol);
         // A method's reference is headed by its name alone, without its class.
         output.push_str(&format!("## `{symbol}`\n{reference}\n\n"));
+        queue.extend(backticked(reference).filter(|name| !read.contains(name)));
+    }
+    let mut missing: Vec<&str> = Vec::new();
+    for symbol in unknown {
+        if !symbol.is_empty() && !missing.contains(&symbol) {
+            missing.push(symbol);
+        }
+    }
+    if !missing.is_empty() {
+        output.push_str(&format!(
+            "Macro's SDK has none of these; use what the indexes and references name instead: {}\n",
+            missing
+                .iter()
+                .map(|name| format!("`{name}`"))
+                .collect::<Vec<_>>()
+                .join(", ")
+        ));
     }
     output
+}
+
+/// The index of the SDK entity that declares `class`, as the drafter shows
+/// it: without code mode's pointer to ReadCodeDocs.
+fn entity_index(class: &str) -> Option<&'static str> {
+    static INDEXES: LazyLock<HashMap<String, String>> = LazyLock::new(|| {
+        let mut indexes = HashMap::new();
+        for entity in agent_code_mode::domain::sdk_documentation() {
+            let Some(index) = entity.index.as_deref() else {
+                continue;
+            };
+            let shown = drafter_index(index);
+            for line in index.lines() {
+                if let Some(class) = line
+                    .strip_prefix("### ")
+                    .and_then(|header| header.split_whitespace().next())
+                {
+                    indexes.insert(class.to_owned(), shown.clone());
+                }
+            }
+        }
+        indexes
+    });
+    INDEXES.get(class).map(String::as_str)
+}
+
+/// An entity index without code mode's pointer to the ReadCodeDocs tool,
+/// which the drafter doesn't have.
+fn drafter_index(index: &str) -> String {
+    index
+        .lines()
+        .filter(|line| !line.starts_with("Read any symbol below"))
+        .collect::<Vec<_>>()
+        .join("\n")
 }
 
 /// The names a reference writes in backticks, such as `SearchOpts`.

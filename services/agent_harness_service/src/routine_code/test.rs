@@ -676,18 +676,42 @@ export async function main({ macro, trigger, steps, run }: StepContext) {
 
 #[test]
 fn a_draft_reads_the_symbols_it_names_then_the_types_they_name() {
-    let reference = symbol_references(&[
-        "TaskNamespace.search".to_owned(),
-        "Nope.nothing".to_owned(),
-        "TaskNamespace.search".to_owned(),
-    ]);
+    let reference = symbol_references(
+        &[
+            "TaskNamespace.search".to_owned(),
+            "UserNamespace.list".to_owned(),
+            "TaskNamespace.search".to_owned(),
+        ],
+        "",
+    );
 
-    // A method's reference is headed by its full name, once.
-    assert!(reference.starts_with("## `TaskNamespace.search`\n"));
-    assert_eq!(reference.matches("## `TaskNamespace.search`").count(), 1);
-    // Its options type, which its reference names.
+    // Their entities' indexes, so the writer sees what `UserNamespace`
+    // really has.
+    assert!(reference.starts_with("## tasks\n"));
+    assert!(reference.contains("\n## users\n"));
+    assert!(reference.contains("`UserNamespace.search`"));
+    assert!(!reference.contains("ReadCodeDocs"));
+    // A method's reference is headed by its full name, once, and its options
+    // type, which the reference names, follows.
+    assert_eq!(reference.matches("## `TaskNamespace.search`\n").count(), 1);
     assert!(reference.contains("## `SearchOpts`\n"));
-    assert!(!reference.contains("Nope"));
-    assert!(reference.len() <= DRAFT_REFERENCE_BYTES + 64);
-    assert_eq!(symbol_references(&[]), "");
+
+    // A property value's union is two types away from the method that
+    // returns it.
+    let properties = symbol_references(&["PropertiedEntity.properties".to_owned()], "");
+    assert!(properties.contains("## `EntityPropertyWithDefinition`\n"));
+    assert!(properties.contains("## `properties.PropertyValue`\n"));
+    assert!(reference.ends_with(
+        "Macro's SDK has none of these; use what the indexes and references name instead: `UserNamespace.list`\n"
+    ));
+    assert!(reference.len() <= DRAFT_REFERENCE_BYTES + 256);
+    assert_eq!(symbol_references(&[], ""), "");
+}
+
+#[test]
+fn a_draft_is_not_shown_an_index_it_already_has() {
+    let users = entity_index("UserNamespace").unwrap();
+    let shown = format!("the guide\n{users}\n");
+    let reference = symbol_references(&["UserNamespace.search".to_owned()], &shown);
+    assert!(reference.starts_with("## `UserNamespace.search`\n"));
 }

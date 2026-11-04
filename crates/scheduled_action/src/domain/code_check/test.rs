@@ -67,7 +67,7 @@ impl RoutineCode for Checker {
         format!("declarations for {} problems", problems.len())
     }
 
-    fn symbol_references(&self, symbols: &[String]) -> String {
+    fn symbol_references(&self, symbols: &[String], _: &str) -> String {
         if symbols.is_empty() {
             String::new()
         } else {

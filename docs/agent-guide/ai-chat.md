@@ -833,8 +833,10 @@ off, Draft it, the add-step box and the built-in templates write Ask AI steps
 only, and code steps a routine already has still show, run and change. The
 scheduler drafts on the server (`POST /scheduled-actions/drafts`, one request
 while the button shows **Drafting…**): it reads the same code-step guide
-CreateRoutine does, plus SDK signatures relevant to the description and the
-starter routines as worked examples, then type-checks the routine's code steps
+CreateRoutine does, plus the SDK entities relevant to the description and the
+starter routines as worked examples; the model names the SDK symbols its code
+will use and reads their full reference before writing, then the scheduler
+type-checks the routine's code steps
 together (a step that misreads an earlier step's output fails) and asks the
 model to fix errors, three times at most. A step that still fails stays in the draft with its
 errors listed, and the routine can't be created until it is drafted again or
