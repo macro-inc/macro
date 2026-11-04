@@ -443,9 +443,11 @@ gcloud iam workload-identity-pools providers update-oidc macro \
 
 Update it before merging a change that adds or renames one of the admitted
 workflows: `workflow_run` workflows only run once they are on `main`, and the
-first run after the merge must be able to sign in. Then dispatch
-`android-release-watch.yml` on `main` and check that its **Authenticate to
-Google Play** step succeeds. See
+first run after the merge must be able to sign in. Google has no dry run
+for the condition, so check what it stored instead: the `attributeCondition`
+in `describe --format=json` must match `play-condition.cel`. The watcher
+signs in only while a PR carries `android-update`, so the first
+`Android Play Publish` run is the real test of the new alternative. See
 [GitHub's OIDC claims](https://docs.github.com/en/actions/reference/security/oidc)
 for the subject and ref each event carries.
 
