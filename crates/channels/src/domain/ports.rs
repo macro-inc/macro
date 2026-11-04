@@ -344,11 +344,17 @@ pub trait ChannelRepo: Send + Sync + 'static {
         req: PatchChannelRequest,
     ) -> impl Future<Output = Result<(), Self::Err>> + Send;
 
-    /// Delete a channel.
+    /// Whether the user is an admin or owner of this exact team.
+    fn user_is_team_admin<'a>(
+        &self,
+        user_id: &MacroUserIdStr<'a>,
+        team_id: Uuid,
+    ) -> impl Future<Output = Result<bool, Self::Err>> + Send;
+
+    /// Delete a channel after the domain service has authorized the caller.
     fn delete_channel(
         &self,
         channel_id: Uuid,
-        user_id: String,
     ) -> impl Future<Output = Result<(), Self::Err>> + Send;
 
     /// Atomically add or reactivate a participant, returning whether membership changed.

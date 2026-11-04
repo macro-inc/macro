@@ -330,7 +330,11 @@ export const useSearchResponseItemMapper = () => {
 };
 
 export const createSearchResponseItemMapper = (
-  channels: ReadonlyArray<{ id: string; name?: string | null }>
+  channels: ReadonlyArray<{
+    id: string;
+    name?: string | null;
+    team_id?: string | null;
+  }>
 ) => {
   return (
     result: UnifiedSearchResponseItem,
@@ -503,8 +507,11 @@ export const createSearchResponseItemMapper = (
           contentHitData: null,
           source: 'service',
         };
+        const channel = channels.find(
+          (channel) => channel.id === result.channel_id
+        );
         const channelName =
-          channels.find((channel) => channel.id === result.channel_id)?.name ??
+          channel?.name ??
           (search.nameHighlight
             ? extractSearchSnippet(search.nameHighlight)
             : blockNameToDefaultFile('channel'));
@@ -515,6 +522,7 @@ export const createSearchResponseItemMapper = (
             name: channelName,
             ownerId: result.owner_id ?? '',
             channelType: result.channel_type as ChannelType,
+            teamId: channel?.team_id ?? undefined,
             createdAt: result.metadata.created_at,
             updatedAt: result.metadata.updated_at,
             viewedAt: result.metadata.viewed_at,

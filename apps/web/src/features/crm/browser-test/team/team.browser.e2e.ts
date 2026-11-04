@@ -2,6 +2,7 @@ import { expect, type Page, test } from '@playwright/test';
 
 async function confirmVisibility(page: Page, label: string) {
   await page.getByRole('button', { name: label, exact: true }).click();
+  if (label === 'Restore') return;
   const dialog = page.getByRole('dialog');
   await expect(dialog).toBeInViewport({ ratio: 1 });
   await expect(dialog).not.toHaveAttribute('data-transitioning');
@@ -28,7 +29,7 @@ test('admin Team excludes removed rows and refreshes after navigating away to hi
   await page.screenshot({ path: info.outputPath('team-before.png') });
   await visible.click();
   await expect(page.getByRole('region', { name: 'Team' })).toHaveCount(0);
-  await confirmVisibility(page, 'Remove from CRM');
+  await confirmVisibility(page, 'Archive');
   await expect(page.getByRole('dialog')).toHaveCount(0);
   await expect(page.getByLabel('Contact identity')).toHaveText(
     'visible-contact / company-1'
@@ -39,7 +40,7 @@ test('admin Team excludes removed rows and refreshes after navigating away to hi
   await expect(page.getByLabel('Company reads')).toHaveText('2');
   await page.screenshot({ path: info.outputPath('team-removed.png') });
   await page.getByRole('button', { name: 'Open contact directly' }).click();
-  await confirmVisibility(page, 'Restore to CRM');
+  await confirmVisibility(page, 'Restore');
   await expect(page.getByRole('dialog')).toHaveCount(0);
   await page.getByRole('button', { name: 'Company Team', exact: true }).click();
   await expect(visible).toBeVisible();
@@ -57,30 +58,32 @@ test('mounted Team updates on hide and restore; rejected writes and member contr
   await page.getByRole('button', { name: 'Keep Team mounted' }).click();
   await page.getByRole('button', { name: /Visible person/ }).click();
   await page.getByRole('button', { name: 'Fail next write' }).click();
-  await confirmVisibility(page, 'Remove from CRM');
-  await expect(page.getByRole('alert', { includeHidden: true })).toHaveText(
-    'Could not update contact visibility'
-  );
+  await confirmVisibility(page, 'Archive');
+  await expect(
+    page
+      .getByRole('alert', { includeHidden: true })
+      .filter({ hasText: 'Could not update contact visibility' })
+  ).toHaveText('Could not update contact visibility');
   await expect(
     page.getByRole('button', { name: /Visible person/, includeHidden: true })
   ).toBeVisible();
   await expect(page.getByLabel('Successful writes')).toHaveText('0');
   await page
     .getByRole('dialog')
-    .getByRole('button', { name: 'Remove from CRM', exact: true })
+    .getByRole('button', { name: 'Archive', exact: true })
     .click();
   await expect(page.getByRole('dialog')).toHaveCount(0);
   await expect(
     page.getByRole('button', { name: /Visible person/ })
   ).toHaveCount(0);
-  await confirmVisibility(page, 'Restore to CRM');
+  await confirmVisibility(page, 'Restore');
   await expect(page.getByRole('dialog')).toHaveCount(0);
   await expect(
     page.getByRole('button', { name: /Visible person/ })
   ).toBeVisible();
   await page.getByRole('button', { name: 'Toggle member role' }).click();
   await expect(
-    page.getByRole('button', { name: 'Remove from CRM', exact: true })
+    page.getByRole('button', { name: 'Archive', exact: true })
   ).toBeDisabled();
   await page.getByRole('button', { name: 'Open removed directly' }).click();
   await expect(page.getByText('Contact unavailable')).toBeVisible();
@@ -90,12 +93,12 @@ test('unfiled contact keeps its identity through removal and restoration', async
   page,
 }) => {
   await page.getByRole('button', { name: 'Open unfiled directly' }).click();
-  await confirmVisibility(page, 'Remove from CRM');
+  await confirmVisibility(page, 'Archive');
   await expect(page.getByRole('dialog')).toHaveCount(0);
   await expect(page.getByLabel('Contact identity')).toHaveText(
     'unfiled-contact / unfiled'
   );
-  await confirmVisibility(page, 'Restore to CRM');
+  await confirmVisibility(page, 'Restore');
   await expect(page.getByRole('dialog')).toHaveCount(0);
   await expect(page.getByLabel('Contact identity')).toHaveText(
     'unfiled-contact / unfiled'

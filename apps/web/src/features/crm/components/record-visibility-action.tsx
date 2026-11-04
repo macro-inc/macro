@@ -1,8 +1,8 @@
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
-import EyeIcon from '@icon/system/regular/eye.svg';
-import EyeSlashIcon from '@icon/system/regular/eye-slash.svg';
+import ArchiveIcon from '@icon/system/regular/archive.svg';
+import UndoIcon from '@icon/system/regular/arrow-u-up-left.svg';
 import { Button, ButtonGroup, ConfirmDialog } from '@ui';
-import { createSignal, createUniqueId, Show } from 'solid-js';
+import { createSignal, createUniqueId, onCleanup, Show } from 'solid-js';
 import { Dynamic } from 'solid-js/web';
 
 type RecordVisibilityActionProps = {
@@ -14,10 +14,17 @@ type RecordVisibilityActionProps = {
   pending: boolean;
   iconOnly?: boolean;
   grouped?: boolean;
-  onChange: (hidden: boolean, onSuccess: () => void) => void;
+  parentArchived?: boolean;
+  parentPending?: boolean;
+  onOpenParent?: () => void;
+  onChange: (
+    hidden: boolean,
+    onSuccess: () => void,
+    onError: () => void
+  ) => void;
 };
 
-/** Removal uses the existing reversible, team-wide hidden state. */
+/** Archive uses the existing reversible, team-scoped hidden state. */
 export function RecordVisibilityAction(props: RecordVisibilityActionProps) {
   return (
     <Show when={props.recordId} keyed>
@@ -28,118 +35,177 @@ export function RecordVisibilityAction(props: RecordVisibilityActionProps) {
 
 function VisibilityControl(props: RecordVisibilityActionProps) {
   const [confirming, setConfirming] = createSignal(false);
+  const [failed, setFailed] = createSignal(false);
+  const [submitting, setSubmitting] = createSignal(false);
   const permissionHintId = createUniqueId();
   const permissionHint =
-    'Ask a team admin or owner to remove or restore this record.';
+    'Ask a team admin or owner to archive or restore this record.';
+  let alive = true;
   let button: HTMLButtonElement | undefined;
-  const label = () => (props.hidden ? 'Restore to CRM' : 'Remove from CRM');
-  const tooltip = () => {
-    if (!props.iconOnly) return;
-    return props.canManage ? label() : permissionHint;
+  onCleanup(() => {
+    alive = false;
+    if (!submitting() || (!confirming() && document.activeElement !== button))
+      return;
+    const id = props.recordId;
+    requestAnimationFrame(() =>
+      document
+        .querySelector<HTMLButtonElement>(
+          `[data-crm-visibility-record="${CSS.escape(id)}"]`
+        )
+        ?.focus()
+    );
+  });
+  const label = () => (props.hidden ? 'Restore' : 'Archive');
+  const pending = () => props.pending || submitting();
+  const submit = () => {
+    if (!props.canManage || pending() || props.parentPending) return;
+    if (props.hidden && props.parentArchived) return;
+    setFailed(false);
+    setSubmitting(true);
+    props.onChange(
+      !props.hidden,
+      () => {
+        if (!alive) return;
+        setSubmitting(false);
+        setConfirming(false);
+      },
+      () => {
+        if (!alive) return;
+        setSubmitting(false);
+        setFailed(true);
+      }
+    );
   };
-  const size = () => {
-    if (!props.iconOnly) return;
-    if (isTouchDevice()) return 'icon-lg';
-    return props.grouped ? 'icon-sm' : 'icon-md';
+  const activate = () => {
+    setFailed(false);
+    if (props.hidden && props.kind === 'contact' && !props.parentArchived) {
+      submit();
+    } else {
+      setConfirming(true);
+    }
   };
 
   return (
-    <div
-      class={props.iconOnly ? 'contents' : 'flex flex-col items-start gap-2'}
-    >
+    <>
       <Dynamic
         component={props.grouped ? ButtonGroup.Button : Button}
         ref={button}
-        variant={props.iconOnly ? 'ghost' : 'secondary'}
-        size={size()}
+        data-crm-visibility-record={props.recordId}
+        variant={props.hidden ? 'link' : 'ghost'}
+        size={
+          props.hidden
+            ? 'sm'
+            : isTouchDevice()
+              ? 'icon-lg'
+              : props.grouped
+                ? 'icon-sm'
+                : 'icon-md'
+        }
+        class={props.hidden ? 'touch:min-h-11' : undefined}
         aria-label={label()}
         aria-describedby={!props.canManage ? permissionHintId : undefined}
-        tooltip={tooltip()}
-        disabled={!props.canManage || props.pending}
-        onClick={() => setConfirming(true)}
+        tooltip={
+          !props.canManage
+            ? permissionHint
+            : !props.hidden
+              ? label()
+              : undefined
+        }
+        disabled={!props.canManage || pending() || props.parentPending}
+        onClick={activate}
       >
         <Show
           when={props.hidden}
-          fallback={
-            <EyeSlashIcon
-              class={props.iconOnly ? 'size-4 touch:size-6' : 'size-4'}
-            />
-          }
+          fallback={<ArchiveIcon class="size-4 touch:size-6" />}
         >
-          <EyeIcon class={props.iconOnly ? 'size-4 touch:size-6' : 'size-4'} />
+          <UndoIcon class="size-4" />
         </Show>
-        <Show when={!props.iconOnly}>{label()}</Show>
+        <Show when={props.hidden}>{label()}</Show>
       </Dynamic>
-      <Show when={props.hidden && !props.iconOnly}>
-        <p class="text-xs text-ink-muted">
-          This {props.kind === 'company' ? 'company' : 'person'} is hidden from
-          your team's CRM lists.
-        </p>
-      </Show>
       <Show when={!props.canManage}>
-        <p
-          id={permissionHintId}
-          class={props.iconOnly ? 'sr-only' : 'text-xs text-ink-muted'}
-        >
+        <span id={permissionHintId} class="sr-only">
           {permissionHint}
-        </p>
+        </span>
+      </Show>
+      <Show when={failed() && !confirming()}>
+        <span role="alert" class="text-xs text-failure">
+          Could not restore. Try again.
+        </span>
       </Show>
       <ConfirmDialog
         open={confirming()}
-        onOpenChange={setConfirming}
-        onCloseAutoFocus={
-          props.iconOnly
-            ? (event) => {
-                event.preventDefault();
-                button?.focus();
-              }
-            : undefined
+        onOpenChange={(open) => {
+          setConfirming(open);
+          if (!open) setFailed(false);
+        }}
+        onCloseAutoFocus={(event) => {
+          if (button?.isConnected) {
+            event.preventDefault();
+            button.focus();
+          }
+        }}
+        title={
+          props.hidden && props.parentArchived
+            ? 'Restore the company first'
+            : `${label()} ${props.kind === 'company' ? 'company' : 'person'}?`
         }
-        title={`${label()}?`}
         confirmLabel={
-          props.iconOnly ? (
-            <span class="whitespace-normal">{label()}</span>
-          ) : (
-            label()
-          )
+          props.hidden && props.parentArchived ? 'Open company' : label()
         }
-        pending={props.pending}
+        pending={pending()}
         onConfirm={() => {
-          if (!props.canManage || props.pending) return;
-          props.onChange(!props.hidden, () => setConfirming(false));
+          if (!props.canManage || pending()) return;
+          if (props.hidden && props.parentArchived) {
+            setConfirming(false);
+            props.onOpenParent?.();
+          } else submit();
         }}
         body={
-          <Show
-            when={props.hidden}
-            fallback={
-              <>
-                Hide <span class="font-medium text-ink">{props.name}</span> from
-                your team's CRM lists. This does not permanently delete the
-                record. You can restore it from this page.
-                <Show when={props.kind === 'company'}>
-                  {' '}
-                  All of its contacts will also be hidden, and team email sync
-                  will be turned off.
-                </Show>
-              </>
-            }
-          >
-            Show <span class="font-medium text-ink">{props.name}</span> in your
-            team's CRM lists again.
-            <Show when={props.kind === 'company'}>
-              {' '}
-              All of its contacts will also be restored, including any hidden
-              individually. Team email sync will stay off until you enable it
-              separately.
+          <>
+            <Show
+              when={props.hidden}
+              fallback={
+                <>
+                  Archive <span class="font-medium text-ink">{props.name}</span>{' '}
+                  for your team. The record and its history are kept, and you
+                  can restore it later.
+                  <Show when={props.kind === 'company'}>
+                    {' '}
+                    All of its people will also be archived, and team email
+                    syncing will be turned off.
+                  </Show>
+                </>
+              }
+            >
+              <Show
+                when={props.parentArchived}
+                fallback={
+                  <>
+                    Restore{' '}
+                    <span class="font-medium text-ink">{props.name}</span> to
+                    your team's visible CRM lists.
+                    <Show when={props.kind === 'company'}>
+                      {' '}
+                      All of its people will also be restored, including people
+                      archived individually. Email syncing will stay off until
+                      enabled separately.
+                    </Show>
+                  </>
+                }
+              >
+                This person is archived with their company. Open the company to
+                review and confirm restoring it and all its people. Email
+                syncing stays off.
+              </Show>
             </Show>
-            <Show when={props.kind === 'contact'}>
-              {' '}
-              If linked to a company, that company must also be visible for them
-              to appear in People.
+            <Show when={failed()}>
+              <p role="alert" class="mt-3 text-failure">
+                Could not save the change. Try again or cancel.
+              </p>
             </Show>
-          </Show>
+          </>
         }
       />
-    </div>
+    </>
   );
 }

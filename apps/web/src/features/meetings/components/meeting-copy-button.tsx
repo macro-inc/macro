@@ -1,7 +1,7 @@
-import { fireAndForget } from '@core/util/fireAndForget';
-import Check from '@icon/system/regular/check.svg';
+import { HeaderIsland } from '@components/app/split-layout/components/HeaderIsland';
+import { isMobile } from '@core/mobile/isMobile';
 import Copy from '@icon/system/regular/copy.svg';
-import { Button } from '@ui';
+import { CopyButton } from '@ui';
 import { createSignal, onCleanup, Show } from 'solid-js';
 
 export function MeetingCopyButton(props: {
@@ -12,29 +12,24 @@ export function MeetingCopyButton(props: {
   const [copied, setCopied] = createSignal(false);
   const [error, setError] = createSignal(false);
   const [copying, setCopying] = createSignal(false);
-  let reset: ReturnType<typeof setTimeout> | undefined;
   let disposed = false;
   onCleanup(() => {
     disposed = true;
-    clearTimeout(reset);
   });
 
   async function copy() {
-    if (copying()) return;
+    if (copying()) return false;
     setCopying(true);
+    setCopied(false);
     setError(false);
     try {
       await props.onCopy();
-      if (disposed) return;
-      clearTimeout(reset);
+      if (disposed) return false;
       setCopied(true);
-      setError(false);
-      reset = setTimeout(() => setCopied(false), 2500);
+      return true;
     } catch {
-      if (disposed) return;
-      clearTimeout(reset);
-      setCopied(false);
-      setError(true);
+      if (!disposed) setError(true);
+      return false;
     } finally {
       if (!disposed) setCopying(false);
     }
@@ -42,20 +37,21 @@ export function MeetingCopyButton(props: {
 
   return (
     <div class="min-w-0 text-sm text-ink-muted">
-      <Button
-        type="button"
-        variant="ghost"
-        size="lg"
-        disabled={props.disabled || copying()}
-        aria-busy={copying()}
-        class="bg-hover text-ink not-touch:not-disabled:hover:bg-active focus-visible:outline-2 focus-visible:outline-accent"
-        onClick={() => fireAndForget(copy(), 'meetings')}
-      >
-        <Show when={copied()} fallback={<Copy class="size-4" />}>
-          <Check class="size-4" />
-        </Show>
-        Copy Meeting Url
-      </Button>
+      <HeaderIsland class="px-0">
+        <CopyButton
+          type="button"
+          variant="ghost"
+          size={isMobile() ? 'icon-lg' : 'lg'}
+          aria-label="Copy Meeting Url"
+          tooltip={{ content: 'Copy Meeting Url', placement: 'top' }}
+          disabled={props.disabled || copying()}
+          aria-busy={copying()}
+          onClick={copy}
+        >
+          <Copy class="size-4" />
+          <span class="hidden @3xl/call-stage:inline">Copy Meeting Url</span>
+        </CopyButton>
+      </HeaderIsland>
       <span role="status" class="sr-only">
         {copied() ? 'Meeting URL copied' : ''}
       </span>

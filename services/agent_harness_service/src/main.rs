@@ -829,12 +829,17 @@ async fn run() -> anyhow::Result<()> {
     if let Some(selector) = &code_mode_selector {
         inmem_engine = inmem_engine.with_tool_mode(Arc::clone(selector));
     }
-    // `auto-skills` decides, per user, whether code-mode turns load the SDK
-    // areas a request needs instead of carrying every area's guidance.
+    // `auto-skills` decides, per user, whether a turn loads the user's skills
+    // its request needs, and whether code-mode turns load the SDK areas a
+    // request needs instead of carrying every area's guidance.
     if let Some(flags) = &feature_flags {
-        inmem_engine = inmem_engine.with_entity_routing(Arc::new(
-            agent_inmem::domain::entity_routing::FlaggedEntityRouting::new(flags.clone()),
-        ));
+        inmem_engine = inmem_engine
+            .with_skill_routing(Arc::new(
+                agent_inmem::domain::skill_routing::FlaggedSkillRouting::new(flags.clone()),
+            ))
+            .with_entity_routing(Arc::new(
+                agent_inmem::domain::entity_routing::FlaggedEntityRouting::new(flags.clone()),
+            ));
     }
     let inmem_model_engine: Arc<dyn TurnEngine> = Arc::new(inmem_engine);
     // Normalize uploaded images before any provider sees them. In addition to

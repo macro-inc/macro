@@ -21,9 +21,11 @@ export function createReviewController(
   const [validation, setValidation] = createSignal<string>();
   const drafts = new Map<string, ReviewDraft>();
   let tail: Promise<void> = Promise.resolve();
-  const record = () =>
-    source().revision > saved().revision ? source() : saved();
-  const stale = () => source().revision > saved().revision;
+  // A poll can return the revision our in-flight save or decision already
+  // committed; only a newer revision once our writes settle is someone else's.
+  const stale = () =>
+    !saving() && !busy() && source().revision > saved().revision;
+  const record = () => (stale() ? source() : saved());
   // Acknowledgments and action status can advance without changing editor data.
   // Adopt those revisions only when no local edits or writes can be displaced.
   createEffect(() => {

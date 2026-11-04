@@ -10,6 +10,8 @@ export async function invalidateCachedCrmContacts() {}
 export const useCrmContext = () => ({
   createNavigation: () => ({ openWithSplit() {} }),
   openCreateContact() {},
+  userId: () => 'user-1',
+  isTeamAdmin: () => () => role() !== 'member',
 });
 
 const CONTACT: CrmContactResponse = {
@@ -88,3 +90,8 @@ export const storageServiceClient = {
   typeof Storage,
   'getCompany' | 'getContact' | 'setContactHidden'
 >;
+
+export const prepareCrmVisibilityWrite = () => ({
+  isCurrent: () => true,
+  async commit() {},
+});
