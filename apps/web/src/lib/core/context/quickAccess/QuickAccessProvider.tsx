@@ -1,6 +1,7 @@
 import { DebugSuspense } from '@channel/DebugSuspense';
 import { useIsAuthenticated, useUserId } from '@core/context/user';
 import { createLazyMemo } from '@solid-primitives/memo';
+import { scheduleIdle } from '@solid-primitives/scheduled';
 import {
   createEffect,
   createMemo,
@@ -17,6 +18,9 @@ import type {
   QuickAccessListOptions,
 } from './types';
 
+/** Upper bound on waiting for idle, so a busy main thread still warms it. */
+const WARM_IDLE_TIMEOUT_MS = 2500;
+
 const QuickAccessProviderValue: FlowComponent = (props) => {
   const authenticated = useIsAuthenticated();
   const userId = useUserId();
@@ -31,7 +35,12 @@ const QuickAccessProviderValue: FlowComponent = (props) => {
             enabled ? createQuickAccessValue() : undefined
           )
         );
-        return { value, request: () => setRequested(true) };
+        const request = () => setRequested(true);
+        // Warm the feed once the app first goes idle so the first @-mention is
+        // not cold. A consumer's earlier request wins; account switches and
+        // disposal cancel the pending warm-up through this memo's cleanup.
+        scheduleIdle(request, WARM_IDLE_TIMEOUT_MS)();
+        return { value, request };
       }
     )
   );

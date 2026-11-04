@@ -4,6 +4,28 @@ import { afterEach, expect, it, vi } from 'vitest';
 import { useQuickAccess } from './context';
 import { QuickAccessProvider } from './QuickAccessProvider';
 
+// `scheduleIdle` picks requestIdleCallback at import, so stub it first.
+const idle = vi.hoisted(() => {
+  const pending = new Map<number, IdleRequestCallback>();
+  const timeouts: (number | undefined)[] = [];
+  let nextId = 0;
+  globalThis.requestIdleCallback = (callback, options) => {
+    pending.set(++nextId, callback);
+    timeouts.push(options?.timeout);
+    return nextId;
+  };
+  globalThis.cancelIdleCallback = (id) => {
+    pending.delete(id);
+  };
+  const run = () => {
+    const callbacks = [...pending.values()];
+    pending.clear();
+    for (const callback of callbacks)
+      callback({ didTimeout: false, timeRemaining: () => 50 });
+  };
+  return { pending, timeouts, run };
+});
+
 const [authenticated, setAuthenticated] = createSignal<boolean | undefined>();
 const [userId, setUserId] = createSignal<string>();
 const [unrelated, setUnrelated] = createSignal(0);
@@ -49,6 +71,8 @@ afterEach(() => {
   cleanup();
   setAuthenticated(undefined);
   setUserId(undefined);
+  idle.pending.clear();
+  idle.timeouts.length = 0;
   vi.clearAllMocks();
 });
 
@@ -158,4 +182,64 @@ it('keeps cache lookups pure and activates only an enabled list', () => {
   setUnrelated(1);
   expect(mountSource).toHaveBeenCalledOnce();
   expect(disposeSource).not.toHaveBeenCalled();
+});
+
+it('builds the account source on first idle, not during render', () => {
+  setUserId('viewer');
+  setAuthenticated(true);
+  render(() => (
+    <QuickAccessProvider>
+      <div>App</div>
+    </QuickAccessProvider>
+  ));
+  expect(mountSource).not.toHaveBeenCalled();
+  expect(idle.pending.size).toBe(1);
+  expect(idle.timeouts).toEqual([2500]);
+
+  idle.run();
+  expect(mountSource).toHaveBeenCalledOnce();
+  expect(mountSource).toHaveBeenCalledWith('viewer');
+});
+
+it('builds the source once when a consumer requests it before idle', () => {
+  setUserId('viewer');
+  setAuthenticated(true);
+  function Consumer() {
+    const list = useQuickAccess().useList('person');
+    return <div>{list.items().length}</div>;
+  }
+  render(() => (
+    <QuickAccessProvider>
+      <Consumer />
+    </QuickAccessProvider>
+  ));
+  expect(mountSource).toHaveBeenCalledOnce();
+
+  idle.run();
+  expect(mountSource).toHaveBeenCalledOnce();
+  expect(disposeSource).not.toHaveBeenCalled();
+});
+
+it('cancels the pending warm-up on account switch and disposal', () => {
+  setUserId('alice');
+  setAuthenticated(true);
+  const { unmount } = render(() => (
+    <QuickAccessProvider>
+      <div>App</div>
+    </QuickAccessProvider>
+  ));
+  expect(idle.pending.size).toBe(1);
+
+  setUserId('bob');
+  expect(idle.pending.size).toBe(1);
+  idle.run();
+  expect(mountSource).toHaveBeenCalledOnce();
+  expect(mountSource).toHaveBeenCalledWith('bob');
+
+  setUserId('carol');
+  expect(disposeSource).toHaveBeenCalledWith('bob');
+  unmount();
+  expect(idle.pending.size).toBe(0);
+  idle.run();
+  expect(mountSource).toHaveBeenCalledOnce();
 });
