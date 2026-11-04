@@ -33,6 +33,7 @@ default = ["auto_apply_update"]
 cef = []
 
 [dependencies]
+async-trait = "0.1"
 http = "1"
 log = "0.4"
 logger = { path = "../logger" }

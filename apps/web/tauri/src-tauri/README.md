@@ -43,6 +43,17 @@ the old cache file, so the first launch after this native update requires
 sign-in again. Cookie expiry, refresh, and write behavior are unchanged. This
 requires a native app release; an OTA frontend bundle cannot relocate the jar.
 
+The native GraphQL cache's streamed sync opens its stream in Rust with the same
+jar: setup builds `sync_stream::CookieSyncOpener` (one `reqwest` client with
+the jar as its cookie provider) and installs it on
+`graphql_cache_plugin::CacheState`. Without it, `graphql_cache_sync_start`
+answers `unsupported`. The client does not decompress: the run asks for gzip
+itself (`accept-encoding: gzip`) and decodes the body. A suspended mobile app
+stops the run (`CacheState::stop_sync`); the next run resumes from the last
+written page. App exit and the desktop installer go through
+`CacheState::shutdown`, which stops the run and waits for the page being
+written, so the database still closes cleanly.
+
 ## Native HTTP connections
 
 Service requests from the native apps go through the HTTP plugin

@@ -47,6 +47,7 @@ mod macos_notification_permission;
 pub mod screen_capture;
 mod share_target;
 mod staged_upload;
+mod sync_stream;
 #[cfg(test)]
 mod test;
 mod whatsapp_passkey;
@@ -473,6 +474,9 @@ pub fn run_with(builder: tauri::Builder<AppRuntime>, configure_window: Configure
             graphql_cache_plugin::commands::graphql_cache_delete_records,
             graphql_cache_plugin::commands::graphql_cache_teardown,
             graphql_cache_plugin::commands::graphql_cache_clear,
+            graphql_cache_plugin::commands::graphql_cache_sync_start,
+            graphql_cache_plugin::commands::graphql_cache_sync_stop,
+            graphql_cache_plugin::commands::graphql_cache_sync_state,
             macro_bundle_updater_plugin::inbound::plugin::grant_bundle_update,
             macro_bundle_updater_plugin::inbound::plugin::perform_update,
             macro_bundle_updater_plugin::inbound::plugin::ack_bundle_update_reload,
@@ -528,6 +532,7 @@ pub fn run_with(builder: tauri::Builder<AppRuntime>, configure_window: Configure
             }
 
             app.chain(attach_deep_link_handler);
+            install_cache_sync_opener(app.handle());
             cleanup_stale_staged_files(&app.handle());
             #[cfg(desktop)]
             {
@@ -616,6 +621,11 @@ pub fn run_with(builder: tauri::Builder<AppRuntime>, configure_window: Configure
             if let Some(state) = app_handle.try_state::<diagnostics::Diagnostics>() {
                 state.record_native_event(diagnostics::events::NativeEvent::Background);
             }
+            // A suspended app stops its cache sync; the next run resumes from
+            // the last written page.
+            if let Some(state) = app_handle.try_state::<graphql_cache_plugin::CacheState>() {
+                state.stop_sync();
+            }
         }
         #[cfg(desktop)]
         RunEvent::ExitRequested { api, .. } => {
@@ -640,6 +650,24 @@ pub fn run_with(builder: tauri::Builder<AppRuntime>, configure_window: Configure
         }
         _ => {}
     });
+}
+
+/// Gives the native cache its sync stream opener: a client on the HTTP
+/// plugin's cookie jar. Plugins are initialized before setup, so the jar exists.
+fn install_cache_sync_opener<R: Runtime>(handle: &AppHandle<R>) {
+    let (Some(http), Some(cache)) = (
+        handle.try_state::<tauri_plugin_http::Http>(),
+        handle.try_state::<graphql_cache_plugin::CacheState>(),
+    ) else {
+        tracing::error!("graphql cache sync opener needs the HTTP plugin and cache state");
+        return;
+    };
+    match sync_stream::CookieSyncOpener::new(http.cookies_jar.clone()) {
+        Ok(opener) => cache.install_sync_opener(std::sync::Arc::new(opener)),
+        Err(error) => {
+            tracing::error!(error=?error, "failed to build the graphql cache sync client")
+        }
+    }
 }
 
 /// fn to merge the headers from the http cookie store into the initial

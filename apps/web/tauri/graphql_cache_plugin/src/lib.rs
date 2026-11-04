@@ -11,16 +11,21 @@
 //! broadcast events. These mirror browser worker pushes; each webview's
 //! `CacheHost` filters operation ids by its own client prefix.
 //!
+//! Streamed cache sync ([`sync`]) runs here too: the plugin opens the stream
+//! through the opener the app installs and publishes each written page with
+//! the same events, so no sync data passes through a webview.
+//!
 //! Design doc: `apps/web/docs/graphql-normalized-cache-plan.md`.
 
 #![deny(missing_docs)]
 
 use serde::Serialize;
-use std::sync::Mutex;
+use std::sync::{Arc, Mutex};
 use tauri::{AppHandle, Emitter, Runtime};
 
 pub mod commands;
 mod engine;
+pub mod sync;
 
 pub use engine::{
     AffectedOperationsResultWire, CalendarRangeResultWire, ClaimedMutationWire,
@@ -38,6 +43,11 @@ pub const OPS_AFFECTED_EVENT: &str = "graphql-cache://ops-affected";
 
 /// Broadcast event emitted whenever the effective cache view changes.
 pub const CACHE_CHANGED_EVENT: &str = "graphql-cache://cache-changed";
+
+/// Broadcast [`CacheChangedEvent`] for background hydration, which only
+/// hydration subscribers observe. Webview hosts emit it after their own
+/// `graphql_cache_hydrate` calls; the plugin emits it for streamed sync pages.
+pub const CACHE_HYDRATED_EVENT: &str = "graphql-cache://cache-hydrated";
 
 /// Broadcast event carrying the final outcome of a queued mutation.
 pub const MUTATION_SETTLED_EVENT: &str = "graphql-cache://mutation-settled";
@@ -98,16 +108,35 @@ struct InitializedCache {
     handle: EngineHandle,
 }
 
-/// Managed state holding the lazily-initialized engine handle. Register
-/// with `.manage(CacheState::default())` in the app builder.
+/// Managed state holding the lazily-initialized engine handle and the
+/// streamed sync run. Register with `.manage(CacheState::default())` in the
+/// app builder.
 #[derive(Default)]
-pub struct CacheState(Mutex<Option<InitializedCache>>);
+pub struct CacheState {
+    cache: Mutex<Option<InitializedCache>>,
+    sync: sync::SyncRuns,
+}
 
 impl CacheState {
-    /// Takes the initialized cache and explicitly closes its Turso connection.
+    /// Installs how streamed sync opens its stream (the app does this at
+    /// setup). Until then `graphql_cache_sync_start` answers `unsupported`.
+    pub fn install_sync_opener(&self, opener: Arc<dyn sync::SyncStreamOpener>) {
+        self.sync.install_opener(opener);
+    }
+
+    /// Stops the streamed sync run, if any, without waiting. Pages already
+    /// written are kept; the next run resumes from them.
+    pub fn stop_sync(&self) {
+        self.sync.cancel();
+    }
+
+    /// Stops sync (waiting for a page being written), takes the initialized
+    /// cache and explicitly closes its Turso connection. Blocks, so call it
+    /// only off the async runtime's worker threads (app exit, a blocking task).
     pub fn shutdown(&self) -> Result<(), String> {
+        self.sync.stop_blocking();
         let cache = self
-            .0
+            .cache
             .lock()
             .map_err(|_| "graphql cache state poisoned".to_string())?
             .take();
@@ -133,6 +162,65 @@ fn emit_ops_affected<R: Runtime>(
             op_ids: op_ids.to_vec(),
         },
     );
+}
+
+/// Notifies webviews of one streamed sync frame like the command it stands
+/// in for, so open views update while the stream runs. A sync run carries no
+/// webview's authority generation, so its notifications carry none either.
+fn emit_sync_publication<R: Runtime>(app: &AppHandle<R>, publication: engine::SyncPublication) {
+    match publication {
+        engine::SyncPublication::Recorded => {}
+        // Like `graphql_cache_hydrate`: an identity reset reaches every
+        // subscriber; other pages reach hydration subscribers only.
+        engine::SyncPublication::Hydrated {
+            write,
+            search_changed_buckets,
+        } => {
+            if write.reset {
+                emit_ops_affected(app, &write.affected_ops, None, None);
+                if write.revision_advanced {
+                    emit_cache_changed(app, &write.revision, true, None);
+                }
+            } else if write.revision_advanced {
+                emit_cache_event(
+                    app,
+                    CACHE_HYDRATED_EVENT,
+                    CacheChangedEvent {
+                        authority_generation: None,
+                        // No window proofs for sync frames: views refresh.
+                        unchanged_views: None,
+                        search_changed_buckets: Some(search_changed_buckets),
+                        revision: write.revision,
+                        reset: None,
+                    },
+                );
+            }
+        }
+        // Like `graphql_cache_delete_records`.
+        engine::SyncPublication::Deleted { affected, .. } => {
+            emit_ops_affected(app, &affected.affected_ops, None, None);
+            emit_cache_changed(app, &affected.revision, false, None);
+        }
+        // Like `graphql_cache_calendar_commit`.
+        engine::SyncPublication::CalendarCommitted(result) => {
+            emit_ops_affected(
+                app,
+                &result.affected_ops,
+                result.field_changes.as_ref(),
+                None,
+            );
+            if result.revision_advanced {
+                emit_cache_changed_with_hints(
+                    app,
+                    &result.revision,
+                    result.reset,
+                    result.search_changed_buckets.as_ref(),
+                    result.unchanged_views.as_ref(),
+                    None,
+                );
+            }
+        }
+    }
 }
 
 fn emit_cache_changed<R: Runtime>(

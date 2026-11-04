@@ -43,11 +43,13 @@ pub use authority::AuthorityTransitionWire;
 mod calendar;
 mod people;
 mod soup;
+mod sync;
 pub use calendar::CalendarRangeResultWire;
 pub use soup::{
     EntityFilterRequest, EntityFilterResult, LiveQueryResult, PredicateBaselineEntry,
     PredicateFilterResult,
 };
+pub(crate) use sync::{NativeSyncHooks, SyncPublication, WeakEngineHandle};
 
 /// Mirrors `ReadResult` in `apps/web/src/lib/graphql-cache/protocol.ts`.
 #[derive(Debug, Serialize)]

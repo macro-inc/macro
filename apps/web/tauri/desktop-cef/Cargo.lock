@@ -274,6 +274,7 @@ dependencies = [
 name = "app"
 version = "0.1.0"
 dependencies = [
+ "async-trait",
  "base64 0.22.1",
  "block2 0.6.2",
  "clap",
@@ -3437,14 +3438,18 @@ dependencies = [
 name = "graphql_cache_plugin"
 version = "0.1.0"
 dependencies = [
+ "async-trait",
  "cache-core",
  "cache-turso",
+ "flate2",
  "predicate-index",
  "serde",
  "serde_json",
  "soup-filter-cache-adapter",
  "tauri",
+ "thiserror 2.0.21",
  "tokio",
+ "tokio-util",
  "tracing",
  "uuid",
 ]
@@ -9176,6 +9181,7 @@ dependencies = [
  "bytes",
  "futures-core",
  "futures-sink",
+ "futures-util",
  "libc",
  "pin-project-lite",
  "tokio",

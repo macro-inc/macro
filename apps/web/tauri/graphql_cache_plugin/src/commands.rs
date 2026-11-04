@@ -16,9 +16,10 @@ use crate::engine::{
     MutationUpsertKindWire, ReadResultWire, RecordSelectionResultWire,
     RollbackOptimisticWriteResultWire, WriteRegistration, WriteRequest, WriteResultWire,
 };
+use crate::sync::SyncRunOutcome;
 use crate::{
     CacheState, InitializedCache, emit_cache_changed, emit_cache_changed_with_hints,
-    emit_mutation_settled, emit_ops_affected,
+    emit_mutation_settled, emit_ops_affected, emit_sync_publication,
 };
 use cache_core::calendar::{CalendarCommit, CalendarRangeRequest};
 use cache_core::entity_resolver::EntityResolver;
@@ -32,6 +33,7 @@ use cache_core::{
         PeopleSearchResult,
     },
 };
+use cache_core::sync::{SyncLaneState, SyncStartArgs};
 use cache_turso::TursoFileDatabase;
 use serde::{Deserialize, Serialize};
 use tauri::{AppHandle, Manager, Runtime, State};
@@ -54,7 +56,7 @@ fn people_trace_correlation(value: Option<&str>) -> Option<&str> {
 
 fn engine_handle(state: &State<'_, CacheState>) -> Result<EngineHandle, String> {
     state
-        .0
+        .cache
         .lock()
         .map_err(|_| "graphql cache state poisoned".to_string())?
         .as_ref()
@@ -84,7 +86,7 @@ pub async fn graphql_cache_abandon(
 ) -> Result<bool, String> {
     // Not through a cloned handle: shutdown fails while another handle lives.
     Ok(state
-        .0
+        .cache
         .lock()
         .map_err(|_| "graphql cache state poisoned".to_string())?
         .as_ref()
@@ -130,7 +132,7 @@ pub async fn graphql_cache_init_with_schema<R: Runtime>(
     let schema_path = dir.join("schema.json");
     let handle = {
         let mut guard = state
-            .0
+            .cache
             .lock()
             .map_err(|_| "graphql cache state poisoned".to_string())?;
         if let Some(existing) = guard.as_ref() {
@@ -1143,13 +1145,16 @@ pub async fn graphql_cache_teardown(
     engine_handle(&state)?.teardown(op_id).await
 }
 
-/// Wipes all cached state (logout).
+/// Wipes all cached state (logout). Stops a streamed sync run first: its saved
+/// state goes with the database, and its pages belong to the old session.
 #[tauri::command]
 pub async fn graphql_cache_clear<R: Runtime>(
     app: AppHandle<R>,
     state: State<'_, CacheState>,
 ) -> Result<String, String> {
-    let revision = engine_handle(&state)?.clear().await?.to_string();
+    let handle = engine_handle(&state)?;
+    state.sync.stop().await;
+    let revision = handle.clear().await?.to_string();
     emit_cache_changed(&app, &revision, true, None);
     Ok(revision)
 }
@@ -1164,4 +1169,39 @@ pub async fn graphql_cache_inspect_mutations(
 
 fn generation_tag(generation: Option<uuid::Uuid>) -> Option<String> {
     generation.map(|value| value.to_string())
+}
+
+/// Runs one streamed cache sync and resolves when it ends. The plugin opens
+/// the stream with the app's session and writes every frame itself, notifying
+/// webviews like the matching ordinary command. Run failures resolve as
+/// `ok: false` outcomes; a second run while one is in progress is `busy`.
+#[tauri::command]
+pub async fn graphql_cache_sync_start<R: Runtime>(
+    app: AppHandle<R>,
+    state: State<'_, CacheState>,
+    args: SyncStartArgs,
+) -> Result<SyncRunOutcome, String> {
+    let engine = engine_handle(&state)?.downgrade();
+    Ok(state
+        .sync
+        .start(engine, args, move |publication| {
+            emit_sync_publication(&app, publication);
+        })
+        .await)
+}
+
+/// Stops the streamed sync run, if any, and resolves once it has stopped.
+/// Pages already written are kept; the next run resumes from them.
+#[tauri::command]
+pub async fn graphql_cache_sync_stop(state: State<'_, CacheState>) -> Result<(), String> {
+    state.sync.stop().await;
+    Ok(())
+}
+
+/// Saved state of every sync lane that has run against this database.
+#[tauri::command]
+pub async fn graphql_cache_sync_state(
+    state: State<'_, CacheState>,
+) -> Result<Vec<SyncLaneState>, String> {
+    engine_handle(&state)?.sync_lane_states().await
 }
