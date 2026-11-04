@@ -15,22 +15,28 @@ function storeGrant(grant: AccountManagerGrant) {
   });
 }
 
-export function useAccountManagersQuery() {
-  return useQuery(() => ({
+function accountManagersOptions() {
+  return {
     queryKey: accountManagerKeys.list.queryKey,
     queryFn: () => throwOnErr(() => storageServiceClient.listAccountManagers()),
-  }));
+  };
+}
+
+export function useAccountManagersQuery() {
+  return useQuery(accountManagersOptions);
+}
+
+function accountManagerGrantOptions(id: string) {
+  return {
+    queryKey: accountManagerKeys.grant(id).queryKey,
+    queryFn: () =>
+      throwOnErr(() => storageServiceClient.getAccountManagerGrant({ id })),
+    retry: false,
+  };
 }
 
 export function useAccountManagerGrantQuery(id: Accessor<string>) {
-  return useQuery(() => ({
-    queryKey: accountManagerKeys.grant(id()).queryKey,
-    queryFn: () =>
-      throwOnErr(() =>
-        storageServiceClient.getAccountManagerGrant({ id: id() })
-      ),
-    retry: false,
-  }));
+  return useQuery(() => accountManagerGrantOptions(id()));
 }
 
 export function useRequestAccountManagerMutation() {
