@@ -64,7 +64,10 @@ import { InboxDateHeader } from '../components/inbox-date-header';
 import { InboxFilterDrawer } from '../components/inbox-filter-drawer';
 import { InboxFilterMenu } from '../components/inbox-filter-menu';
 import { InboxSenderAvatar } from '../components/inbox-sender-avatar';
-import { InboxStatusTabs } from '../components/inbox-status-tabs';
+import {
+  InboxStatusPills,
+  InboxStatusTabs,
+} from '../components/inbox-status-tabs';
 import { NotificationRow } from '../components/notification-row';
 import { NotificationStackItem } from '../components/notification-stack-item';
 import { RowActionButtons } from '../components/row-action-buttons';
@@ -785,16 +788,11 @@ export function NotificationsView(props: NotificationsViewProps) {
           }}
         >
           <header class="pointer-events-none absolute inset-x-0 top-0 z-split-panel-chrome flex shrink-0 flex-col px-(--mobile-chrome-gutter) pt-[calc(var(--safe-top,0px)+0.5rem)]">
-            <div class="pointer-events-auto flex h-10 min-w-0 items-center gap-2">
-              <h1 class="min-w-0 flex-1 truncate text-lg font-semibold text-ink">
-                {t('nav.notifications')}
-              </h1>
-              <InboxStatusTabs
-                status={filters.filters().status}
-                onChange={filters.setStatus}
-              />
-              <InboxFilterDrawer {...filterControls} />
-            </div>
+            <InboxStatusPills
+              status={filters.filters().status}
+              onChange={filters.setStatus}
+              leading={<InboxFilterDrawer {...filterControls} />}
+            />
           </header>
           <PullToRefresh
             scrollContainer={() => viewport() ?? listFrame()}
@@ -859,7 +857,6 @@ export function NotificationsView(props: NotificationsViewProps) {
                 />
                 <div class="shrink-0 px-3 pb-1">
                   <InboxStatusTabs
-                    fullWidth
                     status={filters.filters().status}
                     onChange={filters.setStatus}
                   />

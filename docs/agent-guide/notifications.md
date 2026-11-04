@@ -90,8 +90,8 @@ the filter opens **Settings → Notifications**, which decides what is delivered
 at all (including push and email).
 
 On touch devices the dock's bell (**Notifications**) opens this view with the
-flag on, as the list alone under a floating **Notifications** header with
-the All and Unread toggle and a filter drawer (Type). Cards keep the same anatomy with 44px targets
+flag on, as the list alone under the floating controls Home, Email, Tasks and Drive
+use: the filter drawer (Type), then All and Unread pills. Cards keep the same anatomy with 44px targets
 and inline row buttons; at phone width they have a larger avatar and slightly larger
 text and sit further apart; a read card there loses its fill, fades its avatar and
 mutes its text, so unread cards stand out. A tablet keeps the desktop's sizes. Tapping a card or an unfolded notification opens it
