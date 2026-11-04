@@ -114,9 +114,11 @@ under that action, including the account catalog's durable refresh.
 ### Email read receipts
 
 Behind `enable-email-read-receipts` (on in dev), **Settings → Email → Read
-receipts** lists each owned inbox with a switch that saves immediately. It is
-off by default. Messages sent from an inbox with it on carry an invisible
-pixel; see [read receipts in a thread](email.md#read-receipts) for the status.
+receipts** lists each owned inbox with a switch that saves immediately, under
+the description "See when recipients open messages you send." It is on by
+default, including for an inbox with no saved settings. Messages sent from an
+inbox with it on carry an invisible pixel; see
+[read receipts in a thread](email.md#read-receipts) for the status.
 
 ### Notification permission prompt
 

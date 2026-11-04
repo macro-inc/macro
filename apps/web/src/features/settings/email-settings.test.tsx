@@ -46,6 +46,25 @@ afterEach(() => {
 });
 
 describe('EmailSettings read receipts', () => {
+  it('describes the section in one sentence and treats a missing setting as on', () => {
+    mocks.query = {
+      isPending: false,
+      isError: false,
+      isSuccess: true,
+      data: { links: [{ ...link, settings: {} }] },
+      refetch: vi.fn(),
+    };
+    render(() => <EmailSettings />);
+
+    expect(
+      screen.getByText('See when recipients open messages you send.')
+    ).toBeTruthy();
+    const toggle = screen.getByRole('switch', {
+      name: 'Read receipts for owner@example.com',
+    }) as HTMLInputElement;
+    expect(toggle.checked).toBe(true);
+  });
+
   it('keeps cached account switches when a refetch fails', () => {
     mocks.query = {
       isPending: false,
