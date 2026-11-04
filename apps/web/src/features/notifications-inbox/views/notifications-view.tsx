@@ -94,7 +94,10 @@ import {
 import { createInboxFilters } from '../primitives/inbox-filters';
 import { createInboxList } from '../primitives/inbox-list';
 import { createInboxSelection } from '../primitives/inbox-selection';
-import { agentTurnParams } from '../primitives/notification-location';
+import {
+  agentTurnParams,
+  crmCommentParams,
+} from '../primitives/notification-location';
 import { createRowActions, rowButtons } from '../primitives/row-actions';
 
 type ActivationMetadata = { event?: MouseEvent; newSplit?: boolean };
@@ -142,7 +145,8 @@ const previewSelection = (
 
 /**
  * What the preview shows for a row or one of its notifications; undefined when
- * it has no inline preview. An agent's notification opens at its turn.
+ * it has no inline preview. An agent's notification opens at its turn, and a
+ * company or contact at its comment.
  */
 const previewTargetFor = (
   row: NotificationInboxRow,
@@ -153,8 +157,10 @@ const previewTargetFor = (
   );
   if (!entity) return undefined;
   const target = previewBlockTarget(entity);
-  const turn = notification && agentTurnParams(notification);
-  return turn ? { ...target, params: turn } : target;
+  const params =
+    (notification && agentTurnParams(notification)) ??
+    crmCommentParams(notification ?? row.content.notifications[0]);
+  return params ? { ...target, params } : target;
 };
 
 function NotificationsBreadcrumb(props: { onReturn: () => void }) {

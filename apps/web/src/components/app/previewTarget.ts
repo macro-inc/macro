@@ -18,7 +18,6 @@ import {
   resolveBlockAlias,
 } from '@core/constant/allBlocks';
 import { USE_MACRO_PR_SUMMARY_BLOCK } from '@core/constant/featureFlags';
-import { COMMENT_LINK_PARAM } from '@core/messages/comment-link';
 import type {
   DocumentCommentTarget,
   DocumentEntity,
@@ -75,16 +74,6 @@ export type PreviewBlockTarget = {
 
 const documentCommentParams = (document: DocumentPreviewSelection) =>
   untrack(() => getDocumentCommentTarget(document)?.params);
-
-/** A company or contact opens at the comment its notification is about. */
-const crmCommentParams = (record: PreviewPanelSelection) => {
-  const metadata = untrack(() =>
-    newestRowNotification(record)
-  )?.notification_metadata;
-  return metadata?.tag === 'crm_discussion'
-    ? { [COMMENT_LINK_PARAM]: metadata.content.messageId }
-    : undefined;
-};
 
 function aliasContextFor(
   kind: string | undefined
@@ -147,13 +136,11 @@ export function previewBlockTarget(
       blockType: 'company',
       blockId: company.id,
       aliasContext: undefined,
-      params: crmCommentParams(company),
     }))
     .with({ type: 'crm_contact' }, (contact) => ({
       blockType: 'contact',
       blockId: contact.id,
       aliasContext: undefined,
-      params: crmCommentParams(contact),
     }))
     .otherwise((fallbackEntity) => ({
       blockType: fileTypeToResolvedBlockName(fallbackEntity.type),
