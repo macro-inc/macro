@@ -95,6 +95,24 @@ it('keeps remote authentication and arbitrary email images on the native transpo
   expect(browser).not.toHaveBeenCalled();
 });
 
+it('passes the abort signal of a Request to the native transport', async () => {
+  const request = createPlatformFetch(vi.fn<typeof fetch>());
+  const requestAbort = new AbortController();
+  const initAbort = new AbortController();
+  const input = new Request('https://gateway.example/auth', {
+    signal: requestAbort.signal,
+  });
+  await request(input);
+  await request(input, { signal: initAbort.signal });
+  // A Request copies its signal, so assert on the abort reaching the transport.
+  const [fromRequest, fromInit] = nativeFetch.mock.calls.map(
+    ([, init]) => init?.signal
+  );
+  requestAbort.abort();
+  expect(fromRequest?.aborted).toBe(true);
+  expect(fromInit).toBe(initAbort.signal);
+});
+
 it('uses the captured browser fetch after the global override', async () => {
   const browser = vi
     .fn<typeof fetch>()

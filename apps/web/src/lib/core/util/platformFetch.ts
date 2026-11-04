@@ -78,7 +78,10 @@ export function createPlatformFetch(
       return webviewFetch(input, init);
     }
     const { fetch } = await import('@tauri-apps/plugin-http');
-    return fetch(input, init);
+    // The plugin cancels only on `init.signal`, never on a `Request`'s own.
+    const signal =
+      init?.signal ?? (input instanceof Request ? input.signal : undefined);
+    return fetch(input, { ...init, signal });
   };
 }
 
