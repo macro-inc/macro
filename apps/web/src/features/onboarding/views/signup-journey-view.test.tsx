@@ -7,6 +7,11 @@ import {
 } from '../tests/render';
 import { SignupJourneyView } from './signup-journey-view';
 
+vi.mock(import('@core/constant/featureFlags'), async (importOriginal) => ({
+  ...(await importOriginal()),
+  LOCAL_ONLY: true,
+}));
+
 beforeEach(() => {
   sessionStorage.clear();
   localStorage.clear();
@@ -65,6 +70,16 @@ describe('sign-up starts before authentication', () => {
       accent: '#f77d67',
       authenticating: true,
     });
+  });
+
+  it('skips the local opening slides without bypassing authentication', () => {
+    const { google } = setup();
+    fireEvent.click(screen.getByRole('button', { name: 'Bypass' }));
+    expect(readSignupDraft()?.step).toBe('work');
+    expect(google).not.toHaveBeenCalled();
+    fireEvent.click(screen.getByRole('button', { name: 'Connect work email' }));
+    expect(google).toHaveBeenCalledOnce();
+    expect(readSignupDraft()?.authenticating).toBe(true);
   });
 
   it('restores the work-email step after an OAuth return or cancellation', () => {

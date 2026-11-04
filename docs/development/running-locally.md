@@ -339,6 +339,11 @@ account is absent from the selected database. Sign in to the intended instance
 in an isolated browser profile; do not reset its database or clear another
 instance's session.
 
+Local signup and onboarding screens provide **Bypass** for any account. Before
+signup it skips the opening slides, not authentication; after sign-in it records
+both onboarding and tutorial completion. See the
+[onboarding guide](../agent-guide/onboarding.md#onboarding-bypass--apponboarding).
+
 If the port window conflicts with another program, change the base port:
 
 ```bash

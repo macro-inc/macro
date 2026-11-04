@@ -1,5 +1,7 @@
+import { LOCAL_ONLY } from '@core/constant/featureFlags';
 import { fireAndForget } from '@core/util/fireAndForget';
 import { type JSX, onCleanup, Show } from 'solid-js';
+import { BypassButton } from '../components/bypass-button';
 import { GoogleAccountsStep } from '../components/google-accounts-step';
 import {
   animateStepChange,
@@ -61,6 +63,11 @@ export function SignupJourneyView(props: {
         journey.step() === 'welcome' && !props.showingEmail ? (
           <SignInInstead onSignIn={props.onSignIn} />
         ) : undefined
+      }
+      overlay={
+        <Show when={LOCAL_ONLY && storyStep()}>
+          <BypassButton disabled={false} onBypass={() => goTo('work')} />
+        </Show>
       }
       explainer={
         journey.step() === 'security' || journey.step() === 'work' ? (

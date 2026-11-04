@@ -18,7 +18,16 @@ import {
 } from '../tests/render';
 import { OnboardingFlowView } from './onboarding-flow-view';
 
+const localMode = vi.hoisted(() => ({ enabled: false }));
+vi.mock(import('@core/constant/featureFlags'), async (importOriginal) => ({
+  ...(await importOriginal()),
+  get LOCAL_ONLY() {
+    return localMode.enabled;
+  },
+}));
+
 beforeEach(() => {
+  localMode.enabled = false;
   sessionStorage.clear();
   localStorage.clear();
   stubOnboardingBrowser();
@@ -650,25 +659,32 @@ describe('onboarding flow', () => {
     await waitFor(() => expect(navigate).toHaveBeenCalled());
   });
 
-  it('offers staff a Bypass out of any step', async () => {
-    // Progress is saved per user, so staff start fresh on the first slide.
-    const { fake, navigate } = setup({
-      world: {
-        viewer: {
-          id: 'macro|wolf@macro.com',
-          email: 'wolf@macro.com',
-          tutorialComplete: false,
-          licensed: false,
+  it.each([
+    { account: 'staff', email: 'wolf@macro.com', local: false },
+    { account: 'local non-staff', email: 'tester@example.com', local: true },
+  ])(
+    'lets $account accounts complete setup with Bypass',
+    async ({ email, local }) => {
+      localMode.enabled = local;
+      const { fake, navigate } = setup({
+        world: {
+          viewer: {
+            id: `macro|${email}`,
+            email,
+            tutorialComplete: false,
+            licensed: false,
+          },
         },
-      },
-    });
-    await heading('Create your workspace');
-    click('Bypass');
-    await waitFor(() => expect(navigate).toHaveBeenCalledWith('/home'));
-    expect(fake.calls()).toContain('completeOnboarding:skipped');
-  });
+      });
+      await heading('Create your workspace');
+      click('Bypass');
+      await waitFor(() => expect(navigate).toHaveBeenCalledWith('/home'));
+      expect(fake.calls()).toContain('completeOnboarding:skipped');
+      expect(fake.world.viewer?.tutorialComplete).toBe(true);
+    }
+  );
 
-  it('hides Bypass from everyone else', async () => {
+  it('hides Bypass from non-staff accounts outside local development', async () => {
     setup({ resume: 'team' });
     await heading('Built for teams.');
     expect(screen.queryByRole('button', { name: 'Bypass' })).toBeNull();
