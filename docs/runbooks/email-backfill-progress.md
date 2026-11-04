@@ -66,6 +66,11 @@ send**, enqueue this one Init operation to the approved main backfill queue:
 aws sqs send-message --queue-url "$BACKFILL_QUEUE_URL" --message-body file://recovery-init.json
 ```
 
+Retain both the cancelled legacy job row and its replacement, together with the
+private `recovery-init.json`, until replacement completion and its outbox effects
+are verified. Deleting the legacy row clears `recovery_of` and prevents `--apply`
+from reproducing the mapping after an ambiguous send.
+
 If the send fails or its response is ambiguous, rerun `--apply` for the same old
 job to reproduce the same body and resend it. Initialization leases and outboxes
 make repeated Init delivery safe. The replacement remains visible as `Init`
@@ -114,3 +119,14 @@ counting lost effects as success; inspect the cause before another recovery plan
 Malformed individual messages still use the existing savepoint/skip policy.
 Keep durable thread receipts and listing pages until their parent job is deleted;
 job deletion cascades them. Never delete them to repair a counter.
+
+A durable job whose unfinished operation reaches the DLQ remains `InProgress`;
+queue retry exhaustion is not proof of a permanent failure or of completed effects.
+Retain the original payload and the job's page, import, and completion receipts.
+Inspect and repair the cause, then use the separately approved queue-recovery
+procedure for bounded replay of the original operation body against the same job.
+A metadata receipt mismatch needs investigation and reviewed invariant repair;
+unchanged replay alone will not fix it. Retained receipts make resuming required
+effects safe once the cause is resolved. This release does
+not automatically reconcile DLQ work or fail stale jobs. Do not use the legacy
+replacement command for a durable job or mark unfinished work complete manually.

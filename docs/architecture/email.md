@@ -656,8 +656,8 @@ The job and completion outbox transition only
 when listing is finished and all registered threads have receipts. Redis still
 serves admission control, but never owns completion evidence.
 
-Existing message rows are not completion receipts. Each job commits one canonical
-import receipt with its missing-message writes. Concurrent deliveries cannot add
+Existing message rows are not completion receipts. Each thread import commits one
+canonical import receipt with its missing-message writes. Concurrent deliveries cannot add
 a later snapshot after metadata completes; retries resume attachments and metadata
 from the receipt. A recovery job processes stored messages for required CRM effects
 while preserving their labels. Active legacy jobs defer until an operator explicitly
