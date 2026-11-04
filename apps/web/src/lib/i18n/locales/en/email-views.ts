@@ -24,13 +24,12 @@ export default {
   skippedTitle: 'Some saved settings were skipped.',
   skippedList: 'Skipped settings: {{settings}}',
   viewDefinition: 'Saved definition',
+  deleteDescription: 'This removes the view. Your email isn’t deleted.',
   // Builder
-  people: 'People',
-  peoplePlaceholder: 'Add people or email addresses',
-  domains: 'Domains',
-  domainsPlaceholder: 'Add companies or domains',
-  addDomain: 'Add “{{domain}}”',
-  removeDomain: 'Remove {{domain}}',
+  people: 'People and companies',
+  peoplePlaceholder: 'Add people, companies, or domains',
+  addEntry: 'Add “{{entry}}”',
+  removeEntry: 'Remove {{entry}}',
   domainContacts: {
     one: '{{count}} contact',
     other: '{{count}} contacts',

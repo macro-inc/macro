@@ -5,7 +5,6 @@ import { HeaderActionGroup } from '@components/app/HeaderActionGroup';
 import { toast } from '@core/component/Toast/Toast';
 import { useUserId } from '@core/context/user';
 import { useHotkeyDOMScope } from '@core/hotkey/hotkeys';
-import { useCombinedRecipients } from '@core/signal/useCombinedRecipient';
 import { fireAndForget } from '@core/util/fireAndForget';
 import PlusIcon from '@icon/system/regular/plus.svg';
 import BookmarkIcon from '@phosphor/bookmark-simple.svg';
@@ -66,7 +65,7 @@ import {
   type EmailSavedViewFilters,
   readEmailSavedView,
 } from '../filters/email-saved-view';
-import { useEmailDomainSuggestions } from '../queries/use-email-domain-suggestions';
+import { useEmailParticipantSuggestions } from '../queries/use-email-participant-suggestions';
 import { useEmailSavedViewUnread } from '../queries/use-email-saved-view-unread';
 
 export const EMAIL_SAVED_VIEWS_SECTION_ID = 'saved-views';
@@ -135,8 +134,7 @@ type BuilderProps = ManagedDialogProps & {
 
 /** The view builder: the shared name dialog around the email conditions. */
 function EmailSavedViewDialog(props: BuilderProps) {
-  const { users } = useCombinedRecipients();
-  const domainOptions = useEmailDomainSuggestions();
+  const suggestions = useEmailParticipantSuggestions();
   const analytics = useAnalytics();
   const [filters, setFilters] = createSignal(props.initial);
   const config = () => configOf(filters());
@@ -145,8 +143,7 @@ function EmailSavedViewDialog(props: BuilderProps) {
       filters={filters()}
       onChange={setFilters}
       inboxes={props.inboxes}
-      recipientOptions={users}
-      domainOptions={domainOptions}
+      suggestions={suggestions}
     />
   );
   const shared = {
@@ -313,6 +310,9 @@ function EmailSavedViewMenuItems(props: {
           refresh: savedViewsList.refresh,
           viewerId,
           record,
+          get description() {
+            return t('emailViews.deleteDescription');
+          },
           isCurrent: request.isCurrent,
           onDeleted: (deleted, viewer) => {
             const scope = savedViewScope();

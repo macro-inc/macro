@@ -1,18 +1,17 @@
 import { t } from '@app/lib/i18n';
-import { RecipientSelector } from '@core/component/RecipientSelector';
-import type {
-  CombinedRecipientItem,
-  WithCustomUserInput,
-} from '@core/user/combinedRecipient';
+import { UserIcon } from '@core/component/UserIcon';
 import { parseDomain } from '@core/util/domain';
+import GlobeIcon from '@icon/system/regular/globe.svg';
 import {
   Button,
   Checkbox,
   ChipCombobox,
+  type ChipComboboxDisplay,
   type ChipComboboxOption,
   Input,
   Tabs,
 } from '@ui';
+import * as EmailValidator from 'email-validator';
 import {
   type Accessor,
   createMemo,
@@ -22,14 +21,78 @@ import {
   type JSX,
   Show,
 } from 'solid-js';
+import { match } from 'ts-pattern';
 import type { EmailSavedViewFilters } from '../filters/email-saved-view';
+import type { EmailParticipantSuggestion } from '../queries/use-email-participant-suggestions';
 import {
   EMAIL_RECEIVED_WITHIN_DAYS,
   type EmailParticipant,
   type EmailParticipantField,
 } from '../types';
 
-type RecipientKind = 'user' | 'contact';
+// People and domains share one picker, so their values are tagged.
+const PERSON = 'person:';
+const DOMAIN = 'domain:';
+
+const participantValue = (person: EmailParticipant) =>
+  person.type === 'address'
+    ? `${PERSON}${person.email}`
+    : `${DOMAIN}${person.domain}`;
+
+const participantOf = (value: string): EmailParticipant | undefined => {
+  if (value.startsWith(PERSON))
+    return { type: 'address', email: value.slice(PERSON.length) };
+  if (value.startsWith(DOMAIN))
+    return { type: 'domain', domain: value.slice(DOMAIN.length) };
+  return undefined;
+};
+
+/** An address is a person; a domain, `@domain` or website is a domain. */
+const parseParticipant = (text: string) => {
+  const entry = text.trim().toLowerCase();
+  if (EmailValidator.validate(entry)) return `${PERSON}${entry}`;
+  const domain = parseDomain(entry);
+  return domain ? `${DOMAIN}${domain}` : undefined;
+};
+
+const personIcon = (email: string) => () => (
+  <UserIcon email={email} size="sm" suppressClick showTooltip={false} />
+);
+const domainIcon = () => (
+  <GlobeIcon class="size-4 shrink-0 text-ink-muted" aria-hidden="true" />
+);
+
+/** A chosen person or domain no suggestion describes, such as a typed one. */
+const describeParticipant = (value: string): ChipComboboxDisplay => {
+  const person = participantOf(value);
+  if (!person) return { label: value };
+  return person.type === 'address'
+    ? { label: person.email, icon: personIcon(person.email) }
+    : { label: person.domain, icon: domainIcon };
+};
+
+const participantOption = (
+  suggestion: EmailParticipantSuggestion
+): ChipComboboxOption =>
+  match(suggestion)
+    .with({ type: 'domain' }, ({ domain, company, contacts }) => ({
+      value: `${DOMAIN}${domain}`,
+      label: company ?? domain,
+      detail: company
+        ? domain
+        : contacts
+          ? t('emailViews.domainContacts', { count: contacts })
+          : undefined,
+      chipLabel: domain,
+      icon: domainIcon,
+    }))
+    .with({ type: 'address' }, ({ email, name }) => ({
+      value: `${PERSON}${email}`,
+      label: name ?? email,
+      detail: name ? email : undefined,
+      icon: personIcon(email),
+    }))
+    .exhaustive();
 
 // Enter in a list field ends the entry, never submits the whole view.
 const keepEnterInField = (event: KeyboardEvent) => {
@@ -115,8 +178,7 @@ export function EmailSavedViewFields(props: {
   filters: EmailSavedViewFilters;
   onChange: (filters: EmailSavedViewFilters) => void;
   inboxes: readonly { id: string; label: string }[];
-  recipientOptions: Accessor<CombinedRecipientItem<RecipientKind>[]>;
-  domainOptions: Accessor<ChipComboboxOption[]>;
+  suggestions: Accessor<EmailParticipantSuggestion[]>;
 }) {
   const lookInId = createUniqueId();
   const set = <K extends keyof EmailSavedViewFilters>(
@@ -126,56 +188,13 @@ export function EmailSavedViewFields(props: {
   const [subjectText, setSubjectText] = createSignal(
     props.filters.subject.join(', ')
   );
-  const domains = createMemo(
-    () =>
-      props.filters.participants.flatMap((person) =>
-        person.type === 'domain' ? [person.domain] : []
-      ),
-    undefined,
-    { equals: sameList }
-  );
   // Other edits rebuild `filters`; keep the chips unless the people change.
-  const addresses = createMemo(
-    () =>
-      props.filters.participants.flatMap((person) =>
-        person.type === 'address' ? [person.email] : []
-      ),
+  const participants = createMemo(
+    () => props.filters.participants.map(participantValue),
     undefined,
     { equals: sameList }
   );
-  const setParticipants = (next: {
-    addresses?: string[];
-    domains?: string[];
-  }) => {
-    const people: EmailParticipant[] = [
-      ...(next.addresses ?? addresses()).map((email) => ({
-        type: 'address' as const,
-        email,
-      })),
-      ...(next.domains ?? domains()).map((domain) => ({
-        type: 'domain' as const,
-        domain,
-      })),
-    ];
-    set('participants', people);
-  };
-
-  // Addresses the picker doesn't know stay as typed entries.
-  const selectedRecipients = createMemo(
-    (): WithCustomUserInput<RecipientKind>[] =>
-      addresses().map((email) => {
-        const known = props
-          .recipientOptions()
-          .find((option) => option.data.email.toLowerCase() === email);
-        return (
-          known ?? {
-            kind: 'custom' as const,
-            id: email,
-            data: { id: email, email, invalid: false },
-          }
-        );
-      })
-  );
+  const options = createMemo(() => props.suggestions().map(participantOption));
 
   const toggleField = (field: EmailParticipantField) => {
     const fields = props.filters.participantFields.includes(field)
@@ -196,39 +215,30 @@ export function EmailSavedViewFields(props: {
     );
 
   return (
-    <div class="-mx-1 flex max-h-[min(56vh,32rem)] flex-col gap-5 overflow-y-auto px-1 mobile:max-h-none mobile:overflow-visible">
+    <div class="flex flex-col gap-5">
       <Section label={t('emailViews.people')}>
-        <RecipientSelector<RecipientKind>
-          options={props.recipientOptions}
-          selectedOptions={selectedRecipients()}
-          setSelectedOptions={(next) =>
-            setParticipants({
-              addresses: [
-                ...new Set(
-                  next.flatMap((option) =>
-                    option.kind === 'custom' && option.data.invalid
-                      ? []
-                      : [option.data.email.toLowerCase()]
-                  )
-                ),
-              ],
+        <ChipCombobox
+          aria-label={t('emailViews.people')}
+          placeholder={t('emailViews.peoplePlaceholder')}
+          values={participants()}
+          onChange={(next) =>
+            set(
+              'participants',
+              next.flatMap((value) => {
+                const person = participantOf(value);
+                return person ? [person] : [];
+              })
+            )
+          }
+          options={options()}
+          describeValue={describeParticipant}
+          parseValue={parseParticipant}
+          addLabel={(value) =>
+            t('emailViews.addEntry', {
+              entry: describeParticipant(value).label,
             })
           }
-          placeholder={t('emailViews.peoplePlaceholder')}
-          includeSelf
-          allowCustomRecipients
-          showChipAddresses
-          portalScope="local"
-        />
-        <ChipCombobox
-          aria-label={t('emailViews.domains')}
-          placeholder={t('emailViews.domainsPlaceholder')}
-          values={domains()}
-          onChange={(next) => setParticipants({ domains: next })}
-          options={props.domainOptions()}
-          parseValue={parseDomain}
-          addLabel={(domain) => t('emailViews.addDomain', { domain })}
-          removeLabel={(domain) => t('emailViews.removeDomain', { domain })}
+          removeLabel={(entry) => t('emailViews.removeEntry', { entry })}
           portalScope="local"
         />
         <div class="flex flex-wrap items-center gap-1.5">
