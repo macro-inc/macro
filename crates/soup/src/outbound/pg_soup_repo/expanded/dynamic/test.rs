@@ -10,20 +10,22 @@ fn grouped_access_shape() {
         group_key: None,
         per_group_limit: None,
     };
+    let sort = SimpleSortMethod::ViewedUpdated.into();
     let (builder, _) = build_grouped_query(
         &filter,
         false,
         &grouping,
-        SimpleSortMethod::ViewedUpdated.into(),
-        &mut DocumentIdArrays::starting_at(first_document_id_slot(
-            SimpleSortMethod::ViewedUpdated.into(),
-            true,
-        )),
+        sort,
+        &mut DocumentIdArrays::starting_at(first_document_id_slot(sort, true)),
     );
     let candidates = builder.sql().split("GroupedItems AS").next().unwrap();
     assert!(!candidates.contains("AccessibleItems"));
     for (id, entity_type) in [("d.id", "document"), ("c.id", "chat"), ("p.id", "project")] {
-        assert!(candidates.contains(&access_semi_join(id, entity_type)));
+        assert!(candidates.contains(&bound_access_semi_join(
+            id,
+            entity_type,
+            source_ids_slot(sort, true)
+        )));
     }
     assert!(candidates.contains("cp.left_at IS NULL"));
     assert!(candidates.contains("event.owner_id = $1"));
