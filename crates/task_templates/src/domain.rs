@@ -223,10 +223,10 @@ impl<R: Repository, M: Membership> Service<R, M> {
     /// List personal templates and templates for one currently joined team.
     #[tracing::instrument(skip_all, err)]
     pub async fn list(&self, user: &str, team: Option<Uuid>) -> Result<Vec<TaskTemplate>, Error> {
-        if let Some(team) = team {
-            if self.access(user, team).await?.is_none() {
-                return Err(Error::Forbidden);
-            }
+        if let Some(team) = team
+            && self.access(user, team).await?.is_none()
+        {
+            return Err(Error::Forbidden);
         }
         let mut templates = self.repository.list(user, team).await.map_err(internal)?;
         let role = if let Some(team) = team {
@@ -253,10 +253,10 @@ impl<R: Repository, M: Membership> Service<R, M> {
     ) -> Result<TaskTemplate, Error> {
         input.name = input.name.trim().to_owned();
         Self::validate(&input.name, &mut input.configuration)?;
-        if let Some(team) = input.team_id {
-            if self.access(user, team).await?.is_none() {
-                return Err(Error::Forbidden);
-            }
+        if let Some(team) = input.team_id
+            && self.access(user, team).await?.is_none()
+        {
+            return Err(Error::Forbidden);
         }
         let now = Utc::now();
         let template = TaskTemplate {
