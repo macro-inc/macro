@@ -22,7 +22,8 @@ fn upcoming(id: &str) -> Value {
     value
 }
 
-/// A series repeating hourly, which no Macro recurrence represents.
+/// A series whose pattern type Macro does not know, standing in for any
+/// Graph value the reader does not recognize yet.
 fn hourly(id: &str) -> Value {
     let mut value = upcoming(id);
     value["type"] = json!("seriesMaster");
@@ -30,14 +31,24 @@ fn hourly(id: &str) -> Value {
     value
 }
 
-async fn serve_delta(server: &MockServer, cursor: Option<&str>, ids: &[&str], next: &str) {
+/// A delta entry for a single event.
+fn single(id: &str) -> Value {
+    json!({"id":id})
+}
+
+/// A delta entry for one occurrence, which the page maps to its series.
+fn occurrence(master: &str) -> Value {
+    json!({"id":format!("{master}-occurrence"),"seriesMasterId":master})
+}
+
+async fn serve_delta(server: &MockServer, cursor: Option<&str>, entries: &[Value], next: &str) {
     let mock = Mock::given(method("GET")).and(path("/v1.0/me/calendarView/delta"));
     let mock = match cursor {
         Some(cursor) => mock.and(query_param("$deltatoken", cursor)),
         None => mock.and(query_param_is_missing("$deltatoken")),
     };
     mock.respond_with(ResponseTemplate::new(200).set_body_json(json!({
-        "value":ids.iter().map(|id| json!({"id":id})).collect::<Vec<_>>(),
+        "value":entries,
         "@odata.deltaLink":format!("{}/v1.0/me/calendarView/delta?$deltatoken={next}", server.uri()),
     })))
     .mount(server)
@@ -111,7 +122,13 @@ async fn connected(pool: &PgPool) -> (MockServer, Sync) {
 async fn an_event_macro_cannot_read_is_skipped_and_the_rest_of_the_calendar_syncs(pool: PgPool) {
     let (server, sync) = connected(&pool).await;
     // The unreadable series sorts first, so it is refreshed first.
-    serve_delta(&server, None, &["AAMkReadable", "AAMkHourly"], "complete").await;
+    serve_delta(
+        &server,
+        None,
+        &[single("AAMkReadable"), occurrence("AAMkHourly")],
+        "complete",
+    )
+    .await;
     serve_event(&server, upcoming("AAMkReadable")).await;
     serve_event(&server, hourly("AAMkHourly")).await;
     sync_until_idle(&sync).await;
@@ -127,7 +144,13 @@ async fn an_event_macro_cannot_read_is_skipped_and_the_rest_of_the_calendar_sync
 #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
 async fn a_stored_event_that_turns_unreadable_leaves_the_calendar(pool: PgPool) {
     let (server, sync) = connected(&pool).await;
-    serve_delta(&server, None, &["AAMkReadable", "AAMkChanged"], "first").await;
+    serve_delta(
+        &server,
+        None,
+        &[single("AAMkReadable"), single("AAMkChanged")],
+        "first",
+    )
+    .await;
     serve_event(&server, upcoming("AAMkReadable")).await;
     serve_event(&server, upcoming("AAMkChanged")).await;
     sync_until_idle(&sync).await;
@@ -136,7 +159,13 @@ async fn a_stored_event_that_turns_unreadable_leaves_the_calendar(pool: PgPool) 
     // The organizer turns the meeting into a series Macro cannot read. Its
     // stored copy would show a version Microsoft no longer has.
     server.reset().await;
-    serve_delta(&server, Some("first"), &["AAMkChanged"], "second").await;
+    serve_delta(
+        &server,
+        Some("first"),
+        &[occurrence("AAMkChanged")],
+        "second",
+    )
+    .await;
     serve_event(&server, hourly("AAMkChanged")).await;
     sqlx::query!(
         "UPDATE calendar_outlook_work SET next_run_at = now() WHERE calendar_id IS NOT NULL"
@@ -149,7 +178,8 @@ async fn a_stored_event_that_turns_unreadable_leaves_the_calendar(pool: PgPool) 
     assert_synced(&pool).await;
     assert_eq!(imported(&pool).await, vec!["AAMkReadable"]);
     let members = sqlx::query_scalar!(
-        r#"SELECT count(*) AS "count!" FROM calendar_outlook_members WHERE master_id = 'AAMkChanged'"#
+        r#"SELECT count(*) AS "count!" FROM calendar_outlook_members
+        WHERE provider_id = 'AAMkChanged-occurrence' AND master_id = 'AAMkChanged'"#
     )
     .fetch_one(&pool)
     .await
