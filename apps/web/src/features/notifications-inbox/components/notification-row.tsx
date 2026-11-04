@@ -40,8 +40,8 @@ export type NotificationRowProps = {
 /**
  * One notification inbox row, as a card as tall as it has something to say: who
  * did it, what it is about, and what was said. Choosing it opens it. Several
- * notifications show as a stack with paper edges, and its own button unfolds them
- * into a drawer below the card, which rises and no longer repeats the newest line.
+ * notifications show as a stack with paper edges, and its own button spreads them
+ * into small cards below it, as it rises and stops repeating the newest line.
  * With a pointer, Mark done takes the time's
  * place on hover and nothing else moves; touch marks done by swiping the row. A
  * phone shows larger text, and a read card gives up its fill and fades, so unread
@@ -87,7 +87,7 @@ export function NotificationRow(props: NotificationRowProps) {
         class={cn(
           // The avatar's badge cuts itself out in this color.
           'relative z-1 border bg-(--inbox-card-surface)',
-          isOpen() ? 'rounded-t-xl border-b-0' : 'rounded-xl',
+          'rounded-xl',
           surface()
         )}
       >
@@ -204,7 +204,7 @@ export function NotificationRow(props: NotificationRowProps) {
                 </div>
               )}
             </Show>
-            {/* The drawer starts with the newest line, so it isn't said twice. */}
+            {/* The first card below is the newest line, so it isn't said twice. */}
             <Show when={isOpen() ? undefined : props.body}>
               {(body) => (
                 <div

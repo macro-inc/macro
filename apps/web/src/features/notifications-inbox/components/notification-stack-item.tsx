@@ -15,9 +15,7 @@ export type NotificationStackItemProps = {
   text: string;
   /** When it arrived, already formatted. */
   time: string;
-  /** Opens the drawer, under its hairline. */
-  first: boolean;
-  /** Closes the card its stack unfolded from. */
+  /** The bottom of the stack, which spaces it from the next card. */
   last: boolean;
   /** Notifications past the last one shown; said under the last item. */
   more: number;
@@ -27,9 +25,9 @@ export type NotificationStackItemProps = {
 };
 
 /**
- * One notification of an unfolded stack, in a drawer below its card: a smaller
- * avatar under the card's, and text lined up with the card's, so it reads as what
- * the card contains. Choosing it opens that notification.
+ * One notification of an open stack: a sheet of the stack spread into its own
+ * small card, indented under the card it came from. Choosing it opens that
+ * notification.
  */
 export function NotificationStackItem(props: NotificationStackItemProps) {
   return (
@@ -39,7 +37,7 @@ export function NotificationStackItem(props: NotificationStackItemProps) {
       aria-selected={props.highlighted}
       data-stack-item=""
       class={cn(
-        'relative w-full min-w-0 flex-1 px-3',
+        'relative w-full min-w-0 flex-1 pt-1.5 pr-3 pl-6 mobile:pl-7',
         props.last && 'pb-2.5 mobile:pb-3'
       )}
       onMouseMove={() => props.onHover()}
@@ -48,24 +46,14 @@ export function NotificationStackItem(props: NotificationStackItemProps) {
       <div
         role="gridcell"
         class={cn(
-          'overflow-hidden border-x border-edge-frame bg-control',
-          props.first && 'border-t',
-          props.last && 'rounded-b-xl border-b'
+          'overflow-hidden rounded-xl border bg-control-raised',
+          props.highlighted
+            ? 'border-ink-extra-muted/50 mobile:border-edge-frame'
+            : 'border-edge-frame'
         )}
       >
-        <div
-          class={cn(
-            'flex gap-3 px-3 touch:min-h-[44px]',
-            props.first ? 'pt-3' : 'pt-[9px]',
-            props.last ? 'pb-3' : 'pb-[9px]',
-            props.highlighted
-              ? 'bg-control-raised mobile:bg-transparent'
-              : 'not-touch:hover:bg-surface-3'
-          )}
-        >
-          <span class="flex w-6 shrink-0 justify-center mobile:w-10">
-            {props.icon}
-          </span>
+        <div class="flex gap-2.5 px-3 py-2.5 touch:min-h-[44px] not-touch:hover:overlay-hover">
+          <span class="shrink-0">{props.icon}</span>
           <div class="min-w-0 flex-1">
             <div class="flex gap-2 text-xs mobile:text-[13px] mobile:leading-[18px]">
               <span class="min-w-0 flex-1 truncate text-ink-muted">

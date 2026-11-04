@@ -615,10 +615,6 @@ export function NotificationsView(props: NotificationsViewProps) {
         by={item().by}
         text={item().text}
         time={formatTimestamp(item().at)}
-        first={
-          entry.row().content.notifications[0]?.id ===
-          entry.place.notificationId
-        }
         last={isLast()}
         more={
           isLast()
