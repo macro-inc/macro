@@ -108,6 +108,13 @@ vi.mock('@queries/agents/models', () => ({
   useAgentModelsQuery: vi.fn(() => mocks.models),
 }));
 
+vi.mock('@queries/agents/capabilities', () => ({
+  useAgentCapabilitiesQuery: () => ({
+    isPending: false,
+    data: { configOptions: [] },
+  }),
+}));
+
 vi.mock('@queries/harnesses/harnesses', () => ({
   useHarnessesQuery: () => harnessMocks.query,
   useDeleteHarnessMutation: () => ({
@@ -344,7 +351,9 @@ describe('Harness', () => {
 
     chooseModelOption(screen.getByLabelText('Default model'), 'Another Model');
     await waitFor(() => {
-      expect(mocks.setDefaultModel).toHaveBeenCalledWith('another-model');
+      expect(mocks.setDefaultModel).toHaveBeenCalledWith({
+        modelId: 'another-model',
+      });
       expect(mocks.toastSuccess).toHaveBeenCalledWith('Default model updated');
     });
 
