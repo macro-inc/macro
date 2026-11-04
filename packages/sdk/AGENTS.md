@@ -61,6 +61,12 @@ the existing gateway prefixes.
 
 ## Gotchas
 
+- Every entity's namespace class carries one `@routing` sentence ("Use when …;
+  not …") that agents route on, and may carry an `@agent` block: how that area
+  of Macro works, for agents only. Both are stripped from the public
+  reference, and code-mode generation fails without the routing sentence. Put
+  an area's rules there, never in `crates/prompt`; cross-namespace search
+  guidance lives on the `search.ts` module comment.
 - Code mode puts each relevant entity's index in the agent turn, at most 48
   KiB: a method's signature and the first sentence of its doc, cut at 160
   characters. Anything else reaches an agent only through `ReadCodeDocs`, which

@@ -852,3 +852,27 @@ fn conversation_tools_only_advertise_new_sessions() {
     }
     assert!(!subagent_toolset().tools.contains_key("ReadChat"));
 }
+
+#[test]
+fn unrouted_prompts_inline_the_sdk_area_guidance_and_routed_ones_leave_it_to_the_turn() {
+    use agent_code_mode::domain::{GuideHost, inline_guides};
+    let code = tools_for_agent_code_mode();
+    let unrouted = code.prompt.to_string();
+    let routed = code.routed_prompt.to_string();
+    assert!(unrouted.contains(inline_guides(GuideHost::Code)));
+    assert!(!routed.contains("How Macro databases work"));
+    assert_eq!(
+        unrouted.replacen(inline_guides(GuideHost::Code), "", 1),
+        routed
+    );
+    for host in [AiHost::AgentSession, AiHost::Chat, AiHost::ChannelBot] {
+        let tools = tools_for(host);
+        let prompt = tools.prompt.to_string();
+        assert!(
+            prompt.contains(inline_guides(GuideHost::Direct)),
+            "{host:?}"
+        );
+        assert!(prompt.contains("DispatchCodingAgent"), "{host:?}");
+        assert_eq!(prompt, tools.routed_prompt.to_string(), "{host:?}");
+    }
+}

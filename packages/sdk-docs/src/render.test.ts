@@ -24,6 +24,30 @@ test('the homepage explains entities and links to their reference without test m
   expect(files.filter((file) => /\.(test|spec)(\/|\.)/.test(file))).toEqual([]);
 });
 
+test('agent routing and guidance never reach the public reference', async () => {
+  const markdown = await readFile(
+    new URL(
+      'src/entities/databases/namespace/classes/DatabaseNamespace.md',
+      pages
+    ),
+    'utf8'
+  );
+  expect(markdown).toContain('# Class: DatabaseNamespace');
+  const html = await readFile(
+    new URL(
+      'html/classes/src_entities_databases_namespace.DatabaseNamespace.html',
+      output
+    ),
+    'utf8'
+  );
+  for (const page of [markdown, html]) {
+    expect(page).not.toContain('@agent');
+    expect(page).not.toContain('@routing');
+    expect(page).not.toContain('Use when working with a Macro database');
+    expect(page).not.toContain("check every database's tables");
+  }
+});
+
 test('public SDK pages preserve signatures and linked wire contracts in both formats', async () => {
   const markdown = await readFile(
     new URL(

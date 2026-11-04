@@ -23,6 +23,16 @@ export interface InboxOptions {
   sort?: ApiSortMethod;
 }
 
+/**
+ * @routing Use when reading, searching, labelling, drafting or sending email, or working across several inboxes; not channel messages or calendar invites.
+ *
+ * @agent
+ * ## Email inboxes
+ *
+ * - A user can have more than one inbox: their primary one, others they connected, and inboxes teammates delegated to them. `macro.email.links()` lists them; most users have one.
+ * - Searching and listing span every inbox the user can access unless you pass one. When the user means a specific mailbox ("my work inbox", "the shared inbox"), find it in `links()` and pass that link; never guess an address.
+ * - Labels are per inbox: a label from one inbox does not apply to a thread in another. Change a thread's labels with labels from the inbox that owns the thread.
+ */
 export class EmailNamespace {
   /** Create a draft without sending it; the inbox defaults to the caller's primary. */
   async createDraft(options: DraftOptions, inbox?: Link): Promise<EmailDraft> {
