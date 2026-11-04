@@ -91,11 +91,15 @@ Connections blocked on locks, or a transaction open for a long time.
   transaction alert fires once the oldest transaction has stayed old for five
   minutes. Find it and its SQL in `pg_stat_activity` (`xact_start`,
   `state = 'idle in transaction'`) or Database Monitoring.
+- Every service sets `application_name` to its own name, so
+  `postgresql.activity.xact_start_age` grouped by `app` names the owner, and
+  the transaction-age-by-app alert fires once one service's oldest
+  transaction has stayed over 15 minutes old for 2 minutes.
 - A single sample of `postgresql.activity.xact_start_age` as old as the
   newest `notification-service` task, at about :09 past the hour, is not a
-  transaction. notification-service's `LISTEN` connection (no
-  `application_name`) briefly runs a server-side transaction while it delivers
-  the `NOTIFY` burst from the hourly notification retention sweep. That
+  transaction. notification-service's `LISTEN` connection
+  (`app:notification_service`) briefly runs a server-side transaction while it
+  delivers the `NOTIFY` burst from the hourly notification retention sweep. That
   transaction's `xact_start` is the connection's last statement, its `LISTEN`
   at task start. A fresh `backend_xmin` (thousands of transaction IDs old,
   not millions) shows it is not holding back vacuum.

@@ -98,6 +98,12 @@ const dashboard = new datadog.Dashboard('macrodb-alerts', {
         critical: '1500',
         warning: '300',
       }),
+      thresholdGraph({
+        title: 'macro-db-prod transaction open over 15 minutes by app',
+        query:
+          'max:postgresql.activity.xact_start_age{dbinstanceidentifier:macro-db-prod} by {app}',
+        critical: '900',
+      }),
     ]),
     graphGroup('Storage', [
       thresholdGraph({
@@ -290,6 +296,22 @@ prodMonitor('macrodb-long-transactions', {
   pages: false,
   description:
     'The oldest open transaction on {{host.name}} has been over {{value}} seconds old for 5 minutes, so it has been open at least 5 minutes longer than that. Long transactions hold locks and stop vacuum; find the session and its SQL in Database Monitoring.',
+  dashboard: dashboard.url,
+  runbook: 'docs/runbooks/macrodb.md#locks',
+});
+
+// Grouped by `app`, the session's application_name, so the alert names the
+// service holding the transaction. The 2-minute minimum ignores the single
+// LISTEN sample described above; it fires about 17 minutes into a transaction.
+prodMonitor('macrodb-transaction-age-by-app', {
+  title: 'macro-db-prod transaction open over 15 minutes by app',
+  service: 'macro-db-prod',
+  query:
+    'min(last_2m):max:postgresql.activity.xact_start_age{dbinstanceidentifier:macro-db-prod} by {app} > 900',
+  monitorThresholds: { critical: '900' },
+  pages: false,
+  description:
+    '{{app.name}} has held a transaction open on macro-db-prod for at least {{value}} seconds. Open transactions hold locks and stop vacuum; recurring ones have lasted 28-65 minutes.',
   dashboard: dashboard.url,
   runbook: 'docs/runbooks/macrodb.md#locks',
 });
