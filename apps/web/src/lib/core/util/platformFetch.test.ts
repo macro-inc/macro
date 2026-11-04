@@ -137,3 +137,20 @@ it('routes the installed global fetch to the native transport without recursing'
   expect(nativeFetch).toHaveBeenCalledTimes(2);
   expect(browser).toHaveBeenCalledTimes(1);
 });
+
+it('rejects native transport failures the way browser fetch does', async () => {
+  const request = createPlatformFetch(vi.fn<typeof fetch>());
+  nativeFetch.mockRejectedValueOnce('error sending request');
+  await expect(request('https://gateway.example/auth')).rejects.toEqual(
+    new TypeError('Failed to fetch', { cause: 'error sending request' })
+  );
+
+  const controller = new AbortController();
+  nativeFetch.mockImplementationOnce(async () => {
+    controller.abort();
+    throw new Error('Request cancelled');
+  });
+  await expect(
+    request('https://gateway.example/auth', { signal: controller.signal })
+  ).rejects.toMatchObject({ name: 'AbortError' });
+});

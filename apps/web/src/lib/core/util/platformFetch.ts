@@ -88,8 +88,35 @@ export function createPlatformFetch(
       return webviewFetch(input, init);
     }
     const { fetch } = await import('@tauri-apps/plugin-http');
-    return fetch(input, init);
+    try {
+      return await fetch(input, init);
+    } catch (error) {
+      throw browserFetchError(
+        error,
+        init?.signal ?? (input instanceof Request ? input.signal : undefined)
+      );
+    }
   };
+}
+
+/**
+ * Native HTTP rejects with plain strings, and with `Error('Request cancelled')`
+ * on abort. Callers expect browser fetch: the signal's reason when aborted, and
+ * `TypeError: Failed to fetch` (which `safeFetch` reads as a network error)
+ * when no response arrived.
+ */
+function browserFetchError(
+  error: unknown,
+  signal: AbortSignal | null | undefined
+): unknown {
+  if (signal?.aborted) {
+    return (
+      signal.reason ??
+      new DOMException('The request was aborted.', 'AbortError')
+    );
+  }
+  if (error instanceof Error) return error;
+  return new TypeError('Failed to fetch', { cause: error });
 }
 
 // Native startup installs the transport explicitly; all callers share it.
