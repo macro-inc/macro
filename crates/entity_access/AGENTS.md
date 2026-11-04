@@ -17,6 +17,8 @@ depended-on crates in the backend.
 - `src/inbound/axum_extractors.rs`: Axum extractors that resolve a receipt
   from the request (feature `inbound`).
 - `src/outbound/pg_access_repo.rs`: the Postgres adapter (feature `outbound`).
+  Form Edit/Owner grants Edit on the backing database; form View grants
+  database View only when that form shares its responses.
 - `src/bin/explain_access.rs`: CLI to explain why a user has (or lacks)
   access to an entity (feature `explain_binary`).
 
@@ -56,9 +58,6 @@ the entity-access domain service.
 
 ## Gotchas
 
-- Document checks fall back to live calendar-note or optional team grants only
-  when ordinary document access is absent; these grants are authenticated and
-  view-only. Keep the shared SQL visibility policy aligned with calendar note reads.
 - `#![deny(missing_docs)]`.
 - `EntityAccessReceipt<R: RequiredPermission>` is the only proof a caller
   checked access at the right level; domain code downstream (e.g.

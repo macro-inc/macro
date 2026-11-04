@@ -28,13 +28,17 @@ const format = new Intl.NumberFormat(undefined, { maximumFractionDigits: 6 });
 export function DatabaseTableSummary(props: {
   columns: DatabaseViewColumn[];
   rows: DatabaseRow[];
+  hasMoreRows?: boolean;
   template: string;
   addColumn: boolean;
 }) {
   return (
     <div
       role="row"
-      aria-label="Table summary"
+      data-grid-summary
+      aria-label={
+        props.hasMoreRows ? 'Loaded records summary' : 'Table summary'
+      }
       class="sticky bottom-0 z-2 grid h-10 shrink-0 border-t border-edge-muted bg-panel text-xs"
       style={{ 'grid-template-columns': props.template }}
     >
@@ -47,7 +51,10 @@ export function DatabaseTableSummary(props: {
         <span class="tabular-nums text-ink">
           {format.format(props.rows.length)}
         </span>
-        <span>{props.rows.length === 1 ? 'record' : 'records'} in view</span>
+        <span>
+          {props.rows.length === 1 ? 'record' : 'records'}{' '}
+          {props.hasMoreRows ? 'loaded' : 'in view'}
+        </span>
       </div>
       <Key each={props.columns.slice(1)} by="id">
         {(column) => <SummaryCell column={column()} rows={props.rows} />}

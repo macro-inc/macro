@@ -1,0 +1,15 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "UPDATE memory_refresh_job SET lease_token = NULL, lease_until = NOW() WHERE user_id = $1 AND lease_token = $2",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Text",
+        "Uuid"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "03fe01eea4f183d09bf1a163281586609a9fa9ad9fc229ee53297a5edad99c92"
+}

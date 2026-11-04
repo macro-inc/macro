@@ -180,17 +180,17 @@
     "tauri-cef": {
       "flake": false,
       "locked": {
-        "lastModified": 1792523699,
-        "narHash": "sha256-++WQc4YpvoMPBFTuDj//856BguC1ArS6AeLTbIOn38Q=",
+        "lastModified": 1793371729,
+        "narHash": "sha256-nRfbjAGUWsbN5CBhFgfARFMEWquvCHvgsTH9a8BqA1g=",
         "owner": "macro-inc",
         "repo": "tauri",
-        "rev": "285fb6b1cb2fc20666da1688f4c74e240a100035",
+        "rev": "4b8a46f15c0a54a5c06a1486cd5432d444c17bd8",
         "type": "github"
       },
       "original": {
         "owner": "macro-inc",
         "repo": "tauri",
-        "rev": "285fb6b1cb2fc20666da1688f4c74e240a100035",
+        "rev": "4b8a46f15c0a54a5c06a1486cd5432d444c17bd8",
         "type": "github"
       }
     }

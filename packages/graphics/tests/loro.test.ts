@@ -6,6 +6,7 @@ import {
   freezeDocument,
   type GraphicsEditor,
   IDENTITY,
+  setArtifactCommand,
   translation,
   worldMatrix,
 } from '../src/core';
@@ -294,4 +295,49 @@ it('rejects unsupported proposals before touching Loro or local history', () => 
   converge(a, b);
   expect(worldMatrix(b.document, 'a')).toEqual(translation(10, 20));
   expect(worldMatrix(b.document, 'b')).toEqual(translation(160, 30));
+});
+
+it('artifact content and pose merge independently and survive a reload', () => {
+  const document = createScene([
+    {
+      id: 'art',
+      type: 'artifact',
+      placement: { parentId: 'scene-root', sortKey: 'a0' },
+      transform: translation(0, 0),
+      geometry: {
+        width: 640,
+        height: 360,
+        title: 'Intro',
+        html: '<h1>Hello</h1>',
+        designWidth: 1280,
+        designHeight: 720,
+        presentOrder: 'a0',
+      },
+      appearance: { fill: 'transparent', stroke: 'transparent' },
+    },
+  ]);
+  const { lab, a, b } = setup(document);
+  move(a, 'art', 40);
+  b.execute(setArtifactCommand, {
+    id: 'art',
+    content: { html: '<h1>Hi</h1>', presentOrder: 'a1' },
+  });
+  lab.syncNow();
+  converge(a, b);
+  expect(worldMatrix(a.document, 'art')[4]).toBe(40);
+  expect(a.document.items.art).toMatchObject({
+    geometry: { html: '<h1>Hi</h1>', presentOrder: 'a1', title: 'Intro' },
+  });
+
+  const reloaded = createLoroGraphicsBackend(
+    createLoroSeed(a.document),
+    '3',
+    document.rootId
+  );
+  disposers.push(reloaded.dispose);
+  expect(reloaded.getDocument().items.art).toEqual(a.document.items.art);
+
+  expect(() =>
+    b.execute(setArtifactCommand, { id: 'art', content: { designWidth: 0 } })
+  ).toThrow('Invalid artifact geometry');
 });

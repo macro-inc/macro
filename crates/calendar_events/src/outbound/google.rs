@@ -1356,6 +1356,16 @@ impl<G: GoogleRequestGate> CalendarMutationProvider for GoogleCalendarClient<G> 
         else {
             return Ok(ProviderSeriesMutationOutcome::Gone);
         };
+        // Google answers a read of a deleted or replaced series with its
+        // tombstone and refuses any change to it, so there is nothing left to
+        // truncate. The caller retires the source, as for a missing series.
+        if master.status.as_deref() == Some("cancelled") {
+            tracing::info!(
+                master_provider_event_id,
+                "the series is a tombstone, nothing to truncate"
+            );
+            return Ok(ProviderSeriesMutationOutcome::Gone);
+        }
         // Removing everything from the first occurrence onward is a series
         // deletion, matching Google Calendar's own behavior.
         let master_start = google_time(&master).ok().map(|time| event_start_of(&time));

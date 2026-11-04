@@ -47,8 +47,10 @@ fi
 echo "version_code=${version_code}" >> "$GITHUB_OUTPUT"
 echo "Releasing Android version code ${version_code}."
 
-# (`gh pr checks` names are job names, not workflow names.)
-ours='^(Android Native Check|Android Play Release|Re-run the native check|Web App Status Check|Android Release Drift|iOS Native Check)'
+# (`gh pr checks` names are job names, not workflow names, plus the contexts
+# of commit statuses, such as the android-play/* ones Android Play Publish
+# and Android Release Watch set.)
+ours='^(Android Native Check|Android Play Release|Re-run the native check|Web App Status Check|Android Release Drift|iOS Native Check|android-play/)'
 deadline=$(( $(date +%s) + WAIT_MINUTES * 60 ))
 while true; do
   checks=$(gh pr checks "$PR_NUMBER" --repo "$GH_REPO" --json name,bucket \

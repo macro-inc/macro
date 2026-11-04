@@ -135,18 +135,26 @@ The detail's `limits` supplies allowed MIME types, bytes and the edit window.
 The owner may stop syncing (details → **Syncing**, groups and direct chats) with
 `DELETE /external-chats/<id>`; history remains readable.
 
+Any viewer, including one who can't reply, can make a task from a message:
+**Task** in the row's hover toolbar, or **Create task** in the touch action
+drawer, opens the task composer titled with the first 70 characters of the
+text (mentions as `@<name>`; Macro users mentioned at either end are left out
+and preselected as assignees) and a mention of the chat as its content. The
+mention opens the chat, not the message. The task has no **Source**: the
+properties service's entity references don't include external chats. Pending,
+deleted and system rows have no task action.
+
 After adding, earlier messages (up to 500 messages or 90 days) come from the
-owner's phone only when they press **Import** in the bottom-right prompt
-**Import WhatsApp history** ("Open WhatsApp on your phone and keep it open,
-then import …"), shown app-wide while any of their chats is
-`waiting_for_phone`; closing it hides it until the next load (it is the only
-way to start an import). **Import**
-posts `/whatsapp/history-import`. The detail's `backfill` drives the header's
-subtitle: **WhatsApp · Importing history…** while `pending`/`running`,
-**WhatsApp · Earlier messages not imported. Open WhatsApp on your phone, then
-import them.** (*Earlier messages wait for the owner's phone* for shared
-viewers) while `waiting_for_phone`; the same line shows above the oldest
-message. `waiting_for_message` (nobody has posted since adding, so nothing to
+owner's phone only when they press Import. While a chat is
+`waiting_for_phone`, its owner sees a bar under the chat header ("Open
+WhatsApp on your phone to import earlier messages." with **Import**), and on desktop and
+tablets a closable bottom-right prompt **Import WhatsApp history** with
+**Import** covers all their waiting chats (never on phones, where it would
+cover the composer; a close sticks until another chat needs it). Both post
+`/whatsapp/history-import`. The detail's `backfill` drives the header's
+subtitle: **WhatsApp · Importing history…** while `pending`/`running`, and
+*Earlier messages wait for the owner's phone* for shared viewers while
+`waiting_for_phone`; the same line shows above the oldest message. `waiting_for_message` (nobody has posted since adding, so nothing to
 import from yet) shows nothing; the first message makes it importable. Imported
 messages appear older than what is shown as each page lands (pushed as
 `external_chat_changed`), without moving the viewer's scroll position. `done` is

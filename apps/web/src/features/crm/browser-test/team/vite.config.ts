@@ -1,0 +1,50 @@
+import { fileURLToPath } from 'node:url';
+import tailwind from '@tailwindcss/vite';
+import { defineConfig } from 'vite';
+import solidPlugin from 'vite-plugin-solid';
+import solidSvg from 'vite-plugin-solid-svg';
+import tsconfigPaths from 'vite-tsconfig-paths';
+
+const directory = fileURLToPath(new URL('.', import.meta.url));
+const webDirectory = fileURLToPath(new URL('../../../../../', import.meta.url));
+const workspaceDirectory = fileURLToPath(
+  new URL('../../../../../../../', import.meta.url)
+);
+
+export default defineConfig({
+  root: directory,
+  cacheDir: `${directory}/.vite`,
+  plugins: [
+    solidPlugin(),
+    solidSvg({ defaultAsComponent: true }),
+    tsconfigPaths({ projects: [`${webDirectory}/tsconfig.json`] }),
+    tailwind(),
+  ],
+  resolve: {
+    dedupe: ['solid-js'],
+    alias: [
+      ...[
+        '@service-storage/client',
+        '@service-storage/crm-contacts',
+        '@service-storage/crm-visibility',
+        '@app/lib/analytics',
+        '@app/features/next-soup/filters/filter-store',
+        '../context/crm-context',
+      ].map((find) => ({
+        find,
+        replacement: `${directory}/preview-adapters.ts`,
+      })),
+      { find: /^@entity$/, replacement: `${directory}/entity-preview.tsx` },
+      {
+        find: /^@app\/components\/view-shell$/,
+        replacement: `${webDirectory}/src/components/view-shell/SearchBar.tsx`,
+      },
+    ],
+  },
+  build: { target: 'esnext' },
+  server: {
+    host: '127.0.0.1',
+    strictPort: true,
+    fs: { allow: [workspaceDirectory] },
+  },
+});

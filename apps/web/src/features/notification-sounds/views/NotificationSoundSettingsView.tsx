@@ -2,6 +2,7 @@ import { useUserId } from '@core/context/user';
 import { fireAndForget } from '@core/util/fireAndForget';
 import { Show } from 'solid-js';
 import { NotificationSoundSection } from '../components/NotificationSoundSection';
+import { QuietHoursSection } from '../components/QuietHoursSection';
 import { playNotificationSound } from '../primitives/sound-player';
 import { createNotificationSoundSettings } from '../primitives/sound-settings';
 
@@ -13,18 +14,24 @@ export function NotificationSoundSettingsView() {
       {(id) => {
         const sounds = createNotificationSoundSettings(id);
         return (
-          <NotificationSoundSection
-            settings={sounds.settings()}
-            onEnabledChange={sounds.setEnabled}
-            onVolumeChange={sounds.setVolume}
-            onCategoryChange={sounds.setCategory}
-            onPreview={(sound) =>
-              fireAndForget(
-                playNotificationSound(sound, sounds.settings().volume),
-                'notification-sounds'
-              )
-            }
-          />
+          <>
+            <NotificationSoundSection
+              settings={sounds.settings()}
+              onEnabledChange={sounds.setEnabled}
+              onVolumeChange={sounds.setVolume}
+              onCategoryChange={sounds.setCategory}
+              onPreview={(sound) =>
+                fireAndForget(
+                  playNotificationSound(sound, sounds.settings().volume),
+                  'notification-sounds'
+                )
+              }
+            />
+            <QuietHoursSection
+              quietHours={sounds.settings().quietHours}
+              onChange={sounds.setQuietHours}
+            />
+          </>
         );
       }}
     </Show>

@@ -32,14 +32,84 @@ The root adapters construct production dependencies. `context` defines the
 capabilities; it does not import their implementations. Views consume these
 capabilities, primitives receive narrow inputs, and components render props.
 Core modules remain independent of Solid, service clients, and app state.
+`features/notifications/mark-row-seen.ts` integrates with shared list activation so
+opening a company or contact clears its row's unread notifications immediately.
+It uses the row's attached notifications before falling back to an entity read;
+the shared notification source owns optimistic state and failure rollback.
+The REST fallback waits for the notification feed before reading its snapshot.
+The discussion's message reader remains visibility-gated and reads a separate
+global feed, so it cannot guarantee that opening a record clears its row's dot.
 UI rollout gates read `useFeatureFlag` directly where used; do not pass rollout
 booleans through component props or the CRM source contract.
 
 Shared entity representations, transport clients, property editors, and
 collection mechanics remain shared. CRM owns its record queries and cache updates.
+Pipeline board positions load through the pipeline-authorized endpoint and are
+cached by pipeline and view. Move results update the originating view's cache,
+even if the viewer switches boards while saving. The adapter supplies the selected
+view ID so switching boards also retires unfinished visual moves and sort prompts.
+`browser-test/board.tsx` exercises shared cards, lane composition, and saved ordering with synthetic data.
+
+Successful domain block and unblock mutations evict indexed company rows and
+contact suggestions from the GraphQL cache before refreshing CRM and Soup
+queries. Refresh mounted GraphQL lists that can contain CRM records too: the
+REST mutation returns no changed rows, and hidden records are absent from the
+search index. Failed mutations leave those cached records intact.
+Company selection snapshots and deduplicates the company's domains, waits for
+every domain request, and retains failed domains for retry after the company
+disappears from suggestions. Keep successful blocks when another domain fails.
 CRM supplies row/header/empty state slots, filter choices, grouping policy, and
 its own collection state to the shared collection renderer. Shared collection code must not acquire CRM hooks or
 CRM-specific state again.
+
+Visible contact and company toolbars put the archive-system icon beside Copy link.
+Archived identities group one Archived chip with a borderless Restore action; on
+phones the group wraps beneath the name and Restore retains a 44px touch target.
+The chip owns hover/focus/tap explanation; Restore does not trigger that explanation.
+`RecordVisibilityAction` handles confirmation, pending, cancellation and retry.
+Only admins/owners can change visibility. Company archive cascades to all people
+and disables email syncing; company restore explicitly confirms restoring every
+person, including individually archived people, while email syncing stays off.
+A person under an archived company routes to that company before restoration.
+Both information panels start with Record details and References; company-only
+Properties, Lists and Email sharing follow, with no duplicate visibility toggle.
+
+People, Companies and company Team use an exclusive Visible/Archived filter.
+`people-visibility` keeps the workspace choice local to the account/team/role/view,
+preserves search and other display choices, and sanitizes shared/persisted contact
+filters. Archived People is current-administered-team scoped, server filtered
+before pagination; visible People remains viewer-wide. Team applies the same
+exclusive choice to its embedded contact response, including effective parent state.
+
+Successful REST mutations write confirmed flags through the normalized Soup update
+path and patch paginated suggestions, company search pages, REST Soup and embedded
+detail snapshots. Confirmed detail snapshots become stale without an immediate
+refetch; active initial reads that were cancelled are restarted.
+Pre-write REST reads are cancelled; the normalized exchange fences older responses
+containing or declaring the affected CRM types before publication, hydration or
+persistence. Flat and grouped Soup pages retain their initial filter dependencies
+on continuations, so old empty pages cannot briefly hide a restored record.
+Imperative and durable revalidations recover these dependencies at dispatch, before
+urql can share them with a later mounted reader. Unknown opaque continuation scopes
+conservatively fence both CRM types; known initial scopes retain explicit exclusions.
+Refreshes target CRM-capable readers, leaving unrelated lists alone. A refresh
+failure is logged separately and never misreports a committed save as rejected.
+Session identity is captured before dispatch so a late response cannot populate a
+replacement session. Ordinary Cmd-K continues to exclude archived companies and
+people through its existing feeds and normalized projections; it has no recovery UI.
+
+`browser-test/archive` uses production record headers, toolbar actions, tabs,
+SidePanel, Team filtering and confirmations with synthetic storage and isolated
+shell services/entity-row metadata. It does not verify authenticated persistence.
+`browser-test/people` additionally exercises the production AST compiler and live
+GraphQL page source. Exchange tests cover the normalized-cache race boundary.
+Run the fixture's `playwright.config.ts` from `apps/web`.
+Both hidden mutations emit `crm.visibility_change` through request and cache
+refresh completion, with the opaque record ID, record type, requested hidden
+state, and outcome. `crm.visibility_change.refresh` times cache invalidation and
+the dependent query refreshes before the mutation stops being pending.
+`crm.people_visibility` measures the display choice through the next paint;
+Soup retains its existing query/loading instrumentation.
 
 `task-composer.ts` owns the CRM task preset: Companies/Contacts are visible,
 Status remains a task default but is not initially shown. CRM registers live

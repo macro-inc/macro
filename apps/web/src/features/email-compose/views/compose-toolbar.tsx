@@ -18,10 +18,13 @@ import Trash from '@icon/system/regular/trash.svg';
 import { Button, SendButton } from '@ui';
 import { FORMAT_TEXT_COMMAND, type LexicalEditor } from 'lexical';
 import { createSignal, Show } from 'solid-js';
+import { CreateEventButton } from '../components/create-event-button';
 import { EmailDateSelector } from '../components/email-date-selector';
 import { EmailScheduleSummary } from '../components/email-schedule-summary';
 import { MobileComposeActions } from '../components/mobile-compose-actions';
 import { useCompose } from '../context/compose-context';
+import { proposesMeeting } from '../core/meeting-intent';
+import { createWrittenText } from '../primitives/written-text';
 
 export function EmailComposeToolbar(props: {
   editor?: () => LexicalEditor | undefined;
@@ -30,6 +33,17 @@ export function EmailComposeToolbar(props: {
 }) {
   const ctx = useCompose();
   const [showFormatRibbon, setShowFormatRibbon] = createSignal(false);
+  const writtenText = createWrittenText(() => props.editor?.());
+  const createEvent = () => {
+    const recipients = ctx.recipients();
+    ctx.calendarEvents?.open({
+      subject: ctx.subject(),
+      guests: [...recipients.to, ...recipients.cc].map(
+        (recipient) => recipient.data.email
+      ),
+      text: writtenText(),
+    });
+  };
 
   return (
     <Show when={props.inline || !ctx.isMobile()} fallback={<MobileToolbar />}>
@@ -78,6 +92,7 @@ export function EmailComposeToolbar(props: {
           {/* Inline drafts send without waiting for inline media uploads. */}
           <Show when={props.editor && !props.inline}>
             <Button
+              variant="ghost"
               onClick={() =>
                 props
                   .editor?.()
@@ -86,9 +101,8 @@ export function EmailComposeToolbar(props: {
                     constrainedMediaDimensions: { width: 542, height: 542 },
                   })
               }
-              variant="ghost"
-              tooltip="Insert image"
               aria-label="Insert image"
+              tooltip="Insert image"
               size="icon-md"
               disabled={ctx.disabled()}
             >
@@ -104,6 +118,13 @@ export function EmailComposeToolbar(props: {
           >
             <TextAa class="size-4 touch:size-6 shrink-0 pointer-events-none" />
           </Button>
+          <Show when={ctx.calendarEvents?.enabled()}>
+            <CreateEventButton
+              suggested={proposesMeeting(writtenText())}
+              disabled={ctx.disabled()}
+              onClick={createEvent}
+            />
+          </Show>
           <Show when={ctx.scheduleEnabled}>
             <div class="shrink-0">
               <EmailDateSelector

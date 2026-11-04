@@ -1,3 +1,4 @@
+import { TraceFlow, usePending } from '@app/observability/flow';
 import { SidePanel } from '@components/app/side-panel';
 import { createMemo, Match, onCleanup, Show, Suspense, Switch } from 'solid-js';
 import { CrmListSkeleton } from '../components/list-state';
@@ -12,14 +13,14 @@ import {
 import { ContactDiscussionSection } from './contact-discussion-section';
 import { ContactEmailsSection } from './contact-emails-section';
 import { ContactHeader } from './contact-header';
-import { ContactSharingSection } from './contact-sharing-section';
 import {
   RecordCallsSection,
   RecordDatabasesSection,
   RecordFilesSection,
   RecordReferencesSection,
 } from './record-associations';
-import { useContactQuery, useIsTeamAdmin } from './use-crm';
+import { RecordDetailsSection } from './record-details-section';
+import { useContactQuery } from './use-crm';
 
 type ContactProps = {
   contactId: string;
@@ -32,9 +33,9 @@ type ContactProps = {
 /**
  * Root of the contact detail view, laid out like a project: the host's top
  * bar picks the section, Overview shows the contact and its discussion, and
- * the other sections list its emails, files, tasks and calls. Sharing and
- * references stay in the floating information panel. A legacy email id shows
- * the CRM contact with that email.
+ * the other sections list its emails, files, tasks and calls. References
+ * stay in the floating information panel. A legacy email id shows the CRM
+ * contact with that email.
  */
 export function Contact(props: ContactProps) {
   const contactQuery = useContactQuery(() => props.contactId);
@@ -48,15 +49,31 @@ export function Contact(props: ContactProps) {
       keyed
       fallback={<CrmListSkeleton label="Loading contact" />}
     >
-      {(id) => <ContactRecord {...props} contactId={id} />}
+      {(id) => <TracedContact {...props} contactId={id} />}
     </Show>
   );
 }
 
-function ContactRecord(props: ContactProps) {
+function TracedContact(props: ContactProps) {
+  return (
+    <TraceFlow
+      name="crm.contact"
+      key={() => `${props.contactId}:${props.section ?? 'overview'}`}
+      attributes={{
+        'contact.id': props.contactId,
+        'crm.section': props.section ?? 'overview',
+      }}
+    >
+      <ContactContent {...props} />
+    </TraceFlow>
+  );
+}
+
+function ContactContent(props: ContactProps) {
   const context = useCrmContext();
   const pipelinesEnabled = context.pipelinesEnabled();
   const contactQuery = useContactQuery(() => props.contactId);
+  usePending('crm.record', () => contactQuery.isLoading);
   const contact = () => contactQuery.data;
   onCleanup(
     context.registerTaskComposerRecord(() => ({
@@ -65,7 +82,6 @@ function ContactRecord(props: ContactProps) {
       companyId: contact()?.companyId,
     }))
   );
-  const isTeamAdmin = useIsTeamAdmin();
   const section = () => props.section ?? 'overview';
   const scope = createMemo(
     (): CrmRecordScope | undefined => {
@@ -132,14 +148,11 @@ function ContactRecord(props: ContactProps) {
         </div>
       </div>
 
-      {/* Sharing is admin-only; hide the whole section for non-admins
-          rather than rendering it empty. */}
-      <Show when={isTeamAdmin()}>
-        <SidePanel.Section id="contact-sharing" title="Sharing" order={25}>
-          <ContactSharingSection contact={contact()} />
-        </SidePanel.Section>
-      </Show>
-      <SidePanel.Section id="contact-references" title="References" order={30}>
+      <RecordDetailsSection
+        contact={contact()}
+        onOpenCompany={props.onOpenCompany}
+      />
+      <SidePanel.Section id="contact-references" title="References" order={20}>
         <RecordReferencesSection scope={scope()} />
       </SidePanel.Section>
     </SidePanel.Layout>

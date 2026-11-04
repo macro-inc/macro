@@ -94,6 +94,63 @@ impl SignedUrl {
     }
 }
 
+/// Marks an unsubscribe link in an email body that the producer cannot sign. The notification
+/// service holds the signing key and replaces `macro-unsubscribe:<type name>` with a signed URL
+/// that turns that notification type off for the recipient.
+pub const UNSUBSCRIBE_PLACEHOLDER_PREFIX: &str = "macro-unsubscribe:";
+
+/// The placeholder an email template puts in its unsubscribe `href` for `type_name`.
+pub fn unsubscribe_placeholder(type_name: &str) -> String {
+    format!("{UNSUBSCRIBE_PLACEHOLDER_PREFIX}{type_name}")
+}
+
+/// The signed URL that turns `type_name` off for `user_id` without signing in.
+pub fn unsubscribe_url(
+    notification_service_url: Url,
+    type_name: &str,
+    user_id: &str,
+    mac: Hmac<Sha256>,
+) -> SignedUrl {
+    let mut url = append_path(
+        notification_service_url,
+        &format!("/user_notifications/preferences/{type_name}/disable"),
+    );
+    url.query_pairs_mut().append_pair("id", user_id).finish();
+    SignedUrl::new(url, mac)
+}
+
+/// Replaces every unsubscribe placeholder in an HTML `body` with a signed URL for `user_id`.
+/// Returns `None` when the body has no placeholder.
+pub fn sign_unsubscribe_placeholders(
+    body: &str,
+    notification_service_url: &Url,
+    user_id: &str,
+    mac: &Hmac<Sha256>,
+) -> Option<String> {
+    if !body.contains(UNSUBSCRIBE_PLACEHOLDER_PREFIX) {
+        return None;
+    }
+    let mut signed = String::with_capacity(body.len() + 256);
+    let mut rest = body;
+    while let Some(start) = rest.find(UNSUBSCRIBE_PLACEHOLDER_PREFIX) {
+        signed.push_str(&rest[..start]);
+        let after = &rest[start + UNSUBSCRIBE_PLACEHOLDER_PREFIX.len()..];
+        let type_len = after
+            .find(|c: char| !(c.is_ascii_alphanumeric() || c == '_' || c == '-'))
+            .unwrap_or(after.len());
+        let url = unsubscribe_url(
+            notification_service_url.clone(),
+            &after[..type_len],
+            user_id,
+            mac.clone(),
+        );
+        signed.push_str(&url.as_ref().as_str().replace('&', "&amp;"));
+        rest = &after[type_len..];
+    }
+    signed.push_str(rest);
+    Some(signed)
+}
+
 impl AsRef<Url> for SignedUrl {
     fn as_ref(&self) -> &Url {
         &self.0

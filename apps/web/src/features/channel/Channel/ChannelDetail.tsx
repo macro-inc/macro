@@ -1,6 +1,15 @@
+import {
+  type PriorityCollapser,
+  useRegisterPriorityCollapseItem,
+} from '@app/components/priority-collapse/createPriorityCollapser';
+import {
+  createPriorityCollapseController,
+  PriorityCollapseOverflowSensor,
+} from '@app/components/priority-collapse/PriorityCollapseOverflowSensor';
 import { ViewShell } from '@app/components/view-shell';
 import { ChatWithAgentButton } from '@app/features/chat/ChatWithAgentButton';
 import { useAnalytics } from '@app/lib/analytics/analytics-context';
+import { TraceFlow } from '@app/observability/flow';
 import { ChannelAttachmentsTab } from '@channel/Attachments/ChannelAttachmentsTab';
 import { useChannelBotManagement } from '@channel/Bots/use-channel-bot-management';
 import { useCallContextOptional } from '@channel/Call/CallContext';
@@ -18,15 +27,9 @@ import { ChannelParticipantsTab } from '@channel/Participants/ChannelParticipant
 import { useGlobalBlockOrchestrator } from '@components/app/GlobalAppState';
 import { HeaderActionGroup } from '@components/app/HeaderActionGroup';
 import {
-  createPriorityCollapseController,
-  PriorityCollapseOverflowSensor,
-} from '@components/app/split-layout/components/PriorityCollapseOverflowSensor';
-import {
-  useRegisterPriorityCollapseItem,
   useSplitDisplayName,
   useSplitPanelOrThrow,
 } from '@components/app/split-layout/layoutUtils';
-import type { PriorityCollapser } from '@components/app/split-layout/utils/createPriorityCollapser';
 import { ENABLE_CALLS } from '@core/constant/featureFlags';
 import {
   useChannel,
@@ -34,6 +37,7 @@ import {
   useChannelName,
   useChannelType,
 } from '@core/context/channels';
+import { isMobile } from '@core/mobile/isMobile';
 import { createMethodRegistration } from '@core/orchestrator';
 import { lazyNamed } from '@core/util/lazyNamed';
 import { Tabs } from '@ui';
@@ -158,6 +162,7 @@ export function ChannelDetailActions(props: ChannelDetailHeaderProps) {
   const channelName = useChannelName(props.channelId, props.fallbackName);
   const channelType = useChannelType(props.channelId);
   const call = useCall(() => props.channelId);
+  const { activeTab } = useChannelTab();
 
   // Seed for "Ask Macro": a new chat with this channel @mentioned.
   const askMacroEntity = () => {
@@ -196,13 +201,17 @@ export function ChannelDetailActions(props: ChannelDetailHeaderProps) {
           )}
         </Show>
       </HeaderActionGroup>
-      <DebugSuspense name="ChannelDetail.invite">
-        <ChannelInviteButton
-          channelId={props.channelId}
-          channelName={channelName() ?? 'New Channel'}
-          channelType={channelType()}
-        />
-      </DebugSuspense>
+      <Show
+        when={!isMobile() || activeTab() !== 'call' || !call.isInThisChannel()}
+      >
+        <DebugSuspense name="ChannelDetail.invite">
+          <ChannelInviteButton
+            channelId={props.channelId}
+            channelName={channelName() ?? 'New Channel'}
+            channelType={channelType()}
+          />
+        </DebugSuspense>
+      </Show>
     </div>
   );
 }
@@ -428,36 +437,46 @@ function ChannelDetailContent(props: ChannelDetailProps) {
                   name="ChannelDetail.messages"
                   fallback={<ChannelLoading />}
                 >
-                  <ChannelMessages autofocus={props.autofocus ?? false} />
+                  <TraceFlow name="channel.messages.view">
+                    <ChannelMessages autofocus={props.autofocus ?? false} />
+                  </TraceFlow>
                 </DebugSuspense>
               </Match>
               <Match when={activeTab() === 'attachments'}>
                 <DebugSuspense name="ChannelDetail.attachments">
-                  <ChannelAttachmentsTab channelId={channelId} />
+                  <TraceFlow name="channel.attachments.view">
+                    <ChannelAttachmentsTab channelId={channelId} />
+                  </TraceFlow>
                 </DebugSuspense>
               </Match>
               <Match when={activeTab() === 'calls' && ENABLE_CALLS}>
                 <DebugSuspense name="ChannelDetail.calls">
-                  <ChannelCallsTab channelId={channelId} />
+                  <TraceFlow name="channel.calls.view">
+                    <ChannelCallsTab channelId={channelId} />
+                  </TraceFlow>
                 </DebugSuspense>
               </Match>
               <Match when={activeTab() === 'participants'}>
                 <DebugSuspense name="ChannelDetail.participants">
-                  <ChannelParticipantsTab
-                    channelId={channelId}
-                    botManagementEnabled={botManagement.enabled()}
-                    onCreateBot={botManagement.openCreateBot}
-                    inviteBotFocusRequest={botManagement.inviteFocusRequest()}
-                    onOpenBot={botManagement.openBot}
-                  />
+                  <TraceFlow name="channel.participants.view">
+                    <ChannelParticipantsTab
+                      channelId={channelId}
+                      botManagementEnabled={botManagement.enabled()}
+                      onCreateBot={botManagement.openCreateBot}
+                      inviteBotFocusRequest={botManagement.inviteFocusRequest()}
+                      onOpenBot={botManagement.openBot}
+                    />
+                  </TraceFlow>
                 </DebugSuspense>
               </Match>
               <Match when={activeTab() === 'call' && canUseInlineCallTab()}>
                 <DebugSuspense name="ChannelDetail.call">
-                  <ChannelCallTab
-                    channelId={channelId}
-                    pendingJoin={pendingJoinCall}
-                  />
+                  <TraceFlow name="channel.call.view">
+                    <ChannelCallTab
+                      channelId={channelId}
+                      pendingJoin={pendingJoinCall}
+                    />
+                  </TraceFlow>
                 </DebugSuspense>
               </Match>
             </Switch>

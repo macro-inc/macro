@@ -1,0 +1,39 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            INSERT INTO entity_properties (id, entity_id, entity_type, property_definition_id, values)\n            SELECT cell.id, cell.entity_id, $3, $4, cell.value\n            FROM UNNEST($1::uuid[], $2::text[], $5::jsonb[]) AS cell(id, entity_id, value)\n            WHERE NOT EXISTS (\n                SELECT 1 FROM entity_properties stored\n                WHERE stored.entity_id = cell.entity_id\n                  AND stored.entity_type = $3\n                  AND stored.property_definition_id = $4\n            )\n            ON CONFLICT (entity_id, entity_type, property_definition_id)\n            DO UPDATE SET values = EXCLUDED.values, updated_at = NOW()\n            ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "UuidArray",
+        "TextArray",
+        {
+          "Custom": {
+            "name": "property_entity_type",
+            "kind": {
+              "Enum": [
+                "CHANNEL",
+                "CHAT",
+                "DOCUMENT",
+                "PROJECT",
+                "THREAD",
+                "USER",
+                "COMPANY",
+                "TASK",
+                "CALL_RECORD",
+                "CALENDAR_EVENT",
+                "INITIATIVE",
+                "CONTACT",
+                "DATABASE_ROW"
+              ]
+            }
+          }
+        },
+        "Uuid",
+        "JsonbArray"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "3065089c6dc3baefa2adf9e0bcee8e4dc3bd289db89ec09c0e12a256e0b47ab3"
+}

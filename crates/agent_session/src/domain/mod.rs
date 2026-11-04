@@ -2,6 +2,7 @@ pub mod action_history;
 pub mod agent_conversation;
 /// Current authorization for agent session streams.
 pub mod audience;
+pub mod auto_archive;
 pub mod coding_agents;
 pub mod coding_preferences;
 pub mod connection;
@@ -26,6 +27,7 @@ pub mod session;
 pub mod session_task;
 /// Session link, channel, and team sharing.
 pub mod sharing;
+pub mod updates;
 
 pub mod credentials;
 
