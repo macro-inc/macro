@@ -538,6 +538,12 @@ Re-exports [PipelineTable](../entities/crm/pipeline/classes/PipelineTable.md)
 
 ***
 
+### PipelineView
+
+Re-exports [PipelineView](../entities/crm/pipeline/classes/PipelineView.md)
+
+***
+
 ### PullRequestChangeset
 
 Re-exports [PullRequestChangeset](../entities/github-pull-requests/pull-request/classes/PullRequestChangeset.md)
@@ -568,9 +574,21 @@ Re-exports [QueryTableVersion](../entities/databases/query/interfaces/QueryTable
 
 ***
 
+### ReferralLink
+
+Re-exports [ReferralLink](../entities/referrals/namespace/interfaces/ReferralLink.md)
+
+***
+
 ### ReviewCalendarDraft
 
 Re-exports [ReviewCalendarDraft](../entities/agent-sessions/review/type-aliases/ReviewCalendarDraft.md)
+
+***
+
+### ReviewDraft
+
+Re-exports [ReviewDraft](../entities/agent-sessions/review/type-aliases/ReviewDraft.md)
 
 ***
 
@@ -685,6 +703,12 @@ Re-exports [StructuredCompletionResponse](../../generated/cognition/types.gen/ty
 ### TaskSummary
 
 Re-exports [TaskSummary](../entities/tasks/task/interfaces/TaskSummary.md)
+
+***
+
+### TeamInvite
+
+Re-exports [TeamInvite](../entities/teams/invite/classes/TeamInvite.md)
 
 ***
 

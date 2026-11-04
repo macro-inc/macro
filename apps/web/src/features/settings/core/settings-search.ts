@@ -168,6 +168,12 @@ const SETTINGS: Setting[] = [
   },
   {
     tab: 'Notifications',
+    title: 'Quiet hours',
+    target: 'Quiet hours',
+    keywords: 'schedule do not disturb dnd silence mute night timezone',
+  },
+  {
+    tab: 'Notifications',
     title: 'Snoozed items',
     target: 'Snoozed items',
     keywords: 'pause resume notifications',

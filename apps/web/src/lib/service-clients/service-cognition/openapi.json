@@ -2339,6 +2339,76 @@
         }
       }
     },
+    "/pipedream/mcp/connect/complete": {
+      "post": {
+        "tags": ["pipedream-mcp"],
+        "summary": "Record an app the user connected through Macro Connect.",
+        "description": "Answers 404 until Connect lists an active connection for this user and\napp, so the frontend can poll it while the consent window is open.",
+        "operationId": "complete_pipedream_mcp_connect",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PipedreamConnectCompleteRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PipedreamConnectionResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "501": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/pipedream/mcp/connections": {
       "get": {
         "tags": ["pipedream-mcp"],
@@ -2605,9 +2675,25 @@
     "/pipedream/mcp/token": {
       "post": {
         "tags": ["pipedream-mcp"],
-        "summary": "Create a short-lived Pipedream Connect token for the authenticated user.",
-        "description": "The frontend opens Pipedream's hosted Connect UI with this token; the\nuser picks (or is deep-linked into) an app and authorizes it there.",
+        "summary": "Start a connect flow for the authenticated user.",
+        "description": "By default, a short-lived Pipedream Connect token: the frontend opens\nPipedream's hosted Connect UI with it, and the user picks (or is\ndeep-linked into) an app and authorizes it there. When the body names an\napp Macro Connect serves and the `macro-connect` rollout is on for the\nuser, a Connect URL instead.",
         "operationId": "create_pipedream_mcp_token",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "oneOf": [
+                  {
+                    "type": "null"
+                  },
+                  {
+                    "$ref": "#/components/schemas/PipedreamTokenRequest"
+                  }
+                ]
+              }
+            }
+          }
+        },
         "responses": {
           "200": {
             "description": "",
@@ -5708,10 +5794,25 @@
           }
         }
       },
+      "PipedreamConnectCompleteRequest": {
+        "type": "object",
+        "description": "Request body for recording a finished Macro Connect flow.",
+        "required": ["app_slug"],
+        "properties": {
+          "app_slug": {
+            "type": "string",
+            "description": "The app that was connected, by Pipedream slug."
+          },
+          "server_name": {
+            "type": ["string", "null"],
+            "description": "Optional display name for the connector, as for completion."
+          }
+        }
+      },
       "PipedreamConnectionResponse": {
         "type": "object",
         "description": "A connected MCP app as returned by the API.",
-        "required": ["app_slug", "server_name", "enabled"],
+        "required": ["app_slug", "server_name", "enabled", "provider"],
         "properties": {
           "app_slug": {
             "type": "string",
@@ -5720,6 +5821,10 @@
           "enabled": {
             "type": "boolean",
             "description": "Whether the connector is enabled for tool use."
+          },
+          "provider": {
+            "$ref": "#/components/schemas/PipedreamProviderResponse",
+            "description": "The backend holding the grant."
           },
           "server_name": {
             "type": "string",
@@ -5742,6 +5847,11 @@
           }
         }
       },
+      "PipedreamProviderResponse": {
+        "type": "string",
+        "description": "Which backend a connection or connect flow uses.",
+        "enum": ["pipedream", "connect"]
+      },
       "PipedreamRecoverRequest": {
         "type": "object",
         "description": "Request body for recovering a connect flow whose result the Connect UI\nnever reported.",
@@ -5757,22 +5867,40 @@
           }
         }
       },
+      "PipedreamTokenRequest": {
+        "type": "object",
+        "description": "Request body for starting a connect flow.",
+        "properties": {
+          "app_slug": {
+            "type": ["string", "null"],
+            "description": "The app to connect, by Pipedream slug. With it, an app Macro Connect\nserves can answer with a Connect URL instead of a Pipedream token."
+          }
+        }
+      },
       "PipedreamTokenResponse": {
         "type": "object",
-        "description": "Response from creating a Pipedream Connect token.",
-        "required": ["token", "expires_at", "connect_link_url"],
+        "description": "Response from starting a connect flow: a Pipedream Connect token, or for\n`provider = connect` a Macro Connect URL.",
+        "required": ["provider"],
         "properties": {
           "connect_link_url": {
-            "type": "string",
-            "description": "Shareable link that opens the same connect flow in a browser tab."
+            "type": ["string", "null"],
+            "description": "Shareable link that opens the same connect flow in a browser tab.\nPipedream only."
+          },
+          "connect_url": {
+            "type": ["string", "null"],
+            "description": "URL to open in a popup or browser tab for Macro Connect's consent\nflow; once it finishes, call `/pipedream/mcp/connect/complete`.\nConnect only."
           },
           "expires_at": {
-            "type": "string",
-            "description": "RFC 3339 expiry of the token."
+            "type": ["string", "null"],
+            "description": "RFC 3339 expiry of the token. Pipedream only."
+          },
+          "provider": {
+            "$ref": "#/components/schemas/PipedreamProviderResponse",
+            "description": "The backend this flow connects through."
           },
           "token": {
-            "type": "string",
-            "description": "Short-lived token to open the Pipedream Connect UI with."
+            "type": ["string", "null"],
+            "description": "Short-lived token to open the Pipedream Connect UI with. Pipedream only."
           }
         }
       },

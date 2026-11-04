@@ -13,6 +13,7 @@ import localRuntime from './en/local-runtime';
 import mobile from './en/mobile';
 import nav from './en/nav';
 import settingsLanguage from './en/settings-language';
+import settingsMobileApp from './en/settings-mobile-app';
 import settingsNav from './en/settings-nav';
 import splitMenu from './en/split-menu';
 import tabs from './en/tabs';
@@ -38,6 +39,7 @@ export default {
   mobile,
   nav,
   settingsLanguage,
+  settingsMobileApp,
   settingsNav,
   splitMenu,
   tabs,

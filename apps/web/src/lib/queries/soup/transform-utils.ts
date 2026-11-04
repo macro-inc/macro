@@ -990,7 +990,7 @@ export const mapApiSoupItemToEntity = (
     .with({ tag: 'crmContact' }, (item) => ({
       ...item.data,
       type: 'crm_contact' as const,
-      name: item.data.name?.trim() || item.data.email,
+      name: item.data.name?.trim() || item.data.email || '',
       ownerId: item.data.teamId,
       sortTs: item.data.lastInteraction,
       frecencyScore: item.frecency_score,

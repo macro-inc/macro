@@ -1,5 +1,6 @@
+import { useUserId } from '@core/context/user';
 import { fireAndForget } from '@core/util/fireAndForget';
-import { throwOnErr } from '@core/util/result';
+import { catchToResult, throwOnErr } from '@core/util/result';
 import { notificationServiceClient } from '@service-notification/client';
 import type { UserUnsubscribe } from '@service-notification/generated/schemas/userUnsubscribe';
 import { useMutation, useQuery } from '@tanstack/solid-query';
@@ -7,16 +8,19 @@ import type { Accessor } from 'solid-js';
 import { queryClient } from '../client';
 import { notificationKeys } from './keys';
 
+function muteItemKey(item: UserUnsubscribe): string {
+  let type = item.item_type;
+  if (type === 'email' || type === 'thread') {
+    type = 'email_thread';
+  } else if (type === 'foreign') {
+    type = 'foreign_entity';
+  }
+
+  return `${type}:${item.item_id}`;
+}
+
 function sameMuteItem(left: UserUnsubscribe, right: UserUnsubscribe): boolean {
-  const normalize = (type: string) => {
-    if (type === 'email') return 'email_thread';
-    if (type === 'foreign') return 'foreign_entity';
-    return type;
-  };
-  return (
-    left.item_id === right.item_id &&
-    normalize(left.item_type) === normalize(right.item_type)
-  );
+  return muteItemKey(left) === muteItemKey(right);
 }
 
 async function fetchUnsubscribes() {
@@ -56,6 +60,11 @@ function invalidateUnsubscribes() {
 
 const MUTE_ITEM_MUTATION_KEY = ['notification', 'mute-item'] as const;
 const UNMUTE_ITEM_MUTATION_KEY = ['notification', 'unmute-item'] as const;
+const BULK_PREFERENCE_MUTATION_KEY = [
+  'notification',
+  'bulk-preferences',
+] as const;
+const BULK_PREFERENCE_LIMIT = 500;
 // A paused mutation lives only in memory and replays in parallel on reconnect,
 // so an offline mute must fail and roll back instead of waiting.
 const MUTE_NETWORK_MODE = 'always';
@@ -92,7 +101,8 @@ function removeUnsubscribe(item: UserUnsubscribe) {
 function invalidateUnsubscribesWhenIdle() {
   const pending =
     queryClient.isMutating({ mutationKey: MUTE_ITEM_MUTATION_KEY }) +
-    queryClient.isMutating({ mutationKey: UNMUTE_ITEM_MUTATION_KEY });
+    queryClient.isMutating({ mutationKey: UNMUTE_ITEM_MUTATION_KEY }) +
+    queryClient.isMutating({ mutationKey: BULK_PREFERENCE_MUTATION_KEY });
   if (pending > 1) return;
   return invalidateUnsubscribes();
 }
@@ -156,6 +166,96 @@ export function useUnmuteItemMutation() {
         invalidateUnsubscribesWhenIdle(),
         'notification-unsubscribes'
       );
+    },
+  }));
+}
+
+export type BulkNotificationPreferenceArgs = {
+  actorId: string;
+  items: readonly UserUnsubscribe[];
+  muted: boolean;
+  snoozedUntil?: string;
+};
+
+/** Confirm bulk writes before updating the cache once; retain failed items for retry. */
+export function useBulkNotificationPreferencesMutation() {
+  const userId = useUserId();
+  return useMutation(() => ({
+    mutationKey: BULK_PREFERENCE_MUTATION_KEY,
+    networkMode: MUTE_NETWORK_MODE,
+    mutationFn: async (args: BulkNotificationPreferenceArgs) => {
+      if (args.actorId !== userId())
+        throw new Error('The account has changed.');
+
+      const items = [
+        ...new Map(
+          args.items.map((item) => [muteItemKey(item), item])
+        ).values(),
+      ];
+      const succeeded: UserUnsubscribe[] = [];
+      const failed: UserUnsubscribe[] = [];
+
+      for (
+        let offset = 0;
+        offset < items.length;
+        offset += BULK_PREFERENCE_LIMIT
+      ) {
+        if (args.actorId !== userId()) {
+          failed.push(...items.slice(offset));
+          break;
+        }
+
+        const batch = items.slice(offset, offset + BULK_PREFERENCE_LIMIT);
+        const result = await catchToResult(() =>
+          throwOnErr(() =>
+            args.muted
+              ? notificationServiceClient.unsubscribeItems(
+                  batch,
+                  args.snoozedUntil
+                )
+              : notificationServiceClient.removeUnsubscribeItems(batch)
+          )
+        );
+
+        if (result.isErr()) {
+          failed.push(...batch);
+        } else {
+          succeeded.push(...batch);
+        }
+      }
+
+      return { succeeded, failed };
+    },
+    onMutate: async () => {
+      await cancelUnsubscribesFetch();
+    },
+    onSuccess: async (result, args) => {
+      if (args.actorId !== userId() || result.succeeded.length === 0) return;
+      await cancelUnsubscribesFetch();
+      if (args.actorId !== userId()) return;
+
+      const keys = new Set(result.succeeded.map(muteItemKey));
+      updateUnsubscribes((previous) => {
+        const retained = previous.filter(
+          (item) => !keys.has(muteItemKey(item))
+        );
+        if (!args.muted) return retained;
+
+        return retained.concat(
+          result.succeeded.map((item) => ({
+            ...item,
+            snoozed_until: args.snoozedUntil ?? null,
+          }))
+        );
+      });
+    },
+    onSettled: (_data, _error, args) => {
+      if (args.actorId === userId()) {
+        fireAndForget(
+          invalidateUnsubscribesWhenIdle(),
+          'notification-unsubscribes'
+        );
+      }
     },
   }));
 }

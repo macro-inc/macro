@@ -316,7 +316,7 @@ impl CrmService for FakeCrmService {
         &self,
         _access: &CrmCompanyReceipt<ViewAccessLevel>,
         _name: &str,
-        _email: &str,
+        _email: Option<&str>,
     ) -> Result<CrmContact, CrmError> {
         panic!("unexpected create_contact call")
     }
@@ -459,6 +459,31 @@ impl CrmService for FakeCrmService {
         _patch: crate::domain::model::CrmTeamSettingsPatch,
     ) -> Result<crate::domain::model::CrmTeamSettings, CrmError> {
         panic!("unexpected update_team_settings call")
+    }
+
+    async fn create_team_contact(
+        &self,
+        _access: &CrmTeamReceipt<MemberTeamRole>,
+        _name: &str,
+        _email: Option<&str>,
+    ) -> Result<CrmContact, CrmError> {
+        panic!("unexpected create_team_contact call")
+    }
+
+    async fn list_blocked_domains(
+        &self,
+        _access: &CrmTeamReceipt<MemberTeamRole>,
+    ) -> Result<Vec<crate::domain::model::CrmBlockedDomain>, CrmError> {
+        panic!("unexpected list_blocked_domains call")
+    }
+
+    async fn set_domain_blocked(
+        &self,
+        _access: &CrmTeamReceipt<MemberTeamRole>,
+        _domain: &str,
+        _blocked: bool,
+    ) -> Result<String, CrmError> {
+        panic!("unexpected set_domain_blocked call")
     }
 }
 

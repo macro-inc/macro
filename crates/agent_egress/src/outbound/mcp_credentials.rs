@@ -114,6 +114,7 @@ where
                     server_name: slug.as_str().to_owned(),
                     account_id: String::new(),
                     enabled: false,
+                    provider: pipedream_mcp::domain::models::ConnectionProvider::Pipedream,
                 },
                 false,
             ),

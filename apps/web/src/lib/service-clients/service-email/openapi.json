@@ -7142,6 +7142,8 @@
               "drafts",
               "starred",
               "all",
+              "spam",
+              "trash",
               "important",
               "other"
             ]
@@ -7161,6 +7163,8 @@
           "drafts",
           "starred",
           "all",
+          "spam",
+          "trash",
           "important",
           "other"
         ]

@@ -61,7 +61,6 @@ export const authExcluded = [
   'deleteCursorApiKey',
   'deleteGithubLink',
   'deleteTeam',
-  'deleteTeamInviteHandler',
   'deleteTeamInviteLink',
   'deleteUser',
   'disconnectCodex',
@@ -76,13 +75,11 @@ export const authExcluded = [
   'getGtmInviteOffer',
   'getLegacyUserPermissions',
   'getPermissions',
-  'getReferralCode',
   // Renewal and scheduled-plan details are part of the app's billing settings.
   'getSubscriptionStatus',
   'getTeamByInviteLink',
   'getTeamInviteLink',
   'getSystemStatus',
-  'getTeamInvites',
   // Introductory offers belong to the app's subscription checkout flow.
   'getTrialEligibility',
   'getUserInvites',
@@ -98,7 +95,6 @@ export const authExcluded = [
   'initGithubLink',
   'initGmailLink',
   'initOutlookLink',
-  'inviteToTeam',
   'joinTeam',
   'joinTeamByInviteLink',
   'listCodexEnvironments',
@@ -136,7 +132,6 @@ export const authExcluded = [
   'revokeGtmInviteLink',
   'sendMobileWelcomeEmail',
   'sendTeamDomainNotice',
-  'sendReferralCode',
   'sessionCreation',
   'sessionLogin',
   'setGithubPullRequestDraft',
@@ -171,6 +166,7 @@ export const cognitionExcluded = [
   'callTool',
   // Dialpad call sync's browser connect flow, like the connector routes.
   'completeDialpadConnection',
+  'completePipedreamMcpConnect',
   'completePipedreamMcpConnection',
   'connectDialpad',
   'createPipedreamMcpToken',
@@ -267,9 +263,11 @@ export const notificationExcluded = [
   'healthHandler',
   'removeUnsubscribeAll',
   'removeUnsubscribeItem',
+  'removeUnsubscribeItems',
   'unsubscribeAll',
   'unsubscribeEmail',
   'unsubscribeItem',
+  'unsubscribeItems',
 ] as const satisfies readonly (keyof NotificationSdk)[];
 
 export const notificationBacklog =

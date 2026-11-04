@@ -51,6 +51,7 @@ import type { CalendarMentionPreviewRequest } from './generated/schemas/calendar
 import type { CalendarMentionPreviewResponse } from './generated/schemas/calendarMentionPreviewResponse';
 import type { CalendarOccurrenceResponse } from './generated/schemas/calendarOccurrenceResponse';
 import type { CallRecordPreview } from './generated/schemas/callRecordPreview';
+import type { CardPosition } from './generated/schemas/cardPosition';
 import type { ChannelJoinCodeResponse } from './generated/schemas/channelJoinCodeResponse';
 import type { ChannelLabel } from './generated/schemas/channelLabel';
 import type { ChannelLabelRule } from './generated/schemas/channelLabelRule';
@@ -72,6 +73,7 @@ import type { CreateChannelScopedBotRequest } from './generated/schemas/createCh
 import type { CreateChannelScopedBotResponse } from './generated/schemas/createChannelScopedBotResponse';
 import type { CreateCrmCompanyRequest } from './generated/schemas/createCrmCompanyRequest';
 import type { CreateCrmContactRequest } from './generated/schemas/createCrmContactRequest';
+import type { CreateCrmTeamContactRequest } from './generated/schemas/createCrmTeamContactRequest';
 import type { CreateDocument200 as CreateDocumentResponse } from './generated/schemas/createDocument200';
 import type { CreateDocumentRequest } from './generated/schemas/createDocumentRequest';
 import type { CreatedUserApiKey } from './generated/schemas/createdUserApiKey';
@@ -87,6 +89,7 @@ import type { CreateSnippetRequest } from './generated/schemas/createSnippetRequ
 import type { CreateTaskHandler200 } from './generated/schemas/createTaskHandler200';
 import type { CreateTaskRequest } from './generated/schemas/createTaskRequest';
 import type { CreateUnthreadedAnchorResponse } from './generated/schemas/createUnthreadedAnchorResponse';
+import type { CrmBlockedDomainResponse } from './generated/schemas/crmBlockedDomainResponse';
 import type { CrmCompanyResponse } from './generated/schemas/crmCompanyResponse';
 import type { CrmContactResponse } from './generated/schemas/crmContactResponse';
 import type { CrmStagesResponse } from './generated/schemas/crmStagesResponse';
@@ -438,6 +441,10 @@ export const storageServiceClient = {
     dssFetch<PipelineResponse>(`/crm/pipelines/${id}`, { method: 'GET' }),
   getCrmPipelineTable: (id: string) =>
     dssFetch<TableDetail>(`/crm/pipelines/${id}/table`, { method: 'GET' }),
+  getCrmPipelineViewPositions: (id: string, viewId: string) =>
+    dssFetch<CardPosition[]>(`/crm/pipelines/${id}/views/${viewId}/positions`, {
+      method: 'GET',
+    }),
   getCrmPipelineRows: (id: string, after?: string) =>
     dssFetch<StorageRows>(
       `/crm/pipelines/${id}/rows${after ? `?after=${encodeURIComponent(after)}` : ''}`,
@@ -2780,6 +2787,29 @@ export const storageServiceClient = {
         method: 'POST',
         body: JSON.stringify(body),
       }
+    );
+  },
+  async createTeamContact(body: CreateCrmTeamContactRequest) {
+    return await dssFetch<CrmContactResponse>('/crm/contacts', {
+      method: 'POST',
+      body: JSON.stringify(body),
+    });
+  },
+  async listCrmBlockedDomains() {
+    return await dssFetch<CrmBlockedDomainResponse[]>('/crm/blocked-domains', {
+      method: 'GET',
+    });
+  },
+  async blockCrmDomain({ domain }: { domain: string }) {
+    return await dssFetch(
+      `/crm/blocked-domains/${encodeURIComponent(domain)}`,
+      { method: 'PUT' }
+    );
+  },
+  async unblockCrmDomain({ domain }: { domain: string }) {
+    return await dssFetch(
+      `/crm/blocked-domains/${encodeURIComponent(domain)}`,
+      { method: 'DELETE' }
     );
   },
   async getContact({ contactId }: { contactId: string }) {

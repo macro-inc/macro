@@ -3,6 +3,7 @@
 ## Modules
 
 - [generated/agent-harness/types.gen](generated/agent-harness/types.gen/README.md)
+- [generated/agent-reviews](generated/agent-reviews/README.md)
 - [generated/auth/types.gen](generated/auth/types.gen/README.md)
 - [generated/calendar/types.gen](generated/calendar/types.gen/README.md)
 - [generated/cognition/types.gen](generated/cognition/types.gen/README.md)
@@ -115,6 +116,7 @@
 - [src/entities/properties/property-definition](src/entities/properties/property-definition/README.md)
 - [src/entities/properties/property-option](src/entities/properties/property-option/README.md)
 - [src/entities/reference](src/entities/reference/README.md)
+- [src/entities/referrals/namespace](src/entities/referrals/namespace/README.md)
 - [src/entities/routines/namespace](src/entities/routines/namespace/README.md)
 - [src/entities/routines/routine](src/entities/routines/routine/README.md)
 - [src/entities/search](src/entities/search/README.md)
@@ -122,6 +124,7 @@
 - [src/entities/sharing/permissions](src/entities/sharing/permissions/README.md)
 - [src/entities/tasks/namespace](src/entities/tasks/namespace/README.md)
 - [src/entities/tasks/task](src/entities/tasks/task/README.md)
+- [src/entities/teams/invite](src/entities/teams/invite/README.md)
 - [src/entities/teams/namespace](src/entities/teams/namespace/README.md)
 - [src/entities/teams/team](src/entities/teams/team/README.md)
 - [src/entities/unfurls/namespace](src/entities/unfurls/namespace/README.md)

@@ -4,8 +4,8 @@
 
 Part of Calls: imports a user's Dialpad phone calls (details, transcript, AI
 recap; never audio) as private Macro calls. The Dialpad grant lives in Macro
-Connect, a separate service (`macro-inc/macro-connect`) this crate calls over
-its customer API; this crate owns only the sync.
+Connect, a separate service (`macro-inc/macro-connect`) this crate reaches
+through `connect_client`; this crate owns only the sync.
 
 ## How it works
 
@@ -36,7 +36,7 @@ A first-connect backfill pages `GET /call` one page per reconcile.
 
 ## Boundaries
 
-- Depends on: `call` import port, Macro Connect's HTTP API, `phone_number`,
+- Depends on: `call` import port, `connect_client`, `phone_number`,
   `row_cipher`, `macro_tower_layers` (stored trace context).
 - Used by: `services/agent_harness_service` (composition, routes, worker).
 

@@ -28,7 +28,7 @@ function TitleEditor(props: { contact: CrmContactResponse }) {
     <InlineTitleEditor
       // Nameless contacts display their email; committing it unchanged
       // is a no-op rather than a save.
-      value={props.contact.name ?? props.contact.email}
+      value={props.contact.name ?? props.contact.email ?? ''}
       placeholder="Contact"
       ariaLabel="Contact name"
       class="w-full text-2xl"
@@ -44,13 +44,13 @@ function TitleEditor(props: { contact: CrmContactResponse }) {
 }
 
 function CompanyPill(props: {
-  contact: CrmContactResponse;
+  companyId: string;
   onOpenCompany?: (companyId: string) => boolean;
 }) {
   const { openWithSplit } = useCrmContext().createNavigation();
-  const { company } = useCompanyQuery(() => props.contact.companyId);
+  const { company } = useCompanyQuery(() => props.companyId);
   const openCompany = (event: MouseEvent) => {
-    const companyId = props.contact.companyId;
+    const companyId = props.companyId;
     if (!event.shiftKey && props.onOpenCompany?.(companyId)) return;
     openWithSplit(
       { type: 'company', id: companyId },
@@ -154,9 +154,9 @@ export function ContactHeader(props: {
   // Default avatar mirrors the channel user avatar: initials on a flat circle.
   // Contacts have no photo, so initials come from the name or email.
   const initials = () => {
-    const email = props.contact?.email;
-    if (!email) return undefined;
-    return getInitialsFromName(props.contact?.name, email);
+    const contact = props.contact;
+    if (!contact?.name && !contact?.email) return undefined;
+    return getInitialsFromName(contact.name, contact.email ?? '');
   };
 
   return (
@@ -192,15 +192,23 @@ export function ContactHeader(props: {
             class="mt-3 flex flex-wrap items-center gap-2"
             aria-label="Contact details"
           >
-            <Badge variant="outline" size="sm">
-              <EnvelopeIcon class="size-3" />
-              {contact().email}
-            </Badge>
+            <Show when={contact().email}>
+              {(email) => (
+                <Badge variant="outline" size="sm">
+                  <EnvelopeIcon class="size-3" />
+                  {email()}
+                </Badge>
+              )}
+            </Show>
             <ContactPhones contactId={contact().id} />
-            <CompanyPill
-              contact={contact()}
-              onOpenCompany={props.onOpenCompany}
-            />
+            <Show when={contact().companyId}>
+              {(companyId) => (
+                <CompanyPill
+                  companyId={companyId()}
+                  onOpenCompany={props.onOpenCompany}
+                />
+              )}
+            </Show>
             <Tooltip label={formatDateAndTime(contact().lastInteraction)}>
               <Badge variant="outline" size="sm">
                 <ClockIcon class="size-3" />

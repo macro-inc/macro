@@ -10,6 +10,7 @@ axum.workspace = true
 base64.workspace = true
 call = { path = "../call", default-features = false, features = ["ports"] }
 chrono.workspace = true
+connect_client = { path = "../connect_client" }
 jsonwebtoken.workspace = true
 macro_authorization = { path = "../macro_authorization", default-features = false, features = [
   "axum",

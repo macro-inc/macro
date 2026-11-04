@@ -26,6 +26,7 @@ import { NotificationNamespace } from './entities/notifications/namespace';
 import { PinsNamespace } from './entities/pins/namespace';
 import { ProjectNamespace } from './entities/projects/namespace';
 import { PropertiesNamespace } from './entities/properties/namespace';
+import { ReferralNamespace } from './entities/referrals/namespace';
 import { RoutineNamespace } from './entities/routines/namespace';
 import { TaskNamespace } from './entities/tasks/namespace';
 import { TeamNamespace } from './entities/teams/namespace';
@@ -165,6 +166,9 @@ export class Macro<T extends MacroOpts = MacroOpts> {
 
   readonly properties: PropertiesNamespace;
 
+  /** Share the caller's referral link and email invites to join Macro. */
+  readonly referrals: ReferralNamespace;
+
   readonly tasks: TaskNamespace;
 
   readonly teams: TeamNamespace;
@@ -220,6 +224,7 @@ export class Macro<T extends MacroOpts = MacroOpts> {
     this.pins = new PinsNamespace(client);
     this.projects = new ProjectNamespace(client);
     this.properties = new PropertiesNamespace(client);
+    this.referrals = new ReferralNamespace(client);
     this.tasks = new TaskNamespace(client);
     this.teams = new TeamNamespace(client);
     this.users = new UserNamespace(client);
@@ -259,6 +264,7 @@ export {
 export type {
   CreateReviewOptions,
   ReviewCalendarDraft,
+  ReviewDraft,
   ReviewEmailDraft,
 } from './entities/agent-sessions/review';
 export { ReviewItem, SessionReview } from './entities/agent-sessions/review';
@@ -274,6 +280,7 @@ export {
   PipelineColumn,
   PipelineRow,
   PipelineTable,
+  PipelineView,
 } from './entities/crm/pipeline';
 export type {
   DatabaseQueryOptions,
@@ -320,6 +327,7 @@ export { Meeting } from './entities/meetings/meeting';
 export type { TimelineOptions } from './entities/messages/thread';
 export { type MessageParent, MessageThread } from './entities/messages/thread';
 export type { EntityReference } from './entities/reference';
+export type { ReferralLink } from './entities/referrals/namespace';
 export type {
   RoutineEventFilter,
   RoutineTriggerOptions,
@@ -333,6 +341,7 @@ export {
 export { AccessRequest, EntityAccess } from './entities/sharing/access';
 export type { SharePermissionOptions } from './entities/sharing/permissions';
 export type { TaskSummary } from './entities/tasks/task';
+export { TeamInvite } from './entities/teams/invite';
 export { WhatsAppAccount } from './entities/whatsapp/account';
 export {
   WhatsAppChat,

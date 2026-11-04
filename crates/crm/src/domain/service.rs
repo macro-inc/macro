@@ -8,10 +8,10 @@ use crate::domain::{
     companies_repo::{CompaniesRepository, CrmCompanyListSort, CrmCompanySoupCursor},
     company_metadata_resolver::{CompanyMetadataResolver, DomainResolution},
     contact_phones::{ContactPhone, ContactPhonesRepository, PhoneSource, parse_contact_phones},
-    generic_email_domains::is_generic_email_domain,
+    generic_email_domains::{is_generic_email_domain, is_personal_email_domain},
     model::{
-        CrmCompanyForSoup, CrmCompanyWithContacts, CrmContact, CrmError, CrmScopePrecheck,
-        CrmTeamSettings, CrmTeamSettingsPatch, DepopulateContactOutcome,
+        CrmBlockedDomain, CrmCompanyForSoup, CrmCompanyWithContacts, CrmContact, CrmError,
+        CrmScopePrecheck, CrmTeamSettings, CrmTeamSettingsPatch, DepopulateContactOutcome,
     },
 };
 use chrono::{DateTime, TimeDelta, Utc};
@@ -202,8 +202,9 @@ pub trait CrmService: Clone + Send + Sync + 'static {
     ) -> impl Future<Output = Result<CrmCompanyWithContacts, CrmError>> + Send;
 
     /// Manually creates a named contact under an authorized company. The email
-    /// is validated and normalized, but need not match any company domain:
-    /// this is an explicit association, separate from automatic inference.
+    /// is optional; when given it is validated and normalized, but need not
+    /// match any company domain: this is an explicit association, separate
+    /// from automatic inference.
     /// The contact inherits company visibility; team CRM must be enabled.
     /// A duplicate email in the same company returns
     /// [`CrmError::ContactAlreadyExistsForCompany`].
@@ -211,7 +212,7 @@ pub trait CrmService: Clone + Send + Sync + 'static {
         &self,
         access: &CrmCompanyReceipt<ViewAccessLevel>,
         name: &str,
-        email: &str,
+        email: Option<&str>,
     ) -> impl Future<Output = Result<CrmContact, CrmError>> + Send;
 
     /// Toggle `email_sync` for the company addressed by `access`. Purely
@@ -396,7 +397,7 @@ pub trait CrmService: Clone + Send + Sync + 'static {
     /// Field-wise partial update of the team's CRM configuration.
     /// Any team member may update the views fields (`team_views`,
     /// `default_team_view_id`); the governance fields (permission
-    /// thresholds, `closed_stage_ids`) require an admin/owner role on
+    /// thresholds, `closed_stage_ids`, `exclude_personal_emails`) require an admin/owner role on
     /// the receipt ([`CrmError::SettingsAdminRequired`] otherwise).
     /// `team_views` is replaced whole (last-wins). Returns the
     /// resulting settings. See
@@ -406,6 +407,39 @@ pub trait CrmService: Clone + Send + Sync + 'static {
         access: &CrmTeamReceipt<MemberTeamRole>,
         patch: CrmTeamSettingsPatch,
     ) -> impl Future<Output = Result<CrmTeamSettings, CrmError>> + Send;
+
+    /// Manually creates a contact for the caller's team without a
+    /// company, with a display `name` and an optional `email` of any
+    /// domain. Validates like [`CrmService::create_contact`]. Any team
+    /// member may create one. See
+    /// [`CompaniesRepository::create_contact_for_team`].
+    fn create_team_contact(
+        &self,
+        access: &CrmTeamReceipt<MemberTeamRole>,
+        name: &str,
+        email: Option<&str>,
+    ) -> impl Future<Output = Result<CrmContact, CrmError>> + Send;
+
+    /// The domains the caller's team keeps out of email sync. Any team
+    /// member may read.
+    fn list_blocked_domains(
+        &self,
+        access: &CrmTeamReceipt<MemberTeamRole>,
+    ) -> impl Future<Output = Result<Vec<CrmBlockedDomain>, CrmError>> + Send;
+
+    /// Adds a domain to (`blocked = true`) or removes it from the
+    /// caller's team blocklist. Blocking stops email sync for the domain
+    /// and hides the company and contacts the CRM holds for it;
+    /// unblocking un-hides them. Requires an admin/owner role
+    /// ([`CrmError::SettingsAdminRequired`] otherwise); the domain must
+    /// be a bare domain like "acme.com" ([`CrmError::InvalidRequest`]).
+    /// Returns the normalized domain.
+    fn set_domain_blocked(
+        &self,
+        access: &CrmTeamReceipt<MemberTeamRole>,
+        domain: &str,
+        blocked: bool,
+    ) -> impl Future<Output = Result<String, CrmError>> + Send;
 }
 
 /// Maximum accepted length (in chars) for a manually specified display
@@ -663,7 +697,7 @@ where
 
 /// Pending directory entries one [`CrmServiceImpl::enrich_pending_domains`]
 /// pass claims. Passes run on a fixed interval, so this caps the resolver
-/// (Apollo) call rate.
+/// call rate.
 const ENRICHMENT_BATCH_SIZE: i64 = 10;
 
 /// Enrichment attempts after which a pending directory entry is left alone.
@@ -714,7 +748,10 @@ where
         // populate path; the link's email is treated as the source of
         // truth elsewhere, so we don't want a bad value here to error
         // out an otherwise valid contact populate.
-        if let Some((user_local_part, user_domain)) = user_email.trim().split_once('@')
+        // A personal provider shared with the user is not their company,
+        // so it never marks a contact as a colleague.
+        if !is_personal_email_domain(domain)
+            && let Some((user_local_part, user_domain)) = user_email.trim().split_once('@')
             && !user_local_part.is_empty()
             && !user_domain.is_empty()
             && !user_domain.contains('@')
@@ -727,8 +764,22 @@ where
             return Ok(());
         }
 
-        // Skip personal / free-mail-provider domains (gmail, yahoo,
-        // hotmail, …). CRM rows are meant to represent companies
+        // Personal mail providers (gmail, yahoo, …) never key a company:
+        // one would swallow every contact on the provider. They file as
+        // company-less contacts, and only when the team lets personal
+        // emails in (the repository checks).
+        if is_personal_email_domain(domain) {
+            return self
+                .companies_repository
+                .populate_unfiled_contact(
+                    team_id, link_id, domain, email, name, first_at, last_at, is_sent,
+                )
+                .await;
+        }
+
+        // Other generic domains (SaaS vendors, consumer brands, bulk
+        // senders, disposable inboxes) are product traffic, not
+        // relationships.
         if is_generic_email_domain(domain) {
             tracing::debug!(
                 domain,
@@ -848,10 +899,14 @@ where
         &self,
         access: &CrmCompanyReceipt<ViewAccessLevel>,
         name: &str,
-        email: &str,
+        email: Option<&str>,
     ) -> Result<CrmContact, CrmError> {
         let name = validate_display_name(name)?;
-        let email = normalize_contact_email(email)?;
+        let email = email
+            .map(str::trim)
+            .filter(|email| !email.is_empty())
+            .map(normalize_contact_email)
+            .transpose()?;
 
         let team_id = access.team_id();
         let company_id = access.company_id()?;
@@ -860,7 +915,7 @@ where
             .create_contact_for_company(
                 &team_id,
                 &company_id,
-                &email,
+                email.as_deref(),
                 name,
                 Utc::now(),
                 include_hidden,
@@ -1143,6 +1198,58 @@ where
             .await
     }
 
+    #[tracing::instrument(skip_all, fields(team_id = %access.team_id()), err)]
+    async fn create_team_contact(
+        &self,
+        access: &CrmTeamReceipt<MemberTeamRole>,
+        name: &str,
+        email: Option<&str>,
+    ) -> Result<CrmContact, CrmError> {
+        let name = validate_display_name(name)?;
+        let email = email
+            .map(str::trim)
+            .filter(|email| !email.is_empty())
+            .map(normalize_contact_email)
+            .transpose()?;
+        self.companies_repository
+            .create_contact_for_team(&access.team_id(), email.as_deref(), name, Utc::now())
+            .await
+    }
+
+    #[tracing::instrument(skip(self, access), err)]
+    async fn list_blocked_domains(
+        &self,
+        access: &CrmTeamReceipt<MemberTeamRole>,
+    ) -> Result<Vec<CrmBlockedDomain>, CrmError> {
+        self.companies_repository
+            .list_blocked_domains(&access.team_id())
+            .await
+    }
+
+    #[tracing::instrument(skip(self, access), err)]
+    async fn set_domain_blocked(
+        &self,
+        access: &CrmTeamReceipt<MemberTeamRole>,
+        domain: &str,
+        blocked: bool,
+    ) -> Result<String, CrmError> {
+        if !access.has_admin_role() {
+            return Err(CrmError::SettingsAdminRequired);
+        }
+        let domain = normalize_company_domain(domain)?;
+        let team_id = access.team_id();
+        if blocked {
+            self.companies_repository
+                .block_domain(&team_id, &domain)
+                .await?;
+        } else {
+            self.companies_repository
+                .unblock_domain(&team_id, &domain)
+                .await?;
+        }
+        Ok(domain)
+    }
+
     #[tracing::instrument(skip(self, access, patch), err)]
     async fn update_team_settings(
         &self,
@@ -1155,7 +1262,8 @@ where
         let touches_governance = patch.edit_stages_role.is_some()
             || patch.move_closed_deals_role.is_some()
             || patch.delete_records_role.is_some()
-            || patch.closed_stage_ids.is_some();
+            || patch.closed_stage_ids.is_some()
+            || patch.exclude_personal_emails.is_some();
         if touches_governance && !access.has_admin_role() {
             return Err(CrmError::SettingsAdminRequired);
         }
@@ -1287,7 +1395,7 @@ impl CrmService for NoOpCrmService {
         &self,
         _access: &CrmCompanyReceipt<ViewAccessLevel>,
         _name: &str,
-        _email: &str,
+        _email: Option<&str>,
     ) -> Result<CrmContact, CrmError> {
         unimplemented!("NoOpCrmService.create_contact")
     }
@@ -1429,5 +1537,30 @@ impl CrmService for NoOpCrmService {
         _patch: CrmTeamSettingsPatch,
     ) -> Result<CrmTeamSettings, CrmError> {
         unimplemented!("NoOpCrmService.update_team_settings")
+    }
+
+    async fn create_team_contact(
+        &self,
+        _access: &CrmTeamReceipt<MemberTeamRole>,
+        _name: &str,
+        _email: Option<&str>,
+    ) -> Result<CrmContact, CrmError> {
+        unimplemented!("NoOpCrmService.create_team_contact")
+    }
+
+    async fn list_blocked_domains(
+        &self,
+        _access: &CrmTeamReceipt<MemberTeamRole>,
+    ) -> Result<Vec<CrmBlockedDomain>, CrmError> {
+        unimplemented!("NoOpCrmService.list_blocked_domains")
+    }
+
+    async fn set_domain_blocked(
+        &self,
+        _access: &CrmTeamReceipt<MemberTeamRole>,
+        _domain: &str,
+        _blocked: bool,
+    ) -> Result<String, CrmError> {
+        unimplemented!("NoOpCrmService.set_domain_blocked")
     }
 }

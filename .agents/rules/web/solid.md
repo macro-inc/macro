@@ -64,6 +64,7 @@ State ownership, reactivity, and async error handling.
   expensive. Cheap derivations (() => a() + b()) don't need it regardless of
   subscriber count.
 - Before rolling your own reactive utility, check solid-primitives first.
+- Use keyed reactive collections for mutable maps instead of cloning the whole map into a signal on each write.
 - Never read a solid-query `query.data` unguarded from a component body or an
   eager `createMemo`. `data` is a resource read: while the query is pending it
   suspends the caller's nearest `<Suspense>`, which detaches and re-attaches

@@ -14,6 +14,7 @@ export const useIsTeamAdmin = (
 export const useTeamCrmConfig = (
   ...args: Parameters<CrmContext['createTeamConfigSource']>
 ) => useCrmContext().createTeamConfigSource(...args);
+export const useBlockedDomains = () => useCrmContext().createBlockedDomains();
 export const useCrmPermissions = (
   ...args: Parameters<CrmContext['createCapabilities']>
 ) => useCrmContext().createCapabilities(...args);

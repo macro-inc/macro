@@ -182,7 +182,7 @@ impl<Crm: CrmService, Access: EntityAccessService> TransferRecords
             permission,
         )?;
         let receipt = CrmCompanyReceipt::new(receipt, team_id, team_role);
-        match self.crm.create_contact(&receipt, name, email).await {
+        match self.crm.create_contact(&receipt, name, Some(email)).await {
             Ok(contact) => Ok(Created::New(contact.id)),
             Err(error) => refusal(error),
         }

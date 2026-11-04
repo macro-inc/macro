@@ -1,14 +1,10 @@
-use crate::PRESENT_VIEW_SCHEMA_JSON;
-use crate::check::{CHECKED_KEYWORDS, IGNORED_KEYWORDS};
-use crate::view_problems;
-use serde_json::{Value, json};
-use std::collections::BTreeSet;
+use crate::{View, Widget, decode_view, present_view_schema};
+use serde_json::json;
 
-const WIDGET_TYPES: &str = r#""md", "timeline", "list", "channelMessage", "container""#;
-
-/// One of every widget, with every field the schema names.
-fn every_widget() -> Value {
-    json!({
+/// One of every widget, with every field the types name.
+#[test]
+fn a_view_of_every_widget_decodes() {
+    let view = json!({
         "title": "Everything",
         "widgets": [
             { "type": "md", "markdown": "**Shipped** the agenda." },
@@ -30,12 +26,33 @@ fn every_widget() -> Value {
                 "groupBy": "project",
                 "limit": 5
             },
-            { "type": "list", "source": { "kind": "query", "query": { "include": { "documentId": ["doc-1"] } } } },
+            {
+                "type": "list",
+                "source": {
+                    "kind": "query",
+                    "query": {
+                        "include": { "documentId": ["doc-1"], "channelId": ["channel-1"] },
+                        "documentWhere": [{ "op": "not", "clause": { "include": { "documentDone": true } } }],
+                        "emailView": "inbox"
+                    }
+                }
+            },
             { "type": "channelMessage", "channelId": "channel-1", "messageId": "message-1" },
+            { "type": "events", "title": "This week", "events": [{ "eventId": "event-1", "occurrenceKey": "2026-10-14" }] },
+            { "type": "cards", "title": "Docs", "items": [{ "type": "document", "id": "doc-1" }] },
+            {
+                "type": "tags",
+                "title": "Engineering tags",
+                "tags": [{
+                    "label": "Type",
+                    "description": "What kind of work it is",
+                    "children": [{ "label": "bug", "color": "red", "tagId": "tag-1" }]
+                }]
+            },
             {
                 "type": "container",
                 "direction": "row",
-                "gap": 2,
+                "gap": 8,
                 "wrap": false,
                 "align": "start",
                 "justify": "between",
@@ -46,133 +63,111 @@ fn every_widget() -> Value {
                 ]
             }
         ]
-    })
+    });
+    let decoded = decode_view(&view).expect("every widget decodes");
+    assert_eq!(serde_json::to_value(&decoded).unwrap(), view);
 }
 
 #[test]
-fn a_view_of_every_widget_has_no_problems() {
-    assert_eq!(view_problems(&every_widget()), Vec::<String>::new());
-}
-
-#[test]
-fn fields_the_schema_does_not_name_are_ignored_as_the_renderer_ignores_them() {
+fn fields_the_types_do_not_name_are_dropped() {
     let view = json!({
         "title": "Notes",
         "theme": "dark",
         "widgets": [{ "type": "md", "markdown": "Hi", "style": { "bold": true } }]
     });
-    assert_eq!(view_problems(&view), Vec::<String>::new());
+    assert_eq!(
+        decode_view(&view),
+        Ok(View {
+            title: Some("Notes".to_owned()),
+            widgets: vec![Widget::Md {
+                markdown: "Hi".to_owned()
+            }],
+        })
+    );
 }
 
+/// The views the old schema check turned back, each still turned back, with
+/// where the problem is.
 #[test]
-fn a_markdown_type_and_a_list_without_a_source_are_named() {
-    // The renderer showed "Couldn't render dashboard" for views like this.
-    let view = json!({
-        "title": "Workspace setup",
-        "widgets": [
-            { "type": "markdown", "markdown": "### Routines" },
-            { "type": "list", "title": "Created docs" }
-        ]
-    });
-    assert_eq!(
-        view_problems(&view),
-        [
-            format!("view.widgets[0].type should be one of {WIDGET_TYPES}"),
-            r#"view.widgets[1] is missing "source""#.to_owned(),
-        ]
-    );
-}
-
-#[test]
-fn a_problem_names_its_place_in_nested_widgets_and_sources() {
-    let view = json!({
-        "widgets": [
-            { "type": "container", "children": [{ "type": "channelMessage", "channelId": "channel-1" }] },
-            { "type": "list", "source": { "kind": "ids", "entities": [] } },
-            { "type": "list", "source": { "entities": [] } },
-            { "title": "No type" }
-        ]
-    });
-    assert_eq!(
-        view_problems(&view),
-        [
-            r#"view.widgets[0].children[0] is missing "messageId""#.to_owned(),
-            r#"view.widgets[1].source.kind should be one of "query", "items""#.to_owned(),
-            r#"view.widgets[2].source is missing "kind", one of "query", "items""#.to_owned(),
-            format!(r#"view.widgets[3] is missing "type", one of {WIDGET_TYPES}"#),
-        ]
-    );
-}
-
-#[test]
-fn a_wrong_type_says_what_belongs_there_without_repeating_the_view() {
-    let view = json!({
-        "title": null,
-        "widgets": [
-            { "type": "md", "markdown": 42 },
-            "private text",
-            { "type": "container", "gap": "private gap", "children": {} }
-        ]
-    });
-    let problems = view_problems(&view);
-    assert_eq!(
-        problems,
-        [
-            "view.title should be a string, not null",
-            "view.widgets[0].markdown should be a string, not a number",
-            "view.widgets[1] should be an object, not a string",
-            "view.widgets[2].gap should be a number, not a string",
-            "view.widgets[2].children should be an array, not an object",
-        ]
-    );
-    assert!(problems.iter().all(|problem| !problem.contains("private")));
-    assert_eq!(
-        view_problems(&json!(r#"{"widgets": []}"#)),
-        ["view should be an object, not a string"]
-    );
-}
-
-/// Every keyword a schema node uses, skipping the names of properties and
-/// definitions and the values `const`, `enum` and `required` hold.
-fn keywords(node: &Value, found: &mut BTreeSet<String>) {
-    match node {
-        Value::Object(fields) => {
-            for (keyword, child) in fields {
-                found.insert(keyword.clone());
-                match keyword.as_str() {
-                    "properties" | "$defs" => {
-                        for schema in child.as_object().into_iter().flat_map(|map| map.values()) {
-                            keywords(schema, found);
-                        }
-                    }
-                    "const" | "enum" | "required" => {}
-                    _ => keywords(child, found),
-                }
-            }
-        }
-        Value::Array(items) => {
-            for item in items {
-                keywords(item, found);
-            }
-        }
-        _ => {}
+fn what_the_renderer_cannot_draw_is_named_by_its_place() {
+    let widget_types =
+        "`md`, `timeline`, `list`, `channelMessage`, `events`, `cards`, `tags`, `container`";
+    let cases = [
+        (
+            json!({ "widgets": [{ "type": "markdown", "markdown": "### Routines" }] }),
+            format!("view.widgets[0].type should be one of {widget_types}"),
+        ),
+        (
+            json!({ "widgets": [{ "type": "list", "title": "Created docs" }] }),
+            r#"view.widgets[0] is missing "source""#.to_owned(),
+        ),
+        (
+            json!({ "widgets": [{ "type": "container", "children": [{ "type": "channelMessage", "channelId": "channel-1" }] }] }),
+            r#"view.widgets[0] is missing "messageId""#.to_owned(),
+        ),
+        (
+            json!({ "widgets": [{ "type": "list", "source": { "entities": [] } }] }),
+            r#"view.widgets[0] is missing "kind""#.to_owned(),
+        ),
+        (
+            json!({ "widgets": [{ "title": "No type" }] }),
+            r#"view.widgets[0] is missing "type""#.to_owned(),
+        ),
+        (
+            json!({ "widgets": {} }),
+            "view.widgets should be an array, not an object".to_owned(),
+        ),
+        (
+            json!({ "widgets": [{ "type": "container", "gap": 9, "children": [] }] }),
+            "view.widgets[0] should be less or equal to 8".to_owned(),
+        ),
+        (
+            json!({ "widgets": [{ "type": "tags", "title": "Created tags" }] }),
+            r#"view.widgets[0] is missing "tags""#.to_owned(),
+        ),
+        (
+            json!({ "widgets": [{ "type": "cards", "items": [{ "type": "spaceship", "id": "s-1" }] }] }),
+            "view.widgets[0] should be one of `document`, `email_thread`, `calendar_event`, `project`, `channel`, `routine`, `form`, `initiative`"
+                .to_owned(),
+        ),
+        (
+            json!({ "widgets": [{ "type": "tags", "tags": [{ "label": "Type", "children": [{ "color": "red" }] }] }] }),
+            r#"view.widgets[0] is missing "label""#.to_owned(),
+        ),
+        (json!({}), r#"view is missing "widgets""#.to_owned()),
+    ];
+    for (view, problem) in cases {
+        assert_eq!(decode_view(&view), Err(problem), "{view}");
     }
 }
 
 #[test]
-fn the_view_check_reads_every_keyword_the_generated_schema_uses() {
-    let schema: Value =
-        serde_json::from_str(PRESENT_VIEW_SCHEMA_JSON).expect("generated schema JSON");
-    let mut found = BTreeSet::new();
-    keywords(&schema, &mut found);
-    let known = CHECKED_KEYWORDS
-        .iter()
-        .chain(IGNORED_KEYWORDS)
-        .map(|keyword| (*keyword).to_owned())
-        .collect::<BTreeSet<_>>();
-    let unread = found.difference(&known).collect::<Vec<_>>();
-    assert!(
-        unread.is_empty(),
-        "teach the view check {unread:?}, or it lets through views the renderer rejects"
-    );
+fn a_problem_never_repeats_what_the_view_holds() {
+    let cases = [
+        json!({ "title": 7, "widgets": [] }),
+        json!({ "widgets": ["private text"] }),
+        json!({ "widgets": [{ "type": "private type" }] }),
+        json!({ "widgets": [{ "type": "md", "markdown": 4242 }] }),
+        json!({ "widgets": [{ "type": "container", "gap": "private gap", "children": [] }] }),
+        json!({ "widgets": [{ "type": "list", "source": { "kind": "items", "entities": [{ "id": "a", "type": "private kind" }] } }] }),
+        json!("private view"),
+    ];
+    for view in cases {
+        let problem = decode_view(&view).expect_err("turned back");
+        assert!(
+            !problem.contains("private") && !problem.contains("4242"),
+            "{problem}"
+        );
+    }
+}
+
+/// Maps are sorted: serde_json keeps insertion order only when a build
+/// unifies its `preserve_order` feature.
+#[test]
+fn the_present_view_schema_is_pinned() {
+    let schema: serde_json::Value =
+        serde_json::from_str(&present_view_schema()).expect("the schema is JSON");
+    insta::with_settings!({ sort_maps => true }, {
+        insta::assert_json_snapshot!(schema);
+    });
 }

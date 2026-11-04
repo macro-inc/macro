@@ -90,14 +90,16 @@ The contacts attached to this company (hidden ones filtered for non-admins).
 
 > **createContact**(`opts`): `Promise`\<[`Contact`](../../contact/classes/Contact.md)\>
 
-Create a contact under this company.
+Create a contact under this company. The email is optional and need not
+match the company's domains, so personal addresses work too; omitting it
+adds the contact by name alone.
 
 #### Parameters
 
 | Parameter | Type |
 | ------ | ------ |
-| `opts` | \{ `email`: `string`; `name`: `string`; \} |
-| `opts.email` | `string` |
+| `opts` | \{ `email?`: `string`; `name`: `string`; \} |
+| `opts.email?` | `string` |
 | `opts.name` | `string` |
 
 #### Returns

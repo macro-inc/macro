@@ -68,8 +68,9 @@ maybe_env_vars!(
     pub struct PosthogApiKey;
     /// PostHog ingestion origin. Falls back to the US origin when unset.
     pub struct PosthogHost;
-    /// Macro's customer key for Macro Connect, which holds users' Dialpad
-    /// grants. When unset, Dialpad call sync is unavailable.
+    /// Macro's customer key for the Macro Connect API. When unset, Connect
+    /// is off: every connection goes through Pipedream, and Dialpad call sync
+    /// is unavailable.
     pub struct ConnectCustomerKey;
 );
 
@@ -155,7 +156,9 @@ pub struct Config {
     pub posthog_api_key: PosthogApiKey,
     /// PostHog ingestion origin for integration analytics.
     pub posthog_host: PosthogHost,
-    /// Macro Connect customer key for Dialpad call sync.
+    /// Customer key for Macro Connect, which serves the apps it has in its
+    /// catalog to users in the `macro-connect` rollout, and holds users'
+    /// Dialpad grants.
     pub connect_customer_key: ConnectCustomerKey,
     /// The internal api key
     pub internal_api_key: InternalApiKey,

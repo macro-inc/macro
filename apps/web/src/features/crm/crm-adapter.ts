@@ -67,6 +67,7 @@ import { createCrmPipelineEntries } from './pipeline-entries-adapter';
 import { createCrmPermissions } from './primitives/team-config';
 import { useCrmActivityQuery } from './queries/activity';
 import { crmActivityItemMatches } from './queries/activity-options';
+import { useBlockedDomains } from './queries/blocked-domains';
 import {
   createCompanyImporter,
   useCompanyQuery,
@@ -383,6 +384,7 @@ export function createAppCrmContext(): CrmContext {
       withReadyGate(useContactPhonesQuery(deps, ...args)),
     createTeamSource: useCurrentTeamQuery,
     createTeamConfigSource: createSettings,
+    createBlockedDomains: () => useBlockedDomains(deps),
     createCapabilities: () =>
       createCrmPermissions(userId, useCurrentTeamQuery(), createSettings()),
     createDealStages: createAppDealStages,

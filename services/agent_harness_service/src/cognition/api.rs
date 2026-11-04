@@ -173,7 +173,9 @@ fn api_router(api_context: ApiContext) -> Router {
         ))
         .merge(dialpad_sync::inbound::webhook_router(
             api_context.dialpad_sync.clone(),
-        ));
+        ))
+        // Macro Connect's consent finishes on this page; it records nothing.
+        .merge(pipedream_mcp::inbound::pipedream_connect_callback_router());
 
     match api_context.config.pipedream_webhook_secret.value() {
         Some(secret) => app.merge(pipedream_mcp::inbound::pipedream_webhook_router(

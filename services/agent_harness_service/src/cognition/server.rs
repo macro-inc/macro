@@ -595,7 +595,7 @@ pub async fn build(
     // endpoints answer 501 and its toolsets come up empty. Connect-flow
     // webhooks need both URI and secret; a half-set pair is ignored so we
     // never mint a callback we cannot serve.
-    let pipedream_client: ai_tools::ToolPipedreamConnection = match (
+    let pipedream_client: Option<Arc<pipedream_mcp::outbound::api::PipedreamClient>> = match (
         config.pipedream_client_id.value(),
         config.pipedream_client_secret.value(),
         config.pipedream_project_id.value(),
@@ -665,6 +665,23 @@ pub async fn build(
             None
         }
     };
+    // Macro Connect beside Pipedream: a user the `macro-connect` rollout is
+    // on for is on Connect alone; everyone else stays on Pipedream.
+    let connect_adapter = ai_tools::connect_adapter(config.connect_customer_key.value())?;
+    let rollout = ai_tools::macro_connect_rollout(
+        config.posthog_api_key.value(),
+        config.posthog_host.value(),
+    )?;
+    let connectors: ai_tools::ToolPipedreamConnection = pipedream_client.as_ref().map(|client| {
+        let backends = pipedream_mcp::outbound::dispatch::ConnectorBackends::new(
+            client.clone(),
+            connect_adapter.clone(),
+        );
+        Arc::new(match &rollout {
+            Some(rollout) => backends.with_rollout(rollout.clone()),
+            None => backends,
+        })
+    });
     let pipedream_repo =
         pipedream_mcp::outbound::pg_connection_repo::PgConnectionRepo::new(db.clone());
     let granola_sync: Option<Arc<dyn granola_sync::domain::service::SyncService>> =
@@ -742,7 +759,7 @@ pub async fn build(
     let mcp_selector: Arc<ai_tools::ToolMcpSelector> = Arc::new(mcp_select::McpToolSelector::new(
         Arc::new(mcp_server_repo.clone()),
         Arc::new(pipedream_repo.clone()),
-        Arc::new(pipedream_client.clone()),
+        Arc::new(connectors.clone()),
     ));
 
     // Nudges the user's connected clients when import rows flip, so setup
@@ -805,20 +822,20 @@ pub async fn build(
             Arc::new(
                 import_linear::outbound::client::PipedreamLinearConnections::new(
                     Arc::new(pipedream_repo.clone()),
-                    pipedream_client.clone(),
+                    connectors.clone(),
                 ),
             ),
             Arc::new(
                 import_jira::outbound::client::PipedreamJiraConnections::new(
                     Arc::new(pipedream_repo.clone()),
-                    pipedream_client.clone(),
+                    connectors.clone(),
                 ),
             ),
         )
         .with_notion_connections(Arc::new(
             import_notion::outbound::pipedream::PipedreamNotionConnections::new(
                 Arc::new(pipedream_repo.clone()),
-                pipedream_client.clone(),
+                connectors.clone(),
             ),
         ))
         .with_admission(admission.clone())
@@ -1124,7 +1141,7 @@ pub async fn build(
         );
     let pipedream_state = pipedream_mcp::inbound::PipedreamRouterState::new(
         pipedream_repo,
-        pipedream_client,
+        connectors,
         authorization_state.clone(),
     )
     .with_auth_completed_hook(pipedream_auth_hook)

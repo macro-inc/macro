@@ -12,7 +12,7 @@ use serde::Deserialize;
 #[derive(Deserialize, JsonSchema, Clone)]
 #[schemars(
     title = "BashCodeExecution",
-    description = "Execute a bash command in a sandboxed environment using Claude's built-in code execution tool."
+    description = "Execute a bash command in a sandboxed environment using Claude's built-in code execution tool. Use it only when the user asks to run code, or for a calculation you cannot do reliably in your head."
 )]
 pub struct BashCodeExecution {
     /// The bash command or instruction to execute.
