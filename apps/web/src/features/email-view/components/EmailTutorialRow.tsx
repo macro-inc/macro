@@ -105,14 +105,22 @@ function TutorialVideoDialog(props: {
 }) {
   const [started, setStarted] = createSignal(false);
   let video: HTMLVideoElement | undefined;
+  // Counted once per opening, and only once playback really starts.
+  let playRecorded = false;
 
-  const play = () => {
-    if (!video) return;
+  const recordPlay = () => {
     setStarted(true);
+    if (playRecorded) return;
+    playRecorded = true;
     analytics.track('tutorial_video', {
       tutorial: 'macro-mail',
       action: 'played',
     });
+  };
+
+  const play = () => {
+    if (!video) return;
+    setStarted(true);
     // The play overlay unmounts, so hand focus to the video: Space and Escape keep working.
     video.focus();
     fireAndForget(video.play(), 'email-view');
@@ -122,6 +130,7 @@ function TutorialVideoDialog(props: {
     if (!open) {
       video?.pause();
       setStarted(false);
+      playRecorded = false;
     }
     props.onOpenChange(open);
   };
@@ -134,45 +143,48 @@ function TutorialVideoDialog(props: {
       animate
       class="w-[80vw] max-w-[80vw] mobile:w-full mobile:max-w-full"
     >
-      <Dialog.Title class="sr-only">
-        {t('tutorials.learnMacroMail')}
-      </Dialog.Title>
-      <div class="relative flex h-[80vh] w-full items-center justify-center overflow-hidden rounded-[24px] bg-[black] mobile:h-auto mobile:rounded-none">
-        <video
-          ref={video}
-          src={videoUrl}
-          poster={posterUrl}
-          preload="metadata"
-          playsinline
-          tabIndex={-1}
-          controls={started()}
-          onPlay={() => setStarted(true)}
-          onKeyDown={(event) => {
-            if (event.key === 'Escape') changeOpen(false);
-          }}
-          class="max-h-full w-full object-contain mobile:aspect-video"
-        />
-        <Show when={!started()}>
-          <button
-            type="button"
-            onClick={play}
-            aria-label={t('tutorials.playVideo')}
-            class="absolute inset-0 grid place-items-center bg-[black]/30 outline-none"
+      <div class="flex h-[80vh] w-full flex-col mobile:h-auto">
+        <div class="flex h-12 shrink-0 items-center gap-2 pr-2 pl-4 mobile:hidden">
+          <Dialog.Title class="min-w-0 flex-1 truncate text-sm font-medium text-ink">
+            {t('tutorials.learnMacroMail')}
+          </Dialog.Title>
+          <Dialog.CloseButton
+            as={Button}
+            variant="ghost"
+            size="icon-md"
+            aria-label={t('tutorials.closeVideo')}
           >
-            <span class="grid size-24 place-items-center rounded-full bg-[white] text-[black] shadow-2xl transition-transform not-touch:hover:scale-105 mobile:size-16">
-              <PlayIcon class="ml-1.5 size-10 mobile:size-7" />
-            </span>
-          </button>
-        </Show>
-        <Dialog.CloseButton
-          as={Button}
-          variant="ghost"
-          size="icon-md"
-          aria-label={t('tutorials.closeVideo')}
-          class="absolute top-3 right-3 text-[white]"
-        >
-          <XIcon class="size-5 shrink-0" />
-        </Dialog.CloseButton>
+            <XIcon class="size-4 shrink-0" />
+          </Dialog.CloseButton>
+        </div>
+        <div class="relative mx-2 mb-2 flex min-h-0 flex-1 items-center justify-center overflow-hidden rounded-[18px] bg-[black] mobile:m-0 mobile:rounded-none">
+          <video
+            ref={video}
+            src={videoUrl}
+            poster={posterUrl}
+            preload="metadata"
+            playsinline
+            tabIndex={-1}
+            controls={started()}
+            onPlay={recordPlay}
+            onKeyDown={(event) => {
+              if (event.key === 'Escape') changeOpen(false);
+            }}
+            class="max-h-full w-full object-contain mobile:aspect-video"
+          />
+          <Show when={!started()}>
+            <button
+              type="button"
+              onClick={play}
+              aria-label={t('tutorials.playVideo')}
+              class="absolute inset-0 grid place-items-center bg-[black]/30 outline-none"
+            >
+              <span class="grid size-24 place-items-center rounded-full bg-[white] text-[black] shadow-2xl transition-transform not-touch:hover:scale-105 mobile:size-16">
+                <PlayIcon class="ml-1.5 size-10 mobile:size-7" />
+              </span>
+            </button>
+          </Show>
+        </div>
       </div>
     </Dialog>
   );

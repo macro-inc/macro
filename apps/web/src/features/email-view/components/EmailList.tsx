@@ -756,7 +756,19 @@ export function EmailList(props: EmailListProps) {
                   ref={setEmptyViewport}
                   class="min-h-0 flex-1 overflow-y-auto touch:pb-(--mobile-content-inset-bottom)"
                 >
-                  <EmailEmptyState />
+                  {/* New inboxes start empty, which is when the tutorial
+                      matters most. The row then takes the touch top inset. */}
+                  <Show
+                    when={state.tab === 'important'}
+                    fallback={<EmailEmptyState />}
+                  >
+                    <div class="touch:pt-(--mobile-content-inset-top)">
+                      <EmailTutorialRow />
+                    </div>
+                    <div class="contents touch:[--mobile-content-inset-top:0px]">
+                      <EmailEmptyState />
+                    </div>
+                  </Show>
                 </div>
               </Match>
 
