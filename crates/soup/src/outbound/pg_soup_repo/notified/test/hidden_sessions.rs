@@ -193,12 +193,9 @@ async fn followed_hidden_sessions_return_to_broad_feeds(
         notified_soup_page(&pool, req(Some(&include), &[], &sources, EVERYTHING)).await?;
     assert!(keys(&notified).contains(&(EntityType::AgentSession, mine.to_string())));
     assert_eq!(
-        work_feed_soup_page(
-            &pool,
-            work_request(&include, &sources, WorkFeedSoupMode::Attention, None)
-        )
-        .await?
-        .len(),
+        attention_soup_page(&pool, work_request(&include, &sources, false, None))
+            .await?
+            .len(),
         1
     );
     Ok(())
