@@ -11,12 +11,12 @@ use sqlx::PgPool;
 use std::sync::{Arc, Mutex};
 use wiremock::{Request, Respond, matchers::path_regex};
 
-const OWNER: &str = "macro|olivia@example.com";
+pub(super) const OWNER: &str = "macro|olivia@example.com";
 const INBOX: &str = "olivia@example.com";
-const TOKEN: &str = "graph-access-token";
+pub(super) const TOKEN: &str = "graph-access-token";
 const EVENTS: &str = r"^/v1\.0/me/(calendars/[^/]+/)?events(/|$)";
 
-struct IssuedToken;
+pub(super) struct IssuedToken;
 
 impl CalendarAccessTokenProvider for IssuedToken {
     async fn fetch_access_token(
@@ -27,7 +27,7 @@ impl CalendarAccessTokenProvider for IssuedToken {
     }
 }
 
-struct NoOpenClients;
+pub(super) struct NoOpenClients;
 
 impl CalendarRefreshNotifier for NoOpenClients {
     async fn calendar_changed(&self, _: &str, _: Uuid, _: bool) {}
@@ -76,7 +76,7 @@ impl Respond for GraphEvent {
     }
 }
 
-async fn connected_mailbox(
+pub(super) async fn connected_mailbox(
     pool: &PgPool,
     server: &MockServer,
     api: &OutlookApiClientRepository,
@@ -155,14 +155,16 @@ async fn sync_event(repo: &PgCalendarRepository, api: &OutlookApiClientRepositor
         .await
         .unwrap()
         .unwrap();
-    let upsert = api
+    let OutlookEventRefresh::Refreshed(upsert) = api
         .refresh_calendar_event(TOKEN, lease.target.as_ref().unwrap(), graph_id)
         .await
         .unwrap()
-        .unwrap();
+    else {
+        panic!("{graph_id} should be readable");
+    };
     repo.upsert_event(CalendarEventWrite::OutlookSync {
         lease: Box::new(lease),
-        upsert,
+        upsert: *upsert,
     })
     .await
     .unwrap();

@@ -105,6 +105,14 @@ Outlook (Microsoft Graph) outbound adapters.
 - `domain::request_count::counted` counts the Graph requests one unit of work
   sends (the transport calls `record_sent`); Outlook token failures surface
   as `EmailApiError::CredentialsUnavailable`, apart from Graph failures.
+- The Outlook calendar normalizer (`outlook/calendar/normalize.rs`,
+  `recurrence.rs`) fails with `Rejected`, which names the Graph property
+  path (`recurrence.range.endDate`, `instances.start.dateTime`), built only
+  from literals so its log carries no event content, so the sync can skip and
+  log that one event. Give a new check a `Rejected`, not `invalid()`. Graph names UTC `tzone://Microsoft/Utc` on meetings Exchange
+  imported from another system's invitation, which `zones::zone` maps; a
+  series end date in a legacy custom zone (`tzone://Microsoft/Custom`) is
+  read in the zone the event's time is kept in.
 - Same-mailbox Outlook replies use `createReply`. When Graph refuses it with
   400 `ErrorInvalidOperation`, `create_draft` creates a standalone draft that
   carries the same correlation and RFC reply headers.

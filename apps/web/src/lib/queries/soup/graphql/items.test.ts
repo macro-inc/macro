@@ -82,6 +82,7 @@ import {
 
 type FakeExecution = {
   document: DocumentNode;
+  context: Partial<OperationContext>;
   variables: Record<string, unknown>;
   fail(error: CombinedError): void;
   next(
@@ -133,6 +134,7 @@ function makeFakeClient(): {
     } as Operation<unknown, Record<string, unknown>>;
     executions.push({
       document: _request.query,
+      context,
       variables: _request.variables,
       fail: (error) =>
         subject.next({ operation, error, stale: false, hasNext: false }),
@@ -203,6 +205,46 @@ describe('createGraphqlSoupAstItemsQuery', () => {
     makeGraphqlSoupInputMock.mockReturnValue({
       initial: { limit: 50, sortMethod: 'UPDATED_AT' },
     });
+  });
+
+  it('retains CRM dependency scope on opaque continuation pages', async () => {
+    const fake = makeFakeClient();
+    getGraphqlSoupClientMock.mockReturnValue(fake.client);
+    const { query, dispose } = createRoot((dispose) => ({
+      query: createSoupLiveQuery(() => ({
+        sortMethod: 'UPDATED_AT',
+        filters: {
+          crmCompanyFilter: {
+            literal: { id: '00000000-0000-0000-0000-000000000000' },
+          },
+          crmContactFilter: { literal: { hidden: false } },
+        },
+      })),
+      dispose,
+    }));
+    try {
+      await vi.waitFor(() => expect(fake.executions).toHaveLength(1));
+      expect(fake.executions[0].context.externalCacheWriteTypes).toEqual([
+        'GraphqlSoupCrmContact',
+      ]);
+      fake.executions[0].next(
+        graphqlSoupPage({ items: [], next_cursor: 'page-2' })
+      );
+      const more = query.fetchNextPage();
+      await vi.waitFor(() => expect(fake.executions).toHaveLength(2));
+      expect(fake.executions[1].variables).toMatchObject({
+        input: { continuation: { cursor: 'page-2' } },
+      });
+      expect(fake.executions[1].context.externalCacheWriteTypes).toEqual([
+        'GraphqlSoupCrmContact',
+      ]);
+      fake.executions[1].next(
+        graphqlSoupPage({ items: [], next_cursor: null })
+      );
+      await more;
+    } finally {
+      dispose();
+    }
   });
 
   it.each([

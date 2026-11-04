@@ -1,8 +1,8 @@
 // What "the Android native code" is, shared by the PR gate
-// (android-version-check.mjs), the Play release workflow's preconditions,
-// head guard and provenance stamp, the drift check and the watcher (all
-// through the `hash` CLI below) so they can never disagree about whether a
-// change is native.
+// (android-version-check.mjs), the Play release workflow's preconditions and
+// head guard, the publisher's head guard and provenance stamp, the drift
+// check and the watcher (all through the `hash` CLI below) so they can never
+// disagree about whether a change is native.
 //
 // It is every tracked file under apps/web/tauri except what never reaches
 // the Android binary — iOS, macOS, Linux, Windows and desktop-only paths by

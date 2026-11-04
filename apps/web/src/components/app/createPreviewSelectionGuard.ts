@@ -1,4 +1,5 @@
 import type { NavigationStackChangeReason } from '@app/components/navigation-stack/NavigationStack';
+import { globalTabManager } from '@app/signal/tabLayout';
 import { goToChannelMessage } from '@block-channel/utils/link';
 import { toast } from '@core/component/Toast/Toast';
 import { fireAndForget } from '@core/util/fireAndForget';
@@ -34,11 +35,16 @@ export function createPreviewSelectionGuard(): PreviewSelectionGuard {
   const panel = useSplitPanelOrThrow();
   const owner = Symbol('inline-preview');
   const [current, setCurrent] = createSignal<ContentIdentity>();
+  const activate = () => {
+    // A background desktop tab stays mounted and keeps its selection, so
+    // showing that selection means bringing the tab up.
+    if (globalTabManager()?.revealSplit(panel.handle.id)) return;
+
+    panel.handle.activate();
+  };
   const unregister = manager.registerOpenViews(() => {
     const content = current();
-    return content
-      ? [{ owner, content, activate: () => panel.handle.activate() }]
-      : [];
+    return content ? [{ owner, content, activate }] : [];
   });
   onCleanup(unregister);
 
@@ -98,7 +104,16 @@ export function createPreviewSelectionGuard(): PreviewSelectionGuard {
       }
       return true;
     });
-  const select: SelectPreview = (selection, reason) => {
+  // A host's route effect makes the first call as its view mounts. That
+  // selection was already in the URL (a restored tab or layout), so a conflict
+  // yields quietly: moving focus would bounce the user out of the tab they just
+  // opened.
+  let viewMounting = true;
+  const select: SelectPreview = (
+    selection,
+    reason = viewMounting ? 'restore' : 'navigate'
+  ) => {
+    viewMounting = false;
     if (!canSelect(selection, reason)) return false;
     setCurrent(identity(targetFor(selection)));
     return true;

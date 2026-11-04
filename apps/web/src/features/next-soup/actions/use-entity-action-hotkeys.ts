@@ -21,6 +21,7 @@ import { type EntityData, isEmailEntity, isTaskEntity } from '@entity';
 import { Telemetry } from '@macro-inc/observability';
 import { SYSTEM_PROPERTY_IDS } from '@property/constants';
 import type { Property, PropertyDefinitionDomain } from '@property/types';
+import { useIsTeamAdmin } from '@queries/team/teams';
 import { type Accessor, onCleanup } from 'solid-js';
 import type {
   EntityActionListState,
@@ -88,6 +89,7 @@ export const useEntityActionHotkeys = (
   } = options;
 
   const userId = useUserId();
+  const isTeamAdmin = useIsTeamAdmin();
   const notificationSource = useGlobalNotificationSource();
 
   const group = createHotkeyGroup();
@@ -107,6 +109,7 @@ export const useEntityActionHotkeys = (
   const markUnread = makeMarkUnreadAction();
 
   const deleteAction = makeDeleteAction({
+    isTeamAdmin,
     userId: () => userId(),
   });
 

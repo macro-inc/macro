@@ -1,4 +1,4 @@
-import type { DatabaseOp } from '@core/database-sql/generated/types';
+import type { CellWrite, DatabaseOp } from '@core/database-sql/generated/types';
 import { ThrownResultError, throwOnErr } from '@core/util/result';
 import { soupKeys } from '@queries/soup/keys';
 import { v7 as uuidv7 } from 'uuid';
@@ -7,7 +7,10 @@ import { toViewColumn } from '../../database/queries/column-detail';
 import type { PipelineTransfer } from '../context/pipelines';
 import { importedDomain } from '../core/import-companies';
 import type { Pipeline } from '../core/pipeline';
-import type { PipelineCsvRecord } from '../core/pipeline-csv';
+import {
+  type PipelineCsvRecord,
+  PipelineImportRefusal,
+} from '../core/pipeline-csv';
 import { runConcurrently } from '../core/run-concurrently';
 import type { CrmRecordDependencies } from './dependencies';
 import { fetchCrmExportCompanies } from './export';
@@ -151,28 +154,28 @@ export function createPipelineTransfer(
       });
       return ids;
     },
-    async insertRows(rows, columns) {
+    async insertRows(rows, columns, onRejected) {
       const labels = new Map(
         columns.map((column) => [
           column.id,
           column.options.map((option) => option.label),
         ])
       );
-      for (let start = 0; start < rows.length; start += INSERT_BATCH) {
+      async function write(
+        batch: readonly CellWrite[][],
+        start: number
+      ): Promise<void> {
         const insert: DatabaseOp = {
           kind: 'rows',
           table: pipeline.tableId,
-          change: {
-            kind: 'insert',
-            rows: rows.slice(start, start + INSERT_BATCH),
-          },
+          change: { kind: 'insert', rows: [...batch] },
         };
-        const options: DatabaseOp[] = missingOptionLabels(
+        const additions = missingOptionLabels(
           insert,
           (id) => labels.get(id) ?? []
-        ).map(({ column, labels: added }) => {
-          labels.set(column, [...(labels.get(column) ?? []), ...added]);
-          return {
+        );
+        const options: DatabaseOp[] = additions.map(
+          ({ column, labels: added }) => ({
             kind: 'column',
             table: pipeline.tableId,
             column,
@@ -180,13 +183,33 @@ export function createPipelineTransfer(
               kind: 'add_options',
               options: added.map((label) => ({ id: uuidv7(), label })),
             },
-          };
-        });
+          })
+        );
         const applied = await storage.applyCrmPipelineOps(pipeline.id, {
           ops: [...options, insert],
         });
-        if (applied.isErr()) throw new ThrownResultError(applied.error);
+        if (applied.isErr()) {
+          const refusal = applied.error.find(
+            (error) => error.code === 'INVALID_OP'
+          );
+          if (!refusal) throw new ThrownResultError(applied.error);
+          if (!onRejected) throw new PipelineImportRefusal(refusal.message);
+          // A refusal rolls back the entire batch, including new options. Split
+          // only refused batches so valid rows still commit with their options.
+          if (batch.length === 1) {
+            onRejected(start, refusal.message);
+            return;
+          }
+          const middle = Math.floor(batch.length / 2);
+          await write(batch.slice(0, middle), start);
+          await write(batch.slice(middle), start + middle);
+          return;
+        }
+        for (const { column, labels: added } of additions)
+          labels.set(column, [...(labels.get(column) ?? []), ...added]);
       }
+      for (let start = 0; start < rows.length; start += INSERT_BATCH)
+        await write(rows.slice(start, start + INSERT_BATCH), start);
     },
     async refresh() {
       await Promise.all([
