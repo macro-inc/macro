@@ -25,6 +25,9 @@ enforced by the ordinary backend APIs.
   `external_chat`) and their message/send/upload/participant handles.
 - `src/entities/whatsapp/`: the owner's WhatsApp account and chat list; `WhatsAppChat.add()`
   returns an `ExternalChat`.
+- `src/entities/me/`: `macro.me.update()` sets the caller's name and profile
+  picture from a `macro.images.upload()` image. `team.invite(emails, { agent: true })`
+  invites agents; their token only ever appears in the web app's setup modal.
 - `src/entities/images/`: `macro.images.generate()` (cognition
   `POST /images/generate`, admitted against the user's AI allowance) returns a
   sized `GeneratedImage`; `StaticImage` handles attach to `channel.send(text,

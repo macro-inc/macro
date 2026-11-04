@@ -12,7 +12,9 @@
   "paths": {
     "/health": {
       "get": {
-        "tags": ["scheduled actions"],
+        "tags": [
+          "scheduled actions"
+        ],
         "operationId": "scheduled_action_health",
         "responses": {
           "200": {
@@ -30,7 +32,9 @@
     },
     "/scheduled-actions": {
       "get": {
-        "tags": ["scheduled actions"],
+        "tags": [
+          "scheduled actions"
+        ],
         "operationId": "list_scheduled_actions",
         "parameters": [
           {
@@ -39,7 +43,10 @@
             "description": "Backend clients must opt in to event actions; defaults to false (cron-only).",
             "required": false,
             "schema": {
-              "type": ["boolean", "null"],
+              "type": [
+                "boolean",
+                "null"
+              ],
               "default": false
             }
           }
@@ -91,7 +98,9 @@
         }
       },
       "post": {
-        "tags": ["scheduled actions"],
+        "tags": [
+          "scheduled actions"
+        ],
         "operationId": "create_scheduled_action",
         "requestBody": {
           "content": {
@@ -159,7 +168,9 @@
     },
     "/scheduled-actions/{id}": {
       "get": {
-        "tags": ["scheduled actions"],
+        "tags": [
+          "scheduled actions"
+        ],
         "operationId": "get_scheduled_action",
         "parameters": [
           {
@@ -216,7 +227,9 @@
         }
       },
       "put": {
-        "tags": ["scheduled actions"],
+        "tags": [
+          "scheduled actions"
+        ],
         "operationId": "update_scheduled_action",
         "parameters": [
           {
@@ -303,7 +316,9 @@
         }
       },
       "delete": {
-        "tags": ["scheduled actions"],
+        "tags": [
+          "scheduled actions"
+        ],
         "operationId": "delete_scheduled_action",
         "parameters": [
           {
@@ -355,7 +370,9 @@
     },
     "/scheduled-actions/{id}/enabled": {
       "put": {
-        "tags": ["scheduled actions"],
+        "tags": [
+          "scheduled actions"
+        ],
         "operationId": "set_scheduled_action_enabled",
         "parameters": [
           {
@@ -444,7 +461,9 @@
     },
     "/scheduled-actions/{id}/execute": {
       "post": {
-        "tags": ["scheduled actions"],
+        "tags": [
+          "scheduled actions"
+        ],
         "operationId": "execute_scheduled_action_now",
         "parameters": [
           {
@@ -543,7 +562,9 @@
     },
     "/scheduled-actions/{id}/history": {
       "get": {
-        "tags": ["scheduled actions"],
+        "tags": [
+          "scheduled actions"
+        ],
         "operationId": "list_scheduled_action_history",
         "parameters": [
           {
@@ -605,7 +626,9 @@
     },
     "/scheduled-actions/{id}/template": {
       "get": {
-        "tags": ["scheduled actions"],
+        "tags": [
+          "scheduled actions"
+        ],
         "operationId": "get_scheduled_action_template",
         "parameters": [
           {
@@ -662,7 +685,9 @@
         }
       },
       "put": {
-        "tags": ["scheduled actions"],
+        "tags": [
+          "scheduled actions"
+        ],
         "operationId": "share_scheduled_action_template",
         "parameters": [
           {
@@ -739,7 +764,9 @@
         }
       },
       "delete": {
-        "tags": ["scheduled actions"],
+        "tags": [
+          "scheduled actions"
+        ],
         "operationId": "unshare_scheduled_action_template",
         "parameters": [
           {
@@ -791,7 +818,9 @@
     },
     "/scheduled-actions/{id}/template/activate": {
       "post": {
-        "tags": ["scheduled actions"],
+        "tags": [
+          "scheduled actions"
+        ],
         "operationId": "activate_scheduled_action_template",
         "parameters": [
           {
@@ -884,7 +913,13 @@
       "ActionConfiguration": {
         "type": "object",
         "description": "Client configuration, the create body. Ownership and execution state are\nserver-owned.",
-        "required": ["name", "trigger", "kind", "task", "enabled"],
+        "required": [
+          "name",
+          "trigger",
+          "kind",
+          "task",
+          "enabled"
+        ],
         "properties": {
           "enabled": {
             "type": "boolean"
@@ -911,10 +946,18 @@
       "ActionConfigurationUpdate": {
         "type": "object",
         "description": "Configuration replacement, the update body. Activation has its own endpoint, so\nomitting `enabled` keeps the stored value; omitting `run_visibility` keeps\nit too, so clients that predate the setting do not reset it.",
-        "required": ["name", "trigger", "kind", "task"],
+        "required": [
+          "name",
+          "trigger",
+          "kind",
+          "task"
+        ],
         "properties": {
           "enabled": {
-            "type": ["boolean", "null"],
+            "type": [
+              "boolean",
+              "null"
+            ],
             "description": "Still sent by clients deployed before the activation endpoint.",
             "deprecated": true
           },
@@ -967,14 +1010,20 @@
             "format": "date-time"
           },
           "id": {
-            "type": ["string", "null"],
+            "type": [
+              "string",
+              "null"
+            ],
             "format": "uuid"
           },
           "is_success": {
             "type": "boolean"
           },
           "resource_id": {
-            "type": ["string", "null"],
+            "type": [
+              "string",
+              "null"
+            ],
             "description": "ID of the primary resource produced by this run. Its type is recorded in\n`result`, independently of the routine's current configuration."
           },
           "result": {
@@ -988,13 +1037,19 @@
       },
       "ActionKind": {
         "type": "string",
-        "enum": ["Agent"]
+        "enum": [
+          "Agent"
+        ]
       },
       "ActionTrigger": {
         "oneOf": [
           {
             "type": "object",
-            "required": ["schedule", "timezone", "type"],
+            "required": [
+              "schedule",
+              "timezone",
+              "type"
+            ],
             "properties": {
               "schedule": {
                 "$ref": "#/components/schemas/Schedule"
@@ -1004,33 +1059,45 @@
               },
               "type": {
                 "type": "string",
-                "enum": ["cron"]
+                "enum": [
+                  "cron"
+                ]
               }
             }
           },
           {
             "type": "object",
-            "required": ["filters", "type"],
+            "required": [
+              "filters",
+              "type"
+            ],
             "properties": {
               "filters": {
                 "$ref": "#/components/schemas/EventFilters"
               },
               "type": {
                 "type": "string",
-                "enum": ["events"]
+                "enum": [
+                  "events"
+                ]
               }
             }
           },
           {
             "type": "object",
-            "required": ["triggers", "type"],
+            "required": [
+              "triggers",
+              "type"
+            ],
             "properties": {
               "triggers": {
                 "$ref": "#/components/schemas/RoutineTriggers"
               },
               "type": {
                 "type": "string",
-                "enum": ["multiple"]
+                "enum": [
+                  "multiple"
+                ]
               }
             }
           }
@@ -1040,7 +1107,10 @@
       "AgentMcpServer": {
         "type": "object",
         "description": "One Pipedream app an agent lists under [`AgentMcpServers::Selected`].\n\nOnly the catalog identity is stored. Whether a given person has connected\nthe app is theirs, resolved at call time by the egress proxy, never here.",
-        "required": ["app_slug", "server_name"],
+        "required": [
+          "app_slug",
+          "server_name"
+        ],
         "properties": {
           "app_slug": {
             "type": "string",
@@ -1054,7 +1124,10 @@
       },
       "AgentTask": {
         "type": "object",
-        "required": ["prompt", "user_prompt"],
+        "required": [
+          "prompt",
+          "user_prompt"
+        ],
         "properties": {
           "agent": {
             "oneOf": [
@@ -1096,7 +1169,9 @@
       "AgentTaskAgent": {
         "type": "object",
         "description": "A persona selection, independent of its runtime and current default model.",
-        "required": ["bot_id"],
+        "required": [
+          "bot_id"
+        ],
         "properties": {
           "bot_id": {
             "type": "string",
@@ -1107,7 +1182,10 @@
       "AiAdmissionErrorBody": {
         "type": "object",
         "description": "Public admission error payload. Handlers with additional fields can reuse the\ndomain error's code and message and [`admission_status`].",
-        "required": ["error", "code"],
+        "required": [
+          "error",
+          "code"
+        ],
         "properties": {
           "code": {
             "type": "string",
@@ -1124,7 +1202,10 @@
           {
             "type": "object",
             "description": "The triggering content answered the condition with no.",
-            "required": ["probability", "status"],
+            "required": [
+              "probability",
+              "status"
+            ],
             "properties": {
               "probability": {
                 "type": "number",
@@ -1133,18 +1214,24 @@
               },
               "status": {
                 "type": "string",
-                "enum": ["not_met"]
+                "enum": [
+                  "not_met"
+                ]
               }
             }
           },
           {
             "type": "object",
             "description": "The condition could not be checked before the retry window closed.",
-            "required": ["status"],
+            "required": [
+              "status"
+            ],
             "properties": {
               "status": {
                 "type": "string",
-                "enum": ["unavailable"]
+                "enum": [
+                  "unavailable"
+                ]
               }
             }
           }
@@ -1158,10 +1245,15 @@
       "EventFilter": {
         "type": "object",
         "description": "An event name AND an entity ID must match within the same filter. A\ncondition further requires the event's content to answer it with yes.\n\n`github` comes from outside Macro and carries its payload: it stands\nalone in its filter, takes no ids, and may require\nexact payload values with `match`. A `github` filter narrows deliveries\nwith its `github` selector.",
-        "required": ["events"],
+        "required": [
+          "events"
+        ],
         "properties": {
           "condition": {
-            "type": ["string", "null"],
+            "type": [
+              "string",
+              "null"
+            ],
             "description": "Yes/no question about the triggering content, e.g. \"Is this email an\ninvoice?\". The routine runs only when the answer is yes.",
             "maxLength": 500
           },
@@ -1183,13 +1275,19 @@
             ]
           },
           "ids": {
-            "type": ["array", "null"],
+            "type": [
+              "array",
+              "null"
+            ],
             "items": {
               "type": "string"
             }
           },
           "match": {
-            "type": ["array", "null"],
+            "type": [
+              "array",
+              "null"
+            ],
             "items": {
               "$ref": "#/components/schemas/PayloadCondition"
             },
@@ -1229,7 +1327,10 @@
       "ExecutionResource": {
         "type": "object",
         "description": "Transcript resource created by a run. Never infer this from current task configuration.",
-        "required": ["type", "id"],
+        "required": [
+          "type",
+          "id"
+        ],
         "properties": {
           "id": {
             "type": "string"
@@ -1242,12 +1343,17 @@
       "ExecutionResourceType": {
         "type": "string",
         "description": "Closed set of transcript destinations understood by routine clients.",
-        "enum": ["chat", "agent"]
+        "enum": [
+          "chat",
+          "agent"
+        ]
       },
       "ExecutionResult": {
         "type": "object",
         "description": "Version 1 execution metadata stored in the existing JSON result column.\nNull/string column values predate this envelope and refer to legacy chats.",
-        "required": ["version"],
+        "required": [
+          "version"
+        ],
         "properties": {
           "condition": {
             "oneOf": [
@@ -1261,7 +1367,10 @@
             ]
           },
           "error": {
-            "type": ["string", "null"]
+            "type": [
+              "string",
+              "null"
+            ]
           },
           "resource": {
             "oneOf": [
@@ -1314,14 +1423,19 @@
       },
       "InProgressExecution": {
         "type": "object",
-        "required": ["action_id"],
+        "required": [
+          "action_id"
+        ],
         "properties": {
           "action_id": {
             "type": "string",
             "format": "uuid"
           },
           "chat_id": {
-            "type": ["string", "null"]
+            "type": [
+              "string",
+              "null"
+            ]
           },
           "resource": {
             "oneOf": [
@@ -1339,7 +1453,10 @@
       "LastRun": {
         "type": "object",
         "description": "How a routine's most recent finished run went, so lists can flag failures.",
-        "required": ["end_time", "is_success"],
+        "required": [
+          "end_time",
+          "is_success"
+        ],
         "properties": {
           "end_time": {
             "type": "string",
@@ -1353,7 +1470,9 @@
       "PayloadCondition": {
         "type": "object",
         "description": "`path` walks objects by key; `*` steps into every element of an array and\na number into one. Give exactly one test. `notIn` also passes when the\npath finds nothing.",
-        "required": ["path"],
+        "required": [
+          "path"
+        ],
         "properties": {
           "equals": {
             "oneOf": [
@@ -1367,22 +1486,34 @@
             ]
           },
           "exists": {
-            "type": ["boolean", "null"],
+            "type": [
+              "boolean",
+              "null"
+            ],
             "description": "Whether the path finds a non-null value."
           },
           "glob": {
-            "type": ["string", "null"],
+            "type": [
+              "string",
+              "null"
+            ],
             "description": "Some text found matches this glob; `*` matches any run of characters."
           },
           "in": {
-            "type": ["array", "null"],
+            "type": [
+              "array",
+              "null"
+            ],
             "items": {
               "$ref": "#/components/schemas/PayloadScalar"
             },
             "description": "Some value found is one of these."
           },
           "notIn": {
-            "type": ["array", "null"],
+            "type": [
+              "array",
+              "null"
+            ],
             "items": {
               "$ref": "#/components/schemas/PayloadScalar"
             },
@@ -1484,7 +1615,11 @@
         "oneOf": [
           {
             "type": "object",
-            "required": ["schedule", "timezone", "type"],
+            "required": [
+              "schedule",
+              "timezone",
+              "type"
+            ],
             "properties": {
               "schedule": {
                 "$ref": "#/components/schemas/Schedule"
@@ -1494,20 +1629,27 @@
               },
               "type": {
                 "type": "string",
-                "enum": ["cron"]
+                "enum": [
+                  "cron"
+                ]
               }
             }
           },
           {
             "type": "object",
-            "required": ["filters", "type"],
+            "required": [
+              "filters",
+              "type"
+            ],
             "properties": {
               "filters": {
                 "$ref": "#/components/schemas/EventFilters"
               },
               "type": {
                 "type": "string",
-                "enum": ["events"]
+                "enum": [
+                  "events"
+                ]
               }
             }
           }
@@ -1524,7 +1666,10 @@
       "RunVisibility": {
         "type": "string",
         "description": "Whether a routine's runs are listed in Home and the Agents list. Routines\nthat run often would bury the owner's own work, so runs start unlisted;\neither way they stay in the routine's history. The string form is the\n`scheduled_action.run_visibility` column's.",
-        "enum": ["listed", "unlisted"]
+        "enum": [
+          "listed",
+          "unlisted"
+        ]
       },
       "Schedule": {
         "type": "string"
@@ -1545,7 +1690,10 @@
         ],
         "properties": {
           "claimed": {
-            "type": ["string", "null"],
+            "type": [
+              "string",
+              "null"
+            ],
             "format": "date-time"
           },
           "configuration_revision": {
@@ -1562,12 +1710,18 @@
             "description": "When false, automatic dispatch skips this action. `run_now` remains\navailable regardless."
           },
           "event_activated_at": {
-            "type": ["string", "null"],
+            "type": [
+              "string",
+              "null"
+            ],
             "format": "date-time",
             "description": "Event publication boundary; absent for cron actions."
           },
           "id": {
-            "type": ["string", "null"],
+            "type": [
+              "string",
+              "null"
+            ],
             "format": "uuid"
           },
           "kind": {
@@ -1577,7 +1731,10 @@
             "type": "string"
           },
           "next_run_at": {
-            "type": ["string", "null"],
+            "type": [
+              "string",
+              "null"
+            ],
             "format": "date-time",
             "description": "Next cron firing, absent for event-triggered actions."
           },
@@ -1593,7 +1750,10 @@
             "type": "object"
           },
           "template_id": {
-            "type": ["string", "null"],
+            "type": [
+              "string",
+              "null"
+            ],
             "format": "uuid",
             "description": "The shared template this routine was activated from, if any."
           },
@@ -1626,12 +1786,18 @@
                 ]
               },
               "schedule": {
-                "type": ["string", "null"],
+                "type": [
+                  "string",
+                  "null"
+                ],
                 "description": "Deprecated: use `trigger.schedule`. Present only for cron actions.",
                 "deprecated": true
               },
               "timezone": {
-                "type": ["string", "null"],
+                "type": [
+                  "string",
+                  "null"
+                ],
                 "description": "Deprecated: use `trigger.timezone`. Present only for cron actions.",
                 "deprecated": true
               }
@@ -1644,14 +1810,21 @@
         "oneOf": [
           {
             "type": "object",
-            "required": ["owner", "action_id", "type"],
+            "required": [
+              "owner",
+              "action_id",
+              "type"
+            ],
             "properties": {
               "action_id": {
                 "type": "string",
                 "format": "uuid"
               },
               "chat_id": {
-                "type": ["string", "null"]
+                "type": [
+                  "string",
+                  "null"
+                ]
               },
               "owner": {
                 "type": "string"
@@ -1668,20 +1841,30 @@
               },
               "type": {
                 "type": "string",
-                "enum": ["started"]
+                "enum": [
+                  "started"
+                ]
               }
             }
           },
           {
             "type": "object",
-            "required": ["owner", "action_id", "is_success", "type"],
+            "required": [
+              "owner",
+              "action_id",
+              "is_success",
+              "type"
+            ],
             "properties": {
               "action_id": {
                 "type": "string",
                 "format": "uuid"
               },
               "chat_id": {
-                "type": ["string", "null"]
+                "type": [
+                  "string",
+                  "null"
+                ]
               },
               "is_success": {
                 "type": "boolean"
@@ -1701,7 +1884,9 @@
               },
               "type": {
                 "type": "string",
-                "enum": ["stopped"]
+                "enum": [
+                  "stopped"
+                ]
               }
             }
           }
@@ -1710,7 +1895,9 @@
       },
       "SetScheduledActionEnabled": {
         "type": "object",
-        "required": ["enabled"],
+        "required": [
+          "enabled"
+        ],
         "properties": {
           "enabled": {
             "type": "boolean"
@@ -1721,7 +1908,10 @@
       "ShareRoutineTemplate": {
         "type": "object",
         "description": "What the owner supplies when sharing; the rest is snapshotted from the routine.",
-        "required": ["description", "variables"],
+        "required": [
+          "description",
+          "variables"
+        ],
         "properties": {
           "description": {
             "type": "string"
@@ -1740,7 +1930,12 @@
           {
             "type": "object",
             "description": "A person mentioned in the instructions, by their user ID.",
-            "required": ["id", "label", "fill", "kind"],
+            "required": [
+              "id",
+              "label",
+              "fill",
+              "kind"
+            ],
             "properties": {
               "fill": {
                 "$ref": "#/components/schemas/VariableFill"
@@ -1750,7 +1945,9 @@
               },
               "kind": {
                 "type": "string",
-                "enum": ["user"]
+                "enum": [
+                  "user"
+                ]
               },
               "label": {
                 "type": "string"
@@ -1760,7 +1957,13 @@
           {
             "type": "object",
             "description": "A document, channel or other item mentioned in the instructions.",
-            "required": ["id", "block_name", "label", "fill", "kind"],
+            "required": [
+              "id",
+              "block_name",
+              "label",
+              "fill",
+              "kind"
+            ],
             "properties": {
               "block_name": {
                 "type": "string",
@@ -1774,7 +1977,9 @@
               },
               "kind": {
                 "type": "string",
-                "enum": ["item"]
+                "enum": [
+                  "item"
+                ]
               },
               "label": {
                 "type": "string"
@@ -1784,14 +1989,20 @@
           {
             "type": "object",
             "description": "The time zone of the routine's schedules.",
-            "required": ["timezone", "fill", "kind"],
+            "required": [
+              "timezone",
+              "fill",
+              "kind"
+            ],
             "properties": {
               "fill": {
                 "$ref": "#/components/schemas/VariableFill"
               },
               "kind": {
                 "type": "string",
-                "enum": ["time_zone"]
+                "enum": [
+                  "time_zone"
+                ]
               },
               "timezone": {
                 "type": "string"
@@ -1804,7 +2015,11 @@
       "VariableFill": {
         "type": "string",
         "description": "How a variable is filled when someone activates the template.",
-        "enum": ["activator", "shared", "choice"]
+        "enum": [
+          "activator",
+          "shared",
+          "choice"
+        ]
       }
     }
   },

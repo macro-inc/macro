@@ -7,6 +7,7 @@
 ## Interfaces
 
 - [GenerateImageOptions](interfaces/GenerateImageOptions.md)
+- [UploadImageOptions](interfaces/UploadImageOptions.md)
 
 ## References
 

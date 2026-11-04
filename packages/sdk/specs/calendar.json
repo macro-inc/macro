@@ -11,7 +11,9 @@
   "paths": {
     "/availability-calendars": {
       "get": {
-        "tags": ["calendar_events"],
+        "tags": [
+          "calendar_events"
+        ],
         "summary": "List calendars and their personal-availability inclusion.",
         "operationId": "get_availability_calendars",
         "responses": {
@@ -30,7 +32,9 @@
     },
     "/availability-calendars/{calendar_id}": {
       "put": {
-        "tags": ["calendar_events"],
+        "tags": [
+          "calendar_events"
+        ],
         "summary": "Change which source calendars normally occupy this user's time.",
         "operationId": "set_availability_calendar",
         "parameters": [
@@ -63,7 +67,9 @@
     },
     "/calendars": {
       "get": {
-        "tags": ["calendar_events"],
+        "tags": [
+          "calendar_events"
+        ],
         "summary": "List the requester's visible calendars for pickers and filters.",
         "operationId": "list_calendars",
         "responses": {
@@ -95,7 +101,9 @@
     },
     "/events": {
       "post": {
-        "tags": ["calendar_events"],
+        "tags": [
+          "calendar_events"
+        ],
         "summary": "Create a calendar event and return its synced entity.",
         "operationId": "create_calendar_event",
         "requestBody": {
@@ -167,7 +175,9 @@
     },
     "/events/{event_id}": {
       "delete": {
-        "tags": ["calendar_events"],
+        "tags": [
+          "calendar_events"
+        ],
         "summary": "Delete a calendar event at its provider.",
         "operationId": "delete_calendar_event",
         "parameters": [
@@ -269,7 +279,9 @@
         }
       },
       "patch": {
-        "tags": ["calendar_events"],
+        "tags": [
+          "calendar_events"
+        ],
         "summary": "Update fields of a calendar event and return its synced entity.",
         "operationId": "update_calendar_event",
         "parameters": [
@@ -363,7 +375,9 @@
     },
     "/events/{event_id}/copy": {
       "post": {
-        "tags": ["calendar_events"],
+        "tags": [
+          "calendar_events"
+        ],
         "summary": "Add a snapshot of an event shared with one of the requester's channels to\none of their Google calendars and return the synced snapshot. The\nsnapshot keeps the meeting's iCalendar UID and organizer, lists only the\nrequester as a guest, and carries no join link; nobody is notified.\nWhile the requester's request to join the event is pending or accepted,\nthe copy is refused with `join_request_open`: the meeting reaches their\ncalendar as the invitation, which a copy would otherwise take in.",
         "operationId": "copy_calendar_event",
         "parameters": [
@@ -457,7 +471,9 @@
     },
     "/events/{event_id}/guests": {
       "post": {
-        "tags": ["calendar_events"],
+        "tags": [
+          "calendar_events"
+        ],
         "summary": "Add guests to a calendar event without touching anyone already invited,\nand return its synced entity. The organizer, and guests the organizer lets\ninvite others, may call it; Google emails the new guests.",
         "operationId": "invite_calendar_event_guests",
         "parameters": [
@@ -551,7 +567,9 @@
     },
     "/events/{event_id}/provider-url": {
       "get": {
-        "tags": ["calendar_events"],
+        "tags": [
+          "calendar_events"
+        ],
         "summary": "Resolve an authorized event's provider link for Outlook-only actions.",
         "operationId": "calendar_event_provider_url",
         "parameters": [
@@ -570,7 +588,10 @@
             "description": "Exact calendar copy; defaults to the canonical copy.",
             "required": false,
             "schema": {
-              "type": ["string", "null"],
+              "type": [
+                "string",
+                "null"
+              ],
               "format": "uuid"
             }
           },
@@ -580,7 +601,10 @@
             "description": "Original-start key of one occurrence; omitted for the entire series.",
             "required": false,
             "schema": {
-              "type": ["string", "null"]
+              "type": [
+                "string",
+                "null"
+              ]
             }
           }
         ],
@@ -610,7 +634,9 @@
     },
     "/events/{event_id}/replacement": {
       "post": {
-        "tags": ["calendar_events"],
+        "tags": [
+          "calendar_events"
+        ],
         "summary": "Read and persist an organizer-only preview, without sending invitations.",
         "operationId": "prepare_calendar_replacement",
         "parameters": [
@@ -660,7 +686,9 @@
     },
     "/events/{event_id}/rsvp": {
       "put": {
-        "tags": ["calendar_events"],
+        "tags": [
+          "calendar_events"
+        ],
         "summary": "Set the requester's RSVP on a calendar event and return its synced entity.",
         "operationId": "rsvp_calendar_event",
         "parameters": [
@@ -744,7 +772,9 @@
     },
     "/health": {
       "get": {
-        "tags": ["crate::health"],
+        "tags": [
+          "crate::health"
+        ],
         "summary": "Health check",
         "operationId": "health_handler",
         "responses": {
@@ -763,7 +793,9 @@
     },
     "/join-requests/{request_id}": {
       "put": {
-        "tags": ["calendar_events"],
+        "tags": [
+          "calendar_events"
+        ],
         "summary": "Answer a request to join an event the requester can change and return\nwhere it now stands. Accepting adds the guest through the invite path; an\nalready answered request is returned unchanged.",
         "operationId": "respond_to_join_request",
         "parameters": [
@@ -847,7 +879,9 @@
     },
     "/replacements/{operation_id}": {
       "get": {
-        "tags": ["calendar_events"],
+        "tags": [
+          "calendar_events"
+        ],
         "summary": "Read saved progress without performing a provider mutation.",
         "operationId": "calendar_replacement_status",
         "parameters": [
@@ -885,7 +919,9 @@
         }
       },
       "delete": {
-        "tags": ["calendar_events"],
+        "tags": [
+          "calendar_events"
+        ],
         "summary": "Discard a preview only if no confirmation has been recorded.",
         "operationId": "discard_calendar_replacement",
         "parameters": [
@@ -918,7 +954,9 @@
     },
     "/replacements/{operation_id}/confirm": {
       "post": {
-        "tags": ["calendar_events"],
+        "tags": [
+          "calendar_events"
+        ],
         "summary": "Explicitly confirm the saved preview, or resume the same confirmed operation.",
         "operationId": "confirm_calendar_replacement",
         "parameters": [
@@ -958,7 +996,9 @@
     },
     "/team-sharing": {
       "get": {
-        "tags": ["calendar_events"],
+        "tags": [
+          "calendar_events"
+        ],
         "summary": "Read the authenticated user's sharing choice.",
         "operationId": "get_team_sharing",
         "responses": {
@@ -975,7 +1015,9 @@
         }
       },
       "put": {
-        "tags": ["calendar_events"],
+        "tags": [
+          "calendar_events"
+        ],
         "summary": "Set the authenticated user's sharing choice.",
         "operationId": "set_team_sharing",
         "requestBody": {
@@ -1008,7 +1050,12 @@
       "AttendeeResponseStatus": {
         "type": "string",
         "description": "RSVP state for an attendee.",
-        "enum": ["needs_action", "accepted", "declined", "tentative"]
+        "enum": [
+          "needs_action",
+          "accepted",
+          "declined",
+          "tentative"
+        ]
       },
       "AvailabilityCalendar": {
         "type": "object",
@@ -1042,7 +1089,9 @@
       "AvailabilityCalendarBody": {
         "type": "object",
         "description": "Own-user source inclusion preference.",
-        "required": ["contributesToAvailability"],
+        "required": [
+          "contributesToAvailability"
+        ],
         "properties": {
           "contributesToAvailability": {
             "type": "boolean",
@@ -1053,7 +1102,9 @@
       "AvailabilityCalendarsResponse": {
         "type": "object",
         "description": "Source calendar settings returned to their viewer.",
-        "required": ["calendars"],
+        "required": [
+          "calendars"
+        ],
         "properties": {
           "calendars": {
             "type": "array",
@@ -1076,11 +1127,17 @@
         ],
         "properties": {
           "comment": {
-            "type": ["string", "null"],
+            "type": [
+              "string",
+              "null"
+            ],
             "description": "Optional attendee comment."
           },
           "displayName": {
-            "type": ["string", "null"],
+            "type": [
+              "string",
+              "null"
+            ],
             "description": "Provider display name."
           },
           "email": {
@@ -1108,7 +1165,9 @@
       "CalendarAttendeeInputBody": {
         "type": "object",
         "description": "An attendee supplied to a calendar mutation.",
-        "required": ["email"],
+        "required": [
+          "email"
+        ],
         "properties": {
           "email": {
             "type": "string",
@@ -1172,7 +1231,11 @@
       "CalendarDeletionScopeParam": {
         "type": "string",
         "description": "How much of a recurring series a deletion removes.",
-        "enum": ["all", "this_event", "this_and_following"]
+        "enum": [
+          "all",
+          "this_event",
+          "this_and_following"
+        ]
       },
       "CalendarEvent": {
         "type": "object",
@@ -1205,7 +1268,10 @@
             "description": "Attendees, keyed by email during persistence."
           },
           "calendarId": {
-            "type": ["string", "null"],
+            "type": [
+              "string",
+              "null"
+            ],
             "format": "uuid",
             "description": "Calendar the canonical source belongs to, when known. Absent only in\nprojections stored before calendars were attributed."
           },
@@ -1221,7 +1287,10 @@
             ]
           },
           "conferenceUrl": {
-            "type": ["string", "null"],
+            "type": [
+              "string",
+              "null"
+            ],
             "description": "Direct join URL when known."
           },
           "createdAt": {
@@ -1230,15 +1299,24 @@
             "description": "Entity creation time."
           },
           "creatorEmail": {
-            "type": ["string", "null"],
+            "type": [
+              "string",
+              "null"
+            ],
             "description": "Provider-reported creator email. Distinct from the organizer when\nsomeone writes onto a calendar they do not own. Omitted from stored\nprojections when unknown so events ingested before this field still\ncompare equal."
           },
           "creatorName": {
-            "type": ["string", "null"],
+            "type": [
+              "string",
+              "null"
+            ],
             "description": "Provider-reported creator display name."
           },
           "description": {
-            "type": ["string", "null"],
+            "type": [
+              "string",
+              "null"
+            ],
             "description": "Optional event body."
           },
           "eventType": {
@@ -1267,15 +1345,24 @@
             "description": "Whether this is a snapshot of a meeting shared with the owner, which\nMacro added to their calendar as a private copy: the meeting's changes\nnever reach it, and nothing done to it reaches the meeting."
           },
           "location": {
-            "type": ["string", "null"],
+            "type": [
+              "string",
+              "null"
+            ],
             "description": "Optional physical or virtual location label."
           },
           "organizerEmail": {
-            "type": ["string", "null"],
+            "type": [
+              "string",
+              "null"
+            ],
             "description": "Organizer email."
           },
           "organizerName": {
-            "type": ["string", "null"],
+            "type": [
+              "string",
+              "null"
+            ],
             "description": "Organizer display name."
           },
           "ownerId": {
@@ -1342,7 +1429,10 @@
         "description": "Provider-validated external event link.",
         "properties": {
           "url": {
-            "type": ["string", "null"],
+            "type": [
+              "string",
+              "null"
+            ],
             "description": "None when the event no longer exists at its provider."
           }
         }
@@ -1366,15 +1456,24 @@
             "description": "Calendar this copy lives on."
           },
           "creatorEmail": {
-            "type": ["string", "null"],
+            "type": [
+              "string",
+              "null"
+            ],
             "description": "Provider-reported creator email."
           },
           "creatorName": {
-            "type": ["string", "null"],
+            "type": [
+              "string",
+              "null"
+            ],
             "description": "Provider-reported creator display name."
           },
           "description": {
-            "type": ["string", "null"],
+            "type": [
+              "string",
+              "null"
+            ],
             "description": "Optional event body."
           },
           "eventType": {
@@ -1386,7 +1485,10 @@
             "description": "Whether the calendar's access role prohibits editing this copy."
           },
           "location": {
-            "type": ["string", "null"],
+            "type": [
+              "string",
+              "null"
+            ],
             "description": "Optional physical or virtual location label."
           },
           "reminders": {
@@ -1410,7 +1512,9 @@
       "CalendarGuestInputBody": {
         "type": "object",
         "description": "A guest added to an event.",
-        "required": ["email"],
+        "required": [
+          "email"
+        ],
         "properties": {
           "email": {
             "type": "string",
@@ -1466,17 +1570,27 @@
       "CalendarJoinRequestDecision": {
         "type": "string",
         "description": "How a sharer answers a request to join their event.",
-        "enum": ["accept", "decline"]
+        "enum": [
+          "accept",
+          "decline"
+        ]
       },
       "CalendarJoinRequestStatus": {
         "type": "string",
         "description": "Lifecycle of a request to be added as a guest of a shared event.",
-        "enum": ["pending", "accepted", "declined"]
+        "enum": [
+          "pending",
+          "accepted",
+          "declined"
+        ]
       },
       "CalendarMutationApiError": {
         "type": "object",
         "description": "HTTP error body returned by calendar mutation endpoints.",
-        "required": ["code", "message"],
+        "required": [
+          "code",
+          "message"
+        ],
         "properties": {
           "code": {
             "$ref": "#/components/schemas/CalendarMutationErrorCode",
@@ -1517,7 +1631,10 @@
       "CalendarProvider": {
         "type": "string",
         "description": "Provider selected from the persisted calendar account and email binding.",
-        "enum": ["google", "outlook"]
+        "enum": [
+          "google",
+          "outlook"
+        ]
       },
       "CalendarReplacementView": {
         "type": "object",
@@ -1565,7 +1682,10 @@
             "description": "Use this identity when confirming or checking progress."
           },
           "providerUrl": {
-            "type": ["string", "null"],
+            "type": [
+              "string",
+              "null"
+            ],
             "description": "Original event for manual review."
           },
           "removeConference": {
@@ -1573,7 +1693,10 @@
             "description": "The provider conference is removed."
           },
           "replacementUrl": {
-            "type": ["string", "null"],
+            "type": [
+              "string",
+              "null"
+            ],
             "description": "New provider event, when creation was confirmed."
           },
           "status": {
@@ -1598,29 +1721,47 @@
       "CalendarRsvpScopeParam": {
         "type": "string",
         "description": "How much of a recurring series an RSVP applies to.\n\nUnlike deletion there is no this-and-following variant: the provider\ncannot express a forward-scoped response, so offering one would be a\npromise sync could not keep.",
-        "enum": ["all", "this_event"]
+        "enum": [
+          "all",
+          "this_event"
+        ]
       },
       "CalendarUpdateScopeParam": {
         "type": "string",
         "description": "How much of a recurring series an update applies to.\n\nLike RSVPs there is no this-and-following variant: the provider cannot\nexpress a forward-scoped edit as one write, and emulating it (truncate\nthe series, insert an edited clone) is non-atomic and re-invites the\nattendees of the clone. Compose it from a this-and-following deletion\nand a create when that shape is wanted.",
-        "enum": ["all", "this_event"]
+        "enum": [
+          "all",
+          "this_event"
+        ]
       },
       "ConferenceChange": {
         "type": "string",
         "description": "A requested change to an event's conferencing. Omitting the field leaves\nthe existing conference untouched; only these values change it.",
-        "enum": ["provider_default", "microsoft_teams", "google_meet", "none"]
+        "enum": [
+          "provider_default",
+          "microsoft_teams",
+          "google_meet",
+          "none"
+        ]
       },
       "ConferenceProvider": {
         "type": "string",
         "description": "The conferencing system backing an event's join URL.\n\nCalendars can create Google Meet or Microsoft Teams according to their\ncapabilities. Imported third-party conferences are labeled separately.\nOmitting a conference change preserves the current conference; explicit\nchanges still require provider and calendar capability validation.",
-        "enum": ["microsoft_teams", "google_meet", "other"]
+        "enum": [
+          "microsoft_teams",
+          "google_meet",
+          "other"
+        ]
       },
       "CopyCalendarEventRequest": {
         "type": "object",
         "description": "Request body adding a shared event to the requester's calendar.",
         "properties": {
           "calendarId": {
-            "type": ["string", "null"],
+            "type": [
+              "string",
+              "null"
+            ],
             "format": "uuid",
             "description": "Google calendar to add the copy to; defaults to the requester's\nprimary inbox's primary calendar."
           }
@@ -1629,7 +1770,10 @@
       "CreateCalendarEventRequest": {
         "type": "object",
         "description": "Request body creating a calendar event on the requester's calendar.",
-        "required": ["title", "time"],
+        "required": [
+          "title",
+          "time"
+        ],
         "properties": {
           "attendees": {
             "type": "array",
@@ -1639,7 +1783,10 @@
             "description": "Invited attendees."
           },
           "calendarId": {
-            "type": ["string", "null"],
+            "type": [
+              "string",
+              "null"
+            ],
             "format": "uuid",
             "description": "Exact calendar to create the event on; takes precedence over the\ninbox default."
           },
@@ -1655,11 +1802,17 @@
             ]
           },
           "description": {
-            "type": ["string", "null"],
+            "type": [
+              "string",
+              "null"
+            ],
             "description": "Optional event body."
           },
           "emailLinkId": {
-            "type": ["string", "null"],
+            "type": [
+              "string",
+              "null"
+            ],
             "format": "uuid",
             "description": "Connected inbox whose primary calendar receives the event; defaults\nto the requester's primary inbox."
           },
@@ -1675,12 +1828,18 @@
             ]
           },
           "idempotencyKey": {
-            "type": ["string", "null"],
+            "type": [
+              "string",
+              "null"
+            ],
             "format": "uuid",
             "description": "Stable retry identity, scoped to the authenticated organizer."
           },
           "location": {
-            "type": ["string", "null"],
+            "type": [
+              "string",
+              "null"
+            ],
             "description": "Optional location label."
           },
           "macroCall": {
@@ -1751,7 +1910,10 @@
       "EventReminderOverride": {
         "type": "object",
         "description": "One reminder: how it alerts and how many minutes before the event start\n(before midnight in the calendar's zone for all-day events) it fires.",
-        "required": ["method", "minutes"],
+        "required": [
+          "method",
+          "minutes"
+        ],
         "properties": {
           "method": {
             "type": "string",
@@ -1768,7 +1930,9 @@
       "EventReminders": {
         "type": "object",
         "description": "Per-user reminder configuration for an event, mirroring Google's model:\neither the calendar's default reminders apply, or the explicit overrides\nreplace them entirely.",
-        "required": ["useDefault"],
+        "required": [
+          "useDefault"
+        ],
         "properties": {
           "overrides": {
             "type": "array",
@@ -1786,14 +1950,22 @@
       "EventStatus": {
         "type": "string",
         "description": "Canonical event status.",
-        "enum": ["confirmed", "tentative", "cancelled"]
+        "enum": [
+          "confirmed",
+          "tentative",
+          "cancelled"
+        ]
       },
       "EventTime": {
         "oneOf": [
           {
             "type": "object",
             "description": "An event with absolute instants.",
-            "required": ["startsAt", "endsAt", "kind"],
+            "required": [
+              "startsAt",
+              "endsAt",
+              "kind"
+            ],
             "properties": {
               "endsAt": {
                 "type": "string",
@@ -1802,7 +1974,9 @@
               },
               "kind": {
                 "type": "string",
-                "enum": ["timed"]
+                "enum": [
+                  "timed"
+                ]
               },
               "startsAt": {
                 "type": "string",
@@ -1810,7 +1984,10 @@
                 "description": "Inclusive start instant."
               },
               "timeZone": {
-                "type": ["string", "null"],
+                "type": [
+                  "string",
+                  "null"
+                ],
                 "description": "Original IANA time-zone identifier, when supplied."
               }
             }
@@ -1818,7 +1995,11 @@
           {
             "type": "object",
             "description": "An all-day event using RFC 5545's exclusive end date.",
-            "required": ["startDate", "endDate", "kind"],
+            "required": [
+              "startDate",
+              "endDate",
+              "kind"
+            ],
             "properties": {
               "endDate": {
                 "type": "string",
@@ -1827,7 +2008,9 @@
               },
               "kind": {
                 "type": "string",
-                "enum": ["allDay"]
+                "enum": [
+                  "allDay"
+                ]
               },
               "startDate": {
                 "type": "string",
@@ -1842,7 +2025,10 @@
       "EventTransparency": {
         "type": "string",
         "description": "Whether an event blocks availability.",
-        "enum": ["opaque", "transparent"]
+        "enum": [
+          "opaque",
+          "transparent"
+        ]
       },
       "EventType": {
         "type": "string",
@@ -1859,12 +2045,21 @@
       "EventVisibility": {
         "type": "string",
         "description": "Visibility of event details.",
-        "enum": ["default", "public", "private", "confidential"]
+        "enum": [
+          "default",
+          "public",
+          "private",
+          "confidential"
+        ]
       },
       "GuestPolicy": {
         "type": "object",
         "description": "The switches an organizer sets on an event to bound what its guests may\ndo. Google omits a switch from the payload while it holds its default.",
-        "required": ["canModify", "canInviteOthers", "canSeeOtherGuests"],
+        "required": [
+          "canModify",
+          "canInviteOthers",
+          "canSeeOtherGuests"
+        ],
         "properties": {
           "canInviteOthers": {
             "type": "boolean",
@@ -1883,10 +2078,15 @@
       "InviteCalendarEventGuestsRequest": {
         "type": "object",
         "description": "Request body adding guests to an event without touching anyone already\ninvited.",
-        "required": ["guests"],
+        "required": [
+          "guests"
+        ],
         "properties": {
           "calendarId": {
-            "type": ["string", "null"],
+            "type": [
+              "string",
+              "null"
+            ],
             "format": "uuid",
             "description": "Calendar whose copy of the event is written, for an event synced from\nmore than one calendar. Omit to write the canonical copy."
           },
@@ -1898,11 +2098,17 @@
             "description": "Guests to add; anyone already on the event is skipped."
           },
           "inbox": {
-            "type": ["string", "null"],
+            "type": [
+              "string",
+              "null"
+            ],
             "description": "Inbox address holding the copy this request changes. An agent run\nmust name it when the meeting is on more than one of the requester's\ninboxes, and it must be the inbox holding the addressed copy; a\nmismatch is refused whoever sends it."
           },
           "recurrenceId": {
-            "type": ["string", "null"],
+            "type": [
+              "string",
+              "null"
+            ],
             "description": "Original-start key of the occurrence the guests are added to."
           },
           "scope": {
@@ -1921,7 +2127,9 @@
       "ListCalendarsResponse": {
         "type": "object",
         "description": "Calendars visible to the requester across connected and delegated inboxes.",
-        "required": ["calendars"],
+        "required": [
+          "calendars"
+        ],
         "properties": {
           "calendars": {
             "type": "array",
@@ -1950,7 +2158,10 @@
             "description": "How conflicting invitations are handled while the user is out."
           },
           "declineMessage": {
-            "type": ["string", "null"],
+            "type": [
+              "string",
+              "null"
+            ],
             "description": "Message returned to organizers whose invitations are auto-declined."
           }
         }
@@ -1958,15 +2169,23 @@
       "PrepareCalendarReplacementRequest": {
         "type": "object",
         "description": "A read-only preview request. Confirmation uses the returned operation identity.",
-        "required": ["removeConference"],
+        "required": [
+          "removeConference"
+        ],
         "properties": {
           "calendarId": {
-            "type": ["string", "null"],
+            "type": [
+              "string",
+              "null"
+            ],
             "format": "uuid",
             "description": "Exact calendar copy; defaults to canonical."
           },
           "recurrenceId": {
-            "type": ["string", "null"],
+            "type": [
+              "string",
+              "null"
+            ],
             "description": "Original-start key; omitted to replace the entire series."
           },
           "removeConference": {
@@ -1980,11 +2199,17 @@
           {
             "type": "object",
             "description": "A sync run committed changes for `link_id`; viewers should refetch.",
-            "required": ["link_id", "team_ooo_changed", "event"],
+            "required": [
+              "link_id",
+              "team_ooo_changed",
+              "event"
+            ],
             "properties": {
               "event": {
                 "type": "string",
-                "enum": ["synced"]
+                "enum": [
+                  "synced"
+                ]
               },
               "link_id": {
                 "type": "string",
@@ -2000,11 +2225,16 @@
           {
             "type": "object",
             "description": "Team projections need refreshing after a sync or entitlement change.",
-            "required": ["team_ooo_changed", "event"],
+            "required": [
+              "team_ooo_changed",
+              "event"
+            ],
             "properties": {
               "event": {
                 "type": "string",
-                "enum": ["team_sharing_changed"]
+                "enum": [
+                  "team_sharing_changed"
+                ]
               },
               "team_ooo_changed": {
                 "type": "boolean",
@@ -2015,11 +2245,16 @@
           {
             "type": "object",
             "description": "The viewer's request to join a shared event was answered.",
-            "required": ["event_id", "event"],
+            "required": [
+              "event_id",
+              "event"
+            ],
             "properties": {
               "event": {
                 "type": "string",
-                "enum": ["join_request_answered"]
+                "enum": [
+                  "join_request_answered"
+                ]
               },
               "event_id": {
                 "type": "string",
@@ -2034,12 +2269,18 @@
       "ReplacementStatus": {
         "type": "string",
         "description": "User-visible workflow state.",
-        "enum": ["needs_confirmation", "in_progress", "complete"]
+        "enum": [
+          "needs_confirmation",
+          "in_progress",
+          "complete"
+        ]
       },
       "RespondToJoinRequestRequest": {
         "type": "object",
         "description": "Request body answering a join request.",
-        "required": ["decision"],
+        "required": [
+          "decision"
+        ],
         "properties": {
           "decision": {
             "$ref": "#/components/schemas/CalendarJoinRequestDecision",
@@ -2050,19 +2291,30 @@
       "RsvpCalendarEventRequest": {
         "type": "object",
         "description": "Request body setting the requester's RSVP on an event.",
-        "required": ["response"],
+        "required": [
+          "response"
+        ],
         "properties": {
           "calendarId": {
-            "type": ["string", "null"],
+            "type": [
+              "string",
+              "null"
+            ],
             "format": "uuid",
             "description": "Calendar whose copy of the event is answered, for an event synced\nfrom more than one calendar. Omit to answer on the canonical copy."
           },
           "recurrenceId": {
-            "type": ["string", "null"],
+            "type": [
+              "string",
+              "null"
+            ],
             "description": "Original-start key of the occurrence the response targets."
           },
           "respondingEmail": {
-            "type": ["string", "null"],
+            "type": [
+              "string",
+              "null"
+            ],
             "description": "The owned connected address whose attendance is changed. Validated by the domain.\nOmit to answer as the inbox the addressed copy syncs through."
           },
           "response": {
@@ -2085,12 +2337,18 @@
       "TeamCalendarSharing": {
         "type": "string",
         "description": "What a user exposes through their team membership.",
-        "enum": ["all", "busy_only", "none"]
+        "enum": [
+          "all",
+          "busy_only",
+          "none"
+        ]
       },
       "TeamCalendarSharingBody": {
         "type": "object",
         "description": "Own-user sharing preference.",
-        "required": ["sharing"],
+        "required": [
+          "sharing"
+        ],
         "properties": {
           "sharing": {
             "$ref": "#/components/schemas/TeamCalendarSharing",
@@ -2103,14 +2361,20 @@
         "description": "Request body patching an event; omitted fields are left untouched.",
         "properties": {
           "attendees": {
-            "type": ["array", "null"],
+            "type": [
+              "array",
+              "null"
+            ],
             "items": {
               "$ref": "#/components/schemas/CalendarAttendeeInputBody"
             },
             "description": "Replacement attendee list."
           },
           "calendarId": {
-            "type": ["string", "null"],
+            "type": [
+              "string",
+              "null"
+            ],
             "format": "uuid",
             "description": "Calendar whose copy of the event is patched, for an event synced from\nmore than one calendar. Omit to patch the canonical copy."
           },
@@ -2126,7 +2390,10 @@
             ]
           },
           "description": {
-            "type": ["string", "null"],
+            "type": [
+              "string",
+              "null"
+            ],
             "description": "Replacement description; an empty string clears it."
           },
           "guestPolicy": {
@@ -2141,11 +2408,17 @@
             ]
           },
           "inbox": {
-            "type": ["string", "null"],
+            "type": [
+              "string",
+              "null"
+            ],
             "description": "Inbox address holding the copy this request changes. An agent run\nmust name it when the meeting is on more than one of the requester's\ninboxes, and it must be the inbox holding the addressed copy; a\nmismatch is refused whoever sends it."
           },
           "location": {
-            "type": ["string", "null"],
+            "type": [
+              "string",
+              "null"
+            ],
             "description": "Replacement location; an empty string clears it."
           },
           "outOfOffice": {
@@ -2160,11 +2433,17 @@
             ]
           },
           "recurrenceId": {
-            "type": ["string", "null"],
+            "type": [
+              "string",
+              "null"
+            ],
             "description": "Original-start key of the occurrence the update targets."
           },
           "recurrenceLines": {
-            "type": ["array", "null"],
+            "type": [
+              "array",
+              "null"
+            ],
             "items": {
               "type": "string"
             },
@@ -2204,7 +2483,10 @@
             ]
           },
           "title": {
-            "type": ["string", "null"],
+            "type": [
+              "string",
+              "null"
+            ],
             "description": "Replacement title; an empty string clears it."
           },
           "transparency": {
@@ -2290,7 +2572,10 @@
             "description": "Provider features available on this actual calendar."
           },
           "color": {
-            "type": ["string", "null"],
+            "type": [
+              "string",
+              "null"
+            ],
             "description": "Provider color."
           },
           "contributesToAvailability": {
@@ -2339,7 +2624,10 @@
             "description": "Calendar provider, for display and reconnect routing."
           },
           "syncError": {
-            "type": ["string", "null"],
+            "type": [
+              "string",
+              "null"
+            ],
             "description": "A persistent sync failure isolated to this calendar, surfaced so the\nsettings row can badge it. `None` while the calendar is syncing\nnormally or a failure has not yet crossed the persistence threshold."
           }
         }

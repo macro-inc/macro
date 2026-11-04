@@ -48,3 +48,33 @@ const image = await macro.images.generate({
 });
 await channel.send('Fresh off the press', { images: [image] });
 ```
+
+***
+
+### upload()
+
+> **upload**(`data`, `options`): `Promise`\<[`StaticImage`](../../image/classes/StaticImage.md)\>
+
+Upload an image to static file storage. Use the result as a profile
+picture with `macro.me.update({ profilePicture: image })`, or attach it to
+a channel message.
+
+#### Parameters
+
+| Parameter | Type |
+| ------ | ------ |
+| `data` | `Blob` \| `Uint8Array`\<`ArrayBuffer`\> |
+| `options` | [`UploadImageOptions`](../interfaces/UploadImageOptions.md) |
+
+#### Returns
+
+`Promise`\<[`StaticImage`](../../image/classes/StaticImage.md)\>
+
+#### Example
+
+```ts
+const image = await macro.images.upload(bytes, {
+  fileName: 'avatar.png',
+  contentType: 'image/png',
+});
+```

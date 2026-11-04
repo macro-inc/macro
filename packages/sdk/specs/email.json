@@ -12,7 +12,9 @@
   "paths": {
     "/email/attachments/{id}": {
       "get": {
-        "tags": ["Attachments"],
+        "tags": [
+          "Attachments"
+        ],
         "summary": "Get an attachment by ID.",
         "operationId": "get_attachment",
         "parameters": [
@@ -113,7 +115,9 @@
     },
     "/email/attachments/{id}/document_id": {
       "get": {
-        "tags": ["Attachments"],
+        "tags": [
+          "Attachments"
+        ],
         "summary": "Get the Macro document id for an email attachment, uploading it if it doesn't already exist.",
         "operationId": "get_attachment_document_id",
         "parameters": [
@@ -184,7 +188,9 @@
     },
     "/email/backfill/gmail": {
       "get": {
-        "tags": ["Init"],
+        "tags": [
+          "Init"
+        ],
         "summary": "List all backfill jobs for the authenticated user, across every link they\nown. Scoped by the user's fusionauth id from the request context rather than\na single resolved link.",
         "operationId": "list_backfill_gmail",
         "responses": {
@@ -221,7 +227,9 @@
         }
       },
       "delete": {
-        "tags": ["Init"],
+        "tags": [
+          "Init"
+        ],
         "summary": "Cancel a backfill job.",
         "operationId": "cancel_backfill_gmail",
         "requestBody": {
@@ -280,7 +288,9 @@
     },
     "/email/backfill/gmail/active": {
       "get": {
-        "tags": ["Init"],
+        "tags": [
+          "Init"
+        ],
         "summary": "Get any active backfill job for the user.",
         "operationId": "get_backfill_gmail_active",
         "responses": {
@@ -329,7 +339,9 @@
     },
     "/email/backfill/gmail/{id}": {
       "get": {
-        "tags": ["Init"],
+        "tags": [
+          "Init"
+        ],
         "summary": "Get a backfill job.",
         "operationId": "get_backfill_gmail",
         "parameters": [
@@ -390,7 +402,9 @@
     },
     "/email/calendar-events/{event_id}/forward": {
       "post": {
-        "tags": ["email"],
+        "tags": [
+          "email"
+        ],
         "summary": "Email one of the viewer's events to people the organizer's guest list\ndoes not name, from the inbox that holds the viewer's copy, with the\nusual undo delay, carrying the copy's join link. When the copy is Google's\nprivate copy of an invitation from an organizer outside Google, it is a\nreal invitation (`METHOD:REQUEST`) naming the recipients, who answer it to\nthe organizer, who gets the email too. Otherwise it is the event's file\n(`METHOD:PUBLISH`, no attendees): recipients can add the event to their\nown calendar, are not added to the guest list, and the organizer is not\ntold.",
         "operationId": "forward_calendar_event",
         "parameters": [
@@ -474,7 +488,9 @@
     },
     "/email/contacts": {
       "get": {
-        "tags": ["Contacts"],
+        "tags": [
+          "Contacts"
+        ],
         "summary": "List all contacts belonging to the user, grouped by link.",
         "operationId": "list_contacts",
         "responses": {
@@ -513,7 +529,9 @@
     },
     "/email/contacts/block": {
       "post": {
-        "tags": ["Contacts"],
+        "tags": [
+          "Contacts"
+        ],
         "summary": "Durably block a sender in the selected inbox.",
         "operationId": "block_sender",
         "requestBody": {
@@ -565,7 +583,9 @@
     },
     "/email/contacts/blocked": {
       "get": {
-        "tags": ["Contacts"],
+        "tags": [
+          "Contacts"
+        ],
         "summary": "List all blocked senders for the authenticated user.",
         "operationId": "list_blocked_senders",
         "responses": {
@@ -644,7 +664,9 @@
     },
     "/email/contacts/unblock": {
       "post": {
-        "tags": ["Contacts"],
+        "tags": [
+          "Contacts"
+        ],
         "summary": "Durably remove Macro-managed sender blocking in the selected inbox.",
         "operationId": "unblock_sender",
         "requestBody": {
@@ -696,7 +718,9 @@
     },
     "/email/draft-transfers/{id}/recover": {
       "post": {
-        "tags": ["Drafts"],
+        "tags": [
+          "Drafts"
+        ],
         "operationId": "recover_draft_transfer",
         "parameters": [
           {
@@ -731,7 +755,9 @@
     },
     "/email/drafts": {
       "post": {
-        "tags": ["Drafts"],
+        "tags": [
+          "Drafts"
+        ],
         "summary": "Create a draft.",
         "operationId": "create_draft",
         "requestBody": {
@@ -790,7 +816,9 @@
     },
     "/email/drafts/scheduled": {
       "get": {
-        "tags": ["Draft Scheduling"],
+        "tags": [
+          "Draft Scheduling"
+        ],
         "summary": "List scheduled drafts.",
         "operationId": "get_scheduled_messages",
         "parameters": [
@@ -863,7 +891,9 @@
     },
     "/email/drafts/scheduled/{id}": {
       "put": {
-        "tags": ["Draft Scheduling"],
+        "tags": [
+          "Draft Scheduling"
+        ],
         "summary": "Schedule or update a scheduled draft.",
         "operationId": "upsert_scheduled_message",
         "parameters": [
@@ -964,7 +994,9 @@
     },
     "/email/drafts/scheduled/{message_id}": {
       "delete": {
-        "tags": ["Draft Scheduling"],
+        "tags": [
+          "Draft Scheduling"
+        ],
         "summary": "Remove the scheduled send from a draft, including immediate-send undo.",
         "operationId": "delete_scheduled_draft",
         "parameters": [
@@ -1048,7 +1080,9 @@
     },
     "/email/drafts/{id}": {
       "delete": {
-        "tags": ["Drafts"],
+        "tags": [
+          "Drafts"
+        ],
         "summary": "Delete a draft.",
         "operationId": "delete_draft",
         "parameters": [
@@ -1129,7 +1163,9 @@
     },
     "/email/drafts/{id}/attachments": {
       "post": {
-        "tags": ["Drafts"],
+        "tags": [
+          "Drafts"
+        ],
         "summary": "Add an attachment to a draft.",
         "operationId": "add_draft_attachment",
         "parameters": [
@@ -1220,7 +1256,9 @@
     },
     "/email/drafts/{id}/attachments/{attachment_id}": {
       "delete": {
-        "tags": ["Drafts"],
+        "tags": [
+          "Drafts"
+        ],
         "summary": "Remove an attachment from a draft.",
         "operationId": "remove_draft_attachment",
         "parameters": [
@@ -1311,7 +1349,9 @@
     },
     "/email/drafts/{id}/attachments/{attachment_id}/complete": {
       "post": {
-        "tags": ["Drafts"],
+        "tags": [
+          "Drafts"
+        ],
         "summary": "Confirm an uploaded attachment before it becomes part of a sendable draft.",
         "operationId": "complete_draft_attachment",
         "parameters": [
@@ -1368,7 +1408,9 @@
     },
     "/email/drafts/{id}/forwarded-attachments": {
       "post": {
-        "tags": ["Drafts"],
+        "tags": [
+          "Drafts"
+        ],
         "summary": "Add a forwarded attachment to a draft.",
         "operationId": "add_forwarded_attachment",
         "parameters": [
@@ -1439,7 +1481,9 @@
     },
     "/email/drafts/{id}/forwarded-attachments/{attachment_id}": {
       "delete": {
-        "tags": ["Drafts"],
+        "tags": [
+          "Drafts"
+        ],
         "summary": "Remove a forwarded attachment from a draft.",
         "operationId": "remove_forwarded_attachment",
         "parameters": [
@@ -1503,7 +1547,9 @@
     },
     "/email/drafts/{id}/operation": {
       "get": {
-        "tags": ["Drafts"],
+        "tags": [
+          "Drafts"
+        ],
         "summary": "The same provider-neutral state returned on fully hydrated email messages.",
         "operationId": "message_operation_status",
         "parameters": [
@@ -1554,7 +1600,9 @@
     },
     "/email/drafts/{id}/resolve": {
       "post": {
-        "tags": ["Drafts"],
+        "tags": [
+          "Drafts"
+        ],
         "summary": "Resolve an observed draft conflict or uncertain provider operation.",
         "operationId": "resolve_message_operation",
         "parameters": [
@@ -1628,7 +1676,9 @@
     },
     "/email/drafts/{id}/transfer": {
       "post": {
-        "tags": ["Drafts"],
+        "tags": [
+          "Drafts"
+        ],
         "operationId": "transfer_draft",
         "parameters": [
           {
@@ -1679,7 +1729,9 @@
     },
     "/email/filters": {
       "get": {
-        "tags": ["Email Filters"],
+        "tags": [
+          "Email Filters"
+        ],
         "summary": "List all email filters for the current user.",
         "operationId": "list_email_filters",
         "responses": {
@@ -1716,7 +1768,9 @@
         }
       },
       "put": {
-        "tags": ["Email Filters"],
+        "tags": [
+          "Email Filters"
+        ],
         "summary": "Create or update an email filter.",
         "operationId": "upsert_email_filter",
         "requestBody": {
@@ -1775,7 +1829,9 @@
     },
     "/email/filters/{id}": {
       "delete": {
-        "tags": ["Email Filters"],
+        "tags": [
+          "Email Filters"
+        ],
         "summary": "Delete an email filter by ID.",
         "operationId": "delete_email_filter",
         "parameters": [
@@ -1829,7 +1885,9 @@
     },
     "/email/init": {
       "post": {
-        "tags": ["Init"],
+        "tags": [
+          "Init"
+        ],
         "summary": "Initialize email functionality for the user. Populates initial threads and enables inbox syncing.",
         "operationId": "init_user",
         "parameters": [
@@ -1929,7 +1987,9 @@
     },
     "/email/labels": {
       "get": {
-        "tags": ["Labels"],
+        "tags": [
+          "Labels"
+        ],
         "summary": "List all labels for the user's email link.",
         "operationId": "list_labels",
         "responses": {
@@ -1966,7 +2026,9 @@
         }
       },
       "post": {
-        "tags": ["Labels"],
+        "tags": [
+          "Labels"
+        ],
         "summary": "Create a label.",
         "operationId": "create_label",
         "requestBody": {
@@ -2065,7 +2127,9 @@
     },
     "/email/labels/{id}": {
       "delete": {
-        "tags": ["Labels"],
+        "tags": [
+          "Labels"
+        ],
         "summary": "Delete a label.",
         "operationId": "delete_label",
         "parameters": [
@@ -2136,7 +2200,9 @@
     },
     "/email/links": {
       "get": {
-        "tags": ["Links"],
+        "tags": [
+          "Links"
+        ],
         "summary": "List all links belonging to the user.",
         "operationId": "list_links",
         "responses": {
@@ -2185,7 +2251,9 @@
     },
     "/email/links/health-check": {
       "post": {
-        "tags": ["Links"],
+        "tags": [
+          "Links"
+        ],
         "summary": "Probes the live auth state of each of the caller's inboxes (owned and delegated)\nagainst the auth service and records the result on each link. A grant that died\nwhile the caller was inactive is detected here within minutes instead of waiting on\nthe daily refresh sweep; the side effects (clearing or setting the reauth flag, and\nthe one-time reauth fan-out) are handled by the email service token source.",
         "description": "Probes are durably queued and the response returns immediately to stay off the\nload path; each persisted flag is picked up by the next links read. Probes are\nthrottled per link in Redis so frequent calls — and many sharers of a shared inbox —\ncollapse to one refresh per window.",
         "operationId": "health_check_links",
@@ -2225,7 +2293,9 @@
     },
     "/email/links/{link_id}": {
       "delete": {
-        "tags": ["Links"],
+        "tags": [
+          "Links"
+        ],
         "summary": "Removes a linked inbox.",
         "description": "For an inbox the caller owns this enqueues a full cascade teardown\n(`LinkManagerMessage::DeleteLink`). For an inbox reached via delegation it\nonly drops the `macro_user_links` edge, leaving the owner's data intact.",
         "operationId": "delete_link",
@@ -2297,7 +2367,9 @@
     },
     "/email/links/{link_id}/calendar": {
       "delete": {
-        "tags": ["Links"],
+        "tags": [
+          "Links"
+        ],
         "summary": "Turns calendar off for a connected inbox.",
         "description": "Removes the inbox's calendar data, drops the calendar scopes from its\nrecorded Google grant, and closes its push channels, so the inbox reads as\ncalendar-less until the user runs the calendar consent flow again. Gmail\nsync is untouched.\n\nOnly the inbox's owner may do this: a delegate can see the owner's calendar\nbut must not be able to delete the owner's data.",
         "operationId": "disable_link_calendar",
@@ -2369,7 +2441,9 @@
     },
     "/email/links/{link_id}/resync": {
       "post": {
-        "tags": ["Links"],
+        "tags": [
+          "Links"
+        ],
         "summary": "Re-syncs a linked inbox by enqueuing a fresh backfill.",
         "description": "Idempotent: if a backfill is already `Init`/`InProgress` for the inbox this is\na no-op and returns that job.",
         "operationId": "resync_link",
@@ -2441,7 +2515,9 @@
     },
     "/email/messages": {
       "post": {
-        "tags": ["Messages"],
+        "tags": [
+          "Messages"
+        ],
         "summary": "Send a message.",
         "operationId": "send_message",
         "requestBody": {
@@ -2500,7 +2576,9 @@
     },
     "/email/messages/batch": {
       "post": {
-        "tags": ["Messages"],
+        "tags": [
+          "Messages"
+        ],
         "operationId": "get_messages_batch",
         "requestBody": {
           "content": {
@@ -2575,7 +2653,9 @@
     },
     "/email/messages/labels": {
       "patch": {
-        "tags": ["Messages"],
+        "tags": [
+          "Messages"
+        ],
         "summary": "Add or remove a label from a batch of messages",
         "operationId": "add_remove_label",
         "requestBody": {
@@ -2644,7 +2724,9 @@
     },
     "/email/messages/{id}": {
       "get": {
-        "tags": ["Messages"],
+        "tags": [
+          "Messages"
+        ],
         "operationId": "get_message",
         "parameters": [
           {
@@ -2714,7 +2796,9 @@
     },
     "/email/messages/{id}/eml": {
       "get": {
-        "tags": ["Messages"],
+        "tags": [
+          "Messages"
+        ],
         "summary": "Download a message's original source as an `.eml` file.",
         "operationId": "get_message_eml",
         "parameters": [
@@ -2805,7 +2889,9 @@
     },
     "/email/settings": {
       "patch": {
-        "tags": ["Settings"],
+        "tags": [
+          "Settings"
+        ],
         "summary": "Patch user settings.",
         "operationId": "patch_settings",
         "requestBody": {
@@ -2874,7 +2960,9 @@
     },
     "/email/settings/operations": {
       "get": {
-        "tags": ["Settings"],
+        "tags": [
+          "Settings"
+        ],
         "summary": "Accepted label and sender-policy changes awaiting provider confirmation.",
         "operationId": "mailbox_settings_operations",
         "responses": {
@@ -2896,7 +2984,9 @@
     },
     "/email/sync": {
       "delete": {
-        "tags": ["Sync"],
+        "tags": [
+          "Sync"
+        ],
         "summary": "Disables inbox syncing for the selected inbox.",
         "description": "The inbox is the caller's primary, or the one named by `X-Email-Link-Id`,\nwhich may be an inbox the caller only reaches through delegation. Removal\ntherefore follows the same policy as `DELETE /email/links/{link_id}`: an\nowner's inbox is torn down, while a delegate only loses their\n`macro_user_links` edge and the owner's data stays intact.",
         "operationId": "disable_sync",
@@ -2907,7 +2997,10 @@
             "description": "Inbox link ID to act on instead of the caller's primary inbox; may name a delegated inbox.",
             "required": false,
             "schema": {
-              "type": ["string", "null"],
+              "type": [
+                "string",
+                "null"
+              ],
               "format": "uuid"
             }
           }
@@ -2988,7 +3081,9 @@
     },
     "/email/threads/archived": {
       "patch": {
-        "tags": ["Threads"],
+        "tags": [
+          "Threads"
+        ],
         "summary": "Change the archived status of up to 100 threads, sending one provider\nwrite per inbox. A thread that can't change is reported, not fatal.",
         "operationId": "archive_threads",
         "requestBody": {
@@ -3047,7 +3142,9 @@
     },
     "/email/threads/previews/cursor/{view}": {
       "get": {
-        "tags": ["Previews"],
+        "tags": [
+          "Previews"
+        ],
         "summary": "Get paginated thread previews with cursor-based pagination.",
         "operationId": "previews_inbox_cursor",
         "parameters": [
@@ -3136,7 +3233,9 @@
     },
     "/email/threads/{id}/archived": {
       "patch": {
-        "tags": ["Threads"],
+        "tags": [
+          "Threads"
+        ],
         "summary": "Change the archived status of a thread.",
         "operationId": "archive_thread",
         "parameters": [
@@ -3206,7 +3305,9 @@
     },
     "/email/threads/{id}/labels": {
       "patch": {
-        "tags": ["Threads"],
+        "tags": [
+          "Threads"
+        ],
         "summary": "Add or remove a label from all messages in a thread.",
         "operationId": "add_remove_thread_label",
         "parameters": [
@@ -3287,7 +3388,9 @@
     },
     "/email/threads/{id}/messages": {
       "get": {
-        "tags": ["Threads"],
+        "tags": [
+          "Threads"
+        ],
         "operationId": "get_thread_messages_handler",
         "parameters": [
           {
@@ -3379,7 +3482,9 @@
     },
     "/email/threads/{id}/operations": {
       "get": {
-        "tags": ["Threads"],
+        "tags": [
+          "Threads"
+        ],
         "summary": "Fetch the latest organization action outcomes without provider-specific status strings.",
         "operationId": "thread_operations",
         "parameters": [
@@ -3423,7 +3528,9 @@
     },
     "/email/threads/{id}/seen": {
       "post": {
-        "tags": ["Threads"],
+        "tags": [
+          "Threads"
+        ],
         "summary": "Called by FE when the user has seen a thread.",
         "operationId": "thread_seen",
         "parameters": [
@@ -3484,7 +3591,9 @@
     },
     "/email/threads/{id}/state": {
       "patch": {
-        "tags": ["Threads"],
+        "tags": [
+          "Threads"
+        ],
         "summary": "Set mailbox state without client-side provider label lookup.",
         "operationId": "update_thread_state",
         "parameters": [
@@ -3558,7 +3667,9 @@
     },
     "/email/threads/{thread_id}": {
       "get": {
-        "tags": ["Threads"],
+        "tags": [
+          "Threads"
+        ],
         "summary": "Get a thread with paginated messages.",
         "operationId": "get_thread",
         "parameters": [
@@ -3648,7 +3759,9 @@
     },
     "/email/threads/{thread_id}/calendar-invitations": {
       "get": {
-        "tags": ["email"],
+        "tags": [
+          "email"
+        ],
         "operationId": "get_thread_calendar_invitations",
         "parameters": [
           {
@@ -3690,7 +3803,9 @@
     },
     "/email/threads/{thread_id}/messages/{message_id}/calendar-invitations/{invitation_id}/copy": {
       "post": {
-        "tags": ["email"],
+        "tags": [
+          "email"
+        ],
         "summary": "Add a shared event saved from one of the thread's messages to one of the\nviewer's Google calendars, the way Add to calendar adds a channel-shared\nevent: a snapshot under the meeting's iCalendar UID and organizer, with the\nviewer as its only guest and no join link. Nobody is notified. Only a\npublished event file (`METHOD:PUBLISH`) can be added; an invitation is\nanswered from the calendar it reached.",
         "operationId": "copy_thread_calendar_invitation",
         "parameters": [
@@ -3803,7 +3918,9 @@
     },
     "/email/threads/{thread_id}/project": {
       "patch": {
-        "tags": ["Threads"],
+        "tags": [
+          "Threads"
+        ],
         "summary": "Update the project assignment for a thread.",
         "operationId": "update_thread_project",
         "parameters": [
@@ -3873,7 +3990,9 @@
     },
     "/email/threads/{thread_id}/read-receipts": {
       "get": {
-        "tags": ["email"],
+        "tags": [
+          "email"
+        ],
         "operationId": "get_thread_read_receipts",
         "parameters": [
           {
@@ -3909,7 +4028,9 @@
     },
     "/health": {
       "get": {
-        "tags": ["Health"],
+        "tags": [
+          "Health"
+        ],
         "summary": "Health check",
         "operationId": "health_handler",
         "responses": {
@@ -3928,7 +4049,9 @@
     },
     "/opens/{token}": {
       "get": {
-        "tags": ["email"],
+        "tags": [
+          "email"
+        ],
         "summary": "Every request gets the same uncacheable pixel so the response reveals nothing\nabout the token, and each open reaches the server.",
         "operationId": "get_read_receipt_pixel",
         "parameters": [
@@ -3958,12 +4081,21 @@
       "AccessLevel": {
         "type": "string",
         "description": "Ordered from least to most access top -> bottom",
-        "enum": ["view", "comment", "edit", "owner"]
+        "enum": [
+          "view",
+          "comment",
+          "edit",
+          "owner"
+        ]
       },
       "AddDraftAttachmentRequest": {
         "type": "object",
         "description": "The request passed to send a message",
-        "required": ["file_name", "sha", "size"],
+        "required": [
+          "file_name",
+          "sha",
+          "size"
+        ],
         "properties": {
           "file_name": {
             "type": "string",
@@ -3979,7 +4111,10 @@
             "description": "The size of the file in bytes."
           },
           "upload_id": {
-            "type": ["string", "null"],
+            "type": [
+              "string",
+              "null"
+            ],
             "format": "uuid",
             "description": "Stable client upload identifier. Retry the same file with the same ID."
           }
@@ -3987,7 +4122,11 @@
       },
       "AddDraftAttachmentResponse": {
         "type": "object",
-        "required": ["attachment_id", "upload_url", "content_type"],
+        "required": [
+          "attachment_id",
+          "upload_url",
+          "content_type"
+        ],
         "properties": {
           "attachment_id": {
             "type": "string",
@@ -4006,7 +4145,9 @@
       },
       "AddForwardedAttachmentRequest": {
         "type": "object",
-        "required": ["attachment_id"],
+        "required": [
+          "attachment_id"
+        ],
         "properties": {
           "attachment_id": {
             "type": "string",
@@ -4017,7 +4158,9 @@
       },
       "AddForwardedAttachmentResponse": {
         "type": "object",
-        "required": ["attachment_id"],
+        "required": [
+          "attachment_id"
+        ],
         "properties": {
           "attachment_id": {
             "type": "string",
@@ -4025,15 +4168,24 @@
             "description": "The ID of the original attachment."
           },
           "filename": {
-            "type": ["string", "null"],
+            "type": [
+              "string",
+              "null"
+            ],
             "description": "Original file name of the attachment."
           },
           "mime_type": {
-            "type": ["string", "null"],
+            "type": [
+              "string",
+              "null"
+            ],
             "description": "MIME type of the attachment."
           },
           "size_bytes": {
-            "type": ["integer", "null"],
+            "type": [
+              "integer",
+              "null"
+            ],
             "format": "int64",
             "description": "File size in bytes."
           }
@@ -4041,17 +4193,27 @@
       },
       "ApiAttachment": {
         "type": "object",
-        "required": ["id", "messageId", "createdAt"],
+        "required": [
+          "id",
+          "messageId",
+          "createdAt"
+        ],
         "properties": {
           "contentId": {
-            "type": ["string", "null"]
+            "type": [
+              "string",
+              "null"
+            ]
           },
           "createdAt": {
             "type": "string",
             "format": "date-time"
           },
           "filename": {
-            "type": ["string", "null"]
+            "type": [
+              "string",
+              "null"
+            ]
           },
           "id": {
             "type": "string",
@@ -4062,13 +4224,22 @@
             "format": "uuid"
           },
           "mimeType": {
-            "type": ["string", "null"]
+            "type": [
+              "string",
+              "null"
+            ]
           },
           "providerAttachmentId": {
-            "type": ["string", "null"]
+            "type": [
+              "string",
+              "null"
+            ]
           },
           "sizeBytes": {
-            "type": ["integer", "null"],
+            "type": [
+              "integer",
+              "null"
+            ],
             "format": "int64"
           }
         }
@@ -4089,7 +4260,10 @@
         ],
         "properties": {
           "content_id": {
-            "type": ["string", "null"]
+            "type": [
+              "string",
+              "null"
+            ]
           },
           "content_type": {
             "type": "string"
@@ -4126,7 +4300,11 @@
       "ApiAttachmentForwarded": {
         "type": "object",
         "description": "API representation of a forwarded attachment on a message.",
-        "required": ["attachment_id", "draft_id", "message_provider_id"],
+        "required": [
+          "attachment_id",
+          "draft_id",
+          "message_provider_id"
+        ],
         "properties": {
           "attachment_id": {
             "type": "string",
@@ -4137,29 +4315,47 @@
             "format": "uuid"
           },
           "filename": {
-            "type": ["string", "null"]
+            "type": [
+              "string",
+              "null"
+            ]
           },
           "message_provider_id": {
             "type": "string"
           },
           "mime_type": {
-            "type": ["string", "null"]
+            "type": [
+              "string",
+              "null"
+            ]
           },
           "provider_attachment_id": {
-            "type": ["string", "null"]
+            "type": [
+              "string",
+              "null"
+            ]
           },
           "size_bytes": {
-            "type": ["integer", "null"],
+            "type": [
+              "integer",
+              "null"
+            ],
             "format": "int64"
           }
         }
       },
       "ApiContact": {
         "type": "object",
-        "required": ["id", "linkId"],
+        "required": [
+          "id",
+          "linkId"
+        ],
         "properties": {
           "emailAddress": {
-            "type": ["string", "null"]
+            "type": [
+              "string",
+              "null"
+            ]
           },
           "id": {
             "type": "string",
@@ -4170,44 +4366,66 @@
             "format": "uuid"
           },
           "name": {
-            "type": ["string", "null"]
+            "type": [
+              "string",
+              "null"
+            ]
           },
           "sfsPhotoUrl": {
-            "type": ["string", "null"]
+            "type": [
+              "string",
+              "null"
+            ]
           }
         }
       },
       "ApiContactInfo": {
         "type": "object",
         "description": "API representation of a contact (sender or recipient).",
-        "required": ["email"],
+        "required": [
+          "email"
+        ],
         "properties": {
           "email": {
             "type": "string"
           },
           "name": {
-            "type": ["string", "null"]
+            "type": [
+              "string",
+              "null"
+            ]
           },
           "photo_url": {
-            "type": ["string", "null"]
+            "type": [
+              "string",
+              "null"
+            ]
           }
         }
       },
       "ApiDraftContactInfo": {
         "type": "object",
         "description": "Contact info for draft request/response (backward-compatible with MessageToSend shape).",
-        "required": ["email"],
+        "required": [
+          "email"
+        ],
         "properties": {
           "email": {
             "type": "string",
             "description": "Email address."
           },
           "name": {
-            "type": ["string", "null"],
+            "type": [
+              "string",
+              "null"
+            ],
             "description": "Display name."
           },
           "photo_url": {
-            "type": ["string", "null"],
+            "type": [
+              "string",
+              "null"
+            ],
             "description": "Profile photo URL."
           }
         }
@@ -4215,36 +4433,56 @@
       "ApiDraftInput": {
         "type": "object",
         "description": "The draft input matching the current `MessageToSend` JSON shape for backward compat.",
-        "required": ["subject"],
+        "required": [
+          "subject"
+        ],
         "properties": {
           "bcc": {
-            "type": ["array", "null"],
+            "type": [
+              "array",
+              "null"
+            ],
             "items": {
               "$ref": "#/components/schemas/ApiDraftContactInfo"
             },
             "description": "Bcc recipients."
           },
           "body_html": {
-            "type": ["string", "null"],
+            "type": [
+              "string",
+              "null"
+            ],
             "description": "HTML body (base64 URL_SAFE_NO_PAD encoded). Sanitized before storage."
           },
           "body_macro": {
-            "type": ["string", "null"],
+            "type": [
+              "string",
+              "null"
+            ],
             "description": "Macro body format."
           },
           "body_text": {
-            "type": ["string", "null"],
+            "type": [
+              "string",
+              "null"
+            ],
             "description": "Plain text body."
           },
           "cc": {
-            "type": ["array", "null"],
+            "type": [
+              "array",
+              "null"
+            ],
             "items": {
               "$ref": "#/components/schemas/ApiDraftContactInfo"
             },
             "description": "Cc recipients."
           },
           "db_id": {
-            "type": ["string", "null"],
+            "type": [
+              "string",
+              "null"
+            ],
             "format": "uuid",
             "description": "Existing message DB ID (for updating an existing draft)."
           },
@@ -4265,19 +4503,31 @@
             ]
           },
           "include_signature": {
-            "type": ["boolean", "null"],
+            "type": [
+              "boolean",
+              "null"
+            ],
             "description": "Per-message override for whether to include the signature on send:\n`Some(false)` to exclude (user dismissed it). Omit to use the inbox's\ndefault policy. Ignored for drafts."
           },
           "provider_id": {
-            "type": ["string", "null"],
+            "type": [
+              "string",
+              "null"
+            ],
             "description": "Provider message ID."
           },
           "provider_thread_id": {
-            "type": ["string", "null"],
+            "type": [
+              "string",
+              "null"
+            ],
             "description": "Provider thread ID."
           },
           "replying_to_id": {
-            "type": ["string", "null"],
+            "type": [
+              "string",
+              "null"
+            ],
             "format": "uuid",
             "description": "ID of the message this draft is replying to."
           },
@@ -4286,12 +4536,18 @@
             "description": "Subject line."
           },
           "thread_db_id": {
-            "type": ["string", "null"],
+            "type": [
+              "string",
+              "null"
+            ],
             "format": "uuid",
             "description": "Thread DB ID."
           },
           "to": {
-            "type": ["array", "null"],
+            "type": [
+              "array",
+              "null"
+            ],
             "items": {
               "$ref": "#/components/schemas/ApiDraftContactInfo"
             },
@@ -4302,36 +4558,58 @@
       "ApiDraftOutput": {
         "type": "object",
         "description": "The draft output matching the current `MessageToSend` JSON shape for backward compat.",
-        "required": ["draft_generation", "link_id", "subject"],
+        "required": [
+          "draft_generation",
+          "link_id",
+          "subject"
+        ],
         "properties": {
           "bcc": {
-            "type": ["array", "null"],
+            "type": [
+              "array",
+              "null"
+            ],
             "items": {
               "$ref": "#/components/schemas/ApiDraftContactInfo"
             },
             "description": "Bcc recipients."
           },
           "body_html": {
-            "type": ["string", "null"],
+            "type": [
+              "string",
+              "null"
+            ],
             "description": "HTML body (decoded)."
           },
           "body_macro": {
-            "type": ["string", "null"],
+            "type": [
+              "string",
+              "null"
+            ],
             "description": "Macro body."
           },
           "body_text": {
-            "type": ["string", "null"],
+            "type": [
+              "string",
+              "null"
+            ],
             "description": "Plain text body."
           },
           "cc": {
-            "type": ["array", "null"],
+            "type": [
+              "array",
+              "null"
+            ],
             "items": {
               "$ref": "#/components/schemas/ApiDraftContactInfo"
             },
             "description": "Cc recipients."
           },
           "db_id": {
-            "type": ["string", "null"],
+            "type": [
+              "string",
+              "null"
+            ],
             "format": "uuid",
             "description": "Message DB ID."
           },
@@ -4357,20 +4635,32 @@
             "description": "Link ID."
           },
           "provider_id": {
-            "type": ["string", "null"],
+            "type": [
+              "string",
+              "null"
+            ],
             "description": "Provider message ID."
           },
           "provider_thread_id": {
-            "type": ["string", "null"],
+            "type": [
+              "string",
+              "null"
+            ],
             "description": "Provider thread ID."
           },
           "replying_to_id": {
-            "type": ["string", "null"],
+            "type": [
+              "string",
+              "null"
+            ],
             "format": "uuid",
             "description": "ID of the message this draft is replying to."
           },
           "send_time": {
-            "type": ["string", "null"],
+            "type": [
+              "string",
+              "null"
+            ],
             "format": "date-time",
             "description": "Send time."
           },
@@ -4379,12 +4669,18 @@
             "description": "Subject line."
           },
           "thread_db_id": {
-            "type": ["string", "null"],
+            "type": [
+              "string",
+              "null"
+            ],
             "format": "uuid",
             "description": "Thread DB ID."
           },
           "to": {
-            "type": ["array", "null"],
+            "type": [
+              "array",
+              "null"
+            ],
             "items": {
               "$ref": "#/components/schemas/ApiDraftContactInfo"
             },
@@ -4395,17 +4691,27 @@
       "ApiEmailFilter": {
         "type": "object",
         "description": "A single email filter in API responses.",
-        "required": ["id", "is_important", "created_at"],
+        "required": [
+          "id",
+          "is_important",
+          "created_at"
+        ],
         "properties": {
           "created_at": {
             "type": "string",
             "format": "date-time"
           },
           "email_address": {
-            "type": ["string", "null"]
+            "type": [
+              "string",
+              "null"
+            ]
           },
           "email_domain": {
-            "type": ["string", "null"]
+            "type": [
+              "string",
+              "null"
+            ]
           },
           "id": {
             "type": "string",
@@ -4460,11 +4766,18 @@
       },
       "ApiLabelListVisibility": {
         "type": "string",
-        "enum": ["LabelShow", "LabelShowIfUnread", "LabelHide"]
+        "enum": [
+          "LabelShow",
+          "LabelShowIfUnread",
+          "LabelHide"
+        ]
       },
       "ApiLabelType": {
         "type": "string",
-        "enum": ["System", "User"]
+        "enum": [
+          "System",
+          "User"
+        ]
       },
       "ApiMessage": {
         "type": "object",
@@ -4515,16 +4828,28 @@
             }
           },
           "body_html_sanitized": {
-            "type": ["string", "null"]
+            "type": [
+              "string",
+              "null"
+            ]
           },
           "body_macro": {
-            "type": ["string", "null"]
+            "type": [
+              "string",
+              "null"
+            ]
           },
           "body_replyless": {
-            "type": ["string", "null"]
+            "type": [
+              "string",
+              "null"
+            ]
           },
           "body_text": {
-            "type": ["string", "null"]
+            "type": [
+              "string",
+              "null"
+            ]
           },
           "calendar_invitations": {
             "type": "array",
@@ -4562,14 +4887,20 @@
             ]
           },
           "global_id": {
-            "type": ["string", "null"]
+            "type": [
+              "string",
+              "null"
+            ]
           },
           "has_attachments": {
             "type": "boolean"
           },
           "headers_json": {},
           "internal_date_ts": {
-            "type": ["string", "null"],
+            "type": [
+              "string",
+              "null"
+            ],
             "format": "date-time"
           },
           "is_draft": {
@@ -4605,16 +4936,28 @@
             ]
           },
           "provider_history_id": {
-            "type": ["string", "null"]
+            "type": [
+              "string",
+              "null"
+            ]
           },
           "provider_id": {
-            "type": ["string", "null"]
+            "type": [
+              "string",
+              "null"
+            ]
           },
           "provider_thread_id": {
-            "type": ["string", "null"]
+            "type": [
+              "string",
+              "null"
+            ]
           },
           "replying_to_id": {
-            "type": ["string", "null"],
+            "type": [
+              "string",
+              "null"
+            ],
             "format": "uuid"
           },
           "scheduled_send_status": {
@@ -4629,22 +4972,37 @@
             ]
           },
           "scheduled_send_time": {
-            "type": ["string", "null"],
+            "type": [
+              "string",
+              "null"
+            ],
             "format": "date-time"
           },
           "sent_at": {
-            "type": ["string", "null"],
+            "type": [
+              "string",
+              "null"
+            ],
             "format": "date-time"
           },
           "size_estimate": {
-            "type": ["integer", "null"],
+            "type": [
+              "integer",
+              "null"
+            ],
             "format": "int64"
           },
           "snippet": {
-            "type": ["string", "null"]
+            "type": [
+              "string",
+              "null"
+            ]
           },
           "subject": {
-            "type": ["string", "null"]
+            "type": [
+              "string",
+              "null"
+            ]
           },
           "thread_db_id": {
             "type": "string",
@@ -4665,36 +5023,62 @@
       "ApiMessageAttachment": {
         "type": "object",
         "description": "API representation of a provider attachment on a message.",
-        "required": ["db_id"],
+        "required": [
+          "db_id"
+        ],
         "properties": {
           "content_id": {
-            "type": ["string", "null"]
+            "type": [
+              "string",
+              "null"
+            ]
           },
           "data_url": {
-            "type": ["string", "null"]
+            "type": [
+              "string",
+              "null"
+            ]
           },
           "db_id": {
             "type": "string",
             "format": "uuid"
           },
           "filename": {
-            "type": ["string", "null"]
+            "type": [
+              "string",
+              "null"
+            ]
           },
           "mime_type": {
-            "type": ["string", "null"]
+            "type": [
+              "string",
+              "null"
+            ]
           },
           "provider_id": {
-            "type": ["string", "null"]
+            "type": [
+              "string",
+              "null"
+            ]
           },
           "reference_url": {
-            "type": ["string", "null"]
+            "type": [
+              "string",
+              "null"
+            ]
           },
           "sfs_id": {
-            "type": ["string", "null"],
+            "type": [
+              "string",
+              "null"
+            ],
             "format": "uuid"
           },
           "size_bytes": {
-            "type": ["integer", "null"],
+            "type": [
+              "integer",
+              "null"
+            ],
             "format": "int64"
           }
         }
@@ -4702,14 +5086,21 @@
       "ApiMessageLabel": {
         "type": "object",
         "description": "API representation of a label on a message.",
-        "required": ["link_id", "provider_label_id", "created_at"],
+        "required": [
+          "link_id",
+          "provider_label_id",
+          "created_at"
+        ],
         "properties": {
           "created_at": {
             "type": "string",
             "format": "date-time"
           },
           "id": {
-            "type": ["string", "null"],
+            "type": [
+              "string",
+              "null"
+            ],
             "format": "uuid"
           },
           "label_list_visibility": {
@@ -4737,7 +5128,10 @@
             ]
           },
           "name": {
-            "type": ["string", "null"]
+            "type": [
+              "string",
+              "null"
+            ]
           },
           "provider_label_id": {
             "type": "string"
@@ -4756,12 +5150,18 @@
       },
       "ApiMessageListVisibility": {
         "type": "string",
-        "enum": ["Show", "Hide"]
+        "enum": [
+          "Show",
+          "Hide"
+        ]
       },
       "ApiMessageOperation": {
         "type": "object",
         "description": "Versions are opaque decimal strings so clients never truncate an i64.",
-        "required": ["state", "revision"],
+        "required": [
+          "state",
+          "revision"
+        ],
         "properties": {
           "issue": {
             "oneOf": [
@@ -4774,7 +5174,10 @@
             ]
           },
           "remote_version": {
-            "type": ["string", "null"]
+            "type": [
+              "string",
+              "null"
+            ]
           },
           "revision": {
             "type": "string"
@@ -4832,7 +5235,9 @@
       },
       "ApiPaginatedThreadCursor": {
         "type": "object",
-        "required": ["items"],
+        "required": [
+          "items"
+        ],
         "properties": {
           "items": {
             "type": "array",
@@ -4841,14 +5246,22 @@
             }
           },
           "next_cursor": {
-            "type": ["string", "null"]
+            "type": [
+              "string",
+              "null"
+            ]
           }
         }
       },
       "ApiSortMethod": {
         "type": "string",
         "description": "common types of sorts based on timestamps",
-        "enum": ["viewed_at", "updated_at", "created_at", "viewed_updated"]
+        "enum": [
+          "viewed_at",
+          "updated_at",
+          "created_at",
+          "viewed_updated"
+        ]
       },
       "ApiThread": {
         "type": "object",
@@ -4887,15 +5300,24 @@
             "type": "boolean"
           },
           "latest_inbound_message_ts": {
-            "type": ["string", "null"],
+            "type": [
+              "string",
+              "null"
+            ],
             "format": "date-time"
           },
           "latest_non_spam_message_ts": {
-            "type": ["string", "null"],
+            "type": [
+              "string",
+              "null"
+            ],
             "format": "date-time"
           },
           "latest_outbound_message_ts": {
-            "type": ["string", "null"],
+            "type": [
+              "string",
+              "null"
+            ],
             "format": "date-time"
           },
           "link_id": {
@@ -4909,10 +5331,16 @@
             }
           },
           "project_id": {
-            "type": ["string", "null"]
+            "type": [
+              "string",
+              "null"
+            ]
           },
           "provider_id": {
-            "type": ["string", "null"]
+            "type": [
+              "string",
+              "null"
+            ]
           },
           "updated_at": {
             "type": "string",
@@ -4927,7 +5355,11 @@
           },
           {
             "type": "object",
-            "required": ["attachments", "contacts", "labels"],
+            "required": [
+              "attachments",
+              "contacts",
+              "labels"
+            ],
             "properties": {
               "attachments": {
                 "type": "array",
@@ -4942,7 +5374,10 @@
                 }
               },
               "frecencyScore": {
-                "type": ["number", "null"],
+                "type": [
+                  "number",
+                  "null"
+                ],
                 "format": "double"
               },
               "labels": {
@@ -4995,25 +5430,43 @@
             "format": "uuid"
           },
           "name": {
-            "type": ["string", "null"]
+            "type": [
+              "string",
+              "null"
+            ]
           },
           "ownerId": {
             "type": "string"
           },
           "providerId": {
-            "type": ["string", "null"]
+            "type": [
+              "string",
+              "null"
+            ]
           },
           "senderEmail": {
-            "type": ["string", "null"]
+            "type": [
+              "string",
+              "null"
+            ]
           },
           "senderName": {
-            "type": ["string", "null"]
+            "type": [
+              "string",
+              "null"
+            ]
           },
           "senderPhotoUrl": {
-            "type": ["string", "null"]
+            "type": [
+              "string",
+              "null"
+            ]
           },
           "snippet": {
-            "type": ["string", "null"]
+            "type": [
+              "string",
+              "null"
+            ]
           },
           "sortTs": {
             "type": "string",
@@ -5024,14 +5477,19 @@
             "format": "date-time"
           },
           "viewedAt": {
-            "type": ["string", "null"],
+            "type": [
+              "string",
+              "null"
+            ],
             "format": "date-time"
           }
         }
       },
       "ArchiveThreadRequest": {
         "type": "object",
-        "required": ["value"],
+        "required": [
+          "value"
+        ],
         "properties": {
           "value": {
             "type": "boolean"
@@ -5040,7 +5498,10 @@
       },
       "ArchiveThreadsRequest": {
         "type": "object",
-        "required": ["thread_ids", "value"],
+        "required": [
+          "thread_ids",
+          "value"
+        ],
         "properties": {
           "thread_ids": {
             "type": "array",
@@ -5056,7 +5517,10 @@
       },
       "ArchiveThreadsResponse": {
         "type": "object",
-        "required": ["updated_thread_ids", "failed_thread_ids"],
+        "required": [
+          "updated_thread_ids",
+          "failed_thread_ids"
+        ],
         "properties": {
           "failed_thread_ids": {
             "type": "array",
@@ -5079,37 +5543,63 @@
       "Attachment": {
         "type": "object",
         "description": "Attachments of a message, as sent to us by the provider.",
-        "required": ["db_id"],
+        "required": [
+          "db_id"
+        ],
         "properties": {
           "content_id": {
-            "type": ["string", "null"]
+            "type": [
+              "string",
+              "null"
+            ]
           },
           "data_url": {
-            "type": ["string", "null"]
+            "type": [
+              "string",
+              "null"
+            ]
           },
           "db_id": {
             "type": "string",
             "format": "uuid"
           },
           "filename": {
-            "type": ["string", "null"]
+            "type": [
+              "string",
+              "null"
+            ]
           },
           "mime_type": {
-            "type": ["string", "null"]
+            "type": [
+              "string",
+              "null"
+            ]
           },
           "provider_id": {
-            "type": ["string", "null"]
+            "type": [
+              "string",
+              "null"
+            ]
           },
           "reference_url": {
-            "type": ["string", "null"],
+            "type": [
+              "string",
+              "null"
+            ],
             "description": "Cloud reference: open this provider page instead of downloading bytes."
           },
           "sfs_id": {
-            "type": ["string", "null"],
+            "type": [
+              "string",
+              "null"
+            ],
             "format": "uuid"
           },
           "size_bytes": {
-            "type": ["integer", "null"],
+            "type": [
+              "integer",
+              "null"
+            ],
             "format": "int64"
           }
         }
@@ -5127,7 +5617,10 @@
         ],
         "properties": {
           "content_id": {
-            "type": ["string", "null"],
+            "type": [
+              "string",
+              "null"
+            ],
             "description": "Original Content-ID retained when transferring a provider attachment."
           },
           "content_type": {
@@ -5174,7 +5667,11 @@
       "AttachmentForwarded": {
         "type": "object",
         "description": "A forwarded attachment linking a draft to an original message's attachment.\nData is fetched from Gmail at send time rather than stored in S3.",
-        "required": ["attachment_id", "draft_id", "message_provider_id"],
+        "required": [
+          "attachment_id",
+          "draft_id",
+          "message_provider_id"
+        ],
         "properties": {
           "attachment_id": {
             "type": "string",
@@ -5187,7 +5684,10 @@
             "description": "The ID of the draft message this forwarded attachment belongs to."
           },
           "filename": {
-            "type": ["string", "null"],
+            "type": [
+              "string",
+              "null"
+            ],
             "description": "Original file name of the attachment."
           },
           "message_provider_id": {
@@ -5195,15 +5695,24 @@
             "description": "The Gmail message ID of the original message containing the attachment."
           },
           "mime_type": {
-            "type": ["string", "null"],
+            "type": [
+              "string",
+              "null"
+            ],
             "description": "MIME type of the attachment."
           },
           "provider_attachment_id": {
-            "type": ["string", "null"],
+            "type": [
+              "string",
+              "null"
+            ],
             "description": "The Gmail attachment ID for fetching data from Gmail API."
           },
           "size_bytes": {
-            "type": ["integer", "null"],
+            "type": [
+              "integer",
+              "null"
+            ],
             "format": "int64",
             "description": "File size in bytes."
           }
@@ -5212,7 +5721,12 @@
       "AttendeeResponseStatus": {
         "type": "string",
         "description": "RSVP state for an attendee.",
-        "enum": ["needs_action", "accepted", "declined", "tentative"]
+        "enum": [
+          "needs_action",
+          "accepted",
+          "declined",
+          "tentative"
+        ]
       },
       "BackfillJob": {
         "type": "object",
@@ -5238,14 +5752,20 @@
             "format": "uuid"
           },
           "link_id": {
-            "type": ["string", "null"],
+            "type": [
+              "string",
+              "null"
+            ],
             "format": "uuid"
           },
           "status": {
             "$ref": "#/components/schemas/BackfillJobStatus"
           },
           "threads_requested_limit": {
-            "type": ["integer", "null"],
+            "type": [
+              "integer",
+              "null"
+            ],
             "format": "int32"
           },
           "threads_retrieved_count": {
@@ -5264,17 +5784,29 @@
       },
       "BackfillJobStatus": {
         "type": "string",
-        "enum": ["Init", "InProgress", "Complete", "Cancelled", "Failed"]
+        "enum": [
+          "Init",
+          "InProgress",
+          "Complete",
+          "Cancelled",
+          "Failed"
+        ]
       },
       "BackfillStatus": {
         "type": "string",
         "description": "Progress/terminal state of a backfill job for [`RefreshEmailEvent::Backfill`].",
-        "enum": ["progress", "complete", "failed"]
+        "enum": [
+          "progress",
+          "complete",
+          "failed"
+        ]
       },
       "BlockSenderRequest": {
         "type": "object",
         "description": "Request to block a sender.",
-        "required": ["email_address"],
+        "required": [
+          "email_address"
+        ],
         "properties": {
           "email_address": {
             "type": "string",
@@ -5294,11 +5826,17 @@
         ],
         "properties": {
           "comment": {
-            "type": ["string", "null"],
+            "type": [
+              "string",
+              "null"
+            ],
             "description": "Optional attendee comment."
           },
           "displayName": {
-            "type": ["string", "null"],
+            "type": [
+              "string",
+              "null"
+            ],
             "description": "Provider display name."
           },
           "email": {
@@ -5354,7 +5892,10 @@
             "description": "Attendees, keyed by email during persistence."
           },
           "calendarId": {
-            "type": ["string", "null"],
+            "type": [
+              "string",
+              "null"
+            ],
             "format": "uuid",
             "description": "Calendar the canonical source belongs to, when known. Absent only in\nprojections stored before calendars were attributed."
           },
@@ -5370,7 +5911,10 @@
             ]
           },
           "conferenceUrl": {
-            "type": ["string", "null"],
+            "type": [
+              "string",
+              "null"
+            ],
             "description": "Direct join URL when known."
           },
           "createdAt": {
@@ -5379,15 +5923,24 @@
             "description": "Entity creation time."
           },
           "creatorEmail": {
-            "type": ["string", "null"],
+            "type": [
+              "string",
+              "null"
+            ],
             "description": "Provider-reported creator email. Distinct from the organizer when\nsomeone writes onto a calendar they do not own. Omitted from stored\nprojections when unknown so events ingested before this field still\ncompare equal."
           },
           "creatorName": {
-            "type": ["string", "null"],
+            "type": [
+              "string",
+              "null"
+            ],
             "description": "Provider-reported creator display name."
           },
           "description": {
-            "type": ["string", "null"],
+            "type": [
+              "string",
+              "null"
+            ],
             "description": "Optional event body."
           },
           "eventType": {
@@ -5416,15 +5969,24 @@
             "description": "Whether this is a snapshot of a meeting shared with the owner, which\nMacro added to their calendar as a private copy: the meeting's changes\nnever reach it, and nothing done to it reaches the meeting."
           },
           "location": {
-            "type": ["string", "null"],
+            "type": [
+              "string",
+              "null"
+            ],
             "description": "Optional physical or virtual location label."
           },
           "organizerEmail": {
-            "type": ["string", "null"],
+            "type": [
+              "string",
+              "null"
+            ],
             "description": "Organizer email."
           },
           "organizerName": {
-            "type": ["string", "null"],
+            "type": [
+              "string",
+              "null"
+            ],
             "description": "Organizer display name."
           },
           "ownerId": {
@@ -5505,15 +6067,24 @@
             "description": "Calendar this copy lives on."
           },
           "creatorEmail": {
-            "type": ["string", "null"],
+            "type": [
+              "string",
+              "null"
+            ],
             "description": "Provider-reported creator email."
           },
           "creatorName": {
-            "type": ["string", "null"],
+            "type": [
+              "string",
+              "null"
+            ],
             "description": "Provider-reported creator display name."
           },
           "description": {
-            "type": ["string", "null"],
+            "type": [
+              "string",
+              "null"
+            ],
             "description": "Optional event body."
           },
           "eventType": {
@@ -5525,7 +6096,10 @@
             "description": "Whether the calendar's access role prohibits editing this copy."
           },
           "location": {
-            "type": ["string", "null"],
+            "type": [
+              "string",
+              "null"
+            ],
             "description": "Optional physical or virtual location label."
           },
           "reminders": {
@@ -5549,7 +6123,13 @@
       "CalendarInvitation": {
         "type": "object",
         "description": "Display snapshot of one meaningful VEVENT, owned by the email domain.",
-        "required": ["id", "uid", "method", "sequence", "attendees"],
+        "required": [
+          "id",
+          "uid",
+          "method",
+          "sequence",
+          "attendees"
+        ],
         "properties": {
           "attendees": {
             "type": "array",
@@ -5559,19 +6139,31 @@
             "description": "Historical attendee identities and participation metadata."
           },
           "comment": {
-            "type": ["string", "null"],
+            "type": [
+              "string",
+              "null"
+            ],
             "description": "Reply or counter-proposal comment."
           },
           "conference_url": {
-            "type": ["string", "null"],
+            "type": [
+              "string",
+              "null"
+            ],
             "description": "Validated HTTP(S) conferencing URL; never fetched during rendering."
           },
           "description": {
-            "type": ["string", "null"],
+            "type": [
+              "string",
+              "null"
+            ],
             "description": "Plaintext description, retaining passwords and dial-in instructions."
           },
           "dtstamp": {
-            "type": ["string", "null"],
+            "type": [
+              "string",
+              "null"
+            ],
             "description": "Scheduling timestamp in its original spelling."
           },
           "end": {
@@ -5590,11 +6182,17 @@
             "description": "Content-derived component identity, stable across repeated extraction."
           },
           "last_modified": {
-            "type": ["string", "null"],
+            "type": [
+              "string",
+              "null"
+            ],
             "description": "Last modification timestamp in its original spelling."
           },
           "location": {
-            "type": ["string", "null"],
+            "type": [
+              "string",
+              "null"
+            ],
             "description": "Plaintext event location."
           },
           "method": {
@@ -5613,7 +6211,10 @@
             ]
           },
           "recurrence": {
-            "type": ["array", "null"],
+            "type": [
+              "array",
+              "null"
+            ],
             "items": {
               "type": "string"
             },
@@ -5631,7 +6232,10 @@
             ]
           },
           "recurrence_id_raw": {
-            "type": ["string", "null"],
+            "type": [
+              "string",
+              "null"
+            ],
             "description": "Original recurrence identifier spelling and parameters."
           },
           "sequence": {
@@ -5652,11 +6256,17 @@
             ]
           },
           "status": {
-            "type": ["string", "null"],
+            "type": [
+              "string",
+              "null"
+            ],
             "description": "Original event status."
           },
           "title": {
-            "type": ["string", "null"],
+            "type": [
+              "string",
+              "null"
+            ],
             "description": "Event summary."
           },
           "uid": {
@@ -5668,7 +6278,10 @@
       "CalendarMutationApiError": {
         "type": "object",
         "description": "HTTP error body returned by calendar mutation endpoints.",
-        "required": ["code", "message"],
+        "required": [
+          "code",
+          "message"
+        ],
         "properties": {
           "code": {
             "$ref": "#/components/schemas/CalendarMutationErrorCode",
@@ -5709,7 +6322,12 @@
       "CalendarOccurrence": {
         "type": "object",
         "description": "A materialized recurrence instance optimized for range queries.",
-        "required": ["eventId", "occurrenceKey", "time", "isCancelled"],
+        "required": [
+          "eventId",
+          "occurrenceKey",
+          "time",
+          "isCancelled"
+        ],
         "properties": {
           "eventId": {
             "type": "string",
@@ -5725,7 +6343,10 @@
             "description": "Stable key within the event."
           },
           "recurrenceId": {
-            "type": ["string", "null"],
+            "type": [
+              "string",
+              "null"
+            ],
             "description": "Provider recurrence identifier, when applicable."
           },
           "time": {
@@ -5736,7 +6357,9 @@
       },
       "CancelBackfillParams": {
         "type": "object",
-        "required": ["job_id"],
+        "required": [
+          "job_id"
+        ],
         "properties": {
           "job_id": {
             "type": "string",
@@ -5747,14 +6370,24 @@
       "ConferenceProvider": {
         "type": "string",
         "description": "The conferencing system backing an event's join URL.\n\nCalendars can create Google Meet or Microsoft Teams according to their\ncapabilities. Imported third-party conferences are labeled separately.\nOmitting a conference change preserves the current conference; explicit\nchanges still require provider and calendar capability validation.",
-        "enum": ["microsoft_teams", "google_meet", "other"]
+        "enum": [
+          "microsoft_teams",
+          "google_meet",
+          "other"
+        ]
       },
       "Contact": {
         "type": "object",
-        "required": ["id", "link_id"],
+        "required": [
+          "id",
+          "link_id"
+        ],
         "properties": {
           "email_address": {
-            "type": ["string", "null"]
+            "type": [
+              "string",
+              "null"
+            ]
           },
           "id": {
             "type": "string",
@@ -5765,34 +6398,54 @@
             "format": "uuid"
           },
           "name": {
-            "type": ["string", "null"]
+            "type": [
+              "string",
+              "null"
+            ]
           },
           "original_photo_url": {
-            "type": ["string", "null"]
+            "type": [
+              "string",
+              "null"
+            ]
           },
           "sfs_photo_url": {
-            "type": ["string", "null"]
+            "type": [
+              "string",
+              "null"
+            ]
           }
         }
       },
       "ContactInfo": {
         "type": "object",
-        "required": ["email"],
+        "required": [
+          "email"
+        ],
         "properties": {
           "email": {
             "type": "string"
           },
           "name": {
-            "type": ["string", "null"]
+            "type": [
+              "string",
+              "null"
+            ]
           },
           "photo_url": {
-            "type": ["string", "null"]
+            "type": [
+              "string",
+              "null"
+            ]
           }
         }
       },
       "ContactInfoLegacy": {
         "type": "object",
-        "required": ["email", "email_address"],
+        "required": [
+          "email",
+          "email_address"
+        ],
         "properties": {
           "email": {
             "type": "string"
@@ -5801,10 +6454,16 @@
             "type": "string"
           },
           "name": {
-            "type": ["string", "null"]
+            "type": [
+              "string",
+              "null"
+            ]
           },
           "photo_url": {
-            "type": ["string", "null"]
+            "type": [
+              "string",
+              "null"
+            ]
           }
         }
       },
@@ -5815,7 +6474,9 @@
           },
           {
             "type": "object",
-            "required": ["last_interaction"],
+            "required": [
+              "last_interaction"
+            ],
             "properties": {
               "last_interaction": {
                 "type": "string",
@@ -5830,7 +6491,10 @@
         "description": "Request body adding a shared event to the requester's calendar.",
         "properties": {
           "calendarId": {
-            "type": ["string", "null"],
+            "type": [
+              "string",
+              "null"
+            ],
             "format": "uuid",
             "description": "Google calendar to add the copy to; defaults to the requester's\nprimary inbox's primary calendar."
           }
@@ -5839,14 +6503,19 @@
       "CreateDraftRequest": {
         "type": "object",
         "description": "Request body for creating a draft.",
-        "required": ["draft"],
+        "required": [
+          "draft"
+        ],
         "properties": {
           "draft": {
             "$ref": "#/components/schemas/ApiDraftInput",
             "description": "The draft content."
           },
           "send_time": {
-            "type": ["string", "null"],
+            "type": [
+              "string",
+              "null"
+            ],
             "format": "date-time",
             "description": "Scheduled send time."
           }
@@ -5855,7 +6524,9 @@
       "CreateDraftResponse": {
         "type": "object",
         "description": "Response body for creating a draft.",
-        "required": ["draft"],
+        "required": [
+          "draft"
+        ],
         "properties": {
           "draft": {
             "$ref": "#/components/schemas/ApiDraftOutput",
@@ -5865,7 +6536,9 @@
       },
       "CreateLabelRequest": {
         "type": "object",
-        "required": ["label_name"],
+        "required": [
+          "label_name"
+        ],
         "properties": {
           "label_name": {
             "type": "string"
@@ -5875,7 +6548,9 @@
       "CreateLabelResponse": {
         "type": "object",
         "description": "The response returned from the create label endpoint",
-        "required": ["label"],
+        "required": [
+          "label"
+        ],
         "properties": {
           "label": {
             "$ref": "#/components/schemas/Label",
@@ -5894,7 +6569,9 @@
       "ErrorResponse": {
         "type": "object",
         "description": "A plain old json error response for use with axum.\nyup, thats it.",
-        "required": ["message"],
+        "required": [
+          "message"
+        ],
         "properties": {
           "message": {
             "type": "string",
@@ -5905,7 +6582,10 @@
       "EventReminderOverride": {
         "type": "object",
         "description": "One reminder: how it alerts and how many minutes before the event start\n(before midnight in the calendar's zone for all-day events) it fires.",
-        "required": ["method", "minutes"],
+        "required": [
+          "method",
+          "minutes"
+        ],
         "properties": {
           "method": {
             "type": "string",
@@ -5922,7 +6602,9 @@
       "EventReminders": {
         "type": "object",
         "description": "Per-user reminder configuration for an event, mirroring Google's model:\neither the calendar's default reminders apply, or the explicit overrides\nreplace them entirely.",
-        "required": ["useDefault"],
+        "required": [
+          "useDefault"
+        ],
         "properties": {
           "overrides": {
             "type": "array",
@@ -5940,14 +6622,22 @@
       "EventStatus": {
         "type": "string",
         "description": "Canonical event status.",
-        "enum": ["confirmed", "tentative", "cancelled"]
+        "enum": [
+          "confirmed",
+          "tentative",
+          "cancelled"
+        ]
       },
       "EventTime": {
         "oneOf": [
           {
             "type": "object",
             "description": "An event with absolute instants.",
-            "required": ["startsAt", "endsAt", "kind"],
+            "required": [
+              "startsAt",
+              "endsAt",
+              "kind"
+            ],
             "properties": {
               "endsAt": {
                 "type": "string",
@@ -5956,7 +6646,9 @@
               },
               "kind": {
                 "type": "string",
-                "enum": ["timed"]
+                "enum": [
+                  "timed"
+                ]
               },
               "startsAt": {
                 "type": "string",
@@ -5964,7 +6656,10 @@
                 "description": "Inclusive start instant."
               },
               "timeZone": {
-                "type": ["string", "null"],
+                "type": [
+                  "string",
+                  "null"
+                ],
                 "description": "Original IANA time-zone identifier, when supplied."
               }
             }
@@ -5972,7 +6667,11 @@
           {
             "type": "object",
             "description": "An all-day event using RFC 5545's exclusive end date.",
-            "required": ["startDate", "endDate", "kind"],
+            "required": [
+              "startDate",
+              "endDate",
+              "kind"
+            ],
             "properties": {
               "endDate": {
                 "type": "string",
@@ -5981,7 +6680,9 @@
               },
               "kind": {
                 "type": "string",
-                "enum": ["allDay"]
+                "enum": [
+                  "allDay"
+                ]
               },
               "startDate": {
                 "type": "string",
@@ -5996,7 +6697,10 @@
       "EventTransparency": {
         "type": "string",
         "description": "Whether an event blocks availability.",
-        "enum": ["opaque", "transparent"]
+        "enum": [
+          "opaque",
+          "transparent"
+        ]
       },
       "EventType": {
         "type": "string",
@@ -6013,12 +6717,20 @@
       "EventVisibility": {
         "type": "string",
         "description": "Visibility of event details.",
-        "enum": ["default", "public", "private", "confidential"]
+        "enum": [
+          "default",
+          "public",
+          "private",
+          "confidential"
+        ]
       },
       "ForwardCalendarEventError": {
         "type": "object",
         "description": "A refused or failed forward.",
-        "required": ["code", "message"],
+        "required": [
+          "code",
+          "message"
+        ],
         "properties": {
           "code": {
             "$ref": "#/components/schemas/ForwardCalendarEventErrorCode",
@@ -6043,14 +6755,19 @@
       "ForwardCalendarEventRecipient": {
         "type": "object",
         "description": "One person a forwarded invitation goes to.",
-        "required": ["email"],
+        "required": [
+          "email"
+        ],
         "properties": {
           "email": {
             "type": "string",
             "description": "Their email address."
           },
           "name": {
-            "type": ["string", "null"],
+            "type": [
+              "string",
+              "null"
+            ],
             "description": "Their display name."
           }
         }
@@ -6058,10 +6775,15 @@
       "ForwardCalendarEventRequest": {
         "type": "object",
         "description": "Who a forwarded invitation goes to, and what its email says.",
-        "required": ["to"],
+        "required": [
+          "to"
+        ],
         "properties": {
           "bodyText": {
-            "type": ["string", "null"],
+            "type": [
+              "string",
+              "null"
+            ],
             "description": "A plain-text summary of the event the email opens with; the title\nwhen absent. The email ends with a note saying what the recipient\ncan do with the forward."
           },
           "to": {
@@ -6076,7 +6798,10 @@
       "ForwardCalendarEventResponse": {
         "type": "object",
         "description": "The email the forward queued.",
-        "required": ["messageId", "threadId"],
+        "required": [
+          "messageId",
+          "threadId"
+        ],
         "properties": {
           "messageId": {
             "type": "string",
@@ -6093,7 +6818,9 @@
       "GetActiveBackfillJobResponse": {
         "type": "object",
         "description": "The response returned from the get backfill job endpoint",
-        "required": ["job"],
+        "required": [
+          "job"
+        ],
         "properties": {
           "job": {
             "$ref": "#/components/schemas/BackfillJob"
@@ -6103,7 +6830,10 @@
       "GetAttachmentDocumentIDResponse": {
         "type": "object",
         "description": "The response returned from the get attachment endpoint",
-        "required": ["attachment_id", "document_id"],
+        "required": [
+          "attachment_id",
+          "document_id"
+        ],
         "properties": {
           "attachment_id": {
             "type": "string",
@@ -6117,7 +6847,9 @@
       "GetAttachmentResponse": {
         "type": "object",
         "description": "The response returned from the get attachment endpoint",
-        "required": ["attachment"],
+        "required": [
+          "attachment"
+        ],
         "properties": {
           "attachment": {
             "$ref": "#/components/schemas/Attachment"
@@ -6127,7 +6859,9 @@
       "GetBackfillJobResponse": {
         "type": "object",
         "description": "The response returned from the get backfill job endpoint",
-        "required": ["job"],
+        "required": [
+          "job"
+        ],
         "properties": {
           "job": {
             "$ref": "#/components/schemas/BackfillJob"
@@ -6139,7 +6873,10 @@
         "description": "Parameters for getting thread previews with cursor-based pagination.",
         "properties": {
           "limit": {
-            "type": ["integer", "null"],
+            "type": [
+              "integer",
+              "null"
+            ],
             "format": "int32",
             "description": "Limit for pagination. Default is 20. Max is 500.",
             "minimum": 0
@@ -6159,7 +6896,9 @@
       },
       "GetScheduledResponse": {
         "type": "object",
-        "required": ["messages"],
+        "required": [
+          "messages"
+        ],
         "properties": {
           "messages": {
             "type": "array",
@@ -6172,7 +6911,9 @@
       "GetThreadResponse": {
         "type": "object",
         "description": "Response body for the get-thread endpoint.",
-        "required": ["thread"],
+        "required": [
+          "thread"
+        ],
         "properties": {
           "thread": {
             "$ref": "#/components/schemas/ApiThread"
@@ -6182,7 +6923,11 @@
       "GuestPolicy": {
         "type": "object",
         "description": "The switches an organizer sets on an event to bound what its guests may\ndo. Google omits a switch from the payload while it holds its default.",
-        "required": ["canModify", "canInviteOthers", "canSeeOtherGuests"],
+        "required": [
+          "canModify",
+          "canInviteOthers",
+          "canSeeOtherGuests"
+        ],
         "properties": {
           "canInviteOthers": {
             "type": "boolean",
@@ -6201,7 +6946,10 @@
       "InitErrorCodeResponse": {
         "type": "object",
         "description": "Structured 400 body carrying a machine-readable code. Clients branch on\n`code` instead of parsing the human message.",
-        "required": ["code", "message"],
+        "required": [
+          "code",
+          "message"
+        ],
         "properties": {
           "code": {
             "type": "string",
@@ -6215,10 +6963,15 @@
       },
       "InitResponse": {
         "type": "object",
-        "required": ["link_id"],
+        "required": [
+          "link_id"
+        ],
         "properties": {
           "backfill_job_id": {
-            "type": ["string", "null"],
+            "type": [
+              "string",
+              "null"
+            ],
             "format": "uuid",
             "description": "Present when init enqueued a backfill job. Absent for cross-user delegation,\nwhere the child link's backfill already ran under its own macro_id; present for\nthe self-link bootstrap, where a fresh link is provisioned and backfilled."
           },
@@ -6234,11 +6987,16 @@
           {
             "type": "object",
             "description": "Calendar date. DTEND remains exclusive.",
-            "required": ["value", "kind"],
+            "required": [
+              "value",
+              "kind"
+            ],
             "properties": {
               "kind": {
                 "type": "string",
-                "enum": ["date"]
+                "enum": [
+                  "date"
+                ]
               },
               "value": {
                 "type": "string",
@@ -6249,11 +7007,17 @@
           {
             "type": "object",
             "description": "Unambiguous instant with the original timezone retained.",
-            "required": ["value", "time_zone", "kind"],
+            "required": [
+              "value",
+              "time_zone",
+              "kind"
+            ],
             "properties": {
               "kind": {
                 "type": "string",
-                "enum": ["zoned"]
+                "enum": [
+                  "zoned"
+                ]
               },
               "time_zone": {
                 "type": "string",
@@ -6268,14 +7032,22 @@
           {
             "type": "object",
             "description": "Floating, ambiguous, nonexistent, or unknown-zone wall time.",
-            "required": ["value", "kind"],
+            "required": [
+              "value",
+              "kind"
+            ],
             "properties": {
               "kind": {
                 "type": "string",
-                "enum": ["unresolved"]
+                "enum": [
+                  "unresolved"
+                ]
               },
               "time_zone": {
-                "type": ["string", "null"],
+                "type": [
+                  "string",
+                  "null"
+                ],
                 "description": "Original TZID if present."
               },
               "value": {
@@ -6290,23 +7062,38 @@
       "InvitationMethod": {
         "type": "string",
         "description": "Original scheduling method, including methods unsupported for actions.",
-        "enum": ["request", "reply", "cancel", "counter", "publish", "unknown"]
+        "enum": [
+          "request",
+          "reply",
+          "cancel",
+          "counter",
+          "publish",
+          "unknown"
+        ]
       },
       "InvitationParticipant": {
         "type": "object",
         "description": "Scheduling participant; saved responses are historical, not current RSVP.",
-        "required": ["email"],
+        "required": [
+          "email"
+        ],
         "properties": {
           "email": {
             "type": "string",
             "description": "Participant calendar address."
           },
           "name": {
-            "type": ["string", "null"],
+            "type": [
+              "string",
+              "null"
+            ],
             "description": "Sender-supplied display name."
           },
           "participation_status": {
-            "type": ["string", "null"],
+            "type": [
+              "string",
+              "null"
+            ],
             "description": "Original PARTSTAT, retaining extensions."
           }
         }
@@ -6316,66 +7103,90 @@
           {
             "type": "object",
             "description": "Viewer has no active owned or delegated Google-backed calendar.",
-            "required": ["kind"],
+            "required": [
+              "kind"
+            ],
             "properties": {
               "kind": {
                 "type": "string",
-                "enum": ["disconnected"]
+                "enum": [
+                  "disconnected"
+                ]
               }
             }
           },
           {
             "type": "object",
             "description": "An active calendar is still ingesting this event.",
-            "required": ["kind"],
+            "required": [
+              "kind"
+            ],
             "properties": {
               "kind": {
                 "type": "string",
-                "enum": ["still_syncing"]
+                "enum": [
+                  "still_syncing"
+                ]
               }
             }
           },
           {
             "type": "object",
             "description": "A saved scheduling cancellation precedes removal from the synced projection.",
-            "required": ["kind"],
+            "required": [
+              "kind"
+            ],
             "properties": {
               "kind": {
                 "type": "string",
-                "enum": ["cancelled"]
+                "enum": [
+                  "cancelled"
+                ]
               }
             }
           },
           {
             "type": "object",
             "description": "Original occurrence identity cannot safely be interpreted.",
-            "required": ["kind"],
+            "required": [
+              "kind"
+            ],
             "properties": {
               "kind": {
                 "type": "string",
-                "enum": ["unavailable"]
+                "enum": [
+                  "unavailable"
+                ]
               }
             }
           },
           {
             "type": "object",
             "description": "No independently authorized matching copy has synced.",
-            "required": ["kind"],
+            "required": [
+              "kind"
+            ],
             "properties": {
               "kind": {
                 "type": "string",
-                "enum": ["no_match"]
+                "enum": [
+                  "no_match"
+                ]
               }
             }
           },
           {
             "type": "object",
             "description": "More than one authorized account could respond; never guess.",
-            "required": ["kind"],
+            "required": [
+              "kind"
+            ],
             "properties": {
               "kind": {
                 "type": "string",
-                "enum": ["ambiguous"]
+                "enum": [
+                  "ambiguous"
+                ]
               }
             }
           },
@@ -6410,7 +7221,9 @@
               },
               "kind": {
                 "type": "string",
-                "enum": ["resolved"]
+                "enum": [
+                  "resolved"
+                ]
               },
               "occurrence": {
                 "$ref": "#/components/schemas/CalendarOccurrence",
@@ -6427,14 +7240,21 @@
       },
       "Label": {
         "type": "object",
-        "required": ["link_id", "provider_label_id", "created_at"],
+        "required": [
+          "link_id",
+          "provider_label_id",
+          "created_at"
+        ],
         "properties": {
           "created_at": {
             "type": "string",
             "format": "date-time"
           },
           "id": {
-            "type": ["string", "null"],
+            "type": [
+              "string",
+              "null"
+            ],
             "format": "uuid"
           },
           "label_list_visibility": {
@@ -6462,7 +7282,10 @@
             ]
           },
           "name": {
-            "type": ["string", "null"]
+            "type": [
+              "string",
+              "null"
+            ]
           },
           "provider_label_id": {
             "type": "string"
@@ -6481,7 +7304,10 @@
       },
       "LabelInfo": {
         "type": "object",
-        "required": ["provider_id", "name"],
+        "required": [
+          "provider_id",
+          "name"
+        ],
         "properties": {
           "name": {
             "type": "string"
@@ -6493,11 +7319,18 @@
       },
       "LabelListVisibility": {
         "type": "string",
-        "enum": ["LabelShow", "LabelShowIfUnread", "LabelHide"]
+        "enum": [
+          "LabelShow",
+          "LabelShowIfUnread",
+          "LabelHide"
+        ]
       },
       "LabelType": {
         "type": "string",
-        "enum": ["System", "User"]
+        "enum": [
+          "System",
+          "User"
+        ]
       },
       "Link": {
         "type": "object",
@@ -6559,7 +7392,10 @@
             "description": "Whether the link's Google grant needs to be reconnected. Drives the\nper-inbox reconnect prompt independently of the sync-status badge."
           },
           "photo_url": {
-            "type": ["string", "null"],
+            "type": [
+              "string",
+              "null"
+            ],
             "description": "The inbox's own profile photo (its self-contact's SFS photo), if synced."
           },
           "provider": {
@@ -6580,7 +7416,9 @@
       "ListBackfillJobsResponse": {
         "type": "object",
         "description": "The response returned from the list backfill jobs endpoint",
-        "required": ["jobs"],
+        "required": [
+          "jobs"
+        ],
         "properties": {
           "jobs": {
             "type": "array",
@@ -6593,7 +7431,9 @@
       "ListBlockedResponse": {
         "type": "object",
         "description": "Response containing list of blocked email addresses.",
-        "required": ["blocked_emails"],
+        "required": [
+          "blocked_emails"
+        ],
         "properties": {
           "blocked_emails": {
             "type": "array",
@@ -6606,7 +7446,9 @@
       },
       "ListContactsResponse": {
         "type": "object",
-        "required": ["contacts"],
+        "required": [
+          "contacts"
+        ],
         "properties": {
           "contacts": {
             "type": "object",
@@ -6627,7 +7469,9 @@
       "ListEmailFiltersResponse": {
         "type": "object",
         "description": "Response body for listing email filters.",
-        "required": ["filters"],
+        "required": [
+          "filters"
+        ],
         "properties": {
           "filters": {
             "type": "array",
@@ -6640,7 +7484,9 @@
       "ListLabelsResponse": {
         "type": "object",
         "description": "Response body for listing labels.",
-        "required": ["labels"],
+        "required": [
+          "labels"
+        ],
         "properties": {
           "labels": {
             "type": "array",
@@ -6653,7 +7499,9 @@
       "ListLinksResponse": {
         "type": "object",
         "description": "The response returned from the list links endpoint",
-        "required": ["links"],
+        "required": [
+          "links"
+        ],
         "properties": {
           "links": {
             "type": "array",
@@ -6669,11 +7517,16 @@
           {
             "type": "object",
             "description": "Mark correspondence read or unread.",
-            "required": ["value", "kind"],
+            "required": [
+              "value",
+              "kind"
+            ],
             "properties": {
               "kind": {
                 "type": "string",
-                "enum": ["read"]
+                "enum": [
+                  "read"
+                ]
               },
               "value": {
                 "type": "boolean",
@@ -6684,11 +7537,16 @@
           {
             "type": "object",
             "description": "Set the follow-up star.",
-            "required": ["value", "kind"],
+            "required": [
+              "value",
+              "kind"
+            ],
             "properties": {
               "kind": {
                 "type": "string",
-                "enum": ["flagged"]
+                "enum": [
+                  "flagged"
+                ]
               },
               "value": {
                 "type": "boolean",
@@ -6699,11 +7557,16 @@
           {
             "type": "object",
             "description": "Archive inbox messages, or restore received correspondence to the inbox.",
-            "required": ["value", "kind"],
+            "required": [
+              "value",
+              "kind"
+            ],
             "properties": {
               "kind": {
                 "type": "string",
-                "enum": ["archived"]
+                "enum": [
+                  "archived"
+                ]
               },
               "value": {
                 "type": "boolean",
@@ -6714,11 +7577,16 @@
           {
             "type": "object",
             "description": "Move to recoverable trash, or restore correspondence to Inbox (drafts to Drafts).",
-            "required": ["value", "kind"],
+            "required": [
+              "value",
+              "kind"
+            ],
             "properties": {
               "kind": {
                 "type": "string",
-                "enum": ["trashed"]
+                "enum": [
+                  "trashed"
+                ]
               },
               "value": {
                 "type": "boolean",
@@ -6729,11 +7597,16 @@
           {
             "type": "object",
             "description": "Move to junk, or restore to the inbox.",
-            "required": ["value", "kind"],
+            "required": [
+              "value",
+              "kind"
+            ],
             "properties": {
               "kind": {
                 "type": "string",
-                "enum": ["junk"]
+                "enum": [
+                  "junk"
+                ]
               },
               "value": {
                 "type": "boolean",
@@ -6744,16 +7617,24 @@
           {
             "type": "object",
             "description": "Add/remove a category while preserving other provider assignments.",
-            "required": ["value", "kind"],
+            "required": [
+              "value",
+              "kind"
+            ],
             "properties": {
               "kind": {
                 "type": "string",
-                "enum": ["category"]
+                "enum": [
+                  "category"
+                ]
               },
               "value": {
                 "type": "object",
                 "description": "Add/remove a category while preserving other provider assignments.",
-                "required": ["name", "present"],
+                "required": [
+                  "name",
+                  "present"
+                ],
                 "properties": {
                   "name": {
                     "type": "string"
@@ -6771,7 +7652,12 @@
       "MailboxOperation": {
         "type": "object",
         "description": "Durable outcome of an accepted organization action.",
-        "required": ["id", "action", "state", "updated_at"],
+        "required": [
+          "id",
+          "action",
+          "state",
+          "updated_at"
+        ],
         "properties": {
           "action": {
             "$ref": "#/components/schemas/MailboxAction"
@@ -6791,16 +7677,31 @@
       },
       "MailboxOperationState": {
         "type": "string",
-        "enum": ["pending", "applied", "failed", "cancelled"]
+        "enum": [
+          "pending",
+          "applied",
+          "failed",
+          "cancelled"
+        ]
       },
       "MailboxSettingsChange": {
         "type": "string",
-        "enum": ["create_label", "delete_label", "sender_block"]
+        "enum": [
+          "create_label",
+          "delete_label",
+          "sender_block"
+        ]
       },
       "MailboxSettingsOperation": {
         "type": "object",
         "description": "An accepted inbox configuration change awaiting provider confirmation.",
-        "required": ["id", "kind", "resource", "enabled", "needs_attention"],
+        "required": [
+          "id",
+          "kind",
+          "resource",
+          "enabled",
+          "needs_attention"
+        ],
         "properties": {
           "enabled": {
             "type": "boolean"
@@ -6869,13 +7770,22 @@
             }
           },
           "body_html_sanitized": {
-            "type": ["string", "null"]
+            "type": [
+              "string",
+              "null"
+            ]
           },
           "body_macro": {
-            "type": ["string", "null"]
+            "type": [
+              "string",
+              "null"
+            ]
           },
           "body_text": {
-            "type": ["string", "null"]
+            "type": [
+              "string",
+              "null"
+            ]
           },
           "cc": {
             "type": "array",
@@ -6902,7 +7812,10 @@
             ]
           },
           "global_id": {
-            "type": ["string", "null"],
+            "type": [
+              "string",
+              "null"
+            ],
             "description": "The globally unique Message-ID header value created by the sender to uniquely identify this email\nUsed for threading across all providers (In-Reply-To header, References header)"
           },
           "has_attachments": {
@@ -6919,7 +7832,10 @@
             ]
           },
           "internal_date_ts": {
-            "type": ["string", "null"],
+            "type": [
+              "string",
+              "null"
+            ],
             "format": "date-time"
           },
           "is_draft": {
@@ -6945,35 +7861,62 @@
             "format": "uuid"
           },
           "provider_history_id": {
-            "type": ["string", "null"]
+            "type": [
+              "string",
+              "null"
+            ]
           },
           "provider_id": {
-            "type": ["string", "null"]
+            "type": [
+              "string",
+              "null"
+            ]
           },
           "provider_thread_id": {
-            "type": ["string", "null"]
+            "type": [
+              "string",
+              "null"
+            ]
           },
           "replying_to_id": {
-            "type": ["string", "null"],
+            "type": [
+              "string",
+              "null"
+            ],
             "format": "uuid"
           },
           "scheduled_send_time": {
-            "type": ["string", "null"],
+            "type": [
+              "string",
+              "null"
+            ],
             "format": "date-time"
           },
           "sent_at": {
-            "type": ["string", "null"],
+            "type": [
+              "string",
+              "null"
+            ],
             "format": "date-time"
           },
           "size_estimate": {
-            "type": ["integer", "null"],
+            "type": [
+              "integer",
+              "null"
+            ],
             "format": "int64"
           },
           "snippet": {
-            "type": ["string", "null"]
+            "type": [
+              "string",
+              "null"
+            ]
           },
           "subject": {
-            "type": ["string", "null"]
+            "type": [
+              "string",
+              "null"
+            ]
           },
           "thread_db_id": {
             "type": "string",
@@ -6993,7 +7936,10 @@
       },
       "MessageListVisibility": {
         "type": "string",
-        "enum": ["Show", "Hide"]
+        "enum": [
+          "Show",
+          "Hide"
+        ]
       },
       "MessageOperationResponse": {
         "type": "object",
@@ -7014,15 +7960,24 @@
       "MessageReadReceipt": {
         "type": "object",
         "description": "Open state of one tracked, sent message.",
-        "required": ["message_id", "open_count"],
+        "required": [
+          "message_id",
+          "open_count"
+        ],
         "properties": {
           "first_opened_at": {
-            "type": ["string", "null"],
+            "type": [
+              "string",
+              "null"
+            ],
             "format": "date-time",
             "description": "First counted fetch."
           },
           "last_opened_at": {
-            "type": ["string", "null"],
+            "type": [
+              "string",
+              "null"
+            ],
             "format": "date-time",
             "description": "Latest counted fetch."
           },
@@ -7058,7 +8013,10 @@
             }
           },
           "body_parsed": {
-            "type": ["string", "null"]
+            "type": [
+              "string",
+              "null"
+            ]
           },
           "cc": {
             "type": "array",
@@ -7086,7 +8044,10 @@
             ]
           },
           "internal_date_ts": {
-            "type": ["string", "null"],
+            "type": [
+              "string",
+              "null"
+            ],
             "format": "date-time"
           },
           "labels": {
@@ -7100,7 +8061,10 @@
             "format": "uuid"
           },
           "subject": {
-            "type": ["string", "null"]
+            "type": [
+              "string",
+              "null"
+            ]
           },
           "thread_db_id": {
             "type": "string",
@@ -7116,7 +8080,9 @@
       },
       "PatchSettingsRequest": {
         "type": "object",
-        "required": ["settings"],
+        "required": [
+          "settings"
+        ],
         "properties": {
           "settings": {
             "$ref": "#/components/schemas/Settings"
@@ -7125,7 +8091,9 @@
       },
       "PatchSettingsResponse": {
         "type": "object",
-        "required": ["settings"],
+        "required": [
+          "settings"
+        ],
         "properties": {
           "settings": {
             "$ref": "#/components/schemas/Settings"
@@ -7174,11 +8142,17 @@
           {
             "type": "object",
             "description": "Backfill progress for `link_id`; see [`BackfillStatus`].",
-            "required": ["link_id", "status", "event"],
+            "required": [
+              "link_id",
+              "status",
+              "event"
+            ],
             "properties": {
               "event": {
                 "type": "string",
-                "enum": ["backfill"]
+                "enum": [
+                  "backfill"
+                ]
               },
               "link_id": {
                 "type": "string",
@@ -7192,11 +8166,16 @@
           {
             "type": "object",
             "description": "A message was inserted or updated for `link_id`.",
-            "required": ["link_id", "event"],
+            "required": [
+              "link_id",
+              "event"
+            ],
             "properties": {
               "event": {
                 "type": "string",
-                "enum": ["upsert_message"]
+                "enum": [
+                  "upsert_message"
+                ]
               },
               "link_id": {
                 "type": "string",
@@ -7207,11 +8186,16 @@
           {
             "type": "object",
             "description": "Labels changed for `link_id`.",
-            "required": ["link_id", "event"],
+            "required": [
+              "link_id",
+              "event"
+            ],
             "properties": {
               "event": {
                 "type": "string",
-                "enum": ["update_labels"]
+                "enum": [
+                  "update_labels"
+                ]
               },
               "link_id": {
                 "type": "string",
@@ -7222,11 +8206,16 @@
           {
             "type": "object",
             "description": "A message was deleted for `link_id`.",
-            "required": ["link_id", "event"],
+            "required": [
+              "link_id",
+              "event"
+            ],
             "properties": {
               "event": {
                 "type": "string",
-                "enum": ["delete_message"]
+                "enum": [
+                  "delete_message"
+                ]
               },
               "link_id": {
                 "type": "string",
@@ -7237,11 +8226,16 @@
           {
             "type": "object",
             "description": "The inbox `link_id` was removed and its data torn down.",
-            "required": ["link_id", "event"],
+            "required": [
+              "link_id",
+              "event"
+            ],
             "properties": {
               "event": {
                 "type": "string",
-                "enum": ["link_removed"]
+                "enum": [
+                  "link_removed"
+                ]
               },
               "link_id": {
                 "type": "string",
@@ -7252,11 +8246,16 @@
           {
             "type": "object",
             "description": "The self-contact photo for `link_id` finished uploading to static\nfile storage, so the inbox's derived `photo_url` is now available.",
-            "required": ["link_id", "event"],
+            "required": [
+              "link_id",
+              "event"
+            ],
             "properties": {
               "event": {
                 "type": "string",
-                "enum": ["photo_synced"]
+                "enum": [
+                  "photo_synced"
+                ]
               },
               "link_id": {
                 "type": "string",
@@ -7281,7 +8280,9 @@
               },
               "event": {
                 "type": "string",
-                "enum": ["backfill_progress"]
+                "enum": [
+                  "backfill_progress"
+                ]
               },
               "link_id": {
                 "type": "string",
@@ -7302,7 +8303,10 @@
       "ResolveMessageOperationRequest": {
         "type": "object",
         "description": "Stale versions fail without altering the current operation.",
-        "required": ["revision", "action"],
+        "required": [
+          "revision",
+          "action"
+        ],
         "properties": {
           "accept_duplicate_risk": {
             "type": "boolean"
@@ -7311,7 +8315,10 @@
             "$ref": "#/components/schemas/ApiMessageResolutionAction"
           },
           "remote_version": {
-            "type": ["string", "null"]
+            "type": [
+              "string",
+              "null"
+            ]
           },
           "revision": {
             "type": "string"
@@ -7321,7 +8328,10 @@
       "ResyncResponse": {
         "type": "object",
         "description": "The response returned from the resync endpoint.",
-        "required": ["backfill_job_id", "already_in_progress"],
+        "required": [
+          "backfill_job_id",
+          "already_in_progress"
+        ],
         "properties": {
           "already_in_progress": {
             "type": "boolean",
@@ -7337,12 +8347,19 @@
       "ScheduledSendStatus": {
         "type": "string",
         "description": "The user-visible delivery state of an unsent scheduled message.",
-        "enum": ["pending", "sending", "failed", "unconfirmed"]
+        "enum": [
+          "pending",
+          "sending",
+          "failed",
+          "unconfirmed"
+        ]
       },
       "SendMessageRequest": {
         "type": "object",
         "description": "Request body for sending a message (backward-compatible with `{ message: MessageToSend }`).",
-        "required": ["message"],
+        "required": [
+          "message"
+        ],
         "properties": {
           "message": {
             "$ref": "#/components/schemas/ApiDraftInput",
@@ -7353,7 +8370,9 @@
       "SendMessageResponse": {
         "type": "object",
         "description": "Response body for sending a message.",
-        "required": ["message"],
+        "required": [
+          "message"
+        ],
         "properties": {
           "message": {
             "$ref": "#/components/schemas/ApiDraftOutput",
@@ -7365,15 +8384,24 @@
         "type": "object",
         "properties": {
           "read_receipts_enabled": {
-            "type": ["boolean", "null"],
+            "type": [
+              "boolean",
+              "null"
+            ],
             "description": "Whether messages sent from this inbox carry an open-tracking pixel."
           },
           "signature": {
-            "type": ["string", "null"],
+            "type": [
+              "string",
+              "null"
+            ],
             "description": "The user's email signature content (HTML). On a patch, omit or send\n`null` to leave unchanged (both deserialize to `None`); pass an empty\nstring to clear it. The column cannot be set to SQL NULL via patch."
           },
           "signature_on_replies_forwards": {
-            "type": ["boolean", "null"]
+            "type": [
+              "boolean",
+              "null"
+            ]
           }
         }
       },
@@ -7404,7 +8432,13 @@
       "SyncStatus": {
         "type": "string",
         "description": "Coarse sync state for an inbox, used to render a one-line hint in the\nmulti-inbox settings list. Derived from the link's `is_sync_active` flag, its\nreauth health, and its most recent backfill job.",
-        "enum": ["SYNCING", "UP_TO_DATE", "ERROR", "NEEDS_REAUTH", "INACTIVE"]
+        "enum": [
+          "SYNCING",
+          "UP_TO_DATE",
+          "ERROR",
+          "NEEDS_REAUTH",
+          "INACTIVE"
+        ]
       },
       "Thread": {
         "type": "object",
@@ -7433,15 +8467,24 @@
             "type": "boolean"
           },
           "latest_inbound_message_ts": {
-            "type": ["string", "null"],
+            "type": [
+              "string",
+              "null"
+            ],
             "format": "date-time"
           },
           "latest_non_spam_message_ts": {
-            "type": ["string", "null"],
+            "type": [
+              "string",
+              "null"
+            ],
             "format": "date-time"
           },
           "latest_outbound_message_ts": {
-            "type": ["string", "null"],
+            "type": [
+              "string",
+              "null"
+            ],
             "format": "date-time"
           },
           "link_id": {
@@ -7455,7 +8498,10 @@
             }
           },
           "provider_id": {
-            "type": ["string", "null"]
+            "type": [
+              "string",
+              "null"
+            ]
           },
           "updated_at": {
             "type": "string",
@@ -7465,10 +8511,15 @@
       },
       "ThreadList": {
         "type": "object",
-        "required": ["threads"],
+        "required": [
+          "threads"
+        ],
         "properties": {
           "next_page_token": {
-            "type": ["string", "null"]
+            "type": [
+              "string",
+              "null"
+            ]
           },
           "threads": {
             "type": "array",
@@ -7522,7 +8573,10 @@
             "type": "boolean"
           },
           "name": {
-            "type": ["string", "null"]
+            "type": [
+              "string",
+              "null"
+            ]
           },
           "ownerId": {
             "type": "string"
@@ -7534,19 +8588,34 @@
             }
           },
           "providerId": {
-            "type": ["string", "null"]
+            "type": [
+              "string",
+              "null"
+            ]
           },
           "senderEmail": {
-            "type": ["string", "null"]
+            "type": [
+              "string",
+              "null"
+            ]
           },
           "senderName": {
-            "type": ["string", "null"]
+            "type": [
+              "string",
+              "null"
+            ]
           },
           "senderPhotoUrl": {
-            "type": ["string", "null"]
+            "type": [
+              "string",
+              "null"
+            ]
           },
           "snippet": {
-            "type": ["string", "null"]
+            "type": [
+              "string",
+              "null"
+            ]
           },
           "sortTs": {
             "type": "string",
@@ -7557,7 +8626,10 @@
             "format": "date-time"
           },
           "viewedAt": {
-            "type": ["string", "null"],
+            "type": [
+              "string",
+              "null"
+            ],
             "format": "date-time"
           }
         }
@@ -7565,7 +8637,9 @@
       "ThreadReadReceipts": {
         "type": "object",
         "description": "Open state of the caller's tracked, sent messages in one thread.",
-        "required": ["receipts"],
+        "required": [
+          "receipts"
+        ],
         "properties": {
           "receipts": {
             "type": "array",
@@ -7578,11 +8652,18 @@
       "ThreadStateField": {
         "type": "string",
         "description": "Semantic mailbox facts, independent of folder/category names.",
-        "enum": ["read", "starred", "trashed", "junk"]
+        "enum": [
+          "read",
+          "starred",
+          "trashed",
+          "junk"
+        ]
       },
       "ThreadSummary": {
         "type": "object",
-        "required": ["provider_id"],
+        "required": [
+          "provider_id"
+        ],
         "properties": {
           "provider_id": {
             "type": "string"
@@ -7592,7 +8673,10 @@
       "TransferDraftRequest": {
         "type": "object",
         "description": "Reuse the same operation ID when retrying after a lost response.",
-        "required": ["operation_id", "destination_link_id"],
+        "required": [
+          "operation_id",
+          "destination_link_id"
+        ],
         "properties": {
           "destination_link_id": {
             "type": "string",
@@ -7663,7 +8747,9 @@
       "UnblockSenderRequest": {
         "type": "object",
         "description": "Request to unblock a sender.",
-        "required": ["email_address"],
+        "required": [
+          "email_address"
+        ],
         "properties": {
           "email_address": {
             "type": "string",
@@ -7674,7 +8760,9 @@
       "UnresolvedSignatureImagesError": {
         "type": "object",
         "description": "Body returned with a 422 when signature images can't be loaded.",
-        "required": ["unresolved_image_count"],
+        "required": [
+          "unresolved_image_count"
+        ],
         "properties": {
           "unresolved_image_count": {
             "type": "integer",
@@ -7685,7 +8773,11 @@
       },
       "UpdateLabelBatchRequest": {
         "type": "object",
-        "required": ["message_ids", "label_id", "value"],
+        "required": [
+          "message_ids",
+          "label_id",
+          "value"
+        ],
         "properties": {
           "label_id": {
             "type": "string",
@@ -7705,7 +8797,11 @@
       },
       "UpdateLabelBatchResponse": {
         "type": "object",
-        "required": ["successful_ids", "failed_ids", "missing_ids"],
+        "required": [
+          "successful_ids",
+          "failed_ids",
+          "missing_ids"
+        ],
         "properties": {
           "failed_ids": {
             "type": "array",
@@ -7733,7 +8829,10 @@
       "UpdateThreadLabelRequest": {
         "type": "object",
         "description": "Request body for updating a thread's labels.",
-        "required": ["label_id", "value"],
+        "required": [
+          "label_id",
+          "value"
+        ],
         "properties": {
           "label_id": {
             "type": "string",
@@ -7747,7 +8846,10 @@
       "UpdateThreadLabelsResponse": {
         "type": "object",
         "description": "Response body for updating a thread's labels.",
-        "required": ["successful_ids", "failed_ids"],
+        "required": [
+          "successful_ids",
+          "failed_ids"
+        ],
         "properties": {
           "failed_ids": {
             "type": "array",
@@ -7770,7 +8872,10 @@
         "description": "Request body for updating a thread's project.",
         "properties": {
           "projectId": {
-            "type": ["string", "null"],
+            "type": [
+              "string",
+              "null"
+            ],
             "description": "The project ID to assign to the thread, or null to remove from project."
           }
         }
@@ -7780,7 +8885,10 @@
         "description": "Response body for updating a thread's project.",
         "properties": {
           "oldProjectId": {
-            "type": ["string", "null"],
+            "type": [
+              "string",
+              "null"
+            ],
             "description": "The previous project ID of the thread."
           }
         }
@@ -7788,7 +8896,10 @@
       "UpdateThreadStateRequest": {
         "type": "object",
         "description": "Desired state for every applicable message in an authorized thread.",
-        "required": ["field", "value"],
+        "required": [
+          "field",
+          "value"
+        ],
         "properties": {
           "field": {
             "$ref": "#/components/schemas/ThreadStateField"
@@ -7801,14 +8912,22 @@
       "UpsertEmailFilterRequest": {
         "type": "object",
         "description": "Request body for creating or updating an email filter.",
-        "required": ["is_important"],
+        "required": [
+          "is_important"
+        ],
         "properties": {
           "email_address": {
-            "type": ["string", "null"],
+            "type": [
+              "string",
+              "null"
+            ],
             "description": "Exact email address to match. Mutually exclusive with `email_domain`."
           },
           "email_domain": {
-            "type": ["string", "null"],
+            "type": [
+              "string",
+              "null"
+            ],
             "description": "Email domain to match. Mutually exclusive with `email_address`."
           },
           "is_important": {
@@ -7820,7 +8939,9 @@
       "UpsertEmailFilterResponse": {
         "type": "object",
         "description": "Response body for upsert email filter.",
-        "required": ["filter"],
+        "required": [
+          "filter"
+        ],
         "properties": {
           "filter": {
             "$ref": "#/components/schemas/ApiEmailFilter"
@@ -7829,10 +8950,15 @@
       },
       "UpsertScheduledRequest": {
         "type": "object",
-        "required": ["send_time"],
+        "required": [
+          "send_time"
+        ],
         "properties": {
           "include_signature": {
-            "type": ["boolean", "null"],
+            "type": [
+              "boolean",
+              "null"
+            ],
             "description": "Per-message signature override; absent uses the inbox's send defaults."
           },
           "send_time": {
@@ -7844,7 +8970,10 @@
       },
       "UpsertScheduledResponse": {
         "type": "object",
-        "required": ["message_id", "send_time"],
+        "required": [
+          "message_id",
+          "send_time"
+        ],
         "properties": {
           "message_id": {
             "type": "string",
@@ -7858,7 +8987,10 @@
       },
       "UserProvider": {
         "type": "string",
-        "enum": ["GMAIL", "OUTLOOK"]
+        "enum": [
+          "GMAIL",
+          "OUTLOOK"
+        ]
       },
       "Value": {},
       "ViewerCapabilities": {
