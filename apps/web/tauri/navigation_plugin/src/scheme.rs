@@ -29,7 +29,15 @@ impl MacroScheme {
             });
         };
 
-        let mut rest = url.fragment().unwrap_or(url.path()).trim_start_matches('/');
+        // A webview URL carries its route in the fragment (`tauri://localhost/#/mail`).
+        // Any other fragment belongs to the route, like a booking receipt's token.
+        let (route, fragment) = match url.fragment() {
+            Some(route) if route.starts_with('/') => route
+                .split_once('#')
+                .map_or((route, None), |(route, fragment)| (route, Some(fragment))),
+            fragment => (url.path(), fragment),
+        };
+        let mut rest = route.trim_start_matches('/');
         // Mobile router uses '/' as base, so strip the 'app' prefix from universal links
         if let Some(stripped) = rest.strip_prefix("app/") {
             rest = stripped;
@@ -37,11 +45,12 @@ impl MacroScheme {
             rest = "";
         }
         let query = url.query();
-        let inner = match query {
+        let mut inner = match query {
             Some(q) => format!("macro:///{rest}?{q}"),
             None => format!("macro:///{rest}"),
         }
         .parse::<Url>()?;
+        inner.set_fragment(fragment);
         Ok(MacroScheme(inner))
     }
 }
