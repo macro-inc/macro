@@ -115,6 +115,15 @@ external chat replies depend on it. Direct session controls still mint IDs.
   worktrees, and status comes only from OSC 7501 (README.md, "Herdr versions").
 - macrod never pulls into the operator's working branch — new herdr worktrees
   start from a fresh fetch of `origin/main` (see README.md).
+- Create Git worktrees without Herdr's repository grouping, persist native
+  window IDs before launch, and preserve existing workspace and tab names;
+  `src/herdr/acp_agent/windows.rs` owns reuse, recovery after unconfirmed launches,
+  and rollback. Readiness timeouts must leave the pending prompt unsubmitted.
+  Recovered agents count as observed live agents when reporting later closure.
+- `src/herdr/acp_agent/prompt.rs` owns native prompt delivery. Ordinary Codex
+  follow-ups steer an active turn, including after recovery; require the matching
+  transcript user message before accepting completion. Keep slash commands,
+  Claude turns, and blocked dialogs on the wait-for-idle path.
 - Only release builds update themselves: the tag workflow compiles the tag in
   as `MACROD_RELEASE_TAG`, and a build without a `vYYYY.MM.DD.N` tag never
   polls. `macrod service` (the desktop app's bundled copy) never updates; the

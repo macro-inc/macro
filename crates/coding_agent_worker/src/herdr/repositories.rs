@@ -1,4 +1,4 @@
-//! Session workspaces: the repository store refreshes Git; herdr (git itself under herdr-core) creates worktrees.
+//! Session workspaces: refresh Git and create worktrees without Herdr repository grouping.
 
 use super::cli::HerdrCli;
 use crate::outbound::git::{GitRepositories, git, primary_worktree};

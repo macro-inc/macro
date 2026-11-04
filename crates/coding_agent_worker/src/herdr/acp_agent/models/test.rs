@@ -322,6 +322,8 @@ async fn native_identity_changes_are_rejected_and_metadata_is_not_a_turn() {
         .unwrap();
     let session = adapter.session(&json!({"sessionId":id})).unwrap();
     let mut info = super::super::super::cli::AgentInfo {
+        window: None,
+        workspace_id: None,
         cwd: Some(root.path().to_owned()),
         session_id: Some(id),
         status: "idle".to_owned(),

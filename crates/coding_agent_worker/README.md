@@ -8,15 +8,31 @@ repository is cloned using the operator's Git credentials. New worktrees start
 from a fresh fetch of `origin/main`; macrod never pulls into the operator's
 working branch. A repository without `main` produces an error.
 
-Herdr creates and registers the worktree. The session ID determines its path
-and branch, so redelivery reuses existing work without resetting edits. Cached
+Git creates the worktree without registering it in Herdr's repository grouping.
+The first prompt opens an independent top-level Herdr workspace rooted at that
+worktree, even when another workspace already owns the repository's main checkout.
+The session ID determines its path and branch, so redelivery reuses existing
+work without resetting edits. Cached
 repositories and worktrees live under `~/.macrod/herdr/<harness-id>/`. Each
 paired macrod instance has one configuration and its own storage directory.
+
+Workspace names come from the first visible prompt line; runtime instructions,
+hidden context, and leading mention payloads are excluded. Empty or malformed
+prefix-only prompts fall back to the provider name. The initial legacy Herdr tab
+keeps its default label. Native workspace and tab names are set only on creation:
+later prompts, Macro title updates, and reconnects preserve manual names.
 
 ### Reconnecting native sessions
 
 macrod records native session IDs and transcript locations in private files in
-its instance directory. ACP `session/load` replays the native transcript before
+its instance directory, together with the session's Herdr window. Launch retries
+and daemon restarts reuse the saved window without renaming it. Existing shared
+tabs are reattached in place; only an explicitly closed window is replaced.
+An occupied pane or a connection error does not open a duplicate workspace.
+If launch confirmation fails after the native agent starts, the next prompt
+reattaches to that agent and applies the same prompt handling as an already
+attached session, including steering an active Codex turn.
+ACP `session/load` replays the native transcript before
 acknowledging the load. A running Herdr agent is reattached; an explicitly missing
 agent resumes its native session on the next prompt. Socket errors do not create
 replacement agents. Changing the configured provider does not convert existing
@@ -71,13 +87,20 @@ turn) presses Escape until Herdr reports the agent stopped, at most three times
 never sends an input-clearing key. The turn reports `cancelled` only once the
 agent has stopped; if it keeps running, macrod follows it to its real end.
 
-A prompt from Macro while the native agent is working or showing a dialog
-waits, like input typed into the TUI mid-turn. The running turn keeps streaming
-and its permission dialogs still reach Macro; the prompt is typed once the turn
-ends. Stopping from Macro while it waits interrupts the native turn and drops
-the prompt. Claude Code's exit confirmation, left by a second Ctrl-C while
-background work runs, is dismissed with Escape ("Stay") before the prompt is
-typed.
+An ordinary prompt from Macro is submitted to a working Codex session as
+steering input, so the active turn can receive it before finishing. This also
+applies after reconnecting or recovering a launch. Codex's transcript must
+record that prompt, ignoring surrounding whitespace, before a turn completion
+can acknowledge it; a preceding turn finishing during submission cannot complete
+the new request. Receipt is logged with the session ID, without recording prompt
+contents.
+
+Slash commands, Claude Code prompts, and prompts sent while a native dialog is
+blocking still wait for the turn to finish. The running turn keeps streaming
+and its permission dialogs still reach Macro. Stopping from Macro while a
+prompt waits interrupts the native turn and drops the prompt. Claude Code's
+exit confirmation, left by a second Ctrl-C while background work runs, is
+dismissed with Escape ("Stay") before the prompt is typed.
 
 New and reloaded sessions advertise `/compact`, `/init`, and `/fast` in Macro;
 Codex also advertises `/ultrafast`. Speed controls are delivered unchanged to
@@ -155,20 +178,26 @@ Choose a repository in Macro's composer; local sessions always start from `main`
 
 macrod drives both herdrs and picks by where it runs (`src/herdr/cli.rs`):
 
-- **herdr 0.9** (`HERDR_ENV=1`): the `herdr` CLI. Herdr creates worktrees, opens
-  tabs, starts agents, and reports their status and session IDs.
+- **herdr 0.9** (`HERDR_ENV=1`): the `herdr` CLI. Git creates worktrees; Herdr
+  opens an independent workspace per native session, starts agents, and reports
+  their status and session IDs. These workspaces have no repository parent.
 - **herdr-core and the herdr app** (`HC_TERMINAL_ID`): the `hc` CLI, which must
   be on `PATH`. Each session is a core terminal labelled with the app's
-  `herdr.space` and `herdr.tab`, so the app shows it as a tab in macrod's space.
-  A managed worktree gets its own space. macrod starts the shell and then types
+  `herdr.space` and `herdr.tab`, so each native session has its own space.
+  Viewer tabs still open in macrod's space. macrod starts the shell and then types
   `exec <agent> …` into it, so the agent gets the operator's login environment.
   git creates the worktrees. Tab names and focus go through `herdr-app do`, and
   macrod skips them when the app is not running.
+  Initial space and tab naming is a one-time best-effort request: the app may
+  still be adopting a new terminal, leaving its default name. Rename it in the
+  app if needed; macrod never retries naming in the background.
 
 herdr-core does not guess status; it shows what a program reports through
 OSC 7501. Claude Code reports it. Codex does not, so under herdr-core a Codex
 session loses three things: busy detection before a prompt, remote permission
 answers (approve in Herdr), and cancelling a turn Macro did not start.
+Startup and recovery require an unchanged screen for an agent without status;
+a readiness timeout returns an error without submitting the prompt.
 Transcripts still end its turns. Without a reported session ID, macrod finds
 Codex's transcript by working directory and start time. Viewer windows
 (`macrod herdr-pane`) report their own state through OSC 7501.

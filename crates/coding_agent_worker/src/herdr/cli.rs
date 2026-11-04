@@ -80,8 +80,11 @@ impl HerdrError {
 }
 
 /// The tab and root pane a new herdr window opened with.
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 pub(crate) struct Window {
+    /// A workspace created for this session; absent for older shared tabs.
+    #[serde(default)]
+    pub workspace_id: Option<String>,
     /// The tab, e.g. `w1:t2`, or a herdr app tab id.
     pub tab_id: String,
     /// The tab's only pane, e.g. `w1:p2`, or a herdr-core terminal like `t7`.
@@ -91,6 +94,10 @@ pub(crate) struct Window {
 /// What herdr knows about a running agent.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) struct AgentInfo {
+    /// The agent's current window, when the backend reports it.
+    pub window: Option<Window>,
+    /// The workspace currently containing that window, without claiming ownership.
+    pub workspace_id: Option<String>,
     /// `idle`, `working`, `blocked`, `done`, or `unknown`.
     pub status: String,
     /// The agent's own session id, when its integration reports one.
@@ -117,8 +124,6 @@ pub(crate) struct AgentLaunch<'a> {
     pub label: &'a str,
     /// Switch to the tab.
     pub focus: bool,
-    /// For a managed worktree at `cwd`, the repository's main checkout.
-    pub worktree_source: Option<&'a Path>,
     /// A private environment file to source before starting the agent.
     pub environment: Option<&'a Path>,
     /// The agent's arguments.
@@ -167,21 +172,73 @@ impl HerdrCli {
         path: &Path,
         branch: &str,
     ) -> rootcause::Result<()> {
+        crate::outbound::git::git(
+            source,
+            &[
+                "worktree",
+                "add",
+                "-b",
+                branch,
+                &path.to_string_lossy(),
+                "origin/main",
+            ],
+        )
+        .await
+        .map(drop)
+    }
+
+    /// Open an independent workspace and shell for a native agent.
+    #[tracing::instrument(name = "macrod.open_session_workspace", skip_all, err)]
+    pub(crate) async fn open_agent(&self, launch: &AgentLaunch<'_>) -> Result<Window, HerdrError> {
         match &self.backend {
-            Backend::Legacy(herdr) => Ok(herdr.create_worktree(source, path, branch).await?),
-            Backend::Core(herdr) => herdr.create_worktree(source, path, branch).await,
+            Backend::Legacy(herdr) => herdr.open_agent(launch).await,
+            Backend::Core(herdr) => herdr.open_agent(launch).await,
         }
     }
 
-    /// Open a tab for an agent TUI and start it there, returning once it is
-    /// ready for input.
-    pub(crate) async fn launch_agent(
+    /// Start the agent after the caller has persisted its window.
+    pub(crate) async fn start_agent(
         &self,
         launch: &AgentLaunch<'_>,
-    ) -> Result<Window, HerdrError> {
+        window: &Window,
+    ) -> Result<(), HerdrError> {
         match &self.backend {
-            Backend::Legacy(herdr) => herdr.launch_agent(launch).await,
-            Backend::Core(herdr) => herdr.launch_agent(launch).await,
+            Backend::Legacy(herdr) => herdr.start_in_window(launch, window).await,
+            Backend::Core(herdr) => herdr.start_in_window(launch, window).await,
+        }
+    }
+
+    /// Confirm an unreported agent's startup without starting it again. Legacy
+    /// Herdr must report a known status; core can also observe a settled screen.
+    pub(crate) async fn wait_ready(
+        &self,
+        name: &str,
+        kind: &str,
+        reports_status: bool,
+    ) -> Result<(), HerdrError> {
+        match &self.backend {
+            Backend::Legacy(_) => Err(HerdrError::NotReady),
+            Backend::Core(herdr) => herdr.wait_ready(name, kind, reports_status).await,
+        }
+    }
+
+    /// Reuse a saved window only if it still contains an available shell in `cwd`.
+    pub(crate) async fn existing_window(
+        &self,
+        window: &Window,
+        cwd: &Path,
+    ) -> Result<Option<Window>, HerdrError> {
+        match &self.backend {
+            Backend::Legacy(herdr) => herdr.existing_window(window, cwd).await,
+            Backend::Core(herdr) => herdr.existing_window(window, cwd).await,
+        }
+    }
+
+    /// Roll back a newly opened window if its session could not be saved.
+    pub(crate) async fn close_window(&self, window: &Window) -> Result<(), HerdrError> {
+        match &self.backend {
+            Backend::Legacy(herdr) => herdr.close_window(window).await,
+            Backend::Core(herdr) => herdr.close_window(window).await,
         }
     }
 

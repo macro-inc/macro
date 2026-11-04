@@ -43,6 +43,7 @@ fn codex_adapter(
 
 fn session(root: &Path) -> Session {
     Session {
+        window: Mutex::new(None),
         id: "s1".to_owned(),
         cwd: root.to_owned(),
         mcp_servers: Vec::new(),

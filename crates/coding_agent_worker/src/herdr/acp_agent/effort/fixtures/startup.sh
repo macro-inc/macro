@@ -2,8 +2,8 @@
 cd ROOT
 printf '%s\n' "$*" >> calls
 case "$1:$2" in
-  tab:create)
-    printf '{"result":{"root_pane":{"tab_id":"w1:t1","pane_id":"w1:p1"}}}\n' ;;
+  workspace:create)
+    printf '{"result":{"workspace":{"workspace_id":"w1"},"root_pane":{"tab_id":"w1:t1","pane_id":"w1:p1"}}}\n' ;;
   agent:start) touch started ;;
   agent:get)
     status=idle

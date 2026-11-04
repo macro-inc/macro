@@ -14,6 +14,7 @@ fn records_survive_a_new_store_without_exposing_credentials() {
         native_id: Some(id.clone()),
         transcript: Some(PathBuf::from("/log.jsonl")),
         started: 1,
+        window: None,
     };
     Store(root.path().to_owned()).save(&record).unwrap();
     let reopened = Store(root.path().to_owned());
@@ -45,6 +46,7 @@ fn list_returns_every_valid_record_and_skips_the_rest() {
             native_id: None,
             transcript: None,
             started: 1,
+            window: None,
         })
         .unwrap();
     let sessions = root.path().join("sessions");
@@ -60,6 +62,7 @@ fn list_returns_every_valid_record_and_skips_the_rest() {
             native_id: None,
             transcript: None,
             started: 2,
+            window: None,
         })
         .unwrap(),
     )

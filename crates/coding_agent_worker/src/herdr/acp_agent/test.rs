@@ -193,6 +193,7 @@ pub(super) fn save_transcript(root: &Path, id: &str) -> PathBuf {
             native_id: Some(id.to_owned()),
             transcript: Some(transcript.clone()),
             started: 1,
+            window: None,
         })
         .unwrap();
     transcript
@@ -358,6 +359,7 @@ async fn an_unconfirmed_submission_never_sends_an_extra_enter_or_reports_success
             guard.as_mut().unwrap(),
             &CancellationToken::new(),
             false,
+            None,
         )
         .await
         .unwrap_err();
@@ -406,6 +408,7 @@ async fn a_cancelled_turn_presses_esc_until_the_native_agent_stops() {
             guard.as_mut().unwrap(),
             &cancel,
             false,
+            None,
         )
         .await
         .unwrap();
@@ -566,7 +569,7 @@ async fn an_agent_waits_for_a_shell_still_loading_its_environment() {
             r#"#!/bin/sh
 cd {}
 case "$1:$2" in
-  tab:create) printf '{{"result":{{"root_pane":{{"tab_id":"w1:t1","pane_id":"w1:p1"}}}}}}\n' ;;
+  workspace:create) printf '{{"result":{{"workspace":{{"workspace_id":"w1"}},"root_pane":{{"tab_id":"w1:t1","pane_id":"w1:p1"}}}}}}\n' ;;
   agent:start)
     printf x >> starts
     [ "$(wc -c < starts)" -ge 3 ] && exit 0
@@ -587,7 +590,7 @@ esac
         .unwrap();
 
     adapter
-        .launch(&HerdrCli::new(script, None), &session, "hello")
+        .launch(&HerdrCli::new(script, None), &session, "hello", None)
         .await
         .unwrap();
 
@@ -615,6 +618,7 @@ async fn a_late_codex_item_never_answers_a_waiting_macro_prompt() {
             native_id: None,
             transcript: Some(transcript.clone()),
             started: 1,
+            window: None,
         })
         .unwrap();
     let (mut adapter, mut output) = test_adapter(root.path());
@@ -722,6 +726,15 @@ esac
 
 #[tokio::test]
 async fn a_prompt_to_a_busy_native_session_waits_for_its_turn_then_submits() {
+    check_busy_prompt(false).await;
+}
+
+#[tokio::test]
+async fn a_prompt_recovering_an_unconfirmed_launch_waits_for_the_native_turn() {
+    check_busy_prompt(true).await;
+}
+
+async fn check_busy_prompt(recover: bool) {
     use std::io::Write as _;
     let root = tempfile::tempdir().unwrap();
     let id = uuid::Uuid::new_v4().to_string();
@@ -734,6 +747,9 @@ async fn a_prompt_to_a_busy_native_session_waits_for_its_turn_then_submits() {
         .await
         .unwrap();
     let session = adapter.session(&json!({"sessionId":id})).unwrap();
+    if recover {
+        *session.live.lock().await = None;
+    }
     session.prompt_pending.store(true, Ordering::SeqCst);
     let mut file = std::fs::OpenOptions::new()
         .append(true)
@@ -853,6 +869,7 @@ async fn session_list_names_stored_sessions_whose_herdr_agent_still_runs() {
                 native_id: None,
                 transcript: None,
                 started,
+                window: None,
             })
             .unwrap();
     }

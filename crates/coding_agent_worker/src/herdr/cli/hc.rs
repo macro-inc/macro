@@ -46,6 +46,8 @@ pub(super) struct Terminal {
     state: String,
     cwd: String,
     #[serde(default)]
+    pid: Option<u32>,
+    #[serde(default)]
     labels: Option<std::collections::BTreeMap<String, String>>,
     #[serde(default)]
     status: Option<Status>,
@@ -63,6 +65,10 @@ struct Status {
 #[derive(Debug, Deserialize)]
 struct Foreground {
     name: String,
+    #[serde(default)]
+    pid: Option<u32>,
+    #[serde(default)]
+    cwd: Option<PathBuf>,
 }
 
 impl Terminal {
@@ -92,6 +98,12 @@ impl Terminal {
             return Err(HerdrError::Ended);
         }
         Ok(AgentInfo {
+            window: self.label(TAB_LABEL).map(|tab| Window {
+                workspace_id: None,
+                tab_id: tab.to_owned(),
+                pane_id: self.address.clone(),
+            }),
+            workspace_id: self.label(SPACE_LABEL).map(str::to_owned),
             status: self
                 .status
                 .map(|status| status.state)
@@ -104,42 +116,12 @@ impl Terminal {
 }
 
 impl Core {
-    /// Add a worktree of `source` at `path` on a new branch from the
-    /// freshly fetched main. Core has no worktree concept; git does it.
-    pub(super) async fn create_worktree(
-        &self,
-        source: &Path,
-        path: &Path,
-        branch: &str,
-    ) -> rootcause::Result<()> {
-        crate::outbound::git::git(
-            source,
-            &[
-                "worktree",
-                "add",
-                "-b",
-                branch,
-                &path.to_string_lossy(),
-                "origin/main",
-            ],
-        )
-        .await
-        .map(drop)
-    }
-
     /// Start a shell in a new tab, then replace it with the agent, so the
     /// agent gets the operator's login environment (PATH, direnv) as it
     /// would in a terminal they opened themselves.
-    pub(super) async fn launch_agent(
-        &self,
-        launch: &AgentLaunch<'_>,
-    ) -> Result<Window, HerdrError> {
+    pub(super) async fn open_agent(&self, launch: &AgentLaunch<'_>) -> Result<Window, HerdrError> {
         self.clear(launch.name).await;
-        // A worktree opens as its own space, as herdr's worktree workspaces did.
-        let space = match launch.worktree_source {
-            Some(_) => new_id(),
-            None => self.space().await,
-        };
+        let space = new_id();
         let tab = new_id();
         let terminal = self
             .start(
@@ -151,6 +133,26 @@ impl Core {
                 &[],
             )
             .await?;
+        self.app("space.rename", json!({"id": space, "name": launch.label}))
+            .await;
+        self.app("tab.rename", json!({"id": tab, "name": launch.label}))
+            .await;
+        if launch.focus {
+            self.app("agent.focus", json!({"terminal": terminal.address}))
+                .await;
+        }
+        Ok(Window {
+            workspace_id: Some(space),
+            tab_id: tab,
+            pane_id: terminal.address,
+        })
+    }
+
+    pub(super) async fn start_in_window(
+        &self,
+        launch: &AgentLaunch<'_>,
+        window: &Window,
+    ) -> Result<(), HerdrError> {
         let mut line = String::new();
         if let Some(environment) = launch.environment {
             line.push_str(&format!(
@@ -162,19 +164,55 @@ impl Core {
         command.extend(launch.args.iter().cloned());
         line.push_str("exec ");
         line.push_str(&shell_words::join(&command));
-        self.run(&["send", &terminal.address, &line]).await?;
-        self.wait_ready(launch).await?;
-        tracing::debug!(terminal = %terminal.address, agent = launch.kind, "agent ready in herdr-core");
-        self.app("tab.rename", json!({"id": tab, "name": launch.label}))
-            .await;
-        if launch.focus {
-            self.app("agent.focus", json!({"terminal": terminal.address}))
-                .await;
+        self.run(&["send", &window.pane_id, &line]).await?;
+        self.wait_ready(launch.name, launch.kind, launch.reports_status)
+            .await?;
+        tracing::debug!(terminal = %window.pane_id, agent = launch.kind, "agent ready in herdr-core");
+        Ok(())
+    }
+
+    pub(super) async fn existing_window(
+        &self,
+        window: &Window,
+        cwd: &Path,
+    ) -> Result<Option<Window>, HerdrError> {
+        let terminal = match self.get(&window.pane_id).await {
+            Err(error) if error.missing_agent() => return Ok(None),
+            result => result?,
+        };
+        if terminal.state != "live" {
+            return Ok(None);
         }
-        Ok(Window {
+        let shell = terminal.foreground.as_ref().is_some_and(|foreground| {
+            matches!(
+                foreground.name.as_str(),
+                "sh" | "bash" | "zsh" | "fish" | "nu"
+            ) && foreground.cwd.as_deref() == Some(cwd)
+                && terminal
+                    .pid
+                    .is_some_and(|pid| pid > 0 && foreground.pid == Some(pid))
+        });
+        if terminal.status.is_some() || !shell {
+            return Err(HerdrError::NotReady);
+        }
+        let tab = terminal
+            .label(TAB_LABEL)
+            .ok_or(HerdrError::NotReady)?
+            .to_owned();
+        Ok(Some(Window {
+            workspace_id: window
+                .workspace_id
+                .as_ref()
+                .filter(|id| terminal.label(SPACE_LABEL) == Some(id.as_str()))
+                .cloned(),
             tab_id: tab,
             pane_id: terminal.address,
-        })
+        }))
+    }
+
+    pub(super) async fn close_window(&self, window: &Window) -> Result<(), HerdrError> {
+        self.run(&["kill", &window.pane_id]).await?;
+        self.run(&["rm", &window.pane_id]).await.map(drop)
     }
 
     pub(super) async fn open_viewer(
@@ -186,6 +224,7 @@ impl Core {
         let tab = new_id();
         let terminal = self.start(None, cwd, &space, &tab, &[], command).await?;
         Ok(Window {
+            workspace_id: None,
             tab_id: tab,
             pane_id: terminal.address,
         })
@@ -255,41 +294,53 @@ impl Core {
     /// status is ready once its screen stops changing; one that does must
     /// say so, or it is likely on a dialog (folder trust, sign-in) where a
     /// typed prompt would answer the wrong question.
-    async fn wait_ready(&self, launch: &AgentLaunch<'_>) -> Result<(), HerdrError> {
+    #[tracing::instrument(
+        name = "macrod.herdr.wait_ready",
+        skip_all,
+        fields(agent_id = name, kind = kind, reports_status = reports_status, outcome = "failed"),
+        err
+    )]
+    pub(super) async fn wait_ready(
+        &self,
+        name: &str,
+        kind: &str,
+        reports_status: bool,
+    ) -> Result<(), HerdrError> {
         let deadline = tokio::time::Instant::now() + AGENT_READY_TIMEOUT;
         let mut screen = String::new();
         let mut settled = 0u32;
         while tokio::time::Instant::now() < deadline {
             tokio::time::sleep(AGENT_READY_POLL).await;
-            let terminal = self.get(launch.name).await?;
+            let terminal = self.get(name).await?;
             if terminal.state != "live" {
+                tracing::Span::current().record("outcome", "ended");
                 return Err(HerdrError::Ended);
             }
             if let Some(status) = &terminal.status {
                 if status.state != "working" {
+                    tracing::Span::current().record("outcome", "ready");
                     return Ok(());
                 }
                 continue;
             }
-            if launch.reports_status
+            if reports_status
                 || !terminal
                     .foreground
                     .as_ref()
-                    .is_some_and(|foreground| foreground.name.contains(launch.kind))
+                    .is_some_and(|foreground| foreground.name.contains(kind))
             {
                 continue;
             }
-            let current = self.read_agent(launch.name).await?;
+            let current = self.read_agent(name).await?;
             settled = if current == screen { settled + 1 } else { 0 };
             screen = current;
             if settled >= SETTLED_POLLS {
+                tracing::Span::current().record("outcome", "ready");
                 return Ok(());
             }
         }
-        if launch.reports_status {
-            return Err(HerdrError::NotReady);
-        }
-        Ok(())
+        tracing::Span::current().record("outcome", "not_ready");
+        Err(HerdrError::NotReady)
     }
 
     /// Remove a previous terminal of this name: a finished one keeps its

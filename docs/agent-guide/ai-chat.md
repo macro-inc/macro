@@ -646,6 +646,12 @@ the shimmer.
   creates a managed worktree from a fresh `origin/main`. **Branch** shows `main`
   and cannot be changed for local sessions. The native Claude/Codex TUI remains
   interactive in Herdr, and local turns appear in the Macro transcript.
+  New native sessions open independent top-level Herdr workspaces, rather than
+  joining the repository's existing workspace group. The initial name uses the
+  visible prompt, omitting runtime/context headers and leading mention payloads.
+  Rename the workspace or tab in Herdr; later prompts and reconnects preserve it.
+  Verify two sessions for the same repository remain separate, then rename one
+  and reload its Macro session without creating another workspace.
 - Sending starts a session with the chosen agent's configured default model;
   a model selected from its submenu overrides that default for the next send
   only. Sending or choosing another agent clears the override. This does not
@@ -728,13 +734,13 @@ the shimmer.
   The setup guide contains configuration and pairing screenshots in that order.
   Enter the code from your own terminal, not the example screenshot.
   Run inside a herdr pane, macrod's Quickstart also offers **Claude Code in herdr**
-  and **Codex in herdr**: each session of an agent on that runtime opens a herdr
-  tab in the directory macrod started from, running the real Claude Code or Codex
+  and **Codex in herdr**: each session opens an independent workspace rooted in
+  its prepared worktree, running the real Claude Code or Codex
   TUI. The session page streams its tool calls and replies, and its permission
   prompts appear as approvals. Other runtimes started inside herdr get a live
   view tab per session that can prompt and interrupt it; approvals stay in Macro.
   This works in herdr 0.9 and in the herdr app (herdr-core, with `hc` on `PATH`),
-  where session tabs open in macrod's space. Under herdr-core, Codex reports no
+  where native session tabs have their own spaces. Under herdr-core, Codex reports no
   status, so its permission prompts must be answered in Herdr; see "Herdr
   versions" in `crates/coding_agent_worker/README.md`.
   Native Herdr sessions offer `/compact`, `/init`, and `/fast` in the slash menu;
