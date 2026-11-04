@@ -2,7 +2,8 @@ import type { EmailFocusQuery } from '@service-storage/graphql/generated/graphql
 import { describe, expect, it, vi } from 'vitest';
 import { mapEmailFocus } from './focus';
 
-// Exercise the pure mapping without UI barrels or live connections.
+// Exercise the pure mapping without UI barrels or live connections. Separate
+// from focus.test.ts, which mocks this mapping away to test the query binding.
 vi.mock('@graphql-cache/solid/create-live-query', () => ({
   createLiveQuery: vi.fn(),
 }));

@@ -61,7 +61,7 @@ function tabCopy(tab: EmailTab): { title: string; description: string } {
     }))
     .with('focus', () => ({
       title: "You're caught up",
-      description: `Signal email worth your attention from the last ${FOCUS_WINDOW_DAYS} days appears here.`,
+      description: `Email worth your attention from the last ${FOCUS_WINDOW_DAYS} days appears here.`,
     }))
     .with('spam', () => ({
       title: 'No spam',
