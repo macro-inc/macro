@@ -1064,6 +1064,12 @@ export const listTypedNotificationsResponse = zod
                             .enum(['free', 'premium'])
                             .optional()
                             .describe('What a team invitee gets by joining.'),
+                          isAgent: zod
+                            .boolean()
+                            .optional()
+                            .describe(
+                              'Whether the invite creates an agent account.'
+                            ),
                           reminder: zod
                             .boolean()
                             .optional()
@@ -3113,6 +3119,12 @@ export const bulkGetTypedNotificationsByEventItemIdsResponse = zod
                             .enum(['free', 'premium'])
                             .optional()
                             .describe('What a team invitee gets by joining.'),
+                          isAgent: zod
+                            .boolean()
+                            .optional()
+                            .describe(
+                              'Whether the invite creates an agent account.'
+                            ),
                           reminder: zod
                             .boolean()
                             .optional()
@@ -5156,6 +5168,12 @@ export const getTypedNotificationsByEventItemIdResponse = zod
                             .enum(['free', 'premium'])
                             .optional()
                             .describe('What a team invitee gets by joining.'),
+                          isAgent: zod
+                            .boolean()
+                            .optional()
+                            .describe(
+                              'Whether the invite creates an agent account.'
+                            ),
                           reminder: zod
                             .boolean()
                             .optional()
@@ -7138,6 +7156,10 @@ export const getTypedNotificationByIdResponse = zod
                     .enum(['free', 'premium'])
                     .optional()
                     .describe('What a team invitee gets by joining.'),
+                  isAgent: zod
+                    .boolean()
+                    .optional()
+                    .describe('Whether the invite creates an agent account.'),
                   reminder: zod
                     .boolean()
                     .optional()

@@ -78,6 +78,11 @@ backend-free phone and tablet regression:
 Keep the zoomed image laid out at its zoomed size, translating only: WebKit
 rasterizes an `<img>` at its layout size, so a `scale()` transform blurs it.
 
+The emoji reaction picker renders only the rows in view (about 1,900 emojis
+otherwise); its backend-free regression opens it, scrolls to the last group,
+searches, and picks by keyboard:
+`bunx playwright test --config src/lib/core/component/Emoji/browser-test/playwright.config.ts`.
+
 Discussion link scrolling has a backend-free browser regression:
 `bunx playwright test --config src/lib/core/messages/browser-test/playwright.config.ts`.
 The Dialpad row in Settings (connect, backfill choice, reconnect) has a
@@ -418,6 +423,8 @@ resolved session ID; keep the existing `AgentSessionProvider` subscription to
   Record search fills the row beside filters with header spacing; section creation
   replaces the default floating dock action through FloatRegion. See
   `src/features/crm/README.md` and `docs/agent-guide/crm.md` at the repo root.
+  Keep record Remove/Restore actions out of the information panel: contact Sharing
+  is absent, and company Sharing contains only permission-gated Sync Emails.
   Company Team lists exclude hidden contacts for every role; keep authorized
   detail/restore access and invalidate embedded company contacts on hide/restore.
   People display options expose removed records only after an explicit admin/owner
@@ -1020,10 +1027,12 @@ while preparing a share, retain the bytes and let the same action's next tap
 open the system sheet synchronously. Browser success means handoff, not confirmed
 disk completion. See the native bridge's `tauri/file_export_plugin/AGENTS.md`.
 Keep download confirmations title-only and lightbox Download controls icon-only.
+Keep the expanded video first in the dialog's tab order so initial Space presses
+control native playback; restore focus to its opener on close.
 
 The backend-free browser regression downloads real fixture bytes from channel
 cards, the expanded viewer, and the shared Drive/standalone header on desktop,
-phone, and tablet:
+phone, and tablet, and checks Space playback on opening and reopening the viewer:
 `bunx playwright test --config src/lib/core/component/FileDownload/browser-test/playwright.config.ts`.
 See the [download walkthrough](../../docs/agent-guide/files.md#downloading-files).
 

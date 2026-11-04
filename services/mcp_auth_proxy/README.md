@@ -28,6 +28,15 @@ with `Referrer-Policy: no-referrer`, so FusionAuth sees no client origin and
 third-party clients need no entry in the FusionAuth origin list. Whether a
 client may sign in is decided only by its redirect URI.
 
+## How a user signs in
+
+`/authorize` sends the browser straight to Google through FusionAuth. Clients on
+`SIGN_IN_CHOICE_HOSTS` (ChatGPT) get a small chooser first: Google, or
+FusionAuth's own login page, where an account with a password can sign in.
+OpenAI's reviewers need that path, because a shared Google account trips
+Google's challenges. The chooser stores nothing; each link is the same
+`/authorize` request with `sign_in` added.
+
 ## Which redirect URIs are usable
 
 Dynamic client registration is open, because MCP clients require it. That means

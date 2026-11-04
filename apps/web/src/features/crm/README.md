@@ -65,7 +65,8 @@ CRM-specific state again.
 Company Overview and contact headers expose `RecordVisibilityAction` for removal
 and restoration through the existing hidden mutations. Keep admin/owner checks,
 confirmation of the company-wide contact cascade, and the restore action on the
-open record. The information panel's visibility checkbox uses the same state.
+open record. Do not duplicate visibility controls in the information panel: contacts
+have no Sharing section, and company Sharing contains only Sync Emails.
 Company Team lists filter hidden contacts for every role without changing the
 underlying response or admin detail access. Contact visibility mutations invalidate
 the company query family because those responses embed contacts: mounted lists

@@ -21,7 +21,7 @@ field access, resolved from the caller's team memberships.
 
 ### invite()
 
-> **invite**(`emails`): `Promise`\<`boolean`\>
+> **invite**(`emails`, `options?`): `Promise`\<`boolean`\>
 
 Invite people to this team by email; only invite addresses the user asked
 you to invite. Each new address is emailed an invite in the caller's name.
@@ -36,11 +36,19 @@ nothing, when that is no longer the caller's team. A team that limits
 inviting to admins rejects other members, and teams without an
 enterprise plan accept a limited number of invites per day.
 
+Pass `{ agent: true }` to invite the addresses as agents. An agent invite
+to an address with no account creates an agent account when that address
+signs in: it skips onboarding, gets an SDK token, and joins this team, using
+a paid seat when the team has a subscription. An existing account keeps its
+type and accepts like any other invite.
+
 #### Parameters
 
 | Parameter | Type | Description |
 | ------ | ------ | ------ |
 | `emails` | `string` \| readonly `string`[] | One address or a list of addresses to invite. |
+| `options?` | \{ `agent?`: `boolean`; \} | `agent` invites the addresses as agents. |
+| `options.agent?` | `boolean` | - |
 
 #### Returns
 

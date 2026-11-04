@@ -1,3 +1,4 @@
+use crate::api::webhooks::user::create_user_webhook::revert_unconfirmed_agent;
 use crate::api::{
     context::ApiContext,
     login::sso::{SsoState, is_allowed_original_url, redact_original_url_for_logging},
@@ -155,6 +156,11 @@ pub async fn handler(
         }
         Err(_) => false,
     };
+
+    // A provider just verified this address, so a person is signing in.
+    if !just_signed_up && let Ok(user_id) = decoded_user_id.as_ref() {
+        revert_unconfirmed_agent(&ctx, user_id.as_ref(), user_id.email_str()).await;
+    }
 
     // Only a brand-new account counts as referred: an existing user who signs
     // in through a referral link earns the referrer nothing.

@@ -254,9 +254,9 @@ email sync off; re-enable **Sync Emails** under the information panel's **Sharin
 section if needed. A company's Team tab excludes hidden contacts for every role,
 including search results. Admins can find removed contacts in People display options and retain direct-link
 access for restoration. Removing or restoring a person refreshes open company Team lists;
-returning to a previously visited company reloads its contacts. The existing
-**Sharing → Visible in CRM** checkbox and company row **Hide /
-Unhide** actions control the same state.
+returning to a previously visited company reloads its contacts. Company row
+**Hide / Unhide** actions control the same state. The information panel has no
+visibility toggle; company Sharing contains only **Sync Emails**.
 Restoring a person under a hidden company does not make them appear in People
 until that company is restored too. People without a company can be restored
 directly; a person without a name or email is labeled **Contact** in the confirmation.
@@ -354,8 +354,8 @@ interacted`, followed by the contact's Pipelines cards. Its Files, Tasks, Calls,
 and References show items associated with the contact itself (its `Contacts`
 property or an @mention of it), not everything associated with its company;
 Files also includes attachments of emails with its address. Tasks created from a
-contact also reference its company. The side panel keeps Sharing (admins only)
-and adds References.
+contact also reference its company. The side panel contains References, with no
+empty Sharing section.
 
 In workspace activity and a company or contact's embedded sections, clicking a
 Task, Email, Note, Call, or Database opens its authorized detail inside Customers.
