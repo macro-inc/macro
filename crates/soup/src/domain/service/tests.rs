@@ -46,6 +46,7 @@ use super::*;
 
 mod agent_metadata;
 mod crm_association;
+mod crm_scope;
 mod exclusions;
 mod favorites;
 mod work_feed;
