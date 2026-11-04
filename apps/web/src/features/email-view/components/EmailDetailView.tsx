@@ -294,7 +294,7 @@ export function EmailDetailView(props: {
               source={source}
               threadTransport={() => threadQuery.transport}
               host={host}
-              chrome={({ createTask }) => (
+              chrome={({ createTask, createEvent, canCreateEvent }) => (
                 <EmailDetailHeader
                   onEmailReminderSaved={async () => {
                     await listNavigation.afterReminderSaved?.();
@@ -302,6 +302,8 @@ export function EmailDetailView(props: {
                   id={props.thread.id}
                   title={title()}
                   onCreateTask={createTask}
+                  onCreateEvent={createEvent}
+                  canCreateEvent={canCreateEvent}
                   onMarkedUnread={closeThread}
                   onDeleted={closeThread}
                   listNavigation={listNavigation}

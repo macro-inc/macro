@@ -1,20 +1,28 @@
+import { defaultEditorInitialValues } from '@app/features/calendar/components/composer/event-form-model';
+import { useCalendarUiFlag } from '@app/features/calendar/hooks/use-calendar-ui-flag';
+import { useOpenEventComposer } from '@app/features/calendar-view/components/use-open-event-composer';
 import { openCalendarEventSplit } from '@app/features/calendar-view/open-calendar-event';
 import { AskMacroButton } from '@app/features/chat/ChatWithAgentButton';
+import { isPlaceholderSubject } from '@app/features/email-compose/core/subject-text';
 import type {
   EmailThreadHost,
   EmailThreadSource,
 } from '@app/features/email-thread/context/email-thread-context';
 import { useEmailThreadState } from '@app/features/email-thread/context/email-thread-state-context';
+import { selectThreadParticipants } from '@app/features/email-thread/core/thread-messages';
 import {
   EmailThread,
   type EmailThreadProps,
 } from '@app/features/email-thread/email-thread';
+import { useQuickCallsFlag } from '@app/features/meetings/use-quick-calls-flag';
 import { HeaderActionGroup } from '@components/app/HeaderActionGroup';
 import { SidePanel } from '@components/app/side-panel';
 import { useSplitLayout } from '@components/app/split-layout/layout';
+import { useEmail } from '@core/context/user';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import { fireAndForget } from '@core/util/fireAndForget';
 import { buildMentionMarkdownString } from '@macro-inc/lexical-core';
+import { useInboxEmail } from '@queries/email/inbox-email';
 import type { Accessor, JSX } from 'solid-js';
 import { Show } from 'solid-js';
 import { QueuedSendStatus } from '../email-compose/queued-send-status';
@@ -23,6 +31,8 @@ import { EmailSidePanelSections } from './component/sidepanel/EmailSidePanelSect
 
 export type EmailThreadHostViewContext = {
   createTask: () => void;
+  createEvent: () => boolean;
+  canCreateEvent: () => boolean;
 };
 
 export type EmailThreadHostViewProps = {
@@ -60,6 +70,46 @@ export function EmailThreadHostView(props: EmailThreadHostViewProps) {
       },
     });
 
+  const calendarEnabled = useCalendarUiFlag();
+  const quickCalls = useQuickCallsFlag();
+  const openEventComposer = useOpenEventComposer();
+  const viewerEmail = useInboxEmail(() => props.source.thread()?.link_id);
+  const loginEmail = useEmail();
+  const canCreateEvent = () => calendarEnabled() && !!props.source.thread();
+  const createEvent = () => {
+    const thread = props.source.thread();
+    if (!thread || !calendarEnabled()) return false;
+    openEventComposer({
+      initialValues: {
+        ...defaultEditorInitialValues(
+          new Date(),
+          quickCalls().enabled && !quickCalls().loading
+        ),
+        title: isPlaceholderSubject(props.title) ? '' : props.title,
+        guests: selectThreadParticipants(
+          thread,
+          viewerEmail(),
+          loginEmail()
+        ).join(', '),
+      },
+    });
+    return true;
+  };
+  const context: EmailThreadHostViewContext = {
+    createTask,
+    createEvent,
+    canCreateEvent,
+  };
+  const host: EmailThreadHost = {
+    ...props.host,
+    registerKeyboard: (handlers) =>
+      props.host.registerKeyboard?.({
+        ...handlers,
+        createEvent,
+        canCreateEvent,
+      }),
+  };
+
   return (
     <EmailThread
       title={props.title}
@@ -67,15 +117,15 @@ export function EmailThreadHostView(props: EmailThreadHostViewProps) {
       threadId={props.threadId}
       source={props.source}
       threadTransport={props.threadTransport}
-      host={props.host}
+      host={host}
       openCalendar={(target) => {
         fireAndForget(openCalendarEventSplit(target), 'email-thread');
       }}
-      header={props.topBar?.({ createTask })}
+      header={props.topBar?.(context)}
       actions={<ThreadActions title={props.title} onCreateTask={createTask} />}
       frame={(content) => (
         <>
-          {props.chrome?.({ createTask })}
+          {props.chrome?.(context)}
           <QueuedSendStatus threadId={props.threadId()} />
           <SidePanel.Layout
             floating
