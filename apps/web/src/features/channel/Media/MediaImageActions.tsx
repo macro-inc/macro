@@ -2,12 +2,13 @@ import {
   createImageActions,
   ImageActionButtons,
 } from '@core/component/ImageActions';
+import { cn } from '@ui';
 import type { MediaItem } from './media-items';
 
 /**
  * Copy / download affordances for an image rendered inline in a message,
- * mirroring the lightbox toolbar. Call sites render this inside a
- * `group/media` positioned container.
+ * mirroring the lightbox toolbar and styled like the inline video toolbar.
+ * Call sites render this inside a `group/media` positioned container.
  *
  * Only mount this for pointer devices: `createImageActions` pre-fetches the
  * full-resolution blob on iOS, which would mean downloading every inline image
@@ -20,14 +21,14 @@ export function MediaImageActions(props: { item: MediaItem }) {
   });
 
   return (
-    // Tailwind's hover variant is gated on `@media (hover: hover)`, so a
-    // pointer that cannot hover would otherwise leave invisible buttons
-    // sitting on top of the image.
     <div
-      class="absolute top-2 right-2 flex flex-row items-center gap-0.5 rounded-lg border border-edge bg-surface p-0.5 opacity-0 shadow-md backdrop-blur-sm transition-opacity duration-150 group-hover/media:opacity-100 focus-within:opacity-100 [@media(hover:none)]:opacity-100"
+      class={cn(
+        'absolute right-2 top-2 z-10 flex items-center rounded-full bg-surface/90 opacity-0 transition-opacity group-hover/media:opacity-100 group-focus-within/media:opacity-100',
+        actions.isBusy() && 'opacity-100'
+      )}
       onClick={(event) => event.stopPropagation()}
     >
-      <ImageActionButtons actions={actions} size="icon-sm" />
+      <ImageActionButtons actions={actions} />
     </div>
   );
 }

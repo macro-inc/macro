@@ -1,8 +1,8 @@
 import { cleanup, render, screen } from '@solidjs/testing-library';
 import userEvent from '@testing-library/user-event';
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
-import { MediaGrid } from './MediaGrid';
-import type { MediaItem } from './media-items';
+import { MediaGrid } from '../MediaGrid';
+import type { MediaItem } from '../media-items';
 
 const isTouchDevice = vi.hoisted(() => vi.fn(() => false));
 const imageActions = vi.hoisted(() => ({

@@ -327,16 +327,16 @@ show whatever has arrived so far.
 
 ## Inline image actions
 
-An image attached to a channel message renders inline. Hovering it reveals a
-small toolbar at its top right with `Copy image` and `Download image`, the same
-two actions the lightbox offers; both fade out when the pointer leaves and are
-reachable by keyboard focus. Copy writes the full-resolution image to the
+An image attached to a channel message renders inline. Hovering it, or focusing
+it with the keyboard, reveals a small toolbar at its top right with
+`Copy image` and `Download image`, the same two actions the lightbox offers;
+it fades out when the pointer leaves and stays up while an action runs. Copy writes the full-resolution image to the
 clipboard (`Copied to clipboard`, or `Copied image URL to clipboard` when the
 browser refuses an image write) and Download saves it as
 `image-<attachment id>.<ext>` (`Downloaded image`). Clicking the image itself
 still opens the lightbox. Touch layouts do not get this toolbar: tap the image
-and use the lightbox toolbar instead. Video attachments keep only their
-expand control.
+and use the lightbox toolbar instead. Videos have their own toolbar; see
+[Downloading channel videos](#downloading-channel-videos).
 
 ## Reading channel attachments through MCP
 
