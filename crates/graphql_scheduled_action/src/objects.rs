@@ -87,8 +87,19 @@ pub(crate) struct GraphqlScheduledActionEventFilter {
     github: Option<GraphqlScheduledActionGithubSelector>,
     /// Exact payload tests a GitHub delivery must pass, as a reader would state them.
     payload_match: Vec<String>,
+    /// The task property that must have changed, and the values it must gain.
+    property: Option<GraphqlScheduledActionPropertySelector>,
     /// Yes/no question the triggering content must answer with yes before the routine runs.
     condition: Option<String>,
+}
+
+/// A task property a filter watches.
+#[derive(SimpleObject)]
+pub(crate) struct GraphqlScheduledActionPropertySelector {
+    /// The property definition that must have changed.
+    definition_id: ID,
+    /// Select option or referenced entity ids, one of which the change must add. Empty matches any change.
+    values: Vec<String>,
 }
 
 /// GitHub deliveries a filter watches. Empty lists match everything.
@@ -320,6 +331,12 @@ fn event_filters(
                             .collect()
                     })
                     .unwrap_or_default(),
+                property: filter.property().map(|selector| {
+                    GraphqlScheduledActionPropertySelector {
+                        definition_id: ID(selector.definition_id().to_string()),
+                        values: selector.values().to_vec(),
+                    }
+                }),
                 condition: filter
                     .condition()
                     .map(|condition| condition.as_str().to_owned()),

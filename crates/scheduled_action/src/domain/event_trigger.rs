@@ -38,11 +38,13 @@ use super::models::Schedule;
 
 mod github_selector;
 mod payload_match;
+mod property_selector;
 
 pub use github_selector::{GithubSelector, GithubSelectorError, GithubSelectorInput};
 pub use payload_match::{
     PayloadConditionInput, PayloadConditions, PayloadMatchError, PayloadScalar,
 };
+pub use property_selector::{PropertyChange, PropertySelector, PropertyValuesError};
 
 #[cfg(test)]
 mod test;
@@ -352,6 +354,10 @@ pub enum FilterValidationError {
     GithubSelector,
     #[error("only github filters take a payload match")]
     PayloadMatch,
+    #[error("a property selector needs task property change events that report its property")]
+    PropertyEvents,
+    #[error(transparent)]
+    PropertyValues(#[from] PropertyValuesError),
     #[error(transparent)]
     Github(#[from] GithubSelectorError),
     #[error(transparent)]
@@ -380,6 +386,9 @@ pub struct EventFilter {
     #[serde(rename = "match", skip_serializing_if = "Option::is_none")]
     #[schema(value_type = Option<Vec<PayloadConditionInput>>)]
     payload: Option<PayloadConditions>,
+    /// The task property that must have changed, and the values it must gain.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    property: Option<PropertySelector>,
     /// Yes/no question about the triggering content, e.g. "Is this email an
     /// invoice?". The routine runs only when the answer is yes.
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -398,6 +407,8 @@ struct FilterInput {
     #[serde(default, rename = "match")]
     payload: Option<PayloadConditions>,
     #[serde(default)]
+    property: Option<PropertySelector>,
+    #[serde(default)]
     condition: Option<YesNoQuestion>,
 }
 
@@ -407,6 +418,7 @@ impl TryFrom<FilterInput> for EventFilter {
     fn try_from(input: FilterInput) -> Result<Self, Self::Error> {
         Self::new(input.events, input.ids)?
             .with_condition(input.condition)
+            .with_property(input.property)?
             .with_external(input.github, input.payload)
     }
 }
@@ -439,6 +451,7 @@ impl EventFilter {
             ids,
             github: None,
             payload: None,
+            property: None,
             condition: None,
         })
     }
@@ -446,6 +459,27 @@ impl EventFilter {
     pub fn with_condition(mut self, condition: Option<YesNoQuestion>) -> Self {
         self.condition = condition;
         self
+    }
+
+    /// Narrow task property change events to one property and its new values.
+    pub fn with_property(
+        mut self,
+        property: Option<PropertySelector>,
+    ) -> Result<Self, FilterValidationError> {
+        let Some(property) = property else {
+            self.property = None;
+            return Ok(self);
+        };
+        let reporting_event = task_property_event_name(Some(property.definition_id()));
+        let reported = self
+            .events
+            .iter()
+            .all(|name| *name == reporting_event || *name == EventName::TaskPropertyChanged);
+        if !reported {
+            return Err(FilterValidationError::PropertyEvents);
+        }
+        self.property = Some(property.canonicalized()?);
+        Ok(self)
     }
 
     /// Attach the GitHub selector and payload match an external filter takes.
@@ -483,6 +517,10 @@ impl EventFilter {
         self.payload.as_ref()
     }
 
+    pub fn property(&self) -> Option<&PropertySelector> {
+        self.property.as_ref()
+    }
+
     pub fn condition(&self) -> Option<&YesNoQuestion> {
         self.condition.as_ref()
     }
@@ -495,8 +533,16 @@ impl EventFilter {
                 .is_some_and(|general| self.events.contains(&general));
         named
             && match &event.source {
-                EventSource::Entity { entity_id, .. } => {
+                EventSource::Entity {
+                    entity_id,
+                    property_change,
+                    ..
+                } => {
                     self.ids.as_ref().is_none_or(|ids| ids.contains(entity_id))
+                        && self
+                            .property
+                            .as_ref()
+                            .is_none_or(|selector| selector.accepts(property_change.as_ref()))
                 }
                 EventSource::Github(delivery) => {
                     self.github
@@ -551,6 +597,23 @@ impl EventFilters {
 
     pub fn has_conditions(&self) -> bool {
         self.0.iter().any(|filter| filter.condition.is_some())
+    }
+
+    /// What a run of this routine keeps of `event`: only routines that test
+    /// property changes keep them.
+    pub fn run_event(&self, event: &EventReference) -> EventReference {
+        let mut kept = event.clone();
+        let tests_properties = self.0.iter().any(|filter| filter.property.is_some());
+        if let (
+            false,
+            EventSource::Entity {
+                property_change, ..
+            },
+        ) = (tests_properties, &mut kept.source)
+        {
+            *property_change = None;
+        }
+        kept
     }
 
     pub fn watches_github(&self) -> bool {
@@ -648,6 +711,7 @@ pub enum EventSource {
         entity_id: Uuid,
         message_id: Option<Uuid>,
         change_source: Option<PropertyChangeSource>,
+        property_change: Option<PropertyChange>,
     },
     /// A delivery from Macro's GitHub App. Boxed: it carries its payload.
     Github(Box<GithubWebhookReceived>),
@@ -667,6 +731,8 @@ struct EventReferenceInput {
     github: Option<Box<GithubWebhookReceived>>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     change_source: Option<PropertyChangeSource>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    property_change: Option<PropertyChange>,
 }
 
 fn skip_message_id(message_id: &Option<Option<Uuid>>) -> bool {
@@ -688,10 +754,13 @@ impl TryFrom<EventReferenceInput> for EventReference {
                     entity_id,
                     message_id,
                     change_source: input.change_source,
+                    property_change: input.property_change,
                 }
             }
             (None, Some(delivery))
-                if name == EventName::Github && input.change_source.is_none() =>
+                if name == EventName::Github
+                    && input.change_source.is_none()
+                    && input.property_change.is_none() =>
             {
                 EventSource::Github(delivery)
             }
@@ -714,16 +783,19 @@ impl From<EventReference> for EventReferenceInput {
             message_id: None,
             github: None,
             change_source: None,
+            property_change: None,
         };
         match event.source {
             EventSource::Entity {
                 entity_id,
                 message_id,
                 change_source,
+                property_change,
             } => {
                 input.entity_id = Some(entity_id);
                 input.message_id = Some(message_id);
                 input.change_source = change_source;
+                input.property_change = property_change;
             }
             EventSource::Github(delivery) => input.github = Some(delivery),
         }
@@ -874,6 +946,7 @@ impl IncomingEvent {
         }
         let event_id = EventId::try_from(self.event_id)?;
         let mut change_source = None;
+        let mut property_change = None;
         let (event_name, entity_id, message_id) = match &self.payload {
             EventPayload::Document(event) => {
                 let (name, id) = match event {
@@ -960,10 +1033,12 @@ impl IncomingEvent {
                 MessageFact::Other => return Err(EventRejection::UnsupportedEvent),
             },
             EventPayload::Property(event) => {
-                let (name, id, property_source) = task_property_event(event)?;
-                let id = Uuid::parse_str(id).map_err(|_| EventRejection::InvalidEntityId)?;
-                change_source = property_source;
-                (name, id, None)
+                let task_event = task_property_event(event)?;
+                let id = Uuid::parse_str(task_event.entity_id)
+                    .map_err(|_| EventRejection::InvalidEntityId)?;
+                change_source = task_event.source;
+                property_change = task_event.change;
+                (task_event.name, id, None)
             }
             EventPayload::Email(EmailTopicEvent::MessageReceived(data)) => {
                 // The email domain emits this only for newly received mail,
@@ -1011,15 +1086,33 @@ impl IncomingEvent {
                 entity_id,
                 message_id,
                 change_source,
+                property_change,
             },
         })
     }
 }
 
+/// The event a change to this property publishes; `None` when several properties
+/// changed at once.
+fn task_property_event_name(definition_id: Option<Uuid>) -> EventName {
+    match definition_id {
+        Some(SystemPropertyKey::STATUS_UUID) => EventName::TaskStatusChanged,
+        Some(SystemPropertyKey::PRIORITY_UUID) => EventName::TaskPriorityChanged,
+        _ => EventName::TaskPropertyChanged,
+    }
+}
+
+struct TaskPropertyEvent<'event> {
+    name: EventName,
+    entity_id: &'event str,
+    source: Option<PropertyChangeSource>,
+    change: Option<PropertyChange>,
+}
+
 fn task_property_event(
     event: &PropertyTopicEvent,
-) -> Result<(EventName, &str, Option<PropertyChangeSource>), EventRejection> {
-    let (entity_type, entity_id, property_id, actor, fallback, delegated, source) = match event {
+) -> Result<TaskPropertyEvent<'_>, EventRejection> {
+    let (entity_type, entity_id, change, actor, fallback, delegated, source) = match event {
         PropertyTopicEvent::EntityPropertyUpdated(data) => {
             if data.value == data.previous_value {
                 return Err(EventRejection::UnsupportedEvent);
@@ -1027,7 +1120,11 @@ fn task_property_event(
             (
                 &data.entity_type,
                 data.entity_id.as_str(),
-                Some(data.property_definition_id),
+                Some(PropertyChange::updated(
+                    data.property_definition_id,
+                    data.value.as_ref(),
+                    data.previous_value.as_ref(),
+                )),
                 data.actor.as_ref(),
                 data.actor_user_id.as_ref(),
                 data.on_behalf_of.is_some(),
@@ -1037,7 +1134,7 @@ fn task_property_event(
         PropertyTopicEvent::EntityPropertyDeleted(data) => (
             &data.entity_type,
             data.entity_id.as_str(),
-            Some(data.property_definition_id),
+            Some(PropertyChange::removed(data.property_definition_id)),
             data.actor.as_ref(),
             data.actor_user_id.as_ref(),
             data.on_behalf_of.is_some(),
@@ -1058,11 +1155,7 @@ fn task_property_event(
     if *entity_type != PropertyEntityType::Task {
         return Err(EventRejection::UnsupportedEvent);
     }
-    let name = match property_id {
-        Some(SystemPropertyKey::STATUS_UUID) => EventName::TaskStatusChanged,
-        Some(SystemPropertyKey::PRIORITY_UUID) => EventName::TaskPriorityChanged,
-        _ => EventName::TaskPropertyChanged,
-    };
+    let name = task_property_event_name(change.as_ref().map(PropertyChange::definition_id));
     // GitHub reports what happened to a pull request whether or not its account
     // has a Macro user, so its status changes need no Macro actor. An actor that
     // is present still has to be a person.
@@ -1071,5 +1164,10 @@ fn task_property_event(
     if !from_github {
         document_actor(actor, fallback, delegated)?;
     }
-    Ok((name, entity_id, source))
+    Ok(TaskPropertyEvent {
+        name,
+        entity_id,
+        source,
+        change,
+    })
 }

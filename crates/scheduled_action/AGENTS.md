@@ -16,6 +16,8 @@ each run.
   (Kafka or polled) turns into a dispatched run.
 - `src/domain/event_trigger/github_selector.rs`, `payload_match.rs`: the
   `github` selector and the exact payload `match` GitHub filters take.
+- `src/domain/event_trigger/property_selector.rs`: the `property` selector task
+  property change filters take, matched on the values a change adds.
 - `src/inbound/axum_router.rs`, `src/inbound/kafka_consumer.rs`,
   `src/inbound/event_run_worker.rs`: the three inbound adapters.
 - `src/domain/templates.rs` + `src/inbound/template_router.rs`: sharing a
@@ -88,6 +90,10 @@ that listener is ready. Cancellation can stop the gate before startup finishes.
   payload in `event_context`; access for them is the owner's installation
   claim, which needs a linked GitHub account and, for a personal installation,
   that the linked account installed it.
+- A `property` filter needs the event's `property_change` (the property and the
+  option or entity ids it gained), so runs of routines with one keep it in
+  `event_context`; other runs drop it (`EventFilters::run_event`). Free text and
+  dates are never kept, so those properties only support any-change filters.
 - Enabling a GitHub trigger needs the owner's GitHub link
   (`with_github_links`); without it the service returns `GithubNotLinked`.
 - `TODO.md` tracks open follow-ups (unified history list, delete schedules,

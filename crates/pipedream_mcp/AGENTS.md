@@ -69,6 +69,8 @@ listings, and calls all go through Connect, with no Pipedream fallback.
   and records nothing; the app polls `/pipedream/mcp/connect/complete`, which
   trusts only Connect's own connection list.
 
+- A Macro Connect grant outranks an overlay: the store returns it, and
+  status checks read it before the overlay's native connection.
 - Overlaying an app hides its Pipedream grant from every reader, including
   imports (Linear, Jira, Notion) and Granola sync, which use the Pipedream
   proxy. Keep those slugs out of `mcp_overlays` until their readers have a

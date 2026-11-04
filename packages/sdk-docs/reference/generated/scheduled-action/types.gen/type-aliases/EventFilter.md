@@ -1,6 +1,6 @@
 # Type Alias: EventFilter
 
-> **EventFilter** = \{ `condition?`: `string` \| `null`; `events`: [`EventName`](EventName.md)[]; `github?`: `null` \| [`GithubSelector`](GithubSelector.md); `ids?`: `string`[] \| `null`; `match?`: [`PayloadCondition`](PayloadCondition.md)[] \| `null`; \}
+> **EventFilter** = \{ `condition?`: `string` \| `null`; `events`: [`EventName`](EventName.md)[]; `github?`: `null` \| [`GithubSelector`](GithubSelector.md); `ids?`: `string`[] \| `null`; `match?`: [`PayloadCondition`](PayloadCondition.md)[] \| `null`; `property?`: `null` \| [`PropertySelector`](PropertySelector.md); \}
 
 An event name AND an entity ID must match within the same filter. A
 condition further requires the event's content to answer it with yes.
@@ -19,3 +19,4 @@ with its `github` selector.
 | <a id="property-github"></a> `github?` | `null` \| [`GithubSelector`](GithubSelector.md) | - |
 | <a id="property-ids"></a> `ids?` | `string`[] \| `null` | - |
 | <a id="property-match"></a> `match?` | [`PayloadCondition`](PayloadCondition.md)[] \| `null` | Exact tests on the payload, all of which must pass. |
+| <a id="property-property"></a> `property?` | `null` \| [`PropertySelector`](PropertySelector.md) | - |
