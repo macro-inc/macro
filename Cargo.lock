@@ -13990,6 +13990,8 @@ dependencies = [
  "aws-sdk-sqs",
  "axum",
  "axum-extra",
+ "bot_id",
+ "bots",
  "chrono",
  "database_env_vars",
  "doppler-config",

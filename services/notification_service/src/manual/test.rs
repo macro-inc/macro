@@ -1,9 +1,11 @@
 use std::collections::HashSet;
 use std::sync::Mutex;
 
+use bot_id::BotId;
 use macro_user_id::cowlike::CowLike;
 use macro_user_id::user_id::MacroUserIdStr;
 use model_entity::{Entity, EntityType};
+use model_notifications::ManualNotificationAgent;
 use notification::domain::models::{Notification, NotificationResult, SendNotificationRequest};
 use notification::domain::service::{NotificationIngress, SendNotificationError};
 use rootcause::Report;
@@ -11,7 +13,8 @@ use serde::Serialize;
 use uuid::Uuid;
 
 use super::{
-    LinkAccess, ManualNotificationDraft, ManualNotificationError, ManualNotifications, ManualSender,
+    AgentProfiles, LinkAccess, ManualNotificationDraft, ManualNotificationError,
+    ManualNotifications, ManualSender,
 };
 
 /// Records every request as JSON, the way the SQS ingress would serialize it.
@@ -52,15 +55,31 @@ impl LinkAccess for GrantedAccess {
     }
 }
 
+/// Knows one agent, the one the sending code runs as.
+struct OneAgent;
+
+impl AgentProfiles for OneAgent {
+    async fn profile(&self, agent_id: BotId) -> Result<Option<ManualNotificationAgent>, Report> {
+        Ok(
+            (agent_id.as_uuid() == Uuid::from_u128(0xB07)).then(|| ManualNotificationAgent {
+                id: agent_id.as_uuid(),
+                name: "Deploy bot".to_string(),
+                avatar_url: None,
+            }),
+        )
+    }
+}
+
 fn user(id: &str) -> MacroUserIdStr<'static> {
     MacroUserIdStr::parse_from_str(id).unwrap().into_owned()
 }
 
 fn service(
     grants: &[(&'static str, &'static str)],
-) -> ManualNotifications<GrantedAccess, RecordingIngress> {
+) -> ManualNotifications<GrantedAccess, OneAgent, RecordingIngress> {
     ManualNotifications {
         access: GrantedAccess(grants.iter().copied().collect()),
+        agents: OneAgent,
         ingress: RecordingIngress::default(),
     }
 }
@@ -76,7 +95,7 @@ async fn notifies_a_recipient_who_can_see_the_link_from_the_sender() {
         .send(
             ManualSender {
                 user: user("macro|sender@macro.com"),
-                agent_id: Some(Uuid::from_u128(0xB07)),
+                agent_id: Some(BotId::new_from_uuid(Uuid::from_u128(0xB07))),
             },
             ManualNotificationDraft {
                 recipient: Some(user("macro|teammate@macro.com")),
@@ -102,7 +121,10 @@ async fn notifies_a_recipient_who_can_see_the_link_from_the_sender() {
             "content": {
                 "title": "Deploy finished",
                 "body": "All 3 services are live.",
-                "agentId": "00000000-0000-0000-0000-000000000b07",
+                "agent": {
+                    "id": "00000000-0000-0000-0000-000000000b07",
+                    "name": "Deploy bot",
+                },
             },
         })
     );

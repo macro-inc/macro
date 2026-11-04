@@ -790,7 +790,20 @@ impl GraphqlManualMetadata {
 
     /// The agent whose code sent it, when one did.
     async fn agent_id(&self) -> Option<ID> {
-        self.0.agent_id.map(|id| ID(id.to_string()))
+        self.0.agent.as_ref().map(|agent| ID(agent.id.to_string()))
+    }
+
+    /// The sending agent's name when it was sent.
+    async fn agent_name(&self) -> Option<&str> {
+        self.0.agent.as_ref().map(|agent| agent.name.as_str())
+    }
+
+    /// The sending agent's avatar when it was sent.
+    async fn agent_avatar_url(&self) -> Option<&str> {
+        self.0
+            .agent
+            .as_ref()
+            .and_then(|agent| agent.avatar_url.as_deref())
     }
 }
 

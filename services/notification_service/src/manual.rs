@@ -3,6 +3,7 @@
 //! what it links to. Delivery goes through the notification ingress like every
 //! other kind.
 
+pub(crate) mod bots;
 pub(crate) mod entity_access;
 #[cfg(test)]
 mod test;
@@ -10,12 +11,12 @@ mod test;
 use std::collections::HashSet;
 use std::future::Future;
 
+use bot_id::BotId;
 use macro_user_id::user_id::MacroUserIdStr;
 use model_entity::{Entity, EntityType};
-use model_notifications::ManualMetadata;
+use model_notifications::{ManualMetadata, ManualNotificationAgent};
 use notification::domain::models::SendNotificationRequestBuilder;
 use notification::domain::service::NotificationIngress;
-use uuid::Uuid;
 
 /// The longest title, in characters; longer ones are rejected, not cut.
 pub(crate) const MAX_TITLE_CHARS: usize = 120;
@@ -40,7 +41,7 @@ pub(crate) const LINKABLE_ENTITY_TYPES: [EntityType; 9] = [
 /// Who is sending: the acting user, and the agent whose code runs for them.
 pub(crate) struct ManualSender {
     pub user: MacroUserIdStr<'static>,
-    pub agent_id: Option<Uuid>,
+    pub agent_id: Option<BotId>,
 }
 
 /// What the sender wrote and where it points.
@@ -82,13 +83,28 @@ pub(crate) trait LinkAccess: Send + Sync + 'static {
     ) -> impl Future<Output = Result<bool, rootcause::Report>> + Send;
 }
 
+/// The name and avatar an agent shows as a sender.
+pub(crate) trait AgentProfiles: Send + Sync + 'static {
+    /// `None` when no such agent exists.
+    fn profile(
+        &self,
+        agent_id: BotId,
+    ) -> impl Future<Output = Result<Option<ManualNotificationAgent>, rootcause::Report>> + Send;
+}
+
 /// Validates manual notifications and hands them to the notification ingress.
-pub(crate) struct ManualNotifications<Access, Ingress> {
+pub(crate) struct ManualNotifications<Access, Agents, Ingress> {
     pub access: Access,
+    pub agents: Agents,
     pub ingress: Ingress,
 }
 
-impl<Access: LinkAccess, Ingress: NotificationIngress> ManualNotifications<Access, Ingress> {
+impl<Access, Agents, Ingress> ManualNotifications<Access, Agents, Ingress>
+where
+    Access: LinkAccess,
+    Agents: AgentProfiles,
+    Ingress: NotificationIngress,
+{
     #[tracing::instrument(
         name = "notification.send_manual",
         err,
@@ -156,6 +172,15 @@ impl<Access: LinkAccess, Ingress: NotificationIngress> ManualNotifications<Acces
             }
         }
 
+        let agent = match sender.agent_id {
+            Some(agent_id) => self
+                .agents
+                .profile(agent_id)
+                .await
+                .map_err(ManualNotificationError::Internal)?,
+            None => None,
+        };
+
         // The ingress drops a recipient who is also the sender, so a note to
         // oneself goes out with no sender.
         let (sender_id, recipient_id) = match recipient {
@@ -166,11 +191,7 @@ impl<Access: LinkAccess, Ingress: NotificationIngress> ManualNotifications<Acces
         let request = SendNotificationRequestBuilder {
             notification_entity: draft.link,
             secondary_notification_entity: None,
-            notification: ManualMetadata {
-                title,
-                body,
-                agent_id: sender.agent_id,
-            },
+            notification: ManualMetadata { title, body, agent },
             sender_id,
             recipient_ids: HashSet::from([recipient_id]),
         }

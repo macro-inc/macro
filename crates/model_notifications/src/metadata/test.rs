@@ -1397,7 +1397,11 @@ fn manual_notifications_push_the_senders_words() {
     let metadata = ManualMetadata {
         title: "Deploy finished".to_string(),
         body: Some("All 3 services are live.".to_string()),
-        agent_id: Some(Uuid::nil()),
+        agent: Some(ManualNotificationAgent {
+            id: Uuid::nil(),
+            name: "Macro".to_string(),
+            avatar_url: Some("https://example.com/macro.png".to_string()),
+        }),
     };
     let entity = EntityType::Document.with_entity_str("doc-1");
 
@@ -1409,7 +1413,11 @@ fn manual_notifications_push_the_senders_words() {
             "content": {
                 "title": "Deploy finished",
                 "body": "All 3 services are live.",
-                "agentId": "00000000-0000-0000-0000-000000000000",
+                "agent": {
+                    "id": "00000000-0000-0000-0000-000000000000",
+                    "name": "Macro",
+                    "avatarUrl": "https://example.com/macro.png",
+                },
             },
         })
     );
@@ -1422,6 +1430,12 @@ fn manual_notifications_push_the_senders_words() {
     };
     assert_eq!(alert.title.as_deref(), Some("Deploy finished"));
     assert_eq!(alert.body.as_deref(), Some("All 3 services are live."));
+    assert_eq!(
+        apns.push_notification_data
+            .sender_profile_picture_url
+            .as_deref(),
+        Some("https://example.com/macro.png")
+    );
 
     let other_title = ManualMetadata {
         title: "Deploy failed".to_string(),

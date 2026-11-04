@@ -9,6 +9,7 @@ use axum::response::{IntoResponse, Response};
 use axum::routing::post;
 use axum::{Json, Router};
 use axum_extra::extract::Cached;
+use bots::outbound::pg_bots_repo::PgBotsRepo;
 use entity_access::domain::service::EntityAccessServiceImpl;
 use entity_access::outbound::PgAccessRepository;
 use macro_authorization::{MacroAuthorizationExtractor, MacroAuthorizationState, UserOrInternal};
@@ -28,6 +29,7 @@ use serde::Deserialize;
 use utoipa::ToSchema;
 
 use crate::api::context::AuthorizationService;
+use crate::manual::bots::BotAgentProfiles;
 use crate::manual::entity_access::EntityAccessLinks;
 use crate::manual::{
     ManualNotificationDraft, ManualNotificationError, ManualNotifications, ManualSender,
@@ -39,6 +41,7 @@ const WINDOW: Duration = Duration::from_secs(60 * 60);
 
 pub(crate) type Notifications = ManualNotifications<
     EntityAccessLinks<EntityAccessServiceImpl<PgAccessRepository>>,
+    BotAgentProfiles<PgBotsRepo>,
     SqsNotificationIngress<SqsQueue>,
 >;
 
@@ -193,7 +196,7 @@ pub(crate) async fn send_manual_notification(
         .send(
             ManualSender {
                 user: user.macro_user_id,
-                agent_id: user.agent_id.map(|agent| agent.as_uuid()),
+                agent_id: user.agent_id,
             },
             ManualNotificationDraft {
                 recipient: request.recipient_id,

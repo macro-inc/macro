@@ -15,6 +15,12 @@ worker that sends email/mobile-push/websocket notifications.
   `Kafka*RealtimePublisher`, `RedisRateLimitAdapter`) from `crates/notification`.
 - `src/api.rs` + `src/api/context.rs`: HTTP routes — `user_notification.rs`
   (list/read), `unsubscribe.rs` (single and atomic bulk item mute/snooze), `health.rs`.
+- `src/manual.rs` + `src/api/manual_notification.rs`: manual notifications
+  (`POST /user_notifications/send`, the SDK's `notifications.send`). The
+  domain checks that sender and recipient can see the link, snapshots the
+  sending agent, and enqueues through the notification ingress; the route
+  limits each sender to 60 an hour. It lives here, not in
+  `crates/notification`, because `model_notifications` depends on that crate.
 - `src/model/notification.rs`: service-local request/response shapes.
 - Push payload schemas come from `notification::domain::models::apple`; keep the
   frontend push validators generated from those same OpenAPI components.

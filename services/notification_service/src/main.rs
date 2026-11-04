@@ -256,6 +256,9 @@ pub async fn main() -> anyhow::Result<()> {
                     entity_access::outbound::PgAccessRepository::new(db.clone()),
                 ),
             ),
+            agents: manual::bots::BotAgentProfiles(bots::outbound::pg_bots_repo::PgBotsRepo::new(
+                db.clone(),
+            )),
             ingress: ::notification::domain::service::SqsNotificationIngress {
                 queue: ::notification::outbound::queue::SqsQueue::new(
                     aws_sdk_sqs::Client::new(&aws_config),

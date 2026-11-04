@@ -22,10 +22,10 @@ pub use metadata::{
     GithubPrMentionLocation, GithubPrNotificationCommon, GithubPrReview, GithubPrReviewState,
     GithubPrStatusChanged, GithubReviewRequested, InboxReauthRequiredMetadata,
     InitiativeDiscussionMetadata, InitiativeDiscussionReason, InviteToTeamMetadata, InviteePlan,
-    ItemSharedMetadata, ManualMetadata, MentionedInDocumentCommentMetadata, NewEmailMetadata,
-    NotificationDocumentSubType, NotificationTitle, ReminderMetadata,
-    RepliedToDocumentCommentThreadMetadata, RequestedAccessLevel, RoutineRunFinishedMetadata,
-    RoutineRunOutcome, TaskAssignedMetadata,
+    ItemSharedMetadata, ManualMetadata, ManualNotificationAgent,
+    MentionedInDocumentCommentMetadata, NewEmailMetadata, NotificationDocumentSubType,
+    NotificationTitle, ReminderMetadata, RepliedToDocumentCommentThreadMetadata,
+    RequestedAccessLevel, RoutineRunFinishedMetadata, RoutineRunOutcome, TaskAssignedMetadata,
 };
 pub use unsubscribe::UserUnsubscribe;
 #[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]

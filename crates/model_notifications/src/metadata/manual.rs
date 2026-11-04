@@ -13,11 +13,24 @@ pub struct ManualMetadata {
     /// More detail, as the sender wrote it.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub body: Option<String>,
-    /// The agent whose code sent it, when one did. A string on the wire:
-    /// system bots have fixed ids that are not RFC 4122 uuids.
+    /// The agent whose code sent it, when one did.
     #[serde(default, skip_serializing_if = "Option::is_none")]
-    #[schema(value_type = Option<String>)]
-    pub agent_id: Option<Uuid>,
+    pub agent: Option<ManualNotificationAgent>,
+}
+
+/// The agent a manual notification reads as being from, as it was when sent.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, ToSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct ManualNotificationAgent {
+    /// A string on the wire: system bots have fixed ids that are not RFC 4122
+    /// uuids.
+    #[schema(value_type = String)]
+    pub id: Uuid,
+    /// The agent's display name.
+    pub name: String,
+    /// The agent's avatar.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub avatar_url: Option<String>,
 }
 
 impl Notification for ManualMetadata {
@@ -50,6 +63,10 @@ impl NotificationExtIos for ManualMetadata {
         _entity: &Entity<'_>,
         id: Uuid,
     ) -> Option<APNSPushNotification<Self::NotifData>> {
-        alert_apns(self, sender, id, None).ok()
+        let avatar = self
+            .agent
+            .as_ref()
+            .and_then(|agent| agent.avatar_url.clone());
+        alert_apns(self, sender, id, avatar).ok()
     }
 }
