@@ -193,6 +193,7 @@ impl MarkdownInitializationPort for NoMarkdown {
         &self,
         _document_id: &str,
         _markdown: &str,
+        _initial_pins: Option<&[String]>,
     ) -> Result<Vec<u8>, DocumentError> {
         Ok(Vec::new())
     }
