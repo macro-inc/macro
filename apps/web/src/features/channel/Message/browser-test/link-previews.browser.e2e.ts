@@ -2,29 +2,6 @@ import { expect, type Page, test } from '@playwright/test';
 
 const ARTICLE = 'https://news.example.com/2026/11/offline-first';
 const GUIDE = 'https://docs.example.org/guide';
-const BARE = 'https://bare.example.net';
-const MACRO_DOCUMENT =
-  'https://dev.macro.com/app/md/0195d2dd-5de9-71f2-9d59-5d9734f1adb7';
-
-const UNFURLS: Record<string, object> = {
-  [ARTICLE]: {
-    url: ARTICLE,
-    title: 'Offline first, without the sync bugs',
-    description:
-      'What we learned moving a collaborative editor to local-first storage, and the three conflicts that still need a person to resolve them.',
-    image_url: 'https://news.example.com/images/offline-first.png',
-    favicon_url: 'https://news.example.com/favicon.ico',
-  },
-  [GUIDE]: {
-    url: GUIDE,
-    title: 'Getting started guide',
-    favicon_url: 'https://docs.example.org/favicon.ico',
-  },
-  // The service's answer for a page with no metadata.
-  [BARE]: { url: BARE, title: BARE },
-  // The link's hover card still asks for this.
-  [MACRO_DOCUMENT]: { url: MACRO_DOCUMENT, title: 'Macro' },
-};
 
 // A 1x1 PNG for preview images and favicons.
 const PNG = Buffer.from(
@@ -37,22 +14,10 @@ async function serveFixture(page: Page) {
   const origin = new URL(test.info().project.use.baseURL ?? '').origin;
 
   // The messages render over synthetic props; no hosted data is read or
-  // written. Unfurls and proxied images are answered here, for the tab a card
-  // opens too.
+  // written. Proxied images are answered here, for the tab a card opens too.
   await page.context().route('**/*', async (route) => {
     const request = route.request();
     const url = new URL(request.url());
-
-    if (url.pathname.endsWith('/unfurl/bulk')) {
-      const body = request.postDataJSON() as { url_list: string[] };
-      await route.fulfill({
-        contentType: 'application/json',
-        body: JSON.stringify({
-          responses: body.url_list.map((link) => UNFURLS[link] ?? null),
-        }),
-      });
-      return;
-    }
 
     if (url.pathname.endsWith('/proxy')) {
       await route.fulfill({
@@ -80,12 +45,31 @@ async function serveFixture(page: Page) {
   });
   await page.context().routeWebSocket('**/*', (socket) => socket.close());
 
+  // Record whether each message's cards were already in place when its text
+  // first appeared: a card added later grows the row under a virtual list.
+  await page.addInitScript(() => {
+    const firstSeen: Record<string, number> = {};
+    Object.assign(window, { linkPreviewsAtFirstRender: firstSeen });
+    new MutationObserver(() => {
+      for (const row of document.querySelectorAll('[data-fixture-message]')) {
+        const id = row.getAttribute('data-fixture-message') ?? '';
+        if (id in firstSeen) continue;
+        if (!row.querySelector('[data-message-content]')) continue;
+        firstSeen[id] = row.querySelectorAll(
+          '[data-message-link-previews] a'
+        ).length;
+      }
+    }).observe(document, { childList: true, subtree: true });
+  });
+
   await page.goto(
     '/src/features/channel/Message/browser-test/link-previews.html'
   );
 }
 
-test('a message shows a card for each page it links to', async ({ page }) => {
+test('a message shows its link previews as cards from its first render', async ({
+  page,
+}) => {
   await serveFixture(page);
 
   const article = page.locator('[data-fixture-message="article"]');
@@ -99,14 +83,31 @@ test('a message shows a card for each page it links to', async ({ page }) => {
   await expect(articleCard).toContainText('What we learned');
   await expect(articleCard.locator('img')).toHaveCount(2);
 
-  // The guide gets a card, the article it repeats does not get a second one,
-  // a page with no metadata gets none, and a Macro link stays a link.
-  const several = page.locator('[data-fixture-message="several"]');
-  const severalCards = several.locator('[data-message-link-previews] a');
+  // Cards follow the stored order; a message whose previews are not computed
+  // yet shows none.
+  const severalCards = page.locator(
+    '[data-fixture-message="several"] [data-message-link-previews] a'
+  );
   await expect(severalCards).toHaveCount(2);
   await expect(severalCards.nth(0)).toHaveAttribute('href', GUIDE);
   await expect(severalCards.nth(0)).toContainText('Getting started guide');
   await expect(severalCards.nth(1)).toHaveAttribute('href', ARTICLE);
+  await expect(
+    page.locator('[data-fixture-message="pending"] [data-message-content]')
+  ).toBeVisible();
+  await expect(
+    page.locator(
+      '[data-fixture-message="pending"] [data-message-link-previews]'
+    )
+  ).toHaveCount(0);
+
+  expect(
+    await page.evaluate(
+      () =>
+        (window as unknown as { linkPreviewsAtFirstRender: object })
+          .linkPreviewsAtFirstRender
+    )
+  ).toEqual({ article: 1, several: 2, pending: 0 });
 
   // The card fits the message column on a phone as on desktop.
   const card = await articleCard.boundingBox();

@@ -317,6 +317,35 @@ describe.each([
       )[0].thread.reply_count
     ).toBe(1);
   });
+  it('keeps link previews through a late copy of the same text and applies only previews from their event', () => {
+    seed();
+    const replies = () =>
+      testQueryClient.getQueryData<MessageThread>(threadKey())!.replies;
+    const reply = message(parent, 'reply', 'root');
+    applyMessage(reply, 'posted');
+
+    const previews = [{ url: 'https://example.com/post', title: 'Post' }];
+    applyMessage(
+      { ...reply, content: 'an older snapshot', link_previews: previews },
+      'link_previews_updated'
+    );
+    expect(replies()).toEqual([
+      expect.objectContaining({ content: 'reply', link_previews: previews }),
+    ]);
+
+    // The send response lands after the previews it predates.
+    applyMessage({ ...reply, link_previews: [] }, 'posted');
+    expect(replies()[0].link_previews).toEqual(previews);
+
+    // An edit to other text is computed afresh.
+    applyMessage(
+      { ...reply, content: 'no links now', link_previews: [] },
+      'edited'
+    );
+    expect(replies()[0]).toEqual(
+      expect.objectContaining({ content: 'no links now', link_previews: [] })
+    );
+  });
   it('updates the canonical root when only a linked thread is cached', () => {
     testQueryClient.setQueryData<MessageThread>(threadKey(), {
       state,

@@ -9,6 +9,7 @@ import type { ThreadPatch } from './generated/schemas/threadPatch';
 import type { ThreadState } from './generated/schemas/threadState';
 
 export type { CountedReaction } from './generated/schemas/countedReaction';
+export type { LinkPreview } from './generated/schemas/linkPreview';
 export type { MessageAttachment } from './generated/schemas/messageAttachment';
 export type { MessageParent, PostMessage, ThreadPatch };
 

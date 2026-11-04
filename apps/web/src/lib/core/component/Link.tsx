@@ -1,6 +1,7 @@
 import { displayImageUrl, isImageProxyUrl } from '@core/util/imageProxy';
 import { openExternalUrl } from '@core/util/url';
 import LinkIcon from '@icon/system/regular/link.svg';
+import type { LinkPreview } from '@service-storage/messages';
 import { proxyResource } from '@service-unfurl/client';
 import type { GetUnfurlResponse } from '@service-unfurl/generated/schemas/getUnfurlResponse';
 import type { GetUnfurlResponseFaviconUrl } from '@service-unfurl/generated/schemas/getUnfurlResponseFaviconUrl';
@@ -154,11 +155,11 @@ export function UnfurlLink(props: UnfurlLinkProps) {
  * page title and description, and its preview image as a thumbnail. Opens
  * the link like the link itself does.
  */
-export function LinkPreviewCard(props: { unfurled: GetUnfurlResponse }) {
-  const domain = () => extractDomain(props.unfurled.url);
+export function LinkPreviewCard(props: { preview: LinkPreview }) {
+  const domain = () => extractDomain(props.preview.url);
   const [failedImageSrc, setFailedImageSrc] = createSignal<string>();
   const imageSrc = () => {
-    const url = props.unfurled.image_url;
+    const url = props.preview.image_url;
     if (!url) return;
 
     const src = displayImageUrl(url);
@@ -168,7 +169,7 @@ export function LinkPreviewCard(props: { unfurled: GetUnfurlResponse }) {
 
   return (
     <a
-      href={props.unfurled.url}
+      href={props.preview.url}
       target="_blank"
       rel="noopener"
       draggable={false}
@@ -180,18 +181,18 @@ export function LinkPreviewCard(props: { unfurled: GetUnfurlResponse }) {
           return;
         }
         event.preventDefault();
-        openExternalUrl(props.unfurled.url);
+        openExternalUrl(props.preview.url);
       }}
     >
       <div class="min-w-0 flex-1">
         <div class="flex items-center gap-1.5 text-xs text-ink-muted">
-          <Favicon url={props.unfurled.favicon_url} class="size-4 rounded-sm" />
+          <Favicon url={props.preview.favicon_url} class="size-4 rounded-sm" />
           <span class="truncate">{domain()}</span>
         </div>
         <div class="mt-1 line-clamp-2 text-sm font-medium text-ink">
-          {props.unfurled.title || domain()}
+          {props.preview.title || domain()}
         </div>
-        <Show when={props.unfurled.description}>
+        <Show when={props.preview.description}>
           {(description) => (
             <div class="mt-0.5 line-clamp-2 text-sm text-ink-muted">
               {description()}
