@@ -88,6 +88,11 @@ function StepCard(props: {
   let inserted = false;
   const step = () => props.steps[props.index];
   const position = () => props.index + 1;
+  // The first email goes out on day 1; each later one waits after the last.
+  const day = () =>
+    props.steps
+      .slice(1, props.index + 1)
+      .reduce((total, step) => total + step.delayDays, 1);
   const reply = () => isReplyStep(props.steps, props.index);
 
   // Personalization goes where the caret last was, in the subject or message.
@@ -116,8 +121,11 @@ function StepCard(props: {
         class="relative overflow-clip touch:rounded-xl touch:border touch:border-edge-muted"
       >
         <div class="flex min-h-11 items-center justify-between gap-2 px-4 pt-2">
-          <h3 class="text-sm font-medium">
+          <h3 class="flex items-baseline gap-2 text-sm font-medium">
             {t('sequences.emailNumber', { position: position() })}
+            <span class="text-xs font-normal text-ink-muted">
+              {t('sequences.sendDay', { day: day() })}
+            </span>
           </h3>
           <Show when={!props.disabled}>
             <div class="flex items-center gap-1">
@@ -195,7 +203,6 @@ function StepCard(props: {
                 type="text"
                 aria-label={t('sequences.subjectOf', { position: position() })}
                 class="ph-no-capture w-full bg-transparent text-sm text-ink outline-none placeholder:text-ink-placeholder"
-                placeholder={t('sequences.subjectPlaceholder')}
                 maxLength={SEQUENCE_LIMITS.subject}
                 value={step()?.subject ?? ''}
                 disabled={props.disabled}
