@@ -1106,8 +1106,10 @@ Use **New → New section** to create a section. The wider dialog has a name fie
 and a **Smart section** switch in its body. **Shared with team** sits on the left
 of the footer, with the action buttons on the right. The question-mark tooltip
 beside sharing explains that team members can see and organize the section and
-only team channels can be added. With both switches off, the section is personal
-and manual. Smart grouping reveals a separate input below
+only team channels can be added; clicking or tapping the help button also reveals
+the explanation below the footer controls. The form shows a warning-colored
+**Team channels only** hint when sharing is on and no scope hint when it is off.
+With both switches off, the section is personal and manual. Smart grouping reveals a separate input below
 **Name contains** and a matching-channel count. Hover or focus that count to preview
 matched channels; larger results show the remaining count. Switching sharing scope
 refreshes the preview without replacing the form. A zero shared count explains

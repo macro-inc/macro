@@ -20,6 +20,7 @@ import {
 import {
   type Accessor,
   createSignal,
+  createUniqueId,
   For,
   Match,
   Show,
@@ -149,6 +150,8 @@ function SectionDialog(props: SectionDialogProps & ManagedDialogProps) {
   );
   const [saving, setSaving] = createSignal(false);
   const [error, setError] = createSignal('');
+  const [sharingHelpOpen, setSharingHelpOpen] = createSignal(false);
+  const sharingHelpId = createUniqueId();
 
   const trimmedPattern = () => pattern().trim();
   const canSubmit = () => {
@@ -280,11 +283,11 @@ function SectionDialog(props: SectionDialogProps & ManagedDialogProps) {
             <Show when={kind() === 'smart' && trimmedPattern().length > 0}>
               <SmartSectionPreview pattern={trimmedPattern} scope={scope} />
             </Show>
-            <p class="text-xs leading-5 text-ink-muted">
-              {scope() === 'team'
-                ? t('channelSections.teamChannelsOnly')
-                : t('channelSections.personalChannelsHint')}
-            </p>
+            <Show when={scope() === 'team'}>
+              <p class="text-xs leading-5 text-warning">
+                {t('channelSections.teamChannelsOnly')}
+              </p>
+            </Show>
           </div>
           <div class="flex flex-wrap items-center justify-end gap-3 px-5 py-3">
             <Show when={!props.initial && props.canShare}>
@@ -303,7 +306,13 @@ function SectionDialog(props: SectionDialogProps & ManagedDialogProps) {
                   variant="ghost"
                   size="icon-xs"
                   aria-label={t('channelSections.sharingHelpLabel')}
-                  tooltip={t('channelSections.sharingHelp')}
+                  aria-expanded={sharingHelpOpen()}
+                  aria-controls={sharingHelpId}
+                  onClick={() => setSharingHelpOpen((open) => !open)}
+                  tooltip={{
+                    content: t('channelSections.sharingHelp'),
+                    disabled: sharingHelpOpen(),
+                  }}
                 >
                   <QuestionMarkIcon class="size-3.5" />
                 </Button>
@@ -326,6 +335,14 @@ function SectionDialog(props: SectionDialogProps & ManagedDialogProps) {
                 {submitLabel()}
               </Button>
             </div>
+            <Show when={sharingHelpOpen()}>
+              <p
+                id={sharingHelpId}
+                class="w-full text-xs leading-5 text-ink-muted"
+              >
+                {t('channelSections.sharingHelp')}
+              </p>
+            </Show>
           </div>
         </form>
       </Surface>

@@ -115,10 +115,7 @@ export default {
   loadingChannels: 'Loading channels…',
   channelsUnavailable: 'Could not load channels.',
   noChannelsToAdd: 'No more channels are available to add.',
-  teamChannelsOnly:
-    'Shared sections only include channels from your team that you have joined. Private and public channels belong in personal sections.',
-  personalChannelsHint:
-    'Personal sections can include team, public, and private channels you have joined.',
+  teamChannelsOnly: 'Team channels only',
   addPersonalChannelsHint:
     'Add any joined channel. Moves channels from other personal sections.',
   addSharedChannelsHint:
