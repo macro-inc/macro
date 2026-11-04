@@ -353,7 +353,7 @@ function Root(props: ViewShellRootProps) {
       hotkey: 'cmd+.',
       hotkeyToken: TOKENS.workspace.toggleNavigation,
       scopeId: panel.splitHotkeyScope,
-      description: 'Toggle workspace navigation',
+      description: 'Toggle navigation',
       condition: () => panel.isPanelActive() && value.aside.canCollapse(),
       runWithInputFocused: true,
       keyDownHandler: () => {
