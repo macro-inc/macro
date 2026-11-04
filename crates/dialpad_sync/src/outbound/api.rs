@@ -52,10 +52,13 @@ impl DialpadApi {
         query: &[(&str, String)],
         body: Option<Value>,
     ) -> Result<Reply> {
+        let mut headers = reqwest::header::HeaderMap::new();
+        macro_tower_layers::inject_trace_headers(&mut headers);
         let mut request = self
             .http
             .request(method, format!("{}{path}", self.base_url))
             .bearer_auth(token.0.as_str())
+            .headers(headers)
             .query(query);
         if let Some(body) = body {
             request = request.json(&body);
