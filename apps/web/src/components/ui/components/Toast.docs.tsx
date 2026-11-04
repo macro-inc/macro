@@ -558,6 +558,8 @@ export default defineDoc({
     {
       id: 'actions',
       title: 'Inline undo, stacked prompts, and custom content',
+      description:
+        'Primary actions and secondary Dismiss share the small Button size and match heights within each row, including when labels wrap.',
       render: ActionsDemo,
       fill: true,
     },

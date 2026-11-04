@@ -218,15 +218,18 @@ function ActionButtons(props: {
   return (
     <>
       <Show when={props.showDismiss}>
-        <Toast.CloseButton
-          as={Button}
+        <Button
+          as={Toast.CloseButton}
           size="sm"
           variant="secondary"
+          class="max-w-full"
           aria-label={t('common.dismiss')}
           onClick={() => props.onDismiss?.()}
         >
-          {t('common.dismiss')}
-        </Toast.CloseButton>
+          <span class="min-w-0 whitespace-normal break-words">
+            {t('common.dismiss')}
+          </span>
+        </Button>
       </Show>
       <For each={props.actions}>
         {(action) => (
@@ -353,7 +356,7 @@ export function ToastContent(props: {
                       {props.custom?.title ?? props.message}
                     </Toast.Title>
                     <Show when={inlineActions()}>
-                      <div class="flex max-w-full shrink-0 flex-wrap items-center gap-2">
+                      <div class="flex max-w-full shrink-0 flex-wrap items-stretch gap-2">
                         <ActionButtons
                           actions={actions()}
                           showDismiss={showDismiss()}
@@ -370,7 +373,7 @@ export function ToastContent(props: {
                     </Toast.Description>
                   </Show>
                   <Show when={hasActions() && !inlineActions()}>
-                    <div class="mt-3 flex flex-wrap items-center gap-2">
+                    <div class="mt-3 flex flex-wrap items-stretch gap-2">
                       <ActionButtons
                         actions={actions()}
                         showDismiss={showDismiss()}
@@ -386,7 +389,7 @@ export function ToastContent(props: {
               <div class="min-w-0">
                 <Dynamic component={Embed()} />
                 <Show when={hasActions()}>
-                  <div class="mt-3 flex flex-wrap items-center gap-2">
+                  <div class="mt-3 flex flex-wrap items-stretch gap-2">
                     <ActionButtons
                       actions={actions()}
                       showDismiss={showDismiss()}
