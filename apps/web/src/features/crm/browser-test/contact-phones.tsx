@@ -69,6 +69,11 @@ const crm = {
   createContactPhones: () => query(phones),
   setContactPhones: () => savePhones,
   renameContact: () => mutation(async () => undefined),
+  // The header's archive control reads the contact and the viewer's role.
+  createContactSource: () => query(() => contact),
+  isTeamAdmin: () => () => false,
+  hideContact: () => mutation(async () => undefined),
+  feedback: { success: () => undefined, error: () => undefined },
 } as unknown as CrmContext;
 
 const root = document.getElementById('root');

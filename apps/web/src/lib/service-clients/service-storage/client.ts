@@ -167,6 +167,7 @@ import type { SetCompanyNameRequest } from './generated/schemas/setCompanyNameRe
 import type { SetContactNameRequest } from './generated/schemas/setContactNameRequest';
 import type { SetContactPhonesRequest } from './generated/schemas/setContactPhonesRequest';
 import type { SharePermissionV2 } from './generated/schemas/sharePermissionV2';
+import type { SkillDescriptionBody } from './generated/schemas/skillDescriptionBody';
 import type { SlackCompleteRequest } from './generated/schemas/slackCompleteRequest';
 import type { SlackCreateRequest } from './generated/schemas/slackCreateRequest';
 import type { SlackRegisterRequest } from './generated/schemas/slackRegisterRequest';
@@ -1659,6 +1660,24 @@ export const storageServiceClient = {
   /**
    * Gets the team-share state of a document (resolved against the owner's team).
    */
+  /** When to use a skill; `description` is absent for older skills. */
+  async getSkillDescription(args: { documentId: string }) {
+    return await dssFetch<SkillDescriptionBody>(
+      `/documents/${args.documentId}/skill_description`
+    );
+  },
+
+  /** Sets when to use a skill: one line starting "Use when". */
+  async setSkillDescription(args: { documentId: string; description: string }) {
+    return await dssFetch<SkillDescriptionBody>(
+      `/documents/${args.documentId}/skill_description`,
+      {
+        method: 'PUT',
+        body: JSON.stringify({ description: args.description }),
+      }
+    );
+  },
+
   async getDocumentTeamShare(args: { documentId: string }) {
     return await dssFetch<DocumentTeamShareResponse>(
       `/documents/${args.documentId}/team_share`

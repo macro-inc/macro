@@ -85,7 +85,7 @@ export function CrmEmptyState(
         <CrmListSearchEmpty
           title={
             peopleVisibility.showRemoved()
-              ? 'No matching removed people'
+              ? 'No matching archived people'
               : 'No matching people'
           }
           description="Try a different name or email address."
@@ -94,12 +94,11 @@ export function CrmEmptyState(
       </Match>
       <Match when={peopleVisibility.showRemoved()}>
         <CrmListEmpty
-          title="No removed people"
-          description="Removed people from this team will appear here."
-          action={{
-            label: 'Show active people',
-            onClick: () => peopleVisibility.setShowRemoved(false),
-          }}
+          title={
+            activeTab() === 'people'
+              ? 'No archived people'
+              : 'No archived companies'
+          }
         />
       </Match>
       <Match when={activeTab() === 'people' && props.filtered}>

@@ -128,29 +128,13 @@ email), Company and Last contacted (sortable). `Search people` matches name or
 email on the server after a short typing pause, so results include contacts not
 yet scrolled into view. The desktop header has the title, shared **New** menu,
 and expandable Search; choose **Contact** from New. On touch, **New contact**
-is unchanged. Admins/owners have **People display options → Show removed people**
-on desktop and touch. This shows **Removed people** from the current team only,
-with server search and normal pagination. Open a person and use the existing
-**Restore to CRM** eye action; successful restoration removes the row from this
-view and returns it to normal People and company Team lists. **Show active people**
-returns to the normal list while keeping the search text. A hidden company also
-hides its people: restore the company first to make them visible. The banner
-explains this; no company is silently restored by an individual contact action.
-The choice is local to this workspace, clears on leaving People or changing
-account/team/role, and is not activated by a shared URL or saved filter. Members
-have no removed control, and server role checks still exclude hidden records.
-The contact dialog offers an optional **Choose a company** pill (searchable by name
-or domain, from the up to 500 most relevant companies, including name-only
-companies); without one the person is added with no company. The email is
-optional: personal addresses and different domains are accepted, and leaving it
-empty adds the person by name alone. Contacts without a company show no company
-pill. **Add contact** on a company's Team tab skips the company pill.
-Contact names allow up to 200 characters. A longer name keeps the form open
-with an error; shortening it allows submission without re-entering other fields.
-**New company** requires a name; its domain is optional. If supplied, it must be
-a company domain, not a personal email provider. The company, contact and pipeline dialogs share the
-task/project composer layout: name on the first row beside **Close**, details
-below, and a **Create …** button that also submits on Command-Enter.
+is unchanged. The **Visible / Archived** filter selects one view on People,
+Companies and company Team. Archived is available to admins/owners; People recovery
+is scoped to their current team. Search and sorting stay in place when switching.
+Archived rows carry a chip. Open a record and choose **Restore** beside its identity
+chip; the row leaves Archived and returns to ordinary lists and Cmd-K. People under
+an archived company require that company to be restored first. There is no permanent
+explanatory banner or recovery UI inside Cmd-K.
 
 Verify company domain validation by creating a company with an allowed business
 domain, then adding a contact whose email matches it. Personal email provider
@@ -239,29 +223,35 @@ queries or creation actions. Copy-link islands are 40px square on touch with
 a 24px icon. Verify both record types, section changes, dismissal, copy feedback,
 and header fit at phone and tablet widths.
 
-To remove a person manually, choose the eye-slash **Remove from CRM** button
-beside **Copy contact link** in the top toolbar and confirm. Hidden people show
-the regular eye **Restore to CRM** action in the same place. Both the Customers
-record header and standalone contact header offer it on every section; there is
-no second action in Overview. Company removal stays below the details on
-**Overview**. On phones the confirmation is a bottom sheet. Only team admins
-and owners can remove or restore records; other members see a disabled action. Removal hides the record from the
-team's CRM lists without permanently deleting it. The page stays open and offers
-**Restore to CRM**; admins can also reopen the record's direct link to restore it.
-Hiding a company hides all its contacts and turns off team email sync. Restoring
-the company restores every contact, including individually hidden ones, but leaves
-email sync off; re-enable **Sync Emails** under the information panel's **Sharing**
-section if needed. A company's Team tab excludes hidden contacts for every role,
-including search results. Admins can find removed contacts in People display options and retain direct-link
-access for restoration. Removing or restoring a person refreshes open company Team lists;
-returning to a previously visited company reloads its contacts. Company row
-**Hide / Unhide** actions control the same state. The information panel has no
-visibility toggle; company Sharing contains only **Sync Emails**.
-Restoring a person under a hidden company does not make them appear in People
-until that company is restored too. People without a company can be restored
-directly; a person without a name or email is labeled **Contact** in the confirmation.
+To archive a person or company, choose **Archive** immediately beside **Copy link**
+in the top toolbar. Confirming archives the record for the team while retaining its
+history; Cancel changes nothing. While saving, duplicate actions and dismissal are
+blocked. A rejected save retains the prior state and an actionable retry. Only team
+admins/owners can archive or restore; other members see a disabled action.
 
-The removed-People discovery check is
+An archived record has a single **Archived** chip and a quiet borderless **Restore**
+action beside its name on desktop, grouped beneath it on phones. Its toolbar keeps
+Copy link and Details. Hover or focus the chip for the explanation; tap on phones.
+Escape dismisses it. Restore is a separate focus target. Verify 320px and 390px phone
+widths, a usable Restore touch target and focus after confirmation or cancellation.
+
+Company archive archives all its people and turns off team email sync. Restoring the
+company requires an explicit confirmation: every person is restored, including those
+archived individually, while email syncing stays off. Re-enable **Sync Emails** under
+**Email sharing** separately. A person whose company is archived offers **Open company**
+so that restoration happens there first. Unfiled people restore directly. Company row
+**Archive / Restore** actions also confirm the cascade. Record details and References
+appear first in both information panels; company Properties, Lists and Email sharing
+follow. Neither panel has a duplicate visibility control.
+
+Verify successful changes update open People, Companies, Team and ordinary Cmd-K;
+late responses must not reintroduce archived rows or hide restored rows with an
+old empty page. Returning to a cached company
+must show confirmed embedded contacts. Failed reads after a successful save must not
+claim the save failed. Run the actual-control desktop/phone fixture with
+`bunx playwright test --config src/features/crm/browser-test/archive/playwright.config.ts`.
+
+The archived-People discovery check is
 `bunx playwright test --config src/features/crm/browser-test/people/playwright.config.ts`
 from `apps/web`. It covers desktop/phone discovery, server-side search and cursor
 paging, query errors, unfiled records, hidden-parent behavior, rejected writes,
@@ -272,8 +262,6 @@ The backend-free browser check is
 from `apps/web`. It exercises cancellation, pending/error handling, restoration,
 permissions, and changing records with an open confirmation on desktop, phone,
 and tablet.
-Fixture screenshots: [company confirmation on desktop](media/crm-removal/company-desktop.png)
-and [person confirmation on phone](media/crm-removal/contact-phone.png).
 
 Their information panel starts closed and opens as a floating bubble at every
 width, without shrinking the record content. Click outside the bubble or use
@@ -288,7 +276,7 @@ fills the row beside the filter button, or the whole row without filters.
 Email importance and inbox choices open in the shared filter drawer.
 Section creation actions appear at the bottom right above the navigation dock,
 replacing the default app-wide action: Add contact, New email, New note, New task,
-New call, or New database. Add contact is available once the company is loaded,
+New call, or New database. Add contact is available once the company is loaded and visible,
 including companies without a domain; contact emails may use any valid domain.
 Email-sync and database gates, recipients, and task associations still apply. With company email
 sync off, New email stays visible but disabled; New company must not replace it.

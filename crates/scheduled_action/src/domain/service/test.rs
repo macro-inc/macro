@@ -1242,6 +1242,43 @@ async fn editing_an_overdue_one_off_keeps_its_unconsumed_firing() {
     assert_eq!(updated.next_run_at, None);
 }
 
+#[tokio::test]
+async fn a_past_once_time_is_due_on_save_but_never_rearmed_after_it_ran() {
+    use chrono::SubsecRound;
+    let svc = service(false);
+    let at = (Utc::now() - chrono::Duration::minutes(1)).trunc_subsecs(0);
+    let mut config = configuration(false);
+    config.trigger = ActionTrigger::Once { at };
+    let created = svc
+        .create_action(&user_principal(), config.clone())
+        .await
+        .unwrap();
+    assert_eq!(created.next_run_at, Some(at));
+    let id = created.id.unwrap();
+
+    // The dispatcher ran it: nothing is left to run.
+    svc.repo.actions.lock().unwrap()[0].next_run_at = None;
+    let paused = svc.set_enabled(edit_receipt(id), false).await.unwrap();
+    assert_eq!(paused.next_run_at, None);
+    assert_policy(
+        svc.set_enabled(edit_receipt(id), true).await,
+        ActionPolicyError::NoFutureFirings,
+    );
+
+    // An edit keeps the spent time spent; a newly added past time is due now.
+    let later = (Utc::now() - chrono::Duration::seconds(5)).trunc_subsecs(0);
+    config.trigger = serde_json::from_value(json!({"type": "multiple", "triggers": [
+        {"type": "once", "at": at},
+        {"type": "once", "at": later},
+    ]}))
+    .unwrap();
+    let updated = svc
+        .update_action(edit_receipt(id), update(config))
+        .await
+        .unwrap();
+    assert_eq!(updated.next_run_at, Some(later));
+}
+
 fn conditional_configuration() -> ActionConfiguration {
     ActionConfiguration {
         trigger: serde_json::from_value(json!({

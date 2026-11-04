@@ -235,7 +235,9 @@ export function packageEntityDocs(
     }
     const { header, methods } = splitClass(markdown);
     const guide = guideByPage.get(path);
-    symbols[symbol] = guide ? `${header}\n\n${GUIDE_HEADING}\n\n${guide}` : header;
+    symbols[symbol] = guide
+      ? `${header}\n\n${GUIDE_HEADING}\n\n${guide}`
+      : header;
     for (const method of methods)
       symbols[`${symbol}.${method.name}`] = method.markdown;
   }
