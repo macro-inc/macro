@@ -186,11 +186,16 @@ options) switches between **Priority**,
 **Importance** and **Most recent**; touch layouts have no dropdown and keep the
 saved order (Priority by default). The filter menu adds a Focus group (Reply
 needed, Follow up) on this tab only and has no Status or Done group there. The
-list is one `user.emailFocus` GraphQL read filtered on the client; it refreshes
-on open, not live. Mark Done hides the row at once and archives the thread; Undo
-brings it back. The worker classifies only inboxes on its
-`FOCUS_ENABLED_EMAIL_DOMAINS` allowlist, so other accounts see the empty state
-`Nothing needs you`.
+list is one `user.emailFocus` GraphQL read filtered on the client. New mail
+reaches an open Focus tab within seconds: when the worker stores a
+classification it pushes `refresh_email` (`focus_updated`) to the inbox's owner
+and delegates, and the tab reads the list again without a reload. A hidden tab
+reads once when it next shows, and any other tab reads when Focus opens. Time
+passing stores nothing and pushes nothing, so a follow-up coming due or a
+calendar change whose event ends shows at the tab's next read. Mark
+Done hides the row at once and archives the thread; Undo brings it back. The
+worker classifies only inboxes on its `FOCUS_ENABLED_EMAIL_DOMAINS` allowlist, so
+other accounts see the empty state `Nothing needs you`.
 
 `Archived`, between All mail and Shared in the desktop Library section, lists
 your own archived (Mail Done) threads: the

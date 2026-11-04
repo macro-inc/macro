@@ -109,7 +109,6 @@ async fn run_window<D: FocusDelivery>(
     loop {
         let span = tracing::info_span!(
             "email_focus.notify",
-            otel.kind = "producer",
             %link_id,
             coalesced,
             delivered = Empty,
