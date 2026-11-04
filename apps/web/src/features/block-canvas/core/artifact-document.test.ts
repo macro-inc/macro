@@ -1,5 +1,9 @@
 import { describe, expect, it } from 'vitest';
-import { ARTIFACT_CSP, composeArtifactDocument } from './artifact-document';
+import {
+  ARTIFACT_CSP,
+  composeArtifactDocument,
+  isArtifactLoadMarker,
+} from './artifact-document';
 
 const NO_LIBRARY = { styles: {}, components: {} };
 
@@ -11,7 +15,8 @@ describe('composeArtifactDocument', () => {
     const composed = composeArtifactDocument(
       '<html><head><script>run()</script></head><body>Hi</body></html>',
       {},
-      NO_LIBRARY
+      NO_LIBRARY,
+      'token'
     );
 
     const first = parse(composed).head.firstElementChild;
@@ -26,7 +31,8 @@ describe('composeArtifactDocument', () => {
     const composed = composeArtifactDocument(
       '<script>run()</script>',
       {},
-      NO_LIBRARY
+      NO_LIBRARY,
+      'token'
     );
 
     expect(parse(composed).head.firstElementChild?.tagName).toBe('META');
@@ -36,7 +42,8 @@ describe('composeArtifactDocument', () => {
     const composed = composeArtifactDocument(
       '<meta http-equiv="REFRESH" content="0;url=https://example.com"><p>Hi</p>',
       {},
-      NO_LIBRARY
+      NO_LIBRARY,
+      'token'
     );
 
     expect(composed).not.toContain('example.com');
@@ -47,7 +54,8 @@ describe('composeArtifactDocument', () => {
     const composed = composeArtifactDocument(
       '<p>Hi</p>',
       { '--color-ink': '#111' },
-      NO_LIBRARY
+      NO_LIBRARY,
+      'token'
     );
 
     expect(composed).toContain(':root{--color-ink:#111}');
@@ -63,7 +71,8 @@ describe('composeArtifactDocument', () => {
           card: '<section class="card"><slot></slot></section>',
           title: '<h1><slot></slot></h1>',
         },
-      }
+      },
+      'token'
     );
 
     expect(parse(composed).body.innerHTML).toBe(
@@ -81,7 +90,8 @@ describe('composeArtifactDocument', () => {
           a: '<macro-component name="b"></macro-component>',
           b: '<macro-component name="a"></macro-component>',
         },
-      }
+      },
+      'token'
     );
 
     expect(composed).not.toContain('macro-component');
@@ -91,11 +101,27 @@ describe('composeArtifactDocument', () => {
     const composed = composeArtifactDocument(
       '<macro-style name="brand"></macro-style><macro-style name="constructor"></macro-style><macro-component name="constructor">Kept</macro-component>',
       {},
-      { styles: { brand: 'h1{color:red}' }, components: {} }
+      { styles: { brand: 'h1{color:red}' }, components: {} },
+      'token'
     );
 
     expect(composed).toContain('<style>h1{color:red}</style>');
     expect(composed).not.toContain('macro-style');
     expect(parse(composed).body.textContent).toContain('Kept');
+  it('marks its own load before any artifact script can run', () => {
+    const composed = composeArtifactDocument(
+      '<script>run()</script>',
+      {},
+      NO_LIBRARY,
+      'secret'
+    );
+
+    expect(composed.indexOf('secret')).toBeLessThan(composed.indexOf('run()'));
+    expect(
+      isArtifactLoadMarker({ macroArtifactLoaded: 'secret' }, 'secret')
+    ).toBe(true);
+    expect(
+      isArtifactLoadMarker({ macroArtifactLoaded: 'guess' }, 'secret')
+    ).toBe(false);
   });
 });

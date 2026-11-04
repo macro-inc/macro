@@ -66,8 +66,10 @@ a content security policy ahead of the artifact's own markup, which blocks netwo
 requests, nested frames and form posts. Images and fonts must be inline.
 
 A policy cannot follow a navigation, and a sandbox does not stop a frame navigating
-itself. A second load therefore removes the frame, but the first request of that
-navigation has already been sent. Browsers also do not apply the policy to WebRTC.
+itself. Each composed document therefore announces its load to the host with a token, from
+a script that removes itself before artifact code runs. A load without the token puts
+the artifact's own document back, and an artifact that keeps leaving is stopped, but the first request of each navigation has already been
+sent. Browsers also do not apply the policy to WebRTC.
 So an artifact cannot reach Macro's data, but it can send out what it already holds:
 treat artifact source, and anything typed into an
 artifact, as readable by whoever wrote it. Artifacts mount only while on screen, so

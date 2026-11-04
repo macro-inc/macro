@@ -1032,10 +1032,10 @@ between Threads, All, and Recent preserves an already-open navigation overlay.
 
 With the flag on, desktop Chat has one conversation sidebar, without All, Recent,
 or Threads view tabs. The default order is Favorites, Direct messages, the
-team's channels, then custom sections. There is no All channels section; search
-still finds joined public/private conversations outside these sections. The team
-heading is **[Team name] channels**, with **Team channels** as the fallback while
-its name is unavailable. The team section always shows joined team channels,
+team's channels, custom sections, then **All channels**. All channels lists joined
+public and private channels, including those assigned to manual or smart custom
+sections. The team heading is **[Team name] channels**, with **Team channels** as
+the fallback while its name is unavailable. The team section always shows joined team channels,
 including channels assigned to manual or smart custom sections. Each custom
 section is a top-level heading, independent of the Team channels disclosure. Empty sections
 use padded, bordered cards like saved views, with a subtle background and secondary
@@ -1067,8 +1067,11 @@ Keyboard navigation scrolls immediately, without animation, only when the
 highlighted row enters the viewport's two-row context margin, leaving neighboring
 rows visible above and below. The margin shrinks in short sections.
 Section jumps also reveal the heading with surrounding context.
-Every section scrolls independently. Lists with more than two items have a resize
-grip; drag it to choose a height between two rows (68px) and the end of the list,
+Sections normally scroll independently. When All channels is last and has no
+manually saved height, it expands to its full content height and uses the sidebar's
+scroll area. Moving another section below it restores the usual height cap,
+without discarding a saved manual height. Lists with more than two items have a
+resize grip; drag it to choose a height between two rows (68px) and the end of the list,
 capped by the section's maximum. Shorter lists fit their content and have no
 resize grip. Favorites and Direct messages default to four visible rows;
 other sections default to their maximum height within the pane. Focus the grip

@@ -78,13 +78,33 @@ function expandLibrary(parsed: Document, library: ArtifactLibrary) {
     use.replaceWith(style);
   }
 }
+/**
+ * Tells the host that its own document, not some page navigated to, has loaded.
+ * It runs before any artifact code and removes itself, keeping the token in a
+ * closure, so the artifact cannot hand it to another page. An artifact that
+ * navigates while parsing never reaches its own load, so it sends nothing.
+ */
+const loadMarker = (token: string) =>
+  `(function (host, token) {
+    addEventListener('load', function () {
+      host.postMessage({ macroArtifactLoaded: token }, '*');
+    });
+  })(parent, ${JSON.stringify(token)});
+  document.currentScript.remove();`;
+
+export const isArtifactLoadMarker = (data: unknown, token: string) =>
+  !!data &&
+  typeof data === 'object' &&
+  'macroArtifactLoaded' in data &&
+  data.macroArtifactLoaded === token;
 
 /** Build the srcdoc. The parser never runs scripts, and the policy is parsed
  * first so that nothing in the artifact can run or load before it applies. */
 export function composeArtifactDocument(
   html: string,
   tokens: Record<string, string>,
-  library: ArtifactLibrary
+  library: ArtifactLibrary,
+  loadToken: string
 ): string {
   const parsed = new DOMParser().parseFromString(html, 'text/html');
   expandLibrary(parsed, library);
@@ -101,6 +121,9 @@ export function composeArtifactDocument(
   policy.httpEquiv = 'Content-Security-Policy';
   policy.content = ARTIFACT_CSP;
 
-  parsed.head.prepend(policy, theme);
+  const marker = parsed.createElement('script');
+  marker.textContent = loadMarker(loadToken);
+
+  parsed.head.prepend(policy, theme, marker);
   return `<!doctype html>${parsed.documentElement.outerHTML}`;
 }
