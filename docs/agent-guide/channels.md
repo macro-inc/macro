@@ -1024,8 +1024,9 @@ sections have no scope icon or badge. Header focus backgrounds fill the entire h
 trailing controls, with no extra right padding.
 
 The sidebar uses TanStack Virtual for the section stack, each expanded channel
-list, and search results. Rows retain stable identities through live refreshes;
-focused and dragged rows remain mounted when they leave the visible range.
+list, and search results. Rows retain stable identities and measured positions
+through live refreshes and section reordering; focused and dragged rows remain
+mounted when they leave the visible range.
 Keyboard navigation scrolls immediately, without animation, only when the
 highlighted row enters the viewport's two-row context margin, leaving neighboring
 rows visible above and below. The margin shrinks in short sections.
@@ -1055,8 +1056,10 @@ preference, including for shared sections, and survives reloads. The dragged
 section appears as a card preview while its source is subdued. Other sections
 animate into their new positions on drop or keyboard reorder, except with reduced
 motion enabled. Dragging near the sidebar's top or bottom uses the same edge-scroll
-mechanism as Gantt; wheel scrolling remains available during a drag. Resize drags compensate for sidebar scroll movement,
-and the rounded resize grips retain pointer capture until release or cancellation.
+mechanism as Gantt; wheel scrolling remains available during a drag. Resizing near
+the sidebar's top or bottom also scrolls the sidebar, including while the pointer
+stays still. Resize drags compensate for that movement, and the rounded resize
+grips retain pointer capture until release or cancellation.
 
 Section membership comes from the server's complete visible channel-ID lists.
 The sidebar shows available channel rows immediately. One shared by-ID query
@@ -1101,8 +1104,10 @@ the label service and its feature flag.
 
 Use **New → New section** to create a section. The wider dialog has a name field
 and a **Smart section** switch in its body. **Shared with team** sits on the left
-of the footer, with the action buttons on the right. With both switches off, the
-section is personal and manual. Smart grouping reveals a separate input below
+of the footer, with the action buttons on the right. The question-mark tooltip
+beside sharing explains that team members can see and organize the section and
+only team channels can be added. With both switches off, the section is personal
+and manual. Smart grouping reveals a separate input below
 **Name contains** and a matching-channel count. Hover or focus that count to preview
 matched channels; larger results show the remaining count. Switching sharing scope
 refreshes the preview without replacing the form. A zero shared count explains

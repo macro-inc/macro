@@ -1,6 +1,7 @@
 import { t } from '@app/lib/i18n';
 import { fireAndForget } from '@core/util/fireAndForget';
 import HashIcon from '@icon/system/regular/hash.svg';
+import QuestionMarkIcon from '@icon/system/regular/question-mark.svg';
 import { useSmartTagPreviewQuery } from '@queries/channel-labels/channel-labels';
 import type { ChannelLabelRule } from '@service-storage/generated/schemas/channelLabelRule';
 import type { ChannelLabelScopeSelection } from '@service-storage/generated/schemas/channelLabelScopeSelection';
@@ -287,14 +288,26 @@ function SectionDialog(props: SectionDialogProps & ManagedDialogProps) {
           </div>
           <div class="flex flex-wrap items-center justify-end gap-3 px-5 py-3">
             <Show when={!props.initial && props.canShare}>
-              <ToggleSwitch
-                class="mr-auto shrink-0"
-                label={t('channelSections.shared')}
-                labelClass="text-xs text-ink-muted font-normal whitespace-nowrap"
-                checked={scope() === 'team'}
-                onChange={(checked) => setScope(checked ? 'team' : 'personal')}
-                disabled={saving()}
-              />
+              <div class="mr-auto flex shrink-0 items-center gap-1">
+                <ToggleSwitch
+                  label={t('channelSections.shared')}
+                  labelClass="text-xs text-ink-muted font-normal whitespace-nowrap"
+                  checked={scope() === 'team'}
+                  onChange={(checked) =>
+                    setScope(checked ? 'team' : 'personal')
+                  }
+                  disabled={saving()}
+                />
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="icon-xs"
+                  aria-label={t('channelSections.sharingHelpLabel')}
+                  tooltip={t('channelSections.sharingHelp')}
+                >
+                  <QuestionMarkIcon class="size-3.5" />
+                </Button>
+              </div>
             </Show>
             <div class="ml-auto flex shrink-0 items-center gap-2">
               <Button

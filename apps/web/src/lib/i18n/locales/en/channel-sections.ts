@@ -66,6 +66,9 @@ export default {
   sharedShort: 'Shared',
   personal: 'Personal',
   shared: 'Shared with team',
+  sharingHelpLabel: 'About shared sections',
+  sharingHelp:
+    'Team members can see and organize shared sections. Only team channels can be added.',
   sharedSectionHint: 'Shared with your team. Team channels only.',
   cannotDropHere: 'This item cannot be added here.',
   smartSectionDropHint: 'Smart sections add channels by name, not by dragging.',
