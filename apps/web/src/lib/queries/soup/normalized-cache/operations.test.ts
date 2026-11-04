@@ -3,11 +3,12 @@
  */
 
 import { withDocumentTabItemScope } from '@app/features/next-soup/soup-view/document-tab-scope';
+import type { UnifiedNotification } from '@notifications/types';
 import type { UnifiedSearchResponseItem } from '@service-search/generated/models';
 import type { SoupApiItem } from '@service-storage/generated/schemas';
 import type { SoupPage } from '@service-storage/generated/schemas/soupPage';
 import type { InfiniteData } from '@tanstack/solid-query';
-import { QueryClient } from '@tanstack/solid-query';
+import { QueryClient, QueryObserver } from '@tanstack/solid-query';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 let testQueryClient: QueryClient;
@@ -380,6 +381,74 @@ describe('refetchSoupEntity', () => {
         'doc-new',
         'd-1',
       ]);
+    });
+
+    describe('for a new notification', () => {
+      const notifiedKey = [
+        ...soupKeys.astItems._def,
+        { params: { sort_method: 'notified_at' } },
+      ];
+      const notifiedPages = () =>
+        testQueryClient.getQueryData<
+          InfiniteData<SoupAstItemsFlatPage, unknown>
+        >(notifiedKey);
+      const notification = {
+        id: 'notification-1',
+        entity_id: 'doc-new',
+        entity_type: 'document',
+        created_at: '2026-01-02T00:00:00.000Z',
+        state: 'unseen',
+        notification_metadata: { tag: 'commented_on_document', content: {} },
+      } as unknown as UnifiedNotification;
+
+      beforeEach(() => {
+        testQueryClient.setQueryData(notifiedKey, {
+          pages: [
+            {
+              kind: 'flat',
+              items: [mockDocumentItem('d-1')],
+              nextCursor: null,
+            },
+          ],
+          pageParams: [null],
+        });
+      });
+
+      const mountNotifiedList = () =>
+        new QueryObserver(testQueryClient, {
+          queryKey: notifiedKey,
+          queryFn: () => notifiedPages() ?? null,
+          staleTime: Number.POSITIVE_INFINITY,
+        }).subscribe(() => {});
+
+      it('adds a row a mounted notified_at list does not have yet', async () => {
+        const unmount = mountNotifiedList();
+
+        updateSoupForNotification(notification);
+
+        await vi.waitFor(() => {
+          expect(notifiedPages()?.pages[0].items.map(getSoupItemId)).toEqual([
+            'doc-new',
+            'd-1',
+          ]);
+        });
+        unmount();
+      });
+
+      it('fetches nothing when no notified_at list is mounted', async () => {
+        await refetchSoupEntity('doc-new', 'document', { notified: true });
+
+        expect(getSoupItemsMock).not.toHaveBeenCalled();
+      });
+
+      it('fetches nothing for a change that is not a notification', async () => {
+        const unmount = mountNotifiedList();
+
+        await refetchSoupEntity('doc-new', 'document');
+
+        expect(getSoupItemsMock).not.toHaveBeenCalled();
+        unmount();
+      });
     });
   });
 });
@@ -795,6 +864,7 @@ import {
   soupItemMatchesProjectMembership,
   soupItemMatchesQuery,
 } from '@app/features/next-soup/filters/query-filters';
+import { updateSoupForNotification } from '../../notification/notification-soup';
 import type { GroupByField, GroupMeta } from '../grouped/types';
 import { NOT_SET_GROUP_KEY } from '../grouped/types';
 import type { SoupAstItemsFlatPage, SoupAstItemsGroupedPage } from '../items';
