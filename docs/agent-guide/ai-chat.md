@@ -515,7 +515,7 @@ the shimmer.
   without asking; any failure or a 3s timeout also falls back to Chat. The session opens
   under Chat or Code like one started from that mode.
   Switching modes preserves the draft and attachments and
-  clears model and effort overrides from the previous mode. It does not filter
+  clears the model override from the previous mode. It does not filter
   the conversation sidebar. Session composers start at one line and grow with
   longer prompts or Shift+Enter. Lists, quotes, headings, and other non-paragraph
   blocks expand immediately, even with short text. The editor takes the full width
@@ -658,8 +658,10 @@ the shimmer.
   the catalog in place with a Back action. Search includes every model.
 - A compact **speedometer-style effort** button with a simple arc and needle beside the model selector opens a simple list of effort levels with a check beside the current choice: a popover centered below the button on desktop, or its own bottom sheet on mobile. Choosing a level applies it and closes the menu. Mobile shows it alongside the model control after the input expands. It is hidden when the model has fewer than two effort choices.
   Model-specific effort choices remain available in desktop model submenus.
-  Free and Pro users start new conversations at the lowest advertised level,
-  unless they explicitly choose another. Existing sessions keep their current setting.
+  New conversations remember the last effort picked for each runtime and model,
+  per signed-in user, across sends, mode switches, and reloads, while that model
+  still offers it. Without one, Free and Pro users start at the lowest advertised
+  level. Existing sessions keep their current setting.
 - On desktop, chat agents' empty input shows the static hint **Type @ to mention
   docs, people, or channels, / for skills** immediately, without typing or cycling
   through other hints. Clearing a draft restores the same hint.
@@ -1108,7 +1110,8 @@ all three schemas on its first model call, without `SearchTools` or `LoadTools`.
 For Macro's in-process agent, the backend evaluates the session owner's
 `ai-code-mode` flag once per conversational turn. Enabled users get a smaller
 direct toolset: SDK-supported searches, reads, listing, and data operations run
-through the SDK. Document editing keeps the direct `EditDocument` tool, and
+through the SDK, including AI document and task edits
+(`document.edit(instructions)`; `EditDocument` is hidden in code mode), and
 results are presented with `execution.views.present`. Workspace feeds and
 mixed-entity name searches keep the direct `ListEntities` and `NameSearch` tools,
 including agent sessions. `ContentSearch` supports session history. The legacy
@@ -1183,8 +1186,8 @@ fields, return type) within a 32 KiB budget; references name other symbols in
 backticks, which read the same way. The agent reads the symbols a program uses,
 together, before writing it. There is no runtime `sdk.help` or
 `sdk.ToolName` proxy. The actual SDK exposes `macro.ai.structuredCompletion` and
-`macro.ai.decide`; Handlebars is imported from `handlebars`. Use the direct
-`EditDocument` tool for AI document edits.
+`macro.ai.decide`; Handlebars is imported from `handlebars`. Edit a document or task
+body with `document.edit(instructions)`.
 
 The harness spawns a fresh Deno process for each execution. Dependencies are
 bundled at build time; no TypeScript compilation or package downloads happen
@@ -1243,7 +1246,8 @@ execution and verify its saved status does not claim unfinished work succeeded.
 For AI and templates, use the documented actual SDK methods with supplied fixture
 text, bounded parallel Jev classifications and a local Handlebars import. Check
 probabilities and per-item errors rather than assuming every branch succeeded.
-Use the direct `EditDocument` card in a separate editing check. Already dispatched
+Check an AI edit separately with `document.edit(instructions)`: it returns the
+new revision and web URL; read `content()` to see what changed. Already dispatched
 provider usage and completed writes may remain after cancellation.
 
 ## Code mode on the public MCP
@@ -2360,8 +2364,8 @@ named yes/no probabilities. Both can appear as ordinary expandable tool rows;
 open the row to inspect the generated object or estimates. In code mode, the
 same services are available through `macro.ai.structuredCompletion` and
 `macro.ai.decide`. The program chooses what evidence to include in its final result.
-Generation and classification do not edit a document. Use the existing
-`EditDocument` tool for an AI edit.
+Generation and classification do not edit a document. Use
+`document.edit(instructions)` for an AI edit.
 
 ### Code-mode review stacks
 

@@ -9,6 +9,7 @@ async fn it_should_deserialize_query_params() {
         original_url: Some("https://example.com".parse().unwrap()),
         referral_code: Some("test".to_string()),
         is_mobile: true,
+        is_agent: true,
     };
 
     let json = serde_json::to_string(&sso_state).unwrap();
@@ -30,7 +31,7 @@ async fn it_should_deserialize_query_params() {
 
     assert_matches!(data, OAuthCbParams { code: Some(code), state: Some(container), .. } => {
         assert_eq!(code, "test123");
-        assert_matches!(container.decode().unwrap(), SsoState { original_url: Some(url), is_mobile: true, referral_code: Some(code) } => {
+        assert_matches!(container.decode().unwrap(), SsoState { original_url: Some(url), is_mobile: true, referral_code: Some(code), is_agent: true } => {
             assert_eq!(url.as_str(), "https://example.com/");
             assert_eq!(code.as_str(), "test");
         })
@@ -107,6 +108,7 @@ async fn it_writes_session_code_to_db() {
             original_url: Some("https://macro.com".parse().unwrap()),
             is_mobile: true,
             referral_code: None,
+            is_agent: false,
         }),
         async |x| dummy.cb(x).await,
     )
@@ -132,6 +134,7 @@ async fn it_rejects_disallowed_original_url_without_side_effects() {
             original_url: Some("https://evil.example.com/phish".parse().unwrap()),
             is_mobile: true,
             referral_code: None,
+            is_agent: false,
         }),
         async |x| dummy.cb(x).await,
     )
@@ -148,6 +151,7 @@ async fn it_allows_macro_scheme_original_url() {
             original_url: Some("macro://login".parse().unwrap()),
             is_mobile: false,
             referral_code: None,
+            is_agent: false,
         }),
         async |x| dummy.cb(x).await,
     )
