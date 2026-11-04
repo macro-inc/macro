@@ -26,14 +26,16 @@ pub trait SyncRepository: Send + Sync {
     /// Syncs waiting for setup: pending, or failed setup due for a retry, and
     /// not leased by another instance.
     async fn awaiting_setup(&self, limit: i64) -> Result<Vec<Connection>>;
-    /// Lease setup and store the new signing secret. False when another
+    /// Lease setup and store the new signing secret. None when another
     /// instance holds the lease or the sync is no longer waiting.
-    async fn begin_setup(&self, id: Uuid, secret: &SigningSecret) -> Result<bool>;
+    async fn begin_setup(&self, id: Uuid, secret: &SigningSecret) -> Result<Option<SetupLease>>;
     /// Record the registration and start delivering. False when the sync was
-    /// removed or restarted meanwhile; the caller must retire `registration`.
+    /// removed or restarted meanwhile, or `lease` expired and another
+    /// instance replaced the secret; the caller must retire `registration`.
     async fn activate(
         &self,
         id: Uuid,
+        lease: SetupLease,
         dialpad_user: DialpadId,
         registration: Registration,
     ) -> Result<bool>;

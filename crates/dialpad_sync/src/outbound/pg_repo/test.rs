@@ -488,3 +488,52 @@ async fn an_enrollment_never_finished_in_connect_is_dropped(pool: PgPool) {
         SyncStatus::NotConnected
     );
 }
+
+#[sqlx::test(
+    migrator = "MACRO_DB_MIGRATIONS",
+    fixtures(path = "../../../fixtures", scripts("users"))
+)]
+async fn setup_finishes_only_under_the_lease_that_stored_the_secret(pool: PgPool) {
+    let service = service(pool, GrantState::Active, Arc::new(Calls::default()));
+    service.connect(&user(), Backfill::None).await.unwrap();
+    let id = service.repo.by_user(&user()).await.unwrap().unwrap().id;
+    let secret = || SigningSecret("secret".into());
+    let first = service
+        .repo
+        .begin_setup(id, &secret())
+        .await
+        .unwrap()
+        .unwrap();
+    // The first lease expires while its setup is still talking to Dialpad.
+    sqlx::query!(
+        "UPDATE dialpad_sync_connections SET setup_started_at = now() - interval '1 hour' WHERE id = $1",
+        id
+    )
+    .execute(&service.repo.pool)
+    .await
+    .unwrap();
+    let second = service
+        .repo
+        .begin_setup(id, &secret())
+        .await
+        .unwrap()
+        .unwrap();
+    let registration = Registration {
+        webhook_id: DialpadId(1),
+        subscription_id: DialpadId(2),
+    };
+    assert!(
+        !service
+            .repo
+            .activate(id, first, DialpadId(3), registration)
+            .await
+            .unwrap()
+    );
+    assert!(
+        service
+            .repo
+            .activate(id, second, DialpadId(3), registration)
+            .await
+            .unwrap()
+    );
+}

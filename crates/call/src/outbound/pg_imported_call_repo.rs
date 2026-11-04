@@ -92,15 +92,16 @@ impl ImportedCallRepository for PgImportedCallRepository {
             .map(|v| serde_json::from_value(v.clone()))
             .transpose()?
             .unwrap_or_default();
-        let previous = sqlx::query!(
+        let mut previous = sqlx::query!(
             "SELECT id, email, phone FROM call_entity_participants WHERE call_id = $1 AND id = ANY($2)",
             id,
             &old_ids
         )
         .fetch_all(tx.as_mut())
         .await?;
+        // Each previous ID goes to one participant, since two may share a number.
         for participant in &mut call.participants {
-            if let Some(previous) = previous.iter().find(|p| {
+            if let Some(at) = previous.iter().position(|p| {
                 let same_email = p
                     .email
                     .as_deref()
@@ -109,7 +110,7 @@ impl ImportedCallRepository for PgImportedCallRepository {
                 let same_phone = p.phone.is_some() && p.phone == participant.phone;
                 same_email || same_phone
             }) {
-                participant.id = previous.id;
+                participant.id = previous.swap_remove(at).id;
             }
         }
         let participant_ids: Vec<Uuid> = call.participants.iter().map(|p| p.id).collect();

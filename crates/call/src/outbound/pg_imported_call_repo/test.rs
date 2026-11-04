@@ -153,3 +153,34 @@ async fn phone_only_participants_keep_their_number_and_identity(pool: PgPool) {
         Some("Jane Doe")
     );
 }
+
+#[sqlx::test(
+    migrator = "MACRO_DB_MIGRATIONS",
+    fixtures(path = "../../../fixtures", scripts("import_users"))
+)]
+async fn participants_sharing_a_number_keep_their_own_identities(pool: PgPool) {
+    let service = CallImportServiceImpl(
+        PgImportedCallRepository::new(pool.clone()),
+        macro_event_broker::NoopMacroEventBroker,
+    );
+    let caller = |name: &str| CallParticipant {
+        id: macro_uuid::generate_uuid_v7(),
+        user_id: None,
+        display_name: Some(name.into()),
+        email: None,
+        phone: Some("+1555010".into()),
+        external_id: None,
+        attendance: vec![],
+    };
+    let now = Utc::now();
+    let mut call = snapshot("import-a", now);
+    call.participants = vec![caller("Jane"), caller("Ravi")];
+    let id = service.ingest(call).await.unwrap();
+
+    let mut again = snapshot("import-a", now + chrono::Duration::seconds(1));
+    again.participants = vec![caller("Jane"), caller("Ravi")];
+    service.ingest(again).await.unwrap();
+    let read = service.read(&user("import-a"), id).await.unwrap().unwrap();
+    assert_eq!(read.participants.len(), 2);
+    assert_ne!(read.participants[0].id, read.participants[1].id);
+}

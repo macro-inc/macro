@@ -112,11 +112,11 @@ impl<R: SyncRepository, G: Grants, D: Dialpad, V: DeliveryVerifier> Service<R, G
             }
         };
         let secret = new_secret();
-        if !self.repo.begin_setup(connection.id, &secret).await? {
+        let Some(lease) = self.repo.begin_setup(connection.id, &secret).await? else {
             span.record("outcome", "leased");
             return Ok(());
-        }
-        let result = self.register(&connection, &token, &secret).await;
+        };
+        let result = self.register(&connection, lease, &token, &secret).await;
         if result.is_err() {
             self.repo
                 .stop(connection.id, SyncIssue::SetupFailed)
@@ -129,6 +129,7 @@ impl<R: SyncRepository, G: Grants, D: Dialpad, V: DeliveryVerifier> Service<R, G
     async fn register(
         &self,
         connection: &Connection,
+        lease: SetupLease,
         token: &AccessToken,
         secret: &SigningSecret,
     ) -> Result<()> {
@@ -158,8 +159,13 @@ impl<R: SyncRepository, G: Grants, D: Dialpad, V: DeliveryVerifier> Service<R, G
             webhook_id: webhook,
             subscription_id,
         };
-        // A disconnect or restart raced setup: retire what was just created.
-        if !self.repo.activate(connection.id, me, registration).await? {
+        // A disconnect, restart or newer setup raced this one: retire what
+        // was just created.
+        if !self
+            .repo
+            .activate(connection.id, lease, me, registration)
+            .await?
+        {
             self.dialpad.unregister(token, registration).await?;
         }
         Ok(())

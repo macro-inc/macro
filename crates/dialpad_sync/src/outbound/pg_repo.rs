@@ -156,31 +156,32 @@ impl SyncRepository for PgSyncRepository {
         self.ids(ids).await
     }
 
-    async fn begin_setup(&self, id: Uuid, secret: &SigningSecret) -> Result<bool> {
+    async fn begin_setup(&self, id: Uuid, secret: &SigningSecret) -> Result<Option<SetupLease>> {
         let sealed = self.seal(id, secret)?;
-        let changed = sqlx::query!(
+        let started = sqlx::query_scalar!(
             r#"UPDATE dialpad_sync_connections
             SET setup_started_at = now(), signing_secret = $2, last_error = NULL
             WHERE id = $1 AND NOT enabled
                 AND (setup_started_at IS NULL
                     OR setup_started_at < now() - make_interval(secs => $3))
                 AND (last_error IS NULL
-                    OR (last_error = $4 AND setup_started_at < now() - make_interval(secs => $5)))"#,
+                    OR (last_error = $4 AND setup_started_at < now() - make_interval(secs => $5)))
+            RETURNING setup_started_at AS "setup_started_at!""#,
             id,
             sealed,
             SETUP_LEASE_SECONDS,
             SyncIssue::SetupFailed.as_ref(),
             SETUP_RETRY_SECONDS
         )
-        .execute(&self.pool)
-        .await?
-        .rows_affected();
-        Ok(changed == 1)
+        .fetch_optional(&self.pool)
+        .await?;
+        Ok(started.map(SetupLease))
     }
 
     async fn activate(
         &self,
         id: Uuid,
+        lease: SetupLease,
         dialpad_user: DialpadId,
         registration: Registration,
     ) -> Result<bool> {
@@ -188,11 +189,12 @@ impl SyncRepository for PgSyncRepository {
             r#"UPDATE dialpad_sync_connections
             SET enabled = true, dialpad_user_id = $2, webhook_id = $3, subscription_id = $4,
                 setup_started_at = NULL, last_error = NULL
-            WHERE id = $1 AND NOT enabled AND setup_started_at IS NOT NULL AND last_error IS NULL"#,
+            WHERE id = $1 AND NOT enabled AND setup_started_at = $5 AND last_error IS NULL"#,
             id,
             dialpad_user.0,
             registration.webhook_id.0,
-            registration.subscription_id.0
+            registration.subscription_id.0,
+            lease.0
         )
         .execute(&self.pool)
         .await?

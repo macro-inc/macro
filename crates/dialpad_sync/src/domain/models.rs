@@ -37,6 +37,11 @@ impl std::fmt::Display for DialpadId {
 #[derive(Clone)]
 pub struct SigningSecret(pub String);
 
+/// One instance's hold on a sync's setup, named by when it began. Setup
+/// finishes only under the lease that stored the signing secret.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct SetupLease(pub DateTime<Utc>);
+
 /// How far back to import calls when a user first connects.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Deserialize, Serialize, utoipa::ToSchema)]
 #[schema(as = DialpadBackfill)]

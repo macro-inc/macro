@@ -1,0 +1,26 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "UPDATE dialpad_sync_connections\n            SET setup_started_at = now(), signing_secret = $2, last_error = NULL\n            WHERE id = $1 AND NOT enabled\n                AND (setup_started_at IS NULL\n                    OR setup_started_at < now() - make_interval(secs => $3))\n                AND (last_error IS NULL\n                    OR (last_error = $4 AND setup_started_at < now() - make_interval(secs => $5)))\n            RETURNING setup_started_at AS \"setup_started_at!\"",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "setup_started_at!",
+        "type_info": "Timestamptz"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Bytea",
+        "Float8",
+        "Text",
+        "Float8"
+      ]
+    },
+    "nullable": [
+      true
+    ]
+  },
+  "hash": "f63ccb8850ea768e4b6f82e11966bb6604cb529ce9e272dba8ac496962323c63"
+}
