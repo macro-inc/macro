@@ -488,6 +488,7 @@ impl From<ViewProblem> for RunError {
 
 /// What a statement produced.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Type, Default)]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[serde(rename_all = "camelCase")]
 pub struct Outcome {
     /// The result columns, in select-list order; empty for writes.
@@ -511,6 +512,7 @@ pub struct Outcome {
 
 /// A column whose type an `ALTER COLUMN` changed.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Type)]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[serde(rename_all = "camelCase")]
 pub struct AlteredColumn {
     /// The table.
@@ -523,6 +525,7 @@ pub struct AlteredColumn {
 
 /// One result column.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Type)]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[serde(rename_all = "camelCase")]
 pub struct OutcomeColumn {
     /// The name as the statement would call it: the column's display name,

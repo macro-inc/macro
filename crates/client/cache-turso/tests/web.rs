@@ -17,6 +17,32 @@ wasm_bindgen_test_configure!(run_in_dedicated_worker);
 mod contacts;
 #[path = "common/people.rs"]
 mod people;
+#[path = "common/people_sql.rs"]
+mod people_sql;
+
+#[wasm_bindgen_test(async)]
+async fn local_people_sql_executes_over_opfs() {
+    let owner = OpfsOwner::acquire("cache-people-sql.db")
+        .await
+        .unwrap()
+        .recovery_wipe()
+        .await
+        .unwrap();
+    let OpenResult::Ready(session) = owner.open().await.unwrap() else {
+        panic!("fresh storage");
+    };
+    let storage =
+        TursoStorage::from_opfs_session(session.connect().unwrap(), "local-people-sql").unwrap();
+    let mut engine = Engine::with_capacity(storage, 16);
+    let scope = people_sql::seed(&mut engine, 1_000).await;
+    let engine = people_sql::contract(engine, &scope, 1_000).await;
+    healthy_close(engine.into_storage().try_close().unwrap())
+        .preserve()
+        .unwrap()
+        .release()
+        .await
+        .unwrap();
+}
 
 #[wasm_bindgen_test(async)]
 async fn people_policy_filters_and_ranks_before_limiting_over_opfs() {

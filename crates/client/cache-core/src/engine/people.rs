@@ -37,6 +37,43 @@ impl<S: Storage> Engine<S> {
         }
     }
 
+    /// Execute a bounded read in the existing local database. This entry point
+    /// never binds an account, scans records into Rust, or contacts a server.
+    pub async fn read_people_sql(
+        &mut self,
+        request: &people::sql::PeopleSqlRequest,
+    ) -> Result<people::sql::PeopleSqlResult, EngineError<S::Error>> {
+        self.people_scope(&request.scope).await?;
+        if self.current_identity().await?.as_deref() != Some(request.scope.identity.as_str()) {
+            return Err(EngineError::StaleHydrationScope);
+        }
+        let plan = match &request.input {
+            people::sql::PeopleSqlInput::Statement { sql } => {
+                people::sql::PeopleSqlPlan::compile(sql)?
+            }
+            people::sql::PeopleSqlInput::Identities { ids } => {
+                people::sql::PeopleSqlPlan::identities(ids)?
+            }
+        };
+        if self
+            .optimistic
+            .iter()
+            .filter(|layer| !layer.superseded)
+            .any(|layer| {
+                layer
+                    .updates
+                    .keys()
+                    .any(|key| key.as_ref().starts_with("GraphqlContact:"))
+            })
+        {
+            return Ok(people::sql::PeopleSqlResult::Incomplete);
+        }
+        self.storage
+            .read_people_sql(&request.scope.identity, &plan)
+            .await
+            .map_err(EngineError::Storage)
+    }
+
     /// Inspect context publication before a compare-and-set begin, without scanning people.
     pub async fn people_context_state(
         &mut self,

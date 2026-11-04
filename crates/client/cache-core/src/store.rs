@@ -107,6 +107,14 @@ pub trait Storage: MaybeSend {
         visit: impl FnMut(&EntityKey<'_>, &Record) + MaybeSend,
     ) -> impl Future<Output = Result<(), Self::Error>> + MaybeSend;
 
+    /// Execute filtering, aggregation and limits in local storage. Unsupported
+    /// implementations must refuse; collecting the directory is not a fallback.
+    fn read_people_sql(
+        &self,
+        viewer: &str,
+        plan: &crate::people::sql::PeopleSqlPlan,
+    ) -> impl Future<Output = Result<crate::people::sql::PeopleSqlResult, Self::Error>> + MaybeSend;
+
     /// Reads one bucket in indexed recent order. `after` is exclusive.
     fn browse_search_documents(
         &self,
@@ -422,6 +430,14 @@ impl InMemoryStorage {
 
 impl Storage for InMemoryStorage {
     type Error = Infallible;
+
+    async fn read_people_sql(
+        &self,
+        _viewer: &str,
+        _plan: &crate::people::sql::PeopleSqlPlan,
+    ) -> Result<crate::people::sql::PeopleSqlResult, Self::Error> {
+        Ok(crate::people::sql::PeopleSqlResult::Unsupported)
+    }
 
     async fn get_batch(&self, keys: &[EntityKey<'_>]) -> Result<Vec<Option<Record>>, Self::Error> {
         self.record_get_count.fetch_add(1, Ordering::Relaxed);

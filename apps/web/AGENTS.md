@@ -148,18 +148,17 @@ reader keeps one physical read plus one replaceable pending input, samples cache
 completeness before scanning, and wakes incomplete reads only on readiness
 transitions. Source data is scoped and immediately collected, not a people pool.
 
-Browser SQL describes reads with the actual wasm compiler before choosing execution.
-Any statement bound to `macro.people` uses the dedicated `/databases/read` route;
-ordinary tables keep their local GraphQL/cache path, including tables named people.
-Never enumerate contacts or fall back to the read/write endpoint. Validate the
-response's viewer, definition IDs and result shape; fence account/session, input
-transitions and disposal. Keep last same-owner results on ordinary failures, but
-clear them on account changes, authorization refusals or a foreign-viewer response,
-even before local auth refresh. Keep server query refusals distinct from network/offline failures. Remote SQL does not claim cache availability or rerun on
-hydration hints; committed changes coalesce behind an active read. Preserve explicit
-post-disposal refreshes used to finish accepted database writes only for the original
-account/session. Fresh people SQL requires the new backend route; offline/unsupported
-responses stay errors, not authoritative empty answers.
+Execute browser `macro.people` SQL in the existing local Turso cache, including
+offline; authorized synchronization supplies records, not a server query endpoint.
+Use actual wasm compiler metadata to distinguish the built-in relation from ordinary
+tables named people. Filter, aggregate and limit before materializing results; never
+enumerate contacts or fall back to remote SQL execution. Validate result metadata and
+fence account/session, storage generation, input transitions and disposal. Require
+complete synchronization before treating local results as directory-wide evidence;
+unsupported/incomplete reads stay explicit failures, not authoritative empty answers.
+Keep last same-owner results on ordinary failures, but clear them on account or
+authority changes. Preserve explicit post-disposal refreshes used to finish accepted
+database writes only for the original account/session.
 
 ## Verifying a change in a real browser
 

@@ -919,6 +919,15 @@ impl TursoStorage {
 impl Storage for TursoStorage {
     type Error = TursoStorageError;
 
+    async fn read_people_sql(
+        &self,
+        viewer: &str,
+        plan: &cache_core::people::sql::PeopleSqlPlan,
+    ) -> Result<cache_core::people::sql::PeopleSqlResult, Self::Error> {
+        self.require_healthy()?;
+        self.latch_result(people_sql::read(&self.connection(), viewer, plan))
+    }
+
     async fn get_batch(&self, keys: &[EntityKey<'_>]) -> Result<Vec<Option<Record>>, Self::Error> {
         self.require_healthy()?;
         let result = (|| {
@@ -1029,7 +1038,8 @@ impl Storage for TursoStorage {
                     )?;
                     self.fault_after(TestFaultSite::Delete, index)?;
                 }
-                calendar::delete_ranges(&connection, &keys)
+                calendar::delete_ranges(&connection, &keys)?;
+                people_sql::delete(&connection, &keys)
             })
         })();
         self.latch_result(result)
@@ -1741,6 +1751,7 @@ impl PredicateIndexStorage for TursoStorage {
                     )?;
                 }
                 calendar::delete_ranges(&connection, &keys)?;
+                people_sql::delete(&connection, &keys)?;
                 write_projection_mutations(&connection, projections)
             })
         })();
@@ -2020,6 +2031,18 @@ fn write_projection_mutations(
     connection: &Arc<Connection>,
     mutations: Vec<ProjectionMutation>,
 ) -> Result<(), TursoStorageError> {
+    // Contact facts are cache-owned derivatives of normalized authority. A
+    // caller's generic projection cannot add membership, replace private names,
+    // or erase facts without removing the underlying contact record.
+    let mutations = mutations
+        .into_iter()
+        .filter(|mutation| {
+            !mutation
+                .record_key()
+                .as_str()
+                .starts_with("GraphqlContact:")
+        })
+        .collect::<Vec<_>>();
     let keys = mutations
         .iter()
         .map(ProjectionMutation::record_key)
@@ -3213,6 +3236,7 @@ fn initialize(
     page_retention::compact_legacy_pages(connection)?;
     ensure_search_projection_version(connection)?;
     calendar::ensure_projection_version(connection)?;
+    people_sql::open(connection)?;
     Ok(migrated)
 }
 
@@ -4731,6 +4755,7 @@ struct EncodedRecord {
     value: Vec<u8>,
     search_documents: Vec<SearchDocument>,
     calendar_range: Option<cache_core::calendar::CalendarRangeRow>,
+    contact: Option<Record>,
 }
 
 fn prepare_records(
@@ -4744,6 +4769,16 @@ fn prepare_records(
                 value: encode_record(&record),
                 search_documents: project_search_documents(&key, &record),
                 calendar_range: cache_core::calendar::project_calendar_range(&key, &record),
+                contact: key.as_ref().starts_with("GraphqlContact:").then(|| Record {
+                    fields: record
+                        .fields
+                        .iter()
+                        .filter(|(field, _)| {
+                            cache_core::people::sql::projection::FIELDS.contains(&field.as_str())
+                        })
+                        .map(|(field, value)| (field.clone(), value.clone()))
+                        .collect(),
+                }),
             })
         })
         .collect()
@@ -4846,7 +4881,8 @@ fn write_derived_rows(
     entries: &[EncodedRecord],
 ) -> Result<(), TursoStorageError> {
     write_search_documents(connection, entries)?;
-    calendar::write_ranges(connection, entries)
+    calendar::write_ranges(connection, entries)?;
+    people_sql::write(connection, entries)
 }
 
 fn write_search_documents(
@@ -5225,6 +5261,7 @@ mod conjunction;
 mod integrity;
 mod mutation_retry;
 mod page_retention;
+mod people_sql;
 mod record_batch;
 mod search;
 

@@ -29,6 +29,7 @@ GraphQL response shape for callers. A concrete `Storage` impl (e.g.
   used to select which cached records satisfy a query.
 - `src/search.rs`: disposable Quick Access projection (version 6); email matches subjects and all embedded senders, never snippets or bodies; task projects (`GraphqlSoupInitiative`) index their display name with recency from `metadata`.
 - `src/people.rs`, `src/engine/people.rs`: scoped local context snapshots and specialized streamed person search. Context-only stubs never establish membership; exclusions and one-to-one DM deduplication precede the bounded heap. Browser/native hosts expose the API, and the frontend leader publishes bounded context batches. Ranked cursors bind account/generation, policy, context epoch and scoring clock. Continuations may be short when prior DM aliases are skipped; only a null cursor proves exhaustion. Quick Access and migrated recipient pickers consume these windows; remaining planner/full-list callers are still pending. Policy version 4 retains mention tiers/weights and property-picker self/domain boosts, and excludes automated recipient mailboxes before the heap unless the full address was typed. Its version is generated into the frontend contract.
+- `src/people/sql.rs`: account/generation-fenced local SQL, with no server or directory-fold fallback. Its disposable predicate profile is derived only from viewer-scoped contacts; context stubs and foreign-viewer keys cannot establish membership. Storage returns bounded final rows, explicit incomplete/oversized results, or unsupported. A result still requires the caller's complete backfill checkpoint before being treated as directory-wide evidence.
 - `src/people/references.rs`: complete cached-directory label matching with at most two witnesses per requested label. Exact/preferred-full-name/any-name modes preserve caller ambiguity rules; malformed matching records cannot establish uniqueness. `resolve_people_references` is scoped/read-only and needs ready context only when excluding secondary inboxes. The browser/native reference transport is available; planner adoption remains pending. Foreign-viewer keys are discarded before private-name matching and cannot affect completeness flags. A completed cache scan is not proof of authoritative server membership.
 - `src/search/ranking.rs`: incremental top-K ranking over borrowed storage rows and optimistic shadows; copy only winners and never retain a full text-search bucket. Unicode normalization and subsequence matching live in the WASM-safe `subsequence_match` crate shared with server contact search.
 - `src/engine/hydration.rs`: background admission checks expected/response identity and durable generation without rebinding accounts or recreating cleared metadata. Call under the same engine lock as persistence.
@@ -48,7 +49,7 @@ GraphQL response shape for callers. A concrete `Storage` impl (e.g.
 ## Boundaries
 
 - Depends on: `apollo-compiler`/`apollo-parser` (GraphQL parsing), `predicate-index`,
-  `maybe_send`.
+  `maybe_send`, and the WASM-safe `database_sql` compiler.
 - Used by: `cache-turso`, `cache-wasm`.
 
 ## Recipes

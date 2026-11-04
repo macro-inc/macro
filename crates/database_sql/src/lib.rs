@@ -20,6 +20,7 @@ pub mod catalog;
 pub mod engine;
 pub mod fold;
 pub mod formula;
+pub mod local_people;
 pub mod parse;
 pub mod resolve;
 pub mod run;

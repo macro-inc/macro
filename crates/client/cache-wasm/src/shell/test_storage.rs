@@ -67,6 +67,14 @@ impl BrowserStorage {
 impl Storage for BrowserStorage {
     type Error = TursoStorageError;
 
+    async fn read_people_sql(
+        &self,
+        viewer: &str,
+        plan: &cache_core::people::sql::PeopleSqlPlan,
+    ) -> Result<cache_core::people::sql::PeopleSqlResult, Self::Error> {
+        self.inner.read_people_sql(viewer, plan).await
+    }
+
     async fn get_batch(&self, keys: &[EntityKey<'_>]) -> Result<Vec<Option<Record>>, Self::Error> {
         self.take(TestStorageFault::GetBatch)?;
         self.inner.get_batch(keys).await

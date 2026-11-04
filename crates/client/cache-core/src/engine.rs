@@ -116,6 +116,9 @@ pub enum EngineError<S: std::error::Error + 'static> {
     Storage(#[source] S),
     #[error("cache revision overflow")]
     RevisionOverflow,
+    /// The local people SQL compiler rejected a read.
+    #[error(transparent)]
+    PeopleSql(#[from] database_sql::local_people::PeopleSqlError),
     /// The background response belongs to an obsolete account or generation.
     #[error("cache hydration scope changed")]
     StaleHydrationScope,
@@ -336,8 +339,10 @@ struct BegunOptimisticWrite {
 /// Reserved storage key holding the identity bound to this cache. The
 /// `__meta:` prefix can never collide with entity keys (typenames can't
 /// contain `:`).
-const IDENTITY_META_KEY: &str = "__meta:identity";
-const IDENTITY_VALUE_FIELD: &str = "identity";
+/// Stored account witness shared by the engine and scoped storage projections.
+pub const IDENTITY_META_KEY: &str = "__meta:identity";
+/// Account identity field in the stored witness.
+pub const IDENTITY_VALUE_FIELD: &str = "identity";
 const STORAGE_GENERATION_META_KEY: &str = "__meta:storage-generation";
 const STORAGE_GENERATION_VALUE_FIELD: &str = "generation";
 
