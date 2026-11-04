@@ -347,6 +347,67 @@ async fn a_connected_user_s_calls_import_from_signed_deliveries_until_disconnect
     migrator = "MACRO_DB_MIGRATIONS",
     fixtures(path = "../../../fixtures", scripts("users"))
 )]
+async fn only_the_connected_dialpad_user_s_calls_import(pool: PgPool) {
+    let calls = Arc::new(Calls::default());
+    let service = service(pool, GrantState::Active, calls.clone());
+    let mut someone_elses = call_event(2, "hangup", 0);
+    someone_elses["target"] = json!({"id": 99, "name": "Another Rep"});
+    service.dialpad.pages.lock().unwrap().push_back(CallPage {
+        calls: vec![
+            serde_json::from_value(call_event(1, "hangup", 0)).unwrap(),
+            serde_json::from_value(someone_elses).unwrap(),
+        ],
+        cursor: None,
+    });
+    service.connect(&user(), Backfill::Week).await.unwrap();
+    service.complete(&user()).await.unwrap();
+    service.reconcile().await.unwrap();
+
+    let connection = service.repo.by_user(&user()).await.unwrap().unwrap();
+    let secret = service.dialpad.secret();
+    for (call_id, target) in [
+        (3, json!({"id": 99, "name": "Another Rep"})),
+        (4, json!(null)),
+        (5, json!({"name": "Sam Rep"})),
+    ] {
+        let body = signed(
+            &secret,
+            call_event(call_id, "hangup", 2),
+            json!({ "target": target }),
+        );
+        service.receive(connection.id, &body).await.unwrap();
+    }
+    // Stored before setup read the Dialpad user; the import checks again.
+    let mut early = call_event(6, "hangup", 2);
+    early["target"] = json!({"id": 99});
+    service
+        .repo
+        .enqueue(connection.id, serde_json::from_value(early).unwrap(), None)
+        .await
+        .unwrap();
+    drain(&service).await;
+
+    let imported: Vec<String> = calls
+        .0
+        .lock()
+        .unwrap()
+        .iter()
+        .map(|(call_id, _, _)| call_id.clone())
+        .collect();
+    assert_eq!(imported, vec!["1".to_owned()]);
+    let stored = sqlx::query_scalar!(
+        r#"SELECT count(*) AS "count!" FROM dialpad_sync_events WHERE call_id IN (2, 3, 4, 5)"#
+    )
+    .fetch_one(&service.repo.pool)
+    .await
+    .unwrap();
+    assert_eq!(stored, 0, "another user's call is never stored");
+}
+
+#[sqlx::test(
+    migrator = "MACRO_DB_MIGRATIONS",
+    fixtures(path = "../../../fixtures", scripts("users"))
+)]
 async fn a_removed_connect_grant_stops_sync_and_drops_pending_deliveries(pool: PgPool) {
     let calls = Arc::new(Calls::default());
     let service = service(pool, GrantState::Active, calls.clone());

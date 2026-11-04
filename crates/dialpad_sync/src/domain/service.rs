@@ -58,6 +58,18 @@ fn new_secret() -> SigningSecret {
     SigningSecret(URL_SAFE_NO_PAD.encode(bytes))
 }
 
+/// The subscription targets the connected Dialpad user, but an import makes
+/// that user the call's owner, so anything else is dropped rather than
+/// trusted. Logs ids only.
+fn drop_unowned(connection_id: Uuid, event: &CallEvent) {
+    tracing::warn!(
+        connection_id = %connection_id,
+        call_id = %event.call_id,
+        state = event.state.as_ref(),
+        "dropped a Dialpad event that is not the connected user's call"
+    );
+}
+
 fn status_of(connection: Option<Connection>) -> SyncStatus {
     match connection {
         None
@@ -208,8 +220,14 @@ impl<R: SyncRepository, G: Grants, D: Dialpad, V: DeliveryVerifier> Service<R, G
             .dialpad
             .calls(&token, dialpad_user, *since, cursor.as_deref())
             .await?;
-        let calls: Vec<CallEvent> = page
+        let (calls, unowned): (Vec<CallEvent>, Vec<CallEvent>) = page
             .calls
+            .into_iter()
+            .partition(|call| call.target_id() == Some(dialpad_user));
+        for call in &unowned {
+            drop_unowned(connection.id, call);
+        }
+        let calls: Vec<CallEvent> = calls
             .into_iter()
             .filter(|call| call.date_connected.is_some() && call.occurred_at().is_some())
             .map(|call| CallEvent {
@@ -226,6 +244,18 @@ impl<R: SyncRepository, G: Grants, D: Dialpad, V: DeliveryVerifier> Service<R, G
     async fn sync_call(&self, job: &Job) -> Result<()> {
         let span = tracing::Span::current();
         let events = self.repo.events(job.connection.id, job.call_id).await?;
+        // A running sync always knows its Dialpad user.
+        let owner = job.connection.dialpad_user_id;
+        let (events, unowned): (Vec<CallEvent>, Vec<CallEvent>) = events
+            .into_iter()
+            .partition(|event| owner.is_some() && event.target_id() == owner);
+        for event in &unowned {
+            drop_unowned(job.connection.id, event);
+        }
+        if events.is_empty() {
+            span.record("outcome", "not_the_users_call");
+            return Ok(());
+        }
         let Some(needs) = mapping::needs(&events) else {
             span.record("outcome", "not_connected_call");
             return Ok(());
@@ -366,6 +396,14 @@ impl<R: SyncRepository, G: Grants, D: Dialpad, V: DeliveryVerifier> SyncService
         }
         if event.occurred_at().is_none() {
             return Err(SyncError::InvalidDelivery);
+        }
+        // Mid-setup the Dialpad user may not be read yet, so only a missing
+        // target is dropped here; the import checks the owner again.
+        let owner = connection.dialpad_user_id.filter(|_| connection.enabled);
+        let target = event.target_id();
+        if target.is_none() || owner.is_some_and(|owner| target != Some(owner)) {
+            drop_unowned(id, &event);
+            return Ok(());
         }
         let traceparent = macro_tower_layers::current_traceparent();
         self.repo.enqueue(id, event, traceparent).await?;

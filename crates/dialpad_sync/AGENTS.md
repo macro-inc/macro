@@ -60,6 +60,10 @@ A first-connect backfill pages `GET /call` one page per reconcile.
 - Always pass `target_type=user`: without a target an admin's token lists or
   subscribes to the whole company. Dialpad allows 100 call subscriptions per
   company across all integrations.
+- An import makes the connected user the call's owner, so only events whose
+  `target.id` is that Dialpad user import. Others, and events with no target,
+  are dropped on receipt, on backfill pages, and again at import (deliveries
+  that arrive mid-setup are stored before the user is known).
 - Dialpad only delivers to public HTTPS; setup is a no-op without one
   (local stacks need a tunnel on `/cognition/integrations/dialpad/webhooks`).
 - Disconnecting deletes Macro Connect's connection; it does not revoke the

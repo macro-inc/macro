@@ -300,6 +300,11 @@ impl CallEvent {
             .or(self.date_started)
             .and_then(DateTime::from_timestamp_millis)
     }
+
+    /// The Dialpad user whose call this is.
+    pub fn target_id(&self) -> Option<DialpadId> {
+        self.target.as_ref().and_then(|target| target.id)
+    }
 }
 
 /// One line of Dialpad's transcript.
