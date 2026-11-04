@@ -6,6 +6,7 @@
  */
 
 import type { CountedReaction } from './countedReaction';
+import type { LinkPreview } from './linkPreview';
 import type { MessageAttachment } from './messageAttachment';
 import type { MessageBotProfile } from './messageBotProfile';
 import type { MessageDeletedAt } from './messageDeletedAt';
@@ -38,6 +39,9 @@ export interface Message {
   /** Message UUID. */
   id: string;
   imported_author?: MessageImportedAuthor;
+  /** Previews of the pages a channel message links to, in text order.
+Filled in shortly after a post or edit; empty until then. */
+  link_previews?: LinkPreview[];
   /** Tracked mentions, retained when a caller changes attachments only. */
   mentions: SimpleMention[];
   /** Entity that owns this conversation. */

@@ -12,10 +12,12 @@ overrides port 3051; the harness owns and stops its Vite server.
 
 The fixture mounts the production `ChannelMessage` over the app shell's
 providers with synthetic messages and blocks hosted API traffic, so it needs no
-backend. The test answers the unfurl service and both image proxies itself.
+backend. The test answers both image proxies itself.
 
-The link preview regression runs on desktop and phone. A message shows one
-card per linked page, in the order the text links them, with the page's site,
-title, description, and image. A page linked twice gets one card, a page with
-no metadata gets none, and a Macro app link stays a plain link. The card fits
-the message column, and clicking it opens the page.
+The link preview regression runs on desktop and phone. Previews come with the
+message, so each message's cards must already be in place when its text first
+appears: a card added later grows the row under the channel's virtual list.
+Cards follow the stored order, a message whose previews are not computed yet
+shows none, each card fits the message column, and clicking one opens its page.
+Which links get previews is decided on the server; that rule is tested in
+`packages/lexical-core/tests/link-previews.test.ts`.

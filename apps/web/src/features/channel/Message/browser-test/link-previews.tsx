@@ -14,28 +14,45 @@ import { For, onCleanup } from 'solid-js';
 import { render } from 'solid-js/web';
 import { ChannelMessage } from '../ChannelMessage';
 
-const MESSAGES: { id: string; content: string }[] = [
+const ARTICLE = {
+  url: 'https://news.example.com/2026/11/offline-first',
+  title: 'Offline first, without the sync bugs',
+  description:
+    'What we learned moving a collaborative editor to local-first storage, and the three conflicts that still need a person to resolve them.',
+  image_url: 'https://news.example.com/images/offline-first.png',
+  favicon_url: 'https://news.example.com/favicon.ico',
+};
+
+const GUIDE = {
+  url: 'https://docs.example.org/guide',
+  title: 'Getting started guide',
+  favicon_url: 'https://docs.example.org/favicon.ico',
+};
+
+const MESSAGES: Pick<MessageData, 'id' | 'content' | 'link_previews'>[] = [
   {
     id: 'article',
-    content:
-      'Worth a read before Thursday: https://news.example.com/2026/11/offline-first',
+    content: `Worth a read before Thursday: ${ARTICLE.url}`,
+    link_previews: [ARTICLE],
   },
   {
     id: 'several',
     content: [
       'Notes from the review:',
-      '<m-link>{"url":"https://docs.example.org/guide","text":"the guide","title":""}</m-link> covers setup,',
-      'and https://news.example.com/2026/11/offline-first again for context.',
-      'Also https://bare.example.net, which has no metadata,',
-      'and https://dev.macro.com/app/md/0195d2dd-5de9-71f2-9d59-5d9734f1adb7.',
+      `<m-link>{"url":"${GUIDE.url}","text":"the guide","title":""}</m-link> covers setup,`,
+      `and ${ARTICLE.url} for context.`,
     ].join(' '),
+    link_previews: [GUIDE, ARTICLE],
+  },
+  {
+    id: 'pending',
+    content: 'Previews not computed yet: https://later.example.net',
   },
 ];
 
-function message(id: string, content: string): MessageData {
+function message(entry: (typeof MESSAGES)[number]): MessageData {
   return {
-    id,
-    content,
+    ...entry,
     sender_id: 'macro|ada@example.com',
     created_at: '2026-11-04T17:21:45.000Z',
     updated_at: '2026-11-04T17:21:45.000Z',
@@ -44,7 +61,7 @@ function message(id: string, content: string): MessageData {
   };
 }
 
-/** Production channel messages over synthetic data; the test serves the unfurls. */
+/** Production channel messages over synthetic data, previews included. */
 function Fixture() {
   const client = new QueryClient({
     defaultOptions: { queries: { retry: false } },
@@ -65,9 +82,7 @@ function Fixture() {
                         <For each={MESSAGES}>
                           {(entry) => (
                             <div data-fixture-message={entry.id}>
-                              <ChannelMessage
-                                message={message(entry.id, entry.content)}
-                              />
+                              <ChannelMessage message={message(entry)} />
                             </div>
                           )}
                         </For>

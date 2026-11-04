@@ -6,6 +6,6 @@
  */
 
 /**
- * Root being replied to, or no root for the parent composer.
+ * The page's preview image URL, if any.
  */
-export type MessageChangeOneOfOneoneThreadId = string | null;
+export type LinkPreviewImageUrl = string | null;
