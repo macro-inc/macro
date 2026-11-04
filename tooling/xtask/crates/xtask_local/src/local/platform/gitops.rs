@@ -668,12 +668,18 @@ pub fn wait_synced(stage: &Stage, name: &str, revision: &str) -> Result<()> {
     let result = stage.run_step(&format!("Waiting for Argo CD to sync {name}"), || {
         loop {
             if let Some(app) = application(name)? {
-                if is_converged(&app, revision) {
+                // Publishing another environment moves the repo's head, so an
+                // Application can legitimately sync past `revision`.
+                let at = app["status"]["sync"]["revision"].as_str().unwrap_or_default();
+                let target = if contains(at, revision) { at } else { revision };
+                if is_converged(&app, target) {
                     return Ok(());
                 }
                 let phase = app["status"]["operationState"]["phase"].as_str();
-                let synced_this = app["status"]["operationState"]["operation"]["sync"]["revision"]
-                    == revision;
+                let operating = app["status"]["operationState"]["operation"]["sync"]["revision"]
+                    .as_str()
+                    .unwrap_or_default();
+                let synced_this = contains(operating, revision);
                 // Argo CD finishes a running sync before starting another, and
                 // one stuck on an unhealthy wave never finishes.
                 if !synced_this && matches!(phase, Some("Running")) {
@@ -715,6 +721,24 @@ pub fn wait_synced(stage: &Stage, name: &str, revision: &str) -> Result<()> {
         }
     }
     result
+}
+
+/// Whether deploy-repo commit `descendant` includes `revision`.
+fn contains(descendant: &str, revision: &str) -> bool {
+    if descendant == revision {
+        return true;
+    }
+    if descendant.is_empty() {
+        return false;
+    }
+    let repo = cluster_dir().join("deploy");
+    git(&repo, &["fetch", "-q", "origin", "main"]).is_ok()
+        && Command::new("git")
+            .current_dir(&repo)
+            .args(["merge-base", "--is-ancestor", revision, descendant])
+            .stderr(Stdio::null())
+            .status()
+            .is_ok_and(|s| s.success())
 }
 
 /// Stop a sync of an older revision, so the published one can start.

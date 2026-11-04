@@ -220,10 +220,12 @@ let
       bin,
       trigger,
       env ? { },
+      workingDir ? null,
     }:
     {
       image = image {
         name = bin;
+        inherit workingDir;
         contents = [
           macro.binaries.${bin}
           pkgs.python3
@@ -243,6 +245,7 @@ let
     };
 
   # Handlers with their production triggers (seconds from the stacks' rates).
+  # Env values are what their Pulumi stacks set on dev.
   lambdaHandlers = lib.filterAttrs (_: h: macro.binaries ? ${h.bin}) {
     deleted-item-poller = {
       bin = "deleted_item_poller";
@@ -255,6 +258,11 @@ let
     email-refresh = {
       bin = "email_refresh_handler";
       trigger = "schedule:3600";
+      env = {
+        DELETE_UNUSED_AFTER_DAYS = "5000";
+        DELETE_INACTIVE_AFTER_DAYS = "5000";
+        INBOX_HEALTH_POLL_INTERVAL_HOURS = "6";
+      };
     };
     email-scheduled = {
       bin = "email_scheduled_handler";
@@ -283,10 +291,21 @@ let
     document-text-extractor = {
       bin = "document_text_extractor";
       trigger = "sqs:document-text-extractor-lambda-queue";
+      # The binary loads ./pdfium-lib/linux/libpdfium.so (PDFIUM_LIB_PATH).
+      workingDir = "${pkgs.runCommand "pdfium-workdir" { } ''
+        mkdir -p $out/pdfium-lib/linux
+        ln -s ${pkgs.pdfium-binaries}/lib/libpdfium.so $out/pdfium-lib/linux/libpdfium.so
+      ''}";
     };
     upload-extractor = {
       bin = "upload_extractor_lambda_handler";
       trigger = "sqs:bulk-upload-queue";
+      env = {
+        DYNAMODB_TABLE = "bulk-upload";
+        UPLOAD_BUCKET_NAME = "bulk-upload-staging";
+        DSS_URL = "http://document-storage-service:8080";
+        CONNECTION_GATEWAY_URL = inNetwork.gateway;
+      };
     };
   };
 
