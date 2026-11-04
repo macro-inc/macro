@@ -58,7 +58,11 @@ impl<R: EventRunRepository, A: CurrentOwnerAccess> EventAdmissionService<R, A> {
         }
         Ok(self
             .repository
-            .admit(configuration.action_id, configuration.revision, event)
+            .admit(
+                configuration.action_id,
+                configuration.revision,
+                &configuration.filters.run_event(event),
+            )
             .await?
             == AdmissionResult::Admitted)
     }

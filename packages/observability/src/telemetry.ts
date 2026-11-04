@@ -88,6 +88,15 @@ export class Telemetry {
     return Telemetry.#tracing.captureContext();
   }
 
+  /**
+   * The trace another service started, for work it asked for over a transport
+   * without headers. Spans started in it join that trace. A malformed value
+   * starts a new trace instead.
+   */
+  static remoteContext(traceparent: string): TraceContext {
+    return Telemetry.#tracing.remoteContext(traceparent);
+  }
+
   /** Record a point-in-time sample; timestamp is Unix time in milliseconds. */
   static recordSample(
     name: string,

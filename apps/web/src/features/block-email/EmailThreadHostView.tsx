@@ -9,6 +9,7 @@ import {
   EmailThread,
   type EmailThreadProps,
 } from '@app/features/email-thread/email-thread';
+import { taskSourceComposerContext } from '@app/features/task-composer/source-context';
 import { HeaderActionGroup } from '@components/app/HeaderActionGroup';
 import { SidePanel } from '@components/app/side-panel';
 import { useSplitLayout } from '@components/app/split-layout/layout';
@@ -51,6 +52,10 @@ export function EmailThreadHostView(props: EmailThreadHostViewProps) {
       type: 'component',
       id: 'task-compose',
       params: {
+        composerContext: taskSourceComposerContext({
+          entity_type: 'THREAD',
+          entity_id: props.threadId(),
+        }),
         initialContent: buildMentionMarkdownString({
           type: 'document',
           documentId: props.threadId(),

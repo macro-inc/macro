@@ -83,6 +83,12 @@ otherwise); its backend-free regression opens it, scrolls to the last group,
 searches, and picks by keyboard:
 `bunx playwright test --config src/lib/core/component/Emoji/browser-test/playwright.config.ts`.
 
+Focus rows have a backend-free browser regression over the real row and mapping
+at wide, one-line, stacked, phone, and tablet widths: one reason per row, no
+extra height or lost subject, touch rows of at least 44px, and the importance
+meter only under its sort:
+`bunx playwright test --config src/features/email-view/browser-test/playwright.config.ts`.
+
 Discussion link scrolling has a backend-free browser regression:
 `bunx playwright test --config src/lib/core/messages/browser-test/playwright.config.ts`.
 
@@ -164,6 +170,9 @@ boosts (Cmd+K's channel and DM boosts) order rows within those groups and never
 lift a row past a better name match. The one exception: Cmd+K then keeps Macro
 users and DMs ahead of CRM contacts across the people positions, whatever their
 match. Tune name relevance there for every menu.
+Soup's local search pool (`createSearchState`) stays lazy: it builds only when
+local search has text. Measure Quick Access ranking at scale with the
+[scale fixture](src/features/command/browser-test/README.md).
 Cmd+K and mobile name search widen the first group: a query equal to the first
 word of a DM or person name counts as exact, so a person's first name reaches
 their full-name DM. `commaSeparatedChannelMatch` (Cmd+K, mobile name search,
@@ -612,6 +621,9 @@ resolved session ID; keep the existing `AgentSessionProvider` subscription to
   the create response confirms success; never clear newer composer input from a
   late callback or automatically retry an uncertain create. Keep recovery copies
   through restarts and remove them on explicit logout. See the Tasks walkthrough.
+- Prefill task Source through the originating action's composer preset under
+  `enable-task-source-property`; keep the shared composer flag-agnostic and retain
+  exact message IDs through property edits. See the Tasks walkthrough.
 - Shared server-state queries and mutations live in `src/lib/queries`; keep
   feature-specific query orchestration with its owning feature.
 - Keep CRM contacts explicitly included in the auxiliary GraphQL backfill;
@@ -961,10 +973,12 @@ persisted `turnState` is `failed`; open the session to inspect its error.
 
 ### Agent transcript projection
 
-Keep folded messages ordered by turn and author in the transcript store: append
-at the new index, reconcile matching rows in place, binary-search earlier
-updates, and splice only for real insertion/removal. Never `produce` the whole
-array per append; it makes initial projection quadratic. Check with the
+Key transcript rows by the fold's `FoldedMessage.key` (`<turn>:<author kind>`);
+never rebuild it from `turn` and `author`. Apply a load or rebase as one keyed
+`reconcile(messages, { key: 'key' })`, without `merge`. A streamed message
+reconciles the tail row in place or writes the next index; only an out-of-order
+one takes the keyed path. Never `produce` the whole array per append; it makes
+initial projection quadratic. Check with the
 [session-open runner](src/features/block-agent/browser-test/README.md).
 
 ### Agent system events

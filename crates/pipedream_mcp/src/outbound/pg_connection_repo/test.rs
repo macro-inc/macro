@@ -58,6 +58,27 @@ async fn reads_never_return_connections_to_overlaid_apps(pool: PgPool) {
     );
 }
 
+/// Overlays hide Pipedream grants, not Connect's: a user on Connect alone
+/// gets `sentry` through their Connect row.
+#[sqlx::test(
+    migrator = "MACRO_DB_MIGRATIONS",
+    fixtures(path = "../../../fixtures", scripts("users"))
+)]
+async fn reads_return_connect_connections_to_overlaid_apps(pool: PgPool) {
+    let repo = PgConnectionRepo::new(pool);
+    let user = connection("sentry").user_id;
+    repo.save(&PipedreamConnection {
+        provider: crate::domain::models::ConnectionProvider::Connect,
+        ..connection("sentry")
+    })
+    .await
+    .unwrap();
+
+    assert_eq!(repo.list(&user).await.unwrap().len(), 1);
+    assert!(repo.load(&user, "sentry").await.unwrap().is_some());
+    assert_eq!(repo.list_enabled_for_app("sentry").await.unwrap().len(), 1);
+}
+
 #[sqlx::test(
     migrator = "MACRO_DB_MIGRATIONS",
     fixtures(path = "../../../fixtures", scripts("users"))
