@@ -1,4 +1,5 @@
 use chrono::{TimeZone, Utc};
+use chrono_tz::America::Los_Angeles;
 use uuid::Uuid;
 
 use super::*;
@@ -19,6 +20,7 @@ fn message(body: &str, is_sent: bool) -> FocusMessage {
         calendar_part: None,
         body: Some(body.to_owned()),
         snippet: Some("snippet".to_owned()),
+        date_header: None,
     }
 }
 
@@ -168,4 +170,119 @@ fn long_recipient_lists_are_cut() {
 
     let short = &jev_input(&thread(vec![message("hi", false)]), None)["thread"]["messages"][0];
     assert!(short.get("other_recipients").is_none());
+}
+
+fn day(year: i32, month: u32, day: u32) -> NaiveDate {
+    NaiveDate::from_ymd_opt(year, month, day).unwrap()
+}
+
+/// Written at 02:00 UTC on October 8, the evening before in the Americas.
+fn written_late(date_header: Option<&str>) -> FocusMessage {
+    FocusMessage {
+        at: Utc.with_ymd_and_hms(2026, 10, 8, 2, 0, 0).unwrap(),
+        date_header: date_header.map(str::to_owned),
+        ..message("Please send it by Friday.", false)
+    }
+}
+
+#[test]
+fn a_message_counts_from_its_day_in_the_owners_time_zone_first() {
+    // Stored zone over the header's offset.
+    let message = written_late(Some("Thu, 8 Oct 2026 03:00:00 +0100"));
+    assert_eq!(written_on(&message, Some(Los_Angeles)), day(2026, 10, 7));
+}
+
+#[test]
+fn with_no_stored_zone_a_message_counts_from_the_offset_it_was_written_at() {
+    let message = written_late(Some("Wed, 7 Oct 2026 21:00:00 -0500"));
+    assert_eq!(written_on(&message, None), day(2026, 10, 7));
+    // A comment after the offset, as many mail servers add.
+    let message = written_late(Some("Wed, 7 Oct 2026 21:00:00 -0500 (CDT)"));
+    assert_eq!(written_on(&message, None), day(2026, 10, 7));
+}
+
+#[test]
+fn with_no_zone_or_readable_header_a_message_counts_from_its_utc_day() {
+    assert_eq!(written_on(&written_late(None), None), day(2026, 10, 8));
+    let unreadable = written_late(Some("yesterday-ish"));
+    assert_eq!(written_on(&unreadable, None), day(2026, 10, 8));
+}
+
+#[test]
+fn the_due_date_input_reads_a_replys_own_words_and_never_its_quoted_history() {
+    // Jev gets the whole of a short reply; a quoted "by Friday" here would count
+    // from this reply's date.
+    let reply = message(
+        "Any news?\n\nOn Tue, Oct 6, 2026 at 9:00 AM Ava <ava@example.com> wrote:\n> Send it by Friday.",
+        false,
+    );
+    let input = due_date_input(&thread(vec![reply]), None);
+
+    assert_eq!(input.messages[0].text, "Any news?");
+}
+
+#[test]
+fn the_due_date_input_leaves_out_messages_with_no_words_of_their_own() {
+    let only_quoted = message("> Send it by Friday.", false);
+    let spoken = message("By Monday, please.", false);
+    let input = due_date_input(&thread(vec![only_quoted, spoken]), None);
+
+    assert_eq!(input.messages.len(), 1);
+    assert_eq!(input.messages[0].text, "By Monday, please.");
+}
+
+#[test]
+fn the_due_date_input_falls_back_to_a_snippet_only_with_no_body() {
+    let no_body = FocusMessage {
+        body: None,
+        snippet: Some("Please reply by Friday".to_owned()),
+        ..message("", false)
+    };
+    let input = due_date_input(&thread(vec![no_body]), None);
+
+    assert_eq!(input.messages[0].text, "Please reply by Friday");
+}
+
+#[test]
+fn the_due_date_input_covers_the_messages_jev_is_shown() {
+    let messages = (0..5)
+        .map(|number| message(&format!("Message {number}"), false))
+        .collect::<Vec<_>>();
+    let thread = thread(messages);
+
+    let input = due_date_input(&thread, None);
+
+    let texts = input
+        .messages
+        .iter()
+        .map(|m| m.text.as_str())
+        .collect::<Vec<_>>();
+    assert_eq!(texts, ["Message 2", "Message 3", "Message 4"]);
+    assert_eq!(
+        jev_input(&thread, None)["thread"]["messages"]
+            .as_array()
+            .unwrap()
+            .len(),
+        3
+    );
+    assert_eq!(input.subject.as_deref(), Some("Contract"));
+}
+
+#[test]
+fn the_due_date_input_marks_the_owners_messages_and_names_no_sender() {
+    let input = due_date_input(&thread(vec![message("Sent it over.", true)]), None);
+
+    assert!(input.messages[0].from_owner);
+    let shown = format!("{input:?}");
+    assert!(!shown.contains("ava@example.com") && !shown.contains("Ava"));
+}
+
+#[test]
+fn the_due_date_input_collapses_wrapped_lines_and_bounds_each_message() {
+    let wrapped = message("Please send it\nby\n  Friday.", false);
+    let long = message(&"a".repeat(MESSAGE_CHARS + 50), false);
+    let input = due_date_input(&thread(vec![wrapped, long]), None);
+
+    assert_eq!(input.messages[0].text, "Please send it by Friday.");
+    assert_eq!(input.messages[1].text.chars().count(), MESSAGE_CHARS);
 }

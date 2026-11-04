@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "\n            SELECT t.id, t.link_id, t.is_signal, t.inbox_visible, el.macro_id, el.email_address,\n                   f.classified_message_id AS \"classified_message_id?\",\n                   f.rule_version AS \"rule_version?\",\n                   f.scores AS \"scores?\",\n                   f.model AS \"model?\"\n            FROM email_threads t\n            JOIN email_links el ON el.id = t.link_id\n            LEFT JOIN email_thread_focus f ON f.thread_id = t.id\n            WHERE t.id = $1\n            ",
+  "query": "\n            SELECT t.id, t.link_id, t.is_signal, t.inbox_visible, el.macro_id, el.email_address,\n                   f.classified_message_id AS \"classified_message_id?\",\n                   f.rule_version AS \"rule_version?\",\n                   f.scores AS \"scores?\",\n                   f.model AS \"model?\",\n                   f.due_on AS \"due_on?\"\n            FROM email_threads t\n            JOIN email_links el ON el.id = t.link_id\n            LEFT JOIN email_thread_focus f ON f.thread_id = t.id\n            WHERE t.id = $1\n            ",
   "describe": {
     "columns": [
       {
@@ -52,6 +52,11 @@
         "ordinal": 9,
         "name": "model?",
         "type_info": "Text"
+      },
+      {
+        "ordinal": 10,
+        "name": "due_on?",
+        "type_info": "Date"
       }
     ],
     "parameters": {
@@ -69,8 +74,9 @@
       false,
       false,
       false,
-      false
+      false,
+      true
     ]
   },
-  "hash": "6ae01ede4239a6d05e70b1efd6d912e1ed14a6c575267ad6607bfe654eb3cc20"
+  "hash": "c123cd8a89f53346da8adbd1d52e99e19326fcd44ec3ff6a152628a5797b15ba"
 }

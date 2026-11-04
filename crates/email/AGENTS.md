@@ -76,6 +76,14 @@ tools — hexagonal, heavily feature-gated.
   `NEW_INVITES_STAY_OUT` in `domain/focus/rule.rs` is the switch for new invites.
   `stale_threads` restates `domain/focus/calendar.rs`'s test for a change in SQL;
   change both.
+- A Focus thread's `due_on` is read when new mail is classified, only for a thread
+  with `is_focus` or `awaiting_reply`, and never on the re-decide path: that path
+  keeps the stored date and calls no model, so `save` writes back what
+  `StoredClassification` read. A failed or timed-out read stores no date and never
+  fails the classification. `input.rs` gives the extractor each message's own words,
+  never quoted history, so a relative date counts from the message that wrote it,
+  and each message's day comes from the owner's calendar zone, else the offset in
+  its `Date` header, else UTC. Store no mail text or extracted span.
 - A thread holding only the owner's sent mail stays out of Focus on purpose:
   it has `inbox_visible` false, which the client reads as Done, Mark Done cannot
   change it, and there is no inbound mail for the rule to judge.

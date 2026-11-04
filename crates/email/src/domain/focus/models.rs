@@ -1,6 +1,6 @@
 //! Focus value objects.
 
-use chrono::{DateTime, Utc};
+use chrono::{DateTime, NaiveDate, Utc};
 use macro_user_id::user_id::MacroUserIdStr;
 use serde::{Deserialize, Serialize};
 use strum::{Display, EnumString};
@@ -239,6 +239,8 @@ pub struct FocusMessage {
     pub body: Option<String>,
     /// Provider snippet.
     pub snippet: Option<String>,
+    /// The `Date` header, whose offset tells which day the sender's clock showed.
+    pub date_header: Option<String>,
 }
 
 /// A message the owner sent to one of the thread's senders, anywhere in the inbox.
@@ -263,6 +265,8 @@ pub struct StoredClassification {
     pub answers: Option<FocusAnswers>,
     /// The model that answered.
     pub model: String,
+    /// The day the classified mail says the thread is due.
+    pub due_on: Option<NaiveDate>,
 }
 
 /// Where a thread lives and how it stands; read before any message content.
@@ -361,6 +365,9 @@ pub struct FocusRecord {
     pub model: String,
     /// When the classification was made.
     pub classified_at: DateTime<Utc>,
+    /// The day the classified mail says the thread is due. No mail text or
+    /// extracted span is ever stored with it.
+    pub due_on: Option<NaiveDate>,
 }
 
 /// Which way a thread's importance is moving.
@@ -394,4 +401,27 @@ pub struct ThreadFocus {
     pub classified_at: DateTime<Utc>,
     /// Which way `importance` is moving.
     pub importance_trend: ImportanceTrend,
+    /// The day the classified mail says the thread is due, as a calendar date so no
+    /// time zone can shift it.
+    pub due_on: Option<NaiveDate>,
+}
+
+/// One message as the due date extractor reads it.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct DueDateMessage {
+    /// The local calendar day it was written; its relative dates count from here.
+    pub written_on: NaiveDate,
+    /// Sent by the owner.
+    pub from_owner: bool,
+    /// Its own words, without quoted history.
+    pub text: String,
+}
+
+/// What the due date extractor reads about a thread.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct DueDateInput {
+    /// The thread's subject, as context.
+    pub subject: Option<String>,
+    /// The messages Jev is shown that have words of their own, oldest first.
+    pub messages: Vec<DueDateMessage>,
 }
