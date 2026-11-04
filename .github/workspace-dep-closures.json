@@ -13398,6 +13398,7 @@
       "crates/call",
       "crates/channel_sender",
       "crates/channels",
+      "crates/cognition",
       "crates/comms_db_client",
       "crates/connection",
       "crates/connection_gateway_client",

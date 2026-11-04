@@ -1,5 +1,6 @@
 import type { LexicalEditor } from 'lexical';
 import type { Accessor, JSX } from 'solid-js';
+import type { EmailCalendarEvents } from '../context/compose-capabilities';
 import type { ComposeBodyActions } from '../context/editor-capabilities';
 import type {
   EmailFormRecipients,
@@ -18,6 +19,7 @@ export interface ComposeContextValue extends ComposeState {
   bodyActions: ComposeBodyActions;
   isMobile: Accessor<boolean>;
   scheduleEnabled: boolean;
+  calendarEvents?: EmailCalendarEvents;
   onUpgrade?: () => void;
   viewerLoading?: Accessor<boolean>;
 }
