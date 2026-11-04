@@ -66,8 +66,9 @@ Connecting Dialpad in **Settings → Integrations** (through Macro Connect) is
 the setup; the user may choose to import the last 7, 30 or 90 days. Each
 answered Dialpad call the user is on becomes a private call about a minute
 after Dialpad finishes its transcript, titled `Call with <name or number>`,
-with the caller and the Dialpad user as guests (phone numbers when there is no
-name), the transcript, and Dialpad's AI recap and action items as the summary.
+with the connected user as a Macro participant and the caller as a guest (a
+phone number when there is no name), the transcript, and Dialpad's AI recap
+and action items as the summary.
 Missed calls and voicemails are not imported. Webhooks need the same public
 HTTPS cognition origin as Granola (tunnel `/cognition/integrations/dialpad/webhooks`
 locally).

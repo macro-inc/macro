@@ -99,19 +99,25 @@ impl ImportedCallRepository for PgImportedCallRepository {
         )
         .fetch_all(tx.as_mut())
         .await?;
-        // Each previous ID goes to one participant, since two may share a number.
-        for participant in &mut call.participants {
-            if let Some(at) = previous.iter().position(|p| {
-                let same_email = p
-                    .email
-                    .as_deref()
-                    .zip(participant.email.as_deref())
-                    .is_some_and(|(a, b)| a.eq_ignore_ascii_case(b));
-                let same_phone = p.phone.is_some() && p.phone == participant.phone;
-                same_email || same_phone
-            }) {
-                participant.id = previous.swap_remove(at).id;
-            }
+        // Reserve stronger matches before a shared phone or email can take
+        // another person's ID. Each old ID belongs to only one participant.
+        let mut unmatched: Vec<_> = call.participants.iter_mut().collect();
+        for (match_email, match_phone) in [(true, true), (true, false), (false, true)] {
+            unmatched.retain_mut(|participant| {
+                let matched = previous.iter().position(|p| {
+                    let same_email = p
+                        .email
+                        .as_deref()
+                        .zip(participant.email.as_deref())
+                        .is_some_and(|(a, b)| a.eq_ignore_ascii_case(b));
+                    let same_phone = p.phone.is_some() && p.phone == participant.phone;
+                    (!match_email || same_email) && (!match_phone || same_phone)
+                });
+                if let Some(at) = matched {
+                    participant.id = previous.swap_remove(at).id;
+                }
+                matched.is_none()
+            });
         }
         let participant_ids: Vec<Uuid> = call.participants.iter().map(|p| p.id).collect();
         sqlx::query!("DELETE FROM call_entity_participants WHERE call_id = $1 AND id = ANY($2) AND NOT (id = ANY($3))", id, &old_ids, &participant_ids)

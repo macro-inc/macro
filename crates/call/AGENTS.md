@@ -13,7 +13,8 @@ in-call chat.
   call discussion; message storage and delivery belong to `messages`.
 - `src/domain/imports.rs`: the provider-neutral import port (Granola, Dialpad).
   Each import is a full snapshot; re-imports keep participant ids stable by
-  matching email or phone.
+  matching email and phone together, then email, then phone, reserving stronger
+  matches before shared identity hints can take another attendee's id.
 - `src/domain/meetings.rs`: scheduled-meeting ↔ call association (used by
   `calendar_events`/`calendar_scheduling` meeting links).
 - `src/inbound/axum_router.rs`, `src/inbound/stale_call_sweeper.rs`: HTTP routes
