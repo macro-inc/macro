@@ -2079,7 +2079,7 @@ async fn deciding_a_row_again_keeps_its_due_date_without_asking_the_model(
         due_on: Some(nov(6)),
         asked: Arc::default(),
     };
-    let answers = vec![0.9, 0.0, 0.0, 0.0, 0.0, 0.0, 0.9, 0.0];
+    let answers = vec![0.9, 0.0, 0.0, 0.0, 0.0, 0.0, 0.9, 0.0, 0.0, 0.0];
     let classified = due_date_worker(&repo, Ok(answers), &due_dates)
         .classify_thread(INVOICE)
         .await?;

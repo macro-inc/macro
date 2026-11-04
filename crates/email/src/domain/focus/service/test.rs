@@ -983,7 +983,8 @@ async fn a_focus_thread_stores_the_day_its_mail_says_it_is_due() {
 async fn a_thread_that_cannot_be_in_focus_makes_no_model_call() {
     let store = FakeStore::default();
     // Automated, and nobody waits on it.
-    let classifier = FakeClassifier::answering(Ok(vec![0.0, 0.0, 0.9, 0.0, 0.0, 0.0, 0.0, 0.0]));
+    let classifier =
+        FakeClassifier::answering(Ok(vec![0.0, 0.0, 0.9, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0]));
     let due_dates = FakeDueDates::answering(DueDateAnswer::Finds(Some(friday())));
     let id = insert(&store, thread("owner@acme.example"));
 
@@ -1004,7 +1005,8 @@ async fn a_thread_that_cannot_be_in_focus_makes_no_model_call() {
 async fn a_thread_only_awaiting_a_reply_still_gets_a_due_date() {
     let store = FakeStore::default();
     // Reads as automated, so only the wait can bring it in.
-    let classifier = FakeClassifier::answering(Ok(vec![0.0, 0.0, 0.9, 0.0, 0.0, 0.0, 0.0, 0.0]));
+    let classifier =
+        FakeClassifier::answering(Ok(vec![0.0, 0.0, 0.9, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0]));
     let due_dates = FakeDueDates::answering(DueDateAnswer::Finds(Some(friday())));
     let mut waiting = thread("owner@acme.example");
     let mut reply = waiting.messages[0].clone();
