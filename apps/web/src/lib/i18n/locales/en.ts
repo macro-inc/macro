@@ -8,6 +8,7 @@ import commandMenu from './en/command-menu';
 import commands from './en/commands';
 import common from './en/common';
 import create from './en/create';
+import crm from './en/crm';
 import entityActions from './en/entity-actions';
 import localRuntime from './en/local-runtime';
 import mobile from './en/mobile';
@@ -34,6 +35,7 @@ export default {
   commands,
   common,
   create,
+  crm,
   entityActions,
   localRuntime,
   mobile,

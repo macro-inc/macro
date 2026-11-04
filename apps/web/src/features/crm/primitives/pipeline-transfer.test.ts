@@ -4,7 +4,10 @@ import { describe, expect, it, vi } from 'vitest';
 import type { DatabaseViewColumn } from '../../database/core/database-view';
 import type { PipelineTransfer } from '../context/pipelines';
 import type { Pipeline } from '../core/pipeline';
-import type { PipelineCsvRow } from '../core/pipeline-csv';
+import {
+  type PipelineCsvRow,
+  PipelineImportRefusal,
+} from '../core/pipeline-csv';
 import {
   createPipelineExport,
   createPipelineImport,
@@ -114,6 +117,54 @@ describe('pipeline import', () => {
       ],
     ]);
     expect(transfer.refresh).toHaveBeenCalledTimes(2);
+    dispose();
+  });
+
+  it('reports a rejected deal separately from a valid deal for the same company', async () => {
+    const { transfer } = fakeTransfer([]);
+    const { state, dispose } = createRoot((dispose) => ({
+      state: createPipelineImport(pipeline, {
+        ...transfer,
+        insertRows: async (rows, _columns, rejected) => {
+          expect(rows).toHaveLength(2);
+          rejected?.(0, 'Fill in Amount before entering Lead.');
+        },
+      }),
+      dispose,
+    }));
+    await state.read(
+      file('Company,Domain,Stage\nAcme,acme.com,Lead\nAcme,acme.com,Won\n')
+    );
+    await state.run();
+    expect(state.result()).toEqual({
+      added: 1,
+      present: 0,
+      unresolved: 0,
+      invalid: [
+        {
+          entry: 1,
+          key: 'acme.com',
+          reason: 'Fill in Amount before entering Lead.',
+        },
+      ],
+    });
+    dispose();
+  });
+
+  it('keeps the import plan and shows a stage requirement refusal', async () => {
+    const { transfer } = fakeTransfer([]);
+    transfer.insertRows.mockRejectedValueOnce(
+      new PipelineImportRefusal('Fill in Revenue before entering Lead.')
+    );
+    const { state, dispose } = createRoot((dispose) => ({
+      state: createPipelineImport(pipeline, transfer),
+      dispose,
+    }));
+    await state.read(file('Company,Domain,Stage\nAcme,acme.com,Lead\n'));
+    await state.run();
+    expect(state.error()).toContain('Revenue');
+    expect(state.plan()?.rows).toHaveLength(1);
+    expect(state.result()).toBeUndefined();
     dispose();
   });
 
