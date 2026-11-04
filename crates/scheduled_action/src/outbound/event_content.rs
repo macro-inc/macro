@@ -221,9 +221,7 @@ where
             .await
             .map_err(|error| Report::new(error).into_dynamic())?
             .unwrap_or_default();
-        Ok(messages
-            .into_iter()
-            .find(|message| Some(message.db_id) == event.message_id()))
+        Ok(triggering_email(messages, event))
     }
 
     async fn channel(
@@ -332,6 +330,18 @@ where
     }
 }
 
+/// The event's message from a page of its thread, newest first. A label is
+/// added to a thread rather than one message, so it reads the newest one that
+/// is not a draft.
+fn triggering_email(messages: Vec<ParsedMessage>, event: &EventReference) -> Option<ParsedMessage> {
+    messages
+        .into_iter()
+        .find(|message| match event.message_id() {
+            Some(id) => message.db_id == id,
+            None => !message.is_draft,
+        })
+}
+
 /// The classifier's view of the content.
 fn content_json(event: &EventReference, content: &EventContent) -> Value {
     match content {
@@ -405,6 +415,9 @@ fn envelope(owner: &MacroUserIdStr<'static>, event: &EventReference, content: Va
         "occurred_at": event.published_at(),
         "routine_owner": owner.email_str(),
     });
+    if event.event_name() == EventName::EmailLabelAdded {
+        value["labels_added"] = json!(event.labels());
+    }
     if let (Value::Object(target), Value::Object(content)) = (&mut value, content) {
         target.extend(content);
     }

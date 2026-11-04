@@ -99,6 +99,11 @@ that listener is ready. Cancellation can stop the gate before startup finishes.
   prepared, so changing it affects later runs only.
 - `EventReference` rejects unknown keys, so a replica still on older code can't
   read a run row with a new key: write a new optional key only when it is set.
+- Email label names are the one piece of content a Macro event keeps
+  (`EventReference::labels`): a filter's `labels` is rechecked at dispatch, and
+  `email.thread_labels_updated` is not read again. `email.label_added` needs at
+  least one name; `email.message_received` carries the user labels the message
+  arrived with, which its producers read after the insert.
 
 ## Related
 

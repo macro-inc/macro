@@ -103,6 +103,39 @@ fn envelope_names_the_event_and_the_owner() {
 }
 
 #[test]
+fn a_label_reads_the_threads_newest_sent_or_received_email_and_names_the_labels() {
+    let event: EventReference = serde_json::from_value(json!({
+        "event_id": macro_uuid::generate_uuid_v7(),
+        "event_name": "email.label_added",
+        "entity_id": macro_uuid::generate_uuid_v7(),
+        "labels": ["Clients/Acme"],
+    }))
+    .unwrap();
+    let draft = ParsedMessage {
+        db_id: macro_uuid::generate_uuid_v7(),
+        is_draft: true,
+        ..email()
+    };
+    let newest = ParsedMessage {
+        db_id: macro_uuid::generate_uuid_v7(),
+        ..email()
+    };
+    let older = email();
+    let chosen = triggering_email(vec![draft, newest.clone(), older], &event).unwrap();
+    assert_eq!(chosen.db_id, newest.db_id);
+
+    let received = self::event("email.message_received", Some(Uuid::nil()));
+    let chosen = triggering_email(vec![newest, email()], &received).unwrap();
+    assert_eq!(chosen.db_id, Uuid::nil());
+
+    let value = envelope(&owner(), &event, json!({}));
+    assert_eq!(value["event"], "email.label_added");
+    assert_eq!(value["labels_added"], json!(["Clients/Acme"]));
+    let value = envelope(&owner(), &received, json!({}));
+    assert!(value.get("labels_added").is_none());
+}
+
+#[test]
 fn long_text_is_cut_on_a_character_boundary() {
     assert_eq!(truncate("short"), "short");
     let long = "é".repeat(MAX_TEXT_CHARS + 10);

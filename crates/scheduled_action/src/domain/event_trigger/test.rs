@@ -738,6 +738,144 @@ fn email_receipts_keep_only_ids_and_exclude_spam_and_backfills() {
     assert_eq!(event.normalize(), Err(EventRejection::UnsupportedEvent));
 }
 
+fn email_event(event_type: &str, metadata: Value) -> IncomingEvent {
+    IncomingEvent {
+        event_id: Uuid::parse_str(EVENT_ID).unwrap(),
+        schema_version: 1,
+        payload: EventPayload::Email(
+            serde_json::from_value(json!({"event_type": event_type, "metadata": metadata}))
+                .unwrap(),
+        ),
+    }
+}
+
+fn received_with_labels(labels: Value) -> IncomingEvent {
+    email_event(
+        "email.message_received",
+        json!({
+            "link_id": OTHER_ID, "owner": HUMAN, "message_id": OTHER_ID,
+            "provider_message_id": "provider-msg", "thread_id": ENTITY_ID,
+            "provider_thread_id": "provider-thread", "is_new_thread": false,
+            "to_emails": [], "attachment_count": 0, "is_spam_or_trash": false,
+            "labels": labels
+        }),
+    )
+}
+
+fn labels_updated(added: Value) -> IncomingEvent {
+    email_event(
+        "email.thread_labels_updated",
+        json!({
+            "link_id": OTHER_ID, "owner": HUMAN, "actor": null,
+            "thread_id": ENTITY_ID, "added": added,
+            "removed": [{"label_id": null, "provider_label_id": "Label_9", "name": "Old"}],
+            "origin": "provider_sync"
+        }),
+    )
+}
+
+#[test]
+fn added_labels_trigger_by_name_and_removals_alone_do_not() {
+    let event = labels_updated(json!([
+        {"label_id": null, "provider_label_id": "Label_1", "name": "Clients/Acme"},
+        {"label_id": null, "provider_label_id": "Label_2", "name": null}
+    ]));
+    let normalized = event.normalize().unwrap();
+    assert_eq!(normalized.event_name(), EventName::EmailLabelAdded);
+    assert_eq!(normalized.entity_type(), EventEntityType::EmailThread);
+    assert_eq!(normalized.entity_id().unwrap().to_string(), ENTITY_ID);
+    assert_eq!(normalized.message_id(), None);
+    assert_eq!(normalized.labels(), ["Clients/Acme"]);
+    let stored = serde_json::to_value(&normalized).unwrap();
+    assert_eq!(stored["labels"], json!(["Clients/Acme"]));
+    assert_eq!(
+        serde_json::from_value::<EventReference>(stored).unwrap(),
+        normalized
+    );
+    assert!(event.is_for_owner(&MacroUserIdStr::parse_from_str(HUMAN).unwrap()));
+    assert!(
+        !event.is_for_owner(&MacroUserIdStr::parse_from_str("macro|other@example.com").unwrap())
+    );
+
+    for added in [
+        json!([]),
+        json!([{"label_id": null, "provider_label_id": "Label_2", "name": null}]),
+    ] {
+        assert_eq!(
+            labels_updated(added).normalize(),
+            Err(EventRejection::UnsupportedEvent)
+        );
+    }
+}
+
+#[test]
+fn label_filters_match_any_named_label_ignoring_case() {
+    let added = labels_updated(json!([
+        {"label_id": null, "provider_label_id": "Label_1", "name": "Clients/Acme"}
+    ]))
+    .normalize()
+    .unwrap();
+    let received = received_with_labels(json!(["Clients/Acme"]))
+        .normalize()
+        .unwrap();
+    let unlabeled = received_with_labels(json!([])).normalize().unwrap();
+    let activation = added.published_at();
+    let on_label = |labels: Value| {
+        filters(json!([{
+            "events": ["email.message_received", "email.label_added"],
+            "labels": labels
+        }]))
+    };
+
+    let wanted = on_label(json!(["clients/acme", "Invoices"]));
+    assert!(wanted.matches(&added, activation));
+    assert!(wanted.matches(&received, activation));
+    assert!(!wanted.matches(&unlabeled, activation));
+    assert!(!on_label(json!(["Invoices"])).matches(&added, activation));
+    // Without labels, any label added and any email received still match.
+    let any = filters(json!([{"events": ["email.message_received", "email.label_added"]}]));
+    assert!(any.matches(&added, activation));
+    assert!(any.matches(&unlabeled, activation));
+    assert!(!filters(json!([{"events": ["email.message_received"]}])).matches(&added, activation));
+}
+
+#[test]
+fn labels_validate_on_filters_and_stored_events() {
+    let parse = |filter: Value| serde_json::from_value::<EventFilter>(filter);
+    let filter =
+        parse(json!({"events": ["email.label_added"], "labels": [" Clients ", "Clients"]}))
+            .unwrap();
+    assert_eq!(filter.labels(), Some(&["Clients".to_owned()][..]));
+    for labels in [
+        json!([]),
+        json!(["  "]),
+        json!(vec!["x"; MAX_LABELS_PER_FILTER + 1]),
+    ] {
+        assert!(parse(json!({"events": ["email.label_added"], "labels": labels})).is_err());
+    }
+    for events in [
+        json!(["document.created"]),
+        json!(["email.label_added", "call.ended"]),
+    ] {
+        assert!(parse(json!({"events": events, "labels": ["Clients"]})).is_err());
+    }
+
+    let added = labels_updated(json!([
+        {"label_id": null, "provider_label_id": "Label_1", "name": "Clients"}
+    ]))
+    .normalize()
+    .unwrap();
+    let mut stored = serde_json::to_value(&added).unwrap();
+    stored.as_object_mut().unwrap().remove("labels");
+    assert!(serde_json::from_value::<EventReference>(stored).is_err());
+    let document = incoming("document.created", metadata())
+        .normalize()
+        .unwrap();
+    let mut stored = serde_json::to_value(&document).unwrap();
+    stored["labels"] = json!(["Clients"]);
+    assert!(serde_json::from_value::<EventReference>(stored).is_err());
+}
+
 #[test]
 fn github_stands_alone_and_only_it_takes_a_payload_match() {
     let parse = |filter: serde_json::Value| serde_json::from_value::<EventFilter>(filter);

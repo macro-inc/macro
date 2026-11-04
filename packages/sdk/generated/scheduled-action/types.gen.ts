@@ -171,6 +171,13 @@ export type EventFilter = {
     github?: null | GithubSelector;
     ids?: Array<string> | null;
     /**
+     * Email label names, any one of which the event must carry: the labels
+     * a received message arrived with, or the labels just added to a
+     * thread. Compared ignoring case. Only email received and email label
+     * filters take it; `None` matches any label, or none.
+     */
+    labels?: Array<string> | null;
+    /**
      * Exact tests on the payload, all of which must pass.
      */
     match?: Array<PayloadCondition> | null;
@@ -185,7 +192,7 @@ export type EventFilters = Array<EventFilter>;
  * Closed allowlist: unknown names, deletions and ambiguous attribution are not
  * selectors. Adding a broker variant does not automatically enable routines.
  */
-export type EventName = 'document.created' | 'document.updated' | 'document.deleted' | 'task.created' | 'task.status_changed' | 'task.priority_changed' | 'task.property_changed' | 'email.message_received' | 'channel.created' | 'channel.message_posted' | 'channel.mentioned' | 'channel.message_patched' | 'channel.message_attachment_created' | 'call.started' | 'call.ended' | 'github';
+export type EventName = 'document.created' | 'document.updated' | 'document.deleted' | 'task.created' | 'task.status_changed' | 'task.priority_changed' | 'task.property_changed' | 'email.message_received' | 'email.label_added' | 'channel.created' | 'channel.message_posted' | 'channel.mentioned' | 'channel.message_patched' | 'channel.message_attachment_created' | 'call.started' | 'call.ended' | 'github';
 
 /**
  * Transcript resource created by a run. Never infer this from current task configuration.

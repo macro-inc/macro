@@ -460,6 +460,66 @@ fn a_received_email_carries_its_headers_and_reply_free_body() {
 }
 
 #[test]
+fn a_label_added_carries_the_threads_email_and_the_labels() {
+    let thread_id = Uuid::parse_str("01928f3e-6a2b-7c3d-8e4f-00000000e7a1").unwrap();
+    let event: EventReference = serde_json::from_value(json!({
+        "event_id": "01928f3e-6a2b-7c3d-8e4f-0123456789cd",
+        "event_name": "email.label_added",
+        "entity_id": thread_id,
+        "labels": ["Clients/Acme"],
+    }))
+    .unwrap();
+    let received_at = Utc.with_ymd_and_hms(2026, 10, 5, 9, 30, 0).unwrap();
+    let content = EventContent::Email(Some(ParsedMessage {
+        draft_generation: 0,
+        db_id: Uuid::parse_str("01928f3e-6a2b-7c3d-8e4f-00000000e3e5").unwrap(),
+        link_id: Uuid::nil(),
+        thread_db_id: thread_id,
+        subject: Some("Kickoff".into()),
+        snippet: None,
+        from: Some(ContactInfo {
+            email: "pm@example.com".into(),
+            name: None,
+            photo_url: None,
+        }),
+        to: Vec::new(),
+        cc: Vec::new(),
+        bcc: Vec::new(),
+        labels: Vec::new(),
+        body_parsed: Some("See you Monday.".into()),
+        body_text: None,
+        body_html_sanitized: None,
+        body_macro: None,
+        body_replyless: None,
+        internal_date_ts: Some(received_at),
+        sent_at: None,
+        is_read: true,
+        is_starred: false,
+        is_sent: false,
+        is_draft: false,
+        has_attachments: false,
+        created_at: received_at,
+        updated_at: received_at,
+    }));
+
+    assert_eq!(
+        routine_event(&event, content).unwrap(),
+        RoutineEvent::EmailLabelAdded {
+            email: EmailSnapshot {
+                thread_id,
+                subject: "Kickoff".into(),
+                from: "pm@example.com".into(),
+                to: Vec::new(),
+                received_at,
+                body: "See you Monday.".into(),
+            },
+            labels: vec!["Clients/Acme".into()],
+        }
+    );
+    assert!(routine_event(&event, EventContent::Email(None)).is_err());
+}
+
+#[test]
 fn a_channel_reply_carries_its_thread_through_the_message() {
     let channel_id = Uuid::parse_str("01928f3e-6a2b-7c3d-8e4f-0000000c4a77").unwrap();
     let root_id = Uuid::parse_str("01928f3e-6a2b-7c3d-8e4f-000000000001").unwrap();

@@ -74,6 +74,8 @@ pub(crate) struct GraphqlScheduledActionEventFilter {
     github: Option<GraphqlScheduledActionGithubSelector>,
     /// Exact payload tests a GitHub delivery must pass, as a reader would state them.
     payload_match: Vec<String>,
+    /// Email label names, any one of which the email must carry. Null matches any label.
+    labels: Option<Vec<String>>,
     /// Yes/no question the triggering content must answer with yes before the routine runs.
     condition: Option<String>,
 }
@@ -130,6 +132,8 @@ pub(crate) enum GraphqlScheduledActionEventName {
     TaskPropertyChanged,
     /// A new email was received.
     EmailMessageReceived,
+    /// A user label was added to an email thread.
+    EmailLabelAdded,
     /// A channel was created.
     ChannelCreated,
     /// A channel message was posted.
@@ -159,6 +163,7 @@ impl From<EventName> for GraphqlScheduledActionEventName {
             EventName::TaskPriorityChanged => Self::TaskPriorityChanged,
             EventName::TaskPropertyChanged => Self::TaskPropertyChanged,
             EventName::EmailMessageReceived => Self::EmailMessageReceived,
+            EventName::EmailLabelAdded => Self::EmailLabelAdded,
             EventName::ChannelCreated => Self::ChannelCreated,
             EventName::ChannelMessagePosted => Self::ChannelMessagePosted,
             EventName::ChannelMentioned => Self::ChannelMentioned,
@@ -287,6 +292,7 @@ fn event_filters(
                             .collect()
                     })
                     .unwrap_or_default(),
+                labels: filter.labels().map(<[String]>::to_vec),
                 condition: filter
                     .condition()
                     .map(|condition| condition.as_str().to_owned()),

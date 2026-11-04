@@ -4105,6 +4105,10 @@ input GraphqlEmailLiteral @oneOf {
 	"""
 	projectId: String
 	"""
+	A provider label (Gmail label or Outlook category) by display name.
+	"""
+	label: String
+	"""
 	The importance option.
 	"""
 	importance: Boolean
@@ -6921,6 +6925,10 @@ type GraphqlScheduledActionEventFilter {
 	"""
 	payloadMatch: [String!]!
 	"""
+	Email label names, any one of which the email must carry. Null matches any label.
+	"""
+	labels: [String!]
+	"""
 	Yes/no question the triggering content must answer with yes before the routine runs.
 	"""
 	condition: String
@@ -6962,6 +6970,10 @@ enum GraphqlScheduledActionEventName {
 	A new email was received.
 	"""
 	EMAIL_MESSAGE_RECEIVED
+	"""
+	A user label was added to an email thread.
+	"""
+	EMAIL_LABEL_ADDED
 	"""
 	A channel was created.
 	"""

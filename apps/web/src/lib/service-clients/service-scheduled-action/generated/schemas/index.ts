@@ -41,6 +41,7 @@ export * from './eventFilter';
 export * from './eventFilterCondition';
 export * from './eventFilterGithub';
 export * from './eventFilterIds';
+export * from './eventFilterLabels';
 export * from './eventFilterMatch';
 export * from './eventFilters';
 export * from './eventName';

@@ -592,6 +592,13 @@ pub enum RoutineEvent {
         /// The email.
         email: EmailSnapshot,
     },
+    /// Labels were added to an email thread.
+    EmailLabelAdded {
+        /// The thread's newest email.
+        email: EmailSnapshot,
+        /// The label names just added.
+        labels: Vec<String>,
+    },
     /// A channel was created.
     ChannelCreated {
         /// Channel id.

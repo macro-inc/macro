@@ -1199,6 +1199,14 @@
               "type": "string"
             }
           },
+          "labels": {
+            "type": ["array", "null"],
+            "items": {
+              "type": "string"
+            },
+            "description": "Email label names, any one of which the event must carry: the labels\na received message arrived with, or the labels just added to a\nthread. Compared ignoring case. Only email received and email label\nfilters take it; `None` matches any label, or none.",
+            "maxItems": 20
+          },
           "match": {
             "type": ["array", "null"],
             "items": {
@@ -1227,6 +1235,7 @@
           "task.priority_changed",
           "task.property_changed",
           "email.message_received",
+          "email.label_added",
           "channel.created",
           "channel.message_posted",
           "channel.mentioned",

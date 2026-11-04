@@ -1,10 +1,10 @@
 //! Routine-owned event eligibility and exact selector matching.
 //!
 //! Adapters strip the broker envelope into [`IncomingEvent`]. Only explicitly
-//! allowlisted human actions, inbound emails, call lifecycle events, task status
-//! changes from GitHub pull requests and GitHub App deliveries become
-//! [`EventReference`]s. GitHub deliveries can also be filtered on exact payload
-//! values.
+//! allowlisted human actions, inbound emails, email labels added to a thread,
+//! call lifecycle events, task status changes from GitHub pull requests and
+//! GitHub App deliveries become [`EventReference`]s. GitHub deliveries can also
+//! be filtered on exact payload values, and email events on label names.
 
 use activity::Actor;
 use call::domain::events::CallTopicEvent;
@@ -51,6 +51,7 @@ mod test;
 pub const MAX_FILTERS: usize = 32;
 pub const MAX_EVENTS_PER_FILTER: usize = 15;
 pub const MAX_IDS_PER_FILTER: usize = 100;
+pub const MAX_LABELS_PER_FILTER: usize = 20;
 
 /// A routine may run on one trigger or any of several schedules and Macro events.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, ToSchema)]
@@ -186,6 +187,10 @@ pub enum EventName {
     TaskPropertyChanged,
     #[serde(rename = "email.message_received")]
     EmailMessageReceived,
+    /// A user label (Gmail label, Outlook category) was added to a thread's
+    /// messages, in Macro or at the provider.
+    #[serde(rename = "email.label_added")]
+    EmailLabelAdded,
     #[serde(rename = "channel.created")]
     ChannelCreated,
     #[serde(rename = "channel.message_posted")]
@@ -216,6 +221,7 @@ impl EventName {
             Self::TaskPriorityChanged => "task.priority_changed",
             Self::TaskPropertyChanged => "task.property_changed",
             Self::EmailMessageReceived => "email.message_received",
+            Self::EmailLabelAdded => "email.label_added",
             Self::ChannelCreated => "channel.created",
             Self::ChannelMessagePosted => "channel.message_posted",
             Self::ChannelMentioned => "channel.mentioned",
@@ -236,7 +242,7 @@ impl EventName {
             | Self::TaskStatusChanged
             | Self::TaskPriorityChanged
             | Self::TaskPropertyChanged => EventEntityType::Document,
-            Self::EmailMessageReceived => EventEntityType::EmailThread,
+            Self::EmailMessageReceived | Self::EmailLabelAdded => EventEntityType::EmailThread,
             Self::CallStarted | Self::CallEnded => EventEntityType::Call,
             Self::ChannelCreated
             | Self::ChannelMessagePosted
@@ -262,6 +268,11 @@ impl EventName {
                 | Self::ChannelMessageAttachmentCreated
                 | Self::EmailMessageReceived
         )
+    }
+
+    /// Events whose email labels a filter's `labels` can match.
+    const fn has_labels(self) -> bool {
+        matches!(self, Self::EmailMessageReceived | Self::EmailLabelAdded)
     }
 
     /// Status and priority also match any-property selectors. The original
@@ -299,6 +310,10 @@ pub enum FilterValidationError {
     GithubSelector,
     #[error("only github filters take a payload match")]
     PayloadMatch,
+    #[error("expected between 1 and 20 nonblank label names per filter")]
+    LabelCount,
+    #[error("only email received and email label filters take labels")]
+    LabelEvents,
     #[error(transparent)]
     Github(#[from] GithubSelectorError),
     #[error(transparent)]
@@ -327,6 +342,13 @@ pub struct EventFilter {
     #[serde(rename = "match", skip_serializing_if = "Option::is_none")]
     #[schema(value_type = Option<Vec<PayloadConditionInput>>)]
     payload: Option<PayloadConditions>,
+    /// Email label names, any one of which the event must carry: the labels
+    /// a received message arrived with, or the labels just added to a
+    /// thread. Compared ignoring case. Only email received and email label
+    /// filters take it; `None` matches any label, or none.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    #[schema(max_items = 20)]
+    labels: Option<Vec<String>>,
     /// Yes/no question about the triggering content, e.g. "Is this email an
     /// invoice?". The routine runs only when the answer is yes.
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -345,6 +367,8 @@ struct FilterInput {
     #[serde(default, rename = "match")]
     payload: Option<PayloadConditions>,
     #[serde(default)]
+    labels: Option<Vec<String>>,
+    #[serde(default)]
     condition: Option<YesNoQuestion>,
 }
 
@@ -354,6 +378,7 @@ impl TryFrom<FilterInput> for EventFilter {
     fn try_from(input: FilterInput) -> Result<Self, Self::Error> {
         Self::new(input.events, input.ids)?
             .with_condition(input.condition)
+            .with_labels(input.labels)?
             .with_external(input.github, input.payload)
     }
 }
@@ -386,6 +411,7 @@ impl EventFilter {
             ids,
             github: None,
             payload: None,
+            labels: None,
             condition: None,
         })
     }
@@ -393,6 +419,34 @@ impl EventFilter {
     pub fn with_condition(mut self, condition: Option<YesNoQuestion>) -> Self {
         self.condition = condition;
         self
+    }
+
+    /// Require the event to carry one of these email labels.
+    pub fn with_labels(
+        mut self,
+        labels: Option<Vec<String>>,
+    ) -> Result<Self, FilterValidationError> {
+        let Some(labels) = labels else {
+            self.labels = None;
+            return Ok(self);
+        };
+        if !self.events.iter().all(|name| name.has_labels()) {
+            return Err(FilterValidationError::LabelEvents);
+        }
+        let mut labels: Vec<String> = labels
+            .into_iter()
+            .map(|label| label.trim().to_owned())
+            .collect();
+        if labels.is_empty()
+            || labels.len() > MAX_LABELS_PER_FILTER
+            || labels.iter().any(String::is_empty)
+        {
+            return Err(FilterValidationError::LabelCount);
+        }
+        labels.sort_unstable();
+        labels.dedup();
+        self.labels = Some(labels);
+        Ok(self)
     }
 
     /// Attach the GitHub selector and payload match an external filter takes.
@@ -434,6 +488,10 @@ impl EventFilter {
         self.condition.as_ref()
     }
 
+    pub fn labels(&self) -> Option<&[String]> {
+        self.labels.as_deref()
+    }
+
     pub fn accepts(&self, event: &EventReference) -> bool {
         let name = event.event_name;
         let named = self.events.contains(&name)
@@ -441,6 +499,7 @@ impl EventFilter {
                 .general_event()
                 .is_some_and(|general| self.events.contains(&general));
         named
+            && self.labels_accept(&event.labels)
             && match &event.source {
                 EventSource::Entity { entity_id, .. } => {
                     self.ids.as_ref().is_none_or(|ids| ids.contains(entity_id))
@@ -452,6 +511,15 @@ impl EventFilter {
                         && self.payload_accepts(delivery.payload.as_ref())
                 }
             }
+    }
+
+    fn labels_accept(&self, carried: &[String]) -> bool {
+        self.labels.as_ref().is_none_or(|wanted| {
+            wanted.iter().any(|wanted| {
+                let wanted = wanted.to_lowercase();
+                carried.iter().any(|label| label.to_lowercase() == wanted)
+            })
+        })
     }
 
     fn payload_accepts(&self, payload: Option<&Value>) -> bool {
@@ -584,6 +652,9 @@ pub struct EventReference {
     event_id: EventId,
     event_name: EventName,
     source: EventSource,
+    /// Email label names the event carries, for filters' `labels`: required
+    /// for a label added, optional for a received email, else empty.
+    labels: Vec<String>,
 }
 
 /// What an event is about.
@@ -614,6 +685,8 @@ struct EventReferenceInput {
     github: Option<Box<GithubWebhookReceived>>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     change_source: Option<PropertyChangeSource>,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    labels: Vec<String>,
 }
 
 fn skip_message_id(message_id: &Option<Option<Uuid>>) -> bool {
@@ -644,10 +717,18 @@ impl TryFrom<EventReferenceInput> for EventReference {
             }
             _ => return Err(EventRejection::InvalidContext),
         };
+        let labels_valid = match name {
+            EventName::EmailLabelAdded => !input.labels.is_empty(),
+            name => name.has_labels() || input.labels.is_empty(),
+        };
+        if !labels_valid {
+            return Err(EventRejection::InvalidContext);
+        }
         Ok(Self {
             event_id: input.event_id,
             event_name: name,
             source,
+            labels: input.labels,
         })
     }
 }
@@ -661,6 +742,7 @@ impl From<EventReference> for EventReferenceInput {
             message_id: None,
             github: None,
             change_source: None,
+            labels: event.labels,
         };
         match event.source {
             EventSource::Entity {
@@ -712,6 +794,9 @@ impl EventReference {
     }
     pub fn published_at(&self) -> DateTime<Utc> {
         self.event_id.published_at()
+    }
+    pub fn labels(&self) -> &[String] {
+        &self.labels
     }
 }
 
@@ -793,7 +878,8 @@ fn document_actor(
 }
 
 impl IncomingEvent {
-    /// Mentions belong to the mentioned user, inbound mail to its inbox owner,
+    /// Mentions belong to the mentioned user, inbound mail and its labels to
+    /// its inbox owner,
     /// a started call to who created it, and an ended call to who joined it.
     /// Entity access is checked separately at admission and dispatch. These
     /// audience restrictions never turn an event into an access grant.
@@ -803,6 +889,7 @@ impl IncomingEvent {
                 data.mentioned.entity_type == "user" && data.mentioned.entity_id == owner.as_ref()
             }
             EventPayload::Email(EmailTopicEvent::MessageReceived(data)) => &data.owner == owner,
+            EventPayload::Email(EmailTopicEvent::ThreadLabelsUpdated(data)) => &data.owner == owner,
             EventPayload::Call(CallTopicEvent::Started(data)) => &data.created_by == owner,
             EventPayload::Call(CallTopicEvent::RecordArchived(data)) => {
                 data.participants.contains(owner)
@@ -821,6 +908,7 @@ impl IncomingEvent {
         }
         let event_id = EventId::try_from(self.event_id)?;
         let mut change_source = None;
+        let mut labels = Vec::new();
         let (event_name, entity_id, message_id) = match &self.payload {
             EventPayload::Document(event) => {
                 let (name, id) = match event {
@@ -918,11 +1006,22 @@ impl IncomingEvent {
                 if data.is_spam_or_trash {
                     return Err(EventRejection::UnsupportedEvent);
                 }
+                labels = canonical_labels(data.labels.iter().cloned());
                 (
                     EventName::EmailMessageReceived,
                     data.thread_id,
                     Some(data.message_id),
                 )
+            }
+            EventPayload::Email(EmailTopicEvent::ThreadLabelsUpdated(data)) => {
+                // User labels only; the email domain publishes system labels
+                // (inbox, trash, read, ...) as their own events. A Gmail label
+                // whose name is not known yet cannot be matched by name.
+                labels = canonical_labels(data.added.iter().filter_map(|label| label.name.clone()));
+                if labels.is_empty() {
+                    return Err(EventRejection::UnsupportedEvent);
+                }
+                (EventName::EmailLabelAdded, data.thread_id, None)
             }
             EventPayload::Email(_) => return Err(EventRejection::UnsupportedEvent),
             EventPayload::Call(CallTopicEvent::Started(data)) => {
@@ -948,6 +1047,7 @@ impl IncomingEvent {
                     event_id,
                     event_name: EventName::Github,
                     source: EventSource::Github(Box::new(delivery.clone())),
+                    labels: Vec::new(),
                 });
             }
         };
@@ -959,8 +1059,16 @@ impl IncomingEvent {
                 message_id,
                 change_source,
             },
+            labels,
         })
     }
+}
+
+fn canonical_labels(labels: impl Iterator<Item = String>) -> Vec<String> {
+    let mut labels: Vec<String> = labels.filter(|label| !label.trim().is_empty()).collect();
+    labels.sort_unstable();
+    labels.dedup();
+    labels
 }
 
 fn task_property_event(

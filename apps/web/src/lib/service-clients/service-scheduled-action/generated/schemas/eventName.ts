@@ -22,6 +22,7 @@ export const EventName = {
   taskpriority_changed: 'task.priority_changed',
   taskproperty_changed: 'task.property_changed',
   emailmessage_received: 'email.message_received',
+  emaillabel_added: 'email.label_added',
   channelcreated: 'channel.created',
   channelmessage_posted: 'channel.message_posted',
   channelmentioned: 'channel.mentioned',

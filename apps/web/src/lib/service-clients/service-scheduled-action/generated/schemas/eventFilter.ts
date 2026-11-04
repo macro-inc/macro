@@ -8,6 +8,7 @@
 import type { EventFilterCondition } from './eventFilterCondition';
 import type { EventFilterGithub } from './eventFilterGithub';
 import type { EventFilterIds } from './eventFilterIds';
+import type { EventFilterLabels } from './eventFilterLabels';
 import type { EventFilterMatch } from './eventFilterMatch';
 import type { EventName } from './eventName';
 
@@ -30,6 +31,14 @@ invoice?". The routine runs only when the answer is yes.
   events: EventName[];
   github?: EventFilterGithub;
   ids?: EventFilterIds;
+  /**
+   * Email label names, any one of which the event must carry: the labels
+a received message arrived with, or the labels just added to a
+thread. Compared ignoring case. Only email received and email label
+filters take it; `None` matches any label, or none.
+   * @maxItems 20
+   */
+  labels?: EventFilterLabels;
   /** Exact tests on the payload, all of which must pass. */
   match?: EventFilterMatch;
 }
