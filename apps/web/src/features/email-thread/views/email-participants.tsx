@@ -7,12 +7,10 @@ import { Badge, Button, badgeTriggerClasses } from '@ui';
 import { createMemo, createSignal, Show } from 'solid-js';
 import { useEmailThreadState } from '../context/email-thread-state-context';
 import { useEmailThreadViewContext } from '../context/email-thread-view-context';
-
-interface Participant {
-  email: string;
-  name?: string;
-  photoUrl?: string;
-}
+import {
+  collectEmailParticipants,
+  type EmailParticipant,
+} from '../core/participants';
 
 const DEFAULT_VISIBLE_COUNT = 5;
 
@@ -22,38 +20,11 @@ export function EmailParticipants() {
   const currentUserEmail = viewContext.thread.viewerEmail;
   const [expanded, setExpanded] = createSignal(false);
 
-  const participants = createMemo(() => {
-    // Unsent drafts can be prepended optimistically and removed when emptied.
-    // Participants describe the conversation, not the current draft envelope.
-    const messages = context.messages.list();
-    const seen = new Map<string, Participant>();
-
-    for (const m of messages) {
-      if (m.from?.email) {
-        const existing = seen.get(m.from.email);
-        if (!existing || (!existing.name && m.from.name)) {
-          seen.set(m.from.email, {
-            email: m.from.email,
-            name: m.from.name ?? undefined,
-            photoUrl: m.from.photo_url ?? existing?.photoUrl ?? undefined,
-          });
-        }
-      }
-      for (const r of [...m.to, ...m.cc]) {
-        if (!r.email) continue;
-        const existing = seen.get(r.email);
-        if (!existing || (!existing.name && r.name)) {
-          seen.set(r.email, {
-            email: r.email,
-            name: r.name ?? undefined,
-            photoUrl: r.photo_url ?? existing?.photoUrl ?? undefined,
-          });
-        }
-      }
-    }
-
-    return Array.from(seen.values());
-  });
+  // Unsent drafts can be prepended optimistically and removed when emptied.
+  // Participants describe the conversation, not the current draft envelope.
+  const participants = createMemo(() =>
+    collectEmailParticipants(context.messages.list())
+  );
 
   const visibleParticipants = createMemo(() => {
     const all = participants();
@@ -65,13 +36,13 @@ export function EmailParticipants() {
     Math.max(0, participants().length - DEFAULT_VISIBLE_COUNT)
   );
 
-  const getDisplayName = (p: Participant) => {
+  const getDisplayName = (p: EmailParticipant) => {
     if (isViewerAddress(p.email, currentUserEmail())) return 'Me';
     if (p.name) return p.name.split(' ')[0];
     return p.email.split('@')[0];
   };
 
-  const getIconProps = (p: Participant): UserIconProps => {
+  const getIconProps = (p: EmailParticipant): UserIconProps => {
     const macroId = emailToMacroId(p.email);
     if (macroId) return { id: macroId, photoUrl: p.photoUrl };
     return { email: p.email, photoUrl: p.photoUrl };
