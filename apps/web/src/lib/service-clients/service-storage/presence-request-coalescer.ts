@@ -10,6 +10,7 @@ const COALESCED_OPERATIONS = ['HomeUnreadPresence'];
 export const PRESENCE_REQUEST_INTERVAL_MS = 2_000;
 
 type Slot = {
+  session: number;
   running?: Promise<Response>;
   queued?: Promise<Response>;
   startedAt: number;
@@ -32,7 +33,6 @@ async function abortable<T>(
   signal: AbortSignal | null | undefined
 ): Promise<T> {
   if (!signal) return promise;
-  signal.throwIfAborted();
   let abort = () => {};
   const aborted = new Promise<never>((_, reject) => {
     abort = () => reject(signal.reason);
@@ -51,7 +51,8 @@ export function createPresenceRequestCoalescer(
   wait: (ms: number) => Promise<void> = (ms) =>
     new Promise((resolve) => setTimeout(resolve, ms))
 ) {
-  const slots = new Map<string, Slot>();
+  let slots = new Map<string, Slot>();
+  let session = 0;
 
   const start = (slot: Slot, send: Send, init: RequestInit | undefined) => {
     const startedAt = now();
@@ -75,6 +76,10 @@ export function createPresenceRequestCoalescer(
     const delay = slot.startedAt + intervalMs - now();
     if (delay > 0) await wait(delay);
     slot.queued = undefined;
+    // Credentials are read when the request is sent, so a request queued by
+    // the previous session must not go out under the next one.
+    if (slot.session !== session)
+      throw new Error('presence request outlived its session');
     return start(slot, send, init);
   };
 
@@ -83,16 +88,20 @@ export function createPresenceRequestCoalescer(
     return (await slot.queued).clone();
   };
 
-  return (init: RequestInit | undefined, send: Send): Promise<Response> => {
+  const coalesce = (
+    init: RequestInit | undefined,
+    send: Send
+  ): Promise<Response> => {
     const key = coalescingKey(init);
     if (key === undefined) return send(init);
+    if (init?.signal?.aborted) return Promise.reject(init.signal.reason);
     for (const [other, slot] of slots) {
       if (!slot.running && !slot.queued && now() - slot.startedAt > intervalMs)
         slots.delete(other);
     }
     let slot = slots.get(key);
     if (!slot) {
-      slot = { startedAt: -Infinity };
+      slot = { session, startedAt: -Infinity };
       slots.set(key, slot);
     }
     if (!slot.running && !slot.queued && now() - slot.startedAt >= intervalMs) {
@@ -106,4 +115,12 @@ export function createPresenceRequestCoalescer(
     }
     return abortable(shared(slot), init?.signal);
   };
+
+  /** Forgets every request, and drops queued ones, when the session changes. */
+  const reset = () => {
+    session += 1;
+    slots = new Map();
+  };
+
+  return { coalesce, reset };
 }

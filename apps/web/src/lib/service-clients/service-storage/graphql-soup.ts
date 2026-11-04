@@ -293,14 +293,17 @@ async function isLegacyProjectionValidationError(
   }
 }
 
-const coalescePresenceRequest = createPresenceRequestCoalescer();
+const presenceRequests = createPresenceRequestCoalescer();
+
+/** Drops coalesced presence requests that belong to the previous session. */
+export const resetGraphqlPresenceRequests = presenceRequests.reset;
 
 export function dssGraphqlFetch(
   input: RequestInfo | URL,
   init?: RequestInit,
   queueOwner?: CacheHost
 ): Promise<Response> {
-  return coalescePresenceRequest(init, (coalescedInit) =>
+  return presenceRequests.coalesce(init, (coalescedInit) =>
     sendDssGraphqlRequest(input, coalescedInit, queueOwner)
   );
 }
@@ -610,6 +613,7 @@ export function setGraphqlSoupSessionActive(active: boolean): void {
 
 function disposeSessionClients(): void {
   cacheSessionGeneration += 1;
+  presenceRequests.reset();
   cacheRecovery.reset();
   cacheInitializationFailed = false;
   const cleanup = cachedCacheCleanup;

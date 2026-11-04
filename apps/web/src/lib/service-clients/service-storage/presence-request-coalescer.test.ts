@@ -9,7 +9,7 @@ const presence = (variables = '{}'): RequestInit => ({
 function harness() {
   let time = 0;
   const waits: { at: number; resolve: () => void }[] = [];
-  const coalesce = createPresenceRequestCoalescer(
+  const { coalesce, reset } = createPresenceRequestCoalescer(
     2_000,
     () => time,
     (ms) =>
@@ -35,7 +35,7 @@ function harness() {
     }
     await flush();
   };
-  return { coalesce, send, pending, advance };
+  return { coalesce, reset, send, pending, advance };
 }
 
 const flush = () => new Promise((resolve) => setTimeout(resolve, 0));
@@ -129,5 +129,36 @@ describe('createPresenceRequestCoalescer', () => {
     expect(pending[1].init?.signal).toBeUndefined();
     pending[1].resolve();
     await expect((await kept).text()).resolves.toBe('r2');
+  });
+
+  it('rejects an already-aborted caller without sending', async () => {
+    const { coalesce, send, pending } = harness();
+    const first = coalesce(presence(), send);
+    const controller = new AbortController();
+    controller.abort(new DOMException('aborted', 'AbortError'));
+    await expect(
+      coalesce({ ...presence(), signal: controller.signal }, send)
+    ).rejects.toThrow('aborted');
+    expect(send).toHaveBeenCalledTimes(1);
+    pending[0].resolve();
+    await first;
+  });
+
+  it('drops a request queued by the previous session', async () => {
+    const { coalesce, reset, send, pending, advance } = harness();
+    const first = coalesce(presence(), send);
+    const queued = coalesce(presence(), send);
+    reset();
+    const next = coalesce(presence(), send);
+    expect(send).toHaveBeenCalledTimes(2);
+
+    pending[0].resolve();
+    pending[1].resolve();
+    const dropped = expect(queued).rejects.toThrow('outlived its session');
+    await first;
+    await next;
+    await advance(2_000);
+    await dropped;
+    expect(send).toHaveBeenCalledTimes(2);
   });
 });
