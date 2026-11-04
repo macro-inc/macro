@@ -8493,13 +8493,17 @@ export interface RoutineInfo {
   nextRunAt?: string | null;
 }
 /**
- * Create a skill: a markdown document of reusable instructions that AI reads and follows when the skill is referenced, as Compose Skill in the app does. Write the instructions as the markdown body. Edit an existing skill with EditDocument; find skills with ListSkills or SearchSkills.
+ * Create a skill: a markdown document of reusable instructions that AI reads and follows when the skill is referenced or a request needs it, as Compose Skill in the app does. Write the instructions as the markdown body, and say in description when to use it. Edit an existing skill with EditDocument; find skills with ListSkills or SearchSkills.
  */
 export interface CreateSkill {
   /**
    * The skill's name.
    */
   skillName: string;
+  /**
+   * When to use the skill, in one line starting "Use when", at most 300 characters, e.g. "Use when drafting release notes; not changelog entries". Agents load the skill for requests this describes.
+   */
+  description: string;
   /**
    * The skill's instructions, in markdown.
    */
@@ -12609,6 +12613,10 @@ export interface SkillSearchResult {
    * The name of the skill.
    */
   name: string;
+  /**
+   * When to use the skill, when it says.
+   */
+  description?: string | null;
   /**
    * When the skill was last updated, when known.
    */
