@@ -86,7 +86,7 @@ function invalidateDeletedDssItems(entities: EntityData[]): void {
   }
 }
 
-async function settleGraphqlDeletes(
+async function settleDssDeletes(
   entities: EntityData[],
   deletions: Promise<boolean>[]
 ): Promise<boolean[]> {
@@ -205,11 +205,7 @@ export function createBulkDeleteDssItemsMutation() {
         }
         return deleteItem({ id: e.id, itemType: e.type });
       });
-      const results = graphqlSoupEnabled
-        ? await settleGraphqlDeletes(deletable, deletions)
-        : await Promise.all(deletions);
-      if (!graphqlSoupEnabled) invalidateDeletedDssItems(deletable);
-      return results;
+      return settleDssDeletes(deletable, deletions);
     },
     onMutate: async (entities: EntityData[]) => {
       const deletable = entities.filter(isDeletable);
@@ -252,9 +248,7 @@ export function createBulkDeleteDssItemsMutation() {
         return;
       }
       const partialFailure =
-        graphqlSoupEnabled &&
-        error instanceof BulkDeleteFailure &&
-        error.deletedEntities.length > 0;
+        error instanceof BulkDeleteFailure && error.deletedEntities.length > 0;
       if (partialFailure) {
         // The legacy transactions hold whole snapshots. Restore failed rows,
         // then reapply confirmed removals in one reactive batch so successes
@@ -262,7 +256,7 @@ export function createBulkDeleteDssItemsMutation() {
         batch(() => {
           context?.soupSnapshot.rollback();
           context?.searchSnapshot.rollback();
-          removeDssEntityCaches(error.deletedEntities, true);
+          removeDssEntityCaches(error.deletedEntities, graphqlSoupEnabled);
         });
       } else {
         context?.soupSnapshot.rollback();

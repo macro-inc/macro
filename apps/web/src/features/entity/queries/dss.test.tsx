@@ -446,24 +446,17 @@ describe('bulk delete GraphQL optimism', () => {
   });
 
   it.each([true, false])(
-    'handles boolean-only total failure without changing the disabled path (%s)',
+    'restores a boolean-only total failure with GraphQL Soup enabled=%s',
     async (graphql) => {
       vi.spyOn(console, 'error').mockImplementation(() => {});
       mocks.graphqlEnabled.mockReturnValue(graphql);
       mocks.deleteItem.mockResolvedValue(false);
       const { mutation } = mount();
       const result = mutation.mutateAsync([entity('failed')]);
-      if (graphql) {
-        await expect(result).rejects.toThrow('Failed to delete items');
-        expect(mocks.rollbackSoup).toHaveBeenCalledOnce();
-        expect(mocks.rollbackSearch).toHaveBeenCalledOnce();
-        expect(mocks.failure).toHaveBeenCalledWith('Failed to delete items');
-      } else {
-        await expect(result).resolves.toEqual([false]);
-        expect(mocks.rollbackSoup).not.toHaveBeenCalled();
-        expect(mocks.rollbackSearch).not.toHaveBeenCalled();
-        expect(mocks.failure).not.toHaveBeenCalled();
-      }
+      await expect(result).rejects.toThrow('Failed to delete items');
+      expect(mocks.rollbackSoup).toHaveBeenCalledOnce();
+      expect(mocks.rollbackSearch).toHaveBeenCalledOnce();
+      expect(mocks.failure).toHaveBeenCalledWith('Failed to delete items');
     }
   );
 
@@ -786,6 +779,51 @@ describe('moving databases and forms between folders', () => {
 });
 
 describe('channel deletion', () => {
+  it.each([true, false])(
+    'keeps confirmed channel deletions removed when a sibling fails (GraphQL: %s)',
+    async (graphql) => {
+      mocks.graphqlEnabled.mockReturnValue(graphql);
+      vi.spyOn(console, 'error').mockImplementation(() => {});
+      const soup = cacheRows(mocks.removeSoup, mocks.rollbackSoup, [
+        'deleted-channel',
+        'failed',
+        'other',
+      ]);
+      const search = cacheRows(mocks.removeSearch, mocks.rollbackSearch, [
+        'deleted-channel',
+        'failed',
+        'other',
+      ]);
+      const invalidate = vi.spyOn(client, 'invalidateQueries');
+      const failure = deferred<boolean>();
+      mocks.deleteItem.mockReturnValue(failure.promise);
+      const deleted = entity('deleted-channel', 'channel');
+      const failed = entity('failed');
+      const { mutation } = mount();
+
+      const result = expect(
+        mutation.mutateAsync([deleted, failed])
+      ).rejects.toMatchObject({
+        deletedEntities: [deleted],
+        failedEntities: [failed],
+        results: [true, false],
+      });
+      await vi.waitFor(() => expect(mocks.deleteItem).toHaveBeenCalledOnce());
+      expect(soup()).toEqual(['other']);
+      expect(search()).toEqual(['other']);
+      expect(mutation.isPending).toBe(true);
+      failure.reject(new Error('document delete failed'));
+      await result;
+
+      expect(soup()).toEqual(['failed', 'other']);
+      expect(search()).toEqual(['failed', 'other']);
+      expect(invalidate).toHaveBeenCalledWith({ queryKey: channelKeys._def });
+      expect(mocks.failure).toHaveBeenCalledWith(
+        'Deleted 1 of 2 items; 1 failed'
+      );
+    }
+  );
+
   it.each([true, false])(
     'deletes channels and refreshes channel caches (GraphQL: %s)',
     async (graphql) => {
