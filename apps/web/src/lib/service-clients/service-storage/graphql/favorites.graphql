@@ -20,6 +20,25 @@ query Favorites($filter: FavoritesFilterInput) {
   }
 }
 
+# Presence only: bounded witnesses are not inputs to bulk notification reads.
+# favoritesOnly restricts the Soup page before pagination, not after it.
+query FavoriteUnreadPresence($input: SoupInput!) {
+  user {
+    id
+    soup(input: $input) {
+      items {
+        __typename
+        id
+        unreadNotifications: notifications(filter: { states: [UNSEEN] }, limit: 1) {
+          id
+          state
+        }
+      }
+      nextCursor
+    }
+  }
+}
+
 mutation SetFavorite($entity: EntityRefInput!, $favorite: Boolean!) {
   setFavorite(entity: $entity, favorite: $favorite) {
     __typename
