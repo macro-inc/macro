@@ -9,6 +9,12 @@ const { openCreateContact } = vi.hoisted(() => ({
   openCreateContact: vi.fn(),
 }));
 
+vi.mock('../components/record-visibility-filter', () => ({
+  RecordVisibilityFilter: () => null,
+}));
+vi.mock('../components/record-archived-status', () => ({
+  ArchivedRecordBadge: () => null,
+}));
 vi.mock('@entity', () => ({
   ListEntity: (props: {
     entity: { name: string };
@@ -59,6 +65,8 @@ vi.mock('@app/components/view-shell', () => ({
 }));
 vi.mock('../context/crm-context', () => ({
   useCrmContext: () => ({
+    userId: () => 'user-1',
+    isTeamAdmin: () => () => true,
     openCreateContact,
     createNavigation: () => ({ openWithSplit: vi.fn() }),
     createContactPhoto: (email: string) => () =>

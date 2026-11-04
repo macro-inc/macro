@@ -519,6 +519,34 @@ impl DocumentService for FakeDocumentService {
     ) -> Result<DocumentTeamShareResponse, DocumentError> {
         panic!("unexpected set_team_share call")
     }
+
+    async fn set_skill_description(
+        &self,
+        _entity_access_receipt: entity_access::domain::models::EntityAccessReceipt<
+            models_permissions::share_permission::access_level::EditAccessLevel,
+        >,
+        _description: crate::domain::skill_description::SkillDescription,
+    ) -> Result<(), DocumentError> {
+        panic!("unexpected set_skill_description call")
+    }
+
+    async fn describe_new_skill(
+        &self,
+        _document_id: &str,
+        _description: crate::domain::skill_description::SkillDescription,
+    ) -> Result<(), DocumentError> {
+        Ok(())
+    }
+
+    async fn skill_descriptions(
+        &self,
+        _document_ids: &[String],
+    ) -> Result<
+        std::collections::HashMap<String, crate::domain::skill_description::SkillDescription>,
+        DocumentError,
+    > {
+        Ok(std::collections::HashMap::new())
+    }
 }
 
 impl DocumentContentEventService for FakeDocumentService {
@@ -1802,4 +1830,24 @@ async fn canvas_creation_requires_project_edit_access_before_metadata_creation()
         access.document_access_calls()[0].entity_type,
         EntityType::Project
     );
+}
+
+#[tokio::test]
+async fn a_skill_without_a_use_when_description_is_rejected_before_it_is_created() {
+    for description in ["", "Drafts release notes", "Use when one\nand two"] {
+        let (router, document_service, _access_service, _authorization_service) = test_router();
+        let request =
+            with_jwt(Request::post("/create_skill").header("content-type", "application/json"))
+                .body(Body::from(
+                    json!({ "skillName": "Release notes", "description": description }).to_string(),
+                ))
+                .expect("request should build");
+
+        assert_eq!(
+            send_status(&router, request).await,
+            StatusCode::BAD_REQUEST,
+            "{description:?}"
+        );
+        assert!(document_service.create_calls().is_empty());
+    }
 }

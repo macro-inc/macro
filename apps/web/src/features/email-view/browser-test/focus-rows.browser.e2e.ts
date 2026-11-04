@@ -121,7 +121,7 @@ for (const size of WIDTHS) {
       expect(horizontalOverflow).toBe(false);
     });
 
-    test('the meter shows only under the importance sort, and quietly', async ({
+    test('the meter shows only under the importance sort, in its band color', async ({
       page,
     }) => {
       await open(page);
@@ -134,21 +134,20 @@ for (const size of WIDTHS) {
       await expect(
         reply.getByRole('img', { name: 'Importance 92 of 100' })
       ).toBeVisible();
-      // The value lives in the label, not on screen.
-      await expect(reply).not.toContainText('92');
+      await expect(reply).toContainText('92');
 
-      // No color per band: each meter's first bar is lit or unlit, nothing else.
+      // Each band has its own color; the lowest score leaves the first bar unlit.
       const firstBarColors = await page.evaluate(() => {
         const colors = new Set<string>();
         for (const meter of document.querySelectorAll(
           '[role="img"][aria-label^="Importance"]'
         )) {
-          const first = meter.firstElementChild;
+          const first = meter.lastElementChild?.firstElementChild;
           if (first) colors.add(getComputedStyle(first).backgroundColor);
         }
         return [...colors];
       });
-      expect(firstBarColors).toHaveLength(2);
+      expect(firstBarColors).toHaveLength(6);
 
       await page.getByRole('button', { name: 'Most recent' }).click();
       await expect(meters).toHaveCount(0);

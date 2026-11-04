@@ -7,13 +7,10 @@
 import type { LayoutProblemOneOfOnefiveKind } from './layoutProblemOneOfOnefiveKind';
 
 /**
- * A text is longer than allowed.
+ * A section's show-when rules test a column no earlier section asks.
  */
 export type LayoutProblemOneOfOnefive = {
+  /** The column. */
+  column: string;
   kind: LayoutProblemOneOfOnefiveKind;
-  /**
-   * The longest allowed.
-   * @minimum 0
-   */
-  max: number;
 };
