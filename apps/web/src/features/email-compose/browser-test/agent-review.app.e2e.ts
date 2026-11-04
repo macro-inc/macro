@@ -56,7 +56,7 @@ async function serveReview(
   record: SavedReview,
   onSave: (committed: SavedReview) => Promise<void> = async () => {}
 ) {
-  const server = { record };
+  const server = { record, saves: 0 };
   // The fixture's providers would otherwise reach the hosted dev backend.
   await page.routeWebSocket('**', (socket) => socket.close());
   await page.route('**/__macro_dev/**', (route) => route.abort());
@@ -83,6 +83,7 @@ async function serveReview(
     if (request.method() === 'GET') {
       return route.fulfill({ json: server.record });
     }
+    server.saves += 1;
     const decision = request.postDataJSON();
     server.record = {
       ...server.record,
@@ -141,18 +142,34 @@ test('a poll during an edit save keeps typing in the draft', async ({
   ).toHaveCount(0);
 });
 
+test('opening a draft without editing it saves nothing', async ({ page }) => {
+  const server = await serveReview(page, initial);
+  const polls = (count: number) => {
+    let seen = 0;
+    return page.waitForResponse((response) => {
+      if (
+        response.request().method() !== 'GET' ||
+        !response.url().includes('/reviews/')
+      )
+        return false;
+      seen += 1;
+      return seen === count;
+    });
+  };
+  // The initial load and two polls, four seconds after the editor opens.
+  const polled = polls(3);
+  await page.goto('/src/features/email-compose/browser-test/agent-review.html');
+  await expect(page.locator('[contenteditable="true"]')).toBeVisible();
+  await polled;
+  expect(server.saves).toBe(0);
+});
+
 test('a status saved elsewhere replaces the open draft card', async ({
   page,
 }) => {
   const server = await serveReview(page, initial);
-  // The composer saves its normalized draft once it mounts.
-  const mounted = page.waitForResponse(
-    (response) =>
-      response.request().method() === 'POST' &&
-      response.url().includes('/reviews/')
-  );
   await page.goto('/src/features/email-compose/browser-test/agent-review.html');
-  await mounted;
+  await expect(page.locator('[contenteditable="true"]')).toBeVisible();
 
   server.record = {
     ...server.record,
@@ -171,14 +188,8 @@ test('a draft edited elsewhere offers to reload the saved review', async ({
   page,
 }) => {
   const server = await serveReview(page, initial);
-  // The composer saves its normalized draft once it mounts.
-  const mounted = page.waitForResponse(
-    (response) =>
-      response.request().method() === 'POST' &&
-      response.url().includes('/reviews/')
-  );
   await page.goto('/src/features/email-compose/browser-test/agent-review.html');
-  await mounted;
+  await expect(page.locator('[contenteditable="true"]')).toBeVisible();
 
   server.record = {
     ...server.record,

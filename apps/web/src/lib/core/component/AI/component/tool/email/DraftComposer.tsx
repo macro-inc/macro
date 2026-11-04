@@ -85,8 +85,8 @@ export type EmailDraftComposerProps = {
   readOnly?: boolean;
   /** Suffix for the body editor's debug name, unique per draft. */
   debugName: string;
-  /** The imported body in the same encoding used for subsequent edits. */
-  onBodyInitialized?: (bodyHtml: string) => void;
+  /** The opened draft, serialized as later edits are, before any edit. */
+  onDraftInitialized?: (draft: SendEmail) => void;
 };
 
 function toEmailRecipients(
@@ -418,9 +418,9 @@ export function EmailDraftComposer(props: EmailDraftComposerProps) {
       attachments.remove(attachment);
     },
     captureEditor: setEditor,
-    onEditorInitialized: (editor) => {
+    onEditorInitialized: () => {
       setBodyInitialized(true);
-      props.onBodyInitialized?.(prepareEmailBody(editor)?.bodyHtml ?? '');
+      props.onDraftInitialized?.(collectArgs());
     },
     onSend: handleSend,
     disabled: () => isSending() || uiDisabled(),

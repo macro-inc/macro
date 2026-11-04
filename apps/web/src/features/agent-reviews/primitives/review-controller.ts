@@ -20,6 +20,9 @@ export function createReviewController(
   const [saving, setSaving] = createSignal(false);
   const [validation, setValidation] = createSignal<string>();
   const drafts = new Map<string, ReviewDraft>();
+  // How each composer serializes its saved draft before any edit, keyed by
+  // that saved draft, so opening a card is not mistaken for an edit.
+  const untouched = new Map<string, { saved: string; draft: string }>();
   let tail: Promise<void> = Promise.resolve();
   // A poll can return the revision our in-flight save or decision already
   // committed; only a newer revision once our writes settle is someone else's.
@@ -51,6 +54,10 @@ export function createReviewController(
   async function saveDrafts() {
     if (error()) throw new Error(error());
     for (const [item, draft] of [...drafts]) {
+      if (unchanged(item, draft)) {
+        if (drafts.get(item) === draft) drafts.delete(item);
+        continue;
+      }
       const next = await actions.decide({
         action: 'edit',
         revision: saved().revision,
@@ -85,11 +92,30 @@ export function createReviewController(
   const saveLater = debounce(() => {
     fireAndForget(flush(), 'agent-reviews');
   }, 300);
+  function savedDraft(item: string) {
+    return JSON.stringify(
+      saved().items.find((entry) => entry.id === item)?.draft
+    );
+  }
+  function unchanged(item: string, draft: ReviewDraft) {
+    const current = savedDraft(item);
+    const next = JSON.stringify(draft.draft);
+    if (current === next) return true;
+
+    const initial = untouched.get(item);
+    return initial?.saved === current && initial.draft === next;
+  }
+  /** Record the composer's form of the saved draft it opened with. */
+  function baseline(item: string, draft: ReviewDraft) {
+    untouched.set(item, {
+      saved: savedDraft(item),
+      draft: JSON.stringify(draft.draft),
+    });
+  }
   function edit(item: string, draft: ReviewDraft) {
     if (busy() || error()) return;
     setValidation(undefined);
-    const existing = saved().items.find((entry) => entry.id === item);
-    if (JSON.stringify(existing?.draft) === JSON.stringify(draft.draft)) return;
+    if (unchanged(item, draft) && !drafts.has(item)) return;
     drafts.set(item, draft);
     saveLater();
   }
@@ -150,6 +176,7 @@ export function createReviewController(
     error,
     validation,
     stale,
+    baseline,
     edit,
     flush,
     decide,

@@ -279,6 +279,9 @@ export function ReviewStack(props: {
                     sink={sink(item.id, toDraft)}
                     debugName={`review-${item.id}`}
                     readOnly={readOnly}
+                    onDraftInitialized={(draft) =>
+                      controller.baseline(item.id, toDraft(draft))
+                    }
                     registerDraftReader={(reader) => {
                       readDraft = () => mapDraft(reader(), toDraft);
                     }}

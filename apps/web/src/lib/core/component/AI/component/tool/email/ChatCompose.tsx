@@ -236,10 +236,10 @@ export function ComposeTool(props: ComposeToolProps) {
     <EmailDraftComposer
       initialData={props.initialData}
       sink={sink}
-      onBodyInitialized={(bodyHtml) => {
+      onDraftInitialized={(draft) => {
         // Opening a Markdown draft must not count as a user edit merely
         // because the editor imports it into its HTML representation.
-        lastPersistedSnapshot.body = bodyHtml;
+        lastPersistedSnapshot = createSendEmailSnapshot(draft);
       }}
       recipientOptions={props.recipientOptions}
       header={props.header}

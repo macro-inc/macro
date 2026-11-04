@@ -2404,6 +2404,7 @@ Invalid drafts remain editable; navigation opens the first draft needing attenti
 The card polls its saved review while it is preparing or has pending drafts, so
 statuses set by the agent or another editor appear in place. A poll that returns
 the card's own in-flight save is not a conflict and leaves the editor focused.
+Opening a card saves nothing; only an edit that changes the draft is saved.
 A revision conflict or uncertain request shows **Reload saved review**. Reload
 reads the saved version and discards the local edit; it never retries an external
 send automatically. If the outcome is unknown, check the inbox/calendar before
@@ -2427,8 +2428,8 @@ navigation and page reload,
 that a single draft has no stack controls, that a batch's picker finds drafts,
 that chat remains usable, and that another account cannot submit. Sending an email or
 creating an event is a real action, including from a local app connected to dev.
-The backend-free browser regression for polling, presentation, and typing during
-a save is `bunx playwright test --config src/features/email-compose/browser-test/playwright.app.config.ts agent-review`
+The backend-free browser regression for polling, presentation, untouched opens,
+and typing during a save is `bunx playwright test --config src/features/email-compose/browser-test/playwright.app.config.ts agent-review`
 (from `apps/web`).
 ## Agent reasoning effort
 

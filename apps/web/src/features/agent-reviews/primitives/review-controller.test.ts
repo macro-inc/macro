@@ -169,6 +169,39 @@ describe('persisted review decisions', () => {
     expect(controller.stale()).toBe(false);
     expect(controller.record().items[0].status).toBe('dismissed');
   });
+  it('opening a draft in its composer saves nothing until it is edited', async () => {
+    const { controller, actions } = setup();
+    const opened = {
+      kind: 'email' as const,
+      draft: {
+        to: [{ email: 'a@example.com', name: null }],
+        cc: [],
+        bcc: [],
+        subject: 'Ready?',
+        body: 'PGJvZHk-PC9ib2R5Pg',
+        attachments: [],
+      },
+    };
+    controller.baseline('one', opened);
+    controller.edit('one', opened);
+    expect(await controller.flush()).toBe(true);
+    expect(actions.decide).not.toHaveBeenCalled();
+
+    const edited = {
+      ...opened,
+      draft: { ...opened.draft, subject: 'Ready now?' },
+    };
+    controller.edit('one', edited);
+    controller.edit('one', opened);
+    expect(await controller.flush()).toBe(true);
+    expect(actions.decide).not.toHaveBeenCalled();
+
+    controller.edit('one', edited);
+    expect(await controller.flush()).toBe(true);
+    expect(actions.decide.mock.calls.map(([call]) => call.action)).toEqual([
+      'edit',
+    ]);
+  });
   it('saves the latest edits before sending all, using the acknowledged revision', async () => {
     const { controller, actions } = setup();
     controller.edit('one', {
