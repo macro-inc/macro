@@ -77,6 +77,14 @@ pub trait ProfileSource: Send + Sync + 'static {
     ) -> impl Future<Output = Result<Option<String>, Report>> + Send;
 }
 
+/// Tells the people reading an inbox that its Focus changed.
+pub trait FocusNotifier: Send + Sync + 'static {
+    /// A classification was stored for a thread in `link_id`, an inbox `owner`
+    /// holds. Returns at once: delivery is best effort and never holds up or
+    /// fails a classification.
+    fn focus_changed(&self, owner: &MacroUserIdStr<'static>, link_id: Uuid);
+}
+
 /// Why the classifier gave no answers.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, thiserror::Error)]
 pub enum FocusClassifierError {

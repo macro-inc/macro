@@ -142,18 +142,21 @@ This routine's shared template, or `undefined` when it isn't shared.
 
 ### toJSON()
 
-> **toJSON**(): \{ `detail?`: [`ScheduledActionResponse`](../../../../../generated/scheduled-action/types.gen/type-aliases/ScheduledActionResponse.md); `id`: `string`; \}
+> **toJSON**(): \{ `detail?`: [`ScheduledActionResponse`](../../../../../generated/scheduled-action/types.gen/type-aliases/ScheduledActionResponse.md); `id`: `string`; `url`: `string`; \}
+
+Identity, loaded detail and [webUrl](#weburl), so serialized handles carry their link.
 
 #### Returns
 
-\{ `detail?`: [`ScheduledActionResponse`](../../../../../generated/scheduled-action/types.gen/type-aliases/ScheduledActionResponse.md); `id`: `string`; \}
+\{ `detail?`: [`ScheduledActionResponse`](../../../../../generated/scheduled-action/types.gen/type-aliases/ScheduledActionResponse.md); `id`: `string`; `url`: `string`; \}
 
 | Name | Type |
 | ------ | ------ |
 | `detail?` | [`ScheduledActionResponse`](../../../../../generated/scheduled-action/types.gen/type-aliases/ScheduledActionResponse.md) |
 | `id` | `string` |
+| `url` | `string` |
 
-#### Inherited from
+#### Overrides
 
 [`MacroEntity`](../../../entity/classes/MacroEntity.md).[`toJSON`](../../../entity/classes/MacroEntity.md#tojson)
 
@@ -174,6 +177,18 @@ Replace the routine's task and trigger configuration.
 #### Returns
 
 `Promise`\<`void`\>
+
+***
+
+### webUrl()
+
+> **webUrl**(): `string`
+
+The routine's URL in the Macro web app; hand it to users as the link.
+
+#### Returns
+
+`string`
 
 ***
 

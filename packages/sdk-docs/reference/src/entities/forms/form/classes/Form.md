@@ -179,18 +179,21 @@ Choice and checkbox counts, available to viewers when tally visibility is enable
 
 ### toJSON()
 
-> **toJSON**(): \{ `detail?`: [`FormDetail`](../../../../../generated/storage/types.gen/type-aliases/FormDetail.md); `id`: `string`; \}
+> **toJSON**(): \{ `detail?`: [`FormDetail`](../../../../../generated/storage/types.gen/type-aliases/FormDetail.md); `id`: `string`; `url`: `string`; \}
+
+Identity, loaded detail and [webUrl](#weburl), so serialized handles carry their link.
 
 #### Returns
 
-\{ `detail?`: [`FormDetail`](../../../../../generated/storage/types.gen/type-aliases/FormDetail.md); `id`: `string`; \}
+\{ `detail?`: [`FormDetail`](../../../../../generated/storage/types.gen/type-aliases/FormDetail.md); `id`: `string`; `url`: `string`; \}
 
 | Name | Type |
 | ------ | ------ |
 | `detail?` | [`FormDetail`](../../../../../generated/storage/types.gen/type-aliases/FormDetail.md) |
 | `id` | `string` |
+| `url` | `string` |
 
-#### Inherited from
+#### Overrides
 
 [`MacroEntity`](../../../entity/classes/MacroEntity.md).[`toJSON`](../../../entity/classes/MacroEntity.md#tojson)
 
