@@ -189,6 +189,10 @@ impl SessionAuthority for TurnChanges {
         }
         Ok(grant)
     }
+
+    async fn authorize_session(&self, _: AgentSessionId) -> Result<SessionGrant, EgressError> {
+        self.authorize(&SessionToken::new("unused")).await
+    }
 }
 
 struct Approve;
@@ -254,4 +258,102 @@ async fn macro_tools_are_attributed_to_the_sessions_agent_not_one_the_caller_nam
         service.credentials.asked.lock().unwrap()[0].0,
         asker().to_string()
     );
+}
+
+#[tokio::test]
+async fn an_in_process_call_spends_the_settled_account_without_holding() {
+    let asker = MacroUserIdStr::try_from_email("asker@example.com").unwrap();
+    let transport = Arc::new(ActorTransport::default());
+    let service = gated(prompted_by(Some(asker.clone())), SpyCredentials::knowing())
+        .with_actor_mcp(transport.clone());
+    let grant = service.session_grant(AgentSessionId::new()).await.unwrap();
+
+    let result = service
+        .exchange_as(
+            &grant,
+            &asker,
+            &McpDestination::Connected(McpServerSlug::parse("linear").unwrap()),
+            json!({"jsonrpc":"2.0","id":1,"method":"tools/call","params":{"name":"search","arguments":{"q":"x"}}}),
+        )
+        .await
+        .unwrap();
+
+    assert_eq!(result, json!({"content":[{"type":"text","text":"ok"}]}));
+    assert_eq!(
+        service.credentials.asked.lock().unwrap()[0].0,
+        asker.to_string()
+    );
+    assert_eq!(
+        transport.0.lock().unwrap()[0]["params"]["arguments"],
+        json!({"q":"x"})
+    );
+    assert!(service.approvals.held.lock().unwrap().is_empty());
+    assert!(!service.forward.was_called());
+}
+
+#[tokio::test]
+async fn an_in_process_listing_reads_the_owner_catalog_and_an_unconnected_call_offers_connect() {
+    let asker = MacroUserIdStr::try_from_email("asker@example.com").unwrap();
+    let transport = Arc::new(ActorTransport::default());
+    let service = gated(
+        prompted_by(Some(asker.clone())),
+        SpyCredentials::unconnected(),
+    )
+    .with_actor_mcp(transport.clone());
+    let grant = service.session_grant(AgentSessionId::new()).await.unwrap();
+    let linear = McpDestination::Connected(McpServerSlug::parse("linear").unwrap());
+
+    let listing = service
+        .exchange_as(
+            &grant,
+            &asker,
+            &linear,
+            json!({"jsonrpc":"2.0","id":1,"method":"tools/list"}),
+        )
+        .await
+        .unwrap();
+    let call = service
+        .exchange_as(
+            &grant,
+            &asker,
+            &linear,
+            json!({"jsonrpc":"2.0","id":2,"method":"tools/call","params":{"name":"search","arguments":{}}}),
+        )
+        .await
+        .unwrap();
+
+    assert_eq!(listing["tools"][0]["name"], "search");
+    assert_eq!(call["isError"], true);
+    assert!(
+        call["content"][0]["text"]
+            .as_str()
+            .unwrap()
+            .contains("<m-connect-app>")
+    );
+    let asked = service.credentials.asked.lock().unwrap();
+    assert_eq!(asked[0].0, owner().to_string());
+    assert_eq!(asked[1].0, asker.to_string());
+    assert_eq!(transport.0.lock().unwrap().len(), 1);
+}
+
+#[tokio::test]
+async fn an_in_process_exchange_never_reaches_macro_or_preview() {
+    let transport = Arc::new(ActorTransport::default());
+    let service =
+        gated(prompted_by(None), SpyCredentials::knowing()).with_actor_mcp(transport.clone());
+    let grant = service.session_grant(AgentSessionId::new()).await.unwrap();
+
+    for destination in [McpDestination::Macro, McpDestination::Preview] {
+        let refused = service
+            .exchange_as(
+                &grant,
+                &owner(),
+                &destination,
+                json!({"jsonrpc":"2.0","id":1,"method":"tools/list"}),
+            )
+            .await;
+        assert!(matches!(refused, Err(EgressError::Unroutable(_))));
+    }
+    assert!(service.credentials.asked.lock().unwrap().is_empty());
+    assert!(transport.0.lock().unwrap().is_empty());
 }

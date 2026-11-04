@@ -736,6 +736,27 @@ async fn run() -> anyhow::Result<()> {
         Arc::new(runner.clone()) as Arc<dyn code_execution::domain::ProgramExecutor>
     });
     let code_mode_enabled = code_executor.is_some();
+    let execution_store: Arc<dyn agent_code_mode::domain::ExecutionStore> = Arc::new(
+        agent_code_mode::outbound::postgres::PgExecutionStore::new(pool.clone()),
+    );
+    let execution_turns: Arc<dyn agent_code_mode::domain::ExecutionTurns> = Arc::new(
+        agent_code_mode::outbound::turns::SessionTurns(session_repo.clone()),
+    );
+    // A running execution reaches the apps its session's agent was given,
+    // through the same egress credential resolution as the agent's own calls.
+    let connected_apps = agent_code_mode::domain::connected_apps::ConnectedAppService::new(
+        Arc::clone(&execution_store),
+        Arc::clone(&execution_turns),
+        Arc::new(code_mode::connected_apps::SessionConnectedApps {
+            egress: Arc::clone(&egress),
+            provisioner: EgressProvisioner::new(
+                Arc::clone(&mcp_connections),
+                Arc::clone(&mcp_servers),
+                egress_base_url.clone(),
+            ),
+            sessions: session_repo.clone(),
+        }),
+    );
     let code_mode: Arc<dyn agent_code_mode::domain::SessionCodeMode> =
         Arc::new(agent_code_mode::domain::CodeModeService::new(
             code_executor,
@@ -748,12 +769,8 @@ async fn run() -> anyhow::Result<()> {
                 gate: owner_tool_gate.clone(),
                 hosts: code_mode::sdk_hosts()?,
             }),
-            Arc::new(agent_code_mode::outbound::postgres::PgExecutionStore::new(
-                pool.clone(),
-            )),
-            Arc::new(agent_code_mode::outbound::turns::SessionTurns(
-                session_repo.clone(),
-            )),
+            execution_store,
+            execution_turns,
         ));
     let session_metadata_realtime = ConnectionGatewayAgentSessionRealtime::new(
         connection_gateway.clone(),
@@ -1663,6 +1680,7 @@ async fn run() -> anyhow::Result<()> {
         agent_code_mode::inbound::axum_router::CodeExecutionRouterState::new(
             code_mode,
             reviews,
+            connected_apps,
             entity_access.clone(),
             MacroAuthorizationState::new(Arc::new(authorization_service.clone())),
         ),

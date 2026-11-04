@@ -1,5 +1,7 @@
 //! Session-authorized reads for code execution's existing tool components.
-use crate::domain::{CodeModeError, ExecutionId, ExecutionRecord, SessionCodeMode, reviews::*};
+use crate::domain::{
+    CodeModeError, ExecutionId, ExecutionRecord, SessionCodeMode, connected_apps::*, reviews::*,
+};
 use axum::{
     Json, Router,
     body::Bytes,
@@ -26,6 +28,7 @@ use std::sync::Arc;
 pub struct CodeExecutionRouterState<Access, Auth> {
     service: Arc<dyn SessionCodeMode>,
     reviews: ReviewService,
+    connected_apps: ConnectedAppService,
     entity_access: Arc<Access>,
     authorization: MacroAuthorizationState<Auth>,
 }
@@ -35,12 +38,14 @@ impl<Access, Auth> CodeExecutionRouterState<Access, Auth> {
     pub fn new(
         service: Arc<dyn SessionCodeMode>,
         reviews: ReviewService,
+        connected_apps: ConnectedAppService,
         entity_access: Arc<Access>,
         authorization: MacroAuthorizationState<Auth>,
     ) -> Self {
         Self {
             service,
             reviews,
+            connected_apps,
             entity_access,
             authorization,
         }
@@ -52,6 +57,7 @@ impl<Access, Auth> Clone for CodeExecutionRouterState<Access, Auth> {
         Self {
             service: self.service.clone(),
             reviews: self.reviews.clone(),
+            connected_apps: self.connected_apps.clone(),
             entity_access: self.entity_access.clone(),
             authorization: self.authorization.clone(),
         }
@@ -92,6 +98,18 @@ where
         .route(
             "/{session_id}/code-executions/{execution_id}/reviews",
             get(list_reviews::<Access, Auth>),
+        )
+        .route(
+            "/{session_id}/code-executions/{execution_id}/connected-apps",
+            get(list_connected_apps::<Access, Auth>),
+        )
+        .route(
+            "/{session_id}/code-executions/{execution_id}/connected-apps/{kind}/{key}/tools",
+            get(list_connected_app_tools::<Access, Auth>),
+        )
+        .route(
+            "/{session_id}/code-executions/{execution_id}/connected-apps/{kind}/{key}/calls",
+            post(call_connected_app_tool::<Access, Auth>),
         )
         .with_state(state)
 }
@@ -226,6 +244,84 @@ pub async fn decide_review<Access: EntityAccessService, Auth: MacroAuthorization
             &caller.authorization.macro_user_id,
             ReviewId(id),
             decision,
+        )
+        .await
+        .map(Json)
+        .map_err(CodeExecutionApiError)
+}
+
+#[utoipa::path(get, path = "/agent-sessions/{session_id}/code-executions/{execution_id}/connected-apps", tag = "agent-sessions", operation_id = "list_execution_connected_apps",
+    params(("session_id" = Uuid, Path), ("execution_id" = Uuid, Path, description = "A running execution of the session's current turn")),
+    responses((status = 200, body = Vec<ConnectedApp>), (status = 403), (status = 404)))]
+/// List the connected apps and custom MCP servers the session's agent may use.
+pub async fn list_connected_apps<Access: EntityAccessService, Auth: MacroAuthorizationService>(
+    access: AgentSessionAccessLevelExtractor<EditAccessLevel, Access, Auth>,
+    caller: MacroAuthorizationExtractor<Auth, ActingUser>,
+    State(state): State<CodeExecutionRouterState<Access, Auth>>,
+    Path((_session, execution)): Path<(Uuid, Uuid)>,
+) -> Result<Json<Vec<ConnectedApp>>, CodeExecutionApiError> {
+    state
+        .connected_apps
+        .apps(
+            &access.entity_access_receipt,
+            &caller.authorization.user.macro_user_id,
+            ExecutionId::from_uuid(execution),
+        )
+        .await
+        .map(Json)
+        .map_err(CodeExecutionApiError)
+}
+
+#[utoipa::path(get, path = "/agent-sessions/{session_id}/code-executions/{execution_id}/connected-apps/{kind}/{key}/tools", tag = "agent-sessions", operation_id = "list_connected_app_tools",
+    params(("session_id" = Uuid, Path), ("execution_id" = Uuid, Path), ("kind" = ConnectedAppKind, Path), ("key" = String, Path, description = "The app's slug or custom server key")),
+    responses((status = 200, body = Vec<ConnectedTool>), (status = 403), (status = 404)))]
+/// List the tools one connected app serves.
+pub async fn list_connected_app_tools<
+    Access: EntityAccessService,
+    Auth: MacroAuthorizationService,
+>(
+    access: AgentSessionAccessLevelExtractor<EditAccessLevel, Access, Auth>,
+    caller: MacroAuthorizationExtractor<Auth, ActingUser>,
+    State(state): State<CodeExecutionRouterState<Access, Auth>>,
+    Path((_session, execution, kind, key)): Path<(Uuid, Uuid, ConnectedAppKind, String)>,
+) -> Result<Json<Vec<ConnectedTool>>, CodeExecutionApiError> {
+    state
+        .connected_apps
+        .tools(
+            &access.entity_access_receipt,
+            &caller.authorization.user.macro_user_id,
+            ExecutionId::from_uuid(execution),
+            ConnectedAppRef { kind, key },
+        )
+        .await
+        .map(Json)
+        .map_err(CodeExecutionApiError)
+}
+
+#[utoipa::path(post, path = "/agent-sessions/{session_id}/code-executions/{execution_id}/connected-apps/{kind}/{key}/calls", tag = "agent-sessions", operation_id = "call_connected_app_tool",
+    params(("session_id" = Uuid, Path), ("execution_id" = Uuid, Path), ("kind" = ConnectedAppKind, Path), ("key" = String, Path, description = "The app's slug or custom server key")),
+    request_body = CallConnectedTool,
+    responses((status = 200, body = ConnectedToolResult), (status = 400), (status = 403), (status = 404)))]
+/// Call one tool of a connected app as the execution's account.
+pub async fn call_connected_app_tool<
+    Access: EntityAccessService,
+    Auth: MacroAuthorizationService,
+>(
+    access: AgentSessionAccessLevelExtractor<EditAccessLevel, Access, Auth>,
+    caller: MacroAuthorizationExtractor<Auth, ActingUser>,
+    State(state): State<CodeExecutionRouterState<Access, Auth>>,
+    Path((_session, execution, kind, key)): Path<(Uuid, Uuid, ConnectedAppKind, String)>,
+    body: Bytes,
+) -> Result<Json<ConnectedToolResult>, CodeExecutionApiError> {
+    let call: CallConnectedTool = decode(&body).map_err(CodeExecutionApiError)?;
+    state
+        .connected_apps
+        .call(
+            &access.entity_access_receipt,
+            &caller.authorization.user.macro_user_id,
+            ExecutionId::from_uuid(execution),
+            ConnectedAppRef { kind, key },
+            call,
         )
         .await
         .map(Json)

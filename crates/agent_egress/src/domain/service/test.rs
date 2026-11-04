@@ -70,6 +70,15 @@ impl SessionAuthority for StubSessions {
             .clone()
             .map_err(|()| EgressError::Unauthenticated("unknown session token"))
     }
+
+    async fn authorize_session(
+        &self,
+        _session: AgentSessionId,
+    ) -> Result<SessionGrant, EgressError> {
+        self.0
+            .clone()
+            .map_err(|()| EgressError::Unauthenticated("unknown session"))
+    }
 }
 
 /// How the spy answers a slug it is asked about.

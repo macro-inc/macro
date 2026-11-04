@@ -143,6 +143,7 @@ pub fn sdk_hosts() -> anyhow::Result<BTreeMap<String, String>> {
     .collect())
 }
 
+pub mod connected_apps;
 pub mod reviews;
 
 async fn approve_run(

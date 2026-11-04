@@ -42,6 +42,15 @@ stacks. Process isolation belongs to
   and streams it as a completed `PresentView` call (`view_<id>`) through
   `ReviewActions::present_view`. There is no `PresentView` tool: ExecuteCode's
   description carries the view schema and when to present one.
+- `src/domain/connected_apps.rs`: a running execution's connected apps
+  (`macro.connectedApps`). `GET|POST /agent-sessions/{id}/code-executions/{execution}/connected-apps…`
+  admits only a running execution of the session's current turn, called by
+  the account that execution was approved to act as; the harness adapter
+  (`agent_harness_service/src/code_mode/connected_apps.rs`) lists the apps the
+  session's agent was given (`EgressProvisioner::advertised_all`) and calls
+  them through `agent_egress`'s `SessionMcpExchange`, so credentials never
+  reach the sandbox. The execution's mint-time approval covers its calls;
+  they are not held again per call.
 - `src/domain/documentation.rs`: the build-time SDK catalog (per entity a
   `@routing` description, an `@agent` guide and an index; a reference per
   symbol). Jev ranks entities on their descriptions (32 per call, at most 8
