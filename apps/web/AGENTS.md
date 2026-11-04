@@ -1017,10 +1017,12 @@ while preparing a share, retain the bytes and let the same action's next tap
 open the system sheet synchronously. Browser success means handoff, not confirmed
 disk completion. See the native bridge's `tauri/file_export_plugin/AGENTS.md`.
 Keep download confirmations title-only and lightbox Download controls icon-only.
+Keep the expanded video first in the dialog's tab order so initial Space presses
+control native playback; restore focus to its opener on close.
 
 The backend-free browser regression downloads real fixture bytes from channel
 cards, the expanded viewer, and the shared Drive/standalone header on desktop,
-phone, and tablet:
+phone, and tablet, and checks Space playback on opening and reopening the viewer:
 `bunx playwright test --config src/lib/core/component/FileDownload/browser-test/playwright.config.ts`.
 See the [download walkthrough](../../docs/agent-guide/files.md#downloading-files).
 

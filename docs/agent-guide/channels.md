@@ -1658,6 +1658,12 @@ MIME type. Linked video preview cards also offer Download, using the document's
 current version, name, and file type. See [Downloading files](files.md#downloading-files)
 for progress, cancellation, retries, and mobile save/share verification.
 
+Opening or reopening the expanded video viewer focuses the video. Press Space
+to pause or resume immediately. Tab moves through the native player controls
+and viewer actions; focusing Download explicitly still allows keyboard downloads.
+With the video focused, Escape closes the viewer and returns focus to the
+thumbnail that opened it.
+
 ## Pending message drafts
 
 Sending clears the composer immediately while delivery is pending. If delivery
