@@ -452,6 +452,7 @@ export async function main({ macro, trigger, steps, run }: StepContext) {
         for source in [
             "export async function main(value: string) { return value.toUpperCase(); }",
             "export async function run() { return 1; }",
+            "export default async function main(context: StepContext) { return 1; }",
         ] {
             assert_eq!(
                 code.check_program(&checked(source)).await.unwrap().len(),

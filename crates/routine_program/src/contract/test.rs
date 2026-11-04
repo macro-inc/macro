@@ -68,8 +68,11 @@ fn each_code_step_sees_the_outputs_of_the_steps_before_it() {
     let context = |file: &CheckFile| file.source.lines().rev().nth(1).unwrap().to_owned();
     for file in &files {
         assert_eq!(
-            file.source.lines().last(),
-            Some("main satisfies (context: StepContext) => unknown;")
+            file.source.lines().last().unwrap(),
+            format!(
+                "(undefined as unknown as typeof import('./{}')['main']) satisfies (context: StepContext) => unknown;",
+                file.name
+            )
         );
     }
     assert_eq!(

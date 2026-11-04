@@ -1,6 +1,5 @@
-//! Run routine code steps as the routine's owner in the harness's Deno
-//! executor, under the step's write scopes, and type-check them against the
-//! SDK.
+//! Run routine code steps with the routine owner's access in the harness's
+//! Deno executor, and type-check them against the SDK.
 //!
 //! Each SDK call the code makes becomes one entry in the run's history: the
 //! operation and how it ended, never its arguments or results.
