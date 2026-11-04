@@ -39,7 +39,8 @@ pub struct ValidatedSchema {
 ///    non-whitelisted `format`s are removed and recorded in `description`
 ///
 /// Validation then rejects missing title/description, a non-object root,
-/// root-level `oneOf`/`anyOf`/`allOf`, and residual `oneOf`. Never panics —
+/// root-level `oneOf`/`anyOf`/`allOf`, residual `oneOf`, and a `$ref` loop
+/// made only of required fields (Gemini rejects it). Never panics —
 /// failures are returned as [`ValidationError`]s.
 pub fn generate_validated_input_schema<T: schemars::JsonSchema>()
 -> Result<ValidatedSchema, ValidationError> {
