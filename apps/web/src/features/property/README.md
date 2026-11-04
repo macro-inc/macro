@@ -92,14 +92,15 @@ title-row tags retain their compact height.
 
 ## Assignee selection
 
-The system Assignees property lists selected assignees first, then available
-agents, then the current team roster. The compact **Find other people…** action
+At opening or view navigation, the system Assignees property lists selected
+assignees first, then available agents, then the current team roster. Keep row
+positions stable while selecting. The compact **Find contacts** action
 switches directly to eligible non-team people from the existing Quick Access
 people pool, without teammates or agents. The main search says **Search team...**;
-discovery says **Search other people...**, with a compact footer **Back to team**
-action. Navigation clears the query without animating or remounting the focused
-input. Selections survive both directions.
-An empty non-team pool shows **No other people available.** Selected outsiders
+discovery says **Search contacts**, with a compact footer **Back to team**
+action and a left arrow. Navigation clears the query without animating or
+remounting the focused input. Selections survive both directions.
+An empty non-team pool shows **No contacts available.** Selected outsiders
 remain visible and removable in the main view, including references absent from
 contacts. Closing and reopening starts in team mode.
 

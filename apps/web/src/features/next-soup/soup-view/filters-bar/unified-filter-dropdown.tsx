@@ -906,9 +906,7 @@ export const UnifiedFilterDropdown = (
                       footer={
                         <AssigneeDiscoveryStatus discovery={assigneePicker} />
                       }
-                      onOpenChange={(open) => {
-                        if (!open) assigneePicker.setDiscovering(false);
-                      }}
+                      onOpenChange={assigneePicker.onOpenChange}
                     />
                   </Show>
 

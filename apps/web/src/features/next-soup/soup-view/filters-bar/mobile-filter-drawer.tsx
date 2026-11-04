@@ -268,6 +268,9 @@ export const MobileFilterDrawer = (props: {
   };
 
   const activeCount = () => consolidatedFiltersList().length;
+  const [expandedSections, setExpandedSections] = createSignal([
+    categories()[0]?.id ?? 'assignee',
+  ]);
 
   return (
     <Show when={hasFiltersOrCategories()}>
@@ -275,8 +278,8 @@ export const MobileFilterDrawer = (props: {
         class={props.class}
         activeCount={activeCount()}
         onOpenChange={(open) => {
+          assigneePicker.onOpenChange(open);
           if (!open) {
-            assigneePicker.setDiscovering(false);
             setAssigneeSearch('');
           }
         }}
@@ -323,7 +326,16 @@ export const MobileFilterDrawer = (props: {
         <Accordion
           multiple
           collapsible
-          defaultValue={[categories()[0]?.id ?? 'assignee']}
+          value={expandedSections()}
+          onChange={(value) => {
+            const wasOpen = expandedSections().includes('assignee');
+            const isOpen = value.includes('assignee');
+            if (wasOpen !== isOpen) {
+              assigneePicker.onOpenChange(isOpen);
+              if (!isOpen) setAssigneeSearch('');
+            }
+            setExpandedSections(value);
+          }}
         >
           {/* Filter section */}
           <Show

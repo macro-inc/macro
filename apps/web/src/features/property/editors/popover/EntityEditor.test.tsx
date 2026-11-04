@@ -329,6 +329,56 @@ describe('assigning an agent through task and project properties', () => {
 
 describe('team-first assignees', () => {
   it.each([EntityEditor, EntitySheetEditor])(
+    'keeps selected rows in place until the picker reopens',
+    async (Editor) => {
+      const onSave = setup(undefined, property, Editor);
+      const teammateRow = screen
+        .getByText('Teammate')
+        .closest('[data-entity-index]')!;
+      const originalIndex = teammateRow.getAttribute('data-entity-index');
+      fireEvent.click(screen.getByText('Teammate'));
+      const selectedRow = screen
+        .getByText('Teammate')
+        .closest('[data-entity-index]')!;
+      expect(selectedRow.getAttribute('data-entity-index')).toBe(originalIndex);
+      expect(selectedRow.querySelector('input')?.checked).toBe(true);
+      fireEvent.click(
+        screen.getByText(Editor === EntitySheetEditor ? 'Done' : 'Dismiss')
+      );
+      const selected: EntityProperty = {
+        ...property,
+        value: [
+          { entity_id: userId, entity_type: 'USER' },
+          { entity_id: 'macro|teammate@example.com', entity_type: 'USER' },
+        ],
+      };
+      await waitFor(() =>
+        expect(onSave).toHaveBeenCalledWith(
+          property,
+          { valueType: 'ENTITY', refs: selected.value },
+          new Map([['macro|teammate@example.com', 'Teammate']])
+        )
+      );
+      cleanup();
+      setup(undefined, selected, Editor);
+      expect(
+        Number(
+          screen
+            .getByText('Teammate')
+            .closest('[data-entity-index]')!
+            .getAttribute('data-entity-index')
+        )
+      ).toBeLessThan(
+        Number(
+          screen
+            .getByText('Research assistant')
+            .closest('[data-entity-index]')!
+            .getAttribute('data-entity-index')
+        )
+      );
+    }
+  );
+  it.each([EntityEditor, EntitySheetEditor])(
     'keeps the search field and staged selections across people-view navigation',
     async (Editor) => {
       const assigned: EntityProperty = {
@@ -343,10 +393,8 @@ describe('team-first assignees', () => {
       input.focus();
       expect(screen.getByText('Teammate')).toBeTruthy();
       expect(screen.queryByText('Outside')).toBeNull();
-      fireEvent.click(
-        screen.getByRole('button', { name: 'Find other people…' })
-      );
-      expect(screen.getByPlaceholderText('Search other people...')).toBe(input);
+      fireEvent.click(screen.getByRole('button', { name: 'Find contacts' }));
+      expect(screen.getByPlaceholderText('Search contacts')).toBe(input);
       expect(document.activeElement).toBe(input);
       await waitFor(() => {
         expect(screen.queryByText('Teammate')).toBeNull();
@@ -384,9 +432,9 @@ describe('team-first assignees', () => {
   it('returns from empty discovery without changing assignments', async () => {
     roster.includeOutside = true;
     const onSave = setup();
-    fireEvent.click(screen.getByRole('button', { name: 'Find other people…' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Find contacts' }));
     expect(screen.getByRole('status').textContent).toBe(
-      'No other people available.'
+      'No contacts available.'
     );
     await waitFor(() => {
       expect(screen.queryByText('Teammate')).toBeNull();
@@ -437,9 +485,7 @@ describe('team-first assignees', () => {
     });
     expect(screen.getByText('Teammate')).toBeTruthy();
     expect(screen.queryByText('Outside')).toBeNull();
-    expect(
-      screen.queryByRole('button', { name: 'Find other people…' })
-    ).toBeNull();
+    expect(screen.queryByRole('button', { name: 'Find contacts' })).toBeNull();
   });
 });
 describe('people in a picker sheet', () => {

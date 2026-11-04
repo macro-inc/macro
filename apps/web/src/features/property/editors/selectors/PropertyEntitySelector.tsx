@@ -61,7 +61,7 @@ type EntityInputProps = {
   /** Caller-prioritized ids stay ahead of other matching entities. */
   priorityIds?: ReadonlySet<string>;
   /** Optional action row, reachable through the same keyboard navigation. */
-  action?: { label: string; onSelect: () => void };
+  action?: { label: string; icon?: () => JSX.Element; onSelect: () => void };
   /** Override empty-result content; null hides the default message. */
   emptyState?: JSX.Element;
 };
@@ -126,7 +126,9 @@ export function PropertyEntitySelector(props: EntityInputProps) {
   const [inputValue, setInputValue] = createSignal('');
   const [searchTerm, setSearchTerm] = createSignal('');
   const [selectedIndex, setSelectedIndex] = createSignal(0);
-  const openedSelectedIds = new Set(props.selectedOptions());
+  const [openedSelectedIds, setOpenedSelectedIds] = createSignal(
+    new Set(props.selectedOptions())
+  );
   const keyboardMode = useKeyPressed(100);
 
   let scrollContainerRef: HTMLDivElement | undefined;
@@ -145,6 +147,7 @@ export function PropertyEntitySelector(props: EntityInputProps) {
       setInputValue('');
       setSearchTerm('');
       setSelectedIndex(0);
+      setOpenedSelectedIds(new Set(props.selectedOptions()));
       onSelect();
     });
     searchInputRef.focus();
@@ -330,7 +333,7 @@ export function PropertyEntitySelector(props: EntityInputProps) {
       ? prioritizeEntities(
           entitySearch(allEntities, term).map((result) => result.item),
           props.priorityIds,
-          props.priorityIds ? props.selectedOptions() : undefined
+          props.priorityIds ? openedSelectedIds() : undefined
         )
           .slice(0, MAX_SEARCH_RESULTS)
           .filter(excludeFilter)
@@ -358,9 +361,10 @@ export function PropertyEntitySelector(props: EntityInputProps) {
   const sortedEntities = useSelectedFirst({
     items: filteredEntities,
     allItems: entities,
-    selectedIds: props.selectedOptions,
+    selectedIds: openedSelectedIds,
     searchQuery: searchTerm,
     getId: (e: CombinedEntity) => e.id,
+    sortDeps: [openedSelectedIds],
   });
 
   const toggleEntity = (entity: CombinedEntity) => {
@@ -473,8 +477,8 @@ export function PropertyEntitySelector(props: EntityInputProps) {
       return (
         previous &&
         current &&
-        openedSelectedIds.has(previous.id) &&
-        !openedSelectedIds.has(current.id)
+        openedSelectedIds().has(previous.id) &&
+        !openedSelectedIds().has(current.id)
       );
     };
 
@@ -677,6 +681,7 @@ export function PropertyEntitySelector(props: EntityInputProps) {
                 if (!keyboardMode()) setSelectedIndex(resultCount());
               }}
             >
+              {props.action?.icon?.()}
               {props.action?.label}
             </Button>
           </div>

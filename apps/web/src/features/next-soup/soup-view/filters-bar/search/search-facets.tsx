@@ -146,7 +146,7 @@ export type SearchFacetVM = FacetBase &
         action?: Accessor<SearchableSelectAction | undefined>;
         navigation?: Accessor<SearchableSelectNavigation>;
         footer?: () => JSX.Element;
-        onPickerClose?: () => void;
+        onPickerOpenChange?: (open: boolean) => void;
       }
   );
 
@@ -471,7 +471,7 @@ export function useSearchFacets(
     action: assigneePicker.action,
     navigation: assigneePicker.navigation,
     footer: () => <AssigneeDiscoveryStatus discovery={assigneePicker} />,
-    onPickerClose: () => assigneePicker.setDiscovering(false),
+    onPickerOpenChange: assigneePicker.onOpenChange,
   };
 
   const taskCreatedBy = multiFacet({

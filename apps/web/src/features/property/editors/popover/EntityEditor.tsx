@@ -2,6 +2,7 @@ import { t } from '@app/lib/i18n';
 import { PickerSheet } from '@components/app/mobile/PickerSheet';
 import { isBotPrincipalId } from '@core/constant/macroAgent';
 import { fireAndForget } from '@core/util/fireAndForget';
+import ArrowLeftIcon from '@icon/system/regular/arrow-left.svg';
 import { SYSTEM_PROPERTY_IDS } from '@property/constants';
 import {
   entityReferencesToIdSet,
@@ -197,6 +198,9 @@ function EntityEditorSelector(
                       ? 'viewMenus.backToAssignees'
                       : 'viewMenus.findOtherPeople'
                   ),
+                  icon: findingOtherPeople()
+                    ? () => <ArrowLeftIcon class="size-4" />
+                    : undefined,
                   onSelect: () => setFindingOtherPeople((finding) => !finding),
                 }
               : undefined

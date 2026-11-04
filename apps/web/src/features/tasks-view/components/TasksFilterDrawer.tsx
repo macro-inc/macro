@@ -31,6 +31,9 @@ export function TasksFilterDrawer() {
   const filters = useTaskFilters();
   const [open, setDrawerOpen] = createSignal(false);
   const [assigneeSearch, setAssigneeSearch] = createSignal('');
+  const [expandedSections, setExpandedSections] = createSignal<string[]>([
+    filters.groups()[0]?.id ?? 'status',
+  ]);
   let assigneeInput: HTMLInputElement | undefined;
   const navigateAssignees = (onSelect: () => void) => {
     batch(() => {
@@ -40,8 +43,11 @@ export function TasksFilterDrawer() {
     assigneeInput?.focus();
   };
   const setOpen = (value: boolean) => {
+    filters
+      .groups()
+      .find((group) => group.id === 'assignees')
+      ?.onOpenChange?.(value);
     if (!value) {
-      filters.resetAssigneeDiscovery();
       setAssigneeSearch('');
     }
     setDrawerOpen(value);
@@ -169,7 +175,19 @@ export function TasksFilterDrawer() {
         <Accordion
           multiple
           collapsible
-          defaultValue={[filters.groups()[0]?.id ?? 'status']}
+          value={expandedSections()}
+          onChange={(value) => {
+            const wasOpen = expandedSections().includes('assignees');
+            const isOpen = value.includes('assignees');
+            if (wasOpen !== isOpen) {
+              filters
+                .groups()
+                .find((group) => group.id === 'assignees')
+                ?.onOpenChange?.(isOpen);
+              if (!isOpen) setAssigneeSearch('');
+            }
+            setExpandedSections(value);
+          }}
         >
           <div class="flex flex-col gap-3">
             <Key each={filters.groups()} by="id">

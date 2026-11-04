@@ -16,7 +16,7 @@ import { PropertyValueIcon } from '@property/component/propertyValue';
 import { useTagFilterGroup } from '@property/tags/use-tag-filter-group';
 import { useContacts } from '@queries/contacts/contacts';
 import { Tooltip } from '@ui';
-import { batch, createMemo, createSignal } from 'solid-js';
+import { batch, createMemo, createSignal, on } from 'solid-js';
 import { match } from 'ts-pattern';
 import type { TaskDateRangeDraft } from '../components/task-due-date-range-dialog';
 import {
@@ -58,6 +58,12 @@ export function useTaskFilters() {
     () => true
   );
   const resetAssigneeDiscovery = () => assigneePicker.setDiscovering(false);
+  const selectedAssigneesAtViewEntry = createMemo(
+    on(
+      assigneePicker.selectedIdsAtViewEntry,
+      () => new Set(state.facets.assignees ?? [])
+    )
+  );
 
   const peopleOptions = createMemo(() => {
     const me = currentUserId();
@@ -190,17 +196,15 @@ export function useTaskFilters() {
             .filter((option) => option.id !== NO_ASSIGNEE),
         ].toSorted(
           (a, b) =>
-            Number(state.facets.assignees?.includes(b.id) ?? false) -
-              Number(state.facets.assignees?.includes(a.id) ?? false) ||
+            Number(selectedAssigneesAtViewEntry().has(b.id)) -
+              Number(selectedAssigneesAtViewEntry().has(a.id)) ||
             Number(isBotPrincipalId(b.id)) - Number(isBotPrincipalId(a.id))
         ),
         preserveOrder: true,
         action: assigneePicker.action(),
         navigation: assigneePicker.navigation(),
         footer: <AssigneeDiscoveryStatus discovery={assigneePicker} />,
-        onOpenChange: (open) => {
-          if (!open) resetAssigneeDiscovery();
-        },
+        onOpenChange: assigneePicker.onOpenChange,
       },
       {
         id: 'created-by',

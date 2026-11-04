@@ -13,6 +13,7 @@ import {
   For,
   Match,
   onCleanup,
+  onMount,
   Show,
   Switch,
 } from 'solid-js';
@@ -62,9 +63,10 @@ function MultiFacetContent(props: {
     });
     searchInput?.focus();
   };
+  onMount(() => props.facet.onPickerOpenChange?.(true));
   onCleanup(() => {
     props.onQueryChange?.('');
-    props.facet.onPickerClose?.();
+    props.facet.onPickerOpenChange?.(false);
   });
 
   const filteredOptions = createMemo(() => {
@@ -299,6 +301,7 @@ export const MobileSearchFilterDrawer = (props: { class?: string }) => {
   const controller = createSearchFiltersController();
   const facets = useSearchFacets(controller);
   const [queries, setQueries] = createStore<Record<string, string>>({});
+  const [expandedSections, setExpandedSections] = createSignal(['type']);
 
   const activeCount = createMemo(
     () => facets().filter((facet) => !facet.isDefault()).length
@@ -315,28 +318,43 @@ export const MobileSearchFilterDrawer = (props: { class?: string }) => {
       activeCount={activeCount()}
       onClear={resetAll}
       onOpenChange={(open) => {
-        if (!open) {
-          for (const facet of facets()) {
-            if (facet.kind === 'multi' && facet.onPickerClose) {
-              setQueries(facet.id, '');
-              facet.onPickerClose();
-            }
-          }
+        for (const facet of facets()) {
+          if (facet.kind !== 'multi' || !facet.onPickerOpenChange) continue;
+          facet.onPickerOpenChange(
+            open && expandedSections().includes(facet.id)
+          );
+          if (!open) setQueries(facet.id, '');
         }
       }}
     >
-      <Accordion multiple collapsible defaultValue={['type']}>
+      <Accordion
+        multiple
+        collapsible
+        value={expandedSections()}
+        onChange={(value) => {
+          for (const facet of facets()) {
+            if (facet.kind !== 'multi' || !facet.onPickerOpenChange) continue;
+            const wasOpen = expandedSections().includes(facet.id);
+            const isOpen = value.includes(facet.id);
+            if (wasOpen !== isOpen) {
+              facet.onPickerOpenChange(isOpen);
+              if (!isOpen) setQueries(facet.id, '');
+            }
+          }
+          setExpandedSections(value);
+        }}
+      >
         <For each={facets()}>
           {(facet) => (
             <FacetSection
               facet={facet}
               query={
-                facet.kind === 'multi' && facet.onPickerClose
+                facet.kind === 'multi' && facet.onPickerOpenChange
                   ? (queries[facet.id] ?? '')
                   : undefined
               }
               onQueryChange={
-                facet.kind === 'multi' && facet.onPickerClose
+                facet.kind === 'multi' && facet.onPickerOpenChange
                   ? (query) => setQueries(facet.id, query)
                   : undefined
               }

@@ -147,6 +147,7 @@ export function EntityPropertyEditor(props: {
     batch(() => {
       props.setSearchValue('');
       listController.setSelectedIndex(0, { scrollIntoView: true });
+      setOrderedSelectedIds(new Set(localSelectedIds()));
       setFindingOtherPeople(discovering);
       props.setFooterAction(
         discovering
@@ -222,6 +223,8 @@ export function EntityPropertyEditor(props: {
     {
       users,
       selectedIds: () => (isAssignees() ? localSelectedIds() : undefined),
+      orderedSelectedIds: () =>
+        isAssignees() ? orderedSelectedIds() : undefined,
       priorityIds: () => (isAssignees() ? priorityIds() : undefined),
     }
   );

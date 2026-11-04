@@ -16,7 +16,7 @@ import { useAgentAssignees } from '@property/queries/agent-assignees';
 import { useTeamMembers } from '@property/queries/team-members';
 import { useContacts, useContactsQuery } from '@queries/contacts/contacts';
 import { Button } from '@ui';
-import { type Accessor, createMemo, createSignal, Show } from 'solid-js';
+import { type Accessor, batch, createMemo, createSignal, Show } from 'solid-js';
 
 export function buildContactLabel(
   contact: { id: string; name?: string | null },
@@ -40,14 +40,28 @@ export function useAssigneePicker(
   const team = useTeamMembers(enabled);
   const agents = useAgentAssignees(enabled);
   const userId = useUserId();
-  const [discovering, setDiscovering] = createSignal(false);
+  const [discovering, setDiscoveringView] = createSignal(false);
+  const [selectedIdsAtViewEntry, setSelectedIdsAtViewEntry] = createSignal(
+    new Set(activeIds())
+  );
+  const refreshOrder = () => setSelectedIdsAtViewEntry(new Set(activeIds()));
+  const setDiscovering = (value: boolean) => {
+    batch(() => {
+      refreshOrder();
+      setDiscoveringView(value);
+    });
+  };
+  const onOpenChange = (open: boolean) => {
+    if (open) refreshOrder();
+    else setDiscovering(false);
+  };
   const otherPeople = createMemo(() =>
     nonTeamUserOptions(team.users(), contacts())
   );
 
   const buildOptions = (discovering: boolean) => {
     const uid = userId();
-    const selectedIds = new Set(activeIds());
+    const selectedIds = selectedIdsAtViewEntry();
     const people = new Map<string, IUser>();
     for (const contact of contacts()) people.set(contact.id, contact);
     for (const member of team.users()) people.set(member.id, member);
@@ -90,10 +104,10 @@ export function useAssigneePicker(
         label: t('viewMenus.unassigned'),
         icon: () => <CircleDashedIcon class="size-3.5 text-ink-muted" />,
       });
+      for (const member of team.users()) add(member.id);
       for (const id of activeIds()) {
         if (id !== NO_ASSIGNEE) add(id);
       }
-      for (const member of team.users()) add(member.id);
     }
     return result.toSorted(
       (a, b) =>
@@ -114,6 +128,8 @@ export function useAssigneePicker(
     allOptions,
     discovering,
     setDiscovering,
+    onOpenChange,
+    selectedIdsAtViewEntry,
     placeholder: () =>
       t(
         discovering()

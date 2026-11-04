@@ -36,6 +36,8 @@ export function useEntitiesForProperty(
     users?: Accessor<IUser[] | undefined>;
     /** Keep selected entities available beyond the initial result limit. */
     selectedIds?: Accessor<ReadonlySet<string> | undefined>;
+    /** Selected ids captured at view entry, used only for search ordering. */
+    orderedSelectedIds?: Accessor<ReadonlySet<string> | undefined>;
     priorityIds?: Accessor<ReadonlySet<string> | undefined>;
   }
 ) {
@@ -180,7 +182,7 @@ export function useEntitiesForProperty(
     const localResults = prioritizeEntities(
       entitySearch(available, query).map((result) => result.item),
       options?.priorityIds?.(),
-      options?.selectedIds?.()
+      options?.orderedSelectedIds?.()
     ).slice(0, MAX_RESULTS);
 
     if (needsEmailSearch()) {

@@ -592,8 +592,8 @@ export function useFilterRefinements() {
         getOrCreateConsolidatedChip(key, () => {
           const [isPopupOpen, _setPopupOpen] = createSignal(false);
           const setPopupOpen = (v: boolean) => {
+            assigneePicker.onOpenChange(v);
             if (!v) {
-              assigneePicker.setDiscovering(false);
               queueMicrotask(() =>
                 panel.panelRef()?.focus({ preventScroll: true })
               );

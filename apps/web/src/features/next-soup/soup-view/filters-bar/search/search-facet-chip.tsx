@@ -124,7 +124,7 @@ const MultiValueSegment = (props: {
 }) => {
   const panel = useSplitPanel();
   const [open, setOpen] = createSignal(false);
-  onCleanup(() => props.facet.onPickerClose?.());
+  onCleanup(() => props.facet.onPickerOpenChange?.(false));
 
   return (
     <SearchableMultiSelect
@@ -141,9 +141,9 @@ const MultiValueSegment = (props: {
       placement="bottom-start"
       open={open}
       onOpenChange={(v) => {
+        props.facet.onPickerOpenChange?.(v);
         setOpen(v);
         if (!v) {
-          props.facet.onPickerClose?.();
           queueMicrotask(() =>
             props.onPickerClose
               ? props.onPickerClose()
