@@ -286,9 +286,7 @@ fn place_channel(
                     message_id,
                     thread_id: None,
                 } if active.contains(message_id) => (thread(message_id), true, false),
-                ChannelKind::Reaction { .. } | ChannelKind::Invite => {
-                    (Slot::TopLevel, true, false)
-                }
+                ChannelKind::Reaction { .. } | ChannelKind::Invite => (Slot::TopLevel, true, false),
                 ChannelKind::Quiet => (Slot::TopLevel, false, false),
             };
             Placed {
@@ -434,7 +432,8 @@ fn place_event(notification: &FeedNotification, now: DateTime<Utc>) -> Option<(S
         | NotifEvent::GithubPrReview(_) => (Slot::PullRequest, true),
         NotifEvent::InboxReauthRequired(_)
         | NotifEvent::InviteToTeam(_)
-        | NotifEvent::ExternalChatMessage(_) => return None,
+        | NotifEvent::ExternalChatMessage(_)
+        | NotifEvent::RoutineRunFinished(_) => return None,
         // Channel activity and discussions are placed by their own rules; on
         // any other entity they have no row.
         NotifEvent::ChannelMention(_)

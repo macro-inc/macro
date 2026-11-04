@@ -261,7 +261,11 @@ fn a_lone_reaction_stays_on_the_channels_row() {
             channel_send(1, CHANNEL, 0x100, 1),
             channel_reaction(2, CHANNEL, ROOT, None, 2),
         ])),
-        vec![(InboxRowType::ChannelMessages, vec![uuid(2), uuid(1)], vec![])]
+        vec![(
+            InboxRowType::ChannelMessages,
+            vec![uuid(2), uuid(1)],
+            vec![]
+        )]
     );
 }
 
