@@ -1,0 +1,71 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n        SELECT\n            pid AS \"pid!\",\n            COALESCE(application_name, '') AS \"application_name!\",\n            usename::text AS db_user,\n            state,\n            EXTRACT(EPOCH FROM now() - xact_start)::float8 AS \"transaction_age_secs!\",\n            EXTRACT(EPOCH FROM now() - state_change)::float8 AS state_age_secs,\n            wait_event_type,\n            wait_event,\n            query\n        FROM pg_stat_activity\n        WHERE datname = current_database()\n            AND backend_type = 'client backend'\n            AND pid <> pg_backend_pid()\n            AND xact_start < now() - make_interval(secs => $1)\n        ORDER BY xact_start\n        LIMIT $2\n        ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "pid!",
+        "type_info": "Int4"
+      },
+      {
+        "ordinal": 1,
+        "name": "application_name!",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 2,
+        "name": "db_user",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 3,
+        "name": "state",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 4,
+        "name": "transaction_age_secs!",
+        "type_info": "Float8"
+      },
+      {
+        "ordinal": 5,
+        "name": "state_age_secs",
+        "type_info": "Float8"
+      },
+      {
+        "ordinal": 6,
+        "name": "wait_event_type",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 7,
+        "name": "wait_event",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 8,
+        "name": "query",
+        "type_info": "Text"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Float8",
+        "Int8"
+      ]
+    },
+    "nullable": [
+      true,
+      null,
+      null,
+      true,
+      null,
+      null,
+      true,
+      true,
+      true
+    ]
+  },
+  "hash": "24aabb11dbbaffebb6aec31ac57bdfc99341974c917f9aa8d6f13cc32633c686"
+}

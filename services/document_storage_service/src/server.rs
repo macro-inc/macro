@@ -366,6 +366,17 @@ pub async fn run() -> anyhow::Result<()> {
     let consumer_cancellation_token = CancellationToken::new();
     let consumer_tracker = TaskTracker::new();
     let event_broker_tracker = TaskTracker::new();
+    consumer_tracker.spawn(pg_activity_sampler::domain::run(
+        pg_activity_sampler::outbound::PgActivitySource::new(
+            PgConnectOptions::from_str(&config.database_url)?
+                .application_name("document_storage_service_activity_sampler"),
+        ),
+        pg_activity_sampler::domain::SamplerConfig {
+            interval: Duration::from_secs(60),
+            older_than: Duration::from_secs(300),
+        },
+        consumer_cancellation_token.clone(),
+    ));
     let import_jobs = ai_tools::ImportJobs::new();
     let macro_event_broker = MacroEventBrokerService::new(
         KafkaEventPublisher::new(config.kafka_brokers.as_ref())

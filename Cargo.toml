@@ -115,6 +115,7 @@ members = [
   "crates/mcp_select",
   "crates/mcp_toolset",
   "crates/notification_state",
+  "crates/pg_activity_sampler",
   "crates/pipedream_mcp",
   "crates/granola_sync",
   "crates/onboarding",

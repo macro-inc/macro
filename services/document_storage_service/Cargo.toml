@@ -219,6 +219,7 @@ models_soup = { path = "../../crates/models_soup", features = ["schema"] }
 notification = { path = "../../crates/notification" }
 opensearch_client = { path = "../../crates/opensearch_client" }
 projects_hex = { path = "../../crates/projects", package = "projects" }
+pg_activity_sampler = { path = "../../crates/pg_activity_sampler" }
 properties = { path = "../../crates/properties" }
 properties_service = { path = "../../crates/properties_service" }
 rate_limit = { path = "../../crates/rate_limit", default-features = false, features = [

@@ -5599,6 +5599,7 @@
       "crates/notification_state",
       "crates/opensearch_client",
       "crates/opensearch_query_builder",
+      "crates/pg_activity_sampler",
       "crates/pipedream_mcp",
       "crates/pptx_engine",
       "crates/predicate_index",
@@ -11886,6 +11887,10 @@
       "crates/unfurl",
       "crates/workspace-hack",
       "services/organization_retention_trigger"
+    ],
+    "pg_activity_sampler": [
+      "crates/pg_activity_sampler",
+      "crates/workspace-hack"
     ],
     "pipedream_mcp": [
       "crates/ai_toolset",

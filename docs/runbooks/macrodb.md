@@ -95,6 +95,10 @@ Connections blocked on locks, or a transaction open for a long time.
   `postgresql.activity.xact_start_age` grouped by `app` names the owner, and
   the transaction-age-by-app alert fires once one service's oldest
   transaction has stayed over 15 minutes old for 2 minutes.
+- For the query and history, search logs for
+  `@telemetry_event:pg_long_transaction`: once a minute one
+  `document_storage_service` task logs each transaction open over five minutes
+  with its `application_name`, `pid`, `state`, ages and query.
 - A single sample of `postgresql.activity.xact_start_age` as old as the
   newest `notification-service` task, at about :09 past the hour, is not a
   transaction. notification-service's `LISTEN` connection

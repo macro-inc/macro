@@ -49,6 +49,8 @@ threads, pins, recents, notifications, folders, activity.
   which a promoted shared mailbox's older events do not carry as their owner.
   Nudges follow a committed write, so they share `event_broker_tracker`'s
   bounded shutdown drain with event broker publishes.
+- `src/server.rs` also hosts `crates/pg_activity_sampler`: one replica logs
+  MacroDB transactions open over five minutes (`pg_long_transaction`).
 - `src/service/delete_document_worker.rs`: background worker handling document
   deletion side effects (feature-gated: `delete_document_worker`).
 - `src/service/conn_gateway.rs`: pushes realtime updates through

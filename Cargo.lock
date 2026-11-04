@@ -6722,6 +6722,7 @@ dependencies = [
  "opentelemetry",
  "opentelemetry_sdk",
  "ordered-float",
+ "pg_activity_sampler",
  "projects",
  "properties",
  "properties_service",
@@ -15152,6 +15153,18 @@ dependencies = [
  "fixedbitset 0.5.7",
  "hashbrown 0.15.5",
  "indexmap 2.14.0",
+]
+
+[[package]]
+name = "pg_activity_sampler"
+version = "0.1.0"
+dependencies = [
+ "sqlx",
+ "thiserror 2.0.18",
+ "tokio",
+ "tokio-util",
+ "tracing",
+ "workspace-hack",
 ]
 
 [[package]]
