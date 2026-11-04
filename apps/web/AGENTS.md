@@ -74,6 +74,11 @@ It uses the real records view with a local source and picker to exercise opening
 replacement, cancellation, keyboard editing, and read-only references. Navigation
 adapter tests separately check file types, access failures, and split selection.
 
+Link preview cards in channel messages (the real `ChannelMessage` over stubbed
+unfurls) have a backend-free desktop/phone regression for which links get a
+card, its content, its fit in the message column, and opening it:
+`bunx playwright test --config src/features/channel/Message/browser-test/playwright.config.ts`.
+
 Poll cards in messages (the real `DocumentCard` around `FormCardView`) have a
 backend-free desktop/phone regression: the card reserves its height from
 `previewData.poll.optionCount` as a `min-height`, grows to wrapped text, and
