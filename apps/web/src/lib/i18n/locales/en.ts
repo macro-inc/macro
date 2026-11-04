@@ -1,5 +1,6 @@
 import agentAutoArchive from './en/agent-auto-archive';
 import agentSetup from './en/agent-setup';
+import artifacts from './en/artifacts';
 import calls from './en/calls';
 import channelComposer from './en/channel-composer';
 import channelLabels from './en/channel-labels';
@@ -28,6 +29,7 @@ import viewMenus from './en/view-menus';
 export default {
   agentAutoArchive,
   agentSetup,
+  artifacts,
   calls,
   channelComposer,
   channelLabels,

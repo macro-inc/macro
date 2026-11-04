@@ -12,6 +12,8 @@ export const BlockRegistry = [
   'code',
   'image',
   'canvas',
+  // Agent-published HTML pages with versions and scenes.
+  'artifact',
   'spreadsheet',
   // PowerPoint presentations, edited in the browser.
   'pptx',
