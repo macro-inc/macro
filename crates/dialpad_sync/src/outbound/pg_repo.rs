@@ -72,9 +72,21 @@ impl SyncRepository for PgSyncRepository {
 
     async fn by_id(&self, id: Uuid) -> Result<Option<Connection>> {
         let row = sqlx::query!(
-            r#"SELECT id, namespace, user_id, enabled, dialpad_user_id, webhook_id, subscription_id,
-                signing_secret, setup_started_at, backfill_since, backfill_cursor, enrolled_at, last_synced_at, last_error
-            FROM dialpad_sync_connections WHERE id = $1"#,
+            r#"SELECT c.id, c.namespace, c.user_id, c.enabled, c.dialpad_user_id, c.webhook_id,
+                c.subscription_id, c.signing_secret, c.setup_started_at, c.backfill_since,
+                c.backfill_cursor, c.enrolled_at, c.last_synced_at, c.last_error,
+                EXISTS (
+                    SELECT 1 FROM dialpad_sync_events e
+                    WHERE e.connection_id = c.id AND e.completed_at IS NULL
+                        AND e.available_at = 'infinity'
+                ) AS "calls_abandoned!",
+                EXISTS (
+                    -- A leased event's latest attempt is still running.
+                    SELECT 1 FROM dialpad_sync_events e
+                    WHERE e.connection_id = c.id AND e.completed_at IS NULL
+                        AND e.attempts > CASE WHEN e.lease_id IS NULL THEN 0 ELSE 1 END
+                ) AS "calls_retrying!"
+            FROM dialpad_sync_connections c WHERE c.id = $1"#,
             id
         )
         .fetch_optional(&self.pool)
@@ -110,6 +122,13 @@ impl SyncRepository for PgSyncRepository {
             enrolled_at: row.enrolled_at,
             last_synced_at: row.last_synced_at,
             last_error: row.last_error.as_deref().map(str::parse).transpose()?,
+            calls: if row.calls_abandoned {
+                CallHealth::Abandoned
+            } else if row.calls_retrying {
+                CallHealth::Retrying
+            } else {
+                CallHealth::Healthy
+            },
         }))
     }
 
@@ -413,7 +432,9 @@ impl SyncRepository for PgSyncRepository {
                 FOR UPDATE OF e SKIP LOCKED
             ),
             leased AS (
-                UPDATE dialpad_sync_events e SET lease_id = $1, attempts = e.attempts + 1,
+                -- A call that gave up starts over when a new event wakes it.
+                UPDATE dialpad_sync_events e SET lease_id = $1,
+                    attempts = CASE WHEN e.available_at = 'infinity' THEN 1 ELSE e.attempts + 1 END,
                     available_at = now() + interval '10 minutes'
                 FROM pending p
                 WHERE e.connection_id = p.connection_id AND e.call_id = p.call_id
@@ -461,36 +482,36 @@ impl SyncRepository for PgSyncRepository {
             .collect()
     }
 
-    async fn finish(&self, job: &Job, success: bool) -> Result<()> {
+    async fn finish(&self, job: &Job, outcome: JobOutcome) -> Result<()> {
         let mut tx = self.pool.begin().await?;
         let retry_seconds = 5_i32
             .saturating_mul(2_i32.saturating_pow(job.attempts.min(10) as u32))
             .min(3600);
+        let done = outcome == JobOutcome::Done;
         let changed = sqlx::query!(
             r#"UPDATE dialpad_sync_events SET completed_at = CASE WHEN $4 THEN now() ELSE NULL END,
-                available_at = now() + make_interval(secs => $5::double precision), lease_id = NULL
+                -- A call that gave up is never due again; a new event for it is.
+                available_at = CASE WHEN $6 THEN 'infinity'::timestamptz
+                    ELSE now() + make_interval(secs => $5::double precision) END,
+                lease_id = NULL
             WHERE connection_id = $1 AND call_id = $2 AND lease_id = $3"#,
             job.connection.id,
             job.call_id.0,
             job.lease_id,
-            success,
-            f64::from(retry_seconds)
+            done,
+            f64::from(retry_seconds),
+            outcome == JobOutcome::GiveUp
         )
         .execute(tx.as_mut())
         .await?
         .rows_affected();
-        if changed > 0 {
+        // Call failures are read from the events, so only a success writes
+        // here. It just used the grant, so a reconnect prompt is stale.
+        if changed > 0 && done {
             sqlx::query!(
-                r#"UPDATE dialpad_sync_connections
-                SET last_synced_at = CASE WHEN $2 THEN now() ELSE last_synced_at END,
-                    -- A reconnect prompt outranks a generic retry notice.
-                    last_error = CASE WHEN $2 THEN NULL
-                        WHEN last_error = $4 THEN last_error ELSE $3 END
+                r#"UPDATE dialpad_sync_connections SET last_synced_at = now(), last_error = NULL
                 WHERE id = $1 AND enabled"#,
-                job.connection.id,
-                success,
-                SyncIssue::CallSyncFailed.as_ref(),
-                SyncIssue::NeedsReauth.as_ref()
+                job.connection.id
             )
             .execute(tx.as_mut())
             .await?;

@@ -19,6 +19,7 @@ fn connection() -> Connection {
         enrolled_at: Utc::now(),
         last_synced_at: None,
         last_error: None,
+        calls: CallHealth::Healthy,
     }
 }
 

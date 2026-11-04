@@ -12,6 +12,9 @@ use uuid::Uuid;
 const RECONCILE_BATCH: i64 = 20;
 /// An enrollment the user never finished in Macro Connect is dropped after this.
 const ENROLLMENT_TTL: chrono::Duration = chrono::Duration::hours(1);
+/// A failing call retries with backoff, about three hours in all, then waits
+/// for a new event from Dialpad.
+pub(crate) const MAX_CALL_ATTEMPTS: i32 = 12;
 
 /// Sync follows the user's Dialpad connection in Macro Connect. Users connect,
 /// check and disconnect it; webhooks and reconciliation do the rest.
@@ -79,7 +82,12 @@ fn status_of(connection: Option<Connection>) -> SyncStatus {
         }) => SyncStatus::NotConnected,
         Some(connection) if connection.enabled => SyncStatus::Connected {
             last_synced_at: connection.last_synced_at,
-            issue: connection.last_error,
+            // A reconnect prompt outranks call failures.
+            issue: connection.last_error.or(match connection.calls {
+                CallHealth::Healthy => None,
+                CallHealth::Retrying => Some(SyncIssue::CallSyncFailed),
+                CallHealth::Abandoned => Some(SyncIssue::CallsAbandoned),
+            }),
         },
         Some(Connection {
             last_error: Some(issue),
@@ -276,10 +284,19 @@ impl<R: SyncRepository, G: Grants, D: Dialpad, V: DeliveryVerifier> Service<R, G
         };
         let (transcript, recap) = tokio::try_join!(
             async {
-                if needs.transcript {
-                    self.dialpad.transcript(&token, job.call_id).await
-                } else {
-                    Ok(None)
+                if !needs.transcript {
+                    return Ok(None);
+                }
+                match self.dialpad.transcript(&token, job.call_id).await {
+                    Ok(lines) => Ok(lines),
+                    Err(TranscriptError::Unauthorized) => {
+                        Err(rootcause::report!("Dialpad rejected the access token"))
+                    }
+                    // Any later event for the call (a recap) fetches it again.
+                    Err(TranscriptError::Unavailable(error)) => {
+                        tracing::warn!(error = ?error, "importing a Dialpad call without its transcript");
+                        Ok(None)
+                    }
                 }
             },
             async {
@@ -427,10 +444,16 @@ impl<R: SyncRepository, G: Grants, D: Dialpad, V: DeliveryVerifier> SyncService
             macro_tower_layers::adopt_traceparent(&span, traceparent);
         }
         let result = self.sync_call(&job).instrument(span.clone()).await;
-        self.repo.finish(&job, result.is_ok()).await?;
+        let outcome = match &result {
+            Ok(()) => JobOutcome::Done,
+            Err(_) if job.attempts >= MAX_CALL_ATTEMPTS => JobOutcome::GiveUp,
+            Err(_) => JobOutcome::Retry,
+        };
+        self.repo.finish(&job, outcome).await?;
         if let Err(error) = result {
-            span.record("outcome", "retry");
-            tracing::warn!(parent: &span, error = ?error, "Dialpad call sync will retry");
+            let gave_up = outcome == JobOutcome::GiveUp;
+            span.record("outcome", if gave_up { "gave_up" } else { "retry" });
+            tracing::warn!(parent: &span, error = ?error, gave_up, "Dialpad call sync failed");
         }
         Ok(true)
     }

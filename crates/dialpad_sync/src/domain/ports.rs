@@ -71,9 +71,9 @@ pub trait SyncRepository: Send + Sync {
     async fn claim(&self) -> Result<Option<Job>>;
     /// Every stored event for one call, oldest first.
     async fn events(&self, id: Uuid, call: DialpadId) -> Result<Vec<CallEvent>>;
-    /// Complete the job's leased deliveries, or schedule their retry with
-    /// backoff.
-    async fn finish(&self, job: &Job, success: bool) -> Result<()>;
+    /// Complete the job's leased deliveries, schedule their retry with
+    /// backoff, or park them until a new event for the call arrives.
+    async fn finish(&self, job: &Job, outcome: JobOutcome) -> Result<()>;
 }
 
 /// The user's Dialpad grant, held by Macro Connect.
@@ -116,12 +116,13 @@ pub trait Dialpad: Send + Sync {
     async fn unregister(&self, token: &AccessToken, registration: Registration) -> Result<()>;
     /// Delete a webhook. Already-gone is success.
     async fn delete_webhook(&self, token: &AccessToken, webhook: DialpadId) -> Result<()>;
-    /// `None` when the call has no transcript.
+    /// `None` when the call has no transcript, or transcripts are off for
+    /// the company.
     async fn transcript(
         &self,
         token: &AccessToken,
         call: DialpadId,
-    ) -> Result<Option<Vec<TranscriptLine>>>;
+    ) -> std::result::Result<Option<Vec<TranscriptLine>>, TranscriptError>;
     /// `None` when the call has no recap.
     async fn recap(&self, token: &AccessToken, call: DialpadId) -> Result<Option<Recap>>;
     /// The user's concluded calls started at or after `since`, newest first.

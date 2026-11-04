@@ -106,8 +106,24 @@ pub struct Connection {
     pub enrolled_at: DateTime<Utc>,
     /// When a call last imported successfully.
     pub last_synced_at: Option<DateTime<Utc>>,
-    /// Why the sync is not healthy, if it isn't.
+    /// Why the sync is not healthy, if it isn't. A running sync stores only
+    /// [`SyncIssue::NeedsReauth`]; call failures are read from `calls`.
     pub last_error: Option<SyncIssue>,
+    /// Whether any call is failing to import.
+    pub calls: CallHealth,
+}
+
+/// Whether a sync's calls are importing, read from their pending events so
+/// one call's success never hides another's failure.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub enum CallHealth {
+    /// No call is failing.
+    #[default]
+    Healthy,
+    /// A call failed and will retry.
+    Retrying,
+    /// A call used up its attempts; only a new event for it tries again.
+    Abandoned,
 }
 
 /// Progress of the first-connect import of past calls.
@@ -124,7 +140,8 @@ pub enum BackfillState {
     },
 }
 
-/// Why a sync is not healthy, stored as the connection's `last_error`.
+/// Why a sync is not healthy. Connection issues are stored as the
+/// connection's `last_error`; call issues are read from [`CallHealth`].
 #[derive(Debug, Clone, Copy, PartialEq, Eq, strum::AsRefStr, strum::EnumString)]
 pub enum SyncIssue {
     /// The Dialpad connection was removed from Macro Connect.
@@ -139,6 +156,10 @@ pub enum SyncIssue {
     /// A call failed to sync; it is retried with backoff.
     #[strum(serialize = "Call sync failed; retrying automatically")]
     CallSyncFailed,
+    /// A call failed every attempt; it is retried only if Dialpad sends a
+    /// new event for it.
+    #[strum(serialize = "Some calls could not be imported")]
+    CallsAbandoned,
     /// The user disconnected Dialpad, or never finished connecting. The row
     /// stays so a reconnect keeps the import namespace.
     #[strum(serialize = "Disconnected")]
@@ -349,6 +370,17 @@ pub struct Job {
     pub attempts: i32,
 }
 
+/// How a claimed call's import ended.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum JobOutcome {
+    /// Imported, or nothing to import.
+    Done,
+    /// Failed; retry with backoff.
+    Retry,
+    /// Failed its last attempt; wait for a new event for the call.
+    GiveUp,
+}
+
 /// One page of past calls.
 pub struct CallPage {
     /// Calls on this page.
@@ -388,6 +420,18 @@ pub enum SyncError {
     /// Storing the delivery failed.
     #[error("Dialpad sync request failed: {0}")]
     Internal(rootcause::Report),
+}
+
+/// Why a call's transcript could not be read.
+#[derive(Debug, thiserror::Error)]
+pub enum TranscriptError {
+    /// Dialpad rejected the access token; the import must wait for it.
+    #[error("Dialpad rejected the access token")]
+    Unauthorized,
+    /// Anything else (rate limit, outage, unreadable reply); the call imports
+    /// without its transcript.
+    #[error("Dialpad transcript unavailable: {0}")]
+    Unavailable(rootcause::Report),
 }
 
 impl From<rootcause::Report> for SyncError {

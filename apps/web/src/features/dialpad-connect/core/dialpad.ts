@@ -51,6 +51,8 @@ export function dialpadIssueLabel(
       return 'Stopped';
     case 'call_sync_failed':
       return 'Retrying';
+    case 'calls_abandoned':
+      return 'Some calls not imported';
     default:
       return undefined;
   }

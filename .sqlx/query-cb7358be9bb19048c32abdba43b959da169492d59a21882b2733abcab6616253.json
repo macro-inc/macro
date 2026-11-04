@@ -1,0 +1,15 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "UPDATE dialpad_sync_events SET available_at = now(), attempts = $2 - 1\n            WHERE connection_id = $1 AND call_id = 7",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Int4"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "cb7358be9bb19048c32abdba43b959da169492d59a21882b2733abcab6616253"
+}

@@ -4039,7 +4039,13 @@
       "DialpadSyncIssue": {
         "type": "string",
         "description": "Why Dialpad sync needs attention.",
-        "enum": ["stopped", "needs_reauth", "setup_failed", "call_sync_failed"]
+        "enum": [
+          "stopped",
+          "needs_reauth",
+          "setup_failed",
+          "call_sync_failed",
+          "calls_abandoned"
+        ]
       },
       "DismissedPrompts": {
         "type": "object",

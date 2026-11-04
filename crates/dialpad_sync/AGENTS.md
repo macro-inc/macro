@@ -56,6 +56,13 @@ A first-connect backfill pages `GET /call` one page per reconcile.
 - A call with an active delivery lease cannot be claimed again, including newly
   arrived events; concurrent claims serialize briefly on the connection row.
 - Dialpad sends no event id: deliveries dedupe on (call, state, timestamp).
+- Call failures are read from pending events, never stored in `last_error`,
+  so one call's success cannot hide another's failure. A call retries with
+  backoff `MAX_CALL_ATTEMPTS` times, then waits at `available_at = 'infinity'`
+  (Settings: "Some calls not imported") until a new event for it starts its
+  attempts over.
+- Only a rejected token (401) fails a transcript fetch; any other error
+  imports the call without its transcript, as 403/404 do.
 - `GET /call/{id}` is limited to 10/min and `ai_recap` to 12/min; live calls
   use event payloads, and only backfill reads the recap endpoint.
 - Always pass `target_type=user`: without a target an admin's token lists or

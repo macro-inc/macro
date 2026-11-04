@@ -78,6 +78,10 @@ struct FakeDialpad {
     pages: Mutex<VecDeque<CallPage>>,
     listed_since: Mutex<Option<DateTime<Utc>>>,
     transcript_pause: Mutex<Option<(Arc<tokio::sync::Notify>, Arc<tokio::sync::Notify>)>>,
+    /// Transcript fetches fail: `true` as an auth error, `false` as an outage.
+    transcript_fails: Mutex<Option<bool>>,
+    /// Calls whose recap fetch fails.
+    failing_calls: Mutex<Vec<DialpadId>>,
 }
 
 impl FakeDialpad {
@@ -128,18 +132,33 @@ impl Dialpad for FakeDialpad {
         &self,
         _: &AccessToken,
         _: DialpadId,
-    ) -> Result<Option<Vec<TranscriptLine>>> {
+    ) -> std::result::Result<Option<Vec<TranscriptLine>>, TranscriptError> {
         let pause = self.transcript_pause.lock().unwrap().clone();
         if let Some((started, resume)) = pause {
             started.notify_one();
             resume.notified().await;
         }
-        Ok(Some(vec![serde_json::from_value(json!({
-            "type": "transcript", "name": "Jane Doe",
-            "time": "2025-05-05T18:16:50.000", "content": "Can you send a quote?"
-        }))?]))
+        match *self.transcript_fails.lock().unwrap() {
+            Some(true) => return Err(TranscriptError::Unauthorized),
+            Some(false) => {
+                return Err(TranscriptError::Unavailable(rootcause::report!(
+                    "Dialpad API returned HTTP 429 Too Many Requests"
+                )));
+            }
+            None => {}
+        }
+        Ok(Some(vec![
+            serde_json::from_value(json!({
+                "type": "transcript", "name": "Jane Doe",
+                "time": "2025-05-05T18:16:50.000", "content": "Can you send a quote?"
+            }))
+            .unwrap(),
+        ]))
     }
-    async fn recap(&self, _: &AccessToken, _: DialpadId) -> Result<Option<Recap>> {
+    async fn recap(&self, _: &AccessToken, call: DialpadId) -> Result<Option<Recap>> {
+        if self.failing_calls.lock().unwrap().contains(&call) {
+            return Err(rootcause::report!("Dialpad API returned HTTP 500"));
+        }
         Ok(Some(Recap {
             summary: Some("Past call recap.".into()),
             action_items: vec![],
@@ -850,8 +869,12 @@ async fn late_events_wait_for_the_calls_active_import(pool: PgPool) {
     service.repo.enqueue(id, other, None).await.unwrap();
     let other_job = service.repo.claim().await.unwrap().unwrap();
     assert_eq!(other_job.call_id, DialpadId(10));
-    service.repo.finish(&other_job, true).await.unwrap();
-    service.repo.finish(&job, true).await.unwrap();
+    service
+        .repo
+        .finish(&other_job, JobOutcome::Done)
+        .await
+        .unwrap();
+    service.repo.finish(&job, JobOutcome::Done).await.unwrap();
     let late_job = service.repo.claim().await.unwrap().unwrap();
     assert_eq!(late_job.call_id, DialpadId(9));
     assert_eq!(
@@ -1004,5 +1027,116 @@ async fn an_activation_error_attempts_cleanup_and_preserves_the_cause(pool: PgPo
             webhook_id: DialpadId(11),
             subscription_id: DialpadId(33),
         }]
+    );
+}
+
+fn issue(status: SyncStatus) -> Option<SyncIssue> {
+    match status {
+        SyncStatus::Connected { issue, .. } => issue,
+        status => panic!("expected a running sync, got {status:?}"),
+    }
+}
+
+#[sqlx::test(
+    migrator = "MACRO_DB_MIGRATIONS",
+    fixtures(path = "../../../fixtures", scripts("users"))
+)]
+async fn a_failing_call_stays_visible_until_it_imports_or_gives_up(pool: PgPool) {
+    let calls = Arc::new(Calls::default());
+    let service = service(pool, GrantState::Active, calls.clone());
+    service.connect(&user(), Backfill::None).await.unwrap();
+    service.complete(&user()).await.unwrap();
+    let id = service.repo.by_user(&user()).await.unwrap().unwrap().id;
+    service
+        .dialpad
+        .failing_calls
+        .lock()
+        .unwrap()
+        .push(DialpadId(7));
+    let enqueue = |call_id, state, timestamp| {
+        let event = serde_json::from_value(call_event(call_id, state, timestamp)).unwrap();
+        service.repo.enqueue(id, event, None)
+    };
+
+    // Past calls fetch their recap, which fails for call 7.
+    enqueue(7, "backfill", 2).await.unwrap();
+    drain(&service).await;
+    // Another call importing does not hide the one still failing.
+    enqueue(8, "backfill", 3).await.unwrap();
+    drain(&service).await;
+    assert_eq!(calls.0.lock().unwrap().len(), 1);
+    assert_eq!(
+        issue(service.status(&user()).await.unwrap()),
+        Some(SyncIssue::CallSyncFailed)
+    );
+
+    // Its last attempt fails: it stops retrying and says so.
+    let due_on_last_attempt = || {
+        sqlx::query!(
+            "UPDATE dialpad_sync_events SET available_at = now(), attempts = $2 - 1
+            WHERE connection_id = $1 AND call_id = 7",
+            id,
+            crate::domain::service::MAX_CALL_ATTEMPTS
+        )
+        .execute(&service.repo.pool)
+    };
+    due_on_last_attempt().await.unwrap();
+    drain(&service).await;
+    assert!(service.repo.claim().await.unwrap().is_none());
+    assert_eq!(
+        issue(service.status(&user()).await.unwrap()),
+        Some(SyncIssue::CallsAbandoned)
+    );
+
+    // A new event for the call starts its attempts over.
+    enqueue(7, "recap_summary", 4).await.unwrap();
+    drain(&service).await;
+    assert_eq!(
+        issue(service.status(&user()).await.unwrap()),
+        Some(SyncIssue::CallSyncFailed)
+    );
+    service.dialpad.failing_calls.lock().unwrap().clear();
+    sqlx::query!(
+        "UPDATE dialpad_sync_events SET available_at = now() WHERE connection_id = $1",
+        id
+    )
+    .execute(&service.repo.pool)
+    .await
+    .unwrap();
+    drain(&service).await;
+    assert_eq!(calls.0.lock().unwrap().len(), 2);
+    assert_eq!(issue(service.status(&user()).await.unwrap()), None);
+}
+
+#[sqlx::test(
+    migrator = "MACRO_DB_MIGRATIONS",
+    fixtures(path = "../../../fixtures", scripts("users"))
+)]
+async fn a_transcript_outage_imports_the_call_without_it(pool: PgPool) {
+    let calls = Arc::new(Calls::default());
+    let service = service(pool, GrantState::Active, calls.clone());
+    service.connect(&user(), Backfill::None).await.unwrap();
+    service.complete(&user()).await.unwrap();
+    let id = service.repo.by_user(&user()).await.unwrap().unwrap().id;
+
+    *service.dialpad.transcript_fails.lock().unwrap() = Some(false);
+    let event = serde_json::from_value(call_event(9, "call_transcription", 3)).unwrap();
+    service.repo.enqueue(id, event, None).await.unwrap();
+    drain(&service).await;
+    assert_eq!(
+        calls.0.lock().unwrap().as_slice(),
+        &[("9".to_owned(), None, 0)]
+    );
+    assert_eq!(issue(service.status(&user()).await.unwrap()), None);
+
+    // A rejected token is not an outage: the call waits for a reconnect.
+    *service.dialpad.transcript_fails.lock().unwrap() = Some(true);
+    let event = serde_json::from_value(call_event(10, "call_transcription", 3)).unwrap();
+    service.repo.enqueue(id, event, None).await.unwrap();
+    drain(&service).await;
+    assert_eq!(calls.0.lock().unwrap().len(), 1);
+    assert_eq!(
+        issue(service.status(&user()).await.unwrap()),
+        Some(SyncIssue::CallSyncFailed)
     );
 }

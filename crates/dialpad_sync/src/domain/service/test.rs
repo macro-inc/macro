@@ -16,6 +16,7 @@ fn connection(enabled: bool, last_error: Option<SyncIssue>) -> Connection {
         enrolled_at: chrono::Utc::now(),
         last_synced_at: None,
         last_error,
+        calls: CallHealth::Healthy,
     }
 }
 
@@ -32,11 +33,25 @@ fn status_reflects_setup_and_issues() {
             issue: SyncIssue::NeedsReauth
         }
     );
+    let issue = |last_error, calls| match status_of(Some(Connection {
+        calls,
+        ..connection(true, last_error)
+    })) {
+        SyncStatus::Connected { issue, .. } => issue,
+        status => panic!("expected a running sync, got {status:?}"),
+    };
+    assert_eq!(issue(None, CallHealth::Healthy), None);
     assert_eq!(
-        status_of(Some(connection(true, Some(SyncIssue::CallSyncFailed)))),
-        SyncStatus::Connected {
-            last_synced_at: None,
-            issue: Some(SyncIssue::CallSyncFailed)
-        }
+        issue(None, CallHealth::Retrying),
+        Some(SyncIssue::CallSyncFailed)
+    );
+    assert_eq!(
+        issue(None, CallHealth::Abandoned),
+        Some(SyncIssue::CallsAbandoned)
+    );
+    // A reconnect prompt outranks call failures.
+    assert_eq!(
+        issue(Some(SyncIssue::NeedsReauth), CallHealth::Abandoned),
+        Some(SyncIssue::NeedsReauth)
     );
 }

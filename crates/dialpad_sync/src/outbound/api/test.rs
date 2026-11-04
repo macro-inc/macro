@@ -37,32 +37,42 @@ async fn the_subscription_targets_only_the_connected_user() {
 #[tokio::test]
 async fn missing_transcripts_and_unavailable_recaps_are_absent_not_errors() {
     let server = MockServer::start().await;
-    Mock::given(method("GET"))
-        .and(path("/transcripts/7"))
-        .respond_with(ResponseTemplate::new(404))
-        .mount(&server)
-        .await;
+    for (call, status) in [(7, 404), (6, 403), (8, 429), (9, 401)] {
+        Mock::given(method("GET"))
+            .and(path(format!("/transcripts/{call}")))
+            .respond_with(ResponseTemplate::new(status))
+            .mount(&server)
+            .await;
+    }
     Mock::given(method("GET"))
         .and(path("/call/7/ai_recap"))
         .respond_with(ResponseTemplate::new(403))
         .mount(&server)
         .await;
-    Mock::given(method("GET"))
-        .and(path("/transcripts/8"))
-        .respond_with(ResponseTemplate::new(429))
-        .mount(&server)
-        .await;
     let api = DialpadApi::new(server.uri()).unwrap();
-    assert!(
-        api.transcript(&token(), DialpadId(7))
-            .await
-            .unwrap()
-            .is_none()
-    );
+    for call in [7, 6] {
+        assert!(
+            api.transcript(&token(), DialpadId(call))
+                .await
+                .unwrap()
+                .is_none(),
+            "no transcript, or transcripts are off for the company"
+        );
+    }
     assert!(api.recap(&token(), DialpadId(7)).await.unwrap().is_none());
     assert!(
-        api.transcript(&token(), DialpadId(8)).await.is_err(),
-        "a rate limit retries later"
+        matches!(
+            api.transcript(&token(), DialpadId(8)).await,
+            Err(TranscriptError::Unavailable(_))
+        ),
+        "a rate limit imports without the transcript"
+    );
+    assert!(
+        matches!(
+            api.transcript(&token(), DialpadId(9)).await,
+            Err(TranscriptError::Unauthorized)
+        ),
+        "a rejected token waits for a reconnect"
     );
 }
 

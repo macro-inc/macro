@@ -129,6 +129,8 @@ pub enum DialpadSyncIssue {
     SetupFailed,
     /// A call failed to sync; retried automatically.
     CallSyncFailed,
+    /// A call failed every attempt; only a new event from Dialpad retries it.
+    CallsAbandoned,
 }
 
 impl From<SyncIssue> for DialpadSyncIssue {
@@ -139,6 +141,7 @@ impl From<SyncIssue> for DialpadSyncIssue {
             SyncIssue::NeedsReauth => Self::NeedsReauth,
             SyncIssue::SetupFailed => Self::SetupFailed,
             SyncIssue::CallSyncFailed => Self::CallSyncFailed,
+            SyncIssue::CallsAbandoned => Self::CallsAbandoned,
         }
     }
 }

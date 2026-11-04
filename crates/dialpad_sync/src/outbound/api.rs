@@ -176,25 +176,33 @@ impl Dialpad for DialpadApi {
         &self,
         token: &AccessToken,
         call: DialpadId,
-    ) -> Result<Option<Vec<TranscriptLine>>> {
+    ) -> std::result::Result<Option<Vec<TranscriptLine>>, TranscriptError> {
         #[derive(Deserialize)]
         struct Transcript {
             #[serde(default)]
             lines: Vec<TranscriptLine>,
         }
-        let Some(body) = self
-            .request(
+        let reply = self
+            .send(
                 token,
                 Method::GET,
                 &format!("/transcripts/{call}"),
                 &[],
                 None,
             )
-            .await?
-        else {
-            return Ok(None);
-        };
-        Ok(Some(serde_json::from_value::<Transcript>(body)?.lines))
+            .await
+            .map_err(TranscriptError::Unavailable)?;
+        match reply.status {
+            // No transcript, or transcripts are off for the company (as for recaps).
+            StatusCode::NOT_FOUND | StatusCode::FORBIDDEN => Ok(None),
+            StatusCode::UNAUTHORIZED => Err(TranscriptError::Unauthorized),
+            status if status.is_success() => serde_json::from_value::<Transcript>(reply.body)
+                .map(|transcript| Some(transcript.lines))
+                .map_err(|error| TranscriptError::Unavailable(error.into())),
+            status => Err(TranscriptError::Unavailable(rootcause::report!(
+                "Dialpad API returned HTTP {status}"
+            ))),
+        }
     }
 
     #[tracing::instrument(name = "dialpad.fetch_recap", skip_all, err(Display))]
