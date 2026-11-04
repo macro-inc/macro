@@ -200,6 +200,22 @@ describe('bounded channel unread indicators', () => {
     expect(source.notifications).not.toHaveBeenCalled();
   });
 
+  it('prefers the loaded channel read state over an older favorite lookup', () => {
+    const activity = createRoot((cleanup) => {
+      dispose = cleanup;
+      return useChannelRailActivity(
+        () => [row('one', [])],
+        calls,
+        () => [
+          row('one', [{ id: 'n1', state: 'unseen', createdAt: '2026-01-01' }]),
+        ]
+      );
+    });
+
+    expect(activity.unreadChannelIds().size).toBe(0);
+    expect(activity.unreadCount('channels')).toBe(0);
+  });
+
   it('uses one witness per channel without reading the global notification feed', () => {
     const [channels, setChannels] = createSignal([
       row('one', [{ id: 'n1', state: 'unseen', createdAt: '2026-01-01' }]),
