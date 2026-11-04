@@ -19,7 +19,6 @@ import {
   TableRowNode,
 } from '@lexical/table';
 import { $isParagraphNode, $isTextNode, type LexicalNode } from 'lexical';
-import { z } from 'zod';
 import { CUSTOM_TRANSFORMERS } from './customTransformers';
 import { HTML_TEXT_FORMAT_TRANSFORMERS } from './htmlTextFormats';
 import { I_IMAGE_CONSTRAINED, IMAGE } from './image';
@@ -69,10 +68,19 @@ function parseXmlAttrs(raw: string | undefined): Record<string, string> {
   return attrs;
 }
 
-// Attribute strings from parseXmlAttrs → validated numbers; invalid values are
-// coerced away so a bad attr falls back to the node's default.
-const A_POSITIVE = z.coerce.number().finite().positive();
-const A_SPAN = z.coerce.number().int().min(2);
+// Attribute strings from parseXmlAttrs → validated numbers; invalid values
+// become undefined so a bad attr falls back to the node's default.
+function positiveAttr(raw: string | undefined): number | undefined {
+  if (raw === undefined) return undefined;
+  const value = Number(raw);
+  return Number.isFinite(value) && value > 0 ? value : undefined;
+}
+
+function spanAttr(raw: string | undefined): number | undefined {
+  if (raw === undefined) return undefined;
+  const value = Number(raw);
+  return Number.isInteger(value) && value >= 2 ? value : undefined;
+}
 
 // Upstream's exact definition from @lexical/table's LexicalTableCellNode.ts;
 // the package doesn't re-export the type from its root (not even on main).
@@ -185,9 +193,7 @@ export const I_TABLE_NODE: ElementTransformer = {
         const rowContent = rowMatch[2];
         const rowNode = new TableRowNode();
 
-        const height = A_POSITIVE.optional()
-          .catch(undefined)
-          .parse(rowAttrs.height);
+        const height = positiveAttr(rowAttrs.height);
         if (height) {
           rowNode.setHeight(height);
         }
@@ -199,15 +205,11 @@ export const I_TABLE_NODE: ElementTransformer = {
           const cellContent = cellMatch[2];
           const cellNode = new TableCellNode();
 
-          const colSpan = A_SPAN.optional()
-            .catch(undefined)
-            .parse(cellAttrs.colspan);
+          const colSpan = spanAttr(cellAttrs.colspan);
           if (colSpan) {
             cellNode.setColSpan(colSpan);
           }
-          const rowSpan = A_SPAN.optional()
-            .catch(undefined)
-            .parse(cellAttrs.rowspan);
+          const rowSpan = spanAttr(cellAttrs.rowspan);
           if (rowSpan) {
             cellNode.setRowSpan(rowSpan);
           }
@@ -227,11 +229,12 @@ export const I_TABLE_NODE: ElementTransformer = {
         tableNode.append(rowNode);
       }
 
-      const colWidths = z
-        .array(A_POSITIVE)
-        .safeParse(tableAttrs['col-widths']?.split(','));
-      if (colWidths.success && colWidths.data.length) {
-        tableNode.setColWidths(colWidths.data);
+      const colWidths = tableAttrs['col-widths']?.split(',').map(positiveAttr);
+      if (
+        colWidths?.length &&
+        colWidths.every((width): width is number => width !== undefined)
+      ) {
+        tableNode.setColWidths(colWidths);
       }
 
       node.replace(tableNode);
