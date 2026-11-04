@@ -138,19 +138,31 @@ its fingerprint to production associations before testing Play-installed links.
 Android releases are driven from pull requests, like iOS (see
 `apps/web/docs/ios-releases.md`). Unlike iOS, whose approved version is held
 until the prod deploy, they are not tied to the production deployment cycle.
-Three generated workflows plus the `Android Native Check`
-job of the web app PR checks enforce it:
+Four generated workflows plus the `Android Native Check`
+job of the web app PR checks enforce it.
+
+Only workflows that run `main`'s copy sign in to Google Play: **`Android Play
+Publish`** and **`Android Release Watch`** (plus the manual
+`publish-android-play.yml`). Workflows on `pull_request` events run the PR's
+own copy of the workflow and its scripts, so they never get the publishing
+identity. They read what the `main`-side workflows learned from Play as commit
+statuses on the PR's commits: `android-play/release` (set by the publisher
+around the production promotion) and `android-play/live` (set by the watcher
+once the release is live).
 
 **`Android Native Check`** runs on every PR against `main`. Its native tree
 excludes platform-specific desktop/iOS files and Markdown docs, which do not
 ship in the Android binary (`apps/web/scripts/android-native.mjs` defines
 what counts). When the Android native code changed, it requires a
-`versionCode` bump and asks Google Play whether that version code is a
-production release that Google has **published** (through review and
-available to users — the edit API's `status: completed` only describes the
-rollout, so the gate also reads the release list's `releaseLifecycleState`),
-built from the native code of the PR's merge result. Until both hold the
-check fails and the required `Web App Status Check` fails with it.
+`versionCode` bump and a commit of the PR marked `android-play/live` for that
+version code, the native hash of the PR's current merge result, and the PR.
+The watcher sets that status only once Google has **published** the release
+(through review and available to users; the edit API's `status: completed`
+only describes the rollout, so the watcher also reads the release list's
+`releaseLifecycleState`) with a provenance stamp matching the merge result.
+Until then the check fails and the required `Web App Status Check` fails with
+it. Web-only pushes after the release keep it valid: the status on an earlier
+commit still matches.
 
 Add **`skip-android-update`** instead for native changes that don't break
 the native/web contract: it skips the whole gate, bump included, like
@@ -171,7 +183,8 @@ To release:
    The gate accepts only those two floors: the new versionCode or the base
    branch's. A PR without Android native changes may raise the floor only as
    far as the base branch's versionCode.
-2. Add the **`android-update`** label once the PR is ready to merge. The
+2. Add the **`android-update`** label once the PR is ready to merge. Adding
+   it is the release decision: nothing else approves it. The
    **`Android Play Release`** workflow (`.github/workflows/android-play-release.yml`)
    first refuses drafts, PRs with failing checks (pending ones are waited on,
    up to 30 minutes), PRs without a bump, and PRs whose head lacks Android
@@ -185,14 +198,26 @@ To release:
    runner (Android SDK, Nix, signing and Firebase config from Doppler
    `android-release/prd`), verifies it with bundletool,
    checks again that neither the PR head nor `main` changed native code
-   during the build, uploads it to the **internal** track with
-   `status=completed`, and promotes it to **production** as a full rollout
-   (Google review applies). The bundle and R8 mapping are kept as a workflow
-   artifact for 90 days. The release notes carry a provenance stamp,
-   `native tree <hash> for PR #<n>`, the twin of the iOS TestFlight stamp.
-   The run comments the outcome on the PR (a failure names the step that
-   failed and, for the checking steps, quotes the end of its output);
-   remove and re-add the label to retry. Click **Enable auto-merge** on the
+   during the build, and keeps the bundle and R8 mapping as the
+   `android-release` workflow artifact (90 days). When the build succeeds,
+   **`Android Play Publish`** (`.github/workflows/android-play-publish.yml`,
+   a `workflow_run` workflow, so `main`'s copy) takes over. It treats the
+   build and its artifact as untrusted, since PR code produced them, and
+   publishes only a build that the label started: the build job succeeded,
+   the branch is the head of one open same-repository PR into `main`, the PR
+   still carries the label, and its latest label event is an add by a person
+   with write access who started the build run within minutes of adding it.
+   It then repeats the head guard, writes the release notes' provenance
+   stamp (`native tree <hash> for PR #<n>`, the twin of the iOS TestFlight
+   stamp) from `main`'s hashing script, uploads the bundle to the
+   **internal** track with `status=completed`, checks the native code once
+   more, and promotes it to **production** as a full rollout (Google review
+   applies), recording the promotion as the `android-play/release` status.
+   A failed build comments on the PR; otherwise the publisher comments the
+   outcome (a failure names the step that failed and, for the checking
+   steps, quotes the end of its output). Remove and re-add the label to
+   retry; once the upload succeeded the version code is used up, so bump
+   first. Click **Enable auto-merge** on the
    PR to merge the moment it is live. The label only works on a PR that is
    mergeable: GitHub does not run `pull_request` workflows on a PR that
    conflicts with `main`, so the release never starts there. The **`Release Label Check`** workflow
@@ -202,19 +227,22 @@ To release:
    instead comments that the release started, with the version in flight
    and a link to the run.
 3. Wait for Google. The **`Android Release Watch`** workflow (every 30
-   minutes) notices the version code being published on production, re-runs
-   the PR's failed `Android Native Check` job, and comments; the PR merges if
-   auto-merge is on.
+   minutes) notices the version code being published on production, marks
+   the PR head `android-play/live`, re-runs the PR's failed
+   `Android Native Check` job, and comments; the PR merges if auto-merge is
+   on.
 4. Pushes after the label: web-only commits need nothing. Native commits make
    the bundle stale: **`Android Release Drift`** cancels an in-progress build,
    removes the label and comments. A Play production release cannot be
    withdrawn once submitted, so if the stale bundle was already promoted the
-   comment says so and the follow-up should ship as soon as possible. If the
-   previous native tree cannot be verified (for example, after a force-push),
-   drift skips the Play lookup and reports production status as unknown; the
-   new head's version code cannot identify the prior release. Authentication
-   or Play lookup failures also report unknown status. Keep the reviewed-SHA
-   restriction and verify through an approved check or Play Console before
+   comment says so and the follow-up should ship as soon as possible. Drift
+   cannot sign in to Play; after waiting for publish runs in progress, it
+   reads the `android-play/release` status on the old head and the PR's
+   commits: success means promoted, pending or failure that it may have
+   been. If the previous native tree cannot be verified (for example, after
+   a force-push), drift reports production status as unknown; the new head's
+   version code cannot identify the prior release. A failed lookup also
+   reports unknown status. Check the production track in Play Console before
    treating the prior release as stopped.
 
 Play is the source of truth for what is live; nothing ties Android bundles
@@ -248,9 +276,10 @@ bundle is uploaded; an AAB cannot be installed directly on a device.
 ### Google Play publishing
 
 `.github/workflows/publish-android-play.yml` runs from `main` and is the
-manual fallback. Routine releases go through the `Android Play Release`
-workflow described above, which uploads the PR's bundle to internal testing
-and promotes it to production itself; the publishing workflow is for
+manual fallback. Routine releases go through the `Android Play Release` and
+`Android Play Publish` workflows described above, which upload the PR's
+bundle to internal testing and promote it to production; the manual
+publishing workflow is for
 promoting a version code by hand or uploading a bundle attached to a GitHub
 release.
 
@@ -311,17 +340,38 @@ attribute.repository_id=assertion.repository_id
 
 Use issuer `https://token.actions.githubusercontent.com`. Restrict the provider's
 attribute condition to the numeric repository and owner IDs (available from
-`gh api repos/macro-inc/macro --jq '{repository: .id, owner: .owner.id}'`).
-The initial condition below permits only the manual publishing workflow on
-`main`; automatic PR releases also need the explicit grants described in
-"Authorize an approved PR release" below:
+`gh api repos/macro-inc/macro --jq '{repository: .id, owner: .owner.id}'`)
+and to the three workflows that run `main`'s copy, each for the events it
+runs on: the manual publisher, the watcher, and `Android Play Publish`
+(`workflow_run` workflows always run from the default branch, so their token
+carries `main`'s ref and subject). Save it as `play-condition.cel`:
 
 ```text
 assertion.repository_id == '1092407718' &&
 assertion.repository_owner_id == '65687018' &&
-assertion.workflow_ref == 'macro-inc/macro/.github/workflows/publish-android-play.yml@refs/heads/main' &&
-assertion.sub == 'repo:macro-inc/macro:ref:refs/heads/main'
+assertion.ref == 'refs/heads/main' &&
+assertion.sub == 'repo:macro-inc/macro:ref:refs/heads/main' &&
+(
+  (
+    assertion.workflow_ref == 'macro-inc/macro/.github/workflows/publish-android-play.yml@refs/heads/main' &&
+    assertion.event_name == 'workflow_dispatch'
+  ) ||
+  (
+    assertion.workflow_ref == 'macro-inc/macro/.github/workflows/android-release-watch.yml@refs/heads/main' &&
+    assertion.event_name in ['schedule', 'workflow_dispatch']
+  ) ||
+  (
+    assertion.workflow_ref == 'macro-inc/macro/.github/workflows/android-play-publish.yml@refs/heads/main' &&
+    assertion.event_name == 'workflow_run'
+  )
+)
 ```
+
+No workflow on `pull_request` events is admitted, and none needs to be: those
+run the PR's code, which must never get the publishing identity. The
+condition never changes per PR. Change it only when one of these three
+workflow files is renamed, or a workflow that runs `main`'s copy newly needs
+Play; never add a `pull_request` alternative.
 
 On the publishing service account, grant `roles/iam.workloadIdentityUser` to:
 
@@ -356,7 +406,7 @@ gcloud iam workload-identity-pools providers create-oidc macro \
   --workload-identity-pool=github-play \
   --issuer-uri=https://token.actions.githubusercontent.com \
   --attribute-mapping='google.subject=assertion.sub,attribute.repository_id=assertion.repository_id' \
-  --attribute-condition="assertion.repository_id == '1092407718' && assertion.repository_owner_id == '65687018' && assertion.workflow_ref == 'macro-inc/macro/.github/workflows/publish-android-play.yml@refs/heads/main' && assertion.sub == 'repo:macro-inc/macro:ref:refs/heads/main'"
+  --attribute-condition="$(cat play-condition.cel)"
 
 gcloud iam service-accounts add-iam-policy-binding \
   google-play-publisher@macro-435922.iam.gserviceaccount.com \
@@ -373,90 +423,35 @@ gh variable set GOOGLE_PLAY_SERVICE_ACCOUNT --repo macro-inc/macro \
   --body google-play-publisher@macro-435922.iam.gserviceaccount.com
 ```
 
-#### Authorize an approved PR release
+#### Update the provider condition
 
-The initial provider condition rejects the PR-based native check and release
-workflows. Before releasing a reviewed same-repository PR, an identity
-administrator must extend that condition with narrowly scoped alternatives:
-
-- Keep the numeric repository and owner ID checks around every alternative,
-  and retain the existing manual publisher on `main`.
-- Permit `android-release-watch.yml@refs/heads/main` only with the main ref and
-  main subject, for `schedule` or `workflow_dispatch` events.
-- Permit the specific approved `refs/pull/<PR_NUMBER>/merge` only for
-  `pull_request` events, the `repo:macro-inc/macro:pull_request` subject,
-  `base_ref == 'main'`, the reviewed merge commit in `assertion.sha`, and these
-  exact workflow paths at that same merge ref:
-  `web-app-check-main.yml`, `android-play-release.yml`, and
-  `android-release-drift.yml` under `macro-inc/macro/.github/workflows/`.
-
-Check the PR's head repository and review its merge commit before granting access.
-Do not replace the approved PR ref or SHA with a wildcard: PR workflows execute
-the proposed code with the publishing identity. For `pull_request` workflows,
-`assertion.sha` identifies the event's merge commit, not the PR head. A later push
-or base-branch update creates a different merge commit; review the changes before
-updating the grant. Reruns retain the original event SHA, and release jobs request
-credentials after building. Retain each reviewed event SHA in an explicit
-`assertion.sha in [...]` allowlist while its approved gate, release, or drift run
-still needs credentials, then remove it. Remove the PR's alternative after it
-merges or closes. Keep the main watcher permission so it can verify releases and
-rerun native gates.
-
-Back up the existing provider, then create the complete condition below. Replace
-`<PR_NUMBER>` and `<REVIEWED_MERGE_SHA>` with the approved PR number and full
-40-character merge commit SHA. This example preserves the initial publisher and
-adds the watcher; preserve any other independently approved grants already in
-`provider-before.json` instead of overwriting them.
+To replace the provider's condition (for example, to move an older provider
+that still carries per-PR grants to the one above), back the provider up and
+update it with the complete condition; the attribute mappings and the service
+account binding stay as they are:
 
 ```sh
 gcloud iam workload-identity-pools providers describe macro \
   --project=macro-435922 --location=global \
   --workload-identity-pool=github-play --format=json > provider-before.json
 
-cat > approved-play-condition.cel <<'CEL'
-assertion.repository_id == '1092407718' &&
-assertion.repository_owner_id == '65687018' &&
-(
-  (
-    assertion.workflow_ref == 'macro-inc/macro/.github/workflows/publish-android-play.yml@refs/heads/main' &&
-    assertion.sub == 'repo:macro-inc/macro:ref:refs/heads/main'
-  ) ||
-  (
-    assertion.workflow_ref == 'macro-inc/macro/.github/workflows/android-release-watch.yml@refs/heads/main' &&
-    assertion.ref == 'refs/heads/main' &&
-    assertion.sub == 'repo:macro-inc/macro:ref:refs/heads/main' &&
-    assertion.event_name in ['schedule', 'workflow_dispatch']
-  ) ||
-  (
-    assertion.event_name == 'pull_request' &&
-    assertion.sub == 'repo:macro-inc/macro:pull_request' &&
-    assertion.ref == 'refs/pull/<PR_NUMBER>/merge' &&
-    assertion.base_ref == 'main' &&
-    assertion.sha == '<REVIEWED_MERGE_SHA>' &&
-    assertion.workflow_ref in [
-      'macro-inc/macro/.github/workflows/web-app-check-main.yml@refs/pull/<PR_NUMBER>/merge',
-      'macro-inc/macro/.github/workflows/android-play-release.yml@refs/pull/<PR_NUMBER>/merge',
-      'macro-inc/macro/.github/workflows/android-release-drift.yml@refs/pull/<PR_NUMBER>/merge'
-    ]
-  )
-)
-CEL
-
 gcloud iam workload-identity-pools providers update-oidc macro \
   --project=macro-435922 --location=global \
   --workload-identity-pool=github-play \
-  --attribute-condition="$(cat approved-play-condition.cel)"
+  --attribute-condition="$(cat play-condition.cel)"
 ```
 
-Keep the existing attribute mappings and service-account role binding. Verify the
-updated condition, then rerun the failed Android native-check job: successful
-authentication must reach the Play status check before triggering the release.
-See [GitHub's OIDC claims](https://docs.github.com/en/actions/reference/security/oidc)
-for the distinction between PR subjects and branch subjects.
+Update it before merging a change that adds or renames one of the admitted
+workflows: `workflow_run` workflows only run once they are on `main`, and the
+first run after the merge must be able to sign in. Then dispatch
+`android-release-watch.yml` on `main` and check that its **Authenticate to
+Google Play** step succeeds. See
+[GitHub's OIDC claims](https://docs.github.com/en/actions/reference/security/oidc)
+for the subject and ref each event carries.
 
 #### Manual upload (fallback)
 
-The `Android Play Release` workflow uploads and promotes automatically. For a
+`Android Play Publish` uploads and promotes PR releases automatically. For a
 manual upload, select **Publish Android to Google Play** in Actions, run from
 `main`, select `operation=upload-internal`, and supply a published GitHub
 release tag that carries Android artifacts (none are produced automatically
