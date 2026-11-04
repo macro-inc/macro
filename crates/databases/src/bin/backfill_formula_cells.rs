@@ -3,6 +3,7 @@
 //! cells are already right is left at its version, so a second run changes
 //! nothing.
 
+use std::str::FromStr;
 use std::time::Instant;
 
 use anyhow::Context as _;
@@ -10,7 +11,7 @@ use clap::Parser;
 use database_env_vars::DatabaseUrl;
 use databases::backfill::{backfill_table, tables_with_formulas};
 use macro_entrypoint::MacroEntrypoint;
-use sqlx::postgres::PgPoolOptions;
+use sqlx::postgres::{PgConnectOptions, PgPoolOptions};
 
 #[derive(Parser)]
 #[command(about = "Store the cells of formula columns created before they were stored")]
@@ -36,7 +37,10 @@ async fn main() -> anyhow::Result<()> {
     let pool = PgPoolOptions::new()
         .min_connections(1)
         .max_connections(2)
-        .connect(database_url.as_ref())
+        .connect_with(
+            PgConnectOptions::from_str(database_url.as_ref())?
+                .application_name("backfill_formula_cells"),
+        )
         .await
         .context("could not connect to db")?;
 
