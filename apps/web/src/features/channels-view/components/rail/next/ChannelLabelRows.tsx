@@ -19,7 +19,7 @@ import UsersIcon from '@icon/system/regular/users.svg';
 import { ContextMenu } from '@kobalte/core/context-menu';
 import type { ChannelLabel } from '@service-storage/generated/schemas/channelLabel';
 import { Badge, Button, Tooltip } from '@ui';
-import { For, type JSX, Show } from 'solid-js';
+import { For, Show } from 'solid-js';
 import {
   canAssignChannel,
   canLabelChannel,
@@ -35,10 +35,7 @@ import {
 } from './ChannelSectionMenu';
 
 /** A custom section with the same heading and controls as built-in sections. */
-export function ChannelLabelRow(props: {
-  label: ChannelLabel;
-  dragHandle?: JSX.Element;
-}) {
+export function ChannelLabelRow(props: { label: ChannelLabel }) {
   const rail = useChannelsRail();
   const state = useChannelRailLabelState(() => props.label);
 
@@ -61,7 +58,6 @@ export function ChannelLabelRow(props: {
         focused={state().focused}
         unreadCount={state().unreadCount}
         onToggle={() => rail.activateRow(rowKeyForLabel(props.label.id))}
-        dragHandle={props.dragHandle}
         badge={
           <Show when={props.label.teamId}>
             <Tooltip

@@ -13,7 +13,11 @@ export const useCreateCompanyMutation = () => ({
 });
 export const useCreateContactMutation = () => ({
   isPending: false,
-  async mutateAsync(input: { companyId: string; name: string; email: string }) {
+  async mutateAsync(input: {
+    companyId?: string;
+    name: string;
+    email?: string;
+  }) {
     setCreated(JSON.stringify(input));
     return { id: 'new-contact' };
   },

@@ -30,7 +30,7 @@ track the pointer. Mobile header actions retain 44px touch targets. The homepage
 16px arrow inside a 44px button, inset 20px from the bottom while respecting safe areas.
 
 The homepage keeps the original colored constellation and grainy demo backdrop,
-with “with Macro” in the unification heading. The original sample workspace is
+with “with one system” in the unification heading. The original sample workspace is
 embedded at `/demo?embedded=true`; shared UI fixes and corrected sample names
 remain in place. Compact arrows and dots sit above the original, fuller captions
 at the bottom of the frame. Slide selection is manual: arrows, dots, caption

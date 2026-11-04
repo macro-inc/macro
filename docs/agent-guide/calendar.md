@@ -500,7 +500,11 @@ window. The picker, the people chosen and the send button stay visible at every
 event position and window height. The same regression covers both editors in a
 tall and a short window (`?guests=add` or `?guests=forward`, with
 `?contacts=late` delivering the picker's contacts on
-`window.calendarPreview.deliverContacts()`) and their phone sheets.
+`window.calendarPreview.deliverContacts()`) and their phone sheets. With `?addresses=long` it
+checks that a named guest's address and an address-only guest's address, neither with a space,
+wrap inside the popover and the phone drawer. CI runs it (`just test-calendar-details-browser`
+in `apps/web`) when calendar details or the calendar queries change; its `preview-adapters.tsx`
+stands in for those queries, so give it every export and callback argument the components use.
 
 The `New event` composer (also opened by dragging a range on the grid) has an `Event kind`
 pill choosing between `Event` and `Out of office`. Picking `Out of office` hides the guests,
@@ -545,6 +549,16 @@ selected, since the presets never end. Either is saved as written while untouche
 start to another weekday keeps a custom rule on the day the editor shows. Event details (desktop
 popover and phone drawer) and Forward by email's summary name the day too (`Weekly on Saturday ·
 3 occurrences`), read from the occurrence's original slot in the event's own time zone.
+Each guest in event details (desktop popover and phone drawer) shows their name with their
+address on a muted line under it, as the user card shows a person, followed by `Organizer` or
+`Optional` and any comment; the viewer's own row (`(you)`) does too, which tells their inboxes
+apart. A guest Macro has no name for (no Macro profile or email contact) shows the address
+once, as the name. The address wraps instead of truncating in a narrow popover or on a phone
+(the event details browser regression's `?addresses=long`).
+The `Organizer` row under the calendar row, shown when someone other than the calendar
+organizes the event, adds the organizer's address the same way. Teammates' read-only event
+details (`Shared in Macro · Read only`) list guests by provider name, or by address when there
+is none.
 As in Google Calendar, the guests row of the details popover (a bottom sheet on phones)
 carries `Copy guest emails` and `Email guests` icon buttons, both hidden when you are the
 only guest (always so on a snapshot). Copying puts every guest's address on the clipboard,
@@ -1349,9 +1363,10 @@ is an accessible disclosure that starts closed and stays open across unchanged
 permission refreshes and window refocus on desktop and mobile; attachments remain below it.
 ICS attachments show a calendar icon in the attachment pill and file headers on
 desktop and mobile, including when the email uses `application/ics` or a
-parameterized `text/calendar` MIME type. Opening the attachment of a message that shows a
+parameterized `text/calendar` MIME type. The pill's download button saves the
+file without opening it and without adding it to Drive. Opening the attachment of a message that shows a
 card opens a dialog (a drawer on phones) with the same card, so its RSVP or `Add to calendar`
-works there, and `Download .ics`, which saves the file without adding it to Drive. When an
+works there, and `Download .ics`, which saves the file the same way. When an
 invitation's card falls back to the saved invitation (the event matches nothing on your
 calendars), its status line reads `Saved invitation.` in the dialog; the card in the email
 adds that the original email or invitation attachment has more options. A shared event shown

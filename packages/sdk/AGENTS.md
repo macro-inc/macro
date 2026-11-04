@@ -35,6 +35,7 @@ enforced by the ordinary backend APIs.
 
 - Keep handwritten behavior in `src/`; never edit `generated/` or `specs/`.
 - Keep WhatsApp pairing, passkeys, connection setup/disconnect and rollout configuration out of the handwritten public SDK; operate on accounts linked in the app, with personal bearer sessions for account/access controls. External chat sends/uploads accept the connection owner's session or own API token; bots never send.
+- Keep notification mute, unmute, and snooze endpoints, including bulk item preferences, in the app-only coverage exclusions.
 - Keep `external-chat/` provider-neutral; provider-specific reads (WhatsApp community chats) branch on `provider` with an exhaustive match.
 - Use existing entity handles for reads and mutations. Follow the
   [SDK rule](../../.agents/rules/sdk.md) and `add-sdk-endpoint` skill.
@@ -77,6 +78,8 @@ the existing gateway prefixes.
   in step.
 - Regenerate Rust OpenAPI and web service clients before `bun run sync-specs &&
   bun run generate`; do not copy deployed schemas over a local API change.
+- Run `bun run generate` to regenerate SDK clients and normalize whitespace-only
+  lines; do not hand-edit generated output to satisfy whitespace checks.
 - Regenerate `../sdk-docs/reference` after SDK source or generated type changes;
   run that package's checks because web CI verifies the reference is current.
   Also run `bun packages/code-mode-sdk/scripts/generate.ts` from the root and
@@ -101,6 +104,13 @@ the existing gateway prefixes.
   assigned, Not started), so `Task.create` spells them out when it sends any.
 - Meeting list lookup only covers the owner's newest 100 standalone meetings;
   handles seeded from invitations retain their token for refetching after writes.
+- Team routes act on the caller's current team, which the auth service
+  resolves from the principal. `Team.invite` and `Team.invites` send the
+  handle's `team_id`, which the route checks in the same request (409 on a
+  mismatch); `members` checks the team in the `GET /team` response it reads.
+  `/team/invite` answers 304 when it created no invite; `Team.invite` reports
+  that as `false`. A 204 from `GET /team` (no team) parses as an empty
+  object, not `undefined`.
 - Keep access-request resolution snapshots: resolved requests leave pending lists.
 - Pipeline schema reads share the parent's cache; successful op batches clear it.
 - Email sends and other writes against hosted data are real actions; use mocks

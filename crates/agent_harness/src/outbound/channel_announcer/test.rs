@@ -565,10 +565,12 @@ async fn shared_thread_and_dm_snapshots_omit_raw_tool_details() {
 #[test]
 fn a_stored_step_keeps_the_view_it_presented() {
     use agent_fold::domain::model::{ActivityCard, ActivityRow, Segment};
-    let view = serde_json::json!({
-        "title": "Launch notes",
-        "widgets": [{ "type": "md", "markdown": "Shipped." }]
-    });
+    let view = dynamic_ui::View {
+        title: Some("Launch notes".to_owned()),
+        widgets: vec![dynamic_ui::Widget::Md {
+            markdown: "Shipped.".to_owned(),
+        }],
+    };
     let segments = vec![ProjectedSegment {
         segment: Segment {
             index: 0,

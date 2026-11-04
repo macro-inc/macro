@@ -173,10 +173,12 @@ pub struct CrmDomain {
 pub struct CrmContact {
     /// The id of the contact record
     pub id: uuid::Uuid,
-    /// The id of the company the contact belongs to
-    pub company_id: uuid::Uuid,
-    /// The contact's email address
-    pub email: String,
+    /// The id of the company the contact belongs to; `None` for a
+    /// contact without a company
+    pub company_id: Option<uuid::Uuid>,
+    /// The contact's email address; `None` for a manually created
+    /// contact added by name alone
+    pub email: Option<String>,
     /// Display name observed for the contact, if any
     pub name: Option<String>,
     /// Whether the contact is hidden from CRM listings for the owning
@@ -324,6 +326,10 @@ pub struct CrmTeamSettings {
     pub team_views: Value,
     /// Team view applied by default when a member opens the CRM view.
     pub default_team_view_id: Option<String>,
+    /// Whether email sync keeps personal-provider addresses (gmail.com
+    /// etc.) out of the CRM. When off, sync files them as contacts
+    /// without a company.
+    pub exclude_personal_emails: bool,
 }
 
 impl Default for CrmTeamSettings {
@@ -336,8 +342,18 @@ impl Default for CrmTeamSettings {
             legacy_stage_ids: BTreeMap::new(),
             team_views: Value::Array(Vec::new()),
             default_team_view_id: None,
+            exclude_personal_emails: true,
         }
     }
+}
+
+/// A domain a team keeps out of email sync.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct CrmBlockedDomain {
+    /// The blocked domain, lowercase.
+    pub domain: String,
+    /// When it was added.
+    pub created_at: DateTime<Utc>,
 }
 
 /// Field-wise partial update of [`CrmTeamSettings`]. Outer `None` =
@@ -359,6 +375,8 @@ pub struct CrmTeamSettingsPatch {
     pub team_views: Option<Value>,
     /// New `default_team_view_id`; `Some(None)` clears it.
     pub default_team_view_id: Option<Option<String>>,
+    /// New `exclude_personal_emails`, if provided.
+    pub exclude_personal_emails: Option<bool>,
 }
 
 /// Errors that can occur in the CRM domain.
@@ -414,8 +432,9 @@ pub struct CrmContactForSoup {
     pub contact: CrmContact,
     /// Team owning the company/contact record.
     pub team_id: uuid::Uuid,
-    /// The company's display name (team override, directory name, or domain).
-    pub company_name: String,
+    /// The company's display name (team override, directory name, or
+    /// domain); `None` for a contact without a company.
+    pub company_name: Option<String>,
     /// When this viewer last opened this particular contact record.
     pub viewed_at: Option<DateTime<Utc>>,
 }

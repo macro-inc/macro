@@ -13,12 +13,7 @@ export const CHANNEL_SECTION_MAX_HEIGHT = 800;
 
 export function clampChannelSectionHeight(height: number): number {
   if (!Number.isFinite(height)) return CHANNEL_SECTION_MAX_HEIGHT;
-  return Math.round(
-    Math.min(
-      CHANNEL_SECTION_MAX_HEIGHT,
-      Math.max(CHANNEL_SECTION_MIN_HEIGHT, height)
-    )
-  );
+  return Math.round(Math.max(CHANNEL_SECTION_MIN_HEIGHT, height));
 }
 
 export const CHANNELS_DEFAULT_SORT_BY = {

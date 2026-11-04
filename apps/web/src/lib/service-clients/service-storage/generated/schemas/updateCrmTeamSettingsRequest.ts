@@ -8,6 +8,7 @@ import type { UpdateCrmTeamSettingsRequestClosedStageIds } from './updateCrmTeam
 import type { UpdateCrmTeamSettingsRequestDefaultTeamViewId } from './updateCrmTeamSettingsRequestDefaultTeamViewId';
 import type { UpdateCrmTeamSettingsRequestDeleteRecordsRole } from './updateCrmTeamSettingsRequestDeleteRecordsRole';
 import type { UpdateCrmTeamSettingsRequestEditStagesRole } from './updateCrmTeamSettingsRequestEditStagesRole';
+import type { UpdateCrmTeamSettingsRequestExcludePersonalEmails } from './updateCrmTeamSettingsRequestExcludePersonalEmails';
 import type { UpdateCrmTeamSettingsRequestMoveClosedDealsRole } from './updateCrmTeamSettingsRequestMoveClosedDealsRole';
 
 /**
@@ -23,6 +24,9 @@ export interface UpdateCrmTeamSettingsRequest {
   default_team_view_id?: UpdateCrmTeamSettingsRequestDefaultTeamViewId;
   delete_records_role?: UpdateCrmTeamSettingsRequestDeleteRecordsRole;
   edit_stages_role?: UpdateCrmTeamSettingsRequestEditStagesRole;
+  /** Whether email sync keeps personal-provider addresses out of the
+CRM. Admin/owner only. */
+  exclude_personal_emails?: UpdateCrmTeamSettingsRequestExcludePersonalEmails;
   move_closed_deals_role?: UpdateCrmTeamSettingsRequestMoveClosedDealsRole;
   /** Replacement team-views array (whole-blob, last write wins). */
   team_views?: unknown;

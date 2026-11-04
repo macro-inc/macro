@@ -22,8 +22,9 @@ pub struct CreateCrmContactRequest {
     /// Display name for the contact.
     pub name: String,
     /// The contact's email address, including personal email providers.
-    /// It need not match a company domain.
-    pub email: String,
+    /// It need not match a company domain. Optional: omit it to add the
+    /// contact by name only.
+    pub email: Option<String>,
 }
 
 /// Manually create a contact under a CRM company. Access is enforced by
@@ -64,7 +65,7 @@ pub async fn handler<
 ) -> Result<Json<CrmContactResponse>, CrmError> {
     let contact = state
         .service
-        .create_contact(&access.receipt, &req.name, &req.email)
+        .create_contact(&access.receipt, &req.name, req.email.as_deref())
         .await?;
     Ok(Json(contact.into()))
 }

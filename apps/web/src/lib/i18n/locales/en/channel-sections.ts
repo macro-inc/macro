@@ -36,7 +36,7 @@ export default {
   markLabelReadFailed: 'Failed to mark channel label as read',
   muteAllChannels: 'Mute all channels',
   unmuteAllChannels: 'Unmute all channels',
-  snoozeAllChannels: 'Snooze all channels…',
+  snoozeAllChannels: 'Snooze all channels',
   notificationsFailed:
     'Could not update section notifications. Please try again.',
   deleteForEveryone: 'Delete for everyone',
@@ -49,7 +49,7 @@ export default {
   resizeSection: 'Resize {{name}}',
   resizeSectionHint: 'Drag to resize. Double-click to reset.',
   reorderSection: 'Reorder {{name}}',
-  reorderSectionHint: 'Drag to reorder. Use arrow keys to move up or down.',
+  reorderSectionHint: 'Drag to reorder.',
   expandAllSections: 'Expand all sections',
   collapseAllSections: 'Collapse all sections',
   loading: 'Loading sections…',

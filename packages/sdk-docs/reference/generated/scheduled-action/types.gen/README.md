@@ -52,6 +52,7 @@
 - [GetScheduledActionTemplateResponses](type-aliases/GetScheduledActionTemplateResponses.md)
 - [GithubSelector](type-aliases/GithubSelector.md)
 - [InProgressExecution](type-aliases/InProgressExecution.md)
+- [LastRun](type-aliases/LastRun.md)
 - [ListScheduledActionHistoryData](type-aliases/ListScheduledActionHistoryData.md)
 - [ListScheduledActionHistoryError](type-aliases/ListScheduledActionHistoryError.md)
 - [ListScheduledActionHistoryErrors](type-aliases/ListScheduledActionHistoryErrors.md)

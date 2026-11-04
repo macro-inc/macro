@@ -115,7 +115,7 @@ where
     anyhow::Error: From<T::Err>,
     anyhow::Error: From<E::Err>,
 {
-    pub(super) async fn change_thread_mailbox_state_impl(
+    pub(crate) async fn change_thread_mailbox_state_impl(
         &self,
         actor: macro_user_id::user_id::MacroUserIdStr<'static>,
         thread_id: Uuid,

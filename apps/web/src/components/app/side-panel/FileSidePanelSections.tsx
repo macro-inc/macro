@@ -187,8 +187,7 @@ export function FolderLink(props: { projectId: string; projectName: string }) {
     <span
       {...navHandlers}
       class={
-        SidePanel.pillClass +
-        ' pointer-events-auto text-link hover:text-link-hover hover:bg-hover'
+        SidePanel.pillClass + ' pointer-events-auto text-ink hover:bg-hover'
       }
     >
       <span class="truncate underline decoration-current/20 decoration-[max(1px,0.1em)] underline-offset-2">

@@ -92,6 +92,10 @@ export function getNotificationAction(n: UnifiedNotification): string {
       .with('agent_session_settled', () => 'finished')
       .with('agent_session_waiting_for_input', () => 'needs your answer in')
       .with('agent_session_mentioned', () => 'mentioned you in')
+      // The routine is the actor: "<routine> failed".
+      .with('routine_run_finished', () =>
+        routineRunFailed(n) ? 'failed' : 'finished'
+      )
       .exhaustive(() => 'notified you about')
   );
 }
@@ -153,6 +157,7 @@ export function getNotificationTargetName(
         (m) => m.content.title || '(No title)'
       )
       .with({ tag: 'inbox_reauth_required' }, () => undefined)
+      .with({ tag: 'routine_run_finished' }, () => undefined)
       .with(
         {
           tag: P.union(
@@ -241,6 +246,9 @@ export function getNotificationContent(
         (m) => m.content.question
       )
       .with({ tag: 'agent_session_mentioned' }, () => undefined)
+      .with({ tag: 'routine_run_finished' }, (m) =>
+        m.content.outcome === 'failed' ? 'Its run failed.' : 'Its run finished.'
+      )
       .exhaustive(() => undefined)
   );
 }
@@ -307,6 +315,7 @@ export function shouldShowNotificationTarget(n: UnifiedNotification): boolean {
       .with({ tag: 'calendar_event_reminder' }, () => true)
       .with({ tag: 'calendar_event_join_request' }, () => true)
       .with({ tag: 'inbox_reauth_required' }, () => false)
+      .with({ tag: 'routine_run_finished' }, () => false)
       .with(
         {
           tag: P.union(
@@ -318,5 +327,12 @@ export function shouldShowNotificationTarget(n: UnifiedNotification): boolean {
         () => true
       )
       .exhaustive(() => true)
+  );
+}
+
+function routineRunFailed(n: UnifiedNotification): boolean {
+  const meta = n.notification_metadata;
+  return (
+    meta.tag === 'routine_run_finished' && meta.content.outcome === 'failed'
   );
 }
