@@ -351,3 +351,106 @@ it('sends creation-time pin definitions without assigning empty properties', asy
     })
   );
 });
+
+it('keeps a message source through composer edits and the task create payload', async () => {
+  mock.create.mockResolvedValue({ documentId: 'task' });
+  mock.listProperties.mockReturnValue({
+    isSuccess: true,
+    data: [definition(SYSTEM_PROPERTY_IDS.SOURCE, { data_type: 'ENTITY' })],
+  });
+  const { composer, dispose } = createRoot((dispose) => ({
+    composer: createTaskComposerProperties({
+      initialValues: {
+        [SYSTEM_PROPERTY_IDS.SOURCE]: {
+          valueType: 'ENTITY',
+          refs: [
+            {
+              entity_type: 'CHANNEL',
+              entity_id: 'channel',
+              specific_message_id: 'reply',
+            },
+          ],
+        },
+      },
+      initialVisiblePropertyIds: [SYSTEM_PROPERTY_IDS.SOURCE],
+    }),
+    dispose,
+  }));
+  try {
+    const source = composer.properties()[0];
+    await composer.saveHandler.saveProperty(source, {
+      valueType: 'ENTITY',
+      refs: [
+        {
+          entity_type: 'CHANNEL',
+          entity_id: 'channel',
+          specific_message_id: 'reply',
+        },
+      ],
+    });
+    await createTaskWithProperties(
+      'Task',
+      '',
+      Object.entries(composer.propertyValues),
+      composer.createDefinitions(),
+      vi.fn()
+    );
+    expect(mock.create).toHaveBeenLastCalledWith(
+      expect.objectContaining({
+        propertyValues: [
+          {
+            propertyId: SYSTEM_PROPERTY_IDS.SOURCE,
+            value: {
+              type: 'entity_reference',
+              reference: {
+                entity_type: 'CHANNEL',
+                entity_id: 'channel',
+                specific_message_id: 'reply',
+              },
+            },
+          },
+        ],
+      })
+    );
+    await composer.saveHandler.saveProperty(source, {
+      valueType: 'ENTITY',
+      refs: [{ entity_type: 'DOCUMENT', entity_id: 'request' }],
+    });
+    await createTaskWithProperties(
+      'Task',
+      '',
+      Object.entries(composer.propertyValues),
+      composer.createDefinitions(),
+      vi.fn()
+    );
+    expect(mock.create).toHaveBeenLastCalledWith(
+      expect.objectContaining({
+        propertyValues: [
+          {
+            propertyId: SYSTEM_PROPERTY_IDS.SOURCE,
+            value: {
+              type: 'entity_reference',
+              reference: { entity_type: 'DOCUMENT', entity_id: 'request' },
+            },
+          },
+        ],
+      })
+    );
+    await composer.saveHandler.saveProperty(source, {
+      valueType: 'ENTITY',
+      refs: null,
+    });
+    await createTaskWithProperties(
+      'Task',
+      '',
+      Object.entries(composer.propertyValues),
+      composer.createDefinitions(),
+      vi.fn()
+    );
+    expect(mock.create).toHaveBeenLastCalledWith(
+      expect.objectContaining({ propertyValues: undefined })
+    );
+  } finally {
+    dispose();
+  }
+});

@@ -613,6 +613,9 @@ resolved session ID; keep the existing `AgentSessionProvider` subscription to
   the create response confirms success; never clear newer composer input from a
   late callback or automatically retry an uncertain create. Keep recovery copies
   through restarts and remove them on explicit logout. See the Tasks walkthrough.
+- Prefill task Source through the originating action's composer preset under
+  `enable-task-source-property`; keep the shared composer flag-agnostic and retain
+  exact message IDs through property edits. See the Tasks walkthrough.
 - Shared server-state queries and mutations live in `src/lib/queries`; keep
   feature-specific query orchestration with its owning feature.
 - Keep CRM contacts explicitly included in the auxiliary GraphQL backfill;
@@ -962,10 +965,12 @@ persisted `turnState` is `failed`; open the session to inspect its error.
 
 ### Agent transcript projection
 
-Keep folded messages ordered by turn and author in the transcript store: append
-at the new index, reconcile matching rows in place, binary-search earlier
-updates, and splice only for real insertion/removal. Never `produce` the whole
-array per append; it makes initial projection quadratic. Check with the
+Key transcript rows by the fold's `FoldedMessage.key` (`<turn>:<author kind>`);
+never rebuild it from `turn` and `author`. Apply a load or rebase as one keyed
+`reconcile(messages, { key: 'key' })`, without `merge`. A streamed message
+reconciles the tail row in place or writes the next index; only an out-of-order
+one takes the keyed path. Never `produce` the whole array per append; it makes
+initial projection quadratic. Check with the
 [session-open runner](src/features/block-agent/browser-test/README.md).
 
 ### Agent system events

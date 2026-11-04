@@ -52,7 +52,7 @@ export function Transcript(props: { searchTarget?: AgentMessageTarget }) {
     () =>
       new Map(
         messages().map((message) => [
-          `${message.agentSessionId}:${message.turn}:${message.author.kind}`,
+          `${message.agentSessionId}:${message.key}`,
           message,
         ])
       )
