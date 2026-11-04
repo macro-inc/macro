@@ -17,7 +17,7 @@ const MAX_FOCUS_KEYS: usize = 500;
 /// Focus reads on behalf of a viewer, limited to the viewer's own inboxes.
 pub trait EmailFocusReader: Send + Sync + 'static {
     /// The viewer's Focus threads with mail in the last `window_days`,
-    /// highest priority first.
+    /// newest first by latest message time, in either direction.
     fn focus_thread_ids<'a>(
         &'a self,
         user: &'a MacroUserIdStr<'static>,
@@ -66,7 +66,8 @@ pub enum GraphqlEmailFocusCategory {
     Known,
     /// Relevant mail that fits no narrower category.
     Other,
-    /// A calendar invite, update or RSVP.
+    /// In Focus, a reschedule, update, cancellation or proposed new time for an
+    /// event that isn't over. Left out, a new invite or an RSVP notice.
     Calendar,
     /// Unsolicited outreach: a pitch, recruiting or a job application.
     Outreach,
@@ -99,11 +100,14 @@ pub struct GraphqlEmailThreadFocus {
     is_focus: bool,
     /// The Focus category, or why the thread was left out.
     category: GraphqlEmailFocusCategory,
-    /// Sort key for the Focus list, 0 to 100.
+    /// How much the thread matters, 0 to 100.
     importance: i32,
-    /// The latest message waits on the owner's answer.
+    /// Someone else sent the latest message and it waits on the owner's answer.
+    /// Never true together with `needs_follow_up`.
     needs_reply: bool,
-    /// An open loop the owner should come back to.
+    /// The owner sent the latest message and should come back to the thread: it
+    /// has an open loop or has waited for an answer. Never true together with
+    /// `needs_reply`.
     needs_follow_up: bool,
     /// When the classification was made, in RFC 3339 format.
     classified_at: String,
@@ -172,8 +176,8 @@ pub async fn load_email_thread_focus(
         .map_err(|_| async_graphql::Error::new("email thread focus is unavailable"))
 }
 
-/// The viewer's Focus thread ids, highest priority first; empty when Focus is
-/// not served here.
+/// The viewer's Focus thread ids, newest first; empty when Focus is not served
+/// here.
 pub async fn load_email_focus_thread_ids(
     ctx: &Context<'_>,
     user_id: &MacroUserIdStr<'static>,

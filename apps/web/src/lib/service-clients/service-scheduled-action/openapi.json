@@ -1023,6 +1023,21 @@
           },
           {
             "type": "object",
+            "description": "Fires once at `at`, or as soon as it is saved when `at` has passed.",
+            "required": ["at", "type"],
+            "properties": {
+              "at": {
+                "type": "string",
+                "format": "date-time"
+              },
+              "type": {
+                "type": "string",
+                "enum": ["once"]
+              }
+            }
+          },
+          {
+            "type": "object",
             "required": ["triggers", "type"],
             "properties": {
               "triggers": {
@@ -1194,6 +1209,17 @@
               "$ref": "#/components/schemas/PayloadCondition"
             },
             "description": "Exact tests on the payload, all of which must pass."
+          },
+          "property": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/PropertySelector",
+                "description": "The task property that must have changed, and the values it must gain."
+              }
+            ]
           }
         }
       },
@@ -1336,6 +1362,20 @@
           }
         }
       },
+      "LastRun": {
+        "type": "object",
+        "description": "How a routine's most recent finished run went, so lists can flag failures.",
+        "required": ["end_time", "is_success"],
+        "properties": {
+          "end_time": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "is_success": {
+            "type": "boolean"
+          }
+        }
+      },
       "PayloadCondition": {
         "type": "object",
         "description": "`path` walks objects by key; `*` steps into every element of an array and\na number into one. Give exactly one test. `notIn` also passes when the\npath finds nothing.",
@@ -1402,6 +1442,25 @@
           }
         ],
         "description": "A JSON text, number, boolean or null that payload values are compared with."
+      },
+      "PropertySelector": {
+        "type": "object",
+        "description": "Narrows a task property change filter to one property and, optionally, the\nvalues it must gain.",
+        "required": ["definitionId"],
+        "properties": {
+          "definitionId": {
+            "type": "string",
+            "description": "The property definition that must have changed."
+          },
+          "values": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "Select option ids or referenced entity ids, one of which the change must\nadd. Any change to the property matches when empty."
+          }
+        },
+        "additionalProperties": false
       },
       "RoutineModelId": {
         "type": "string",
@@ -1494,6 +1553,21 @@
               "type": {
                 "type": "string",
                 "enum": ["events"]
+              }
+            }
+          },
+          {
+            "type": "object",
+            "description": "Fires once at `at`, or as soon as it is saved when `at` has passed.",
+            "required": ["at", "type"],
+            "properties": {
+              "at": {
+                "type": "string",
+                "format": "date-time"
+              },
+              "type": {
+                "type": "string",
+                "enum": ["once"]
               }
             }
           }
@@ -1600,6 +1674,17 @@
           {
             "type": "object",
             "properties": {
+              "last_run": {
+                "oneOf": [
+                  {
+                    "type": "null"
+                  },
+                  {
+                    "$ref": "#/components/schemas/LastRun",
+                    "description": "The latest finished run. Present only in lists, and only once the\nroutine has finished a run."
+                  }
+                ]
+              },
               "schedule": {
                 "type": ["string", "null"],
                 "description": "Deprecated: use `trigger.schedule`. Present only for cron actions.",

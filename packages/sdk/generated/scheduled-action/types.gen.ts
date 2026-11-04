@@ -73,6 +73,9 @@ export type ActionTrigger = {
     filters: EventFilters;
     type: 'events';
 } | {
+    at: string;
+    type: 'once';
+} | {
     triggers: RoutineTriggers;
     type: 'multiple';
 };
@@ -170,6 +173,7 @@ export type EventFilter = {
      * Exact tests on the payload, all of which must pass.
      */
     match?: Array<PayloadCondition> | null;
+    property?: null | PropertySelector;
 };
 
 /**
@@ -238,6 +242,14 @@ export type InProgressExecution = {
 };
 
 /**
+ * How a routine's most recent finished run went, so lists can flag failures.
+ */
+export type LastRun = {
+    end_time: string;
+    is_success: boolean;
+};
+
+/**
  * `path` walks objects by key; `*` steps into every element of an array and
  * a number into one. Give exactly one test. `notIn` also passes when the
  * path finds nothing.
@@ -270,6 +282,22 @@ export type PayloadCondition = {
  * A JSON text, number, boolean or null that payload values are compared with.
  */
 export type PayloadScalar = null | boolean | number | string;
+
+/**
+ * Narrows a task property change filter to one property and, optionally, the
+ * values it must gain.
+ */
+export type PropertySelector = {
+    /**
+     * The property definition that must have changed.
+     */
+    definitionId: string;
+    /**
+     * Select option ids or referenced entity ids, one of which the change must
+     * add. Any change to the property matches when empty.
+     */
+    values?: Array<string>;
+};
 
 /**
  * A nonblank model identifier. Runtime catalogs, not the scheduler, own availability.
@@ -313,6 +341,9 @@ export type RoutineTrigger = {
 } | {
     filters: EventFilters;
     type: 'events';
+} | {
+    at: string;
+    type: 'once';
 };
 
 /**
@@ -380,6 +411,7 @@ export type ScheduledAction = {
  * responses omit legacy fields rather than inventing a schedule or timezone.
  */
 export type ScheduledActionResponse = ScheduledAction & {
+    last_run?: null | LastRun;
     /**
      * Deprecated: use `trigger.schedule`. Present only for cron actions.
      *

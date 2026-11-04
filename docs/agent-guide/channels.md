@@ -1,5 +1,23 @@
 # Channels and Messaging
 
+## Deleting a channel
+
+The channel owner can permanently delete their channel. A team owner or admin
+can also delete a team channel belonging to their own team. Being a participant,
+administering another team, or sharing a team with the channel creator does not
+grant permission to delete it.
+
+Use Delete from the channel row or title menu, or the mobile long-press menu.
+Confirm the deletion in the existing delete dialog; it removes the channel for
+everyone. The same permission rule applies to the delete hotkey and bulk action.
+If a bulk deletion partly succeeds, confirmed deletions stay removed and only
+failed items remain in the dialog for retry.
+
+User mentions sent by integrations may contain only `userId`. For human user
+IDs, messages and editors resolve the current name and fall back to the email
+local part when lookup fails. Verify that these mentions remain intact when
+editing and saving a message; integrations need not supply email or displayName.
+
 ## Channel list previews
 
 Message text in channel rows and Home cards is display-only, including quoted
@@ -298,7 +316,9 @@ remain visible when the entire timeline fits without scrolling.
 
 ## Agent session entities
 
-The Agents list includes owned and shared sessions. Rows show the shared agent
+The Agents list includes owned and shared sessions, except sessions started
+from a thread, which list only for people who prompted them from the session
+itself (see [Home](home.md)). Rows show the shared agent
 icon and session title; opening one navigates to `/app/agent/<id>`. The session title
 menu uses the shared entity actions: Favorite/Unfavorite and Copy link, plus
 Rename and Delete for the owner. Rename uses the shared rename dialog, not a
@@ -364,7 +384,8 @@ Desktop message text uses a 16px horizontal inset and a compact gap above the
 toolbar, consistent at narrow and wide composer widths.
 
 The new-message compose screen and channel message/reply inputs use the same
-attachment and send controls on mobile and desktop, with no format toggle.
+attachment and send controls on mobile and desktop. On phones, the `+` drawer
+offers `Format text` beneath `Mention` to toggle the formatting ribbon.
 iOS uses the native media attachment picker.
 In the iOS app, both collapsed and expanded channel inputs use the shared
 [glass press spotlight](navigation.md#mobile-glass-feedback). Tap the editor and its
@@ -408,6 +429,13 @@ below the editor. Check one image, several mixed attachments, and a document
 alone, with and without text, in light and dark themes.
 Input action and formatting buttons show the app tooltip without a second
 native browser tooltip.
+On phones, choose `+` → `Format text` beneath `Mention` to show or hide the
+ribbon above the editor, including in message and reply edits. It offers bold,
+italic, strikethrough, inline code, lists, checklists, and blockquotes; scroll
+the ribbon horizontally to reach all controls. Verify that selecting struck-through
+text, tapping Strikethrough, and saving removes the formatting while preserving
+the text. Toggling the ribbon keeps the draft and returns focus to the editor.
+Tapping the ribbon's padding or dividers also keeps the editor focused.
 On desktop, select draft text to open the floating formatting toolbar. Its
 compact frame uses 4px outer padding with concentric button corners, a white
 light-mode background, a thin border, and a soft downward shadow. Check
@@ -418,8 +446,8 @@ beside the buttons and collapse when it fits again, without flickering between
 layouts. Also add and remove a line break or attachment and
 confirm the draft and caret position survive. The attachment and send controls
 should remain usable in both layouts. Existing message and reply edit inputs show
-Attach files, Discard Edit, and Send, with no format toggle; Escape also cancels
-an edit. The iOS app uses its native media picker. Check inline and unified edits
+Add, Discard Edit, and Send on phones; desktop keeps Attach files in place of Add.
+Escape also cancels an edit. The iOS app uses its native media picker. Check inline and unified edits
 on desktop and touch: attach a file and save, then edit again and discard changes
 without changing the original message or attachments.
 The iOS share sheet keeps its editor above the attachment and formatting controls.
@@ -991,13 +1019,12 @@ between Threads, All, and Recent preserves an already-open navigation overlay.
 
 With the flag on, desktop Chat has one conversation sidebar, without All, Recent,
 or Threads view tabs. The default order is Favorites, Direct messages, the
-team's channels, custom sections, then **All channels**. The team heading is
-**[Team name] channels**, with **Team channels** as the fallback while the name
-is unavailable. The team section always shows joined team channels, including
-channels assigned to manual or smart custom sections. All channels is the renamed
-remaining-public/private list: its membership is unchanged, so it excludes team
-channels and channels assigned to custom sections. Each custom section is a
-top-level heading, independent of the Team channels disclosure. Empty sections
+team's channels, then custom sections. There is no All channels section; search
+still finds joined public/private conversations outside these sections. The team
+heading is **[Team name] channels**, with **Team channels** as the fallback while
+its name is unavailable. The team section always shows joined team channels,
+including channels assigned to manual or smart custom sections. Each custom
+section is a top-level heading, independent of the Team channels disclosure. Empty sections
 use padded, bordered cards like saved views, with a subtle background and secondary
 actions; empty Favorites explains how to add a favorite. Private conversations
 use a lock icon in the sidebar and mobile feed, including favorited private
@@ -1005,7 +1032,8 @@ conversations.
 All section headers use the shared collapsible-section styling without leading
 icons or top padding; the section stack supplies a compact 2px flex gap.
 Custom-section drop zones and highlights cover both the header and its content, including the
-empty state.
+empty state. Rejected drops show a borderless explanation; pending section data
+keeps drops disabled without covering the section with a loading message.
 Section, DM, and search containers use the 8px outer sidebar gutter; headings
 and rows add their own item padding so headings align with the Chat title.
 Rows are indented by 8px under every section, including Favorites, custom
@@ -1018,28 +1046,43 @@ explain the name and sharing, without overlapping native title hints. Personal
 sections have no scope icon or badge. Header focus backgrounds fill the entire header row, including its
 trailing controls, with no extra right padding.
 
-The sidebar scrolls through all sections. Each expanded section has its own
-virtualized, scrollable list. Lists with more than two items have a resize grip;
-drag it to choose a height between two rows (68px) and the end of the list,
-capped by the available pane space. Shorter lists fit their content and have no
+The sidebar uses TanStack Virtual for the section stack, each expanded channel
+list, and search results. Rows retain stable identities and measured positions
+through live refreshes and section reordering; focused and dragged rows remain
+mounted when they leave the visible range.
+Keyboard navigation scrolls immediately, without animation, only when the
+highlighted row enters the viewport's two-row context margin, leaving neighboring
+rows visible above and below. The margin shrinks in short sections.
+Section jumps also reveal the heading with surrounding context.
+Every section scrolls independently. Lists with more than two items have a resize
+grip; drag it to choose a height between two rows (68px) and the end of the list,
+capped by the section's maximum. Shorter lists fit their content and have no
 resize grip. Favorites and Direct messages default to four visible rows;
-other sections default to their maximum height. Focus the grip and use Up/Down
-to resize by 20px (100px with Shift), or double-click to restore the default.
+other sections default to their maximum height within the pane. Focus the grip
+and use Up/Down to resize by 20px (100px with Shift), or double-click to restore
+the default.
 Section heights persist as personal preferences alongside sorting and sidebar
 width. Heights adapt to filtered content and smaller panes without discarding
 the saved preference. Search covers channels and DMs regardless of section
 placement and restores the selected row in its section when closed. Mobile
 retains the recent-conversation feed below.
 
-Use the drag grip in the left gutter before the section name to reorder sections,
-or focus the grip and use Up/Down. The grip does not shift the header's text or
-controls. An insertion line shows the destination. Section order is a personal
+Drag a section heading, its name, or the grip in the left gutter to reorder
+sections, or focus the grip and use Up/Down. Pointer dragging starts only after
+more than 8px of movement, never from holding still. A normal heading click still
+toggles the section; releasing a drag does not. Add and menu buttons never start
+a drag. The bare grip appears only on header hover or keyboard focus and stays
+fixed when pressed, without its own button background. The drag highlight includes
+both the grip and section name without shifting the header's text or controls.
+An insertion line shows the destination. Section order is a personal
 preference, including for shared sections, and survives reloads. The dragged
 section appears as a card preview while its source is subdued. Other sections
 animate into their new positions on drop or keyboard reorder, except with reduced
 motion enabled. Dragging near the sidebar's top or bottom uses the same edge-scroll
-mechanism as Gantt; wheel scrolling remains available during a drag. Resize drags compensate for sidebar scroll movement,
-and the rounded resize grips retain pointer capture until release or cancellation.
+mechanism as Gantt; wheel scrolling remains available during a drag. Resizing near
+the sidebar's top or bottom also scrolls the sidebar, including while the pointer
+stays still. Resize drags compensate for that movement, and the rounded resize
+grips retain pointer capture until release or cancellation.
 
 Section membership comes from the server's complete visible channel-ID lists.
 The sidebar shows available channel rows immediately. One shared by-ID query
@@ -1047,14 +1090,22 @@ per batch supplies cached channel data and fetches only missing records using
 Soup's generic explicit-entity hydration. Channel batching and unread refreshes
 stay in the channel query layer; the sidebar does not coordinate separate cache
 and network queries.
-Each expanded section appends skeleton rows while its remaining channels load.
+Each expanded section appends skeleton rows while its remaining channels load,
+using the same row indentation and icon/text columns as loaded channels.
 A failed fetch keeps available rows and replaces that section's loading feedback
 with Retry. Loading sections must not briefly show an empty-state hint.
 Collapsing a section hides its loading feedback without changing membership or
 stopping shared channel hydration.
+The header does not show a Loading sections/Retry strip during normal loading.
+Section reads use the shared bounded retry policy, retry on focus, and preserve
+cached sections during a refetch. A failed initial load retains a compact error
+and Retry action. Until section metadata is available, New section explains its
+unavailable state in the creation menu; ordinary conversations remain usable.
 
-Favorites open the same channel detail as ordinary rows. Shift-clicking a
-favorite, channel, or DM opens it in a new split. Rejected navigation and failed
+Favorites open the same channel detail as ordinary rows. A single click opens a
+row even when channel data refreshes between pressing and releasing the pointer;
+section and search lists retain row identity through those updates. Shift-clicking
+a favorite, channel, or DM opens it in a new split. Rejected navigation and failed
 hydration must not mark notifications read. Context menus retain Mark Read,
 Open in new split, Unfavorite, notification controls, and Copy Link.
 
@@ -1076,18 +1127,31 @@ the label service and its feature flag.
 
 Use **New → New section** to create a section. The wider dialog has a name field
 and a **Smart section** switch in its body. **Shared with team** sits on the left
-of the footer, with the action buttons on the right. With both switches off, the
-section is personal and manual. Smart grouping reveals a separate input below
+of the footer, with the action buttons on the right. The question-mark tooltip
+beside sharing explains that team members can see and organize the section and
+only team channels can be added; clicking or tapping the help button also reveals
+the explanation below the footer controls. The form shows a warning-colored
+**Team channels only** hint when sharing is on and no scope hint when it is off.
+With both switches off, the section is personal and manual. Smart grouping reveals a separate input below
 **Name contains** and a matching-channel count. Hover or focus that count to preview
 matched channels; larger results show the remaining count. Switching sharing scope
 refreshes the preview without replacing the form. A zero shared count explains
 that only joined team channels match; public and private channels remain personal.
-Edit and delete through each section's sliders menu. Personal sections are
-private to the account, including for team members, and accept joined team,
-public, or private channels. Shared sections
-retain the team's existing label permissions and accept only channels from that
-team. Neither kind accepts DMs. A personal assignment never changes a shared
-assignment. Names are unique within each scope, case-insensitively.
+Edit and delete through each section's sliders menu. Editing also exposes
+**Shared with team**. Turning it on or off preserves the section ID; turning it
+off requires confirmation and makes the section personal to the current account,
+removing it from teammates' sidebars. The toggle is disabled with an explanation
+while channel eligibility is loading or when any current member is unavailable
+or ineligible for the destination scope. No channels are silently dropped.
+Personal sections are private to the account, including for team members, and
+accept joined team, public, or private channels. Shared sections accept only
+channels from that team. Any current team member can create, edit, change sharing,
+or delete a shared section; these actions are not admin-only. Neither kind accepts DMs.
+Scope changes reject duplicate destination names and atomically move manual
+assignments into the destination scope, replacing other manual assignments there.
+Smart sections keep their rule and reevaluate matches in the new scope.
+Ordinary channel assignments stay isolated between personal and shared scopes.
+Names are unique within each scope, case-insensitively.
 
 Each heading has one sliders-icon menu, also available by right-clicking the header.
 **Sort** opens its independent single-select options with a checkmark on the right.
@@ -1113,20 +1177,24 @@ Filtered-out channels retain their membership and do not reappear ungrouped.
 Shared name and rule edits apply to the team; personal edits affect only the account.
 Deleting a section does not delete its conversations or change channel access.
 
-Every desktop section menu, including **Favorites**, **All channels**,
-**[team name] channels**, and **Direct messages**, offers **Mute all channels**,
-**Unmute all channels**, and **Snooze all channels…**. These update only your
+Every desktop section menu, including **Favorites**, **[team name] channels**,
+and **Direct messages**, offers **Mute all channels**,
+**Unmute all channels**, and **Snooze all channels**. These update only your
 notifications, including for shared sections. Each action uses the section's
 complete current membership, including filtered-out and unloaded channels;
 channels added later do not inherit the change. Built-in lists resolve all pages
-before applying an action and never include unjoined channels. The team section
-includes custom-section members; only All channels excludes those assignments.
+before applying an action and never include unjoined channels. The team
+section includes its custom-section members.
 Favorites targets only channel favorites, not documents or other favorite types.
 Snooze uses the usual
 duration/date picker and resumes notifications at the chosen time. A partial
 failure keeps successful updates and reports the failures; snooze retries only
-failed channels. Empty or unavailable custom sections and empty Favorites disable
-these actions. Mobile remains unchanged.
+failed channels. Mute, unmute, and snooze submit up to 500 item preferences in
+one atomic backend request, rather than one request per channel. Larger selections
+use sequential requests. The frontend applies confirmed changes in one cache
+update, preserving unrelated preferences and successful requests if another fails.
+Empty or unavailable custom sections and empty Favorites disable these actions.
+Mobile remains unchanged.
 
 Use a channel's Add to section menu to change the personal or shared assignment.
 Each section uses a checkbox: checking moves the channel into that section,
@@ -1136,6 +1204,10 @@ and shared assignments remain independent.
 Choose smart grouping in the section dialog for automatic name matching.
 Smart sections match channel names literally and without regard to capitalization. They preserve ordinary section permissions and are not manual
 drop targets. Channels can appear in multiple matching smart sections.
+Loaded same-team channels join matching shared smart sections immediately,
+including after a rename; they do not wait for the next section refresh. If a
+channel's team metadata is missing, only an existing server-authorized match is
+retained. Channels from another team never become new local matches.
 Hovering an incompatible item over a section shows a not-allowed cursor and an
 explanation over the section, including automatic membership, shared-scope
 restrictions, and channels already in the section. Returning a channel to its
@@ -1620,6 +1692,12 @@ If the metadata is unavailable, the fallback extension comes from the response
 MIME type. Linked video preview cards also offer Download, using the document's
 current version, name, and file type. See [Downloading files](files.md#downloading-files)
 for progress, cancellation, retries, and mobile save/share verification.
+
+Opening or reopening the expanded video viewer focuses the video. Press Space
+to pause or resume immediately. Tab moves through the native player controls
+and viewer actions; focusing Download explicitly still allows keyboard downloads.
+With the video focused, Escape closes the viewer and returns focus to the
+thumbnail that opened it.
 
 ## Pending message drafts
 

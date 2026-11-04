@@ -69,6 +69,10 @@ pub fn static_dir(instance: &Instance) -> std::path::PathBuf {
 /// otherwise compiles DEV from `NODE_ENV=production`, which drops local-only
 /// paths such as passwordless auto-login (`just run_local` uses `vite serve`,
 /// where DEV is already true). Headless `stack up` sets the same origin env.
+///
+/// `VITE_LOCAL_ONLY` makes the bundle count as local, as the dev server does
+/// through `import.meta.hot`, so local-only flags, routes and tools match
+/// `just run_local`.
 pub fn build_static(stage: &Stage, instance: &Instance, mode: Mode) -> Result<()> {
     prepare_dependencies(stage)?;
     let dist = {
@@ -78,7 +82,8 @@ pub fn build_static(stage: &Stage, instance: &Instance, mode: Mode) -> Result<()
             .env("MODE", "development")
             .env("NODE_ENV", "production")
             .env("VITE_LOCAL_SERVERS", "ALL")
-            .env("VITE_LOCAL_BACKEND_ORIGIN", "same-origin");
+            .env("VITE_LOCAL_BACKEND_ORIGIN", "same-origin")
+            .env("VITE_LOCAL_ONLY", "true");
         if mode.spec().runs_local_infra {
             cmd.env("VITE_AI_EDITING_WORKER_URL", "/ai-editing");
         }

@@ -16,6 +16,7 @@ export function EmailCompose(
     <EmailComposeView
       {...props}
       draftId={draftId}
+      initialTo={props.initialTo ?? route.linkedRecipients()}
       context={composeContext}
       host={host}
     />

@@ -153,6 +153,20 @@ traces. Errors carry fixed messages. Never add addresses, subjects, bodies, or
 file names. The `http POST` spans carry `traceparent`, but email_service does not
 join the trace yet (see known gaps).
 
+## Email Focus live updates
+
+Search Tempo for `{ name="email_focus.classify" && span.thread_id="<id>" }`. One
+trace covers an email event from its Kafka publish to the browser's read:
+
+| Span | What it measures |
+| --- | --- |
+| `kafka.process` | One `macro.email` event in the `email-focus` group, until its classification ends. |
+| `email_focus.queue` | The wait for the thread's turn: mail for a thread being classified runs after that call. `event_age_ms` is the time from publish to receipt, which includes any time the consumer stopped reading because every slot was busy. |
+| `email_focus.classify` | One classification: `classify_thread`, with its mail reads, `jev.evaluate`, and `save`. `outcome` is `classified`, `redecided`, `up_to_date`, `missing`, `not_signal`, `not_enabled`, `unavailable`, `rejected`, or `failed`. `event_age_ms` is the time from publish to the end. |
+| `email_focus.notify` | One push to an inbox's readers, under the newest classification it covers. `coalesced` counts the classifications it covers, and 0 marks the repeat for the replica. `delivered` counts the websockets that got it. |
+| `connection_gateway.websocket_send` | The frame leaving the gateway. |
+| `email.focus.refresh` | The browser's read after a push, joined through the push's `traceparent`. A read after a reconnect starts its own trace. `email.focus.threads` is the list's size. |
+
 ## Agent sessions
 
 A session's lifetime is reconstructable from these spans. All of them carry

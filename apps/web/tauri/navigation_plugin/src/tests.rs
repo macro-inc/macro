@@ -285,6 +285,16 @@ fn popup_app_link_emits_once_and_never_creates_a_webview() {
         vec![serde_json::json!({"path": "/mail", "query": "view=all"})],
     );
     assert!(app.webview_windows().is_empty());
+
+    received.lock().unwrap().clear();
+    test_plugin().on_new_window(
+        app.handle(),
+        &Url::parse("https://macro.com/app/booking/id#token").unwrap(),
+    );
+    assert_eq!(
+        *received.lock().unwrap(),
+        vec![serde_json::json!({"path": "/booking/id", "query": "", "fragment": "token"})],
+    );
 }
 
 #[test]
@@ -386,6 +396,29 @@ fn from_url_extracts_path_and_query_from_universal_link() {
     let result = MacroScheme::from_url(&url).unwrap();
     assert_eq!(result.path(), "/component/doc123");
     assert_eq!(result.query(), Some("foo=bar"));
+}
+
+#[test]
+fn from_url_keeps_the_fragment_of_a_universal_link() {
+    let url = Url::parse("https://macro.com/app/booking/id?foo=bar#token").unwrap();
+    let result = MacroScheme::from_url(&url).unwrap();
+    assert_eq!(result.path(), "/booking/id");
+    assert_eq!(result.query(), Some("foo=bar"));
+    assert_eq!(result.fragment(), Some("token"));
+}
+
+#[test]
+fn from_url_reads_the_route_from_a_webview_fragment() {
+    let url = Url::parse("tauri://localhost/#/app/booking/id#token").unwrap();
+    let result = MacroScheme::from_url(&url).unwrap();
+    assert_eq!(result.path(), "/booking/id");
+    assert_eq!(result.fragment(), Some("token"));
+
+    let url = Url::parse("tauri://localhost/#/mail?view=all").unwrap();
+    let result = MacroScheme::from_url(&url).unwrap();
+    assert_eq!(result.path(), "/mail");
+    assert_eq!(result.query(), Some("view=all"));
+    assert_eq!(result.fragment(), None);
 }
 
 #[test]

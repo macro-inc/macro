@@ -570,6 +570,66 @@ it.each([true, false])(
   }
 );
 
+it.each([true, false])(
+  'omits All channels while keeping custom public and private channel sections open=%s',
+  (open) => {
+    const publicChannel = channel('public', 'Public', 'public');
+    const privateChannel = channel('private', 'Private', 'private');
+    const channels = [publicChannel, privateChannel];
+    const channelsById = new Map(channels.map((item) => [item.id, item]));
+    const sections = buildSectionedChannelRows({
+      labels: [
+        { ...label('manual', 'Manual', ['public']), teamId: undefined },
+        {
+          ...label('smart', 'Smart', ['private']),
+          teamId: undefined,
+          rule: { attribute: 'name', contains: 'Private' },
+        },
+      ],
+      channels,
+      channelsById,
+      isLabelOpen: () => open,
+    });
+    const rows = buildSectionedRailRows(
+      'browse',
+      {
+        favorites: true,
+        direct_messages: true,
+        team_channels: true,
+        channels: true,
+      },
+      {
+        favorites: [],
+        direct_messages: [],
+        team_channels: [],
+        channels,
+        recents: [],
+        threads: [],
+      },
+      sections
+    );
+    const grouped = groupChannelRailSections(rows);
+
+    expect([...grouped.keys()]).toEqual([
+      'favorites',
+      'direct_messages',
+      'team_channels',
+      'label:manual',
+      'label:smart',
+    ]);
+    expect(grouped.get('team_channels')?.rows.map((row) => row.id)).toEqual([
+      'status:team_channels',
+    ]);
+    expect(grouped.get('label:manual')?.rows.map((row) => row.id)).toEqual(
+      open ? ['channel:public:label:manual'] : []
+    );
+    expect(grouped.get('label:smart')?.rows.map((row) => row.id)).toEqual(
+      open ? ['channel:private:label:smart'] : []
+    );
+    expect(new Set(rows.map((row) => row.id)).size).toBe(rows.length);
+  }
+);
+
 it('keeps section membership and navigation together after reordering with stale or duplicate keys', () => {
   const rows = buildSectionedRailRows(
     'browse',
@@ -606,26 +666,15 @@ it('keeps section membership and navigation together after reordering with stale
     'team_channels',
     'favorites',
     'direct_messages',
-    'channels',
   ]);
   expect(grouped.get('label:first')?.rows.map((row) => row.id)).toEqual([
     'channel:acme:label:first',
     'reference-status:label:first',
   ]);
-  expect(grouped.get('channels')?.rows.map((row) => row.id)).toEqual([
-    'channel:private',
-    'status:channels',
-  ]);
   expect(new Set(rows.map((row) => row.id)).size).toBe(rows.length);
   expect([
     ...groupChannelRailSections(
-      orderChannelRailSections(rows, ['favorites', 'channels'])
+      orderChannelRailSections(rows, ['favorites', 'direct_messages'])
     ).keys(),
-  ]).toEqual([
-    'favorites',
-    'label:first',
-    'team_channels',
-    'direct_messages',
-    'channels',
-  ]);
+  ]).toEqual(['favorites', 'direct_messages', 'label:first', 'team_channels']);
 });

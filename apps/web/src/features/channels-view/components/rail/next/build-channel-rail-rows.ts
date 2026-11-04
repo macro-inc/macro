@@ -272,47 +272,29 @@ export function buildChannelRailRows(
     });
   }
 
-  const labelledIds = new Set(
-    channelSectionRows.flatMap((row) =>
-      row.kind === 'conversation' && row.labelId ? [row.channel.id] : []
-    )
-  );
-  // Membership still hides channels when their section is collapsed.
-  for (const row of channelSectionRows) {
-    if (row.kind === 'label') {
-      for (const id of row.label.channelIds) {
-        labelledIds.add(id);
-      }
-    }
-  }
+  rows.push({
+    kind: 'section',
+    id: 'section:team_channels',
+    group: 'team_channels',
+  });
 
-  for (const group of ['team_channels', 'channels'] as const) {
-    const channels = items[group].filter(
-      (channel) => group === 'team_channels' || !labelledIds.has(channel.id)
-    );
-
-    if (group === 'channels' && channels.length === 0) {
-      continue;
-    }
-
-    rows.push({ kind: 'section', id: `section:${group}`, group });
-
-    if (!expandedGroups[group]) {
-      continue;
-    }
-
-    for (const channel of channels) {
+  if (expandedGroups.team_channels) {
+    for (const channel of items.team_channels) {
       rows.push({
         kind: 'conversation',
         id: rowKeyForChannel(channel.id),
-        group,
-        scope: group,
+        group: 'team_channels',
+        scope: 'team_channels',
         localIndex: 0,
         channel,
       });
     }
 
-    rows.push({ kind: 'status', id: `status:${group}`, group });
+    rows.push({
+      kind: 'status',
+      id: 'status:team_channels',
+      group: 'team_channels',
+    });
   }
 
   let previousLabelId: string | undefined;
@@ -387,22 +369,15 @@ export function groupChannelRailSections(rows: readonly ChannelRailRow[]) {
   return sections;
 }
 
-/** Keep saved sections in order and append new sections before All channels. */
+/** Keep saved sections in order and append new sections in source order. */
 export function orderChannelRailSections(
   rows: readonly ChannelRailRow[],
   order: readonly ChannelSectionKey[]
 ): ChannelRailRow[] {
   const sections = groupChannelRailSections(rows);
   const keys = [...new Set(order)].filter((key) => sections.has(key));
-  const missing = [...sections.keys()].filter(
-    (key) => key !== 'channels' && !keys.includes(key)
-  );
-  const insertion = keys.at(-1) === 'channels' ? keys.length - 1 : keys.length;
-  keys.splice(insertion, 0, ...missing);
-
-  if (sections.has('channels') && !keys.includes('channels')) {
-    keys.push('channels');
-  }
+  const missing = [...sections.keys()].filter((key) => !keys.includes(key));
+  keys.push(...missing);
 
   return keys.flatMap((key) => {
     const section = sections.get(key);

@@ -27,9 +27,15 @@ export type RoutineEventFilter = Omit<EventFilter, 'ids' | 'condition'> & {
   condition?: string;
 };
 
-/** One schedule or set of event selectors. */
+/**
+ * One schedule, one exact time, or one set of event selectors. A `once`
+ * trigger runs a single time at `at` (RFC 3339), within about a second; a time
+ * already past runs as soon as the routine is saved. Use it to check back on
+ * something later instead of waiting inside a program.
+ */
 export type SingleRoutineTrigger =
   | Extract<RoutineTrigger, { type: 'cron' }>
+  | Extract<RoutineTrigger, { type: 'once' }>
   | { type: 'events'; filters: RoutineEventFilter[] };
 
 /** One or multiple routine triggers. */
@@ -40,6 +46,7 @@ export type RoutineTriggerOptions =
 function singleTriggerBody(trigger: SingleRoutineTrigger): RoutineTrigger {
   return match(trigger)
     .with({ type: 'cron' }, (value) => value)
+    .with({ type: 'once' }, (value) => value)
     .with({ type: 'events' }, (value) => ({
       type: 'events' as const,
       filters: value.filters.map(({ entities, ...filter }) => ({
@@ -57,6 +64,7 @@ function triggerBody(trigger: RoutineTriggerOptions): ActionTrigger {
       triggers: value.triggers.map(singleTriggerBody),
     }))
     .with({ type: 'cron' }, singleTriggerBody)
+    .with({ type: 'once' }, singleTriggerBody)
     .with({ type: 'events' }, singleTriggerBody)
     .exhaustive();
 }
@@ -96,6 +104,16 @@ export interface RoutineOptions {
 
 /** A scheduled or event-triggered agent task. */
 export class Routine extends MacroEntity<ScheduledActionResponse> {
+  /** The routine's URL in the Macro web app; hand it to users as the link. */
+  webUrl(): string {
+    return `${this.client.webAppUrl}/app/routines/${this.id}`;
+  }
+
+  /** Identity, loaded detail and {@link webUrl}, so serialized handles carry their link. */
+  override toJSON() {
+    return { ...super.toJSON(), url: this.webUrl() };
+  }
+
   /** Construct a lazy routine handle. */
   static byId(client: MacroClient, id: string): Routine {
     return new Routine(client, id);

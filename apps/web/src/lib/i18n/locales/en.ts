@@ -1,5 +1,7 @@
 import agentAutoArchive from './en/agent-auto-archive';
+import agentSetup from './en/agent-setup';
 import calls from './en/calls';
+import channelComposer from './en/channel-composer';
 import channelLabels from './en/channel-labels';
 import channelSections from './en/channel-sections';
 import commandMenu from './en/command-menu';
@@ -11,6 +13,7 @@ import localRuntime from './en/local-runtime';
 import mobile from './en/mobile';
 import nav from './en/nav';
 import settingsLanguage from './en/settings-language';
+import settingsMobileApp from './en/settings-mobile-app';
 import settingsNav from './en/settings-nav';
 import splitMenu from './en/split-menu';
 import tabs from './en/tabs';
@@ -22,7 +25,9 @@ import viewMenus from './en/view-menus';
  */
 export default {
   agentAutoArchive,
+  agentSetup,
   calls,
+  channelComposer,
   channelLabels,
   channelSections,
   commandMenu,
@@ -34,6 +39,7 @@ export default {
   mobile,
   nav,
   settingsLanguage,
+  settingsMobileApp,
   settingsNav,
   splitMenu,
   tabs,

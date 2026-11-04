@@ -131,6 +131,27 @@ describe('smart tag matching', () => {
     expect(result[0].channelCount).toBe(2);
   });
 
+  it('matches current-team channels before the shared membership snapshot refreshes', () => {
+    const result = resolveChannelLabelMemberships(
+      [{ ...label('shared', ['unknown-team']), teamId: 'team' }],
+      [
+        { ...channel('new', 'SUPPORT queue'), teamId: 'team' },
+        { ...channel('renamed', 'Support'), teamId: 'team' },
+        { ...channel('other-team', 'Support'), teamId: 'other-team' },
+        {
+          ...channel('unjoined', 'Support'),
+          teamId: 'team',
+          isParticipant: false,
+        },
+        channel('unknown-team', 'Support'),
+        channel('unconfirmed', 'Support'),
+      ]
+    );
+
+    expect(result[0].channelIds).toEqual(['new', 'renamed', 'unknown-team']);
+    expect(result[0].channelCount).toBe(3);
+  });
+
   it('matches private channels in personal sections without adding them to shared sections', () => {
     const result = resolveChannelLabelMemberships(
       [label('personal', []), { ...label('shared', []), teamId: 'team' }],

@@ -27,4 +27,8 @@ export interface EmailThreadKeyboardHandlers {
   /** Expands the focused message, or collapses it if already expanded. */
   expandFocusedMessage: () => boolean;
   expandAllMessages: () => boolean;
+  /** Opens a new calendar event prefilled from the thread, where the host can. */
+  createEvent?: () => boolean;
+  /** Gates `createEvent`, e.g. while the calendar is unavailable. */
+  canCreateEvent?: () => boolean;
 }

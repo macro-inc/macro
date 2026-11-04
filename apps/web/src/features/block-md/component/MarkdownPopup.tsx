@@ -1,3 +1,4 @@
+import { taskSourceComposerContext } from '@app/features/task-composer/source-context';
 import { useFeatureFlag } from '@app/lib/analytics/posthog';
 import { useFlow } from '@app/observability/flow';
 import { globalSplitManager } from '@app/signal/splitLayout';
@@ -60,7 +61,6 @@ import { getScrollParentElement } from '@core/util/scrollParent';
 import CheckIcon from '@icon/system/bold/check-bold.svg?component-solid';
 import SparkleIcon from '@icon/system/bold/sparkle-bold.svg?component-solid';
 import LoadingIcon from '@icon/system/bold/spinner-gap-bold.svg?component-solid';
-import ChatTeardrop from '@icon/system/regular/chat-teardrop.svg';
 import CheckSquareIcon from '@icon/system/regular/check-square.svg?component-solid';
 import GridIcon from '@icon/system/regular/grid-four.svg';
 import LinkIcon from '@icon/system/regular/link.svg?component-solid';
@@ -105,6 +105,7 @@ import {
   $insertAtSavedPoint,
   type SavedPoint,
 } from '../util/insertAtSavedPoint';
+import { CommentButton } from './CommentButton';
 import { FormatTools } from './FormatTools';
 import { TouchSelectionToolbar } from './TouchSelectionToolbar';
 
@@ -516,6 +517,10 @@ export function MarkdownPopup(props: {
         type: 'component',
         id: 'task-compose',
         params: {
+          composerContext: taskSourceComposerContext({
+            entity_type: 'DOCUMENT',
+            entity_id: blockId,
+          }),
           initialTitle: text.length > 70 ? `${text.slice(0, 70)}...` : text,
           initialContent: buildMentionMarkdownString({
             type: 'document',
@@ -727,14 +732,7 @@ export function MarkdownPopup(props: {
               <Toolbar.Divider />
             </Show>
             <Show when={ENABLE_MARKDOWN_COMMENTS && canComment()}>
-              <Toolbar.Button
-                aria-label="Comment"
-                size="icon-sm"
-                onClick={handleInsertComment}
-                tooltip="Comment"
-              >
-                <ChatTeardrop class="size-4" />
-              </Toolbar.Button>
+              <CommentButton onClick={handleInsertComment} />
             </Show>
             <Toolbar.Button
               aria-label="Copy link to snippet"

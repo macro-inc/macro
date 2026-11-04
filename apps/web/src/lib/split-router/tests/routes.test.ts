@@ -303,7 +303,11 @@ describe('panes codec', () => {
     const encoded = encodePanes(
       routes,
       [{ paneId: 'p1' as PaneId, entry: login }],
-      { path: '/home', search: '?email=a&next=b&s0.drive.sort=name', hash: '' }
+      {
+        path: '/home/~/drive',
+        search: '?email=a&layout=c2pp&next=b&s0.drive.sort=name',
+        hash: '',
+      }
     );
     expect(encoded.search).toBe('?email=a&next=b');
   });

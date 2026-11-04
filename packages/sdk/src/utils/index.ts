@@ -5,6 +5,7 @@ export { type Page, paginate } from './pagination';
 export {
   MacroApiError,
   MacroError,
+  MacroForbiddenError,
   MacroNotFoundError,
   unwrap,
 } from './unwrap';
