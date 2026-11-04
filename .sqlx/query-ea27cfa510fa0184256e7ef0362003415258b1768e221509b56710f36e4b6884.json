@@ -1,0 +1,41 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "UPDATE email_backfill_jobs SET completed_threads = completed_threads + $2, updated_at = now()\n        WHERE id = $1 RETURNING completed_threads AS \"completed_threads!\",\n            listed_threads AS total_threads, listing_complete, status = 'InProgress' AS \"active!\"",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "completed_threads!",
+        "type_info": "Int4"
+      },
+      {
+        "ordinal": 1,
+        "name": "total_threads",
+        "type_info": "Int4"
+      },
+      {
+        "ordinal": 2,
+        "name": "listing_complete",
+        "type_info": "Bool"
+      },
+      {
+        "ordinal": 3,
+        "name": "active!",
+        "type_info": "Bool"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Int4"
+      ]
+    },
+    "nullable": [
+      true,
+      false,
+      false,
+      null
+    ]
+  },
+  "hash": "ea27cfa510fa0184256e7ef0362003415258b1768e221509b56710f36e4b6884"
+}

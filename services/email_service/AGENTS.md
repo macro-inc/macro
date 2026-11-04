@@ -16,7 +16,8 @@ the gateway `/email` prefix.
   `sfs_uploader`/`sfs_deleter` (attachment storage), `gmail_ops`, `backfill`,
   `crm_cleanup`, `worker_lifecycle`.
 - `src/backfill_outbox.rs`, `src/backfill_init_service.rs`,
-  `src/backfill_completion_service.rs`: Gmail history backfill orchestration.
+  `src/backfill_completion_service.rs`, `src/backfill_progress.rs`: Gmail
+  history backfill orchestration and its progress counters.
 - `src/crm_enrichment_worker.rs`: periodic pass that resolves pending CRM
   company directory entries (names/logos) left by binaries without a resolver.
 - `src/mailbox_sync_worker.rs`: the Outlook mailbox loops (sync, projections,
@@ -73,6 +74,12 @@ the gateway `/email` prefix.
   calendar refresh so unrelated invitation updates retain teammates' OOO rows.
 - Spawn `run_transfers` regardless of the Outlook flags. Gmail inbox moves
   finish there; with writes off it pauses only the Outlook retire step.
+- Backfill progress uses durable unique thread receipts and replayable listing
+  pages in Postgres. Never infer completion from a stored email or missing Redis
+  key. Legacy jobs (`completed_threads IS NULL`) defer until explicitly replaced
+  with `recover_backfill_progress`; follow `docs/runbooks/email-backfill-progress.md`.
+  Quiesce and replace all old backfill-capable binaries before resuming; mixed
+  versions cannot safely share counting. Keep completed receipts until job deletion.
 - Every `GmailApi` call takes a permit from `RedisGmailRequestGate`
   (`outbound/email_api/gmail_gate.rs`): per mailbox it caps requests in
   flight and quota units per window, and pauses after a Gmail 429 (live work
@@ -89,21 +96,22 @@ the gateway `/email` prefix.
   requeues the upsert, because a claimed attachment is never offered again.
 - BackfillThread reads a whole thread with one Gmail `threads.get` and writes
   the thread row and all of its messages in one transaction
-  (`insert_backfilled_thread`), so a failed write leaves nothing for a retry
+  (`backfill::progress::import::write_thread`), so a failed write leaves nothing for a retry
   to skip. Each message has its own savepoint: one whose data can never be
   stored (`db_error::is_unstorable`) is skipped and logged, and the rest of the
-  thread commits. The CRM fan-out is enqueued after the write slot is taken
-  and before the write: after the commit nothing in the handler may request a
-  retry, because a retry would find the thread and skip it, and an operation
-  deferred for a busy slot must not repeat the fan-out. Invitation and attachment fan-outs only log their
-  failures, and the metadata step is enqueued last. BackfillMessage only drains
-  operations enqueued before thread writes.
+  thread commits. The CRM fan-out is enqueued before the write. A retry with an
+  import receipt resumes attachment scheduling and metadata without reimporting.
+  The receipt commits with one canonical snapshot; a recovery job inserts missing
+  messages and repeats CRM effects for stored messages without changing their labels. Invitation extraction remains
+  best effort; attachment/metadata publication failures retry. Only metadata
+  completion records the thread's unique receipt; confirmed provider-deleted
+  threads receive an explicit skip receipt. BackfillMessage defers legacy
+  work for explicit recovery instead of guessing its missing completion state.
 - Backfill keeps a message hidden while its operation runs
   (`process::keep_invisible`, a 20 s heartbeat restoring the queue's 60 s
-  visibility timeout). Without it, a slow thread is delivered to a second
-  worker, which counts the written thread again.
-- Each backfill thread write, and each BackfillMessage write still draining,
-  holds one of twenty fleet-wide Redis write slots
+  visibility timeout). Durable thread receipts also deduplicate delivery when
+  heartbeats fail or SQS redelivers after acknowledgement.
+- Each backfill thread write holds one of twenty fleet-wide Redis write slots
   (`util/redis/backfill_write_slots.rs`), however many workers and tasks run,
   so a large backfill can't queue enough writers on the primary to slow every
   other query. A write waits up to 10 s for a slot and is then deferred like a

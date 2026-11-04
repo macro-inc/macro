@@ -143,8 +143,8 @@ async fn completing_an_active_scan_runs_completion_effects_once(
     .await?;
     sqlx::query!(
         r#"
-        INSERT INTO email_backfill_jobs (id, link_id, fusionauth_user_id, status)
-        VALUES ($1, $2, $3, 'InProgress')
+        INSERT INTO email_backfill_jobs (id, link_id, fusionauth_user_id, status, completed_threads, listing_complete)
+        VALUES ($1, $2, $3, 'InProgress', 0, true)
         "#,
         email_job_id,
         link_id,

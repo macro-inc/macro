@@ -7522,6 +7522,7 @@ dependencies = [
  "calendar_events",
  "channels",
  "chrono",
+ "clap",
  "cloudfront_sign",
  "connection_gateway_client",
  "contacts",

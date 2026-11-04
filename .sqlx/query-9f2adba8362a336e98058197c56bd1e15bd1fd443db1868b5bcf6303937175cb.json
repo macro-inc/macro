@@ -1,0 +1,23 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT thread_provider_id FROM email_backfill_thread_progress WHERE backfill_job_id = $1 AND thread_provider_id = $2 AND (thread_id IS NOT NULL OR provider_missing)",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "thread_provider_id",
+        "type_info": "Text"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Text"
+      ]
+    },
+    "nullable": [
+      false
+    ]
+  },
+  "hash": "9f2adba8362a336e98058197c56bd1e15bd1fd443db1868b5bcf6303937175cb"
+}

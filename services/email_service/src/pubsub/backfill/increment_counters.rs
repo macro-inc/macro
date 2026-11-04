@@ -1,7 +1,5 @@
 use crate::{backfill_completion_service, pubsub::context::PubSubContext};
-use models_email::service::{
-    backfill::BackfillMessagePayload, link::Link, pubsub::ProcessingError,
-};
+use models_email::service::{link::Link, pubsub::ProcessingError};
 use uuid::Uuid;
 
 /// Map a completed thread delivery into the backfill application service.
@@ -10,19 +8,9 @@ pub async fn incr_completed_threads(
     ctx: &PubSubContext,
     link: &Link,
     job_id: Uuid,
+    thread_provider_id: &str,
 ) -> Result<(), ProcessingError> {
-    backfill_completion_service::incr_completed_threads(ctx, link, job_id).await
-}
-
-/// Map a completed message delivery into the backfill application service.
-#[tracing::instrument(skip(ctx, payload))]
-pub async fn incr_completed_messages(
-    ctx: &PubSubContext,
-    link: &Link,
-    job_id: Uuid,
-    payload: &BackfillMessagePayload,
-) -> Result<(), ProcessingError> {
-    backfill_completion_service::incr_completed_messages(ctx, link, job_id, payload).await
+    backfill_completion_service::incr_completed_threads(ctx, link, job_id, thread_provider_id).await
 }
 
 /// Complete an email scan and its associated calendar extraction.

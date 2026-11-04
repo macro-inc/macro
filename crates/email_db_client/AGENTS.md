@@ -80,3 +80,9 @@ Parsed message responses expose the draft generation captured in the same SQL sn
 ## Related
 
 - Rules: `.agents/rules/rust/db.md` · Docs: `docs/development/database.md`
+
+- `backfill::progress` registers immutable provider pages and unique thread
+  identities under the job lock; `progress::import` commits the canonical import
+  receipt with missing-message writes. Completion counts each identity once and waits
+  for listing to finish. `backfill::recovery` atomically replaces an active legacy
+  job with one full recovery job and retains the mapping for publication retries.

@@ -1,0 +1,15 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "UPDATE email_backfill_thread_progress SET completed_at = now()\n        WHERE backfill_job_id = $1 AND thread_provider_id = $2 AND completed_at IS NULL AND (thread_id IS NOT NULL OR provider_missing)\n          AND EXISTS (SELECT 1 FROM email_backfill_jobs WHERE id = $1 AND status = 'InProgress')",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Text"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "2784de4276c91596091dc266c568d8c9dbc7946956f0d00b428dda0034a3c743"
+}

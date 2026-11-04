@@ -31,6 +31,8 @@ pub enum ProcessingError {
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Display, EnumString)]
 pub enum FailureReason {
+    /// Legacy progress cannot prove completion and needs an explicit recovery sweep.
+    BackfillProgressNeedsRecovery,
     DatabaseQueryFailed,
     RedisQueryFailed,
     SqsEnqueueFailed,

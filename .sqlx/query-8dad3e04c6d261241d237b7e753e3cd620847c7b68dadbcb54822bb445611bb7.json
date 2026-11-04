@@ -1,0 +1,14 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "UPDATE email_backfill_jobs SET status = 'Cancelled', updated_at = now() WHERE id = $1",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "8dad3e04c6d261241d237b7e753e3cd620847c7b68dadbcb54822bb445611bb7"
+}

@@ -1,81 +1,23 @@
-use crate::pubsub::backfill::db_error::map_db_error;
-use crate::pubsub::backfill::email_api_error::map_email_api_error;
-use crate::pubsub::backfill::{increment_counters, write_slot};
 use crate::pubsub::context::PubSubContext;
-use crate::pubsub::inbox_sync::operations::pending_labels;
 use crate::pubsub::util::{CrmContactRecipient, enqueue_populate_crm_contacts};
-use crate::util::process_pre_insert::process_message_pre_insert;
 use email_api_client::domain::models::CalendarPart;
 use models_email::email::service::backfill::{BackfillMessagePayload, JobScopedPayload};
 use models_email::email::service::link;
 use models_email::email::service::message::Message;
 use models_email::email::service::pubsub::{DetailedError, FailureReason, ProcessingError};
 
-/// Backfills one message of a thread whose messages were enqueued one by one.
-///
-/// BackfillThread now writes a thread's messages itself; this step only drains
-/// BackfillMessage operations enqueued before that. Creates a message object in
-/// the database. If the message is the last message in the thread to be
-/// processed, it sends an UpdateThreadMetadata message for the thread.
-#[tracing::instrument(skip(ctx))]
+/// Legacy per-message deliveries cannot establish a thread's complete set of
+/// work after counter loss. Defer them until the parent job is recovered.
+#[tracing::instrument(skip(_ctx, scope, _link), fields(job_id = %scope.job_id), err)]
 pub async fn backfill_message(
-    ctx: &PubSubContext,
+    _ctx: &PubSubContext,
     scope: &JobScopedPayload<BackfillMessagePayload>,
-    link: &link::Link,
+    _link: &link::Link,
 ) -> Result<(), ProcessingError> {
-    let p = &scope.payload;
-    // Sync may have stored the message since the backfill listed it; a
-    // re-sync must not undo a label write made meanwhile.
-    let stored =
-        email_db_client::messages::get_simple_messages::get_simple_message_by_provider_and_link(
-            &ctx.db,
-            &p.message_provider_id,
-            &link.id,
-        )
-        .await
-        .map_err(|e| map_db_error(e, "Failed to look up the stored message"))?;
-    let fetch = Box::pin(ctx.email_api.get_message(link.id, &p.message_provider_id));
-    let (fetched, resync) = match &stored {
-        Some(stored) => {
-            let (fetched, snapshot) = pending_labels::resync_around(&ctx.db, stored.db_id, fetch)
-                .await
-                .map_err(|e| map_db_error(e, "Failed to read the stored message"))?;
-            (fetched, Some(snapshot))
-        }
-        None => (fetch.await, None),
-    };
-    let fetched = fetched
-        .map_err(|error| map_email_api_error(error, "Failed to get provider message"))?
-        .ok_or_else(|| {
-            ProcessingError::NonRetryable(DetailedError {
-                reason: FailureReason::MessageNotFoundInProvider,
-                source: anyhow::anyhow!("Message {} not found in provider", p.message_provider_id),
-            })
-        })?;
-    let mut message = fetched.message;
-
-    process_message_pre_insert(&mut message).await;
-
-    // Insert the message while holding one of the fleet's backfill write slots.
-    let slot = write_slot::acquire(ctx).await?;
-    let inserted = slot
-        .hold(email_db_client::messages::insert::insert_message(
-            &ctx.db,
-            p.thread_db_id,
-            &mut message,
-            link.id,
-            // we update the thread metadata once all messages in the thread have been backfilled
-            false,
-            resync.as_ref(),
-        ))
-        .await;
-    inserted.map_err(|e| map_db_error(e, "Failed to insert final message into database"))?;
-
-    save_invitations(ctx, link, &message, &fetched.calendar_parts).await;
-    enqueue_crm_contacts(ctx, link, &message).await?;
-
-    // Handle all success-related operations
-    increment_counters::incr_completed_messages(ctx, link, scope.job_id, p).await
+    Err(ProcessingError::Retryable(DetailedError {
+        reason: FailureReason::BackfillProgressNeedsRecovery,
+        source: anyhow::anyhow!("legacy per-message import requires a fresh recovery sweep"),
+    }))
 }
 
 /// Saves the calendar invitations a written backfill message carries. Best

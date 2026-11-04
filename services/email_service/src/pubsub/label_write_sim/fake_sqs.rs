@@ -35,6 +35,8 @@ pub struct SqsState {
     /// retries against an SQS outage.
     pub outage: bool,
     pub failed_sends: Vec<Sent>,
+    /// Fail only sends containing this marker, for post-write failure tests.
+    pub fail_body_containing: Option<String>,
     next_id: u64,
     /// Holds the next SendMessage until released.
     paused_send: Option<(oneshot::Sender<()>, oneshot::Receiver<()>)>,
@@ -111,6 +113,11 @@ async fn handle(State(sqs): State<FakeSqs>, headers: HeaderMap, body: Bytes) -> 
         .unwrap_or("")
         .trim_start_matches("AmazonSQS.")
         .to_string();
+    // Reject non-SQS HTTP requests before locking state. An unrelated request
+    // to this ephemeral listener must not poison the simulation's mutex.
+    if target.is_empty() {
+        return StatusCode::BAD_REQUEST.into_response();
+    }
     let request: Value = serde_json::from_slice(&body).unwrap_or(Value::Null);
     let text = |field: &str| {
         request
@@ -139,7 +146,12 @@ async fn handle(State(sqs): State<FakeSqs>, headers: HeaderMap, body: Bytes) -> 
                     .unwrap_or(0),
                 message_id: format!("msg-{}", state.next_id),
             };
-            if state.outage {
+            if state.outage
+                || state
+                    .fail_body_containing
+                    .as_ref()
+                    .is_some_and(|text| sent.body.contains(text))
+            {
                 state.failed_sends.push(sent);
                 return (
                     StatusCode::INTERNAL_SERVER_ERROR,

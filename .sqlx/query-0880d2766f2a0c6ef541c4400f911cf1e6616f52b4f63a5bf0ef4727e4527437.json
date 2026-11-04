@@ -1,0 +1,23 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT status = 'InProgress' AND link_id = $2 AND completed_threads IS NOT NULL FROM email_backfill_jobs WHERE id = $1 FOR SHARE",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "?column?",
+        "type_info": "Bool"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      null
+    ]
+  },
+  "hash": "0880d2766f2a0c6ef541c4400f911cf1e6616f52b4f63a5bf0ef4727e4527437"
+}

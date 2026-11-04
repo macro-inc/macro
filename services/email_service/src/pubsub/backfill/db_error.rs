@@ -21,7 +21,7 @@ const CHECK_VIOLATION: &str = "23514";
 /// The default is `Retryable`: transient connection drops, deadlocks, and
 /// serialization failures all clear on redelivery. Errors that are a property
 /// of the payload rather than of the moment are `NonRetryable` instead, so the
-/// backfill error handlers count the thread as failed and let the job finish.
+/// backfill error handlers fail the job instead of claiming lost effects completed.
 /// Left retryable, they burn 20 receives and land in the DLQ while the job's
 /// completion counter sits one short forever.
 ///

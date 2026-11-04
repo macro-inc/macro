@@ -1,0 +1,23 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT completed_at IS NOT NULL FROM email_backfill_thread_progress WHERE backfill_job_id = $1 AND thread_provider_id = $2",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "?column?",
+        "type_info": "Bool"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Text"
+      ]
+    },
+    "nullable": [
+      null
+    ]
+  },
+  "hash": "8155cbfc1676e90e28d3724c1111cfb343b8614d4d23ce72d2a828183c7097f6"
+}

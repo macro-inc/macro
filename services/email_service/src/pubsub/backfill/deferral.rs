@@ -39,6 +39,7 @@ pub(crate) fn rate_limit(error: &DetailedError) -> Option<Option<Duration>> {
             })
         }
         FailureReason::BackfillWritesBusy => Some(None),
+        FailureReason::BackfillProgressNeedsRecovery => Some(Some(MAX_SQS_DELAY)),
         _ => None,
     }
 }

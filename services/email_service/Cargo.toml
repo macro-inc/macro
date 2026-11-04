@@ -61,6 +61,10 @@ path = "src/openapi.rs"
 name = "email_service_doppler_config"
 path = "src/doppler_config.rs"
 
+[[bin]]
+name = "recover_backfill_progress"
+path = "src/bin/recover_backfill_progress/recover_backfill_progress.rs"
+
 [features]
 attachment_upload = []
 connection_gateway = []
@@ -93,6 +97,7 @@ axum-extra = { workspace = true }
 base64 = { workspace = true }
 bytes = { workspace = true }
 chrono = { workspace = true }
+clap = { workspace = true }
 cloudfront_sign = { workspace = true }
 connection_gateway_client = { path = "../../crates/connection_gateway_client" }
 crm = { path = "../../crates/crm" }

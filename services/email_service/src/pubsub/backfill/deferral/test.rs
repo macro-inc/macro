@@ -116,3 +116,12 @@ fn the_deferral_count_is_read_from_the_message() {
     assert_eq!(deferrals(&deferred), 4);
     assert_eq!(deferrals(&fresh), 0);
 }
+
+#[test]
+fn legacy_progress_waits_without_spending_receive_attempts() {
+    let error = DetailedError {
+        reason: FailureReason::BackfillProgressNeedsRecovery,
+        source: anyhow::anyhow!("explicit recovery required"),
+    };
+    assert_eq!(rate_limit(&error), Some(Some(Duration::from_secs(900))));
+}

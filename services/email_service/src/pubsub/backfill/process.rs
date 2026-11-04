@@ -69,7 +69,8 @@ const VISIBILITY_TIMEOUT_SECONDS: i32 = 60;
 /// copy still runs, the second copy would find the thread written and count
 /// it, and the first would count it again through its metadata step,
 /// completing the job early. A failed heartbeat only logs: the message then
-/// reappears as it would have without one.
+/// reappears as it would have without one. Durable thread receipts deduplicate
+/// completion even when this heartbeat cannot prevent concurrent delivery.
 async fn keep_invisible<F: Future>(
     message: &aws_sdk_sqs::types::Message,
     sqs_worker: &sqs_worker::SQSWorker,
@@ -132,10 +133,8 @@ async fn inner_process_message(
             let Some(JobContextNoToken { link, .. }) =
                 fetch_job_context_no_token(ctx, scope, false).await?
             else {
-                // BackfillMessage owns per-thread progress in addition to
-                // the job-level progress that fetch_job_context already
-                // cleared on cancellation. Drop it so a re-run of the
-                // cancelled job doesn't see stale thread counters.
+                // Retire obsolete Redis state for this terminal legacy job.
+                // Durable receipts are retained until their parent is deleted.
                 let _ = ctx
                     .redis_client
                     .delete_backfill_thread_progress(
@@ -207,12 +206,12 @@ struct JobContextNoToken {
 }
 
 /// Shared prefetch for DB-only job-scoped handlers: loads the backfill
-/// job, short-circuits on cancellation (also cleaning up the job-level
-/// redis progress key), and loads the link. Returns `Ok(None)` when the
-/// parent backfill job is failed or cancelled, and normally when it is
-/// complete. Completion follow-up operations may opt into running after the
-/// terminal transition. Variant-specific cancellation cleanup (e.g.
-/// per-thread progress keys) belongs at the call site, not here.
+/// job, short-circuits on cancellation (also dropping the job's progress),
+/// and loads the link. Returns `Ok(None)` when the parent backfill job is
+/// failed or cancelled, and normally when it is complete. Completion
+/// follow-up operations may opt into running after the terminal transition.
+/// Variant-specific cancellation cleanup (e.g. per-thread progress keys)
+/// belongs at the call site, not here.
 async fn fetch_job_context_no_token<P>(
     ctx: &PubSubContext,
     scope: &JobScopedPayload<P>,
@@ -238,14 +237,20 @@ async fn fetch_job_context_no_token<P>(
         BackfillJobStatus::Cancelled | BackfillJobStatus::Failed
     ) || (backfill_job.status == BackfillJobStatus::Complete && !allow_complete)
     {
-        let _ = ctx
-            .redis_client
-            .delete_backfill_job_progress(scope.job_id)
-            .await;
+        crate::backfill_progress::clear_job(&ctx.db, &ctx.redis_client, scope.job_id).await;
         return Ok(None);
     }
 
+    if backfill_job.link_id != Some(scope.link_id) {
+        return Err(ProcessingError::NonRetryable(DetailedError {
+            reason: FailureReason::LinkNotFound,
+            source: anyhow::anyhow!("backfill operation does not match its job's link"),
+        }));
+    }
     let link = fetch_link(ctx, scope.link_id).await?;
+    if backfill_job.status == BackfillJobStatus::InProgress {
+        crate::backfill_progress::require_durable(&ctx.db, scope.job_id).await?;
+    }
 
     Ok(Some(JobContextNoToken { link, backfill_job }))
 }

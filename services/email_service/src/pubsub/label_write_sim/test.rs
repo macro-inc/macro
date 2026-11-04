@@ -327,7 +327,7 @@ scenario!(
     a_recovery_backfill_does_not_bring_back_an_archive_that_landed_during_its_fetch,
     913,
     |world| {
-        use models_email::email::service::backfill::{BackfillMessagePayload, JobScopedPayload};
+        use models_email::email::service::backfill::{BackfillThreadPayload, JobScopedPayload};
         let sim = &mut Sim::new(&mut world, 1);
         sim.act(Action::Archive(T1, true), false).await.unwrap();
         sim.deliver_all(Queue::Ops, Reply::RateLimited).await;
@@ -336,24 +336,36 @@ scenario!(
             .await
             .unwrap()
             .unwrap();
+        let job_id = uuid::Uuid::now_v7();
+        sqlx::query!("INSERT INTO email_backfill_jobs (id, link_id, fusionauth_user_id, status, completed_threads) VALUES ($1, $2, 'fa-label-test', 'InProgress', 0)", job_id, link.id).execute(&ctx.db).await.unwrap();
+        email_db_client::backfill::progress::register_page(
+            &ctx.db,
+            job_id,
+            false,
+            "",
+            email_db_client::backfill::progress::ListingPage {
+                thread_provider_ids: vec![THREADS[T1].to_string()],
+                next_page_token: None,
+            },
+        )
+        .await
+        .unwrap();
         let scope = JobScopedPayload {
             link_id: link.id,
-            job_id: uuid::Uuid::from_u128(0xb0),
-            payload: BackfillMessagePayload {
+            job_id,
+            payload: BackfillThreadPayload {
                 thread_provider_id: THREADS[T1].to_string(),
-                thread_db_id: sim.world.thread_ids[THREADS[T1]],
-                message_provider_id: MESSAGES[M1A].0.to_string(),
+                refresh_existing: true,
             },
         };
         wiring::reset_admission(&mut sim.world.redis, sim.world.link_id).await;
         let pause = sim
             .world
             .gmail
-            .pause_next(Kind::ReadFull, Some("m1a"), PauseAt::AfterApply);
+            .pause_next(Kind::ReadFull, Some("t1"), PauseAt::AfterApply);
         let mut backfill = tokio::spawn(async move {
-            let _ =
-                crate::pubsub::backfill::backfill_message::backfill_message(&ctx, &scope, &link)
-                    .await;
+            let _ = crate::pubsub::backfill::backfill_thread::backfill_thread(&ctx, &scope, &link)
+                .await;
         });
         let arrived = tokio::select! {
             _ = &mut backfill => false,

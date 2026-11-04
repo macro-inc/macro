@@ -643,3 +643,24 @@ The format-4 browser cache starts a separate physical database. Old nonempty
 general mutation queues are retained but are not imported into it; verify their
 recovery separately during the cache rollout. The email journal is independent
 of these cache files and retains its draft working copies and send attempts.
+
+## Gmail backfill progress
+
+Backfill listing persists each provider page and registers its unique thread
+identities before publishing queue work. Redelivery republishes the saved page;
+priority and normal listing share thread identities. Threads finish after CRM,
+attachment scheduling and metadata work, with retained Postgres receipts that
+make repeated completion safe. A thread confirmed deleted by the provider before
+import gets an explicit skip receipt; an existing import still finishes its effects.
+The job and completion outbox transition only
+when listing is finished and all registered threads have receipts. Redis still
+serves admission control, but never owns completion evidence.
+
+Existing message rows are not completion receipts. Each thread import commits one
+canonical import receipt with its missing-message writes. Concurrent deliveries cannot add
+a later snapshot after metadata completes; retries resume attachments and metadata
+from the receipt. A recovery job processes stored messages for required CRM effects
+while preserving their labels. Active legacy jobs defer until an operator explicitly
+replaces them with a full recovery job. See the
+[cutover and recovery runbook](../runbooks/email-backfill-progress.md) for migration,
+quiescence, rollback constraints and the recovery command.

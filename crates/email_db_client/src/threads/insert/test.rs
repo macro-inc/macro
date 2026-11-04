@@ -671,3 +671,207 @@ async fn whole_thread_resync_recomputes_thread_state_from_stored_labels(
 
     Ok(())
 }
+
+#[sqlx::test(
+    migrator = "MACRO_DB_MIGRATIONS",
+    fixtures(path = "../../../fixtures", scripts("links"))
+)]
+async fn durable_import_freezes_one_snapshot_across_concurrent_deliveries(
+    pool: Pool<Postgres>,
+) -> anyhow::Result<()> {
+    use crate::backfill::progress::{self, ListingPage, import};
+    let link = Uuid::parse_str("00000000-0000-0000-0000-000000000001")?;
+    let job = Uuid::now_v7();
+    sqlx::query!("INSERT INTO email_backfill_jobs (id, link_id, fusionauth_user_id, status, completed_threads) VALUES ($1, $2, 'fa-import', 'InProgress', 0)", job, link).execute(&pool).await?;
+    progress::register_page(
+        &pool,
+        job,
+        false,
+        "",
+        ListingPage {
+            thread_provider_ids: vec!["backfill-thread".into()],
+            next_page_token: None,
+        },
+    )
+    .await?;
+    let mut first = backfilled_messages(link);
+    first.truncate(1);
+    let mut second = backfilled_messages(link);
+    let (a, b) = tokio::join!(
+        import::write_thread(
+            &pool,
+            job,
+            "backfill-thread",
+            link,
+            &mut first,
+            data_exception
+        ),
+        import::write_thread(
+            &pool,
+            job,
+            "backfill-thread",
+            link,
+            &mut second,
+            data_exception
+        ),
+    );
+    let (import::ImportOutcome::Stored(a), import::ImportOutcome::Stored(b)) = (a?, b?) else {
+        panic!("both deliveries refer to an existing provider thread");
+    };
+    assert_ne!(
+        a.written, b.written,
+        "only one provider snapshot may be imported"
+    );
+    assert_eq!(a.thread_id, b.thread_id);
+    let frozen_count = if a.written { 1 } else { 2 };
+    assert_eq!(
+        thread_message_count(&pool, a.thread_id).await?,
+        frozen_count
+    );
+    // A delayed delivery holding a newer Gmail response must not write after
+    // metadata has completed the winning snapshot.
+    progress::complete_thread(&pool, job, "backfill-thread").await?;
+    let mut later = backfilled_messages(link);
+    let later = import::write_thread(
+        &pool,
+        job,
+        "backfill-thread",
+        link,
+        &mut later,
+        data_exception,
+    )
+    .await?;
+    let import::ImportOutcome::Stored(later) = later else {
+        panic!("stored snapshot")
+    };
+    assert!(!later.written);
+    assert_eq!(
+        thread_message_count(&pool, a.thread_id).await?,
+        frozen_count
+    );
+    Ok(())
+}
+
+#[sqlx::test(
+    migrator = "MACRO_DB_MIGRATIONS",
+    fixtures(path = "../../../fixtures", scripts("links"))
+)]
+async fn failed_message_transaction_leaves_no_import_receipt(
+    pool: Pool<Postgres>,
+) -> anyhow::Result<()> {
+    use crate::backfill::progress::{self, ListingPage, import};
+    let link = Uuid::parse_str("00000000-0000-0000-0000-000000000001")?;
+    let job = Uuid::now_v7();
+    sqlx::query!("INSERT INTO email_backfill_jobs (id, link_id, fusionauth_user_id, status, completed_threads) VALUES ($1, $2, 'fa-import', 'InProgress', 0)", job, link).execute(&pool).await?;
+    progress::register_page(
+        &pool,
+        job,
+        false,
+        "",
+        ListingPage {
+            thread_provider_ids: vec!["backfill-thread".into()],
+            next_page_token: None,
+        },
+    )
+    .await?;
+    let mut broken = backfilled_messages(link);
+    broken[1].body_text = Some("invalid\0text".into());
+    assert!(
+        import::write_thread(&pool, job, "backfill-thread", link, &mut broken, |_| false)
+            .await
+            .is_err()
+    );
+    assert_eq!(
+        import::receipt(&pool, job, "backfill-thread")
+            .await?
+            .thread_id,
+        None
+    );
+    assert!(
+        progress::complete_thread(&pool, job, "backfill-thread")
+            .await
+            .is_err()
+    );
+    let count = sqlx::query_scalar!(
+        "SELECT count(*) FROM email_threads WHERE link_id = $1 AND provider_id = 'backfill-thread'",
+        link
+    )
+    .fetch_one(&pool)
+    .await?;
+    assert_eq!(count, Some(0));
+    let mut retry = backfilled_messages(link);
+    let imported = import::write_thread(
+        &pool,
+        job,
+        "backfill-thread",
+        link,
+        &mut retry,
+        data_exception,
+    )
+    .await?;
+    let import::ImportOutcome::Stored(imported) = imported else {
+        panic!("stored snapshot")
+    };
+    assert!(imported.written);
+    assert_eq!(thread_message_count(&pool, imported.thread_id).await?, 2);
+    Ok(())
+}
+
+#[sqlx::test(
+    migrator = "MACRO_DB_MIGRATIONS",
+    fixtures(path = "../../../fixtures", scripts("links"))
+)]
+async fn provider_missing_and_real_import_keep_the_winning_snapshot(
+    pool: Pool<Postgres>,
+) -> anyhow::Result<()> {
+    use crate::backfill::progress::{self, ListingPage, import};
+    let link = Uuid::parse_str("00000000-0000-0000-0000-000000000001")?;
+    let job = Uuid::now_v7();
+    sqlx::query!("INSERT INTO email_backfill_jobs (id, link_id, fusionauth_user_id, status, completed_threads) VALUES ($1, $2, 'fa-import', 'InProgress', 0)", job, link).execute(&pool).await?;
+    progress::register_page(
+        &pool,
+        job,
+        false,
+        "",
+        ListingPage {
+            thread_provider_ids: vec!["gone".into(), "stored".into()],
+            next_page_token: None,
+        },
+    )
+    .await?;
+    assert!(
+        import::mark_provider_missing(&pool, job, "gone")
+            .await?
+            .provider_missing
+    );
+    let mut messages = backfilled_messages(link);
+    assert!(matches!(
+        import::write_thread(&pool, job, "gone", link, &mut messages, data_exception).await?,
+        import::ImportOutcome::ProviderMissing
+    ));
+    let count = sqlx::query_scalar!(
+        "SELECT count(*) FROM email_threads WHERE link_id = $1",
+        link
+    )
+    .fetch_one(&pool)
+    .await?;
+    assert_eq!(
+        count,
+        Some(0),
+        "a stale fetch cannot resurrect provider-deleted work"
+    );
+    let import::ImportOutcome::Stored(stored) =
+        import::write_thread(&pool, job, "stored", link, &mut messages, data_exception).await?
+    else {
+        panic!("live provider thread")
+    };
+    let missing = import::mark_provider_missing(&pool, job, "stored").await?;
+    assert_eq!(missing.thread_id, Some(stored.thread_id));
+    assert!(!missing.provider_missing);
+    assert!(
+        !missing.completed,
+        "committed content still requires metadata/effects"
+    );
+    assert_eq!(thread_message_count(&pool, stored.thread_id).await?, 2);
+    Ok(())
+}

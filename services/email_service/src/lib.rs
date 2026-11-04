@@ -10,6 +10,8 @@ pub mod backfill_completion_service;
 pub mod backfill_init_service;
 /// Durable publication of email backfill outbox rows.
 pub mod backfill_outbox;
+/// Email-backfill thread and message progress counters.
+pub mod backfill_progress;
 /// Connection-gateway refresh adapter for disconnecting an inbox's calendar.
 pub mod calendar_refresh;
 /// Google Calendar quota gate for disconnecting an inbox's calendar.

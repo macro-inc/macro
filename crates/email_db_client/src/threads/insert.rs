@@ -159,7 +159,7 @@ pub async fn insert_thread(
 }
 
 /// A thread row with no metadata yet, for writers that fill it in afterwards.
-fn blank_thread(thread_provider_id: &str, link_id: Uuid) -> thread::Thread {
+pub(crate) fn blank_thread(thread_provider_id: &str, link_id: Uuid) -> thread::Thread {
     thread::Thread {
         db_id: macro_uuid::generate_uuid_v7(),
         provider_id: Some(thread_provider_id.to_string()),

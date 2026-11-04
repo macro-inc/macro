@@ -8,8 +8,8 @@ use models_email::service::attachment::{
     AttachmentUploadArgs, AttachmentUploadDestination, AttachmentUploadMetadata,
 };
 use models_email::service::backfill::{
-    BackfillAttachmentPayload, BackfillMessagePayload, BackfillOperation, BackfillPubsubMessage,
-    JobScopedPayload, UpdateMetadataPayload,
+    BackfillAttachmentPayload, BackfillOperation, BackfillPubsubMessage, JobScopedPayload,
+    UpdateMetadataPayload,
 };
 use models_email::service::link::Link;
 use models_email::service::pubsub::{DetailedError, FailureReason, ProcessingError};
@@ -31,19 +31,22 @@ pub async fn incr_completed_threads(
     ctx: &PubSubContext,
     link: &Link,
     job_id: Uuid,
+    thread_provider_id: &str,
 ) -> Result<(), ProcessingError> {
-    let progress = ctx
-        .redis_client
-        .incr_completed_threads(job_id)
-        .await
-        .map_err(|e| {
-            ProcessingError::Retryable(DetailedError {
-                reason: FailureReason::RedisQueryFailed,
-                source: e.context("Failed to increment completed thread count"),
-            })
-        })?;
+    let progress =
+        email_db_client::backfill::progress::complete_thread(&ctx.db, job_id, thread_provider_id)
+            .await
+            .map_err(|e| {
+                ProcessingError::Retryable(DetailedError {
+                    reason: FailureReason::DatabaseQueryFailed,
+                    source: e.context("Failed to increment completed thread count"),
+                })
+            })?;
 
-    if progress.job_complete {
+    if !progress.active {
+        return Ok(());
+    }
+    if progress.listing_complete && progress.completed_threads == progress.total_threads {
         tracing::info!(
             job_id = job_id.to_string(),
             "All threads for job have been processed"
@@ -68,35 +71,6 @@ pub async fn incr_completed_threads(
     Ok(())
 }
 
-/// If this message was the last one in the thread to be processed, proceed to next stage of backfill for thread
-#[tracing::instrument(skip(ctx))]
-pub async fn incr_completed_messages(
-    ctx: &PubSubContext,
-    link: &Link,
-    job_id: Uuid,
-    p: &BackfillMessagePayload,
-) -> Result<(), ProcessingError> {
-    let thread_backfill_complete = ctx
-        .redis_client
-        .incr_completed_messages(job_id, &p.thread_provider_id)
-        .await
-        .map_err(|e| {
-            ProcessingError::Retryable(DetailedError {
-                reason: FailureReason::RedisQueryFailed,
-                source: e.context(format!(
-                    "Handle completed message for {} failed",
-                    p.message_provider_id
-                )),
-            })
-        })?;
-
-    if thread_backfill_complete {
-        handle_thread_completed(ctx, link, job_id, p).await?;
-    }
-
-    Ok(())
-}
-
 /// performs actions when all threads and messages have been backfilled for the user.
 #[tracing::instrument(skip(ctx))]
 pub(crate) async fn handle_job_completed(
@@ -104,7 +78,7 @@ pub(crate) async fn handle_job_completed(
     job_id: Uuid,
     init_lease_token: Option<Uuid>,
 ) -> Result<(), ProcessingError> {
-    tracing::info!("Backfill complete for job {}", job_id);
+    tracing::debug!("Checking durable completion for backfill job {}", job_id);
     let outcome = email_db_client::backfill::job::update::complete_backfill_job(
         &ctx.db,
         job_id,
@@ -123,7 +97,9 @@ pub(crate) async fn handle_job_completed(
 
 fn completion_result(job_id: Uuid, outcome: BackfillCompletion) -> Result<(), ProcessingError> {
     match outcome {
-        BackfillCompletion::Completed | BackfillCompletion::AlreadyTerminal => Ok(()),
+        BackfillCompletion::Completed
+        | BackfillCompletion::AlreadyTerminal
+        | BackfillCompletion::NotReady => Ok(()),
         BackfillCompletion::LeaseLost => Err(ProcessingError::Retryable(DetailedError {
             reason: FailureReason::EmailBackfillInitBusy,
             source: anyhow::anyhow!("email backfill completion lease was lost for job {job_id}"),
@@ -331,7 +307,7 @@ async fn retire_completion_effects(
     })
 }
 
-fn completion_effect_retry(error: ProcessingError) -> ProcessingError {
+pub(crate) fn completion_effect_retry(error: ProcessingError) -> ProcessingError {
     match error {
         ProcessingError::NonRetryable(detail) => ProcessingError::Retryable(detail),
         error => error,
@@ -407,7 +383,7 @@ async fn handle_contacts_sync(ctx: &PubSubContext, link: &Link) -> Result<(), Pr
         .enqueue_contact_connections(connections)
         .await
         .map_err(|e| {
-            ProcessingError::NonRetryable(DetailedError {
+            ProcessingError::Retryable(DetailedError {
                 reason: FailureReason::SqsEnqueueFailed,
                 source: anyhow::anyhow!("{e:?}").context(format!(
                     "Failed to enqueue {length} contact connections for link {}",
@@ -423,19 +399,6 @@ async fn handle_contacts_sync(ctx: &PubSubContext, link: &Link) -> Result<(), Pr
     );
 
     Ok(())
-}
-
-/// when a thread is done being backfilled, update its metadata and backfill its attachments.
-#[tracing::instrument(skip(ctx))]
-async fn handle_thread_completed(
-    ctx: &PubSubContext,
-    link: &Link,
-    job_id: Uuid,
-    p: &BackfillMessagePayload,
-) -> Result<(), ProcessingError> {
-    enqueue_thread_metadata_update(ctx, link, job_id, &p.thread_provider_id, p.thread_db_id)
-        .await?;
-    handle_thread_attachment_upload(ctx, link, job_id, p.thread_db_id).await
 }
 
 /// Hands a fully written thread to its UpdateThreadMetadata step, which
@@ -463,7 +426,7 @@ pub async fn enqueue_thread_metadata_update(
         .enqueue_email_backfill_message(ps_message)
         .await
         .map_err(|e| {
-            ProcessingError::NonRetryable(DetailedError {
+            ProcessingError::Retryable(DetailedError {
                 reason: FailureReason::SqsEnqueueFailed,
                 source: e.context("Failed to enqueue metadata message".to_string()),
             })

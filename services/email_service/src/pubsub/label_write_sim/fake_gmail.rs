@@ -132,7 +132,9 @@ impl Request {
         match self {
             Request::Modify { .. } => Kind::Write,
             Request::GetMessage { minimal: true, .. } => Kind::ReadLabels,
-            Request::GetMessage { minimal: false, .. } => Kind::ReadFull,
+            Request::GetMessage { minimal: false, .. } | Request::GetThread { .. } => {
+                Kind::ReadFull
+            }
             _ => Kind::Other,
         }
     }
@@ -140,7 +142,7 @@ impl Request {
     fn message_ids(&self) -> Vec<String> {
         match self {
             Request::Modify { ids, .. } => ids.clone(),
-            Request::GetMessage { id, .. } => vec![id.clone()],
+            Request::GetMessage { id, .. } | Request::GetThread { id } => vec![id.clone()],
             _ => Vec::new(),
         }
     }

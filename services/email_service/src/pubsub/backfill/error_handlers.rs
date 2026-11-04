@@ -1,13 +1,8 @@
 use crate::pubsub::backfill::deferral;
-use crate::pubsub::backfill::increment_counters::{
-    incr_completed_messages, incr_completed_threads,
-};
 use crate::pubsub::context::PubSubContext;
 use crate::pubsub::util::cg_refresh_email;
 use models_email::api::refresh::{BackfillStatus, RefreshEmailEvent};
-use models_email::email::service::backfill::{
-    BackfillMessagePayload, BackfillOperation, BackfillPubsubMessage, JobScopedPayload,
-};
+use models_email::email::service::backfill::{BackfillOperation, BackfillPubsubMessage};
 use models_email::email::service::pubsub::{DetailedError, FailureReason};
 use sqs_worker::cleanup_message;
 use std::time::Duration;
@@ -31,13 +26,13 @@ pub async fn handle_non_retryable_error(
         BackfillOperation::Init(scope) => mark_job_failed(ctx, scope.job_id).await?,
         BackfillOperation::ListThreads(scope) => mark_job_failed(ctx, scope.job_id).await?,
         BackfillOperation::BackfillThread(scope) => {
-            handle_thread_failure(ctx, scope.link_id, scope.job_id).await?;
+            mark_job_failed(ctx, scope.job_id).await?;
         }
         BackfillOperation::UpdateThreadMetadata(scope) => {
-            handle_thread_failure(ctx, scope.link_id, scope.job_id).await?;
+            mark_job_failed(ctx, scope.job_id).await?;
         }
         BackfillOperation::BackfillMessage(scope) => {
-            handle_message_failure(ctx, scope).await?;
+            mark_job_failed(ctx, scope.job_id).await?;
         }
         BackfillOperation::BackfillAttachment(_) => {}
         BackfillOperation::FinalizeBackfill(scope) => {
@@ -234,90 +229,6 @@ pub async fn handle_retryable_error(
                 "Retryable error depopulating CRM for user"
             )
         }
-    }
-    Ok(())
-}
-
-#[tracing::instrument(skip(ctx))]
-async fn handle_thread_failure(
-    ctx: &PubSubContext,
-    link_id: Uuid,
-    job_id: Uuid,
-) -> anyhow::Result<()> {
-    let link = match email_db_client::links::get::fetch_link_by_id(&ctx.db, link_id).await {
-        Ok(Some(link)) => link,
-        Ok(None) => {
-            // Link is gone — `incr_completed_threads` can't run without
-            // it, so this thread will never complete on its own. Mark the
-            // parent job failed instead of silently dropping the message
-            // (the SQS message gets cleaned up after this returns, so a
-            // silent return strands the job in InProgress forever).
-            tracing::error!(
-                link_id = link_id.to_string(),
-                job_id = job_id.to_string(),
-                "Link not found in handle_thread_failure; marking backfill job failed"
-            );
-            mark_job_failed(ctx, job_id).await?;
-            return Ok(());
-        }
-        Err(db_err) => {
-            tracing::error!(
-                error = %db_err,
-                job_id = job_id.to_string(),
-                "Failed to fetch link in handle_thread_failure; marking backfill job failed"
-            );
-            mark_job_failed(ctx, job_id).await?;
-            return Ok(());
-        }
-    };
-
-    if let Err(err) = incr_completed_threads(ctx, &link, job_id).await {
-        tracing::error!(
-            error = %err,
-            job_id = job_id.to_string(),
-            "Failed to check if job is completed in handle thread failure"
-        );
-    }
-    Ok(())
-}
-
-#[tracing::instrument(skip(ctx))]
-pub async fn handle_message_failure(
-    ctx: &PubSubContext,
-    scope: &JobScopedPayload<BackfillMessagePayload>,
-) -> anyhow::Result<()> {
-    let link = match email_db_client::links::get::fetch_link_by_id(&ctx.db, scope.link_id).await {
-        Ok(Some(link)) => link,
-        Ok(None) => {
-            // Same defense as handle_thread_failure — without a link we
-            // can't increment counters, and a silent return leaves the
-            // parent job in InProgress forever after the SQS message is
-            // cleaned up.
-            tracing::error!(
-                link_id = scope.link_id.to_string(),
-                job_id = scope.job_id.to_string(),
-                "Link not found in handle_message_failure; marking backfill job failed"
-            );
-            mark_job_failed(ctx, scope.job_id).await?;
-            return Ok(());
-        }
-        Err(db_err) => {
-            tracing::error!(
-                error = %db_err,
-                job_id = scope.job_id.to_string(),
-                "Failed to fetch link in handle_message_failure; marking backfill job failed"
-            );
-            mark_job_failed(ctx, scope.job_id).await?;
-            return Ok(());
-        }
-    };
-
-    if let Err(err) = incr_completed_messages(ctx, &link, scope.job_id, &scope.payload).await {
-        tracing::error!(
-            error = %err,
-            job_id = scope.job_id.to_string(),
-            "Failed to check if thread is completed in handle message failure"
-        );
     }
     Ok(())
 }
