@@ -68,7 +68,8 @@ export const theme: EditorThemeClasses = {
     checklist: 'md-list md-check',
     listitemChecked: 'checked md-strike text-ink-extra-muted',
   },
-  link: 'text-link hover:text-link-hover visited:text-link-visited underline hover:underline cursor-default underline-offset-[0.15em]',
+  // Ordinary hyperlinks use link colors; mention decorators own their styling.
+  link: 'text-link hover:text-link-hover visited:text-link-visited underline decoration-current/20 decoration-[max(1px,0.1em)] underline-offset-[0.15em] hover:decoration-current cursor-default',
   quote:
     'md-quote border-l-2 border-edge pl-4 py-2 italic text-ink-muted my-4 first:mt-1.5',
   code: 'bg-code-buffer font-mono p-3 rounded block md-code-box before:text-ink-extra-muted/70 whitespace-pre mb-4',
@@ -188,7 +189,6 @@ export const channelThemeSender = createTheme(
     list: {
       listitemChecked: 'checked chat-blue md-strike text-current/50',
     },
-    link: 'text-link hover:text-link-hover visited:text-link-visited underline',
     code: `chat-blue font-mono p-3 rounded block md-code-box before:text-current/50`,
     static: {
       'code-container': `bg-[navy]/20 rounded m-2`,

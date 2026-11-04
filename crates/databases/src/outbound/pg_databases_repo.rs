@@ -158,26 +158,7 @@ pub(crate) async fn insert_owned_database(
     table_name: &str,
 ) -> Result<Database, PgDatabasesRepoError> {
     let position = position_after(None)?;
-    sqlx::query!(
-        "INSERT INTO databases (id) VALUES ($1)",
-        database_id.into_uuid()
-    )
-    .execute(&mut **transaction)
-    .await?;
-    let database: Database = sqlx::query_as!(
-        DatabaseRecord,
-        r#"
-            INSERT INTO database_entities (database_id, name, user_id)
-            VALUES ($1, $2, $3)
-            RETURNING database_id AS id, name, user_id AS owner_id, created_at, trashed_at, project_id
-            "#,
-        database_id.into_uuid(),
-        name,
-        owner_id,
-    )
-    .fetch_one(&mut **transaction)
-    .await?
-    .into();
+    let database = insert_owned_entity(transaction, database_id, name, owner_id, None).await?;
     sqlx::query!(
         r#"
             INSERT INTO database_tables (id, database_id, name, position)
@@ -190,6 +171,39 @@ pub(crate) async fn insert_owned_database(
     )
     .execute(&mut **transaction)
     .await?;
+    Ok(database)
+}
+
+/// Insert a core database with no tables, its app entity and its owner's
+/// grant; `created_at` defaults to the transaction's time.
+pub(crate) async fn insert_owned_entity(
+    transaction: &mut Transaction<'static, Postgres>,
+    database_id: DatabaseId,
+    name: &str,
+    owner_id: &str,
+    created_at: Option<chrono::DateTime<chrono::Utc>>,
+) -> Result<Database, PgDatabasesRepoError> {
+    sqlx::query!(
+        "INSERT INTO databases (id) VALUES ($1)",
+        database_id.into_uuid()
+    )
+    .execute(&mut **transaction)
+    .await?;
+    let database: Database = sqlx::query_as!(
+        DatabaseRecord,
+        r#"
+            INSERT INTO database_entities (database_id, name, user_id, created_at)
+            VALUES ($1, $2, $3, COALESCE($4::timestamptz, now()))
+            RETURNING database_id AS id, name, user_id AS owner_id, created_at, trashed_at, project_id
+            "#,
+        database_id.into_uuid(),
+        name,
+        owner_id,
+        created_at,
+    )
+    .fetch_one(&mut **transaction)
+    .await?
+    .into();
     entity_access_db_utils::insert_entity_access_row(
         transaction,
         database_id.as_uuid(),

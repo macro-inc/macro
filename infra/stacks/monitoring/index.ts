@@ -22,6 +22,7 @@ import './monitors/ai-editing';
 import './monitors/calls';
 import './monitors/graphql-soup';
 import './monitors/macrodb';
+import './monitors/outlook-sync';
 import './monitors/queues';
 import './monitors/redis';
 import './monitors/regressions';

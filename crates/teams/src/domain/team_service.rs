@@ -1509,6 +1509,7 @@ where
         &self,
         entity_access_receipt: EntityAccessReceipt<MemberTeamRole>,
         invites: non_empty::NonEmpty<&[Email<Lowercase<'_>>]>,
+        is_agent: bool,
     ) -> Result<Vec<TeamInvite<'_>>, InviteUsersToTeamError> {
         let team_id =
             macro_uuid::string_to_uuid(&entity_access_receipt.entity().entity_id).unwrap();
@@ -1604,7 +1605,7 @@ where
 
         let invited = self
             .team_repository
-            .invite_users_to_team(&team_id, invited_by, invites)
+            .invite_users_to_team(&team_id, invited_by, invites, is_agent)
             .await?;
 
         let team_name = if invited.is_empty() {
@@ -1634,6 +1635,7 @@ where
                             sender_profile_picture_url: None,
                             invitee_plan,
                             reminder: false,
+                            is_agent: invite.is_agent,
                         },
                     )
                     .await

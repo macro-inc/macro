@@ -23,6 +23,9 @@ export interface UpdateForm {
    * @pattern ^#[0-9a-fA-F]{6}$
    */
   accentColor?: UpdateFormAccentColor;
+  /** Whether nobody can see who gave which response; refused once anyone
+has responded. */
+  anonymous?: boolean;
   /** Who may respond from now on. */
   audience?: Audience;
   /** When it stops taking responses, or `null` for never. */
@@ -35,6 +38,8 @@ export interface UpdateForm {
   description?: string;
   /** A new logo, or `null` to remove it. */
   logoFileId?: UpdateFormLogoFileId;
+  /** Whether people with View may read individual response rows. */
+  responsesVisible?: boolean;
   /** Open or close it. */
   status?: FormStatus;
   /** Whether respondents may read option tallies. */

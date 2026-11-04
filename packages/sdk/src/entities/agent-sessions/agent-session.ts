@@ -5,6 +5,8 @@ import type {
   AgentSessionChangesResponse,
   AgentSessionLogResponse,
   AgentSessionResponse,
+  ArchiveCause,
+  AutoArchivePreferencesBody,
   CodingPreferencesBody,
   ControlResponse,
   PromptAttachment,
@@ -27,6 +29,32 @@ import { QueuedAction } from './queued-action';
 import { type CreateReviewOptions, SessionReview } from './review';
 import { ToolApproval } from './tool-approval';
 import { presentView, type SessionView } from './view';
+
+export type { ArchiveCause };
+
+/**
+ * One session's auto-archive choices. A trigger left `undefined` follows the
+ * owner's default.
+ */
+export type AutoArchiveOverrides = {
+  /** Archive once every linked pull request is closed and at least one merged. */
+  onPullRequestMerged?: boolean;
+  /** Archive once the runtime session backing it is deliberately closed. */
+  onRuntimeClosed?: boolean;
+};
+
+/** A session's auto-archive settings, and when a trigger archived it. */
+export type SessionAutoArchive = {
+  /** The session's own choices. */
+  overrides: AutoArchiveOverrides;
+  /** The owner's defaults, which apply where the session has no choice. */
+  defaults: AutoArchivePreferencesBody;
+  /**
+   * When a trigger first archived the session, if one did. It stays after the
+   * session is unarchived, since a session archives itself at most once.
+   */
+  autoArchivedAt?: string;
+};
 
 /** A session's history folded into readable messages, oldest first. */
 export type FoldedAgentSessionLog = {
@@ -224,8 +252,15 @@ export class AgentSession extends MacroEntity<AgentSessionResponse> {
   /** The session's user-facing display name. */
   readonly name = this.field('name');
 
-  /** Whether the session is archived and read-only. */
-  readonly isArchived = this.field('isArchived');
+  /**
+   * Who archived the session, making it read-only: `'user'`,
+   * `'pull_request_merged'` or `'runtime_closed'`. `undefined` while it is not
+   * archived.
+   */
+  readonly archivedBy = this.field('archivedBy');
+
+  /** When the session was archived (RFC 3339), or `undefined` while it is not. */
+  readonly archivedAt = this.field('archivedAt');
 
   /** The model currently configured for the session. */
   readonly model = this.field('model');
@@ -318,6 +353,39 @@ export class AgentSession extends MacroEntity<AgentSessionResponse> {
     );
   }
 
+  /** This session's auto-archive settings, and when a trigger archived it. */
+  async autoArchive(): Promise<SessionAutoArchive> {
+    const { overrides, defaults, autoArchivedAt } = unwrap(
+      await this.client.agentHarness.getAgentSessionAutoArchive({
+        path: { session_id: this.id },
+      }),
+    );
+    return {
+      overrides: {
+        onPullRequestMerged: overrides.onPullRequestMerged ?? undefined,
+        onRuntimeClosed: overrides.onRuntimeClosed ?? undefined,
+      },
+      defaults,
+      autoArchivedAt: autoArchivedAt ?? undefined,
+    };
+  }
+
+  /**
+   * Replace this session's auto-archive choices. Owner only; a trigger left
+   * `undefined` follows the owner's default.
+   */
+  async setAutoArchive(overrides: AutoArchiveOverrides): Promise<void> {
+    unwrap(
+      await this.client.agentHarness.putAgentSessionAutoArchive({
+        path: { session_id: this.id },
+        body: {
+          onPullRequestMerged: overrides.onPullRequestMerged ?? null,
+          onRuntimeClosed: overrides.onRuntimeClosed ?? null,
+        },
+      }),
+    );
+  }
+
   /** Rename this session. */
   async rename(name: string): Promise<void> {
     await this.mutate((client) =>
@@ -338,11 +406,11 @@ export class AgentSession extends MacroEntity<AgentSessionResponse> {
     await this.setArchived(false);
   }
 
-  private async setArchived(isArchived: boolean): Promise<void> {
+  private async setArchived(archived: boolean): Promise<void> {
     await this.mutate((client) =>
       client.agentHarness.setAgentSessionArchived({
         path: { session_id: this.id },
-        body: { isArchived },
+        body: { archived },
       }),
     );
   }
@@ -380,6 +448,25 @@ export class AgentSession extends MacroEntity<AgentSessionResponse> {
     client: MacroClient,
   ): Promise<CodingPreferencesBody> {
     return unwrap(await client.agentHarness.getAgentCodingPreferences());
+  }
+
+  /** Which triggers archive the caller's sessions by default; each is off unless chosen. */
+  static async autoArchivePreferences(
+    client: MacroClient,
+  ): Promise<AutoArchivePreferencesBody> {
+    return unwrap(await client.agentHarness.getAgentAutoArchivePreferences());
+  }
+
+  /** Replace which triggers archive the caller's sessions by default. */
+  static async setAutoArchivePreferences(
+    client: MacroClient,
+    preferences: AutoArchivePreferencesBody,
+  ): Promise<AutoArchivePreferencesBody> {
+    return unwrap(
+      await client.agentHarness.putAgentAutoArchivePreferences({
+        body: preferences,
+      }),
+    );
   }
 
   /** Replace the caller's coding preferences. */

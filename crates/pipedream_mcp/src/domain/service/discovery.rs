@@ -1,7 +1,7 @@
 //! Read-only discovery of apps and their actual MCP capabilities.
 
 use crate::domain::{
-    models::MacroUserIdStr,
+    models::{ConnectionProvider, MacroUserIdStr},
     ports::{
         ConnectionStore, ConnectorCapabilities, ConnectorDirectory, ConnectorOverlays,
         OverlayConnections,
@@ -120,16 +120,21 @@ where
                 if query.trim().is_empty() {
                     anyhow::bail!("Search for an app name, such as Linear");
                 }
-                let page =
-                    super::catalog::browse_catalog(directory.as_ref(), Some(query), None, Some(10))
-                        .await?;
+                let page = super::catalog::browse_catalog(
+                    directory.as_ref(),
+                    user_id,
+                    Some(query),
+                    None,
+                    Some(10),
+                )
+                .await?;
                 Ok(DiscoveryResult::Search {
                     apps: page.entries.into_iter().map(DiscoveredApp::from).collect(),
                     more_results: page.next_cursor.is_some(),
                 })
             }
             DiscoveryRequest::Inspect { app_slug } => {
-                let Some(app) = directory.retrieve(app_slug).await? else {
+                let Some(app) = directory.retrieve(user_id, app_slug).await? else {
                     anyhow::bail!("No connectable app has that slug; search the catalog first");
                 };
                 let connected = self.connected(user_id, &app.app_slug).await?;
@@ -151,6 +156,18 @@ where
         user_id: &MacroUserIdStr<'static>,
         app_slug: &str,
     ) -> anyhow::Result<bool> {
+        let connection = self
+            .connections
+            .load(user_id, app_slug)
+            .await
+            .map_err(|error| anyhow::anyhow!("Could not check connector status: {error:?}"))?;
+        // A Macro Connect grant outranks an overlay; a Pipedream grant doesn't.
+        if let Some(connection) = connection
+            .as_ref()
+            .filter(|connection| connection.provider == ConnectionProvider::Connect)
+        {
+            return Ok(connection.enabled);
+        }
         if let Some(overlay) = self.connections.overlay(app_slug).await? {
             return Ok(self
                 .overlay_connections
@@ -158,12 +175,7 @@ where
                 .await?
                 .is_some());
         }
-        Ok(self
-            .connections
-            .load(user_id, app_slug)
-            .await
-            .map_err(|error| anyhow::anyhow!("Could not check connector status: {error:?}"))?
-            .is_some_and(|connection| connection.enabled))
+        Ok(connection.is_some_and(|connection| connection.enabled))
     }
 }
 

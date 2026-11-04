@@ -669,11 +669,10 @@ export function normalizedCacheExchange(
       const operation = activeOps.get(key);
       if (!operation) return;
       const state = queryState(key);
-      // Supersede the initial cache snapshot. An affected reread carries newer
-      // local/optimistic state, so let it complete even if network persistence
-      // finishes first; only teardown/remount may discard that update.
-      state.cacheReadVersion += 1;
-      const generation = cacheGeneration;
+      // Supersede the initial cache snapshot, but let a newer published result
+      // supersede this read too. Pending local edits are reconciled against the
+      // new server snapshot after persistence, never through an older snapshot.
+      const readVersion = beginCacheRead(key);
       await documentReader
         .read({
           opKey: operation.key,
@@ -685,12 +684,7 @@ export function normalizedCacheExchange(
         })
         .then((read) => {
           const active = activeOps.get(key);
-          if (
-            generation !== cacheGeneration ||
-            read.kind !== 'hit' ||
-            !active ||
-            queryStates.get(key) !== state
-          )
+          if (!readVersion.isCurrent() || read.kind !== 'hit' || !active)
             return;
           // Preserve the authoritative request while immediately surfacing the
           // newer local view. Its eventual result still gets the deferred

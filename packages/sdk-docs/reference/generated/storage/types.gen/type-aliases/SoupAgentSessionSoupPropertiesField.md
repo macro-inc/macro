@@ -1,6 +1,6 @@
 # Type Alias: SoupAgentSessionSoupPropertiesField
 
-> **SoupAgentSessionSoupPropertiesField** = \{ `properties`: [`SoupProperty`](SoupProperty.md)[]; \} & \{ `botId`: `string`; `createdAt`: `string`; `harness`: `string`; `id`: `string`; `isArchived`: `boolean`; `name`: `string`; `ownerId`: `string`; `pullRequestId?`: `string` \| `null`; `pullRequestState?`: `null` \| [`AgentPullRequestState`](AgentPullRequestState.md); `pullRequestUrl?`: `string` \| `null`; `repoBranch?`: `string` \| `null`; `repoUrl?`: `string` \| `null`; `source?`: [`AgentSessionSource`](AgentSessionSource.md); `status`: `string`; `threadId?`: `string` \| `null`; `turnState?`: `string` \| `null`; `updatedAt`: `string`; `viewedAt?`: `string` \| `null`; `visibility?`: [`AgentSessionVisibility`](AgentSessionVisibility.md); `workingBranch?`: `string` \| `null`; \}
+> **SoupAgentSessionSoupPropertiesField** = \{ `properties`: [`SoupProperty`](SoupProperty.md)[]; \} & \{ `archivedAt?`: `string` \| `null`; `archivedBy?`: `null` \| [`AgentSessionArchiveCause`](AgentSessionArchiveCause.md); `botId`: `string`; `createdAt`: `string`; `harness`: `string`; `id`: `string`; `name`: `string`; `ownerId`: `string`; `pullRequestId?`: `string` \| `null`; `pullRequestState?`: `null` \| [`AgentPullRequestState`](AgentPullRequestState.md); `pullRequestUrl?`: `string` \| `null`; `repoBranch?`: `string` \| `null`; `repoUrl?`: `string` \| `null`; `source?`: [`AgentSessionSource`](AgentSessionSource.md); `status`: `string`; `threadId?`: `string` \| `null`; `turnState?`: `string` \| `null`; `updatedAt`: `string`; `viewedAt?`: `string` \| `null`; `visibility?`: [`AgentSessionVisibility`](AgentSessionVisibility.md); `workingBranch?`: `string` \| `null`; \}
 
 An agent session as displayed in Soup.
 
@@ -15,11 +15,12 @@ coding and non-coding sessions without fetching each session separately.
 
 | Name | Type | Description |
 | ------ | ------ | ------ |
+| `archivedAt?` | `string` \| `null` | When the session was archived, or `None` while it is active. |
+| `archivedBy?` | `null` \| [`AgentSessionArchiveCause`](AgentSessionArchiveCause.md) | - |
 | `botId` | `string` | The bot running this session |
 | `createdAt` | `string` | The time the session was created |
 | `harness` | `string` | The runtime snapshotted when the session was created. |
 | `id` | `string` | The agent session uuid |
-| `isArchived` | `boolean` | Whether the session is archived and read-only. |
 | `name` | `string` | The user-facing name of the session |
 | `ownerId` | `string` | Who the session belongs to |
 | `pullRequestId?` | `string` \| `null` | The linked pull request's Macro entity, when visible to the viewer. |

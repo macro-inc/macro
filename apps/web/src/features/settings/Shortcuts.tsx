@@ -945,6 +945,11 @@ const shortcutSections: ShortcutSection[] = [
         description: 'Spotlight split',
       },
       { keys: ['\\'], codes: ['Backslash'], description: 'Create a split' },
+      {
+        keys: ['|'],
+        codes: ['ShiftLeft', 'Backslash'],
+        description: 'Create a split below',
+      },
     ],
   },
   {

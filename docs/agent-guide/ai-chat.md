@@ -172,6 +172,18 @@ always the user's. Each row names the item with a chip that opens it; edit and
 sharing rows expand to show the new text or settings. Verify with throwaway
 items, since these mutate real data.
 
+### Requesting access the user lacks
+
+A write the user can only view fails in code mode with `MacroForbiddenError`
+(a 403). The agent should say the user can only view the item and offer to
+ask its owner for edit access; only after the user agrees does it call
+`<item>.access.request('edit')`. The owner gets the same request the Share
+menu sends, from the user, and **Share → Permission requests** shows it. The
+agent reports the request as pending and who reviews it, and retries the write
+only after `<item>.access.state()` shows edit access. To verify, have a
+view-only user ask an agent to add a task to a project they can only view,
+agree to the request, grant it as the owner, then ask the agent to retry.
+
 ## Phones with new agents enabled
 
 With `enable-chat-v3-agents`, **Agents** opens the new conversation list on phones,
@@ -338,6 +350,12 @@ pull request. **Open session** opens the coding conversation in another split so
 you can follow up there. Reloading the chat restores the same session card.
 Failed dispatches do not show a successful session card. If no coding agents are
 available, configure one in Agents before retrying.
+
+Code-mode sessions do not get these two tools. They do the coding work themselves
+first and, when asked to hand a task off, run `ExecuteCode`: pick one of your own
+agents from `macro.agents.list()` and start it with
+`macro.agentSessions.createManaged({ agent, prompt, repoUrl })`, omitting `agent`
+for the default persona. Built-in personas cannot be chosen by id there yet.
 
 Ask a chat agent what your coding agents need from you and it calls
 `ListAgentUpdates`: your non-archived coding sessions waiting on a permission,
@@ -776,7 +794,12 @@ the shimmer.
   and quoting remain available.
   Archived sessions are read-only: Rename and all message controls are unavailable,
   and an **Unarchive** action replaces the composer at the bottom. Archive /
-  Unarchive is also available from the title dropdown.
+  Unarchive is also available from the title dropdown. The footer says when the
+  session was archived and, if it archived itself, why (its pull requests
+  merged, or its machine session closed). For the owner of an unarchived session that has never
+  archived itself, the title dropdown also has **Archive when PRs merge** and
+  **Archive when session closes** submenus, each with **Use default (On/Off)**,
+  **On**, and **Off**; the defaults live in Settings → Agents → **Auto-archive**.
 - Users without `enable-chat-v3-agents` retain the Owned / Running / Shared /
   Automations / Skills list. With the flag enabled, touch devices use the new
   conversation list described above. Touch conversation links open standalone
@@ -792,6 +815,23 @@ Loading metadata affects only its row. Deleted, inaccessible, or missing resourc
 show **Run unavailable** without a link, including failed preparation that created
 no resource. Live pending rows remain neutral; persisted unsuccessful runs keep
 the failure-colored timestamp even when their transcript is still available.
+
+## Routine run notifications and failures
+
+Every routine run creates one `routine_run_finished` notification for the
+owner, "<routine> finished" or "<routine> failed", including runs that fail
+before an agent session starts. Routine notifications go to the inbox only:
+they never show a toast, browser or desktop alert, or phone push. Opening one
+opens the routine. The routine's own agent turn sends no "agent finished"
+notification; its questions still notify.
+
+The routines list shows **Failed** in failure color in the Status column while a
+routine's latest finished run failed, whether it is active, paused, or done; a
+run in progress still shows **Running**. The legacy Agents list shows **Last run
+failed** for the same routine. Verify by running a routine whose required app is
+disconnected: the row turns **Failed** and a "failed" notification appears in the
+inbox without an alert; reconnect and run again: a "finished" notification
+appears and the row returns to its normal status.
 
 ## Start a standalone chat
 
@@ -1088,6 +1128,14 @@ not authorization; SDK requests retain normal user permissions, and issuing the 
 External coding harnesses keep their own tool selection. A runner that fails
 after its tools were advertised still produces an execution failure, not an
 automatic retry through a direct tool.
+
+Team and referral invites exist only in the SDK: `team.invite(emails)` on
+`macro.teams.current()` (resolves `false` when every address was already a
+member or invited), `team.invites()` and `invite.revoke()` for team admins, and
+`macro.referrals.link()` / `macro.referrals.invite(email)`. Invites send email
+immediately, with no review card, so test them on a team and addresses you
+control. The standard toolset and the standard MCP have no direct tool for
+either.
 
 Ask the agent to discover SDK entities and write a JavaScript module exporting
 `async function main({macro, session, execution})`. These are actual public SDK
@@ -1624,19 +1672,31 @@ a review with nothing saved; there is no direct view tool.
 The agent decides when to present one without being asked, usually at the end
 of a turn that made, changed or sent something, or to answer a question about
 workspace data, and it does not mention again in its reply what the view shows.
-The view is checked against the renderer's schema before it is drawn: a view
-that does not match is never presented, and the agent is told what to fix.
+The server decodes the view before it is drawn: a view that does not decode
+is never presented, and the agent is told what to fix.
 The call the harness presents (`view_<id>`) draws the view directly in the
 reply and stays visible without opening a tool row. Every agent chain with
 `ExecuteCode`, including external coding agents connected through Macro's MCP
-server, can present one. Older sessions' `DisplayResults` calls, and AI chat's, still render
-the same way.
+server, can present one. AI chat's `DisplayResults` calls render the same
+way, from the view the call returns; nothing draws while the call streams.
 
 A presented view breaks tool groups before and after itself; later calls start
-a separate group. Its dashboard supports markdown, timelines, entity lists, and
-channel messages, using the same full-width view as AI chat. Malformed views
-show **Couldn't render dashboard**; failed calls show a **Failed** summary row
-without a disclosure.
+a separate group. Its dashboard supports markdown, timelines, entity lists,
+channel messages, item cards, calendar agendas and tags, using the same
+full-width view as AI chat. An item card (one to four items: a document or
+spreadsheet, an email thread, an event, a project, a channel, a routine, a form
+or an initiative) loads its item with the viewer's own access and opens it; a
+routine's card can pause it or run it now. An agenda loads its events live
+from the viewer's calendars and groups them by day. A tags widget nests tags
+to any depth as coloured pills. A list holds a fixed height and says how many
+items are below it. The dynamic UI gallery (`/app/component/dynamic-ui`) shows
+each widget. Task list titles wrap above their live properties and timestamps;
+side-by-side project groups stack below 672px of available container width,
+including a narrow split on a wide screen. Check full long and unbroken titles
+at phone width and in a narrow split, then open a task from its title.
+A finished call
+with no view shows **Couldn't render dashboard**; failed calls show a
+**Failed** summary row without a disclosure.
 
 The development gallery at `/app/component/agent-ui` includes **Replay tool
 calls** and **Replay fast batch**, both using the message renderer. Check that
@@ -2445,3 +2505,7 @@ preferences are private and cannot be read by targeting another user.
 
 Activity is generated for completed UTC days in the background. Local environments
 require an intentional CLI refresh; ordinary memory reads do not invoke a model.
+
+Opening a row clears its unread state immediately; direct details mark read when
+ready. See [reading items](notifications.md#reading-items) for failure, keyboard,
+mobile, and email inbox checks.

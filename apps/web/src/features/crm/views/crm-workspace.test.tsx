@@ -311,6 +311,7 @@ function setup(
     [activeTab(), ...records().map((record) => record.id)].join(' ')
   );
   fixture.workspace = {
+    peopleVisibility: { canShowRemoved: () => false, showRemoved: () => false },
     activeTab,
     setActiveTab,
     host: {

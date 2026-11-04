@@ -43,7 +43,7 @@ export function ChannelSectionDropZone(props: {
     }
 
     if (!rail.labelsAvailable()) {
-      return rail.labelsUnavailableReason();
+      return rail.labelsFailed() ? rail.labelsUnavailableReason() : undefined;
     }
 
     const reason = channelSectionDropError({
@@ -116,7 +116,7 @@ export function ChannelSectionDropZone(props: {
         {(reason) => (
           <div
             role="status"
-            class="pointer-events-none absolute inset-0 z-20 flex items-center justify-center gap-2 rounded-lg bg-surface/90 px-3 py-2 text-xs text-ink-muted ring-1 ring-inset ring-edge-muted"
+            class="pointer-events-none absolute inset-0 z-20 flex items-center justify-center gap-2 rounded-lg bg-surface/90 px-3 py-2 text-xs text-ink-muted"
           >
             <ProhibitIcon class="size-4 shrink-0" />
             <span>{reason()}</span>

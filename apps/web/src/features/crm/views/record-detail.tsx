@@ -38,6 +38,7 @@ import {
 } from '../core/record';
 import { Company } from './company-detail';
 import { Contact } from './contact-detail';
+import { ContactVisibilityButton } from './contact-visibility-button';
 import { CrmCopyLinkButton } from './copy-link-button';
 import { useCompanyQuery, useContactQuery } from './use-crm';
 
@@ -204,12 +205,21 @@ export function CrmRecordDetail(props: {
               </Show>
             </div>
             <div class="ml-auto flex shrink-0 items-center gap-2 touch:gap-1">
-              <HeaderActionGroup label="Sharing">
+              <HeaderActionGroup
+                label={
+                  current().type === 'contact' ? 'Contact actions' : 'Sharing'
+                }
+              >
                 <CrmCopyLinkButton
                   grouped
                   type={current().type}
                   id={current().id}
                 />
+                <Show when={current().type === 'contact' && current().id} keyed>
+                  {(contactId) => (
+                    <ContactVisibilityButton grouped contactId={contactId} />
+                  )}
+                </Show>
               </HeaderActionGroup>
               <SidePanel.Toggle />
             </div>
@@ -230,13 +240,12 @@ export function CrmRecordDetail(props: {
                         companyId={record.id}
                         section={companySection()}
                         headerToggle={false}
-                        onHidden={back}
                         onOpenPipeline={props.onOpenPipeline}
                         onOpenContact={(contact) =>
                           open({
                             type: 'contact',
                             id: contact.id,
-                            name: contact.name ?? contact.email,
+                            name: contact.name ?? contact.email ?? '',
                           })
                         }
                       />

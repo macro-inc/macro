@@ -111,6 +111,13 @@ function fetchCached<Data>(options: {
   return new ResultAsync(catchToResult(() => queryClient.fetchQuery(options)));
 }
 
+/** Share the initial block load with the mounted view's schema query. */
+export function fetchDatabaseDetail(
+  id: string
+): ResultAsync<DatabaseDetail, ResultError[]> {
+  return fetchCached(databaseDetailQueryOptions(id));
+}
+
 /** {@link useViewerDatabases}, read once. */
 export function fetchViewerDatabases(): ResultAsync<
   DatabaseDetail[],
@@ -376,6 +383,21 @@ export function createDatabase(params: {
         source: params.source,
       });
       // Creation is committed. Refresh discovery without blocking the new editor.
+      queryClient.invalidateQueries({
+        queryKey: databasesKeys.list.queryKey,
+      });
+      return id;
+    });
+}
+
+/** Copy a database into a new one the caller owns, answering the copy's id. */
+export function duplicateDatabase(params: {
+  id: string;
+  name: string;
+}): ResultAsync<string, ResultError<DatabaseSchemaErrorCode>[]> {
+  return storageServiceClient.databases
+    .duplicate({ id: params.id, name: params.name })
+    .map(({ id }) => {
       queryClient.invalidateQueries({
         queryKey: databasesKeys.list.queryKey,
       });

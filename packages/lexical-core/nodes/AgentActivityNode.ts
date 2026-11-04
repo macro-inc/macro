@@ -11,6 +11,7 @@ import {
   type Spread,
 } from 'lexical';
 import { type DecoratorComponent, getDecorator } from '../decoratorRegistry';
+import type { View_Serialize as View } from '../generated/dynamic-ui';
 import { $applyIdFromSerialized } from '../plugins/nodeIdPlugin';
 
 const VERSION = 1;
@@ -34,8 +35,8 @@ export type AgentActivityStatus = (typeof AGENT_ACTIVITY_STATUSES)[number];
  */
 export type AgentActivityCard = {
   kind: 'view';
-  /** A dynamic-UI view, validated where it renders. */
-  view: unknown;
+  /** A dynamic-UI view, decoded by the server that wrote the message. */
+  view: View;
 };
 
 /** One step of work as the agent session's fold worded it. */

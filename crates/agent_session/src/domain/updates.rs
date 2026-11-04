@@ -28,7 +28,7 @@ pub struct UpdateCandidate {
     pub harness: String,
     pub pull_request_url: Option<String>,
     pub turn_state: UpdateTurnState,
-    pub is_archived: bool,
+    pub archived: bool,
     pub last_activity: DateTime<Utc>,
 }
 
@@ -121,9 +121,7 @@ pub async fn list_updates<R: CodingAgentUpdatesRepo>(
     let now = Utc::now();
     let mut items = Vec::new();
     for candidate in candidates {
-        if candidate.is_archived
-            || matches!(candidate.harness.as_str(), "in-memory" | "macro-inmem")
-        {
+        if candidate.archived || matches!(candidate.harness.as_str(), "in-memory" | "macro-inmem") {
             continue;
         }
         match candidate.turn_state {

@@ -45,7 +45,7 @@ impl<Repo: AgentSessionRepo> SessionStandings for Repo {
         let session = self.get(session_id).await?;
         Ok(SessionStanding {
             owner: session.owner_user().ok().cloned(),
-            archived: session.is_archived,
+            archived: session.is_archived(),
         })
     }
 }

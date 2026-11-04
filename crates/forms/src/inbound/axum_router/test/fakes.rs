@@ -260,6 +260,8 @@ pub(super) fn form() -> Form {
         updated_at: at,
         project_id: None,
         is_hidden_in_drive: false,
+        responses_visible: false,
+        anonymous: false,
     }
 }
 

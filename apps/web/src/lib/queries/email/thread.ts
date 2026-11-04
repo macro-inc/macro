@@ -16,10 +16,7 @@ import type {
   ApiThread as Thread,
   UpsertScheduledResponse,
 } from '@service-email/generated/schemas';
-import {
-  markGraphqlEmailThreadSeen,
-  markGraphqlEmailThreadUnread,
-} from '@service-storage/graphql-email-read-state';
+import { markGraphqlEmailThreadUnread } from '@service-storage/graphql-email-read-state';
 import {
   getGraphqlSoupClient,
   graphqlCacheEnabled,
@@ -41,6 +38,7 @@ import { invalidateAllSoup } from '../soup/normalized-cache';
 import { type UndoHandle, useUndoableMutation } from '../undo';
 import { type MutationCallbacks, withCallbacks } from '../utils';
 import { updateEmailThreadState } from './cache-cleanup';
+import { invalidateEmailFolderQueries } from './folder-cache';
 import {
   createGraphqlEmailThreadQuery,
   fetchGraphqlEmailThread,
@@ -51,6 +49,7 @@ import {
   type EmailArchiveDisposition,
 } from './integration';
 import { emailKeys } from './keys';
+import { type MarkThreadAsSeenParams, markEmailThreadSeen } from './read-state';
 
 const THREAD_STALE_TIME = 5 * 60 * 1000;
 
@@ -332,64 +331,13 @@ export function useThreadQuery<TData = ThreadQueryData>(
   };
 }
 
-type MarkThreadAsSeenParams = {
-  threadId: string;
-  /** Target inbox for a non-primary inbox; sent as the X-Email-Link-Id header. */
-  linkId?: string;
-};
-
-/**
- * Optimistically update soup queries when marking as seen.
- * Note: We intentionally don't update the thread messages cache here.
- * Doing so triggers Suspense boundaries which unmount/remount the email view,
- * causing scroll position to reset. The is_read property isn't used in the
- * email view anyway - only the soup/list view needs it.
- */
-function threadSeenOnMutate(params: MarkThreadAsSeenParams): void {
-  if (isFeatureEnabled(enableGraphqlSoup)) return;
-  optimisticUpdateSoupEntity({
-    tag: 'emailThread',
-    data: { id: params.threadId, isRead: true },
-    frecency_score: 0,
-  });
-}
-
-/**
- * Mutation to mark a thread as seen.
- */
+/** Mutation wrapper for the shared optimistic thread read operation. */
 export function useMarkThreadAsSeenMutation(
   callbacks?: MutationCallbacks<void, Error, MarkThreadAsSeenParams>
 ) {
   return useMutation(() => ({
-    mutationFn: async (params: MarkThreadAsSeenParams) => {
-      if (isFeatureEnabled(enableGraphqlSoup)) {
-        // The optimistic and committed `isRead` reach every list the cache
-        // maintains; the rest are read again when the write commits.
-        const disposition = await markGraphqlEmailThreadSeen(
-          getGraphqlSoupClient(),
-          params.threadId,
-          getUnmaintainedGraphqlSoupRevalidations()
-        );
-        if (disposition === 'committed' && !graphqlCacheEnabled())
-          await refreshActiveGraphqlSoupQueries();
-        return;
-      }
-      await throwOnErr(() =>
-        emailClient.markThreadAsSeen(
-          { thread_id: params.threadId },
-          params.linkId
-        )
-      );
-    },
-    ...withCallbacks<void, Error, MarkThreadAsSeenParams>(
-      {
-        onMutate: threadSeenOnMutate,
-        // Note: We intentionally don't invalidate thread messages in onSuccess.
-        // The optimistic update already sets isRead in soup, and invalidating
-        // thread messages triggers Suspense which resets scroll position.
-      },
-      callbacks
-    ),
+    mutationFn: markEmailThreadSeen,
+    ...withCallbacks<void, Error, MarkThreadAsSeenParams>({}, callbacks),
   }));
 }
 
@@ -402,7 +350,7 @@ type MarkThreadAsUnreadParams = {
 /**
  * Optimistically flip the soup row to unread. The thread messages cache is
  * intentionally left alone for the same Suspense/scroll-reset reason as
- * threadSeenOnMutate.
+ * markEmailThreadSeen.
  */
 function threadUnreadOnMutate(params: MarkThreadAsUnreadParams): void {
   if (isFeatureEnabled(enableGraphqlSoup)) return;
@@ -442,7 +390,10 @@ export function useMarkThreadAsUnreadMutation(
       );
     },
     ...withCallbacks<void, Error, MarkThreadAsUnreadParams>(
-      { onMutate: threadUnreadOnMutate },
+      {
+        onMutate: threadUnreadOnMutate,
+        onSettled: () => invalidateEmailFolderQueries(),
+      },
       callbacks
     ),
   }));

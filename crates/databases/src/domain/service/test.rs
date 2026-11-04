@@ -41,6 +41,7 @@ mod delete_table;
 mod derived_columns;
 mod discovery;
 mod domain_events;
+mod duplicate;
 mod fakes;
 mod infer_column_type;
 mod metadata;

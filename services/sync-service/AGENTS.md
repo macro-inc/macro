@@ -39,8 +39,9 @@ updates over WebSocket.
 
 ## Recipes
 
-- Change the wire protocol: `bebop/schema.bop` → `cd bebop && npx bebop-tools build`
-  (TS bindings) → `worker-build` regenerates Rust bindings via `build.rs`.
+- Change the wire protocol with the repository-pinned Bebop generator; update
+  both service and collaboration package bindings (see README), then
+  `worker-build` regenerates Rust bindings via `build.rs`.
 - Add a storage backend: `src/outbound/storage/backends/` (new file + `mod.rs`) → gate
   it behind a new feature in `Cargo.toml` → wire into `src/outbound/storage.rs`.
 - Add a non-document surface: `src/inbound/durable_object/surface_api.rs` →
@@ -87,7 +88,10 @@ to the requested surface. These are scoped sync JWTs, not app-session tokens.
   A new write path does the same (`tests/peer_authors.test.ts`).
 - `migration-test-hooks` is test-only fault injection — never enable it in a
   deployed worker (see the feature's doc comment in `Cargo.toml`).
+- Provision `LEXICAL_SERVICE_AUTH_KEY` to match lexical-service before deploying; `just check-secrets <environment>` checks binding presence without reading values.
+- Deploy `PeerCommentUpdate` support before clients send it; validate these frames as comment-only for editors as well as commenters, and reject viewers.
 - Never run `just deploy-dev` / `just deploy-prod` without explicit approval.
+- Wait at least five minutes after a manual worker deployment before publishing clients that require its new protocol; the CI worker job waits out Durable Objects' default 300-second code-update deferral.
 
 ## Related
 
