@@ -125,6 +125,8 @@ pub struct RefreshedGrant {
 pub struct MicrosoftAccessGrant {
     token: Zeroizing<String>,
     pub scopes: Vec<String>,
+    /// Served from this process's token cache rather than a refresh.
+    pub cached: bool,
 }
 impl MicrosoftAccessGrant {
     pub fn as_str(&self) -> &str {
@@ -595,6 +597,7 @@ impl<R: MicrosoftGrantRepository, P: MicrosoftIdentityProvider, F> MicrosoftAuth
             return Ok(MicrosoftAccessGrant {
                 token: cached.value.clone(),
                 scopes: cached.scopes.clone(),
+                cached: true,
             });
         }
         let lease = macro_uuid::generate_uuid_v7();
@@ -651,6 +654,7 @@ impl<R: MicrosoftGrantRepository, P: MicrosoftIdentityProvider, F> MicrosoftAuth
             Ok(MicrosoftAccessGrant {
                 token: refreshed.access_token,
                 scopes: refreshed.scopes,
+                cached: false,
             })
         }
         .await;

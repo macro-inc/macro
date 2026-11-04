@@ -1,6 +1,9 @@
 import type { MacroClient } from '../../utils/client';
 import { Team } from './team';
 
+/**
+ * @routing Use when managing teams and membership or inviting people to a team; not inviting people to Macro, which is referrals.
+ */
 export class TeamNamespace {
   constructor(private readonly client: MacroClient) {}
 

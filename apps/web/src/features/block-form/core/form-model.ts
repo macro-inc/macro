@@ -5,8 +5,9 @@
  *
  * The shapes follow the service's wire types, but core never imports them.
  * Sections are an editor projection: the wire's questions, gate or booking
- * union is flattened into one shape (a questions section has no rules; a
- * gate has no questions; only a booking step has a target), converted both
+ * union is flattened into one shape (only a gate has gate rules; only a
+ * questions section has questions or a condition; only a booking step has a
+ * target), converted both
  * ways in `queries/form-detail.ts`. A form has at most one booking step, and
  * it comes last.
  */
@@ -16,7 +17,7 @@ export type FormAudience = 'members' | 'public';
 
 export type FormStatus = 'open' | 'closed';
 
-/** What the viewer may do: view = respond; edit = build, and edit responses (edit on the linked database). */
+/** What the viewer may do: view = respond (and read shared responses); edit = build, and edit responses (edit on the linked database). */
 export type FormAccess = 'view' | 'edit' | 'owner';
 
 export type SectionKind = 'questions' | 'gate' | 'booking';
@@ -184,6 +185,11 @@ export type FormSection = {
   gateRules: GateRules | null;
   gateMessage: string;
   /**
+   * Only a questions section has one: it is shown only when the answers of
+   * earlier shown sections pass it, and skipped otherwise. Null: always shown.
+   */
+  showWhen: GateRules | null;
+  /**
    * Only a booking step has a target, and only editors read it: respondents
    * get it from an accepted submission (`UnlockedBooking`).
    */
@@ -213,6 +219,8 @@ export type FormMetadata = {
   status: FormStatus;
   closesAt: string | null;
   tallyVisible: boolean;
+  responsesVisible: boolean;
+  anonymous: boolean;
   confirmationMessage: string;
   branding: FormBranding;
   submittedColumnId: string | null;

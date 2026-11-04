@@ -23,6 +23,8 @@ function offsite(): FormDetail {
       status: 'open',
       closesAt: '2026-10-03T17:00:00Z',
       tallyVisible: false,
+      responsesVisible: false,
+      anonymous: false,
       confirmationMessage: 'See you there.',
       branding: { logoFileId: null, coverFileId: null, accentColor: null },
       submittedColumnId: null,
@@ -37,6 +39,7 @@ function offsite(): FormDetail {
           kind: 'questions',
           gateRules: null,
           gateMessage: '',
+          showWhen: null,
           bookingTarget: null,
           questions: [
             {
@@ -75,6 +78,7 @@ function offsite(): FormDetail {
             ],
           },
           gateMessage: 'The offsite is for employees.',
+          showWhen: null,
           bookingTarget: null,
           questions: [],
         },
@@ -85,6 +89,7 @@ function offsite(): FormDetail {
           kind: 'questions',
           gateRules: null,
           gateMessage: '',
+          showWhen: null,
           bookingTarget: null,
           questions: [
             {
@@ -132,6 +137,8 @@ describe('createRespond', () => {
         status: 'closed',
         closesAt: null,
         tallyVisible: false,
+        responsesVisible: false,
+        anonymous: false,
         confirmationMessage: 'See you there.',
         branding: { logoFileId: null, coverFileId: null, accentColor: null },
         submittedColumnId: null,
@@ -146,6 +153,7 @@ describe('createRespond', () => {
             description: '',
             gateRules: null,
             gateMessage: '',
+            showWhen: null,
             bookingTarget: null,
             questions: [
               {
@@ -174,6 +182,7 @@ describe('createRespond', () => {
               ],
             },
             gateMessage: 'This invitation is for Ada.',
+            showWhen: null,
             bookingTarget: null,
           },
         ],
@@ -609,6 +618,7 @@ describe('createRespond', () => {
             kind: 'questions',
             gateRules: null,
             gateMessage: '',
+            showWhen: null,
             bookingTarget: null,
             questions: [],
           });
@@ -812,6 +822,282 @@ describe('createRespond', () => {
     });
   });
 
+  describe('a section shown on a condition', () => {
+    function branching(): FormDetail {
+      return {
+        form: {
+          id: 'form-2',
+          name: 'Offsite RSVP',
+          description: '',
+          ownerId: 'macro|owner@example.com',
+          databaseId: 'database-1',
+          tableId: 'table-1',
+          audience: 'members',
+          status: 'open',
+          closesAt: null,
+          tallyVisible: false,
+          responsesVisible: false,
+          anonymous: false,
+          confirmationMessage: 'See you there.',
+          branding: { logoFileId: null, coverFileId: null, accentColor: null },
+          submittedColumnId: null,
+          respondentColumnId: null,
+        },
+        layout: {
+          sections: [
+            {
+              id: 'about',
+              title: 'About you',
+              description: '',
+              kind: 'questions',
+              gateRules: null,
+              gateMessage: '',
+              showWhen: null,
+              bookingTarget: null,
+              questions: [
+                {
+                  id: 'q-team',
+                  columnId: TEAM,
+                  helpText: '',
+                  required: true,
+                  widget: 'choice',
+                },
+              ],
+            },
+            {
+              id: 'contractors',
+              title: 'Your agency',
+              description: '',
+              kind: 'questions',
+              gateRules: null,
+              gateMessage: '',
+              showWhen: {
+                conjunction: 'and',
+                conditions: [
+                  {
+                    kind: 'condition',
+                    column: TEAM,
+                    test: {
+                      kind: 'options',
+                      operator: 'isAnyOf',
+                      options: [CONTRACTOR],
+                    },
+                  },
+                ],
+              },
+              bookingTarget: null,
+              questions: [
+                {
+                  id: 'q-agency',
+                  columnId: 'column-agency',
+                  helpText: '',
+                  required: true,
+                  widget: 'short',
+                },
+              ],
+            },
+            {
+              id: 'details',
+              title: 'Details',
+              description: '',
+              kind: 'questions',
+              gateRules: null,
+              gateMessage: '',
+              showWhen: null,
+              bookingTarget: null,
+              questions: [
+                {
+                  id: 'q-diet',
+                  columnId: 'column-diet',
+                  helpText: '',
+                  required: true,
+                  widget: 'paragraph',
+                },
+              ],
+            },
+          ],
+        },
+        columns: [
+          {
+            id: TEAM,
+            name: 'Team',
+            kind: { type: 'select', multi: false },
+            options: [
+              { id: CONTRACTOR, label: 'Contractor', color: null },
+              { id: EMPLOYEE, label: 'Employee', color: null },
+            ],
+          },
+          {
+            id: 'column-agency',
+            name: 'Agency',
+            kind: { type: 'text' },
+            options: [],
+          },
+          {
+            id: 'column-diet',
+            name: 'Diet',
+            kind: { type: 'text' },
+            options: [],
+          },
+        ],
+        access: 'view',
+        tableGone: false,
+      };
+    }
+
+    it('shows the section only while an earlier answer asks for it, keeps what was typed there, and never requires or sends it once skipped', async () => {
+      const sent: SubmittedAnswer[][] = [];
+      await createRoot(async (dispose) => {
+        const respond = createRespond({
+          detail: branching,
+          mine: () => null,
+          signedIn: () => true,
+          submit: (answers) => {
+            sent.push(answers);
+            return okAsync<SubmitOutcome, never>({
+              kind: 'submitted',
+              responseId: 'response-1',
+              booking: null,
+            });
+          },
+          editMine: () => errAsync({ message: 'unexpected' }),
+          mineFailed: () => false,
+          reloadMine: async () => {},
+          refetch: async () => {},
+          now,
+        });
+        expect(respond.view()).toMatchObject({
+          kind: 'answering',
+          position: 1,
+          total: 2,
+        });
+        respond.setAnswer('q-team', {
+          type: 'options',
+          value: [{ id: CONTRACTOR }],
+        });
+        expect(respond.view()).toMatchObject({ position: 1, total: 3 });
+        expect(respond.next()).toBe(true);
+        expect(respond.view()).toMatchObject({
+          kind: 'answering',
+          section: { id: 'contractors' },
+          position: 2,
+          total: 3,
+          isLast: false,
+        });
+        respond.setAnswer('q-agency', { type: 'text', value: 'Acme' });
+        respond.back();
+        respond.setAnswer('q-team', {
+          type: 'options',
+          value: [{ id: EMPLOYEE }],
+        });
+        expect(respond.next()).toBe(true);
+        expect(respond.view()).toMatchObject({
+          kind: 'answering',
+          section: { id: 'details' },
+          position: 2,
+          total: 2,
+          isLast: true,
+        });
+        respond.back();
+        expect(respond.view()).toMatchObject({ section: { id: 'about' } });
+        expect(respond.answers()['q-agency']).toEqual({
+          type: 'text',
+          value: 'Acme',
+        });
+        respond.next();
+        respond.setAnswer('q-diet', { type: 'text', value: 'None' });
+        await respond.submit();
+        expect(sent).toEqual([
+          [
+            {
+              question: 'q-team',
+              value: { type: 'options', value: [{ id: EMPLOYEE }] },
+            },
+            { question: 'q-diet', value: { type: 'text', value: 'None' } },
+          ],
+        ]);
+        expect(respond.view()).toEqual({
+          kind: 'confirmation',
+          answers: {
+            'q-team': { type: 'options', value: [{ id: EMPLOYEE }] },
+            'q-diet': { type: 'text', value: 'None' },
+          },
+          fresh: true,
+          alreadyResponded: false,
+          canEdit: true,
+          submittedAt: '2026-10-01T12:00:00.000Z',
+          booking: null,
+        });
+        dispose();
+      });
+    });
+
+    it('clears the answers of a section an edit skips', async () => {
+      const edits: SubmittedAnswer[][] = [];
+      const mine: MyResponse = {
+        status: 'submitted',
+        booking: null,
+        submittedAt: '2026-09-30T10:00:00Z',
+        answers: [
+          {
+            question: 'q-team',
+            value: { type: 'options', value: [{ id: CONTRACTOR }] },
+          },
+          { question: 'q-agency', value: { type: 'text', value: 'Acme' } },
+          { question: 'q-diet', value: { type: 'text', value: 'None' } },
+        ],
+      };
+      await createRoot(async (dispose) => {
+        const respond = createRespond({
+          detail: branching,
+          mine: () => mine,
+          signedIn: () => true,
+          submit: () => errAsync({ message: 'unexpected' }),
+          editMine: (answers) => {
+            edits.push(answers);
+            return okAsync({
+              kind: 'submitted',
+              responseId: 'response-1',
+              booking: null,
+            });
+          },
+          mineFailed: () => false,
+          reloadMine: async () => {},
+          refetch: async () => {},
+          now,
+        });
+        respond.editResponse();
+        expect(respond.view()).toMatchObject({
+          kind: 'answering',
+          position: 1,
+          total: 3,
+        });
+        respond.setAnswer('q-team', {
+          type: 'options',
+          value: [{ id: EMPLOYEE }],
+        });
+        respond.next();
+        expect(respond.view()).toMatchObject({
+          section: { id: 'details' },
+          position: 2,
+          total: 2,
+        });
+        await respond.submit();
+        expect(edits).toEqual([
+          [
+            {
+              question: 'q-team',
+              value: { type: 'options', value: [{ id: EMPLOYEE }] },
+            },
+            { question: 'q-agency', value: { type: 'clear' } },
+            { question: 'q-diet', value: { type: 'text', value: 'None' } },
+          ],
+        ]);
+        dispose();
+      });
+    });
+  });
+
   describe('a booking step', () => {
     const INTRO_CALL = { profileId: 'profile-1', eventTypeId: 'intro-call' };
     const UNLOCKED = {
@@ -832,6 +1118,7 @@ describe('createRespond', () => {
             kind: 'booking',
             gateRules: null,
             gateMessage: '',
+            showWhen: null,
             bookingTarget: null,
             questions: [],
           },
@@ -915,6 +1202,7 @@ describe('createRespond', () => {
         kind: 'booking',
         gateRules: null,
         gateMessage: '',
+        showWhen: null,
         bookingTarget: target,
         questions: [],
       });

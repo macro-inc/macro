@@ -1,20 +1,40 @@
 import { t } from '@app/lib/i18n';
 import { fireAndForget } from '@core/util/fireAndForget';
 import HashIcon from '@icon/system/regular/hash.svg';
-import { useSmartTagPreviewQuery } from '@queries/channel-labels/channel-labels';
+import QuestionMarkIcon from '@icon/system/regular/question-mark.svg';
+import {
+  useAvailableSectionChannelsQuery,
+  useChannelLabelsQuery,
+  useSmartTagPreviewQuery,
+} from '@queries/channel-labels/channel-labels';
+import type { ChannelLabel } from '@service-storage/generated/schemas/channelLabel';
 import type { ChannelLabelRule } from '@service-storage/generated/schemas/channelLabelRule';
 import type { ChannelLabelScopeSelection } from '@service-storage/generated/schemas/channelLabelScopeSelection';
 import {
   Button,
+  confirmDialog,
   Dialog,
+  HoverCard,
   Input,
   type ManagedDialogProps,
   type OpenDialogOptions,
   openDialog,
   Surface,
   ToggleSwitch,
+  Tooltip,
 } from '@ui';
-import { type Accessor, createSignal, For, Show } from 'solid-js';
+import {
+  type Accessor,
+  createMemo,
+  createSignal,
+  createUniqueId,
+  For,
+  getOwner,
+  Match,
+  Show,
+  Switch,
+} from 'solid-js';
+import { channelSectionScopeChangeError } from '../../../core/channel-label-eligibility';
 
 export type SectionDialogValue = {
   name: string;
@@ -25,98 +45,114 @@ export type SectionDialogValue = {
 export type SectionDialogProps = {
   scope?: ChannelLabelScopeSelection;
   canShare: boolean;
-  initial?: { name: string; rule?: ChannelLabelRule };
+  initial?: ChannelLabel;
   onConfirm: (value: SectionDialogValue) => Promise<void>;
 };
 
 function SmartSectionPreview(props: {
   pattern: Accessor<string>;
-  scope: ChannelLabelScopeSelection;
+  scope: Accessor<ChannelLabelScopeSelection>;
 }) {
   const preview = useSmartTagPreviewQuery(props.pattern, props.scope);
-  const data = () => (preview.isSuccess ? preview.data : undefined);
+  const data = () => (!preview.isPending ? preview.data : undefined);
+  const count = () => data()?.totalCount ?? 0;
   const matches = () => data()?.channels ?? [];
-  const totalCount = () => data()?.totalCount ?? 0;
-  const overflowCount = () => totalCount() - matches().length;
+  const overflow = () => count() - matches().length;
+
+  const retry = (
+    <Button
+      type="button"
+      variant="ghost"
+      size="xs"
+      onClick={() => fireAndForget(preview.refetch(), 'channels-view')}
+    >
+      {t('channelSections.retry')}
+    </Button>
+  );
 
   return (
-    <section
-      aria-label={t('channelSections.matchedChannels')}
+    <div
       aria-live="polite"
-      class="flex shrink-0 flex-col gap-0.5 text-sm"
+      aria-busy={preview.isFetching}
+      class="text-xs text-ink-muted"
     >
-      <div class="flex items-center gap-1.5 px-2 py-1 text-xs font-medium text-ink-muted">
-        <HashIcon class="size-3.5 shrink-0" aria-hidden="true" />
-        <span>{t('channelSections.matchedChannels')}</span>
-        <Show when={data()}>
-          <span class="tabular-nums">{totalCount()}</span>
-        </Show>
-      </div>
-      <Show
-        when={!preview.isPending}
-        fallback={
-          <p class="px-2 py-2 text-xs text-ink-muted">
-            {t('channelSections.matchingChannelsLoading')}
-          </p>
-        }
-      >
-        <Show
-          when={!preview.isError}
-          fallback={
-            <div class="flex items-center justify-between gap-2 px-2 py-1 text-xs text-ink-muted">
-              <span>{t('channelSections.matchesUnavailable')}</span>
-              <Button
-                type="button"
-                variant="ghost"
-                size="sm"
-                onClick={() =>
-                  fireAndForget(preview.refetch(), 'channels-view')
-                }
-              >
-                {t('channelSections.retry')}
-              </Button>
-            </div>
-          }
-        >
-          <Show
-            when={totalCount()}
-            fallback={
-              <p class="px-2 py-2 text-xs text-ink-muted">
-                {t('channelSections.noMatchingChannels')}
-              </p>
+      <Switch>
+        <Match when={preview.isPending}>
+          {t('channelSections.matchingChannelsLoading')}
+        </Match>
+        <Match when={data()}>
+          <HoverCard
+            as="button"
+            placement="bottom-start"
+            triggerAriaLabel={t('channelSections.matchCount', {
+              count: count(),
+            })}
+            triggerClass="underline decoration-dotted underline-offset-4"
+            contentClass="block min-w-56 max-w-80"
+            content={
+              <div>
+                <Show
+                  when={count() > 0}
+                  fallback={
+                    <p class="p-2">
+                      {props.scope() === 'team'
+                        ? t('channelSections.noMatchingTeamChannels')
+                        : t('channelSections.noMatchingChannels')}
+                    </p>
+                  }
+                >
+                  <ul class="max-h-48 overflow-y-auto">
+                    <For each={matches()}>
+                      {(channel) => (
+                        <li class="flex min-w-0 items-center gap-2 p-2">
+                          <HashIcon class="size-3.5 shrink-0" />
+                          <Tooltip
+                            as="span"
+                            class="min-w-0"
+                            label={channel.name}
+                          >
+                            <span class="truncate">{channel.name}</span>
+                          </Tooltip>
+                        </li>
+                      )}
+                    </For>
+                  </ul>
+                  <Show when={overflow() > 0}>
+                    <p class="p-2">
+                      {t('channelSections.moreChannelsMatched', {
+                        count: overflow(),
+                      })}
+                    </p>
+                  </Show>
+                </Show>
+              </div>
             }
           >
-            <ul class="flex max-h-48 flex-col overflow-y-auto scrollbar-hidden">
-              <For each={matches()}>
-                {(channel) => (
-                  <li
-                    class="flex min-w-0 items-center gap-2 px-2 py-2"
-                    title={channel.name}
-                  >
-                    <HashIcon
-                      class="size-4 shrink-0 text-ink-muted"
-                      aria-hidden="true"
-                    />
-                    <span class="truncate">{channel.name}</span>
-                  </li>
-                )}
-              </For>
-            </ul>
-            <Show when={overflowCount() > 0}>
-              <p class="px-2 py-2 text-xs text-ink-muted">
-                {t('channelSections.moreChannelsMatched', {
-                  count: overflowCount(),
-                })}
-              </p>
-            </Show>
+            {t('channelSections.matchCount', { count: count() })}
+          </HoverCard>
+          <Show when={preview.isError}>
+            <span class="ml-2">{t('channelSections.matchesUnavailable')}</span>
+            {retry}
           </Show>
-        </Show>
-      </Show>
-    </section>
+        </Match>
+        <Match when={preview.isError}>
+          <div class="flex items-center gap-2">
+            {t('channelSections.matchesUnavailable')}
+            {retry}
+          </div>
+        </Match>
+      </Switch>
+    </div>
   );
 }
 
 function SectionDialog(props: SectionDialogProps & ManagedDialogProps) {
+  const dialogOwner = getOwner();
+  const initialScope = props.scope ?? 'personal';
+  const teamLabels = useChannelLabelsQuery();
+  const channels = useAvailableSectionChannelsQuery(
+    () => props.canShare && Boolean(props.initial?.channelCount)
+  );
   const [name, setName] = createSignal(props.initial?.name ?? '');
   const [scope, setScope] = createSignal<ChannelLabelScopeSelection>(
     props.scope ?? 'personal'
@@ -129,9 +165,52 @@ function SectionDialog(props: SectionDialogProps & ManagedDialogProps) {
   );
   const [saving, setSaving] = createSignal(false);
   const [error, setError] = createSignal('');
+  const [sharingHelpOpen, setSharingHelpOpen] = createSignal(false);
+  const sharingHelpId = createUniqueId();
+
+  const channelsById = createMemo(
+    () =>
+      new Map(
+        (channels.isPending ? [] : (channels.data ?? [])).map((channel) => [
+          channel.id,
+          {
+            channelType: channel.channel_type,
+            teamId: channel.team_id ?? undefined,
+            isParticipant: channel.is_participant,
+          },
+        ])
+      )
+  );
+  const scopeChangeError = (target: ChannelLabelScopeSelection) => {
+    const initial = props.initial;
+    if (!initial) return;
+
+    const teamId = !teamLabels.isPending ? teamLabels.data?.teamId : undefined;
+    if (target === 'team' && !teamId) return t('channelSections.noAccess');
+    if (initial.channelCount > 0 && channels.isPending)
+      return t('channelSections.checkingSharing');
+    if (initial.channelCount > 0 && channels.isError)
+      return t('channelSections.channelsUnavailable');
+
+    const error = channelSectionScopeChangeError(initial, channelsById(), {
+      teamId: target === 'team' ? teamId : undefined,
+    });
+    if (error === 'team-only')
+      return t('channelSections.sharingIneligibleChannels');
+    if (error === 'unavailable')
+      return t('channelSections.sharingUnavailableChannels');
+  };
+  const sharingDisabledReason = () => {
+    if (scope() !== initialScope) return;
+    return scopeChangeError(initialScope === 'personal' ? 'team' : 'personal');
+  };
+  const selectedScopeError = () =>
+    scope() !== initialScope ? scopeChangeError(scope()) : undefined;
 
   const trimmedPattern = () => pattern().trim();
   const canSubmit = () => {
+    if (selectedScopeError()) return false;
+
     if (name().trim().length === 0) {
       return false;
     }
@@ -140,7 +219,11 @@ function SectionDialog(props: SectionDialogProps & ManagedDialogProps) {
       return false;
     }
 
-    if (!props.initial || name().trim() !== props.initial.name.trim()) {
+    if (
+      !props.initial ||
+      scope() !== initialScope ||
+      name().trim() !== props.initial.name.trim()
+    ) {
       return true;
     }
 
@@ -170,6 +253,28 @@ function SectionDialog(props: SectionDialogProps & ManagedDialogProps) {
     setError('');
 
     try {
+      if (props.initial && initialScope === 'team' && scope() === 'personal') {
+        const confirmed = await confirmDialog(
+          {
+            title: t('channelSections.makePersonalTitle'),
+            body: t('channelSections.makePersonalBody', {
+              name: props.initial.name,
+            }),
+            confirmLabel: t('channelSections.makePersonal'),
+            cancelLabel: t('channelSections.cancel'),
+            tone: 'danger',
+          },
+          { owner: dialogOwner }
+        );
+        if (!confirmed) return;
+      }
+
+      const scopeError = selectedScopeError();
+      if (scopeError) {
+        setError(scopeError);
+        return;
+      }
+
       const value: SectionDialogValue = {
         name: name().trim(),
         scope: scope(),
@@ -241,13 +346,9 @@ function SectionDialog(props: SectionDialogProps & ManagedDialogProps) {
               />
             </Show>
             <Show when={kind() === 'smart'}>
-              <label class="flex flex-wrap items-center gap-x-3 gap-y-2 text-sm text-ink-muted focus-within:text-ink">
-                <span class="shrink-0">
-                  {t('channelSections.nameContains')}
-                </span>
+              <label class="flex flex-col gap-2 text-sm text-ink-muted">
+                <span>{t('channelSections.nameContains')}</span>
                 <Input
-                  variant="bare"
-                  class="min-w-40 flex-1 px-0 text-sm"
                   value={pattern()}
                   onInput={(event) => setPattern(event.currentTarget.value)}
                   maxLength={200}
@@ -262,26 +363,42 @@ function SectionDialog(props: SectionDialogProps & ManagedDialogProps) {
               </p>
             </Show>
             <Show when={kind() === 'smart' && trimmedPattern().length > 0}>
-              <Show when={scope()} keyed>
-                {(selectedScope) => (
-                  <SmartSectionPreview
-                    pattern={trimmedPattern}
-                    scope={selectedScope}
-                  />
-                )}
-              </Show>
+              <SmartSectionPreview pattern={trimmedPattern} scope={scope} />
+            </Show>
+            <Show when={scope() === 'team'}>
+              <p class="text-xs leading-5 text-warning">
+                {t('channelSections.teamChannelsOnly')}
+              </p>
             </Show>
           </div>
           <div class="flex flex-wrap items-center justify-end gap-3 px-5 py-3">
-            <Show when={!props.initial && props.canShare}>
-              <ToggleSwitch
-                class="mr-auto shrink-0"
-                label={t('channelSections.shared')}
-                labelClass="text-xs text-ink-muted font-normal whitespace-nowrap"
-                checked={scope() === 'team'}
-                onChange={(checked) => setScope(checked ? 'team' : 'personal')}
-                disabled={saving()}
-              />
+            <Show when={props.canShare}>
+              <div class="mr-auto flex shrink-0 items-center gap-1">
+                <ToggleSwitch
+                  label={t('channelSections.shared')}
+                  labelClass="text-xs text-ink-muted font-normal whitespace-nowrap"
+                  checked={scope() === 'team'}
+                  onChange={(checked) =>
+                    setScope(checked ? 'team' : 'personal')
+                  }
+                  disabled={saving() || Boolean(sharingDisabledReason())}
+                />
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="icon-xs"
+                  aria-label={t('channelSections.sharingHelpLabel')}
+                  aria-expanded={sharingHelpOpen()}
+                  aria-controls={sharingHelpId}
+                  onClick={() => setSharingHelpOpen((open) => !open)}
+                  tooltip={{
+                    content: t('channelSections.sharingHelp'),
+                    disabled: sharingHelpOpen(),
+                  }}
+                >
+                  <QuestionMarkIcon class="size-3.5" />
+                </Button>
+              </div>
             </Show>
             <div class="ml-auto flex shrink-0 items-center gap-2">
               <Button
@@ -300,6 +417,31 @@ function SectionDialog(props: SectionDialogProps & ManagedDialogProps) {
                 {submitLabel()}
               </Button>
             </div>
+            <Show when={sharingDisabledReason() || selectedScopeError()}>
+              {(reason) => (
+                <p class="w-full text-xs leading-5 text-warning">{reason()}</p>
+              )}
+            </Show>
+            <Show when={channels.isError}>
+              <Button
+                type="button"
+                variant="ghost"
+                size="xs"
+                onClick={() =>
+                  fireAndForget(channels.refetch(), 'channels-view')
+                }
+              >
+                {t('channelSections.retry')}
+              </Button>
+            </Show>
+            <Show when={sharingHelpOpen()}>
+              <p
+                id={sharingHelpId}
+                class="w-full text-xs leading-5 text-ink-muted"
+              >
+                {t('channelSections.sharingHelp')}
+              </p>
+            </Show>
           </div>
         </form>
       </Surface>

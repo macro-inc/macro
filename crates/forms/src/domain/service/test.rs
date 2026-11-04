@@ -24,8 +24,11 @@ use crate::domain::models::{
     FormSectionId, FormStatus, QuestionLayout, StoredForm, Widget,
 };
 
+mod anonymous;
+mod authoring_branching;
 mod authoring_workflow;
 mod booking;
+mod branching;
 mod catalog;
 mod create;
 mod drafts;
@@ -192,6 +195,7 @@ fn rsvp_layout() -> FormLayout {
                         widget: Some(Widget::Date),
                     },
                 ],
+                show_when: None,
             },
             FormSection::Gate {
                 id: ELIGIBILITY,
@@ -229,6 +233,7 @@ fn rsvp_layout() -> FormLayout {
                         widget: None,
                     },
                 ],
+                show_when: None,
             },
         ],
     }
@@ -298,7 +303,10 @@ fn seed_rsvp(world: &Shared, audience: Audience) {
             branding: FormBranding::default(),
             created_at: now,
             updated_at: now,
+            project_id: None,
             is_hidden_in_drive: false,
+            responses_visible: false,
+            anonymous: false,
         },
         trashed_at: None,
         name_follows_database: false,

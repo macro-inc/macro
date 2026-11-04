@@ -78,20 +78,34 @@ type IdMappingResponse = { target_id: string | null };
 // Hand-written mirrors of the DCS OpenAPI types for the Pipedream MCP
 // connector endpoints (`/pipedream/mcp/*`); replace with the orval-generated
 // schemas on the next client regeneration.
+/** The backend holding a connection's grant. */
+export type PipedreamProvider = 'pipedream' | 'connect';
 export type PipedreamConnectionResponse = {
   app_slug: string;
   server_name: string;
   enabled: boolean;
+  provider?: PipedreamProvider;
 };
 export type PipedreamUpdateRequest = {
   app_slug: string;
   server_name?: string;
   enabled?: boolean;
 };
+export type PipedreamTokenRequest = {
+  /** With it, an app Macro Connect serves may answer with a Connect URL. */
+  app_slug?: string;
+};
+/** A Pipedream Connect token, or for `provider: 'connect'` a Connect URL. */
 export type PipedreamTokenResponse = {
-  token: string;
-  expires_at: string;
-  connect_link_url: string;
+  provider: PipedreamProvider;
+  token?: string | null;
+  expires_at?: string | null;
+  connect_link_url?: string | null;
+  connect_url?: string | null;
+};
+export type PipedreamConnectCompleteRequest = {
+  app_slug: string;
+  server_name?: string;
 };
 export type PipedreamCompleteRequest = {
   account_id: string;
@@ -435,17 +449,18 @@ export const cognitionApiServiceClient = {
   },
 
   /**
-   * Create a Pipedream Connect token for authorizing an MCP connector.
+   * Start connecting an MCP connector: a Pipedream Connect token, or a
+   * Macro Connect URL when the backend routes `app_slug` through Connect.
    * Answers with the {@link PIPEDREAM_DISABLED} error code on deployments
    * where Pipedream isn't configured (HTTP 501).
    */
-  async createPipedreamToken() {
+  async createPipedreamToken(args: PipedreamTokenRequest = {}) {
     return (
       await fetchWithToken<PipedreamTokenResponse, typeof PIPEDREAM_DISABLED>(
         `${dcsHost}/pipedream/mcp/token`,
         {
           method: 'POST',
-          body: JSON.stringify({}),
+          body: JSON.stringify(args),
           errorResponseHandler: async (response) => {
             if (response.status === 501) {
               return {
@@ -470,6 +485,22 @@ export const cognitionApiServiceClient = {
         method: 'POST',
         body: JSON.stringify(args),
       })
+    ).map((result) => result);
+  },
+
+  /**
+   * Record an app connected through Macro Connect. Fails with `NOT_FOUND`
+   * until Connect lists the connection, so callers poll it.
+   */
+  async completeMacroConnect(args: PipedreamConnectCompleteRequest) {
+    return (
+      await dcsFetch<PipedreamConnectionResponse>(
+        `/pipedream/mcp/connect/complete`,
+        {
+          method: 'POST',
+          body: JSON.stringify(args),
+        }
+      )
     ).map((result) => result);
   },
 

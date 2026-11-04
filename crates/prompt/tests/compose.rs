@@ -36,26 +36,11 @@ fn base_prompt_includes_channel_message_mention_format() {
 }
 
 #[test]
-fn tool_use_prompt_appends_tool_section_to_base() {
+fn tool_use_prompt_appends_tool_sections_to_base_and_no_area_guidance() {
     let rendered = TOOL_USE_PROMPT.to_string();
     assert!(rendered.starts_with(&BASE_PROMPT.to_string()));
-    assert!(rendered.contains("# Tool Use"));
-    assert!(rendered.contains("read the appropriate resource using the read tool."));
-    assert!(
-        rendered.contains("Only fall back to searching by name if you cannot resolve an address.")
-    );
-}
-
-#[test]
-fn tool_use_prompt_appends_email_section_after_tool_use() {
-    let rendered = TOOL_USE_PROMPT.to_string();
-    assert!(rendered.contains("# Email Inboxes"));
-    assert!(
-        rendered
-            .trim_end()
-            .ends_with("or omit both for the primary inbox.")
-    );
-    let tool_use_idx = rendered.find("# Tool Use").expect("tool use section");
-    let email_idx = rendered.find("# Email Inboxes").expect("email section");
-    assert!(tool_use_idx < email_idx, "email section must come last");
+    // How each area of Macro works is the SDK's `@agent` guidance, which
+    // `ai_tools` composes; none of it lives in this crate.
+    assert!(!rendered.contains("How Macro databases work"));
+    assert!(!rendered.contains("Labels are per inbox"));
 }

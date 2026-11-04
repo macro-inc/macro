@@ -389,7 +389,7 @@ async fn archive_is_persisted_published_and_blocks_rename() {
         .await
         .expect("archive session");
 
-    assert!(repo.get(session).await.expect("get session").is_archived);
+    assert!(repo.get(session).await.expect("get session").is_archived());
     assert_eq!(realtime.updated(), vec![session]);
     assert!(matches!(
         service
@@ -446,7 +446,7 @@ async fn a_conversations_current_session_is_not_archived() {
         service.set_archived(&owner_access(session), true).await,
         Err(AgentSessionError::AnswersConversation(id)) if id == session
     ));
-    assert!(!repo.get(session).await.expect("get session").is_archived);
+    assert!(!repo.get(session).await.expect("get session").is_archived());
     assert!(realtime.updated().is_empty());
     // Unarchiving is never refused.
     service
@@ -818,6 +818,10 @@ impl AgentSessionRepo for BlockingPromptLogs {
         self.repo.set_turn_prompter(id, prompter).await
     }
 
+    async fn add_follower(&self, id: AgentSessionId, user: &MacroUserIdStr<'static>) -> Result<()> {
+        self.repo.add_follower(id, user).await
+    }
+
     async fn turn_prompter(
         &self,
         id: AgentSessionId,
@@ -846,8 +850,8 @@ impl AgentSessionRepo for BlockingPromptLogs {
         self.repo.set_name(id, name).await
     }
 
-    async fn set_archived(&self, id: AgentSessionId, is_archived: bool) -> Result<()> {
-        self.repo.set_archived(id, is_archived).await
+    async fn set_archived(&self, id: AgentSessionId, archived: bool) -> Result<()> {
+        self.repo.set_archived(id, archived).await
     }
 
     async fn is_current_conversation_session(&self, id: AgentSessionId) -> Result<bool> {

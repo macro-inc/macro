@@ -2,6 +2,7 @@ import {
   NavigationStack,
   useNavigationStack,
 } from '@app/components/navigation-stack/NavigationStack';
+import { setGlobalTabManager } from '@app/signal/tabLayout';
 import { toast } from '@core/component/Toast/Toast';
 import { render } from '@solidjs/testing-library';
 import {
@@ -11,12 +12,13 @@ import {
   createSignal,
   type ParentProps,
 } from 'solid-js';
-import { beforeEach, expect, it, vi } from 'vitest';
+import { beforeEach, expect, it, onTestFinished, vi } from 'vitest';
 import { createPreviewSelectionGuard } from './createPreviewSelectionGuard';
 import type { PreviewPanelSelection } from './previewTarget';
 import { createContentInstanceRegistry } from './split-layout/contentInstanceRegistry';
 import { SplitLayoutContext } from './split-layout/context';
 import type { SplitManager } from './split-layout/layoutManager';
+import type { TabManager } from './tab-layout/tab-manager';
 
 let manager: Pick<
   SplitManager,
@@ -28,7 +30,7 @@ const activate = vi.hoisted(() => vi.fn());
 vi.mock('@app/signal/splitLayout', () => ({ globalSplitManager: vi.fn() }));
 vi.mock('@core/component/Toast/Toast', () => ({ toast: { alert: vi.fn() } }));
 vi.mock('./split-layout/layoutUtils', () => ({
-  useSplitPanelOrThrow: () => ({ handle: { activate } }),
+  useSplitPanelOrThrow: () => ({ handle: { id: 'split-1', activate } }),
 }));
 vi.mock('@core/constant/allBlocks', () => ({
   resolveBlockAlias: (type: string) => (type === 'task' ? 'md' : type),
@@ -141,6 +143,51 @@ it('does not move focus or toast for a conflicting restored selection', () => {
   expect(toast.alert).toHaveBeenCalledWith('Content already open');
   restored.unmount();
   first.unmount();
+});
+
+it('brings up the background tab holding a selection instead of its hidden split', () => {
+  const revealSplit = vi.fn(() => true);
+  setGlobalTabManager({ revealSplit } as unknown as TabManager);
+  onTestFinished(() => setGlobalTabManager(undefined));
+  const channel = { type: 'channel', id: 'channel' } as const;
+  const background = setup();
+  const live = setup();
+  background.stack.reset(channel);
+
+  expect(live.selectionGuard.canSelect(channel)).toBe(false);
+  expect(revealSplit).toHaveBeenCalledWith('split-1');
+  expect(activate).not.toHaveBeenCalled();
+  live.unmount();
+  background.unmount();
+});
+
+it('leaves a selection already in the URL passive as its view mounts', () => {
+  const channel = { type: 'channel', id: 'channel' } as const;
+  const holder = setup();
+  holder.stack.reset(channel);
+  const [selection, setSelection] =
+    createSignal<PreviewPanelSelection>(channel);
+
+  function RouteHost() {
+    const selectPreview = createPreviewSelectionGuard();
+    createEffect(() => selectPreview(selection()));
+    return null;
+  }
+  const mounted = render(() => (
+    <Layout>
+      <RouteHost />
+    </Layout>
+  ));
+  expect(activate).not.toHaveBeenCalled();
+  expect(toast.alert).not.toHaveBeenCalled();
+
+  // Later route changes are navigation again.
+  setSelection({ type: 'email', id: 'free' });
+  setSelection(channel);
+  expect(activate).toHaveBeenCalledOnce();
+  expect(toast.alert).toHaveBeenCalledOnce();
+  mounted.unmount();
+  holder.unmount();
 });
 
 it('uses the change reason independently of mount timing', () => {

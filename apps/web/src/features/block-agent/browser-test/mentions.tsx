@@ -29,6 +29,7 @@ function Fixture() {
   const literal = new URLSearchParams(location.search).has('literal');
   const reply = (): FoldedMessage => ({
     agentSessionId: 'fixture',
+    key: '1:agent',
     turn: 1,
     author: { kind: 'agent' },
     parts: [

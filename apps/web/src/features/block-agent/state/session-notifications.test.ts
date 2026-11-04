@@ -5,6 +5,7 @@ import type {
   FoldedMessage,
   SessionMetadata,
   SessionNotification,
+  ToolName,
 } from '@service-agent-fold/generated/types';
 import { beforeAll, expect, it } from 'vitest';
 import { timelineNotifications } from './session-notifications';
@@ -157,6 +158,7 @@ it('suppresses review events only when their trusted card is in the thread', () 
   ];
   const card: FoldedMessage = {
     agentSessionId: 'session',
+    key: '0:agent',
     turn: 0,
     author: { kind: 'agent' },
     requestId: null,
@@ -186,13 +188,18 @@ it('suppresses review events only when their trusted card is in the thread', () 
   expect(
     timelineNotifications([card], events).map((event) => event.id)
   ).toEqual(['connected']);
+  const externalName: ToolName = {
+    kind: 'mcp',
+    server: 'external',
+    tool: 'PresentReview',
+  };
   const externalCard: FoldedMessage = {
     ...card,
     parts: card.parts.map((part) =>
       part.kind === 'tool_use'
         ? {
             ...part,
-            name: { kind: 'mcp', server: 'external', tool: 'PresentReview' },
+            name: externalName,
           }
         : part
     ),

@@ -130,10 +130,9 @@ use macro_authorization::{
 };
 use macro_env_var::maybe_env_vars;
 use macro_event_broker::{KafkaEventPublisher, MacroEventBrokerService};
-#[cfg(feature = "delete_document_worker")]
-use macro_service_urls::AiEditingWorkerUrl;
 use macro_service_urls::{
-    ConnectionGatewayUrl, LexicalServiceUrl, StaticFileServiceUrl, SyncServiceUrl,
+    AiEditingWorkerUrl, ConnectionGatewayUrl, LexicalServiceUrl, StaticFileServiceUrl,
+    SyncServiceUrl,
 };
 use macro_sha_count_client::Redis;
 use notification::domain::service::{
@@ -1393,6 +1392,17 @@ pub async fn run() -> anyhow::Result<()> {
         config.enable_ai_usage_enforcement,
         config.ai_pricing(),
         ai_usage::pg_recorder_with_enforcement(db.clone(), config.enable_ai_usage_enforcement),
+        Some(Arc::new(
+            mcp_client::outbound::auth_service_github_tokens::AuthServiceGithubTokens::new(
+                authentication_service_client::AuthServiceClient::new(
+                    config
+                        .authentication_service_secret_key
+                        .as_ref()
+                        .to_string(),
+                    macro_service_urls::AuthServiceUrl::new()?.to_string(),
+                ),
+            ),
+        )),
     )
     .await
     .context("failed to build Macro agent tool context")?;
@@ -1415,6 +1425,16 @@ pub async fn run() -> anyhow::Result<()> {
         ),
     );
     let admission = macro_agent_tool_context.admission.clone();
+    // Document AI edits over HTTP share the channel agent's admission.
+    let document_ai_editing = Arc::new(documents_hex::domain::ai_editing::AiEditingService::new(
+        Arc::new(
+            documents_hex::outbound::editing_worker_client::ReqwestEditingWorkerClient::from_url(
+                AiEditingWorkerUrl::new()?.to_string(),
+            ),
+        ),
+        admission.clone(),
+        ai_usage::pg_recorder_with_enforcement(db.clone(), config.enable_ai_usage_enforcement),
+    ));
     let bot_trigger_router = channel_bots::inbound::BotTriggerRouter::new_with_admission(
         message_service.clone(),
         conversation_access.clone(),
@@ -2188,19 +2208,27 @@ pub async fn run() -> anyhow::Result<()> {
                 entity_access_service.as_ref().clone(),
             ),
         ),
-        graphql_agent_session_entity_loader: graphql_soup::AgentSessionEntityLoader(
+        graphql_agent_session_entity_loader: graphql_soup::AgentSessionEntityLoader::new(
+            primary_entity_soup.clone(),
+            Arc::new(email_service.clone()),
+            entity_access_service.as_ref().clone(),
+        ),
+        graphql_database_rows_context: graphql_databases::DatabaseRowsGraphqlContext::new(
+            databases_sql::view_rows::DatabaseViewRows::new(
+                databases_service.clone(),
+                databases::outbound::pg_view_rows::PgViewRows::new(db.clone()),
+            ),
+            entity_access_service.clone(),
             graphql_soup::soup_item_loader(
                 primary_entity_soup.clone(),
                 Arc::new(email_service.clone()),
                 entity_access_service.as_ref().clone(),
             ),
         ),
-        graphql_primary_soup_item_loader: graphql_soup::PrimarySoupItemLoader(
-            graphql_soup::soup_item_loader_with_team_access(
-                primary_entity_soup,
-                Arc::new(email_service.clone()),
-                entity_access_service.as_ref().clone(),
-            ),
+        graphql_primary_soup_item_loader: graphql_soup::PrimarySoupItemLoader::new(
+            primary_entity_soup,
+            Arc::new(email_service.clone()),
+            entity_access_service.as_ref().clone(),
         ),
         // Ordinary single-entity GraphQL reads use the replica-backed Soup
         // and email readers. Subscription hydration, `soupEntity`, and
@@ -2325,6 +2353,7 @@ pub async fn run() -> anyhow::Result<()> {
             task_dedup_service,
             lexical_client: lexical_client.clone(),
             creator: document_creator,
+            ai_editing: document_ai_editing,
             document_permission_jwt_secret: config.document_permission_jwt.as_ref().to_string(),
             non_user_owners,
         },

@@ -10,8 +10,11 @@ import {
   createEffect,
   createSignal,
   onCleanup,
+  Show,
   useContext,
 } from 'solid-js';
+
+const stopPropagation = (event: Event) => event.stopPropagation();
 
 type NestedHoverCardContext = {
   count: () => number;
@@ -131,6 +134,12 @@ export type HoverCardComponentProps = {
    * surface below.
    */
   passThroughPointerEvents?: boolean;
+  /**
+   * Keep presses inside the card from reaching the trigger's ancestors. Solid
+   * delivers portaled events through the component tree, so without this a
+   * click anywhere on a card opened from a list row also activates that row.
+   */
+  isolateClicks?: boolean;
   /** Callback when open state changes */
   onOpenChange?: (open: boolean) => void;
   /**
@@ -397,32 +406,47 @@ export function HoverCard(props: HoverCardComponentProps) {
         {props.trigger}
       </KobalteHoverCard.Trigger>
 
-      <KobalteHoverCard.Portal mount={props.portalMount}>
-        <KobalteHoverCard.Content
-          ref={(el) => {
-            setContentEl(el);
-            props.contentRef?.(el);
-          }}
-          {...dismissableLayerProps}
-          class={cn(
-            props.contentZIndexClass ?? 'z-tool-tip',
-            // `!` because the dismissable layer writes `pointer-events: auto`
-            // onto this element.
-            props.passThroughPointerEvents && 'pointer-events-none!',
-            props.contentClass
-          )}
-        >
-          <HoverCardPortalNestedPreviewOpenContext.Provider
-            value={{
-              count: nestedOpenCount,
-              setCount: setNestedOpenCount,
-              entry,
+      {/* Opening the card leaves the portal's placeholder text node here, and
+          closing it removes the node. Outside a wrapper that change reaches the
+          trigger's parent, which can detach and reinsert the trigger; a press
+          that closes the card then loses its click. */}
+      <span class="contents">
+        <KobalteHoverCard.Portal mount={props.portalMount}>
+          <KobalteHoverCard.Content
+            ref={(el) => {
+              setContentEl(el);
+              props.contentRef?.(el);
             }}
+            {...dismissableLayerProps}
+            class={cn(
+              props.contentZIndexClass ?? 'z-tool-tip',
+              // `!` because the dismissable layer writes `pointer-events: auto`
+              // onto this element.
+              props.passThroughPointerEvents && 'pointer-events-none!',
+              props.contentClass
+            )}
           >
-            {props.content}
-          </HoverCardPortalNestedPreviewOpenContext.Provider>
-        </KobalteHoverCard.Content>
-      </KobalteHoverCard.Portal>
+            <HoverCardPortalNestedPreviewOpenContext.Provider
+              value={{
+                count: nestedOpenCount,
+                setCount: setNestedOpenCount,
+                entry,
+              }}
+            >
+              <Show when={props.isolateClicks} fallback={props.content}>
+                <div
+                  class="contents"
+                  onClick={stopPropagation}
+                  onMouseDown={stopPropagation}
+                  onPointerDown={stopPropagation}
+                >
+                  {props.content}
+                </div>
+              </Show>
+            </HoverCardPortalNestedPreviewOpenContext.Provider>
+          </KobalteHoverCard.Content>
+        </KobalteHoverCard.Portal>
+      </span>
     </KobalteHoverCard>
   );
 }

@@ -1,0 +1,412 @@
+//! Which of the user's skills a request needs, decided by Jev before an
+//! agent's turn.
+//!
+//! The user's most recently updated skills are the candidates. Jev answers one
+//! yes/no question per candidate, built from its "Use when …" description, at
+//! most 32 per call, so candidates are split into parallel calls, at most
+//! [`MAX_CALLS`]. A skill redirects the agent, so only a confident match
+//! loads.
+
+#[cfg(test)]
+mod test;
+
+use std::sync::Arc;
+use std::time::Duration;
+
+use cognition::domain::{Cognition, DecisionRequest};
+use futures::future::join_all;
+use macro_user_id::user_id::MacroUserIdStr;
+use tokio_util::sync::CancellationToken;
+use uuid::Uuid;
+
+use crate::domain::model::{SkillError, SkillSummary};
+use crate::domain::ports::SkillService;
+
+/// Questions Jev answers in one call.
+const QUESTIONS_PER_CALL: usize = 32;
+/// Parallel Jev calls per turn; candidates past `MAX_CALLS * 32` are not
+/// routed, and stay reachable through `ReadSkill`.
+pub const MAX_CALLS: usize = 8;
+/// How long the turn waits for Jev.
+const DECISION_DEADLINE: Duration = Duration::from_secs(1);
+/// How long the turn waits for the chosen skills' instructions.
+const READ_DEADLINE: Duration = Duration::from_secs(1);
+/// Skills scoring at least this load, most relevant first, at most
+/// [`LOAD_LIMIT`].
+const LOAD_THRESHOLD: f32 = 0.8;
+const LOAD_LIMIT: usize = 2;
+/// A skill created before descriptions existed routes on its name alone, and
+/// a generic name ("Brand voice") matches too much, so it loads only when the
+/// request all but names it.
+const UNDESCRIBED_LOAD_THRESHOLD: f32 = 0.95;
+/// Skills scoring at least this, but not loaded, are recorded as suggested.
+const SUGGEST_THRESHOLD: f32 = 0.5;
+/// Jev's limits on one question and on the request text it reads.
+const MAX_QUESTION_CHARS: usize = 500;
+const MAX_REQUEST_CHARS: usize = 8000;
+
+/// The user's words the turn answers.
+#[derive(Debug, Clone, Copy)]
+pub struct SkillRequest<'a> {
+    /// The newest user message.
+    pub latest: &'a str,
+    /// The user message before it, so a follow-up such as "now do it for Q3"
+    /// keeps the skill the conversation is using.
+    pub previous: Option<&'a str>,
+}
+
+/// A skill chosen for a turn, with its instructions.
+#[derive(Debug, Clone, PartialEq)]
+pub struct LoadedSkill {
+    /// The skill document id, or built-in skill id.
+    pub id: Uuid,
+    /// The skill's display name.
+    pub name: String,
+    /// Jev's probability that the request needs it.
+    pub score: f32,
+    /// The skill's full instructions.
+    pub content: String,
+}
+
+/// How routing ended.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum SelectionStatus {
+    /// Jev scored the candidates; nothing loading is a decision too.
+    Selected,
+    /// There was nothing to ask about.
+    NoCandidates,
+    /// No cognition service is configured.
+    Unconfigured,
+    /// The turn was cancelled first.
+    Cancelled,
+    /// Listing skills or every Jev call failed.
+    ProviderError,
+    /// Jev did not answer before the deadline.
+    Timeout,
+}
+
+impl SelectionStatus {
+    /// The status as recorded on spans.
+    pub fn as_str(self) -> &'static str {
+        match self {
+            Self::Selected => "selected",
+            Self::NoCandidates => "no_candidates",
+            Self::Unconfigured => "unconfigured",
+            Self::Cancelled => "cancelled",
+            Self::ProviderError => "provider_error",
+            Self::Timeout => "timeout",
+        }
+    }
+}
+
+/// What routing chose for one turn.
+#[derive(Debug, Clone, PartialEq)]
+pub struct SkillSelection {
+    /// Skills Jev was asked about.
+    pub candidates: usize,
+    /// Skills to load, most relevant first.
+    pub loaded: Vec<LoadedSkill>,
+    /// Skills that may help but fell short of loading.
+    pub suggested: Vec<SkillSummary>,
+    /// How routing ended.
+    pub status: SelectionStatus,
+    /// The highest score any candidate got.
+    pub top_score: Option<f32>,
+}
+
+impl SkillSelection {
+    fn nothing(candidates: usize, status: SelectionStatus) -> Self {
+        Self {
+            candidates,
+            loaded: Vec::new(),
+            suggested: Vec::new(),
+            status,
+            top_score: None,
+        }
+    }
+}
+
+/// Choose the skills a request needs. Never fails: anything that goes wrong
+/// loads nothing and says why in the status.
+///
+/// `already_loaded` skills are in the conversation already and are not asked
+/// about again; neither is a skill the request mentions, whose mention
+/// carries its id and which the agent reads itself.
+#[tracing::instrument(
+    name = "agent.skill_selection",
+    skip_all,
+    fields(
+        candidates = tracing::field::Empty,
+        loaded = tracing::field::Empty,
+        suggested = tracing::field::Empty,
+        top_score = tracing::field::Empty,
+        bytes = tracing::field::Empty,
+        selection_status = tracing::field::Empty,
+    )
+)]
+pub async fn select_skills<Svc: SkillService>(
+    service: &Svc,
+    cognition: Option<&Arc<dyn Cognition>>,
+    user: &MacroUserIdStr<'static>,
+    request: SkillRequest<'_>,
+    already_loaded: &[Uuid],
+    cancel: &CancellationToken,
+) -> SkillSelection {
+    let selection = select(service, cognition, user, request, already_loaded, cancel).await;
+    let span = tracing::Span::current();
+    span.record("candidates", selection.candidates);
+    span.record(
+        "loaded",
+        selection
+            .loaded
+            .iter()
+            .map(|skill| skill.id.to_string())
+            .collect::<Vec<_>>()
+            .join(","),
+    );
+    span.record(
+        "suggested",
+        selection
+            .suggested
+            .iter()
+            .map(|skill| skill.document_id.to_string())
+            .collect::<Vec<_>>()
+            .join(","),
+    );
+    if let Some(score) = selection.top_score {
+        span.record("top_score", f64::from(score));
+    }
+    span.record(
+        "bytes",
+        selection
+            .loaded
+            .iter()
+            .map(|skill| skill.content.len())
+            .sum::<usize>(),
+    );
+    span.record("selection_status", selection.status.as_str());
+    selection
+}
+
+async fn select<Svc: SkillService>(
+    service: &Svc,
+    cognition: Option<&Arc<dyn Cognition>>,
+    user: &MacroUserIdStr<'static>,
+    request: SkillRequest<'_>,
+    already_loaded: &[Uuid],
+    cancel: &CancellationToken,
+) -> SkillSelection {
+    let Some(cognition) = cognition else {
+        return SkillSelection::nothing(0, SelectionStatus::Unconfigured);
+    };
+    let skills = tokio::select! {
+        biased;
+        _ = cancel.cancelled() => return SkillSelection::nothing(0, SelectionStatus::Cancelled),
+        // Boxed, like the read below: a production service's futures are deep
+        // enough to overflow the layout of a caller's future that holds them.
+        skills = Box::pin(service.list_routable_skills(user)) => skills,
+    };
+    let skills = match skills {
+        Ok(skills) => skills,
+        Err(error) => {
+            tracing::warn!(error = %error, "could not list skills to route");
+            return SkillSelection::nothing(0, SelectionStatus::ProviderError);
+        }
+    };
+    let candidates = candidates(skills, request, already_loaded);
+    if candidates.is_empty() {
+        return SkillSelection::nothing(0, SelectionStatus::NoCandidates);
+    }
+    let scored = tokio::select! {
+        biased;
+        _ = cancel.cancelled() => {
+            return SkillSelection::nothing(candidates.len(), SelectionStatus::Cancelled);
+        }
+        scored = tokio::time::timeout(DECISION_DEADLINE, score(cognition.as_ref(), user, request, &candidates)) => scored,
+    };
+    let scores = match scored {
+        Ok(Some(scores)) => scores,
+        Ok(None) => {
+            return SkillSelection::nothing(candidates.len(), SelectionStatus::ProviderError);
+        }
+        Err(_) => return SkillSelection::nothing(candidates.len(), SelectionStatus::Timeout),
+    };
+    let top_score = scores.iter().map(|(_, score)| *score).reduce(f32::max);
+    let (chosen, suggested) = choose(scores);
+    let loaded = tokio::select! {
+        biased;
+        _ = cancel.cancelled() => {
+            return SkillSelection::nothing(candidates.len(), SelectionStatus::Cancelled);
+        }
+        loaded = read(service, user, chosen) => loaded,
+    };
+    SkillSelection {
+        candidates: candidates.len(),
+        loaded,
+        suggested,
+        status: SelectionStatus::Selected,
+        top_score,
+    }
+}
+
+/// The routable skills not already in the conversation, in the order listed
+/// (most recently updated first), up to what [`MAX_CALLS`] can ask about.
+fn candidates(
+    skills: Vec<SkillSummary>,
+    request: SkillRequest<'_>,
+    already_loaded: &[Uuid],
+) -> Vec<SkillSummary> {
+    let mut candidates: Vec<SkillSummary> = skills
+        .into_iter()
+        .filter(|skill| !already_loaded.contains(&skill.document_id))
+        .filter(|skill| !request.latest.contains(&skill.document_id.to_string()))
+        .collect();
+    candidates.truncate(MAX_CALLS * QUESTIONS_PER_CALL);
+    candidates
+}
+
+/// Every candidate's score, or `None` when no call succeeded.
+async fn score(
+    cognition: &dyn Cognition,
+    user: &MacroUserIdStr<'static>,
+    request: SkillRequest<'_>,
+    candidates: &[SkillSummary],
+) -> Option<Vec<(SkillSummary, f32)>> {
+    let mut input = serde_json::json!({ "request": clip(request.latest, MAX_REQUEST_CHARS) });
+    if let Some(previous) = request.previous {
+        input["previousRequest"] = clip(previous, MAX_REQUEST_CHARS).into();
+    }
+    let calls = candidates.chunks(QUESTIONS_PER_CALL).map(|chunk| {
+        let request = DecisionRequest {
+            input: input.clone(),
+            questions: chunk
+                .iter()
+                .map(|skill| (skill.document_id.to_string(), question(skill)))
+                .collect(),
+        };
+        cognition.decide(user, request)
+    });
+    let answers = join_all(calls).await;
+    let mut scores = Vec::new();
+    let mut answered = false;
+    for answer in answers {
+        match answer {
+            Ok(answer) => {
+                answered = true;
+                scores.extend(answer.probabilities.into_iter().filter_map(|(key, score)| {
+                    let skill = candidates
+                        .iter()
+                        .find(|skill| skill.document_id.to_string() == key)?;
+                    score.is_finite().then(|| (skill.clone(), score))
+                }));
+            }
+            Err(error) => tracing::warn!(error = %error, "Jev could not route skills"),
+        }
+    }
+    answered.then_some(scores)
+}
+
+fn question(skill: &SkillSummary) -> String {
+    let question = match &skill.description {
+        Some(description) => format!(
+            "Would the skill \"{}\" help with this request? {description}",
+            skill.name
+        ),
+        None => format!("Would the skill \"{}\" help with this request?", skill.name),
+    };
+    clip(&question, MAX_QUESTION_CHARS)
+}
+
+fn clip(text: &str, chars: usize) -> String {
+    text.chars().take(chars).collect()
+}
+
+/// The skills to load, and skills worth recording as suggested, each most
+/// relevant first.
+fn choose(mut scores: Vec<(SkillSummary, f32)>) -> (Vec<(SkillSummary, f32)>, Vec<SkillSummary>) {
+    scores.sort_by(|a, b| {
+        b.1.total_cmp(&a.1)
+            .then_with(|| a.0.document_id.cmp(&b.0.document_id))
+    });
+    let mut chosen = Vec::new();
+    let mut suggested = Vec::new();
+    for (skill, score) in scores {
+        let threshold = if skill.description.is_some() {
+            LOAD_THRESHOLD
+        } else {
+            UNDESCRIBED_LOAD_THRESHOLD
+        };
+        if score >= threshold && chosen.len() < LOAD_LIMIT {
+            chosen.push((skill, score));
+        } else if score >= SUGGEST_THRESHOLD {
+            suggested.push(skill);
+        }
+    }
+    (chosen, suggested)
+}
+
+/// Read the chosen skills' instructions; a skill that cannot be read in time
+/// is left out.
+async fn read<Svc: SkillService>(
+    service: &Svc,
+    user: &MacroUserIdStr<'static>,
+    chosen: Vec<(SkillSummary, f32)>,
+) -> Vec<LoadedSkill> {
+    let reads = chosen.iter().map(|(skill, _)| async {
+        tokio::time::timeout(
+            READ_DEADLINE,
+            Box::pin(service.read_skill(user, skill.document_id)),
+        )
+        .await
+        .unwrap_or_else(|_| {
+            Err(SkillError::ReadFailed(anyhow::anyhow!(
+                "reading the skill took too long"
+            )))
+        })
+    });
+    let contents = join_all(reads).await;
+    chosen
+        .into_iter()
+        .zip(contents)
+        .filter_map(|((skill, score), content)| match content {
+            Ok(content) => Some(LoadedSkill {
+                id: skill.document_id,
+                name: content.name,
+                score,
+                content: content.content,
+            }),
+            Err(error) => {
+                tracing::warn!(error = %error, skill_id = %skill.document_id, "could not read a routed skill");
+                None
+            }
+        })
+        .collect()
+}
+
+/// Loaded skills as one tagged block for the turn's context; empty when none
+/// are loaded.
+pub fn render_loaded(skills: &[LoadedSkill]) -> String {
+    if skills.is_empty() {
+        return String::new();
+    }
+    let mut section = String::from(
+        "<loaded_skills>\nThese of the user's skills were loaded because this request needs them. Follow each where the request calls for it, and only there.\n",
+    );
+    for skill in skills {
+        section.push_str(&format!(
+            "<skill name=\"{}\" id=\"{}\">\n{}\n</skill>\n",
+            escape_attribute(&skill.name),
+            skill.id,
+            skill.content.trim_end()
+        ));
+    }
+    section.push_str("</loaded_skills>");
+    section
+}
+
+fn escape_attribute(text: &str) -> String {
+    text.replace('&', "&amp;")
+        .replace('"', "&quot;")
+        .replace('<', "&lt;")
+        .replace('>', "&gt;")
+}

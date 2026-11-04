@@ -26,7 +26,7 @@ export class FormResponse {
 
   private async load(): Promise<ResponseSnapshot> {
     const current = await this.form.myResponse();
-    if (current.response.id !== this.id)
+    if (current.kind === 'anonymous' || current.response.id !== this.id)
       throw new MacroNotFoundError(
         `response ${this.id} is not your current response`,
       );

@@ -1,4 +1,4 @@
-//! DuplicateItem tool for copying documents.
+//! DuplicateItem tool for copying documents and databases.
 
 use ai_toolset::{AsyncTool, RequestContext, ServiceContext, ToolCallError, ToolResult};
 use ai_toolset::{ToolAnnotated, ToolAnnotations};
@@ -18,12 +18,15 @@ use super::{DocumentCapabilities, ProjectCapabilities, ProjectToolContext};
 pub enum DuplicableEntityType {
     /// A document (includes tasks).
     Document,
+    /// A database, with its tables, columns, views and rows.
+    Database,
 }
 
 impl DuplicableEntityType {
     fn entity_type(self) -> EntityType {
         match self {
             Self::Document => EntityType::Document,
+            Self::Database => EntityType::Database,
         }
     }
 }
@@ -69,7 +72,7 @@ pub struct DuplicateItemResponse {
 #[serde(rename_all = "camelCase")]
 #[schemars(
     title = "DuplicateItem",
-    description = "Make a copy of a document (including a task), owned by the user, as the Duplicate action in the app does. Requires view access to the original. Returns the copy's id."
+    description = "Make a copy of a document (including a task) or a database, owned by the user, as the Duplicate action in the app does. A database copy has every table, column, view and row, except relation columns into other databases the user cannot view, which it leaves out; its sharing, forms and history stay with the original. Requires view access to the original. Returns the copy's id."
 )]
 pub struct DuplicateItem {
     /// The kind of item to duplicate.
@@ -81,9 +84,7 @@ pub struct DuplicateItem {
     pub entity_id: uuid::Uuid,
 
     /// Optional name for the copy.
-    #[schemars(
-        description = "Name for the copy of a document. Omit to use \"<original name> copy\"."
-    )]
+    #[schemars(description = "Name for the copy. Omit to use \"<original name> copy\".")]
     #[serde(default)]
     pub name: Option<String>,
 }
@@ -93,20 +94,21 @@ impl ToolAnnotated for DuplicateItem {
 }
 
 #[async_trait]
-impl<PSvc, ESvc, DSvc, EmSvc> AsyncTool<ProjectToolContext<PSvc, ESvc, DSvc, EmSvc>>
+impl<PSvc, ESvc, DSvc, EmSvc, DbSvc> AsyncTool<ProjectToolContext<PSvc, ESvc, DSvc, EmSvc, DbSvc>>
     for DuplicateItem
 where
     PSvc: ProjectCapabilities,
     ESvc: EntityAccessService,
     DSvc: DocumentCapabilities,
     EmSvc: MoveEntity + Send + Sync + 'static,
+    DbSvc: DuplicateEntity + Send + Sync + 'static,
 {
     type Output = DuplicateItemResponse;
 
     #[tracing::instrument(skip_all, fields(user_id=?request_context.user_id, entity_type=?self.entity_type, entity_id=?self.entity_id), err)]
     async fn call(
         &self,
-        service_context: ServiceContext<ProjectToolContext<PSvc, ESvc, DSvc, EmSvc>>,
+        service_context: ServiceContext<ProjectToolContext<PSvc, ESvc, DSvc, EmSvc, DbSvc>>,
         request_context: RequestContext,
     ) -> ToolResult<Self::Output> {
         let entity = self
@@ -124,6 +126,16 @@ where
             DuplicableEntityType::Document => {
                 duplicate_with(
                     &*service_context.document_move_service,
+                    access,
+                    &request_context,
+                    entity,
+                    name,
+                )
+                .await?
+            }
+            DuplicableEntityType::Database => {
+                duplicate_with(
+                    &*service_context.database_duplicate_service,
                     access,
                     &request_context,
                     entity,

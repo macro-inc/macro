@@ -55,6 +55,7 @@ import {
   type WriteResult,
 } from '../protocol';
 import { entityFromArgument } from './entity-resolvers';
+import { liveQueryData } from './live-query';
 import { NOOP_MUTATION_QUEUE_TELEMETRY } from './mutation-queue-telemetry';
 import {
   HYDRATE_ONLY_CONTEXT_KEY,
@@ -1034,6 +1035,19 @@ describe('normalizedCacheExchange', () => {
     }
   });
 
+  it('publishes a network result it was asked not to persist without writing it', async () => {
+    const { ops, results } = harness(host, () => ({
+      data: { user: { emailThread: null } },
+    }));
+    const op = makeOp(902, 'network-only');
+    ops.next(
+      makeOperation('query', op, { ...op.context, persistResult: false })
+    );
+    await tick();
+    expect(host.cacheActions).toEqual([]);
+    expect(results.at(-1)?.data).toEqual({ user: { emailThread: null } });
+  });
+
   it('evicts inferred missing records after writing the network response', async () => {
     const deletedRecordKeys = vi.fn(() => ['GraphqlSoupEmailThread:gone']);
     const { ops, results } = harness(
@@ -1893,6 +1907,124 @@ describe('normalizedCacheExchange', () => {
     });
     expect(forwarded).toHaveLength(1);
   });
+
+  it.each([false, true])(
+    'never restores stale message membership after a newer network result (persisted: %s)',
+    async (persisted) => {
+      vi.useFakeTimers();
+      try {
+        const cached = { messages: ['first'], isRead: true };
+        const fresh = { messages: ['first', 'second'], isRead: true };
+        const affectedRead = deferred<ReadResult>();
+        const write = deferred<WriteResult>();
+        host.readQuery = vi
+          .fn()
+          .mockResolvedValueOnce({ kind: 'hit', data: cached })
+          .mockImplementationOnce(() => affectedRead.promise)
+          .mockResolvedValue({ kind: 'hit', data: fresh });
+        host.writeQuery = vi.fn(() => write.promise);
+        const { ops, results, forwarded, network } =
+          controlledQueryHarness(host);
+
+        ops.next(makeOp(1, 'cache-and-network'));
+        await vi.advanceTimersByTimeAsync(0);
+        host.pushAffected([1]);
+        await vi.advanceTimersByTimeAsync(0);
+
+        network.next(queryResult(forwarded[0]!, fresh));
+        await vi.advanceTimersByTimeAsync(0);
+        expect(results.map((result) => result.data)).toEqual([cached, fresh]);
+
+        const acknowledgeWrite = () =>
+          write.resolve({
+            revision: INITIAL_CACHE_REVISION,
+            revisionAdvanced: true,
+            changed: [],
+            affectedOps: [],
+            reset: false,
+          });
+        if (persisted) {
+          acknowledgeWrite();
+          await vi.advanceTimersByTimeAsync(0);
+        }
+        affectedRead.resolve({ kind: 'hit', data: cached });
+        await vi.advanceTimersByTimeAsync(0);
+        if (!persisted) acknowledgeWrite();
+        await vi.advanceTimersByTimeAsync(0);
+
+        expect(results.map((result) => result.data)).toEqual([cached, fresh]);
+        expect(forwarded).toHaveLength(1);
+      } finally {
+        vi.useRealTimers();
+      }
+    }
+  );
+
+  it.each(['watch', 'fallback'])(
+    'reconciles pending edits with fresh message membership after discarding an older %s read',
+    async (reader) => {
+      vi.useFakeTimers();
+      try {
+        const cached = { messages: ['first'], isRead: false };
+        const fresh = { messages: ['first', 'second'], isRead: false };
+        const reconciled = { ...fresh, isRead: true };
+        const lateSnapshot = {
+          kind: 'hit' as const,
+          data: { ...cached, isRead: true },
+          revision: parseCacheRevision('2'),
+        };
+        const affectedRead = deferred<typeof lateSnapshot>();
+        const write = deferred<WriteResult>();
+        const read = vi
+          .fn()
+          .mockResolvedValueOnce({
+            kind: 'hit',
+            data: cached,
+            revision: parseCacheRevision('1'),
+          })
+          .mockImplementationOnce(() => affectedRead.promise)
+          .mockResolvedValue({
+            kind: 'hit',
+            data: reconciled,
+            revision: parseCacheRevision('3'),
+          });
+        host.watchQuery =
+          reader === 'watch'
+            ? read
+            : vi.fn(async () => ({ kind: 'unsupported' as const }));
+        host.readQuery = read;
+        host.writeQuery = vi.fn(() => write.promise);
+        const { ops, results, forwarded, network } =
+          controlledQueryHarness(host);
+
+        ops.next(makeOp(1, 'cache-and-network'));
+        await vi.advanceTimersByTimeAsync(0);
+        host.pushAffected([1]);
+        await vi.advanceTimersByTimeAsync(0);
+        network.next(queryResult(forwarded[0]!, fresh));
+        await vi.advanceTimersByTimeAsync(0);
+        const live = liveQueryData(results.at(-1)!);
+
+        affectedRead.resolve(lateSnapshot);
+        await vi.advanceTimersByTimeAsync(0);
+        expect(live).toEqual(fresh);
+        write.resolve({
+          revision: parseCacheRevision('3'),
+          revisionAdvanced: true,
+          changed: [],
+          affectedOps: [],
+          reset: false,
+        });
+        await vi.advanceTimersByTimeAsync(0);
+
+        expect(live).toEqual(reconciled);
+        expect(results.map((result) => result.data)).toEqual([cached, fresh]);
+        expect(forwarded).toHaveLength(1);
+      } finally {
+        vi.useRealTimers();
+      }
+    }
+  );
 
   it('preserves optimistic rereads that finish after network persistence', async () => {
     const write = deferred<WriteResult>();

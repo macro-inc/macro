@@ -49,6 +49,8 @@ pub enum FormErrorCode {
     AlreadyResponded,
     /// The caller has no saved response to read or edit.
     NoResponse,
+    /// A response to an anonymous form can't be changed.
+    AnonymousResponseFinal,
     /// An answer names a question the form does not ask.
     UnknownQuestion,
     /// A question is answered twice.
@@ -135,6 +137,21 @@ pub enum LayoutProblem {
     /// A gate's rule does not fit its column.
     #[error("a gate rule does not fit its column: {reason}")]
     GateRule {
+        /// Why.
+        reason: String,
+    },
+    /// A section's show-when rules test a column no earlier section asks.
+    #[error(
+        "a section can only be shown on answers to questions of earlier sections; column {column} is not one"
+    )]
+    ConditionNamesLaterColumn {
+        /// The column.
+        #[schema(value_type = Uuid)]
+        column: ColumnId,
+    },
+    /// A section's show-when rule does not fit its column.
+    #[error("a show-when rule does not fit its column: {reason}")]
+    ConditionRule {
         /// Why.
         reason: String,
     },

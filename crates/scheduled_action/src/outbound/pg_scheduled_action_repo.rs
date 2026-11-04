@@ -12,13 +12,14 @@ use model_entity::EntityType;
 use model_owner::Owner;
 use serde_json::Value;
 use sqlx::PgPool;
+use std::collections::HashMap;
 use std::str::FromStr;
 
 use crate::domain::event_runs::{ClaimToken, ConfigurationRevision};
 use crate::domain::event_trigger::ActionTrigger;
 use crate::domain::models::{
-    ActionExecutionRecord, ActionKind, ActionPolicyError, AlreadyRunningError, MAX_ACTION_TIME,
-    Schedule, ScheduledAction,
+    ActionExecutionRecord, ActionKind, ActionPolicyError, AlreadyRunningError, LastRun,
+    MAX_ACTION_TIME, Schedule, ScheduledAction,
 };
 use crate::domain::ports::ScheduledActionRepo;
 
@@ -96,7 +97,7 @@ impl TryFrom<ActionRow> for ScheduledAction {
                     row.event_filters.context("event filters missing")?,
                 )?,
             },
-            "multiple" => {
+            "multiple" | "once" => {
                 serde_json::from_value(row.trigger_config.context("routine triggers missing")?)?
             }
             other => bail!("unknown action trigger: {other}"),
@@ -152,6 +153,13 @@ impl TryFrom<&ActionTrigger> for TriggerColumns {
                 timezone: None,
                 event_filters: Some(serde_json::to_value(filters)?),
                 trigger_config: None,
+            }),
+            ActionTrigger::Once { .. } => Ok(Self {
+                trigger_type: "once",
+                schedule: None,
+                timezone: None,
+                event_filters: None,
+                trigger_config: Some(serde_json::to_value(trigger)?),
             }),
             ActionTrigger::Multiple { .. } => Ok(Self {
                 trigger_type: "multiple",
@@ -293,7 +301,7 @@ impl<B: BotFacts + 'static> ScheduledActionRepo for PgScheduledActionRepo<B> {
                    updated_at, next_run_at, enabled, trigger_type, event_filters,
                    configuration_revision, event_activated_at, trigger_config, run_visibility, template_id
             FROM scheduled_action
-            WHERE enabled AND trigger_type IN ('cron', 'multiple') AND next_run_at IS NOT NULL
+            WHERE enabled AND trigger_type IN ('cron', 'once', 'multiple') AND next_run_at IS NOT NULL
               AND (claimed IS NULL OR claimed < $1)
             ORDER BY next_run_at ASC, id ASC
             LIMIT $2
@@ -493,6 +501,31 @@ impl<B: BotFacts + 'static> ScheduledActionRepo for PgScheduledActionRepo<B> {
             .collect())
     }
 
+    async fn last_runs(&self, action_ids: &[Uuid]) -> Result<HashMap<Uuid, LastRun>> {
+        let rows = sqlx::query!(
+            r#"
+            SELECT DISTINCT ON (action_id) action_id, end_time, is_success
+            FROM action_execution_record
+            WHERE action_id = ANY($1)
+            ORDER BY action_id, end_time DESC
+            "#,
+            action_ids,
+        )
+        .fetch_all(&self.pool)
+        .await?;
+
+        Ok(rows
+            .into_iter()
+            .map(|row| {
+                let last_run = LastRun {
+                    end_time: row.end_time,
+                    is_success: row.is_success,
+                };
+                (row.action_id, last_run)
+            })
+            .collect())
+    }
+
     async fn update_next_run_at(&self, id: &Uuid) -> Result<()> {
         // Lock through the update so a concurrent trigger replacement cannot
         // receive a firing time derived from the old schedule.
@@ -509,7 +542,7 @@ impl<B: BotFacts + 'static> ScheduledActionRepo for PgScheduledActionRepo<B> {
         .fetch_one(&mut *tx)
         .await?;
 
-        if row.trigger_type == "cron" || row.trigger_type == "multiple" {
+        if matches!(row.trigger_type.as_str(), "cron" | "once" | "multiple") {
             let trigger = if row.trigger_type == "cron" {
                 ActionTrigger::Cron {
                     schedule: Schedule::from_cron(row.schedule.context("cron schedule missing")?)?,
@@ -523,7 +556,7 @@ impl<B: BotFacts + 'static> ScheduledActionRepo for PgScheduledActionRepo<B> {
                 r#"
                     UPDATE scheduled_action
                     SET next_run_at = $1, updated_at = now()
-                    WHERE id = $2 AND trigger_type IN ('cron', 'multiple')
+                    WHERE id = $2 AND trigger_type IN ('cron', 'once', 'multiple')
                     "#,
                 next_run_at,
                 *id,
