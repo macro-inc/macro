@@ -1,0 +1,15 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            UPDATE crm_companies co\n            SET hidden = EXISTS (\n                SELECT 1\n                FROM crm_domains own\n                JOIN crm_blocked_domains bd\n                  ON bd.team_id = own.team_id\n                 AND bd.domain = LOWER(own.domain)\n                WHERE own.company_id = co.id\n                  AND own.team_id = $1\n            )\n            FROM crm_domains d\n            WHERE d.company_id = co.id\n              AND d.team_id = $1\n              AND co.team_id = $1\n              AND LOWER(d.domain) = $2\n            ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Text"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "6c7ab90a393bfc86ff18d4301ca4a3213a67eaa683f8123af3037b7c33e91c0e"
+}

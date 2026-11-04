@@ -27,7 +27,7 @@ through the same service.
   `SignedUnsubscribeLinks` signs `domain/models/signing.rs` unsubscribe
   placeholders per recipient), `repository.rs`
   (owned Postgres queries), `withdrawal.rs` (durable suppression),
-  `item_preferences.rs` (snooze/mute).
+  `item_preferences.rs` (owner-scoped single and atomic bulk snooze/mute).
 - `outbound/notification_consumer/health.rs`: periodic per-instance Kafka
   backlog and telemetry-health logs; offsets stay uncommitted.
 - `domain/retention.rs` + `outbound/retention.rs`: bounded 30-day cleanup.

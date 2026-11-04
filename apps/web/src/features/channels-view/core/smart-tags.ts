@@ -41,18 +41,32 @@ export function resolveChannelLabelMemberships(
               (label.channelIds.length - channelIds.length),
           };
     }
-    // Channel entities have no team ID. Shared-label matches must come from
-    // the server so a matching name cannot add another team's channel.
+    // Known team IDs allow live matches before the membership snapshot refreshes.
+    // Keep server authorization as the baseline when team metadata is missing.
     const serverIds = new Set(label.channelIds);
     const channelIds = [
       ...new Set([
         ...label.channelIds.filter((id) => !loadedIds.has(id)),
         ...channels
-          .filter(
-            (channel) =>
-              (!label.teamId || serverIds.has(channel.id)) &&
-              channelMatchesSmartTag(channel, rule, label)
-          )
+          .filter((channel) => {
+            if (!channelMatchesSmartTag(channel, rule, label)) {
+              return false;
+            }
+
+            if (!label.teamId) {
+              return true;
+            }
+
+            if (channel.isParticipant === false) {
+              return false;
+            }
+
+            if (channel.teamId) {
+              return channel.teamId === label.teamId;
+            }
+
+            return serverIds.has(channel.id);
+          })
           .map((channel) => channel.id),
       ]),
     ];

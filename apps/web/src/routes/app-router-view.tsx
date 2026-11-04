@@ -51,6 +51,7 @@ import {
   DriveCallRouteView,
   DriveDetailView,
   DriveRouteView,
+  EmailComposeRouteView,
   EmailDetailRouteView,
   FoldersRouteView,
   FormRespondRoutePage,
@@ -119,6 +120,7 @@ import {
   driveSplitRoute,
   driveTabDocumentRoute,
   driveTabRoute,
+  emailComposeRoute,
   emailSignupCallbackRoute,
   emailSplitRoute,
   emailThreadRoute,
@@ -373,6 +375,10 @@ export function AppRouterView() {
           component={MailRouteView}
           loading={EmailViewSkeleton}
         >
+          <Route
+            definition={emailComposeRoute}
+            component={EmailComposeRouteView}
+          />
           <Route
             definition={emailThreadRoute}
             component={EmailDetailRouteView}

@@ -711,7 +711,11 @@ where
                 results.push(skip(EnrollSkip::NotFound));
                 continue;
             };
-            let email = normalize_email(&person.email);
+            let email = person
+                .email
+                .as_deref()
+                .map(normalize_email)
+                .unwrap_or_default();
             if email.is_empty() {
                 results.push(skip(EnrollSkip::NoEmail));
             } else if EmailStr::parse_from_str(&email).is_err() {
@@ -866,8 +870,12 @@ where
             .into_iter()
             .find(|person| person.id == crm_contact_id && person.team_id == owner.team_id)
             .ok_or(SequenceError::NotFound)?;
+        // Enrollments are by address: someone without one has none.
+        let Some(email) = person.email.as_deref().map(normalize_email) else {
+            return Ok(Vec::new());
+        };
         self.repo
-            .contact_enrollments(owner.team_id, &normalize_email(&person.email), user_id)
+            .contact_enrollments(owner.team_id, &email, user_id)
             .await
             .map_err(internal)
     }

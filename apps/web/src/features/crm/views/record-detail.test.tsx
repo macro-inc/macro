@@ -193,9 +193,6 @@ vi.mock('./contact-emails-section', () => ({
   ContactEmailsSection: () => null,
 }));
 vi.mock('./contact-header', () => ({ ContactHeader: () => null }));
-vi.mock('./contact-sharing-section', () => ({
-  ContactSharingSection: () => null,
-}));
 vi.mock('./record-associations', () => ({
   RecordCallsSection: () => null,
   RecordFilesSection: () => null,

@@ -158,20 +158,30 @@ impl<R: MailboxWatchRepository, G: MailboxWatchGateway> MailboxWatchService<R, G
         if !self.callback_base.starts_with("https://") {
             return Ok(false);
         }
-        let Some(lease) = self.repository.claim_watch(Uuid::new_v4()).await? else {
+        let Some(lease) = self
+            .repository
+            .claim_watch(Uuid::new_v4())
+            .await
+            .map_err(|error| super::telemetry::claim_failed("watches", error))?
+        else {
             return Ok(false);
         };
-        let result = super::maintain_lease(self.execute(&lease), || {
-            self.repository.renew_watch_lease(&lease)
-        })
-        .await;
-        let delay = match &result {
-            Ok(()) => 12 * 60 * 60,
-            Err(MailboxError::Provider(e)) => super::retry_seconds(e),
-            _ => 30,
-        };
-        self.repository.release_watch(&lease, delay).await?;
-        result.map(|()| true)
+        let link_id = lease.mailbox.link_id;
+        async {
+            let result = super::maintain_lease(self.execute(&lease), || {
+                self.repository.renew_watch_lease(&lease)
+            })
+            .await;
+            let delay = match &result {
+                Ok(()) => 12 * 60 * 60,
+                Err(MailboxError::Provider(e)) => super::retry_seconds(e),
+                _ => 30,
+            };
+            self.repository.release_watch(&lease, delay).await?;
+            result.map(|()| true)
+        }
+        .await
+        .inspect_err(|error| super::telemetry::log_unit_error(link_id, error))
     }
     async fn execute(&self, lease: &WatchLease) -> Result<(), MailboxError> {
         let remote = self.gateway.watches(lease.mailbox).await?;

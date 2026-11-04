@@ -332,7 +332,7 @@ function EventLocationItem(props: { location: string }) {
           {(segment) =>
             segment.kind === 'phone' ? (
               <a
-                class="underline decoration-current/20 decoration-[max(1px,0.1em)] underline-offset-2 hover:decoration-current"
+                class="text-link hover:text-link-hover underline decoration-current/20 decoration-[max(1px,0.1em)] underline-offset-2 hover:decoration-current"
                 href={segment.telUrl}
               >
                 {segment.text}
@@ -618,7 +618,7 @@ export function EventDetails(props: {
           <div class="contents">
             <TextAlignLeftIcon class="mt-0.5 size-5 text-ink-extra-muted sm:size-4" />
             <div
-              class="select-text leading-relaxed text-ink-muted [&_a]:underline [&_ol]:list-decimal [&_ol]:pl-4 [&_p+p]:mt-1 [&_ul]:list-disc [&_ul]:pl-4"
+              class="select-text leading-relaxed text-ink-muted [&_a]:text-link [&_a:hover]:text-link-hover [&_a:visited]:text-link-visited [&_a]:underline [&_ol]:list-decimal [&_ol]:pl-4 [&_p+p]:mt-1 [&_ul]:list-disc [&_ul]:pl-4"
               innerHTML={html()}
               onClick={openDescriptionLink}
             />

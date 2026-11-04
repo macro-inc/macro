@@ -59,6 +59,10 @@ import { CrmCreateMenu } from '../components/crm-create-menu';
 import { CrmMobileTabs } from '../components/crm-mobile-tabs';
 import { CrmSidebar } from '../components/crm-sidebar';
 import { CrmListError, CrmListSkeleton } from '../components/list-state';
+import {
+  PeopleDisplayMenu,
+  RemovedPeopleNotice,
+} from '../components/people-display-menu';
 import { PipelineDialog } from '../components/pipeline-dialog';
 import { PipelineSidebar } from '../components/pipeline-sidebar';
 import { useCrmContext } from '../context/crm-context';
@@ -427,7 +431,10 @@ export function CrmWorkspaceView(props: {
   const title = () =>
     sequencesShown()
       ? t('sequences.title')
-      : (activeList()?.name ??
+      : ((view.peopleVisibility.showRemoved()
+          ? t('viewMenus.removedPeople')
+          : undefined) ??
+        activeList()?.name ??
         [...CRM_RECORDS, ...CRM_ACTIVITY_TABS].find(
           (record) => record.id === activeRecord()
         )?.label ??
@@ -843,6 +850,7 @@ export function CrmWorkspaceView(props: {
                         value={peopleSearch()}
                         onValueChange={searchPeople}
                       />
+                      <PeopleDisplayMenu visibility={view.peopleVisibility} />
                       <Button
                         variant="secondary"
                         class="ml-auto shrink-0"
@@ -889,6 +897,9 @@ export function CrmWorkspaceView(props: {
                     </Show>
                   </HeaderActionGroup>
                 </Show>
+                <Show when={peopleActive()}>
+                  <PeopleDisplayMenu visibility={view.peopleVisibility} />
+                </Show>
                 {toolbarCreateMenu()}
                 <CrmHeaderSearch
                   label={peopleActive() ? 'Search people' : 'Search companies'}
@@ -905,6 +916,11 @@ export function CrmWorkspaceView(props: {
                   <CrmFilterChips onReset={() => navigate(active())} />
                 </Suspense>
               </Show>
+            </Show>
+            <Show when={view.peopleVisibility.showRemoved()}>
+              <RemovedPeopleNotice
+                onShowActive={() => view.peopleVisibility.setShowRemoved(false)}
+              />
             </Show>
             {/* The header above already clears the status bar on touch. */}
             <div class="flex min-h-0 min-w-0 flex-1 flex-col [--mobile-content-inset-top:0px]">

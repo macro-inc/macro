@@ -20,7 +20,7 @@ export type Options<TData extends TDataShape = TDataShape, ThrowOnError extends 
 
 class HeyApiClient {
     protected client: Client;
-    
+
     constructor(args?: {
         client?: Client;
     }) {
@@ -30,9 +30,9 @@ class HeyApiClient {
 
 class HeyApiRegistry<T> {
     private readonly defaultKey = 'default';
-    
+
     private readonly instances: Map<string, T> = new Map();
-    
+
     get(key?: string): T {
         const instance = this.instances.get(key ?? this.defaultKey);
         if (!instance) {
@@ -40,7 +40,7 @@ class HeyApiRegistry<T> {
         }
         return instance;
     }
-    
+
     set(value: T, key?: string): void {
         this.instances.set(key ?? this.defaultKey, value);
     }
@@ -48,7 +48,7 @@ class HeyApiRegistry<T> {
 
 export class Sdk extends HeyApiClient {
     public static readonly __registry: HeyApiRegistry<Sdk> = new HeyApiRegistry<Sdk>();
-    
+
     constructor(args?: {
         client?: Client;
         key?: string;
@@ -56,21 +56,21 @@ export class Sdk extends HeyApiClient {
         super(args);
         Sdk.__registry.set(this, args?.key);
     }
-    
+
     /**
      * Get an attachment by ID.
      */
     public getAttachment<ThrowOnError extends boolean = false>(options: Options<GetAttachmentData, ThrowOnError>): RequestResult<GetAttachmentResponses, GetAttachmentErrors, ThrowOnError> {
         return (options.client ?? this.client).get<GetAttachmentResponses, GetAttachmentErrors, ThrowOnError>({ url: '/email/attachments/{id}', ...options });
     }
-    
+
     /**
      * Get the Macro document id for an email attachment, uploading it if it doesn't already exist.
      */
     public getAttachmentDocumentId<ThrowOnError extends boolean = false>(options: Options<GetAttachmentDocumentIdData, ThrowOnError>): RequestResult<GetAttachmentDocumentIdResponses, GetAttachmentDocumentIdErrors, ThrowOnError> {
         return (options.client ?? this.client).get<GetAttachmentDocumentIdResponses, GetAttachmentDocumentIdErrors, ThrowOnError>({ url: '/email/attachments/{id}/document_id', ...options });
     }
-    
+
     /**
      * Cancel a backfill job.
      */
@@ -84,7 +84,7 @@ export class Sdk extends HeyApiClient {
             }
         });
     }
-    
+
     /**
      * List all backfill jobs for the authenticated user, across every link they
      * own. Scoped by the user's fusionauth id from the request context rather than
@@ -93,21 +93,21 @@ export class Sdk extends HeyApiClient {
     public listBackfillGmail<ThrowOnError extends boolean = false>(options?: Options<ListBackfillGmailData, ThrowOnError>): RequestResult<ListBackfillGmailResponses, ListBackfillGmailErrors, ThrowOnError> {
         return (options?.client ?? this.client).get<ListBackfillGmailResponses, ListBackfillGmailErrors, ThrowOnError>({ url: '/email/backfill/gmail', ...options });
     }
-    
+
     /**
      * Get any active backfill job for the user.
      */
     public getBackfillGmailActive<ThrowOnError extends boolean = false>(options?: Options<GetBackfillGmailActiveData, ThrowOnError>): RequestResult<GetBackfillGmailActiveResponses, GetBackfillGmailActiveErrors, ThrowOnError> {
         return (options?.client ?? this.client).get<GetBackfillGmailActiveResponses, GetBackfillGmailActiveErrors, ThrowOnError>({ url: '/email/backfill/gmail/active', ...options });
     }
-    
+
     /**
      * Get a backfill job.
      */
     public getBackfillGmail<ThrowOnError extends boolean = false>(options: Options<GetBackfillGmailData, ThrowOnError>): RequestResult<GetBackfillGmailResponses, GetBackfillGmailErrors, ThrowOnError> {
         return (options.client ?? this.client).get<GetBackfillGmailResponses, GetBackfillGmailErrors, ThrowOnError>({ url: '/email/backfill/gmail/{id}', ...options });
     }
-    
+
     /**
      * Email one of the viewer's events to people the organizer's guest list
      * does not name, from the inbox that holds the viewer's copy, with the
@@ -129,14 +129,14 @@ export class Sdk extends HeyApiClient {
             }
         });
     }
-    
+
     /**
      * List all contacts belonging to the user, grouped by link.
      */
     public listContacts<ThrowOnError extends boolean = false>(options?: Options<ListContactsData, ThrowOnError>): RequestResult<ListContactsResponses, ListContactsErrors, ThrowOnError> {
         return (options?.client ?? this.client).get<ListContactsResponses, ListContactsErrors, ThrowOnError>({ url: '/email/contacts', ...options });
     }
-    
+
     /**
      * Durably block a sender in the selected inbox.
      */
@@ -150,14 +150,14 @@ export class Sdk extends HeyApiClient {
             }
         });
     }
-    
+
     /**
      * List all blocked senders for the authenticated user.
      */
     public listBlockedSenders<ThrowOnError extends boolean = false>(options?: Options<ListBlockedSendersData, ThrowOnError>): RequestResult<ListBlockedSendersResponses, ListBlockedSendersErrors, ThrowOnError> {
         return (options?.client ?? this.client).get<ListBlockedSendersResponses, ListBlockedSendersErrors, ThrowOnError>({ url: '/email/contacts/blocked', ...options });
     }
-    
+
     /**
      * Durably remove Macro-managed sender blocking in the selected inbox.
      */
@@ -171,11 +171,11 @@ export class Sdk extends HeyApiClient {
             }
         });
     }
-    
+
     public recoverDraftTransfer<ThrowOnError extends boolean = false>(options: Options<RecoverDraftTransferData, ThrowOnError>): RequestResult<RecoverDraftTransferResponses, RecoverDraftTransferErrors, ThrowOnError> {
         return (options.client ?? this.client).post<RecoverDraftTransferResponses, RecoverDraftTransferErrors, ThrowOnError>({ url: '/email/draft-transfers/{id}/recover', ...options });
     }
-    
+
     /**
      * Create a draft.
      */
@@ -189,14 +189,14 @@ export class Sdk extends HeyApiClient {
             }
         });
     }
-    
+
     /**
      * List scheduled drafts.
      */
     public getScheduledMessages<ThrowOnError extends boolean = false>(options?: Options<GetScheduledMessagesData, ThrowOnError>): RequestResult<GetScheduledMessagesResponses, GetScheduledMessagesErrors, ThrowOnError> {
         return (options?.client ?? this.client).get<GetScheduledMessagesResponses, GetScheduledMessagesErrors, ThrowOnError>({ url: '/email/drafts/scheduled', ...options });
     }
-    
+
     /**
      * Schedule or update a scheduled draft.
      */
@@ -210,21 +210,21 @@ export class Sdk extends HeyApiClient {
             }
         });
     }
-    
+
     /**
      * Remove the scheduled send from a draft, including immediate-send undo.
      */
     public deleteScheduledDraft<ThrowOnError extends boolean = false>(options: Options<DeleteScheduledDraftData, ThrowOnError>): RequestResult<DeleteScheduledDraftResponses, DeleteScheduledDraftErrors, ThrowOnError> {
         return (options.client ?? this.client).delete<DeleteScheduledDraftResponses, DeleteScheduledDraftErrors, ThrowOnError>({ url: '/email/drafts/scheduled/{message_id}', ...options });
     }
-    
+
     /**
      * Delete a draft.
      */
     public deleteDraft<ThrowOnError extends boolean = false>(options: Options<DeleteDraftData, ThrowOnError>): RequestResult<DeleteDraftResponses, DeleteDraftErrors, ThrowOnError> {
         return (options.client ?? this.client).delete<DeleteDraftResponses, DeleteDraftErrors, ThrowOnError>({ url: '/email/drafts/{id}', ...options });
     }
-    
+
     /**
      * Add an attachment to a draft.
      */
@@ -238,21 +238,21 @@ export class Sdk extends HeyApiClient {
             }
         });
     }
-    
+
     /**
      * Remove an attachment from a draft.
      */
     public removeDraftAttachment<ThrowOnError extends boolean = false>(options: Options<RemoveDraftAttachmentData, ThrowOnError>): RequestResult<RemoveDraftAttachmentResponses, RemoveDraftAttachmentErrors, ThrowOnError> {
         return (options.client ?? this.client).delete<RemoveDraftAttachmentResponses, RemoveDraftAttachmentErrors, ThrowOnError>({ url: '/email/drafts/{id}/attachments/{attachment_id}', ...options });
     }
-    
+
     /**
      * Confirm an uploaded attachment before it becomes part of a sendable draft.
      */
     public completeDraftAttachment<ThrowOnError extends boolean = false>(options: Options<CompleteDraftAttachmentData, ThrowOnError>): RequestResult<CompleteDraftAttachmentResponses, CompleteDraftAttachmentErrors, ThrowOnError> {
         return (options.client ?? this.client).post<CompleteDraftAttachmentResponses, CompleteDraftAttachmentErrors, ThrowOnError>({ url: '/email/drafts/{id}/attachments/{attachment_id}/complete', ...options });
     }
-    
+
     /**
      * Add a forwarded attachment to a draft.
      */
@@ -266,21 +266,21 @@ export class Sdk extends HeyApiClient {
             }
         });
     }
-    
+
     /**
      * Remove a forwarded attachment from a draft.
      */
     public removeForwardedAttachment<ThrowOnError extends boolean = false>(options: Options<RemoveForwardedAttachmentData, ThrowOnError>): RequestResult<RemoveForwardedAttachmentResponses, RemoveForwardedAttachmentErrors, ThrowOnError> {
         return (options.client ?? this.client).delete<RemoveForwardedAttachmentResponses, RemoveForwardedAttachmentErrors, ThrowOnError>({ url: '/email/drafts/{id}/forwarded-attachments/{attachment_id}', ...options });
     }
-    
+
     /**
      * The same provider-neutral state returned on fully hydrated email messages.
      */
     public messageOperationStatus<ThrowOnError extends boolean = false>(options: Options<MessageOperationStatusData, ThrowOnError>): RequestResult<MessageOperationStatusResponses, MessageOperationStatusErrors, ThrowOnError> {
         return (options.client ?? this.client).get<MessageOperationStatusResponses, MessageOperationStatusErrors, ThrowOnError>({ url: '/email/drafts/{id}/operation', ...options });
     }
-    
+
     /**
      * Resolve an observed draft conflict or uncertain provider operation.
      */
@@ -294,7 +294,7 @@ export class Sdk extends HeyApiClient {
             }
         });
     }
-    
+
     public transferDraft<ThrowOnError extends boolean = false>(options: Options<TransferDraftData, ThrowOnError>): RequestResult<TransferDraftResponses, TransferDraftErrors, ThrowOnError> {
         return (options.client ?? this.client).post<TransferDraftResponses, TransferDraftErrors, ThrowOnError>({
             url: '/email/drafts/{id}/transfer',
@@ -305,14 +305,14 @@ export class Sdk extends HeyApiClient {
             }
         });
     }
-    
+
     /**
      * List all email filters for the current user.
      */
     public listEmailFilters<ThrowOnError extends boolean = false>(options?: Options<ListEmailFiltersData, ThrowOnError>): RequestResult<ListEmailFiltersResponses, ListEmailFiltersErrors, ThrowOnError> {
         return (options?.client ?? this.client).get<ListEmailFiltersResponses, ListEmailFiltersErrors, ThrowOnError>({ url: '/email/filters', ...options });
     }
-    
+
     /**
      * Create or update an email filter.
      */
@@ -326,28 +326,28 @@ export class Sdk extends HeyApiClient {
             }
         });
     }
-    
+
     /**
      * Delete an email filter by ID.
      */
     public deleteEmailFilter<ThrowOnError extends boolean = false>(options: Options<DeleteEmailFilterData, ThrowOnError>): RequestResult<DeleteEmailFilterResponses, DeleteEmailFilterErrors, ThrowOnError> {
         return (options.client ?? this.client).delete<DeleteEmailFilterResponses, DeleteEmailFilterErrors, ThrowOnError>({ url: '/email/filters/{id}', ...options });
     }
-    
+
     /**
      * Initialize email functionality for the user. Populates initial threads and enables inbox syncing.
      */
     public initUser<ThrowOnError extends boolean = false>(options?: Options<InitUserData, ThrowOnError>): RequestResult<InitUserResponses, InitUserErrors, ThrowOnError> {
         return (options?.client ?? this.client).post<InitUserResponses, InitUserErrors, ThrowOnError>({ url: '/email/init', ...options });
     }
-    
+
     /**
      * List all labels for the user's email link.
      */
     public listLabels<ThrowOnError extends boolean = false>(options?: Options<ListLabelsData, ThrowOnError>): RequestResult<ListLabelsResponses, ListLabelsErrors, ThrowOnError> {
         return (options?.client ?? this.client).get<ListLabelsResponses, ListLabelsErrors, ThrowOnError>({ url: '/email/labels', ...options });
     }
-    
+
     /**
      * Create a label.
      */
@@ -361,21 +361,21 @@ export class Sdk extends HeyApiClient {
             }
         });
     }
-    
+
     /**
      * Delete a label.
      */
     public deleteLabel<ThrowOnError extends boolean = false>(options: Options<DeleteLabelData, ThrowOnError>): RequestResult<DeleteLabelResponses, DeleteLabelErrors, ThrowOnError> {
         return (options.client ?? this.client).delete<DeleteLabelResponses, DeleteLabelErrors, ThrowOnError>({ url: '/email/labels/{id}', ...options });
     }
-    
+
     /**
      * List all links belonging to the user.
      */
     public listLinks<ThrowOnError extends boolean = false>(options?: Options<ListLinksData, ThrowOnError>): RequestResult<ListLinksResponses, ListLinksErrors, ThrowOnError> {
         return (options?.client ?? this.client).get<ListLinksResponses, ListLinksErrors, ThrowOnError>({ url: '/email/links', ...options });
     }
-    
+
     /**
      * Probes the live auth state of each of the caller's inboxes (owned and delegated)
      * against the auth service and records the result on each link. A grant that died
@@ -391,7 +391,7 @@ export class Sdk extends HeyApiClient {
     public healthCheckLinks<ThrowOnError extends boolean = false>(options?: Options<HealthCheckLinksData, ThrowOnError>): RequestResult<HealthCheckLinksResponses, HealthCheckLinksErrors, ThrowOnError> {
         return (options?.client ?? this.client).post<HealthCheckLinksResponses, HealthCheckLinksErrors, ThrowOnError>({ url: '/email/links/health-check', ...options });
     }
-    
+
     /**
      * Removes a linked inbox.
      *
@@ -402,7 +402,7 @@ export class Sdk extends HeyApiClient {
     public deleteLink<ThrowOnError extends boolean = false>(options: Options<DeleteLinkData, ThrowOnError>): RequestResult<DeleteLinkResponses, DeleteLinkErrors, ThrowOnError> {
         return (options.client ?? this.client).delete<DeleteLinkResponses, DeleteLinkErrors, ThrowOnError>({ url: '/email/links/{link_id}', ...options });
     }
-    
+
     /**
      * Turns calendar off for a connected inbox.
      *
@@ -417,7 +417,7 @@ export class Sdk extends HeyApiClient {
     public disableLinkCalendar<ThrowOnError extends boolean = false>(options: Options<DisableLinkCalendarData, ThrowOnError>): RequestResult<DisableLinkCalendarResponses, DisableLinkCalendarErrors, ThrowOnError> {
         return (options.client ?? this.client).delete<DisableLinkCalendarResponses, DisableLinkCalendarErrors, ThrowOnError>({ url: '/email/links/{link_id}/calendar', ...options });
     }
-    
+
     /**
      * Re-syncs a linked inbox by enqueuing a fresh backfill.
      *
@@ -427,7 +427,7 @@ export class Sdk extends HeyApiClient {
     public resyncLink<ThrowOnError extends boolean = false>(options: Options<ResyncLinkData, ThrowOnError>): RequestResult<ResyncLinkResponses, ResyncLinkErrors, ThrowOnError> {
         return (options.client ?? this.client).post<ResyncLinkResponses, ResyncLinkErrors, ThrowOnError>({ url: '/email/links/{link_id}/resync', ...options });
     }
-    
+
     /**
      * Send a message.
      */
@@ -441,7 +441,7 @@ export class Sdk extends HeyApiClient {
             }
         });
     }
-    
+
     public getMessagesBatch<ThrowOnError extends boolean = false>(options: Options<GetMessagesBatchData, ThrowOnError>): RequestResult<GetMessagesBatchResponses, GetMessagesBatchErrors, ThrowOnError> {
         return (options.client ?? this.client).post<GetMessagesBatchResponses, GetMessagesBatchErrors, ThrowOnError>({
             url: '/email/messages/batch',
@@ -452,7 +452,7 @@ export class Sdk extends HeyApiClient {
             }
         });
     }
-    
+
     /**
      * Add or remove a label from a batch of messages
      */
@@ -466,25 +466,25 @@ export class Sdk extends HeyApiClient {
             }
         });
     }
-    
+
     public getMessage<ThrowOnError extends boolean = false>(options: Options<GetMessageData, ThrowOnError>): RequestResult<GetMessageResponses, GetMessageErrors, ThrowOnError> {
         return (options.client ?? this.client).get<GetMessageResponses, GetMessageErrors, ThrowOnError>({ url: '/email/messages/{id}', ...options });
     }
-    
+
     /**
      * Download a message's original source as an `.eml` file.
      */
     public getMessageEml<ThrowOnError extends boolean = false>(options: Options<GetMessageEmlData, ThrowOnError>): RequestResult<GetMessageEmlResponses, GetMessageEmlErrors, ThrowOnError> {
         return (options.client ?? this.client).get<GetMessageEmlResponses, GetMessageEmlErrors, ThrowOnError>({ url: '/email/messages/{id}/eml', ...options });
     }
-    
+
     /**
      * List the caller's sequences.
      */
     public listSequences<ThrowOnError extends boolean = false>(options?: Options<ListSequencesData, ThrowOnError>): RequestResult<ListSequencesResponses, ListSequencesErrors, ThrowOnError> {
         return (options?.client ?? this.client).get<ListSequencesResponses, ListSequencesErrors, ThrowOnError>({ url: '/email/sequences', ...options });
     }
-    
+
     /**
      * Create a draft sequence.
      */
@@ -498,21 +498,21 @@ export class Sdk extends HeyApiClient {
             }
         });
     }
-    
+
     /**
      * A CRM person's enrollments across the team, without step content.
      */
     public contactEnrollments<ThrowOnError extends boolean = false>(options: Options<ContactEnrollmentsData, ThrowOnError>): RequestResult<ContactEnrollmentsResponses, ContactEnrollmentsErrors, ThrowOnError> {
         return (options.client ?? this.client).get<ContactEnrollmentsResponses, ContactEnrollmentsErrors, ThrowOnError>({ url: '/email/sequences/contacts/{crm_contact_id}', ...options });
     }
-    
+
     /**
      * An enrollment with its rendered steps and what happened to each.
      */
     public getEnrollment<ThrowOnError extends boolean = false>(options: Options<GetEnrollmentData, ThrowOnError>): RequestResult<GetEnrollmentResponses, GetEnrollmentErrors, ThrowOnError> {
         return (options.client ?? this.client).get<GetEnrollmentResponses, GetEnrollmentErrors, ThrowOnError>({ url: '/email/sequences/enrollments/{id}', ...options });
     }
-    
+
     /**
      * Pause, resume, stop or unsubscribe an enrollment.
      */
@@ -526,21 +526,21 @@ export class Sdk extends HeyApiClient {
             }
         });
     }
-    
+
     /**
      * Delete a sequence, withdrawing its unsent steps.
      */
     public deleteSequence<ThrowOnError extends boolean = false>(options: Options<DeleteSequenceData, ThrowOnError>): RequestResult<DeleteSequenceResponses, DeleteSequenceErrors, ThrowOnError> {
         return (options.client ?? this.client).delete<DeleteSequenceResponses, DeleteSequenceErrors, ThrowOnError>({ url: '/email/sequences/{id}', ...options });
     }
-    
+
     /**
      * A sequence with its enrollments.
      */
     public getSequence<ThrowOnError extends boolean = false>(options: Options<GetSequenceData, ThrowOnError>): RequestResult<GetSequenceResponses, GetSequenceErrors, ThrowOnError> {
         return (options.client ?? this.client).get<GetSequenceResponses, GetSequenceErrors, ThrowOnError>({ url: '/email/sequences/{id}', ...options });
     }
-    
+
     /**
      * Edit a draft or paused sequence, or change its status.
      */
@@ -554,7 +554,7 @@ export class Sdk extends HeyApiClient {
             }
         });
     }
-    
+
     /**
      * Enroll CRM people into an active sequence.
      */
@@ -568,7 +568,7 @@ export class Sdk extends HeyApiClient {
             }
         });
     }
-    
+
     /**
      * Patch user settings.
      */
@@ -582,14 +582,14 @@ export class Sdk extends HeyApiClient {
             }
         });
     }
-    
+
     /**
      * Accepted label and sender-policy changes awaiting provider confirmation.
      */
     public mailboxSettingsOperations<ThrowOnError extends boolean = false>(options?: Options<MailboxSettingsOperationsData, ThrowOnError>): RequestResult<MailboxSettingsOperationsResponses, unknown, ThrowOnError> {
         return (options?.client ?? this.client).get<MailboxSettingsOperationsResponses, unknown, ThrowOnError>({ url: '/email/settings/operations', ...options });
     }
-    
+
     /**
      * Disables inbox syncing for the selected inbox.
      *
@@ -602,7 +602,7 @@ export class Sdk extends HeyApiClient {
     public disableSync<ThrowOnError extends boolean = false>(options?: Options<DisableSyncData, ThrowOnError>): RequestResult<DisableSyncResponses, DisableSyncErrors, ThrowOnError> {
         return (options?.client ?? this.client).delete<DisableSyncResponses, DisableSyncErrors, ThrowOnError>({ url: '/email/sync', ...options });
     }
-    
+
     /**
      * Change the archived status of up to 100 threads, sending one provider
      * write per inbox. A thread that can't change is reported, not fatal.
@@ -617,14 +617,14 @@ export class Sdk extends HeyApiClient {
             }
         });
     }
-    
+
     /**
      * Get paginated thread previews with cursor-based pagination.
      */
     public previewsInboxCursor<ThrowOnError extends boolean = false>(options: Options<PreviewsInboxCursorData, ThrowOnError>): RequestResult<PreviewsInboxCursorResponses, PreviewsInboxCursorErrors, ThrowOnError> {
         return (options.client ?? this.client).get<PreviewsInboxCursorResponses, PreviewsInboxCursorErrors, ThrowOnError>({ url: '/email/threads/previews/cursor/{view}', ...options });
     }
-    
+
     /**
      * Change the archived status of a thread.
      */
@@ -638,7 +638,7 @@ export class Sdk extends HeyApiClient {
             }
         });
     }
-    
+
     /**
      * Add or remove a label from all messages in a thread.
      */
@@ -652,25 +652,25 @@ export class Sdk extends HeyApiClient {
             }
         });
     }
-    
+
     public getThreadMessagesHandler<ThrowOnError extends boolean = false>(options: Options<GetThreadMessagesHandlerData, ThrowOnError>): RequestResult<GetThreadMessagesHandlerResponses, GetThreadMessagesHandlerErrors, ThrowOnError> {
         return (options.client ?? this.client).get<GetThreadMessagesHandlerResponses, GetThreadMessagesHandlerErrors, ThrowOnError>({ url: '/email/threads/{id}/messages', ...options });
     }
-    
+
     /**
      * Fetch the latest organization action outcomes without provider-specific status strings.
      */
     public threadOperations<ThrowOnError extends boolean = false>(options: Options<ThreadOperationsData, ThrowOnError>): RequestResult<ThreadOperationsResponses, ThreadOperationsErrors, ThrowOnError> {
         return (options.client ?? this.client).get<ThreadOperationsResponses, ThreadOperationsErrors, ThrowOnError>({ url: '/email/threads/{id}/operations', ...options });
     }
-    
+
     /**
      * Called by FE when the user has seen a thread.
      */
     public threadSeen<ThrowOnError extends boolean = false>(options: Options<ThreadSeenData, ThrowOnError>): RequestResult<ThreadSeenResponses, ThreadSeenErrors, ThrowOnError> {
         return (options.client ?? this.client).post<ThreadSeenResponses, ThreadSeenErrors, ThrowOnError>({ url: '/email/threads/{id}/seen', ...options });
     }
-    
+
     /**
      * Set mailbox state without client-side provider label lookup.
      */
@@ -684,18 +684,18 @@ export class Sdk extends HeyApiClient {
             }
         });
     }
-    
+
     /**
      * Get a thread with paginated messages.
      */
     public getThread<ThrowOnError extends boolean = false>(options: Options<GetThreadData, ThrowOnError>): RequestResult<GetThreadResponses, GetThreadErrors, ThrowOnError> {
         return (options.client ?? this.client).get<GetThreadResponses, GetThreadErrors, ThrowOnError>({ url: '/email/threads/{thread_id}', ...options });
     }
-    
+
     public getThreadCalendarInvitations<ThrowOnError extends boolean = false>(options: Options<GetThreadCalendarInvitationsData, ThrowOnError>): RequestResult<GetThreadCalendarInvitationsResponses, GetThreadCalendarInvitationsErrors, ThrowOnError> {
         return (options.client ?? this.client).get<GetThreadCalendarInvitationsResponses, GetThreadCalendarInvitationsErrors, ThrowOnError>({ url: '/email/threads/{thread_id}/calendar-invitations', ...options });
     }
-    
+
     /**
      * Add a shared event saved from one of the thread's messages to one of the
      * viewer's Google calendars, the way Add to calendar adds a channel-shared
@@ -714,7 +714,7 @@ export class Sdk extends HeyApiClient {
             }
         });
     }
-    
+
     /**
      * Update the project assignment for a thread.
      */
@@ -728,18 +728,18 @@ export class Sdk extends HeyApiClient {
             }
         });
     }
-    
+
     public getThreadReadReceipts<ThrowOnError extends boolean = false>(options: Options<GetThreadReadReceiptsData, ThrowOnError>): RequestResult<GetThreadReadReceiptsResponses, GetThreadReadReceiptsErrors, ThrowOnError> {
         return (options.client ?? this.client).get<GetThreadReadReceiptsResponses, GetThreadReadReceiptsErrors, ThrowOnError>({ url: '/email/threads/{thread_id}/read-receipts', ...options });
     }
-    
+
     /**
      * Health check
      */
     public healthHandler<ThrowOnError extends boolean = false>(options?: Options<HealthHandlerData, ThrowOnError>): RequestResult<HealthHandlerResponses, unknown, ThrowOnError> {
         return (options?.client ?? this.client).get<HealthHandlerResponses, unknown, ThrowOnError>({ url: '/health', ...options });
     }
-    
+
     /**
      * Every request gets the same uncacheable pixel so the response reveals nothing
      * about the token, and each open reaches the server.

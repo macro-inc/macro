@@ -1,9 +1,9 @@
 import { t } from '@app/lib/i18n';
-import { useGlobalNotificationSource } from '@components/app/GlobalAppState';
 import { toast } from '@core/component/Toast/Toast';
 import { useUserId } from '@core/context/user';
 import { Telemetry } from '@macro-inc/observability';
 import { openSnoozeNotifications } from '@notifications/SnoozeNotificationsDialog';
+import { useBulkNotificationPreferencesMutation } from '@queries/notification/unsubscribes';
 import type { ChannelLabel } from '@service-storage/generated/schemas/channelLabel';
 import type { Favorite } from '@service-storage/generated/schemas/favorite';
 import { type Accessor, createSignal, type Owner, onCleanup } from 'solid-js';
@@ -22,7 +22,7 @@ export function useChannelSectionNotifications(
   options: SectionNotificationOptions
 ) {
   const userId = useUserId();
-  const notificationSource = useGlobalNotificationSource();
+  const notificationPreferences = useBulkNotificationPreferencesMutation();
   const [pending, setPending] = createSignal<{ actorId: string }>();
   const requests = new Set<AbortController>();
   let disposed = false;
@@ -82,14 +82,8 @@ export function useChannelSectionNotifications(
       section === 'team_channels' ||
       section === 'direct_messages'
     ) {
-      // Only All channels excludes custom-section assignments.
-      const excludedIds =
-        section === 'channels'
-          ? options.labels().flatMap((label) => label.channelIds)
-          : [];
-
       return Telemetry.span('channels.section.members', () =>
-        fetchChannelGroupIds(section, excludedIds, signal)
+        fetchChannelGroupIds(section, [], signal)
       );
     }
 
@@ -143,23 +137,16 @@ export function useChannelSectionNotifications(
         }
 
         const muted = action === 'mute';
-        const results = await Promise.allSettled(
-          channelIds.map((id) =>
-            span.span('channels.section.notification.update', async (child) => {
-              child.setAttr('channel.id', id);
-
-              if (muted) {
-                await notificationSource.muteEntity({ type: 'channel', id });
-              } else {
-                await notificationSource.unmuteEntity({ type: 'channel', id });
-              }
-            })
-          )
-        );
-        const failed = results.filter(
-          (result) => result.status === 'rejected'
-        ).length;
-        const succeeded = results.length - failed;
+        const result = await notificationPreferences.mutateAsync({
+          actorId,
+          items: channelIds.map((id) => ({
+            item_type: 'channel',
+            item_id: id,
+          })),
+          muted,
+        });
+        const failed = result.failed.length;
+        const succeeded = result.succeeded.length;
 
         span.setAttr('notification.failed_count', failed);
 
@@ -177,7 +164,7 @@ export function useChannelSectionNotifications(
               muted
                 ? 'entityActions.toastMutedSome'
                 : 'entityActions.toastUnmutedSome',
-              { succeeded, count: results.length, failed }
+              { succeeded, count: channelIds.length, failed }
             )
           );
           return;

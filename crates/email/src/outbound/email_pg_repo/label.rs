@@ -273,6 +273,15 @@ pub(super) async fn stage_thread_label_change(
         write_id,
     )
     .await?;
+
+    // Folder changes immediately alter the canonical All Mail preview, sort,
+    // and signal state; they must not wait for the Gmail worker's confirmation.
+    if matches!(
+        provider_label_id,
+        system_labels::SPAM | system_labels::TRASH
+    ) {
+        super::thread::update_thread_metadata(&mut tx, thread_id, link_id).await?;
+    }
     tx.commit().await?;
 
     Ok(Some(StagedLabelChange {

@@ -4,7 +4,6 @@ import {
 } from '@app/components/entity-detail/entity-detail-target';
 import { makeShareAction } from '@app/features/next-soup/actions';
 import {
-  markRowNotificationsSeenOnOpen,
   openEntityInNewTab,
   openEntityInSplitFromUnifiedList,
 } from '@app/features/next-soup/utils';
@@ -25,6 +24,7 @@ import {
   openFolderPicker,
 } from '@core/util/upload';
 import type { EntityData } from '@entity';
+import { markRowNotificationsSeenOnOpen } from '@notifications/mark-row-seen';
 import type { Accessor } from 'solid-js';
 import type { DriveHostActions } from './context/drive-context';
 import { useDriveDetailNavigation } from './drive-detail-navigation';

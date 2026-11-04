@@ -435,18 +435,23 @@ fn build_address_message_predicate(
     })
 }
 
-/// A message any list may show: present, not trashed, and not a pending
-/// sequence step (a draft whose schedule has a source and is neither sent nor
-/// failed), which stays out of every mail list until it is sent or fails.
-/// Every candidate-stage message probe and the preview lateral use it, so a
-/// thread is a candidate only when the lateral can show one of its messages.
-/// The static preview views and `recompute_thread_metadata` restate the
-/// sequence predicate.
-pub(super) fn build_visible_message_check(_resolved: &ResolvedFilters) -> SqlFragment {
-    SqlFragment::raw(
-        "EXISTS (SELECT 1 FROM email_message_mailbox_facts mf WHERE mf.id = m.id AND mf.is_present AND NOT mf.in_trash) \
+/// A message any list may show: present, not trashed outside its explicit
+/// folder, and not a pending sequence step (a draft whose schedule has a
+/// source and is neither sent nor failed), which stays out of every mail list
+/// until it is sent or fails. Every candidate-stage message probe and the
+/// preview lateral use it, so a thread is a candidate only when the lateral
+/// can show one of its messages. The static preview views and
+/// `recompute_thread_metadata` restate the sequence predicate.
+pub(super) fn build_visible_message_check(resolved: &ResolvedFilters) -> SqlFragment {
+    let trash = if resolved.include_trash {
+        ""
+    } else {
+        " AND NOT mf.in_trash"
+    };
+    SqlFragment::raw(format!(
+        "EXISTS (SELECT 1 FROM email_message_mailbox_facts mf WHERE mf.id = m.id AND mf.is_present{trash}) \
          AND NOT EXISTS (SELECT 1 FROM email_scheduled_messages sm_seq WHERE sm_seq.message_id = m.id AND sm_seq.source IS NOT NULL AND NOT sm_seq.sent AND sm_seq.delivery_status <> 'failed')",
-    )
+    ))
 }
 
 /// True when the AST contains at least one pure-address top-level
@@ -935,6 +940,8 @@ pub(super) fn build_view_thread_filter(view: &PreviewView) -> SqlFragment {
         PreviewView::StandardLabel(PreviewViewStandardLabel::Drafts)
         | PreviewView::StandardLabel(PreviewViewStandardLabel::Starred)
         | PreviewView::StandardLabel(PreviewViewStandardLabel::All)
+        | PreviewView::StandardLabel(PreviewViewStandardLabel::Spam)
+        | PreviewView::StandardLabel(PreviewViewStandardLabel::Trash)
         | PreviewView::StandardLabel(PreviewViewStandardLabel::Important)
         | PreviewView::UserLabel(_) => SqlFragment::empty(),
         PreviewView::StandardLabel(PreviewViewStandardLabel::Other) => {
@@ -949,6 +956,12 @@ pub(super) fn build_view_message_filter(view: &PreviewView) -> SqlFragment {
         PreviewView::StandardLabel(PreviewViewStandardLabel::Inbox) => SqlFragment::empty(),
         PreviewView::StandardLabel(PreviewViewStandardLabel::All) => SqlFragment::raw(
             " AND EXISTS (SELECT 1 FROM email_message_mailbox_facts mf WHERE mf.id = m.id AND NOT mf.in_junk)",
+        ),
+        PreviewView::StandardLabel(PreviewViewStandardLabel::Spam) => SqlFragment::raw(
+            " AND EXISTS (SELECT 1 FROM email_message_mailbox_facts mf WHERE mf.id = m.id AND mf.in_junk)",
+        ),
+        PreviewView::StandardLabel(PreviewViewStandardLabel::Trash) => SqlFragment::raw(
+            " AND EXISTS (SELECT 1 FROM email_message_mailbox_facts mf WHERE mf.id = m.id AND mf.in_trash)",
         ),
         PreviewView::StandardLabel(PreviewViewStandardLabel::Sent) => {
             SqlFragment::raw(" AND m.is_sent = TRUE")
@@ -993,6 +1006,9 @@ pub(super) fn build_view_message_filter(view: &PreviewView) -> SqlFragment {
 /// Returns the appropriate timestamp field to use for sorting based on the view
 pub(super) fn get_sort_timestamp_field(view: &PreviewView) -> &'static str {
     match view {
+        PreviewView::StandardLabel(
+            PreviewViewStandardLabel::Spam | PreviewViewStandardLabel::Trash,
+        ) => "folder.latest_folder_message_ts",
         PreviewView::StandardLabel(PreviewViewStandardLabel::Sent) => {
             "t.latest_outbound_message_ts"
         }

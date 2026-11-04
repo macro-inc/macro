@@ -509,6 +509,14 @@ export const agentsViewRoute = defineRoute({
   claim: () => ({ namespace: 'component', id: 'agents' }),
 });
 
+/** A new email, composed beside the list on desktop. */
+export const emailComposeRoute = defineRoute({
+  id: 'mail-compose',
+  path: 'new',
+  // Each open is a fresh composer, even in a Mail view already composing.
+  remountKey: (_params, { entryId }) => entryId,
+});
+
 export const emailThreadRoute = defineRoute({
   id: 'mail-thread',
   path: ':threadId',

@@ -1,3 +1,4 @@
+import type { ImportDraft as SavedImportDraft } from '@service-agent-reviews/generated/types';
 import { match } from 'ts-pattern';
 import type { Review, ReviewItem } from './review';
 
@@ -106,12 +107,17 @@ export type ImportReviewPhase =
  * The saved draft of an import review. `shared` and `personal` hold the rows
  * the owner switched to or from team sharing, against the plan's choice.
  */
-export type ImportDraft = {
-  source: 'notion' | 'linear' | 'jira';
-  excluded: string[];
-  shared: string[];
-  personal: string[];
-};
+export type ImportDraft = Required<SavedImportDraft>;
+
+/** A saved import draft with its omitted row lists filled in. */
+export function withRowLists(draft: SavedImportDraft): ImportDraft {
+  return {
+    source: draft.source,
+    excluded: draft.excluded ?? [],
+    shared: draft.shared ?? [],
+    personal: draft.personal ?? [],
+  };
+}
 
 export const EMPTY_IMPORT_DRAFT: ImportDraft = {
   source: 'notion',

@@ -27,6 +27,7 @@ import type { CrmSoupActivityTab } from '../core/navigation';
 import type { Pipeline } from '../core/pipeline';
 import type { CrmRecordScope, CrmTaskRecord } from '../core/record';
 import type {
+  BlockedDomainsSource,
   CompanyImporter,
   CompanySource,
   ContactSource,
@@ -165,7 +166,7 @@ export type CrmContext = {
     query: { readonly isLoading: boolean };
   };
   createContactSuggestions(): {
-    contacts: Accessor<{ id: string; name: string; email: string }[]>;
+    contacts: Accessor<{ id: string; name: string; email?: string | null }[]>;
     query: { readonly isLoading: boolean };
   };
   exportCompanies(
@@ -186,6 +187,7 @@ export type CrmContext = {
   createContactSource(id: Accessor<string>): ContactSource;
   createTeamSource(): TeamSource;
   createTeamConfigSource(): TeamConfigSource;
+  createBlockedDomains(): BlockedDomainsSource;
   createCapabilities(): CrmCapabilities;
   createDealStages(): DealStages;
   createPersonalViews(): PersonalViewsSource;
@@ -197,13 +199,13 @@ export type CrmContext = {
   >;
   createCompanyImporter(): CompanyImporter;
   createContact(): CrmMutation<
-    { companyId: string; name: string; email: string },
+    { companyId?: string; name: string; email?: string },
     { id: string }
   >;
   renameCompany(): CrmMutation<{ companyId: string; name: string }>;
   renameContact(): CrmMutation<{
     contactId: string;
-    companyId: string;
+    companyId?: string | null;
     name: string;
   }>;
   hideCompany(): CrmMutation<{ companyId: string; hidden: boolean }>;

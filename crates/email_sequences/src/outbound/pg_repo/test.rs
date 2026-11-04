@@ -50,7 +50,7 @@ impl OwnerAccess for Access {
         .map(|(id, email, name)| CrmPerson {
             id,
             team_id: TEAM,
-            email: email.to_owned(),
+            email: Some(email.to_owned()),
             name: Some(name.to_owned()),
         })
         .collect())

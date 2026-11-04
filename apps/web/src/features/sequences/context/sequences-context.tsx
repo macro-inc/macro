@@ -63,7 +63,8 @@ export type EnrollmentCommands = {
 };
 
 /** A CRM person who can be enrolled. */
-export type Person = { id: string; name: string; email: string };
+/** A CRM person; the CRM may have no address for them. */
+export type Person = { id: string; name: string; email?: string | null };
 
 export type PeopleSource = {
   people: Accessor<readonly Person[]>;

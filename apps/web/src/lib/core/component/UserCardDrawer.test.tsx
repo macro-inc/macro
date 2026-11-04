@@ -40,6 +40,8 @@ vi.mock('@core/context/user', () => ({
 }));
 
 vi.mock('@core/user', () => ({
+  isAgentAccount: () => false,
+  tryMacroId: () => undefined,
   useIsConnectedSecondaryInbox: () => () => false,
 }));
 

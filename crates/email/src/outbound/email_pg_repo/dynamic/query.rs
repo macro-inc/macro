@@ -47,6 +47,7 @@ struct ProjectScope {
     source_ids: Vec<String>,
 }
 
+#[derive(Clone, Copy)]
 enum ThreadCandidateSource {
     Owned,
     Shared,
@@ -114,6 +115,87 @@ fn push_shared_cte(builder: &mut QueryBuilder<'static, Postgres>, params: &Query
     );
 }
 
+fn push_source_scope(
+    builder: &mut QueryBuilder<'static, Postgres>,
+    params: &QueryParams,
+    source: ThreadCandidateSource,
+    per_link_fanout: bool,
+) {
+    match source {
+        ThreadCandidateSource::Owned => match params.team_id {
+            // Normal per-mailbox query.
+            None => {
+                if per_link_fanout {
+                    builder.push("t.link_id = links.link_id");
+                } else {
+                    builder.push("t.link_id = ANY(");
+                    builder.push_bind(params.link_ids.clone());
+                    builder.push(")");
+                }
+            }
+            // CRM-scoped query: expand to every primary email_link owned by
+            // any member of the team. Non-primary links (connected secondary
+            // mailboxes, whose address differs from the owner's macro_id
+            // email) are excluded. The receipt has already been validated
+            // upstream, so the team_id is trusted here.
+            //
+            // resolve_filters pre-resolves the team's primary link ids: the
+            // ANY probe gives the planner a tight static link set, and the
+            // membership subquery revalidates it at execution time so a
+            // member or link removed between resolve_filters and this query
+            // can't leak threads (same belt-and-suspenders rationale as the
+            // crm_enabled EXISTS below). The subquery alone remains as a
+            // fallback for resolutions that didn't carry team links.
+            Some(team_id) => {
+                if let Some(team_links) = params.resolved.team_link_ids() {
+                    builder.push("t.link_id = ANY(");
+                    builder.push_bind(team_links.to_vec());
+                    builder.push(") AND ");
+                }
+                builder.push(
+                    r#"t.link_id IN (
+                        SELECT el.id
+                        FROM email_links el
+                        JOIN team_user tu ON tu.user_id = el.macro_id
+                        WHERE tu.team_id = "#,
+                );
+                builder.push_bind(team_id);
+                builder.push(" AND el.is_primary)");
+            }
+        },
+        ThreadCandidateSource::Shared => {
+            builder.push("t.id IN (SELECT thread_id FROM SharedEmailThreads)");
+        }
+        // All threads in the requested projects, across every inbox — each
+        // row gated on the caller's sources having an entity_access grant
+        // on that row's project (same check as thread_access.rs Source 3).
+        ThreadCandidateSource::Project => {
+            let scope = params
+                .project_scope
+                .as_ref()
+                .expect("Project candidate source requires project_scope");
+            builder.push("t.project_id = ANY(");
+            builder.push_bind(scope.project_ids.clone());
+            builder.push(
+                r#") AND EXISTS (
+                        SELECT 1 FROM entity_access pea
+                        WHERE pea.entity_id::text = t.project_id
+                          AND pea.entity_type = 'project'
+                          AND pea.source_id = ANY("#,
+            );
+            builder.push_bind(scope.source_ids.clone());
+            builder.push("))");
+            // Shared=Only means "not my own threads" — keep the project
+            // widening for teammates' threads but exclude the caller's.
+            if matches!(params.shared, SharedEmailFilter::Only) {
+                builder.push(" AND NOT (t.link_id = ANY(");
+                builder.push_bind(params.link_ids.clone());
+                builder.push("))");
+            }
+        }
+    }
+}
+
 fn push_thread_candidate_select(
     builder: &mut QueryBuilder<'static, Postgres>,
     view: &PreviewView,
@@ -126,7 +208,11 @@ fn push_thread_candidate_select(
     // All Mail displays the latest eligible message date, even when a newer
     // junk/trash message or a read-state write updates the thread metadata.
     let updated_at_field = match view {
-        PreviewView::StandardLabel(PreviewViewStandardLabel::All) => sort_ts_field,
+        PreviewView::StandardLabel(
+            PreviewViewStandardLabel::All
+            | PreviewViewStandardLabel::Spam
+            | PreviewViewStandardLabel::Trash,
+        ) => sort_ts_field,
         _ => "t.updated_at",
     };
 
@@ -223,96 +309,21 @@ fn push_thread_candidate_select(
         builder.push(") AS is_own_link");
     }
 
-    if defer_uh {
-        builder.push(
-            r#"
-                FROM email_threads t
-                WHERE
-                    "#,
-        );
+    if super::folders::is_folder(view) {
+        super::folders::push_folder_threads(builder, view, |builder| {
+            push_source_scope(builder, params, source, per_link_fanout);
+        });
     } else {
+        builder.push(" FROM email_threads t ");
+    }
+    if !defer_uh {
         builder.push(
-            r#"
-                FROM email_threads t
-                LEFT JOIN email_user_history uh ON uh.thread_id = t.id AND uh.link_id = t.link_id
-                WHERE
-                    "#,
+            " LEFT JOIN email_user_history uh ON uh.thread_id = t.id AND uh.link_id = t.link_id ",
         );
     }
+    builder.push(" WHERE ");
 
-    match source {
-        ThreadCandidateSource::Owned => match params.team_id {
-            // Normal per-mailbox query.
-            None => {
-                if per_link_fanout {
-                    builder.push("t.link_id = links.link_id");
-                } else {
-                    builder.push("t.link_id = ANY(");
-                    builder.push_bind(params.link_ids.clone());
-                    builder.push(")");
-                }
-            }
-            // CRM-scoped query: expand to every primary email_link owned by
-            // any member of the team. Non-primary links (connected secondary
-            // mailboxes, whose address differs from the owner's macro_id
-            // email) are excluded. The receipt has already been validated
-            // upstream, so the team_id is trusted here.
-            //
-            // resolve_filters pre-resolves the team's primary link ids: the
-            // ANY probe gives the planner a tight static link set, and the
-            // membership subquery revalidates it at execution time so a
-            // member or link removed between resolve_filters and this query
-            // can't leak threads (same belt-and-suspenders rationale as the
-            // crm_enabled EXISTS below). The subquery alone remains as a
-            // fallback for resolutions that didn't carry team links.
-            Some(team_id) => {
-                if let Some(team_links) = params.resolved.team_link_ids() {
-                    builder.push("t.link_id = ANY(");
-                    builder.push_bind(team_links.to_vec());
-                    builder.push(") AND ");
-                }
-                builder.push(
-                    r#"t.link_id IN (
-                        SELECT el.id
-                        FROM email_links el
-                        JOIN team_user tu ON tu.user_id = el.macro_id
-                        WHERE tu.team_id = "#,
-                );
-                builder.push_bind(team_id);
-                builder.push(" AND el.is_primary)");
-            }
-        },
-        ThreadCandidateSource::Shared => {
-            builder.push("t.id IN (SELECT thread_id FROM SharedEmailThreads)");
-        }
-        // All threads in the requested projects, across every inbox — each
-        // row gated on the caller's sources having an entity_access grant
-        // on that row's project (same check as thread_access.rs Source 3).
-        ThreadCandidateSource::Project => {
-            let scope = params
-                .project_scope
-                .as_ref()
-                .expect("Project candidate source requires project_scope");
-            builder.push("t.project_id = ANY(");
-            builder.push_bind(scope.project_ids.clone());
-            builder.push(
-                r#") AND EXISTS (
-                        SELECT 1 FROM entity_access pea
-                        WHERE pea.entity_id::text = t.project_id
-                          AND pea.entity_type = 'project'
-                          AND pea.source_id = ANY("#,
-            );
-            builder.push_bind(scope.source_ids.clone());
-            builder.push("))");
-            // Shared=Only means "not my own threads" — keep the project
-            // widening for teammates' threads but exclude the caller's.
-            if matches!(params.shared, SharedEmailFilter::Only) {
-                builder.push(" AND NOT (t.link_id = ANY(");
-                builder.push_bind(params.link_ids.clone());
-                builder.push("))");
-            }
-        }
-    }
+    push_source_scope(builder, params, source, per_link_fanout);
 
     // Belt-and-suspenders killswitch check that covers both the Owned and
     // Shared branches. Without this, a CRM-scoped request with
@@ -441,8 +452,12 @@ fn push_thread_candidate_select(
 fn build_query(
     view: &PreviewView,
     email_filter: &Expr<EmailLiteral>,
-    params: QueryParams,
+    mut params: QueryParams,
 ) -> QueryBuilder<'static, Postgres> {
+    params.resolved.include_trash = matches!(
+        view,
+        PreviewView::StandardLabel(PreviewViewStandardLabel::Trash)
+    );
     let sort_ts_field = get_sort_timestamp_field(view);
     let view_message_filter = build_view_message_filter(view);
     // When neither ordering nor filtering needs view history, the
@@ -669,9 +684,15 @@ fn build_query(
 
     builder.push_bind(params.query_limit);
 
+    builder.push(") AS t");
+    if super::folders::is_folder(view) {
+        // Preserve the folder sort date inside mixed thread/message predicates
+        // in the preview LATERAL, after the candidate relation has been limited.
+        builder
+            .push(" CROSS JOIN LATERAL (SELECT t.created_at AS latest_folder_message_ts) folder ");
+    }
     builder.push(
         r#"
-        ) AS t
         -- Step 2: For each thread, find its latest message matching the filter
         CROSS JOIN LATERAL (
             SELECT
