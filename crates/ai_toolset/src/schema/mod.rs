@@ -19,3 +19,4 @@ pub use frontend_typegen::{
 };
 pub use generate::{ValidatedSchema, frontend_schemas_builder, generate_validated_input_schema};
 pub use phantom_tool::PhantomTool;
+pub use validate::required_ref_loop;

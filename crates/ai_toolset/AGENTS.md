@@ -55,6 +55,10 @@ deliberately stable and widely depended on.
 - Keep tool input roots free of `oneOf`, `anyOf`, and `allOf`; put tagged variants
   under a named property so provider validation accepts them. Schema generation
   rejects root composition when toolsets are built, including in their tests.
+- A recursive input type recurses through an optional or nullable field, or a
+  list that may be empty. Gemini rejects a whole request whose tool schemas
+  hold a `$ref` loop of required fields, so schema generation rejects one too
+  (`schema/validate/ref_loop.rs`).
 
 ## Related
 
