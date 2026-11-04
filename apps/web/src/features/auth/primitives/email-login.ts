@@ -18,7 +18,6 @@ const VERIFY_ERRORS = {
 type EmailLoginCapabilities = Pick<
   AuthContext,
   | 'session'
-  | 'agentSignupEnabled'
   | 'sendEmailCode'
   | 'verifyEmailCode'
   | 'completeLogin'
@@ -46,7 +45,6 @@ export function createEmailLogin(
   );
   const [email, setEmail] = createSignal(options.initialEmail ?? '');
   const [password, setPassword] = createSignal('');
-  const [isAgent, setIsAgent] = createSignal(false);
   const [passwordRequired, setPasswordRequired] = createSignal(false);
   const [sending, setSending] = createSignal(false);
   const [sendError, setSendError] = createSignal<string>();
@@ -106,7 +104,7 @@ export function createEmailLogin(
       const result = await context.sendEmailCode({
         email: address,
         password: passwordRequired() ? password() : undefined,
-        isAgent: context.agentSignupEnabled() && isAgent(),
+        isAgent: options.intent === 'agent-signup',
       });
       switch (result.t) {
         case 'code-sent':
@@ -145,9 +143,6 @@ export function createEmailLogin(
     setEmail,
     password,
     setPassword,
-    isAgent,
-    setIsAgent,
-    showAgentToggle: context.agentSignupEnabled,
     passwordRequired,
     sending,
     sendError,
@@ -158,7 +153,7 @@ export function createEmailLogin(
     resendIn,
     canVerify: () => isCompleteCode(code()) && !verifying(),
     chooseEmail: () => {
-      if (options.intent === 'signup')
+      if (options.intent !== 'login')
         context.track('sign_up_click', { method: 'email' });
       setStep('email');
     },

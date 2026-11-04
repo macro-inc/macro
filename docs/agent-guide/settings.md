@@ -197,7 +197,9 @@ another team are told to leave it first. Team admins and owners also see
 **Reset link** (the old link stops working and a new one is copied) and
 **Turn off**, each behind a confirmation. Anyone who may invite can copy the
 link or create the first one. Below it, **Invite by email** sends invitations
-as before. Each email says what joining gives: **Pro is included** when joining
+as before; **Invite as agent** invites every address in the dialog as an agent,
+and its email and **Copy link** go to `/app/signup/agent?team_invite=<id>` (see
+[agent accounts](login.md#agent-accounts)). Each email says what joining gives: **Pro is included** when joining
 grants a Pro seat (an enterprise team, or one with a subscription), otherwise
 **Free to join**. Examples: [desktop](media/team-invite-email/desktop.png) and
 [mobile](media/team-invite-email/mobile.png).
