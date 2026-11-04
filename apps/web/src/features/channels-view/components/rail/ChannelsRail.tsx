@@ -454,13 +454,12 @@ export function ChannelsRail(props: ChannelsRailProps) {
     channelsById().get(channelId) ??
     referencedChannels().find((channel) => channel.id === channelId);
 
-  const activityChannels = createMemo(() => {
-    if (!sectionsEnabled()) return allChannels();
-    return deduplicateChannels([
+  const activityChannels = createMemo(() =>
+    deduplicateChannels([
       allChannels(),
       favoriteChannelIds().flatMap((id) => channelById(id) ?? []),
-    ]);
-  });
+    ])
+  );
   const channelActivity = useChannelRailActivity(
     activityChannels,
     channelCalls
