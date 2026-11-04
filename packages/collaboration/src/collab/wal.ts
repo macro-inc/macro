@@ -238,6 +238,8 @@ export class WALSyncer<T> {
    *  to re-run after completing so those entries aren't stranded. */
   private hasNewPending = false;
   private reportedFailures = new Map<'initialization' | 'flush', string>();
+  /** Appends still writing to the store; see {@link deliverAll}. */
+  private readonly appending = new Set<Promise<void>>();
   public pendingFlush: Promise<void> = Promise.resolve();
   private cleanupFns: Array<() => void> = [];
   private deliveryOutage:
@@ -297,6 +299,26 @@ export class WALSyncer<T> {
   }
 
   public async append(item: T): Promise<void> {
+    const appended = this.appendEntry(item);
+    this.appending.add(appended);
+    try {
+      await appended;
+    } finally {
+      this.appending.delete(appended);
+    }
+  }
+
+  /**
+   * Waits for appends still writing, flushes, and resolves whether every
+   * entry has been delivered.
+   */
+  public async deliverAll(): Promise<boolean> {
+    await Promise.allSettled([...this.appending]);
+    await this.flush();
+    return (await this.summary()).dirty === 0;
+  }
+
+  private async appendEntry(item: T): Promise<void> {
     await this.ready();
     await this.store.append(item);
     if (this.label)
