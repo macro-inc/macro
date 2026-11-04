@@ -53,7 +53,7 @@ Each surface is purpose-built for its job rather than composed from a generic bl
 | Docs | [Docs &rarr;](https://docs.macro.com/product/docs) | Real-time collaborative, markdown-native docs built on CRDTs, with @mentions. |
 | Canvas | [Docs &rarr;](https://docs.macro.com/product/canvas) | 2D board with embedded @links to tasks, files, and emails. |
 | Agents | [Docs &rarr;](https://docs.macro.com/product/agents) | Use our models or your agents to work across Macro and automate tasks. |
-| Calls | [Docs &rarr;](https://docs.macro.com/product/calls) | Recorded, transcribed, and logged to team memory for agents. |
+| Calls | [Docs &rarr;](https://docs.macro.com/product/calls) | Recorded calls, transcripts, and summaries that agents can use. |
 | File storage | [Docs &rarr;](https://docs.macro.com/product/folders) | Auto-imported from email and channels, fully searchable. |
 | Pull requests | [Docs &rarr;](https://docs.macro.com/integrations/github) | Linked to tasks, embeddable in channels, available to agents. |
 | CRM | [Docs &rarr;](https://docs.macro.com/product/crm) | Customer and contact objects, custom properties, email sync, enrichment. |
@@ -216,7 +216,7 @@ Since Macro already has your CRM, chats, DMs, booking links, and calendar, calls
 
 # Calendar
 
-We built a simple Calendar in Macro so you can manage your week right next to where your work is happening.
+We built a thoughtful Calendar in Macro so you can manage your week right next to where your work is happening.
 
 - Connect multiple Google and Outlook calendars in one place.
 - Share personal or team booking links. Guests don’t need a Macro account.
