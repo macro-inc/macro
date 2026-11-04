@@ -72,7 +72,9 @@ and action items as the summary. If Dialpad cannot serve the transcript, the
 call imports without it. A call that keeps failing retries for about three
 hours; Settings then shows **Some calls not imported** until Dialpad sends a
 new event for it. If importing past calls fails, Settings shows **Past calls
-retrying** while it backs off and tries again.
+retrying** while it backs off and tries again. If setup keeps failing for
+about a day, it stops and Settings shows **Setup could not finish** until the
+user reconnects.
 Missed calls and voicemails are not imported. Webhooks need the same public
 HTTPS cognition origin as Granola (tunnel `/cognition/integrations/dialpad/webhooks`
 locally).

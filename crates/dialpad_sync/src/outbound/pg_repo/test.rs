@@ -2,7 +2,7 @@ use super::*;
 use crate::{
     domain::{
         ports::{Dialpad, Grants},
-        service::{Service, SyncService},
+        service::{MAX_SETUP_ATTEMPTS, Service, SyncService},
     },
     outbound::jwt::JwtVerifier,
 };
@@ -641,7 +641,11 @@ async fn setup_finishes_only_under_the_lease_that_stored_the_secret(pool: PgPool
     );
     let event = serde_json::from_value(call_event(9, "hangup", 2)).unwrap();
     service.repo.enqueue(id, event, None).await.unwrap();
-    service.repo.failed_setup(id, first).await.unwrap();
+    service
+        .repo
+        .failed_setup(id, first, MAX_SETUP_ATTEMPTS)
+        .await
+        .unwrap();
     assert!(
         service
             .repo
@@ -663,7 +667,11 @@ async fn setup_finishes_only_under_the_lease_that_stored_the_secret(pool: PgPool
             .await
             .unwrap()
     );
-    service.repo.failed_setup(id, first).await.unwrap();
+    service
+        .repo
+        .failed_setup(id, first, MAX_SETUP_ATTEMPTS)
+        .await
+        .unwrap();
     assert!(service.repo.by_id(id).await.unwrap().unwrap().enabled);
     assert_eq!(
         service.repo.events(id, DialpadId(9)).await.unwrap().len(),
@@ -688,7 +696,11 @@ async fn setup_failure_after_disconnect_cannot_restart_the_sync(pool: PgPool) {
         .unwrap();
     let connection = service.repo.by_id(id).await.unwrap().unwrap();
     service.repo.disconnect(&connection, false).await.unwrap();
-    service.repo.failed_setup(id, lease).await.unwrap();
+    service
+        .repo
+        .failed_setup(id, lease, MAX_SETUP_ATTEMPTS)
+        .await
+        .unwrap();
     assert_eq!(
         service.status(&user()).await.unwrap(),
         SyncStatus::NotConnected
@@ -1328,4 +1340,51 @@ async fn a_reconnect_during_an_import_still_imports_the_call(pool: PgPool) {
     resume.notify_one();
     worker.await.unwrap().unwrap();
     assert_eq!(calls.0.lock().unwrap().len(), 1);
+}
+
+#[sqlx::test(
+    migrator = "MACRO_DB_MIGRATIONS",
+    fixtures(path = "../../../fixtures", scripts("users"))
+)]
+async fn setup_gives_up_after_its_attempts_until_the_user_reconnects(pool: PgPool) {
+    let service = service(pool, GrantState::Active, Arc::new(Calls::default()));
+    *service.dialpad.fail_subscribe.lock().unwrap() = true;
+    service.connect(&user(), Backfill::None).await.unwrap();
+    assert!(service.complete(&user()).await.is_err());
+    let retry_due = || {
+        sqlx::query!(
+            "UPDATE dialpad_sync_connections SET setup_started_at = now() - interval '2 hours'"
+        )
+        .execute(&service.repo.pool)
+    };
+
+    // The last attempt fails: setup stops and says so.
+    sqlx::query!(
+        "UPDATE dialpad_sync_connections SET setup_attempts = $1 - 1",
+        MAX_SETUP_ATTEMPTS
+    )
+    .execute(&service.repo.pool)
+    .await
+    .unwrap();
+    retry_due().await.unwrap();
+    service.reconcile().await.unwrap();
+    assert_eq!(
+        service.status(&user()).await.unwrap(),
+        SyncStatus::Failed {
+            issue: SyncIssue::SetupAbandoned
+        }
+    );
+    let attempts = service.dialpad.webhooks.lock().unwrap().len();
+    retry_due().await.unwrap();
+    service.reconcile().await.unwrap();
+    assert_eq!(service.dialpad.webhooks.lock().unwrap().len(), attempts);
+
+    // Reconnecting starts over.
+    *service.dialpad.fail_subscribe.lock().unwrap() = false;
+    service.connect(&user(), Backfill::None).await.unwrap();
+    service.complete(&user()).await.unwrap();
+    assert!(matches!(
+        service.status(&user()).await.unwrap(),
+        SyncStatus::Connected { issue: None, .. }
+    ));
 }

@@ -609,7 +609,7 @@ export type DialpadConnectionState = 'unavailable' | 'not_connected' | 'connecti
 /**
  * Why Dialpad sync needs attention.
  */
-export type DialpadSyncIssue = 'stopped' | 'needs_reauth' | 'setup_failed' | 'call_sync_failed' | 'calls_abandoned' | 'backfill_failed';
+export type DialpadSyncIssue = 'stopped' | 'needs_reauth' | 'setup_failed' | 'setup_abandoned' | 'call_sync_failed' | 'calls_abandoned' | 'backfill_failed';
 
 /**
  * The prompts the user dismissed, on any device.

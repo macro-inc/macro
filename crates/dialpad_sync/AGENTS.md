@@ -53,6 +53,10 @@ unreadable item is skipped and logged by call id and field path.
   Events can be sparse: details merge field by field, newest value first.
 - Setup success and failure must both match the lease that stored the secret.
   If activation fails, retire the newly created registration before returning.
+- Failed setup retries hourly, `MAX_SETUP_ATTEMPTS` times in a row, then stops
+  as `SetupAbandoned` (Settings: "Setup could not finish") until the user
+  reconnects. Every failure counts the same; Dialpad's errors (its
+  subscription cap among them) are not told apart.
 - Setup first removes a registration a stopped sync left behind. Dialpad's 403
   and 404 count as removed; any other failure fails setup and keeps the old
   ids for the hourly retry, so a sync never has two live subscriptions.

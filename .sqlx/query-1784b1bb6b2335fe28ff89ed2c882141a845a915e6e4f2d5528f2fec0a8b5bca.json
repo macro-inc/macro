@@ -1,0 +1,14 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "UPDATE dialpad_sync_connections SET setup_attempts = $1 - 1",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Int4"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "1784b1bb6b2335fe28ff89ed2c882141a845a915e6e4f2d5528f2fec0a8b5bca"
+}

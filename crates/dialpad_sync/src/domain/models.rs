@@ -162,6 +162,9 @@ pub enum SyncIssue {
     /// new event for it.
     #[strum(serialize = "Some calls could not be imported")]
     CallsAbandoned,
+    /// Setup failed every attempt; it waits for the user to reconnect.
+    #[strum(serialize = "Setup could not finish")]
+    SetupAbandoned,
     /// A page of past calls failed to import; it retries with backoff.
     #[strum(serialize = "Importing past calls failed; retrying")]
     BackfillFailed,

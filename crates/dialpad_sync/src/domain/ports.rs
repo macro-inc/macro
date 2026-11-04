@@ -43,8 +43,10 @@ pub trait SyncRepository: Send + Sync {
         dialpad_user: DialpadId,
         registration: Registration,
     ) -> Result<bool>;
-    /// Fail only the setup that still holds `lease`; drop its pending deliveries.
-    async fn failed_setup(&self, id: Uuid, lease: SetupLease) -> Result<()>;
+    /// Fail only the setup that still holds `lease`; drop its pending
+    /// deliveries. The `max_attempts`th failure in a row stops retrying as
+    /// [`SyncIssue::SetupAbandoned`].
+    async fn failed_setup(&self, id: Uuid, lease: SetupLease, max_attempts: i32) -> Result<()>;
     /// Stop the observed connection state and drop pending deliveries only if
     /// its enrollment, setup and enabled state still match.
     async fn stop(&self, connection: &Connection, issue: SyncIssue) -> Result<()>;

@@ -47,6 +47,8 @@ export function dialpadIssueLabel(
       return 'Reconnect needed';
     case 'setup_failed':
       return 'Setup failed';
+    case 'setup_abandoned':
+      return 'Setup could not finish';
     case 'stopped':
       return 'Stopped';
     case 'call_sync_failed':

@@ -146,6 +146,7 @@ impl SyncRepository for PgSyncRepository {
             ON CONFLICT (user_id) DO UPDATE SET
                 enrolled_at = now(),
                 last_error = NULL,
+                setup_attempts = 0,
                 backfill_since = CASE WHEN dialpad_sync_connections.enabled
                     THEN dialpad_sync_connections.backfill_since ELSE EXCLUDED.backfill_since END,
                 backfill_cursor = CASE WHEN dialpad_sync_connections.enabled
@@ -219,7 +220,7 @@ impl SyncRepository for PgSyncRepository {
         let changed = sqlx::query!(
             r#"UPDATE dialpad_sync_connections
             SET enabled = true, dialpad_user_id = $2, webhook_id = $3, subscription_id = $4,
-                setup_started_at = NULL, last_error = NULL
+                setup_started_at = NULL, last_error = NULL, setup_attempts = 0
             WHERE id = $1 AND NOT enabled AND setup_started_at = $5 AND last_error IS NULL"#,
             id,
             dialpad_user.0,
@@ -233,10 +234,12 @@ impl SyncRepository for PgSyncRepository {
         Ok(changed == 1)
     }
 
-    async fn failed_setup(&self, id: Uuid, lease: SetupLease) -> Result<()> {
+    async fn failed_setup(&self, id: Uuid, lease: SetupLease, max_attempts: i32) -> Result<()> {
         sqlx::query!(
             r#"WITH failed AS (
-                UPDATE dialpad_sync_connections SET last_error = $3
+                UPDATE dialpad_sync_connections SET setup_attempts = setup_attempts + 1,
+                    -- At the cap, setup waits for the user to reconnect.
+                    last_error = CASE WHEN setup_attempts + 1 >= $4 THEN $5 ELSE $3 END
                 WHERE id = $1 AND NOT enabled AND setup_started_at = $2 AND last_error IS NULL
                 RETURNING id
             )
@@ -244,7 +247,9 @@ impl SyncRepository for PgSyncRepository {
             WHERE connection_id IN (SELECT id FROM failed) AND completed_at IS NULL"#,
             id,
             lease.0,
-            SyncIssue::SetupFailed.as_ref()
+            SyncIssue::SetupFailed.as_ref(),
+            max_attempts,
+            SyncIssue::SetupAbandoned.as_ref()
         )
         .execute(&self.pool)
         .await?;

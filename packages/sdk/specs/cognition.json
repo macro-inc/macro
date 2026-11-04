@@ -4043,6 +4043,7 @@
           "stopped",
           "needs_reauth",
           "setup_failed",
+          "setup_abandoned",
           "call_sync_failed",
           "calls_abandoned",
           "backfill_failed"

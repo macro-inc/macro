@@ -86,6 +86,33 @@ test('a lost grant asks to reconnect', async ({ page }) => {
   ).toBeVisible();
 });
 
+for (const { connection, label, action } of [
+  {
+    connection: { state: 'failed', issue: 'setup_abandoned' },
+    label: 'Setup could not finish',
+    action: 'Reconnect Dialpad',
+  },
+  {
+    connection: { state: 'connected', issue: 'calls_abandoned' },
+    label: 'Some calls not imported',
+    action: /^Disconnect Dialpad/,
+  },
+  {
+    connection: { state: 'connected', issue: 'backfill_failed' },
+    label: 'Past calls retrying',
+    action: /^Disconnect Dialpad/,
+  },
+]) {
+  test(`${connection.issue} reads as ${label}`, async ({ page }) => {
+    await serveDialpad(page, { current: connection });
+    await page.goto(PAGE, { waitUntil: 'domcontentloaded' });
+    await expect(page.getByRole('img', { name: label })).toBeVisible({
+      timeout: 60_000,
+    });
+    await expect(page.getByRole('button', { name: action })).toBeVisible();
+  });
+}
+
 test('a deployment without Macro Connect hides the row', async ({ page }) => {
   await serveDialpad(page, { current: { state: 'unavailable' } });
   await page.goto(PAGE, { waitUntil: 'domcontentloaded' });

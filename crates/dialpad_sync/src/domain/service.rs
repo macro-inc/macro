@@ -16,6 +16,10 @@ const ENROLLMENT_TTL: chrono::Duration = chrono::Duration::hours(1);
 /// A failing call retries with backoff, about three hours in all, then waits
 /// for a new event from Dialpad.
 pub(crate) const MAX_CALL_ATTEMPTS: i32 = 12;
+/// Failed setup retries hourly for about a day, then waits for the user to
+/// reconnect. Every failure counts the same: Dialpad's errors (its
+/// subscription cap among them) are not told apart.
+pub(crate) const MAX_SETUP_ATTEMPTS: i32 = 24;
 
 /// Sync follows the user's Dialpad connection in Macro Connect. Users connect,
 /// check and disconnect it; webhooks and reconciliation do the rest.
@@ -146,7 +150,7 @@ impl<R: SyncRepository, G: Grants, D: Dialpad, V: DeliveryVerifier> Service<R, G
         if result.is_err() {
             let _ = self
                 .repo
-                .failed_setup(connection.id, lease)
+                .failed_setup(connection.id, lease, MAX_SETUP_ATTEMPTS)
                 .await
                 .inspect_err(
                     |error| tracing::warn!(error = ?error, "could not record failed Dialpad setup"),

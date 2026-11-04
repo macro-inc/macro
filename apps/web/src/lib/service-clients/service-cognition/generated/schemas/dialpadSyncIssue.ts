@@ -16,6 +16,7 @@ export const DialpadSyncIssue = {
   stopped: 'stopped',
   needs_reauth: 'needs_reauth',
   setup_failed: 'setup_failed',
+  setup_abandoned: 'setup_abandoned',
   call_sync_failed: 'call_sync_failed',
   calls_abandoned: 'calls_abandoned',
   backfill_failed: 'backfill_failed',
