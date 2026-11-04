@@ -240,13 +240,12 @@ sessions. Existing legacy chat rows still open their original chats. Contextual
 chat actions use agent sessions regardless of the flag; without the flag, the
 legacy list and flag-gated composer flows remain available.
 
-While an agent works, a draft can be sent to its queue. Above the queue,
-**Send next** explicitly interrupts the current turn and sends the oldest queued
-message. The empty composer offers the same action as **Flush queued messages**
-with a ringed send arrow; with a draft it offers **Send**. Each queued row offers
-**Steer** while a turn is running, to interrupt it and send that row next. With no
-draft or queue, the busy composer offers **Stop**. Send next and Steer stay
-available while a previous one is starting; read-only sessions get neither.
+While an agent works, a draft can be sent to its queue; queued messages send in
+order as each turn ends. The busy composer offers **Send** with a draft and
+**Stop** without one; Enter on an empty draft does nothing. Each queued row
+offers **Steer** while a turn is running, to interrupt it and send that row next.
+Steer stays available while a previous one is starting; read-only sessions don't
+get it.
 
 Phone verification: check portrait and landscape with touch emulation. In the
 Agents composer, enter multiple lines and tap Send, attach, or the model control;
@@ -1109,7 +1108,8 @@ all three schemas on its first model call, without `SearchTools` or `LoadTools`.
 For Macro's in-process agent, the backend evaluates the session owner's
 `ai-code-mode` flag once per conversational turn. Enabled users get a smaller
 direct toolset: SDK-supported searches, reads, listing, and data operations run
-through the SDK. Document editing keeps the direct `EditDocument` tool, and
+through the SDK, including AI document and task edits
+(`document.edit(instructions)`; `EditDocument` is hidden in code mode), and
 results are presented with `execution.views.present`. Workspace feeds and
 mixed-entity name searches keep the direct `ListEntities` and `NameSearch` tools,
 including agent sessions. `ContentSearch` supports session history. The legacy
@@ -1184,8 +1184,8 @@ fields, return type) within a 32 KiB budget; references name other symbols in
 backticks, which read the same way. The agent reads the symbols a program uses,
 together, before writing it. There is no runtime `sdk.help` or
 `sdk.ToolName` proxy. The actual SDK exposes `macro.ai.structuredCompletion` and
-`macro.ai.decide`; Handlebars is imported from `handlebars`. Use the direct
-`EditDocument` tool for AI document edits.
+`macro.ai.decide`; Handlebars is imported from `handlebars`. Edit a document or task
+body with `document.edit(instructions)`.
 
 The harness spawns a fresh Deno process for each execution. Dependencies are
 bundled at build time; no TypeScript compilation or package downloads happen
@@ -1244,7 +1244,8 @@ execution and verify its saved status does not claim unfinished work succeeded.
 For AI and templates, use the documented actual SDK methods with supplied fixture
 text, bounded parallel Jev classifications and a local Handlebars import. Check
 probabilities and per-item errors rather than assuming every branch succeeded.
-Use the direct `EditDocument` card in a separate editing check. Already dispatched
+Check an AI edit separately with `document.edit(instructions)`: it returns the
+new revision and web URL; read `content()` to see what changed. Already dispatched
 provider usage and completed writes may remain after cancellation.
 
 ## Code mode on the public MCP
@@ -2048,14 +2049,11 @@ must stay hidden; subsequent live messages must still appear.
   user message in the transcript.
 - Keyboard: Up at the very start of the composer input moves focus into the
   bottom (next-to-send) queue row; further Up presses walk toward newer entries, Down
-  walks back and past the bottom row returns to the input. When the composer is empty
-  and a prompt is queued, its action becomes `Flush queued messages` (the send arrow,
-  with a ring so it reads as flushing the queue rather than sending a new message);
-  pressing Enter or clicking that button cancels the current turn so the queue drains
-  in order, oldest first. Steer on a queued row is the interrupt for that one message;
-  flush sends whatever is already next. Each advance or Steer shows its message as a
-  pending bubble at once and drops its row; consecutive ones never wait on each other in
-  the UI. Their steer requests go out one at a time in press order, each after the
+  walks back and past the bottom row returns to the input. With an empty composer the
+  busy action is Stop, and Enter does nothing; the queue drains in order, oldest first,
+  as each turn ends. Steer on a queued row is the interrupt for that one message. Each
+  Steer shows its message as a pending bubble at once and drops its row; consecutive
+  ones never wait on each other in the UI. Their steer requests go out one at a time in press order, each after the
   previous message leaves the server queue, so three rapid presses send three messages,
   each once, in that order. A refused steer brings its row back labelled `Not sent`; it
   stays queued and can be steered again. Typed composer text still takes priority and Enter
@@ -2364,8 +2362,8 @@ named yes/no probabilities. Both can appear as ordinary expandable tool rows;
 open the row to inspect the generated object or estimates. In code mode, the
 same services are available through `macro.ai.structuredCompletion` and
 `macro.ai.decide`. The program chooses what evidence to include in its final result.
-Generation and classification do not edit a document. Use the existing
-`EditDocument` tool for an AI edit.
+Generation and classification do not edit a document. Use
+`document.edit(instructions)` for an AI edit.
 
 ### Code-mode review stacks
 

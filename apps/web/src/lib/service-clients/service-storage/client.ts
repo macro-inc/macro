@@ -51,6 +51,7 @@ import type { CalendarMentionPreviewRequest } from './generated/schemas/calendar
 import type { CalendarMentionPreviewResponse } from './generated/schemas/calendarMentionPreviewResponse';
 import type { CalendarOccurrenceResponse } from './generated/schemas/calendarOccurrenceResponse';
 import type { CallRecordPreview } from './generated/schemas/callRecordPreview';
+import type { CardPosition } from './generated/schemas/cardPosition';
 import type { ChannelAccessDecision } from './generated/schemas/channelAccessDecision';
 import type { ChannelAccessRequest } from './generated/schemas/channelAccessRequest';
 import type { ChannelAccessRequestState } from './generated/schemas/channelAccessRequestState';
@@ -441,6 +442,10 @@ export const storageServiceClient = {
     dssFetch<PipelineResponse>(`/crm/pipelines/${id}`, { method: 'GET' }),
   getCrmPipelineTable: (id: string) =>
     dssFetch<TableDetail>(`/crm/pipelines/${id}/table`, { method: 'GET' }),
+  getCrmPipelineViewPositions: (id: string, viewId: string) =>
+    dssFetch<CardPosition[]>(`/crm/pipelines/${id}/views/${viewId}/positions`, {
+      method: 'GET',
+    }),
   getCrmPipelineRows: (id: string, after?: string) =>
     dssFetch<StorageRows>(
       `/crm/pipelines/${id}/rows${after ? `?after=${encodeURIComponent(after)}` : ''}`,

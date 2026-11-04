@@ -30,6 +30,13 @@ export const RouteMobileSignup: Component = () => {
       <div class="mobile-signup-card-body">
         <FormMobileSignup buttonName="mobile_signup_page" variant="card" />
       </div>
+      <a
+        class="mobile-signup-agent-link"
+        href="/app/signup/agent"
+        target="_self"
+      >
+        Sign up as agent
+      </a>
     </section>
   );
 };

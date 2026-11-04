@@ -2690,9 +2690,11 @@ access to the title and property controls.
 
 ## AI edit
 
-1. Click `Edit with AI` (button directly under the editor body).
-2. A focused prompt box appears (placeholder `Describe the edit…`). Type the instruction,
-   press Enter (or click `Send`).
+1. Select text in the document, then click `AI edit` in the selection toolbar (on touch,
+   `Edit with AI` in the selection toolbar opens the same prompt in a drawer).
+2. A focused prompt box appears (placeholder `Describe changes`). Type the instruction,
+   press Enter (or click `Send`). The edit runs in fast mode and its changes apply
+   client-side, so they land in the user's undo stack.
    Selected-text AI edit uses the shared Send button: muted and disabled for an
    empty or whitespace-only prompt, black with a white arrow in light mode once
    an instruction is entered (inverted for dark mode), on desktop and mobile.
@@ -2740,6 +2742,33 @@ On touch devices, the Discussion section is hidden until it contains a comment;
 the floating **Leave a comment...** input remains available. If the discussion
 becomes empty again, the section disappears. Desktop keeps the empty section
 and inline input.
+
+Select plain text or text already covered by a comment, then press **Comment**.
+The press keeps the editor selection until the draft opens. Cancel with Escape
+or the composer's close control, then select the same text and try again: the
+new draft highlight should clear on cancellation and the existing comment
+should keep its full range. Repeat with a selection spanning paragraphs and
+with a collaborator editing another part of the document. Draft marks stay
+local until the comment is posted. Posting first saves the highlight, then the
+message. Refuse an anchor update and verify that no message is posted, the input
+survives, and cancelling lets another comment open without changing document text.
+Document typing briefly pauses during anchor publication so pending text is
+flushed before the highlight is saved. Repeat posting and starting another comment
+with both edit and comment-only access; creating a document tests the owner path.
+Also withhold a collaborator's update before posting: catch up its missing history
+before publishing the highlight, preserving both the remote text and the comment.
+Confirm the posted comment appears in a separate browser, since reopening the
+same client can restore an unsynced mark from its local snapshot. When messages
+and notifications exist but another browser has no inline highlights, check WAL
+acknowledgements and sync-service's comment-validation errors.
+Cancellation retries unconfirmed highlight cleanup after reconnect or reopening.
+An uncertain message response preserves its highlight rather than risking a saved
+comment becoming invisible.
+
+Discussion and thread loading errors use compact muted text and a separate
+**Retry** button. Retry is disabled while fetching. A missing parent or thread
+shows an unavailable message without Retry; a deleted task cannot load comments
+until it is restored. Verify that an unavailable discussion hides its composer.
 
 Comments anchored to selected text open in a floating margin card on desktop and
 a `Comments` drawer on touch devices. Hovering a desktop card reveals its actions

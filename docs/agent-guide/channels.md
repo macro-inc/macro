@@ -303,7 +303,9 @@ remain visible when the entire timeline fits without scrolling.
 
 ## Agent session entities
 
-The Agents list includes owned and shared sessions. Rows show the shared agent
+The Agents list includes owned and shared sessions, except sessions started
+from a thread, which list only for people who prompted them from the session
+itself (see [Home](home.md)). Rows show the shared agent
 icon and session title; opening one navigates to `/app/agent/<id>`. The session title
 menu uses the shared entity actions: Favorite/Unfavorite and Copy link, plus
 Rename and Delete for the owner. Rename uses the shared rename dialog, not a
@@ -369,7 +371,8 @@ Desktop message text uses a 16px horizontal inset and a compact gap above the
 toolbar, consistent at narrow and wide composer widths.
 
 The new-message compose screen and channel message/reply inputs use the same
-attachment and send controls on mobile and desktop, with no format toggle.
+attachment and send controls on mobile and desktop. On phones, the `+` drawer
+offers `Format text` beneath `Mention` to toggle the formatting ribbon.
 iOS uses the native media attachment picker.
 In the iOS app, both collapsed and expanded channel inputs use the shared
 [glass press spotlight](navigation.md#mobile-glass-feedback). Tap the editor and its
@@ -413,6 +416,13 @@ below the editor. Check one image, several mixed attachments, and a document
 alone, with and without text, in light and dark themes.
 Input action and formatting buttons show the app tooltip without a second
 native browser tooltip.
+On phones, choose `+` → `Format text` beneath `Mention` to show or hide the
+ribbon above the editor, including in message and reply edits. It offers bold,
+italic, strikethrough, inline code, lists, checklists, and blockquotes; scroll
+the ribbon horizontally to reach all controls. Verify that selecting struck-through
+text, tapping Strikethrough, and saving removes the formatting while preserving
+the text. Toggling the ribbon keeps the draft and returns focus to the editor.
+Tapping the ribbon's padding or dividers also keeps the editor focused.
 On desktop, select draft text to open the floating formatting toolbar. Its
 compact frame uses 4px outer padding with concentric button corners, a white
 light-mode background, a thin border, and a soft downward shadow. Check
@@ -423,8 +433,8 @@ beside the buttons and collapse when it fits again, without flickering between
 layouts. Also add and remove a line break or attachment and
 confirm the draft and caret position survive. The attachment and send controls
 should remain usable in both layouts. Existing message and reply edit inputs show
-Attach files, Discard Edit, and Send, with no format toggle; Escape also cancels
-an edit. The iOS app uses its native media picker. Check inline and unified edits
+Add, Discard Edit, and Send on phones; desktop keeps Attach files in place of Add.
+Escape also cancels an edit. The iOS app uses its native media picker. Check inline and unified edits
 on desktop and touch: attach a file and save, then edit again and discard changes
 without changing the original message or attachments.
 The iOS share sheet keeps its editor above the attachment and formatting controls.
@@ -1694,6 +1704,12 @@ If the metadata is unavailable, the fallback extension comes from the response
 MIME type. Linked video preview cards also offer Download, using the document's
 current version, name, and file type. See [Downloading files](files.md#downloading-files)
 for progress, cancellation, retries, and mobile save/share verification.
+
+Opening or reopening the expanded video viewer focuses the video. Press Space
+to pause or resume immediately. Tab moves through the native player controls
+and viewer actions; focusing Download explicitly still allows keyboard downloads.
+With the video focused, Escape closes the viewer and returns focus to the
+thumbnail that opened it.
 
 ## Pending message drafts
 

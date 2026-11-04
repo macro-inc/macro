@@ -62,6 +62,7 @@ impl SeedAuth {
         }
 
         self.create_user(fusionauth::user::create::User {
+            data: None,
             email: std::borrow::Cow::Owned(email.clone()),
             username: None,
             password: "hardcodeLocalPassword123!".into(),

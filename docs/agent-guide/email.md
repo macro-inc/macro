@@ -161,24 +161,50 @@ changing the list query. Text search still resolves favorite IDs for the search
 service. An empty favorites list shows `No favorite emails`.
 
 With `enable-email-focus` and `enable-graphql-soup` on, a `Focus` tab leads the
-desktop Inbox tabs and the mobile pills. It lists signal
+desktop Inbox tabs and the mobile pills. It lists inbox
 threads from the last 30 days that the email focus worker
 (`services/email_focus_worker`) classified as worth attention, including inboxes
-linked to the account, by priority: the importance score halved for every 2 days
-since the thread's latest inbound mail. Rows at least 32rem wide show the 0-100
-importance score with a five-bar meter just before the date, and from 56rem also
-`Reply needed` and `Follow up` tag pills ahead of it. Narrower rows drop both;
-without a touch screen the score moves before the subject, and touch screens
-show neither. The desktop header's sort dropdown (`Sort Focus`, among the view
-options) switches between **Priority**,
-**Importance** and **Most recent**; touch layouts have no dropdown and keep the
-saved order (Priority by default). The filter menu adds a Focus group (Reply
+linked to the account, newest first by the thread's latest message in either
+direction, so a thread the owner replied to last sorts and dates by that reply.
+Day headers group the list and stay pinned while it scrolls: Today, Yesterday,
+the weekday for the rest of the last week, then the date. These are Focus's own
+(`focusDateBucket`); Signal keeps the shared date sections, drops a leading
+Today, and does not pin. Key
+mail stays in whatever its score: mail waiting on the owner's reply, and mail from
+someone the owner wrote to in the last 90 days, unless it reads as outreach or
+automated. A calendar change (a reschedule, update, cancellation or proposed new
+time) stays in until its event is over, or for 7 days after the notice when it is a
+recurring event or no time can be read, and is the only mail with the Calendar
+category in Focus. New invites and RSVP notices stay out. A calendar notice counts
+only as the thread's latest message: once anyone writes after it, the thread takes
+the same rules as any other. A thread the owner answered last joins 3 days after
+their message, unless that message only closes the exchange ("Thanks!"). `Follow up`
+marks only threads whose
+latest message is the owner's, and `Reply needed` only threads whose latest message
+is someone else's. A thread holding only the owner's sent mail is not listed: it
+has no inbox state, so Mark Done could not remove it. Each row says why it is
+there with one tag pill: `Reply needed`, else `Follow up`, else its category as
+`Calendar change`, `Customer`, `Teammate` or `Contact`; other categories show no
+pill. While the list is sorted by Importance, five quiet bars join it, with the
+0-100 score in their tooltip and label; Most recent hides them. Rows at least
+40rem wide keep both just before the date. Narrower Focus rows stack, on touch
+too, with the subject on its own line and both ahead of the preview. The desktop
+header's sort dropdown (`Sort Focus`, among the view options) switches between
+**Most recent**, the default, and **Importance**, which
+is flat with no day headers; touch layouts have no dropdown and keep the saved
+order. A saved order that no longer exists restores as Most recent. The filter menu adds a Focus group (Reply
 needed, Follow up) on this tab only and has no Status or Done group there. The
-list is one `user.emailFocus` GraphQL read filtered on the client; it refreshes
-on open, not live. Mark Done hides the row at once and archives the thread; Undo
-brings it back. The worker classifies only inboxes on its
-`FOCUS_ENABLED_EMAIL_DOMAINS` allowlist, so other accounts see the empty state
-`Nothing needs you`.
+list is one `user.emailFocus` GraphQL read filtered on the client. New mail
+reaches an open Focus tab within seconds: when the worker stores a
+classification it pushes `refresh_email` (`focus_updated`) to the inbox's owner
+and delegates, and the tab reads the list again without a reload. A hidden tab
+reads once when it next shows, and any other tab reads when Focus opens. Time
+passing stores nothing and pushes nothing, so a follow-up coming due or a
+calendar change whose event ends shows at the tab's next read. Mark
+Done hides the row at once and archives the thread; Undo brings it back. The
+worker classifies only inboxes on its `FOCUS_ENABLED_EMAIL_DOMAINS` allowlist, so
+other accounts see the empty state `You're caught up`, whose **See the rest of
+your inbox** opens Signal.
 
 `Archived`, between All mail and Shared in the desktop Library section, lists
 your own archived (Mail Done) threads: the
@@ -588,6 +614,15 @@ Opening a saved draft from **Drafts** shows the title menu beside Back, since
 the composer has no subject line above it, and keeps the applicable header
 controls. Verify these remain
 available when returning to Drafts and reopening the draft.
+On desktop a new email opens inside the Email view at `/app/mail/new`, from
+Email's **New**, the app's New menu, a `mailto:` link, a calendar event's
+guest email, or the agent's send-email card: the composer takes the list's
+place beside the Email sidebar, and the reading pane folds away while it is
+open. Its Back arrow returns to the list. Replies stay in their thread. Touch
+keeps the full-screen composer. Check with the reading pane on and off that
+the sidebar stays usable while composing, that Back and sidebar tabs return
+to the list without the draft in its URL, that reloading keeps the draft, and
+that a second **New** starts an empty composer.
 **Delete** in the title menu moves the thread to Trash and returns to the same
 filtered list. Its toast offers **Undo** to restore the email.
 **Sender → Signal**, **Sender → Noise** and **Block Sender**, and the sender

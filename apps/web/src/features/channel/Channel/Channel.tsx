@@ -5,6 +5,7 @@ import {
 import { AgentConversationsProvider } from '@app/features/agent-conversations/agent-conversations-provider';
 import { AgentDmComposer } from '@app/features/agent-dms/agent-dm-composer';
 import { openChatWithInput } from '@app/features/chat/ChatWithAgentButton';
+import { taskSourceComposerContext } from '@app/features/task-composer/source-context';
 import { usePending } from '@app/observability/flow';
 import { startUiOperation } from '@app/observability/ui-operation';
 import { createActivityTracker } from '@channel/activity-tracker';
@@ -500,6 +501,11 @@ export function Channel(props: ChannelProps) {
         type: 'component',
         id: 'task-compose',
         params: {
+          composerContext: taskSourceComposerContext({
+            entity_type: 'CHANNEL',
+            entity_id: props.channelId,
+            specific_message_id: ctx.message.id,
+          }),
           initialTitle: title,
           initialContent: buildChannelMessageMention(ctx.message),
           initialAssigneeIds:

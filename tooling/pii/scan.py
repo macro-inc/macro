@@ -6,6 +6,9 @@ relative to every parent, excluding unchanged imported content. `--changed`
 covers the same scope as `just check`. `--text` scans a PR title/body or other
 free text.
 
+The optional Gitleaks pass conservatively excludes only entire staged files
+identical to the same path in an incoming parent; modified files stay scanned.
+
 Only humans should add `tooling/pii/exceptions` entries, unless they ask an
 agent to.
 """
@@ -13,11 +16,13 @@ agent to.
 from __future__ import annotations
 
 import argparse
+import json
 import os
 import re
 import shutil
 import subprocess
 import sys
+import tempfile
 from collections.abc import Iterable
 from dataclasses import dataclass
 from pathlib import Path
@@ -230,21 +235,29 @@ def staged_diff(parent: str | None = None) -> str:
     return result.stdout
 
 
-def staged_findings(exceptions: Exceptions) -> list[Finding]:
-    """Keep only staged findings on lines newly added relative to every parent."""
-    findings = list(iter_diff_findings(staged_diff(), exceptions))
+def merge_parents() -> list[str]:
+    """Verify incoming merge parents before excluding imported content."""
     result = git("rev-parse", "--git-path", "MERGE_HEAD")
     result.check_returncode()
     merge_head = ROOT / result.stdout.strip()
     if not merge_head.exists():
-        return findings
+        return []
     parents = merge_head.read_text(encoding="utf-8").splitlines()
     if not parents:
         raise ValueError("MERGE_HEAD contains no parents")
+    verified_parents = []
     for parent in parents:
         verified = git("rev-parse", "--verify", "--end-of-options", f"{parent}^{{commit}}")
         verified.check_returncode()
-        parent_findings = set(iter_diff_findings(staged_diff(verified.stdout.strip()), exceptions))
+        verified_parents.append(verified.stdout.strip())
+    return verified_parents
+
+
+def staged_findings(exceptions: Exceptions) -> list[Finding]:
+    """Keep only staged findings on lines newly added relative to every parent."""
+    findings = list(iter_diff_findings(staged_diff(), exceptions))
+    for parent in merge_parents():
+        parent_findings = set(iter_diff_findings(staged_diff(parent), exceptions))
         findings = [finding for finding in findings if finding in parent_findings]
     return findings
 
@@ -291,16 +304,62 @@ def scan_text(text: str, exceptions: Exceptions, path: str = "<text>") -> list[F
     return findings
 
 
+def unchanged_import(path: str, parents: list[str]) -> bool:
+    """Exclude only a same-path staged blob imported unchanged from a parent."""
+    if not path or Path(path).is_absolute() or ".." in Path(path).parts or "\0" in path:
+        raise ValueError("Invalid Gitleaks finding path")
+    staged = git("rev-parse", "--verify", "--end-of-options", f":0:{path}")
+    staged.check_returncode()
+    for parent in parents:
+        entry = git("ls-tree", "-z", parent, "--", f":(literal){path}")
+        entry.check_returncode()
+        if not entry.stdout:
+            continue
+        metadata, found_path = entry.stdout.rstrip("\0").split("\t", 1)
+        _, kind, oid = metadata.split()
+        if found_path == path and kind == "blob" and oid == staged.stdout.strip():
+            return True
+    return False
+
+
 def run_gitleaks() -> int:
     gitleaks = shutil.which("gitleaks")
     if not gitleaks:
         return 0
-    result = subprocess.run(
-        [gitleaks, "protect", "--staged", "--redact", "--no-banner"],
-        cwd=ROOT,
-        check=False,
-    )
-    return result.returncode
+    command = [gitleaks, "protect", "--staged", "--redact", "--no-banner"]
+    try:
+        parents = merge_parents()
+        if not parents:
+            return subprocess.run(command, cwd=ROOT, check=False).returncode
+        with tempfile.TemporaryDirectory(prefix="macro-pii-") as directory:
+            report_path = Path(directory) / "gitleaks.json"
+            result = subprocess.run(
+                [*command, "--exit-code", "42", "--report-format", "json", "--report-path", str(report_path)],
+                cwd=ROOT,
+                check=False,
+            )
+            if result.returncode not in (0, 42):
+                return result.returncode
+            findings = json.loads(report_path.read_text(encoding="utf-8"))
+        if not isinstance(findings, list) or bool(findings) != (result.returncode == 42):
+            raise ValueError("Invalid Gitleaks report")
+        blocked = 0
+        for finding in findings:
+            if (not isinstance(finding, dict)
+                    or not isinstance(finding.get("File"), str)
+                    or not isinstance(finding.get("RuleID"), str)
+                    or type(finding.get("StartLine")) is not int):
+                raise ValueError("Invalid Gitleaks finding")
+            if unchanged_import(finding["File"], parents):
+                continue
+            print(f'{finding["File"]}:{finding["StartLine"]}: {finding["RuleID"]} [redacted]', file=sys.stderr)
+            blocked += 1
+        if not blocked and findings:
+            print("Gitleaks findings are in unchanged files imported from a merge parent.", file=sys.stderr)
+        return int(blocked != 0)
+    except (OSError, ValueError, subprocess.CalledProcessError):
+        print("Gitleaks merge scan failed; commit remains blocked.", file=sys.stderr)
+        return 2
 
 
 def report(findings: list[Finding]) -> int:

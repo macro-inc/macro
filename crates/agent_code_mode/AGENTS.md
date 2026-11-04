@@ -42,10 +42,15 @@ stacks. Process isolation belongs to
   and streams it as a completed `PresentView` call (`view_<id>`) through
   `ReviewActions::present_view`. There is no `PresentView` tool: ExecuteCode's
   description carries the view schema and when to present one.
-- `src/domain/documentation.rs`: the generated SDK catalog (an index per
-  entity, a reference per symbol). Jev selects entity indexes for the per-turn
-  prompt (top four, 48 KiB) or a `DescribeCodeTools` `task` (every relevant
-  entity, 32 KiB); `ReadCodeDocs` reads symbol references (32 KiB).
+- `src/domain/documentation.rs`: the build-time SDK catalog (per entity a
+  `@routing` description, an `@agent` guide and an index; a reference per
+  symbol). Jev ranks entities on their descriptions (32 per call, at most 8
+  calls) for the per-turn prompt (≥ 0.5, top four, 48 KiB) or a
+  `DescribeCodeTools` `task` (every relevant entity, 32 KiB); `ReadCodeDocs`
+  reads symbol references (32 KiB). `Guidance::Selected` (owners with
+  `auto-skills`) loads each entity's guide with its index; otherwise prompts
+  carry `inline_guides`. `mcp_guides` and `entity_guide` serve hosts that
+  carry areas whole. All of it is generated from the SDK; edit the TSDoc.
 - `src/inbound/toolset.rs`: `toolset()` for sessions, `user_toolset()` for the
   public MCP. Tool texts are composed: host-specific parts in `toolset/session/`
   and `toolset/user/`, guidance both share in `toolset/shared/`. Edit shared
@@ -78,9 +83,12 @@ longer delivery state.
 
 - `cargo test -p agent_code_mode --lib` from the repository root, with live local
   database configuration and `SQLX_OFFLINE` unset.
+- The review toolset test builds every review tool through shared provider schema
+  validation.
 - Keep generated discovery topics within the classifier's 32-question limit.
-- Regenerate SDK documentation through `packages/code-mode-sdk`; never edit
-  `src/domain/documentation.json` by hand.
+- The SDK catalog and operation labels come from `crates/code_mode_assets`,
+  generated from the public SDK at build time; change the SDK or
+  `packages/code-mode-sdk`, never a generated file.
 
 Import reviews contain exactly one draft, with source `notion`, `linear`, or
 `jira`. Source selection stays on that draft through presentation and approval.

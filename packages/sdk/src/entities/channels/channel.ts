@@ -263,9 +263,8 @@ export class Channel extends PropertiedEntity<ChannelDetail> {
   }
 
   /**
-   * The current user's latest request to join this channel, whether the
-   * channel accepts requests, and when they may ask again after a denial or
-   * withdrawal. Works without access to the channel.
+   * Read the current user's join request, eligibility, and retry time.
+   * Works without channel access. Denial or withdrawal may delay retries.
    */
   async myAccessRequest(): Promise<{
     request?: ChannelAccessRequest;
@@ -287,8 +286,8 @@ export class Channel extends PropertiedEntity<ChannelDetail> {
   }
 
   /**
-   * Ask this private or team channel's participants to let the current user
-   * join. Asking again while a request is pending returns that request.
+   * Ask to join a private or team channel.
+   * Repeated calls return the pending request.
    */
   async requestAccess(): Promise<ChannelAccessRequest> {
     return ChannelAccessRequest.from(
@@ -302,7 +301,7 @@ export class Channel extends PropertiedEntity<ChannelDetail> {
     );
   }
 
-  /** Withdraw the current user's pending request to join this channel. */
+  /** Withdraw the current user's pending join request. */
   async cancelAccessRequest(): Promise<void> {
     unwrap(
       await this.client.storage.cancelChannelAccessRequest({
@@ -387,6 +386,11 @@ export class Channel extends PropertiedEntity<ChannelDetail> {
   /** The channel's URL in the Macro web app. */
   webUrl(): string {
     return `${this.client.webAppUrl}/app/channel/${this.id}`;
+  }
+
+  /** Identity, loaded detail and {@link webUrl}, so serialized handles carry their link. */
+  override toJSON() {
+    return { ...super.toJSON(), url: this.webUrl() };
   }
 
   /** Search channels by content, most relevant first, auto-paginated. */

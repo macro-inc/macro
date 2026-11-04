@@ -2498,6 +2498,10 @@
             "$ref": "#/components/schemas/InviteePlan",
             "description": "What the invitee gets by joining, as the team stood when the invite was sent."
           },
+          "isAgent": {
+            "type": "boolean",
+            "description": "Whether the invite creates an agent account."
+          },
           "reminder": {
             "type": "boolean",
             "description": "Whether this email reminds the invitee of an invite they have not answered."

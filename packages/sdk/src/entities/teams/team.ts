@@ -91,11 +91,21 @@ export class Team extends MacroEntity<TeamRecord> {
    * inviting to admins rejects other members, and teams without an
    * enterprise plan accept a limited number of invites per day.
    *
+   * Pass `{ agent: true }` to invite the addresses as agents. An agent invite
+   * to an address with no account creates an agent account when that address
+   * signs in: it skips onboarding, gets an SDK token, and joins this team, using
+   * a paid seat when the team has a subscription. An existing account keeps its
+   * type and accepts like any other invite.
+   *
    * @param emails - One address or a list of addresses to invite.
+   * @param options - `agent` invites the addresses as agents.
    * @returns `true` when at least one new invite was sent, `false` when every
    *   address was already a member or already invited.
    */
-  async invite(emails: string | readonly string[]): Promise<boolean> {
+  async invite(
+    emails: string | readonly string[],
+    options?: { agent?: boolean },
+  ): Promise<boolean> {
     const addresses: string[] = [];
     const seen = new Set<string>();
     for (const raw of typeof emails === 'string' ? [emails] : emails) {
@@ -114,6 +124,7 @@ export class Team extends MacroEntity<TeamRecord> {
       body: {
         invites: addresses.map((email) => ({ email })),
         team_id: this.id,
+        ...(options?.agent && { is_agent: true }),
       },
     });
     // The API answers 304 when it created no invite: every address was
