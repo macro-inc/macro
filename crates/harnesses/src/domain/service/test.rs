@@ -18,6 +18,12 @@ fn caller(id: &str) -> MacroUserIdStr<'static> {
     MacroUserIdStr::try_from(id.to_string()).unwrap()
 }
 
+fn user_owner(id: &str) -> HarnessOwner {
+    HarnessOwner::User {
+        user_id: id.to_owned(),
+    }
+}
+
 fn harness(owner: HarnessOwner) -> Harness {
     Harness {
         allow_permission_bypass: false,
@@ -25,6 +31,8 @@ fn harness(owner: HarnessOwner) -> Harness {
         kind: "macrod".to_owned(),
         name: "erics-macbook".to_owned(),
         owner,
+        access: HarnessAccess::None,
+        shared_team_ids: Vec::new(),
         created_by: OWNER_ID.to_owned(),
         created_at: Utc::now(),
         updated_at: Utc::now(),
@@ -55,10 +63,12 @@ struct Calls {
     claimed: Vec<Uuid>,
     deleted: Vec<HarnessId>,
     team_lookups: Vec<(String, Uuid)>,
+    team_access: Vec<(Uuid, bool)>,
 }
 
 #[derive(Clone, Default)]
 struct FakeRepo {
+    access: HarnessAccess,
     open_counts: OpenPairingCountsConfig,
     insert_conflicts: usize,
     pairing: Option<PairingRow>,
@@ -132,11 +142,47 @@ impl HarnessRepo for FakeRepo {
         Ok(self.claim_result.clone())
     }
 
-    async fn list_visible_harnesses(
+    async fn list_usable_harnesses(
         &self,
         _caller: MacroUserIdStr<'static>,
     ) -> Result<Vec<Harness>, Self::Err> {
         Ok(self.harness.clone().into_iter().collect())
+    }
+
+    async fn list_directory_harnesses(
+        &self,
+        _caller: MacroUserIdStr<'static>,
+    ) -> Result<Vec<Harness>, Self::Err> {
+        Ok(self.harness.clone().into_iter().collect())
+    }
+
+    async fn harness_access(
+        &self,
+        _harness_id: HarnessId,
+        _caller: MacroUserIdStr<'static>,
+    ) -> Result<HarnessAccess, Self::Err> {
+        Ok(self.access)
+    }
+
+    async fn set_team_access(
+        &self,
+        _harness_id: HarnessId,
+        team_id: Uuid,
+        enabled: bool,
+    ) -> Result<(), Self::Err> {
+        self.calls
+            .lock()
+            .unwrap()
+            .team_access
+            .push((team_id, enabled));
+        Ok(())
+    }
+
+    async fn list_residents(
+        &self,
+        _harness_id: HarnessId,
+    ) -> Result<Vec<HarnessResident>, Self::Err> {
+        Ok(Vec::new())
     }
 
     async fn get_harness(&self, _harness_id: HarnessId) -> Result<Option<Harness>, Self::Err> {
@@ -349,7 +395,7 @@ async fn approval_registers_a_private_harness_for_the_caller() {
 async fn team_approval_requires_membership_and_honors_the_name_override() {
     let repo = FakeRepo {
         pairing: Some(pending_pairing()),
-        approve_result: Some(harness(HarnessOwner::Team { team_id: TEAM_ID })),
+        approve_result: Some(harness(user_owner(MEMBER_ID))),
         user_has_team: true,
         ..FakeRepo::default()
     };
@@ -369,7 +415,8 @@ async fn team_approval_requires_membership_and_honors_the_name_override() {
     let calls = repo.calls.lock().unwrap();
     let (_, new_harness) = &calls.approved[0];
     assert_eq!(new_harness.name, "team box");
-    assert_eq!(new_harness.owner, HarnessOwner::Team { team_id: TEAM_ID });
+    assert_eq!(new_harness.owner, user_owner(MEMBER_ID));
+    assert_eq!(new_harness.team_grant, Some(TEAM_ID));
     assert_eq!(calls.team_lookups[0], (MEMBER_ID.to_owned(), TEAM_ID));
 
     let repo = FakeRepo {
@@ -551,11 +598,18 @@ async fn private_harnesses_are_deletable_only_by_their_owner() {
     assert!(matches!(result, Err(HarnessError::Unauthorized)));
 }
 
+fn shared_with_team() -> Harness {
+    Harness {
+        shared_team_ids: vec![TEAM_ID],
+        ..harness(user_owner(OWNER_ID))
+    }
+}
+
 #[tokio::test]
-async fn team_harnesses_are_deletable_by_their_registrant_or_the_team_owner() {
-    // The registrant.
+async fn team_runtimes_are_deletable_by_their_owner_or_the_team_owner() {
+    // Its owner.
     let repo = FakeRepo {
-        harness: Some(harness(HarnessOwner::Team { team_id: TEAM_ID })),
+        harness: Some(shared_with_team()),
         delete_result: true,
         ..FakeRepo::default()
     };
@@ -566,7 +620,7 @@ async fn team_harnesses_are_deletable_by_their_registrant_or_the_team_owner() {
 
     // The team owner.
     let repo = FakeRepo {
-        harness: Some(harness(HarnessOwner::Team { team_id: TEAM_ID })),
+        harness: Some(shared_with_team()),
         delete_result: true,
         user_owns_team: true,
         ..FakeRepo::default()
@@ -576,9 +630,9 @@ async fn team_harnesses_are_deletable_by_their_registrant_or_the_team_owner() {
         .await
         .unwrap();
 
-    // A plain member who did not register it.
+    // A plain member.
     let repo = FakeRepo {
-        harness: Some(harness(HarnessOwner::Team { team_id: TEAM_ID })),
+        harness: Some(shared_with_team()),
         user_has_team: true,
         ..FakeRepo::default()
     };
@@ -591,6 +645,70 @@ async fn team_harnesses_are_deletable_by_their_registrant_or_the_team_owner() {
         .delete_harness(caller(OWNER_ID), HarnessId::TEST_A)
         .await;
     assert!(matches!(result, Err(HarnessError::NotFound(_))));
+}
+
+#[tokio::test]
+async fn only_the_owner_opens_a_runtime_to_a_team_they_belong_to() {
+    let request = || SetHarnessTeamAccessRequest {
+        team_id: TEAM_ID,
+        enabled: true,
+    };
+
+    // The owner, on their own team.
+    let repo = FakeRepo {
+        access: HarnessAccess::Owner,
+        user_has_team: true,
+        ..FakeRepo::default()
+    };
+    service(repo.clone())
+        .set_team_access(caller(OWNER_ID), HarnessId::TEST_A, request())
+        .await
+        .unwrap();
+    assert_eq!(repo.calls.lock().unwrap().team_access, [(TEAM_ID, true)]);
+
+    // Someone holding a grant cannot pass it on.
+    let repo = FakeRepo {
+        access: HarnessAccess::Use,
+        user_has_team: true,
+        ..FakeRepo::default()
+    };
+    let result = service(repo.clone())
+        .set_team_access(caller(MEMBER_ID), HarnessId::TEST_A, request())
+        .await;
+    assert!(matches!(result, Err(HarnessError::Unauthorized)));
+    assert!(repo.calls.lock().unwrap().team_access.is_empty());
+
+    // The owner, on a team they are not in.
+    let repo = FakeRepo {
+        access: HarnessAccess::Owner,
+        user_has_team: false,
+        ..FakeRepo::default()
+    };
+    let result = service(repo)
+        .set_team_access(caller(OWNER_ID), HarnessId::TEST_A, request())
+        .await;
+    assert!(matches!(result, Err(HarnessError::Unauthorized)));
+}
+
+#[tokio::test]
+async fn residents_are_visible_only_to_people_who_may_use_the_runtime() {
+    let repo = FakeRepo {
+        access: HarnessAccess::None,
+        ..FakeRepo::default()
+    };
+    let result = service(repo)
+        .list_residents(caller(MEMBER_ID), HarnessId::TEST_A)
+        .await;
+    assert!(matches!(result, Err(HarnessError::Unauthorized)));
+
+    let repo = FakeRepo {
+        access: HarnessAccess::Use,
+        ..FakeRepo::default()
+    };
+    service(repo)
+        .list_residents(caller(MEMBER_ID), HarnessId::TEST_A)
+        .await
+        .unwrap();
 }
 
 #[tokio::test]

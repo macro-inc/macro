@@ -29,6 +29,8 @@ pub enum ShareEntityType {
     /// External chats added to Macro.
     #[serde(rename = "external_chat")]
     ExternalChat,
+    /// Runtimes: shared only with teammates, and only by the owner in person.
+    Harness,
 }
 impl From<ShareEntityType> for EntityType {
     fn from(value: ShareEntityType) -> Self {
@@ -42,6 +44,7 @@ impl From<ShareEntityType> for EntityType {
             ShareEntityType::EmailThread => Self::EmailThread,
             ShareEntityType::AgentSession => Self::AgentSession,
             ShareEntityType::ExternalChat => Self::ExternalChat,
+            ShareEntityType::Harness => Self::Harness,
         }
     }
 }
@@ -93,6 +96,9 @@ pub struct AccessRequest {
     /// Earliest next submission or level change; cancellation preserves this deadline.
     /// Submissions wait one minute, denials wait 24 hours, and approval clears it.
     pub retry_after: Option<DateTime<Utc>>,
+    /// The agent that asked on the requester's behalf, when one did.
+    #[serde(default)]
+    pub requested_by_agent: Option<Uuid>,
 }
 /// A direct user grant; inherited grants are deliberately not editable here.
 #[derive(Debug, Clone, Serialize, Deserialize, utoipa::ToSchema)]

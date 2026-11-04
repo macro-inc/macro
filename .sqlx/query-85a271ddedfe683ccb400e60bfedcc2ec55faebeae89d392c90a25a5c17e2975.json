@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "SELECT id, requester_id, requested_level AS \"requested_level: AccessLevel\", status, revision, created_at, updated_at, resolved_at, granted_level AS \"granted_level: AccessLevel\", retry_after\n            FROM entity_access_request WHERE entity_type = $1 AND entity_id = $2 AND status = 'pending' ORDER BY created_at, id LIMIT $3 OFFSET $4",
+  "query": "SELECT id, requester_id, requested_level AS \"requested_level: AccessLevel\", status, revision, created_at, updated_at, resolved_at, granted_level AS \"granted_level: AccessLevel\", retry_after, requested_by_agent\n            FROM entity_access_request WHERE entity_type = $1 AND entity_id = $2 AND ($3::text IS NULL OR requester_id = $3) AND ($4::uuid IS NULL OR id = $4) LIMIT 1",
   "describe": {
     "columns": [
       {
@@ -76,14 +76,19 @@
         "ordinal": 9,
         "name": "retry_after",
         "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 10,
+        "name": "requested_by_agent",
+        "type_info": "Uuid"
       }
     ],
     "parameters": {
       "Left": [
         "Text",
         "Uuid",
-        "Int8",
-        "Int8"
+        "Text",
+        "Uuid"
       ]
     },
     "nullable": [
@@ -96,8 +101,9 @@
       false,
       true,
       true,
+      true,
       true
     ]
   },
-  "hash": "a01e2431f273549303d91a507d356faeb2ee456b6b7e5a0c46dfcc9dd37d323f"
+  "hash": "85a271ddedfe683ccb400e60bfedcc2ec55faebeae89d392c90a25a5c17e2975"
 }

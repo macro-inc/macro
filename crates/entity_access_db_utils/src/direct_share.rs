@@ -30,6 +30,8 @@ pub async fn facts(
             .fetch_optional(tx.as_mut()).await?.map(|r| (r.owner_id, r.name, None)),
         EntityType::ExternalChat => sqlx::query!("SELECT user_id, name FROM external_chat WHERE id = $1 FOR SHARE", id)
             .fetch_optional(tx.as_mut()).await?.map(|r| (r.user_id, r.name, None)),
+        EntityType::Harness => sqlx::query!(r#"SELECT COALESCE(owner_user_id, created_by) AS "owner!", name FROM harnesses WHERE id = $1 AND deleted_at IS NULL FOR SHARE"#, id)
+            .fetch_optional(tx.as_mut()).await?.map(|r| (r.owner, r.name, None)),
         EntityType::Initiative => sqlx::query!("SELECT owner_user_id, name FROM initiative WHERE id = $1 FOR SHARE", id)
             .fetch_optional(tx.as_mut()).await?.map(|r| (r.owner_user_id, r.name, None)),
         EntityType::Database => sqlx::query!("SELECT user_id AS owner_id, name FROM database_entities WHERE database_id = $1 AND trashed_at IS NULL FOR SHARE", id)
@@ -73,6 +75,34 @@ pub async fn facts(
         name,
         file_type,
     }))
+}
+
+/// Grant the runtimes offered with a team invite to whoever accepted it. An offer
+/// counts only while its inviter still owns the runtime and it is still live.
+pub async fn grant_invited_harnesses(
+    tx: &mut Transaction<'_, Postgres>,
+    team_invite_id: &macro_uuid::Uuid,
+    invited_by: &MacroUserIdStr<'_>,
+    user: &MacroUserIdStr<'_>,
+) -> anyhow::Result<()> {
+    sqlx::query!(
+        r#"INSERT INTO entity_access (entity_id, entity_type, source_id, source_type, access_level)
+        SELECT h.id, 'harness', $3, 'user', 'edit'
+        FROM team_invite_harness_grant g
+        JOIN harnesses h ON h.id = g.harness_id
+        WHERE g.team_invite_id = $1
+          AND h.deleted_at IS NULL
+          AND COALESCE(h.owner_user_id, h.created_by) = $2
+        ON CONFLICT (entity_id, entity_type, source_id, source_type)
+        WHERE granted_from_project_id IS NULL
+        DO NOTHING"#,
+        team_invite_id,
+        invited_by.as_ref(),
+        user.as_ref(),
+    )
+    .execute(tx.as_mut())
+    .await?;
+    Ok(())
 }
 
 /// List direct non-owner user grants. Inherited, channel and team grants are excluded.

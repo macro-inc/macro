@@ -113,7 +113,21 @@ pub trait BotRepo: Send + Sync + 'static {
         team_id: Uuid,
     ) -> impl Future<Output = Result<bool, Self::Err>> + Send;
 
-    /// Get ownership and permission capabilities of an active registered harness.
+    /// Whether a team's every member may use a harness.
+    fn harness_granted_to_team(
+        &self,
+        harness_id: HarnessId,
+        team_id: Uuid,
+    ) -> impl Future<Output = Result<bool, Self::Err>> + Send;
+
+    /// Whether a user may use a harness: its owner, or through a live grant.
+    fn user_may_use_harness(
+        &self,
+        harness_id: HarnessId,
+        user_id: &str,
+    ) -> impl Future<Output = Result<bool, Self::Err>> + Send;
+
+    /// Get the permission capabilities of an active registered harness.
     fn get_harness_facts(
         &self,
         harness_id: HarnessId,

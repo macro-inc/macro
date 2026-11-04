@@ -8,6 +8,7 @@ use super::models::{
     HarnessTokenAuthorization, InternalIdentityClaims, MacroAuthorizationError, ResolvedApiKeyUser,
     ResolvedBotActingUser, ValidatedCredential, ValidatedIdentity,
 };
+use harness_id::HarnessId;
 use uuid::Uuid;
 
 /// Persistence facts required to authorize bot credentials.
@@ -125,11 +126,12 @@ pub trait HarnessAuthorizationRepo: Clone + Send + Sync + 'static {
         macro_user_id: &str,
     ) -> impl Future<Output = Result<Option<ResolvedBotActingUser>, Self::Err>> + Send;
 
-    /// Check whether a user is a current member of a team.
-    fn user_has_team(
+    /// Check whether a user may use a harness: its owner, or through a live
+    /// direct or team grant.
+    fn user_may_use_harness(
         &self,
-        fusion_user_id: &str,
-        team_id: Uuid,
+        harness_id: HarnessId,
+        macro_user_id: &str,
     ) -> impl Future<Output = Result<bool, Self::Err>> + Send;
 }
 

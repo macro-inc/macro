@@ -113,3 +113,46 @@ async fn a_deleted_harness_reattaches_nothing(pool: PgPool) {
 
     assert!(found.is_empty());
 }
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn a_resident_runs_on_its_owners_access_and_a_coding_agent_on_the_prompters(pool: PgPool) {
+    let laptop = insert_harness(&pool).await;
+    let coding = BotId::new_from_uuid(insert_bot(&pool, laptop).await);
+    let resident = BotId::new_from_uuid(insert_bot(&pool, laptop).await);
+    sqlx::query!(
+        "UPDATE agent_configs SET is_coding = false WHERE bot_id = $1",
+        resident.as_uuid(),
+    )
+    .execute(&pool)
+    .await
+    .unwrap();
+    let stranger = MacroUserIdStr::try_from("macro|stranger@example.com".to_owned()).unwrap();
+    let bindings = PgHarnessBindings::new(pool.clone());
+
+    let facts = bindings
+        .access_facts(resident, Some(&stranger))
+        .await
+        .unwrap()
+        .unwrap();
+    assert!(facts.resident);
+    assert_eq!(facts.actor_may_use, Some(false));
+    assert!(
+        facts.may_run(),
+        "anyone who can reach a resident can talk to it"
+    );
+
+    let facts = bindings
+        .access_facts(coding, Some(&stranger))
+        .await
+        .unwrap()
+        .unwrap();
+    assert!(!facts.resident);
+    assert!(
+        !facts.may_run(),
+        "a coding agent runs its prompter's instructions"
+    );
+
+    let facts = bindings.access_facts(coding, None).await.unwrap().unwrap();
+    assert_eq!(facts.actor_may_use, None);
+    assert!(facts.may_run(), "its owner's own agent runs unprompted");
+}

@@ -561,6 +561,31 @@ pub struct DeliverAction {
     pub context: Option<TriggerContext>,
 }
 
+/// What decides whether a turn may run on an agent's registered runtime.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct RuntimeAccessFacts {
+    /// The agent lives on the runtime, rather than being a coding agent someone
+    /// directs there turn by turn.
+    pub resident: bool,
+    /// Whether the agent's own owner may use the runtime.
+    pub agent_owner_may_use: bool,
+    /// Whether the person prompting may use it, when a person is.
+    pub actor_may_use: Option<bool>,
+}
+
+impl RuntimeAccessFacts {
+    /// Whether the turn may run. A resident answers to anyone who can reach it
+    /// for as long as its owner keeps access; a coding agent runs someone's
+    /// instructions, so that person needs access themselves.
+    #[must_use]
+    pub const fn may_run(self) -> bool {
+        match (self.resident, self.actor_may_use) {
+            (false, Some(actor_may_use)) => actor_may_use,
+            (true, _) | (false, None) => self.agent_owner_may_use,
+        }
+    }
+}
+
 /// One operation executed by the harness for an agent session.
 ///
 /// Create, act, destroy. Everything that happens *within* a session's life is

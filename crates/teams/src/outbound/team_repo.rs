@@ -887,6 +887,34 @@ impl TeamRepository for TeamRepositoryImpl {
         Ok(members)
     }
 
+    #[tracing::instrument(skip_all, fields(invites = invite_ids.len(), harnesses = harness_ids.len()), err)]
+    async fn offer_harnesses_with_invites(
+        &self,
+        invite_ids: &[uuid::Uuid],
+        invited_by: &MacroUserIdStr<'_>,
+        harness_ids: &[uuid::Uuid],
+    ) -> Result<(), InviteUsersToTeamError> {
+        sqlx::query!(
+            r#"
+            INSERT INTO team_invite_harness_grant (team_invite_id, harness_id)
+            SELECT invite.id, h.id
+            FROM unnest($1::uuid[]) AS invite(id)
+            CROSS JOIN harnesses h
+            WHERE h.id = ANY($2)
+              AND h.deleted_at IS NULL
+              AND COALESCE(h.owner_user_id, h.created_by) = $3
+            ON CONFLICT DO NOTHING
+            "#,
+            invite_ids,
+            harness_ids,
+            invited_by.as_ref(),
+        )
+        .execute(&self.pool)
+        .await
+        .map_err(|error| InviteUsersToTeamError::from(TeamError::from(error)))?;
+        Ok(())
+    }
+
     #[tracing::instrument(skip(self), err)]
     #[allow(clippy::disallowed_methods, reason = "legacy code. fix later")]
     async fn accept_team_invite(
@@ -951,6 +979,15 @@ impl TeamRepository for TeamRepositoryImpl {
         // bump seat count
         let team_id: uuid::Uuid = team_member.try_get("team_id")?;
         TeamRepositoryImpl::bump_seat_count(&mut transaction, &team_id, 1).await?;
+
+        entity_access_db_utils::direct_share::grant_invited_harnesses(
+            &mut transaction,
+            team_invite_id,
+            &invite_snapshot.invited_by,
+            user_id,
+        )
+        .await
+        .map_err(TeamError::StorageLayerError)?;
 
         // Remove team invite
         sqlx::query(

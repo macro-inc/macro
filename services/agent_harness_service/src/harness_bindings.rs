@@ -10,10 +10,12 @@ use std::pin::Pin;
 use std::sync::Arc;
 
 use agent_client_protocol::schema::v1::SessionId;
+use agent_harness::domain::model::RuntimeAccessFacts;
 use agent_harness::domain::ports::{HarnessBindings, HarnessPresence};
 use agent_session::domain::model::AgentSessionId;
 use bot_id::BotId;
 use harness_id::HarnessId;
+use macro_user_id::user_id::MacroUserIdStr;
 use sqlx::PgPool;
 
 #[cfg(test)]
@@ -47,6 +49,46 @@ impl HarnessBindings for PgHarnessBindings {
         .await?;
 
         Ok(harness_id.flatten().map(HarnessId::new_from_uuid))
+    }
+
+    async fn access_facts(
+        &self,
+        bot: BotId,
+        actor: Option<&MacroUserIdStr<'static>>,
+    ) -> anyhow::Result<Option<RuntimeAccessFacts>> {
+        let actor_id: Option<&str> = actor.map(|actor| actor.as_ref());
+        let row = sqlx::query!(
+            r#"
+            SELECT
+                NOT ac.is_coding AS "resident!",
+                CASE
+                    WHEN b.owner_user_id IS NOT NULL
+                        THEN harness_access_level(ac.harness_id, b.owner_user_id) IS NOT NULL
+                    ELSE EXISTS (
+                        SELECT 1 FROM entity_access ea
+                        WHERE ea.entity_id = ac.harness_id
+                          AND ea.entity_type = 'harness'
+                          AND ea.source_type = 'team'
+                          AND ea.source_id = b.team_id::text
+                    )
+                END AS "agent_owner_may_use!",
+                harness_access_level(ac.harness_id, $2) IS NOT NULL AS "actor_may_use!"
+            FROM agent_configs ac
+            JOIN bots b ON b.id = ac.bot_id
+            JOIN harnesses h ON h.id = ac.harness_id
+            WHERE ac.bot_id = $1 AND h.deleted_at IS NULL
+            "#,
+            bot.as_uuid(),
+            actor_id,
+        )
+        .fetch_optional(&self.pool)
+        .await?;
+
+        Ok(row.map(|row| RuntimeAccessFacts {
+            resident: row.resident,
+            agent_owner_may_use: row.agent_owner_may_use,
+            actor_may_use: actor.map(|_| row.actor_may_use),
+        }))
     }
 
     async fn sessions_on_harness(
