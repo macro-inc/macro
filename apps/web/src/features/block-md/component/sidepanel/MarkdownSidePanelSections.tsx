@@ -182,7 +182,7 @@ function FolderLink(props: { projectId: string; projectName: string }) {
   return (
     <span
       {...navHandlers}
-      class="pointer-events-auto min-w-0 truncate py-0.5 rounded-xs text-link hover:text-link-hover hover:bg-hover focus:bg-active"
+      class="pointer-events-auto min-w-0 truncate py-0.5 rounded-xs text-ink hover:bg-hover focus:bg-active"
     >
       <span class="underline decoration-current/20 decoration-[max(1px,0.1em)] underline-offset-2">
         {props.projectName}

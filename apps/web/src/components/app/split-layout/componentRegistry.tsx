@@ -3,6 +3,10 @@ import { useSpreadsheetAccess } from '@app/features/block-spreadsheet/primitives
 import type { EventEditorInitialValues } from '@app/features/calendar/components/composer/event-form-model';
 import type { CreatedCalendarEvent } from '@app/features/calendar/hooks/use-event-editor';
 import type { CalendarEvent } from '@app/features/calendar/types';
+import {
+  composePropsFromParams,
+  recipientsFromLink,
+} from '@app/features/email-compose/compose-params';
 import { HomeRouteView } from '@app/features/home/route-views';
 import { parseProjectRoute } from '@app/features/projects/core/route';
 import { useFeatureFlag } from '@app/lib/analytics/posthog';
@@ -399,46 +403,15 @@ registerComponent('channel-compose', () => {
 });
 registerComponent('email-compose', (params) => {
   usePageViewTracking('email-compose');
-  // mailto: links land here as `component/email-compose?to=a@x.com,b@y.com`.
+  // mailto: links land here as
+  // `component/email-compose?to=a@example.com,b@example.com` on touch;
+  // desktop carries `to` into its `/mail/new` route.
   const toParam = new URLSearchParams(window.location.search).get('to');
-  const paramsInitialTo = Array.isArray(params.initialTo)
-    ? params.initialTo.filter(
-        (value): value is string => typeof value === 'string'
-      )
-    : undefined;
-  const initialTo =
-    paramsInitialTo ??
-    toParam
-      ?.split(',')
-      .map((e) => e.trim())
-      .filter(Boolean);
-  const draftID =
-    typeof params.draftID === 'string' ? params.draftID : undefined;
-  const initialInboxId =
-    typeof params.initialInboxId === 'string'
-      ? params.initialInboxId
-      : undefined;
-  const initialSubject =
-    typeof params.initialSubject === 'string'
-      ? params.initialSubject
-      : undefined;
-  const initialBodyText =
-    typeof params.initialBodyText === 'string'
-      ? params.initialBodyText
-      : undefined;
-  const initialAttachments = Array.isArray(params.initialAttachments)
-    ? params.initialAttachments.filter(
-        (value): value is File => value instanceof File
-      )
-    : undefined;
+  const props = composePropsFromParams(params);
   return (
     <EmailCompose
-      draftId={draftID}
-      initialTo={initialTo}
-      initialInboxId={initialInboxId}
-      initialSubject={initialSubject}
-      initialBodyText={initialBodyText}
-      initialAttachments={initialAttachments}
+      {...props}
+      initialTo={props.initialTo ?? recipientsFromLink(toParam)}
     />
   );
 });
@@ -608,6 +581,11 @@ if (LOCAL_ONLY) {
   registerComponent(
     'agent-ui',
     lazy(() => import('@app/features/block-agent/debug/Gallery'))
+  );
+
+  registerComponent(
+    'agent-cards',
+    lazy(() => import('@app/features/agent-cards/debug/Gallery'))
   );
 
   registerComponent(

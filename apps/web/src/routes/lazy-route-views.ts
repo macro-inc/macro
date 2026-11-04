@@ -59,6 +59,10 @@ export const DriveRouteView = lazyNamed(
   () => import('@app/features/drive-view/route-views'),
   'DriveRouteView'
 );
+export const EmailComposeRouteView = lazyNamed(
+  () => import('@app/features/email-view/components/EmailComposeRouteView'),
+  'EmailComposeRouteView'
+);
 export const EmailDetailRouteView = lazyNamed(
   () => import('@app/features/email-view/components/EmailDetailView'),
   'EmailDetailRouteView'

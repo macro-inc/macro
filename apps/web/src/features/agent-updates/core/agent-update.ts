@@ -3,6 +3,7 @@ import type {
   FoldedMessage,
   PendingInteraction,
 } from '@service-agent-fold/generated/types';
+import { isSessionArchived } from '@service-agent-harness/session-archive';
 import { match } from 'ts-pattern';
 import {
   isCoderHarness,
@@ -25,7 +26,7 @@ export type UpdateSession = Pick<
   | 'id'
   | 'name'
   | 'ownerId'
-  | 'isArchived'
+  | 'archivedBy'
   | 'harness'
   | 'botId'
   | 'turnState'
@@ -40,7 +41,7 @@ export function eligibleSessions(
   return sessions.filter(
     (session) =>
       session.ownerId === ownerId &&
-      !session.isArchived &&
+      !isSessionArchived(session) &&
       (isCoderHarness(session.harness) ||
         (!session.harness && systemBotKind(session.botId) === 'coder'))
   );

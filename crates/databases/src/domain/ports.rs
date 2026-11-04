@@ -64,6 +64,15 @@ pub trait DatabasesRepo: Send + Sync + 'static {
         id: DatabaseId,
     ) -> impl Future<Output = Result<bool, Self::Error>> + Send;
 
+    /// File a live database in a folder, or at the root when `project_id`
+    /// is `None`, swapping the grants it inherits from folders to match;
+    /// `false` when it is trashed or gone.
+    fn move_database(
+        &self,
+        id: DatabaseId,
+        project_id: Option<&str>,
+    ) -> impl Future<Output = Result<bool, Self::Error>> + Send;
+
     /// Remove a database permanently.
     fn delete_database(
         &self,

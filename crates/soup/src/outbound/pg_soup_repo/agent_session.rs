@@ -38,7 +38,8 @@ pub(super) fn visibility_sql(visibility: AgentSessionVisibility) -> String {
 struct AgentSessionRow {
     id: Uuid,
     name: String,
-    is_archived: bool,
+    archived_by: Option<String>,
+    archived_at: Option<DateTime<Utc>>,
     owner_id: String,
     bot_id: Uuid,
     harness: String,
@@ -258,7 +259,8 @@ const ACCESS_SQL: &str = r#" AND cp.left_at IS NULL
     SELECT
         s.id,
         s.name,
-        s.is_archived,
+        s.archived_by::TEXT AS archived_by,
+        s.archived_at,
         s.owner_id,
         s.bot_id,
         s.harness,
@@ -389,7 +391,13 @@ fn row_to_item(row: AgentSessionRow) -> Result<SoupItem<()>, sqlx::Error> {
     Ok(SoupItem::AgentSession(SoupAgentSession {
         id: row.id,
         name: row.name,
-        is_archived: row.is_archived,
+        archived_by: row
+            .archived_by
+            .as_deref()
+            .map(str::parse)
+            .transpose()
+            .map_err(super::type_err)?,
+        archived_at: row.archived_at,
         owner_id,
         bot_id: row.bot_id,
         harness: row.harness,

@@ -7,14 +7,23 @@ import type { ChannelLabelScopeSelection } from '@service-storage/generated/sche
 import {
   Button,
   Dialog,
+  HoverCard,
   Input,
   type ManagedDialogProps,
   type OpenDialogOptions,
   openDialog,
   Surface,
   ToggleSwitch,
+  Tooltip,
 } from '@ui';
-import { type Accessor, createSignal, For, Show } from 'solid-js';
+import {
+  type Accessor,
+  createSignal,
+  For,
+  Match,
+  Show,
+  Switch,
+} from 'solid-js';
 
 export type SectionDialogValue = {
   name: string;
@@ -31,88 +40,98 @@ export type SectionDialogProps = {
 
 function SmartSectionPreview(props: {
   pattern: Accessor<string>;
-  scope: ChannelLabelScopeSelection;
+  scope: Accessor<ChannelLabelScopeSelection>;
 }) {
   const preview = useSmartTagPreviewQuery(props.pattern, props.scope);
-  const data = () => (preview.isSuccess ? preview.data : undefined);
+  const data = () => (!preview.isPending ? preview.data : undefined);
+  const count = () => data()?.totalCount ?? 0;
   const matches = () => data()?.channels ?? [];
-  const totalCount = () => data()?.totalCount ?? 0;
-  const overflowCount = () => totalCount() - matches().length;
+  const overflow = () => count() - matches().length;
+
+  const retry = (
+    <Button
+      type="button"
+      variant="ghost"
+      size="xs"
+      onClick={() => fireAndForget(preview.refetch(), 'channels-view')}
+    >
+      {t('channelSections.retry')}
+    </Button>
+  );
 
   return (
-    <section
-      aria-label={t('channelSections.matchedChannels')}
+    <div
       aria-live="polite"
-      class="flex shrink-0 flex-col gap-0.5 text-sm"
+      aria-busy={preview.isFetching}
+      class="text-xs text-ink-muted"
     >
-      <div class="flex items-center gap-1.5 px-2 py-1 text-xs font-medium text-ink-muted">
-        <HashIcon class="size-3.5 shrink-0" aria-hidden="true" />
-        <span>{t('channelSections.matchedChannels')}</span>
-        <Show when={data()}>
-          <span class="tabular-nums">{totalCount()}</span>
-        </Show>
-      </div>
-      <Show
-        when={!preview.isPending}
-        fallback={
-          <p class="px-2 py-2 text-xs text-ink-muted">
-            {t('channelSections.matchingChannelsLoading')}
-          </p>
-        }
-      >
-        <Show
-          when={!preview.isError}
-          fallback={
-            <div class="flex items-center justify-between gap-2 px-2 py-1 text-xs text-ink-muted">
-              <span>{t('channelSections.matchesUnavailable')}</span>
-              <Button
-                type="button"
-                variant="ghost"
-                size="sm"
-                onClick={() =>
-                  fireAndForget(preview.refetch(), 'channels-view')
-                }
-              >
-                {t('channelSections.retry')}
-              </Button>
-            </div>
-          }
-        >
-          <Show
-            when={totalCount()}
-            fallback={
-              <p class="px-2 py-2 text-xs text-ink-muted">
-                {t('channelSections.noMatchingChannels')}
-              </p>
+      <Switch>
+        <Match when={preview.isPending}>
+          {t('channelSections.matchingChannelsLoading')}
+        </Match>
+        <Match when={data()}>
+          <HoverCard
+            as="button"
+            placement="bottom-start"
+            triggerAriaLabel={t('channelSections.matchCount', {
+              count: count(),
+            })}
+            triggerClass="underline decoration-dotted underline-offset-4"
+            contentClass="block min-w-56 max-w-80"
+            content={
+              <div>
+                <Show
+                  when={count() > 0}
+                  fallback={
+                    <p class="p-2">
+                      {props.scope() === 'team'
+                        ? t('channelSections.noMatchingTeamChannels')
+                        : t('channelSections.noMatchingChannels')}
+                    </p>
+                  }
+                >
+                  <ul class="max-h-48 overflow-y-auto">
+                    <For each={matches()}>
+                      {(channel) => (
+                        <li class="flex min-w-0 items-center gap-2 p-2">
+                          <HashIcon class="size-3.5 shrink-0" />
+                          <Tooltip
+                            as="span"
+                            class="min-w-0"
+                            label={channel.name}
+                          >
+                            <span class="truncate">{channel.name}</span>
+                          </Tooltip>
+                        </li>
+                      )}
+                    </For>
+                  </ul>
+                  <Show when={overflow() > 0}>
+                    <p class="p-2">
+                      {t('channelSections.moreChannelsMatched', {
+                        count: overflow(),
+                      })}
+                    </p>
+                  </Show>
+                </Show>
+              </div>
             }
           >
-            <ul class="flex max-h-48 flex-col overflow-y-auto scrollbar-hidden">
-              <For each={matches()}>
-                {(channel) => (
-                  <li
-                    class="flex min-w-0 items-center gap-2 px-2 py-2"
-                    title={channel.name}
-                  >
-                    <HashIcon
-                      class="size-4 shrink-0 text-ink-muted"
-                      aria-hidden="true"
-                    />
-                    <span class="truncate">{channel.name}</span>
-                  </li>
-                )}
-              </For>
-            </ul>
-            <Show when={overflowCount() > 0}>
-              <p class="px-2 py-2 text-xs text-ink-muted">
-                {t('channelSections.moreChannelsMatched', {
-                  count: overflowCount(),
-                })}
-              </p>
-            </Show>
+            {t('channelSections.matchCount', { count: count() })}
+          </HoverCard>
+          <Show when={preview.isError}>
+            <span class="ml-2">{t('channelSections.matchesUnavailable')}</span>
+            {retry}
           </Show>
-        </Show>
-      </Show>
-    </section>
+        </Match>
+        <Match when={preview.isError}>
+          <div class="flex items-center gap-2">
+            {t('channelSections.matchesUnavailable')}
+            {retry}
+          </div>
+        </Match>
+      </Switch>
+    </div>
   );
 }
 
@@ -241,13 +260,9 @@ function SectionDialog(props: SectionDialogProps & ManagedDialogProps) {
               />
             </Show>
             <Show when={kind() === 'smart'}>
-              <label class="flex flex-wrap items-center gap-x-3 gap-y-2 text-sm text-ink-muted focus-within:text-ink">
-                <span class="shrink-0">
-                  {t('channelSections.nameContains')}
-                </span>
+              <label class="flex flex-col gap-2 text-sm text-ink-muted">
+                <span>{t('channelSections.nameContains')}</span>
                 <Input
-                  variant="bare"
-                  class="min-w-40 flex-1 px-0 text-sm"
                   value={pattern()}
                   onInput={(event) => setPattern(event.currentTarget.value)}
                   maxLength={200}
@@ -262,15 +277,13 @@ function SectionDialog(props: SectionDialogProps & ManagedDialogProps) {
               </p>
             </Show>
             <Show when={kind() === 'smart' && trimmedPattern().length > 0}>
-              <Show when={scope()} keyed>
-                {(selectedScope) => (
-                  <SmartSectionPreview
-                    pattern={trimmedPattern}
-                    scope={selectedScope}
-                  />
-                )}
-              </Show>
+              <SmartSectionPreview pattern={trimmedPattern} scope={scope} />
             </Show>
+            <p class="text-xs leading-5 text-ink-muted">
+              {scope() === 'team'
+                ? t('channelSections.teamChannelsOnly')
+                : t('channelSections.personalChannelsHint')}
+            </p>
           </div>
           <div class="flex flex-wrap items-center justify-end gap-3 px-5 py-3">
             <Show when={!props.initial && props.canShare}>

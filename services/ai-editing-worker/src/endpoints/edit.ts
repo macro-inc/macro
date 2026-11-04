@@ -85,8 +85,8 @@ const EditBody = z
     mode: z.enum(['supervised', 'fast']).default('supervised'),
     /**
      * The agent or persona the edit runs as. Its name labels every cursor the
-     * edit draws, so readers see who is editing; omitted, cursors draw pooled
-     * names.
+     * edit draws, so readers see who is editing; omitted, cursors read
+     * `Macro (AI)`.
      */
     editor: z.object({ name: z.string().trim().min(1) }).optional(),
     typingAnimations: z.boolean().optional(),

@@ -20,7 +20,7 @@ function session(
     id,
     name: `Session ${id}`,
     ownerId: OWNER,
-    isArchived: false,
+    archivedBy: null,
     botId: 'bot-chat',
     status: 'acp_ready',
     updatedAt: '2026-09-15T10:00:00Z',
@@ -117,7 +117,7 @@ describe('mixed conversation navigation', () => {
       session('ended', {
         botId: 'bot-coder',
         status: 'disconnected',
-        isArchived: true,
+        archivedBy: 'runtime_closed',
       }),
       session('agent'),
     ];

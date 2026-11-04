@@ -329,6 +329,7 @@ export function filterCorpus(
         isSignal: n % 3 === 0,
         isImportant: n % 3 === 0,
         isDraft: false,
+        hasReceivedMail: true,
         snippet: `Email ${n}`,
         senderEmail: 'sender@example.com',
         senderName: 'Sender',
@@ -344,6 +345,7 @@ export function filterCorpus(
         mailSentPreview: n % 4 === 0 ? preview(30000, `Sent ${n}`) : null,
         notifications: [],
         participants: [],
+        senders: [],
         labels: [],
         isFavorited: favorite,
         attachments: [

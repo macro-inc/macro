@@ -723,6 +723,7 @@ impl JwtValidator for FakeJwtValidator {
             origin: macro_authorization::CredentialOrigin::Session,
             identity: ValidatedIdentity {
                 agent_id: None,
+                agent_via: None,
                 user_id: TEST_USER_ID.to_string(),
                 fusion_user_id: "test-fusion-user".to_string(),
                 organization_id,

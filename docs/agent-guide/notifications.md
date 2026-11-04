@@ -112,6 +112,34 @@ comment, and stays there as new ones land. Marking one
 done leaves the others, Undo restores it in place, and a new notification in a done
 row brings it back with only what's new.
 
+## Reading items
+
+Opening or previewing an item clears the unread dot immediately, before its
+read request completes. Home, Mail, Drive and Tasks share this behavior for
+Markdown/tasks, legacy AI chats, email, calendar events, agent sessions, CRM
+records and pull requests. Loaded call/project notifications use the same policy.
+Email clears both the mailbox unread state and reminder notifications, using the
+thread's owning inbox. A failed notification write restores its dot; failed REST
+mailbox writes refresh the affected thread. Direct document/chat/PR/email links
+mark read when their content mounts, without an extra timer.
+
+Check click/tap, Enter, keyboard preview following, next-item navigation and
+mark-done advance. With writes held pending, the dot should already be gone;
+fail the write and verify that the dot returns and reopening retries. Include
+email from a secondary inbox and a received thread with a draft reply. Mark an
+open email unread explicitly and leave it open: the mount marker must not keep
+marking it read. Local-only drafts must not issue a mailbox read.
+
+Channel/thread rows retain their scoped reads, and message readers still require
+actual visibility; opening another entity must not mark hidden replies seen.
+
+With GraphQL Soup enabled, modern project **Mark read** and **Mark done** actions
+target all of the project's notifications, including notifications absent from
+the loaded feed. The target is `INITIATIVE`; legacy Drive folders retain the
+separate `PROJECT` target.
+Check both actions with a partially loaded notification feed. This mapping does
+not add read-on-open behavior to project routes or folder navigation.
+
 ## Notifications
 
 Browser notifications must arrive while Macro is in a background tab, not just
@@ -315,6 +343,17 @@ When Macro plays a sound for a notification, its browser or macOS alert is
 sent silent so the person hears one sound. macOS builds older than the
 `silent` argument on `send_macos_notification` ignore it and still play the
 system sound.
+
+**Settings → Notifications → Quiet hours** silences those sounds and skips
+desktop and browser alerts on a weekly schedule. It is off until turned on,
+then covers every day from 10:00 PM to 8:00 AM in the device's time zone. The
+person picks the days, the start and end, and the time zone. A later start
+runs through midnight, and the window is the clock time on each selected day,
+so Tuesday morning is quiet only when Tuesday is selected. An equal start and
+end covers no time. Incoming calls still ring and still show an alert. Inbox
+items still arrive. The schedule is saved on this device with the sound
+settings, so a phone and a computer can differ. A sound preview still plays.
+Mobile push sent while the app is not open is unchanged.
 
 The backend-free desktop/phone regression drives the real settings section,
 persistence, previews, and delivery through a stand-in notification feed:

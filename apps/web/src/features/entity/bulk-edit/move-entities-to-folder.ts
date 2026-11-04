@@ -20,6 +20,7 @@ export function createMoveEntitiesToFolder(source: string) {
             name: entity.name || entity.id,
           })),
           project: folder,
+          parentSpan: span,
         });
       } catch (error) {
         span.setAttr('move.outcome', 'failed');

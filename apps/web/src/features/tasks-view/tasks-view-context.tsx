@@ -29,6 +29,7 @@ import {
   tasksSplitRoute,
 } from '@app/routes/routes';
 import { createPreviewSelectionGuard } from '@components/app/createPreviewSelectionGuard';
+import { useGlobalNotificationSource } from '@components/app/GlobalAppState';
 import {
   useSplitPanelOrThrow,
   withSplitPanelOwner,
@@ -37,6 +38,7 @@ import { createAssertedContextProvider } from '@core/context/createContext';
 import { useUserId } from '@core/context/user';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import { fireAndForget } from '@core/util/fireAndForget';
+import { markRowNotificationsSeenOnOpen } from '@notifications/mark-row-seen';
 import { useTagSets, useTagSetsReady } from '@property/tags/tag-sets-context';
 import type { ContextProviderProps } from '@solid-primitives/context';
 import {
@@ -546,13 +548,27 @@ export const [TasksViewProvider, useTasksView] = createAssertedContextProvider<
       'tasks-view'
     );
   };
+  const notificationSource = useGlobalNotificationSource();
+  const markTaskSeen = (id: string) => {
+    const rows = source.boardRows?.() ?? source.items();
+    const row = rows.find(
+      (row) => row.kind === 'entity' && row.entity.id === id
+    );
+    if (row?.kind === 'entity')
+      markRowNotificationsSeenOnOpen(row.entity, notificationSource);
+  };
   const openTask = (
     task: TaskDetailTarget,
     options?: EntityDetailNavigationOptions
   ) => {
-    if (props.onOpenTask) return props.onOpenTask(task, options);
+    if (props.onOpenTask) {
+      const opened = props.onOpenTask(task, options);
+      if (opened) markTaskSeen(task.id);
+      return opened;
+    }
     if (!opensInline(options)) return false;
     if (!selectPreview.canSelect(taskSelection(task.id))) return true;
+    markTaskSeen(task.id);
     fireAndForget(
       navigate(
         { route: taskDetailRoute, params: { taskId: task.id } },

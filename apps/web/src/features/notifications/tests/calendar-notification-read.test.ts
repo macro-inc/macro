@@ -1,8 +1,10 @@
-import { markCalendarNotificationSeenOnOpen } from '@app/features/calendar/mark-event-notifications-seen';
+vi.mock('@queries/email/read-state', () => ({ markEmailThreadSeen: vi.fn() }));
+
 import { withEntityNotifications } from '@app/features/soup/entity-notifications';
 import type { CalendarEventEntity } from '@entity/types/entity';
 import { unreadFilterFn } from '@entity/utils/filter';
 import { Telemetry } from '@macro-inc/observability';
+import { markRowNotificationsSeenOnOpen } from '@notifications/mark-row-seen';
 import type { ConnectionGatewayWebsocket } from '@service-connection/websocket';
 import { createRoot } from 'solid-js';
 import { afterEach, describe, expect, it, vi } from 'vitest';
@@ -105,13 +107,10 @@ describe('opening calendar notifications', () => {
       dispose,
     }));
     try {
-      markCalendarNotificationSeenOnOpen(
-        { ...event, notifications: [] },
-        source
-      );
+      markRowNotificationsSeenOnOpen({ ...event, notifications: [] }, source);
       await reported.promise;
       expect(telemetry).toHaveBeenCalledWith(error, {
-        surface: 'calendar-notification-read',
+        surface: 'row-notification-read',
       });
     } finally {
       dispose();
@@ -140,7 +139,7 @@ describe('opening calendar notifications', () => {
       const rendered = withEntityNotifications(row, source);
       try {
         expect(unreadFilterFn(rendered)).toBe(true);
-        markCalendarNotificationSeenOnOpen(row, source);
+        markRowNotificationsSeenOnOpen(row, source);
         expect(unreadFilterFn(rendered)).toBe(false);
         expect(mocks.seen).toHaveBeenLastCalledWith({
           notificationIds: [`pending-${shape}`],
@@ -173,13 +172,13 @@ describe('opening calendar notifications', () => {
       source
     );
     try {
-      markCalendarNotificationSeenOnOpen(row, source);
+      markRowNotificationsSeenOnOpen(row, source);
       expect(unreadFilterFn(row)).toBe(false);
       pending.reject(new Error('offline'));
       await reported.promise;
       expect(unreadFilterFn(row)).toBe(true);
       mocks.seen.mockResolvedValueOnce(undefined);
-      markCalendarNotificationSeenOnOpen(row, source);
+      markRowNotificationsSeenOnOpen(row, source);
       expect(unreadFilterFn(row)).toBe(false);
     } finally {
       dispose();

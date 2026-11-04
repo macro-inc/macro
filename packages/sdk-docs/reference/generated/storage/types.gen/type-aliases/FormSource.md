@@ -1,6 +1,6 @@
 # Type Alias: FormSource
 
-> **FormSource** = \{ `isHiddenInDrive?`: `boolean`; `kind`: `"new"`; \} \| \{ `databaseId`: `string`; `kind`: `"table"`; `tableId`: `string`; \}
+> **FormSource** = \{ `anonymous?`: `boolean`; `isHiddenInDrive?`: `boolean`; `kind`: `"new"`; \} \| \{ `databaseId`: `string`; `kind`: `"table"`; `tableId`: `string`; \}
 
 Where a new form's responses go.
 
@@ -8,10 +8,11 @@ Where a new form's responses go.
 
 ### Type Literal
 
-\{ `isHiddenInDrive?`: `boolean`; `kind`: `"new"`; \}
+\{ `anonymous?`: `boolean`; `isHiddenInDrive?`: `boolean`; `kind`: `"new"`; \}
 
 | Name | Type | Description |
 | ------ | ------ | ------ |
+| `anonymous?` | `boolean` | Make the form anonymous from the start: its table gets no Respondent column. |
 | `isHiddenInDrive?` | `boolean` | Keep the form, and the database made for it, out of Drive, as for a channel poll. |
 | `kind` | `"new"` | - |
 

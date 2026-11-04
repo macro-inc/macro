@@ -6,6 +6,7 @@ export type AuthUser = {
   id: string;
   email: string | undefined;
   tutorialComplete: boolean;
+  isAgent: boolean;
 };
 
 export type AuthSession =
@@ -50,9 +51,12 @@ export type AuthContext = {
   session: Accessor<AuthSession>;
   /** Leaves for the identity provider; on web the page navigates away. */
   startSso(provider: SsoProvider, intent: AuthIntent): Promise<void>;
+  /** Whether the email step offers the "I'm an agent" toggle. */
+  agentSignupEnabled: Accessor<boolean>;
   sendEmailCode(input: {
     email: string;
     password?: string;
+    isAgent: boolean;
   }): Promise<SendCodeResult>;
   verifyEmailCode(input: {
     email: string;

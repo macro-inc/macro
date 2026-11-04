@@ -46,4 +46,13 @@ pub enum RefreshEmailEvent {
         completed_threads: i32,
         total_threads: i32,
     },
+    /// A Focus classification was stored for a thread in `link_id`, so its
+    /// readers read their Focus list again. `traceparent` is the W3C trace
+    /// context of the classification, for that read to join. Coalesced by the
+    /// sender; carries nothing about the mail.
+    FocusUpdated {
+        link_id: Uuid,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        traceparent: Option<String>,
+    },
 }

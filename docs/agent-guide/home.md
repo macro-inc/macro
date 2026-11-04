@@ -170,6 +170,14 @@ arrow-key browsing keeps it open. Preview headers start with **Home >**. Clickin
 sidebar visibility. Use the hamburger to reopen the feed. Mobile continues to
 show the activity list alone.
 
+Project rows, including unread discussion notifications, open the project Overview
+inside Home on desktop. The preview keeps the Home return breadcrumb, project
+properties, description, and discussion; a discussion notification targets its
+message. Overview/Tasks tabs stay inside the Home preview, and reloading its URL
+restores the section and discussion target. Shift-click still opens the project
+in a split; touch opens the full-screen project page. Verify clicking an unread
+project row, switching tabs, returning Home, and reopening the same comment.
+
 Desktop previews use the same header controls as their standalone views, with
 the **Home >** return breadcrumb added. Calendar shares its date, search,
 navigation, view, and New controls; email shares its action, navigation, AI/task,

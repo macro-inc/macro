@@ -1,0 +1,23 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            SELECT co.id\n            FROM crm_companies co\n            JOIN crm_domains d ON d.company_id = co.id\n            WHERE co.team_id = $1\n              AND d.team_id = $1\n              AND LOWER(d.domain) = $2\n            FOR UPDATE OF co\n            ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Uuid"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Text"
+      ]
+    },
+    "nullable": [
+      false
+    ]
+  },
+  "hash": "8550064e166ca4909d4ed3ef21d96f9769d9db55c1d48677b82103d805e619c5"
+}

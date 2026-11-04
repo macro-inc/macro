@@ -14,6 +14,10 @@ const SPLIT_DOWN: &str = include_str!(concat!(
     env!("CARGO_MANIFEST_DIR"),
     "/../macro_db_client/migrations/20261005183743_separate_database_entity.down.sql"
 ));
+const FOLDERS_UP: &str = include_str!(concat!(
+    env!("CARGO_MANIFEST_DIR"),
+    "/../macro_db_client/migrations/20261102210628_databases_in_folders.sql"
+));
 const WEBHOOKS_DOWN: &str = include_str!(concat!(
     env!("CARGO_MANIFEST_DIR"),
     "/../macro_db_client/migrations/20261014153433_database_webhooks.down.sql"
@@ -205,6 +209,11 @@ async fn schema_cutover_discards_database_content_and_allows_a_fresh_start(pool:
         .await
         .unwrap();
     sqlx::raw_sql(SPLIT_UP)
+        .execute(&mut *transaction)
+        .await
+        .unwrap();
+    // The recreated entity table needs the later folder column back.
+    sqlx::raw_sql(FOLDERS_UP)
         .execute(&mut *transaction)
         .await
         .unwrap();

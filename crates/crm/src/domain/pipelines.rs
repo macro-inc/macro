@@ -8,8 +8,8 @@ use bot_id::BotId;
 use chrono::{DateTime, Utc};
 use databases::domain::{
     models::{
-        AppliedOps, ColumnDetail, ColumnId, ColumnProtection, DatabaseId, OpBatch, RowId,
-        TableDetail, TableId, Viewer,
+        AppliedOps, CardPosition, ColumnDetail, ColumnId, ColumnProtection, DatabaseId, OpBatch,
+        RowId, TableDetail, TableId, ViewId, Viewer,
     },
     provisioning::{ProvisionedColumn, StorageBlueprint},
     storage::{DatabaseStorageService, StorageRow, StorageRows, StorageRowsQuery},
@@ -258,6 +258,12 @@ pub trait PipelineRepo: Send + Sync + 'static {
 
 /// Pipeline use cases for HTTP and other driving adapters.
 pub trait PipelineService: Send + Sync + 'static {
+    /// Read a saved board's order through pipeline access and lifecycle checks.
+    fn view_positions(
+        &self,
+        receipt: EntityAccessReceipt<ViewAccessLevel>,
+        view: ViewId,
+    ) -> impl Future<Output = Result<Vec<CardPosition>, PipelineError>> + Send;
     /// Create for the authenticated team member.
     fn create(
         &self,
@@ -796,6 +802,25 @@ where
             .set_trashed(pipeline.id, trashed)
             .await
             .map_err(storage)
+    }
+
+    #[tracing::instrument(name = "crm.board.positions", skip_all, fields(pipeline_id = %receipt.entity().entity_id, view_id = %view), err)]
+    async fn view_positions(
+        &self,
+        receipt: EntityAccessReceipt<ViewAccessLevel>,
+        view: ViewId,
+    ) -> Result<Vec<CardPosition>, PipelineError> {
+        let pipeline = self.pipeline(&receipt).await?;
+        let _guard = self
+            .repo
+            .lock_live(pipeline.id)
+            .await
+            .map_err(storage)?
+            .ok_or(PipelineError::NotFound)?;
+        Ok(self
+            .databases
+            .storage_view_positions(pipeline.database_id, pipeline.table_id, view)
+            .await?)
     }
 
     async fn table(

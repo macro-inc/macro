@@ -4,14 +4,16 @@
  * document_storage_service
  * OpenAPI spec version: 0.1.0
  */
+import type { CreateCrmContactRequestEmail } from './createCrmContactRequestEmail';
 
 /**
  * Request body for `POST /crm/companies/{company_id}/contacts`.
  */
 export interface CreateCrmContactRequest {
   /** The contact's email address, including personal email providers.
-It need not match a company domain. */
-  email: string;
+It need not match a company domain. Optional: omit it to add the
+contact by name only. */
+  email?: CreateCrmContactRequestEmail;
   /** Display name for the contact. */
   name: string;
 }

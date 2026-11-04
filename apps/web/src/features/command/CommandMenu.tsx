@@ -3,6 +3,11 @@ import { useCrmContactDiscovery } from '@app/features/crm/record-adapter';
 import { useAnalytics } from '@app/lib/analytics/analytics-context';
 import { useFeatureFlag } from '@app/lib/analytics/posthog';
 import { t } from '@app/lib/i18n';
+import {
+  beginInteraction,
+  TraceFlow,
+  usePending,
+} from '@app/observability/flow';
 import { globalSplitManager } from '@app/signal/splitLayout';
 import { useSplitLayout } from '@components/app/split-layout/layout';
 import {
@@ -187,13 +192,19 @@ export function CommandMenu() {
       }}
       open={CommandState.isOpen()}
     >
-      <CommandMenuInner
-        depth={2}
-        onSelect={handleSelect}
-        onHint={() => {
-          suppressCloseAutoFocus = true;
-        }}
-      />
+      <TraceFlow
+        name="quick_access.results"
+        key={CommandState.query}
+        attributes={{ 'search.query_length': CommandState.query().length }}
+      >
+        <CommandMenuInner
+          depth={2}
+          onSelect={handleSelect}
+          onHint={() => {
+            suppressCloseAutoFocus = true;
+          }}
+        />
+      </TraceFlow>
     </Dialog>
   );
 }
@@ -443,6 +454,8 @@ function CommandSearchMenu(
       : CommandState.categoryFilter();
 
   const { popoverSplit } = useSplitLayout();
+  const canOpenInNewSplit = () =>
+    globalSplitManager()?.canAppendSplit() ?? false;
 
   const [attachHotkeys, hotkeyScope] = useHotkeyDOMScope('command-menu');
 
@@ -460,6 +473,26 @@ function CommandSearchMenu(
   const pagination = defaultCommandItems?.pagination;
   const isLoadingEntities = () =>
     defaultCommandItems?.isLoadingEntities() ?? false;
+  const isSettling = () => defaultCommandItems?.isSettling() ?? false;
+  usePending('quick_access.sources', isSettling);
+  usePending('quick_access.debounce', () => query() !== CommandState.query());
+  const trackInput = (
+    event: InputEvent & { currentTarget: HTMLTextAreaElement }
+  ) => {
+    const interaction = beginInteraction('quick_access.input', {
+      event,
+      attributes: { 'search.query_length': event.currentTarget.value.length },
+      onFinish: (span) =>
+        span.setAttr('search.result_count', filteredItems().length),
+    });
+    try {
+      interaction.span.run(() =>
+        props.onQueryInput(event.currentTarget, event.isComposing)
+      );
+    } finally {
+      interaction.end();
+    }
+  };
   const listController = createCommandListController({
     items: filteredItems,
     selectedIndex: CommandState.selectedIndex,
@@ -673,6 +706,24 @@ function CommandSearchMenu(
     runWithInputFocused: true,
   });
 
+  // Universal Input mounts its own menu and scope, so there Shift+Enter
+  // stays a newline in its editor.
+  const confirmSplitHotkey = registerHotkey({
+    hotkey: 'shift+enter',
+    scopeId: hotkeyScope,
+    description: () => t('commandMenu.openInNewSplit'),
+    keyDownHandler: (event) => {
+      if (event?.isComposing) return false;
+      const item = selectedItem();
+      if (item) {
+        handleItemAction(item, true);
+        return true;
+      }
+      return false;
+    },
+    runWithInputFocused: true,
+  });
+
   const escapeHotkey = registerHotkey({
     hotkey: 'escape',
     scopeId: hotkeyScope,
@@ -833,7 +884,7 @@ function CommandSearchMenu(
               : t('commandMenu.searchPlaceholder'))
           }
           value={CommandState.query()}
-          onInput={(e) => props.onQueryInput(e.currentTarget, e.isComposing)}
+          onInput={trackInput}
           onCompositionEnd={(e) => props.onQueryInput(e.currentTarget, false)}
           onKeyDown={props.onQueryKeyDown}
           onKeyUp={(e) => props.onQueryKeyUp(e.currentTarget, e.isComposing)}
@@ -934,6 +985,12 @@ function CommandSearchMenu(
               command={confirmHotkey}
               label={t('commandMenu.hintSearch')}
             />
+            <Show when={canOpenInNewSplit()}>
+              <HotkeyHint
+                command={confirmSplitHotkey}
+                label={t('commandMenu.hintSearchInNewSplit')}
+              />
+            </Show>
           </Match>
           <Match when={selectedIsAskAi()}>
             <HotkeyHint
@@ -946,6 +1003,12 @@ function CommandSearchMenu(
               command={confirmHotkey}
               label={t('commandMenu.hintOpen')}
             />
+            <Show when={canOpenInNewSplit()}>
+              <HotkeyHint
+                command={confirmSplitHotkey}
+                label={t('commandMenu.openInNewSplit')}
+              />
+            </Show>
           </Match>
         </Switch>
 
