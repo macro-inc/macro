@@ -22,6 +22,7 @@ export default {
   close: 'Close',
   dismiss: 'Dismiss',
   loading: 'Loading…',
+  loadingConversation: 'Loading conversation',
   delete: 'Delete',
   rename: 'Rename',
   more: 'More',
