@@ -29,7 +29,7 @@ pub fn needs(events: &[CallEvent]) -> Option<Needs> {
     latest.date_connected?;
     let has = |state| events.iter().any(|event| event.state == state);
     let backfill = has(CallState::Backfill);
-    let recap_in_events = has(CallState::RecapSummary) || has(CallState::RecapActionItems);
+    let recap_in_events = has(CallState::RecapSummary) && has(CallState::RecapActionItems);
     Some(Needs {
         transcript: backfill || has(CallState::CallTranscription),
         recap: backfill && !recap_in_events,

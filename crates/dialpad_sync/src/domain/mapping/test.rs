@@ -209,3 +209,42 @@ fn only_a_transcript_notice_fetches_the_transcript() {
         })
     );
 }
+
+#[test]
+fn backfill_fetches_the_missing_recap_component() {
+    for partial in [
+        event("recap_summary", 3, json!({"recap_summary": "Summary"})),
+        event(
+            "recap_action_items",
+            3,
+            json!({"recap_action_items": ["Follow up"]}),
+        ),
+    ] {
+        let events = vec![event("backfill", 2, json!({})), partial];
+        assert!(needs(&events).unwrap().recap);
+        let call = imported_call(
+            &connection(),
+            &events,
+            None,
+            Some(Recap {
+                summary: Some("Summary".into()),
+                action_items: vec!["Follow up".into()],
+            }),
+        )
+        .unwrap();
+        assert_eq!(
+            call.source.metadata["summary"],
+            "Summary\n\n**Action items**\n\n- Follow up"
+        );
+    }
+    let events = vec![
+        event("backfill", 2, json!({})),
+        event("recap_summary", 3, json!({"recap_summary": "Summary"})),
+        event(
+            "recap_action_items",
+            4,
+            json!({"recap_action_items": ["Follow up"]}),
+        ),
+    ];
+    assert!(!needs(&events).unwrap().recap);
+}
