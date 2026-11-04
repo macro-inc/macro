@@ -83,6 +83,12 @@ otherwise); its backend-free regression opens it, scrolls to the last group,
 searches, and picks by keyboard:
 `bunx playwright test --config src/lib/core/component/Emoji/browser-test/playwright.config.ts`.
 
+Focus rows have a backend-free browser regression over the real row and mapping
+at wide, one-line, stacked, phone, and tablet widths: one reason per row, no
+extra height or lost subject, touch rows of at least 44px, and the importance
+meter only under its sort:
+`bunx playwright test --config src/features/email-view/browser-test/playwright.config.ts`.
+
 Discussion link scrolling has a backend-free browser regression:
 `bunx playwright test --config src/lib/core/messages/browser-test/playwright.config.ts`.
 
@@ -164,6 +170,9 @@ boosts (Cmd+K's channel and DM boosts) order rows within those groups and never
 lift a row past a better name match. The one exception: Cmd+K then keeps Macro
 users and DMs ahead of CRM contacts across the people positions, whatever their
 match. Tune name relevance there for every menu.
+Soup's local search pool (`createSearchState`) stays lazy: it builds only when
+local search has text. Measure Quick Access ranking at scale with the
+[scale fixture](src/features/command/browser-test/README.md).
 Cmd+K and mobile name search widen the first group: a query equal to the first
 word of a DM or person name counts as exact, so a person's first name reaches
 their full-name DM. `commaSeparatedChannelMatch` (Cmd+K, mobile name search,

@@ -14531,11 +14531,13 @@ version = "0.1.0"
 dependencies = [
  "anyhow",
  "chrono",
+ "hyper 1.9.0",
  "macro_entrypoint",
  "models_opensearch",
  "models_search_cursor",
  "opensearch",
  "opensearch_query_builder",
+ "reqwest 0.13.4",
  "serde",
  "serde_json",
  "strum 0.27.2",
