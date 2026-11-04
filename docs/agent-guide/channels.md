@@ -531,7 +531,7 @@ for the user to confirm a composer card). For an event with attendees the bot is
 ask for confirmation in the thread first, since Google sends the invitations the moment the
 event is created — no invitation goes out from the initial request. It cannot draft or send
 email at all. A bot or agent reply posted for a person shares, as that person, the linked items
-(chips or attachments) that the replying bot created for them while answering: those with a
+(chips, attachments, or forms presented as cards in the reply's steps) that the replying bot created for them while answering: those with a
 `created` activity row by that bot on the person's behalf since the person's latest message in
 the thread before the reply, or, for a bot message that starts its own thread (a poll card
 posted top-level), their latest message in the channel. Forms an agent creates through code
