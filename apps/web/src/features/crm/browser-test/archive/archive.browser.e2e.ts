@@ -188,6 +188,16 @@ test('Team Visible and Archived are exclusive and preserve scoped search', async
   await page.evaluate(() => window.archiveFixture.setRole('member'));
   await expect(filter).toContainText('Visible');
   await page.goto('/?kind=company&team&companyArchived&legacyParent');
+  await expect(
+    page.getByRole('heading', { name: 'No contacts yet' })
+  ).toBeVisible();
+  await expect(
+    page.getByRole('button', {
+      name: 'Add contact',
+      exact: true,
+      disabled: false,
+    })
+  ).toHaveCount(0);
   await filter.click();
   await page
     .getByRole('menuitemradio', { name: 'Archived', exact: true })

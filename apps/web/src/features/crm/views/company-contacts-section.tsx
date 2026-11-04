@@ -116,7 +116,7 @@ export function CompanyContactsSection(props: {
     );
   });
   const createContact = () => {
-    if (props.company)
+    if (props.company && !props.company.hidden)
       context.openCreateContact({ companyId: props.company.id });
   };
 
@@ -156,12 +156,12 @@ export function CompanyContactsSection(props: {
                 <CrmListEmpty
                   title={archived() ? 'No archived people' : 'No contacts yet'}
                   description={
-                    archived()
+                    archived() || props.company?.hidden
                       ? undefined
                       : 'Add a contact to this company to see them here.'
                   }
                   action={
-                    props.company && !archived()
+                    props.company && !props.company.hidden && !archived()
                       ? { label: 'Add contact', onClick: createContact }
                       : undefined
                   }

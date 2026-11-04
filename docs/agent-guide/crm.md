@@ -267,7 +267,7 @@ fills the row beside the filter button, or the whole row without filters.
 Email importance and inbox choices open in the shared filter drawer.
 Section creation actions appear at the bottom right above the navigation dock,
 replacing the default app-wide action: Add contact, New email, New note, New task,
-New call, or New database. Add contact is available once the company is loaded,
+New call, or New database. Add contact is available once the company is loaded and visible,
 including companies without a domain; contact emails may use any valid domain.
 Email-sync and database gates, recipients, and task associations still apply. With company email
 sync off, New email stays visible but disabled; New company must not replace it.

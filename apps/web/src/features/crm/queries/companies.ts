@@ -328,6 +328,8 @@ export function useSetCompanyHiddenMutation(deps: CrmRecordDependencies) {
           span.setAttr('crm.hidden', hidden);
           try {
             const cacheWrite = prepareCrmVisibilityWrite();
+            // The write returns no affected contact IDs. A stale or empty roster
+            // would leave cascaded contacts eligible in normalized search.
             const company = await throwOnErr(() =>
               deps.storage.getCompany({ companyId })
             );
