@@ -240,16 +240,11 @@ export class SyncEngine<S extends GenericRootSchema, D> {
       if (generation !== this.lifecycleGeneration) return false;
       this.log('info', 'engine.reset: starting');
       // The snapshot replaces this document, and this peer's unsent edits
-      // can't be merged into it locally afterwards. Keep the document until
-      // the server has them; the next failed import retries the reset. A
-      // read-only peer could never deliver them, so it resets regardless.
-      if (!this.readonly() && !(await this.deliverUnsentEdits())) {
-        this.log(
-          'warn',
-          'engine.reset: unsent edits not delivered, kept the document'
-        );
-        return false;
-      }
+      // can't be merged into it locally afterwards; deliver them first so the
+      // server's snapshot holds them. Any the server doesn't acknowledge stay
+      // in the WAL for later delivery (the canvas replays them onto the
+      // replacement).
+      await this.flushUnsentEdits();
       if (generation !== this.lifecycleGeneration) return false;
       const snapshot = await (snapshotThunk ?? this.defaultSnapshotThunk)();
       if (generation !== this.lifecycleGeneration) return false;
@@ -284,12 +279,11 @@ export class SyncEngine<S extends GenericRootSchema, D> {
     }
   }
 
-  private async deliverUnsentEdits(): Promise<boolean> {
+  private async flushUnsentEdits(): Promise<void> {
     try {
-      return await this.syncs.wal.deliverAll();
+      await this.syncs.wal.flushPending();
     } catch {
       // The WAL reports its own failures.
-      return false;
     }
   }
 
