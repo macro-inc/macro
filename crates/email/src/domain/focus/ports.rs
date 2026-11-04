@@ -29,9 +29,9 @@ pub trait FocusStore: Send + Sync + 'static {
     /// already stored. Returns whether it was stored.
     fn save(&self, record: &FocusRecord) -> impl Future<Output = Result<bool, Report>> + Send;
 
-    /// Inbox signal threads with mail since `since` and no classification of
-    /// their latest message, newest first, from inboxes whose address is at
-    /// one of `domains`.
+    /// Inbox threads that may belong in Focus with mail since `since` and no
+    /// classification of their latest message under the current rule, newest
+    /// first, from inboxes whose address is at one of `domains`.
     fn stale_threads(
         &self,
         since: DateTime<Utc>,
@@ -40,20 +40,24 @@ pub trait FocusStore: Send + Sync + 'static {
     ) -> impl Future<Output = Result<Vec<StaleThread>, Report>> + Send;
 
     /// The owner's Focus threads still in the inbox with mail since `since`,
-    /// highest priority first: importance, halved for every 2 days since the
-    /// latest inbound mail.
+    /// newest first by latest message time, in either direction. Threads whose
+    /// owner has been awaiting a reply since at or before `waiting_before` count.
     fn focus_thread_ids(
         &self,
         owner: &MacroUserIdStr<'static>,
         since: DateTime<Utc>,
+        waiting_before: DateTime<Utc>,
         limit: i64,
     ) -> impl Future<Output = Result<Vec<Uuid>, Report>> + Send;
 
-    /// Stored classifications of the owner's threads among `thread_ids`.
+    /// Classifications of the owner's threads among `thread_ids`, as they stand
+    /// now: who wrote last settles the labels, and a thread whose owner has been
+    /// awaiting a reply since at or before `waiting_before` is in Focus.
     fn focus_for_threads(
         &self,
         owner: &MacroUserIdStr<'static>,
         thread_ids: &[Uuid],
+        waiting_before: DateTime<Utc>,
     ) -> impl Future<Output = Result<HashMap<Uuid, ThreadFocus>, Report>> + Send;
 }
 

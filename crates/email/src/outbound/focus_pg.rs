@@ -9,8 +9,9 @@ use sqlx::PgPool;
 use uuid::Uuid;
 
 use crate::domain::focus::{
-    FocusCategory, FocusInbox, FocusMail, FocusMessage, FocusRecord, FocusStore, SentNote,
-    StaleThread, ThreadFocus,
+    CalendarPart, FOCUS_RULE_VERSION, FocusAnswers, FocusCategory, FocusInbox, FocusMail,
+    FocusMessage, FocusRecord, FocusStore, SentNote, StaleThread, StoredClassification,
+    ThreadFocus,
 };
 
 /// Most recent messages read per thread.
@@ -64,7 +65,22 @@ impl FocusPgRepository {
                         )
                        OR (LOWER(h->>'name') = 'precedence'
                            AND LOWER(h->>'value') IN ('bulk', 'list', 'junk'))
-                ) AS "bulk!"
+                ) AS "bulk!",
+                EXISTS (
+                    SELECT 1 FROM email_message_calendar_invites i
+                    WHERE i.message_id = m.id
+                      AND i.snapshot->>'method' IS DISTINCT FROM 'reply'
+                ) AS "calendar_scheduling!",
+                EXISTS (
+                    SELECT 1 FROM email_message_calendar_invites i
+                    WHERE i.message_id = m.id AND i.snapshot->>'method' = 'reply'
+                ) AS "calendar_rsvp!",
+                EXISTS (
+                    SELECT 1 FROM email_attachments a
+                    WHERE a.message_id = m.id
+                      AND (a.filename ILIKE '%.ics'
+                           OR a.mime_type IN ('text/calendar', 'application/ics'))
+                ) AS "calendar_file!"
             FROM email_messages m
             LEFT JOIN email_contacts c ON c.id = m.from_contact_id
             WHERE m.thread_id = $1
@@ -85,19 +101,31 @@ impl FocusPgRepository {
         .await?;
         let mut messages = rows
             .into_iter()
-            .map(|row| FocusMessage {
-                id: row.id,
-                at: row.at,
-                is_sent: row.is_sent,
-                from_email: row.from_email,
-                from_name: row.from_name,
-                to: row.to_emails,
-                cc: row.cc_emails,
-                subject: row.subject,
-                has_attachments: row.has_attachments,
-                bulk: row.bulk,
-                body: row.body,
-                snippet: row.snippet,
+            .map(|row| {
+                let calendar_part = if row.calendar_scheduling {
+                    Some(CalendarPart::Scheduling)
+                } else if row.calendar_rsvp {
+                    Some(CalendarPart::Rsvp)
+                } else if row.calendar_file {
+                    Some(CalendarPart::Unparsed)
+                } else {
+                    None
+                };
+                FocusMessage {
+                    id: row.id,
+                    at: row.at,
+                    is_sent: row.is_sent,
+                    from_email: row.from_email,
+                    from_name: row.from_name,
+                    to: row.to_emails,
+                    cc: row.cc_emails,
+                    subject: row.subject,
+                    has_attachments: row.has_attachments,
+                    bulk: row.bulk,
+                    calendar_part,
+                    body: row.body,
+                    snippet: row.snippet,
+                }
             })
             .collect::<Vec<_>>();
         messages.reverse();
@@ -116,7 +144,9 @@ impl FocusPgRepository {
         // close correspondent can have thousands of messages.
         let rows = sqlx::query!(
             r#"
-            SELECT newest.recipient AS "recipient!", LEFT(m.body_text, $3) AS body
+            SELECT newest.recipient AS "recipient!",
+                   COALESCE(newest.internal_date_ts, m.created_at) AS "at!",
+                   LEFT(m.body_text, $3) AS body
             FROM (
                 SELECT LOWER(rc.email_address) AS recipient, m.id, m.internal_date_ts
                 FROM email_contacts rc
@@ -143,6 +173,7 @@ impl FocusPgRepository {
             .into_iter()
             .map(|row| SentNote {
                 recipient: row.recipient,
+                at: row.at,
                 body: row.body,
             })
             .collect())
@@ -155,7 +186,10 @@ impl FocusStore for FocusPgRepository {
         let Some(row) = sqlx::query!(
             r#"
             SELECT t.id, t.link_id, t.is_signal, t.inbox_visible, el.macro_id, el.email_address,
-                   f.classified_message_id AS "classified_message_id?"
+                   f.classified_message_id AS "classified_message_id?",
+                   f.rule_version AS "rule_version?",
+                   f.scores AS "scores?",
+                   f.model AS "model?"
             FROM email_threads t
             JOIN email_links el ON el.id = t.link_id
             LEFT JOIN email_thread_focus f ON f.thread_id = t.id
@@ -168,6 +202,28 @@ impl FocusStore for FocusPgRepository {
         else {
             return Ok(None);
         };
+        let classified = match (
+            row.classified_message_id,
+            row.rule_version,
+            row.scores,
+            row.model,
+        ) {
+            (Some(message_id), Some(rule_version), Some(scores), Some(model)) => {
+                // Answers that no longer decode just go back to the classifier.
+                let answers = serde_json::from_value::<FocusAnswers>(scores)
+                    .inspect_err(|_| {
+                        tracing::warn!(thread_id = %row.id, "undecodable focus answers stored");
+                    })
+                    .ok();
+                Some(StoredClassification {
+                    message_id,
+                    rule_version,
+                    answers,
+                    model,
+                })
+            }
+            _ => None,
+        };
         Ok(Some(FocusInbox {
             thread_id: row.id,
             link_id: row.link_id,
@@ -175,7 +231,7 @@ impl FocusStore for FocusPgRepository {
             owner_email: row.email_address.to_lowercase(),
             is_signal: row.is_signal,
             inbox_visible: row.inbox_visible,
-            classified_message_id: row.classified_message_id,
+            classified,
         }))
     }
 
@@ -206,9 +262,10 @@ impl FocusStore for FocusPgRepository {
             r#"
             INSERT INTO email_thread_focus (
                 thread_id, link_id, classified_message_id, classified_message_ts, is_focus,
-                category, importance, needs_reply, needs_follow_up, scores, model, classified_at
+                category, importance, needs_reply, needs_follow_up, scores, model, classified_at,
+                rule_version, pinned, awaiting_reply
             )
-            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
+            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15)
             ON CONFLICT (thread_id) DO UPDATE SET
                 link_id = EXCLUDED.link_id,
                 classified_message_id = EXCLUDED.classified_message_id,
@@ -220,7 +277,10 @@ impl FocusStore for FocusPgRepository {
                 needs_follow_up = EXCLUDED.needs_follow_up,
                 scores = EXCLUDED.scores,
                 model = EXCLUDED.model,
-                classified_at = EXCLUDED.classified_at
+                classified_at = EXCLUDED.classified_at,
+                rule_version = EXCLUDED.rule_version,
+                pinned = EXCLUDED.pinned,
+                awaiting_reply = EXCLUDED.awaiting_reply
             WHERE email_thread_focus.classified_message_ts <= EXCLUDED.classified_message_ts
             "#,
             record.thread_id,
@@ -235,6 +295,9 @@ impl FocusStore for FocusPgRepository {
             scores,
             record.model,
             record.classified_at,
+            FOCUS_RULE_VERSION,
+            record.verdict.pinned,
+            record.verdict.awaiting_reply,
         )
         .execute(&self.0)
         .await?;
@@ -258,20 +321,26 @@ impl FocusStore for FocusPgRepository {
             LEFT JOIN email_thread_focus f ON f.thread_id = t.id
             WHERE LOWER(SPLIT_PART(el.email_address, '@', 2)) = ANY($2)
               AND t.inbox_visible
-              AND t.is_signal
               AND t.latest_inbound_message_ts IS NOT NULL
-              AND t.latest_inbound_message_ts >= $1
+              AND GREATEST(t.latest_inbound_message_ts, t.latest_outbound_message_ts) >= $1
+              AND (
+                  t.is_signal
+                  OR t.has_calendar_attachment
+                  OR t.latest_outbound_message_ts > t.latest_inbound_message_ts
+              )
               AND (
                   f.thread_id IS NULL
+                  OR f.rule_version < $4
                   OR f.classified_message_ts
                      < GREATEST(t.latest_inbound_message_ts, t.latest_outbound_message_ts)
               )
-            ORDER BY t.latest_inbound_message_ts DESC
+            ORDER BY GREATEST(t.latest_inbound_message_ts, t.latest_outbound_message_ts) DESC
             LIMIT $3
             "#,
             since,
             domains,
             limit,
+            FOCUS_RULE_VERSION,
         )
         .fetch_all(&self.0)
         .await?;
@@ -284,21 +353,19 @@ impl FocusStore for FocusPgRepository {
             .collect())
     }
 
-    #[tracing::instrument(skip(self), err)]
+    #[tracing::instrument(skip(self), fields(threads = tracing::field::Empty), err)]
     async fn focus_thread_ids(
         &self,
         owner: &MacroUserIdStr<'static>,
         since: DateTime<Utc>,
+        waiting_before: DateTime<Utc>,
         limit: i64,
     ) -> Result<Vec<Uuid>, Report> {
-        // GREATEST floors importance at 1 below: log(0) is an error.
-        Ok(sqlx::query_scalar!(
+        // The waiting test here restates `focus_for_threads`; change both together.
+        let thread_ids = sqlx::query_scalar!(
             r#"
             SELECT f.thread_id
             FROM email_thread_focus f
-            -- Joining on the inbox too lets the planner walk each inbox's recent
-            -- signal threads (idx_email_threads_signal_view) instead of every
-            -- Focus row the inbox ever had.
             JOIN email_threads t ON t.id = f.thread_id AND t.link_id = f.link_id
             WHERE f.link_id IN (
                     -- The owner's inboxes, as Soup lists them: their own and linked ones.
@@ -306,38 +373,77 @@ impl FocusStore for FocusPgRepository {
                     UNION
                     SELECT mul.link_id FROM macro_user_links mul WHERE mul.primary_macro_id = $1
                 )
-              AND f.is_focus
+              -- Both ways in, indexed by email_thread_focus_list_idx and
+              -- email_thread_focus_waiting_idx.
+              AND (f.is_focus OR f.awaiting_reply)
               AND t.inbox_visible
-              AND t.is_signal
-              AND t.latest_inbound_message_ts >= $2
-            -- Priority: importance, halved for every 2 days (172800 s) since the
-            -- latest inbound mail. As a sum of logs the key doesn't depend on the
-            -- current time, so the order only changes when new mail arrives.
-            ORDER BY log(2.0, GREATEST(f.importance, 1))
-                         + extract(epoch FROM t.latest_inbound_message_ts) / 172800 DESC,
-                     t.latest_inbound_message_ts DESC,
+              AND GREATEST(t.latest_inbound_message_ts, t.latest_outbound_message_ts) >= $2
+              AND (
+                  (f.is_focus AND (t.is_signal OR f.pinned))
+                  OR (
+                      -- Nothing reclassifies a thread as it ages, so the wait is
+                      -- measured here, and a newer reply ends it before the worker
+                      -- gets to the thread.
+                      f.awaiting_reply
+                      AND f.classified_message_ts <= $3
+                      AND t.latest_inbound_message_ts <= f.classified_message_ts
+                  )
+              )
+            -- Newest first, so the limit keeps the newest threads.
+            ORDER BY GREATEST(t.latest_inbound_message_ts, t.latest_outbound_message_ts) DESC,
                      f.thread_id
-            LIMIT $3
+            LIMIT $4
             "#,
             owner.as_ref(),
             since,
+            waiting_before,
             limit,
         )
         .fetch_all(&self.0)
-        .await?)
+        .await?;
+        tracing::Span::current().record("threads", thread_ids.len());
+        Ok(thread_ids)
     }
 
-    #[tracing::instrument(skip(self, thread_ids), fields(threads = thread_ids.len()), err)]
+    #[tracing::instrument(
+        skip(self, thread_ids),
+        fields(threads = thread_ids.len(), waiting = tracing::field::Empty),
+        err
+    )]
     async fn focus_for_threads(
         &self,
         owner: &MacroUserIdStr<'static>,
         thread_ids: &[Uuid],
+        waiting_before: DateTime<Utc>,
     ) -> Result<HashMap<Uuid, ThreadFocus>, Report> {
+        // The labels are settled here rather than trusted from the row: who
+        // wrote last can move before the worker reaches the thread, and rows
+        // from an older rule can carry a follow-up on someone else's message,
+        // which reads as a reply needed.
         let rows = sqlx::query!(
             r#"
-            SELECT f.thread_id, f.is_focus, f.category, f.importance, f.needs_reply,
-                   f.needs_follow_up, f.classified_at
+            SELECT f.thread_id, f.category, f.importance, f.classified_at,
+                   f.is_focus OR now_state.waiting AS "is_focus!",
+                   (f.needs_reply OR f.needs_follow_up) AND NOT now_state.owner_latest
+                       AS "needs_reply!",
+                   (f.needs_follow_up AND now_state.owner_latest) OR now_state.waiting
+                       AS "needs_follow_up!",
+                   now_state.waiting AS "waiting!"
             FROM email_thread_focus f
+            JOIN email_threads t ON t.id = f.thread_id AND t.link_id = f.link_id
+            CROSS JOIN LATERAL (
+                SELECT COALESCE(
+                           t.latest_outbound_message_ts >= t.latest_inbound_message_ts,
+                           t.latest_outbound_message_ts IS NOT NULL
+                       ) AS owner_latest,
+                       COALESCE(
+                           f.awaiting_reply
+                           AND t.inbox_visible
+                           AND f.classified_message_ts <= $3
+                           AND t.latest_inbound_message_ts <= f.classified_message_ts,
+                           false
+                       ) AS waiting
+            ) now_state
             WHERE f.thread_id = ANY($1)
               AND f.link_id IN (
                   SELECT el.id FROM email_links el WHERE el.macro_id = $2
@@ -347,9 +453,12 @@ impl FocusStore for FocusPgRepository {
             "#,
             thread_ids,
             owner.as_ref(),
+            waiting_before,
         )
         .fetch_all(&self.0)
         .await?;
+        let waiting = rows.iter().filter(|row| row.waiting).count();
+        tracing::Span::current().record("waiting", waiting);
         Ok(rows
             .into_iter()
             .filter_map(|row| {

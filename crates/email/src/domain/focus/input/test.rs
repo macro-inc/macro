@@ -16,6 +16,7 @@ fn message(body: &str, is_sent: bool) -> FocusMessage {
         subject: Some("Contract".to_owned()),
         has_attachments: false,
         bulk: false,
+        calendar_part: None,
         body: Some(body.to_owned()),
         snippet: Some("snippet".to_owned()),
     }
@@ -30,7 +31,7 @@ fn thread(messages: Vec<FocusMessage>) -> FocusThread {
         owner_email: "owner@acme.example".to_owned(),
         is_signal: true,
         inbox_visible: true,
-        classified_message_id: None,
+        classified: None,
         messages,
         sent_notes: Vec::new(),
     }
@@ -43,6 +44,32 @@ fn new_text_drops_quoted_history() {
     assert_eq!(new_text("> only quoted\n> lines"), "");
     assert_eq!(new_text("Thanks!\n\nSent from my iPhone\nmore"), "Thanks!");
     assert_eq!(new_text("Hi\n-----Original Message-----\nFrom: x"), "Hi");
+}
+
+#[test]
+fn closing_replies_owe_nobody_an_answer() {
+    for reply in [
+        "Thanks!",
+        "Thank you so much",
+        "thx",
+        "Got it, thanks",
+        "Sounds good.",
+        "Thanks Ava!\n\nOwner\nFounder, Acme",
+        "No thanks",
+    ] {
+        assert!(is_closing_reply(reply), "{reply}");
+    }
+    for reply in [
+        "",
+        "Thanks, can you send the contract?",
+        "Thanks!\n\nAlso, when can you start?",
+        "Thanks for the intro. I would love to hear how the pilot went and what you would change.",
+        "Thanksgiving works for us",
+        "Okay to send the draft Monday morning to the whole team",
+        "Here is the contract to sign",
+    ] {
+        assert!(!is_closing_reply(reply), "{reply}");
+    }
 }
 
 #[test]

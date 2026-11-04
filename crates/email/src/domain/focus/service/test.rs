@@ -11,7 +11,8 @@ use uuid::Uuid;
 
 use super::*;
 use crate::domain::focus::models::{
-    FocusCategory, FocusInbox, FocusMail, FocusMessage, FocusThread,
+    CalendarPart, FocusCategory, FocusInbox, FocusMail, FocusMessage, FocusThread, SentNote,
+    StoredClassification,
 };
 
 #[derive(Clone, Default)]
@@ -23,6 +24,8 @@ struct FakeStore {
     stale: Arc<Mutex<Vec<StaleThread>>>,
     stale_domains: Arc<Mutex<Vec<String>>>,
     mail_reads: Arc<Mutex<usize>>,
+    /// The cutoff each list read was given.
+    waiting_before: Arc<Mutex<Vec<DateTime<Utc>>>>,
 }
 
 impl FocusStore for FakeStore {
@@ -39,7 +42,7 @@ impl FocusStore for FakeStore {
                 owner_email: thread.owner_email.clone(),
                 is_signal: thread.is_signal,
                 inbox_visible: thread.inbox_visible,
-                classified_message_id: thread.classified_message_id,
+                classified: thread.classified.clone(),
             }))
     }
 
@@ -75,8 +78,10 @@ impl FocusStore for FakeStore {
         &self,
         _owner: &MacroUserIdStr<'static>,
         _since: DateTime<Utc>,
+        waiting_before: DateTime<Utc>,
         _limit: i64,
     ) -> Result<Vec<Uuid>, Report> {
+        self.waiting_before.lock().unwrap().push(waiting_before);
         Ok(Vec::new())
     }
 
@@ -84,7 +89,9 @@ impl FocusStore for FakeStore {
         &self,
         _owner: &MacroUserIdStr<'static>,
         _thread_ids: &[Uuid],
+        waiting_before: DateTime<Utc>,
     ) -> Result<HashMap<Uuid, ThreadFocus>, Report> {
+        self.waiting_before.lock().unwrap().push(waiting_before);
         Ok(HashMap::new())
     }
 }
@@ -143,7 +150,7 @@ fn thread(owner_email: &str) -> FocusThread {
         owner_email: owner_email.to_owned(),
         is_signal: true,
         inbox_visible: true,
-        classified_message_id: None,
+        classified: None,
         messages: vec![FocusMessage {
             id: Uuid::new_v4(),
             at: Utc.with_ymd_and_hms(2026, 10, 8, 12, 0, 0).unwrap(),
@@ -155,6 +162,7 @@ fn thread(owner_email: &str) -> FocusThread {
             subject: Some("Unpaid invoice".to_owned()),
             has_attachments: false,
             bulk: false,
+            calendar_part: None,
             body: Some("Can you approve the invoice today?".to_owned()),
             snippet: None,
         }],
@@ -194,6 +202,17 @@ fn set_stale(store: &FakeStore, thread_ids: &[Uuid], latest_at: DateTime<Utc>) {
 
 fn noon() -> DateTime<Utc> {
     Utc.with_ymd_and_hms(2026, 10, 8, 12, 0, 0).unwrap()
+}
+
+/// A classification of `thread`'s latest message: Focus low, reply needed.
+fn stored_at(thread: &FocusThread, rule_version: i16) -> StoredClassification {
+    let answers = FocusAnswers::from_probabilities(&[0.1, 0.0, 0.0, 0.0, 0.0, 0.0, 0.9, 0.0]);
+    StoredClassification {
+        message_id: thread.messages.last().unwrap().id,
+        rule_version,
+        answers,
+        model: "jev-earlier".to_owned(),
+    }
 }
 
 #[tokio::test]
@@ -251,7 +270,7 @@ async fn skips_threads_outside_the_signal_inbox_and_up_to_date_ones() {
     archived.inbox_visible = false;
     let archived = insert(&store, archived);
     let mut current = thread("owner@acme.example");
-    current.classified_message_id = Some(current.messages[0].id);
+    current.classified = Some(stored_at(&current, FOCUS_RULE_VERSION));
     let current = insert(&store, current);
     let mut only_sent = thread("owner@acme.example");
     only_sent.messages[0].is_sent = true;
@@ -338,6 +357,7 @@ async fn sweep_classifies_every_stale_thread() {
         SweepReport {
             candidates: 3,
             classified: 2,
+            redecided: 0,
             skipped: 1,
             failed: 0,
             stopped_early: false,
@@ -424,4 +444,218 @@ async fn sweep_stops_when_the_classifier_rejects_everything() {
         classifier.inputs.lock().unwrap().len(),
         MAX_REJECTIONS_IN_A_ROW
     );
+}
+
+#[tokio::test]
+async fn an_older_rule_is_decided_again_without_the_classifier() {
+    let store = FakeStore::default();
+    let classifier = FakeClassifier::answering(Err(FocusClassifierError::Unavailable));
+    let mut legacy = thread("owner@acme.example");
+    legacy.classified = Some(stored_at(&legacy, 0));
+    let id = insert(&store, legacy);
+
+    let outcome = service(&store, &classifier, &["acme.example"])
+        .classify_thread(id)
+        .await
+        .unwrap();
+    let ClassifyOutcome::Redecided(verdict) = outcome else {
+        panic!("expected a new decision, got {outcome:?}");
+    };
+    // The stored answers now read as a reply the owner owes, on a low score.
+    assert!(verdict.is_focus && verdict.pinned && verdict.needs_reply);
+    assert!(classifier.inputs.lock().unwrap().is_empty());
+    let saved = store.saved.lock().unwrap();
+    assert_eq!(saved.len(), 1);
+    assert_eq!(saved[0].model, "jev-earlier");
+    assert_eq!(saved[0].answers.needs_response, 0.9);
+}
+
+#[tokio::test]
+async fn sweep_counts_threads_decided_again_apart_from_classified_ones() {
+    let store = FakeStore::default();
+    let classifier = FakeClassifier::answering(Ok(relevant()));
+    let mut legacy = thread("owner@acme.example");
+    legacy.classified = Some(stored_at(&legacy, 0));
+    let legacy = insert(&store, legacy);
+    let new = insert(&store, thread("owner@acme.example"));
+    set_stale(&store, &[legacy, new], noon());
+
+    let report = service(&store, &classifier, &["acme.example"])
+        .sweep(Duration::days(30), 100)
+        .await
+        .unwrap();
+    assert_eq!((report.classified, report.redecided), (1, 1));
+    assert_eq!(classifier.inputs.lock().unwrap().len(), 1);
+}
+
+#[tokio::test]
+async fn answers_that_no_longer_decode_go_back_to_the_classifier() {
+    let store = FakeStore::default();
+    let classifier = FakeClassifier::answering(Ok(relevant()));
+    let mut unreadable = thread("owner@acme.example");
+    unreadable.classified = Some(StoredClassification {
+        answers: None,
+        ..stored_at(&unreadable, 0)
+    });
+    let id = insert(&store, unreadable);
+
+    let outcome = service(&store, &classifier, &["acme.example"])
+        .classify_thread(id)
+        .await
+        .unwrap();
+    assert!(matches!(outcome, ClassifyOutcome::Classified(_)));
+    assert_eq!(classifier.inputs.lock().unwrap().len(), 1);
+}
+
+#[tokio::test]
+async fn new_mail_goes_to_the_classifier_even_under_an_older_rule() {
+    let store = FakeStore::default();
+    let classifier = FakeClassifier::answering(Ok(relevant()));
+    let mut stale = thread("owner@acme.example");
+    stale.classified = Some(StoredClassification {
+        message_id: Uuid::new_v4(),
+        ..stored_at(&stale, 0)
+    });
+    let id = insert(&store, stale);
+
+    let outcome = service(&store, &classifier, &["acme.example"])
+        .classify_thread(id)
+        .await
+        .unwrap();
+    assert!(matches!(outcome, ClassifyOutcome::Classified(_)));
+    assert_eq!(classifier.inputs.lock().unwrap().len(), 1);
+}
+
+#[tokio::test]
+async fn outside_the_signal_inbox_only_key_mail_reaches_the_classifier() {
+    let store = FakeStore::default();
+    let classifier = FakeClassifier::answering(Ok(relevant()));
+    let service = service(&store, &classifier, &["acme.example"]);
+
+    let mut noise = thread("owner@acme.example");
+    noise.is_signal = false;
+    let noise = insert(&store, noise);
+    assert_eq!(
+        service.classify_thread(noise).await.unwrap(),
+        ClassifyOutcome::NotSignal
+    );
+    assert!(classifier.inputs.lock().unwrap().is_empty());
+
+    let mut rsvp = thread("owner@acme.example");
+    rsvp.is_signal = false;
+    rsvp.messages[0].calendar_part = Some(CalendarPart::Rsvp);
+    let rsvp = insert(&store, rsvp);
+    assert_eq!(
+        service.classify_thread(rsvp).await.unwrap(),
+        ClassifyOutcome::NotSignal
+    );
+    assert!(classifier.inputs.lock().unwrap().is_empty());
+
+    let mut reschedule = thread("owner@acme.example");
+    reschedule.is_signal = false;
+    reschedule.messages[0].calendar_part = Some(CalendarPart::Scheduling);
+    let reschedule = insert(&store, reschedule);
+    let ClassifyOutcome::Classified(verdict) = service.classify_thread(reschedule).await.unwrap()
+    else {
+        panic!("expected the reschedule to be classified");
+    };
+    assert!(verdict.is_focus && verdict.pinned);
+    assert_eq!(verdict.category, FocusCategory::Calendar);
+
+    let mut contact = thread("owner@acme.example");
+    contact.is_signal = false;
+    contact.sent_notes = vec![SentNote {
+        recipient: "ceo@customer.example".to_owned(),
+        at: noon() - Duration::days(7),
+        body: Some("Sending the invoice over now".to_owned()),
+    }];
+    let contact = insert(&store, contact);
+    let ClassifyOutcome::Classified(verdict) = service.classify_thread(contact).await.unwrap()
+    else {
+        panic!("expected the recent contact to be classified");
+    };
+    assert!(verdict.is_focus && verdict.pinned);
+}
+
+#[tokio::test]
+async fn a_thread_the_owner_answered_last_is_classified_outside_the_signal_inbox() {
+    let store = FakeStore::default();
+    // Reads as automated, so only the wait can bring it in.
+    let classifier = FakeClassifier::answering(Ok(vec![0.0, 0.0, 0.9, 0.0, 0.0, 0.0, 0.0, 0.0]));
+    let mut waiting = thread("owner@acme.example");
+    waiting.is_signal = false;
+    let mut reply = waiting.messages[0].clone();
+    reply.id = Uuid::new_v4();
+    reply.at = noon() + Duration::hours(1);
+    reply.is_sent = true;
+    reply.from_email = Some("owner@acme.example".to_owned());
+    reply.to = vec!["ceo@customer.example".to_owned()];
+    reply.body = Some("Can you resend the invoice?".to_owned());
+    waiting.messages.push(reply);
+    let id = insert(&store, waiting);
+
+    let outcome = service(&store, &classifier, &["acme.example"])
+        .classify_thread(id)
+        .await
+        .unwrap();
+    let ClassifyOutcome::Classified(verdict) = outcome else {
+        panic!("expected a classification, got {outcome:?}");
+    };
+    // The list applies the age; the verdict records that it can.
+    assert!(!verdict.is_focus);
+    assert!(verdict.awaiting_reply);
+}
+
+#[tokio::test]
+async fn a_thread_of_only_sent_mail_never_reaches_the_classifier() {
+    let store = FakeStore::default();
+    let classifier = FakeClassifier::answering(Ok(relevant()));
+    let service = service(&store, &classifier, &["acme.example"]);
+
+    // As the projection stores it: never in the inbox, and so not visible.
+    let mut unanswered = thread("owner@acme.example");
+    unanswered.inbox_visible = false;
+    unanswered.messages[0].is_sent = true;
+    unanswered.messages[0].from_email = Some("owner@acme.example".to_owned());
+    unanswered.messages[0].to = vec!["ceo@customer.example".to_owned()];
+    let hidden = insert(&store, unanswered.clone());
+    assert_eq!(
+        service.classify_thread(hidden).await.unwrap(),
+        ClassifyOutcome::NotSignal
+    );
+
+    // Back in the inbox through a reminder, it still has no mail from anyone else.
+    unanswered.thread_id = Uuid::new_v4();
+    unanswered.inbox_visible = true;
+    let returned = insert(&store, unanswered);
+    assert_eq!(
+        service.classify_thread(returned).await.unwrap(),
+        ClassifyOutcome::Missing
+    );
+    assert!(classifier.inputs.lock().unwrap().is_empty());
+    assert!(store.saved.lock().unwrap().is_empty());
+}
+
+#[tokio::test]
+async fn the_lists_apply_a_three_day_wait() {
+    let store = FakeStore::default();
+    let queries = FocusQueries::new(store.clone());
+    let owner = MacroUserIdStr::try_from_email("owner@acme.example").unwrap();
+
+    let before = Utc::now() - Duration::days(FOLLOW_UP_AFTER_DAYS);
+    queries.focus_thread_ids(&owner, 30).await.unwrap();
+    queries
+        .focus_for_threads(&owner, &[Uuid::new_v4()])
+        .await
+        .unwrap();
+    let after = Utc::now() - Duration::days(FOLLOW_UP_AFTER_DAYS);
+
+    let cutoffs = store.waiting_before.lock().unwrap();
+    assert_eq!(cutoffs.len(), 2);
+    assert!(
+        cutoffs
+            .iter()
+            .all(|cutoff| before <= *cutoff && *cutoff <= after)
+    );
+    assert_eq!(FOLLOW_UP_AFTER_DAYS, 3);
 }

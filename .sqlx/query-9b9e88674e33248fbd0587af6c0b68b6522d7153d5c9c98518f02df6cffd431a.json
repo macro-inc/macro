@@ -1,0 +1,25 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            SELECT f.thread_id\n            FROM email_thread_focus f\n            JOIN email_threads t ON t.id = f.thread_id AND t.link_id = f.link_id\n            WHERE f.link_id IN (\n                    -- The owner's inboxes, as Soup lists them: their own and linked ones.\n                    SELECT el.id FROM email_links el WHERE el.macro_id = $1\n                    UNION\n                    SELECT mul.link_id FROM macro_user_links mul WHERE mul.primary_macro_id = $1\n                )\n              -- Both ways in, indexed by email_thread_focus_list_idx and\n              -- email_thread_focus_waiting_idx.\n              AND (f.is_focus OR f.awaiting_reply)\n              AND t.inbox_visible\n              AND GREATEST(t.latest_inbound_message_ts, t.latest_outbound_message_ts) >= $2\n              AND (\n                  (f.is_focus AND (t.is_signal OR f.pinned))\n                  OR (\n                      -- Nothing reclassifies a thread as it ages, so the wait is\n                      -- measured here, and a newer reply ends it before the worker\n                      -- gets to the thread.\n                      f.awaiting_reply\n                      AND f.classified_message_ts <= $3\n                      AND t.latest_inbound_message_ts <= f.classified_message_ts\n                  )\n              )\n            -- Newest first, so the limit keeps the newest threads.\n            ORDER BY GREATEST(t.latest_inbound_message_ts, t.latest_outbound_message_ts) DESC,\n                     f.thread_id\n            LIMIT $4\n            ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "thread_id",
+        "type_info": "Uuid"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Text",
+        "Timestamptz",
+        "Timestamptz",
+        "Int8"
+      ]
+    },
+    "nullable": [
+      false
+    ]
+  },
+  "hash": "9b9e88674e33248fbd0587af6c0b68b6522d7153d5c9c98518f02df6cffd431a"
+}

@@ -26,6 +26,30 @@ const BRUSH_OFF_PHRASES: [&str; 5] = [
     "remove me",
 ];
 
+/// Words in a line that opens with a closing phrase and still only closes.
+const CLOSING_LINE_WORDS: usize = 5;
+/// Openings of a message that ends the exchange ("Thanks!", "Got it"): nobody
+/// owes a reply to one, though unlike a brush-off it says nothing bad about the
+/// relationship.
+const CLOSING_PHRASES: [&str; 16] = [
+    "thanks",
+    "thank you",
+    "many thanks",
+    "thx",
+    "ty",
+    "cheers",
+    "got it",
+    "sounds good",
+    "will do",
+    "noted",
+    "great",
+    "perfect",
+    "awesome",
+    "ok",
+    "okay",
+    "appreciated",
+];
+
 /// The part of a plain-text body above the quoted history.
 pub fn new_text(body: &str) -> String {
     let mut kept = Vec::new();
@@ -61,6 +85,28 @@ pub fn is_dismissive_reply(text: &str) -> bool {
         || BRUSH_OFF_PHRASES
             .iter()
             .any(|phrase| contains_words(&lowered, phrase))
+}
+
+/// Whether a message only ends the exchange, so nobody owes a reply to it:
+/// a brush-off, or a short acknowledgement with no question in it.
+pub fn is_closing_reply(text: &str) -> bool {
+    if is_dismissive_reply(text) {
+        return true;
+    }
+    let lowered = text.to_lowercase();
+    if lowered.contains('?') || lowered.split_whitespace().count() > BRUSH_OFF_WORDS {
+        return false;
+    }
+    let Some(first_line) = lowered.lines().find(|line| !line.trim().is_empty()) else {
+        return false;
+    };
+    let first_line = first_line.trim();
+    first_line.split_whitespace().count() <= CLOSING_LINE_WORDS
+        && CLOSING_PHRASES.iter().any(|phrase| {
+            first_line
+                .strip_prefix(phrase)
+                .is_some_and(|rest| !rest.chars().next().is_some_and(char::is_alphanumeric))
+        })
 }
 
 /// `phrase` appears in `text` as whole words.
