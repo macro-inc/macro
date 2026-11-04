@@ -1250,10 +1250,7 @@ async fn a_past_once_time_is_due_on_save_but_never_rearmed_after_it_ran() {
     let mut config = configuration(false);
     config.trigger = ActionTrigger::Once { at };
     let created = svc
-        .create_action(
-            &user_principal(),
-            CreateScheduledAction::Canonical(config.clone()),
-        )
+        .create_action(&user_principal(), config.clone())
         .await
         .unwrap();
     assert_eq!(created.next_run_at, Some(at));
