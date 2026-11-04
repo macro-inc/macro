@@ -171,3 +171,47 @@ test('routine options carry run visibility and updates that omit it keep it', as
   expect(bodies[0]).toMatchObject({ run_visibility: 'listed' });
   expect(bodies[1]).not.toHaveProperty('run_visibility');
 });
+
+test('a rejected routine create carries the server validation message', async () => {
+  const rejection =
+    'invalid routine task; select a model or agent and provide instructions';
+  globalThis.fetch = Object.assign(
+    async () =>
+      new Response(rejection, {
+        status: 400,
+        headers: { 'content-type': 'text/plain' },
+      }),
+    { preconnect: originalFetch.preconnect },
+  );
+  const macro = new Macro({
+    token: 'user',
+    hosts: { 'scheduled-action': 'https://routines.test' },
+  });
+  await expect(
+    macro.routines.create({
+      name: 'Check in',
+      trigger: { type: 'cron', schedule: '0 */10 * * * *', timezone: 'UTC' },
+      prompt: 'Check in',
+      userPrompt: 'Check in',
+      model: 'model',
+    }),
+  ).rejects.toMatchObject({
+    name: 'MacroApiError',
+    status: 400,
+    message: `Macro API error 400: ${rejection}`,
+    data: rejection,
+  });
+});
+
+test('MacroApiError messages carry the message or error of a JSON body', () => {
+  expect(new MacroApiError(403, { message: 'Forbidden' }).message).toBe(
+    'Macro API error 403: Forbidden',
+  );
+  expect(new MacroApiError(409, { error: 'already running' }).message).toBe(
+    'Macro API error 409: already running',
+  );
+  expect(new MacroApiError(500, {}).message).toBe('Macro API error 500');
+  expect(new MacroApiError(502, 'x'.repeat(600)).message).toBe(
+    `Macro API error 502: ${'x'.repeat(500)}…`,
+  );
+});

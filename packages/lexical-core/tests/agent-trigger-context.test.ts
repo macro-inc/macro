@@ -552,6 +552,37 @@ describe('composeAgentContextPrompt with a trigger', () => {
     );
   });
 
+  it('renders a once routine run', () => {
+    const markdown = composeAgentContextPrompt({
+      promptMarkdown: 'Check whether the deploy finished.',
+      trigger: {
+        kind: 'routine',
+        routine_id: 'r-3',
+        name: 'Check back on the deploy',
+        owner: {
+          id: 'macro|julia@example.com',
+          name: 'Julia',
+          email: 'julia@example.com',
+        },
+        instructions: 'Report the deploy status in the thread.',
+        triggers: [{ type: 'once', at: '2026-10-08T09:00:02Z' }],
+        firing: {
+          type: 'scheduled',
+          scheduled_for: '2026-10-08T09:00:02Z',
+          schedule: 'once at 2026-10-08T09:00:02Z',
+        },
+      },
+    });
+
+    expect(hiddenContext(markdown)).toContain(
+      [
+        '  <triggers>',
+        '    <once at="2026-10-08T09:00:02Z"/>',
+        '  </triggers>',
+      ].join('\n')
+    );
+  });
+
   it('renders a routine fired by a task status change, with the change and the condition', () => {
     const markdown = composeAgentContextPrompt({
       promptMarkdown: 'Escalate the blocker.',

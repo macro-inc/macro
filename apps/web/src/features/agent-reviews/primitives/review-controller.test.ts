@@ -1,20 +1,39 @@
 /** @vitest-environment jsdom */
+import { ThrownResultError } from '@core/util/result';
+import { INVALID_REVIEW_DECISION } from '@service-agent-harness/reviews';
 import { createRoot, createSignal } from 'solid-js';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import type { Review, ReviewDecision } from '../core/review';
 import { createReviewController } from './review-controller';
 
-const initial: Review = {
+type EmailReview = Review & { kind: 'email' };
+
+const initial: EmailReview = {
   id: 'review',
   sessionId: 'session',
+  actingUser: 'macro|owner@macro.local',
   executionId: 'execution',
+  presentedAt: null,
+  decision: null,
   kind: 'email',
   title: 'Emails',
   revision: 0,
   updatedAt: 0,
   items: [
-    { id: 'one', draft: { subject: 'Ready?' }, status: 'pending' },
-    { id: 'two', draft: { subject: 'When?' }, status: 'pending' },
+    {
+      id: 'one',
+      draft: { subject: 'Ready?', body: '', to: [{ email: 'a@example.com' }] },
+      status: 'pending',
+      error: null,
+      result: null,
+    },
+    {
+      id: 'two',
+      draft: { subject: 'When?', body: '', to: [{ email: 'b@example.com' }] },
+      status: 'pending',
+      error: null,
+      result: null,
+    },
   ],
 };
 const cleanups: Array<() => void> = [];
@@ -23,49 +42,52 @@ afterEach(() => {
 });
 function setup(
   fail = false,
-  validate?: (
-    item: Review['items'][number],
-    kind: Review['kind']
-  ) => string | undefined
+  refuseSubmit?: (record: EmailReview) => string | undefined
 ) {
   let saved = structuredClone(initial);
   const actions = {
-    reload: async () => structuredClone(saved),
-    decide: vi.fn(async (decision: ReviewDecision) => {
+    reload: async (): Promise<Review> => structuredClone(saved),
+    decide: vi.fn(async (decision: ReviewDecision): Promise<Review> => {
       if (fail || decision.revision !== saved.revision)
         throw new Error('conflict');
+      const refusal =
+        decision.action === 'submit' ? refuseSubmit?.(saved) : undefined;
+      if (refusal)
+        throw new ThrownResultError([
+          { code: INVALID_REVIEW_DECISION, message: refusal },
+        ]);
       saved = {
         ...saved,
         revision: saved.revision + 1,
-        items: saved.items.map((item) =>
-          decision.action === 'edit'
-            ? item.id === decision.item
-              ? { ...item, draft: decision.draft }
-              : item
-            : decision.items.length === 0 || decision.items.includes(item.id)
-              ? {
-                  ...item,
-                  status:
-                    decision.action === 'submit' ? 'submitting' : 'dismissed',
-                }
-              : item
-        ),
+        items: saved.items.map((item) => {
+          if (decision.action === 'edit')
+            return item.id === decision.item && decision.draft.kind === 'email'
+              ? { ...item, draft: decision.draft.draft }
+              : item;
+          return decision.items.length === 0 || decision.items.includes(item.id)
+            ? {
+                ...item,
+                status:
+                  decision.action === 'submit' ? 'submitting' : 'dismissed',
+              }
+            : item;
+        }),
       };
       return structuredClone(saved);
     }),
   };
   const controller = createRoot((dispose) => {
     cleanups.push(dispose);
-    return createReviewController(() => initial, actions, validate);
+    return createReviewController(() => initial, actions);
   });
   return { controller, actions };
 }
 describe('persisted review decisions', () => {
   it('adopts presentation acknowledgments but preserves conflicting editor data', async () => {
-    const [source, update] = createSignal(initial);
+    const [source, update] = createSignal<EmailReview>(initial);
     const actions = {
-      reload: async () => source(),
-      decide: vi.fn(async () => source()),
+      reload: async (): Promise<Review> => source(),
+      decide: vi.fn(async (): Promise<Review> => source()),
     };
     const controller = createRoot((dispose) => {
       cleanups.push(dispose);
@@ -80,16 +102,91 @@ describe('persisted review decisions', () => {
       revision: 2,
       items: initial.items.map((item) => ({
         ...item,
-        draft: { subject: 'Changed elsewhere' },
+        draft: { ...item.draft, subject: 'Changed elsewhere' },
       })),
     });
     await Promise.resolve();
     expect(controller.stale()).toBe(true);
   });
+  it('a poll returning its own in-flight save does not mark the review stale', async () => {
+    const [source, update] = createSignal<EmailReview>({
+      ...initial,
+      revision: 1,
+      presentedAt: 100,
+    });
+    let commit!: (record: Review) => void;
+    let started!: () => void;
+    const saving = new Promise<void>((resolve) => {
+      started = resolve;
+    });
+    const actions = {
+      reload: async (): Promise<Review> => source(),
+      decide: vi.fn(
+        () =>
+          new Promise<Review>((resolve) => {
+            commit = resolve;
+            started();
+          })
+      ),
+    };
+    const controller = createRoot((dispose) => {
+      cleanups.push(dispose);
+      return createReviewController(source, actions);
+    });
+    const edited: EmailReview = {
+      ...source(),
+      revision: 2,
+      items: [
+        {
+          ...initial.items[0],
+          draft: {
+            subject: 'Ready?',
+            body: 'Yes',
+            to: [{ email: 'a@example.com' }],
+          },
+        },
+        initial.items[1],
+      ],
+    };
+    controller.edit('one', { kind: 'email', draft: edited.items[0].draft });
+    const flushed = controller.flush();
+    await saving;
+
+    update(edited);
+    expect(controller.stale()).toBe(false);
+
+    commit(edited);
+    expect(await flushed).toBe(true);
+    expect(controller.stale()).toBe(false);
+    expect(controller.record().revision).toBe(2);
+
+    update({
+      ...edited,
+      revision: 3,
+      items: edited.items.map((item) => ({ ...item, status: 'dismissed' })),
+    });
+    await Promise.resolve();
+    expect(controller.stale()).toBe(false);
+    expect(controller.record().items[0].status).toBe('dismissed');
+  });
   it('saves the latest edits before sending all, using the acknowledged revision', async () => {
     const { controller, actions } = setup();
-    controller.edit('one', { subject: 'Ready?', body: 'Yes' });
-    controller.edit('two', { subject: 'When?', body: 'Tomorrow' });
+    controller.edit('one', {
+      kind: 'email',
+      draft: {
+        subject: 'Ready?',
+        body: 'Yes',
+        to: [{ email: 'a@example.com' }],
+      },
+    });
+    controller.edit('two', {
+      kind: 'email',
+      draft: {
+        subject: 'When?',
+        body: 'Tomorrow',
+        to: [{ email: 'b@example.com' }],
+      },
+    });
     expect(await controller.decide('submit', [])).toBe(true);
     expect(
       actions.decide.mock.calls.map(([call]) => [call.action, call.revision])
@@ -102,38 +199,31 @@ describe('persisted review decisions', () => {
       controller.record().items.every((item) => item.status === 'submitting')
     ).toBe(true);
   });
-  it('preflights every selected item before starting any batch action', async () => {
-    const { controller, actions } = setup(false, (item) =>
-      item.id === 'two' && !JSON.stringify(item.draft).includes('Fixed')
-        ? 'Fix the second draft.'
+  it('shows a refused submission as validation without blocking the review', async () => {
+    const { controller, actions } = setup(false, (record) =>
+      record.items[1].draft.to.length === 0
+        ? 'Add at least one recipient.'
         : undefined
     );
-    expect(await controller.decide('submit', [])).toBe(false);
-    expect(actions.decide).not.toHaveBeenCalled();
-    expect(controller.validation()).toEqual({
-      item: 'two',
-      message: 'Fix the second draft.',
+    controller.edit('two', {
+      kind: 'email',
+      draft: { subject: 'When?', body: '', to: [] },
     });
+    expect(await controller.decide('submit', [])).toBe(false);
+    expect(controller.validation()).toBe('Add at least one recipient.');
     expect(controller.error()).toBeUndefined();
-    controller.edit('two', { subject: 'Fixed' });
+    controller.edit('two', {
+      kind: 'email',
+      draft: { subject: 'When?', body: '', to: [{ email: 'b@example.com' }] },
+    });
     expect(controller.validation()).toBeUndefined();
     expect(await controller.decide('submit', [])).toBe(true);
     expect(actions.decide.mock.calls.map(([call]) => call.action)).toEqual([
       'edit',
       'submit',
+      'edit',
+      'submit',
     ]);
-  });
-  it('does not let an unrelated invalid draft block an individual submission', async () => {
-    const { controller, actions } = setup(false, (item) =>
-      item.id === 'two' ? 'Fix the second draft.' : undefined
-    );
-    expect(await controller.decide('submit', ['one'])).toBe(true);
-    expect(actions.decide).toHaveBeenCalledExactlyOnceWith({
-      action: 'submit',
-      revision: 0,
-      items: ['one'],
-    });
-    expect(controller.record().items[1].status).toBe('pending');
   });
   it('a simultaneous second click cannot submit twice', async () => {
     const { controller, actions } = setup();
@@ -144,7 +234,14 @@ describe('persisted review decisions', () => {
   });
   it('a failed save stops submission and requires explicit reload', async () => {
     const { controller, actions } = setup(true);
-    controller.edit('one', { subject: 'Ready?', body: 'Changed' });
+    controller.edit('one', {
+      kind: 'email',
+      draft: {
+        subject: 'Ready?',
+        body: 'Changed',
+        to: [{ email: 'a@example.com' }],
+      },
+    });
     expect(await controller.decide('submit', [])).toBe(false);
     expect(actions.decide.mock.calls.map(([call]) => call.action)).toEqual([
       'edit',
@@ -155,7 +252,14 @@ describe('persisted review decisions', () => {
   });
   it('serialized flushes cannot reuse a revision', async () => {
     const { controller, actions } = setup();
-    controller.edit('one', { subject: 'Ready?', body: 'Yes' });
+    controller.edit('one', {
+      kind: 'email',
+      draft: {
+        subject: 'Ready?',
+        body: 'Yes',
+        to: [{ email: 'a@example.com' }],
+      },
+    });
     expect(await Promise.all([controller.flush(), controller.flush()])).toEqual(
       [true, true]
     );

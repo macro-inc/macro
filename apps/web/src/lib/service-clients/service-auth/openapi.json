@@ -347,6 +347,78 @@
         }
       }
     },
+    "/ai-billing/credits/purchase": {
+      "post": {
+        "tags": ["ai_billing"],
+        "summary": "Buy a credit pack now, charged to the payer's card on file. Any paid team\nmember may buy, within the team's monthly credit limit.",
+        "operationId": "purchase_ai_credits",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreditPurchaseRequestBody"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Purchase outcome and updated position",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CreditPurchaseResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid pack or no payment account",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AiBillingErrorBody"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "402": {
+            "description": "A paid plan is required",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AiBillingErrorBody"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Over the monthly credit limit, or an earlier purchase is still processing",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AiBillingErrorBody"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal server error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AiBillingErrorBody"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/ai-billing/overage": {
       "patch": {
         "tags": ["ai_billing"],
@@ -2948,6 +3020,15 @@
             "schema": {
               "type": "string"
             }
+          },
+          {
+            "name": "is_agent",
+            "in": "query",
+            "description": "**OPTIONAL**. If the sign-in started on the agent signup page. A new account becomes an agent.",
+            "required": true,
+            "schema": {
+              "type": "boolean"
+            }
           }
         ],
         "responses": {
@@ -4126,6 +4207,55 @@
         }
       }
     },
+    "/team/domain-notice": {
+      "post": {
+        "tags": ["teams::inbound::axum_router::domain_notice"],
+        "summary": "Emails the caller's contacts on the team's auto-join domain that the team\nexists, so they can sign up and join. Contacts already on Macro, on the\nteam, invited, or emailed before are skipped, and a team emails at most 25\npeople in total. Call it after sending the team's invites. Requires the\ncaller to be an Admin or Owner of the team.",
+        "operationId": "send_team_domain_notice",
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SendDomainNoticeResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/team/invite": {
       "post": {
         "tags": ["teams::inbound::axum_router::invite_to_team"],
@@ -4170,6 +4300,16 @@
           },
           "404": {
             "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "`team_id` names a team other than the caller's current team",
             "content": {
               "application/json": {
                 "schema": {
@@ -4523,6 +4663,18 @@
         "tags": ["teams::inbound::axum_router::get_team_invites"],
         "summary": "Gets all invites for a team.",
         "operationId": "get_team_invites",
+        "parameters": [
+          {
+            "name": "team_id",
+            "in": "query",
+            "description": "The team the caller means to list. Invites are always read from the\ncaller's current team; when this names another team, the request\nanswers 409.",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
         "responses": {
           "200": {
             "description": "",
@@ -4546,6 +4698,16 @@
           },
           "401": {
             "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "`team_id` names a team other than the caller's current team",
             "content": {
               "application/json": {
                 "schema": {
@@ -4954,6 +5116,66 @@
           },
           "401": {
             "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/user/agent_setup": {
+      "post": {
+        "tags": ["user::agent_setup"],
+        "summary": "Finishes an agent's signup: joins the team that invited it and mints its\nSDK token.",
+        "description": "Safe to repeat until the agent confirms it saved the token: a reload replaces\nthe key, and a failed join stays pending for the next attempt.",
+        "operationId": "agent_setup",
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AgentSetupResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "The account is not an agent",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Setup is already confirmed",
             "content": {
               "application/json": {
                 "schema": {
@@ -5682,6 +5904,132 @@
         }
       }
     },
+    "/user/profile_picture/file": {
+      "put": {
+        "tags": ["user::put_profile_picture_file"],
+        "summary": "Sets the caller's profile picture to an image they uploaded.",
+        "operationId": "put_profile_picture_file",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PutProfilePictureFileRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/EmptyResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "The file is not a supported image",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "The caller has no such file",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "tags": ["user::put_profile_picture_file"],
+        "summary": "Reserves storage for a new profile picture. Static file storage has no\nMacroDB, so it cannot check API keys; this route lets key holders upload.",
+        "operationId": "create_profile_picture_upload",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateProfilePictureUploadRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProfilePictureUpload"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Not a supported image type",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/user/profile_pictures": {
       "post": {
         "tags": ["user::post_profile_pictures"],
@@ -6169,6 +6517,21 @@
         "description": "A provider an agent can bring its own key for.",
         "enum": ["anthropic", "openai"]
       },
+      "AgentSetupResponse": {
+        "type": "object",
+        "description": "What an agent needs to start using the SDK.",
+        "required": ["api_key", "team_join_failed"],
+        "properties": {
+          "api_key": {
+            "type": "string",
+            "description": "The agent's API key. Shown only here; repeating setup revokes it."
+          },
+          "team_join_failed": {
+            "type": "boolean",
+            "description": "Whether joining the inviting team failed. The invite stays pending:\nrepeating setup tries again, and the invite link works after confirming."
+          }
+        }
+      },
       "AiBillingErrorBody": {
         "type": "object",
         "description": "Error response body.",
@@ -6217,7 +6580,7 @@
           "committed_cents": {
             "type": "integer",
             "format": "int64",
-            "description": "Reloads paid, pending, or failed with an invoice that can still collect.\nCustomer cents; manual credit purchases do not count."
+            "description": "Reloads and one-time card purchases paid, pending, or failed with an\ninvoice that can still collect. Customer cents; Checkout purchases do\nnot count."
           },
           "limit_reached": {
             "type": "boolean",
@@ -6550,11 +6913,29 @@
           }
         }
       },
+      "CreateProfilePictureUploadRequest": {
+        "type": "object",
+        "required": ["file_name", "content_type"],
+        "properties": {
+          "content_type": {
+            "type": "string",
+            "description": "Mime type of the image."
+          },
+          "file_name": {
+            "type": "string",
+            "description": "File name, such as `avatar.png`."
+          }
+        }
+      },
       "CreateTeamRequest": {
         "type": "object",
         "description": "The request body to create a new team",
         "required": ["name"],
         "properties": {
+          "allow_domain_join": {
+            "type": "boolean",
+            "description": "Whether colleagues who sign up with the owner's work email domain join\nthe team automatically. Ignored for generic email providers."
+          },
           "name": {
             "type": "string",
             "description": "The name of the team"
@@ -6602,6 +6983,77 @@
             "description": "The hosted Checkout URL to redirect to."
           }
         }
+      },
+      "CreditPurchaseRequestBody": {
+        "type": "object",
+        "description": "Request body for [`purchase_credits_handler`].",
+        "required": ["amountCents"],
+        "properties": {
+          "amountCents": {
+            "type": "integer",
+            "format": "int64",
+            "description": "One of the catalog's credit packs, cents."
+          }
+        }
+      },
+      "CreditPurchaseResponse": {
+        "type": "object",
+        "description": "Response for [`purchase_credits_handler`].",
+        "required": ["status", "amountCents"],
+        "properties": {
+          "amountCents": {
+            "type": "integer",
+            "format": "int64",
+            "description": "Amount charged, cents: the requested pack, unless an earlier declined\npurchase that Stripe collected in the meantime was booked instead."
+          },
+          "snapshot": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/UsageSnapshot",
+                "description": "The caller's position after the purchase. Absent when it could not be\nread; the purchase still happened, so refetch the summary instead."
+              }
+            ]
+          },
+          "status": {
+            "$ref": "#/components/schemas/CreditPurchaseStatus",
+            "description": "Whether the card on file paid."
+          }
+        }
+      },
+      "CreditPurchaseSnapshot": {
+        "type": "object",
+        "description": "The monthly credit limit that applies to this user's one-time purchases.",
+        "required": ["committed_cents", "resets_at"],
+        "properties": {
+          "committed_cents": {
+            "type": "integer",
+            "format": "int64",
+            "description": "Charged this month so far, including charges that may still collect."
+          },
+          "monthly_limit_cents": {
+            "type": ["integer", "null"],
+            "format": "int64",
+            "description": "Most credits charged to the card on file per UTC calendar month, from\nautomatic reloads and one-time purchases together, in customer cents.\n`null` when the payer set no limit; team members always have one."
+          },
+          "resets_at": {
+            "type": "string",
+            "format": "date-time",
+            "description": "Start of the next UTC calendar month."
+          }
+        }
+      },
+      "CreditPurchaseStatus": {
+        "type": "string",
+        "description": "How a one-time credit purchase charged to the card on file ended.",
+        "enum": [
+          "paid",
+          "declined",
+          "payment_method_required",
+          "authentication_required"
+        ]
       },
       "CurrentSystemStatus": {
         "allOf": [
@@ -6897,6 +7349,7 @@
           "email",
           "licenseStatus",
           "tutorialComplete",
+          "isAgent",
           "hasChromeExt",
           "hasTrialed",
           "aiDataConsent",
@@ -6934,6 +7387,10 @@
           "hasTrialed": {
             "type": "boolean",
             "description": "Whether the user has trialed through stripe"
+          },
+          "isAgent": {
+            "type": "boolean",
+            "description": "Whether this is an agent account rather than a person"
           },
           "licenseStatus": {
             "type": "string",
@@ -7592,6 +8049,15 @@
               "$ref": "#/components/schemas/InviteEntry"
             },
             "description": "The invites to send, each with an email and tier"
+          },
+          "is_agent": {
+            "type": "boolean",
+            "description": "Invite these addresses as agents: an address with no account signs up\nas an agent and joins the team when it first signs in."
+          },
+          "team_id": {
+            "type": ["string", "null"],
+            "format": "uuid",
+            "description": "The team the caller means to invite to. Invites always go to the\ncaller's current team; when this names another team, nothing is sent\nand the request answers 409."
           }
         }
       },
@@ -7731,6 +8197,10 @@
           "email": {
             "type": "string",
             "description": "The email to initiate passwordless authentication for"
+          },
+          "is_agent": {
+            "type": "boolean",
+            "description": "Create an agent account if this address has no account yet. Otherwise\n`true` has no effect, and `false` reverts an agent flag nobody has proven:\nsee `revert_unconfirmed_agent`."
           },
           "redirect_uri": {
             "type": "string",
@@ -7932,6 +8402,11 @@
           "purchasable"
         ],
         "properties": {
+          "auto_reload_default_monthly_limit_cents": {
+            "type": ["integer", "null"],
+            "format": "int64",
+            "description": "Monthly automatic reload limit a payer on this plan starts from,\ncents. Absent for plans that cannot reload."
+          },
           "included_ai_cents_per_seat": {
             "type": "integer",
             "format": "int64",
@@ -8026,6 +8501,21 @@
           }
         }
       },
+      "ProfilePictureUpload": {
+        "type": "object",
+        "description": "Where to upload a new profile picture, and the file id to set afterwards.",
+        "required": ["file_id", "upload_url"],
+        "properties": {
+          "file_id": {
+            "type": "string",
+            "description": "Id to pass to `PUT /user/profile_picture/file` once uploaded."
+          },
+          "upload_url": {
+            "type": "string",
+            "description": "Expiring URL to `PUT` the image bytes to."
+          }
+        }
+      },
       "ProfilePictures": {
         "type": "object",
         "required": ["pictures"],
@@ -8088,6 +8578,16 @@
           "modelId": {
             "type": ["string", "null"],
             "description": "A Cursor model id (e.g. `grok-4.6`), or `null` to clear the choice and\nfall back to the deployment default."
+          }
+        }
+      },
+      "PutProfilePictureFileRequest": {
+        "type": "object",
+        "required": ["file_id"],
+        "properties": {
+          "file_id": {
+            "type": "string",
+            "description": "Id of an image the caller uploaded to static file storage."
           }
         }
       },
@@ -8161,6 +8661,19 @@
         "type": "string",
         "description": "The paid plan a seat is billed at. Every member of a paying team has one;\na team may mix them, and its Stripe subscription carries one seat item per\nplan in use.",
         "enum": ["premium", "max"]
+      },
+      "SendDomainNoticeResponse": {
+        "type": "object",
+        "description": "Response for the domain notice endpoint.",
+        "required": ["sent"],
+        "properties": {
+          "sent": {
+            "type": "integer",
+            "format": "int32",
+            "description": "How many colleagues were emailed by this call.",
+            "minimum": 0
+          }
+        }
       },
       "SendInviteBody": {
         "type": "object",
@@ -8495,7 +9008,8 @@
           "team_role",
           "invited_by",
           "created_at",
-          "last_sent_at"
+          "last_sent_at",
+          "is_agent"
         ],
         "properties": {
           "created_at": {
@@ -8515,6 +9029,10 @@
           "invited_by": {
             "type": "string",
             "description": "The user who sent the invitation"
+          },
+          "is_agent": {
+            "type": "boolean",
+            "description": "Whether the invite creates an agent account"
           },
           "last_sent_at": {
             "type": "string",
@@ -8807,6 +9325,17 @@
             "format": "int64",
             "description": "Shared prepaid credit balance, in customer cents."
           },
+          "credit_purchase": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/CreditPurchaseSnapshot",
+                "description": "The monthly credit limit for one-time purchases charged to the card on\nfile. Present for paid, metered users, payer and team members alike."
+              }
+            ]
+          },
           "credits_consumed_cents": {
             "type": "integer",
             "format": "int64",
@@ -8920,6 +9449,10 @@
           },
           "id": {
             "type": "string"
+          },
+          "is_agent": {
+            "type": "boolean",
+            "description": "Whether this is an agent account rather than a person."
           },
           "last_name": {
             "type": ["string", "null"]

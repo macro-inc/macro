@@ -10,7 +10,7 @@ use tracing::Instrument;
 use upstream_error::UpstreamFailure;
 
 use crate::domain::{
-    models::{RefreshToken, UpstreamTokens},
+    models::{RefreshToken, SignInMethod, UpstreamTokens},
     ports::{OAuthProvider, UpstreamGrantError, UpstreamRevocationFuture, UpstreamTokensFuture},
 };
 
@@ -61,12 +61,21 @@ fn grant_error(error: FusionAuthClientError) -> UpstreamGrantError {
 
 impl OAuthProvider for FusionAuthOAuthProvider {
     #[tracing::instrument(skip(self), err)]
-    fn construct_authorize_url(&self, state: &str) -> anyhow::Result<String> {
-        self.client.construct_oauth2_authorize_url(
-            &self.google_idp_id,
-            None,
-            Some(state.to_owned()),
-        )
+    fn construct_authorize_url(
+        &self,
+        state: &str,
+        sign_in: SignInMethod,
+    ) -> anyhow::Result<String> {
+        match sign_in {
+            SignInMethod::Google => self.client.construct_oauth2_authorize_url(
+                &self.google_idp_id,
+                None,
+                Some(state.to_owned()),
+            ),
+            SignInMethod::Login => self
+                .client
+                .construct_oauth2_login_page_url(Some(state.to_owned())),
+        }
     }
 
     fn exchange_authorization_code<'a>(&'a self, code: &'a str) -> UpstreamTokensFuture<'a> {

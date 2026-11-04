@@ -216,6 +216,75 @@ async fn authorize_withholds_the_client_origin_from_the_identity_provider() {
     }
 }
 
+/// ChatGPT's reviewers sign in with a password, so its users pick; the choice
+/// carries the whole request, escaped, and only then does the flow start.
+#[tokio::test]
+async fn authorize_offers_chatgpt_a_sign_in_choice() {
+    let harness = Harness::new();
+    let redirect_uri = "https://chatgpt.com/connector/oauth/abc";
+    let registration = send(&harness, register_request(redirect_uri)).await;
+    assert_eq!(registration.status, StatusCode::OK);
+    let client_id = registration.json()["client_id"]
+        .as_str()
+        .expect("registration returns a client_id")
+        .to_owned();
+
+    let choice = send(
+        &harness,
+        authorize_request(&client_id, redirect_uri, VICTIM_CODE_VERIFIER),
+    )
+    .await;
+    assert_eq!(choice.status, StatusCode::OK);
+    let page = choice.body;
+    assert!(page.contains("&amp;sign_in=google"), "{page}");
+    assert!(page.contains("&amp;sign_in=login"), "{page}");
+    assert!(page.contains(&format!("client_id={client_id}")), "{page}");
+
+    let code_challenge = code_challenge_for(VICTIM_CODE_VERIFIER);
+    let chosen = |choice: &str| {
+        Request::builder()
+            .method("GET")
+            .uri(format!(
+                "/authorize?response_type=code&client_id={client_id}\
+                 &redirect_uri={}&state=x&code_challenge={code_challenge}\
+                 &code_challenge_method=S256&sign_in={choice}",
+                urlencoding::encode(redirect_uri),
+            ))
+            .body(Body::empty())
+            .expect("request should build")
+    };
+    let login = send(&harness, chosen("login")).await;
+    assert_eq!(login.status, StatusCode::TEMPORARY_REDIRECT);
+    let location = login.location.expect("redirect has a location");
+    assert!(
+        location.starts_with("https://upstream.example/login"),
+        "{location}"
+    );
+    let google = send(&harness, chosen("google")).await;
+    let location = google.location.expect("redirect has a location");
+    assert!(
+        location.starts_with("https://upstream.example/authorize"),
+        "{location}"
+    );
+}
+
+/// Whatever the query holds is re-encoded before it reaches the page.
+#[tokio::test]
+async fn the_sign_in_choice_escapes_the_query() {
+    let response = super::sign_in_choice(Some("state=%22%3E%3Cscript%3E&a=1".to_owned()));
+    let csp = response.headers()[axum::http::header::CONTENT_SECURITY_POLICY]
+        .to_str()
+        .expect("the policy is ascii")
+        .to_owned();
+    assert!(csp.contains("default-src 'none'"), "{csp}");
+    let body = axum::body::to_bytes(response.into_body(), 64 * 1024)
+        .await
+        .expect("page should read");
+    let page = String::from_utf8(body.to_vec()).expect("page is utf-8");
+    assert!(!page.contains("<script"), "{page}");
+    assert!(page.contains("state=%22%3E%3Cscript%3E&amp;a=1"), "{page}");
+}
+
 /// Loopback hosts are interchangeable for the policy but not for the
 /// registration: a client registered on `localhost` cannot have its code sent
 /// to `127.0.0.1`.

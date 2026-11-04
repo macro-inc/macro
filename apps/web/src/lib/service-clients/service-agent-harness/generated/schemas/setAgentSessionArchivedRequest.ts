@@ -9,6 +9,6 @@
  * Request body for archiving or unarchiving an agent session.
  */
 export interface SetAgentSessionArchivedRequest {
-  /** The requested archive state. */
-  isArchived: boolean;
+  /** Archive the session, or restore it. */
+  archived: boolean;
 }

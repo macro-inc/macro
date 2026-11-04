@@ -26,7 +26,8 @@ import SplitIcon from '@icon/system/regular/square-half.svg';
 import XIcon from '@icon/system/regular/x.svg';
 import { mergeRegister } from '@lexical/utils';
 import { Telemetry } from '@macro-inc/observability';
-import { Button, Hotkey, Scroll } from '@ui';
+import { skillDescriptionProblem } from '@queries/storage/skill-description';
+import { Button, Hotkey, Input, Scroll } from '@ui';
 import {
   $getRoot,
   COMMAND_PRIORITY_NORMAL,
@@ -46,6 +47,7 @@ import {
   untrack,
 } from 'solid-js';
 import { EditorSystemMessage } from './EditorSystemMessage';
+import { SKILL_DESCRIPTION_PLACEHOLDER } from './SkillDescriptionField';
 
 function composerTitleNavigationPlugin(
   bodyEditor: Accessor<LexicalEditor | undefined>
@@ -186,12 +188,14 @@ function ComposeSkillTitleEditor(props: {
 export type ComposeSkillSuccess = {
   documentId: string;
   title: string;
+  description: string;
   content: string;
 };
 
 export interface ComposeSkillProps {
   onClose?: () => void;
   initialTitle?: string;
+  initialDescription?: string;
   initialContent?: string;
   placeholder?: string;
   /**
@@ -204,7 +208,8 @@ export interface ComposeSkillProps {
 
 /**
  * Popover dialog for creating a skill — a trimmed-down sibling of
- * [`ComposeTask`]: just a name, markdown instructions, and a create button.
+ * [`ComposeTask`]: a name, a one-line "Use when …" description agents route
+ * requests on, markdown instructions, and a create button.
  * Skills have no properties, tags, or assignees, so none of that appears.
  */
 export function ComposeSkill(props: ComposeSkillProps) {
@@ -212,6 +217,9 @@ export function ComposeSkill(props: ComposeSkillProps) {
   const { openWithSplit } = useSplitLayout();
 
   const [title, setTitle] = createSignal(props.initialTitle ?? '');
+  const [description, setDescription] = createSignal(
+    props.initialDescription ?? ''
+  );
   const [content, setContent] = createSignal(props.initialContent ?? '');
   const [bodyEditor, setBodyEditor] = createSignal<LexicalEditor>();
   const [containerRef, setContainerRef] = createSignal<HTMLDivElement>();
@@ -264,11 +272,13 @@ export function ComposeSkill(props: ComposeSkillProps) {
   // input instead of dropping it.
   const submitSkill = async () => {
     const skillTitle = title().trim();
+    const skillDescription = description().trim();
     const skillContent = content().trim();
 
     setIsCreating(true);
     const documentId = await createSkill({
       title: skillTitle,
+      description: skillDescription,
       content: skillContent,
       source: 'skill_composer',
     });
@@ -284,6 +294,7 @@ export function ComposeSkill(props: ComposeSkillProps) {
     props.onSuccess?.({
       documentId,
       title: skillTitle,
+      description: skillDescription,
       content: skillContent,
     });
     return documentId;
@@ -296,6 +307,11 @@ export function ComposeSkill(props: ComposeSkillProps) {
       setErrorMessage('Please give this skill a name');
       return;
     }
+    const descriptionProblem = skillDescriptionProblem(description());
+    if (descriptionProblem) {
+      setErrorMessage(descriptionProblem);
+      return;
+    }
     setErrorMessage('');
 
     const documentId = await submitSkill();
@@ -306,6 +322,11 @@ export function ComposeSkill(props: ComposeSkillProps) {
 
   const handleContinueInSplit = async () => {
     if (isCreating()) return;
+    const descriptionProblem = skillDescriptionProblem(description());
+    if (descriptionProblem) {
+      setErrorMessage(descriptionProblem);
+      return;
+    }
     setErrorMessage('');
 
     const documentId = await submitSkill();
@@ -412,6 +433,29 @@ export function ComposeSkill(props: ComposeSkillProps) {
           />
         </div>
 
+        <div class="shrink-0 px-2 mb-4">
+          <Input
+            variant="bare"
+            size="sm"
+            class="px-0 text-sm text-ink-muted"
+            aria-label="When to use this skill"
+            placeholder={SKILL_DESCRIPTION_PLACEHOLDER}
+            maxLength={300}
+            value={description()}
+            disabled={isCreating()}
+            onInput={(event) => {
+              setDescription(event.currentTarget.value);
+              if (errorMessage()) setErrorMessage('');
+            }}
+            onKeyDown={(event) => {
+              if (event.key === 'Enter') {
+                event.preventDefault();
+                bodyEditor()?.focus();
+              }
+            }}
+          />
+        </div>
+
         <div class="overflow-auto scrollbar-hidden mb-6 min-h-24 grow px-2">
           <Scroll>
             <MarkdownShell
@@ -436,7 +480,11 @@ export function ComposeSkill(props: ComposeSkillProps) {
       <div class="shrink-0 flex justify-end items-end gap-2">
         <Button
           onClick={handleCreateSkill}
-          disabled={title().trim().length === 0 || isCreating()}
+          disabled={
+            title().trim().length === 0 ||
+            description().trim().length === 0 ||
+            isCreating()
+          }
           variant="secondary"
           class="gap-3"
         >

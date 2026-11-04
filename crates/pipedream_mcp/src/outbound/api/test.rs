@@ -95,6 +95,7 @@ async fn the_proxy_addresses_the_upstream_url_for_the_connected_account() {
         server_name: "Notion".into(),
         account_id: "apn_notion".into(),
         enabled: true,
+        provider: crate::domain::models::ConnectionProvider::Pipedream,
     };
 
     let response = client

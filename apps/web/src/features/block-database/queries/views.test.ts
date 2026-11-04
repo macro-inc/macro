@@ -1,15 +1,65 @@
 import { queryClient } from '@queries/client';
 import { databasesKeys } from '@queries/storage/keys';
+import type { CardPosition } from '@service-storage/generated/schemas/cardPosition';
 import type { DatabaseDetail } from '@service-storage/generated/schemas/databaseDetail';
 import type { OpResult } from '@service-storage/generated/schemas/opResult';
 import { errAsync, okAsync, ResultAsync } from 'neverthrow';
 import { afterEach, describe, expect, it, vi } from 'vitest';
+import { databaseViewKeys } from './keys';
 import {
   createDatabaseView,
   moveDatabaseCard,
   reorderDatabaseViews,
+  setCardPositions,
   updateDatabaseView,
 } from './views';
+
+it('keeps optimistic and committed positions when older reads settle', async () => {
+  const key = databaseViewKeys.positions('db', 'first').queryKey;
+  const original: CardPosition[] = [
+    { row: 'row', lane: { kind: 'option', id: 'stage' }, position: 'a0' },
+  ];
+  queryClient.setQueryData(key, original);
+
+  for (const position of ['a1', 'a2']) {
+    const response = Promise.withResolvers<CardPosition[]>();
+    const read = queryClient
+      .fetchQuery({ queryKey: key, queryFn: () => response.promise })
+      .catch(() => undefined);
+    const next = [{ ...original[0], position }];
+    setCardPositions('db', 'first', () => next);
+    await vi.waitFor(() => expect(queryClient.getQueryData(key)).toEqual(next));
+
+    response.resolve(original);
+    await read;
+    expect(queryClient.getQueryData(key)).toEqual(next);
+  }
+});
+
+it('applies concurrent position updates in order while canceling a read', async () => {
+  const key = databaseViewKeys.positions('db', 'first').queryKey;
+  queryClient.setQueryData(key, []);
+  const response = Promise.withResolvers<CardPosition[]>();
+  const read = queryClient
+    .fetchQuery({ queryKey: key, queryFn: () => response.promise })
+    .catch(() => undefined);
+  const placed: CardPosition = {
+    row: 'row',
+    lane: { kind: 'option', id: 'stage' },
+    position: 'a1',
+  };
+  setCardPositions('db', 'first', () => [placed]);
+  setCardPositions('db', 'first', (positions) =>
+    positions.map((entry) => ({ ...entry, position: 'a2' }))
+  );
+  response.resolve([]);
+  await read;
+  await vi.waitFor(() =>
+    expect(queryClient.getQueryData(key)).toEqual([
+      { ...placed, position: 'a2' },
+    ])
+  );
+});
 
 const transport = vi.hoisted(() => ({
   applyDatabaseOps: vi.fn(),
@@ -38,6 +88,7 @@ const detail: DatabaseDetail = {
     owner_id: 'owner',
     created_at: '',
     trashed_at: null,
+    project_id: null,
   },
   grant: 'owner',
   tables: [

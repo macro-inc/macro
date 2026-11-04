@@ -8,7 +8,9 @@ import {
   makeRenameAction,
   useBlockEntityCommands,
 } from '@app/features/next-soup/actions';
+import { t } from '@app/lib/i18n';
 import { createSearchParams } from '@app/lib/split-router';
+import { TraceFlow } from '@app/observability/flow';
 import { URL_PARAMS } from '@block-channel/constants';
 import { ChannelAttachmentsTab } from '@channel/Attachments/ChannelAttachmentsTab';
 import { useChannelBotManagement } from '@channel/Bots/use-channel-bot-management';
@@ -55,7 +57,10 @@ import { useChannelPictureActions } from '@channel/channel-picture';
 import { ChannelParticipantsTab } from '@channel/Participants/ChannelParticipantsTab';
 import { HeaderIsland } from '@components/app/split-layout/components/HeaderIsland';
 import { BlockSplitFileMenu } from '@components/app/split-layout/components/SplitFileMenu';
-import { SplitHeaderRight } from '@components/app/split-layout/components/SplitHeader';
+import {
+  SplitHeaderLeft,
+  SplitHeaderRight,
+} from '@components/app/split-layout/components/SplitHeader';
 import { SplitTitleFileMenu } from '@components/app/split-layout/components/SplitLabel';
 import { SplitLayoutContext } from '@components/app/split-layout/context';
 import {
@@ -79,13 +84,14 @@ import { blockHotkeyScopeSignal } from '@core/signal/blockElement';
 import { blockHandleSignal } from '@core/signal/load';
 import { fireAndForget } from '@core/util/fireAndForget';
 import { buildEntityData, canEditChannelIdentity } from '@entity';
+import CaretLeft from '@icon/system/regular/caret-left.svg';
 import PictureIcon from '@icon/system/regular/image.svg';
 import RenameIcon from '@icon/system/regular/pencil-line.svg';
 import TrashIcon from '@icon/system/regular/trash.svg';
 import { useActiveCallQuery } from '@queries/call/call';
 import { useChannelParticipantsQuery } from '@queries/channel/channel-participants';
 import { useSearchParams } from '@solidjs/router';
-import { cn } from '@ui';
+import { Button, cn } from '@ui';
 import {
   createComputed,
   createEffect,
@@ -130,6 +136,7 @@ const initialChannelTab = (options: {
 
 function NewTop(props: { channelId: string }) {
   const { activeTab, setActiveTab } = useChannelTab();
+  const panel = useSplitPanelOrThrow();
   const channelName = useChannelName(props.channelId);
   const channelType = useChannelType(props.channelId);
   const channel = useChannel(props.channelId);
@@ -138,6 +145,8 @@ function NewTop(props: { channelId: string }) {
   const participantsQuery = useChannelParticipantsQuery(() => props.channelId);
   const call = useCall(() => props.channelId);
   const activeCallQuery = useActiveCallQuery(() => props.channelId);
+  const isActivePhoneCall = () =>
+    isMobile() && activeTab() === 'call' && call.isInThisChannel();
   const participants = () =>
     participantsQuery.isLoading ? [] : participantsQuery.data;
   const tabs = useChannelTabItems(props.channelId);
@@ -150,6 +159,7 @@ function NewTop(props: { channelId: string }) {
       name: ch.name ?? 'New Channel',
       blockName: 'channel',
       channelType: ch.channel_type,
+      teamId: ch.team_id ?? undefined,
       ownerId: ch.owner_id,
       isParticipant: participantsQuery.isSuccess
         ? (participantsQuery.data ?? []).some(
@@ -196,6 +206,20 @@ function NewTop(props: { channelId: string }) {
 
   return (
     <Suspense>
+      <Show when={isActivePhoneCall() && !panel.handle.canGoBack()}>
+        <SplitHeaderLeft>
+          <HeaderIsland class="order-first gap-0 px-1">
+            <Button
+              variant="ghost"
+              size="icon-sm"
+              aria-label={t('splitMenu.goBack')}
+              onClick={() => setActiveTab('messages')}
+            >
+              <CaretLeft class="size-6" />
+            </Button>
+          </HeaderIsland>
+        </SplitHeaderLeft>
+      </Show>
       <ChannelTopLeft
         channelId={props.channelId}
         channelType={channelType()!}
@@ -259,18 +283,18 @@ function NewTop(props: { channelId: string }) {
           ]}
         />
       </SplitTitleFileMenu>
-      <SplitHeaderRight>
-        {/* On mobile the split header is pointer-events-none; only islands
-            (glass pills) take taps. `empty:hidden` drops the pill when the
-            button is not offered (DMs, non-participants). */}
-        <HeaderIsland class="px-1">
-          <ChannelInviteButton
-            channelId={props.channelId}
-            channelName={channelName() ?? 'New Channel'}
-            channelType={channelType()}
-          />
-        </HeaderIsland>
-      </SplitHeaderRight>
+      <Show when={!isActivePhoneCall()}>
+        <SplitHeaderRight>
+          {/* Only header islands receive taps on touch screens. */}
+          <HeaderIsland class="px-1">
+            <ChannelInviteButton
+              channelId={props.channelId}
+              channelName={channelName() ?? 'New Channel'}
+              channelType={channelType()}
+            />
+          </HeaderIsland>
+        </SplitHeaderRight>
+      </Show>
       {/* Desktop only: on mobile the action lives in the title drawer above. */}
       <Show when={!isMobile() && askMacroEntity()}>
         {(entity) => (
@@ -318,11 +342,24 @@ export function NewChannelBlockAdapter(props: BlockChannelProps) {
   // The layout context exists during construction; its global signal is set later.
   const splitLayout = useContext(SplitLayoutContext);
   blockHotkeyScopeSignal.set(splitPanel.splitHotkeyScope);
-  useBlockEntityCommands();
   const canAutofocusSplitContent = useCanAutofocusSplitContent();
   const { navigatedFromJK } = useNavigatedFromJK();
   const channelId = useBlockId();
   const conversationChannel = useChannel(channelId);
+  useBlockEntityCommands({
+    resolveEntity: () => {
+      const channel = conversationChannel();
+      if (!channel) return undefined;
+      return buildEntityData({
+        id: channelId,
+        name: channel.name ?? 'New Channel',
+        blockName: 'channel',
+        ownerId: channel.owner_id,
+        channelType: channel.channel_type,
+        teamId: channel.team_id ?? undefined,
+      });
+    },
+  });
   const canCall = useChannelCanCall(channelId);
   const blockHandle = blockHandleSignal.get;
   const [searchParams, setSearchParams] = useSearchParams();
@@ -564,31 +601,41 @@ export function NewChannelBlockAdapter(props: BlockChannelProps) {
             <Switch>
               <Match when={activeTab() === 'messages'}>
                 <Suspense fallback={<ChannelLoading />}>
-                  <ChannelMessages
-                    autofocus={canAutofocusSplitContent && !navigatedFromJK()}
-                  />
+                  <TraceFlow name="channel.messages.view">
+                    <ChannelMessages
+                      autofocus={canAutofocusSplitContent && !navigatedFromJK()}
+                    />
+                  </TraceFlow>
                 </Suspense>
               </Match>
               <Match when={activeTab() === 'attachments'}>
-                <ChannelAttachmentsTab channelId={channelId} />
+                <TraceFlow name="channel.attachments.view">
+                  <ChannelAttachmentsTab channelId={channelId} />
+                </TraceFlow>
               </Match>
               <Match when={activeTab() === 'calls' && ENABLE_CALLS}>
-                <ChannelCallsTab channelId={channelId} />
+                <TraceFlow name="channel.calls.view">
+                  <ChannelCallsTab channelId={channelId} />
+                </TraceFlow>
               </Match>
               <Match when={activeTab() === 'participants'}>
-                <ChannelParticipantsTab
-                  channelId={channelId}
-                  botManagementEnabled={botManagement.enabled()}
-                  onCreateBot={botManagement.openCreateBot}
-                  inviteBotFocusRequest={botManagement.inviteFocusRequest()}
-                  onOpenBot={botManagement.openBot}
-                />
+                <TraceFlow name="channel.participants.view">
+                  <ChannelParticipantsTab
+                    channelId={channelId}
+                    botManagementEnabled={botManagement.enabled()}
+                    onCreateBot={botManagement.openCreateBot}
+                    inviteBotFocusRequest={botManagement.inviteFocusRequest()}
+                    onOpenBot={botManagement.openBot}
+                  />
+                </TraceFlow>
               </Match>
               <Match when={activeTab() === 'call' && canUseInlineCallTab()}>
-                <ChannelCallTab
-                  channelId={channelId}
-                  pendingJoin={pendingJoinCall}
-                />
+                <TraceFlow name="channel.call.view">
+                  <ChannelCallTab
+                    channelId={channelId}
+                    pendingJoin={pendingJoinCall}
+                  />
+                </TraceFlow>
               </Match>
             </Switch>
           </div>

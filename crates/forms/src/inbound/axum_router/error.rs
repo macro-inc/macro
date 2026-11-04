@@ -128,6 +128,10 @@ impl IntoResponse for FormsApiError {
                 StatusCode::NOT_FOUND,
                 body(FormErrorCode::NoResponse, message),
             ),
+            FormError::AnonymousResponseFinal => (
+                StatusCode::CONFLICT,
+                body(FormErrorCode::AnonymousResponseFinal, message),
+            ),
             FormError::UnknownQuestion { question } => (
                 StatusCode::BAD_REQUEST,
                 FormErrorResponse {
@@ -181,6 +185,10 @@ impl IntoResponse for FormsApiError {
             FormError::InvalidSharing(_) => (
                 StatusCode::BAD_REQUEST,
                 body(FormErrorCode::InvalidSharing, message),
+            ),
+            FormError::InvalidBranding(_) => (
+                StatusCode::BAD_REQUEST,
+                body(FormErrorCode::InvalidBranding, message),
             ),
             FormError::TallyHidden => (
                 StatusCode::FORBIDDEN,

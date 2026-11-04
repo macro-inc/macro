@@ -79,21 +79,14 @@ export function ToolCallPart(props: {
           context={props.context}
         />
       </Match>
-      <Match
-        when={
-          rendersOwnView(props.part) &&
-          toolLabel(props.part.name) === 'DisplayResults'
-        }
-      >
-        <DisplayResultsToolCall
-          input={
-            'input' in props.part.detail ? props.part.detail.input : undefined
-          }
-          error={
-            'error' in props.part.detail ? props.part.detail.error : undefined
-          }
-          common={common()}
-        />
+      <Match when={props.part.detail.kind === 'view' && props.part.detail}>
+        {(detail) => (
+          <DisplayResultsToolCall
+            view={detail().view ?? undefined}
+            error={detail().error}
+            common={common()}
+          />
+        )}
       </Match>
       <Match when={props.part.detail.kind === 'terminal' && props.part.detail}>
         {(detail) => <TerminalToolCall detail={detail()} common={common()} />}

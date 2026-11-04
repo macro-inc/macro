@@ -68,7 +68,9 @@ threads, pins, recents, notifications, folders, activity.
 - Add a Soup GraphQL field: resolver/loader in `crates/graphql_soup` →
   `src/api/graphql_soup.rs` if wiring changes.
 - Add a REST route: `src/api/<area>.rs` → `src/api.rs` (router) →
-  `src/api/swagger.rs`.
+  `src/api/swagger.rs`; register query-only schemas explicitly in its components list.
+  Then `bun run gen-api cloud-storage` in `apps/web` regenerates
+  `service-storage/openapi.json` and its clients.
 - Add a config value or feature-gated behavior: `src/config.rs` → the
   `[features]` table in `Cargo.toml` if it should be independently toggleable.
 

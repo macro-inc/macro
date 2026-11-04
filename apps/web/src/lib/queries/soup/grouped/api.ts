@@ -1,3 +1,4 @@
+import { TASK_PRIORITY_OPTIONS } from '@entity/utils/task-properties';
 import { SYSTEM_PROPERTY_IDS } from '@property/constants';
 import type { SoupProperty } from '@service-storage/generated/schemas';
 import type { ApiGroupByField as ApiGroupedSoupField } from '@service-storage/generated/schemas/apiGroupByField';
@@ -196,6 +197,10 @@ function getGroupedPropertyValueType(
   return value?.type;
 }
 
+const PRIORITY_GROUP_ORDER: readonly string[] = TASK_PRIORITY_OPTIONS.map(
+  (option) => option.value
+);
+
 function keyRank(order: readonly string[], key: string): number {
   const i = order.indexOf(key);
   return i === -1 ? order.length : i;
@@ -233,6 +238,12 @@ export function makeGroupComparator(
       if (aNotSet && bNotSet) return 0;
       if (aNotSet) return 1;
       if (bNotSet) return -1;
+      if (groupBy.propertyDefinitionId === SYSTEM_PROPERTY_IDS.PRIORITY) {
+        const priority =
+          keyRank(PRIORITY_GROUP_ORDER, a.key) -
+          keyRank(PRIORITY_GROUP_ORDER, b.key);
+        if (priority !== 0) return priority;
+      }
       // Server metadata uses the definition's option display_order, also used by item sorting.
       return defaultOrder(a, b);
     };

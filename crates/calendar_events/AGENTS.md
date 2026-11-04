@@ -15,8 +15,6 @@ reminder dispatch, team availability, and provider/Postgres persistence.
 - `src/domain/capabilities.rs`: Google's organizer-set `GuestPolicy` and the
   `ViewerCapabilities` every read surface exposes as `viewerCan`.
 - `src/domain/team_availability.rs` + `src/domain/team.rs`: team sharing/availability.
-- `src/domain/notes.rs`, `src/outbound/pg_notes.rs`, `src/inbound/notes_router.rs`:
-  occurrence-scoped markdown links and optional team view access (feature `notes`).
 - `src/outbound/google.rs`, `src/outbound/pg.rs`: Google Calendar and Postgres adapters.
 - `src/outbound/pg/outlook.rs`: durable Outlook synchronization; preserve
   provider-specific coverage on discovery.
@@ -52,17 +50,9 @@ reminder dispatch, team availability, and provider/Postgres persistence.
 ## Checks
 
 - `cargo test -p calendar_events` (`SQLX_OFFLINE` unset).
-- `cargo test -p calendar_events --features notes,postgres` covers meeting-note
-  policy and its document-access integration against a migrated local MacroDB.
 
 ## Gotchas
 
-- Keep note links separate from sync-owned occurrence rows; require a live
-  occurrence and corroborated inbox copies for inherited view access. A document
-  owner can unlink after losing meeting access. Document readers can discover
-  only links whose meeting details they can currently see; owners also retain
-  unavailable links for revocation. See
-  [meeting-note access](../../docs/architecture/calendar-meeting-notes.md).
 - `CalendarEvent` is the stable Macro entity; external calendars and email
   invitations are sources feeding it, and recurrence instances are queryable
   occurrence projections, not separate events — don't model them as new entities.
@@ -236,8 +226,7 @@ reminder dispatch, team availability, and provider/Postgres persistence.
   `ReadCalendarEvent` (`src/inbound/toolset/read_calendar_event.rs`), which goes
   through `mention_previews`: the hover card's visibility and fields. A preview
   that falls back to a channel share loses its Macro call there, in the
-  repository so that meeting-note references (`reference_previews`) get the
-  same, and before the description cap, since the join line closes the
+  repository and before the description cap, since the join line closes the
   description. Whoever resolves to their own copy keeps it: the card's Join
   button reads the link from the preview. Only the generated Macro call goes;
   join text a provider wrote into the body, as a Teams invitation's, stays, as
@@ -346,6 +335,16 @@ reminder dispatch, team availability, and provider/Postgres persistence.
   plain sentence for an event that is not the user's: `ReadCalendarEvent` and
   `NameSearch` both give it, because models follow it more reliably than the
   fields behind it.
+- A series Google split off another without moving it in time has the id
+  `<parent>_R<first start>`, a UID of its own and the parent's `created`; a
+  split that moved it gets an unrelated id. A change to a `_R` series' recurrence
+  answers with a new event, new id and UID at `sequence` + 1, and leaves the old
+  id, and every later `_R` slice of that parent, a cancelled tombstone Google
+  refuses to patch (`badRequest`). The entity follows the UID, so the echo lands
+  on a new entity: `delete_copy` retires the old id's source in the same request,
+  or the old entity keeps every occurrence until the tombstone syncs, and
+  `truncate_recurring_event` reads a tombstone as gone, so a delete from a copy
+  or later slice that has not synced yet retires it too.
 - Copies of one meeting pair by `calendar_meeting_uid(ical_uid)`, not the raw
   UID: Exchange gives a meeting it imports from an invitation its own UID that
   wraps the original after `vCal-Uid`, and the SQL function unwraps it, so an

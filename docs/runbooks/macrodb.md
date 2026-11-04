@@ -87,7 +87,8 @@ Connections blocked on locks, or a transaction open for a long time.
 - In Database Monitoring's blocking queries view, find the blocking session and
   its query. Advisory locks (`pg_advisory_xact_lock`) and tuple locks from
   concurrent updates of the same rows have caused past overloads.
-- A long open transaction holds its locks and stops vacuum. Find it in
+- A long open transaction holds its locks and stops vacuum. The long-running
+  transaction alert includes the normalized SQL. Confirm it in
   `pg_stat_activity` (`xact_start`, `state = 'idle in transaction'`).
 - Levers: cancel (`pg_cancel_backend`) or terminate (`pg_terminate_backend`)
   the blocking session once you know what it is; stop the job that keeps

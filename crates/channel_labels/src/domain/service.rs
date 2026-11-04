@@ -53,7 +53,7 @@ fn channel_write_result(outcome: SetChannelLabelOutcome) -> Result<(), ChannelLa
             Err(ChannelLabelsError::NotFound("label not found"))
         }
         SetChannelLabelOutcome::ChannelNotLabelable => Err(ChannelLabelsError::BadRequest(
-            "only team channels in this label's scope can be added to a label".to_string(),
+            "channel is not eligible for this label's scope".to_string(),
         )),
         SetChannelLabelOutcome::SmartTagReadOnly => Err(ChannelLabelsError::BadRequest(
             "smart tag membership is determined by its rule".to_string(),
@@ -112,7 +112,7 @@ where
     R: ChannelLabelsRepo,
     anyhow::Error: From<R::Err>,
 {
-    #[tracing::instrument(err, skip(self))]
+    #[tracing::instrument(skip_all, err)]
     async fn list_labels(
         &self,
         receipt: &ChannelLabelsReceipt,
@@ -124,7 +124,7 @@ where
             .map_err(anyhow::Error::from)?)
     }
 
-    #[tracing::instrument(err, skip(self))]
+    #[tracing::instrument(skip_all, err)]
     async fn create_label(
         &self,
         receipt: &ChannelLabelsReceipt,
@@ -155,7 +155,7 @@ where
         )
     }
 
-    #[tracing::instrument(err, skip(self))]
+    #[tracing::instrument(skip_all, err)]
     async fn rename_label(
         &self,
         receipt: &ChannelLabelsReceipt,
@@ -193,7 +193,64 @@ where
         )
     }
 
-    #[tracing::instrument(err, skip(self))]
+    #[tracing::instrument(
+        skip_all,
+        err,
+        fields(
+            label.id = %label_id,
+            source.scope = ?source.scope().selection(),
+            target.scope = ?target.map(|receipt| receipt.scope().selection()),
+        ),
+    )]
+    async fn update_label(
+        &self,
+        source: &ChannelLabelsReceipt,
+        target: Option<&ChannelLabelsReceipt>,
+        label_id: Uuid,
+        name: String,
+        rule: Option<ChannelLabelRule>,
+    ) -> Result<ChannelLabel, ChannelLabelsError> {
+        let Some(target) = target else {
+            return self.rename_label(source, label_id, name, rule).await;
+        };
+        if source.user_id() != target.user_id() {
+            return Err(ChannelLabelsError::Unauthorized);
+        }
+        if source.scope() == target.scope() {
+            return self.rename_label(source, label_id, name, rule).await;
+        }
+        let name = validate_name(&name)?;
+        let rule = rule.map(validate_rule).transpose()?;
+        if rule.is_some() {
+            let existing = self
+                .repo
+                .get_label(source.scope(), label_id, source.user_id())
+                .await
+                .map_err(anyhow::Error::from)?
+                .ok_or(ChannelLabelsError::NotFound("label not found"))?;
+            if existing.rule.is_none() {
+                return Err(ChannelLabelsError::BadRequest(
+                    "only smart tags have editable rules".into(),
+                ));
+            }
+        }
+        written(
+            self.repo
+                .transfer_label(
+                    source.scope(),
+                    target.scope(),
+                    label_id,
+                    &name,
+                    source.user_id(),
+                    rule.as_ref(),
+                )
+                .await
+                .map_err(anyhow::Error::from)?,
+            &name,
+        )
+    }
+
+    #[tracing::instrument(skip_all, err)]
     async fn delete_label(
         &self,
         receipt: &ChannelLabelsReceipt,
@@ -211,7 +268,7 @@ where
         }
     }
 
-    #[tracing::instrument(err, skip(self))]
+    #[tracing::instrument(skip_all, err)]
     async fn set_channel_label(
         &self,
         receipt: &ChannelLabelsReceipt,
@@ -222,7 +279,7 @@ where
             .await
     }
 
-    #[tracing::instrument(err, skip(self))]
+    #[tracing::instrument(skip_all, err)]
     async fn preview_smart_tag(
         &self,
         receipt: &ChannelLabelsReceipt,

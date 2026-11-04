@@ -742,6 +742,7 @@ impl JwtValidator for FakeJwtValidator {
             origin: macro_authorization::CredentialOrigin::Session,
             identity: ValidatedIdentity {
                 agent_id: None,
+                agent_via: None,
                 user_id: jwt.to_string(),
                 fusion_user_id: "fusion-user".to_string(),
                 organization_id: None,
@@ -832,6 +833,7 @@ fn bot_authentication_with_acting_user(bot_id: BotId) -> BotAuthentication {
         acting_user: Some(MacroUserAuthentication {
             origin: macro_authorization::CredentialOrigin::Bot,
             agent_id: None,
+            agent_via: None,
             macro_user_id: MacroUserIdStr::parse_from_str("macro|acting-bot@example.com").unwrap(),
             user_context: Default::default(),
         }),

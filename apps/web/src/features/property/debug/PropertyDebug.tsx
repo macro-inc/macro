@@ -110,7 +110,12 @@ const PropertyDebug: Component = () => {
               >
                 <Property.Text
                   property={get(p)}
-                  fallback={<Property.Empty label="None" />}
+                  fallback={
+                    <Property.Empty
+                      propertyDefinitionId={p.propertyDefinitionId}
+                      label="None"
+                    />
+                  }
                 />
               </Property.Root>
             )}
@@ -130,7 +135,12 @@ const PropertyDebug: Component = () => {
                   <Property.Icon property={get(p)} class="size-3 shrink-0" />
                   <Property.Text
                     property={get(p)}
-                    fallback={<Property.Empty label="None" />}
+                    fallback={
+                      <Property.Empty
+                        propertyDefinitionId={p.propertyDefinitionId}
+                        label="None"
+                      />
+                    }
                   />
                 </div>
               </Property.Root>
@@ -154,6 +164,7 @@ const PropertyDebug: Component = () => {
                   property={get(p)}
                   fallback={
                     <Property.Empty
+                      propertyDefinitionId={p.propertyDefinitionId}
                       label={`Set ${p.displayName.toLowerCase()}`}
                     />
                   }
@@ -202,7 +213,12 @@ const PropertyDebug: Component = () => {
                     <Property.Icon property={get(p)} class="size-3 shrink-0" />
                     <Property.Text
                       property={get(p)}
-                      fallback={<Property.Empty label="None" />}
+                      fallback={
+                        <Property.Empty
+                          propertyDefinitionId={p.propertyDefinitionId}
+                          label="None"
+                        />
+                      }
                     />
                     <Property.Caret />
                   </Property.Pill>
@@ -364,7 +380,12 @@ const EditorRow: Component<{ initial: PropertyT }> = (props) => {
                 <Property.Icon property={property()} class="size-3 shrink-0" />
                 <Property.Text
                   property={property()}
-                  fallback={<Property.Empty label="None" />}
+                  fallback={
+                    <Property.Empty
+                      propertyDefinitionId={property().propertyDefinitionId}
+                      label="None"
+                    />
+                  }
                 />
                 <Property.Caret />
               </Property.Pill>

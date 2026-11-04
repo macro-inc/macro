@@ -17,7 +17,7 @@ import { GithubLabelPills } from '@entity/components/GithubLabelPill';
 import { PrAgentSessionsChip } from '@entity/views/PrAgentSessionsChip';
 import IconShared from '@icon/share.svg';
 import IconLink from '@icon/system/regular/link.svg';
-import { DebouncedNotificationReadMarker } from '@notifications';
+import { NotificationReadMarker } from '@notifications';
 import {
   type GithubPullRequestWithDetails,
   useRefreshGithubPullRequest,
@@ -130,7 +130,7 @@ export function PrDetailBody(props: PrDetailBodyProps) {
   const notificationSource = useGlobalNotificationSource();
   return (
     <>
-      <DebouncedNotificationReadMarker
+      <NotificationReadMarker
         notificationSource={notificationSource}
         entity={{ type: 'foreign_entity', id: props.foreignEntityId }}
       />

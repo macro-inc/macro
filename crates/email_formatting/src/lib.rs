@@ -111,18 +111,12 @@ impl EmailDigestNotification {
         }
         let num_truncated = input_len - preview_len;
 
-        let mut unsubscribe_url = signing::append_path(
+        let unsubscribe_url = signing::unsubscribe_url(
             NotificationServiceUrl::new_for_environment(env)?.parse_url()?,
-            &format!(
-                "/user_notifications/preferences/{}/disable",
-                Self::TYPE_NAME
-            ),
+            Self::TYPE_NAME,
+            digest.user_id.as_ref(),
+            sha,
         );
-        unsubscribe_url
-            .query_pairs_mut()
-            .append_pair("id", digest.user_id.as_ref())
-            .finish();
-        let unsubscribe_url = SignedUrl::new(unsubscribe_url, sha);
 
         let inner_html_string = DigestTemplate {
             notifs,

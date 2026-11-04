@@ -513,6 +513,7 @@ where
             }
 
             let session_id = uuid::Uuid::new_v4().to_string();
+            let sign_in = params.sign_in.unwrap_or_default();
             tracing::info!(%session_id, client_id = %client.client_id, "starting OAuth authorize flow");
 
             service
@@ -531,7 +532,7 @@ where
 
             service
                 .oauth_provider
-                .construct_authorize_url(&session_id)
+                .construct_authorize_url(&session_id, sign_in)
                 .map_err(StartAuthorizationError::ConstructAuthorizeUrl)
         }
     }

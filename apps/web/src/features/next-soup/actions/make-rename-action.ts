@@ -3,6 +3,7 @@ import { t } from '@app/lib/i18n';
 import { toast } from '@core/component/Toast/Toast';
 import { fireAndForget } from '@core/util/fireAndForget';
 import { canEditChannelIdentity, type EntityData } from '@entity/types/entity';
+import { isSessionArchived } from '@service-agent-harness/session-archive';
 import { restoreSoupFocus } from '../utils';
 import type { EntityActionListState } from './entity-action-context';
 
@@ -14,7 +15,8 @@ export const makeRenameAction = (options: MakeRenameOptions) => {
   const { userId } = options;
 
   const canExecute = (entity: EntityData): boolean => {
-    if (entity.type === 'agent_session' && entity.isArchived) return false;
+    if (entity.type === 'agent_session' && isSessionArchived(entity))
+      return false;
     if (entity.type === 'database') {
       return entity.grant === 'edit' || entity.grant === 'owner';
     }

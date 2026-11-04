@@ -6,6 +6,8 @@ use uuid::Uuid;
 
 /// Cache mailbox-scoped contact identities for address predicates and team scope.
 pub(super) struct ResolvedFilters {
+    /// Only the explicit Trash view may admit present messages in trash.
+    pub(super) include_trash: bool,
     /// Lowercased email address → all contact ids that match across the
     /// resolved scope (one link, or all team links). Empty Vec means the
     /// address has no matching contact anywhere in scope.
@@ -51,6 +53,7 @@ impl ResolvedFilters {
     #[cfg(test)]
     pub(super) fn empty() -> Self {
         Self {
+            include_trash: false,
             contact_ids: HashMap::new(),
             team_link_ids: None,
         }
@@ -204,6 +207,7 @@ pub(super) async fn resolve_filters(
     }
 
     Ok(ResolvedFilters {
+        include_trash: false,
         contact_ids,
         team_link_ids,
     })

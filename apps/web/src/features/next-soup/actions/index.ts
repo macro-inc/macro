@@ -26,6 +26,7 @@ export { makeCopyEntityIdAction } from './make-copy-entity-id-action';
 export { makeCopyLinkAction } from './make-copy-link-action';
 export { makeCreateReminderAction } from './make-create-reminder-action';
 export { makeDeleteAction } from './make-delete-action';
+export { makeDiscardDraftAction } from './make-discard-draft-action';
 export { makeDownloadAction } from './make-download-action';
 export { makeFavoriteAction } from './make-favorite-action';
 export { makeGithubLinkAction } from './make-github-link-action';

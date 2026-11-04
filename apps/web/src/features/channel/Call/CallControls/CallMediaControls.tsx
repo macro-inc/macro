@@ -1,3 +1,4 @@
+import { MobileDrawer } from '@components/app/mobile/MobileDrawer';
 import { BlurIcon } from '@core/component/media/media-background-picker';
 import { MediaDeviceRadioItems } from '@core/component/media/media-device-picker';
 import type { BackgroundEffect } from '@core/media/background-effect';
@@ -6,8 +7,8 @@ import { fireAndForget } from '@core/util/fireAndForget';
 import Image from '@icon/system/regular/image.svg';
 import Prohibit from '@icon/system/regular/prohibit.svg';
 import Upload from '@icon/system/regular/upload-simple.svg';
-import { Dropdown } from '@ui';
-import { createSignal, type JSX, onCleanup, Show } from 'solid-js';
+import { Dropdown, SingleSelectCheck, ToggleSwitch } from '@ui';
+import { createSignal, For, type JSX, onCleanup, Show } from 'solid-js';
 import type { CallState } from '../CallContext';
 import { CallControlBar } from './CallControlBar';
 
@@ -48,6 +49,8 @@ function backgroundChoice(effect: BackgroundEffect): BackgroundChoice {
 export function CallMediaControls(props: {
   media: CallMediaControlsState;
   onLeave: () => void | Promise<void>;
+  onSettingsOpenChange?: (open: boolean) => void;
+  children?: JSX.Element;
 }) {
   const call = props.media;
   const [applyingBackground, setApplyingBackground] = createSignal(false);
@@ -97,10 +100,19 @@ export function CallMediaControls(props: {
   }
 
   const backgroundDisabled = () => call.isConnecting() || applyingBackground();
+  const selectMicrophone = (id: string) =>
+    fire(() => call.switchAudioInput(id || 'default'));
+  const selectSpeaker = (id: string) =>
+    fire(() => call.switchAudioOutput(id || 'default'));
+  const selectCamera = (id: string) =>
+    fire(() =>
+      call.switchVideoInput(id || call.videoInputDevices()[0]?.deviceId || '')
+    );
 
   return (
     <>
       <CallControlBar
+        onSettingsOpenChange={props.onSettingsOpenChange}
         disabled={call.isConnecting()}
         audioMuted={call.isAudioMuted()}
         videoMuted={call.isVideoMuted()}
@@ -119,9 +131,7 @@ export function CallMediaControls(props: {
                 devices={call.audioInputDevices()}
                 selected={call.activeAudioInputDeviceId() ?? ''}
                 disabled={call.isConnecting()}
-                onSelect={(id) =>
-                  fire(() => call.switchAudioInput(id || 'default'))
-                }
+                onSelect={selectMicrophone}
               />
             </Dropdown.Group>
             <Show when={'setSinkId' in HTMLMediaElement.prototype}>
@@ -133,21 +143,28 @@ export function CallMediaControls(props: {
                   devices={call.audioOutputDevices()}
                   selected={call.activeAudioOutputDeviceId() ?? ''}
                   disabled={call.isConnecting()}
-                  onSelect={(id) =>
-                    fire(() => call.switchAudioOutput(id || 'default'))
-                  }
+                  onSelect={selectSpeaker}
                 />
               </Dropdown.Group>
             </Show>
             <Dropdown.Separator />
             <Dropdown.Group>
               <Dropdown.CheckboxItem
+                class="flex-row-reverse"
                 checked={call.isNoiseSuppressed()}
                 disabled={call.isConnecting()}
                 closeOnSelect={false}
                 onChange={() => fire(call.toggleNoiseSuppression)}
+                indicator={
+                  <span inert aria-hidden="true">
+                    <ToggleSwitch
+                      size="md"
+                      checked={call.isNoiseSuppressed()}
+                    />
+                  </span>
+                }
               >
-                Noise suppression
+                <span class="flex-1">Noise suppression</span>
               </Dropdown.CheckboxItem>
             </Dropdown.Group>
           </>
@@ -169,6 +186,26 @@ export function CallMediaControls(props: {
             </p>
           </Dropdown.Group>
         }
+        screenDrawer={
+          <>
+            <MobileDrawer.Section>
+              <ToggleSwitch
+                size="md"
+                label="Share audio"
+                labelClass="order-first flex-1"
+                class="min-h-11 w-full px-3 py-2.5 text-sm"
+                checked={call.shareScreenAudio()}
+                disabled={call.isConnecting() || call.isScreenSharing()}
+                onChange={(checked) => call.setShareScreenAudio(checked)}
+              />
+            </MobileDrawer.Section>
+            <p class="mt-2 px-3 text-xs text-ink-muted">
+              {call.isScreenSharing()
+                ? 'Stop sharing to change this.'
+                : 'Shares audio from a tab, or from your whole system where the browser supports it.'}
+            </p>
+          </>
+        }
         videoMenu={
           <>
             <Dropdown.Group>
@@ -178,13 +215,7 @@ export function CallMediaControls(props: {
                 devices={call.videoInputDevices()}
                 selected={call.activeVideoInputDeviceId() ?? ''}
                 disabled={call.isConnecting()}
-                onSelect={(id) =>
-                  fire(() =>
-                    call.switchVideoInput(
-                      id || call.videoInputDevices()[0]?.deviceId || ''
-                    )
-                  )
-                }
+                onSelect={selectCamera}
               />
             </Dropdown.Group>
             <Dropdown.Separator />
@@ -243,7 +274,125 @@ export function CallMediaControls(props: {
             </Dropdown.Group>
           </>
         }
-      />
+        audioDrawer={
+          <div class="space-y-4">
+            <div>
+              <MobileDrawer.Label>Microphone</MobileDrawer.Label>
+              <MobileDrawer.Section>
+                <DeviceDrawerOptions
+                  label="Microphone"
+                  devices={call.audioInputDevices()}
+                  selected={call.activeAudioInputDeviceId() ?? ''}
+                  disabled={call.isConnecting()}
+                  onSelect={selectMicrophone}
+                />
+              </MobileDrawer.Section>
+            </div>
+            <Show when={'setSinkId' in HTMLMediaElement.prototype}>
+              <div>
+                <MobileDrawer.Label>Speaker</MobileDrawer.Label>
+                <MobileDrawer.Section>
+                  <DeviceDrawerOptions
+                    label="Speaker"
+                    devices={call.audioOutputDevices()}
+                    selected={call.activeAudioOutputDeviceId() ?? ''}
+                    disabled={call.isConnecting()}
+                    onSelect={selectSpeaker}
+                  />
+                </MobileDrawer.Section>
+              </div>
+            </Show>
+            <MobileDrawer.Section>
+              <ToggleSwitch
+                size="md"
+                label="Noise suppression"
+                labelClass="order-first flex-1"
+                class="min-h-11 w-full px-3 py-2.5 text-sm"
+                checked={call.isNoiseSuppressed()}
+                disabled={call.isConnecting()}
+                onChange={() => fire(call.toggleNoiseSuppression)}
+              />
+            </MobileDrawer.Section>
+          </div>
+        }
+        videoDrawer={
+          <div class="space-y-4">
+            <div>
+              <MobileDrawer.Label>Camera</MobileDrawer.Label>
+              <MobileDrawer.Section>
+                <DeviceDrawerOptions
+                  label="Camera"
+                  devices={call.videoInputDevices()}
+                  selected={call.activeVideoInputDeviceId() ?? ''}
+                  disabled={call.isConnecting()}
+                  onSelect={selectCamera}
+                />
+              </MobileDrawer.Section>
+            </div>
+            <div>
+              <MobileDrawer.Label>Background</MobileDrawer.Label>
+              <MobileDrawer.Section role="radiogroup" aria-label="Background">
+                <For
+                  each={[
+                    { value: 'none', label: 'None' },
+                    { value: 'light', label: 'Light blur' },
+                    { value: 'heavy', label: 'Strong blur' },
+                  ]}
+                >
+                  {(option) => (
+                    <MobileDrawer.Item
+                      role="radio"
+                      aria-checked={
+                        backgroundChoice(call.backgroundEffect()) ===
+                        option.value
+                      }
+                      disabled={backgroundDisabled()}
+                      onClick={() =>
+                        fireAndForget(
+                          selectBackground(option.value),
+                          'channel-call'
+                        )
+                      }
+                    >
+                      <span class="flex-1">{option.label}</span>
+                      <SingleSelectCheck
+                        active={
+                          backgroundChoice(call.backgroundEffect()) ===
+                          option.value
+                        }
+                      />
+                    </MobileDrawer.Item>
+                  )}
+                </For>
+                <Show when={call.backgroundEffect().type === 'image'}>
+                  <MobileDrawer.Item
+                    role="radio"
+                    aria-checked="true"
+                    disabled={backgroundDisabled()}
+                  >
+                    <Image class="size-4" />
+                    <span class="flex-1">Custom image</span>
+                    <SingleSelectCheck active />
+                  </MobileDrawer.Item>
+                </Show>
+              </MobileDrawer.Section>
+              <MobileDrawer.Section class="mt-2">
+                <MobileDrawer.Item
+                  disabled={backgroundDisabled()}
+                  onClick={() => upload?.click()}
+                >
+                  <Upload class="size-4" />
+                  <span>
+                    {applyingBackground() ? 'Loading…' : 'Upload image'}
+                  </span>
+                </MobileDrawer.Item>
+              </MobileDrawer.Section>
+            </div>
+          </div>
+        }
+      >
+        {props.children}
+      </CallControlBar>
       <input
         ref={upload}
         type="file"
@@ -261,6 +410,40 @@ export function CallMediaControls(props: {
   );
 }
 
+function DeviceDrawerOptions(props: {
+  label: string;
+  devices: ReadonlyArray<Pick<MediaDeviceInfo, 'deviceId' | 'label'>>;
+  selected: string;
+  disabled: boolean;
+  onSelect: (id: string) => void;
+}) {
+  const options = () => [
+    { deviceId: '', label: 'System default' },
+    ...props.devices
+      .filter((device) => device.deviceId !== '')
+      .map((device, index) => ({
+        deviceId: device.deviceId,
+        label: device.label || `${props.label} ${index + 1}`,
+      })),
+  ];
+  return (
+    <div role="radiogroup" aria-label={props.label}>
+      <For each={options()}>
+        {(device) => (
+          <MobileDrawer.Item
+            role="radio"
+            aria-checked={props.selected === device.deviceId}
+            disabled={props.disabled}
+            onClick={() => props.onSelect(device.deviceId)}
+          >
+            <span class="min-w-0 flex-1 truncate">{device.label}</span>
+            <SingleSelectCheck active={props.selected === device.deviceId} />
+          </MobileDrawer.Item>
+        )}
+      </For>
+    </div>
+  );
+}
 /** One background choice as a small tile; `caption` shortens the visible name. */
 function BackgroundTile(props: {
   value: BackgroundChoice;

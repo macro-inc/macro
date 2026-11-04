@@ -24,9 +24,13 @@ fn respondent_details_withhold_the_booking_destination() {
         status: FormStatus::Open,
         closes_at: None,
         confirmation_message: "Thank you".into(),
+        branding: FormBranding::default(),
         created_at: start_of_tests(),
         updated_at: start_of_tests(),
+        project_id: None,
         is_hidden_in_drive: false,
+        responses_visible: false,
+        anonymous: false,
     };
     let layout = FormLayout {
         sections: vec![FormSection::Booking {
@@ -90,6 +94,7 @@ fn with_questions(questions: Vec<QuestionLayout>) -> FormLayout {
             title: "".into(),
             description: "".into(),
             questions,
+            show_when: None,
         }],
     }
 }
@@ -257,6 +262,7 @@ async fn a_layout_asking_a_column_twice_or_reusing_an_id_is_refused() {
             title: "".into(),
             description: "".into(),
             questions: vec![question(7, TEAM, None)],
+            show_when: None,
         }],
     };
     assert!(matches!(
@@ -328,6 +334,7 @@ async fn a_gate_may_test_only_columns_asked_before_it_as_a_view_filter_would() {
                 title: "".into(),
                 description: "".into(),
                 questions: vec![question(1, TEAM, None), question(2, START_DATE, None)],
+                show_when: None,
             },
             FormSection::Gate {
                 id: ELIGIBILITY,
@@ -344,6 +351,7 @@ async fn a_gate_may_test_only_columns_asked_before_it_as_a_view_filter_would() {
                 title: "".into(),
                 description: "".into(),
                 questions: vec![question(3, DIET, None)],
+                show_when: None,
             },
         ],
     };
@@ -436,6 +444,7 @@ async fn texts_longer_than_allowed_are_refused() {
             title: "x".repeat(201),
             description: "".into(),
             questions: vec![],
+            show_when: None,
         }],
     };
     assert!(matches!(

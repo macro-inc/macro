@@ -799,7 +799,6 @@ impl BootStubEnv {
         // email_service's GCP pubsub queue (gmail watch notifications) and
         // its own CloudFront signer for attachment presigned URLs.
         env.insert("GMAIL_GCP_QUEUE".into(), "gmail-gcp-queue-local".into());
-        env.insert("APOLLO_API_KEY".into(), "local".into());
         env.insert(
             "EMAIL_SERVICE_CLOUDFRONT_DISTRIBUTION_URL".into(),
             "http://localhost:8100".into(),
@@ -842,6 +841,12 @@ impl BootStubEnv {
         env.insert(
             "SLACK_MCP_CLIENT_SECRET".into(),
             "local-slack-mcp-secret".into(),
+        );
+        // agent_harness_service serves this at `/.well-known/openai-apps-challenge`;
+        // only OpenAI's verifier reads it.
+        env.insert(
+            "OPENAI_DOMAIN_VERIFICATION_TOKEN".into(),
+            "local-openai-domain-verification-token".into(),
         );
         // document_storage_service's GitHub sync + LiveKit + LLM + Cal config.
         // All boot-required; the integrations they back are inert locally.

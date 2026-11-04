@@ -44,6 +44,12 @@ reconnecting the websocket, verify recovery without requiring another action.
 Hidden tabs defer refresh until visible; purges refresh all mounted activity
 queries through the normal access checks.
 
+Overview dates retain their server calendar day in every viewer timezone. Check
+the year grid, tooltips and streaks across a daylight-saving transition and leap
+day; mounting the same cached overview must not shift or omit a day. The shared
+activity date owner (`activity/core/activity-dates.ts`) uses UTC calendar
+arithmetic, without a timezone lookup per cell; test it in a DST timezone.
+
 GitHub-style actions heatmap (one a11y node per day — makes snapshots huge; prefer saving the
 snapshot to a file), then a `Most active` section header (styled like the feed's day headers)
 over a wrapping row of pill chips (entity icon, name, action count; click opens the entity,
