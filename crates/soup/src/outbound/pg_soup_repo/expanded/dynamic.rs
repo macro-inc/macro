@@ -2341,7 +2341,7 @@ async fn expanded_dynamic_cursor_soup_hydrated(
     let completed_option_id = StatusOption::COMPLETED_UUID.to_string();
 
     let mut transaction = begin_dynamic_query(db).await?;
-    let source_ids = fetch_user_source_ids(&mut *transaction, user_id.as_ref()).await?;
+    let source_ids = fetch_user_source_ids(&mut transaction, user_id.as_ref()).await?;
     let mut document_ids =
         DocumentIdArrays::starting_at(first_document_id_slot(*cursor.sort_method(), false));
     let mut builder = build_query(
@@ -2844,7 +2844,7 @@ pub async fn expanded_dynamic_cursor_soup_grouped(
     let completed_option_id = StatusOption::COMPLETED_UUID.to_string();
 
     let mut transaction = begin_dynamic_query(db).await?;
-    let source_ids = fetch_user_source_ids(&mut *transaction, user_id.as_ref()).await?;
+    let source_ids = fetch_user_source_ids(&mut transaction, user_id.as_ref()).await?;
     let mut document_ids =
         DocumentIdArrays::starting_at(first_document_id_slot(*cursor.sort_method(), true));
     let (mut query_builder, entity_type_bind) = build_grouped_query(
