@@ -464,6 +464,7 @@ function BrowseSection(props: {
       maxHeight={props.maxHeight}
       dropEdge={props.sectionReorder.dropEdge(props.sectionKey)}
       dragging={props.sectionReorder.isDragging(props.sectionKey)}
+      outerScrollRoot={props.outerScrollRoot}
       itemCount={itemCount()}
       rootRef={(element) => {
         handle.root = element;
