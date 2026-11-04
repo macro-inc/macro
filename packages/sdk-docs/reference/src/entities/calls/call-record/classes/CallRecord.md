@@ -219,18 +219,21 @@ Toggle the server's share-with-team setting and return its new value.
 
 ### toJSON()
 
-> **toJSON**(): \{ `detail?`: [`CallRecord`](../../../../../generated/storage/types.gen/type-aliases/CallRecord.md); `id`: `string`; \}
+> **toJSON**(): \{ `detail?`: [`CallRecord`](../../../../../generated/storage/types.gen/type-aliases/CallRecord.md); `id`: `string`; `url`: `string`; \}
+
+Identity, loaded detail and [webUrl](#weburl), so serialized handles carry their link.
 
 #### Returns
 
-\{ `detail?`: [`CallRecord`](../../../../../generated/storage/types.gen/type-aliases/CallRecord.md); `id`: `string`; \}
+\{ `detail?`: [`CallRecord`](../../../../../generated/storage/types.gen/type-aliases/CallRecord.md); `id`: `string`; `url`: `string`; \}
 
 | Name | Type |
 | ------ | ------ |
 | `detail?` | [`CallRecord`](../../../../../generated/storage/types.gen/type-aliases/CallRecord.md) |
 | `id` | `string` |
+| `url` | `string` |
 
-#### Inherited from
+#### Overrides
 
 [`FavoritableEntity`](../../../entity/classes/FavoritableEntity.md).[`toJSON`](../../../entity/classes/FavoritableEntity.md#tojson)
 
@@ -249,6 +252,18 @@ Remove this entity from the user's favorites. Returns this handle for chaining.
 #### Inherited from
 
 [`FavoritableEntity`](../../../entity/classes/FavoritableEntity.md).[`unfavorite`](../../../entity/classes/FavoritableEntity.md#unfavorite)
+
+***
+
+### webUrl()
+
+> **webUrl**(): `string`
+
+The call's URL in the Macro web app; hand it to users as the link.
+
+#### Returns
+
+`string`
 
 ***
 

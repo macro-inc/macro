@@ -125,23 +125,29 @@ pub(super) async fn cursor_soup(
     query.push_bind(req.user_id.as_ref().to_string());
     let named_ids = explicitly_named_ids(filter);
     query.push(ACCESS_SQL);
-    // A session the query names is also readable through its thread's parent,
-    // like the session's own REST read; GraphQL `agentSession` loads this way.
-    // Broad lists stay limited to session grants so every document thread's
-    // sessions do not flood Home and Recent.
+    // A session the query names, or one the viewer follows, is also readable
+    // through its thread's parent, like the session's own REST read; GraphQL
+    // `agentSession` loads this way. Other broad-list rows stay limited to
+    // session grants so every document thread's sessions do not flood Home
+    // and Recent.
     query.push("(");
     query.push(SESSION_GRANT_SQL);
-    query.push(" OR (s.id = ANY(");
+    query.push(" OR ((s.id = ANY(");
     query.push_bind(named_ids.clone());
+    query.push(") OR ");
+    query.push(FOLLOWED_SQL);
     query.push(") AND ");
     query.push(PARENT_THREAD_GRANT_SQL);
     query.push(")) AND (");
     push_filter(&mut query, filter);
     query.push(")");
-    // Hidden inline mentions and DM contexts are absent from broad lists. A
+    // Hidden thread sessions and DM contexts are absent from broad lists,
+    // except for the people who prompted them from the session itself. A
     // query that names the session still returns it, so favorites and direct
     // id lookups keep working.
-    query.push(" AND (s.visibility <> 'hidden' OR s.id = ANY(");
+    query.push(" AND (s.visibility <> 'hidden' OR ");
+    query.push(FOLLOWED_SQL);
+    query.push(" OR s.id = ANY(");
     query.push_bind(named_ids);
     query.push("))");
     if let (Some(timestamp), Some(id)) = (parts.timestamp, parts.id) {
@@ -292,10 +298,17 @@ const SESSION_GRANT_SQL: &str = r#"EXISTS (
             AND ea.source_id IN (SELECT source_id FROM user_source_ids)
     )"#;
 
+/// The viewer (`$1`) prompted the session `s` from the session itself, which
+/// lists it for them even when it is hidden. Grants nothing on its own.
+pub(super) const FOLLOWED_SQL: &str = r#"EXISTS (
+        SELECT 1 FROM agent_session_follower f
+        WHERE f.agent_session_id = s.id AND f.user_id = $1
+    )"#;
+
 /// The viewer holds a grant on the document or call whose live thread the
 /// session runs in. Mirrors the parent inheritance `entity_access` applies to
 /// agent sessions, over the same stored grants Soup reads for documents.
-const PARENT_THREAD_GRANT_SQL: &str = r#"EXISTS (
+pub(super) const PARENT_THREAD_GRANT_SQL: &str = r#"EXISTS (
         SELECT 1 FROM comms_messages m
         JOIN comms_message_threads t ON t.root_id = m.id AND t.deleted_at IS NULL
         JOIN entity_access ea

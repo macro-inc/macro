@@ -339,6 +339,11 @@ export class Channel extends PropertiedEntity<ChannelDetail> {
     return `${this.client.webAppUrl}/app/channel/${this.id}`;
   }
 
+  /** Identity, loaded detail and {@link webUrl}, so serialized handles carry their link. */
+  override toJSON() {
+    return { ...super.toJSON(), url: this.webUrl() };
+  }
+
   /** Search channels by content, most relevant first, auto-paginated. */
   static search = entitySearch({
     type: 'channel',

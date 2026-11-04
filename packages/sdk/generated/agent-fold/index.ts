@@ -853,6 +853,12 @@ export type FoldedMessage = FoldedMessage_Serialize | FoldedMessage_Deserialize;
 export type FoldedMessage_Deserialize = {
 	/**  Session that scopes this message id. */
 	agentSessionId: string,
+	/**
+	 *  The message's identity within its session, `<turn>:<author kind>`
+	 *  (`3:agent`): stable across streaming updates, rebases, and pending
+	 *  flipping off, so a reader can key and reconcile rows by it.
+	 */
+	key: string,
 	/**  The turn within the session, assigned in log order from zero. */
 	turn: number,
 	/**  Who produced the message. */
@@ -895,6 +901,12 @@ export type FoldedMessage_Deserialize = {
 export type FoldedMessage_Serialize = {
 	/**  Session that scopes this message id. */
 	agentSessionId: string,
+	/**
+	 *  The message's identity within its session, `<turn>:<author kind>`
+	 *  (`3:agent`): stable across streaming updates, rebases, and pending
+	 *  flipping off, so a reader can key and reconcile rows by it.
+	 */
+	key: string,
 	/**  The turn within the session, assigned in log order from zero. */
 	turn: number,
 	/**  Who produced the message. */

@@ -62,6 +62,14 @@ unquoted paragraphs retain normal paste behavior.
 Screenshots: [desktop](proof/quotes-desktop.png), [phone](proof/quotes-mobile.png),
 and [multi-paragraph paste](proof/quote-paste.png).
 
+## Date chips
+
+`date-chips.browser.e2e.ts` renders a whole-day chip (`"date":"2026-09-24"`)
+and a timed chip in `America/Los_Angeles` at 1:03 PM that day, and checks both
+read Today. A bare date read as UTC midnight shows Yesterday west of
+Greenwich. Run just this case by adding `date-chips.browser.e2e.ts` to the
+command above.
+
 ## Images in lists
 
 `list-images.browser.e2e.ts` mounts the production Markdown editor with media
