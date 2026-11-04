@@ -2,7 +2,7 @@
 
 import type { Client, ClientMeta, Options as Options2, RequestResult, TDataShape } from './client';
 import { client } from './client.gen';
-import type { BulkDeleteUserNotificationsV2Data, BulkDeleteUserNotificationsV2Errors, BulkDeleteUserNotificationsV2Responses, BulkGetTypedNotificationsByEventItemIdsData, BulkGetTypedNotificationsByEventItemIdsErrors, BulkGetTypedNotificationsByEventItemIdsResponses, BulkMarkNotificationsDoneData, BulkMarkNotificationsDoneErrors, BulkMarkNotificationsDoneResponses, BulkMarkNotificationsSeenData, BulkMarkNotificationsSeenErrors, BulkMarkNotificationsSeenResponses, BulkMarkNotificationsUndoneData, BulkMarkNotificationsUndoneErrors, BulkMarkNotificationsUndoneResponses, DeleteUserNotificationV2Data, DeleteUserNotificationV2Errors, DeleteUserNotificationV2Responses, DisableNotificationTypeData, DisableNotificationTypeErrors, DisableNotificationTypeResponses, EnableNotificationTypeData, EnableNotificationTypeErrors, EnableNotificationTypeResponses, GetNotificationTypePreferencesData, GetNotificationTypePreferencesErrors, GetNotificationTypePreferencesResponses, GetTypedNotificationByIdData, GetTypedNotificationByIdErrors, GetTypedNotificationByIdResponses, GetTypedNotificationsByEventItemIdData, GetTypedNotificationsByEventItemIdErrors, GetTypedNotificationsByEventItemIdResponses, GetUnsubscribesData, GetUnsubscribesErrors, GetUnsubscribesResponses, HealthHandlerData, HealthHandlerResponses, ListTypedNotificationsData, ListTypedNotificationsErrors, ListTypedNotificationsResponses, RemoveUnsubscribeAllData, RemoveUnsubscribeAllErrors, RemoveUnsubscribeAllResponses, RemoveUnsubscribeItemData, RemoveUnsubscribeItemErrors, RemoveUnsubscribeItemResponses, RemoveUnsubscribeItemsData, RemoveUnsubscribeItemsErrors, RemoveUnsubscribeItemsResponses, UnsubscribeAllData, UnsubscribeAllErrors, UnsubscribeAllResponses, UnsubscribeEmailData, UnsubscribeEmailErrors, UnsubscribeEmailResponses, UnsubscribeItemData, UnsubscribeItemErrors, UnsubscribeItemResponses, UnsubscribeItemsData, UnsubscribeItemsErrors, UnsubscribeItemsResponses } from './types.gen';
+import type { BulkDeleteUserNotificationsV2Data, BulkDeleteUserNotificationsV2Errors, BulkDeleteUserNotificationsV2Responses, BulkGetTypedNotificationsByEventItemIdsData, BulkGetTypedNotificationsByEventItemIdsErrors, BulkGetTypedNotificationsByEventItemIdsResponses, BulkMarkNotificationsDoneData, BulkMarkNotificationsDoneErrors, BulkMarkNotificationsDoneResponses, BulkMarkNotificationsSeenData, BulkMarkNotificationsSeenErrors, BulkMarkNotificationsSeenResponses, BulkMarkNotificationsUndoneData, BulkMarkNotificationsUndoneErrors, BulkMarkNotificationsUndoneResponses, DeleteUserNotificationV2Data, DeleteUserNotificationV2Errors, DeleteUserNotificationV2Responses, DisableNotificationTypeData, DisableNotificationTypeErrors, DisableNotificationTypeResponses, EnableNotificationTypeData, EnableNotificationTypeErrors, EnableNotificationTypeResponses, GetNotificationTypePreferencesData, GetNotificationTypePreferencesErrors, GetNotificationTypePreferencesResponses, GetTypedNotificationByIdData, GetTypedNotificationByIdErrors, GetTypedNotificationByIdResponses, GetTypedNotificationsByEventItemIdData, GetTypedNotificationsByEventItemIdErrors, GetTypedNotificationsByEventItemIdResponses, GetUnsubscribesData, GetUnsubscribesErrors, GetUnsubscribesResponses, HealthHandlerData, HealthHandlerResponses, ListTypedNotificationsData, ListTypedNotificationsErrors, ListTypedNotificationsResponses, RemoveUnsubscribeAllData, RemoveUnsubscribeAllErrors, RemoveUnsubscribeAllResponses, RemoveUnsubscribeItemData, RemoveUnsubscribeItemErrors, RemoveUnsubscribeItemResponses, RemoveUnsubscribeItemsData, RemoveUnsubscribeItemsErrors, RemoveUnsubscribeItemsResponses, SendManualNotificationData, SendManualNotificationErrors, SendManualNotificationResponses, UnsubscribeAllData, UnsubscribeAllErrors, UnsubscribeAllResponses, UnsubscribeEmailData, UnsubscribeEmailErrors, UnsubscribeEmailResponses, UnsubscribeItemData, UnsubscribeItemErrors, UnsubscribeItemResponses, UnsubscribeItemsData, UnsubscribeItemsErrors, UnsubscribeItemsResponses } from './types.gen';
 
 export type Options<TData extends TDataShape = TDataShape, ThrowOnError extends boolean = boolean, TResponse = unknown> = Options2<TData, ThrowOnError, TResponse> & {
     /**
@@ -188,6 +188,22 @@ export class Sdk extends HeyApiClient {
      */
     public enableNotificationType<ThrowOnError extends boolean = false>(options: Options<EnableNotificationTypeData, ThrowOnError>): RequestResult<EnableNotificationTypeResponses, EnableNotificationTypeErrors, ThrowOnError> {
         return (options.client ?? this.client).put<EnableNotificationTypeResponses, EnableNotificationTypeErrors, ThrowOnError>({ url: '/v1/user_notifications/preferences/{notification_event_type}/enable', ...options });
+    }
+
+    /**
+     * Send a notification the caller wrote, to themselves or to someone who can
+     * already see what it links to. Delivered like any other notification and
+     * subject to the recipient's notification preferences.
+     */
+    public sendManualNotification<ThrowOnError extends boolean = false>(options: Options<SendManualNotificationData, ThrowOnError>): RequestResult<SendManualNotificationResponses, SendManualNotificationErrors, ThrowOnError> {
+        return (options.client ?? this.client).post<SendManualNotificationResponses, SendManualNotificationErrors, ThrowOnError>({
+            url: '/v1/user_notifications/send',
+            ...options,
+            headers: {
+                'Content-Type': 'application/json',
+                ...options.headers
+            }
+        });
     }
 
     /**
