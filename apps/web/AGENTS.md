@@ -433,6 +433,8 @@ resolved session ID; keep the existing `AgentSessionProvider` subscription to
   Record search fills the row beside filters with header spacing; section creation
   replaces the default floating dock action through FloatRegion. See
   `src/features/crm/README.md` and `docs/agent-guide/crm.md` at the repo root.
+  Keep Files scoped to the contact when its optional email is absent; emit an
+  email-attachment participant literal only for a present address.
   Put Archive beside Copy link for visible CRM records; put the Archived chip and
   separate borderless Restore action in the identity heading for archived records.
   Keep explanations on the chip and retain company-only Email sharing controls.
