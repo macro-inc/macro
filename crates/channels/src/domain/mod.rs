@@ -1,7 +1,12 @@
 /// Event-to-activity mappings for this domain.
 pub mod activity;
+#[cfg(feature = "ports")]
+pub mod agent_dm;
 /// Kafka event models for the `macro.channels` topic.
 pub mod broker_events;
+/// Agent personas that converse in a channel.
+#[cfg(feature = "ports")]
+pub mod channel_agents;
 /// Direct-message identity and batch commands.
 pub mod dm;
 #[cfg(feature = "entity_mutation")]
@@ -17,6 +22,8 @@ pub mod historical;
 /// Legacy channel list service implementation.
 #[cfg(feature = "list")]
 pub mod list_service;
+/// Reserved uploads for images and videos attached to channel messages.
+pub mod media_upload;
 /// Kafka event models for the `macro.mentions` topic.
 pub mod mention_events;
 /// Channel side effects for messages committed by the shared message service.

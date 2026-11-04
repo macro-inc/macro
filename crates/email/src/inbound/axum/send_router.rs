@@ -67,7 +67,9 @@ impl From<EmailErr> for SendMessageError {
     fn from(err: EmailErr) -> Self {
         match &err {
             EmailErr::MessageNotFound(_) => SendMessageError::NotFound(err.to_string()),
-            EmailErr::MessageAlreadySent(_)
+            EmailErr::DraftGenerationConflict(_)
+            | EmailErr::MessageAlreadySent(_)
+            | EmailErr::InvalidDraft(_)
             | EmailErr::MessageDeliveryConflict(_)
             | EmailErr::CannotReplyToDraft
             | EmailErr::Base64DecodeError(_)

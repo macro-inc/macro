@@ -6,6 +6,15 @@ use uuid::Uuid;
 
 use crate::domain::models::{ContactInfo, CreateDraftInput, CreatedDraft};
 
+/// Preconditions captured with a draft edit, including attachment changes.
+#[derive(Debug, Deserialize, utoipa::IntoParams)]
+#[into_params(parameter_in = Query)]
+pub struct DraftEditPrecondition {
+    /// Generation from the last loaded draft. Legacy clients use zero.
+    #[serde(default)]
+    pub draft_generation: i32,
+}
+
 /// Contact info for draft request/response (backward-compatible with MessageToSend shape).
 #[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
 pub struct ApiDraftContactInfo {
@@ -40,6 +49,9 @@ impl From<ContactInfo> for ApiDraftContactInfo {
 /// The draft input matching the current `MessageToSend` JSON shape for backward compat.
 #[derive(Debug, Deserialize, ToSchema)]
 pub struct ApiDraftInput {
+    /// Generation from the last loaded draft; legacy clients begin at zero.
+    #[serde(default)]
+    pub draft_generation: i32,
     /// Existing message DB ID (for updating an existing draft).
     pub db_id: Option<Uuid>,
     /// Provider message ID.
@@ -85,6 +97,8 @@ pub struct CreateDraftRequest {
 /// The draft output matching the current `MessageToSend` JSON shape for backward compat.
 #[derive(Debug, Serialize, ToSchema)]
 pub struct ApiDraftOutput {
+    /// Generation required for subsequent edits.
+    pub draft_generation: i32,
     /// Message DB ID.
     pub db_id: Option<Uuid>,
     /// Provider message ID.
@@ -130,6 +144,8 @@ impl CreateDraftRequest {
         let draft = self.draft;
 
         CreateDraftInput {
+            frozen_signature_html: None,
+            draft_generation: draft.draft_generation,
             sender_email: None,
             db_id: draft.db_id,
             provider_id: draft.provider_id,
@@ -180,6 +196,7 @@ impl From<CreatedDraft> for ApiDraftOutput {
             d.bcc.into_iter().map(ApiDraftContactInfo::from).collect();
 
         ApiDraftOutput {
+            draft_generation: d.draft_generation,
             db_id: Some(d.db_id),
             provider_id: d.provider_id,
             replying_to_id: d.replying_to_id,

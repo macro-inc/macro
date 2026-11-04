@@ -6,6 +6,7 @@ A TypeScript state management library that syncs application state with [loro-cr
 
 - 🔄 **Bidirectional Sync**: Seamlessly sync between application state and Loro CRDT
 - 📊 **Schema Validation**: Type-safe schema system for validating state
+- 🌳 **Native Trees**: Typed `{ data, children }` forests with identity-preserving moves
 - 🧩 **Composable Core**: Focused package for state management primitives
 - 🔍 **Selective Updates**: Subscribe to specific parts of your state
 - 🛠️ **Developer Friendly**: Familiar API inspired by popular state management libraries

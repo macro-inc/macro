@@ -18,7 +18,7 @@ vi.mock('@ui', async () => ({
     props: JSX.ButtonHTMLAttributes<HTMLButtonElement> & { label?: string }
   ) => (
     <button
-      aria-label={props.label}
+      aria-label={props['aria-label'] ?? props.label}
       onMouseDown={props.onMouseDown}
       onClick={props.onClick}
       disabled={props.disabled}

@@ -5,8 +5,8 @@ use std::sync::Arc;
 use tracing::Instrument;
 
 use crate::domain::{
-    models::{RefreshToken, UpstreamTokens},
-    ports::{OAuthProvider, UpstreamTokensFuture},
+    models::{RefreshToken, SignInMethod, UpstreamTokens},
+    ports::{OAuthProvider, UpstreamRevocationFuture, UpstreamTokensFuture},
 };
 
 /// FusionAuth-backed OAuth provider for the MCP auth proxy.
@@ -35,12 +35,21 @@ impl FusionAuthOAuthProvider {
 
 impl OAuthProvider for FusionAuthOAuthProvider {
     #[tracing::instrument(skip(self), err)]
-    fn construct_authorize_url(&self, state: &str) -> anyhow::Result<String> {
-        self.client.construct_oauth2_authorize_url(
-            &self.google_idp_id,
-            None,
-            Some(state.to_owned()),
-        )
+    fn construct_authorize_url(
+        &self,
+        state: &str,
+        sign_in: SignInMethod,
+    ) -> anyhow::Result<String> {
+        match sign_in {
+            SignInMethod::Google => self.client.construct_oauth2_authorize_url(
+                &self.google_idp_id,
+                None,
+                Some(state.to_owned()),
+            ),
+            SignInMethod::Login => self
+                .client
+                .construct_oauth2_login_page_url(Some(state.to_owned())),
+        }
     }
 
     fn exchange_authorization_code<'a>(&'a self, code: &'a str) -> UpstreamTokensFuture<'a> {
@@ -81,6 +90,22 @@ impl OAuthProvider for FusionAuthOAuthProvider {
                     refresh_token: grant.refresh_token.into(),
                     expires_in: grant.expires_in,
                 })
+            }
+            .instrument(span),
+        )
+    }
+
+    fn revoke_refresh_token<'a>(
+        &'a self,
+        refresh_token: &'a RefreshToken,
+    ) -> UpstreamRevocationFuture<'a> {
+        let span = tracing::debug_span!("FusionAuthOAuthProvider::revoke_refresh_token");
+        Box::pin(
+            async move {
+                self.client
+                    .revoke_refresh_token(refresh_token.as_str())
+                    .await
+                    .map_err(anyhow::Error::from)
             }
             .instrument(span),
         )

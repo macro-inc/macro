@@ -1,8 +1,8 @@
 import { useSplitLayout } from '@components/app/split-layout/layout';
 import { EntityIcon } from '@core/component/EntityIcon';
 import { fileTypeToBlockName } from '@core/constant/allBlocks';
-import WideChannel from '@phosphor/hash-straight.svg';
-import List from '@phosphor-icons/core/regular/list.svg';
+import WideChannel from '@icon/system/regular/hash-straight.svg';
+import List from '@icon/system/regular/list.svg';
 import type { NamedTool } from '@service-cognition/generated/tools/tool';
 import { createMemo, createSignal } from 'solid-js';
 import { VList } from 'virtua/solid';
@@ -33,7 +33,8 @@ const ListEntitiesToolResponse = (props: {
       case 'document':
         return item.name || 'Document';
       case 'aiChat':
-        return item.name || 'Chat';
+      case 'agentSession':
+        return item.name || 'Agent session';
       case 'project':
         return item.name || 'Project';
       case 'email':
@@ -61,7 +62,8 @@ const ListEntitiesToolResponse = (props: {
           />
         );
       case 'aiChat':
-        return <EntityIcon targetType="chat" size="xs" theme="monochrome" />;
+      case 'agentSession':
+        return <EntityIcon targetType="agent" size="xs" theme="monochrome" />;
       case 'project':
         return <EntityIcon targetType="project" size="xs" theme="monochrome" />;
       case 'email':
@@ -89,6 +91,13 @@ const ListEntitiesToolResponse = (props: {
         return (event: MouseEvent) => {
           openWithSplit(
             { type: 'chat', id: item.id },
+            { activate: true, preferNewSplit: event.shiftKey }
+          );
+        };
+      case 'agentSession':
+        return (event: MouseEvent) => {
+          openWithSplit(
+            { type: 'agent', id: item.id },
             { activate: true, preferNewSplit: event.shiftKey }
           );
         };
@@ -128,8 +137,11 @@ const ListEntitiesToolResponse = (props: {
         data={results()}
         bufferSize={itemHeight * 5}
         itemSize={itemHeight}
+        // Sized by its rows, which are taller on touch and shorter among an
+        // agent's grouped tool rows than the estimate.
         style={{
-          height: `${Math.min(results().length * itemHeight, maxHeight)}px`,
+          height: 'auto',
+          'max-height': `${maxHeight}px`,
           contain: 'content',
         }}
       >
@@ -137,17 +149,13 @@ const ListEntitiesToolResponse = (props: {
           const clickHandler = getClickHandler(item);
 
           return (
-            <button
-              type="button"
-              class="block w-full text-left hover:bg-hover"
-              onClick={clickHandler}
-            >
+            <Tool.ListButton onClick={clickHandler}>
               <Tool.ListItem icon={getItemIcon(item)}>
                 <div class="truncate text-xs text-ink">
                   {getItemTitle(item)}
                 </div>
               </Tool.ListItem>
-            </button>
+            </Tool.ListButton>
           );
         }}
       </VList>

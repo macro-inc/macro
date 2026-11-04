@@ -48,6 +48,7 @@ use macro_authorization::{
 use macro_event_broker::{KafkaEventPublisher, MacroEventBrokerService};
 use macro_service_urls::{
     AppServiceUrl, ConnectionGatewayUrl, DocumentStorageServiceUrl, EmailServiceUrl,
+    StaticFilePublicUrl, StaticFileServiceUrl,
 };
 use native_app_service::{
     domain::{models::PlatformData, service::NativeAppServiceImpl},
@@ -63,6 +64,7 @@ use roles_and_permissions::{
 };
 use secretsmanager_client::SecretManager;
 use sqlx::postgres::PgPoolOptions;
+use static_file_service_client::StaticFileServiceClient;
 use teams::{
     domain::team_service::TeamServiceImpl,
     outbound::{
@@ -74,9 +76,16 @@ use teams::{
 use gtm_invite::{
     domain::service::GtmInviteServiceImpl, outbound::pg_gtm_invite_repo::PgGtmInviteRepo,
 };
-use referral::{
-    domain::service::ReferralServiceImpl,
-    outbound::{pg_referral_repo::PgReferralRepo, stripe_discount_client::StripeDiscountClient},
+use referral::{domain::service::ReferralServiceImpl, outbound::pg_referral_repo::PgReferralRepo};
+use system_status::{
+    domain::service::SystemStatusServiceImpl,
+    outbound::{
+        connection_gateway_broadcaster::ConnectionGatewayStatusBroadcaster,
+        pg_system_status_repo::PgSystemStatusRepo,
+    },
+};
+use user_language::{
+    domain::service::UserLanguageServiceImpl, outbound::pg_user_language_repo::PgUserLanguageRepo,
 };
 
 use crate::{
@@ -94,7 +103,7 @@ use crate::{
     outbound::team_owned_entity_cleanup::TeamOwnedEntityCleanupAdapter,
 };
 use std::{sync::Arc, time::Duration};
-use tokio_util::task::TaskTracker;
+use tokio_util::{sync::CancellationToken, task::TaskTracker};
 
 /// Build the service from the environment and serve until shutdown.
 pub async fn run() -> anyhow::Result<()> {
@@ -108,6 +117,7 @@ pub async fn run() -> anyhow::Result<()> {
 
     // Parse our configuration from the environment.
     let config = Config::from_env().context("expected to be able to generate config")?;
+    let account_link_state_key = config.account_link_state_key()?;
     let signup_policy = Arc::new(
         config
             .signup_policy()
@@ -129,11 +139,14 @@ pub async fn run() -> anyhow::Result<()> {
     // A separate KMS key from the Microsoft one by design: sharing it would
     // grant whatever decrypts Cursor keys access to the key protecting
     // everyone's mailbox credentials.
+    // Agents' own API keys share it: they are read by the same agent harness
+    // and protected by the same IAM grants.
+    let cursor_kms = cursor_api_key::cipher::AwsKmsCiphertexts::new(
+        aws_sdk_kms::Client::new(&aws_config),
+        config.cursor_api_key_kms_key_id()?,
+    );
     let cursor_api_key_cipher = Arc::new(cursor_api_key::cipher::KmsCursorApiKeyCipher::new(
-        cursor_api_key::cipher::AwsKmsCiphertexts::new(
-            aws_sdk_kms::Client::new(&aws_config),
-            config.cursor_api_key_kms_key_id()?,
-        ),
+        cursor_kms.clone(),
     )) as Arc<dyn cursor_api_key::cipher::CursorApiKeyCipher>;
 
     let internal_api_key = config.internal_api_key.clone();
@@ -228,7 +241,45 @@ pub async fn run() -> anyhow::Result<()> {
         None => auth_client,
     };
     tracing::trace!("initialized auth client");
+    // Gates new Outlook connections per user (`enable-outlook`). Without a
+    // PostHog key the deployment switch alone decides.
+    let feature_flags = config
+        .posthog_api_key
+        .value()
+        .map(|key| {
+            feature_flags::outbound::posthog::PostHogFeatureFlags::new(
+                config.posthog_host.value().unwrap_or(DEFAULT_POSTHOG_HOST),
+                key.to_owned(),
+                Duration::from_secs(3),
+            )
+        })
+        .transpose()
+        .map_err(|error| anyhow!("invalid feature flag configuration: {error}"))?;
+    let microsoft_auth = microsoft_token_cipher.map(|cipher| {
+        use crate::{
+            domain::microsoft::{MicrosoftAuth, MicrosoftAuthService},
+            outbound::microsoft::{MicrosoftOAuthProvider, PgMicrosoftGrants},
+        };
+        Arc::new(
+            MicrosoftAuthService::new(
+                PgMicrosoftGrants::new(db.clone()),
+                MicrosoftOAuthProvider::new(
+                    Arc::new(auth_client.clone()),
+                    account_link_state_key.clone(),
+                ),
+                cipher,
+            )
+            .with_connections_enabled(config.outlook_connections_enabled)
+            .with_feature_flags(feature_flags),
+        ) as Arc<dyn MicrosoftAuth>
+    });
 
+    let static_file_service_client = Arc::new(StaticFileServiceClient::with_timeout(
+        config.service_internal_auth_key.to_string(),
+        StaticFileServiceUrl::new()?.to_string(),
+        std::time::Duration::from_secs(10),
+    ));
+    let static_file_public_url = StaticFilePublicUrl::new()?.to_string();
     let document_storage_service_client = DocumentStorageServiceClient::new(
         config.service_internal_auth_key.to_string().clone(),
         DocumentStorageServiceUrl::new()?.to_string(),
@@ -324,8 +375,8 @@ pub async fn run() -> anyhow::Result<()> {
                 host: config
                     .posthog_host
                     .value()
-                    .map(str::to_string)
-                    .unwrap_or_else(|| "https://us.i.posthog.com".to_string()),
+                    .unwrap_or(DEFAULT_POSTHOG_HOST)
+                    .to_string(),
             }
         }),
     }));
@@ -438,8 +489,9 @@ pub async fn run() -> anyhow::Result<()> {
                         entity_access_service_impl.clone(),
                     ),
                     messages::outbound::connection_gateway::ConnectionGatewayMessages(
-                        connection_gateway_client,
+                        connection_gateway_client.clone(),
                     ),
+                    channels::outbound::pg_agent_creations::PgAgentCreations::new(db.clone()),
                 ),
             ),
         )
@@ -455,8 +507,6 @@ pub async fn run() -> anyhow::Result<()> {
 
     let foreign_entity_service =
         ForeignEntityServiceImpl::new(PgForeignEntityRepo::new(db.clone()));
-
-    let account_link_state_key = config.account_link_state_key()?;
 
     let github_link_service_impl = GithubLinkServiceImpl::new(
         PgGithubRepo::new(db.clone()),
@@ -483,18 +533,35 @@ pub async fn run() -> anyhow::Result<()> {
             redis: redis_client,
         },
     };
+    let user_language_service = Arc::new(UserLanguageServiceImpl::new(PgUserLanguageRepo::new(
+        db.clone(),
+    )));
+
+    // Invites that turn into teammates and referrals that sign up earn the
+    // inviter AI credit (or more free allowance).
+    let invite_rewards = crate::outbound::invite_rewards::BillingInviteRewards::new(
+        ai_billing::domain::InviteRewardService::new(
+            ai_billing::outbound::RolesTeamsEntitlementSource::new(
+                user_roles_and_permissions_service.clone(),
+                teams_repo_impl.clone(),
+            ),
+            ai_billing::outbound::PgCreditGrantRepo::new(db.clone()),
+            ai_billing::outbound::PgCreditGrantRepo::new(db.clone()),
+        ),
+    );
     let referral_service = ReferralServiceImpl {
         repo: PgReferralRepo::new(db.clone()),
-        discount_client: StripeDiscountClient::new(
-            stripe_client.clone(),
-            10000, /*100$ credit, in cents*/
-        ),
+        rewarder: invite_rewards.clone(),
         notification_ingress: notification_ingress_service.clone(),
     };
     let gtm_invite_service = GtmInviteServiceImpl {
         repo: PgGtmInviteRepo::new(db.clone()),
         config: gtm_invite_config,
     };
+    let system_status_service = Arc::new(SystemStatusServiceImpl::new(
+        PgSystemStatusRepo::new(db.clone()),
+        ConnectionGatewayStatusBroadcaster::new(connection_gateway_client.clone()),
+    ));
 
     let codex_connection = if let Some(key_id) = config.codex_oauth_kms_key_id() {
         let cipher = Arc::new(codex_connection::outbound::cipher::EnvelopeCipher::new(
@@ -614,10 +681,41 @@ pub async fn run() -> anyhow::Result<()> {
         team_analytics,
     )
     .with_contacts_enqueuer(contacts_enqueuer)
-    .with_event_broker(macro_event_broker)
+    .with_event_broker(macro_event_broker.clone())
     .with_open_seat_release((*ai_billing_service).clone())
-    .with_owned_entity_cleanup(team_owned_entity_cleanup);
+    .with_owned_entity_cleanup(team_owned_entity_cleanup)
+    .with_invite_rewarder(Arc::new(invite_rewards));
     let teams_service = Arc::new(teams_service_impl);
+    let domain_notice_service =
+        Arc::new(teams::domain::domain_notice::DomainNoticeServiceImpl::new(
+            teams::outbound::colleague_directory::ContactsColleagueDirectory::new(
+                contacts::outbound::repository::DbContactsRepository::new(db.clone()),
+            ),
+            teams::domain::join_announcement::JoinAnnouncementServiceImpl::new(
+                teams::outbound::join_announcement_repo::JoinAnnouncementRepositoryImpl::new(
+                    db.clone(),
+                ),
+                SqsNotificationIngress {
+                    queue: SqsQueue::new(
+                        aws_sdk_sqs::Client::new(&aws_config),
+                        notification_queue.to_string(),
+                    ),
+                },
+            ),
+        ));
+    // Reminds people of team invites they have not answered. Replicas claim
+    // disjoint invites, so every replica sweeps.
+    let invite_reminders_stop = CancellationToken::new();
+    let invite_reminders = TaskTracker::new();
+    invite_reminders.spawn(
+        teams::inbound::invite_reminder_worker::run_invite_reminder_sweep(
+            teams_service.clone(),
+            teams::inbound::invite_reminder_worker::INVITE_REMINDER_SWEEP_INITIAL_DELAY,
+            teams::inbound::invite_reminder_worker::INVITE_REMINDER_SWEEP_INTERVAL,
+            invite_reminders_stop.clone().cancelled_owned(),
+        ),
+    );
+    invite_reminders.close();
     let user_deletion = Arc::new(
         crate::outbound::user_deletion::UserDeletionAdapter::new(
             db.clone(),
@@ -632,13 +730,50 @@ pub async fn run() -> anyhow::Result<()> {
         .map_err(|error| anyhow::anyhow!("{error:?}"))?,
     );
 
+    // Cleanup continues while new connections are disabled or OAuth is unconfigured.
+    let grant_repository = crate::outbound::microsoft::PgMicrosoftGrants::new(db.clone());
+    let grant_cleanup = tokio::spawn(async move {
+        let mut interval = tokio::time::interval(MICROSOFT_GRANT_CLEANUP_INTERVAL);
+        interval.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Skip);
+        loop {
+            interval.tick().await;
+            if let Err(error) =
+                crate::domain::microsoft::collect_expired_grants(&grant_repository).await
+            {
+                tracing::error!(?error, "Microsoft grant expiry cleanup failed");
+            }
+        }
+    });
+
+    let agent_api_keys = Arc::new(agent_api_keys::domain::AgentKeyService::new(
+        agent_api_keys::outbound::PgAgentKeyRepo::new(db.clone()),
+        agent_api_keys::outbound::KmsAgentKeyCipher::new(cursor_kms),
+        agent_api_keys::outbound::EntitlementKeyPlans::new(
+            ai_billing::outbound::RolesTeamsEntitlementSource::new(
+                user_roles_and_permissions_service.clone(),
+                teams_repo_impl.clone(),
+            ),
+        ),
+    ));
+    // Only to authorize changes to an agent's API key, with the agents' own
+    // rule; agents themselves are created and edited in document storage.
+    let bots = Arc::new(bots::domain::service::BotServiceImpl::new(
+        PgBotsRepo::new(db.clone()),
+        macro_event_broker.clone(),
+    ));
+
     let server_result = api::setup_and_serve(
         ApiContext {
+            inbox_connections: Arc::new(email::domain::inbox_entitlement::InboxConnectionService(
+                email::outbound::EmailPgRepo::new(db.clone()),
+            )),
             db,
             github_link_service: Arc::new(github_link_service_impl),
             auth_client: Arc::new(auth_client),
-            microsoft_token_cipher,
+            microsoft_auth,
             cursor_api_key_cipher,
+            agent_api_keys,
+            bots,
             codex_connection,
             macro_cache_client: Arc::new(macro_cache_client),
             stripe_client,
@@ -646,6 +781,8 @@ pub async fn run() -> anyhow::Result<()> {
             subscription_plan,
             subscription_status,
             document_storage_service_client,
+            static_file_service_client,
+            static_file_public_url,
             user_deletion,
             email_service_client: Arc::new(email_service_client),
             ses_client: Arc::new(ses_client),
@@ -670,12 +807,15 @@ pub async fn run() -> anyhow::Result<()> {
             stripe_webhook_secret,
             user_roles_and_permissions_service: Arc::new(user_roles_and_permissions_service),
             teams_service,
+            domain_notice_service,
             channel_service: Arc::new(channel_service),
             channel_messages,
             favorites_service: Arc::new(favorites_service),
             entity_access_service: entity_access_service_impl,
             referral_service: Arc::new(referral_service),
+            user_language_service,
             gtm_invite_service,
+            system_status_service,
             native_app_service: Arc::new(NativeAppServiceImpl {
                 bundle_fetcher: DefaultBundleFetcher::new(
                     AppServiceUrl::new_for_environment(config.environment)
@@ -702,10 +842,25 @@ pub async fn run() -> anyhow::Result<()> {
     )
     .await;
 
+    grant_cleanup.abort();
+    let _ = grant_cleanup.await;
     // A sweep interrupted here leaves nothing half done: each settlement
     // step commits on its own and the next sweep, on any replica, resumes.
     if let Some(sweep) = settlement_sweep {
         sweep.abort();
+    }
+
+    // Lets a sweep in progress finish: its reminders are already counted as
+    // sent, so abandoning the batch would drop them.
+    invite_reminders_stop.cancel();
+    if tokio::time::timeout(INVITE_REMINDER_DRAIN_TIMEOUT, invite_reminders.wait())
+        .await
+        .is_err()
+    {
+        tracing::warn!(
+            timeout_seconds = INVITE_REMINDER_DRAIN_TIMEOUT.as_secs(),
+            "timed out waiting for the team invite reminder sweep to finish"
+        );
     }
 
     tracing::info!("waiting for event broker publishes to drain");
@@ -725,6 +880,10 @@ pub async fn run() -> anyhow::Result<()> {
 }
 
 const EVENT_BROKER_DRAIN_TIMEOUT: Duration = Duration::from_secs(10);
+const INVITE_REMINDER_DRAIN_TIMEOUT: Duration = Duration::from_secs(10);
+const MICROSOFT_GRANT_CLEANUP_INTERVAL: Duration = Duration::from_secs(5 * 60);
+/// PostHog's US ingestion origin, used when `POSTHOG_HOST` is unset.
+const DEFAULT_POSTHOG_HOST: &str = "https://us.i.posthog.com";
 
 // SAFETY: this is not a secret value
 const IOS_DEVELOPMENT_TEAM_ID: &str = "TY74Q77JBD";

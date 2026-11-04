@@ -9,8 +9,11 @@ import { TOKENS } from '@core/hotkey/tokens';
 import { useWarmAgentSessionQuery } from '@queries/agent-session/warm';
 import { createEffect, onCleanup } from 'solid-js';
 import '../agents-view/agents-view.css';
+import { buildAgentPrompt } from '@app/features/agents-view/queries/composer-prompt';
+import { fireAndForget } from '@core/util/fireAndForget';
 import {
   createPersistedComposerDraft,
+  HOME_CONVERSATION_ATTACHMENTS_KEY,
   HOME_CONVERSATION_DRAFT_KEY,
 } from '../agents-view/primitives/composer-draft';
 import { createAgentRosterSource } from '../agents-view/queries/agent-roster-source';
@@ -19,7 +22,6 @@ import {
   type StartConversation,
 } from '../agents-view/views/NewChatPage';
 import { useHomeView } from './home-view-context';
-import { buildHomeAgentPrompt } from './queries/home-agent-prompt';
 
 /** Home supplies suggestions and its detail pane to the same composer used by Agents. */
 export function HomeAgentComposer(props: { autoFocus?: boolean }) {
@@ -43,7 +45,7 @@ export function HomeAgentComposer(props: { autoFocus?: boolean }) {
   const applySuggestion = async (content: string) => {
     const version = ++draftVersion;
     try {
-      const prompt = await buildHomeAgentPrompt({
+      const prompt = await buildAgentPrompt({
         content,
         attachments: input.attachments.attached(),
       });
@@ -65,7 +67,7 @@ export function HomeAgentComposer(props: { autoFocus?: boolean }) {
     const requested = input.pendingDraft();
     if (requested == null) return;
     input.setPendingDraft(null);
-    void applySuggestion(requested);
+    fireAndForget(applySuggestion(requested), 'home');
   });
   registerHotkey({
     hotkey: 'enter',
@@ -95,6 +97,7 @@ export function HomeAgentComposer(props: { autoFocus?: boolean }) {
         rosterLoading={roster.loading()}
         availabilityLoading={roster.availabilityLoading()}
         draft={draft()}
+        attachmentsKey={HOME_CONVERSATION_ATTACHMENTS_KEY}
         onDraftChange={(value) => {
           draftVersion++;
           setDraft(value);

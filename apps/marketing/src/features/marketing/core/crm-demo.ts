@@ -2,29 +2,29 @@ export const CRM_DEMO_DURATION = 14000;
 export const CRM_DEMO_COMPANIES = [
   {
     id: 'northwind',
-    name: 'Northwind',
-    domain: 'northwind.example',
+    name: 'Keystone Mechanical',
+    domain: 'keystone.example',
     stage: 0,
-    initials: 'N',
+    initials: 'K',
   },
   {
     id: 'fieldnote',
-    name: 'Fieldnote',
-    domain: 'fieldnote.example',
+    name: 'Panelwork Research',
+    domain: 'panelwork.example',
     stage: 0,
-    initials: 'F',
+    initials: 'P',
   },
   {
     id: 'lumen',
-    name: 'Lumen',
-    domain: 'lumen.example',
+    name: 'Bookend Retail',
+    domain: 'bookend.example',
     stage: 1,
-    initials: 'L',
+    initials: 'B',
   },
   {
     id: 'relay',
-    name: 'Relay',
-    domain: 'relay.example',
+    name: 'Replywell',
+    domain: 'replywell.example',
     stage: 2,
     initials: 'R',
   },
@@ -62,9 +62,9 @@ export function crmDemoFrame(t: number) {
     lumenStage: t >= 10600 ? 2 : 1,
     status:
       t >= 10600
-        ? 'Northwind → Proposal · Lumen → Closed won'
+        ? 'Keystone Mechanical → Proposal · Bookend Retail → Closed won'
         : second
-          ? 'Moving Lumen to Closed won'
-          : 'Moving Northwind to Proposal',
+          ? 'Moving Bookend Retail to Closed won'
+          : 'Moving Keystone Mechanical to Proposal',
   };
 }

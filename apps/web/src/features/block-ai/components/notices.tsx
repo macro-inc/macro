@@ -4,9 +4,9 @@
  * saved. Presentational.
  */
 
-import Info from '@phosphor/info.svg';
-import WarningCircle from '@phosphor/warning-circle.svg';
-import XIcon from '@phosphor/x.svg';
+import Info from '@icon/system/regular/info.svg';
+import WarningCircle from '@icon/system/regular/warning-circle.svg';
+import XIcon from '@icon/system/regular/x.svg';
 import { Button } from '@ui/components/Button';
 import { For, Show } from 'solid-js';
 
@@ -24,7 +24,7 @@ export function SessionNotice(props: {
       <WarningCircle class="size-3.5 shrink-0 text-warning" />
       <span class="min-w-0 flex-1">{props.message}</span>
       <Button
-        variant="outline"
+        variant="secondary"
         size="sm"
         data-testid="ai-session-action"
         onClick={() => props.onAction()}
@@ -45,7 +45,7 @@ export function FileNotice(props: {
   return (
     <div
       role="status"
-      class="pointer-events-auto flex max-w-md items-start gap-2 rounded-lg border border-edge-muted bg-menu px-3 py-2 text-ink text-xs shadow-lg"
+      class="menu-surface pointer-events-auto flex max-w-md items-start gap-2 px-3 py-2 text-xs"
       data-testid={props.testId}
       onPointerDown={(e) => e.stopPropagation()}
     >

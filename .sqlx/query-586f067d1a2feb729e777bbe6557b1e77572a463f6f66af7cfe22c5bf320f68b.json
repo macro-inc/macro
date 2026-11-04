@@ -1,0 +1,78 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT a.id,a.draft_id,a.file_name,a.content_type,a.sha,a.size,a.s3_key,a.upload_pending,a.content_id,a.is_inline FROM email_attachments_drafts a JOIN email_messages m ON m.id=a.draft_id WHERE m.link_id=$1 AND a.draft_id=$2 AND a.id=$3",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 1,
+        "name": "draft_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 2,
+        "name": "file_name",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 3,
+        "name": "content_type",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 4,
+        "name": "sha",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 5,
+        "name": "size",
+        "type_info": "Int4"
+      },
+      {
+        "ordinal": 6,
+        "name": "s3_key",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 7,
+        "name": "upload_pending",
+        "type_info": "Bool"
+      },
+      {
+        "ordinal": 8,
+        "name": "content_id",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 9,
+        "name": "is_inline",
+        "type_info": "Bool"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid",
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      true,
+      false
+    ]
+  },
+  "hash": "586f067d1a2feb729e777bbe6557b1e77572a463f6f66af7cfe22c5bf320f68b"
+}

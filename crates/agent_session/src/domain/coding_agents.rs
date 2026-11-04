@@ -8,11 +8,12 @@ use macro_user_id::user_id::MacroUserIdStr;
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
-use super::model::AgentSessionId;
+use super::model::{AgentSessionId, SessionSource, SessionVisibility};
 use super::routines::{
     PrepareRoutineSession, PromptRoutineSession, RoutineSessionAction, RoutineSessionError,
     RoutineSessions, ValidateRoutineSession,
 };
+use super::updates::{AgentUpdates, CodingAgentUpdatesRepo, list_updates};
 
 #[cfg(test)]
 mod test;
@@ -114,11 +115,22 @@ pub enum CodingAgentError {
 
 /// Owner-authorized coding delegation shared by tool and transport adapters.
 pub trait CodingAgentService: Send + Sync + 'static {
+    /// List the caller's pending coding-session updates.
+    fn list_updates(
+        &self,
+        user_id: MacroUserIdStr<'static>,
+    ) -> Pin<Box<dyn Future<Output = Result<AgentUpdates, CodingAgentError>> + Send + '_>>;
     /// List the caller's configured, available coding personas.
     fn list(
         &self,
         user_id: MacroUserIdStr<'static>,
     ) -> Pin<Box<dyn Future<Output = Result<Vec<CodingAgent>, CodingAgentError>> + Send + '_>>;
+
+    /// Start a session with any available coding or chat persona the caller may use.
+    fn create(
+        &self,
+        command: DispatchCodingAgentRequest,
+    ) -> Pin<Box<dyn Future<Output = Result<DispatchedCodingAgent, CodingAgentError>> + Send + '_>>;
 
     /// Reauthorize a persona, create a session, and admit its initial prompt once.
     fn dispatch(
@@ -128,26 +140,38 @@ pub trait CodingAgentService: Send + Sync + 'static {
 }
 
 /// Delegation policy over the existing persona directory and session lifecycle.
-pub struct CodingAgentServiceImpl<Directory, Sessions> {
+pub struct CodingAgentServiceImpl<Directory, Sessions, Updates> {
     directory: Directory,
     sessions: Sessions,
+    updates: Updates,
 }
 
-impl<Directory, Sessions> CodingAgentServiceImpl<Directory, Sessions> {
+impl<Directory, Sessions, Updates: CodingAgentUpdatesRepo>
+    CodingAgentServiceImpl<Directory, Sessions, Updates>
+{
     /// Compose persona visibility with the normal session preparation and control path.
-    pub fn new(directory: Directory, sessions: Sessions) -> Self {
+    pub fn new(directory: Directory, sessions: Sessions, updates: Updates) -> Self {
         Self {
             directory,
             sessions,
+            updates,
         }
     }
 }
 
-impl<Directory, Sessions> CodingAgentService for CodingAgentServiceImpl<Directory, Sessions>
+impl<Directory, Sessions, Updates> CodingAgentService
+    for CodingAgentServiceImpl<Directory, Sessions, Updates>
 where
     Directory: CodingAgentDirectory,
     Sessions: RoutineSessions,
+    Updates: CodingAgentUpdatesRepo,
 {
+    fn list_updates(
+        &self,
+        user_id: MacroUserIdStr<'static>,
+    ) -> Pin<Box<dyn Future<Output = Result<AgentUpdates, CodingAgentError>> + Send + '_>> {
+        Box::pin(list_updates(&self.updates, user_id))
+    }
     fn list(
         &self,
         user_id: MacroUserIdStr<'static>,
@@ -169,6 +193,26 @@ where
         command: DispatchCodingAgentRequest,
     ) -> Pin<Box<dyn Future<Output = Result<DispatchedCodingAgent, CodingAgentError>> + Send + '_>>
     {
+        self.dispatch_selected(command, true)
+    }
+    fn create(
+        &self,
+        command: DispatchCodingAgentRequest,
+    ) -> Pin<Box<dyn Future<Output = Result<DispatchedCodingAgent, CodingAgentError>> + Send + '_>>
+    {
+        self.dispatch_selected(command, false)
+    }
+}
+
+impl<Directory: CodingAgentDirectory, Sessions: RoutineSessions, Updates: CodingAgentUpdatesRepo>
+    CodingAgentServiceImpl<Directory, Sessions, Updates>
+{
+    fn dispatch_selected(
+        &self,
+        command: DispatchCodingAgentRequest,
+        coding_only: bool,
+    ) -> Pin<Box<dyn Future<Output = Result<DispatchedCodingAgent, CodingAgentError>> + Send + '_>>
+    {
         Box::pin(async move {
             if command.prompt.trim().is_empty() {
                 return Err(CodingAgentError::InvalidPrompt);
@@ -176,9 +220,12 @@ where
             // Re-read visibility and configuration at dispatch time. A saved tool
             // result is not authority to use a removed or reconfigured persona.
             let agent = self
-                .list(command.user_id.clone())
+                .directory
+                .candidates(command.user_id.clone())
                 .await?
                 .into_iter()
+                .filter(|candidate| candidate.available && (!coding_only || candidate.is_coding))
+                .map(|candidate| candidate.agent)
                 .find(|agent| agent.id == command.agent_id)
                 .ok_or(CodingAgentError::Unavailable)?;
             let session_id = AgentSessionId::new();
@@ -194,8 +241,11 @@ where
                         owner: command.user_id.clone(),
                         bot_id,
                         model: None,
+                        mcp_servers: Vec::new(),
                     },
                     session_id,
+                    source: SessionSource::Agent,
+                    visibility: SessionVisibility::Listed,
                 })
                 .await
                 .map_err(failed)?;

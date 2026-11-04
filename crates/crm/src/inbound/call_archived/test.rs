@@ -109,6 +109,7 @@ fn archived() -> CallTopicEvent {
         ended_at: Utc::now(),
         duration_ms: Some(1_000),
         participant_count: 1,
+        participants: vec![MacroUserIdStr::try_from_email("rep@ours.com").unwrap()],
         has_recording: false,
         archive_reason: CallArchiveReason::LastParticipantLeft,
     })

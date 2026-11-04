@@ -26,12 +26,7 @@ const displayResults = (): Extract<MessagePart, { kind: 'tool_use' }> => ({
   id: 'view',
   name: { kind: 'native', name: 'DisplayResults' },
   status: 'completed',
-  detail: {
-    kind: 'macro',
-    input: { view: { widgets: [] } },
-    output: { message: 'done' },
-    error: null,
-  },
+  detail: { kind: 'view', view: { widgets: [] }, error: null },
 });
 const permission = (): MessagePart => ({
   kind: 'permission',
@@ -87,6 +82,21 @@ describe('segmentParts', () => {
     ]);
   });
 
+  it('splits a running group around a compaction that landed inside it', () => {
+    const compaction: MessagePart = {
+      kind: 'control',
+      control: { kind: 'compact' },
+      outcome: { kind: 'accepted' },
+    };
+    expect(
+      segmentParts([tool({ status: 'running' }), compaction, tool()])
+    ).toEqual([
+      { kind: 'tools', start: 0, end: 1 },
+      { kind: 'part', start: 1, end: 2 },
+      { kind: 'tools', start: 2, end: 3 },
+    ]);
+  });
+
   describe.each([
     {
       label: 'native',
@@ -105,18 +115,9 @@ describe('segmentParts', () => {
       'breaks tool groups before and after a %s call',
       (status) => {
         const details: ToolDetail[] = [
-          { kind: 'macro', input: null, output: null, error: null },
-          {
-            kind: 'other',
-            acpKind: 'other',
-            input: null,
-            output: null,
-            result: null,
-            error: null,
-          },
+          { kind: 'view', view: null, error: null },
         ];
         for (const detail of details) {
-          if (name.kind === 'native' && detail.kind === 'other') continue;
           const display = tool({ name, status, detail });
           expect(
             segmentParts([tool(), tool(), display, tool(), tool()])
@@ -438,3 +439,80 @@ describe.each(['GenerateImage', 'DispatchCodingAgent'])(
     });
   }
 );
+
+it('keeps trusted code executions visible so their inner views stay outside collapsed groups', () => {
+  const execution = tool({
+    name: { kind: 'mcp', server: 'macro_internal', tool: 'ExecuteCode' },
+    detail: {
+      kind: 'other',
+      input: null,
+      output: null,
+      result: null,
+      error: null,
+      acpKind: 'other',
+    },
+  });
+  expect(rendersOwnView(execution)).toBe(true);
+  expect(segmentParts([tool(), execution, tool()])).toEqual([
+    { kind: 'tools', start: 0, end: 1 },
+    { kind: 'part', start: 1, end: 2 },
+    { kind: 'tools', start: 2, end: 3 },
+  ]);
+  execution.name = { kind: 'mcp', server: 'external', tool: 'ExecuteCode' };
+  expect(rendersOwnView(execution)).toBe(false);
+});
+
+describe('persistent review presentation', () => {
+  const id = '019a0000-0000-7000-8000-000000000005';
+  const presentation = (
+    server = 'macro_internal',
+    callId = `review_${id}`
+  ): ToolUsePart =>
+    tool({
+      id: callId,
+      name: { kind: 'mcp', server, tool: 'PresentReview' },
+      detail: {
+        kind: 'other',
+        acpKind: 'other',
+        input: { reviewId: id, kind: 'email', title: 'Drafts' },
+        output: null,
+        result: { reviewId: id, message: 'Presented to the user' },
+        error: null,
+      },
+    });
+  it('keeps a completed presentation visible outside collapsed tool groups', () => {
+    expect(rendersOwnView(presentation())).toBe(true);
+    expect(segmentParts([tool(), presentation(), tool()])).toEqual([
+      { kind: 'tools', start: 0, end: 1 },
+      { kind: 'part', start: 1, end: 2 },
+      { kind: 'tools', start: 2, end: 3 },
+    ]);
+  });
+  it('does not turn the native invocation receipt or an external tool into another card', () => {
+    expect(
+      rendersOwnView(presentation('macro_internal', 'ordinary-call'))
+    ).toBe(false);
+    expect(rendersOwnView(presentation('untrusted'))).toBe(false);
+  });
+});
+
+describe('presented views', () => {
+  const presentation = (): ToolUsePart =>
+    tool({
+      id: 'view_019a0000-0000-7000-8000-000000000006',
+      name: { kind: 'mcp', server: 'macro_internal', tool: 'PresentView' },
+      detail: {
+        kind: 'view',
+        view: { title: 'Launch notes', widgets: [] },
+        error: null,
+      },
+    });
+  it('draws the view the harness presented, outside collapsed tool groups', () => {
+    expect(rendersOwnView(presentation())).toBe(true);
+    expect(segmentParts([tool(), presentation(), tool()])).toEqual([
+      { kind: 'tools', start: 0, end: 1 },
+      { kind: 'part', start: 1, end: 2 },
+      { kind: 'tools', start: 2, end: 3 },
+    ]);
+  });
+});

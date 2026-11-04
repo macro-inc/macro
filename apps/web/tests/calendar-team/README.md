@@ -1,11 +1,11 @@
 # Team calendar browser verification
 
-This harness loads the complete bundled app and intercepts auth, team, and calendar HTTP traffic with synthetic identities. It blocks nonlocal requests and websocket traffic. It does not verify the Rust service or Google permissions. Own-calendar reads use the existing REST fallback; team projections use their production REST query, mapping, and UI paths.
+This harness loads the complete bundled app and intercepts auth, team, and calendar HTTP traffic with synthetic identities. It blocks nonlocal requests and websocket traffic. It does not verify the Rust service or Google permissions. Own-calendar reads use the existing REST fallback.
 
-It uses a live clock and checks that loading placeholders disappear and event chips are opaque and in the viewport before capture. It exercises sharing and availability settings, read-only event details, revocation, membership loss, a viewer without any connected Google account, and automatic data/popover expiry while refresh requests hang. The expiry check waits up to 65 seconds with the browser clock running normally.
+It uses a live clock and checks that loading placeholders disappear before capture. It checks that no surface reads teammate calendars or shows team calendar controls, that the `Team out of office` checkbox hides and restores a teammate's out-of-office chip while the sidebar keeps listing it, and exercises the Team sharing select and the account-grouped "Calendars that count as busy" list, failing if any change flashes a loading state.
 
-Imported own and shared point events must render compactly with a single time,
-without drag/resize. Editing the own point's title must omit time from its request.
+Imported own point events must render compactly with a single time,
+without drag/resize. Editing the point's title must omit time from its request.
 Adding a Macro call to a point must show a duration error before any mutation.
 
 From `apps/web`, with Chromium installed:

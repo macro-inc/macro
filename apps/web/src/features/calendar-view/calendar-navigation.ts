@@ -59,7 +59,10 @@ export function calendarViewContent(
   };
 }
 
-/** Open the singleton Calendar route, or retarget its existing split. */
+/**
+ * Open the singleton Calendar route, or retarget its existing split. Returns
+ * false when there was nowhere to open it.
+ */
 export function openCalendarView(
   target: CalendarRouteTarget = {},
   options: {
@@ -69,10 +72,12 @@ export function openCalendarView(
     mergeHistory?: boolean;
     referredFrom?: ReferredFrom;
     onApplied?: VoidFunction;
+    /** False retargets an open Calendar split without taking focus from the caller. */
+    activate?: boolean;
   } = {}
-): void {
+): boolean {
   const manager = options.manager ?? globalSplitManager();
-  if (!manager) return;
+  if (!manager) return false;
 
   let onApplied = options.onApplied;
   const reportApplied = () => {
@@ -95,13 +100,13 @@ export function openCalendarView(
       mergeHistory: options.mergeHistory ?? true,
       referredFrom: options.referredFrom,
     });
-    existing.activate();
+    if (options.activate !== false) existing.activate();
     reportApplied();
-    return;
+    return true;
   }
 
   const result = manager.openWithSplit(content, {
-    activate: true,
+    activate: options.activate !== false,
     referredFrom: options.referredFrom ?? null,
     preferNewSplit: options.openInNewSplit,
     handle: options.handle,
@@ -109,4 +114,5 @@ export function openCalendarView(
     ...(options.onApplied ? { onApplied: reportApplied } : {}),
   });
   reportImmediateResult(result);
+  return result !== undefined && result.status !== 'unavailable';
 }

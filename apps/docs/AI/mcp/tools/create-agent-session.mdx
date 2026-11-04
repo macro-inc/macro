@@ -1,0 +1,16 @@
+---
+title: CreateAgentSession
+description: >-
+  Start a new session with a coding or chat agent from ListAgents.
+---
+
+# CreateAgentSession
+
+Start a new session with a coding or chat agent from ListAgents. Provide the agent botId and a self-contained initial prompt. The new session does not inherit this conversation. Returns its session ID after the first prompt is accepted, not completed work. Use ManageAgentSession to continue an existing session. Create once; do not automatically retry after an uncertain failure.
+
+## Parameters
+
+| Parameter | Type | Required | Description |
+| --- | --- | --- | --- |
+| `agentId` | string | Yes | Agent persona botId from ListAgents. |
+| `prompt` | string | Yes | Complete initial task and relevant context. |

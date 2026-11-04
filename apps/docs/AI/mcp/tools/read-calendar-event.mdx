@@ -1,0 +1,20 @@
+---
+title: ReadCalendarEvent
+description: >-
+  Read one calendar event by id: the `documentId` of a calendar event mention
+  (`blockName` `calendar`) in a message, document, or email, or an `eventId` a
+  calendar tool returned.
+---
+
+# ReadCalendarEvent
+
+Read one calendar event by id: the `documentId` of a calendar event mention (`blockName` `calendar`) in a message, document, or email, or an `eventId` a calendar tool returned. Returns what the mention's preview card shows: title, time, location, description (truncated), organizer, guest count, and whether it repeats. ReadContent and ReadMetadata read documents only; use this tool for calendar events.
+
+`access` says how the user holds the meeting, as the card does. `on_your_calendar`: their own event, on a calendar of their schedule. `on_visible_calendar`: it is on a calendar they can see that is not part of their schedule, named by `calendarName`, which may be a colleague's: never call it theirs, say whose it is when the name shows that, and otherwise say you cannot tell. `invited`: they are a guest. `snapshot`: a private copy they added of a shared meeting, which doesn't follow the organizer's changes and where an answer or a new guest would never reach the meeting. In these four, `eventId` is the user's copy for UpdateCalendarEvent and DeleteCalendarEvent. `shared_with_you`: someone shared their copy with a channel the user belongs to and the meeting is on none of the user's calendars. The event is then read-only for the user; AddSharedCalendarEvent adds a snapshot of it, and `canRequestToJoin` and `joinRequestStatus` say whether they can ask the person who shared it to add them as a guest, which they do from the event's card. To read one instance of a recurring event, pass the mention's `occurrenceKey` block param.
+
+## Parameters
+
+| Parameter | Type | Required | Description |
+| --- | --- | --- | --- |
+| `eventId` | string | Yes | Calendar event id: a calendar mention's documentId, or an eventId from a calendar tool. |
+| `occurrenceKey` | string | No | Occurrence to read for a recurring event: the mention's occurrenceKey block param, or a recurrenceId from ListCalendarEvents. Omit to read the next upcoming instance, else the latest past one, else the series start. |

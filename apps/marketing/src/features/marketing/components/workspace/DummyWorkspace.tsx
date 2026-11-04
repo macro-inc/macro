@@ -25,6 +25,7 @@ import { Button } from '@ui';
 import {
   createSignal,
   For,
+  type JSX,
   Match,
   onCleanup,
   onMount,
@@ -82,6 +83,10 @@ export default function DummyWorkspace(props: {
   tasksShowcase?: boolean;
   chatSplits?: boolean;
   embedded?: boolean;
+  /** Homepage scenes reuse this workspace chrome around their focused content. */
+  demoContent?: JSX.Element;
+  demoIncludesSidebar?: boolean;
+  demoTitle?: string;
 }) {
   let workspaceElement!: HTMLDivElement;
   const showcase =
@@ -451,7 +456,12 @@ export default function DummyWorkspace(props: {
             class="size-8 rounded-full"
           />
         </div>
-        <Show when={sidebar()}>
+        <Show
+          when={
+            sidebar() &&
+            !(props.demoIncludesSidebar && w.view() === props.initialView)
+          }
+        >
           <div class="dummy-sidebar">
             <Show
               when={w.view() === 'email'}
@@ -461,6 +471,11 @@ export default function DummyWorkspace(props: {
                   fallback={
                     <WorkspaceSidebar
                       workspace={w}
+                      demoTitle={
+                        w.view() === props.initialView
+                          ? props.demoTitle
+                          : undefined
+                      }
                       title={title()}
                       collapse={() => setSidebar(false)}
                       create={create}
@@ -552,60 +567,75 @@ export default function DummyWorkspace(props: {
               </Button>
             </div>
           </Show>
-          <Switch>
-            <Match when={w.contentView() === 'tasks'}>
-              <Show
-                when={taskWorkspace}
-                fallback={<WorkspaceTasks workspace={w} filter={filter()} />}
-              >
-                {(controller) => <TasksWorkspaceMain state={controller()} />}
-              </Show>
-            </Match>
-            <Match when={w.contentView() === 'email'}>
-              <WorkspaceEmail
-                workspace={w}
-                tag={mailTag()}
-                onClearTag={() => setMailTag(undefined)}
-                tab={mailTab()}
-                account={account()}
-                navigationOpen={sidebar()}
-                onToggleNavigation={() => setSidebar(!sidebar())}
-              />
-            </Match>
-            <Match when={w.contentView() === 'spreadsheet'}>
-              <WorkspaceSpreadsheet workspace={w} />
-            </Match>
-            <Match when={w.contentView() === 'documents'}>
-              <WorkspaceDocuments workspace={w} />
-            </Match>
-            <Match when={w.contentView() === 'messages'}>
-              <Show
-                when={showcase && w.channel() === 'product-feedback'}
-                fallback={
+          <Show
+            when={
+              props.demoContent &&
+              w.view() === props.initialView &&
+              !w.selected()
+            }
+            fallback={
+              <Switch>
+                <Match when={w.contentView() === 'tasks'}>
                   <Show
-                    when={props.chatSplits}
-                    fallback={<WorkspaceChannel workspace={w} />}
+                    when={taskWorkspace}
+                    fallback={
+                      <WorkspaceTasks workspace={w} filter={filter()} />
+                    }
                   >
-                    <ChannelWorkSurface workspace={w} />
+                    {(controller) => (
+                      <TasksWorkspaceMain state={controller()} />
+                    )}
                   </Show>
-                }
-              >
-                <AgentFeedbackWorkflow workspace={w} />
-              </Show>
-            </Match>
-            <Match when={w.contentView() === 'agents'}>
-              <WorkspaceAgents workspace={w} />
-            </Match>
-            <Match when={w.contentView() === 'home'}>
-              <WorkspaceAgents workspace={w} home />
-            </Match>
-            <Match when={w.contentView() === 'calendar'}>
-              <WorkspaceCalendar workspace={w} />
-            </Match>
-            <Match when={w.contentView() === 'crm'}>
-              <WorkspaceCompanies workspace={w} />
-            </Match>
-          </Switch>
+                </Match>
+                <Match when={w.contentView() === 'email'}>
+                  <WorkspaceEmail
+                    workspace={w}
+                    tag={mailTag()}
+                    onClearTag={() => setMailTag(undefined)}
+                    tab={mailTab()}
+                    account={account()}
+                    navigationOpen={sidebar()}
+                    onToggleNavigation={() => setSidebar(!sidebar())}
+                  />
+                </Match>
+                <Match when={w.contentView() === 'spreadsheet'}>
+                  <WorkspaceSpreadsheet workspace={w} />
+                </Match>
+                <Match when={w.contentView() === 'documents'}>
+                  <WorkspaceDocuments workspace={w} />
+                </Match>
+                <Match when={w.contentView() === 'messages'}>
+                  <Show
+                    when={showcase && w.channel() === 'product-feedback'}
+                    fallback={
+                      <Show
+                        when={props.chatSplits}
+                        fallback={<WorkspaceChannel workspace={w} />}
+                      >
+                        <ChannelWorkSurface workspace={w} />
+                      </Show>
+                    }
+                  >
+                    <AgentFeedbackWorkflow workspace={w} />
+                  </Show>
+                </Match>
+                <Match when={w.contentView() === 'agents'}>
+                  <WorkspaceAgents workspace={w} />
+                </Match>
+                <Match when={w.contentView() === 'home'}>
+                  <WorkspaceAgents workspace={w} home />
+                </Match>
+                <Match when={w.contentView() === 'calendar'}>
+                  <WorkspaceCalendar workspace={w} />
+                </Match>
+                <Match when={w.contentView() === 'crm'}>
+                  <WorkspaceCompanies workspace={w} />
+                </Match>
+              </Switch>
+            }
+          >
+            {props.demoContent}
+          </Show>
         </div>
       </div>
     </div>

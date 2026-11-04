@@ -108,6 +108,33 @@ for (const previous of indexedRoutes) {
     .querySelector('meta[property="og:image"]')
     ?.getAttribute('content');
   assert(og, `${previous.path}: missing social card`);
+  assert.equal(
+    doc.querySelector('meta[name="twitter:card"]')?.getAttribute('content'),
+    'summary_large_image',
+    `${previous.path}: preserve X image card`
+  );
+  assert.equal(
+    doc.querySelector('meta[name="twitter:image"]')?.getAttribute('content'),
+    og,
+    `${previous.path}: X image matches Open Graph image`
+  );
+  const video = doc
+    .querySelector('meta[property="og:video"]')
+    ?.getAttribute('content');
+  if (previous.path === '/') {
+    assert(video, 'Homepage: missing Open Graph video');
+    const videoUrl = new URL(video);
+    assert.equal(videoUrl.origin, origin);
+    const videoFile = path.join(directory, videoUrl.pathname);
+    assert(fs.existsSync(videoFile), 'Homepage: missing Open Graph MP4');
+    assert(
+      fs.statSync(videoFile).size < 2_000_000,
+      'Homepage: keep preview video small'
+    );
+  } else {
+    assert(!video, `${previous.path}: video must remain homepage-only`);
+  }
+
   if (new URL(og).origin === origin)
     assert(
       fs.existsSync(path.join(directory, new URL(og).pathname)),

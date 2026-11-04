@@ -1,4 +1,5 @@
 import { useUserId } from '@core/context/user';
+import { fireAndForget } from '@core/util/fireAndForget';
 import {
   entityMessagesClient,
   type MessageCursor,
@@ -29,7 +30,7 @@ export function useMessageRootsQuery(parent: Accessor<MessageParent>) {
       !query.isFetching &&
       !query.isFetchNextPageError
     )
-      void query.fetchNextPage();
+      fireAndForget(query.fetchNextPage(), 'document-messages');
   });
   return {
     get data() {

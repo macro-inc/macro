@@ -16,19 +16,27 @@ use crate::domain::ports::{
 #[derive(Debug, Serialize, JsonSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct ToolCalendar {
+    /// Provider hosting this calendar.
+    pub provider: crate::domain::models::CalendarProvider,
+    /// Supported conference, recurrence, reminder, and RSVP operations.
+    pub capabilities: crate::domain::models::CalendarCapabilities,
     /// Calendar id; pass as `calendarId` to CreateCalendarEvent to target
     /// this calendar. Not a mentionable entity: never put it in a mention
     /// tag — only individual calendar events can be mentioned.
     pub calendar_id: uuid::Uuid,
     /// Provider display name.
     pub name: String,
-    /// Connected inbox address the calendar belongs to.
+    /// Connected inbox address syncing the calendar. It stays the user's own
+    /// address on a colleague's calendar, so it never says whose it is.
     pub email_address: String,
     /// Whether this is its account's primary calendar — the default target
     /// for created events.
     pub is_primary: bool,
     /// Whether events can be created and modified on this calendar.
     pub is_writable: bool,
+    /// Whether this calendar counts toward the user's busy time. Only these
+    /// are the user's own schedule; false does not say whose calendar it is.
+    pub contributes_to_availability: bool,
 }
 
 /// Response from the ListCalendars tool.
@@ -47,12 +55,21 @@ pub struct ListCalendarsToolResponse {
     title = "ListCalendars",
     description = "\
 List the calendars the user can see across their connected inboxes, with each calendar's \
-`calendarId`, display name, owning inbox address, and whether it is primary and writable.\n\
+`calendarId`, display name, syncing inbox address, provider, capabilities, and whether it is \
+primary, writable and part of the user's busy time.\n\
+\n\
+Not every calendar here is the user's. `emailAddress` is the account syncing a calendar, so a \
+colleague's calendar reports the user's own address, and being writable or not primary proves \
+nothing either way. `contributesToAvailability` marks the calendars that are the user's \
+schedule. Call any other by its name, say whose it is when the name shows that, and otherwise \
+say you cannot tell.\n\
 \n\
 Use this before CreateCalendarEvent when the user wants an event on a specific non-default \
 calendar (e.g. \"add it to my work calendar\") so you can pass the exact `calendarId`. Most \
 users have a single primary calendar, in which case CreateCalendarEvent targets it by default \
-and you do not need this tool. An empty result means no calendar is connected."
+and you do not need this tool unless choosing conference or other provider-dependent behavior. \
+Check `capabilities` before requesting a conference, removing one, or using custom recurrence. \
+An empty result means no calendar is connected."
 )]
 pub struct ListCalendars {}
 
@@ -87,11 +104,14 @@ where
         let calendars: Vec<ToolCalendar> = calendars
             .into_iter()
             .map(|calendar| ToolCalendar {
+                provider: calendar.provider,
+                capabilities: calendar.capabilities,
                 calendar_id: calendar.id,
                 name: calendar.name,
                 email_address: calendar.email_address,
                 is_primary: calendar.is_primary,
                 is_writable: calendar.is_writable,
+                contributes_to_availability: calendar.contributes_to_availability,
             })
             .collect();
 

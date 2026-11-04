@@ -66,11 +66,11 @@ export const HOSTS: Record<Env, Record<ServiceName, string>> = {
     // root; the `/calendar` segment keeps local paths identical to the
     // gateway's. Mirrors apps/web servers.ts.
     calendar: 'http://localhost:8088/calendar',
-    cognition: 'http://localhost:8085',
+    cognition: 'http://localhost:8101/cognition',
     notification: 'http://localhost:8089',
     properties: 'http://localhost:8086',
     search: 'http://localhost:8086',
-    'scheduled-action': 'http://localhost:8099',
+    'scheduled-action': 'http://localhost:8101/scheduled-action',
     'static-files': 'http://localhost:8100',
     connection: 'http://localhost:8082',
     contacts: 'http://localhost:8083',
@@ -108,6 +108,8 @@ export type MacroAuth =
 
 /** Options passed to `new Macro(opts)` and stored on `MacroClient`. */
 export interface MacroOpts {
+  /** Optional generated API operation events; excludes arguments, URLs and response data. */
+  onRequest?: (event: import('./utils/activity').RequestActivity) => void;
   /** How to authenticate. Takes precedence over `token`. Falls back to
    * `MACRO_API_KEY` (a user API key or bearer token) or `MACRO_BOT_TOKEN`
    * (bot). */

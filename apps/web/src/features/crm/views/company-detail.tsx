@@ -1,7 +1,9 @@
+import { TraceFlow, usePending } from '@app/observability/flow';
 import { SidePanel } from '@components/app/side-panel';
-import PlusIcon from '@phosphor/plus.svg';
-import { Button } from '@ui';
-import { createMemo, Match, Show, Suspense, Switch } from 'solid-js';
+import { createMemo, Match, onCleanup, Show, Suspense, Switch } from 'solid-js';
+import { CrmListSkeleton } from '../components/list-state';
+import { RecordOverview } from '../components/record-overview';
+import { RecordVisibilityAction } from '../components/record-visibility-action';
 import { useCrmContext } from '../context/crm-context';
 import type { CrmContact as CompanyContact } from '../core/contact';
 import {
@@ -18,10 +20,15 @@ import { CompanyPropertiesSection } from './company-properties-section';
 import { CompanySharingSection } from './company-sharing-section';
 import {
   RecordCallsSection,
+  RecordDatabasesSection,
   RecordFilesSection,
   RecordReferencesSection,
 } from './record-associations';
-import { useCompanyQuery } from './use-crm';
+import {
+  useCompanyQuery,
+  useIsTeamAdmin,
+  useSetCompanyHiddenMutation,
+} from './use-crm';
 
 /**
  * Root of the company detail view, laid out like a project: the host's top
@@ -30,19 +37,43 @@ import { useCompanyQuery } from './use-crm';
  * calls. Properties, sharing, and references open in the floating
  * information panel.
  */
-export function Company(props: {
+type CompanyProps = {
   companyId: string;
   section?: CompanySection;
   headerToggle?: boolean;
-  onHidden?: () => void;
   onOpenContact?: (contact: CompanyContact) => void;
   onOpenPipeline?: (pipelineId: string) => void;
-}) {
+};
+
+export function Company(props: CompanyProps) {
+  return (
+    <TraceFlow
+      name="crm.company"
+      key={() => `${props.companyId}:${props.section ?? 'overview'}`}
+      attributes={{
+        'company.id': props.companyId,
+        'crm.section': props.section ?? 'overview',
+      }}
+    >
+      <CompanyContent {...props} />
+    </TraceFlow>
+  );
+}
+
+function CompanyContent(props: CompanyProps) {
   const context = useCrmContext();
-  const openCreateContactModal = context.openCreateContact;
+  onCleanup(
+    context.registerTaskComposerRecord(() => ({
+      type: 'company',
+      id: props.companyId,
+    }))
+  );
   const listsEnabled = context.listsEnabled();
   const pipelinesEnabled = context.pipelinesEnabled();
-  const { company, contacts } = useCompanyQuery(() => props.companyId);
+  const { company, contacts, query } = useCompanyQuery(() => props.companyId);
+  usePending('crm.record', () => query.isLoading);
+  const isTeamAdmin = useIsTeamAdmin();
+  const hiddenMutation = useSetCompanyHiddenMutation();
   const section = () => props.section ?? 'overview';
   const scope = createMemo(
     (): CrmRecordScope | undefined => {
@@ -68,43 +99,53 @@ export function Company(props: {
         <div class="min-h-0 min-w-0 flex-1">
           <Switch>
             <Match when={section() === 'overview'}>
-              <div class="h-full overflow-y-auto px-6 pb-12 pt-12 scrollbar-hidden touch:pt-6">
-                <div class="mx-auto flex max-w-3xl min-w-0 flex-col gap-6">
-                  <CompanyHeader company={company()} />
-                  <Show when={pipelinesEnabled()}>
-                    <context.PipelineEntries
-                      record={{ type: 'company', id: props.companyId }}
-                      onOpenPipeline={props.onOpenPipeline}
+              <RecordOverview>
+                <CompanyHeader company={company()} />
+                <Show when={company()}>
+                  {(current) => (
+                    <RecordVisibilityAction
+                      recordId={current().id}
+                      kind="company"
+                      name={current().name}
+                      hidden={current().hidden}
+                      canManage={isTeamAdmin()}
+                      pending={hiddenMutation.isPending}
+                      onChange={(hidden, onSuccess) =>
+                        hiddenMutation.mutate(
+                          { companyId: current().id, hidden },
+                          {
+                            onSuccess: () => {
+                              onSuccess();
+                              context.feedback.success(
+                                hidden
+                                  ? 'Company removed from CRM'
+                                  : 'Company restored to CRM'
+                              );
+                            },
+                            onError: () =>
+                              context.feedback.failure(
+                                'Could not update company visibility'
+                              ),
+                          }
+                        )
+                      }
                     />
-                  </Show>
-                  <CompanyDiscussionSection companyId={props.companyId} />
-                </div>
-              </div>
+                  )}
+                </Show>
+                <Show when={pipelinesEnabled()}>
+                  <context.PipelineEntries
+                    record={{ type: 'company', id: props.companyId }}
+                    onOpenPipeline={props.onOpenPipeline}
+                  />
+                </Show>
+                <CompanyDiscussionSection companyId={props.companyId} />
+              </RecordOverview>
             </Match>
             <Match when={section() === 'team'}>
               <CompanyContactsSection
                 company={company()}
                 contacts={contacts()}
                 onOpenContact={props.onOpenContact}
-                actions={
-                  <Button
-                    variant="outline"
-                    // Contact emails are pinned to the company's primary
-                    // domain; disabled until the company has loaded.
-                    disabled={!company()?.domains[0]}
-                    onClick={() => {
-                      const domain = company()?.domains[0]?.domain;
-                      if (domain)
-                        openCreateContactModal({
-                          companyId: props.companyId,
-                          domain,
-                        });
-                    }}
-                  >
-                    <PlusIcon class="size-4" />
-                    Add contact
-                  </Button>
-                }
               />
             </Match>
             <Match when={section() === 'emails'}>
@@ -114,24 +155,17 @@ export function Company(props: {
               <RecordFilesSection scope={scope()} />
             </Match>
             <Match when={section() === 'tasks'}>
-              <Suspense
-                fallback={
-                  <div class="p-6 text-center text-sm text-ink-muted">
-                    Loading…
-                  </div>
-                }
-              >
+              <Suspense fallback={<CrmListSkeleton label="Loading tasks" />}>
                 <Show
                   when={scope()}
-                  fallback={
-                    <div class="p-6 text-center text-sm text-ink-muted">
-                      Loading…
-                    </div>
-                  }
+                  fallback={<CrmListSkeleton label="Loading tasks" />}
                 >
                   {(current) => <context.RecordTasks scope={current()} />}
                 </Show>
               </Suspense>
+            </Match>
+            <Match when={section() === 'databases'}>
+              <RecordDatabasesSection scope={scope()} />
             </Match>
             <Match when={section() === 'calls'}>
               <RecordCallsSection scope={scope()} />
@@ -145,16 +179,20 @@ export function Company(props: {
         title="Properties"
         order={15}
         defaultOpen
-      >
-        <CompanyPropertiesSection companyId={props.companyId} />
-      </SidePanel.Section>
+        render={(renderSection) => (
+          <CompanyPropertiesSection
+            companyId={props.companyId}
+            renderSection={renderSection}
+          />
+        )}
+      />
       <Show when={listsEnabled()}>
         <Suspense>
           <CompanyListsSection companyId={props.companyId} />
         </Suspense>
       </Show>
       <SidePanel.Section id="company-sharing" title="Sharing" order={25}>
-        <CompanySharingSection company={company()} onHidden={props.onHidden} />
+        <CompanySharingSection company={company()} />
       </SidePanel.Section>
       <SidePanel.Section id="company-references" title="References" order={30}>
         <RecordReferencesSection scope={scope()} />

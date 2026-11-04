@@ -6,6 +6,7 @@
  */
 
 /**
- * A bearer capability that grants access only to a meeting's RTC room.
+ * An invitation capability for joining a meeting's RTC room. Chat additionally
+requires the resulting participant credential and current guest membership.
  */
 export type MeetingToken = string;

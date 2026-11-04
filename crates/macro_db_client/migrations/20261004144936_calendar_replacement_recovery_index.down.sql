@@ -1,0 +1,1 @@
+DROP INDEX calendar_event_replacements_recovery;

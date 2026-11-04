@@ -22,8 +22,9 @@ use crate::domain::models::{NotificationStatusPayload, TaggedContent};
 use crate::domain::models::email_notification_digest::ports::{ClaimResult, DigestBatch};
 use crate::domain::models::request::{NotificationListFilters, NotificationStatus};
 use crate::domain::models::{
-    DeviceEndpoint, DisabledNotificationType, NotificationExtEmail, NotificationIdAndCollapseKey,
-    SendNotificationRequestBuilder, UserNotificationRow, VoipPushTarget,
+    DeviceEndpoint, DisabledNotificationType, NativeCallPushResult, NotificationExtEmail,
+    NotificationIdAndCollapseKey, SendNotificationRequestBuilder, UserNotificationRow,
+    VoipPushTarget,
     android::FCMMessage,
     apple::{APNSPushNotification, VoipPushPayload},
     mobile::MessageAttributes,
@@ -71,8 +72,8 @@ pub trait NotificationRepository: Send + Sync + 'static {
 
     /// Create a notification and user notification records.
     ///
-    /// Returns the notification ID if successful, or None if it already exists
-    /// (idempotent operation).
+    /// Returns new or unpublished recipient rows, or None after publication or withdrawal.
+    /// Retried publication preserves the original recipients and their lifecycle state.
     fn create_notification<'a, T: Serialize + Send + Sync>(
         &self,
         request: SendNotificationRequestBuilder<'a, TaggedContent<T>>,
@@ -80,6 +81,18 @@ pub trait NotificationRepository: Send + Sync + 'static {
         service_sender: &str,
         apns_collapse_key: Option<&str>,
     ) -> impl Future<Output = Result<Option<Vec<UserNotificationRow<Arc<T>>>>, Report>> + Send;
+
+    /// Whether a resolved workflow has withdrawn this notification before delivery.
+    fn notification_is_withdrawn(
+        &self,
+        notification_id: Uuid,
+    ) -> impl std::future::Future<Output = Result<bool, Report>> + Send;
+
+    /// Record successful delivery-queue publication; retries remain pending until this succeeds.
+    fn complete_notification_publication(
+        &self,
+        notification_id: Uuid,
+    ) -> impl std::future::Future<Output = Result<(), Report>> + Send;
 
     /// Update the sent status for users who received the notification.
     fn update_sent_status<'a>(
@@ -219,6 +232,7 @@ pub trait NotificationRepository: Send + Sync + 'static {
         device_token: &str,
         device_endpoint: &str,
         device_type: &DeviceType,
+        native_call_capable: bool,
     ) -> impl Future<Output = Result<(), Report>> + Send;
 
     /// Delete all of the user's device registrations matching the given token
@@ -543,11 +557,12 @@ pub trait VoipPushDelivery: Send + Sync + 'static {
     fn send_voip_push(
         &self,
         endpoint_arn: &str,
+        recipient_id: &MacroUserIdStr<'_>,
         payload: &VoipPushPayload,
     ) -> impl Future<Output = Result<String, Report>> + Send;
 }
 
-/// Port for sending VoIP push notifications (PushKit / CallKit) to iOS devices.
+/// Port for sending native call pushes to iOS PushKit and Android FCM devices.
 ///
 /// VoIP pushes bypass the regular notification pipeline — they are delivered
 /// immediately without DB persistence and wake the app via PushKit so that
@@ -561,12 +576,13 @@ pub trait VoipPushSender: Send + Sync + 'static {
 
     /// Send recipient-specific payloads to already-resolved VoIP endpoints.
     ///
-    /// Errors are logged but do not propagate. The returned set contains users
-    /// that received at least one successful VoIP push delivery.
+    /// Errors are logged but do not propagate. Successful deliveries suppress
+    /// ordinary alerts only on the corresponding platform. Users whose mobile
+    /// platforms are all handled natively need no fallback notification row.
     fn send_voip_pushes(
         &self,
         pushes: Vec<(VoipPushTarget, VoipPushPayload)>,
-    ) -> impl std::future::Future<Output = HashSet<MacroUserIdStr<'static>>> + Send;
+    ) -> impl std::future::Future<Output = NativeCallPushResult> + Send;
 }
 
 impl VoipPushSender for () {
@@ -580,8 +596,8 @@ impl VoipPushSender for () {
     async fn send_voip_pushes(
         &self,
         _: Vec<(VoipPushTarget, VoipPushPayload)>,
-    ) -> HashSet<MacroUserIdStr<'static>> {
-        HashSet::new()
+    ) -> NativeCallPushResult {
+        NativeCallPushResult::default()
     }
 }
 
@@ -600,11 +616,20 @@ impl<V: VoipPushSender> VoipPushSender for Option<V> {
     async fn send_voip_pushes(
         &self,
         pushes: Vec<(VoipPushTarget, VoipPushPayload)>,
-    ) -> HashSet<MacroUserIdStr<'static>> {
+    ) -> NativeCallPushResult {
         if let Some(inner) = self {
             inner.send_voip_pushes(pushes).await
         } else {
-            HashSet::new()
+            NativeCallPushResult::default()
         }
     }
+}
+
+/// Permanently suppress a superseded notification, including delayed queue delivery.
+pub trait NotificationWithdrawal: Send + Sync + 'static {
+    /// Record withdrawal before completing any existing recipient notifications.
+    fn withdraw(
+        &self,
+        notification_id: Uuid,
+    ) -> impl Future<Output = Result<(), rootcause::Report>> + Send;
 }

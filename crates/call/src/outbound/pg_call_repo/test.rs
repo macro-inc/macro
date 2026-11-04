@@ -661,7 +661,7 @@ async fn archive_call_creates_record_and_deletes_ephemeral(
     assert_eq!(archived.ended_at, record.ended_at);
     assert_eq!(archived.duration_ms, record.duration_ms);
     assert!(archived.has_recording);
-    assert_eq!(archived.participant_count, 2);
+    assert_eq!(archived.participants.len(), 2);
 
     assert_eq!(record.channel_id, archived.channel_id);
     assert_eq!(record.created_by, archived.created_by);
@@ -681,7 +681,11 @@ async fn archive_call_creates_record_and_deletes_ephemeral(
     .fetch_all(&pool)
     .await?;
 
-    assert_eq!(participants.len(), archived.participant_count);
+    let mut returned = archived.participants.clone();
+    returned.sort();
+    let mut stored = participants.clone();
+    stored.sort();
+    assert_eq!(returned, stored);
     assert!(participants.contains(&USER_A.to_string()));
     assert!(participants.contains(&USER_B.to_string()));
     Ok(())
@@ -709,7 +713,9 @@ async fn archive_call_preserves_soft_deleted_participants(
 
     // Archive the call.
     let archived = repo.archive_call(&CALL1).await?;
-    assert_eq!(archived.participant_count, 2);
+    assert_eq!(archived.participants.len(), 2);
+    assert!(archived.participants.contains(&USER_A.to_string()));
+    assert!(archived.participants.contains(&USER_B.to_string()));
     assert!(!archived.has_recording);
 
     // call_record_participants should have both participants with left_at set.
@@ -725,7 +731,7 @@ async fn archive_call_preserves_soft_deleted_participants(
     .fetch_all(&pool)
     .await?;
 
-    assert_eq!(rows.len(), archived.participant_count);
+    assert_eq!(rows.len(), archived.participants.len());
     let user_ids: Vec<&str> = rows.iter().map(|r| r.user_id.as_str()).collect();
     assert!(user_ids.contains(&USER_A.as_ref()));
     assert!(user_ids.contains(&USER_B.as_ref()));

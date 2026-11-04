@@ -15,6 +15,7 @@ import {
   crmDemoFrame,
 } from '../core/crm-demo';
 import { homepagePeople } from '../core/homepage-demo-people';
+import { observeDemoTakeover } from '../primitives/observeDemoTakeover';
 import {
   CompanyKanbanCardSurface,
   CompanyKanbanColumn,
@@ -28,6 +29,7 @@ type Company = (typeof CRM_DEMO_COMPANIES)[number];
 function DemoCard(props: { company: Company }) {
   return (
     <CompanyKanbanCardSurface
+      class="homepage-crm-card-surface"
       icon={
         <span class="homepage-crm-company-mark">{props.company.initials}</span>
       }
@@ -45,9 +47,7 @@ function DemoCard(props: { company: Company }) {
   );
 }
 
-export default function HomepageCrm(
-  props: { playbackControls?: boolean } = {}
-) {
+export default function HomepageCrm() {
   const [time, setTime] = createSignal(0);
   const [paused, setPaused] = createSignal(false);
   const [visible, setVisible] = createSignal(false);
@@ -71,6 +71,9 @@ export default function HomepageCrm(
     CRM_DEMO_COMPANIES.find((c) => c.id === frame().company)!;
 
   onMount(() => {
+    const releaseTakeover = viewport()
+      ? observeDemoTakeover(viewport()!, () => setPaused(true))
+      : undefined;
     const media = matchMedia('(prefers-reduced-motion: reduce)');
     const sync = () => {
       setReduced(media.matches);
@@ -79,11 +82,17 @@ export default function HomepageCrm(
     sync();
     media.addEventListener('change', sync);
     const observer = new IntersectionObserver(
-      (entries) => setVisible(entries.some((e) => e.isIntersecting)),
+      (entries) =>
+        setVisible(
+          entries.some(
+            (entry) => entry.isIntersecting && entry.intersectionRatio >= 0.3
+          )
+        ),
       { threshold: 0.3 }
     );
     if (viewport()) observer.observe(viewport()!);
     onCleanup(() => {
+      releaseTakeover?.();
       observer.disconnect();
       media.removeEventListener('change', sync);
     });
@@ -116,12 +125,12 @@ export default function HomepageCrm(
           ref={setViewport}
           class="homepage-crm-viewport"
           role="img"
-          aria-label="Claude moves Northwind from Qualified to Proposal, then Lumen from Proposal to Closed won."
+          aria-label="Claude moves Keystone Mechanical from Qualified to Proposal, then Bookend Retail from Proposal to Closed won."
         >
           <div
             class="homepage-crm-canvas"
             style={{
-              transform: `scale(${scale()}) translateX(${-camera()}px)`,
+              transform: `translate3d(${-camera() * scale()}px, 0, 0) scale(${scale()})`,
             }}
             aria-hidden="true"
           >
@@ -158,10 +167,10 @@ export default function HomepageCrm(
                           data-crm-stage={label}
                           class="homepage-crm-card"
                           style={{
-                            opacity:
+                            visibility:
                               frame().dragging && frame().company === company.id
-                                ? 0.18
-                                : 1,
+                                ? 'hidden'
+                                : 'visible',
                           }}
                         >
                           <DemoCard company={company} />
@@ -172,54 +181,27 @@ export default function HomepageCrm(
                 )}
               </For>
             </div>
-            <Show when={frame().dragging}>
-              <div
-                class="homepage-crm-drag"
-                style={{
-                  transform: `translate(${frame().x - 90}px, ${frame().y - 28}px) rotate(-2deg) scale(1.035)`,
-                }}
-              >
-                <DemoCard company={moving()} />
-              </div>
-            </Show>
-            <DemoCursor
-              class="homepage-crm-cursor"
-              style={{
-                transform: `translate(${frame().x}px, ${frame().y}px)`,
-                opacity: frame().opacity,
-              }}
-            />
           </div>
-        </div>
-        <div class="homepage-crm-footer">
-          <span class="homepage-crm-status" role="status">
-            {frame().status}
-          </span>
-          <Show when={!reduced() && props.playbackControls !== false}>
-            <div class="flex gap-3 shrink-0">
-              <Show when={!complete()}>
-                <button
-                  type="button"
-                  onClick={() => setPaused((p) => !p)}
-                  aria-label={
-                    paused() ? 'Play CRM walkthrough' : 'Pause CRM walkthrough'
-                  }
-                >
-                  {paused() ? 'Play' : 'Pause'}
-                </button>
-              </Show>
-              <button
-                type="button"
-                onClick={() => {
-                  setTime(0);
-                  setPaused(false);
-                }}
-                aria-label="Replay CRM walkthrough"
-              >
-                Replay
-              </button>
+          {/* Keep moving objects outside the panning board so each has one
+              viewport-space transform rather than nested moving layers. */}
+          <Show when={frame().dragging}>
+            <div
+              class="homepage-crm-drag"
+              aria-hidden="true"
+              style={{
+                transform: `translate3d(${(frame().x - 90 - camera()) * scale()}px, ${(frame().y - 28) * scale()}px, 0) scale(${scale()})`,
+              }}
+            >
+              <DemoCard company={moving()} />
             </div>
           </Show>
+          <DemoCursor
+            class="homepage-crm-cursor"
+            style={{
+              transform: `translate3d(${(frame().x - camera()) * scale()}px, ${frame().y * scale()}px, 0) scale(${scale()})`,
+              opacity: frame().opacity,
+            }}
+          />
         </div>
       </DocsGraphicFrame>
     </div>

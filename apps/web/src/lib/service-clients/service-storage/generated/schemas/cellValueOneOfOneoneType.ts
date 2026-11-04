@@ -10,5 +10,5 @@ export type CellValueOneOfOneoneType =
 
 // eslint-disable-next-line @typescript-eslint/no-redeclare
 export const CellValueOneOfOneoneType = {
-  options: 'options',
+  link: 'link',
 } as const;

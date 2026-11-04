@@ -52,8 +52,7 @@ fi
 key_prefix=${prefix:+$prefix/}
 records_prefix=${key_prefix}_builds
 
-# The build number the shell advertises as `macro-bundle-build`, so a record
-# sorts by the same clock the service worker compares builds with.
+# Use the same build timestamp as the bundle manifest and app update checks.
 manifest=$dist_root/bundle-manifest.json
 if [ ! -f "$manifest" ]; then
   echo "no bundle manifest at $manifest" >&2

@@ -487,13 +487,13 @@ const THREAD: Msg[] = [
   {
     who: 'teo',
     time: '2:54 PM',
-    text: 'Do we have the launch date and owners confirmed? Dana asked for the plan before the team call.',
+    text: 'Do we have the launch date and owners confirmed? Valentina asked for the plan before the team call.',
     reaction: true,
   },
   {
     who: 'aidan',
     time: '3:00 PM',
-    text: 'The Q3 launch plan is updated. Thursday at 9, and Dana has the email. We just need to check invites.',
+    text: 'The Website launch plan is updated. Thursday at 9, and Valentina has the email. We just need to check invites.',
   },
   {
     who: 'teo',

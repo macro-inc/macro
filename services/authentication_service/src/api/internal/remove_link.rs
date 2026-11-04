@@ -1,4 +1,5 @@
 use crate::api::context::{ApiContext, AuthorizationService};
+use fusionauth::FusionAuthClient;
 use fusionauth::error::FusionAuthClientError;
 use fusionauth::identity_provider::Link;
 
@@ -52,9 +53,23 @@ pub async fn handler(
     }): extract::Query<RemoveLinkQueryParams>,
 ) -> Result<Response, Response> {
     tracing::info!("internal_remove_link");
-    let idp_id = ctx
-        .auth_client
-        .get_identity_provider_id_by_name(&idp_name)
+    remove_link(
+        &ctx.auth_client,
+        &fusionauth_user_id,
+        &linked_email,
+        &idp_name,
+    )
+    .await
+}
+
+async fn remove_link(
+    auth_client: &FusionAuthClient,
+    fusionauth_user_id: &str,
+    linked_email: &str,
+    idp_name: &str,
+) -> Result<Response, Response> {
+    let idp_id = auth_client
+        .get_identity_provider_id_by_name(idp_name)
         .await
         .map_err(|e| match e {
             FusionAuthClientError::NoIdentityProviderFound => {
@@ -81,40 +96,39 @@ pub async fn handler(
 
     tracing::trace!("removing link for idp id {}", idp_id);
 
-    let links = ctx
-        .auth_client
-        .get_links(&fusionauth_user_id, Some(idp_id.clone()))
+    let links = match auth_client
+        .get_links(fusionauth_user_id, Some(idp_id.clone()))
         .await
-        .map_err(|e| {
+    {
+        Ok(links) => links,
+        // Deleting a FusionAuth user deletes its links with it.
+        Err(FusionAuthClientError::UserDoesNotExist) => Vec::new(),
+        Err(e) => {
             tracing::error!(error=?e, "error fetching links for userid {} and idp id {}", fusionauth_user_id, idp_id.as_str());
-            (
+            return Err((
                 StatusCode::INTERNAL_SERVER_ERROR,
                 Json(ErrorResponse {
                     message: "unable to fetch links".into(),
                 }),
             )
-                .into_response()
-        })?;
+                .into_response());
+        }
+    };
 
     // a fusionauth user can have multiple links to the same identity provider with different email
     // addresses, but can only have one link with a given email
-    let Some(link) = find_idp_link(links, &linked_email) else {
+    let Some(link) = find_idp_link(links, linked_email) else {
         // the link is already gone; treat removal as an idempotent no-op so retries don't wedge
         tracing::warn!(
-            "no {} link found for user id {} and email {}; treating remove as no-op",
+            "no {} link found for user id {}; treating remove as no-op",
             idp_name,
-            fusionauth_user_id,
-            linked_email
+            fusionauth_user_id
         );
         return Ok((StatusCode::OK, Json(EmptyResponse::default())).into_response());
     };
 
-    ctx.auth_client
-        .unlink_user(
-            &fusionauth_user_id,
-            &idp_id,
-            &link.identity_provider_user_id,
-        )
+    auth_client
+        .unlink_user(fusionauth_user_id, &idp_id, &link.identity_provider_user_id)
         .await
         .map_err(|e| match e {
             FusionAuthClientError::NoIdentityProviderFound => {

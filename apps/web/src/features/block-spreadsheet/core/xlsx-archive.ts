@@ -208,10 +208,6 @@ export function xlsxFeatureWarnings(names: string[]): string[] {
       warnings.add(
         'External workbook links are not supported; formulas that use them keep their last calculated values.'
       );
-    if (/^xl\/tables\//.test(name))
-      warnings.add(
-        'Excel tables are imported as ordinary cells; table formulas are converted to cell ranges.'
-      );
     if (/(^|\/)vbaProject\.bin$/i.test(name))
       warnings.add(
         'VBA macros are not imported. Cells, formulas and formatting are; the macros do not run in Macro.'

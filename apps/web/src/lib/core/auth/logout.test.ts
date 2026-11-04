@@ -4,10 +4,9 @@ import { isCancelledError, QueryClient } from '@tanstack/solid-query';
 import { createRoot } from 'solid-js';
 import { describe, expect, it, vi } from 'vitest';
 
-const { client, isTauri, navigate } = vi.hoisted(() => ({
+const { client, isTauri } = vi.hoisted(() => ({
   client: { current: undefined as QueryClient | undefined },
   isTauri: vi.fn(() => false),
-  navigate: vi.fn(),
 }));
 vi.mock('@queries/client', () => ({
   queryPersistence: {
@@ -22,18 +21,22 @@ vi.mock('@queries/client', () => ({
 vi.mock('@app/lib/analytics/analytics-context', () => ({
   useAnalytics: () => ({ track: vi.fn(), reset: vi.fn() }),
 }));
-vi.mock('@solidjs/router', () => ({ useNavigate: () => navigate }));
 vi.mock('@ui', () => ({ confirmDialog: vi.fn(async () => false) }));
 vi.mock('@queries/email/local-drafts', () => ({
   clearLocalDrafts: vi.fn(async () => {}),
   flushLocalDrafts: vi.fn(async () => {}),
   listLocalDrafts: vi.fn(async () => []),
 }));
-vi.mock('@core/constant/servers', () => ({
-  SERVER_HOSTS: { 'auth-logout': 'https://auth.example.com/oauth2/logout' },
+vi.mock('@queries/email/send-queue', () => ({
+  readEmailSendIntents: vi.fn(async () => []),
+  settledSendAttempt: () => ({ status: 'ACCEPTED' }),
 }));
-vi.mock('@core/mobile/isNativeMobilePlatform', () => ({
-  isNativeMobilePlatform: vi.fn(() => false),
+vi.mock('@queries/email/outbox-session', () => ({
+  setEmailOutboxSession: vi.fn(),
+}));
+vi.mock('@core/constant/servers', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@core/constant/servers')>()),
+  SERVER_HOSTS: { 'auth-logout': 'https://auth.example.com/oauth2/logout' },
 }));
 vi.mock('@core/util/platform', async (importOriginal) => ({
   ...(await importOriginal<typeof import('@core/util/platform')>()),
@@ -42,6 +45,10 @@ vi.mock('@core/util/platform', async (importOriginal) => ({
 vi.mock('@core/util/cookies', () => ({ syncLoginStorage: vi.fn() }));
 vi.mock('@graphql-cache/lifecycle', () => ({
   clearRegisteredCaches: vi.fn(async () => {}),
+}));
+vi.mock('@service-storage/graphql-soup', () => ({
+  recordGraphqlMutationQueueCleared: vi.fn(async () => {}),
+  setGraphqlSoupSessionActive: vi.fn(),
 }));
 vi.mock('@queries/auth/user-info', () => ({
   authKeys: {
@@ -59,14 +66,34 @@ vi.mock('./push-registration-lifecycle', () => ({
   unregisterPushRegistrationsForLogout: vi.fn(async () => {}),
 }));
 
+import { clearRegisteredCaches } from '@graphql-cache/lifecycle';
 import {
   clearLocalDrafts,
   flushLocalDrafts,
   listLocalDrafts,
 } from '@queries/email/local-drafts';
+import { readEmailSendIntents } from '@queries/email/send-queue';
 import { authServiceClient } from '@service-auth/client';
+import { setGraphqlSoupSessionActive } from '@service-storage/graphql-soup';
 import { confirmDialog } from '@ui';
 import { clearLocalAuthSession, useLogout } from './logout';
+
+describe('logout GraphQL session teardown', () => {
+  it('ends the GraphQL session only after the cache wipe', async () => {
+    client.current = new QueryClient();
+    const order: string[] = [];
+    vi.mocked(clearRegisteredCaches).mockImplementationOnce(async () => {
+      order.push('wipe');
+    });
+    vi.mocked(setGraphqlSoupSessionActive).mockImplementationOnce(() => {
+      order.push('teardown');
+    });
+    await clearLocalAuthSession();
+    expect(order).toEqual(['wipe', 'teardown']);
+    expect(setGraphqlSoupSessionActive).toHaveBeenCalledWith(false);
+    client.current.clear();
+  });
+});
 
 describe('logout notification cache isolation', () => {
   it('retires pending Done buckets and rotates the display-intent session', async () => {
@@ -139,21 +166,28 @@ describe('local draft logout warning', () => {
   // The Tauri shell, desktop included: a webview navigation to the identity
   // provider would be handed to the system browser by the navigation plugin,
   // leaving the app itself signed in.
-  it('reloads the Tauri login document only after local cleanup and navigation', async () => {
+  // The router writes a navigation's URL only once its transition settles, so
+  // the login URL must already be in place when the reload starts.
+  it('reloads the Tauri webview onto the login route after local cleanup', async () => {
     const order: string[] = [];
     client.current = new QueryClient();
     isTauri.mockReturnValue(true);
     vi.mocked(clearLocalDrafts).mockImplementationOnce(async () => {
       order.push('clear');
     });
-    navigate.mockImplementationOnce(() => {
-      order.push('navigate');
-    });
-    const reload = vi.fn(() => {
-      order.push('reload');
-    });
+    const location = {
+      hash: '#/home',
+      reload: vi.fn(() => {
+        order.push(`reload ${location.hash}`);
+      }),
+    };
+    const replaceState = vi.fn(
+      (_state: unknown, _unused: string, url: string) => {
+        location.hash = url;
+      }
+    );
     const fetchMock = vi.fn(async () => new Response());
-    vi.stubGlobal('window', { location: { reload } });
+    vi.stubGlobal('window', { location, history: { replaceState } });
     vi.stubGlobal('fetch', fetchMock);
     const { logout, dispose } = createRoot((dispose) => ({
       logout: useLogout(),
@@ -161,13 +195,12 @@ describe('local draft logout warning', () => {
     }));
     try {
       await logout();
-      expect(order).toEqual(['clear', 'navigate', 'reload']);
+      expect(order).toEqual(['clear', 'reload #/login']);
       expect(fetchMock).toHaveBeenCalledWith(
         'https://auth.example.com/oauth2/logout',
         expect.objectContaining({ credentials: 'include', mode: 'no-cors' })
       );
-      expect(navigate).toHaveBeenLastCalledWith('/login');
-      expect(reload).toHaveBeenCalledOnce();
+      expect(location.reload).toHaveBeenCalledOnce();
     } finally {
       dispose();
       isTauri.mockReturnValue(false);
@@ -189,6 +222,28 @@ describe('local draft logout warning', () => {
       expect(confirmDialog).toHaveBeenLastCalledWith(
         expect.objectContaining({
           body: expect.stringContaining('1 draft(s)'),
+        }),
+        expect.anything()
+      );
+      expect(authServiceClient.logout).not.toHaveBeenCalled();
+    } finally {
+      dispose();
+    }
+  });
+
+  it('warns about queued sends after their working copies have been retired', async () => {
+    vi.mocked(readEmailSendIntents).mockResolvedValueOnce([
+      { uuid: 'send' },
+    ] as Awaited<ReturnType<typeof readEmailSendIntents>>);
+    const { logout, dispose } = createRoot((dispose) => ({
+      logout: useLogout(),
+      dispose,
+    }));
+    try {
+      await logout();
+      expect(confirmDialog).toHaveBeenLastCalledWith(
+        expect.objectContaining({
+          body: expect.stringContaining('signing out does not cancel them'),
         }),
         expect.anything()
       );

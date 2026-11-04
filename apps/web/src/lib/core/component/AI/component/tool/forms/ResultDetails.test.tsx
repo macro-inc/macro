@@ -31,11 +31,15 @@ const result: FormMutation = {
       status: 'open',
       closesAt: null,
       tallyVisible: false,
+      responsesVisible: false,
+      anonymous: false,
       confirmationMessage: '',
+      branding: { logoFileId: null, coverFileId: null, accentColor: null },
       submittedColumnId: null,
       respondentColumnId: null,
       createdAt: '2026-10-06T12:00:00Z',
       updatedAt: '2026-10-06T12:00:00Z',
+      isHiddenInDrive: false,
     },
     columns: [
       {

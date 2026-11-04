@@ -12,10 +12,15 @@ touches, in order, with the existing code to copy.
 | A GraphQL field, query, mutation, or subscription | [add-graphql-field.md](add-graphql-field.md) |
 | A notification kind | [add-notification-kind.md](add-notification-kind.md) |
 | A Kafka topic, event, or consumer | [add-kafka-event.md](add-kafka-event.md) |
+| A bot that searches and posts to channels through the SDK | [bots.md](bots.md) |
 | A MacroDB table, column, or query | [database guide](../development/database.md) |
 | An AI tool | [`create-ai-tool` skill](../../.agents/skills/create-ai-tool/SKILL.md) |
 | A backend endpoint to the TypeScript SDK | [`add-sdk-endpoint` skill](../../.agents/skills/add-sdk-endpoint/SKILL.md) |
 | A feature flag (web or backend) | [`feature-flags` skill](../../.agents/skills/feature-flags/SKILL.md) |
 | A view's feature tour | [`add-tour` skill](../../.agents/skills/add-tour/SKILL.md) |
+| Interface translations of new menu text | [`update-translations` skill](../../.agents/skills/update-translations/SKILL.md) |
 | Collaborative markdown on a feature | [`collab-surface-core` skill](../../.agents/skills/collab-surface-core/SKILL.md) |
 | A feature on shared database storage | [`database-core` skill](../../.agents/skills/database-core/SKILL.md) |
+
+For the single agent backend and retirement of its former ECS services, see
+[Consolidate agent services](consolidate-agent-services.md).

@@ -19,7 +19,10 @@ vi.mock('@queries/auth/user-info', () => ({ invalidateUserInfo: vi.fn() }));
 vi.mock('@queries/soup/normalized-cache', () => ({
   invalidateAllSoup: vi.fn(),
 }));
-vi.mock('@core/context/user', () => ({ useUserId: () => () => 'macro|self' }));
+vi.mock('@core/context/user', () => ({
+  useUserId: () => () => 'macro|self',
+  useIsAuthenticated: () => () => true,
+}));
 vi.mock('@queries/client', () => ({ queryClient: {} }));
 
 const link = (id: string, owner: string, primary: boolean): Link => ({

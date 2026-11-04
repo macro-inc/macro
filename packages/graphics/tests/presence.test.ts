@@ -1,6 +1,6 @@
 import { afterEach, expect, it, vi } from 'vitest';
 import { createScene, translation } from '../src/core';
-import { currentPresencePreview } from '../src/loro';
+import { currentPresencePreview, presenceItemState } from '../src/loro';
 import type { PresencePacket } from '../src/loro/presence';
 import { createGraphicsPeerLab } from './helpers/peer-lab';
 
@@ -80,23 +80,23 @@ it('captures nested pending moves in world space and clears on cancel', () => {
   expect(b.presence.getRemote()[0]!.preview).toBeNull();
   expect(lab.status().delivered).toBe(0);
 });
-it.each([
-  'rectangle',
-  'ellipse',
-] as const)('shares a pending %s without creating a remote item', (kind) => {
-  const { a, b } = setup();
-  a.editor.beginShape(kind, { x: 20, y: 30 });
-  a.editor.updateShape({ x: 100, y: 90 });
-  vi.advanceTimersByTime(50);
-  expect(b.presence.getRemote()[0]?.preview).toMatchObject({
-    kind: 'draw',
-    shapes: [{ kind, width: 80, height: 60, world: [1, 0, 0, 1, 20, 30] }],
-  });
-  expect(Object.keys(b.editor.document.items)).toHaveLength(4);
-  a.editor.cancelShape();
-  vi.advanceTimersByTime(50);
-  expect(b.presence.getRemote()[0]?.preview).toBeNull();
-});
+it.each(['rectangle', 'ellipse'] as const)(
+  'shares a pending %s without creating a remote item',
+  (kind) => {
+    const { a, b } = setup();
+    a.editor.beginShape(kind, { x: 20, y: 30 });
+    a.editor.updateShape({ x: 100, y: 90 });
+    vi.advanceTimersByTime(50);
+    expect(b.presence.getRemote()[0]?.preview).toMatchObject({
+      kind: 'draw',
+      shapes: [{ kind, width: 80, height: 60, world: [1, 0, 0, 1, 20, 30] }],
+    });
+    expect(Object.keys(b.editor.document.items)).toHaveLength(4);
+    a.editor.cancelShape();
+    vi.advanceTimersByTime(50);
+    expect(b.presence.getRemote()[0]?.preview).toBeNull();
+  }
+);
 it('shares box selection and resize/rotation action kinds', () => {
   const { a, b } = setup();
   a.editor.beginBoxSelection({ x: 0, y: 0 });
@@ -215,4 +215,111 @@ it('expires an absent peer while heartbeats retain an idle connected selection',
   a.presence.dispose();
   vi.advanceTimersByTime(46_000);
   expect(b.presence.getRemote()).toEqual([]);
+});
+
+it('keeps an AI action under unrelated commits but clears it after target changes', () => {
+  const { a, b, lab } = setup();
+  const before = a.editor.document;
+  const target = before.items.a;
+  const state = {
+    id: 'writer',
+    name: 'Writer (AI)',
+    color: 'cyan',
+    cursor: null,
+    selectedIds: ['a'],
+    clock: a.backend.getClock(),
+    preview: {
+      kind: 'ai' as const,
+      shapes: [],
+      box: null,
+      guard: {
+        items: { a: presenceItemState(target) },
+        regions: [],
+        occupants: [],
+      },
+    },
+  };
+  // A remote commit elsewhere advances the document clock without changing a.
+  b.editor.select('b');
+  b.editor.setSelectionAppearance({ fill: '#abcdef' });
+  lab.syncNow();
+  expect(
+    currentPresencePreview(state, a.backend.getClock(), a.editor.document)
+  ).not.toBeNull();
+  b.editor.select('a');
+  b.editor.setSelectionAppearance({ fill: '#123456' });
+  lab.syncNow();
+  expect(
+    currentPresencePreview(state, a.backend.getClock(), a.editor.document)
+  ).toBeNull();
+});
+
+it('invalidates an AI reservation when a new object appears inside its region', () => {
+  const scene = createScene();
+  const state = {
+    id: 'writer',
+    name: 'Writer (AI)',
+    color: 'cyan',
+    cursor: null,
+    selectedIds: [],
+    clock: {},
+    preview: {
+      kind: 'ai' as const,
+      shapes: [],
+      box: null,
+      guard: {
+        items: {},
+        regions: [{ x: 0, y: 0, width: 100, height: 100 }],
+        occupants: [],
+      },
+    },
+  };
+  expect(currentPresencePreview(state, {}, scene)).not.toBeNull();
+  const changed = createScene([
+    {
+      id: 'human',
+      type: 'rectangle',
+      placement: { parentId: scene.rootId, sortKey: 'a0' },
+      transform: translation(20, 20),
+      geometry: { width: 40, height: 40 },
+      appearance: { fill: '#fff', stroke: '#000' },
+    },
+  ]);
+  expect(currentPresencePreview(state, {}, changed)).toBeNull();
+});
+
+it('uses semantic guard state despite different object-key enumeration on replicas', () => {
+  const { a } = setup();
+  const item = a.editor.document.items.a;
+  if (item?.type !== 'rectangle') throw new Error('rectangle fixture');
+  const reordered = {
+    ...item,
+    appearance: {
+      cornerRadius: item.appearance.cornerRadius,
+      opacity: item.appearance.opacity,
+      strokeStyle: item.appearance.strokeStyle,
+      strokeWidth: item.appearance.strokeWidth,
+      stroke: item.appearance.stroke,
+      fill: item.appearance.fill,
+    },
+  };
+  const state = {
+    id: 'writer',
+    name: 'Writer (AI)',
+    color: 'cyan',
+    cursor: null,
+    selectedIds: ['a'],
+    clock: {},
+    preview: {
+      kind: 'ai' as const,
+      shapes: [],
+      box: null,
+      guard: {
+        items: { a: presenceItemState(reordered) },
+        regions: [],
+        occupants: [],
+      },
+    },
+  };
+  expect(currentPresencePreview(state, {}, a.editor.document)).not.toBeNull();
 });

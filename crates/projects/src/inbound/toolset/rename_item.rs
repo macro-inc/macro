@@ -1,16 +1,16 @@
-//! RenameItem tool for renaming projects (folders) and AI chats.
+//! RenameItem tool for renaming projects (folders).
 
 use ai_toolset::{AsyncTool, RequestContext, ServiceContext, ToolCallError, ToolResult};
 use ai_toolset::{ToolAnnotated, ToolAnnotations};
 use async_trait::async_trait;
 use entity_access::domain::ports::EntityAccessService;
-use entity_mutation::{MoveEntity, RenameEntity};
+use entity_mutation::{DuplicateEntity, MoveEntity, RenameEntity};
 use model_entity::{Entity, EntityType};
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 
 use super::entity_receipts::{mutation_failed, user_receipt};
-use super::{ChatCapabilities, DocumentCapabilities, ProjectCapabilities, ProjectToolContext};
+use super::{DocumentCapabilities, ProjectCapabilities, ProjectToolContext};
 
 /// The kind of item to rename.
 #[derive(Debug, Deserialize, Serialize, JsonSchema, Clone, Copy, PartialEq, Eq)]
@@ -18,21 +18,17 @@ use super::{ChatCapabilities, DocumentCapabilities, ProjectCapabilities, Project
 pub enum RenameableEntityType {
     /// A project (folder).
     Project,
-    /// An AI chat conversation.
-    Chat,
 }
 
 impl RenameableEntityType {
     fn entity_type(self) -> EntityType {
         match self {
             Self::Project => EntityType::Project,
-            Self::Chat => EntityType::Chat,
         }
     }
 }
 
-const RENAME_FORBIDDEN: &str =
-    "renaming a project requires edit access and renaming an AI chat requires owning it";
+const RENAME_FORBIDDEN: &str = "renaming a project requires edit access";
 
 /// Rename an entity through its domain capability, as the user.
 async fn rename_with<S, ESvc>(
@@ -72,7 +68,7 @@ pub struct RenameItemResponse {
 #[serde(rename_all = "camelCase")]
 #[schemars(
     title = "RenameItem",
-    description = "Rename a project (shown as a folder in the app) or an AI chat. Renaming a project requires edit access; renaming an AI chat requires owning it. Use RenameDocument for documents and tasks, and RenameChannel for channels."
+    description = "Rename a project (shown as a folder in the app). Renaming a project requires edit access. Use RenameDocument for documents and tasks, and RenameChannel for channels."
 )]
 pub struct RenameItem {
     /// The kind of item to rename.
@@ -93,21 +89,21 @@ impl ToolAnnotated for RenameItem {
 }
 
 #[async_trait]
-impl<PSvc, ESvc, DSvc, CSvc, EmSvc> AsyncTool<ProjectToolContext<PSvc, ESvc, DSvc, CSvc, EmSvc>>
+impl<PSvc, ESvc, DSvc, EmSvc, DbSvc> AsyncTool<ProjectToolContext<PSvc, ESvc, DSvc, EmSvc, DbSvc>>
     for RenameItem
 where
     PSvc: ProjectCapabilities,
     ESvc: EntityAccessService,
     DSvc: DocumentCapabilities,
-    CSvc: ChatCapabilities,
     EmSvc: MoveEntity + Send + Sync + 'static,
+    DbSvc: DuplicateEntity + Send + Sync + 'static,
 {
     type Output = RenameItemResponse;
 
     #[tracing::instrument(skip_all, fields(user_id=?request_context.user_id, entity_type=?self.entity_type, entity_id=?self.entity_id), err)]
     async fn call(
         &self,
-        service_context: ServiceContext<ProjectToolContext<PSvc, ESvc, DSvc, CSvc, EmSvc>>,
+        service_context: ServiceContext<ProjectToolContext<PSvc, ESvc, DSvc, EmSvc, DbSvc>>,
         request_context: RequestContext,
     ) -> ToolResult<Self::Output> {
         let name = self.name.trim().to_string();
@@ -126,16 +122,6 @@ where
             RenameableEntityType::Project => {
                 rename_with(
                     &*service_context.service,
-                    access,
-                    &request_context,
-                    entity,
-                    name.clone(),
-                )
-                .await?
-            }
-            RenameableEntityType::Chat => {
-                rename_with(
-                    &*service_context.chat_move_service,
                     access,
                     &request_context,
                     entity,

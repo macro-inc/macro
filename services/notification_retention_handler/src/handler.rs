@@ -29,7 +29,12 @@ impl CleanupEvent {
     }
 }
 
-#[tracing::instrument(err, skip(service, event))]
+#[tracing::instrument(
+    name = "notification.retention.invoke",
+    err,
+    skip(service, event),
+    fields(faas.invocation_id = %event.context.request_id, dry_run = event.payload.dry_run)
+)]
 pub(crate) async fn handle<R: NotificationRetentionRepository>(
     service: &NotificationRetentionService<R>,
     event: LambdaEvent<CleanupEvent>,

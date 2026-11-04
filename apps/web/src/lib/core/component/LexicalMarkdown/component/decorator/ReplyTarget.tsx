@@ -1,4 +1,5 @@
 import { projectRouteId } from '@app/features/projects/core/route';
+import { openProject } from '@app/features/projects/open-project';
 import {
   callDetailSearch,
   callDetailSearchCodec,
@@ -104,6 +105,14 @@ export function ReplyTarget(props: ReplyTargetDecoratorProps) {
       event.shiftKey,
       currentBlockName !== destination.type || currentBlockId !== destination.id
     );
+    if (props.parent.type === 'initiative') {
+      // Retargets an open project instead of mounting a second pane for it.
+      openProject(useSplitLayout(), props.parent.id, {
+        discussionId: props.targetMessageId,
+        newSplit: preferNewSplit,
+      });
+      return;
+    }
     if (props.parent.type === 'call') {
       // Route search delivers a fresh request even when this call is already open.
       useSplitLayout().openWithSplit(

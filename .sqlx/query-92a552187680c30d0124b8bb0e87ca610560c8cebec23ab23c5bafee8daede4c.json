@@ -1,0 +1,23 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT EXISTS(SELECT 1 FROM email_scheduled_messages WHERE message_id = $1 AND link_id = $2) AS \"scheduled!\"",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "scheduled!",
+        "type_info": "Bool"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      null
+    ]
+  },
+  "hash": "92a552187680c30d0124b8bb0e87ca610560c8cebec23ab23c5bafee8daede4c"
+}

@@ -27,8 +27,14 @@ import { MacroApiError, MacroError, unwrap } from '../../utils';
 import type { MacroClient } from '../../utils/client';
 import { MacroEntity } from '../entity';
 import type { PropertyDefinition } from '../properties/property-definition';
+import { EntityAccess } from '../sharing/access';
 import { User } from '../users/user';
 import { DatabaseColumn } from './column';
+import {
+  type DatabaseQueryOptions,
+  type DatabaseQueryResult,
+  queryDatabases,
+} from './query';
 import type { DatabaseRow } from './row';
 import { DatabaseTable } from './table';
 import type { DatabaseView } from './view';
@@ -130,10 +136,13 @@ export type InferColumnTypeOptions = {
 export class MacroOpRefusedError extends MacroApiError {
   /** The refused op's index in the batch. */
   readonly op: number;
+
   /** The row's index within the op, when one row is at fault. */
   readonly row: number | null;
+
   /** The column placement at fault, when one is. */
   readonly column: string | null;
+
   /** The minted id that is already taken, when that is the reason. */
   readonly taken: TakenId | null;
 
@@ -181,6 +190,7 @@ function typeLabel(type: ColumnType): string {
     .with({ type: 'number' }, () => 'Number')
     .with({ type: 'boolean' }, () => 'Checkbox')
     .with({ type: 'date' }, () => 'Date')
+    .with({ type: 'date_range' }, () => 'Time range')
     .with({ type: 'link' }, () => 'URL')
     .with({ type: 'select', multi: true }, () => 'Multi-select')
     .with({ type: 'select', multi: false }, () => 'Select')
@@ -189,7 +199,7 @@ function typeLabel(type: ColumnType): string {
     .with({ type: 'tag' }, () => 'Tag')
     .with({ type: 'entity' }, ({ target }) => entityLabels[target])
     .with({ type: 'relation' }, () => 'Relation')
-    .exhaustive();
+    .exhaustive(() => 'Column');
 }
 
 function newOptions(labels: string[]): NewOption[] {
@@ -217,7 +227,7 @@ function resultName(result: OpResult): string {
       { kind: P.union('table', 'column', 'rows', 'view') },
       ({ kind, change }) => `${kind}.${change.kind}`,
     )
-    .exhaustive();
+    .exhaustive(() => 'unknown');
 }
 
 /** The one result of a one-op batch, which must be what the op answers. */
@@ -241,6 +251,9 @@ function soleResult<
  * loads lazily on first field access and is dropped after any mutation.
  */
 export class Database extends MacroEntity<DatabaseDetail> {
+  /** Access requests and direct user grants. */
+  readonly access = new EntityAccess(this.client, 'database', this);
+
   protected async fetch(): Promise<DatabaseDetail> {
     return unwrap(
       await this.client.storage.getDatabase({ path: { id: this.id } }),
@@ -250,6 +263,16 @@ export class Database extends MacroEntity<DatabaseDetail> {
   private assertOwns(part: string, owner: Database): void {
     if (owner.id !== this.id)
       throw new MacroError(`${part} does not belong to database ${this.id}`);
+  }
+
+  /** The database's URL in the Macro web app; hand it to users as the link. */
+  webUrl(): string {
+    return `${this.client.webAppUrl}/app/database/${this.id}`;
+  }
+
+  /** Identity, loaded detail and {@link webUrl}, so serialized handles carry their link. */
+  override toJSON() {
+    return { ...super.toJSON(), url: this.webUrl() };
   }
 
   /** A handle to a database by id. Details load on first access. */
@@ -268,10 +291,44 @@ export class Database extends MacroEntity<DatabaseDetail> {
     return new Database(client, record.id);
   }
 
+  /**
+   * Copy the database into a new one the caller owns, with its tables,
+   * columns, views and rows. Its sharing, forms, webhooks and history stay
+   * with this one. Viewing it is enough.
+   */
+  async duplicate(options?: {
+    /** The copy's name; by default, "<name> copy". */
+    name?: string;
+  }): Promise<Database> {
+    const record = unwrap(
+      await this.client.storage.duplicateDatabase({
+        path: { id: this.id },
+        body: { name: options?.name },
+      }),
+    );
+    return new Database(this.client, record.id);
+  }
+
   /** The databases the caller can see, each with the caller's access level. */
   static async list(client: MacroClient): Promise<Database[]> {
     const listed = unwrap(await client.storage.listDatabases());
     return listed.map((entry) => new Database(client, entry.database.id));
+  }
+
+  /** Run one SQL statement with this database as the default name scope. */
+  query(
+    sql: string,
+    options?: Omit<DatabaseQueryOptions, 'database'>,
+  ): Promise<DatabaseQueryResult> {
+    return queryDatabases(this.client, Database.byId, sql, {
+      ...options,
+      database: this,
+    });
+  }
+
+  /** @internal Drop the schema snapshot after a successful SQL write. */
+  invalidateSchema(): void {
+    this.detail.clear();
   }
 
   /**

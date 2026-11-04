@@ -3,6 +3,7 @@ import { describe, expect, it } from 'vitest';
 import {
   buildRecurrenceLines,
   defaultCustomConfig,
+  eventRecurrenceDescription,
   formatRecurrenceDescription,
   monthlyOrdinalFor,
   parseRecurrenceConfig,
@@ -179,6 +180,24 @@ describe('formatRecurrenceDescription', () => {
     );
   });
 
+  it('names the start weekday of a weekly rule without weekdays', () => {
+    const lines = ['RRULE:FREQ=WEEKLY;COUNT=3'];
+    // Saturday, October 24 2026 (local).
+    const saturday = new Date(2026, 9, 24, 14, 0, 0);
+    expect(
+      formatRecurrenceDescription(lines, { locale: 'en-US', start: saturday })
+    ).toBe('Weekly on Saturday · 3 occurrences');
+    expect(formatRecurrenceDescription(lines, { locale: 'en-US' })).toBe(
+      'Weekly · 3 occurrences'
+    );
+    expect(
+      formatRecurrenceDescription(['RRULE:FREQ=WEEKLY;BYDAY=MO'], {
+        locale: 'en-US',
+        start: saturday,
+      })
+    ).toBe('Weekly on Monday');
+  });
+
   it('returns undefined when the lines do not declare recurrence', () => {
     expect(formatRecurrenceDescription([])).toBeUndefined();
     expect(formatRecurrenceDescription(['EXDATE:20260815'])).toBeUndefined();
@@ -196,6 +215,27 @@ const timedUntil = (date: string) =>
     .toISOString()
     .slice(0, 19)
     .replaceAll(/[-:]/g, '')}Z`;
+
+describe('eventRecurrenceDescription', () => {
+  it('reads the weekday of the occurrence slot in the event’s own zone', () => {
+    // 22:00 on Saturday, October 24 in New York is already Sunday in UTC.
+    expect(
+      eventRecurrenceDescription({
+        recurrenceLines: ['RRULE:FREQ=WEEKLY'],
+        occurrenceKey: '2026-10-25T02:00:00+00:00',
+        allDay: false,
+        timeZone: 'America/New_York',
+      })
+    ).toBe('Weekly on Saturday');
+    expect(
+      eventRecurrenceDescription({
+        recurrenceLines: ['RRULE:FREQ=WEEKLY;COUNT=3'],
+        occurrenceKey: '2026-10-24',
+        allDay: true,
+      })
+    ).toBe('Weekly on Saturday · 3 occurrences');
+  });
+});
 
 describe('buildRecurrenceLines', () => {
   it('serializes the shapes the custom editor produces', () => {

@@ -6,6 +6,7 @@
 
 import { createTileCompositor } from '@app/features/block-fig/primitives/create-tile-compositor';
 import type { EdgeRect } from '@core/ai-engine/types';
+import { fireAndForget } from '@core/util/fireAndForget';
 import { createEffect, type JSX, on, onCleanup, onMount, Show } from 'solid-js';
 import {
   drawOverlay,
@@ -369,7 +370,10 @@ export function AiCanvas(props: {
     );
     if (!editor.enabled() || files.length === 0) return;
     e.preventDefault();
-    void editor.placeImages(files, gestures.at(gestures.local(e)));
+    fireAndForget(
+      editor.placeImages(files, gestures.at(gestures.local(e))),
+      'ai-editor'
+    );
   };
 
   return (
@@ -385,7 +389,7 @@ export function AiCanvas(props: {
       onPointerUp={gestures.onPointerUp}
       onPointerCancel={gestures.onPointerUp}
       onPointerLeave={gestures.onPointerLeave}
-      onDblClick={(e) => void gestures.onDoubleClick(e)}
+      onDblClick={(e) => fireAndForget(gestures.onDoubleClick(e), 'ai-editor')}
       onDragOver={(e) => {
         if (editor.enabled() && e.dataTransfer?.types.includes('Files')) {
           e.preventDefault();

@@ -89,7 +89,9 @@ fn projector(policy: ContentPolicy) -> GenAiProjector {
 fn replay(projector: &mut GenAiProjector, jsonl: &str) {
     for mut entry in parse_log(jsonl) {
         match &mut entry.content {
-            Message::ToRuntime(message) => projector.on_outbound(message, None),
+            Message::Notification(message) | Message::ToRuntime(message) => {
+                projector.on_outbound(message, None)
+            }
             Message::ToServer(message) => projector.on_inbound(message),
         }
     }
@@ -184,6 +186,10 @@ fn a_turn_becomes_an_agent_span_with_a_tool_span_per_call() {
     assert!(
         result.contains("events.rs"),
         "terminal output recorded: {result}"
+    );
+    assert_eq!(
+        int_attribute(bash, attr::MACRO_TOOL_RESULT_BYTES),
+        Some(i64::try_from(result.len()).unwrap())
     );
     assert_eq!(bash.status, Status::Unset);
 
@@ -393,6 +399,8 @@ fn content_is_not_recorded_when_capture_is_off() {
     let bash = spans_named(&spans, "execute_tool Bash")[0];
     assert!(attribute(bash, attr::TOOL_CALL_ARGUMENTS).is_none());
     assert!(attribute(bash, attr::TOOL_CALL_RESULT).is_none());
+    // A size is not content: it is recorded either way.
+    assert!(int_attribute(bash, attr::MACRO_TOOL_RESULT_BYTES).is_some_and(|bytes| bytes > 0));
     assert_eq!(
         string_attribute(bash, attr::TOOL_NAME).as_deref(),
         Some("Bash")

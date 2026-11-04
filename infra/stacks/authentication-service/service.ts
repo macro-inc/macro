@@ -529,9 +529,10 @@ export class AuthenticationService extends pulumi.ComponentResource {
                 { name: 'BASE_URL', value: this.domain },
                 // Injected here rather than configured in Doppler: a key id is
                 // not a secret, and deriving it from the resource keeps the two
-                // from drifting. Note MICROSOFT_TOKEN_KMS_KEY_ID is documented
-                // as injected the same way but is not — see the Pulumi yaml
-                // comment; that gap is not fixed here.
+                // from drifting. MICROSOFT_TOKEN_KMS_KEY_ID is the exception:
+                // it is set by hand in Doppler to the key behind
+                // `alias/${BASE_NAME}-microsoft-token-${stack}` (see the
+                // Pulumi.<stack>.yaml comment), so this stack does not emit it.
                 {
                   name: 'CURSOR_API_KEY_KMS_KEY_ID',
                   value: cursorApiKeyKmsKey.arn,

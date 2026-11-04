@@ -1,5 +1,5 @@
 use crate::api::search::simple::{SearchError, simple_channel};
-use crate::api::search::terms::split_search_terms;
+use crate::api::search::terms::{drop_wordless_terms, record_term_counts, split_search_terms};
 use chrono::{DateTime, Utc};
 use indexmap::IndexMap;
 use std::collections::HashMap;
@@ -169,11 +169,24 @@ fn construct_channel_name_items(
         .collect()
 }
 
+/// Splits channel hits into message hits (OpenSearch content matches, which
+/// carry goto content) and name hits (Postgres channel name matches, which
+/// carry none).
+pub(in crate::api::search) fn split_channel_hits(
+    hits: Vec<opensearch_client::search::model::SearchHit>,
+) -> (
+    Vec<opensearch_client::search::model::SearchHit>,
+    Vec<opensearch_client::search::model::SearchHit>,
+) {
+    hits.into_iter().partition(|hit| hit.goto.is_some())
+}
+
 /// Builds one per-message item per content hit. Drops hits whose channel has
 /// no history info for the caller (no access / channel gone) and hits whose
 /// message no longer exists in the DB (stale OpenSearch entries); soft-deleted
-/// messages are kept with `deleted_at` set. The channels index carries no
-/// name field, so every hit has message goto content.
+/// messages are kept with `deleted_at` set. Name hits from the Postgres channel
+/// name search carry no goto content and are skipped here; they become channel
+/// items through `construct_channel_name_items`.
 pub fn construct_channel_message_items(
     search_results: Vec<opensearch_client::search::model::SearchHit>,
     channel_histories: HashMap<Uuid, ChannelHistoryInfo>,
@@ -326,13 +339,6 @@ pub async fn name_handler(
         .map_err(|_| SearchError::InvalidUserId(user_context.user_id.clone()))?
         .lowercase();
     let filters = item_filters::ChannelFilters::default();
-    let channels = simple_channel::filter_channels(
-        &ctx,
-        user_id.as_ref(),
-        user_context.organization_id,
-        &filters,
-    )
-    .await?;
     let cursor = query_params
         .cursor
         .as_deref()
@@ -342,7 +348,7 @@ pub async fn name_handler(
     let (hits, next_cursor) = simple_channel::search_names(
         &ctx.db,
         &user_id,
-        &channels,
+        &filters,
         query.to_string(),
         req.match_type == MatchType::Exact,
         page_size,
@@ -376,6 +382,15 @@ pub async fn name_handler(
         (status = 401, body=model::response::ErrorResponse),
         (status = 500, body=model::response::ErrorResponse),
     )
+)]
+#[tracing::instrument(
+    skip_all,
+    fields(
+        search.match_type = %req.match_type,
+        search.terms = tracing::field::Empty,
+        search.dropped_terms = tracing::field::Empty,
+    ),
+    err
 )]
 pub async fn handler(
     State(ctx): State<SearchHandlerState>,
@@ -414,6 +429,13 @@ pub async fn handler(
     } else {
         split_search_terms(&raw_terms)
     };
+    let split_count = terms.len();
+    let terms = drop_wordless_terms(terms, req.match_type);
+    record_term_counts(
+        &tracing::Span::current(),
+        terms.len(),
+        split_count - terms.len(),
+    );
     if terms.is_empty() {
         return Err(SearchError::NoQueryOrTermsProvided);
     }

@@ -155,8 +155,10 @@ pub async fn explain_channel_access(
 
 /// Get a bot's channel role while operating in its owning team's scope.
 ///
-/// An active participant row grants its stored role in any channel. Without an
-/// active participant row, only a team channel owned by the supplied team
+/// An active participant row grants its stored role in any channel except a
+/// direct agent conversation: that channel belongs to the person the persona
+/// talks with, and the rest of the persona's team must not reach it. Without
+/// an active participant row, only a team channel owned by the supplied team
 /// grants view-only access. The bot must be active and owned by that team.
 #[tracing::instrument(err, skip(pool))]
 pub async fn get_team_channel_role(
@@ -185,6 +187,12 @@ pub async fn get_team_channel_role(
          AND cp.user_id = $2
          AND cp.left_at IS NULL
          AND b.id IS NOT NULL
+         AND NOT EXISTS (
+             SELECT 1
+             FROM comms_channel_agents ca
+             WHERE ca.channel_id = c.id
+               AND ca.kind = 'direct'
+         )
         WHERE c.id = $1
         "#,
         channel_id,

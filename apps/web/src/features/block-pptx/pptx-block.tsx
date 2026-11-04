@@ -1,3 +1,4 @@
+import { HeaderActionGroup } from '@components/app/HeaderActionGroup';
 /**
  * The pptx block: app chrome (header, file menu, sharing) around the
  * presentation editor, wired to the worker engine and document storage.
@@ -34,9 +35,10 @@ import {
   useBlockDocumentDownloadName,
   useBlockDocumentName,
 } from '@core/util/currentBlockDocumentName';
+import { fireAndForget } from '@core/util/fireAndForget';
 import { downloadFile } from '@filesystem/download';
 import IconShared from '@icon/share.svg';
-import DownloadSimple from '@phosphor/download-simple.svg';
+import DownloadSimple from '@icon/system/regular/download-simple.svg';
 import { Button } from '@ui/components/Button';
 import { LoroDoc } from 'loro-crdt';
 import {
@@ -82,7 +84,7 @@ function download(bytes: Uint8Array | Blob, name: string, mimeType?: string) {
     bytes instanceof Blob
       ? bytes
       : new Blob([bytes as BlobPart], { type: mimeType ?? PPTX_MIME });
-  void downloadFile(blob, name);
+  fireAndForget(downloadFile(blob, name), 'pptx-download');
 }
 
 /** Opens a presentation engine and mounts the editor once ready. */
@@ -237,8 +239,8 @@ function DownloadOnly(props: { onDownload: () => void }): JSX.Element {
   return (
     <div class="flex size-full flex-col items-center justify-center gap-3 p-6 text-ink-muted text-sm">
       Presentations can't be previewed here yet.
-      <Button variant="outline" size="sm" onClick={props.onDownload}>
-        <DownloadSimple />
+      <Button variant="secondary" size="sm" onClick={props.onDownload}>
+        <DownloadSimple class="size-3 touch:size-6 shrink-0 pointer-events-none" />
         Download
       </Button>
     </div>
@@ -299,15 +301,18 @@ export default function PptxBlock(props: { share?: string }) {
         </SplitHeaderRight>
         <SplitHeaderRight>
           <div class="order-[999] flex items-center">
-            <ChatWithAgentButton
-              label="Ask Macro"
-              entity={{
-                type: 'document',
-                id: documentId,
-                name: name(),
-                fileType: 'pptx',
-              }}
-            />
+            <HeaderActionGroup label="Presentation actions">
+              <ChatWithAgentButton
+                grouped
+                label="Ask Macro"
+                entity={{
+                  type: 'document',
+                  id: documentId,
+                  name: name(),
+                  fileType: 'pptx',
+                }}
+              />
+            </HeaderActionGroup>
           </div>
         </SplitHeaderRight>
         <ResponsivePermissionsBadge />
@@ -323,7 +328,7 @@ export default function PptxBlock(props: { share?: string }) {
               group: 'file',
               label: 'Download',
               icon: DownloadSimple,
-              action: () => void downloadCurrent(),
+              action: () => fireAndForget(downloadCurrent(), 'pptx-download'),
             },
             { op: 'delete' },
           ]}
@@ -344,7 +349,11 @@ export default function PptxBlock(props: { share?: string }) {
               <Show
                 when={d.bytes}
                 fallback={
-                  <DownloadOnly onDownload={() => void downloadCurrent()} />
+                  <DownloadOnly
+                    onDownload={() =>
+                      fireAndForget(downloadCurrent(), 'pptx-download')
+                    }
+                  />
                 }
               >
                 {(bytes) => (

@@ -125,13 +125,8 @@ export function useEntitiesForProperty(
         converted.push(userToEntity(augmentedUser));
       } else {
         const entity = quickAccessItemToEntity(item);
-        // Filter by specific entity type if needed
-        if (entityType) {
-          const type = getEntityType(entity);
-          if (type === entityType) {
-            converted.push(entity);
-          }
-        } else {
+        const type = getEntityType(entity);
+        if (type && (!entityType || type === entityType)) {
           converted.push(entity);
         }
       }

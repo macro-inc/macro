@@ -1,5 +1,7 @@
 import { MediaViewerDialog } from '@channel/Media/MediaViewerDialog';
 import type { MediaItem } from '@channel/Media/media-items';
+import { toast } from '@core/component/Toast/Toast';
+import { getEmailAttachmentDownloadUrl } from '@queries/email/attachment';
 import { createSignal, onCleanup } from 'solid-js';
 import type { DraftFormAttachment } from '../primitives/email-form-state';
 
@@ -26,9 +28,36 @@ export function createAttachmentViewer() {
     setItem({ id: objectUrl, src: objectUrl, fullSrc: objectUrl, kind });
   };
 
-  // Only files added in this session have viewable bytes; saved draft and
-  // forwarded attachments carry an S3 key or provider id, not a URL.
+  // Remote provider files require a fresh authorized download, never a raw
+  // provider ID or a persisted bearer URL.
   const onClickFor = (attachment: DraftFormAttachment) => {
+    if (attachment.type === 'native' && attachment.referenceUrl) {
+      const url = attachment.referenceUrl;
+      return () => window.open(url, '_blank', 'noopener,noreferrer');
+    }
+    if (attachment.type === 'native' || attachment.type === 'forwarded') {
+      return () => {
+        const kind = mediaKind(attachment.mimeType);
+        // Open within the user gesture so browsers permit non-media downloads.
+        const tab = kind ? undefined : window.open('', '_blank');
+        if (tab) tab.opener = null;
+        void getEmailAttachmentDownloadUrl(attachment.attachmentId)
+          .then((url) => {
+            if (kind)
+              setItem({
+                id: attachment.attachmentId,
+                src: url,
+                fullSrc: url,
+                kind,
+              });
+            else if (tab) tab.location.replace(url);
+          })
+          .catch(() => {
+            tab?.close();
+            toast.failure('Unable to open this attachment');
+          });
+      };
+    }
     if (attachment.type !== 'local') return undefined;
     const { file } = attachment;
     const kind = mediaKind(file.type);

@@ -33,6 +33,11 @@ export class User extends PropertiedEntity<UserName> implements Mentionable {
     return new User(client, id);
   }
 
+  /** A user handle seeded with an already loaded auth-service name. */
+  static fromName(client: MacroClient, name: UserName): User {
+    return new User(client, name.id, name);
+  }
+
   /** A handle to the current authenticated user. */
   static async me(client: MacroClient): Promise<User> {
     const { user_id } = unwrap(await client.auth.getUserInfo());
@@ -49,6 +54,16 @@ export class User extends PropertiedEntity<UserName> implements Mentionable {
     const entry = await this.detail.get();
     const full = [entry.first_name, entry.last_name].filter(Boolean).join(' ');
     return full || undefined;
+  }
+
+  /**
+   * Whether this user is an agent account rather than a person.
+   *
+   * @returns `true` for an agent account.
+   */
+  async isAgent(): Promise<boolean> {
+    const entry = await this.detail.get();
+    return entry.is_agent === true;
   }
 
   /**

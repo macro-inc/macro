@@ -2,10 +2,15 @@ import { EntityActivitySectionConditional } from '@app/features/activity/views/e
 import { EntityPropertiesSection } from '@app/features/property/side-panel/properties';
 import { useCallContextOptional } from '@channel/Call/CallContext';
 import { SidePanel } from '@components/app/side-panel';
-import { EntityMetadata } from '@components/app/side-panel/EntityMetadata';
+import {
+  EntityMetadata,
+  EntityMetadataRow,
+} from '@components/app/side-panel/EntityMetadata';
+import type { SidePanelSectionLayout } from '@components/app/side-panel/SidePanel';
 import { References } from '@core/component/References';
 import { useUserId } from '@core/context/user';
 import { type DateValue, formatDate } from '@core/util/date';
+import { fireAndForget } from '@core/util/fireAndForget';
 import {
   isCallSharedWithTeam,
   useSetCallRecordTeamShareMutation,
@@ -33,11 +38,13 @@ export function CallSidePanelSections(props: CallSidePanelSectionsProps) {
         title="Properties"
         defaultOpen
         order={15}
-      >
-        <Suspense fallback={<SidePanel.Loading />}>
-          <PropertiesSectionContent record={props.record} />
-        </Suspense>
-      </SidePanel.Section>
+        render={(renderSection) => (
+          <PropertiesSectionContent
+            record={props.record}
+            renderSection={renderSection}
+          />
+        )}
+      />
       <Show when={props.record.channelId != null}>
         <SidePanel.Section id="sharing" title="Sharing" order={20}>
           <SharingSectionContent record={props.record} />
@@ -64,21 +71,36 @@ function DetailsSectionContent(props: { record: CallRecord }) {
     <EntityMetadata ownerId={record().createdBy}>
       <Show when={startedAt()}>
         {(value) => (
-          <div>Started {formatDate(value(), { showTime: true })}</div>
+          <EntityMetadataRow label="Started">
+            {formatDate(value(), { showTime: true })}
+          </EntityMetadataRow>
         )}
       </Show>
       <Show when={endedAt()}>
-        {(value) => <div>Ended {formatDate(value(), { showTime: true })}</div>}
+        {(value) => (
+          <EntityMetadataRow label="Ended">
+            {formatDate(value(), { showTime: true })}
+          </EntityMetadataRow>
+        )}
       </Show>
       <Show when={durationMs()}>
-        {(ms) => <div>{formatCallDuration(ms())}</div>}
+        {(ms) => (
+          <EntityMetadataRow label="Duration">
+            {formatCallDuration(ms())}
+          </EntityMetadataRow>
+        )}
       </Show>
-      <div>{record().isActive ? 'In progress' : 'Ended'}</div>
+      <EntityMetadataRow label="Status">
+        {record().isActive ? 'In progress' : 'Ended'}
+      </EntityMetadataRow>
     </EntityMetadata>
   );
 }
 
-function PropertiesSectionContent(props: { record: CallRecord }) {
+function PropertiesSectionContent(props: {
+  record: CallRecord;
+  renderSection: SidePanelSectionLayout;
+}) {
   // Tag/property writes are authorized server-side via the call's owning
   // channel (edit access), mirroring the sharing control above, so the editor
   // is always mounted and the backend rejects unauthorized mutations.
@@ -90,6 +112,7 @@ function PropertiesSectionContent(props: { record: CallRecord }) {
       documentName={
         props.record.customName ?? props.record.channelName ?? undefined
       }
+      renderSection={props.renderSection}
     />
   );
 }
@@ -155,7 +178,7 @@ function SharingSectionContent(props: { record: CallRecord }) {
         aria-checked={isShared()}
         aria-readonly={!canEdit()}
         disabled={isDisabled()}
-        onClick={() => void handleChange(!isShared())}
+        onClick={() => fireAndForget(handleChange(!isShared()), 'call-sharing')}
         class={cn(
           'inline-flex items-center gap-2 rounded-md h-7 px-2.5 text-xs select-none w-fit',
           'border border-ink-muted/[0.08] bg-ink-muted/[0.025]',

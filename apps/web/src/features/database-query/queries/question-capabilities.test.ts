@@ -17,6 +17,7 @@ const detail: DatabaseDetail = {
     owner_id: 'owner',
     created_at: '',
     trashed_at: null,
+    project_id: null,
   },
   grant: 'view',
   tables: ['Tickets', 'Customers'].map((name) => ({
@@ -73,7 +74,10 @@ describe('automatic question source verification', () => {
       })
     )._unsafeUnwrap();
     expect(verified).toEqual({ ...answer, source: schema });
-    expect(read).toHaveBeenCalledExactlyOnceWith(generated.sql);
+    expect(read).toHaveBeenCalledExactlyOnceWith(generated.sql, {
+      databaseId: schema.databaseId,
+      source: generated.source,
+    });
     expect(describe).not.toHaveBeenCalled();
   });
 

@@ -1,4 +1,4 @@
-import type { EventFormProps } from '@app/features/calendar/components/composer/EventForm';
+import type { EventFormProps } from '@app/features/calendar/components/composer/event-form-state';
 import type { VisibleCalendar } from '@queries/calendar/calendars';
 import type { CreateCalendarEvent } from '@service-cognition/generated/tools/types';
 import type { Link } from '@service-email/generated/schemas';
@@ -16,9 +16,13 @@ const mocks = vi.hoisted(() => ({
   startAddInbox: vi.fn(),
   execute: vi.fn(),
   quickCalls: () => ({ loading: false, enabled: true }),
+  guestInvites: (): boolean => true,
 }));
 vi.mock('@app/features/meetings/use-quick-calls-flag', () => ({
   useQuickCallsFlag: () => () => mocks.quickCalls(),
+}));
+vi.mock('@app/features/calendar/hooks/use-calendar-ui-flag', () => ({
+  useCalendarGuestInvitesFlag: () => () => mocks.guestInvites(),
 }));
 vi.mock('@queries/calendar/calendars', () => ({
   useVisibleCalendarsQuery: () => ({
@@ -93,7 +97,10 @@ vi.mock('@app/features/calendar/components/composer/EventForm', () => ({
   ),
 }));
 
-import { CalendarDraftComposer } from './DraftComposer';
+import {
+  CalendarDraftComposer,
+  type CalendarDraftComposerProps,
+} from './DraftComposer';
 
 const link = (id: string, overrides: Partial<Link> = {}): Link =>
   ({
@@ -114,12 +121,22 @@ const calendar = (id: string): VisibleCalendar => ({
   isPrimary: true,
   isWritable: true,
   isSubscription: false,
+  provider: 'google',
+  capabilities: {
+    autoDecline: true,
+    emailReminders: true,
+    customRecurrence: false,
+    removeConference: false,
+    resetRsvp: false,
+    guestPolicy: true,
+  },
   defaultReminders: [],
 });
 
 function showDraft(
   calendarId?: string,
-  overrides: Partial<CreateCalendarEvent> = {}
+  overrides: Partial<CreateCalendarEvent> = {},
+  registerSubmitReader?: CalendarDraftComposerProps['registerSubmitReader']
 ) {
   const draft = {
     title: 'Customer demo',
@@ -135,6 +152,7 @@ function showDraft(
     <CalendarDraftComposer
       initialData={draft}
       previewKey="test"
+      registerSubmitReader={registerSubmitReader}
       showPreview={false}
       sink={{
         canAct: () => true,
@@ -151,6 +169,7 @@ beforeEach(() => {
   mocks.execute.mockResolvedValue(true);
   mocks.startAddInbox.mockResolvedValue(undefined);
   mocks.quickCalls = () => ({ loading: false, enabled: true });
+  mocks.guestInvites = () => true;
   mocks.calendarError = false;
   mocks.linksError = false;
   mocks.links = [link('personal'), link('work')];
@@ -288,7 +307,7 @@ describe('AI calendar draft Macro calls', () => {
   it('executes the tool with addMacroCall when the user picks a Macro call', async () => {
     showDraft(undefined, {
       attendees: [{ email: 'guest@example.com' }],
-      addGoogleMeet: false,
+      addConference: false,
     });
     expect(screen.getByLabelText('Conference').textContent).toBe('none');
     await fireEvent.click(
@@ -299,9 +318,57 @@ describe('AI calendar draft Macro calls', () => {
     expect(mocks.execute).toHaveBeenCalledWith(
       expect.objectContaining({
         addMacroCall: true,
-        addGoogleMeet: false,
+        addConference: false,
         attendees: [{ email: 'guest@example.com' }],
       })
     );
+  });
+});
+
+describe('AI calendar draft guest permissions', () => {
+  const agentPolicy = {
+    canModify: false,
+    canInviteOthers: false,
+    canSeeOtherGuests: true,
+  };
+
+  it('creates the event with the guest permissions the agent drafted', async () => {
+    showDraft(undefined, { guestPolicy: agentPolicy });
+    await fireEvent.click(screen.getByRole('button', { name: 'Create event' }));
+    expect(mocks.execute).toHaveBeenCalledWith(
+      expect.objectContaining({ guestPolicy: agentPolicy })
+    );
+  });
+
+  it('leaves the drafted guest permissions out while the rollout is off', async () => {
+    mocks.guestInvites = () => false;
+    showDraft(undefined, { guestPolicy: agentPolicy });
+    await fireEvent.click(screen.getByRole('button', { name: 'Create event' }));
+    expect(mocks.execute).toHaveBeenCalledOnce();
+    expect(mocks.execute.mock.calls[0][0].guestPolicy).toBeUndefined();
+  });
+});
+
+describe('calendar batch preparation', () => {
+  it('captures the same validated snapshot without creating an event', async () => {
+    let read: (() => Promise<CreateCalendarEvent | undefined>) | undefined;
+    showDraft(undefined, {}, (reader) => {
+      read = reader;
+    });
+    expect(read).toBeDefined();
+    expect(await read?.()).toMatchObject({
+      title: 'Customer demo',
+      time: { kind: 'timed' },
+    });
+    expect(mocks.execute).not.toHaveBeenCalled();
+  });
+  it('cannot prepare an event on an unavailable calendar', async () => {
+    let read: (() => Promise<CreateCalendarEvent | undefined>) | undefined;
+    showDraft('deleted-calendar', {}, (reader) => {
+      read = reader;
+    });
+    expect(read).toBeDefined();
+    expect(await read?.()).toBeUndefined();
+    expect(mocks.execute).not.toHaveBeenCalled();
   });
 });

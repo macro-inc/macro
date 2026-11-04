@@ -1,5 +1,6 @@
 import { useDragDropContext } from '@thisbeyond/solid-dnd';
 import { createEffect, on, onCleanup } from 'solid-js';
+import { createPointerAutoScroll } from './create-pointer-auto-scroll';
 
 type NestedScroll = {
   viewportSelector: string;
@@ -55,7 +56,7 @@ function scrollDragFrame(
   viewport: HTMLElement,
   pointer: Point,
   elapsed: number,
-  options: { axis: 'x' | 'both'; nestedScroll?: NestedScroll }
+  options: { axis: 'x' | 'y' | 'both'; nestedScroll?: NestedScroll }
 ) {
   const bounds = viewport.getBoundingClientRect();
   const edges = {
@@ -76,7 +77,7 @@ function scrollDragFrame(
       ? options.nestedScroll
       : undefined;
   const beforeX = viewport.scrollLeft;
-  if (inside || nested?.horizontalOutside) {
+  if (options.axis !== 'y' && (inside || nested?.horizontalOutside)) {
     viewport.scrollLeft = Math.max(
       0,
       Math.min(
@@ -87,7 +88,7 @@ function scrollDragFrame(
     );
   }
   let scrolled = viewport.scrollLeft !== beforeX;
-  if (inside && options.axis === 'both' && !nested) {
+  if (inside && options.axis !== 'x' && !nested) {
     const beforeY = viewport.scrollTop;
     viewport.scrollTop = Math.max(
       0,
@@ -110,17 +111,27 @@ function scrollDragFrame(
 /** Scroll the active solid-dnd surface while the pointer rests near its edge. */
 export function createDragAutoScroll(options: {
   getViewport: () => HTMLElement | undefined;
-  axis: 'x' | 'both';
+  axis: 'x' | 'y' | 'both';
   nestedScroll?: NestedScroll;
 }) {
   const context = useDragDropContext();
   if (!context) throw new Error('Drag auto-scroll requires DragDropProvider');
   const [state, actions] = context;
+  const autoScroll = createPointerAutoScroll({
+    ...options,
+    getPointer: () => state.active.sensor?.coordinates.current,
+    onScroll: () => actions.detectCollisions(),
+  });
   createEffect(
     on(
       () => state.active.draggableId,
       (id) => {
         if (id === null) return;
+        if (!options.nestedScroll) {
+          autoScroll.start();
+          onCleanup(autoScroll.stop);
+          return;
+        }
         let previousTime: number | undefined;
         let frame: number;
         const tick = (time: number) => {

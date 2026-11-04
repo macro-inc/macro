@@ -9,6 +9,7 @@ import type { ApiMessageAttachmentDataUrl } from './apiMessageAttachmentDataUrl'
 import type { ApiMessageAttachmentFilename } from './apiMessageAttachmentFilename';
 import type { ApiMessageAttachmentMimeType } from './apiMessageAttachmentMimeType';
 import type { ApiMessageAttachmentProviderId } from './apiMessageAttachmentProviderId';
+import type { ApiMessageAttachmentReferenceUrl } from './apiMessageAttachmentReferenceUrl';
 import type { ApiMessageAttachmentSfsId } from './apiMessageAttachmentSfsId';
 import type { ApiMessageAttachmentSizeBytes } from './apiMessageAttachmentSizeBytes';
 
@@ -22,6 +23,7 @@ export interface ApiMessageAttachment {
   filename?: ApiMessageAttachmentFilename;
   mime_type?: ApiMessageAttachmentMimeType;
   provider_id?: ApiMessageAttachmentProviderId;
+  reference_url?: ApiMessageAttachmentReferenceUrl;
   sfs_id?: ApiMessageAttachmentSfsId;
   size_bytes?: ApiMessageAttachmentSizeBytes;
 }

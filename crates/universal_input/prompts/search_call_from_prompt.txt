@@ -1,0 +1,1 @@
+Explicit call speaker filters. Return speaker names or supplied addresses, never IDs. Do not infer speakers from topic wording. Keep a quoted name together and use [] when absent. Do not turn negated speakers into positive filters.

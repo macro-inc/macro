@@ -22,6 +22,12 @@ Both must be set together or both omitted. If only one is set the service will p
 It can be used with the [Slack Manifest API](https://api.slack.com/reference/manifests) to create
 or update the app programmatically.
 
+The harness preserves the original cognition hostnames and OAuth callbacks;
+consolidating services does not require changing this app's allowlist. The
+manifest also includes optional gateway callbacks. Updating the manifest does
+not update Slack's registered URLs. The documented app covers both environments,
+so changing that shared app still requires explicit authorization.
+
 ## Docs
 - [MCP Docs](https://docs.slack.dev/ai/slack-mcp-server/)
 - [Slack MCP overview](https://docs.slack.dev/agents-and-apps/mcp-for-slack)

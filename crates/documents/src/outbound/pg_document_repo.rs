@@ -720,6 +720,37 @@ impl<B: BotFacts + 'static> DocumentRepo for PgDocumentRepo<B> {
     }
 
     #[tracing::instrument(err, skip(self))]
+    async fn extend_project_dates(
+        &self,
+        project_id: &str,
+        created_at: chrono::DateTime<chrono::Utc>,
+        updated_at: chrono::DateTime<chrono::Utc>,
+    ) -> Result<(), Self::Err> {
+        sqlx::query!(
+            r#"
+            WITH RECURSIVE ancestors AS (
+                SELECT id, "parentId" FROM "Project" WHERE id = $1
+                UNION
+                SELECT p.id, p."parentId"
+                FROM "Project" p
+                JOIN ancestors a ON p.id = a."parentId"
+            )
+            UPDATE "Project"
+            SET "createdAt" = LEAST("createdAt", $2),
+                "updatedAt" = GREATEST("updatedAt", $3)
+            WHERE id IN (SELECT id FROM ancestors)
+            "#,
+            project_id,
+            created_at.naive_utc(),
+            updated_at.naive_utc(),
+        )
+        .execute(&self.pool)
+        .await?;
+
+        Ok(())
+    }
+
+    #[tracing::instrument(err, skip(self))]
     async fn delete_document_by_id(&self, document_id: &str) -> Result<(), Self::Err> {
         let mut transaction = self.pool.begin().await?;
         sqlx::query!(r#"DELETE FROM "Document" WHERE id = $1"#, document_id)
@@ -1004,6 +1035,58 @@ impl<B: BotFacts + 'static> DocumentRepo for PgDocumentRepo<B> {
         command: models_permissions::share_permission::team_share::AuthorizedTeamShareCommand,
     ) -> Result<DocumentTeamShare, DocumentError> {
         share::set_team_share(&self.pool, command).await
+    }
+
+    #[tracing::instrument(err, skip(self, document_ids), fields(skills = document_ids.len()))]
+    async fn get_skill_descriptions(
+        &self,
+        document_ids: &[String],
+    ) -> Result<
+        std::collections::HashMap<String, crate::domain::skill_description::SkillDescription>,
+        Self::Err,
+    > {
+        let rows = sqlx::query!(
+            r#"
+            SELECT document_id, description
+            FROM skill_description
+            WHERE document_id = ANY($1)
+            "#,
+            document_ids,
+        )
+        .fetch_all(&self.pool)
+        .await?;
+        Ok(rows
+            .into_iter()
+            .map(|row| {
+                (
+                    row.document_id,
+                    crate::domain::skill_description::SkillDescription::from_stored(
+                        row.description,
+                    ),
+                )
+            })
+            .collect())
+    }
+
+    #[tracing::instrument(err, skip(self, description))]
+    async fn set_skill_description(
+        &self,
+        document_id: &str,
+        description: &crate::domain::skill_description::SkillDescription,
+    ) -> Result<(), Self::Err> {
+        sqlx::query!(
+            r#"
+            INSERT INTO skill_description (document_id, description)
+            VALUES ($1, $2)
+            ON CONFLICT (document_id)
+            DO UPDATE SET description = EXCLUDED.description, updated_at = now()
+            "#,
+            document_id,
+            description.as_str(),
+        )
+        .execute(&self.pool)
+        .await?;
+        Ok(())
     }
 
     #[tracing::instrument(err, skip(self))]

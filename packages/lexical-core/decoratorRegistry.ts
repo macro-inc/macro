@@ -1,5 +1,9 @@
 import type { Klass, LexicalNode } from 'lexical';
 import type {
+  AgentActivityDecoratorProps,
+  AgentActivityNode,
+} from './nodes/AgentActivityNode';
+import type {
   AgentContextDecoratorProps,
   AgentContextNode,
 } from './nodes/AgentContextNode';
@@ -206,6 +210,10 @@ export interface NodeDecoratorMap {
   MagicChipNode: {
     klass: typeof MagicChipNode;
     props: MagicChipDecoratorProps;
+  };
+  AgentActivityNode: {
+    klass: typeof AgentActivityNode;
+    props: AgentActivityDecoratorProps;
   };
   CursorSystemNotificationNode: {
     klass: typeof CursorSystemNotificationNode;

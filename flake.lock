@@ -141,7 +141,8 @@
         "flake-parts": "flake-parts",
         "flake-utils": "flake-utils",
         "import-tree": "import-tree",
-        "nixpkgs": "nixpkgs"
+        "nixpkgs": "nixpkgs",
+        "tauri-cef": "tauri-cef"
       }
     },
     "rust-analyzer-src": {
@@ -173,6 +174,23 @@
       "original": {
         "owner": "nix-systems",
         "repo": "default",
+        "type": "github"
+      }
+    },
+    "tauri-cef": {
+      "flake": false,
+      "locked": {
+        "lastModified": 1793371729,
+        "narHash": "sha256-nRfbjAGUWsbN5CBhFgfARFMEWquvCHvgsTH9a8BqA1g=",
+        "owner": "macro-inc",
+        "repo": "tauri",
+        "rev": "4b8a46f15c0a54a5c06a1486cd5432d444c17bd8",
+        "type": "github"
+      },
+      "original": {
+        "owner": "macro-inc",
+        "repo": "tauri",
+        "rev": "4b8a46f15c0a54a5c06a1486cd5432d444c17bd8",
         "type": "github"
       }
     }

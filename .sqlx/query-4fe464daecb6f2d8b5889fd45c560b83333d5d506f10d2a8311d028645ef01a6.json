@@ -1,0 +1,18 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n                    UPDATE email_message_reconciliation q SET lease_until = now() + interval '3 minutes'\n                    FROM email_links l WHERE q.link_id = $1 AND q.generation = $2 AND q.provider_id = $3\n                        AND q.lease_id = $4 AND q.lease_until > now() AND l.id = q.link_id\n                        AND l.sync_generation = q.generation AND l.grant_generation = $5 AND l.is_sync_active\n                ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Int8",
+        "Text",
+        "Uuid",
+        "Int8"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "4fe464daecb6f2d8b5889fd45c560b83333d5d506f10d2a8311d028645ef01a6"
+}

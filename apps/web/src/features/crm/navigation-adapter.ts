@@ -1,6 +1,7 @@
 import { useSplitLayout } from '@components/app/split-layout/layout';
 import { useSplitPanel } from '@components/app/split-layout/layoutUtils';
 import { toast } from '@core/component/Toast/Toast';
+import { fireAndForget } from '@core/util/fireAndForget';
 import { buildSimpleEntityUrl } from '@core/util/url';
 import { getWebOrigin } from '@core/util/webOrigin';
 import { openEntityInSplitFromUnifiedList } from '../next-soup/utils';
@@ -18,8 +19,20 @@ export function buildCrmViewShareUrl(config: CrmViewConfig): string {
 }
 
 export async function copyCrmViewLink(config: CrmViewConfig) {
+  await copyCrmLink(buildCrmViewShareUrl(config));
+}
+/** A pipeline's link opens Customers on it. */
+export async function copyCrmPipelineLink(pipelineId: string) {
+  await copyCrmLink(
+    new URL(
+      `/app/companies/pipeline/${encodeURIComponent(pipelineId)}`,
+      getWebOrigin()
+    ).toString()
+  );
+}
+async function copyCrmLink(url: string) {
   try {
-    await navigator.clipboard.writeText(buildCrmViewShareUrl(config));
+    await navigator.clipboard.writeText(url);
     toast.success('Link copied to clipboard');
   } catch {
     toast.failure('Failed to copy link');
@@ -51,7 +64,10 @@ export function createAppCrmNavigation(): ReturnType<
       layout.replaceOrInsertSplit({ type: 'component', id: 'companies' });
     },
     openEntity: (entity) => {
-      void openEntityInSplitFromUnifiedList(entity, {});
+      fireAndForget(
+        openEntityInSplitFromUnifiedList(entity, {}),
+        'open-entity-in-split'
+      );
     },
   };
 }

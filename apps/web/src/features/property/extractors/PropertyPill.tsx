@@ -1,10 +1,4 @@
-import {
-  type BadgeSize,
-  type BadgeVariant,
-  badgeClasses,
-  badgeTriggerClasses,
-  cn,
-} from '@ui';
+import type { BadgeSize, BadgeVariant } from '@ui';
 import { splitProps } from 'solid-js';
 import { useProperty } from '../core/context';
 import { hasValue } from '../utils/typeGuards';
@@ -12,6 +6,7 @@ import {
   PropertyEditTrigger,
   type PropertyEditTriggerProps,
 } from './PropertyEditTrigger';
+import { propertyPillClasses } from './property-pill-classes';
 
 export type PropertyPillProps = PropertyEditTriggerProps & {
   variant?: BadgeVariant;
@@ -29,19 +24,14 @@ export function PropertyPill(props: PropertyPillProps) {
   const isReadOnly = () => !ctx.canEdit() || ctx.property().isMetadata;
   const isEmpty = () => !hasValue(ctx.property());
 
-  const classes = () => {
-    const options = {
-      variant: local.variant ?? 'ghost',
-      size: local.size ?? 'sm',
-      class: cn(
-        'max-w-full text-left',
-        isEmpty() && 'text-ink-extra-muted',
-        local.class
-      ),
-    } as const;
-
-    return isReadOnly() ? badgeClasses(options) : badgeTriggerClasses(options);
-  };
+  const classes = () =>
+    propertyPillClasses({
+      variant: local.variant,
+      size: local.size,
+      class: local.class,
+      readOnly: isReadOnly(),
+      empty: isEmpty(),
+    });
 
   return (
     <PropertyEditTrigger

@@ -4,12 +4,14 @@
 //! - `POST /` — create a new document
 //! - `GET /{document_id}` — get document metadata
 //! - `GET /slug/{slug}` - get document by team slug
+//! - `POST /{document_id}/ai-edit` — edit a markdown document by instructions
 //! - `GET /{document_id}/location_v3` — get document content location (presigned URL)
 //! - `GET /{document_id}/branch_name` — get short ID + task-aware git branch name (when the document is a task)
 //! - `GET /{document_id}/github_prs` — get GitHub pull requests associated with a task document
 //! - `POST /github_prs/tasks` — get the tasks linked to each of a batch of GitHub pull requests
 //! - `GET /{document_id}/short_id` — get document short ID
 //! - `GET`/`PUT /{document_id}/team_share` — get/set the document's team-share state
+//! - `GET`/`PUT /{document_id}/skill_description` — get/set when to use a skill
 //! - `POST /create_markdown` — create and initialize a markdown document
 //! - `POST /create_snippet` — create and initialize a snippet document
 //! - `POST /create_skill` — create and initialize a skill document
@@ -19,10 +21,13 @@
 #[cfg(test)]
 mod tests;
 
+#[cfg(feature = "ai_tools")]
+pub mod ai_edit;
 pub mod content_uploaded;
 pub mod copy_document;
-pub mod create_document;
 #[cfg(feature = "document_create")]
+pub mod create_canvas;
+pub mod create_document;
 pub mod create_markdown;
 #[cfg(feature = "document_create")]
 pub mod create_skill;
@@ -39,8 +44,10 @@ pub mod get_github_pull_request_tasks;
 pub mod get_github_pull_requests;
 pub mod get_location;
 pub mod get_short_id;
+pub mod get_text;
 pub mod put_interaction;
 pub mod put_snapshot;
+pub mod skill_description;
 pub mod sync_content_updated;
 pub mod system_skills;
 pub mod task_duplicates;
@@ -62,10 +69,13 @@ use lexical_client::LexicalClient;
 use macro_authorization::{MacroAuthorizationService, MacroAuthorizationState};
 use model_error_response::ErrorResponse;
 use serde::Deserialize;
+// Existing router composition state; the text handler uses domain services, never SQL.
+// ast-grep-ignore: rust-no-sqlx-in-inbound
 use sqlx::PgPool;
 use task_dedup::PgTaskDedupService;
 
 #[cfg(feature = "document_create")]
+use self::create_canvas::create_canvas_handler;
 use self::create_markdown::create_markdown_handler;
 #[cfg(feature = "document_create")]
 use self::create_skill::create_skill_handler;
@@ -86,6 +96,7 @@ use self::{
     get_location::get_location_v3_handler,
     get_short_id::get_short_id_handler,
     put_snapshot::put_snapshot_handler,
+    skill_description::{get_skill_description_handler, set_skill_description_handler},
     system_skills::get_system_skills_handler,
     task_duplicates::{
         delete_this_duplicate_task_handler, dismiss_task_duplicates_handler,
@@ -162,6 +173,10 @@ pub type DefaultDocumentCreator<T> = crate::domain::create::DocumentCreator<
     crate::outbound::mention_tracker::LexicalCommsMentionTracker,
 >;
 
+/// Editing worker behind the AI edit route.
+#[cfg(feature = "ai_tools")]
+pub type DefaultEditingWorker = crate::outbound::editing_worker_client::ReqwestEditingWorkerClient;
+
 /// Router state containing document router dependencies.
 pub struct DocumentRouterState<T, Svc, Auth> {
     /// The document service implementation.
@@ -180,6 +195,9 @@ pub struct DocumentRouterState<T, Svc, Auth> {
     /// Backend-owned document creation use case.
     #[cfg(feature = "document_create_adapters")]
     pub creator: DefaultDocumentCreator<T>,
+    /// EditDocument's AI-editing use case, with the host's admission and metering.
+    #[cfg(feature = "ai_tools")]
+    pub ai_editing: Arc<crate::domain::ai_editing::AiEditingService<DefaultEditingWorker>>,
     /// JWT secret for signing document permission tokens.
     pub document_permission_jwt_secret: String,
     /// Whether a team bot with no acting user may own what it creates.
@@ -198,6 +216,8 @@ impl<T, Svc, Auth> Clone for DocumentRouterState<T, Svc, Auth> {
             lexical_client: self.lexical_client.clone(),
             #[cfg(feature = "document_create_adapters")]
             creator: self.creator.clone(),
+            #[cfg(feature = "ai_tools")]
+            ai_editing: self.ai_editing.clone(),
             document_permission_jwt_secret: self.document_permission_jwt_secret.clone(),
             non_user_owners: self.non_user_owners,
         }
@@ -245,6 +265,10 @@ where
                 .delete(delete_document_handler::<T, Svc, Auth>),
         )
         .route(
+            "/{document_id}/text-content",
+            axum::routing::get(get_text::get_text_handler::<T, Svc, Auth>),
+        )
+        .route(
             "/{document_id}/location_v3",
             axum::routing::get(get_location_v3_handler::<T, Svc, Auth>),
         )
@@ -288,7 +312,18 @@ where
             "/{document_id}/team_share",
             axum::routing::get(get_team_share_handler::<T, Svc, Auth>)
                 .put(set_team_share_handler::<T, Svc, Auth>),
+        )
+        .route(
+            "/{document_id}/skill_description",
+            axum::routing::get(get_skill_description_handler::<T, Svc, Auth>)
+                .put(set_skill_description_handler::<T, Svc, Auth>),
         );
+
+    #[cfg(feature = "ai_tools")]
+    let document_id_routes = document_id_routes.route(
+        "/{document_id}/ai-edit",
+        axum::routing::post(ai_edit::ai_edit_handler::<T, Svc, Auth>),
+    );
 
     let document_id_routes = document_id_routes.layer(middleware::from_fn_with_state(
         state.clone(),
@@ -324,6 +359,10 @@ where
 
     #[cfg(feature = "document_create")]
     let router = router
+        .route(
+            "/create_canvas",
+            axum::routing::post(create_canvas_handler::<T, Svc, Auth>),
+        )
         .route(
             "/create_markdown",
             axum::routing::post(create_markdown_handler::<T, Svc, Auth>),

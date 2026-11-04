@@ -9,12 +9,22 @@ import { idToDisplayName } from '@core/user/util';
 import { PropertyValueIcon } from '@property/component/propertyValue';
 import { useTagFilterGroup } from '@property/tags/use-tag-filter-group';
 import { useContacts } from '@queries/contacts/contacts';
-import { batch, createMemo } from 'solid-js';
+import { Tooltip } from '@ui';
+import { batch, createMemo, createSignal } from 'solid-js';
 import { match } from 'ts-pattern';
+import type { TaskDateRangeDraft } from '../components/task-due-date-range-dialog';
+import {
+  isTaskDueDateBucket,
+  TASK_DUE_DATE_BUCKETS,
+} from '../core/task-due-date';
 import { requestAiTaskFilterPlan } from '../queries/ai-task-filter-plan';
 import { useTasksView } from '../tasks-view-context';
 import type { AiTaskFilterCatalog } from './ai-task-filter';
-import { TASK_PRIORITY_OPTIONS, TASK_STATUS_OPTIONS } from './task-facets';
+import {
+  TASK_PRIORITY_OPTIONS,
+  TASK_STATUS_OPTIONS,
+  TASK_VIEWER,
+} from './task-facets';
 
 const AI_FILTER_UNAVAILABLE_MESSAGE =
   'AI filtering is unavailable right now. Try again in a moment.';
@@ -28,13 +38,15 @@ export type TaskFilterGroupId =
   | 'priority'
   | 'assignees'
   | 'created-by'
-  | 'tags';
+  | 'tags'
+  | 'due_date';
 
 export function useTaskFilters() {
-  const { state, setFacets, setState } = useTasksView();
+  const { state, setFacets, setState, savedViews } = useTasksView();
   const contacts = useContacts();
   const currentUserId = useUserId();
   const tagGroup = useTagFilterGroup();
+  const [customRange, setCustomRange] = createSignal<TaskDateRangeDraft>();
 
   const peopleOptions = createMemo(() => {
     const me = currentUserId();
@@ -45,7 +57,7 @@ export function useTaskFilters() {
       people.unshift({ id: me, email: '', name: idToDisplayName(me) });
     }
 
-    return people.map((person) => ({
+    const options = people.map((person) => ({
       id: person.id,
       label:
         person.id === me
@@ -63,60 +75,143 @@ export function useTaskFilters() {
         />
       ),
     }));
+    return savedViews
+      ? [
+          {
+            id: TASK_VIEWER,
+            label: 'Me',
+            content: () => (
+              <Tooltip label="Matches whoever opens this saved view." as="span">
+                Me
+              </Tooltip>
+            ),
+            icon: () => (
+              <UserIcon
+                id={me ?? ''}
+                size="sm"
+                class="size-3.5"
+                suppressClick
+                showTooltip={false}
+              />
+            ),
+          },
+          ...options,
+        ]
+      : options;
   });
+
+  const withUnavailable = (
+    id: TaskFilterGroupId,
+    options: ListFilterGroup<TaskFilterGroupId, string>['options']
+  ) => [
+    ...options,
+    ...(state.facets[id] ?? [])
+      .filter((selected) => !options.some((option) => option.id === selected))
+      .map((selected) => ({
+        id: selected,
+        label: `Unavailable ${id === 'tags' ? 'tag' : 'option'}`,
+      })),
+  ];
 
   const groups = createMemo(
     (): ListFilterGroup<TaskFilterGroupId, string>[] => [
       {
         id: 'status',
         label: 'Status',
-        options: TASK_STATUS_OPTIONS.map((option) => ({
-          ...option,
-          icon: () => (
-            <PropertyValueIcon
-              optionId={option.propertyOptionId}
-              class="size-3.5"
-            />
-          ),
-        })),
+        options: withUnavailable(
+          'status',
+          TASK_STATUS_OPTIONS.map((option) => ({
+            ...option,
+            icon: () => (
+              <PropertyValueIcon
+                optionId={option.propertyOptionId}
+                class="size-3.5"
+              />
+            ),
+          }))
+        ),
       },
       {
         id: 'priority',
         label: 'Priority',
-        options: TASK_PRIORITY_OPTIONS.map((option) => ({
-          ...option,
-          icon: () => (
-            <PropertyValueIcon
-              optionId={option.propertyOptionId}
-              class="size-3.5"
-            />
-          ),
-        })),
+        options: withUnavailable(
+          'priority',
+          TASK_PRIORITY_OPTIONS.map((option) => ({
+            ...option,
+            icon: () => (
+              <PropertyValueIcon
+                optionId={option.propertyOptionId}
+                class="size-3.5"
+              />
+            ),
+          }))
+        ),
+      },
+      {
+        id: 'due_date',
+        label: 'Due date',
+        selectionMode: 'single',
+        defaultOptionId: 'any',
+        options: [
+          { id: 'any', label: 'Any due date' },
+          ...TASK_DUE_DATE_BUCKETS,
+          { id: 'has_due_date', label: 'Has due date' },
+          {
+            id: 'range',
+            label:
+              state.dueDate?.type === 'range'
+                ? `Custom range (${state.dueDate.start ?? 'Any'} – ${state.dueDate.end ?? 'Any'})`
+                : 'Custom range…',
+          },
+        ],
       },
       {
         id: 'assignees',
         label: 'Assignee',
         searchPlaceholder: 'Search assignees...',
-        options: peopleOptions(),
+        options: withUnavailable('assignees', peopleOptions()),
       },
       {
         id: 'created-by',
         label: 'Created by',
         searchPlaceholder: 'Search creators...',
-        options: peopleOptions(),
+        options: withUnavailable('created-by', peopleOptions()),
       },
-      ...(tagGroup().options.length > 0 ? [tagGroup()] : []),
+      ...(tagGroup().options.length > 0 || (state.facets.tags?.length ?? 0) > 0
+        ? [
+            {
+              ...tagGroup(),
+              options: withUnavailable('tags', tagGroup().options),
+            },
+          ]
+        : []),
     ]
   );
 
   const isSelected = (groupId: TaskFilterGroupId, optionId: string) =>
-    (state.facets[groupId] ?? []).includes(optionId);
+    groupId === 'due_date'
+      ? (state.dueDate?.type ?? 'any') === optionId
+      : (state.facets[groupId] ?? []).includes(optionId);
 
   const setSelected = (
     groupId: TaskFilterGroupId,
     optionId: string,
     selected: boolean
   ) => {
+    if (groupId === 'due_date') {
+      if (optionId === 'range') {
+        const current = state.dueDate;
+        setCustomRange({
+          start: current?.type === 'range' ? (current.start ?? '') : '',
+          end: current?.type === 'range' ? (current.end ?? '') : '',
+        });
+      } else if (!selected || optionId === 'any') {
+        setState('dueDate', undefined);
+      } else if (isTaskDueDateBucket(optionId) || optionId === 'has_due_date') {
+        setState('dueDate', { type: optionId });
+      }
+      return;
+    }
     const update = selected ? addUnique(optionId) : removeValue(optionId);
     setFacets({
       ...state.facets,
@@ -127,7 +222,7 @@ export function useTaskFilters() {
   const activeCount = () =>
     Object.values(state.facets).reduce(
       (count, optionIds) => count + optionIds.length,
-      0
+      state.dueDate ? 1 : 0
     );
 
   const aiCatalog = (): AiTaskFilterCatalog => ({
@@ -163,9 +258,31 @@ export function useTaskFilters() {
   return {
     activeCount,
     applyDescription,
-    clear: () => setFacets({}),
+    clear: () =>
+      batch(() => {
+        setFacets({});
+        setState('dueDate', undefined);
+      }),
+    customRange,
+    setCustomRange,
+    applyCustomRange: () => {
+      const range = customRange();
+      if (
+        !range ||
+        !(range.start || range.end) ||
+        (range.start && range.end && range.start > range.end)
+      )
+        return;
+      setState('dueDate', {
+        type: 'range',
+        start: range.start || undefined,
+        end: range.end || undefined,
+      });
+      setCustomRange(undefined);
+    },
     groups,
     isSelected,
+    selectedIds: (groupId: TaskFilterGroupId) => state.facets[groupId] ?? [],
     setSelected,
   };
 }

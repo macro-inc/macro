@@ -24,6 +24,9 @@ pub use schema::{
 pub struct Catalog {
     /// The visible tables.
     pub tables: Vec<Table>,
+    /// The database whose tables win when an unqualified name matches several.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub scope: Option<DatabaseId>,
 }
 
 /// One table and its columns, in display order.
@@ -145,6 +148,9 @@ pub enum ColumnKind {
     Boolean,
     /// A date-time.
     Date,
+    /// A span from one date-time to another.
+    #[strum(serialize = "date range")]
+    DateRange,
     /// A URL.
     Link,
     /// One or more of a fixed set of options.
@@ -169,6 +175,8 @@ pub enum ColumnKind {
 /// Spelled as the properties system spells entity types (`USER`,
 /// `DATABASE_ROW`), on the wire and in SQL, where it parses
 /// case-insensitively.
+#[cfg_attr(feature = "openapi", derive(utoipa::ToSchema))]
+#[cfg_attr(feature = "openapi", schema(as = SqlEntityKind))]
 #[derive(
     Debug,
     Clone,
@@ -252,6 +260,8 @@ impl TryFrom<EntityKind> for OpEntityKind {
 }
 
 /// One option of a select column.
+#[cfg_attr(feature = "openapi", derive(utoipa::ToSchema))]
+#[cfg_attr(feature = "openapi", schema(as = SqlSelectOption))]
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Type)]
 #[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[serde(rename_all = "camelCase")]
@@ -290,6 +300,7 @@ impl ColumnKind {
             CastKind::Number => ColumnKind::Number,
             CastKind::Boolean => ColumnKind::Boolean,
             CastKind::Date => ColumnKind::Date,
+            CastKind::DateRange => ColumnKind::DateRange,
             CastKind::Link => ColumnKind::Link,
             CastKind::Select { multi } => ColumnKind::Select { multi, options },
             CastKind::Entity { target, multi } => ColumnKind::Entity {
@@ -310,6 +321,7 @@ impl ColumnKind {
             ColumnKind::Number => CastKind::Number,
             ColumnKind::Boolean => CastKind::Boolean,
             ColumnKind::Date => CastKind::Date,
+            ColumnKind::DateRange => CastKind::DateRange,
             ColumnKind::Link => CastKind::Link,
             ColumnKind::Select { multi, .. } => CastKind::Select { multi: *multi },
             ColumnKind::Entity { multi, target } => match OpEntityKind::try_from(*target) {

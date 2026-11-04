@@ -24,8 +24,11 @@ files; the [style guide](docs/development/style-guide.md) indexes them.
 - No macros or helpers just to save a few lines.
 - Use native APIs and existing libraries. No polyfills, no homemade crypto.
 - Keep types and traits small.
-- Name things for what they are. No jargon or slang.
-- Compatibility only at deployed boundaries (migrations, persisted formats).
+- Name things for what they are or do; avoid jargon, slang, and vague labels such as `candidates`.
+- Use ternaries sparingly for short, simple expressions; use explicit branches for complex or nested decisions.
+- Break up long statements and compound conditions instead of compressing them onto one line.
+- Separate functions, variable groups, conditionals, and distinct logic blocks with blank lines.
+- Keep compatibility only at deployed boundaries; reject obsolete unreleased formats instead of adding upgrade paths.
 
 ## Correctness
 
@@ -45,8 +48,13 @@ files; the [style guide](docs/development/style-guide.md) indexes them.
 
 ## Tests
 
-- Every bug fix adds a regression test that fails before the fix and passes
-  after.
+- A bug fix adds a regression test only when the test exercises behavior that
+  could plausibly break again: domain logic, queries and data, state machines,
+  API contracts, or the reproduced bug path. It fails before the fix and
+  doesn't assert UI copy or visibility, restate the implementation's mapping,
+  or mock so heavily it can't catch the real failure.
+- Add no test for small UI changes (copy, labels, showing or hiding elements)
+  unless asked.
 - Test behavior, not names or derive round-trips.
 - Explicit literals, no tiny helpers.
 - No `sleep`, `yield_now`, or polling; use real sync primitives.

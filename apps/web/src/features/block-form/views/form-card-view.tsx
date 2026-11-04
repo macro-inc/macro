@@ -1,4 +1,5 @@
-import ArrowSquareOut from '@phosphor/arrow-square-out.svg';
+import { fireAndForget } from '@core/util/fireAndForget';
+import ArrowSquareOut from '@icon/system/regular/arrow-square-out.svg';
 import { Button } from '@ui';
 import { createSignal, Show } from 'solid-js';
 import { PollBars, PollResults } from '../components/poll/poll-bars';
@@ -10,9 +11,10 @@ import { createPollVoting } from '../primitives/create-poll-voting';
 import { RespondView } from './respond-view';
 
 /**
- * A poll's card body: vote and see the tally. "Responses" takes editors to
- * the Responses tab; respondents, who cannot read the table, see the tally
- * spelled out in place.
+ * A poll's card body: vote and see the tally. When the tally names voters
+ * (editors, or respondents of a poll that shares its responses, never an
+ * anonymous one), Results shows who chose each option; otherwise those who
+ * may read the responses get "Responses", the Responses tab.
  */
 function PollCardBody(props: {
   detail: FormDetail;
@@ -21,6 +23,8 @@ function PollCardBody(props: {
 }) {
   const context = useFormContext();
   const isEditor = () => props.detail.access !== 'view';
+  const canReadResponses = () =>
+    isEditor() || props.detail.form.responsesVisible;
   const [showingResults, setShowingResults] = createSignal(false);
   const availability = () =>
     formAvailability(props.detail.form, props.detail.tableGone, new Date());
@@ -32,6 +36,7 @@ function PollCardBody(props: {
   );
   const voting = createPollVoting({
     poll: () => props.poll,
+    anonymous: () => props.detail.form.anonymous,
     mine: mine.response,
     tally: tally.value,
     submit: (answers) =>
@@ -48,7 +53,7 @@ function PollCardBody(props: {
         bars={voting.bars()}
         showResults={voting.hasTally()}
         multi={props.poll.multi}
-        disabled={!context.viewer.userId() || !open()}
+        disabled={!context.viewer.userId() || !open() || voting.final()}
         pending={voting.pending()}
         summary={voting.summary()}
         hiddenNote={
@@ -58,30 +63,53 @@ function PollCardBody(props: {
               ? 'Loading results…'
               : 'Only the poll’s editors see the counts.'
         }
-        onVote={(optionId) => void voting.vote(optionId)}
+        onVote={(optionId) =>
+          fireAndForget(voting.vote(optionId), 'poll-voting')
+        }
         results={
-          isEditor()
+          voting.hasVoters()
             ? {
-                label: 'Responses',
-                expanded: undefined,
-                onOpen: props.onOpenResponses,
+                label: showingResults() ? 'Hide results' : 'Results',
+                expanded: showingResults(),
+                onOpen: () => setShowingResults(!showingResults()),
               }
-            : voting.hasTally()
+            : canReadResponses()
               ? {
-                  label: showingResults() ? 'Hide results' : 'Results',
-                  expanded: showingResults(),
-                  onOpen: () => setShowingResults(!showingResults()),
+                  label: 'Responses',
+                  expanded: undefined,
+                  onOpen: props.onOpenResponses,
                 }
               : undefined
         }
       />
+      <Show when={props.detail.form.anonymous}>
+        <p class="text-xs text-ink-muted">
+          {voting.final()
+            ? 'You voted. Anonymous poll: votes aren’t linked to people, so yours can’t be changed.'
+            : 'Anonymous poll: votes aren’t linked to people, not even for the poll’s owner.'}
+        </p>
+      </Show>
       <Show when={!open()}>
         <p class="text-xs text-ink-muted">
           {availabilityLine(availability(), new Date())}
         </p>
       </Show>
-      <Show when={!isEditor() && showingResults()}>
-        <PollResults bars={voting.bars()} summary={voting.summary()} />
+      <Show when={voting.hasVoters() && showingResults()}>
+        <PollResults
+          ref={(element) =>
+            // A card in a message is a fixed-height embed: bring the opened
+            // results into view instead of leaving them below its fold.
+            requestAnimationFrame(() =>
+              element.scrollIntoView?.({ block: 'nearest' })
+            )
+          }
+          bars={voting.bars()}
+          viewerId={context.viewer.userId()}
+          renderPerson={context.ui.renderPerson}
+          onOpenResponses={
+            canReadResponses() ? props.onOpenResponses : undefined
+          }
+        />
       </Show>
     </div>
   );
@@ -126,7 +154,7 @@ export function FormCardView(props: {
       <Show
         when={poll() || !props.narrow}
         fallback={
-          <Button variant="outline" size="sm" onClick={props.onOpen}>
+          <Button variant="secondary" size="sm" onClick={props.onOpen}>
             Open the form to respond
           </Button>
         }

@@ -1,4 +1,10 @@
 import { isFeatureEnabled, showDatabaseSql } from '@core/constant/featureFlags';
+import { fireAndForget } from '@core/util/fireAndForget';
+import ArrowClockwiseIcon from '@icon/system/regular/arrow-clockwise.svg';
+import ArrowUpIcon from '@icon/system/regular/arrow-up.svg';
+import CodeIcon from '@icon/system/regular/code.svg';
+import PlayIcon from '@icon/system/regular/play.svg';
+import TableIcon from '@icon/system/regular/table.svg';
 import {
   DATABASE_QUERY_CHART_MODES,
   type DatabaseQueryDisplayMode,
@@ -6,11 +12,6 @@ import {
   isDatabaseQueryDisplayMode,
 } from '@macro-inc/lexical-core/nodes/databaseQueryData';
 import { Telemetry } from '@macro-inc/observability';
-import ArrowClockwiseIcon from '@phosphor/arrow-clockwise.svg';
-import ArrowUpIcon from '@phosphor/arrow-up.svg';
-import CodeIcon from '@phosphor/code.svg';
-import PlayIcon from '@phosphor/play.svg';
-import TableIcon from '@phosphor/table.svg';
 import { Button } from '@ui/components/Button';
 import { Hotkey } from '@ui/components/Hotkey';
 import {
@@ -184,7 +185,7 @@ export function QueryEditor(props: {
       props.initial.sql.trim() &&
       !composer.needsGeneration()
     )
-      void composer.run();
+      fireAndForget(composer.run(), 'database-query');
   });
 
   return (
@@ -202,7 +203,7 @@ export function QueryEditor(props: {
       <form
         onSubmit={(event) => {
           event.preventDefault();
-          void ask();
+          fireAndForget(ask(), 'database-query');
         }}
       >
         <label class="sr-only" for={promptId}>
@@ -224,7 +225,7 @@ export function QueryEditor(props: {
                   event.preventDefault();
                   event.stopPropagation();
                   if (canAccept()) accept();
-                  else void ask();
+                  else fireAndForget(ask(), 'database-query');
                 }
               }}
             />
@@ -236,7 +237,12 @@ export function QueryEditor(props: {
           </div>
           <Show when={!canAccept()}>
             <div class="flex items-center justify-end gap-2">
-              <Button type="submit" size="sm" disabled={!canAsk()}>
+              <Button
+                variant="primary"
+                type="submit"
+                size="sm"
+                disabled={!canAsk()}
+              >
                 <Show
                   when={busy()}
                   fallback={
@@ -307,7 +313,7 @@ export function QueryEditor(props: {
             value={composer.sql()}
             schema={composer.schema()}
             onChange={composer.setSql}
-            onRun={() => void composer.run()}
+            onRun={() => fireAndForget(composer.run(), 'database-query')}
           />
           <div class="mt-1.5 flex items-center justify-between gap-2">
             <p class="text-[11px] text-ink-muted">
@@ -317,7 +323,7 @@ export function QueryEditor(props: {
               variant="ghost"
               size="sm"
               disabled={busy() || !composer.sql().trim()}
-              onClick={() => void composer.run()}
+              onClick={() => fireAndForget(composer.run(), 'database-query')}
             >
               <PlayIcon class="size-3.5" /> Run SQL
             </Button>
@@ -413,7 +419,9 @@ export function QueryEditor(props: {
                     title="Refresh answer"
                     disabled={busy() || !sourceAvailable()}
                     class="rounded p-1 text-ink-muted hover:bg-hover hover:text-ink disabled:opacity-40"
-                    onClick={() => void composer.run()}
+                    onClick={() =>
+                      fireAndForget(composer.run(), 'database-query')
+                    }
                   >
                     <ArrowClockwiseIcon class="size-3.5" />
                   </button>
@@ -434,7 +442,7 @@ export function QueryEditor(props: {
                 <Button variant="ghost" size="sm" onClick={editPrompt}>
                   Edit
                 </Button>
-                <Button size="sm" onClick={accept}>
+                <Button variant="primary" size="sm" onClick={accept}>
                   {props.saveLabel ?? 'Insert'}
                   <Hotkey shortcut="enter" theme="current" aria-hidden="true" />
                 </Button>

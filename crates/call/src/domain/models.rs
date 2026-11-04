@@ -49,8 +49,8 @@ pub struct ArchivedCall {
     pub duration_ms: i64,
     /// Whether a recording egress was started before the call was archived.
     pub has_recording: bool,
-    /// Number of distinct participants over the call's lifetime.
-    pub participant_count: usize,
+    /// Macro accounts that joined the call over its lifetime, once each.
+    pub participants: Vec<String>,
 }
 
 /// The people known to have been on, or invited to, an archived call.
@@ -150,6 +150,15 @@ pub struct VerifiedRingToken {
     pub identity: String,
     /// The room the token grants access to, if any.
     pub room: Option<String>,
+}
+
+/// An RTC room that currently exists on the provider.
+#[derive(Debug, Clone)]
+pub struct RtcRoom {
+    /// The room name; Macro names rooms after their call id.
+    pub name: String,
+    /// When the provider created the room.
+    pub created_at: DateTime<Utc>,
 }
 
 /// Response for the leave/end call operation.
@@ -471,8 +480,8 @@ pub struct CallRecord {
     pub call_id: Uuid,
     /// The channel this call belongs to.
     pub channel_id: Option<Uuid>,
-    /// The RTC room name.
-    pub room_name: String,
+    /// The RTC room name. `None` for imported calls, which never had a room.
+    pub room_name: Option<String>,
     /// User who created the call.
     pub created_by: String,
     /// When the call started (created_at for active, started_at for archived).
@@ -536,6 +545,20 @@ pub struct CallRecord {
     pub guests: Vec<CallRecordGuest>,
     /// Transcript segments ordered by `sequence_num`.
     pub transcript: Vec<CallRecordTranscriptSegment>,
+    /// External provenance for calls imported from another provider; `None`
+    /// for calls recorded in Macro.
+    pub source: Option<CallRecordSource>,
+}
+
+/// Where an imported call came from.
+#[derive(Debug, Clone, serde::Serialize)]
+#[cfg_attr(feature = "inbound", derive(utoipa::ToSchema))]
+#[serde(rename_all = "camelCase")]
+pub struct CallRecordSource {
+    /// Provider that supplied the call.
+    pub provider: crate::domain::records::CallProvider,
+    /// Link to the call in the provider's app, if it has one.
+    pub external_url: Option<String>,
 }
 
 /// Storage object keys associated with a deleted archived call record.

@@ -1,3 +1,5 @@
+import type { InteractionController } from '@app/features/agent-interactions/context/interaction';
+import { createInteractionController } from '@app/features/agent-interactions/primitives/create-interaction-controller';
 import {
   harnessDisplayName,
   harnessTitle,
@@ -8,13 +10,12 @@ import {
   toolCallDetail,
   toolLabel,
 } from '@app/features/block-agent/component/parts/shared';
-import type { InteractionController } from '@app/features/block-agent/context/interaction';
-import { createInteractionController } from '@app/features/block-agent/primitives/create-interaction-controller';
 import { issueSessionAction } from '@app/features/block-agent/queries/issue-session-action';
 import { describeToolCall } from '@app/features/block-agent/state/tool-approval-wording';
 import { AgentSession } from '@core/agent-session/AgentSession';
 import { toast } from '@core/component/Toast/Toast';
 import { useUserId } from '@core/context/user';
+import { fireAndForget } from '@core/util/fireAndForget';
 import {
   MAGIC_CHIP_STATUSES,
   type MagicChipData,
@@ -158,7 +159,7 @@ export function createMagicChipModel(props: MagicChipData): {
       if (!released) setLoading(false);
     }
   }
-  void loadSession();
+  fireAndForget(loadSession(), 'magic-chip');
 
   onCleanup(() => {
     released = true;

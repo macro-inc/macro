@@ -117,7 +117,9 @@ export function ThreadReplyChannelInput(props: ThreadReplyChannelInputProps) {
       })}
       markdownNamespace={`thread-reply-input-${props.threadId}-markdown`}
       onReady={onReady}
-      onChange={(snapshot) => void props.setReplyInputState(snapshot)}
+      onChange={(snapshot) => {
+        props.setReplyInputState(snapshot);
+      }}
       onStartTyping={() =>
         typingMutation.mutate({
           parent: props.parent,
@@ -133,6 +135,10 @@ export function ThreadReplyChannelInput(props: ThreadReplyChannelInputProps) {
         })
       }
       onClose={() => {
+        props.setReplyInputState(undefined);
+        props.onExit();
+      }}
+      onEscape={() => {
         props.setReplyInputState(undefined);
         props.onExit();
       }}

@@ -2,14 +2,15 @@ import {
   createImageActions,
   ImageActionButtons,
 } from '@core/component/ImageActions';
+import Spinner from '@icon/system/bold/spinner-gap-bold.svg?component-solid';
+import XIcon from '@icon/system/regular/x.svg';
 import { Dialog, useDialogContext } from '@kobalte/core/dialog';
-import XIcon from '@phosphor/x.svg';
-import Spinner from '@phosphor-icons/core/bold/spinner-gap-bold.svg?component-solid';
 import { Button, cn } from '@ui';
 import {
   type Accessor,
   createEffect,
   createSignal,
+  type JSX,
   Show,
   untrack,
 } from 'solid-js';
@@ -23,6 +24,8 @@ import { LightboxToolbar } from './LightboxToolbar';
 type LightboxProps = {
   // Current image to display
   src: Accessor<string | undefined>;
+  // Match the source image's CORS mode when the host does not supply CORP.
+  crossOrigin?: JSX.ImgHTMLAttributes<HTMLImageElement>['crossorigin'];
   // Used for the download filename
   imageId: Accessor<string>;
   // Optional pre-fetched blob override (e.g. DSS images). Falls back to fetching `src`.
@@ -83,12 +86,13 @@ export function Lightbox(props: LightboxProps) {
         <LightboxToolbar isVisible={true}>
           <ImageActionButtons actions={images} />
           <Dialog.CloseButton
+            aria-label="Close"
+            tooltip="Close"
             as={Button}
             variant="ghost"
             size="icon-md"
-            label="Close"
           >
-            <XIcon />
+            <XIcon class="size-4 touch:size-6 shrink-0 pointer-events-none" />
           </Dialog.CloseButton>
         </LightboxToolbar>
 
@@ -143,6 +147,7 @@ export function Lightbox(props: LightboxProps) {
               }
             >
               <img
+                crossorigin={props.crossOrigin}
                 class="size-full sm:min-w-50 sm:max-h-[80vh] object-contain select-none"
                 style={{ '-webkit-touch-callout': 'none' }}
                 src={props.src()}

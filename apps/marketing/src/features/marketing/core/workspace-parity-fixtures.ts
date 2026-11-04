@@ -54,7 +54,7 @@ export const sampleAgentSessions = [
     provider: 'chatgpt',
     prompt: 'Summarize the Meadow conversation and suggest next steps.',
     answer:
-      'Dana confirmed the Thursday check-in. Share the team rollout plan, introduce Julia, and confirm the workspace owner before the meeting.',
+      'Valentina confirmed the Thursday check-in. Share the team rollout plan, introduce Julia, and confirm the workspace owner before the meeting.',
   },
   {
     id: 'release-notes',

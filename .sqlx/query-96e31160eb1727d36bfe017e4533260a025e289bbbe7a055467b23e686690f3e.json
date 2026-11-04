@@ -1,0 +1,18 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n                UPDATE email_messages m SET provider_id = $3,provider_thread_id = $4\n                FROM email_mailbox_drafts d WHERE m.id = $1 AND m.link_id = $2 AND m.provider_id IS NULL\n                    AND d.message_id = m.id AND d.generation = $5 AND d.state = 'running'\n                    AND d.checkpoint->>'stage' = 'creating'\n            ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid",
+        "Text",
+        "Text",
+        "Int8"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "96e31160eb1727d36bfe017e4533260a025e289bbbe7a055467b23e686690f3e"
+}

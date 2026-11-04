@@ -4,6 +4,8 @@ expression: machine.metadata()
 input_file: crates/folds/agent_fold/fixtures/real/subagent_opencode.jsonl
 ---
 SessionMetadata {
+    notifications: [],
+    noop_turn: None,
     harness: OpenCode,
     model: Some(
         "openai/gpt-5.6-terra",

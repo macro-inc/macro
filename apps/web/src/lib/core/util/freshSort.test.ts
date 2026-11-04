@@ -254,6 +254,50 @@ describe('createFreshSearch with comma-separated channel matching', () => {
     expect(results2.length).toBe(1);
     expect(results2[0].item.id).toBe('1');
   });
+
+  it('keeps the fuzzy score of a channel typed in order, and adds channels typed out of order', () => {
+    const now = new Date();
+    const items: MockItem[] = [
+      { id: '1', name: 'Avery Morgan, Blair Chen', type: 'channel' },
+      { id: '2', name: 'Blair Chen, Avery Morgan', type: 'channel' },
+      { id: '3', name: 'Blair notes for Avery', type: 'item', viewedAt: now },
+    ];
+
+    const results = createCommaSeparatedSearch()(items, 'avery blair');
+
+    expect(results.map((result) => result.item.id)).toEqual(['1', '2']);
+    expect(results[0].fuzzyScore).toBe(1);
+    expect(results[1].fuzzyScore).toBeLessThan(1);
+  });
+
+  it('adds no channels for a query of separators alone', () => {
+    const items: MockItem[] = [
+      { id: '1', name: 'Avery Morgan, Blair Chen', type: 'channel' },
+    ];
+
+    expect(createCommaSeparatedSearch()(items, ' , ')).toEqual([]);
+  });
+
+  it('ranks the exact participants above a newer larger group without name ranking', () => {
+    const items: MockItem[] = [
+      {
+        id: 'group',
+        name: 'Avery Morgan, Blair Chen, Casey Reed',
+        type: 'channel',
+        viewedAt: new Date(),
+      },
+      {
+        id: 'pair',
+        name: 'Avery Morgan, Blair Chen',
+        type: 'channel',
+        viewedAt: applyDurationToDate(new Date(), { value: -20, unit: 'd' }),
+      },
+    ];
+
+    const results = createCommaSeparatedSearch()(items, 'blair, avery');
+
+    expect(results.map((result) => result.item.id)).toEqual(['pair', 'group']);
+  });
 });
 
 describe('normalizeFuzzyScore', () => {
@@ -384,6 +428,91 @@ describe('freshSort with all exact matches', () => {
 
     expect(results).toHaveLength(2);
     expect(results[0].item.type).toBe('channel');
+  });
+});
+
+describe('name match ranking', () => {
+  it('ranks exact names, then prefixes, then other matches, ignoring case and outer spaces', () => {
+    const viewedAt = new Date();
+    const items: MockItem[] = [
+      { id: 'contains', name: 'Team launch plan', type: 'item', viewedAt },
+      { id: 'prefix', name: 'Launch plan review', type: 'item', viewedAt },
+      { id: 'exact', name: 'Launch Plan', type: 'item', viewedAt },
+    ];
+    const search = createFreshSearch<MockItem>({
+      config: { rankNameMatchesFirst: true },
+      getName: (item) => item.name,
+      getTimestamp: (item) => ({ viewedAt: item.viewedAt }),
+    });
+
+    expect(
+      search(items, '  launch PLAN ').map((result) => result.item.id)
+    ).toEqual(['exact', 'prefix', 'contains']);
+    const browseScores = search(items, '').map(
+      (result) => result.combinedScore
+    );
+    expect(new Set(browseScores).size).toBe(1);
+  });
+
+  it('keeps an exact name ahead of a boosted channel that only starts with it', () => {
+    const items: MockItem[] = [
+      {
+        id: 'channel',
+        name: 'Planning',
+        type: 'channel',
+        viewedAt: new Date(),
+      },
+      {
+        id: 'exact',
+        name: 'Plan',
+        type: 'item',
+        viewedAt: new Date(Date.now() - 20 * 24 * 60 * 60 * 1000),
+      },
+    ];
+    const search = createFreshSearch<MockItem>({
+      config: {
+        rankNameMatchesFirst: true,
+        useViewedAt: true,
+        channelBoost: 3,
+      },
+      getName: (item) => item.name,
+      isChannelItem: (item) => item.type === 'channel',
+      getTimestamp: (item) => ({ viewedAt: item.viewedAt }),
+    });
+
+    expect(search(items, 'plan').map((result) => result.item.id)).toEqual([
+      'exact',
+      'channel',
+    ]);
+  });
+
+  it('measures match position on the label when search text puts keywords first', () => {
+    const now = Date.now();
+    const items: MockItem[] = [
+      {
+        id: 'plan',
+        name: 'Create plan',
+        type: 'item',
+        viewedAt: new Date(now - 24 * 60 * 60 * 1000),
+      },
+      { id: 'command', name: 'Create', type: 'item', viewedAt: new Date(now) },
+    ];
+    const search = createFreshSearch<MockItem>({
+      config: {
+        rankNameMatchesFirst: true,
+        startBonusDecay: 0.2,
+        useViewedAt: true,
+      },
+      getName: (item) =>
+        item.id === 'command' ? `new make add ${item.name}` : item.name,
+      getDisplayName: (item) => item.name,
+      getTimestamp: (item) => ({ viewedAt: item.viewedAt }),
+    });
+
+    expect(search(items, 'cre').map((result) => result.item.id)).toEqual([
+      'command',
+      'plan',
+    ]);
   });
 });
 

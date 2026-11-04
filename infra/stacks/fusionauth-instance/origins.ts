@@ -5,7 +5,15 @@ import { AUTHENTICATION_SERVICE_DOMAIN } from './constants';
  * Creates an array of allowed origins for the fusionauth application depending on stack
  */
 export const ALLOWED_ORIGINS = () => {
-  const allowedOrigins = [AUTHENTICATION_SERVICE_DOMAIN];
+  const allowedOrigins = [
+    AUTHENTICATION_SERVICE_DOMAIN,
+    'https://platform.openai.com',
+    'https://platform.claude.com',
+    'https://console.anthropic.com',
+    // Google's sign-in pages send the browser back to FusionAuth, which reads
+    // their origin and otherwise ends Google sign-in with `invalid_origin`.
+    'https://accounts.google.com',
+  ];
 
   switch (stack) {
     case 'local':

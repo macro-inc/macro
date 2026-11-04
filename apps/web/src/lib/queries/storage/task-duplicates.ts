@@ -1,3 +1,4 @@
+import { fireAndForget } from '@core/util/fireAndForget';
 import { markdownToEmbeddingText } from '@macro-inc/lexical-core/utils/parsers';
 import { queryClient } from '@queries/client';
 import {
@@ -31,7 +32,10 @@ export function handleTaskDuplicateMatchesUpdated(
     console.warn('Malformed task duplicate live update payload', payload);
     return;
   }
-  invalidateTaskDuplicates(payload.documentId);
+  fireAndForget(
+    invalidateTaskDuplicates(payload.documentId),
+    'task-duplicates'
+  );
 }
 
 async function fetchTaskDuplicates(
@@ -70,9 +74,12 @@ export function useDismissTaskDuplicatesMutation(documentId: Accessor<string>) {
       if (result.isErr()) throw new Error('Failed to dismiss duplicate');
     },
     onSuccess: (_data, params) => {
-      invalidateTaskDuplicates(documentId());
+      fireAndForget(invalidateTaskDuplicates(documentId()), 'task-duplicates');
       for (const otherDocumentId of params.otherDocumentIds ?? []) {
-        invalidateTaskDuplicates(otherDocumentId);
+        fireAndForget(
+          invalidateTaskDuplicates(otherDocumentId),
+          'task-duplicates'
+        );
       }
     },
   }));

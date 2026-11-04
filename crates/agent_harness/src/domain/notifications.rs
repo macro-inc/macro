@@ -10,7 +10,7 @@
 //!
 //! | fact | notification | recipients |
 //! | --- | --- | --- |
-//! | `settled` | [`AgentSessionSettledMetadata`] | the session's audience: owner plus everyone who has driven it - unless the turn was a chat agent's announced reply, whose patched message already notifies the thread |
+//! | `settled` | [`AgentSessionSettledMetadata`] | the session's audience: owner plus everyone who has driven it - unless the turn was a chat agent's announced reply, whose patched message already notifies the thread, or the turn a routine prompted |
 //! | `waiting_for_input` | [`AgentSessionWaitingForInputMetadata`] | the same audience - anyone with edit access may answer, and these are the people already driving it - with the same exception for a chat agent's announced turn, whose reply is patched to say it is waiting |
 //! | `mentioned` | [`AgentSessionMentionedMetadata`] | the users the prompt named, who can now open the session - unless the prompt was posted as a channel or document message, whose own mention notification already reached them |
 //!
@@ -39,6 +39,14 @@
 //! session. A prompt typed into the session view has no message to have
 //! spoken for it, so it keeps its notification.
 //!
+//! The turn a routine prompted plans nothing however it ended: the
+//! scheduler reports every routine run itself (`routine_run_finished`, with
+//! its outcome), including runs that never reached an agent. Its questions
+//! and mentions still notify, since they need somebody whether or not a
+//! routine asked. A turn the
+//! owner prompts afterwards, from the session itself, notifies as in any
+//! other session.
+//!
 //! Retracting a notification once it is stale (the question answered, the
 //! next turn started) is deliberately not done yet: the notification ingress
 //! has no producer-facing way to mark done, and adding one is its own change.
@@ -60,7 +68,7 @@ use agent_session::domain::events::{
     AgentSessionLifecycleEvent, SessionIdentity, SessionMentionedMetadata, SessionSettledMetadata,
     WaitingForInputMetadata,
 };
-use agent_session::domain::model::TurnId;
+use agent_session::domain::model::{SessionSource, TurnId};
 use macro_user_id::user_id::MacroUserIdStr;
 use macro_uuid::Uuid;
 use model_entity::{Entity, EntityType};
@@ -76,6 +84,10 @@ use notification::domain::models::{Notification, SendNotificationRequest};
 /// forever: changing it would orphan every retraction of a notification
 /// created before the change.
 const NOTIFICATION_ID_NAMESPACE: Uuid = Uuid::from_u128(0x6d61_6372_6f2d_6167_656e_742d_6e6f_7469);
+
+/// The turn a routine's own prompt opens: a routine run's session accepts
+/// that prompt only while it has no other.
+const ROUTINE_TURN: TurnId = TurnId(0);
 
 /// One notification to create: everything the ingress request is built from,
 /// in the open, so a test can look at it.
@@ -180,6 +192,11 @@ fn plan_settled(settled: &SessionSettledMetadata, is_coding: bool) -> Vec<Planne
     // A chat agent's announced turn already told the thread: its pending
     // reply was patched into the answer, and that patch notifies as a post.
     if !is_coding && has_discussion_reply(&settled.identity, turn.announcement_message_id) {
+        return Vec::new();
+    }
+    // The routine's own turn ends its run: the run is in the routine's
+    // history, and the scheduler notifies the owner when it fails.
+    if settled.identity.source == SessionSource::Routine && turn.turn == ROUTINE_TURN {
         return Vec::new();
     }
     let (entity, secondary_entity) = entities(&settled.identity);

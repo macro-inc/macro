@@ -100,7 +100,10 @@ function rsvp(): FormDetail {
       status: 'open',
       closesAt: null,
       tallyVisible: false,
+      responsesVisible: false,
+      anonymous: false,
       confirmationMessage: '',
+      branding: { logoFileId: null, coverFileId: null, accentColor: null },
       submittedColumnId: null,
       respondentColumnId: null,
     },
@@ -113,6 +116,7 @@ function rsvp(): FormDetail {
           kind: 'questions',
           gateRules: null,
           gateMessage: '',
+          showWhen: null,
           bookingTarget: null,
           questions: [
             {
@@ -609,6 +613,87 @@ describe('BuilderView', () => {
     expect(screen.getByRole('textbox', { name: 'Filter value' })).toBe(value);
   });
 
+  it('shows a later section only on a condition built in the filter editor, summarises it, and removes it', async () => {
+    const detail = rsvp();
+    detail.layout.sections.push({
+      id: 'logistics',
+      title: 'Logistics',
+      description: '',
+      kind: 'questions',
+      gateRules: null,
+      gateMessage: '',
+      showWhen: null,
+      bookingTarget: null,
+      questions: [],
+    });
+    const mock = createMockFormContext({ detail, tableColumns: columns });
+    const context = {
+      ...mock.context,
+      ui: {
+        ...mock.context.ui,
+        renderConditionEditor: FormConditionEditor,
+      },
+    };
+    render(() => (
+      <FormProvider value={context}>
+        <BuilderView
+          source={mock.source}
+          detail={detail}
+          collaboration={mock.shared.collaboration}
+          trackWrites={() => {}}
+          onOpenDatabase={() => {}}
+        />
+      </FormProvider>
+    ));
+    // The first section has nothing before it to depend on.
+    const aboutMenu = screen.getByRole('button', { name: 'About you actions' });
+    aboutMenu.focus();
+    fireEvent.keyDown(aboutMenu, { key: 'ArrowDown' });
+    await vi.advanceTimersByTimeAsync(0);
+    expect(
+      screen.queryByRole('menuitem', { name: /Show only when/ })
+    ).toBeNull();
+    fireEvent.keyDown(document.activeElement ?? document.body, {
+      key: 'Escape',
+    });
+    await vi.advanceTimersByTimeAsync(0);
+
+    const trigger = screen.getByRole('button', { name: 'Logistics actions' });
+    trigger.focus();
+    fireEvent.keyDown(trigger, { key: 'ArrowDown' });
+    await vi.advanceTimersByTimeAsync(0);
+    const item = screen.getByRole('menuitem', { name: /Show only when/ });
+    item.focus();
+    fireEvent.keyDown(item, { key: 'Enter' });
+    await vi.advanceTimersByTimeAsync(100);
+    const logistics = screen.getByRole('region', { name: 'Logistics' });
+    fireEvent.click(
+      within(logistics).getByRole('button', { name: /Add condition/ })
+    );
+    await vi.advanceTimersByTimeAsync(100);
+    fireEvent.input(
+      within(logistics).getByRole('textbox', { name: 'Filter value' }),
+      { target: { value: 'Ada' } }
+    );
+    await vi.advanceTimersByTimeAsync(400);
+    expect(mock.calls.layouts.at(-1)?.sections[1].showWhen).toEqual({
+      conjunction: 'and',
+      conditions: [
+        {
+          kind: 'condition',
+          column: 'name',
+          test: { kind: 'text', operator: 'contains', value: 'Ada' },
+        },
+      ],
+    });
+    fireEvent.click(within(logistics).getByRole('button', { name: 'Done' }));
+    expect(logistics.textContent).toContain('IF Name contains “Ada”');
+    fireEvent.click(within(logistics).getByRole('button', { name: 'Remove' }));
+    await vi.advanceTimersByTimeAsync(400);
+    expect(mock.calls.layouts.at(-1)?.sections[1].showWhen).toBeNull();
+    expect(logistics.textContent).not.toContain('Show this section only');
+  });
+
   it('offers Add question inside an empty section, where a phone can reach it', () => {
     const detail = rsvp();
     detail.layout.sections.push({
@@ -618,6 +703,7 @@ describe('BuilderView', () => {
       kind: 'questions',
       gateRules: null,
       gateMessage: '',
+      showWhen: null,
       bookingTarget: null,
       questions: [],
     });
@@ -712,10 +798,10 @@ describe('BuilderView', () => {
   it('says respondents still see the last valid version while the layout can’t be published', () => {
     const { shared } = mount();
     shared.setPublicationError(
-      'Screener “Eligibility” checks a question asked after it.'
+      'Gate “Eligibility” checks a question asked after it.'
     );
     expect(screen.getByRole('alert').textContent).toBe(
-      'Respondents still see the last valid version of this form. Screener “Eligibility” checks a question asked after it.'
+      'Respondents still see the last valid version of this form. Gate “Eligibility” checks a question asked after it.'
     );
     shared.setPublicationError(undefined);
     expect(screen.queryByRole('alert')).toBeNull();
@@ -925,6 +1011,7 @@ describe('BuilderView', () => {
         kind: 'booking',
         gateRules: null,
         gateMessage: '',
+        showWhen: null,
         bookingTarget: INTRO_CALL,
         questions: [],
       });
@@ -1000,6 +1087,7 @@ describe('BuilderView', () => {
           kind: 'booking',
           gateRules: null,
           gateMessage: '',
+          showWhen: null,
           bookingTarget: INTRO_CALL,
           questions: [],
         },
@@ -1010,6 +1098,7 @@ describe('BuilderView', () => {
           kind: 'booking',
           gateRules: null,
           gateMessage: '',
+          showWhen: null,
           bookingTarget: REVIEW_CALL,
           questions: [],
         }
@@ -1067,6 +1156,7 @@ describe('BuilderView', () => {
         kind: 'booking',
         gateRules: null,
         gateMessage: '',
+        showWhen: null,
         bookingTarget: INTRO_CALL,
         questions: [],
       });

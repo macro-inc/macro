@@ -11,6 +11,7 @@ import type {
   OpenWithSplitOptions,
   PopoverSplitOptions,
   ReferredFrom,
+  ReplaceAllSplitsOptions,
   SplitContent,
 } from './layoutManager';
 
@@ -90,7 +91,7 @@ export function useSplitLayout() {
   function insertSplit(
     content: SplitContent,
     referredFrom: ReferredFrom = null,
-    options: Pick<OpenWithSplitOptions, 'insertIndex'> = {}
+    options: Pick<OpenWithSplitOptions, 'beside'> = {}
   ) {
     return openWithSplit(content, {
       activate: true,
@@ -114,7 +115,7 @@ export function useSplitLayout() {
 
   function replaceAllSplits(
     content: SplitContent,
-    options?: { referredFrom?: ReferredFrom }
+    options?: ReplaceAllSplitsOptions
   ) {
     const splitManager = globalSplitManager();
     if (!splitManager) {

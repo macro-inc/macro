@@ -19,6 +19,7 @@ events to the `macro.properties` Kafka topic.
 - `src/outbound/properties_pg_repo.rs` +
   `src/outbound/*_queries.rs`: the Postgres adapters, one file per concern
   (definitions, options, entity values, metadata, tag promotion).
+- `src/domain/service.rs`: property reads and mutations; Soup does not require a separate definition-reader collaborator.
 
 ## Scope
 
@@ -35,6 +36,7 @@ events to the `macro.properties` Kafka topic.
   `search_service`, `soup`, `crm`, `graphql_properties`, `properties_service`,
   `services/document_storage_service`, `services/agent_trigger_service`,
   `services/search_processing_service`.
+- Keep Soup sort/group SQL in Soup; property-definition authorization must be designed consistently across filters, grouping, and sorting, not added to one path.
 
 ## Recipes
 
@@ -43,11 +45,17 @@ events to the `macro.properties` Kafka topic.
   `README.md`'s event table.
 - Add a query: `src/outbound/<concern>_queries.rs` → its sibling `_test.rs`.
 
+## Tool contracts
+
+- AI property/tag adapters omit legacy chat targets; this does not change persisted property entity types.
+
 ## Checks
 
 - `cargo test -p properties` (`SQLX_OFFLINE` unset; requires local MacroDB).
 - `cargo test -p properties --no-default-features --features outbound` to
   check the outbound-only build other services depend on.
+
+- `ExternalChat` currently has no property-storage mapping.
 
 ## Related
 

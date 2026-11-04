@@ -23,6 +23,10 @@ fn archived(
             ended_at,
             duration_ms,
             participant_count: 2,
+            participants: vec![
+                "macro|rahul@example.com".to_string().try_into().unwrap(),
+                "macro|teo@example.com".to_string().try_into().unwrap(),
+            ],
             has_recording: false,
             archive_reason: crate::domain::events::CallArchiveReason::LastParticipantLeft,
         }),

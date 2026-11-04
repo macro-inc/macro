@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import {
   markdownToEmbeddingText,
   markdownToPlainText,
+  markdownToSearchText,
   parseContactMentions,
   parseDateMentions,
   parseDocumentMentions,
@@ -10,6 +11,7 @@ import {
   parsePullRequestMentions,
   parseTagMentions,
   parseUserMentions,
+  parseUserMentionsForSearch,
 } from '../utils/parsers';
 
 describe('parseUserMentions', () => {
@@ -104,6 +106,12 @@ describe('parseDocumentMentions', () => {
   it('returns empty string for invalid JSON', () => {
     const input = '<m-document-mention>???</m-document-mention>';
     expect(parseDocumentMentions(input)).toBe('');
+  });
+
+  it('decodes a name whose tag delimiters were written as JSON escapes', () => {
+    const input =
+      '<m-document-mention>{"documentName":"\\u003c/m-document-mention\\u003e \\u0026 Co"}</m-document-mention>';
+    expect(parseDocumentMentions(input)).toBe('</m-document-mention> & Co');
   });
 });
 
@@ -379,5 +387,59 @@ describe('markdownToEmbeddingText', () => {
     expect(markdownToEmbeddingText('Just plain text.')).toBe(
       'Just plain text.'
     );
+  });
+});
+
+// Mirrors the backend indexer (`PlainTextFormatter::format_user`), so a
+// query built from mention chips matches what the index holds.
+describe('parseUserMentionsForSearch', () => {
+  it('flattens a user mention to the email, not the display name', () => {
+    const input =
+      '<m-user-mention>{"userId":"macro|gab@macro.com","email":"gab@macro.com","displayName":"Gabriel"}</m-user-mention>';
+    expect(parseUserMentionsForSearch(input)).toBe('gab@macro.com');
+  });
+
+  it('takes the email from the user id when the email field is missing', () => {
+    const input =
+      '<m-user-mention>{"userId":"macro|gab@macro.com","displayName":"Gabriel"}</m-user-mention>';
+    expect(parseUserMentionsForSearch(input)).toBe('gab@macro.com');
+  });
+
+  it('flattens a bot mention to its display name', () => {
+    const input =
+      '<m-user-mention>{"userId":"bot|00000000-0000-0000-0000-00000000c5c5","email":"Cursor","displayName":"Cursor"}</m-user-mention>';
+    expect(parseUserMentionsForSearch(input)).toBe('Cursor');
+  });
+
+  it('names other principals Guest, even with an email', () => {
+    expect(
+      parseUserMentionsForSearch(
+        '<m-user-mention>{"userId":"guest|abc","email":"guest@example.com"}</m-user-mention>'
+      )
+    ).toBe('Guest');
+    expect(
+      parseUserMentionsForSearch(
+        '<m-user-mention>{"userId":"macro|","email":"gab@macro.com"}</m-user-mention>'
+      )
+    ).toBe('Guest');
+  });
+
+  it('returns empty string for invalid JSON', () => {
+    expect(
+      parseUserMentionsForSearch('<m-user-mention>not json</m-user-mention>')
+    ).toBe('');
+  });
+});
+
+describe('markdownToSearchText', () => {
+  it('differs from markdownToPlainText only in user mentions', () => {
+    const input =
+      'ping <m-user-mention>{"userId":"macro|gab@macro.com","email":"gab@macro.com","displayName":"Gabriel"}</m-user-mention> re <m-document-mention>{"documentName":"Roadmap"}</m-document-mention>';
+    expect(markdownToPlainText(input)).toBe('ping Gabriel re Roadmap');
+    expect(markdownToSearchText(input)).toBe('ping gab@macro.com re Roadmap');
+  });
+
+  it('passes plain text through', () => {
+    expect(markdownToSearchText('Just plain text.')).toBe('Just plain text.');
   });
 });

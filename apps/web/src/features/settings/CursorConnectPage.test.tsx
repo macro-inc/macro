@@ -5,7 +5,7 @@
 import { fireEvent, render, screen, waitFor } from '@solidjs/testing-library';
 import { beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import { CursorConnectPage } from './CursorConnectPage';
-import { chooseSelectOption } from './tests/select-helpers';
+import { chooseModelOption } from './tests/select-helpers';
 
 vi.mock('@ui', async (importOriginal) => ({
   ...(await importOriginal<typeof import('@ui')>()),
@@ -142,7 +142,7 @@ describe('CursorConnectPage', () => {
     expect(screen.getByText('Connected')).toBeTruthy();
     expect(screen.queryByLabelText('API key')).toBeNull();
 
-    chooseSelectOption(screen.getByLabelText('Default model'), 'Composer');
+    chooseModelOption(screen.getByLabelText('Default model'), 'Composer');
     await waitFor(() => {
       expect(mocks.setDefaultModel).toHaveBeenCalledWith('composer');
       expect(mocks.toastSuccess).toHaveBeenCalledWith('Default model updated');

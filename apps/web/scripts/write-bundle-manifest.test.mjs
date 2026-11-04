@@ -20,15 +20,15 @@ function build(env) {
   }
 }
 
-test('independent mobile minima use a schema older updaters reject', () => {
+await test('independent mobile minima use a schema older updaters reject', () => {
   const manifest = build({ MIN_NATIVE_BUILD_ANDROID: '2050001', MIN_NATIVE_BUILD_IOS: '184' });
   assert.equal(manifest.schemaVersion, 3);
   assert.deepEqual(manifest.minNativeBuilds, { android: 2050001, ios: 184 });
 });
-test('incomplete or unsafe minima fail the build', () => {
+await test('incomplete or unsafe minima fail the build', () => {
   assert.throws(() => build({ MIN_NATIVE_BUILD_ANDROID: '2' }));
   assert.throws(() => build({ MIN_NATIVE_BUILD_ANDROID: '9007199254740992', MIN_NATIVE_BUILD_IOS: '1' }));
 });
-test('legacy manifests retain schema 2', () => {
+await test('legacy manifests retain schema 2', () => {
   assert.equal(build({ MIN_NATIVE_BUILD: '5' }).schemaVersion, 2);
 });

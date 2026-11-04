@@ -4,14 +4,12 @@
 //! document service's own methods, preconditions, and errors, so the
 //! composition layer routes without translating.
 
-use std::collections::HashSet;
-
 use entity_access::domain::models::{
     EditAccessLevel, EntityAccessReceipt, OwnerAccessLevel, ViewAccessLevel,
 };
 use entity_mutation::{
     DuplicateEntity, EntityMutationEffect, EntityMutationErrorCode, MoveEntity, RenameEntity,
-    TrashEntity, UpdateEntitySharePolicy, capability::MoveEntityRequest,
+    TrashEntity, UpdateEntitySharePolicy, capability::MoveEntityRequest, project_refs,
 };
 use macro_user_id::user_id::MacroUserIdStr;
 use model::document::DocumentBasic;
@@ -45,16 +43,6 @@ impl From<DocumentError> for EntityMutationErrorCode {
             error => Self::internal(rootcause::report!(error)),
         }
     }
-}
-
-/// Build affected project entities from optional container ids.
-fn project_refs(ids: impl IntoIterator<Item = Option<String>>) -> Vec<Entity<'static>> {
-    let mut seen = HashSet::new();
-    ids.into_iter()
-        .flatten()
-        .filter(|id| !id.is_empty() && seen.insert(id.clone()))
-        .map(|id| EntityType::Project.with_entity_string(id))
-        .collect()
 }
 
 /// Fetch a document and reject the mutation if it is trashed.

@@ -76,6 +76,15 @@ impl MacroAuthorizationService for FakeAuthorizationService {
         })
     }
 
+    async fn authorize_identity(
+        &self,
+        jwt: &str,
+    ) -> Result<macro_authorization::ValidatedCredential, Report<MacroAuthorizationError>> {
+        self.authorize(jwt)
+            .await
+            .map(macro_authorization::ValidatedCredential::session)
+    }
+
     async fn authorize_internal(
         &self,
         provided_key: &str,
@@ -182,6 +191,7 @@ impl NotificationReader for AuthenticationTestService {
         _user_id: MacroUserIdStr<'_>,
         _device_token: &str,
         _device_type: &DeviceType,
+        _native_call_capable: bool,
     ) -> impl Future<Output = Result<(), Report>> + Send {
         async { unreachable!("should not be called") }
     }
@@ -667,6 +677,7 @@ impl NotificationReader for PresignedTestService {
         _user_id: MacroUserIdStr<'_>,
         _device_token: &str,
         _device_type: &DeviceType,
+        _native_call_capable: bool,
     ) -> impl Future<Output = Result<(), Report>> + Send {
         async { unreachable!() }
     }

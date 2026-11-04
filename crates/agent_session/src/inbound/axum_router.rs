@@ -19,7 +19,7 @@
 use std::sync::Arc;
 
 use agent_runtime_protocol::domain::{
-    action::{AgentAction, AgentActionId},
+    action::{AgentAction, AgentActionId, PromptAttachment},
     schema::v0::SystemEvent,
 };
 use ai_billing::inbound::admission::AiAdmissionErrorBody;
@@ -50,13 +50,15 @@ use utoipa::ToSchema;
 use crate::domain::coding_preferences::CodingPreferences;
 use crate::domain::error::AgentSessionError;
 use crate::domain::model::{
-    AgentSession, AgentSessionId, AgentSessionPreview, ExternalSession, Message, SandboxSize,
-    SessionBot, SessionStatus, StoredAgentSessionLog,
+    AgentSession, AgentSessionId, AgentSessionPreview, ArchiveCause, ExternalSession, Message,
+    SandboxSize, SessionBot, SessionSource, SessionStatus, SessionVisibility,
+    StoredAgentSessionLog,
 };
 use crate::domain::ports::{
     AgentSessionNotificationRecipient, BotDirectory, BotFacts, ControlDisposition, ControlEvent,
-    ExternalSessionRequester, ManagedPersonaError, OpenExternalAgentSession, OpenManagedSession,
-    RequestedExternalSession, SelectedPersona, SessionOpener, SessionThread, persona_for_owner,
+    ExternalSessionRequester, FirstPrompt, ManagedPersonaError, OpenExternalAgentSession,
+    OpenManagedSession, RequestedExternalSession, SelectedPersona, SessionOpener, SessionThread,
+    persona_for_owner,
 };
 use crate::domain::service::AgentSessionService;
 use bots::domain::models::BotId;
@@ -69,6 +71,9 @@ pub mod sharing;
 
 /// Routes associating pull requests with sessions.
 pub mod pull_requests;
+
+/// Auto-archive defaults and per-session choices.
+pub mod auto_archive;
 
 mod owned_purge;
 
@@ -196,6 +201,10 @@ where
         .route(
             "/{session_id}/log",
             get(get_agent_session_log_handler::<T, Access, Auth>),
+        )
+        .route(
+            "/{session_id}/log/folded",
+            get(get_agent_session_folded_log_handler::<T, Access, Auth>),
         )
         .route(
             "/{session_id}/name",
@@ -414,9 +423,10 @@ impl IntoResponse for AgentSessionApiError {
                 | AgentSessionError::TooManyPullRequests(_)
                 | AgentSessionError::InvalidPullRequestUrl),
             ) => (StatusCode::BAD_REQUEST, error.to_string()).into_response(),
-            Self::Domain(error @ AgentSessionError::Archived(_)) => {
-                (StatusCode::CONFLICT, error.to_string()).into_response()
-            }
+            Self::Domain(
+                error
+                @ (AgentSessionError::Archived(_) | AgentSessionError::AnswersConversation(_)),
+            ) => (StatusCode::CONFLICT, error.to_string()).into_response(),
             // Somebody else answered first, or the agent moved on: nothing to
             // answer anymore, and the transcript already shows how it went.
             Self::Domain(error @ AgentSessionError::PermissionRequestNotFound(_)) => {
@@ -483,8 +493,8 @@ pub struct RenameAgentSessionRequest {
 #[derive(Debug, Serialize, Deserialize, ToSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct SetAgentSessionArchivedRequest {
-    /// The requested archive state.
-    pub is_archived: bool,
+    /// Archive the session, or restore it.
+    pub archived: bool,
 }
 
 /// Request body for a control operation on a live session.
@@ -591,8 +601,11 @@ pub struct AgentSessionResponse {
     pub id: Uuid,
     /// User-facing session name.
     pub name: String,
-    /// Whether the session is archived and read-only.
-    pub is_archived: bool,
+    /// Who or what archived the session, or `None` while it is active. An archived session is
+    /// read-only.
+    pub archived_by: Option<ArchiveCause>,
+    /// When the session was archived, or `None` while it is active.
+    pub archived_at: Option<DateTime<Utc>>,
     /// The user who created and owns the session.
     pub owner_id: String,
     /// Whether the caller may drive the session - prompt it, answer its
@@ -660,11 +673,10 @@ pub struct ExternalSessionResponse {
 
 impl From<ExternalSession> for ExternalSessionResponse {
     fn from(external: ExternalSession) -> Self {
-        let url = external.web_url();
         Self {
             provider: external.provider,
             name: external.external_name,
-            url,
+            url: external.external_url,
         }
     }
 }
@@ -686,7 +698,8 @@ impl AgentSessionResponse {
         Self {
             id: session.id.as_uuid(),
             name: session.name,
-            is_archived: session.is_archived,
+            archived_by: session.archived.map(|archive| archive.by),
+            archived_at: session.archived.map(|archive| archive.at),
             owner_id: session.owner_id.to_string(),
             can_edit,
             thread_id: session.thread_id,
@@ -749,7 +762,7 @@ pub async fn get_agent_session_handler<
         .service
         .get_session(AgentSessionId::new_from_uuid(session_id))
         .await?;
-    let can_edit = !session.is_archived
+    let can_edit = !session.is_archived()
         && access
             .entity_access_receipt
             .entity_permission()
@@ -948,6 +961,7 @@ pub async fn rename_agent_session_handler<
         (status = 204),
         (status = 401, body = String),
         (status = 403, body = String),
+        (status = 409, body = String, description = "The session answers an agent conversation"),
         (status = 500, body = String),
     )
 )]
@@ -965,7 +979,7 @@ pub async fn set_agent_session_archived_handler<
 ) -> Result<StatusCode, AgentSessionApiError> {
     state
         .service
-        .set_archived(&access.entity_access_receipt, request.is_archived)
+        .set_archived(&access.entity_access_receipt, request.archived)
         .await?;
     Ok(StatusCode::NO_CONTENT)
 }
@@ -1573,6 +1587,8 @@ pub struct LogFrameDto {
 #[derive(Debug, Serialize, ToSchema)]
 #[serde(rename_all = "snake_case")]
 pub enum LogDirectionDto {
+    /// Trusted system-event invocation, separate from user prompts.
+    Notification,
     /// Runtime → server.
     ToServer,
     /// Server → runtime.
@@ -1666,6 +1682,70 @@ pub async fn get_agent_session_log_handler<
     }))
 }
 
+/// Response body for one session's folded log.
+#[derive(Serialize, ToSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct AgentSessionFoldedLogResponse {
+    /// The agent whose messages these are; it sent every agent message.
+    pub bot: SessionBot,
+    /// The conversation, oldest first: prompts, replies, tool calls and their
+    /// results, plans, permission requests and how each turn ended. Each
+    /// element is a `FoldedMessage` from the fold's TypeScript contract,
+    /// which the SDK exports; the schema is opaque here because those types
+    /// are described with specta rather than utoipa.
+    #[schema(value_type = Vec<Object>)]
+    pub messages: Vec<agent_fold::inbound::wire::FoldedMessage>,
+}
+
+#[utoipa::path(
+    get,
+    path = "/agent-sessions/{session_id}/log/folded",
+    tag = "agent-sessions",
+    operation_id = "get_agent_session_folded_log",
+    params(("session_id" = Uuid, Path, description = "ID of the agent session")),
+    responses(
+        (status = 200, body = AgentSessionFoldedLogResponse),
+        (status = 401, body = String),
+        (status = 403, body = String),
+        (status = 500, body = String),
+    )
+)]
+/// One agent session's history folded into renderable messages: the same
+/// fold the web client runs over [`get_agent_session_log_handler`]'s frames.
+///
+/// For readers that do not run the fold themselves, such as SDK programs and
+/// agents reading another session's history.
+#[tracing::instrument(
+    skip_all,
+    fields(
+        session_id = %session_id,
+        agent.session.folded_log.messages = tracing::field::Empty,
+    ),
+    err(Debug)
+)]
+pub async fn get_agent_session_folded_log_handler<
+    T: AgentSessionService,
+    Access: EntityAccessService,
+    Auth: MacroAuthorizationService,
+>(
+    _access: AgentSessionAccessLevelExtractor<ViewAccessLevel, Access, Auth>,
+    State(state): State<AgentSessionRouterState<T, Access, Auth>>,
+    Path(session_id): Path<Uuid>,
+) -> Result<Json<AgentSessionFoldedLogResponse>, AgentSessionApiError> {
+    let session = AgentSessionId::new_from_uuid(session_id);
+    let log = state.service.folded_session_log(session).await?;
+    tracing::Span::current().record("agent.session.folded_log.messages", log.messages.len());
+
+    Ok(Json(AgentSessionFoldedLogResponse {
+        bot: log.bot,
+        messages: log
+            .messages
+            .into_iter()
+            .map(|message| agent_fold::inbound::wire::FoldedMessage::new(session, message))
+            .collect(),
+    }))
+}
+
 /// Shared state for the create route: the opener that owns session-opening
 /// semantics, the bot directory that gates it, and the authorization state the
 /// extractor runs against.
@@ -1752,9 +1832,10 @@ where
 /// say which bot and which directory, and must own that bot. Omitting it asks
 /// for a managed session, whose runtime this deployment provisions. A managed
 /// request may select an authorized persisted persona with `botId`; omitting
-/// it uses the deployment's default coding persona. Fields describing someone
-/// else's runtime must still be omitted rather than quietly ignored. Mixing
-/// the two shapes is refused rather than guessed at.
+/// it uses the deployment's default coding persona, or Cursor when `repoUrl`
+/// is set. Fields describing someone else's runtime must still be omitted
+/// rather than quietly ignored. Mixing the two shapes is refused rather
+/// than guessed at.
 ///
 /// Clients serialize this, so both derives are used.
 #[derive(Debug, Clone, Default, Serialize, Deserialize, ToSchema)]
@@ -1772,9 +1853,9 @@ pub struct CreateAgentSessionRequest {
     /// Bot the session runs for. On a managed request this optionally selects
     /// a persisted persona the user owns, may use through team membership, or
     /// can `@` mention in a shared channel; omitting it uses the deployment's
-    /// default coding persona. On an external request, bot callers may omit it
-    /// (their own identity is used) and must not name another bot; user callers
-    /// must supply a bot they own.
+    /// default coding persona, or Cursor when `repoUrl` is set. On an
+    /// external request, bot callers may omit it (their own identity is used)
+    /// and must not name another bot; user callers must supply a bot they own.
     pub bot_id: Option<Uuid>,
     /// Absolute directory the bot's harness runs in on its runtime. Present
     /// for an external session, absent for a managed one, which runs in the
@@ -1784,9 +1865,20 @@ pub struct CreateAgentSessionRequest {
     /// only - an external runtime sends its own first prompt through the
     /// control endpoint. Omitted, the session opens idle.
     pub prompt: Option<String>,
+    /// Id to deliver `prompt` under, minted by the caller so the prompt it
+    /// already shows is the row the log confirms. Requires `prompt`; omitted,
+    /// the service mints one.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub prompt_action_id: Option<AgentActionId>,
+    /// Files `prompt` refers to, in the order the user attached them.
+    /// Requires `prompt`.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub prompt_attachments: Vec<PromptAttachment>,
     /// Explicit GitHub repository for a managed Cursor session, as one of the
     /// urls `GET /agent-repositories` lists for the caller. Access is checked
-    /// for the session owner. For external sessions this is informational:
+    /// for the session owner. On a managed request that names no `botId`,
+    /// this starts the session as Cursor — the only managed persona that
+    /// honors a repository. For external sessions this is informational:
     /// cloning it is the runtime operator's job.
     pub repo_url: Option<String>,
     /// Starting branch for a managed coding session's selected repository.
@@ -1901,6 +1993,8 @@ pub enum CreateSessionApiError {
     MixedSessionShape,
     /// The thread named neither a parent nor a channel.
     ThreadParentRequired,
+    /// A first prompt's id or files arrived without the prompt itself.
+    PromptDetailsWithoutPrompt,
     /// A field the request cannot honour for a persona whose runtime is its
     /// operator's: they configure it, or the caller sends it separately.
     ExternalPersonaUnsupported(&'static str),
@@ -1964,6 +2058,10 @@ impl IntoResponse for CreateSessionApiError {
             Self::ThreadParentRequired => (
                 StatusCode::UNPROCESSABLE_ENTITY,
                 "thread.parent is required".to_owned(),
+            ),
+            Self::PromptDetailsWithoutPrompt => (
+                StatusCode::UNPROCESSABLE_ENTITY,
+                "promptActionId and promptAttachments require a prompt".to_owned(),
             ),
             Self::ExternalPersonaUnsupported(field) => (
                 StatusCode::UNPROCESSABLE_ENTITY,
@@ -2153,6 +2251,17 @@ pub async fn create_agent_session_handler<
     // the row, the response and every runtime see one representation of
     // absence, whichever shape the request turns out to be.
     let instructions = request.instructions.filter(|text| !text.trim().is_empty());
+    let first_prompt = match request.prompt {
+        Some(prompt) => Some(FirstPrompt {
+            action_id: request.prompt_action_id,
+            prompt,
+            attachments: request.prompt_attachments,
+        }),
+        None if request.prompt_action_id.is_some() || !request.prompt_attachments.is_empty() => {
+            return Err(CreateSessionApiError::PromptDetailsWithoutPrompt);
+        }
+        None => None,
+    };
 
     // No workspace means the managed shape. A bot id selects a managed
     // persona; the domain resolver owns its user/team/channel authorization
@@ -2198,7 +2307,7 @@ pub async fn create_agent_session_handler<
                     // caller that sent one would otherwise never learn it was
                     // ignored. A model is different - it is applied when the
                     // session binds, like the persona's own.
-                    if request.prompt.is_some() {
+                    if first_prompt.is_some() {
                         return Err(CreateSessionApiError::ExternalPersonaUnsupported("prompt"));
                     }
                     let owner = owner
@@ -2219,6 +2328,8 @@ pub async fn create_agent_session_handler<
                             repo_url,
                             owner,
                             model: request.model.filter(|model| !model.trim().is_empty()),
+                            source: SessionSource::User,
+                            visibility: SessionVisibility::Listed,
                         })
                         .await?;
                     return Ok((
@@ -2247,10 +2358,12 @@ pub async fn create_agent_session_handler<
                         )
                     })?,
                 owner,
-                prompt: request.prompt,
+                prompt: first_prompt,
                 profile,
                 instructions,
                 model: request.model.filter(|model| !model.trim().is_empty()),
+                source: SessionSource::User,
+                visibility: SessionVisibility::Listed,
             })
             .await?;
         return Ok((
@@ -2264,7 +2377,7 @@ pub async fn create_agent_session_handler<
     // An external runtime sends its own first prompt through the control
     // endpoint, so accepting one here would silently drop it, and it runs on
     // whatever model its operator configured, which is not ours to set.
-    if request.prompt.is_some() || request.repo_branch.is_some() || request.model.is_some() {
+    if first_prompt.is_some() || request.repo_branch.is_some() || request.model.is_some() {
         return Err(CreateSessionApiError::MixedSessionShape);
     }
     let bot_id = resolve_bot(&caller.authorization, request.bot_id)?;
@@ -2401,3 +2514,6 @@ pub async fn warm_agent_session_handler<
         session: session.map(|session| AgentSessionResponse::new(session, true)),
     }))
 }
+
+/// Internal service controls used by AI tools.
+pub mod tool_actions;

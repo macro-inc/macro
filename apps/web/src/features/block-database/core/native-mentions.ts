@@ -61,7 +61,7 @@ export function databaseMentionScope(
     .with('USER', () => ({ sources: ['users'] }))
     .with('CHANNEL', () => ({ sources: ['channels'] }))
     .with('THREAD', () => ({ sources: ['emails'] }))
-    .with('COMPANY', () => ({ sources: ['companies'] }))
+    .with('COMPANY', () => ({ sources: ['crm'] }))
     .with('CONTACT', () => documentScope(['crm_contact']))
     .with('TASK', () => documentScope(['task']))
     .with('DOCUMENT', () => documentScope(['note', 'snippet', 'document']))
@@ -74,5 +74,5 @@ export function databaseMentionScope(
       'INITIATIVE',
       () => ({ sources: [], documentBuckets: undefined })
     )
-    .exhaustive();
+    .exhaustive(() => ({ sources: [] }));
 }

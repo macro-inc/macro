@@ -1,0 +1,70 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n        SELECT\n            ea.message_id,\n            ea.id,\n            ea.provider_attachment_id,\n            ea.filename,\n            ea.mime_type,\n            ea.size_bytes,\n            eas.sfs_id as \"sfs_id?\",\n            ea.content_id, ea.reference_url\n        FROM email_attachments ea\n        JOIN email_messages message ON message.id = ea.message_id\n        LEFT JOIN email_attachments_sfs eas ON ea.id = eas.attachment_id\n        WHERE ea.message_id = ANY($1)\n            AND (message.is_sent OR (\n                NOT EXISTS (SELECT 1 FROM email_draft_attachment_removals r WHERE r.message_id = message.id AND (r.provider_id = ea.provider_attachment_id OR trim(both '<>' from r.content_id) = trim(both '<>' from ea.content_id)))\n                AND NOT EXISTS (SELECT 1 FROM email_attachments_drafts d WHERE d.draft_id = message.id AND trim(both '<>' from ea.content_id) = COALESCE(trim(both '<>' from d.content_id),d.id::text || '@attachments.macro.com'))\n                AND NOT EXISTS (SELECT 1 FROM email_attachments_fwd f JOIN email_attachments original ON original.id = f.attachment_id\n                    WHERE f.message_id = message.id AND (trim(both '<>' from ea.content_id) = f.attachment_id::text || '@attachments.macro.com' OR trim(both '<>' from ea.content_id) = trim(both '<>' from original.content_id)))))\n        ORDER BY ea.message_id, ea.filename NULLS LAST\n        ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "message_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 1,
+        "name": "id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 2,
+        "name": "provider_attachment_id",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 3,
+        "name": "filename",
+        "type_info": "Varchar"
+      },
+      {
+        "ordinal": 4,
+        "name": "mime_type",
+        "type_info": "Varchar"
+      },
+      {
+        "ordinal": 5,
+        "name": "size_bytes",
+        "type_info": "Int8"
+      },
+      {
+        "ordinal": 6,
+        "name": "sfs_id?",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 7,
+        "name": "content_id",
+        "type_info": "Varchar"
+      },
+      {
+        "ordinal": 8,
+        "name": "reference_url",
+        "type_info": "Text"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "UuidArray"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      true,
+      true,
+      true,
+      true,
+      false,
+      true,
+      true
+    ]
+  },
+  "hash": "692b642bc2309398f859a375a09f32497c09357f284474320df8d5ce73420ba0"
+}

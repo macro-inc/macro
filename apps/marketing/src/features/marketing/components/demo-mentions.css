@@ -69,16 +69,16 @@
 .workspace-demo .demo-inline-mention.mention-person {
   padding: 2px;
   border-radius: 6px;
-  color: var(--color-link, #59a8ed);
-  background: color-mix(in srgb, var(--color-link, #59a8ed) 8%, transparent);
+  color: var(--marketing-mention, var(--color-link, #59a8ed));
+  background: color-mix(in srgb, var(--marketing-mention, var(--color-link, #59a8ed)) 12%, transparent);
   white-space: nowrap;
 }
-.workspace-demo .demo-inline-mention > .demo-mention-icon { position: relative; top: .125em; width: 1em; height: 1em; margin-inline: 4px; }
+.workspace-demo .demo-inline-mention > .demo-mention-icon { position: relative; top: .125em; width: 1em; height: 1em; margin-inline: .25em; }
 .workspace-demo .demo-inline-mention:not(.mention-person) > .demo-mention-name {
   text-decoration: underline;
   text-decoration-color: color-mix(in srgb, currentColor 20%, transparent);
   text-decoration-thickness: max(1px, .1em);
-  text-underline-offset: 2px;
+  text-underline-offset: .125em;
 }
 .workspace-demo .demo-mention-status { display: inline-block; width: .75em; height: .75em; border: 2px solid var(--color-task, #37bb72); border-radius: 50%; margin-left: 4px; }
 .workspace-demo .demo-mention-status[data-status='In Review'] { border-color: var(--color-violet); background: conic-gradient(transparent 0 75%, var(--color-violet) 75% 100%); }

@@ -1,5 +1,6 @@
 import { execFileSync } from 'node:child_process';
 import { readFileSync } from 'node:fs';
+import { connect as connectHttp2, constants as http2Constants } from 'node:http2';
 import { get, request } from 'node:https';
 import { createServer, resolveConfig } from 'vite';
 import { expect, it } from 'vitest';
@@ -126,3 +127,50 @@ it.each(['build', 'preview'] as const)(
     expect(config.server.https).toBeUndefined();
   }
 );
+
+it('keeps the HTTP/2 session when a reload cancels thousands of module requests', async () => {
+  const vite = await createServer({
+    configFile: false,
+    appType: 'custom',
+    logLevel: 'silent',
+    plugins: [devHttps({})],
+    optimizeDeps: { noDiscovery: true, include: [] },
+    server: { host: '127.0.0.1', port: 0 },
+  });
+  vite.middlewares.use((_req, res) => {
+    setTimeout(() => res.end('module'), 50);
+  });
+  try {
+    await vite.listen();
+    const address = vite.httpServer?.address();
+    if (!address || typeof address === 'string')
+      throw new Error('Vite has no TCP listener');
+    const session = connectHttp2(`https://localhost:${address.port}`, {
+      host: '127.0.0.1',
+      servername: 'localhost',
+      ca,
+    });
+    try {
+      await new Promise((resolve) => session.once('connect', resolve));
+      const abandoned = Array.from({ length: 3000 }, (_, i) =>
+        session.request({ ':path': `/app/module-${i}` })
+      );
+      for (const stream of abandoned) stream.on('error', () => {});
+      await new Promise((resolve) => setTimeout(resolve, 20));
+      for (const stream of abandoned) stream.close(http2Constants.NGHTTP2_CANCEL);
+      await new Promise((resolve) => setTimeout(resolve, 300));
+
+      const status = await new Promise((resolve, reject) => {
+        const stream = session.request({ ':path': '/app/' });
+        stream.on('response', (headers) => resolve(headers[':status']));
+        stream.on('error', reject);
+        stream.resume();
+      });
+      expect(status).toBe(200);
+    } finally {
+      session.destroy();
+    }
+  } finally {
+    await vite.close();
+  }
+});

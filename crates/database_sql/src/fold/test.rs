@@ -544,3 +544,23 @@ fn bins_do_not_answer_a_row_shaped_plan() {
         Err(RunError::NotAnsweredByBins)
     );
 }
+
+#[test]
+fn row_queries_order_by_position_and_alias() {
+    let expected = vec![
+        vec![Some(Cell::Text("Acme".into()))],
+        vec![Some(Cell::Text("Initech".into()))],
+        vec![Some(Cell::Text("Globex".into()))],
+        vec![Some(Cell::Text("hooli".into()))],
+    ];
+    for sql in [
+        "SELECT name, amount FROM crm.deals ORDER BY 2 DESC",
+        "SELECT name, amount AS total FROM crm.deals ORDER BY total DESC",
+    ] {
+        let names: Vec<_> = fold_rows(&catalog(), &plan(sql), deals())
+            .into_iter()
+            .map(|row| vec![row[0].clone()])
+            .collect();
+        assert_eq!(names, expected, "{sql}");
+    }
+}

@@ -1,8 +1,8 @@
 import { BaseTool } from '@core/component/AI/component/tool/BaseTool';
 import { createToolRenderer } from '@core/component/AI/component/tool/ToolRenderer';
 import { ItemPreview } from '@core/component/ItemPreview';
-import Buildings from '@phosphor-icons/core/regular/buildings.svg';
-import UserPlus from '@phosphor-icons/core/regular/user-plus.svg';
+import Buildings from '@icon/system/regular/buildings.svg';
+import UserPlus from '@icon/system/regular/user-plus.svg';
 import { Show, Suspense } from 'solid-js';
 import {
   GetCompanyToolResponse,
@@ -115,8 +115,10 @@ const createCompanyHandler = createToolRenderer({
           when={ctx.response?.data.companyId}
           fallback={
             <>
-              Add CRM company <span class="text-ink">{ctx.tool.data.name}</span>{' '}
-              ({ctx.tool.data.domain})
+              Add CRM company <span class="text-ink">{ctx.tool.data.name}</span>
+              <Show when={ctx.tool.data.domain}>
+                {(domain) => <> ({domain()})</>}
+              </Show>
             </>
           }
         >
@@ -137,9 +139,16 @@ const createContactHandler = createToolRenderer({
     <BaseTool icon={UserPlus} renderContext={ctx.renderContext} type="call">
       <div class="min-w-0 flex-1">
         {ctx.response ? 'Added' : 'Add'} contact{' '}
-        <span class="text-ink">{ctx.tool.data.name}</span> (
-        {ctx.tool.data.email}) to{' '}
-        <CompanyPreview companyId={ctx.tool.data.companyId} />
+        <span class="text-ink">{ctx.tool.data.name}</span>
+        <Show when={ctx.tool.data.email}>{(email) => <> ({email()})</>}</Show>
+        <Show when={ctx.tool.data.companyId}>
+          {(companyId) => (
+            <>
+              {' '}
+              to <CompanyPreview companyId={companyId()} />
+            </>
+          )}
+        </Show>
       </div>
     </BaseTool>
   ),

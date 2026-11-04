@@ -191,15 +191,15 @@ export function sampleCompanies(): SampleCompany[] {
         '18,000'
       ),
       contacts: [
-        { name: 'Dana', email: 'dana@meadow.example' },
-        { name: 'Alex', email: 'alex@meadow.example' },
-        { name: 'Priya', email: 'priya@meadow.example' },
+        { name: 'Valentina', email: 'valentina@coparse.com' },
+        { name: 'Alex', email: 'alex@coparse.com' },
+        { name: 'Priya', email: 'priya@coparse.com' },
       ],
       comments: [
         {
           id: 'meadow-pricing',
           person: 'julia',
-          body: 'Dana asked about pricing for 12 seats now and the studio team in November. I quoted the annual team rate. @[Jacob](demo-mention:jacob) can we hold it through the end of the year?',
+          body: 'Valentina asked about pricing for 12 seats now and the studio team in November. I quoted the annual team rate. @[Jacob](demo-mention:jacob) can we hold it through the end of the year?',
           time: '8:47 AM',
         },
         {
@@ -237,7 +237,7 @@ export function sampleCompanies(): SampleCompany[] {
         },
         {
           id: 'meadow-invite',
-          sender: 'Dana',
+          sender: 'Valentina',
           subject: 'Invitation: The Meadow · Demo',
           snippet: 'Thursday, October 1 · 9:00 – 10:00 AM',
           time: 'Sep 26',
@@ -255,14 +255,14 @@ export function sampleCompanies(): SampleCompany[] {
           id: 'meadow-recap',
           sender: 'Jacob',
           subject: 'Recap from today',
-          snippet: 'Thanks for the time, Dana. Here’s what we covered.',
+          snippet: 'Thanks for the time, Valentina. Here’s what we covered.',
           time: 'Sep 22',
           signal: true,
           mine: true,
         },
         {
           id: 'meadow-intro',
-          sender: 'Dana',
+          sender: 'Valentina',
           subject: 'Intro from Sam',
           snippet:
             'Sam mentioned you’re building something for studios like ours.',
@@ -278,7 +278,7 @@ export function sampleCompanies(): SampleCompany[] {
           time: 'Sep 28',
           duration: '18m 40s',
           people: ['jacob', 'julia'],
-          guests: ['Dana', 'Alex'],
+          guests: ['Valentina', 'Alex'],
         },
         {
           id: 'meadow-pricing-call',
@@ -286,7 +286,7 @@ export function sampleCompanies(): SampleCompany[] {
           time: 'Sep 25',
           duration: '12m 4s',
           people: ['julia'],
-          guests: ['Dana'],
+          guests: ['Valentina'],
         },
         {
           id: 'meadow-design-review',
@@ -302,7 +302,7 @@ export function sampleCompanies(): SampleCompany[] {
           time: 'Sep 22',
           duration: '31m 12s',
           people: ['jacob'],
-          guests: ['Dana'],
+          guests: ['Valentina'],
         },
       ],
       files: [
@@ -484,7 +484,7 @@ export function sampleEvents(): SampleEvent[] {
       start: 9,
       duration: 1,
       calendar: 'work',
-      description: 'Walk Dana and the team through the new workspace.',
+      description: 'Walk Valentina and the team through the new workspace.',
     },
     {
       id: 'design-review',

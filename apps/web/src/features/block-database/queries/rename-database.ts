@@ -80,7 +80,7 @@ export function renameDatabase(
               database: { ...previous.database, name: displayName },
             }
         );
-        void queryClient.invalidateQueries({
+        queryClient.invalidateQueries({
           queryKey: databasesKeys.list.queryKey,
         });
         // Qualified SQL names include the database name; open reads rerun
@@ -103,7 +103,7 @@ export function renameDatabase(
         );
         return ok(undefined);
       })
-      .exhaustive();
+      .exhaustive(async () => err({ kind: 'unreachable' }));
   };
   return new ResultAsync(renamed());
 }

@@ -1,0 +1,1083 @@
+[
+  {
+    "request": {
+      "op": "sign",
+      "private_key": "98794fee6600db481805b60c5e84c91af5a5e8dad1494bcd94a3f4a0a8d57f6d",
+      "message": "78656464736120766563746f722030"
+    },
+    "response": {
+      "signature": "f30560b17f2977351301cf8a9ee11d44d00257de0cc77704c294a206aaca7b5c693e586305f401dca3825a69356b70bdc911dbd09a0fcdac1569e2c2cf935d81"
+    }
+  },
+  {
+    "request": {
+      "op": "verify",
+      "public_key": "67d700369576d97a468a564a0bce976082531ddb9325b708befd4c5d0c52bd58",
+      "message": "78656464736120766563746f722030",
+      "signature": "478e404e7da17de4e255bc0286420ba56090d2bca2873ac4bbd5a9ae23d3fd878203cd4a1f562031b6208bcd7bca01175f764da7e032350ffda66c92c0a94984"
+    },
+    "response": {
+      "valid": true
+    }
+  },
+  {
+    "request": {
+      "op": "verify",
+      "public_key": "67d700369576d97a468a564a0bce976082531ddb9325b708befd4c5d0c52bd58",
+      "message": "78656464736120766563746f722030",
+      "signature": "478e404e7da17de4e255bc0286420ba56090d2bca2873ac4bbd5a9ae23d3fd878203cd4a1f562031b6208bcd7bca01175f764da7e032350ffda66c92c0a94904"
+    },
+    "response": {
+      "valid": false
+    }
+  },
+  {
+    "request": {
+      "op": "sign",
+      "private_key": "50d38c411257de87f2eee4a9f64f1c6e48e36c05c486ecfc37ab3c3d67bcd143",
+      "message": "78656464736120766563746f722031"
+    },
+    "response": {
+      "signature": "c91f6e6f0bb44c7ed91e95fdb4b3b898b5415a54b4ef1f132b21d312974dd2863ee03007fc48296011e7a36382447dcb62ec8bc6e6864127e42dbf21bef02c84"
+    }
+  },
+  {
+    "request": {
+      "op": "verify",
+      "public_key": "5a050f9cb38bffdbaacd2e8dc8c18213c7d73f6927a87e2e1a893925de2a5730",
+      "message": "78656464736120766563746f722031",
+      "signature": "3c723d48df1a28f6b7fb90fc39d56047b5bf4eaf802abe245622add91537f80385e62a550ceea489263ed1ac0498a53a05781528f126c973fd60dedb6237bd80"
+    },
+    "response": {
+      "valid": true
+    }
+  },
+  {
+    "request": {
+      "op": "verify",
+      "public_key": "5a050f9cb38bffdbaacd2e8dc8c18213c7d73f6927a87e2e1a893925de2a5730",
+      "message": "78656464736120766563746f722031",
+      "signature": "3c723d48df1a28f6b7fb90fc39d56047b5bf4eaf802abe245622add91537f80385e62a550ceea489263ed1ac0498a53a05781528f126c973fd60dedb6237bd00"
+    },
+    "response": {
+      "valid": false
+    }
+  },
+  {
+    "request": {
+      "op": "sign",
+      "private_key": "f87966a3be87b9df013af166bb6c89db61dbd45f79a3df4311f240a6a2b86372",
+      "message": "78656464736120766563746f722032"
+    },
+    "response": {
+      "signature": "c62367943af8032bd1aa197dee33966200a12d6ff639579e59126563a99c9998f1604a81ab4f0c433c10cc47a1e27e2a944ddddc22d32e4fdf368ee55279df81"
+    }
+  },
+  {
+    "request": {
+      "op": "verify",
+      "public_key": "b49d368af1f08d9df2fb4757ce34fb7794d3940beffe4559e6a5d9c15d7dac02",
+      "message": "78656464736120766563746f722032",
+      "signature": "e792d7e49f3d904796fdc977b42d0bf7591de147d3ecd88fede8569d3b27a5fa578d8e8d4fcd53124240ae8c85f1179c0b888cc2e8a03dcc34f77d4c0edad283"
+    },
+    "response": {
+      "valid": true
+    }
+  },
+  {
+    "request": {
+      "op": "verify",
+      "public_key": "b49d368af1f08d9df2fb4757ce34fb7794d3940beffe4559e6a5d9c15d7dac02",
+      "message": "78656464736120766563746f722032",
+      "signature": "e792d7e49f3d904796fdc977b42d0bf7591de147d3ecd88fede8569d3b27a5fa578d8e8d4fcd53124240ae8c85f1179c0b888cc2e8a03dcc34f77d4c0edad203"
+    },
+    "response": {
+      "valid": false
+    }
+  },
+  {
+    "request": {
+      "op": "sign",
+      "private_key": "d05c51efdb962b2cb5c765f11160312c609b3434cb65a1935478970b2713e27b",
+      "message": "78656464736120766563746f722033"
+    },
+    "response": {
+      "signature": "cb04d54f3fcb8982900a7dc58a4c934eb6de39fb05fd7d8675928c474675abe1ae63aca756b5782fc0926fd60970547c8e57c098069e9bf55d7fdd63320fe900"
+    }
+  },
+  {
+    "request": {
+      "op": "verify",
+      "public_key": "16088dbd1d2d92977f06a45a45eda993c05d1bb72d3c40d3776ac95b32619b1b",
+      "message": "78656464736120766563746f722033",
+      "signature": "1336bae178c031bbb22650d3312c6d6bc08a4864eaae453e093307bdb268c65b3904fa5c0b96330988f778cce81e72c2c0e158600e813b5c8ec6e574395b3f08"
+    },
+    "response": {
+      "valid": true
+    }
+  },
+  {
+    "request": {
+      "op": "verify",
+      "public_key": "16088dbd1d2d92977f06a45a45eda993c05d1bb72d3c40d3776ac95b32619b1b",
+      "message": "78656464736120766563746f722033",
+      "signature": "1336bae178c031bbb22650d3312c6d6bc08a4864eaae453e093307bdb268c65b3904fa5c0b96330988f778cce81e72c2c0e158600e813b5c8ec6e574395b3f88"
+    },
+    "response": {
+      "valid": false
+    }
+  },
+  {
+    "request": {
+      "op": "sign",
+      "private_key": "4892236c0435453656a85b7d7c11dc6dfb7414416d9e8a37e4c7235faeec4f70",
+      "message": "78656464736120766563746f722034"
+    },
+    "response": {
+      "signature": "1f8ea0aa351bef3ca2db09b9c236ad465a13518e349724f5bc294a74f30e0a078271a95c51de3067db0ca480ed4a7d4b6a823ee86c2836bdf26fc99f391ef18b"
+    }
+  },
+  {
+    "request": {
+      "op": "verify",
+      "public_key": "be50d9f9199a8076e2b903de6d852d62f7bdbfb9c6723044893d15ddace29343",
+      "message": "78656464736120766563746f722034",
+      "signature": "a23fa3e4fa66b743c5d324a19780c58535b6bf345a51438ccce04effacd10096ef0c7436a01ca847d2eb693d1243985db98755d25fa9a4c95c185deed5abbf8b"
+    },
+    "response": {
+      "valid": true
+    }
+  },
+  {
+    "request": {
+      "op": "verify",
+      "public_key": "be50d9f9199a8076e2b903de6d852d62f7bdbfb9c6723044893d15ddace29343",
+      "message": "78656464736120766563746f722034",
+      "signature": "a23fa3e4fa66b743c5d324a19780c58535b6bf345a51438ccce04effacd10096ef0c7436a01ca847d2eb693d1243985db98755d25fa9a4c95c185deed5abbf0b"
+    },
+    "response": {
+      "valid": false
+    }
+  },
+  {
+    "request": {
+      "op": "sign",
+      "private_key": "609e703a43e61244e7eea359be9771095b5382131359554ca13a31406d963070",
+      "message": "78656464736120766563746f722035"
+    },
+    "response": {
+      "signature": "9b5b7835355649462835ecba3fbe90c3d2f73b9a8f7a95cd1716796ba6b972ae5eb9cf7fb2b7f65c42505bb15372e8fa942848b5063c61c751d5a2981b874084"
+    }
+  },
+  {
+    "request": {
+      "op": "verify",
+      "public_key": "ff0a95398ebd71a38d9d17cc9b2432fcec90a4bc9dd0a74f68c5ba0bf1cf7642",
+      "message": "78656464736120766563746f722035",
+      "signature": "e9820a242c362cdbabc1955c1047939c11c7f70ccd3b620a6f12b85380036c6ac3375aa049245a7163072459089d6b4d60af51ce0301027913f676c9d8c1168b"
+    },
+    "response": {
+      "valid": true
+    }
+  },
+  {
+    "request": {
+      "op": "verify",
+      "public_key": "ff0a95398ebd71a38d9d17cc9b2432fcec90a4bc9dd0a74f68c5ba0bf1cf7642",
+      "message": "78656464736120766563746f722035",
+      "signature": "e9820a242c362cdbabc1955c1047939c11c7f70ccd3b620a6f12b85380036c6ac3375aa049245a7163072459089d6b4d60af51ce0301027913f676c9d8c1160b"
+    },
+    "response": {
+      "valid": false
+    }
+  },
+  {
+    "request": {
+      "op": "sign",
+      "private_key": "a091d09e42f8fdc195dea2476b54d90c9706b62e13192153cea0d507d1602778",
+      "message": "78656464736120766563746f722036"
+    },
+    "response": {
+      "signature": "63ae8b899fa6533e90a73dc311644ee744718eba2d6f10c7bf049b36ac43367ee725ab3ffe7a7034ad4bda94ba554545f6c5eb560751d113d337ce1d482ca384"
+    }
+  },
+  {
+    "request": {
+      "op": "verify",
+      "public_key": "9ab50b6af4130b9f903c56b5969c6d5d1f40252e4714f952c7a812efce2db34f",
+      "message": "78656464736120766563746f722036",
+      "signature": "765f7f9ea0fdbbbdb17c70a0d645c82127ca8020bff577ad3beda3fadb0e89e8e3d4245e45b430d1f3f21c429d91dbd2252bf02f9ed551193e256fd689535f8f"
+    },
+    "response": {
+      "valid": true
+    }
+  },
+  {
+    "request": {
+      "op": "verify",
+      "public_key": "9ab50b6af4130b9f903c56b5969c6d5d1f40252e4714f952c7a812efce2db34f",
+      "message": "78656464736120766563746f722036",
+      "signature": "765f7f9ea0fdbbbdb17c70a0d645c82127ca8020bff577ad3beda3fadb0e89e8e3d4245e45b430d1f3f21c429d91dbd2252bf02f9ed551193e256fd689535f0f"
+    },
+    "response": {
+      "valid": false
+    }
+  },
+  {
+    "request": {
+      "op": "sign",
+      "private_key": "b0bf8903323f8f2a48c56afe6a89a0b11c59aaaffc64e826fcf96dba2380284b",
+      "message": "78656464736120766563746f722037"
+    },
+    "response": {
+      "signature": "c80825b79bfa108a2ffe921f9f1f31a00ec3715fc6947f5823c692c2bc15a7ca53de05a0537455849d9436b57ac45045d44ca1b35b048a4156a4a3f95cb68380"
+    }
+  },
+  {
+    "request": {
+      "op": "verify",
+      "public_key": "e1a6eae61e5a81ff2aeb0da87c64e2b17eafad82edc986921cf2b33515ca6665",
+      "message": "78656464736120766563746f722037",
+      "signature": "474e4c1ac46d06fbc2b5c6ddec5c1032a4de00bbe321f36ac5afcc892a472a4d90e0edcbfb08913b7052c876743f0aa7f12eca3cd2d065b8cee85d0a88c5f982"
+    },
+    "response": {
+      "valid": true
+    }
+  },
+  {
+    "request": {
+      "op": "verify",
+      "public_key": "e1a6eae61e5a81ff2aeb0da87c64e2b17eafad82edc986921cf2b33515ca6665",
+      "message": "78656464736120766563746f722037",
+      "signature": "474e4c1ac46d06fbc2b5c6ddec5c1032a4de00bbe321f36ac5afcc892a472a4d90e0edcbfb08913b7052c876743f0aa7f12eca3cd2d065b8cee85d0a88c5f902"
+    },
+    "response": {
+      "valid": false
+    }
+  },
+  {
+    "request": {
+      "op": "new_device",
+      "device": "bob",
+      "registration_id": 2002
+    },
+    "response": {
+      "identity_key": "18ad2964c025b62f53ab61fc5aef89c5f594e6ff2ab8559cd59b0ce72f892660"
+    }
+  },
+  {
+    "request": {
+      "op": "make_bundle",
+      "device": "bob",
+      "signed_pre_key_id": 1,
+      "pre_key_id": 31
+    },
+    "response": {
+      "bundle": {
+        "registration_id": 2002,
+        "device_id": 0,
+        "pre_key": {
+          "id": 31,
+          "public": "a64d01fc93974045c6f74f71181d8d3468b188eeeeb046dad2fd564b64df773c"
+        },
+        "signed_pre_key": {
+          "id": 1,
+          "public": "e3c7219d36a2c679f30b6a88b7bf9919ab89c32f60386937896c97bf6aa6d065"
+        },
+        "signed_pre_key_signature": "86bb906a900054303b458e1c2c22aa73c4462be02c16d4bf63efd84e3f099692e336f3dd2384a7a1adade220ef45396657cc487d990182643ac64fe83a24d282",
+        "identity_key": "18ad2964c025b62f53ab61fc5aef89c5f594e6ff2ab8559cd59b0ce72f892660"
+      }
+    }
+  },
+  {
+    "request": {
+      "op": "decrypt",
+      "device": "bob",
+      "peer": {
+        "name": "rust-alice",
+        "device": 1
+      },
+      "type": "pkmsg",
+      "ciphertext": "33081f122105ea76c35b1d420e61c2a97151ec7e653870fff09ec8efb628995eb43d26bde0591a210567d700369576d97a468a564a0bce976082531ddb9325b708befd4c5d0c52bd582242330a2105f7896bdcfda1b2baa6479e74eeff5aea4e04a3bb6536cb5ff34485a422c4b907100118002210aa56967e6e9daf2f54a8694397b9449d471ffd3a938f9e1828e9073001"
+    },
+    "response": {
+      "plaintext": "7365636f6e64"
+    }
+  },
+  {
+    "request": {
+      "op": "decrypt",
+      "device": "bob",
+      "peer": {
+        "name": "rust-alice",
+        "device": 1
+      },
+      "type": "pkmsg",
+      "ciphertext": "33081f122105ea76c35b1d420e61c2a97151ec7e653870fff09ec8efb628995eb43d26bde0591a210567d700369576d97a468a564a0bce976082531ddb9325b708befd4c5d0c52bd582242330a2105f7896bdcfda1b2baa6479e74eeff5aea4e04a3bb6536cb5ff34485a422c4b90710001800221022ecbb14cf5c9d5f83f6ccc660cc14cee0cde738f208883e28e9073001"
+    },
+    "response": {
+      "plaintext": "6669727374"
+    }
+  },
+  {
+    "request": {
+      "op": "encrypt",
+      "device": "bob",
+      "peer": {
+        "name": "rust-alice",
+        "device": 1
+      },
+      "plaintext": "7265706c79206f6e65"
+    },
+    "response": {
+      "type": "msg",
+      "ciphertext": "330a2105f84d35937209f8eaeba4e6b59c9fefd904c071285f17378abbfe461ed2dfe36f100018ffffffff0f2210d61d417cfbc3326fa5e08c51e09b15e64f4d2747030f1bc8"
+    }
+  },
+  {
+    "request": {
+      "op": "encrypt",
+      "device": "bob",
+      "peer": {
+        "name": "rust-alice",
+        "device": 1
+      },
+      "plaintext": "7265706c792074776f"
+    },
+    "response": {
+      "type": "msg",
+      "ciphertext": "330a2105f84d35937209f8eaeba4e6b59c9fefd904c071285f17378abbfe461ed2dfe36f100118ffffffff0f2210e033478f686754e9ebb2132dbae41bf4e669263facbe42eb"
+    }
+  },
+  {
+    "request": {
+      "op": "encrypt",
+      "device": "bob",
+      "peer": {
+        "name": "rust-alice",
+        "device": 1
+      },
+      "plaintext": "7265706c79207468726565"
+    },
+    "response": {
+      "type": "msg",
+      "ciphertext": "330a2105f84d35937209f8eaeba4e6b59c9fefd904c071285f17378abbfe461ed2dfe36f100218ffffffff0f2210e32466e42123fb94f7ad2c908a7c49b5bad879de93261316"
+    }
+  },
+  {
+    "request": {
+      "op": "encrypt",
+      "device": "bob",
+      "peer": {
+        "name": "rust-alice",
+        "device": 1
+      },
+      "plaintext": "756e746f7563686564"
+    },
+    "response": {
+      "type": "msg",
+      "ciphertext": "330a2105f84d35937209f8eaeba4e6b59c9fefd904c071285f17378abbfe461ed2dfe36f100318ffffffff0f2210dbbed1f0aa3edd3fab3080638c243565ade7dde7269889bf"
+    }
+  },
+  {
+    "request": {
+      "op": "decrypt",
+      "device": "bob",
+      "peer": {
+        "name": "rust-alice",
+        "device": 1
+      },
+      "type": "msg",
+      "ciphertext": "330a2105257bdcdd4d89d59ed043ca110247747fc38c59213cacde4f3f2ba02926592e74100118012210d581eee2be368e6bf3c0bd97f9da8edccfcfd86af26643d4"
+    },
+    "response": {
+      "plaintext": "7275737420726f756e6420302062"
+    }
+  },
+  {
+    "request": {
+      "op": "decrypt",
+      "device": "bob",
+      "peer": {
+        "name": "rust-alice",
+        "device": 1
+      },
+      "type": "msg",
+      "ciphertext": "330a2105257bdcdd4d89d59ed043ca110247747fc38c59213cacde4f3f2ba02926592e741000180122109b2476c08f9d1b43890d1a64acb09f3735e7855682d5f12d"
+    },
+    "response": {
+      "plaintext": "7275737420726f756e6420302061"
+    }
+  },
+  {
+    "request": {
+      "op": "decrypt",
+      "device": "bob",
+      "peer": {
+        "name": "rust-alice",
+        "device": 1
+      },
+      "type": "msg",
+      "ciphertext": "330a2105257bdcdd4d89d59ed043ca110247747fc38c59213cacde4f3f2ba02926592e741000180122109b2476c08f9d1b43890d1a64acb09f3735e7855682d5f12d"
+    },
+    "response": {
+      "error": "failed to get or create message keys: received message with old counter (index: 2, count: 0)"
+    }
+  },
+  {
+    "request": {
+      "op": "encrypt",
+      "device": "bob",
+      "peer": {
+        "name": "rust-alice",
+        "device": 1
+      },
+      "plaintext": "676f20726f756e6420302061"
+    },
+    "response": {
+      "type": "msg",
+      "ciphertext": "330a21051e5fe01f71bc846c0aa96ac734f05ab78eb7c3985546f8f01ed5ec2c85b6696310001803221095fa43ebce5b303248c88573ed19f0b0e7a509f8535b7895"
+    }
+  },
+  {
+    "request": {
+      "op": "encrypt",
+      "device": "bob",
+      "peer": {
+        "name": "rust-alice",
+        "device": 1
+      },
+      "plaintext": "676f20726f756e6420302062"
+    },
+    "response": {
+      "type": "msg",
+      "ciphertext": "330a21051e5fe01f71bc846c0aa96ac734f05ab78eb7c3985546f8f01ed5ec2c85b6696310011803221032d8053e74da394f381892067fdf96570b218cdd4ff265e3"
+    }
+  },
+  {
+    "request": {
+      "op": "decrypt",
+      "device": "bob",
+      "peer": {
+        "name": "rust-alice",
+        "device": 1
+      },
+      "type": "msg",
+      "ciphertext": "330a21056434d50a9fe312bd129a5d80c082d1ccf2c6f409802f04af361fbda644944a781001180122101bdad0a0f65d672cd8116dcb4b02200f84ce91e5ac1a65f9"
+    },
+    "response": {
+      "plaintext": "7275737420726f756e6420312062"
+    }
+  },
+  {
+    "request": {
+      "op": "decrypt",
+      "device": "bob",
+      "peer": {
+        "name": "rust-alice",
+        "device": 1
+      },
+      "type": "msg",
+      "ciphertext": "330a21056434d50a9fe312bd129a5d80c082d1ccf2c6f409802f04af361fbda644944a781000180122109d1cc2d6e2e2f7640e201f8fceb1f20020139f60afe095a7"
+    },
+    "response": {
+      "plaintext": "7275737420726f756e6420312061"
+    }
+  },
+  {
+    "request": {
+      "op": "decrypt",
+      "device": "bob",
+      "peer": {
+        "name": "rust-alice",
+        "device": 1
+      },
+      "type": "msg",
+      "ciphertext": "330a21056434d50a9fe312bd129a5d80c082d1ccf2c6f409802f04af361fbda644944a781000180122109d1cc2d6e2e2f7640e201f8fceb1f20020139f60afe095a7"
+    },
+    "response": {
+      "error": "failed to get or create message keys: received message with old counter (index: 2, count: 0)"
+    }
+  },
+  {
+    "request": {
+      "op": "encrypt",
+      "device": "bob",
+      "peer": {
+        "name": "rust-alice",
+        "device": 1
+      },
+      "plaintext": "676f20726f756e6420312061"
+    },
+    "response": {
+      "type": "msg",
+      "ciphertext": "330a2105a051652de004c03ad67e0820fc3eedf8b7196206304bef3d03b7e44870f5a8741000180122100ebb345df1c796cb36da00a7af0e87df9ed520ef0a4c3af8"
+    }
+  },
+  {
+    "request": {
+      "op": "encrypt",
+      "device": "bob",
+      "peer": {
+        "name": "rust-alice",
+        "device": 1
+      },
+      "plaintext": "676f20726f756e6420312062"
+    },
+    "response": {
+      "type": "msg",
+      "ciphertext": "330a2105a051652de004c03ad67e0820fc3eedf8b7196206304bef3d03b7e44870f5a874100118012210d318fdabe49177f26e310dd887a76266783219f23bb33c35"
+    }
+  },
+  {
+    "request": {
+      "op": "decrypt",
+      "device": "bob",
+      "peer": {
+        "name": "rust-alice",
+        "device": 1
+      },
+      "type": "msg",
+      "ciphertext": "330a210505b36302adc577ac75fe312c99dfb0944ad83b780509446c46790b585c4c0066100118012210632a2da0a9ba8b8a32ba66ac83afa6aaa874c934272cc85f"
+    },
+    "response": {
+      "plaintext": "7275737420726f756e6420322062"
+    }
+  },
+  {
+    "request": {
+      "op": "decrypt",
+      "device": "bob",
+      "peer": {
+        "name": "rust-alice",
+        "device": 1
+      },
+      "type": "msg",
+      "ciphertext": "330a210505b36302adc577ac75fe312c99dfb0944ad83b780509446c46790b585c4c006610001801221086266558c4b9cbd65673b2eb03dded06671eff0616306ec4"
+    },
+    "response": {
+      "plaintext": "7275737420726f756e6420322061"
+    }
+  },
+  {
+    "request": {
+      "op": "decrypt",
+      "device": "bob",
+      "peer": {
+        "name": "rust-alice",
+        "device": 1
+      },
+      "type": "msg",
+      "ciphertext": "330a210505b36302adc577ac75fe312c99dfb0944ad83b780509446c46790b585c4c006610001801221086266558c4b9cbd65673b2eb03dded06671eff0616306ec4"
+    },
+    "response": {
+      "error": "failed to get or create message keys: received message with old counter (index: 2, count: 0)"
+    }
+  },
+  {
+    "request": {
+      "op": "encrypt",
+      "device": "bob",
+      "peer": {
+        "name": "rust-alice",
+        "device": 1
+      },
+      "plaintext": "676f20726f756e6420322061"
+    },
+    "response": {
+      "type": "msg",
+      "ciphertext": "330a2105c9ac61ef10ec82c4d59fa1bf26c8ffe6b75b7e300fd1ccbb844174708bf8c33c100018012210147c66fdcb5c267f76ec09f4308c3ed375771e4d351bd9aa"
+    }
+  },
+  {
+    "request": {
+      "op": "encrypt",
+      "device": "bob",
+      "peer": {
+        "name": "rust-alice",
+        "device": 1
+      },
+      "plaintext": "676f20726f756e6420322062"
+    },
+    "response": {
+      "type": "msg",
+      "ciphertext": "330a2105c9ac61ef10ec82c4d59fa1bf26c8ffe6b75b7e300fd1ccbb844174708bf8c33c10011801221041130563ffbf154e70b7f728bef5affc658e0e4fef799ed2"
+    }
+  },
+  {
+    "request": {
+      "op": "decrypt",
+      "device": "bob",
+      "peer": {
+        "name": "rust-alice",
+        "device": 1
+      },
+      "type": "msg",
+      "ciphertext": "330a21057974bb9d8aa9bbd3f860bd5186dcf446c28f0570a47358f4b6252295bd3286691001180122100651b4244270cb7d670462597489024e2cbd21e5136c933d"
+    },
+    "response": {
+      "plaintext": "7275737420726f756e6420332062"
+    }
+  },
+  {
+    "request": {
+      "op": "decrypt",
+      "device": "bob",
+      "peer": {
+        "name": "rust-alice",
+        "device": 1
+      },
+      "type": "msg",
+      "ciphertext": "330a21057974bb9d8aa9bbd3f860bd5186dcf446c28f0570a47358f4b6252295bd328669100018012210e0e73e83d12307edd5ff173779ceec7df8fe99d845fd6f34"
+    },
+    "response": {
+      "plaintext": "7275737420726f756e6420332061"
+    }
+  },
+  {
+    "request": {
+      "op": "decrypt",
+      "device": "bob",
+      "peer": {
+        "name": "rust-alice",
+        "device": 1
+      },
+      "type": "msg",
+      "ciphertext": "330a21057974bb9d8aa9bbd3f860bd5186dcf446c28f0570a47358f4b6252295bd328669100018012210e0e73e83d12307edd5ff173779ceec7df8fe99d845fd6f34"
+    },
+    "response": {
+      "error": "failed to get or create message keys: received message with old counter (index: 2, count: 0)"
+    }
+  },
+  {
+    "request": {
+      "op": "encrypt",
+      "device": "bob",
+      "peer": {
+        "name": "rust-alice",
+        "device": 1
+      },
+      "plaintext": "676f20726f756e6420332061"
+    },
+    "response": {
+      "type": "msg",
+      "ciphertext": "330a21053c259080f67c7573c1b6921de13101a5871076631a9e8e7dfae2d128cf3e1c25100018012210f568008618dd28f06db0e5c1e7b57be7e86d8dc13a0badda"
+    }
+  },
+  {
+    "request": {
+      "op": "encrypt",
+      "device": "bob",
+      "peer": {
+        "name": "rust-alice",
+        "device": 1
+      },
+      "plaintext": "676f20726f756e6420332062"
+    },
+    "response": {
+      "type": "msg",
+      "ciphertext": "330a21053c259080f67c7573c1b6921de13101a5871076631a9e8e7dfae2d128cf3e1c2510011801221028da8a15e2d4bc16814d53362a709d37520460bdbc0f217b"
+    }
+  },
+  {
+    "request": {
+      "op": "new_device",
+      "device": "erin",
+      "registration_id": 5005
+    },
+    "response": {
+      "identity_key": "72f3c6f08f37c330d7f7231e90883417f685f0f8469a88b6adff773994797d60"
+    }
+  },
+  {
+    "request": {
+      "op": "make_bundle",
+      "device": "erin",
+      "signed_pre_key_id": 9
+    },
+    "response": {
+      "bundle": {
+        "registration_id": 5005,
+        "device_id": 0,
+        "signed_pre_key": {
+          "id": 9,
+          "public": "73d82ad0430d4ccac709fb38161b76cae25d47c8eaac9acc62b209aa8688515d"
+        },
+        "signed_pre_key_signature": "2a16e7efbcb73b3616658db21e711023778c89c2903da44bca3858c553a78407cd1d591be8fa22ea0599b3c76e65bda3461c4a175ad268da76377aa0eaed6d0a",
+        "identity_key": "72f3c6f08f37c330d7f7231e90883417f685f0f8469a88b6adff773994797d60"
+      }
+    }
+  },
+  {
+    "request": {
+      "op": "decrypt",
+      "device": "erin",
+      "peer": {
+        "name": "rust-alice",
+        "device": 1
+      },
+      "type": "pkmsg",
+      "ciphertext": "33122105da396cb0177d63c0f159fdc1f2e036a2abb4f4435ff9c353095e339f8235567f1a210567d700369576d97a468a564a0bce976082531ddb9325b708befd4c5d0c52bd582242330a2105f931770ac04cc3160128b04abc77122f5a26ea5aa4a396f37df7c6ace8b6bb4c100018002210d6340f1ad5a5630c503813ffc01413521f9ed5020c4617ec28e9073009"
+    },
+    "response": {
+      "plaintext": "68656c6c6f206572696e"
+    }
+  },
+  {
+    "request": {
+      "op": "new_device",
+      "device": "dave",
+      "registration_id": 4004
+    },
+    "response": {
+      "identity_key": "8030cc631c47c3d010e229aea32eb98d1a2a554e3b570a19d61c87d1bfca127a"
+    }
+  },
+  {
+    "request": {
+      "op": "process_bundle",
+      "device": "dave",
+      "peer": {
+        "name": "rust-carol",
+        "device": 3
+      },
+      "bundle": {
+        "registration_id": 3003,
+        "device_id": 3,
+        "signed_pre_key": {
+          "id": 1,
+          "public": "16088dbd1d2d92977f06a45a45eda993c05d1bb72d3c40d3776ac95b32619b1b"
+        },
+        "signed_pre_key_signature": "c381cd5ed9886ac6ae25a6ad26549461756e755fd97e781a6d5717047683b5ff275bd8d39827e87bd139218ba26cd8f1c2173b2b40fbee991f51fdd327966780",
+        "identity_key": "b49d368af1f08d9df2fb4757ce34fb7794d3940beffe4559e6a5d9c15d7dac02",
+        "pre_key": {
+          "id": 77,
+          "public": "be50d9f9199a8076e2b903de6d852d62f7bdbfb9c6723044893d15ddace29343"
+        }
+      }
+    },
+    "response": {}
+  },
+  {
+    "request": {
+      "op": "encrypt",
+      "device": "dave",
+      "peer": {
+        "name": "rust-carol",
+        "device": 3
+      },
+      "plaintext": "66726f6d20676f2031"
+    },
+    "response": {
+      "type": "pkmsg",
+      "ciphertext": "33084d1221054cc53d7f7d793ae26afed38b9ff87bce8b649c67e619eb8cb08698c30e526a151a21058030cc631c47c3d010e229aea32eb98d1a2a554e3b570a19d61c87d1bfca127a2242330a21050d3abbb9beb49e1815bee89caa0310f51b35a23275640f6e1d9e1e9c499c39131000180022101e367205fc13369ba2488c3c2cb1f3c5b6bf08b5f7e2468f28a41f3001"
+    }
+  },
+  {
+    "request": {
+      "op": "encrypt",
+      "device": "dave",
+      "peer": {
+        "name": "rust-carol",
+        "device": 3
+      },
+      "plaintext": "66726f6d20676f2032"
+    },
+    "response": {
+      "type": "pkmsg",
+      "ciphertext": "33084d1221054cc53d7f7d793ae26afed38b9ff87bce8b649c67e619eb8cb08698c30e526a151a21058030cc631c47c3d010e229aea32eb98d1a2a554e3b570a19d61c87d1bfca127a2242330a21050d3abbb9beb49e1815bee89caa0310f51b35a23275640f6e1d9e1e9c499c3913100118002210a0d62e80cfb1e2354163e8d59782336e19309e50ac60b1c328a41f3001"
+    }
+  },
+  {
+    "request": {
+      "op": "decrypt",
+      "device": "dave",
+      "peer": {
+        "name": "rust-carol",
+        "device": 3
+      },
+      "type": "msg",
+      "ciphertext": "330a2105903b2527798a3f4ad96ab04aa4cbe59d281b39acb3c41bd75254e1a15ce094681000180022104bfdaca3c36e8dccb1818cf1f343126360c6792afcd8ebe7"
+    },
+    "response": {
+      "plaintext": "7265706c792066726f6d2072757374"
+    }
+  },
+  {
+    "request": {
+      "op": "encrypt",
+      "device": "dave",
+      "peer": {
+        "name": "rust-carol",
+        "device": 3
+      },
+      "plaintext": "616674657220746865207265706c79"
+    },
+    "response": {
+      "type": "msg",
+      "ciphertext": "330a21056e7557e38cf49e7c427b658e5b6033c291d9b6fe4b7a38c51c57648ca571242510001801221013a00dd59a0da7dfcebc73bbb8d08393369d00e885044851"
+    }
+  },
+  {
+    "request": {
+      "op": "new_device",
+      "device": "frank",
+      "registration_id": 6006
+    },
+    "response": {
+      "identity_key": "44b5a5dc64ad860e42b329b08d709047b02f7daa3d0c0b91afc1f78d753b973f"
+    }
+  },
+  {
+    "request": {
+      "op": "process_bundle",
+      "device": "frank",
+      "peer": {
+        "name": "rust-carol",
+        "device": 3
+      },
+      "bundle": {
+        "registration_id": 3003,
+        "device_id": 3,
+        "signed_pre_key": {
+          "id": 1,
+          "public": "16088dbd1d2d92977f06a45a45eda993c05d1bb72d3c40d3776ac95b32619b1b"
+        },
+        "signed_pre_key_signature": "c381cd5ed9886ac6ae25a6ad26549461756e755fd97e781a6d5717047683b5ff275bd8d39827e87bd139218ba26cd8f1c2173b2b40fbee991f51fdd327966780",
+        "identity_key": "b49d368af1f08d9df2fb4757ce34fb7794d3940beffe4559e6a5d9c15d7dac02"
+      }
+    },
+    "response": {}
+  },
+  {
+    "request": {
+      "op": "encrypt",
+      "device": "frank",
+      "peer": {
+        "name": "rust-carol",
+        "device": 3
+      },
+      "plaintext": "6e6f206f6e652d74696d65206b6579"
+    },
+    "response": {
+      "type": "pkmsg",
+      "ciphertext": "33122105fe2d7309ee52cc53aef6e0ed0f41d933d1c3c09d195b8d8260cea59fe47abf6d1a210544b5a5dc64ad860e42b329b08d709047b02f7daa3d0c0b91afc1f78d753b973f2242330a210570d67b2cc96a1bdb777f889d609d0809ae18a8215c4b2c5e30e904b0b6215a61100018002210f19e769fd8e1271bdc529a50e9cf589bdaa6f8f2f75f52fb28f62e3001"
+    }
+  },
+  {
+    "request": {
+      "op": "process_sender_key",
+      "device": "bob",
+      "group": "120363000000000001@g.us",
+      "peer": {
+        "name": "rust-alice",
+        "device": 1
+      },
+      "message": "3308f9a7f5ad0410001a209720db3adac4a286d528b4253e9204d5cad0e725c54a33396b0728fd928bfda52221050989b31482ee6d51964ab120aa669c0855ebe9bb1b4be3ec7c1c18f84e541c07"
+    },
+    "response": {}
+  },
+  {
+    "request": {
+      "op": "group_decrypt",
+      "device": "bob",
+      "group": "120363000000000001@g.us",
+      "peer": {
+        "name": "rust-alice",
+        "device": 1
+      },
+      "ciphertext": "3308f9a7f5ad0410021a10e5e7cf50d89c8f0dadd668e64e32c1d09851ead7fa579a7f05b8d4f4e2236c36eeba1cf6c7bedc068993b8b25bca85b90c84c471854bed569c3bbeb436d12679b0e4708358b85e79ff9307c9765e370b"
+    },
+    "response": {
+      "plaintext": "67726f75702074776f"
+    }
+  },
+  {
+    "request": {
+      "op": "group_decrypt",
+      "device": "bob",
+      "group": "120363000000000001@g.us",
+      "peer": {
+        "name": "rust-alice",
+        "device": 1
+      },
+      "ciphertext": "3308f9a7f5ad0410001a10fbfeb5cb710a62c43609bce59cc027b6a1669d539e06cf65dbfaf8cff1e63ad426bc270d0657b90574b22159efda800744376abe8732ee1469a7d4b63838e7ce4895f015f242c69613107b31ff1e9c0a"
+    },
+    "response": {
+      "plaintext": "67726f7570207a65726f"
+    }
+  },
+  {
+    "request": {
+      "op": "group_decrypt",
+      "device": "bob",
+      "group": "120363000000000001@g.us",
+      "peer": {
+        "name": "rust-alice",
+        "device": 1
+      },
+      "ciphertext": "3308f9a7f5ad0410011a1095b1cb59eb4b24cec630f9c1042d9e7000507ac1d054f6a2adcdc645fa023e71795a4020f93432815f32f29add4b8430014dac374195a4fe5a1e91feaac9e234d1cd45f70fc684a92faa2b8424363006"
+    },
+    "response": {
+      "plaintext": "67726f7570206f6e65"
+    }
+  },
+  {
+    "request": {
+      "op": "create_sender_key",
+      "device": "bob",
+      "group": "120363000000000001@g.us",
+      "peer": {
+        "name": "go-bob",
+        "device": 2
+      }
+    },
+    "response": {
+      "message": "33088a86fb820710001a208d1a904f411604da9c846e7338063717ca9ee36149fd32a28c7235efc4cfebb82221059ef08a17cb0f0780cd246209b311cd262e7f505c7e0e8298d20e2881d9c8b95b"
+    }
+  },
+  {
+    "request": {
+      "op": "group_encrypt",
+      "device": "bob",
+      "group": "120363000000000001@g.us",
+      "peer": {
+        "name": "go-bob",
+        "device": 2
+      },
+      "plaintext": "676f2067726f7570207a65726f"
+    },
+    "response": {
+      "ciphertext": "33088a86fb820710001a108e7fa59dd85be2a5b6759790c0e12f1e7cd5ead0df6d7c3212ce2012c00b93768c4276187b7fdef727002278703ddfdb689295f25e07a0adc931c3cad7ad6683a5f5301b4494b66eb61f62d2259b3a05"
+    }
+  },
+  {
+    "request": {
+      "op": "group_encrypt",
+      "device": "bob",
+      "group": "120363000000000001@g.us",
+      "peer": {
+        "name": "go-bob",
+        "device": 2
+      },
+      "plaintext": "676f2067726f7570206f6e65"
+    },
+    "response": {
+      "ciphertext": "33088a86fb820710011a10afe5d06eaf567f1632802c4df4602abc96c1cde6afe47279778cf5ad56d988519032fd776fcb7f3721b0d6580d4705e326ed3079ab94848ac4ab6c96bff579010f06b9a804dd08ecee050326e3011d07"
+    }
+  },
+  {
+    "request": {
+      "op": "group_encrypt",
+      "device": "bob",
+      "group": "120363000000000001@g.us",
+      "peer": {
+        "name": "go-bob",
+        "device": 2
+      },
+      "plaintext": "676f2067726f75702074776f"
+    },
+    "response": {
+      "ciphertext": "33088a86fb820710021a107afbd4a9ed45968d8c2732712e1c38a4ff8363d4e4989b95475b0fda13e051addd8f0bf1021382b51b54f6c4f8a89c15a02d5ac6ec5545fd1796fb4f0762761ffb5611853ea2592f7ac37c56444a4305"
+    }
+  },
+  {
+    "request": {
+      "op": "process_sender_key",
+      "device": "bob",
+      "group": "120363000000000001@g.us",
+      "peer": {
+        "name": "rust-alice",
+        "device": 1
+      },
+      "message": "3308cfe58e800110001a208f480ffbdabac1c2f03e948c24f0a16d55c36dbdec0b6c9b9daf738a53519e2c2221059df7ad32c88f726557bc6224bedc7ce61a84a10036445b66032e1418adcc327b"
+    },
+    "response": {}
+  },
+  {
+    "request": {
+      "op": "group_decrypt",
+      "device": "bob",
+      "group": "120363000000000001@g.us",
+      "peer": {
+        "name": "rust-alice",
+        "device": 1
+      },
+      "ciphertext": "3308cfe58e800110001a1085adbd3bf6d5cffecd9a584f644fb788b1d330d3d807ccbc8e6ac445b5ad9a0770f03516daf34494d64e9e22929f1ab5bdd7b903677a46a70927f858056d9049e6d26244738444a6b567d001c25b9400"
+    },
+    "response": {
+      "plaintext": "7275737420726f7461746564"
+    }
+  },
+  {
+    "request": {
+      "op": "group_decrypt",
+      "device": "bob",
+      "group": "120363000000000001@g.us",
+      "peer": {
+        "name": "rust-alice",
+        "device": 1
+      },
+      "ciphertext": "3308f9a7f5ad0410031a10603a2510e96648d2f9c9b8e9a32a2af685569d63fc25c996c84a43e8c21134aa39344f061bbe9c86a9dd6ca7eaf8ec408ddf992727fd05937113b40bfe14f0257a031948a6d52e07d6b552fd2ff4bb08"
+    },
+    "response": {
+      "plaintext": "7275737420696e20666c69676874"
+    }
+  },
+  {
+    "request": {
+      "op": "group_encrypt",
+      "device": "bob",
+      "group": "120363000000000001@g.us",
+      "peer": {
+        "name": "go-bob",
+        "device": 2
+      },
+      "plaintext": "676f20696e20666c69676874"
+    },
+    "response": {
+      "ciphertext": "33088a86fb820710031a107779500f81912cbda9e1da594b81e1a274badd21d69dd87e207b6a6d1dd51cf8bff17307470007a8561bfbb163d2283dd92428e96fb538890fcf6f51c13ca91de448fb845b315f5f130e3b03ba996f00"
+    }
+  },
+  {
+    "request": {
+      "op": "delete_sender_key",
+      "device": "bob",
+      "group": "120363000000000001@g.us",
+      "peer": {
+        "name": "go-bob",
+        "device": 2
+      }
+    },
+    "response": {}
+  },
+  {
+    "request": {
+      "op": "create_sender_key",
+      "device": "bob",
+      "group": "120363000000000001@g.us",
+      "peer": {
+        "name": "go-bob",
+        "device": 2
+      }
+    },
+    "response": {
+      "message": "3308c48aaaad0b10001a20c4bc8c17d5d83e3bd96e65a8964a17167f6621c59047ae19404e0e083b6cc0462221055a23bae95a990ea3cbfc5d393033940ecb145db5e288bdb5832a26d0f942250e"
+    }
+  },
+  {
+    "request": {
+      "op": "group_encrypt",
+      "device": "bob",
+      "group": "120363000000000001@g.us",
+      "peer": {
+        "name": "go-bob",
+        "device": 2
+      },
+      "plaintext": "676f20726f7461746564"
+    },
+    "response": {
+      "ciphertext": "3308c48aaaad0b10001a10bdae9581b52b4446b370126c81259684d272803707fd2381f28a05754e204b4c6303f9b0f1663a268ed4aebe86ea2c743395385754ead53ac62d9c1cbfd14b15fa099ac334b851e6a41a3af352413583"
+    }
+  }
+]

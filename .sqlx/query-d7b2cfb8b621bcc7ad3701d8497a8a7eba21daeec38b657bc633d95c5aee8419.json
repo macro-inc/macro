@@ -1,0 +1,23 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            SELECT COUNT(DISTINCT channel_id) = CARDINALITY($2::uuid[]) AS \"has_channels!\"\n            FROM comms_channel_participants\n            WHERE user_id = $1\n              AND channel_id = ANY($2::uuid[])\n              AND left_at IS NULL\n              AND NOT EXISTS (\n                  SELECT 1\n                  FROM comms_channel_agents ca\n                  WHERE ca.channel_id = comms_channel_participants.channel_id\n                    AND ca.kind = 'direct'\n              )\n            ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "has_channels!",
+        "type_info": "Bool"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Text",
+        "UuidArray"
+      ]
+    },
+    "nullable": [
+      null
+    ]
+  },
+  "hash": "d7b2cfb8b621bcc7ad3701d8497a8a7eba21daeec38b657bc633d95c5aee8419"
+}

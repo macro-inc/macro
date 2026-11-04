@@ -7,6 +7,7 @@ import {
   AgentMeetingStory,
   AgentTeamworkStory,
 } from '../components/agents/AgentWorkflowStories';
+import { DemoInteractionBoundary } from '../components/DemoInteractionBoundary';
 import { FeaturePageFaq, FeaturePageSection } from '../components/FeaturePage';
 import { HomepageClosing } from '../components/HomepageClosing';
 import {
@@ -21,20 +22,53 @@ import './agents-page.css';
 
 const agentsFaq = [
   {
-    q: 'Can I choose a different model?',
-    a: 'Yes. Choose from the models in Macro’s agent picker when starting or continuing a conversation. A connected agent uses the models supported by its own runtime.',
+    q: 'What can Macro’s agents do?',
+    a: 'Search workspace context, draft emails, edit documents, create tasks, and update customer records. Start a conversation in Agents or mention an available agent in a team channel.',
   },
   {
-    q: 'Whose permissions does an agent use?',
-    a: 'Hosted agents use the conversation owner’s access. Someone else prompting a shared conversation may need the owner’s approval. Connected agents also follow their own permission settings.',
+    q: 'Can I use my existing AI client?',
+    a: (
+      <>
+        Yes. Connect an MCP-compatible client to your Macro account so it can
+        work with your workspace. Follow the{' '}
+        <a href="https://docs.macro.com/AI/mcp/overview">MCP setup guide</a>.
+        Running a local agent inside Macro is a separate feature; check the{' '}
+        <a href="https://docs.macro.com/AI/bring-your-own">local agent guide</a>{' '}
+        for availability.
+      </>
+    ),
   },
   {
-    q: 'Can I review an email before it goes out?',
-    a: 'Yes. Review and edit the draft in the conversation, then send it. In a channel or document discussion, the agent asks for confirmation in the thread. External clients have their own review controls.',
+    q: 'Can I choose the model?',
+    a: 'Yes. Use the model picker in an agent conversation. Available models and usage limits depend on your plan. A connected agent uses the models its own runtime supports.',
   },
   {
-    q: 'Can an agent work while I’m away?',
-    a: 'Hosted agents can continue after you close the app. Local agents need your machine to stay online. Routines let you schedule recurring work.',
+    q: 'What can an agent access?',
+    a: 'Hosted agents use the conversation owner’s access. Someone else prompting a shared session may need the owner’s approval. Connected clients and local agents also follow their own permission settings.',
+  },
+  {
+    q: 'Can I review an email before it is sent?',
+    a: (
+      <>
+        Yes. Ask for a draft, review it, and make edits before sending.
+        Connected AI clients have their own approval controls. See{' '}
+        <a href="/email">Macro Mail</a>.
+      </>
+    ),
+  },
+  {
+    q: 'Can agents work while I’m away?',
+    a: 'Hosted agents can continue after you close the app, and scheduled routines can run recurring work. Local agents need their computer and runtime to stay online.',
+  },
+  {
+    q: 'How much agent usage is included?',
+    a: (
+      <>
+        Macro has a free plan with limited AI usage. Paid plans offer more usage
+        and model options. See{' '}
+        <a href="/pricing">current plans and AI limits</a>.
+      </>
+    ),
   },
 ];
 
@@ -108,30 +142,33 @@ export function RouteAgents() {
       </nav>
       <FeaturePageSection
         id="agent-sources"
-        title="An agent that knows where to look."
-        description="Your agent can follow connections across your company’s work and act on what it finds. A question about tomorrow’s calls can draw on your calendar, earlier conversations, and the latest customer messages."
+        title={['Give your agent the full', 'context of your team’s work.']}
+        description="Macro gives your agent access to your team’s calendar, conversations, and files, so it can use the full context of your work to help you get more done."
       >
-        <div class="feature-page-visual">
-          <AgentMeetingStory />
-        </div>
+        <DemoInteractionBoundary
+          class="feature-page-visual"
+          render={() => <AgentMeetingStory />}
+        />
       </FeaturePageSection>
       <FeaturePageSection
         id="agent-actions"
-        title="Work alongside your agent"
-        description="Your team can open the same document, add context, and ask an agent to update it. Changes happen in the shared file."
+        title={['Work with your agent', 'across the workspace.']}
+        description="Work with your agent in the chats and documents your team already uses. Add context, ask for updates, and review the result without leaving your workspace."
       >
-        <div class="feature-page-visual">
-          <AgentDeliverableStory />
-        </div>
+        <DemoInteractionBoundary
+          class="feature-page-visual"
+          render={() => <AgentDeliverableStory />}
+        />
       </FeaturePageSection>
       <FeaturePageSection
         id="agent-collaboration"
-        title="Bring your agents into team chat."
-        description="Ask Macro for a mockup, give feedback, then tag Cursor to build it."
+        title={['Turn conversations', 'into finished work.']}
+        description="Bring design and implementation into the team conversation. Ask Macro for a mockup, give feedback together, then tag Cursor to build it using the context already in the channel."
       >
-        <div class="feature-page-visual">
-          <AgentTeamworkStory />
-        </div>
+        <DemoInteractionBoundary
+          class="feature-page-visual"
+          render={() => <AgentTeamworkStory />}
+        />
       </FeaturePageSection>
       <FeaturePageSection
         id="existing-agents"
@@ -184,7 +221,7 @@ export function RouteAgents() {
       </FeaturePageSection>
       <FeaturePageFaq
         id="agents-faq-title"
-        title="Models, permissions, and control."
+        title="Questions about Macro Agents"
         items={agentsFaq}
       />
       <HomepageClosing />

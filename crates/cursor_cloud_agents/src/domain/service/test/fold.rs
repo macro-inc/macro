@@ -193,6 +193,7 @@ fn entry(content: Message) -> AgentSessionLog {
         agent_session_id: AgentSessionId::TEST_A,
         user_id: None,
         content,
+        logged_at: None,
     }
 }
 

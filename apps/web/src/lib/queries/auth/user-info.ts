@@ -1,6 +1,10 @@
 import { syncPushRegistrations } from '@core/auth/push-registration-lifecycle';
-import { enableUserInfoQuery } from '@core/context/user-info-gate';
+import {
+  enableUserInfoQuery,
+  shouldQueryUserInfo,
+} from '@core/context/user-info-gate';
 import { hasLoginCookie } from '@core/util/cookies';
+import { fireAndForget } from '@core/util/fireAndForget';
 import { catchToResult, type ResultType, throwOnErr } from '@core/util/result';
 import { authServiceClient } from '@service-auth/client';
 import { queryOptions, useQuery } from '@tanstack/solid-query';
@@ -52,7 +56,7 @@ export function useUserInfoQuery(options?: UseUserInfoQueryOptions) {
     userInfoQueryOptions(
       typeof options?.enabled === 'function'
         ? options.enabled()
-        : (options?.enabled ?? true)
+        : (options?.enabled ?? shouldQueryUserInfo())
     )
   );
 }
@@ -77,7 +81,10 @@ export function invalidateAllAfterLogin() {
   // exercised the fresh session — registering earlier can race auth state
   // that is still settling. Fire-and-forget so login isn't blocked on the
   // notification service.
-  void invalidated.catch(() => {}).then(() => syncPushRegistrations());
+  fireAndForget(
+    invalidated.catch(() => {}).then(() => syncPushRegistrations()),
+    'push-registration'
+  );
   return invalidated;
 }
 

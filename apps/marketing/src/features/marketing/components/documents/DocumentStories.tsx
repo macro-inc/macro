@@ -101,6 +101,17 @@ export function DocumentAgentDemo() {
                     label={PROJECT_TITLE}
                     description="The website copy and pricing changes."
                     href="#document-agents"
+                    onOpen={() => {
+                      pause();
+                      setSource(undefined);
+                      queueMicrotask(() =>
+                        editorRoot
+                          .querySelector<HTMLElement>(
+                            '[aria-label="Document body"]'
+                          )
+                          ?.focus({ preventScroll: true })
+                      );
+                    }}
                   />{' '}
                   from the latest pricing email.
                 </>

@@ -14,6 +14,22 @@ function draft(overrides: Partial<ApiMessage> = {}): ApiMessage {
 }
 
 describe('deriveEmailDraftLifecycle', () => {
+  it.each(['pending', 'sending', 'failed', 'unconfirmed'] as const)(
+    'retains scheduled delivery recovery status %s',
+    (status) => {
+      expect(
+        deriveEmailDraftLifecycle({
+          draftId: 'draft',
+          threadId: 'thread',
+          inboxId: 'inbox',
+          message: draft({
+            scheduled_send_time: '2026-12-01T12:00:00Z',
+            scheduled_send_status: status,
+          }),
+        })
+      ).toMatchObject({ type: 'scheduled', deliveryStatus: status });
+    }
+  );
   it('tracks an editable draft by its exact message and inbox identity', () => {
     expect(
       deriveEmailDraftLifecycle({

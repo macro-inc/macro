@@ -1,5 +1,6 @@
 import { useAnalytics } from '@app/lib/analytics/analytics-context';
 import { MOBILE_WEB_SIGNUP_LEAD_VALUE } from '@app/lib/analytics/leadValues';
+import { adAttributionForCapture } from '@app/lib/analytics/signupAttribution';
 import { GOOGLE_GMAIL_IDP } from '@core/auth/email';
 import { toast } from '@core/component/Toast/Toast';
 import { deriveIsAuthenticated } from '@core/context/user';
@@ -12,6 +13,7 @@ import {
 } from '@queries/auth/user-info';
 import { queryReadyGate } from '@queries/gate';
 import { detect } from 'detect-browser';
+import { match } from 'ts-pattern';
 import type { AuthContext, AuthSession } from './context/auth-context';
 import {
   exchangeSessionCode,
@@ -27,6 +29,7 @@ export function createAppAuthContext(): AuthContext {
   const { initEmailLink } = useEmailLinks();
   const loginSso = useSsoLogin();
   const signupSso = useSsoLogin({ signupMode: true });
+  const agentSignupSso = useSsoLogin({ signupMode: true, isAgent: true });
   const sendWelcomeEmail = useSendMobileWelcomeEmail();
 
   const session = (): AuthSession => {
@@ -46,6 +49,7 @@ export function createAppAuthContext(): AuthContext {
         id: data.userId,
         email: data.email ?? undefined,
         tutorialComplete: data.tutorialComplete === true,
+        isAgent: data.isAgent === true,
       },
     };
   };
@@ -66,10 +70,14 @@ export function createAppAuthContext(): AuthContext {
 
   return {
     session,
-    startSso: (provider, intent) =>
-      (intent === 'signup' ? signupSso : loginSso)(
-        provider === 'google' ? GOOGLE_GMAIL_IDP : 'Apple'
-      ),
+    startSso: (provider, intent) => {
+      const startSsoFor = match(intent)
+        .with('login', () => loginSso)
+        .with('signup', () => signupSso)
+        .with('agent-signup', () => agentSignupSso)
+        .exhaustive();
+      return startSsoFor(provider === 'google' ? GOOGLE_GMAIL_IDP : 'Apple');
+    },
     sendEmailCode,
     verifyEmailCode,
     redeemSessionToken: async (token) => {
@@ -79,7 +87,10 @@ export function createAppAuthContext(): AuthContext {
     },
     completeLogin,
     sendMobileWelcomeEmail: async (email) => {
-      const result = await sendWelcomeEmail.mutateAsync(email);
+      const attribution = adAttributionForCapture();
+      const result = await sendWelcomeEmail.mutateAsync(
+        Object.keys(attribution).length > 0 ? { email, attribution } : { email }
+      );
       if (result.isOk()) return { t: 'sent', alreadySent: !result.value.sent };
       const code = result.error[0]?.code;
       if (code === 'INVALID_EMAIL') return { t: 'invalid-email' };
@@ -90,6 +101,7 @@ export function createAppAuthContext(): AuthContext {
       analytics.identify(user.id, {
         email: user.email,
         os: detect(navigator.userAgent)?.os?.replaceAll(' ', ''),
+        setOnce: user.setOnce,
       }),
     trackMobileSignupLead: (email) => {
       // Lead feeds an existing custom conversion; Meta's Maximize Value

@@ -1,5 +1,7 @@
 /** Load a component thumbnail only when its card approaches the viewport. */
-import DiamondsFour from '@phosphor/diamonds-four.svg';
+
+import { fireAndForget } from '@core/util/fireAndForget';
+import DiamondsFour from '@icon/system/regular/diamonds-four.svg';
 import { createSignal, onCleanup, onMount, Show } from 'solid-js';
 
 export function ComponentPreview(props: { load: () => Promise<Blob> }) {
@@ -19,7 +21,7 @@ export function ComponentPreview(props: { load: () => Promise<Blob> }) {
       (entries) => {
         if (!entries.some((entry) => entry.isIntersecting)) return;
         observer.disconnect();
-        void load();
+        fireAndForget(load(), 'fig-design-system');
       },
       { rootMargin: '64px' }
     );

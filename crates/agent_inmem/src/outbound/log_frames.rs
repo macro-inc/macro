@@ -24,24 +24,16 @@ impl<Repo> FrameSource for LogFrameSource<Repo>
 where
     Repo: AgentSessionLogRepo,
 {
-    fn frames(&self, session: AgentSessionId) -> BoxFuture<'_, Vec<Message>> {
+    fn frames(
+        &self,
+        session: AgentSessionId,
+    ) -> BoxFuture<'_, agent_session::domain::error::Result<Vec<Message>>> {
         Box::pin(async move {
-            match self.repo.list_by_session(session).await {
-                Ok(entries) => entries
-                    .into_iter()
-                    .map(|stored| stored.entry.content)
-                    .collect(),
-                // Degrade to the pre-replay behavior - the model's context
-                // starts over - rather than failing the attach.
-                Err(error) => {
-                    tracing::warn!(
-                        error = ?error,
-                        %session,
-                        "failed to load the session log; the in-memory agent starts with no model context"
-                    );
-                    Vec::new()
-                }
-            }
+            let entries = self.repo.list_by_session(session).await?;
+            Ok(entries
+                .into_iter()
+                .map(|stored| stored.entry.content)
+                .collect())
         })
     }
 }

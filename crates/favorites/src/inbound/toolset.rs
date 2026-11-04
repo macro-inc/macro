@@ -55,8 +55,6 @@ pub enum FavoritableEntityType {
     Document,
     /// A project (folder).
     Project,
-    /// An AI chat conversation.
-    Chat,
     /// A channel.
     Channel,
     /// An email thread.
@@ -74,7 +72,6 @@ impl FavoritableEntityType {
         match self {
             Self::Document => EntityType::Document,
             Self::Project => EntityType::Project,
-            Self::Chat => EntityType::Chat,
             Self::Channel => EntityType::Channel,
             Self::Email => EntityType::EmailThread,
             Self::Call => EntityType::Call,

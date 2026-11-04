@@ -1,3 +1,4 @@
+import { useFlow, usePending } from '@app/observability/flow';
 /**
  * The Solid face of {@link AgentSession}: the shared session for whatever id
  * the block currently shows, as a reconciled ordered store of folded messages
@@ -14,6 +15,7 @@ import {
   type AgentSessionRecord,
   type IssueResult,
 } from '@core/agent-session/AgentSession';
+import { fireAndForget } from '@core/util/fireAndForget';
 import type { AgentSessionRenamedEvent } from '@queries/agent-session/realtime-protocol';
 import {
   subscribeAgentSessionRenamed,
@@ -40,7 +42,7 @@ import {
   onCleanup,
   untrack,
 } from 'solid-js';
-import { createStore, produce, reconcile } from 'solid-js/store';
+import { createStore, reconcile, unwrap } from 'solid-js/store';
 import { issueSessionAction } from '../queries/issue-session-action';
 import type { EffortSelection } from '../state/session-config';
 import { configureSessionModel } from './configure-session-model';
@@ -97,10 +99,6 @@ function compareMessages(a: FoldedMessage, b: FoldedMessage): number {
   return authorRank(a) - authorRank(b);
 }
 
-function sameMessage(a: FoldedMessage, b: FoldedMessage): boolean {
-  return a.turn === b.turn && a.author.kind === b.author.kind;
-}
-
 /**
  * `sessionId` is absent while a just-created session's `POST` is still on the
  * wire (`pending-session.ts`). `createResource` treats an absent source as
@@ -112,6 +110,8 @@ export function createAgentSession(
   options: {
     /** The viewer, so a speculated prompt is attributed as the log will. */
     userId: Accessor<string | undefined>;
+    /** Keeps initial readiness open while a new session is provisioned. */
+    provisioning: Accessor<boolean>;
     /** This view now owns a reference; a pending navigation may release its own. */
     onAcquire?: () => void;
   }
@@ -128,71 +128,49 @@ export function createAgentSession(
   // time, and the detach blanks the transcript and drops the caret to
   // `<body>`. Absent is a state it already renders — that is the whole point
   // of the placeholder — so report that for the first fetch instead.
+  const loadSpan = useFlow().span;
   const openedPending = sessionId() === undefined;
 
   const [list, setList] = createStore<FoldedMessage[]>([]);
   const [bot, setBot] = createSignal<SessionBot>();
   const [metadata, setMetadata] = createSignal<SessionMetadata>();
 
-  const upsert = (messages: FoldedMessage[]) =>
-    batch(() => {
-      for (const message of messages) {
-        // The list is short and appends dominate, so scan from the tail
-        // rather than binary-searching.
-        let index = list.length - 1;
-        while (index >= 0 && compareMessages(list[index]!, message) > 0) {
-          index--;
-        }
-        if (index >= 0 && sameMessage(list[index]!, message)) {
-          // Path-scoped reconcile: a streaming turn replaces its message
-          // hundreds of times; only the changed content re-renders.
-          setList(index, reconcile(message));
-        } else {
-          const at = index + 1;
-          setList(
-            produce((current: FoldedMessage[]) =>
-              current.splice(at, 0, message)
-            )
-          );
-        }
-      }
-    });
-
-  /** A row's identity in the transcript, and the transcript's render key. */
-  const keyOf = (message: FoldedMessage) =>
-    `${message.turn}:${message.author.kind}`;
-
   // A whole new view of the conversation: what a load reports, and what every
   // rebase reports while something is speculated.
   //
-  // Merged row by row rather than spliced wholesale. A splice hands the store
-  // a fresh object for every index, so Solid remounts every row - the
-  // transcript re-measures, entrance motions replay, and a streaming turn
-  // visibly jumps. A rebase happens on *every* confirmed frame while an
-  // action is pending, so that jump was the whole turn flickering. Reconciling
-  // each row against the one already there keeps identity for everything that
-  // did not actually change.
+  // Keyed by each message's stable `key` (`<turn>:<author kind>`), so a row
+  // the new view still holds stays the same store object, reconciled in place,
+  // and only rows that came or went mount or unmount. A rebase happens on
+  // every confirmed frame while an action is pending; reconciling by position
+  // or swapping in fresh objects would remount the transcript and replay the
+  // whole turn. Not `merge`: a row can move.
   const replace = (messages: FoldedMessage[]) =>
-    batch(() => {
-      const wanted = new Set(messages.map(keyOf));
-      // Tail first, so the indices ahead of each removal still hold.
-      for (let index = list.length - 1; index >= 0; index--) {
-        if (wanted.has(keyOf(list[index]!))) continue;
-        setList(
-          produce((current: FoldedMessage[]) => {
-            current.splice(index, 1);
-          })
-        );
-      }
-      upsert(messages);
-    });
+    setList(reconcile(messages, { key: 'key' }));
+
+  // One streamed message. The fold appends in transcript order, so the tail is
+  // the only row this reads: settled history is never walked per event.
+  const upsert = (message: FoldedMessage) => {
+    const last = list.at(-1);
+    if (last?.key === message.key) {
+      setList(list.length - 1, reconcile(message));
+    } else if (!last || compareMessages(last, message) < 0) {
+      setList(list.length, message);
+    } else {
+      // Out of order or an earlier row's update: rare, so take the keyed
+      // path over the whole list.
+      const next = unwrap(list).filter((row) => row.key !== message.key);
+      const at = next.findIndex((row) => compareMessages(row, message) > 0);
+      next.splice(at === -1 ? next.length : at, 0, message);
+      replace(next);
+    }
+  };
 
   const applyEvents = (events: FoldedStreamEvent[]) =>
     batch(() => {
       for (const event of events) {
         if (event.kind === 'replace') replace(event.messages);
         else if (event.kind === 'metadata') setMetadata(event.metadata);
-        else upsert([event.message]);
+        else upsert(event.message);
       }
     });
 
@@ -201,7 +179,7 @@ export function createAgentSession(
   const live = createMemo(() => {
     const id = sessionId();
     if (!id) return undefined;
-    const session = AgentSession.acquire(id);
+    const session = loadSpan.run(() => AgentSession.acquire(id));
     const unsubscribe = session.subscribe(applyEvents);
     onCleanup(() => {
       unsubscribe();
@@ -278,9 +256,17 @@ export function createAgentSession(
       // replaces it when it lands, through the same store, so the resource
       // resolves here and the fetch settles it in the background.
       await show(session, cached, 'cached');
-      void settleInBackground(session, renameRefreshAtStart);
+      fireAndForget(
+        settleInBackground(session, renameRefreshAtStart),
+        'agent-session'
+      );
       return cached.session;
     }
+  );
+
+  usePending(
+    'agent.transcript',
+    () => options.provisioning() || resource.loading
   );
 
   async function settleInBackground(
@@ -299,9 +285,8 @@ export function createAgentSession(
     subscribeAgentSessionRenamed((event) => {
       if (event.agentSessionId !== sessionId()) return;
       const run = ++renameRefresh;
-      void agentHarnessServiceClient
-        .get(event.agentSessionId)
-        .then((session) => {
+      fireAndForget(
+        agentHarnessServiceClient.get(event.agentSessionId).then((session) => {
           if (
             session.isErr() ||
             run !== renameRefresh ||
@@ -315,7 +300,9 @@ export function createAgentSession(
           mutate((current) =>
             current ? { ...current, name: session.value.name } : current
           );
-        });
+        }),
+        'agent-session'
+      );
     })
   );
 
@@ -324,19 +311,22 @@ export function createAgentSession(
     subscribeAgentSessionUpdated((event) => {
       if (event.agentSessionId !== sessionId()) return;
       const run = ++updateRefresh;
-      void (async () => {
-        const session = await agentHarnessServiceClient.get(
-          event.agentSessionId
-        );
-        if (
-          session.isErr() ||
-          run !== updateRefresh ||
-          event.agentSessionId !== sessionId()
-        ) {
-          return;
-        }
-        mutate((current) => (current ? session.value : current));
-      })();
+      fireAndForget(
+        (async () => {
+          const session = await agentHarnessServiceClient.get(
+            event.agentSessionId
+          );
+          if (
+            session.isErr() ||
+            run !== updateRefresh ||
+            event.agentSessionId !== sessionId()
+          ) {
+            return;
+          }
+          mutate((current) => (current ? session.value : current));
+        })(),
+        'agent-session'
+      );
     })
   );
 
@@ -361,7 +351,7 @@ export function createAgentSession(
     messages: () => list,
     loadFailed: () => failure() !== undefined,
     accessDenied: () => failure() instanceof AgentSessionAccessDenied,
-    retry: () => void refetch(),
+    retry: () => fireAndForget(refetch(), 'agent-session'),
     issue: (action) => {
       const current = live();
       return current
@@ -373,10 +363,13 @@ export function createAgentSession(
       if (!current) throw new Error('The agent session is not ready.');
       await configureSessionModel(
         {
+          id: current.id,
           issue: (action) =>
             issueSessionAction(current, action, { userId: options.userId() }),
           snapshot: () => current.snapshot(),
           subscribe: (listener) => current.subscribe(listener),
+          refresh: () => current.refresh(),
+          retract: (actionId) => current.retract(actionId),
         },
         model,
         effort

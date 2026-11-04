@@ -1,4 +1,6 @@
+import { usePending } from '@app/observability/flow';
 import { StaticMarkdownContext } from '@core/component/LexicalMarkdown/component/core/StaticMarkdown';
+import { fireAndForget } from '@core/util/fireAndForget';
 import { refreshInBackground } from '@queries/database-sql/create-database-sql-query';
 import {
   applyDatabaseOps,
@@ -41,8 +43,6 @@ import type { DatabaseEntityType } from '../../database/core/column-inference';
 import { convertedColumnName } from '../../database/core/column-schema';
 import type { DatabaseRelatedDestination } from '../../database/core/database-relations';
 import type { ViewChange } from '../../database/core/view-state';
-import type { BoardPositionsState } from '../../database/primitives/board-layout';
-import type { BoardPositions } from '../../database/views/database-board-view';
 import { DatabaseRecords } from '../../database/views/database-records';
 import type { DatabaseRecordsActions } from '../../database/views/database-records-view';
 import {
@@ -51,6 +51,12 @@ import {
   DatabaseTextEditor,
   DatabaseTextValue,
 } from '../database-mentions';
+import { createDatabaseDocumentNavigation } from '../navigation-adapter';
+import {
+  type DatabaseGridHost,
+  trackQueryRuns,
+} from '../primitives/track-query-runs';
+import { useDatabaseBoardPositions } from '../queries/board-positions';
 import { createColumnCasts } from '../queries/column-casts';
 import {
   addDatabaseColumnOptions,
@@ -64,17 +70,14 @@ import { useFormsAskingColumns } from '../queries/forms-usage';
 import { deleteDatabaseOption, updateDatabaseOption } from '../queries/options';
 import { tableChangesOf } from '../queries/table-changes';
 import { createDatabaseRowsSource, toViewColumn } from '../queries/table-rows';
-import {
-  moveDatabaseCard,
-  refreshCardPositions,
-  setCardPositions,
-  useCardPositions,
-} from '../queries/views';
+import { refreshCardPositions } from '../queries/views';
 
 export type DatabaseGridProps = {
   /** Host framing for the records area, below the toolbar. */
   contentClass?: string;
   databaseId: string;
+  /** Where the grid is shown, for analytics. */
+  host: DatabaseGridHost;
   table: TableDetail;
   canEdit: boolean;
   /** The view on screen: a stored one, or the table's own All records. */
@@ -155,7 +158,10 @@ function RelatedDatabaseSync(props: {
 }
 
 function TableAdapter(props: DatabaseGridProps & { tableId: string }) {
+  const canEdit = createMemo(() => props.canEdit);
+
   const queryClient = useQueryClient();
+  const openDocumentMention = createDatabaseDocumentNavigation();
   // Keep the final schema for this table available to already-queued writes
   // after its tab is closed; a new selected table must never redirect them.
   let ownedTable = props.table;
@@ -188,6 +194,12 @@ function TableAdapter(props: DatabaseGridProps & { tableId: string }) {
     onTableChanged: (listener) =>
       useDatabaseTableChanges((change) => listener(change.tableId)),
   });
+  trackQueryRuns({
+    databaseId,
+    tableId: props.tableId,
+    host: props.host,
+    view: () => props.view,
+  });
   const source = withRelationLabels(
     createDatabaseRowsSource({
       databaseId,
@@ -205,7 +217,10 @@ function TableAdapter(props: DatabaseGridProps & { tableId: string }) {
             return;
           listener(change.version);
           if (props.stored && props.view.layout.kind === 'board')
-            void refreshCardPositions(databaseId, props.view.id);
+            fireAndForget(
+              refreshCardPositions(databaseId, props.view.id),
+              'database-cache'
+            );
         });
         // An undo or redo is read back as soon as it answers, ahead of its ping.
         onCleanup(
@@ -239,29 +254,15 @@ function TableAdapter(props: DatabaseGridProps & { tableId: string }) {
     }),
     relations
   );
+  usePending('database.rows', source.loading);
   // Embedded grids have no database BlockContainer to subscribe for them.
   // Tracking is reference-counted across grids and full database blocks.
   useDatabaseSubscription(databaseId, () => refreshInBackground(source));
-  const boardViewId = () =>
-    props.stored && props.view.layout.kind === 'board'
-      ? props.view.id
-      : undefined;
-  const positions = useCardPositions(databaseId, boardViewId);
-  const boardPositions: BoardPositions = {
-    state: (): BoardPositionsState => {
-      if (!props.stored) return { kind: 'ready', positions: [] };
-      if (positions.isSuccess)
-        return { kind: 'ready', positions: positions.data };
-      if (positions.isError)
-        return { kind: 'failed', retry: () => void positions.refetch() };
-      return { kind: 'loading' };
-    },
-    setPositions: (change) => {
-      const viewId = boardViewId();
-      if (viewId) setCardPositions(databaseId, viewId, change);
-    },
-    move: (move) => moveDatabaseCard(props.view, move),
-  };
+  const boardPositions = useDatabaseBoardPositions(
+    databaseId,
+    () => props.view,
+    () => props.stored
+  );
   const optionEditing: OptionEditing = {
     update: (columnId, optionId, change) =>
       updateDatabaseOption(
@@ -310,15 +311,15 @@ function TableAdapter(props: DatabaseGridProps & { tableId: string }) {
       <StaticMarkdownContext>
         <ColumnUsageContext.Provider value={formsAsking}>
           <OptionEditingContext.Provider
-            value={props.canEdit ? optionEditing : undefined}
+            value={canEdit() ? optionEditing : undefined}
           >
             <DatabaseProvider
               api={createMacroDatabaseApi(databaseId, queryClient)}
               tableId={props.tableId}
               view={props.view}
               capabilities={{
-                editRows: props.canEdit,
-                editColumns: props.canEdit,
+                editRows: canEdit(),
+                editColumns: canEdit(),
               }}
               data={{ table: () => editorTable(table()), rows: source }}
               inferNewColumns
@@ -340,6 +341,7 @@ function TableAdapter(props: DatabaseGridProps & { tableId: string }) {
                 renderTextValue={renderTextValue}
                 renderMentionPicker={renderMentionPicker}
                 renderMentionValue={renderMentionValue}
+                onOpenDocumentMention={openDocumentMention}
                 renderRelationCell={(cell) => (
                   <DatabaseRelationCell
                     {...cell}

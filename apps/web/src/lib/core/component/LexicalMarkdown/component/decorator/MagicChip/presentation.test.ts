@@ -8,12 +8,16 @@ import {
 
 const response = (overrides: Partial<FoldedMessage> = {}): FoldedMessage => ({
   agentSessionId: 'session',
+  key: '0:agent',
   requestId: null,
   turn: 0,
   author: { kind: 'agent' },
   parts: [{ kind: 'thought', text: 'Inspecting the repository' }],
   stop: null,
   pending: false,
+  segments: [],
+  phase: null,
+  postedAt: null,
   ...overrides,
 });
 

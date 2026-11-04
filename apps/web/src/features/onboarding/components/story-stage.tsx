@@ -1,3 +1,4 @@
+import { fireAndForget } from '@core/util/fireAndForget';
 import {
   createEffect,
   createSignal,
@@ -241,7 +242,7 @@ export function StoryStage(props: {
           /* Navigation or unmount cancelled the handoff. */
         }
       };
-      void settle();
+      fireAndForget(settle(), 'onboarding');
       window.addEventListener('resize', finish, { once: true });
     });
   };

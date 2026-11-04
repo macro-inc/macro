@@ -1,0 +1,6 @@
+query ImportInitiatives($after: String) {
+  initiatives(first: 50, after: $after, includeArchived: true) {
+    nodes { id name description url parentInitiative { id } }
+    pageInfo { hasNextPage endCursor }
+  }
+}

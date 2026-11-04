@@ -9,8 +9,12 @@ const wiring = vi.hoisted(() => ({
   userId: 'tour-user',
   settings: vi.fn(),
   links: [] as unknown[],
-  native: [] as { server_name: string; authenticated: boolean }[],
-  pipedream: [] as { server_name: string }[],
+  native: [] as {
+    server_name: string;
+    authenticated: boolean;
+    enabled: boolean;
+  }[],
+  pipedream: [] as { server_name: string; enabled: boolean }[],
   queries: vi.fn(),
 }));
 
@@ -165,14 +169,17 @@ describe('ViewTour', () => {
     expect(wiring.settings).toHaveBeenCalledWith('Connected');
     view.unmount();
 
-    // Pipedream connections win over native rows, as the backend serves them.
-    wiring.native = [{ server_name: 'Linear', authenticated: true }];
-    wiring.pipedream = [{ server_name: 'notion' }];
+    // A native connection remains usable alongside unrelated Pipedream apps.
+    wiring.native = [
+      { server_name: 'Linear', authenticated: true, enabled: true },
+    ];
+    wiring.pipedream = [{ server_name: 'notion', enabled: true }];
     const second = render(() => <ViewTour tour={linear} />);
-    expect(screen.getByRole('button', { name: 'Connect Linear' })).toBeTruthy();
+    expect(screen.queryByRole('button', { name: 'Connect Linear' })).toBeNull();
     second.unmount();
 
-    wiring.pipedream = [{ server_name: 'linear' }];
+    wiring.native = [];
+    wiring.pipedream = [{ server_name: 'linear', enabled: true }];
     render(() => <ViewTour tour={linear} />);
     expect(screen.queryByRole('button', { name: 'Connect Linear' })).toBeNull();
   });

@@ -32,6 +32,7 @@ const layout: FormLayout = {
       kind: 'questions',
       gateRules: null,
       gateMessage: '',
+      showWhen: null,
       bookingTarget: null,
       questions: [
         {
@@ -70,6 +71,7 @@ const layout: FormLayout = {
         ],
       },
       gateMessage: 'The offsite is for employees.',
+      showWhen: null,
       bookingTarget: null,
       questions: [],
     },
@@ -80,6 +82,7 @@ const layout: FormLayout = {
       kind: 'questions',
       gateRules: null,
       gateMessage: '',
+      showWhen: null,
       bookingTarget: null,
       questions: [
         {
@@ -187,9 +190,9 @@ describe('nextStep', () => {
   });
 
   it('goes back over gates to the previous questions section', () => {
-    expect(previousSectionIndex(layout, 2)).toBe(0);
-    expect(previousSectionIndex(layout, 0)).toBeUndefined();
-    expect(questionSectionIndices(layout)).toEqual([0, 2]);
+    expect(previousSectionIndex(layout, 2, {})).toBe(0);
+    expect(previousSectionIndex(layout, 0, {})).toBeUndefined();
+    expect(questionSectionIndices(layout, {})).toEqual([0, 2]);
   });
 });
 
@@ -270,6 +273,19 @@ describe('validation', () => {
     expect(
       answerProblem(question, date, { type: 'date', value: 'not a date' })
     ).toBe('Enter a valid date.');
+    const trip: FormColumn = { ...link, kind: { type: 'date_range' } };
+    expect(
+      answerProblem(question, trip, {
+        type: 'date_range',
+        value: { start: '2026-03-05T00:00:00Z', end: '2026-03-01T00:00:00Z' },
+      })
+    ).toBe('The end date can’t be before the start date.');
+    expect(
+      answerProblem(question, trip, {
+        type: 'date_range',
+        value: { start: '2026-03-01T00:00:00Z', end: '2026-03-01T00:00:00Z' },
+      })
+    ).toBeUndefined();
     const person: FormColumn = {
       ...link,
       kind: { type: 'entity', target: 'USER', multi: false },
@@ -336,6 +352,7 @@ describe('a booking step', () => {
         kind: 'booking',
         gateRules: null,
         gateMessage: '',
+        showWhen: null,
         // A respondent's detail never carries the target.
         bookingTarget: null,
         questions: [],
@@ -345,8 +362,240 @@ describe('a booking step', () => {
 
   it('is not a screen before submitting: the last questions section submits', () => {
     expect(nextStep(booked, 2, {})).toEqual({ kind: 'submit' });
-    expect(questionSectionIndices(booked)).toEqual([0, 2]);
+    expect(questionSectionIndices(booked, {})).toEqual([0, 2]);
     expect(endsWithBooking(booked)).toBe(true);
     expect(endsWithBooking(layout)).toBe(false);
+  });
+});
+
+describe('a section shown only when earlier answers pass its condition', () => {
+  const ROLE = 'column-role';
+  const LANGUAGE = 'column-language';
+  const TOOL = 'column-tool';
+  const NOTE = 'column-note';
+  const ENGINEER = 'option-engineer';
+  const DESIGNER = 'option-designer';
+
+  const branching: FormLayout = {
+    sections: [
+      {
+        id: 'about',
+        title: 'About you',
+        description: '',
+        kind: 'questions',
+        gateRules: null,
+        gateMessage: '',
+        showWhen: null,
+        bookingTarget: null,
+        questions: [
+          {
+            id: 'q-role',
+            columnId: ROLE,
+            helpText: '',
+            required: true,
+            widget: 'choice',
+          },
+        ],
+      },
+      {
+        id: 'engineering',
+        title: 'Engineering',
+        description: '',
+        kind: 'questions',
+        gateRules: null,
+        gateMessage: '',
+        showWhen: {
+          conjunction: 'and',
+          conditions: [
+            {
+              kind: 'condition',
+              column: ROLE,
+              test: {
+                kind: 'options',
+                operator: 'isAnyOf',
+                options: [ENGINEER],
+              },
+            },
+          ],
+        },
+        bookingTarget: null,
+        questions: [
+          {
+            id: 'q-language',
+            columnId: LANGUAGE,
+            helpText: '',
+            required: true,
+            widget: 'short',
+          },
+        ],
+      },
+      {
+        id: 'design',
+        title: 'Design',
+        description: '',
+        kind: 'questions',
+        gateRules: null,
+        gateMessage: '',
+        showWhen: {
+          conjunction: 'and',
+          conditions: [
+            {
+              kind: 'condition',
+              column: ROLE,
+              test: {
+                kind: 'options',
+                operator: 'isAnyOf',
+                options: [DESIGNER],
+              },
+            },
+          ],
+        },
+        bookingTarget: null,
+        questions: [
+          {
+            id: 'q-tool',
+            columnId: TOOL,
+            helpText: '',
+            required: true,
+            widget: 'short',
+          },
+        ],
+      },
+      {
+        id: 'fit',
+        title: 'Fit',
+        description: '',
+        kind: 'gate',
+        gateRules: {
+          conjunction: 'or',
+          conditions: [
+            {
+              kind: 'condition',
+              column: LANGUAGE,
+              test: { kind: 'text', operator: 'is', value: 'Rust' },
+            },
+            {
+              kind: 'condition',
+              column: TOOL,
+              test: { kind: 'presence', operator: 'isNotEmpty' },
+            },
+          ],
+        },
+        gateMessage: 'Not a fit yet.',
+        showWhen: null,
+        bookingTarget: null,
+        questions: [],
+      },
+      {
+        id: 'wrap-up',
+        title: 'Anything else',
+        description: '',
+        kind: 'questions',
+        gateRules: null,
+        gateMessage: '',
+        showWhen: null,
+        bookingTarget: null,
+        questions: [
+          {
+            id: 'q-note',
+            columnId: NOTE,
+            helpText: '',
+            required: false,
+            widget: 'paragraph',
+          },
+        ],
+      },
+    ],
+  };
+
+  it('leads an engineer through the engineering section and a designer through the design one', () => {
+    expect(
+      nextStep(branching, 0, {
+        'q-role': { type: 'options', value: [{ id: ENGINEER }] },
+      })
+    ).toEqual({ kind: 'section', index: 1 });
+    expect(
+      nextStep(branching, 1, {
+        'q-role': { type: 'options', value: [{ id: ENGINEER }] },
+        'q-language': { type: 'text', value: 'Rust' },
+      })
+    ).toEqual({ kind: 'section', index: 4 });
+    expect(
+      nextStep(branching, 0, {
+        'q-role': { type: 'options', value: [{ id: DESIGNER }] },
+      })
+    ).toEqual({ kind: 'section', index: 2 });
+    expect(
+      nextStep(branching, 2, {
+        'q-role': { type: 'options', value: [{ id: DESIGNER }] },
+        'q-tool': { type: 'text', value: 'Figma' },
+      })
+    ).toEqual({ kind: 'section', index: 4 });
+  });
+
+  it('skips every conditional section for someone who left the question unanswered', () => {
+    expect(nextStep(branching, 0, {})).toEqual({
+      kind: 'stop',
+      sectionId: 'fit',
+      message: 'Not a fit yet.',
+    });
+  });
+
+  it('counts and steps back over only the sections shown', () => {
+    const engineer = {
+      'q-role': { type: 'options' as const, value: [{ id: ENGINEER }] },
+    };
+    const designer = {
+      'q-role': { type: 'options' as const, value: [{ id: DESIGNER }] },
+    };
+    expect(questionSectionIndices(branching, engineer)).toEqual([0, 1, 4]);
+    expect(questionSectionIndices(branching, designer)).toEqual([0, 2, 4]);
+    expect(previousSectionIndex(branching, 4, engineer)).toBe(1);
+    expect(previousSectionIndex(branching, 4, designer)).toBe(2);
+    expect(previousSectionIndex(branching, 2, designer)).toBe(0);
+  });
+
+  it('lets a gate read no answer typed into a section that is now skipped', () => {
+    // Answered as an engineer, then went back and chose designer.
+    expect(
+      nextStep(branching, 2, {
+        'q-role': { type: 'options', value: [{ id: DESIGNER }] },
+        'q-language': { type: 'text', value: 'Rust' },
+      })
+    ).toEqual({ kind: 'stop', sectionId: 'fit', message: 'Not a fit yet.' });
+  });
+
+  it('sends nothing from a skipped section on a first submission, and clears it on an edit', () => {
+    const answers = {
+      'q-role': { type: 'options' as const, value: [{ id: DESIGNER }] },
+      'q-language': { type: 'text' as const, value: 'Rust' },
+      'q-tool': { type: 'text' as const, value: 'Figma' },
+    };
+    expect(submissionAnswers(branching, answers, 'create')).toEqual([
+      {
+        question: 'q-role',
+        value: { type: 'options', value: [{ id: DESIGNER }] },
+      },
+      { question: 'q-tool', value: { type: 'text', value: 'Figma' } },
+    ]);
+    expect(submissionAnswers(branching, answers, 'edit')).toEqual([
+      {
+        question: 'q-role',
+        value: { type: 'options', value: [{ id: DESIGNER }] },
+      },
+      { question: 'q-language', value: { type: 'clear' } },
+      { question: 'q-tool', value: { type: 'text', value: 'Figma' } },
+      { question: 'q-note', value: { type: 'clear' } },
+    ]);
+  });
+
+  it('reports a condition on a question no longer before it as an update in progress', () => {
+    const stale: FormLayout = {
+      sections: [
+        { ...branching.sections[0], questions: [] },
+        ...branching.sections.slice(1),
+      ],
+    };
+    expect(nextStep(stale, 0, {})).toEqual({ kind: 'updating' });
   });
 });

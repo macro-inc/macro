@@ -5,12 +5,17 @@ export type ClientOptions = {
 };
 
 /**
- * Canonical client configuration. Ownership and execution state are server-owned.
+ * Client configuration, the create body. Ownership and execution state are
+ * server-owned.
  */
 export type ActionConfiguration = {
     enabled: boolean;
     kind: ActionKind;
     name: string;
+    /**
+     * Omitted by clients that predate the setting; runs then start unlisted.
+     */
+    run_visibility?: RunVisibility;
     task: {
         [key: string]: unknown;
     };
@@ -18,8 +23,9 @@ export type ActionConfiguration = {
 };
 
 /**
- * Canonical configuration replacement. Activation has its own endpoint, so
- * omitting `enabled` keeps the stored value.
+ * Configuration replacement, the update body. Activation has its own endpoint, so
+ * omitting `enabled` keeps the stored value; omitting `run_visibility` keeps
+ * it too, so clients that predate the setting do not reset it.
  */
 export type ActionConfigurationUpdate = {
     /**
@@ -30,6 +36,7 @@ export type ActionConfigurationUpdate = {
     enabled?: boolean | null;
     kind: ActionKind;
     name: string;
+    run_visibility?: null | RunVisibility;
     task: {
         [key: string]: unknown;
     };
@@ -66,12 +73,37 @@ export type ActionTrigger = {
     filters: EventFilters;
     type: 'events';
 } | {
+    at: string;
+    type: 'once';
+} | {
     triggers: RoutineTriggers;
     type: 'multiple';
 };
 
+/**
+ * One Pipedream app an agent lists under [`AgentMcpServers::Selected`].
+ *
+ * Only the catalog identity is stored. Whether a given person has connected
+ * the app is theirs, resolved at call time by the egress proxy, never here.
+ */
+export type AgentMcpServer = {
+    /**
+     * Pipedream app slug, e.g. `linear`.
+     */
+    app_slug: string;
+    /**
+     * Display name, e.g. `Linear`.
+     */
+    server_name: string;
+};
+
 export type AgentTask = {
     agent?: null | AgentTaskAgent;
+    /**
+     * Apps the routine requires on top of the agent's own. The owner must
+     * have each one connected to save the routine and for it to run.
+     */
+    mcp_servers?: Array<AgentMcpServer>;
     model?: null | RoutineModelId;
     prompt: string;
     user_prompt: string;
@@ -113,11 +145,6 @@ export type ConditionResult = {
 };
 
 /**
- * Exactly one representation is accepted, even if mixed fields agree or are null.
- */
-export type CreateScheduledAction = ActionConfiguration | LegacyActionConfiguration;
-
-/**
  * Empty response is required due to custom fetch forcing `response.json()`
  */
 export type EmptyResponse = {
@@ -127,6 +154,11 @@ export type EmptyResponse = {
 /**
  * An event name AND an entity ID must match within the same filter. A
  * condition further requires the event's content to answer it with yes.
+ *
+ * `github` comes from outside Macro and carries its payload: it stands
+ * alone in its filter, takes no ids, and may require
+ * exact payload values with `match`. A `github` filter narrows deliveries
+ * with its `github` selector.
  */
 export type EventFilter = {
     /**
@@ -135,7 +167,13 @@ export type EventFilter = {
      */
     condition?: string | null;
     events: Array<EventName>;
+    github?: null | GithubSelector;
     ids?: Array<string> | null;
+    /**
+     * Exact tests on the payload, all of which must pass.
+     */
+    match?: Array<PayloadCondition> | null;
+    property?: null | PropertySelector;
 };
 
 /**
@@ -147,7 +185,7 @@ export type EventFilters = Array<EventFilter>;
  * Closed allowlist: unknown names, deletions and ambiguous attribution are not
  * selectors. Adding a broker variant does not automatically enable routines.
  */
-export type EventName = 'document.created' | 'document.updated' | 'document.deleted' | 'task.created' | 'task.status_changed' | 'task.priority_changed' | 'task.property_changed' | 'email.message_received' | 'channel.created' | 'channel.message_posted' | 'channel.mentioned' | 'channel.message_patched' | 'channel.message_attachment_created';
+export type EventName = 'document.created' | 'document.updated' | 'document.deleted' | 'task.created' | 'task.status_changed' | 'task.priority_changed' | 'task.property_changed' | 'email.message_received' | 'channel.created' | 'channel.message_posted' | 'channel.mentioned' | 'channel.message_patched' | 'channel.message_attachment_created' | 'call.started' | 'call.ended' | 'github';
 
 /**
  * Transcript resource created by a run. Never infer this from current task configuration.
@@ -173,6 +211,30 @@ export type ExecutionResult = {
     version: number;
 };
 
+/**
+ * Which GitHub deliveries match.
+ */
+export type GithubSelector = {
+    /**
+     * Payload actions, such as `completed` or `opened`; any when empty.
+     */
+    actions?: Array<string>;
+    /**
+     * GitHub event names, such as `workflow_run` or `pull_request`; any when empty.
+     */
+    events?: Array<string>;
+    /**
+     * Also run for deliveries caused by bots and apps, including Macro's own.
+     */
+    includeBots?: boolean;
+    /**
+     * Repositories as `owner/name`, matched without regard to case; every
+     * repository the owner's installations cover when empty. A renamed
+     * repository stops matching until it is chosen again.
+     */
+    repositories?: Array<string>;
+};
+
 export type InProgressExecution = {
     action_id: string;
     chat_id?: string | null;
@@ -180,23 +242,94 @@ export type InProgressExecution = {
 };
 
 /**
- * Deprecated cron-only input, accepted during the compatibility rollout.
+ * How a routine's most recent finished run went, so lists can flag failures.
  */
-export type LegacyActionConfiguration = {
-    enabled: boolean;
-    kind: ActionKind;
-    name: string;
-    schedule: Schedule;
-    task: {
-        [key: string]: unknown;
-    };
-    timezone: string;
+export type LastRun = {
+    end_time: string;
+    is_success: boolean;
+};
+
+/**
+ * `path` walks objects by key; `*` steps into every element of an array and
+ * a number into one. Give exactly one test. `notIn` also passes when the
+ * path finds nothing.
+ */
+export type PayloadCondition = {
+    equals?: null | PayloadScalar;
+    /**
+     * Whether the path finds a non-null value.
+     */
+    exists?: boolean | null;
+    /**
+     * Some text found matches this glob; `*` matches any run of characters.
+     */
+    glob?: string | null;
+    /**
+     * Some value found is one of these.
+     */
+    in?: Array<PayloadScalar> | null;
+    /**
+     * No value found is one of these.
+     */
+    notIn?: Array<PayloadScalar> | null;
+    /**
+     * Keys from the payload's root, e.g. `["workflow_run", "conclusion"]`.
+     */
+    path: Array<string>;
+};
+
+/**
+ * A JSON text, number, boolean or null that payload values are compared with.
+ */
+export type PayloadScalar = null | boolean | number | string;
+
+/**
+ * Narrows a task property change filter to one property and, optionally, the
+ * values it must gain.
+ */
+export type PropertySelector = {
+    /**
+     * The property definition that must have changed.
+     */
+    definitionId: string;
+    /**
+     * Select option ids or referenced entity ids, one of which the change must
+     * add. Any change to the property matches when empty.
+     */
+    values?: Array<string>;
 };
 
 /**
  * A nonblank model identifier. Runtime catalogs, not the scheduler, own availability.
  */
 export type RoutineModelId = string;
+
+/**
+ * A shared routine's snapshot, readable by signed-in users with sharing enabled.
+ */
+export type RoutineTemplate = {
+    /**
+     * Routines activated from this template, including stopped ones.
+     */
+    active_count: number;
+    /**
+     * Who shared it: the source routine's owner.
+     */
+    author: string;
+    created_at: string;
+    description: string;
+    /**
+     * The routine it was shared from.
+     */
+    id: string;
+    name: string;
+    task: {
+        [key: string]: unknown;
+    };
+    trigger: ActionTrigger;
+    updated_at: string;
+    variables: Array<TemplateVariable>;
+};
 
 /**
  * An individual trigger in a routine's trigger list.
@@ -208,12 +341,23 @@ export type RoutineTrigger = {
 } | {
     filters: EventFilters;
     type: 'events';
+} | {
+    at: string;
+    type: 'once';
 };
 
 /**
  * Bounded schedules and one combined set of event filters.
  */
 export type RoutineTriggers = Array<RoutineTrigger>;
+
+/**
+ * Whether a routine's runs are listed in Home and the Agents list. Routines
+ * that run often would bury the owner's own work, so runs start unlisted;
+ * either way they stay in the routine's history. The string form is the
+ * `scheduled_action.run_visibility` column's.
+ */
+export type RunVisibility = 'listed' | 'unlisted';
 
 export type Schedule = string;
 
@@ -247,9 +391,17 @@ export type ScheduledAction = {
      * rather than failing to parse.
      */
     owner: string;
+    /**
+     * Whether the action's runs are listed in Home and the Agents list.
+     */
+    run_visibility: RunVisibility;
     task: {
         [key: string]: unknown;
     };
+    /**
+     * The shared template this routine was activated from, if any.
+     */
+    template_id?: string | null;
     trigger: ActionTrigger;
     updated_at: string;
 };
@@ -259,6 +411,7 @@ export type ScheduledAction = {
  * responses omit legacy fields rather than inventing a schedule or timezone.
  */
 export type ScheduledActionResponse = ScheduledAction & {
+    last_run?: null | LastRun;
     /**
      * Deprecated: use `trigger.schedule`. Present only for cron actions.
      *
@@ -302,9 +455,40 @@ export type SetScheduledActionEnabled = {
 };
 
 /**
- * Full replacement of client configuration, not of server-owned action state.
+ * What the owner supplies when sharing; the rest is snapshotted from the routine.
  */
-export type UpdateScheduledAction = ActionConfigurationUpdate | LegacyActionConfiguration;
+export type ShareRoutineTemplate = {
+    description: string;
+    variables: Array<TemplateVariable>;
+};
+
+/**
+ * A user-specific part of a shared routine.
+ */
+export type TemplateVariable = {
+    fill: VariableFill;
+    id: string;
+    kind: 'user';
+    label: string;
+} | {
+    /**
+     * The mention's block name, such as `channel` or `md`.
+     */
+    block_name: string;
+    fill: VariableFill;
+    id: string;
+    kind: 'item';
+    label: string;
+} | {
+    fill: VariableFill;
+    kind: 'time_zone';
+    timezone: string;
+};
+
+/**
+ * How a variable is filled when someone activates the template.
+ */
+export type VariableFill = 'activator' | 'shared' | 'choice';
 
 export type ScheduledActionHealthData = {
     body?: never;
@@ -349,7 +533,7 @@ export type ListScheduledActionsResponses = {
 export type ListScheduledActionsResponse = ListScheduledActionsResponses[keyof ListScheduledActionsResponses];
 
 export type CreateScheduledActionData = {
-    body: CreateScheduledAction;
+    body: ActionConfiguration;
     path?: never;
     query?: never;
     url: '/scheduled-actions';
@@ -423,7 +607,7 @@ export type GetScheduledActionResponses = {
 export type GetScheduledActionResponse = GetScheduledActionResponses[keyof GetScheduledActionResponses];
 
 export type UpdateScheduledActionData = {
-    body: UpdateScheduledAction;
+    body: ActionConfigurationUpdate;
     path: {
         /**
          * ID of the scheduled action
@@ -548,3 +732,116 @@ export type ListScheduledActionHistoryResponses = {
 };
 
 export type ListScheduledActionHistoryResponse = ListScheduledActionHistoryResponses[keyof ListScheduledActionHistoryResponses];
+
+export type UnshareScheduledActionTemplateData = {
+    body?: never;
+    path: {
+        /**
+         * ID of the shared routine
+         */
+        id: string;
+    };
+    query?: never;
+    url: '/scheduled-actions/{id}/template';
+};
+
+export type UnshareScheduledActionTemplateErrors = {
+    401: string;
+    404: string;
+    500: string;
+};
+
+export type UnshareScheduledActionTemplateError = UnshareScheduledActionTemplateErrors[keyof UnshareScheduledActionTemplateErrors];
+
+export type UnshareScheduledActionTemplateResponses = {
+    204: void;
+};
+
+export type UnshareScheduledActionTemplateResponse = UnshareScheduledActionTemplateResponses[keyof UnshareScheduledActionTemplateResponses];
+
+export type GetScheduledActionTemplateData = {
+    body?: never;
+    path: {
+        /**
+         * ID of the shared routine
+         */
+        id: string;
+    };
+    query?: never;
+    url: '/scheduled-actions/{id}/template';
+};
+
+export type GetScheduledActionTemplateErrors = {
+    401: string;
+    /**
+     * The routine is not shared
+     */
+    404: string;
+    500: string;
+};
+
+export type GetScheduledActionTemplateError = GetScheduledActionTemplateErrors[keyof GetScheduledActionTemplateErrors];
+
+export type GetScheduledActionTemplateResponses = {
+    200: RoutineTemplate;
+};
+
+export type GetScheduledActionTemplateResponse = GetScheduledActionTemplateResponses[keyof GetScheduledActionTemplateResponses];
+
+export type ShareScheduledActionTemplateData = {
+    body: ShareRoutineTemplate;
+    path: {
+        /**
+         * ID of the routine to share
+         */
+        id: string;
+    };
+    query?: never;
+    url: '/scheduled-actions/{id}/template';
+};
+
+export type ShareScheduledActionTemplateErrors = {
+    400: string;
+    401: string;
+    404: string;
+    500: string;
+};
+
+export type ShareScheduledActionTemplateError = ShareScheduledActionTemplateErrors[keyof ShareScheduledActionTemplateErrors];
+
+export type ShareScheduledActionTemplateResponses = {
+    200: RoutineTemplate;
+};
+
+export type ShareScheduledActionTemplateResponse = ShareScheduledActionTemplateResponses[keyof ShareScheduledActionTemplateResponses];
+
+export type ActivateScheduledActionTemplateData = {
+    body: ActionConfiguration;
+    path: {
+        /**
+         * ID of the shared routine
+         */
+        id: string;
+    };
+    query?: never;
+    url: '/scheduled-actions/{id}/template/activate';
+};
+
+export type ActivateScheduledActionTemplateErrors = {
+    400: string;
+    401: string;
+    403: string;
+    /**
+     * The routine is not shared
+     */
+    404: string;
+    500: string;
+};
+
+export type ActivateScheduledActionTemplateError = ActivateScheduledActionTemplateErrors[keyof ActivateScheduledActionTemplateErrors];
+
+export type ActivateScheduledActionTemplateResponses = {
+    201: ScheduledActionResponse;
+};
+
+export type ActivateScheduledActionTemplateResponse = ActivateScheduledActionTemplateResponses[keyof ActivateScheduledActionTemplateResponses];

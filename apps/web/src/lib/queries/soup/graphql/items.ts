@@ -1,12 +1,12 @@
 import type { CombinedError } from '@urql/core';
 import { type Accessor, createMemo } from 'solid-js';
 import { arrayEquals } from '../../../core/util/compareUtils';
+import type { QueryRevalidation } from '../../../graphql-cache/exchange/optimistic';
 import type { CacheRevision } from '../../../graphql-cache/protocol';
 import {
   type GraphqlSoupItem,
   mapGraphqlSoupItem,
 } from '../../../service-clients/service-storage/graphql-soup';
-import { useInstructionsMdIdQuery } from '../../storage/instructions-md';
 import { createKeyedProjection } from '../create-keyed-projection';
 import { soupQueryExcludesDone } from '../excludes-done';
 import type { SoupAstBody, SoupAstItemsData, SoupAstParams } from '../items';
@@ -16,12 +16,14 @@ import {
   mapSoupPageToEntityList,
 } from '../transform-utils';
 import { makeGraphqlSoupInput } from './ast';
+import type { GroupedSoupPaging } from './create-grouped-soup-live-query';
+import type { PredicateQueryStatus } from './create-predicate-query';
 import {
   createSoupLiveQuery,
   type SoupLiveQueryOptions,
 } from './create-soup-live-query';
 import { createGraphqlSoupDoneProjection } from './done-projection';
-import { usePendingGraphqlSoupDeleteIds } from './optimistic-deletions';
+import { usePendingGraphqlSoupDeleteKeys } from './optimistic-deletions';
 import { usePendingGraphqlSoupDone } from './optimistic-done';
 import { soupItemKey } from './reconciliation';
 
@@ -36,11 +38,19 @@ export type GraphqlSoupAstItemsQueryOptions = SoupLiveQueryOptions & {
 };
 
 export type GraphqlSoupAstItemsQuery = {
+  groupedPaging?: GroupedSoupPaging;
+  /** Cache writes keep this list current. Grouped lists leave it out. */
+  cacheMaintained?: Accessor<boolean>;
+  /** Readiness of the local predicate, not proof of complete server membership. */
+  cacheStatus?: Accessor<PredicateQueryStatus>;
   localRevision?: Accessor<CacheRevision | undefined>;
   localOptimistic?: Accessor<boolean>;
+  revalidationQueries?: Accessor<readonly QueryRevalidation[]>;
   data: Accessor<SoupAstItemsData | undefined>;
   /** Latest GraphQL transport or application error. */
   error: Accessor<CombinedError | undefined>;
+  /** Includes background failures hidden by the cached-data display policy. */
+  fetchError?: Accessor<CombinedError | undefined>;
   /** False when the filter AST has no GraphQL translation. */
   isSupported: Accessor<boolean>;
   isEnabled: Accessor<boolean>;
@@ -72,13 +82,9 @@ export function createGraphqlSoupAstItemsQuery(
     }
   });
   const source = createSoupLiveQuery(input, options);
-  const instructions = useInstructionsMdIdQuery();
-  const instructionsId = createMemo(() =>
-    instructions.isSuccess ? instructions.data : undefined
-  );
   const sortMethod = createMemo(() => args().params.sort_method);
   const showForeign = createMemo(() => options().showSupportedForeignEntities);
-  const pendingDeleteIds = usePendingGraphqlSoupDeleteIds();
+  const pendingDeleteKeys = usePendingGraphqlSoupDeleteKeys();
   const pendingDone = usePendingGraphqlSoupDone();
   const projectDone = createGraphqlSoupDoneProjection();
   const excludesDone = createMemo(() => soupQueryExcludesDone([args().body]));
@@ -110,15 +116,15 @@ export function createGraphqlSoupAstItemsQuery(
     records,
     (row) => row.key,
     ({ record, fetched }) => {
-      const id = instructionsId();
       const sort = sortMethod();
       const showSupportedForeignEntities = showForeign();
-      const item = mapGraphqlSoupItem(record);
+      const view = { emailView: input()?.emailView };
+      const item = mapGraphqlSoupItem(record, view);
       const fetchedItem =
         fetched === record
           ? item
           : fetched
-            ? mapGraphqlSoupItem(fetched)
+            ? mapGraphqlSoupItem(fetched, view)
             : undefined;
       return {
         key: soupItemKey(record),
@@ -126,10 +132,7 @@ export function createGraphqlSoupAstItemsQuery(
         entity: item
           ? mapSoupPageToEntityList(
               { items: [item], next_cursor: undefined },
-              {
-                instructionsIdQuery: { isSuccess: id !== undefined, data: id },
-                showSupportedForeignEntities,
-              }
+              { showSupportedForeignEntities }
             )[0]
           : undefined,
         timestamp: fetchedItem
@@ -191,7 +194,7 @@ export function createGraphqlSoupAstItemsQuery(
         data(),
         pendingDone(),
         excludesDone(),
-        pendingDeleteIds()
+        pendingDeleteKeys()
       )
     ),
   };

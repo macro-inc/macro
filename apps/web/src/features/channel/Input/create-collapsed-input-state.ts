@@ -1,5 +1,6 @@
 import { isMobile } from '@core/mobile/isMobile';
 import { pickNativePhotoLibraryMedia } from '@core/mobile/nativePhotoLibrary';
+import { fireAndForget } from '@core/util/fireAndForget';
 import { isPlatform } from '@core/util/platform';
 import {
   type Accessor,
@@ -36,13 +37,16 @@ export function createCollapsedInputState(options: {
 
   const attach = () => {
     if (isPlatform('ios')) {
-      void pickNativePhotoLibraryMedia().then((files) => {
-        if (files === null) {
-          filePickerRef?.click();
-          return;
-        }
-        return attachFiles(files);
-      });
+      fireAndForget(
+        pickNativePhotoLibraryMedia().then((files) => {
+          if (files === null) {
+            filePickerRef?.click();
+            return;
+          }
+          return attachFiles(files);
+        }),
+        'channel-input'
+      );
       return;
     }
     filePickerRef?.click();
@@ -53,7 +57,7 @@ export function createCollapsedInputState(options: {
   ) => {
     const files = Array.from(event.currentTarget.files ?? []);
     event.currentTarget.value = '';
-    void attachFiles(files);
+    fireAndForget(attachFiles(files), 'channel-input');
   };
 
   return {

@@ -1,9 +1,11 @@
+import { renameDatabase } from '@block-database/queries/rename-database';
 import { renameItem } from '@core/component/FileList/itemOperations';
 import { toast } from '@core/component/Toast/Toast';
 import {
   enableGraphqlSoup,
   isFeatureEnabled,
 } from '@core/constant/featureFlags';
+import { fireAndForget } from '@core/util/fireAndForget';
 import { optimisticMutationDispositionOf } from '@graphql-cache/exchange/optimistic';
 import { renameAgentSession } from '@queries/agent-session/entity-mutations';
 import { callKeys } from '@queries/call/keys';
@@ -109,8 +111,8 @@ const getEntityRenameData = (
   // Reminders aren't either — the entity-mutation router rejects them, and a
   // reminder's name is its description, edited through the reminders API.
   // Calendar event titles are edited through the calendar mutation API.
-  // Databases are renamed by the database block's `renameDatabase`, which owns
-  // the schema cache it updates; forms by the form block's `renameForm`.
+  // Databases go through `renameDatabase` (not Soup optimism); forms through
+  // `renameForm` on the form block.
   if (
     entity.type === 'crm_company' ||
     entity.type === 'crm_contact' ||
@@ -130,6 +132,20 @@ const getEntityRenameData = (
 };
 
 const performEntityRename = async (operation: EntityRenameOperation) => {
+  if (operation.entity.type === 'database') {
+    if (operation.newName.trim() === operation.entity.name) {
+      return { success: true };
+    }
+    const renamed = await renameDatabase(
+      getEntityGraphqlClient(),
+      operation.entity.id,
+      operation.newName
+    );
+    if (renamed.isErr()) {
+      console.error('Failed to rename database', renamed.error);
+    }
+    return { success: renamed.isOk() };
+  }
   const data = getEntityRenameData(operation);
   if (!data) return { success: false };
   if (data.itemType === 'agent_session') {
@@ -239,7 +255,7 @@ function observeRenameSettlement(
     if (finished) return;
     finished = true;
     dispose();
-    void refresh();
+    fireAndForget(refresh(), 'entity-rename');
   };
   unsubscribe = host?.onMutationSettled((settlement) => {
     if (settlement.mutationUuid === uuid && settlement.status !== 'superseded')
@@ -267,6 +283,7 @@ const validateEntityRename = (entity: RenamableEntity): void => {
     case 'chat':
     case 'project':
     case 'call':
+    case 'database':
       return;
     case 'foreign':
       throw new Error('Foreign entities do not support renaming');
@@ -524,7 +541,10 @@ const bulkRenameOnSettled = (
 
   data.forEach((result, index) => {
     if (!result.success) {
-      const update = onMutateResult.updates[index];
+      const { entity } = params[index];
+      const update = onMutateResult.updates.find(
+        ({ id, itemType }) => id === entity.id && itemType === entity.type
+      );
       if (update) {
         failedUpdates.push(update);
         const key = soupTransactionKey(update.itemType, update.id);
@@ -545,7 +565,7 @@ const bulkRenameOnSettled = (
   }
 };
 
-/** Supports channel/document/chat/project/call/agent-session rename. */
+/** Supports channel/document/chat/project/call/agent-session/database rename. */
 export function createRenameDssEntityMutation(
   callbacks?: MutationCallbacks<
     RenameDssEntityMutationData,
@@ -583,7 +603,7 @@ export function createRenameDssEntityMutation(
   }));
 }
 
-/** Supports channel/document/chat/project/call/agent-session bulk rename. */
+/** Supports channel/document/chat/project/call/agent-session/database bulk rename. */
 export function createBulkRenameDssEntityMutation() {
   return useMutation<
     BulkRenameDssEntityMutationData,

@@ -1,5 +1,5 @@
 import { cleanup, fireEvent, render, screen } from '@solidjs/testing-library';
-import type { Accessor, ParentProps } from 'solid-js';
+import type { Accessor } from 'solid-js';
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 import type { ProjectDetail } from '../core/project';
 import { AddProjectTasks } from './add-project-tasks';
@@ -12,9 +12,7 @@ vi.mock('@ui', async () => ({
   ...(await import('@app/components/ui/utils/classname')),
   Hotkey: () => null,
 }));
-vi.mock('@app/components/ui/components/Tooltip', () => ({
-  Tooltip: (props: ParentProps) => props.children,
-}));
+
 vi.mock('@core/component/HoverCard', () => ({
   useIsInsideHoverCard: () => false,
 }));

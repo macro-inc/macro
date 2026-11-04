@@ -1,4 +1,5 @@
 import type { EventEditorInitialValues } from '@app/features/calendar/components/composer/event-form-model';
+import type { CreatedCalendarEvent } from '@app/features/calendar/hooks/use-event-editor';
 import type { CalendarEvent } from '@app/features/calendar/types';
 import { useSplitLayout } from '@components/app/split-layout/layout';
 import { confirmDialog } from '@ui';
@@ -8,7 +9,11 @@ import { getOwner } from 'solid-js';
 export interface OpenEventComposerOptions {
   event?: CalendarEvent;
   initialValues?: EventEditorInitialValues;
+  /** Values that arrive after the composer opens, applied only to an untouched form. */
+  suggestedValues?: Promise<Partial<EventEditorInitialValues>>;
   onCalendarChange?: (calendarId: string, color: string) => void;
+  /** Called with a new event once it exists, before the composer closes. */
+  onCreated?: (created: CreatedCalendarEvent) => void;
   onClose?: () => void;
 }
 
@@ -29,6 +34,7 @@ export function useOpenEventComposer() {
         params: {
           event: options.event,
           initialValues: options.initialValues,
+          suggestedValues: options.suggestedValues,
           onCalendarChange: options.onCalendarChange,
           onDirtyChange: (dirty: boolean) => {
             formDirty = dirty;
@@ -36,6 +42,7 @@ export function useOpenEventComposer() {
           onSaveSuccess: () => {
             eventSaved = true;
           },
+          onCreated: options.onCreated,
         },
       },
       {

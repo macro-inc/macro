@@ -1,9 +1,12 @@
 //! Email API infrastructure adapters.
 
-mod rate_limiter;
+mod gmail_gate;
+mod microsoft;
 mod token_source;
 
-pub use rate_limiter::{RateBudget, RedisProviderRateLimiter};
+pub use email_api_client::outbound::microsoft_gate::RedisMicrosoftRequestGate;
+pub use gmail_gate::{RateBudget, RedisGmailRequestGate};
+pub use microsoft::{MicrosoftCredentialsClient, ProviderMailboxGateway};
 pub use token_source::{EmailServiceTokenSource, StaticTokenSource};
 
 use email_api_client::GmailApiClientRepository;
@@ -13,5 +16,5 @@ use email_api_client::domain::service::EmailApiClientServiceImpl;
 pub type GmailApi = EmailApiClientServiceImpl<
     GmailApiClientRepository,
     EmailServiceTokenSource,
-    RedisProviderRateLimiter,
+    RedisGmailRequestGate,
 >;

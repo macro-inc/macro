@@ -14,9 +14,13 @@ serde_json = { workspace = true }
 serde_urlencoded = { workspace = true }
 thiserror = { workspace = true }
 tracing = { workspace = true }
+upstream_error = { path = "../upstream_error", default-features = false, features = [
+  "reqwest",
+] }
 urlencoding = { workspace = true }
+uuid = { workspace = true }
 workspace-hack = { version = "0.1", path = "../workspace-hack" }
 
 [dev-dependencies]
-tokio = { workspace = true }
+tokio = { workspace = true, features = ["test-util", "net", "io-util", "sync"] }
 wiremock = { workspace = true }

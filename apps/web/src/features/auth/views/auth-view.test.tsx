@@ -90,6 +90,29 @@ const typeCode = async (value: string) =>
     target: { value },
   });
 
+describe('agent signup', () => {
+  it('asks for an agent account by email', async () => {
+    const { fake } = setup({ intent: 'agent-signup' });
+
+    click('Continue with email');
+    await typeEmail('agent@signup.test');
+    click('Continue');
+    await screen.findByText('agent@signup.test');
+
+    expect(fake.calls()).toContain('sendAgentCode:agent@signup.test');
+  });
+
+  it('asks for an agent account through Google', async () => {
+    const { fake } = setup({ intent: 'agent-signup' });
+
+    click('Continue with Google');
+
+    await waitFor(() =>
+      expect(fake.calls()).toContain('sso:google:agent-signup')
+    );
+  });
+});
+
 describe('email sign-in', () => {
   it('updates a signed-in viewer without remounting their workspace on session refresh', () => {
     const { fake } = setup({
@@ -98,6 +121,7 @@ describe('email sign-in', () => {
           id: 'macro|member@acme.com',
           email: 'member@acme.com',
           tutorialComplete: false,
+          isAgent: false,
         },
       },
     });
@@ -115,6 +139,7 @@ describe('email sign-in', () => {
         id: 'macro|another@acme.com',
         email: 'another@acme.com',
         tutorialComplete: false,
+        isAgent: false,
       };
     });
     expect(screen.getByTestId('signed-in')).not.toBe(workspace);
@@ -358,10 +383,17 @@ describe('single sign-on', () => {
   });
 });
 
+let googleSignup: Promise<void> | undefined;
+
 function Journey(props: SignupJourneySlots) {
   return (
     <section>
-      <button type="button" onClick={() => void props.onGoogle()}>
+      <button
+        type="button"
+        onClick={() => {
+          googleSignup = props.onGoogle();
+        }}
+      >
         Connect work email
       </button>
       <button type="button" onClick={props.onSignIn}>
@@ -384,6 +416,7 @@ describe('desktop sign-up', () => {
     click('Connect work email');
     await screen.findByText('new@acme.com new');
     expect(fake.calls()).toContain('sso:google:signup');
+    await googleSignup;
   });
 
   it('shows the email form inside the slides for an emailed sign-up link', () => {

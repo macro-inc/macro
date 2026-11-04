@@ -17,7 +17,7 @@ function mentionTypeLabel(type: DatabaseEntityType): string {
     .with('CALL_RECORD', () => 'Call')
     .with('CALENDAR_EVENT', () => 'Event')
     .with('DATABASE_ROW', () => 'Row')
-    .exhaustive();
+    .exhaustive(() => 'Item');
 }
 
 export function DatabaseMentionLabel(props: {
@@ -39,7 +39,7 @@ export function DatabaseMentionLabel(props: {
         >
           {props.icon}
         </span>
-        <span class="truncate">
+        <span class="truncate" data-database-mention-label>
           {props.name || mentionTypeLabel(props.entityType)}
         </span>
       </span>

@@ -1,4 +1,5 @@
-import type { ScheduledAction } from '@service-scheduled-action/generated/schemas';
+import { fireAndForget } from '@core/util/fireAndForget';
+import type { ScheduledActionResponse } from '@service-scheduled-action/generated/schemas';
 import type { Accessor } from 'solid-js';
 import { createMemo, onMount } from 'solid-js';
 import type {
@@ -26,7 +27,7 @@ import {
   useUpdateScheduleMutation,
 } from './schedules';
 
-function toRoutine(schedule: ScheduledAction): RoutineSnapshot {
+function toRoutine(schedule: ScheduledActionResponse): RoutineSnapshot {
   if (!schedule.id) throw new Error('Routine has no ID');
   return {
     id: schedule.id,
@@ -36,14 +37,19 @@ function toRoutine(schedule: ScheduledAction): RoutineSnapshot {
     enabled: schedule.enabled,
     nextRunAt: schedule.next_run_at,
     claimedAt: schedule.claimed,
+    lastRunFailed: schedule.last_run
+      ? !schedule.last_run.is_success
+      : undefined,
     revision: schedule.configuration_revision,
     configurationKey: JSON.stringify([
       schedule.name,
       schedule.kind,
       schedule.trigger,
       schedule.task,
+      schedule.run_visibility,
     ]),
     draft: draftFromSchedule(schedule),
+    templateId: schedule.template_id ?? undefined,
   };
 }
 
@@ -54,6 +60,7 @@ type DetailCallbacks = {
 
 export function createRoutineDetailSource(
   id: Accessor<string>,
+  userId: Accessor<string | undefined>,
   callbacks: DetailCallbacks
 ): RoutineDetailSource {
   const list = useSchedulesQuery(() => true);
@@ -76,15 +83,21 @@ export function createRoutineDetailSource(
   const activate = useSetScheduleEnabledMutation({
     onError: (error) => callbacks.onError('Failed to update routine', error),
   });
-  const duplicate = useCreateScheduleMutation({
-    onSuccess: (created) => {
-      if (created.id) callbacks.onDuplicated(created.id);
+  const duplicate = useCreateScheduleMutation(
+    {
+      onSuccess: (created) => {
+        if (created.id) callbacks.onDuplicated(created.id);
+      },
+      onError: (error) =>
+        callbacks.onError('Failed to duplicate routine', error),
     },
-    onError: (error) => callbacks.onError('Failed to duplicate routine', error),
-  });
-  const history = useScheduleHistoryQuery(id, () => Boolean(raw()));
+    'duplicate'
+  );
+  const history = useScheduleHistoryQuery(id, () =>
+    Boolean(raw() && raw()?.owner === userId())
+  );
   onMount(() => {
-    void invalidateSchedules();
+    fireAndForget(invalidateSchedules(), 'routines');
   });
   return {
     routine,

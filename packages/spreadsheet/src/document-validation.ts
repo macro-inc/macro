@@ -16,6 +16,7 @@ import {
   isSpreadsheetSheetId,
   validateSpreadsheetSheetName,
 } from './spreadsheet-sheet-registry';
+import { parseStoredTable } from './table-storage';
 import { parseWorkbookMetadata } from './workbook-metadata';
 
 const MAX_DOCUMENT_ENTRIES = 5_000_000;
@@ -84,6 +85,10 @@ function validEntry(root: string, key: string, value: unknown): boolean {
       'spreadsheetSheetMetadata',
       () => isSpreadsheetSheetId(key) && !!parseWorkbookMetadata(value)
     )
+    .with('spreadsheetTables', () => {
+      const field = sheetKey(key);
+      return field !== undefined && !!parseStoredTable(field, value);
+    })
     .with(
       'spreadsheetSheetNames',
       () => isSpreadsheetSheetId(key) && sheetName(value)

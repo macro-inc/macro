@@ -1,0 +1,17 @@
+---
+title: ExportPipelineCsv
+description: >-
+  Export a CRM pipeline's deals (entries) to a CSV file saved in the user's
+  Macro files: Company and Domain (or Contact and Email), then one column per
+  field, with people as emails.
+---
+
+# ExportPipelineCsv
+
+Export a CRM pipeline's deals (entries) to a CSV file saved in the user's Macro files: Company and Domain (or Contact and Email), then one column per field, with people as emails. Use it to back up a pipeline, move it to another team (ImportPipelineCsv reads the same file), or share it as a spreadsheet; to answer questions about deals, use FindPipelineEntries instead. Returns the file's documentId and how many entries it holds.
+
+## Parameters
+
+| Parameter | Type | Required | Description |
+| --- | --- | --- | --- |
+| `pipelineId` | string | Yes | The pipeline's id from ListPipelines. |

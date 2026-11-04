@@ -32,7 +32,14 @@ export function toFormMetadata(form: Form): FormMetadata {
     status: form.status,
     closesAt: form.closesAt ?? null,
     tallyVisible: form.tallyVisible,
+    responsesVisible: form.responsesVisible,
+    anonymous: form.anonymous,
     confirmationMessage: form.confirmationMessage,
+    branding: {
+      logoFileId: form.branding.logoFileId ?? null,
+      coverFileId: form.branding.coverFileId ?? null,
+      accentColor: form.branding.accentColor ?? null,
+    },
     submittedColumnId: form.submittedColumnId ?? null,
     respondentColumnId: form.respondentColumnId ?? null,
   };
@@ -48,6 +55,7 @@ function toSection(section: FormSectionDetail): FormSection {
       kind: 'questions',
       gateRules: null,
       gateMessage: '',
+      showWhen: questions.showWhen ?? null,
       bookingTarget: null,
       questions: questions.questions.map((question) => ({
         id: question.id,
@@ -64,6 +72,7 @@ function toSection(section: FormSectionDetail): FormSection {
       kind: 'gate',
       gateRules: gate.rules,
       gateMessage: gate.message,
+      showWhen: null,
       bookingTarget: null,
       questions: [],
     }))
@@ -74,11 +83,22 @@ function toSection(section: FormSectionDetail): FormSection {
       kind: 'booking',
       gateRules: null,
       gateMessage: '',
+      showWhen: null,
       // Editors only: a respondent's detail withholds where it books.
       bookingTarget: booking.target ? toBookingTarget(booking.target) : null,
       questions: [],
     }))
-    .exhaustive();
+    .exhaustive(() => ({
+      id: section.id,
+      title: section.title,
+      description: section.description,
+      kind: 'questions',
+      gateRules: null,
+      gateMessage: '',
+      showWhen: null,
+      bookingTarget: null,
+      questions: [],
+    }));
 }
 
 function toBookingTarget(target: FormBookingTarget): FormBookingTarget {
@@ -145,6 +165,7 @@ export function toFormLayout(layout: WireFormLayout): FormLayout {
           kind: 'questions',
           gateRules: null,
           gateMessage: '',
+          showWhen: questions.showWhen ?? null,
           bookingTarget: null,
           questions: questions.questions.map((question) => ({
             id: question.id,
@@ -161,6 +182,7 @@ export function toFormLayout(layout: WireFormLayout): FormLayout {
           kind: 'gate',
           gateRules: gate.rules,
           gateMessage: gate.message,
+          showWhen: null,
           bookingTarget: null,
           questions: [],
         }))
@@ -171,10 +193,21 @@ export function toFormLayout(layout: WireFormLayout): FormLayout {
           kind: 'booking',
           gateRules: null,
           gateMessage: '',
+          showWhen: null,
           bookingTarget: toBookingTarget(booking.target),
           questions: [],
         }))
-        .exhaustive()
+        .exhaustive(() => ({
+          id: section.id,
+          title: section.title,
+          description: section.description,
+          kind: 'questions',
+          gateRules: null,
+          gateMessage: '',
+          showWhen: null,
+          bookingTarget: null,
+          questions: [],
+        }))
     ),
   };
 }
@@ -205,6 +238,7 @@ export function toLayoutDocument(layout: FormLayout): WireFormLayout {
           id: section.id,
           title: section.title,
           description: section.description,
+          ...(section.showWhen ? { showWhen: section.showWhen } : {}),
           questions: section.questions.map((question) => ({
             id: question.id,
             column: question.columnId,
@@ -213,7 +247,9 @@ export function toLayoutDocument(layout: FormLayout): WireFormLayout {
             widget: question.widget,
           })),
         }))
-        .exhaustive()
+        .exhaustive(() => {
+          throw new Error(`Section “${section.id}” has an unknown kind`);
+        })
     ),
   };
 }
@@ -243,10 +279,23 @@ export function toSubmitOutcome(outcome: SubmissionOutcome): SubmitOutcome {
       sectionId: section,
       message,
     }))
-    .exhaustive();
+    .exhaustive(() => ({
+      kind: 'stopped',
+      sectionId: '',
+      message: 'Update Macro to see whether your response was submitted.',
+    }));
 }
 
 export function toMyResponse(mine: WireMyResponse): MyResponse {
+  if (mine.kind === 'anonymous')
+    return {
+      status: 'submitted',
+      submittedAt: undefined,
+      answers: [],
+      booking: null,
+      anonymous: true,
+    };
+  // Before `kind`, the service sent only saved responses.
   return {
     status: mine.response.status,
     submittedAt: mine.response.submittedAt,

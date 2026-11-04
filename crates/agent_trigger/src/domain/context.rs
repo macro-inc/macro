@@ -31,8 +31,9 @@ pub trait PeopleDirectory: Send + Sync + 'static {
     fn people(&self, ids: Vec<String>) -> impl Future<Output = Result<Vec<ContextPerson>>> + Send;
 }
 
-/// Why a decision calls its agent: a mention opens a session, anything else
-/// follows up in one that is running.
+/// Why a decision calls its agent: a mention opens a session, a message in
+/// an agent's conversation is a turn of it, and anything else follows up in
+/// a session that is running.
 #[must_use]
 pub fn discussion_trigger(
     decision: &TriggerDecision,
@@ -40,6 +41,15 @@ pub fn discussion_trigger(
 ) -> TriggerContext {
     match decision {
         TriggerDecision::Open { .. } => TriggerContext::Mentioned(discussion),
+        // The session's history already holds the conversation; reading the
+        // channel again would repeat earlier turns and bring back a segment
+        // the person reset.
+        TriggerDecision::ConversationMessage { .. } => {
+            TriggerContext::Conversation(DiscussionContext {
+                channel: Vec::new(),
+                ..discussion
+            })
+        }
         TriggerDecision::Existing { kind, .. } => TriggerContext::FollowUp(FollowUpContext {
             addressed_by: match kind {
                 ThreadMessageKind::MentionThread => AddressedBy::Mention,

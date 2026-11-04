@@ -1,6 +1,7 @@
 //! Postgres-backed repository for call state.
 
 mod edit;
+mod imported;
 mod lifecycle;
 mod meetings;
 mod preparations;
@@ -1347,7 +1348,7 @@ impl CallRepository for PgCallRepo {
                 call_id: active.id,
                 user_access_level: None,
                 channel_id: active.channel_id,
-                room_name: active.room_name,
+                room_name: Some(active.room_name),
                 created_by: active.created_by,
                 started_at: active.created_at,
                 ended_at: None,
@@ -1371,6 +1372,7 @@ impl CallRepository for PgCallRepo {
                 participants,
                 guests,
                 transcript,
+                source: None,
             }));
         }
 
@@ -1388,8 +1390,10 @@ impl CallRepository for PgCallRepo {
         .fetch_optional(&mut *tx)
         .await?
         else {
+            // Imported calls never had a room, so they live only in `call_entities`.
+            let imported = imported::read_imported_call_record(&mut tx, call_id).await?;
             tx.commit().await?;
-            return Ok(None);
+            return Ok(imported);
         };
 
         let participants = sqlx::query!(
@@ -1460,7 +1464,7 @@ impl CallRepository for PgCallRepo {
             call_id: archived.id,
             user_access_level: None,
             channel_id: archived.channel_id,
-            room_name: archived.room_name,
+            room_name: Some(archived.room_name),
             created_by: archived.created_by,
             started_at: archived.started_at,
             ended_at: Some(archived.ended_at),
@@ -1482,6 +1486,7 @@ impl CallRepository for PgCallRepo {
             participants,
             guests,
             transcript,
+            source: None,
         }))
     }
 
@@ -1637,6 +1642,7 @@ impl CallRepository for PgCallRepo {
                     c.share_with_team,
                     sp.team_share_access_level,
                     true AS is_active,
+                    false AS is_imported,
                     CASE
                         WHEN EXISTS (
                             SELECT 1 FROM call_participants cp
@@ -1707,6 +1713,7 @@ impl CallRepository for PgCallRepo {
                     (sp.team_share_access_level IS NOT NULL) AS share_with_team,
                     sp.team_share_access_level,
                     false AS is_active,
+                    false AS is_imported,
                     CASE
                         WHEN EXISTS (
                             SELECT 1 FROM call_record_participants crp
@@ -1759,11 +1766,76 @@ impl CallRepository for PgCallRepo {
                           )
                     )
                 )
+                UNION ALL
+                -- Imported calls (e.g. Granola) exist only as call entities;
+                -- native calls are mirrored there too, so exclude them.
+                SELECT
+                    ce.id AS call_id,
+                    ce.channel_id,
+                    NULL::text AS room_name,
+                    ce.user_id AS created_by,
+                    COALESCE(ce.started_at, ce.created_at) AS started_at,
+                    ce.ended_at,
+                    ce.duration_ms,
+                    NULL::text AS egress_id,
+                    NULL::text AS recording_key,
+                    NULL::text AS preview_url,
+                    NULL::timestamptz AS recording_started_at,
+                    ce.title AS custom_name,
+                    (
+                        SELECT s.metadata ->> 'summary' FROM call_entity_sources s
+                        WHERE s.call_id = ce.id
+                        ORDER BY s.synced_at DESC NULLS LAST
+                        LIMIT 1
+                    ) AS summary,
+                    (sp.team_share_access_level IS NOT NULL) AS share_with_team,
+                    sp.team_share_access_level,
+                    false AS is_active,
+                    true AS is_imported,
+                    -- The importer was in the meeting; everyone else only
+                    -- sees it when shared, so it is not theirs to attend.
+                    CASE WHEN ce.user_id = $1 THEN 'ATTENDED'::text ELSE 'UNATTENDED'::text END AS status
+                FROM call_entities ce
+                JOIN "SharePermission" sp ON sp.id = ce.share_permission_id
+                WHERE ce.created_via <> 'native'
+                AND EXISTS (
+                    SELECT 1 FROM entity_access ea
+                    JOIN user_source_ids u ON u.source_id = ea.source_id
+                    WHERE ea.entity_id = ce.id
+                      AND ea.entity_type = 'call'
+                      AND (ce.channel_id IS NOT NULL OR (ea.source_type = 'user' AND ea.source_id = $1))
+                )
+                AND ($3::bool IS FALSE OR ce.channel_id = ANY($4))
+                AND ($5::bool IS FALSE OR ce.id = ANY($6))
+                AND NOT EXISTS (
+                    SELECT 1
+                    FROM generate_series(0, $9::int - 1) AS clause(idx)
+                    WHERE NOT EXISTS (
+                        SELECT 1
+                        FROM UNNEST($10::int[], $11::bool[], $12::uuid[], $13::text[])
+                            AS term(clause_idx, negated, definition_id, value)
+                        WHERE term.clause_idx = clause.idx
+                          AND term.negated <> EXISTS (
+                              SELECT 1 FROM entity_properties ep
+                              WHERE ep.entity_id = ce.id::text
+                                AND ep.entity_type = 'CALL_RECORD'
+                                AND jsonb_typeof(ep.values -> 'value') = 'array'
+                                AND CASE
+                                    WHEN term.definition_id IS NULL
+                                        THEN jsonb_exists(ep.values -> 'value', term.value)
+                                    ELSE ep.property_definition_id = term.definition_id
+                                        AND ep.values -> 'value' @> jsonb_build_array(
+                                            jsonb_build_object('entity_id', term.value)
+                                        )
+                                END
+                          )
+                    )
+                )
             )
             SELECT
                 call_id as "call_id!",
                 channel_id as "channel_id?",
-                room_name as "room_name!",
+                room_name,
                 created_by as "created_by!",
                 started_at as "started_at!",
                 ended_at,
@@ -1777,6 +1849,7 @@ impl CallRepository for PgCallRepo {
                 share_with_team as "share_with_team!",
                 team_share_access_level as "team_share_access_level?: AccessLevel",
                 is_active as "is_active!",
+                is_imported as "is_imported!",
                 status as "status!"
             FROM visible_calls
             WHERE ($7::bool IS FALSE OR status = ANY($8::text[]))
@@ -1820,8 +1893,11 @@ impl CallRepository for PgCallRepo {
         // in one round-trip; we then group by id in memory (avoids N+1).
         let mut active_ids: Vec<Uuid> = Vec::new();
         let mut archived_ids: Vec<Uuid> = Vec::new();
+        let mut imported_ids: Vec<Uuid> = Vec::new();
         for row in &rows {
-            if row.is_active {
+            if row.is_imported {
+                imported_ids.push(row.call_id);
+            } else if row.is_active {
                 active_ids.push(row.call_id);
             } else {
                 archived_ids.push(row.call_id);
@@ -1888,6 +1964,10 @@ impl CallRepository for PgCallRepo {
                 });
         }
 
+        let mut conn = self.pool.acquire().await?;
+        guests_by_call.extend(imported::imported_guests(&mut conn, &imported_ids).await?);
+        drop(conn);
+
         let mut records = Vec::with_capacity(rows.len());
         for row in rows {
             let participants = participants_by_call
@@ -1921,6 +2001,7 @@ impl CallRepository for PgCallRepo {
                 participants,
                 guests,
                 transcript: Vec::new(),
+                source: None,
             });
         }
 

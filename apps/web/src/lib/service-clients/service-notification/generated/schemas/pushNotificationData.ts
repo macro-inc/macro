@@ -4,11 +4,20 @@
  * notification_service
  * OpenAPI spec version: 0.1.0
  */
+import type { PushNotificationDataNavigation } from './pushNotificationDataNavigation';
+import type { PushNotificationDataRecipientId } from './pushNotificationDataRecipientId';
 import type { PushNotificationDataSenderProfilePictureUrl } from './pushNotificationDataSenderProfilePictureUrl';
 
+/**
+ * the value we send as the payload in the ios notification
+This data is accessible to the client
+ */
 export interface PushNotificationData {
+  navigation?: PushNotificationDataNavigation;
   /** The id of the notification record (UserNotification.id) */
   notificationId: string;
+  /** Account that owns the receiving device, set during per-recipient delivery. */
+  recipientId?: PushNotificationDataRecipientId;
   /** The sender's profile picture URL, used by the Notification Service Extension
 to download and attach as a rich notification image. */
   senderProfilePictureUrl?: PushNotificationDataSenderProfilePictureUrl;

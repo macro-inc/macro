@@ -1,10 +1,110 @@
+import type { CreateDocumentRequest } from '../../../generated/storage/types.gen';
+import { unwrap } from '../../utils';
 import type { MacroClient } from '../../utils/client';
+import type { EmailAttachment } from '../email/attachment';
 import type { Project } from '../projects/project';
 import type { SearchOpts } from '../search';
+import type { Team } from '../teams/team';
+import { User } from '../users/user';
 import { Document } from './document';
 import { SystemSkill } from './system-skill';
 
+/**
+ * @routing Use when writing, creating, reading or editing a document of any kind, such as a brief, notes, a spec, a canvas, a spreadsheet or a deck; not databases, tasks or email.
+ *
+ * @agent
+ * ## Linking Macro items inside document content
+ *
+ * `CreateDocument` content (the `fileContent` argument) is rendered with the same Markdown parser used for chat responses, channel messages, and email bodies inside the Macro app — but only for Markdown (`.md`) documents. Non-Markdown documents (e.g. PDF, CSV, PNG, XLSX, DOCX, created by passing a non-`md` `file_extension`) are stored as raw file bytes and must never contain Markdown syntax or mention tags.
+ *
+ * For Markdown document content, link to other Macro documents, channels, chats, projects, tasks, or email threads using `<m-document-mention>` XML mention tags, e.g.:
+ *
+ * `<m-document-mention>{"documentId":"{id}","documentName":"","blockName":"md","blockParams":{}}</m-document-mention>`
+ *
+ * The same Markdown parser also renders the other in-app chip tags: `<m-date-mention>` for a day or time, `<m-agent-session-mention>` for an agent session (add `"expanded":true` for the card that follows the latest turn), `<m-user-mention>` / `<m-contact-mention>` / `<m-group-mention>` for people and groups, `<m-pr-mention>` for a pull request, and `<m-booking-link-mention>` for a booking link. Use those tags in document content the same way you would in a chat reply.
+ *
+ * Reference a GitHub pull request with a PR chip rather than a Markdown link or bare URL: `<m-pr-mention>{"url":"https://github.com/{owner}/{repo}/pull/{number}","label":""}</m-pr-mention>`. Put the PR's github.com URL in `url`; no Macro id is needed. This applies to Markdown document content and to `SendChannelMessage` content, which uses the same Markdown syntax. The chip shows the PR's number, title, and live status and opens it in Macro, so leave `label` empty and do not repeat the number or title beside it. Issues, commits, and other GitHub pages stay Markdown links. Your own chat replies to the MCP client still link pull requests as plain Markdown URLs.
+ *
+ * Reference a Macro booking link with a booking-link chip rather than a Markdown link or bare URL: `<m-booking-link-mention>{"profileId":"{profile_id}","slug":"{slug}","url":"https://macro.com/app/book/{profile_id}/{slug}","label":""}</m-booking-link-mention>` (`slug` optional when linking the profile page). Put the shareable URL in `url` and the path's profile id (and slug when present) in `profileId`/`slug`. Leave `label` empty. Your own chat replies to the MCP client still link booking pages as plain Markdown URLs.
+ *
+ * This holds true even when `CreateDocument` is called through the MCP server, where you are otherwise told to link items in your own chat replies as plain Markdown URLs — that rule is about your conversational responses to the MCP client, not about content you write into a Macro document. Do NOT use plain Markdown links or bare URLs to reference other Macro items inside document content; only `<m-document-mention>` tags (and the other chip tags above) render as working links there.
+ *
+ * The same applies to `EditDocument`: when its `instructions` ask for a mention chip (person, date/time, document, agent session, booking link, and so on) or a document-card, include the referenced item's ids and details so the editing worker can construct the correct in-app markup itself. Date chips need an ISO datetime and displayFormat; they do not need a looked-up id. Booking-link chips need profileId, url, and slug when the URL has one.
+ */
 export class DocumentNamespace {
+  /** Resolve a team task reference such as ENG-42. */
+  async byTeamSlug(slug: string): Promise<Document> {
+    // The generated operation currently references a colliding TypedSuccessResponse
+    // schema. Validate the actual document response before constructing a handle.
+    const result: unknown = unwrap(
+      await this.client.storage.getDocumentByTeamSlug({ path: { slug } }),
+    );
+    if (
+      typeof result !== 'object' ||
+      result === null ||
+      !('data' in result) ||
+      typeof result.data !== 'object' ||
+      result.data === null ||
+      !('documentMetadata' in result.data) ||
+      typeof result.data.documentMetadata !== 'object' ||
+      result.data.documentMetadata === null ||
+      !('documentId' in result.data.documentMetadata) ||
+      typeof result.data.documentMetadata.documentId !== 'string'
+    )
+      throw new Error('Invalid team task document response');
+    return Document.byId(this.client, result.data.documentMetadata.documentId);
+  }
+
+  /** Validate a permissions token, returning its document and optional user handles. */
+  async validatePermissionsToken(token: string) {
+    const result = unwrap(
+      await this.client.storage.validateDocumentPermissionsToken({
+        body: { token },
+      }),
+    );
+    return {
+      document: Document.byId(this.client, result.document_id),
+      user: result.user_id ? User.byId(this.client, result.user_id) : undefined,
+      accessLevel: result.access_level,
+      expiresAt: result.exp,
+      issuer: result.iss,
+    };
+  }
+
+  /** Reserve a binary document and return upload instructions. Upload content before saving. */
+  async createUpload(options: {
+    name: string;
+    sha: string;
+    fileType?: string;
+    mimeType?: string;
+    project?: Project;
+    team?: Team;
+    branchedFrom?: Document;
+    attachment?: EmailAttachment;
+    isTask?: boolean;
+  }) {
+    const body: CreateDocumentRequest = {
+      documentName: options.name,
+      sha: options.sha,
+      fileType: options.fileType,
+      mimeType: options.mimeType,
+      projectId: options.project?.id,
+      teamId: options.team?.id,
+      branchedFromId: options.branchedFrom?.id,
+      emailAttachmentId: options.attachment?.id,
+      isTask: options.isTask,
+    };
+    const result = unwrap(
+      await this.client.storage.createDocument({ body }),
+    ).data;
+    return {
+      document: Document.byId(this.client, result.documentMetadata.documentId),
+      uploadUrl: result.presignedUrl ?? undefined,
+      contentType: result.contentType,
+      content: result.documentMetadata.content,
+    };
+  }
+
   constructor(private readonly client: MacroClient) {}
 
   /** A handle to a document by id. Details load on first access. */
@@ -21,6 +121,19 @@ export class DocumentNamespace {
     return Document.create(this.client, opts);
   }
 
+  /** Create a native Canvas with shared content ready for reading and editing. */
+  async createCanvas(opts: {
+    name: string;
+    project?: Project;
+  }): Promise<Document> {
+    const result = unwrap(
+      await this.client.storage.createCanvasHandler({
+        body: { documentName: opts.name, projectId: opts.project?.id },
+      }),
+    );
+    return Document.byId(this.client, result.documentId);
+  }
+
   /** Create a snippet: a reusable markdown document. */
   createSnippet(opts: {
     name: string;
@@ -30,9 +143,27 @@ export class DocumentNamespace {
     return Document.createSnippet(this.client, opts);
   }
 
-  /** Create a skill: markdown instructions that AI reads and follows. */
+  /**
+   * Create a skill: markdown instructions that AI reads and follows.
+   *
+   * A skill is a markdown document, so read one with `content()`, by the id of
+   * a skill mention or of a search result:
+   *
+   * ```js
+   * const skill = macro.documents.byId(skillId);
+   * const instructions = await skill.content();
+   * ```
+   *
+   * Read a skill the request names before doing the task, and follow it for
+   * that request only. `systemSkills()` lists the built-in skills, whose
+   * instructions have no document; read those with the ReadSkill tool.
+   *
+   * `description` says when to use the skill, in one line starting "Use when"
+   * (at most 300 characters); agents load the skill for requests it describes.
+   */
   createSkill(opts: {
     name: string;
+    description: string;
     markdown?: string;
     project?: Project;
   }): Promise<Document> {
@@ -41,7 +172,8 @@ export class DocumentNamespace {
 
   /**
    * The built-in system skills: static AI instructions with no document
-   * behind them. Unlike user skills they cannot be opened or edited.
+   * behind them. Unlike user skills they cannot be opened or edited, and
+   * their instructions are read with the ReadSkill tool, not `content()`.
    */
   systemSkills(): Promise<SystemSkill[]> {
     return SystemSkill.list(this.client);

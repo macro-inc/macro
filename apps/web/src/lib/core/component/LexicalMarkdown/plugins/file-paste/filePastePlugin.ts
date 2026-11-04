@@ -3,12 +3,17 @@ import {
   shouldUseMobileClipboardImageRecovery,
 } from '@core/mobile/mobileClipboardImageRecovery';
 import { extractFileSystemEntries } from '@core/util/dataTransfer';
+import { fireAndForget } from '@core/util/fireAndForget';
 import { mergeRegister } from '@lexical/utils';
 import {
   COMMAND_PRIORITY_NORMAL,
   type LexicalEditor,
   PASTE_COMMAND,
 } from 'lexical';
+import {
+  shouldStageDesktopPasteFiles,
+  stageDesktopPasteFiles,
+} from './desktopPasteboardFiles';
 
 type FilePastePluginProps = {
   onPasteFilesAndDirs: (
@@ -16,6 +21,13 @@ type FilePastePluginProps = {
     directories: FileSystemDirectoryEntry[]
   ) => void;
 };
+
+async function pasteStagedDesktopFiles(
+  files: File[],
+  props: FilePastePluginProps
+) {
+  props.onPasteFilesAndDirs(await stageDesktopPasteFiles(files), []);
+}
 
 function registerFilePastePlugin(
   editor: LexicalEditor,
@@ -38,13 +50,16 @@ function registerFilePastePlugin(
           shouldUseMobileClipboardImageRecovery(data)
         ) {
           event.preventDefault();
-          void recoverMobileClipboardImageEntries().then((entries) => {
-            if (entries.length > 0) {
-              props.onPasteFilesAndDirs(entries, []);
-            } else if (fileEntries.length > 0) {
-              props.onPasteFilesAndDirs(fileEntries, []);
-            }
-          });
+          fireAndForget(
+            recoverMobileClipboardImageEntries().then((entries) => {
+              if (entries.length > 0) {
+                props.onPasteFilesAndDirs(entries, []);
+              } else if (fileEntries.length > 0) {
+                props.onPasteFilesAndDirs(fileEntries, []);
+              }
+            }),
+            'markdown-file-paste'
+          );
           return true;
         }
 
@@ -57,6 +72,17 @@ function registerFilePastePlugin(
           props.onPasteFilesAndDirs([], directoryEntries);
           return true;
         }
+
+        const files = Array.from(data.files);
+        if (shouldStageDesktopPasteFiles(files)) {
+          event.preventDefault();
+          fireAndForget(
+            pasteStagedDesktopFiles(files, props),
+            'markdown-file-paste'
+          );
+          return true;
+        }
+
         props.onPasteFilesAndDirs(fileEntries, []);
         return true;
       },

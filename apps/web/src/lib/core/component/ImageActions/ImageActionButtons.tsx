@@ -1,8 +1,10 @@
-import ClipboardIcon from '@phosphor/clipboard.svg';
-import DownloadIcon from '@phosphor/download-simple.svg';
-import Spinner from '@phosphor-icons/core/bold/spinner-gap-bold.svg?component-solid';
+import Spinner from '@icon/system/bold/spinner-gap-bold.svg?component-solid';
+import ClipboardIcon from '@icon/system/regular/clipboard.svg';
+import DownloadIcon from '@icon/system/regular/download-simple.svg';
 import { Button, type ButtonSize } from '@ui';
 import type { createImageActions } from './createImageActions';
+
+const GLYPH_CLASS = 'size-4 touch:size-6 shrink-0 pointer-events-none';
 
 type ImageActionButtonsProps = {
   actions: ReturnType<typeof createImageActions>;
@@ -18,29 +20,31 @@ export function ImageActionButtons(props: ImageActionButtonsProps) {
   return (
     <>
       <Button
+        aria-label="Copy image"
+        tooltip="Copy image"
         variant="ghost"
         size={size()}
         onClick={() => props.actions.copyToClipboard()}
         disabled={disabled()}
-        label="Copy image"
       >
         {props.actions.isCopying() ? (
-          <Spinner class="animate-spin" />
+          <Spinner class={`${GLYPH_CLASS} animate-spin`} />
         ) : (
-          <ClipboardIcon />
+          <ClipboardIcon class={GLYPH_CLASS} />
         )}
       </Button>
       <Button
+        aria-label="Download image"
+        tooltip="Download image"
         variant="ghost"
         size={size()}
         onClick={() => props.actions.downloadImage()}
         disabled={disabled()}
-        label="Download image"
       >
         {props.actions.isDownloading() ? (
-          <Spinner class="animate-spin" />
+          <Spinner class={`${GLYPH_CLASS} animate-spin`} />
         ) : (
-          <DownloadIcon />
+          <DownloadIcon class={GLYPH_CLASS} />
         )}
       </Button>
     </>

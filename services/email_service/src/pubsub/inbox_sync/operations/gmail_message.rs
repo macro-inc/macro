@@ -1,15 +1,12 @@
 use crate::pubsub::context::PubSubContext;
-use crate::pubsub::inbox_sync::email_api_error::handle_gmail_message_error;
+use crate::pubsub::inbox_sync::email_api_error::handle_operation_error;
 use crate::util::process_pre_insert::sync_labels::sync_labels;
-use email_api_client::domain::models::{EmailApiError, InboxChanges, SyncCursor};
+use email_api_client::domain::models::{EmailApiError, SyncCursor};
 use models_email::email::service::backfill::BackfillJob;
 use models_email::email::service::backfill::{
     BackfillOperation, BackfillPubsubMessage, InitPayload, JobScopedPayload,
 };
-use models_email::gmail::inbox_sync::{
-    DeleteMessagePayload, GmailMessagePayload, InboxSyncOperation, InboxSyncPubsubMessage,
-    UpdateLabelsPayload, UpsertMessagePayload,
-};
+use models_email::gmail::inbox_sync::{GmailMessagePayload, InboxSyncOperation};
 use models_email::service::link::{Link, UserProvider};
 use models_email::service::pubsub::{DetailedError, FailureReason, ProcessingError};
 use sqlx::PgPool;
@@ -62,14 +59,14 @@ pub async fn gmail_message(
         return Ok(());
     }
 
-    // Gmail message notifications intentionally refuse labels/history work when quota is
-    // exhausted. A later notification will cover the same cursor range, avoiding fan-out
-    // backpressure while preserving the separate retry queue for child operations.
-    let labels = ctx
-        .email_api
-        .list_labels(link.id)
-        .await
-        .map_err(handle_gmail_message_error)?;
+    // A rate-limited notification is requeued like its child operations rather
+    // than dropped: an idle mailbox may get no later notification to cover
+    // this cursor range.
+    let operation = || InboxSyncOperation::GmailMessage(payload.clone());
+    let labels = match ctx.email_api.list_labels(link.id).await {
+        Ok(labels) => labels,
+        Err(error) => return Err(handle_operation_error(ctx, link.id, operation(), error).await),
+    };
     sync_labels(&ctx.db, link.id, &labels).await.map_err(|e| {
         ProcessingError::Retryable(DetailedError {
             reason: FailureReason::DatabaseQueryFailed,
@@ -85,36 +82,22 @@ pub async fn gmail_message(
         Ok(batch) => batch,
         Err(EmailApiError::OutdatedCursor) => {
             schedule_stale_cursor_backfill(ctx, link, payload.history_id).await?;
-            return Err(handle_gmail_message_error(EmailApiError::OutdatedCursor));
+            let error = EmailApiError::OutdatedCursor;
+            return Err(handle_operation_error(ctx, link.id, operation(), error).await);
         }
-        Err(error) => return Err(handle_gmail_message_error(error)),
+        Err(error) => return Err(handle_operation_error(ctx, link.id, operation(), error).await),
     };
 
-    email_db_client::histories::upsert_gmail_history(
-        &ctx.db,
-        link.id,
-        change_batch.next_cursor.as_str(),
-    )
-    .await
-    .map_err(|e| {
-        ProcessingError::NonRetryable(DetailedError {
-            reason: FailureReason::DatabaseQueryFailed,
-            source: e.context("Failed to upsert gmail history"),
-        })
-    })?;
-
-    for ps_message in build_pubsub_messages(link.id, change_batch.changes) {
-        let message_for_error = ps_message.clone();
-        ctx.sqs_client
-            .enqueue_gmail_inbox_sync_notification(ps_message)
-            .await
-            .map_err(|e| {
-                ProcessingError::NonRetryable(DetailedError {
-                    reason: FailureReason::SqsEnqueueFailed,
-                    source: e.context(format!("Failed to enqueue message {message_for_error:?}")),
-                })
-            })?;
-    }
+    ctx.gmail_history
+        .accept(link.id, &db_history_id, change_batch)
+        .await
+        .map_err(|error| {
+            ProcessingError::Retryable(DetailedError {
+                reason: FailureReason::DatabaseQueryFailed,
+                source: anyhow::Error::new(error)
+                    .context("Failed to atomically accept Gmail history and its work"),
+            })
+        })?;
 
     Ok(())
 }
@@ -222,39 +205,4 @@ fn recovery_db_error(error: impl Into<anyhow::Error>) -> ProcessingError {
             .into()
             .context("Failed to schedule stale-cursor backfill"),
     })
-}
-
-/// Builds pubsub messages from history data.
-fn build_pubsub_messages(
-    link_id: Uuid,
-    inbox_changes: InboxChanges,
-) -> Vec<InboxSyncPubsubMessage> {
-    let mut pubsub_messages = Vec::new();
-
-    for message_id in inbox_changes.message_ids_to_upsert {
-        pubsub_messages.push(InboxSyncPubsubMessage {
-            link_id,
-            operation: InboxSyncOperation::UpsertMessage(UpsertMessagePayload {
-                provider_message_id: message_id,
-            }),
-        });
-    }
-    for message_id in inbox_changes.message_ids_to_delete {
-        pubsub_messages.push(InboxSyncPubsubMessage {
-            link_id,
-            operation: InboxSyncOperation::DeleteMessage(DeleteMessagePayload {
-                provider_message_id: message_id,
-            }),
-        });
-    }
-    for message_id in inbox_changes.labels_to_update {
-        pubsub_messages.push(InboxSyncPubsubMessage {
-            link_id,
-            operation: InboxSyncOperation::UpdateLabels(UpdateLabelsPayload {
-                provider_message_id: message_id,
-            }),
-        });
-    }
-
-    pubsub_messages
 }

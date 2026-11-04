@@ -1,0 +1,15 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "UPDATE email_mailbox_lifecycle_outbox SET lease_id = NULL,lease_until = NULL,available_at = now() + make_interval(secs => LEAST(600,attempts * 30)) WHERE id = $1 AND lease_id = $2",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "992b71e287c101c7c3dae03b2e627310ccc436f22b32f5f059202173b97d1e2f"
+}

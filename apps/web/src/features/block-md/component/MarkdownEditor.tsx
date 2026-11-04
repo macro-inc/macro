@@ -1,7 +1,10 @@
+import { usePending } from '@app/observability/flow';
+import { activeElement } from '@app/signal/focus';
 import { MessageCommentsProvider } from '@block-md/comments/MessageCommentsProvider';
 import { URL_PARAMS } from '@block-md/constants';
 import { keyNavigationPlugin } from '@block-md/plugins/keyboardNavigation';
 import { SplitBottomPanel } from '@components/app/split-layout/components/SplitBottomPanel';
+import { useSplitPanel } from '@components/app/split-layout/layoutUtils';
 import { FocusClickTarget } from '@core/component/LexicalMarkdown/component/core/FocusClickTarget';
 import {
   HighlightLayer,
@@ -79,8 +82,11 @@ import {
   enableGitBlame,
   isFeatureEnabled,
 } from '@core/constant/featureFlags';
+import { useIsAuthenticated } from '@core/context/user';
 import { fileFolderDrop } from '@core/directive/fileFolderDrop';
 import { isNativeMobilePlatform } from '@core/mobile/isNativeMobilePlatform';
+import { fireAndForget } from '@core/util/fireAndForget';
+import { onElementConnect } from '@core/util/onElementConnect';
 import { bufToString } from '@core/util/string';
 import type { LoroManager } from '@macro-inc/collaboration/collab/manager';
 import {
@@ -88,9 +94,9 @@ import {
   createPeerIdValidator,
   type PeerIdValidator,
 } from '@macro-inc/lexical-core';
+import { Telemetry } from '@macro-inc/observability';
 import { useDocTags } from '@property/tags';
 import { EntityType } from '@service-properties/generated/schemas/entityType';
-import { onElementConnect } from '@solid-primitives/lifecycle';
 import { isIOS } from '@solid-primitives/platform';
 import { createCallback } from '@solid-primitives/rootless';
 import { debounce } from '@solid-primitives/scheduled';
@@ -104,7 +110,6 @@ import {
   onCleanup,
   Show,
   Suspense,
-  untrack,
 } from 'solid-js';
 import { useMarkdownDocument } from '../context/markdown-document-context';
 import { createSaveMarkdownDocumentMutation } from '../queries/markdown-document-operations';
@@ -112,6 +117,7 @@ import { EditorSystemMessage } from './EditorSystemMessage';
 import { MarkdownCollabProvider } from './MarkdownCollabProvider';
 import { MarkdownPopup } from './MarkdownPopup';
 import { isMarkdownEditorLoading } from './markdownEditorLoadingState';
+import { shouldAutofocusDocument } from './should-autofocus-document';
 
 false && fileFolderDrop;
 
@@ -140,12 +146,15 @@ export function MarkdownEditor(props: {
 }) {
   const {
     documentId,
+    element: blockElement,
     kind,
     documentSource,
     persistedName: mdDocumentName,
     permissions,
     state: documentState,
   } = useMarkdownDocument();
+  const panel = useSplitPanel();
+  const authenticated = useIsAuthenticated();
   const { canEdit } = permissions;
   const blockId = documentId();
   const documentKind = kind();
@@ -223,6 +232,7 @@ export function MarkdownEditor(props: {
   ];
 
   const [editorReady, setEditorReady] = createSignal<boolean>(false);
+  usePending('doc.editor.initialize', () => !editorReady() && !editorError());
 
   const [highlightLayerRef, setHighlightLayerRef] =
     createSignal<HTMLDivElement>();
@@ -553,11 +563,16 @@ export function MarkdownEditor(props: {
   );
 
   const [fileArrayBuffer, setFileArrayBuffer] = createSignal<ArrayBuffer>();
+  const readFileArrayBuffer = async (file: Blob) => {
+    setFileArrayBuffer(await file.arrayBuffer());
+  };
   createEffect(() => {
     const source = documentSource();
     if (source.type !== 'dss') return;
 
-    source.file.arrayBuffer().then(setFileArrayBuffer);
+    readFileArrayBuffer(source.file).catch((error) =>
+      Telemetry.error(error, { surface: 'markdown-editor' })
+    );
   });
 
   createEffect(() => {
@@ -621,13 +636,24 @@ export function MarkdownEditor(props: {
     setEditorReady(true);
   });
 
-  // Auto-focus on mount if enabled and editor is ready and document name is not empty.
+  // Focus a named document once both its editor and metadata are ready.
+  let didAutoFocus = false;
   createEffect(() => {
+    activeElement();
     if (
+      !didAutoFocus &&
       props.autoFocusOnMount &&
       editorReady() &&
-      untrack(mdDocumentName) !== ''
+      mdDocumentName()
     ) {
+      if (
+        !shouldAutofocusDocument(
+          blockElement() ?? null,
+          panel?.panelRef() ?? null
+        )
+      )
+        return;
+      didAutoFocus = true;
       editor.focus(undefined, { defaultSelection: 'rootStart' });
     }
   });
@@ -772,7 +798,10 @@ export function MarkdownEditor(props: {
           isApplied={(tag) => documentTags.isApplied(tag.optionId)}
           onApplyTag={(tag) => {
             if (!canEdit()) return;
-            void documentTags.applyTag(tag.scope, tag.optionId);
+            fireAndForget(
+              documentTags.applyTag(tag.scope, tag.optionId),
+              'markdown-editor'
+            );
           }}
         />
 
@@ -794,7 +823,7 @@ export function MarkdownEditor(props: {
           />
         </Show>
 
-        <Show when={ENABLE_MARKDOWN_COMMENTS}>
+        <Show when={ENABLE_MARKDOWN_COMMENTS && authenticated() === true}>
           <Suspense>
             <MessageCommentsProvider
               activeComment={activeCommentIdParam}

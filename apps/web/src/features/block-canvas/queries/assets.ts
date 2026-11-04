@@ -49,7 +49,7 @@ async function dimensions(url: string, type: 'image' | 'video') {
   });
 }
 export const canvasAssetSource: CanvasAssetSource = {
-  async upload(file) {
+  async upload(file, onPreview) {
     const type = fileTypeToBlockName(file.name.split('.').pop());
     const kind =
       file.type.startsWith('video/') || type === 'video'
@@ -58,6 +58,26 @@ export const canvasAssetSource: CanvasAssetSource = {
           ? 'image'
           : undefined;
     if (!kind) throw new Error('Choose an image or video');
+    if (onPreview) {
+      const url = URL.createObjectURL(file);
+      try {
+        const size = await dimensions(url, kind);
+        onPreview({
+          media: {
+            type: kind,
+            geometry: {
+              ...size,
+              source: { type: 'url', url },
+              name: file.name,
+            },
+          },
+          dispose: () => URL.revokeObjectURL(url),
+        });
+      } catch {
+        // Formats such as HEIC may only be decodable after upload conversion.
+        URL.revokeObjectURL(url);
+      }
+    }
     // The shared uploader handles validation and HEIC conversion.
     const result = await uploadFile(file, 'static', {
       hideProgressIndicator: true,

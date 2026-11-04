@@ -11,7 +11,9 @@ nearly every Rust service's `main.rs` calls.
 - `src/lib.rs`: `MacroEntrypoint::init` — builds the tracing subscriber stack
   per `Environment` (local / develop / production), returning
   `InitializedEntrypoint` as proof of initialization; call `.shutdown()`
-  before exit to flush OTel.
+  before exit to flush OTel. Serverless handlers retain it and await
+  `.force_flush()` after invocation spans close, without shutting down warm
+  providers. The caller must bound flush time and preserve its operation result.
 - `src/datadog_fmt.rs`: JSON log format injecting `dd.trace_id`/`dd.span_id`
   for prod/develop trace-log correlation.
 - `src/grafana.rs`: a second, best-effort span exporter that mirrors spans to

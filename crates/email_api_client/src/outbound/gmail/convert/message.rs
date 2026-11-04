@@ -43,6 +43,7 @@ pub(crate) fn map_message_resource_to_service(
             db_id: Uuid::now_v7(),
             provider_id: metadata.provider_attachment_id,
             data_url: None,
+            reference_url: None,
             filename: metadata.filename,
             mime_type: metadata.mime_type,
             size_bytes: metadata.size_bytes,

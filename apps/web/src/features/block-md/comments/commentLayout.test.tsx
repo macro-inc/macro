@@ -2,7 +2,11 @@ import { cleanup, render } from '@solidjs/testing-library';
 import { createEditor } from 'lexical';
 import { createStore } from 'solid-js/store';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { createCommentLayout } from './commentLayout';
+import {
+  createCommentLayout,
+  MIN_THREAD_GAP,
+  stackMarginThreads,
+} from './commentLayout';
 import type { MarkStore } from './commentType';
 
 const listeners = vi.hoisted(() => ({
@@ -146,4 +150,59 @@ describe('comment layout during document reflow', () => {
       }
     }
   );
+});
+
+describe('stacking margin threads', () => {
+  const thread = (id: string, top: number, height: number) => ({
+    id,
+    height,
+    layout: { originalYPosition: top },
+  });
+  const tops = (layouts: ReturnType<typeof stackMarginThreads>) =>
+    layouts.map((layout) => layout.layout.calculatedYPos);
+  const expectNoOverlap = (
+    threads: ReturnType<typeof thread>[],
+    layouts: ReturnType<typeof stackMarginThreads>
+  ) => {
+    for (let i = 1; i < layouts.length; i++) {
+      const previous = layouts[i - 1].layout;
+      expect(layouts[i].layout.calculatedYPos).toBeGreaterThanOrEqual(
+        previous.calculatedYPos + threads[i - 1].height + MIN_THREAD_GAP
+      );
+    }
+    for (const layout of layouts) {
+      expect(layout.layout.calculatedYPos).toBeGreaterThanOrEqual(0);
+    }
+  };
+
+  it('keeps each thread beside its mark when they fit', () => {
+    const threads = [thread('a', 100, 50), thread('b', 400, 50)];
+    expect(tops(stackMarginThreads(threads, 0, 2000))).toEqual([100, 400]);
+  });
+
+  it('pushes the threads below a tall active thread past its end', () => {
+    const threads = [thread('a', 100, 900), thread('b', 200, 300)];
+    const layouts = stackMarginThreads(threads, 0, 2000);
+    expect(tops(layouts)).toEqual([100, 100 + 900 + MIN_THREAD_GAP]);
+    expectNoOverlap(threads, layouts);
+  });
+
+  it('never stacks a thread above the top of a short page', () => {
+    // A long active thread low on a short page: fitting it inside the page
+    // would push the thread above it out the top, out of reach.
+    const threads = [
+      thread('above', 230, 400),
+      thread('active', 350, 1300),
+      thread('below', 600, 500),
+    ];
+    const layouts = stackMarginThreads(threads, 1, 750);
+    expect(tops(layouts)[0]).toBe(0);
+    expectNoOverlap(threads, layouts);
+  });
+
+  it('moves the active thread up only to end inside the page', () => {
+    const threads = [thread('a', 50, 40), thread('active', 700, 200)];
+    const layouts = stackMarginThreads(threads, 1, 800);
+    expect(tops(layouts)).toEqual([50, 600]);
+  });
 });

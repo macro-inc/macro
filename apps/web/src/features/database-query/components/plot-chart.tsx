@@ -1,3 +1,4 @@
+import { fireAndForget } from '@core/util/fireAndForget';
 import {
   createEffect,
   createMemo,
@@ -48,13 +49,16 @@ export function PlotChart(props: {
   const [plot, setPlot] = createSignal<PlotModule>();
   const [failed, setFailed] = createSignal(false);
   onMount(() => {
-    void (async () => {
-      try {
-        setPlot(await loadPlot());
-      } catch {
-        setFailed(true);
-      }
-    })();
+    fireAndForget(
+      (async () => {
+        try {
+          setPlot(await loadPlot());
+        } catch {
+          setFailed(true);
+        }
+      })(),
+      'database-query'
+    );
   });
   let container: HTMLDivElement | undefined;
   // Imperative sync with Plot's returned element; nothing is derived here.

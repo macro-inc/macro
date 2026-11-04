@@ -21,7 +21,9 @@ Type design, idioms, errors and observability, performance, and tests.
 - **CS-13** Model tri-state data (not-loaded / missing / present) as one flat
   enum, not nested `Option`s or ad-hoc flags.
 - **CS-19** Give third-party errors their own variant — don't collapse e.g. a
-  `jsonwebtoken` failure into a generic internal error.
+  `jsonwebtoken` failure into a generic internal error. A provider outage
+  (5xx, 429, unreachable, undecodable) is an `upstream_error::UpstreamError`,
+  answered 502/503 — see `crates/upstream_error`.
 - **CS-20** Depending on a rate-limited external provider requires a fallback
   (fallback model, retry story, or documented degradation).
 - **CS-21** Wire usage metering on every invocation path — MCP-triggered tool
@@ -66,7 +68,7 @@ Type design, idioms, errors and observability, performance, and tests.
   (`crates/agent_session/src/domain/session/telemetry.rs`), so do not add GenAI
   spans to a harness runtime — `agent_inmem` runs its agent loop with
   `with_genai_telemetry(false)` for that reason. Outside sessions (chat in
-  `document_cognition_service`), the agent loop and
+  `agent_harness_service::cognition`), the agent loop and
   `ai_toolset::ToolSet::try_tool_call` emit and enrich the `invoke_agent` /
   `chat` / `execute_tool` spans; do not open tool spans in tools or toolsets,
   and never record prompts, tool arguments or tool results as span fields or

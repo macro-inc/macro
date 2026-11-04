@@ -96,5 +96,5 @@ export function runLabel(run: ImportRun | undefined): string {
     .with('importing', () => 'Importing channels…')
     .with('completed', () => 'Import complete')
     .with('dismissed', () => 'Find public Slack channels to import.')
-    .exhaustive();
+    .exhaustive(() => 'Find public Slack channels to import.');
 }

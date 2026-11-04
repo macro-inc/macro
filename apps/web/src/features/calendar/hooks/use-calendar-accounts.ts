@@ -11,6 +11,7 @@ type CalendarAccountAction = 'enable' | 'reconnect' | 'turnOff';
 /** A viewer-owned inbox rendered as a manageable calendar account. */
 export interface CalendarAccount {
   linkId: string;
+  provider: EmailLink['provider'];
   emailAddress: string;
   action: CalendarAccountAction;
   consentScopes: ConsentScopes;
@@ -38,6 +39,7 @@ export function toCalendarAccounts(
     .sort((a, b) => Number(b.is_primary) - Number(a.is_primary))
     .map((link) => ({
       linkId: link.id,
+      provider: link.provider,
       emailAddress: link.email_address,
       consentScopes: calendarConsentScopes(link),
       action: link.needs_calendar_permission
@@ -53,6 +55,23 @@ export function useCalendarAccounts() {
   const linksQuery = useEmailLinksQuery();
   const userId = useUserId();
   return createMemo<CalendarAccount[]>(() =>
-    toCalendarAccounts(linksQuery.data?.links ?? [], userId())
+    toCalendarAccounts(
+      linksQuery.isSuccess ? linksQuery.data.links : [],
+      userId()
+    )
+  );
+}
+
+/**
+ * {@link useCalendarAccounts} for callers that must not suspend: `undefined`
+ * until the email links have loaded.
+ */
+export function useLoadedCalendarAccounts() {
+  const linksQuery = useEmailLinksQuery();
+  const userId = useUserId();
+  return createMemo<CalendarAccount[] | undefined>(() =>
+    linksQuery.isPending || !linksQuery.data
+      ? undefined
+      : toCalendarAccounts(linksQuery.data.links, userId())
   );
 }

@@ -6,7 +6,7 @@ export type MeetingNavigationCapabilities = {
   replace: (
     target: Extract<MeetingRouteTarget, { shareToken: string }>
   ) => void;
-  returnToApp: () => void;
+  returnToApp: (path: string) => void;
 };
 
 /** Stable owner across the setup and connected URLs of a single meeting. */

@@ -1,11 +1,11 @@
 import '@app/index.css';
 import { AnalyticsContextProvider } from '@app/lib/analytics/analytics-context';
 import { PosthogProvider } from '@app/lib/analytics/posthog';
+import { onElementConnect } from '@core/util/onElementConnect';
 import { PullRequestMentionNode } from '@macro-inc/lexical-core';
 import { setDecorator } from '@macro-inc/lexical-core/decoratorRegistry';
 import { pullRequestMentionKeys } from '@queries/storage/keys';
 import type { ForeignEntity } from '@service-storage/generated/schemas';
-import { onElementConnect } from '@solid-primitives/lifecycle';
 import { QueryClient, QueryClientProvider } from '@tanstack/solid-query';
 import { createSignal, For, onCleanup } from 'solid-js';
 import { render } from 'solid-js/web';

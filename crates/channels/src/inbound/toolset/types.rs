@@ -1,12 +1,16 @@
 //! Shared channel AI tool input/output types.
 use messages::domain::{
     models::MessageListItem,
-    models::{CountedReaction, Message, MessageAttachment},
+    models::{CountedReaction, Message, MessageAttachment, NewAttachment},
 };
 
+use crate::domain::media_upload::ChannelMediaKind;
+
 use chrono::{DateTime, Utc};
+use macro_user_id::user_id::MacroUserIdStr;
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
+use std::collections::{HashMap, HashSet};
 use uuid::Uuid;
 
 /// Default number of messages/replies returned by channel AI tools.
@@ -17,6 +21,36 @@ pub(crate) const MAX_LIMIT: u16 = 100;
 pub(crate) const DEFAULT_MAX_CHARS_PER_MESSAGE: usize = 4_000;
 /// Maximum allowed content length per message.
 pub(crate) const MAX_CHARS_PER_MESSAGE: usize = 16_000;
+
+/// Profile names of the people who sent a set of messages, keyed by user id.
+pub(crate) type SenderNames = HashMap<MacroUserIdStr<'static>, String>;
+
+/// The name the app shows for a message's sender: an imported author's, the
+/// bot's, a call guest's, or the person's profile name.
+fn sender_name(message: &Message, names: &SenderNames) -> Option<String> {
+    message
+        .imported_author
+        .as_ref()
+        .map(|author| author.name.clone())
+        .or_else(|| message.bot_profile.as_ref().map(|bot| bot.name.clone()))
+        .or_else(|| message.guest_name.clone())
+        .or_else(|| {
+            message
+                .sender_id
+                .as_user()
+                .and_then(|user| names.get(user).cloned())
+        })
+}
+
+/// The people among the senders of `messages`, for one name lookup.
+pub(crate) fn user_senders<'a>(
+    messages: impl IntoIterator<Item = &'a Message>,
+) -> HashSet<MacroUserIdStr<'static>> {
+    messages
+        .into_iter()
+        .filter_map(|message| message.sender_id.as_user().cloned())
+        .collect()
+}
 
 /// Direction for reading more messages around a cursor.
 #[allow(missing_docs)]
@@ -35,6 +69,66 @@ pub enum ToolMessageKind {
     TopLevelMessage,
     /// A reply inside a top-level message's thread.
     ThreadReply,
+}
+
+/// How an attachment on a sent message renders.
+#[derive(Debug, Clone, Copy, Deserialize, Serialize, JsonSchema, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub enum ChannelAttachmentKind {
+    /// An inline image uploaded with CreateChannelMediaUpload.
+    Image,
+    /// An inline, playable video uploaded with CreateChannelMediaUpload.
+    Video,
+    /// A Macro document, shown as a file chip.
+    Document,
+}
+
+impl ChannelAttachmentKind {
+    fn entity_type(self) -> &'static str {
+        match self {
+            Self::Image => ChannelMediaKind::Image.attachment_entity_type(),
+            Self::Video => ChannelMediaKind::Video.attachment_entity_type(),
+            Self::Document => "document",
+        }
+    }
+}
+
+/// An attachment to send with a channel message.
+#[derive(Debug, Clone, Deserialize, Serialize, JsonSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct ChannelMessageAttachmentInput {
+    /// The attachmentId from CreateChannelMediaUpload, or a document ID.
+    #[schemars(
+        description = "The attachmentId returned by CreateChannelMediaUpload (after its upload succeeded), or the ID of a Macro document."
+    )]
+    pub id: String,
+    /// How the attachment renders.
+    #[schemars(
+        description = "image or video for media from CreateChannelMediaUpload (use the kind it returned); document for a Macro document ID."
+    )]
+    pub kind: ChannelAttachmentKind,
+    /// Optional pixel width of an image or video, used to lay it out before it loads.
+    #[serde(default)]
+    #[schemars(
+        description = "Optional pixel width of an image or video, used to lay it out before it loads."
+    )]
+    pub width: Option<i32>,
+    /// Optional pixel height of an image or video.
+    #[serde(default)]
+    #[schemars(description = "Optional pixel height of an image or video.")]
+    pub height: Option<i32>,
+}
+
+impl From<&ChannelMessageAttachmentInput> for NewAttachment {
+    fn from(input: &ChannelMessageAttachmentInput) -> Self {
+        let media = input.kind != ChannelAttachmentKind::Document;
+        Self {
+            entity_type: input.kind.entity_type().to_string(),
+            entity_id: input.id.trim().to_string(),
+            width: input.width.filter(|_| media),
+            height: input.height.filter(|_| media),
+        }
+    }
 }
 
 /// A reaction summary on a message.
@@ -89,8 +183,12 @@ pub struct ToolThreadReply {
     pub id: Uuid,
     /// Parent thread id.
     pub thread_id: Uuid,
-    /// Sender user id.
+    /// Sender id: `macro|<email>` for a person, `bot|<id>` for a bot.
     pub sender_id: String,
+    /// The sender's name as the app shows it, for the same sender as
+    /// `senderId`. Absent when a person has no profile name.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub sender_name: Option<String>,
     /// Reply content, possibly truncated.
     pub content: String,
     /// Whether the reply content was truncated.
@@ -112,7 +210,9 @@ impl ToolThreadReply {
         reply: Message,
         thread_id: Uuid,
         max_chars_per_message: usize,
+        names: &SenderNames,
     ) -> Self {
+        let sender_name = sender_name(&reply, names);
         let TruncatedContent {
             content,
             content_truncated,
@@ -122,6 +222,7 @@ impl ToolThreadReply {
             id: reply.id,
             thread_id,
             sender_id: reply.sender_id.into(),
+            sender_name,
             content,
             content_truncated,
             created_at: reply.created_at,
@@ -165,8 +266,12 @@ pub struct ToolChannelMessage {
     pub id: Uuid,
     /// Channel id.
     pub channel_id: Uuid,
-    /// Sender user id.
+    /// Sender id: `macro|<email>` for a person, `bot|<id>` for a bot.
     pub sender_id: String,
+    /// The sender's name as the app shows it, for the same sender as
+    /// `senderId`. Absent when a person has no profile name.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub sender_name: Option<String>,
     /// Message content, possibly truncated.
     pub content: String,
     /// Whether message content was truncated.
@@ -193,8 +298,10 @@ impl ToolChannelMessage {
         channel_id: Uuid,
         include_thread_preview: bool,
         max_chars_per_message: usize,
+        names: &SenderNames,
     ) -> Self {
         let message = item.message;
+        let sender_name = sender_name(&message, names);
         let thread_id = message.id;
         let TruncatedContent {
             content,
@@ -209,7 +316,9 @@ impl ToolChannelMessage {
         let preview = include_thread_preview.then(|| {
             preview_replies
                 .into_iter()
-                .map(|reply| ToolThreadReply::from_reply(reply, thread_id, max_chars_per_message))
+                .map(|reply| {
+                    ToolThreadReply::from_reply(reply, thread_id, max_chars_per_message, names)
+                })
                 .collect()
         });
 
@@ -217,6 +326,7 @@ impl ToolChannelMessage {
             id: message.id,
             channel_id,
             sender_id: message.sender_id.into(),
+            sender_name,
             content,
             content_truncated,
             created_at: message.created_at,

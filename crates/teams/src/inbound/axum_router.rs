@@ -6,6 +6,8 @@ pub mod create_team;
 pub mod delete_team;
 /// Delete a team invite.
 pub mod delete_team_invite;
+/// Email a new team's domain contacts that it exists.
+pub mod domain_notice;
 /// Get a team by ID.
 pub mod get_team;
 /// Get all invites for a team.
@@ -14,6 +16,9 @@ pub mod get_team_invites;
 pub mod get_user_invites;
 /// Get all teams for a user.
 pub mod get_user_teams;
+/// Read, create, and turn off a team's shareable invite link, and join
+/// through it.
+pub mod invite_link;
 /// Invite users to a team.
 pub mod invite_to_team;
 /// Join a team via invite.
@@ -47,7 +52,10 @@ use axum::{
     response::{IntoResponse, Response},
     routing::{delete, get, patch, post},
 };
-use entity_access::domain::ports::EntityAccessService;
+use entity_access::domain::{
+    models::{EntityAccessReceipt, RequiredPermission},
+    ports::EntityAccessService,
+};
 use macro_authorization::{MacroAuthorizationService, MacroAuthorizationState};
 use model_error_response::ErrorResponse;
 
@@ -57,8 +65,35 @@ use crate::domain::{
         RemoveTeamInviteError, RemoveUserFromTeamError, SetTeamMemberPlanError, TeamError,
         ToggleAutoJoinDomainError,
     },
-    team_repo::TeamService,
+    team_repo::{TeamInviteLinkService, TeamService},
 };
+
+/// Why a team route refused a request that named a team other than the
+/// caller's current one.
+const NOT_CURRENT_TEAM: &str = "the requested team is not the caller's current team";
+
+/// Whether `expected`, when the caller names one, is the team `receipt` was
+/// issued for. Team routes act on the caller's current team, resolved with
+/// the caller's role in the same request; naming the team binds the request
+/// to it, so a caller who has since moved to another team is refused instead
+/// of acting there.
+fn is_expected_team<P: RequiredPermission>(
+    receipt: &EntityAccessReceipt<P>,
+    expected: Option<uuid::Uuid>,
+) -> bool {
+    expected.is_none_or(|team_id| receipt.entity().entity_id == team_id.to_string())
+}
+
+/// The 409 a team route answers when the caller named another team.
+fn not_current_team_response() -> Response {
+    (
+        StatusCode::CONFLICT,
+        Json(ErrorResponse {
+            message: NOT_CURRENT_TEAM.into(),
+        }),
+    )
+        .into_response()
+}
 
 /// Router state containing the team service.
 pub struct TeamRouterState<T, Eas, Auth> {
@@ -96,7 +131,7 @@ impl<T, Eas, Auth> Clone for TeamRouterState<T, Eas, Auth> {
 /// Build the teams router with all endpoints.
 pub fn teams_router<T, Eas, Auth, S>(state: TeamRouterState<T, Eas, Auth>) -> Router<S>
 where
-    T: TeamService,
+    T: TeamService + TeamInviteLinkService,
     Eas: EntityAccessService,
     Auth: MacroAuthorizationService,
     S: Send + Sync + 'static,
@@ -129,6 +164,20 @@ where
         )
         .route("/invites", get(get_team_invites::handler::<T, Eas, Auth>))
         .route("/invite", post(invite_to_team::handler::<T, Eas, Auth>))
+        .route(
+            "/invite-link",
+            get(invite_link::get_handler::<T, Eas, Auth>)
+                .post(invite_link::create_handler::<T, Eas, Auth>)
+                .delete(invite_link::delete_handler::<T, Eas, Auth>),
+        )
+        .route(
+            "/invite-link/team",
+            post(invite_link::get_team_handler::<T, Eas, Auth>),
+        )
+        .route(
+            "/invite-link/join",
+            post(invite_link::join_handler::<T, Eas, Auth>),
+        )
         .route(
             "/join/{team_invite_id}",
             delete(reject_invitation::handler::<T, Eas, Auth>),
@@ -262,7 +311,7 @@ impl IntoResponse for InviteUsersToTeamError {
             InviteUsersToTeamError::TooManyEmails => (
                 StatusCode::BAD_REQUEST,
                 Json(ErrorResponse {
-                    message: "too many emails".into(),
+                    message: "too many invites today; try again tomorrow".into(),
                 }),
             ),
             InviteUsersToTeamError::NonAdminInvitesDisabled => (

@@ -11,6 +11,7 @@ export type BillingContext = {
     { plan: PlanTier; effectiveAt: string } | undefined
   >;
   hasPaid: Accessor<boolean>;
+  trialEligible?: Accessor<boolean | undefined>;
   aiUsageBilling: Accessor<boolean>;
   teamRole: Accessor<'owner' | 'member' | undefined>;
   teamSeatDescription: Accessor<string | undefined>;

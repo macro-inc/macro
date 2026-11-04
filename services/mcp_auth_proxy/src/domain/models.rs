@@ -178,9 +178,19 @@ pub struct IssuedAuthorizationCode {
     /// The redirect URI from the authorization request, used for exact-match
     /// validation during token exchange.
     pub redirect_uri: String,
-    /// When `access_token` expires. `None` for codes issued before the broker
-    /// started tracking upstream token lifetimes.
-    pub access_token_expires_at: Option<SystemTime>,
+    /// When `access_token` expires.
+    pub access_token_expires_at: SystemTime,
+}
+
+/// How a user signs in upstream during an authorize flow.
+#[derive(Clone, Copy, Debug, Default, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "lowercase")]
+pub enum SignInMethod {
+    /// Straight to Google, the default for every client.
+    #[default]
+    Google,
+    /// FusionAuth's login page: password and every other provider.
+    Login,
 }
 
 /// OAuth authorize request from the MCP client.
@@ -198,6 +208,9 @@ pub struct AuthorizeRequest {
     pub code_challenge: String,
     /// Expected to be `S256`.
     pub code_challenge_method: String,
+    /// The sign-in the user picked on the chooser, when it was shown.
+    #[serde(default)]
+    pub sign_in: Option<SignInMethod>,
     /// Optional requested scopes.
     #[serde(default)]
     #[allow(dead_code)]
@@ -258,7 +271,34 @@ pub struct TokenResponse {
     /// OAuth token type.
     pub token_type: &'static str,
     /// Seconds until `access_token` expires, so clients can refresh before it
-    /// does. Omitted when the upstream lifetime is unknown.
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub expires_in: Option<u64>,
+    /// does. Revocation does not cut an access token short, so this is also the
+    /// longest it stays usable after its grant is revoked.
+    pub expires_in: u64,
+}
+
+/// The client and grant an outstanding refresh token belongs to.
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct RefreshTokenBinding {
+    /// The client that obtained the refresh token.
+    pub client_id: String,
+    /// The authorization this refresh token descends from. Every token rotated
+    /// out of one authorization code shares it, so revoking it revokes the
+    /// whole family.
+    pub grant_id: String,
+}
+
+/// RFC 7009 token revocation request from the MCP client.
+///
+/// `token_type_hint` is accepted and ignored: RFC 7009 makes it optional, and
+/// the broker looks the token up the same way whatever its type.
+#[derive(Deserialize)]
+pub struct RevocationRequest {
+    /// The token to revoke.
+    #[serde(default)]
+    pub token: Option<RefreshToken>,
+    /// The client revoking the token. Public clients hold no credential, so
+    /// this is the client authentication RFC 7009 requires, and it must match
+    /// the client the token was issued to.
+    #[serde(default)]
+    pub client_id: Option<String>,
 }

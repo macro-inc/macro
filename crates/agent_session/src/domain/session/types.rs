@@ -18,7 +18,8 @@ pub(super) struct PendingAction<Token> {
 }
 
 /// How a connection answers the agent's `session/request_permission`.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, strum::IntoStaticStr)]
+#[strum(serialize_all = "camelCase")]
 pub enum PermissionPolicy {
     /// Approve the broadest allow option the moment the request arrives.
     /// Right for runtimes in sandboxes this deployment owns, where nothing
@@ -102,6 +103,20 @@ pub struct SessionRestoreSupport {
     pub resume: bool,
     /// The agent offers `session/load`.
     pub load: bool,
+}
+
+impl SessionRestoreSupport {
+    /// What an agent's `initialize` answer offers.
+    pub fn of(response: &agent_client_protocol::schema::v1::InitializeResponse) -> Self {
+        Self {
+            resume: response
+                .agent_capabilities
+                .session_capabilities
+                .resume
+                .is_some(),
+            load: response.agent_capabilities.load_session,
+        }
+    }
 }
 
 /// Where the sessions on one connection learn that its ACP handshake is done.
@@ -273,6 +288,10 @@ pub enum Effect<Token> {
         /// Whether the action reached the transport.
         result: Result<()>,
     },
+    /// The runtime reported that the person or agent deliberately ended the
+    /// runtime session behind the live ACP session. Never emitted for a
+    /// disconnect: only the runtime's explicit `_session/closed` says this.
+    RuntimeClosed,
     /// Tear the connection down. Always the final effect of its batch; the
     /// machine is [`RuntimeStatus::Dead`] once it appears.
     Stop {

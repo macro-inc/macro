@@ -1,5 +1,6 @@
+import { fireAndForget } from '@core/util/fireAndForget';
 import EmptyStateNoFilterMatchGraphic from '@design/empty-state-no-filter-match.svg';
-import PlusIcon from '@phosphor/plus.svg';
+import PlusIcon from '@icon/system/regular/plus.svg';
 import type { DatabaseOpsError } from '@service-storage/databases';
 import { Button } from '@ui/components/Button';
 import type { Result } from 'neverthrow';
@@ -71,7 +72,7 @@ export function NewBoardGroup(props: {
             <h2 class="text-sm font-medium">Create a group</h2>
             <Button
               size="sm"
-              variant="outline"
+              variant="secondary"
               class="gap-2"
               onClick={() => {
                 setDraft('');
@@ -85,7 +86,10 @@ export function NewBoardGroup(props: {
           </>
         }
       >
-        <form class="w-full text-left" onSubmit={(event) => void save(event)}>
+        <form
+          class="w-full text-left"
+          onSubmit={(event) => fireAndForget(save(event), 'database')}
+        >
           <p class="mb-2 block text-xs font-medium text-ink-muted">
             New {props.column.name.toLowerCase()} group
           </p>
@@ -118,13 +122,18 @@ export function NewBoardGroup(props: {
             </p>
           </Show>
           <div class="mt-3 flex items-center justify-end gap-2">
-            <Button size="sm" disabled={pending()} onClick={cancel}>
+            <Button
+              variant="ghost"
+              size="sm"
+              disabled={pending()}
+              onClick={cancel}
+            >
               Cancel
             </Button>
             <Button
               size="sm"
               type="submit"
-              variant="cta"
+              variant="primary"
               disabled={pending() || !draft().trim()}
             >
               {pending() ? 'Adding…' : 'Add group'}

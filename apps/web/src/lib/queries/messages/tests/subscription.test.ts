@@ -10,12 +10,12 @@ import { useMessageThreadQuery } from '../thread-replies';
 
 const mocks = await vi.hoisted(async () => {
   const { createSignal } = await import('solid-js');
-  const [focused, setFocused] = createSignal(true);
+  const [visible, setVisible] = createSignal(true);
   return {
     send: vi.fn(),
     clearStream: vi.fn(),
-    focused,
-    setFocused,
+    visible,
+    setVisible,
     invalidate: vi.fn().mockResolvedValue(undefined),
     updates: new Set<(event: unknown) => void>(),
     reconnects: new Set<() => void>(),
@@ -25,7 +25,11 @@ const mocks = await vi.hoisted(async () => {
 vi.mock('@macro-inc/observability', () => ({
   Telemetry: { info: vi.fn(), warn: mocks.warn, error: vi.fn() },
 }));
-vi.mock('@core/signal/tabFocus', () => ({ isTabFocused: mocks.focused }));
+// Focus is elsewhere throughout: presence follows visibility alone.
+vi.mock('@core/signal/tabFocus', () => ({
+  isTabFocused: () => false,
+  isTabVisible: mocks.visible,
+}));
 vi.mock('@service-connection/stream', () => ({
   clearStream: mocks.clearStream,
 }));
@@ -85,7 +89,7 @@ function sent(action: string, id = parent.id) {
 beforeEach(() => {
   vi.useFakeTimers();
   vi.clearAllMocks();
-  mocks.setFocused(true);
+  mocks.setVisible(true);
 });
 afterEach(() => {
   for (const dispose of disposers.splice(0)) dispose();
@@ -213,17 +217,23 @@ it('refreshes cached messages after all views close and the parent reopens', () 
   expect(mocks.invalidate).toHaveBeenCalledTimes(3);
 });
 
+it('keeps the heartbeat in a visible tab whose window is not focused', () => {
+  mountBlock();
+  vi.advanceTimersByTime(60_000);
+  expect(sent('ping')).toHaveLength(3);
+});
+
 it('suspends the shared heartbeat in a background tab', () => {
   mountBlock();
-  mocks.setFocused(false);
+  mocks.setVisible(false);
   vi.advanceTimersByTime(40_000);
   expect(sent('ping')).toHaveLength(0);
-  mocks.setFocused(true);
+  mocks.setVisible(true);
   vi.advanceTimersByTime(20_000);
   expect(sent('ping')).toHaveLength(1);
 });
 
-it('reports a presence lapse once per unfocused absence past the gateway window', () => {
+it('reports a presence lapse once per hidden absence past the gateway window', () => {
   mount(useRefreshTrackedEntitiesOnFocus);
   mountBlock();
   const lapses = () =>
@@ -231,7 +241,7 @@ it('reports a presence lapse once per unfocused absence past the gateway window'
       ([name]) => name === 'presence.heartbeat_lapsed'
     );
 
-  mocks.setFocused(false);
+  mocks.setVisible(false);
   vi.advanceTimersByTime(40_000);
   expect(lapses()).toHaveLength(0);
   vi.advanceTimersByTime(40_000);
@@ -243,13 +253,13 @@ it('reports a presence lapse once per unfocused absence past the gateway window'
   vi.advanceTimersByTime(60_000);
   expect(lapses()).toHaveLength(1);
 
-  mocks.setFocused(true);
-  mocks.setFocused(false);
+  mocks.setVisible(true);
+  mocks.setVisible(false);
   vi.advanceTimersByTime(60_000);
   expect(lapses()).toHaveLength(2);
 });
 
-it('pings on refocus and refreshes only views left unseen past the gateway window', () => {
+it('pings when visible again and refreshes only views left unseen past the gateway window', () => {
   mount(useRefreshTrackedEntitiesOnFocus);
   mount(() =>
     useMessageThreadQuery(
@@ -259,20 +269,20 @@ it('pings on refocus and refreshes only views left unseen past the gateway windo
   );
   mocks.invalidate.mockClear();
 
-  // Heartbeats keep the gateway's view fresh while focused.
+  // Heartbeats keep the gateway's view fresh while visible, focused or not.
   vi.advanceTimersByTime(80_000);
   expect(sent('ping')).toHaveLength(4);
-  mocks.setFocused(false);
+  mocks.setVisible(false);
   vi.advanceTimersByTime(30_000);
-  mocks.setFocused(true);
+  mocks.setVisible(true);
   expect(sent('ping')).toHaveLength(5);
   expect(mocks.invalidate).not.toHaveBeenCalled();
 
   // Away past the window: the gateway stopped sending this parent's events.
-  mocks.setFocused(false);
+  mocks.setVisible(false);
   vi.advanceTimersByTime(60_000);
   expect(sent('ping')).toHaveLength(5);
-  mocks.setFocused(true);
+  mocks.setVisible(true);
   expect(sent('ping')).toHaveLength(6);
   expect(mocks.invalidate).toHaveBeenCalledTimes(3);
   expect(mocks.invalidate).toHaveBeenCalledWith({

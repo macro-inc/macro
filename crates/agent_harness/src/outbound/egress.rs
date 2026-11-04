@@ -15,7 +15,7 @@ use agent_egress::domain::model::{
 };
 use macro_user_id::user_id::MacroUserIdStr;
 use mcp_client::domain::ports::McpServerStore;
-use pipedream_mcp::domain::ports::ConnectionStore;
+use pipedream_mcp::domain::ports::{ConnectionStore, ConnectorOverlays};
 use std::sync::Arc;
 
 use crate::domain::error::{HarnessError, Result};
@@ -36,7 +36,7 @@ pub struct EgressProvisioner<Connections, Servers> {
 
 impl<Connections, Servers> EgressProvisioner<Connections, Servers>
 where
-    Connections: ConnectionStore,
+    Connections: ConnectionStore + ConnectorOverlays,
     Servers: McpServerStore,
 {
     /// Build the provisioner over the Pipedream connection store, the custom
@@ -60,122 +60,68 @@ where
         self
     }
 
-    /// The slugs to advertise for one session, verbatim.
-    ///
-    /// `app_slug`, exactly as the proxy resolves it - the same value at both
-    /// ends by equality is what makes a server entry dialable, and there is
-    /// no derivation for the two to disagree over. Macro's own server is not
-    /// in the list: every session has it, on its own route.
-    ///
-    /// Under [`AgentMcpServers::OwnerConnections`] an app the owner turned
-    /// off is left out here as well as refused by the proxy: an agent that
-    /// can see a server in its list will try it, and a call the proxy answers
-    /// with a bare "no such server" is worse than a tool that is absent.
-    ///
-    /// Under [`AgentMcpServers::Selected`] the agent's list is advertised
-    /// whole, including apps the owner has not connected. That is deliberate,
-    /// and the reason the proxy answers those differently: a call to a
-    /// selected-but-unconnected app comes back as a tool result that says so
-    /// and names the fix, which the model can act on, and the moment the
-    /// owner connects the app the same advertised server starts working with
-    /// nothing re-attached.
-    async fn advertised(
+    // Both runtime hosts use mcp_select's provider policy. This adapter only
+    // loads owner-scoped rows and converts the result to proxy addresses.
+    async fn advertised_all(
         &self,
         owner: &MacroUserIdStr<'static>,
         selection: &AgentMcpServers,
-    ) -> Result<Vec<McpServerSlug>> {
-        let raw: Vec<String> = match selection {
-            AgentMcpServers::OwnerConnections => self
-                .connections
-                .list(owner)
-                .await
-                .map_err(|error| {
-                    HarnessError::Egress(rootcause::report!(
-                        "could not list Pipedream connections: {error:?}"
-                    ))
-                })?
-                .into_iter()
-                .filter(|record| record.enabled)
-                .map(|record| record.app_slug)
-                .collect(),
-            AgentMcpServers::Selected { servers } => servers
-                .iter()
-                .map(|server| server.app_slug.clone())
-                .collect(),
-        };
-
-        let slugs: Vec<McpServerSlug> = raw
-            .into_iter()
-            .filter_map(|app_slug| {
-                let slug = McpServerSlug::parse(&app_slug);
-                if slug.is_none() {
-                    // An app slug the strict parse refuses could never be
-                    // dialed - the proxy would refuse the same path segment -
-                    // so leaving it out is the only honest rendering.
-                    tracing::warn!(
-                        %owner,
-                        %app_slug,
-                        "an MCP server's app slug is not a valid path segment; skipped"
-                    );
+    ) -> Result<(Vec<McpServerSlug>, Vec<CustomMcpServerListing>)> {
+        let native = self.custom_servers.list(owner).await.map_err(|error| {
+            HarnessError::Egress(rootcause::report!(
+                "could not list custom MCP servers: {error:?}"
+            ))
+        })?;
+        // Selected-agent permissions are unchanged: advertise the author's
+        // explicit list and never add the owner's other private servers to
+        // it. An overlaid app the owner connected natively is advertised as
+        // that server; unconnected, its slug stays so a call asks to connect.
+        if let AgentMcpServers::Selected { servers } = selection {
+            let overlays = self.connections.overlays().await.map_err(|error| {
+                HarnessError::Egress(rootcause::report!("could not list MCP overlays: {error:?}"))
+            })?;
+            let mut slugs = Vec::new();
+            let mut custom = Vec::new();
+            for server in servers {
+                let connected = overlays
+                    .iter()
+                    .find(|overlay| overlay.app_slug == server.app_slug)
+                    .and_then(|overlay| mcp_select::overlay_connection(&native, overlay));
+                match connected {
+                    Some(record) => custom.push(CustomMcpServerListing {
+                        key: CustomMcpServerKey::for_url(&record.url),
+                        name: record.server_name.clone(),
+                    }),
+                    None => slugs.extend(McpServerSlug::parse(&server.app_slug)),
                 }
-                slug
-            })
-            .collect();
-        tracing::debug!(
-            mcp_servers = slugs.len(),
-            scope = selection.scope_str(),
-            "advertising MCP servers"
-        );
-        Ok(slugs)
-    }
-
-    /// The owner's custom MCP servers to advertise for one session.
-    ///
-    /// Only under [`AgentMcpServers::OwnerConnections`]: a session that runs
-    /// with the owner's connections gets the owner's own servers too, by the
-    /// same reasoning. A [`AgentMcpServers::Selected`] list is an agent
-    /// author's deliberate choice of apps, and the owner's private servers
-    /// are not something an author can select, so none are added behind it.
-    ///
-    /// A server the owner turned off is left out, as with apps. One that is
-    /// on but whose connection has lapsed is still listed: the proxy answers
-    /// its calls with a tool result naming the fix, which the model can act
-    /// on, where an absent tool could only be silently missing.
-    async fn advertised_custom(
-        &self,
-        owner: &MacroUserIdStr<'static>,
-        selection: &AgentMcpServers,
-    ) -> Result<Vec<CustomMcpServerListing>> {
-        let AgentMcpServers::OwnerConnections = selection else {
-            return Ok(Vec::new());
-        };
-        let listings: Vec<CustomMcpServerListing> = self
-            .custom_servers
-            .list(owner)
-            .await
-            .map_err(|error| {
-                HarnessError::Egress(rootcause::report!(
-                    "could not list custom MCP servers: {error:?}"
-                ))
-            })?
-            .into_iter()
-            .filter(|record| record.enabled)
-            .map(|record| CustomMcpServerListing {
-                key: CustomMcpServerKey::for_url(&record.url),
-                name: record.server_name,
-            })
-            .collect();
-        tracing::debug!(
-            custom_servers = listings.len(),
-            "advertising custom MCP servers"
-        );
-        Ok(listings)
+            }
+            return Ok((slugs, custom));
+        }
+        let pipedream = self.connections.list(owner).await.map_err(|error| {
+            HarnessError::Egress(rootcause::report!(
+                "could not list Pipedream connections: {error:?}"
+            ))
+        })?;
+        let (native, pipedream) = mcp_select::select_connections(native, pipedream);
+        Ok((
+            pipedream
+                .into_iter()
+                .filter_map(|r| McpServerSlug::parse(&r.app_slug))
+                .collect(),
+            native
+                .into_iter()
+                .map(|r| CustomMcpServerListing {
+                    key: CustomMcpServerKey::for_url(&r.url),
+                    name: r.server_name,
+                })
+                .collect(),
+        ))
     }
 }
 
 impl<Connections, Servers> SandboxEgressProvisioner for EgressProvisioner<Connections, Servers>
 where
-    Connections: ConnectionStore,
+    Connections: ConnectionStore + ConnectorOverlays,
     Servers: McpServerStore,
 {
     fn external_mcp_servers(
@@ -186,10 +132,7 @@ where
         if let Some(url) = &self.external_base_url {
             external.base_url = url.clone();
         }
-        vec![
-            external.internal_mcp_server(),
-            external.preview_mcp_server(),
-        ]
+        external.acp_servers()
     }
 
     #[tracing::instrument(err, skip(self), fields(%session, %owner))]
@@ -200,14 +143,15 @@ where
         selection: &AgentMcpServers,
     ) -> Result<ProvisionedEgress> {
         let token = SessionToken::mint();
+        let (mcp_servers, custom_servers) = self.advertised_all(owner, selection).await?;
 
         Ok(ProvisionedEgress {
             session_token_hash: token.hash(),
             sandbox: SandboxEgress {
                 base_url: self.base_url.clone(),
                 session_token: token.as_str().to_owned(),
-                mcp_servers: self.advertised(owner, selection).await?,
-                custom_servers: self.advertised_custom(owner, selection).await?,
+                mcp_servers,
+                custom_servers,
             },
         })
     }
@@ -219,11 +163,12 @@ where
         session_token: String,
         selection: &AgentMcpServers,
     ) -> Result<SandboxEgress> {
+        let (mcp_servers, custom_servers) = self.advertised_all(owner, selection).await?;
         Ok(SandboxEgress {
             base_url: self.base_url.clone(),
             session_token,
-            mcp_servers: self.advertised(owner, selection).await?,
-            custom_servers: self.advertised_custom(owner, selection).await?,
+            mcp_servers,
+            custom_servers,
         })
     }
 }

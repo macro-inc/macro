@@ -4,15 +4,11 @@
  * properties_service
  * OpenAPI spec version: 0.1.0
  */
-
 import type { PropertyDataTypeOneOfNineType } from './propertyDataTypeOneOfNineType';
-import type { SelectNumberOption } from './selectNumberOption';
 
 /**
- * Select property with numeric options.
+ * String/text values.
  */
 export type PropertyDataTypeOneOfNine = {
-  multi: boolean;
-  options: SelectNumberOption[];
   type: PropertyDataTypeOneOfNineType;
 };

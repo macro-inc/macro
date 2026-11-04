@@ -6,10 +6,21 @@ import { type AndroidFileAction, exportAndroidFile } from './androidFiles';
 export async function exportAndroidFileWithProgress(
   blob: Blob,
   name: string,
-  action: AndroidFileAction = 'save'
+  action: AndroidFileAction = 'save',
+  signal?: AbortSignal
 ): Promise<{ canceled: boolean }> {
-  if (blob.size < 1024 * 1024) return exportAndroidFile(blob, name, action);
+  if (signal?.aborted) return { canceled: true };
+  if (blob.size < 1024 * 1024) {
+    try {
+      return await exportAndroidFile(blob, name, action, { signal });
+    } catch (error) {
+      if (signal?.aborted) return { canceled: true };
+      throw error;
+    }
+  }
   const controller = new AbortController();
+  const abort = () => controller.abort();
+  signal?.addEventListener('abort', abort, { once: true });
   const [progress, setProgress] = createSignal(0);
   const id = toast.custom(
     {
@@ -33,6 +44,7 @@ export async function exportAndroidFileWithProgress(
     if (controller.signal.aborted) return { canceled: true };
     throw error;
   } finally {
+    signal?.removeEventListener('abort', abort);
     toast.dismiss(id);
   }
 }

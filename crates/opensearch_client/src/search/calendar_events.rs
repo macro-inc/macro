@@ -34,7 +34,8 @@ const SOURCE_NAMES_KEY: &str = "source_names";
 /// `source_names` every copy's, so a shared calendar's bracketed re-import
 /// of a member's event is found under either. Access mirrors the soup
 /// predicate: `owner_id == caller` or the event's `source_link_id` is one of
-/// the caller's delegated inbox links.
+/// the caller's delegated inbox links. Events shared with the caller's
+/// channels arrive as an explicit `ids_only` set instead.
 pub(crate) struct CalendarEventQueryBuilder {
     inner: SearchQueryBuilder<CalendarEventSearchConfig>,
     link_ids: Vec<String>,

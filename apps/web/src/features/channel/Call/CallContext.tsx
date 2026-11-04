@@ -5,9 +5,11 @@ import {
   type BackgroundEffect,
   backgroundProcessorOptions,
 } from '@core/media/background-effect';
+import { fireAndForget } from '@core/util/fireAndForget';
 import { holdAutomaticReload } from '@core/util/reloadForNewerBuild';
 import type { KrispNoiseFilter } from '@livekit/krisp-noise-filter';
 import type { BackgroundProcessorWrapper } from '@livekit/track-processors';
+import type { Span } from '@macro-inc/observability';
 import {
   fetchActiveCall,
   invalidateActiveCallQueries,
@@ -22,6 +24,7 @@ import type {
   LocalTrack,
   RemoteParticipant,
   Room,
+  ScreenShareCaptureOptions,
 } from 'livekit-client';
 import {
   createContext,
@@ -39,6 +42,7 @@ import {
   stopPrejoinTracks,
 } from './CallSessionController';
 import { type CallLifecycleState, createCallLifecycle } from './call-lifecycle';
+import { traceCallMedia } from './call-media-telemetry';
 import { publishCallResolution } from './call-resolution';
 import { createLatestAsyncRequestQueue } from './latest-async-request-queue';
 import {
@@ -56,8 +60,10 @@ import {
   type NativeCallConnectionState,
   useMaybeNativeCallState,
 } from './native-call-state';
+import { ScreenShareError } from './screen-share-error';
 import {
-  isNativeIosCallKitEnabled,
+  isNativeCallEnabled,
+  prepareNativeCallJoin,
   registerCallKitCallEndedHandler,
 } from './use-callkit';
 
@@ -185,6 +191,23 @@ function microphoneCaptureOptions(
       ? { voiceIsolation: useBrowserProcessing && !noiseSuppressionSupported }
       : {}),
     ...(deviceId ? { deviceId: { exact: deviceId } } : {}),
+  };
+}
+
+function screenShareCaptureOptions(
+  includeAudio: boolean
+): ScreenShareCaptureOptions {
+  if (!includeAudio) return { audio: false };
+  return {
+    // Shared audio is usually music or video, which voice processing mangles.
+    audio: {
+      echoCancellation: false,
+      noiseSuppression: false,
+      autoGainControl: false,
+    },
+    // Chromium offers system audio only when asked (Windows, ChromeOS); other
+    // platforms and browsers capture tab audio or none.
+    systemAudio: 'include',
   };
 }
 
@@ -355,6 +378,13 @@ const [persistedNoiseSuppressionMode, setPersistedNoiseSuppressionMode] =
     },
   });
 
+// Persisted across reloads. Off by default: shared tab or system audio is heard
+// by everyone in the call, so including it is an explicit choice.
+const [persistedShareScreenAudio, setPersistedShareScreenAudio] = makePersisted(
+  createSignal(false),
+  { name: 'call.shareScreenAudio' }
+);
+
 export type CallState = {
   /** Media connection owned by the meeting session; channel calls use callLifecycle. */
   meetingSession: Pick<
@@ -405,6 +435,10 @@ export type CallState = {
   toggleVideo: () => Promise<void>;
   /** Toggle screen sharing */
   toggleScreenShare: () => Promise<void>;
+  /** Whether the next screen share captures tab or system audio */
+  shareScreenAudio: () => boolean;
+  /** Choose whether the next screen share captures tab or system audio */
+  setShareScreenAudio: (value: boolean) => void;
   /** Switch active audio input device */
   switchAudioInput: (deviceId: string) => Promise<void>;
   /** Switch active audio output device */
@@ -1068,7 +1102,7 @@ function createCallState() {
 
   // Re-enumerate when devices change (e.g. headphones plugged in)
   const handleDeviceChange = () => {
-    enumerateDevices();
+    fireAndForget(enumerateDevices(), 'call-devices');
   };
   navigator.mediaDevices?.addEventListener('devicechange', handleDeviceChange);
 
@@ -1193,11 +1227,21 @@ function createCallState() {
     targetRoom: Room,
     source: keyof CallPrejoinTracks,
     prejoinTrack: MediaStreamTrack | undefined,
-    enableDevice: () => Promise<unknown>
+    enableDevice: () => Promise<unknown>,
+    mediaSpan?: Span
   ) {
+    const callId = store.activeCallId;
     if (prejoinTrack?.readyState === 'live') {
       try {
-        await publishPrejoinTrack(targetRoom, source, prejoinTrack);
+        await traceCallMedia(
+          'publish_prejoin',
+          {
+            'call.id': callId ?? undefined,
+            'call.media.device': source,
+          },
+          () => publishPrejoinTrack(targetRoom, source, prejoinTrack),
+          mediaSpan
+        );
         return;
       } catch (e) {
         console.error(`failed to publish prejoin ${source} track`, e);
@@ -1206,13 +1250,22 @@ function createCallState() {
       }
     }
     prejoinTrack?.stop();
-    await enableDevice();
+    await traceCallMedia(
+      'enable',
+      {
+        'call.id': callId ?? undefined,
+        'call.media.device': source,
+      },
+      enableDevice,
+      mediaSpan
+    );
   }
 
   async function finishLocalMediaSetup(
     targetRoom: Room,
     setupVersion: number,
-    prejoinTracks?: CallPrejoinTracks
+    prejoinTracks?: CallPrejoinTracks,
+    mediaSpan?: Span
   ) {
     // Each step claims its track; anything left unclaimed is stopped.
     const unclaimed = { ...prejoinTracks };
@@ -1222,7 +1275,7 @@ function createCallState() {
       return track;
     };
     try {
-      await setUpLocalMedia(targetRoom, setupVersion, claim);
+      await setUpLocalMedia(targetRoom, setupVersion, claim, mediaSpan);
     } finally {
       stopPrejoinTracks(unclaimed);
     }
@@ -1231,7 +1284,8 @@ function createCallState() {
   async function setUpLocalMedia(
     targetRoom: Room,
     setupVersion: number,
-    claim: (source: keyof CallPrejoinTracks) => MediaStreamTrack | undefined
+    claim: (source: keyof CallPrejoinTracks) => MediaStreamTrack | undefined,
+    mediaSpan?: Span
   ) {
     if (!isCurrentMediaSetup(targetRoom, setupVersion)) return;
 
@@ -1248,7 +1302,8 @@ function createCallState() {
             targetRoom.localParticipant.setMicrophoneEnabled(
               true,
               currentMicrophoneCaptureOptions(store.activeAudioInputDeviceId)
-            )
+            ),
+          mediaSpan
         );
       }
     } catch (e) {
@@ -1274,8 +1329,12 @@ function createCallState() {
 
     if (!store.isVideoMuted) {
       try {
-        await enablePrejoinOrDevice(targetRoom, 'camera', claim('camera'), () =>
-          enableInitialCamera(targetRoom)
+        await enablePrejoinOrDevice(
+          targetRoom,
+          'camera',
+          claim('camera'),
+          () => enableInitialCamera(targetRoom),
+          mediaSpan
         );
         if (!isCurrentMediaSetup(targetRoom, setupVersion)) return;
         if (store.isVideoMuted) {
@@ -1420,16 +1479,33 @@ function createCallState() {
     const newMuted = !store.isAudioMuted;
     try {
       if (newMuted) {
-        await r.localParticipant.setMicrophoneEnabled(false);
+        await traceCallMedia(
+          'toggle',
+          {
+            'call.id': store.activeCallId ?? undefined,
+            'call.media.device': 'microphone',
+            'call.media.enabled': false,
+          },
+          () => r.localParticipant.setMicrophoneEnabled(false)
+        );
       } else {
         // Re-enable the mic. When the muted publication survived
         // (stopMicTrackOnMute is false) this only unmutes and the capture
         // options are ignored; they matter when the track was stopped and
         // must be recreated (e.g. after a device unplug).
         const deviceId = store.activeAudioInputDeviceId;
-        await r.localParticipant.setMicrophoneEnabled(
-          true,
-          currentMicrophoneCaptureOptions(deviceId)
+        await traceCallMedia(
+          'toggle',
+          {
+            'call.id': store.activeCallId ?? undefined,
+            'call.media.device': 'microphone',
+            'call.media.enabled': true,
+          },
+          () =>
+            r.localParticipant.setMicrophoneEnabled(
+              true,
+              currentMicrophoneCaptureOptions(deviceId)
+            )
         );
         // The mic track may have changed — re-apply the selected audio processing.
         await ensureNoiseSuppressionOnMicTrack(r);
@@ -1453,14 +1529,31 @@ function createCallState() {
     const newMuted = !store.isVideoMuted;
     try {
       if (newMuted) {
-        await r.localParticipant.setCameraEnabled(false);
+        await traceCallMedia(
+          'toggle',
+          {
+            'call.id': store.activeCallId ?? undefined,
+            'call.media.device': 'camera',
+            'call.media.enabled': false,
+          },
+          () => r.localParticipant.setCameraEnabled(false)
+        );
         // Track is gone — drop our processor ref so the next enable starts clean.
         setBlurProcessor(null);
       } else {
         const deviceId = store.activeVideoInputDeviceId;
-        await r.localParticipant.setCameraEnabled(
-          true,
-          deviceId ? { deviceId: { exact: deviceId } } : undefined
+        await traceCallMedia(
+          'toggle',
+          {
+            'call.id': store.activeCallId ?? undefined,
+            'call.media.device': 'camera',
+            'call.media.enabled': true,
+          },
+          () =>
+            r.localParticipant.setCameraEnabled(
+              true,
+              deviceId ? { deviceId: { exact: deviceId } } : undefined
+            )
         );
         // Read the actual device the browser chose so the dropdown is accurate
         const camPub = r.localParticipant.getTrackPublication(
@@ -1488,16 +1581,39 @@ function createCallState() {
     if (!r) return;
     const newSharing = !store.isScreenSharing;
     try {
-      await r.localParticipant.setScreenShareEnabled(newSharing);
+      const outcome = await traceCallMedia(
+        'screen_share',
+        {
+          'call.id': store.activeCallId ?? undefined,
+          'call.media.enabled': newSharing,
+        },
+        async (span) => {
+          if (newSharing) {
+            // The picker stays out of the startup bundle CallProvider is in.
+            const { startScreenShare } = await import('./screen-share');
+            return startScreenShare(
+              r,
+              span,
+              screenShareCaptureOptions(persistedShareScreenAudio())
+            );
+          }
+          await r.localParticipant.setScreenShareEnabled(false);
+          return 'shared';
+        }
+      );
+      if (outcome === 'cancelled') return;
       setStore('isScreenSharing', newSharing);
       analytics.track('call_action', {
         action: 'screen_share_toggled',
         channelId: store.activeChannelId ?? '',
         callId: store.activeCallId ?? undefined,
         enabled: newSharing,
+        audio: newSharing ? persistedShareScreenAudio() : undefined,
       });
     } catch (e) {
       console.error('failed to toggle screen share', e);
+      // The controls show it; browser picker failures include cancelling.
+      if (e instanceof ScreenShareError) throw e;
     }
   }
 
@@ -1574,8 +1690,11 @@ function createCallState() {
     }
   }
 
+  // When this client joined its current call, for time-in-call analytics.
+  let joinedAt: number | undefined;
   const lifecycle = createCallLifecycle({
     shouldRequestToken: callSession.shouldRequestToken,
+    prepareToken: prepareNativeCallJoin,
     requestToken: requestCallToken,
     connect: (token) =>
       callSession.connectWithToken(token, {
@@ -1605,7 +1724,7 @@ function createCallState() {
         unregister();
       };
     },
-    onJoined: (call) => {
+    onJoined: (call, source) => {
       const answeringUserId = userId();
       if (answeringUserId && call.callId) {
         publishCallResolution({
@@ -1614,18 +1733,29 @@ function createCallState() {
           answeredBy: answeringUserId,
         });
       }
-      void invalidateActiveCallQueries();
+      fireAndForget(invalidateActiveCallQueries(), 'call-membership');
+      joinedAt = Date.now();
       analytics.track('call_action', {
         action: 'joined',
         channelId: call.channelId,
+        callId: call.callId ?? undefined,
+        trigger: source,
       });
     },
-    onLeft: (channelId) =>
+    onLeft: (call, reason) => {
+      const secondsInCall =
+        joinedAt === undefined
+          ? undefined
+          : Math.round((Date.now() - joinedAt) / 1000);
+      joinedAt = undefined;
       analytics.track('call_action', {
         action: 'left',
-        channelId,
-        leaveReason: 'user_initiated',
-      }),
+        channelId: call.channelId,
+        callId: call.callId ?? undefined,
+        leaveReason: reason,
+        secondsInCall,
+      });
+    },
     reportError: (error) => console.error('call lifecycle failed', error),
   });
   const [lifecycleSnapshot, setLifecycleSnapshot] = createSignal(
@@ -1649,7 +1779,7 @@ function createCallState() {
   });
 
   const unsubscribeNative =
-    isNativeIosCallKitEnabled() && nativeCall
+    isNativeCallEnabled() && nativeCall
       ? bindNativeCallLifecycle(nativeCall, lifecycle)
       : undefined;
 
@@ -1722,6 +1852,8 @@ function createCallState() {
     toggleAudio,
     toggleVideo,
     toggleScreenShare,
+    shareScreenAudio: persistedShareScreenAudio,
+    setShareScreenAudio: (value) => setPersistedShareScreenAudio(value),
     switchAudioInput,
     switchAudioOutput,
     switchVideoInput,

@@ -956,6 +956,119 @@ async fn team_channel_role_uses_scoped_channel_rules(pool: PgPool) -> anyhow::Re
     Ok(())
 }
 
+/// A direct agent conversation between `owner` and `bot_id`, holding just the
+/// two of them as opening one does.
+async fn insert_pg_direct_agent_conversation(
+    pool: &PgPool,
+    channel_id: Uuid,
+    owner: &str,
+    bot_id: BotId,
+) -> anyhow::Result<()> {
+    sqlx::query!(
+        "INSERT INTO comms_channels (id, channel_type, owner_id) VALUES ($1, 'direct_message', $2)",
+        channel_id,
+        owner,
+    )
+    .execute(pool)
+    .await?;
+    sqlx::query!(
+        "INSERT INTO comms_channel_agents (channel_id, bot_id, kind, user_id) VALUES ($1, $2, 'direct', $3)",
+        channel_id,
+        bot_id.as_uuid(),
+        owner,
+    )
+    .execute(pool)
+    .await?;
+    let principal = bot_id.into_storage_id();
+    sqlx::query!(
+        "INSERT INTO comms_channel_participants (channel_id, user_id, role) VALUES ($1, $2, 'owner'), ($1, $3, 'member')",
+        channel_id,
+        owner,
+        principal.as_ref(),
+    )
+    .execute(pool)
+    .await?;
+    Ok(())
+}
+
+/// Any member of a persona's team can mint its team-scope token, so the
+/// conversation one teammate has with the persona must stay out of it: its
+/// channel, and everything shared there, including the conversation's
+/// sessions.
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn team_scope_does_not_reach_a_direct_agent_conversation(pool: PgPool) -> anyhow::Result<()> {
+    let team_id = Uuid::new_v4();
+    let bot_id = BotId::new_from_uuid(Uuid::new_v4());
+    let shared_channel_id = Uuid::new_v4();
+    let conversation_id = Uuid::new_v4();
+    insert_pg_bot_team(&pool, team_id).await?;
+    insert_pg_bot(&pool, bot_id, None, Some(team_id)).await?;
+    insert_pg_bot_channel(&pool, shared_channel_id, "private", None).await?;
+    insert_pg_bot_participant(&pool, shared_channel_id, bot_id, "member").await?;
+    insert_pg_direct_agent_conversation(&pool, conversation_id, PG_BOT_OWNER, bot_id).await?;
+    let repo = PgAccessRepository::new(pool);
+
+    assert_eq!(
+        repo.get_team_channel_role(&shared_channel_id, team_id, bot_id)
+            .await?,
+        ChannelRoleResult::Role(ParticipantRole::Member),
+    );
+    assert_eq!(
+        repo.get_team_channel_role(&conversation_id, team_id, bot_id)
+            .await?,
+        ChannelRoleResult::NoAccess,
+    );
+    for (entity_type, stored_type) in [
+        (EntityType::Document, "document"),
+        (EntityType::AgentSession, "agent_session"),
+    ] {
+        let in_shared_channel = Uuid::new_v4();
+        insert_pg_bot_entity_access(
+            &repo.pool,
+            in_shared_channel,
+            stored_type,
+            &shared_channel_id.to_string(),
+            "channel",
+            AccessLevel::Edit,
+        )
+        .await?;
+        assert_eq!(
+            repo.get_team_entity_access(
+                bot_id,
+                team_id,
+                &in_shared_channel.to_string(),
+                entity_type,
+            )
+            .await?,
+            Some(AccessLevel::Edit),
+            "{stored_type} shared in a channel",
+        );
+
+        let in_conversation = Uuid::new_v4();
+        insert_pg_bot_entity_access(
+            &repo.pool,
+            in_conversation,
+            stored_type,
+            &conversation_id.to_string(),
+            "channel",
+            AccessLevel::Edit,
+        )
+        .await?;
+        assert_eq!(
+            repo.get_team_entity_access(
+                bot_id,
+                team_id,
+                &in_conversation.to_string(),
+                entity_type,
+            )
+            .await?,
+            None,
+            "{stored_type} shared in the direct conversation",
+        );
+    }
+    Ok(())
+}
+
 #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
 async fn team_foreign_entity_access_uses_only_team_and_bot_pairs(
     pool: PgPool,

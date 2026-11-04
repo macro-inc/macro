@@ -237,6 +237,9 @@ pub struct SessionGrant {
     pub session: AgentSessionId,
     /// Whose connected servers it may reach.
     pub owner: MacroUserIdStr<'static>,
+    /// The agent the session is bound to. Macro's own tools write as it,
+    /// never as a bot the sandbox names.
+    pub agent: bot_id::BotId,
     /// The repository git egress is pinned to, if this session chose one.
     pub repo: Option<RepoSlug>,
     /// The apps the agent listed for this session, for naming only.
@@ -253,7 +256,7 @@ impl SessionGrant {
     pub fn held_prompter(&self) -> Option<&TurnPrompter> {
         self.prompter
             .as_ref()
-            .filter(|prompter| prompter.user.as_ref() != Some(&self.owner))
+            .filter(|prompter| prompter.acting_user() != Some(&self.owner))
     }
 
     /// What to call `slug` when speaking to the model: the agent's own name
@@ -394,7 +397,7 @@ pub fn not_connected_tool_result(
         "name": name,
     });
     let text = format!(
-        "{name} is not connected for the person running this session, or they have it          turned off, so this tool cannot run yet. Tell them so in your reply, and include          this exact markup so they get a button that connects it:          <{tag}>{payload}</{tag}>          Close your reply by asking them to let you know once they have connected {name} so \
+        "{name} is not connected for the selected acting_as account, or they have it          turned off, so this tool cannot run yet. Tell them so in your reply, and include          this exact markup so they get a button that connects it:          <{tag}>{payload}</{tag}>          Close your reply by asking them to let you know once they have connected {name} so \
          you can try again - when they do, call this tool again; nothing else needs to change.",
         name = name,
         tag = CONNECT_APP_TAG,
@@ -413,7 +416,7 @@ pub fn not_connected_tool_result(
 /// carried.
 pub fn disconnected_tool_result(name: &str, id: serde_json::Value) -> ProxyResponse {
     let text = format!(
-        "{name} is a custom MCP server the person running this session added, but its \
+        "{name} is a custom MCP server the selected acting_as account added, but its \
          connection has expired, so this tool cannot run yet. Tell them so in your reply, \
          and ask them to open Agents → Connections, find {name} under Custom MCP, and use \
          Reconnect. Close your reply by asking them to let you know once they have done so \
@@ -423,7 +426,7 @@ pub fn disconnected_tool_result(name: &str, id: serde_json::Value) -> ProxyRespo
 }
 
 /// A JSON-RPC response carrying `text` as an `isError` tool result for `id`.
-fn tool_result_response(id: serde_json::Value, text: String) -> ProxyResponse {
+pub(crate) fn tool_result_response(id: serde_json::Value, text: String) -> ProxyResponse {
     let body = serde_json::json!({
         "jsonrpc": "2.0",
         "id": id,

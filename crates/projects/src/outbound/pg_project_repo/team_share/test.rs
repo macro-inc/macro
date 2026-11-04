@@ -34,6 +34,7 @@ async fn create_project(repo: &TestRepo, name: &str) -> String {
         name: name.to_string(),
         parent_id: None,
         share_permission: SharePermissionV2::new_project_share_permission(None),
+        updated_at: None,
     })
     .await
     .unwrap()
@@ -598,6 +599,7 @@ async fn bot_owned_child_under_team_shared_parent_inherits_and_keeps_its_own_gra
             name: "Bot child".to_string(),
             parent_id: Some(parent_id.clone()),
             share_permission: SharePermissionV2::new_project_share_permission(None),
+            updated_at: None,
         })
         .await
         .unwrap();

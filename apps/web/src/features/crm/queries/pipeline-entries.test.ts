@@ -1,7 +1,16 @@
 import type { CrmPipelineEntryFieldsFragment } from '@service-storage/graphql/generated/graphql';
+import { okAsync } from 'neverthrow';
 import { expect, it, vi } from 'vitest';
 import { UNAVAILABLE_OPTION } from '../../database/core/grid-cells';
-import { pipelineEntriesInput, toPipelineEntry } from './pipeline-entries';
+import {
+  type PipelineEntriesDependencies,
+  pipelineEntriesInput,
+  savePipelineEntryCell,
+  toPipelineEntry,
+} from './pipeline-entries';
+
+const track = vi.hoisted(() => vi.fn());
+vi.mock('@app/lib/analytics', () => ({ analytics: { track } }));
 
 vi.mock('@service-storage/graphql-soup', () => ({
   getGraphqlSoupClient: vi.fn(),
@@ -136,6 +145,38 @@ it('reads stored values the way the pipeline table does', () => {
   ]);
 });
 
+it('reads value kinds from a newer server as empty instead of throwing', () => {
+  const fromNewerServer = JSON.parse(
+    '{"__typename":"GraphqlColorPropertyValue","hex":"#ff0000"}'
+  );
+  const optionFromNewerServer = JSON.parse(
+    '{"__typename":"GraphqlColorPropertyOptionValue","hex":"#ff0000"}'
+  );
+  const mapped = toPipelineEntry(
+    entry([
+      {
+        __typename: 'GraphqlCrmPipelineCell',
+        column: column({
+          id: 'shade',
+          options: [
+            {
+              __typename: 'GraphqlPropertyOption',
+              id: 'red',
+              color: null,
+              value: optionFromNewerServer,
+            },
+          ],
+        }),
+        value: fromNewerServer,
+      },
+    ])
+  );
+  expect(mapped.cells[0].value).toBeNull();
+  expect(mapped.cells[0].column.options).toEqual([
+    { id: 'red', label: '', color: null },
+  ]);
+});
+
 it('reads one company or one contact through soup', () => {
   const company = pipelineEntriesInput({ type: 'company', id: 'acme' });
   expect(company?.initial?.filters?.crmCompanyFilter).toEqual({
@@ -154,4 +195,37 @@ it('reads one company or one contact through soup', () => {
     company?.initial?.filters?.documentFilter
   );
   expect(contact?.initial?.limit).toBe(1);
+});
+
+it('reports a record page pipeline write with the record type', async () => {
+  const mapped = toPipelineEntry(
+    entry([
+      {
+        __typename: 'GraphqlCrmPipelineCell',
+        column: column({ id: 'notes' }),
+        value: null,
+      },
+    ])
+  );
+  const storage = {
+    applyCrmPipelineOps: vi.fn(() => okAsync({ results: [], changes: [] })),
+  } as unknown as PipelineEntriesDependencies['storage'];
+
+  await savePipelineEntryCell(
+    storage,
+    mapped,
+    'contact',
+    mapped.cells[0],
+    'Follow up',
+    false
+  );
+
+  expect(track).toHaveBeenCalledExactlyOnceWith('crm_pipeline_entries_edited', {
+    pipelineId: 'pipeline',
+    recordType: 'contact',
+    surface: 'record',
+    insertedRows: 0,
+    updatedRows: 1,
+    deletedRows: 0,
+  });
 });

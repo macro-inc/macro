@@ -1,6 +1,6 @@
-use models_email::{db, service};
+use models_email::db;
+use sqlx::PgPool;
 use sqlx::types::Uuid;
-use sqlx::{Executor, PgPool, Postgres};
 
 #[cfg(test)]
 mod test;
@@ -8,60 +8,87 @@ mod test;
 /// Inserts a forwarded attachment link between a draft and an original message's attachment.
 /// Uses a subquery to verify the draft belongs to the given link_id.
 /// ON CONFLICT DO NOTHING makes this idempotent.
-#[tracing::instrument(skip(executor), err)]
-pub async fn insert_forwarded_attachment<'e, E>(
-    executor: E,
+#[tracing::instrument(skip(pool), err)]
+pub async fn insert_forwarded_attachment(
+    pool: &PgPool,
     link_id: Uuid,
     draft_id: Uuid,
     attachment_id: Uuid,
-) -> anyhow::Result<()>
-where
-    E: Executor<'e, Database = Postgres>,
-{
+) -> anyhow::Result<()> {
+    let mut tx = pool.begin().await?;
+    if !super::mutation::lock_editable_attachment_message(&mut tx, link_id, draft_id, false).await?
+    {
+        return Ok(());
+    }
     sqlx::query!(
         r#"
+        WITH editable AS (
+            SELECT id FROM email_messages
+            WHERE id = $1 AND link_id = $3 AND is_draft AND NOT is_sent
+            FOR UPDATE
+        )
         INSERT INTO email_attachments_fwd (message_id, attachment_id)
             SELECT $1, $2
-            FROM email_messages m
-            WHERE m.id = $1 AND m.link_id = $3
+            FROM editable
         ON CONFLICT DO NOTHING
         "#,
         draft_id,
         attachment_id,
         link_id,
     )
-    .execute(executor)
+    .execute(&mut *tx)
     .await?;
 
+    tx.commit().await?;
     Ok(())
 }
 
 /// Deletes a forwarded attachment link. Verifies draft ownership via link_id.
-#[tracing::instrument(skip(executor), err)]
-pub async fn delete_forwarded_attachment<'e, E>(
-    executor: E,
+#[tracing::instrument(skip(pool), err)]
+pub async fn delete_forwarded_attachment(
+    pool: &PgPool,
     link_id: Uuid,
     draft_id: Uuid,
     attachment_id: Uuid,
-) -> anyhow::Result<u64>
-where
-    E: Executor<'e, Database = Postgres>,
-{
+) -> anyhow::Result<u64> {
+    let mut tx = pool.begin().await?;
+    if !super::mutation::lock_editable_attachment_message(&mut tx, link_id, draft_id, false).await?
+    {
+        return Ok(0);
+    }
     let result = sqlx::query!(
         r#"
+        WITH editable AS (
+            SELECT id FROM email_messages
+            WHERE id = $1 AND link_id = $3 AND is_draft AND NOT is_sent
+            FOR UPDATE
+        )
         DELETE FROM email_attachments_fwd eaf
-        USING email_messages m
-        WHERE eaf.message_id = m.id
-        AND eaf.message_id = $1 AND eaf.attachment_id = $2 AND m.link_id = $3
+        USING editable m
+        WHERE eaf.message_id = m.id AND eaf.attachment_id = $2
         "#,
         draft_id,
         attachment_id,
         link_id,
     )
-    .execute(executor)
+    .execute(&mut *tx)
     .await?;
 
+    tx.commit().await?;
     Ok(result.rows_affected())
+}
+
+/// Provider download facts scoped to a draft, retaining the original inbox.
+#[derive(Debug, sqlx::FromRow)]
+pub struct ForwardedAttachmentForSend {
+    pub source_link_id: Uuid,
+    pub attachment_id: Uuid,
+    pub draft_id: Uuid,
+    pub provider_attachment_id: Option<String>,
+    pub message_provider_id: String,
+    pub filename: Option<String>,
+    pub mime_type: Option<String>,
+    pub size_bytes: Option<i64>,
 }
 
 /// Fetches all forwarded attachments for a given draft, joining email_attachments
@@ -71,11 +98,12 @@ pub async fn fetch_forwarded_attachments_by_draft_id(
     pool: &PgPool,
     link_id: Uuid,
     draft_id: Uuid,
-) -> anyhow::Result<Vec<service::attachment::AttachmentForwarded>> {
-    let db_attachments = sqlx::query_as!(
-        db::attachment::AttachmentForwarded,
+) -> anyhow::Result<Vec<ForwardedAttachmentForSend>> {
+    let attachments = sqlx::query_as!(
+        ForwardedAttachmentForSend,
         r#"
         SELECT
+            orig_msg.link_id AS source_link_id,
             eaf.attachment_id,
             eaf.message_id AS draft_id,
             ea.provider_attachment_id,
@@ -96,12 +124,7 @@ pub async fn fetch_forwarded_attachments_by_draft_id(
     .fetch_all(pool)
     .await?;
 
-    let service_attachments = db_attachments
-        .into_iter()
-        .map(service::attachment::AttachmentForwarded::from)
-        .collect();
-
-    Ok(service_attachments)
+    Ok(attachments)
 }
 
 /// Fetches forwarded attachments for multiple draft IDs and returns a map keyed by draft_id.

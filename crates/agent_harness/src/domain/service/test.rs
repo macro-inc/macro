@@ -4,7 +4,12 @@
 
 mod chat_reply;
 mod coding_preferences;
+mod external_mcp;
+mod external_replies;
+mod followers;
+mod notifications;
 mod owned_purge;
+mod presentation;
 mod quota;
 mod user_cleanup;
 mod warm;
@@ -36,7 +41,7 @@ use agent_session::domain::model::{
 };
 use agent_session::domain::ports::{
     AgentSessionLogRepo as _, AgentSessionNotificationRecipient as _, AgentSessionRepo as _,
-    ControlEvent, NoOpRealtime, NoopLifecyclePublisher,
+    ControlEvent, FirstPrompt, NoOpRealtime, NoopLifecyclePublisher,
 };
 use agent_session::domain::service::AgentSessionServiceImpl;
 use agent_session::domain::session::StopReason;
@@ -104,6 +109,7 @@ fn open_command() -> OpenSession {
             mcp_servers: AgentMcpServers::OwnerConnections,
         },
         origin: SessionOrigin::Mention(MentionOrigin {
+            reply_placement: Default::default(),
             parent: MessageParent::Channel(macro_uuid::generate_uuid_v7()),
             thread_id,
             message_id: thread_id,
@@ -118,6 +124,7 @@ fn open_command() -> OpenSession {
 /// Why the agent was called, as a trigger event carries it.
 fn trigger() -> TriggerContext {
     TriggerContext::Mentioned(DiscussionContext {
+        agent_request: None,
         surface: DiscussionSurface::Channel {
             id: Uuid::from_u128(0xf0),
             name: Some("eng".to_owned()),
@@ -160,6 +167,7 @@ fn forward_message(content: &str) -> DeliverAction {
             AgentAction::prompt(content),
             Some(staff_sender()),
             Some(AnnounceOrigin {
+                reply_placement: Default::default(),
                 reuse_origin_message: false,
                 parent: MessageParent::Channel(macro_uuid::Uuid::from_u128(0xf0)),
                 thread_id: macro_uuid::Uuid::from_u128(0xf1),
@@ -173,6 +181,8 @@ fn forward_message(content: &str) -> DeliverAction {
 struct PromptContextMock {
     unauthorized: Arc<Mutex<Option<String>>>,
     authorized: Arc<Mutex<Vec<(MacroUserIdStr<'static>, AnnounceOrigin)>>>,
+    /// Messages deleted since they were posted.
+    deleted: Arc<Mutex<Vec<macro_uuid::Uuid>>>,
 }
 
 impl PromptContextMock {
@@ -186,6 +196,11 @@ impl PromptContextMock {
     fn authorized(&self) -> Vec<(MacroUserIdStr<'static>, AnnounceOrigin)> {
         self.authorized.lock().unwrap().clone()
     }
+
+    /// Delete a posted message: an origin naming it is no longer valid.
+    fn delete(&self, message_id: macro_uuid::Uuid) {
+        self.deleted.lock().unwrap().push(message_id);
+    }
 }
 
 impl MessagePromptContext for PromptContextMock {
@@ -196,6 +211,11 @@ impl MessagePromptContext for PromptContextMock {
     ) -> crate::domain::error::Result<()> {
         if let Some(message) = self.unauthorized.lock().unwrap().clone() {
             return Err(HarnessError::PromptContext(rootcause::report!("{message}")));
+        }
+        if self.deleted.lock().unwrap().contains(&origin.message_id) {
+            return Err(HarnessError::InvalidOrigin(rootcause::report!(
+                "the message was deleted"
+            )));
         }
         self.authorized
             .lock()
@@ -285,6 +305,18 @@ impl crate::domain::ports::HarnessBindings for MirrorBindings {
     async fn harness_for(&self, bot: BotId) -> anyhow::Result<Option<harness_id::HarnessId>> {
         Ok(Some(harness_for_bot(bot)))
     }
+
+    /// Mirrored too: an ACP session id that is a session's own id names it.
+    async fn sessions_on_harness(
+        &self,
+        _harness: harness_id::HarnessId,
+        acp_sessions: &[agent_client_protocol::schema::v1::SessionId],
+    ) -> anyhow::Result<Vec<AgentSessionId>> {
+        Ok(acp_sessions
+            .iter()
+            .filter_map(|acp| acp.to_string().parse().ok())
+            .collect())
+    }
 }
 
 /// No agent has said anything about permissions: every bot runs under its
@@ -355,6 +387,10 @@ impl agent_session::domain::ports::SessionTurnObserver for SignallingTurnObserve
             id,
             reason,
         );
+    }
+
+    fn runtime_closed(&self, id: AgentSessionId) {
+        agent_session::domain::ports::SessionTurnObserver::runtime_closed(&self.harness, id);
     }
 }
 
@@ -485,6 +521,54 @@ fn harness_with_ports(
     mentions: PromptMentionsMock,
     egress: EgressProvisionerMock,
 ) -> (TestBench, TurnSignals) {
+    harness_with_ports_and_journal(
+        prompt_context,
+        prompt_composer,
+        permission_policies,
+        coding_agents,
+        mentions,
+        egress,
+        None,
+    )
+}
+
+fn harness_with_ports_and_journal(
+    prompt_context: PromptContextMock,
+    prompt_composer: PromptComposerMock,
+    permission_policies: impl crate::domain::ports::PermissionPolicySource,
+    coding_agents: impl crate::domain::ports::CodingAgentSource,
+    mentions: PromptMentionsMock,
+    egress: EgressProvisionerMock,
+    journal: Option<Arc<dyn crate::domain::conversation_turns::ConversationTurnStore>>,
+) -> (TestBench, TurnSignals) {
+    harness_with_journal_and_policy(
+        prompt_context,
+        prompt_composer,
+        permission_policies,
+        coding_agents,
+        mentions,
+        egress,
+        journal,
+        None,
+        None,
+    )
+}
+
+#[expect(
+    clippy::too_many_arguments,
+    reason = "the test harness accepts independently replaceable ports"
+)]
+fn harness_with_journal_and_policy(
+    prompt_context: PromptContextMock,
+    prompt_composer: PromptComposerMock,
+    permission_policies: impl crate::domain::ports::PermissionPolicySource,
+    coding_agents: impl crate::domain::ports::CodingAgentSource,
+    mentions: PromptMentionsMock,
+    egress: EgressProvisionerMock,
+    journal: Option<Arc<dyn crate::domain::conversation_turns::ConversationTurnStore>>,
+    policy: Option<Arc<dyn crate::domain::conversations::ConversationPolicy>>,
+    notifications: Option<Arc<dyn agent_session::domain::notifications::NotificationStore>>,
+) -> (TestBench, TurnSignals) {
     let repo = InMemoryAgentSessionRepo::new();
     let containers = MockContainerManager::new();
     let announcer = AnnouncerMock::new();
@@ -497,6 +581,7 @@ fn harness_with_ports(
     let lifecycle = RecordingLifecyclePublisher::new();
     let notifier = NotifierMock::new();
     let service = AgentHarnessService::new(
+        policy,
         AgentSessionServiceImpl::new(
             repo.clone(),
             FoldedMessageService::new(repo.clone()),
@@ -535,6 +620,14 @@ fn harness_with_ports(
         mentions,
         notifier.clone(),
     );
+    let service = match journal {
+        Some(journal) => service.with_conversation_turns(journal),
+        None => service,
+    };
+    let service = match notifications {
+        Some(store) => service.with_notifications(store),
+        None => service,
+    };
     let (ended, ended_rx) = mpsc::unbounded_channel();
     turn_observer.bind(SignallingTurnObserver {
         harness: service.clone(),
@@ -574,6 +667,7 @@ fn harness_sharing_repo(repo: InMemoryAgentSessionRepo) -> TestHarness {
     let lifecycle = RecordingLifecyclePublisher::new();
     let runtimes = RuntimeRegistry::new();
     let service = AgentHarnessService::new(
+        None,
         AgentSessionServiceImpl::new(
             repo.clone(),
             FoldedMessageService::new(repo),
@@ -653,7 +747,18 @@ fn prompts(agent: &FakeAgent) -> Vec<Vec<ContentBlock>> {
         .received_requests()
         .into_iter()
         .filter_map(|request| match request {
-            ClientRequest::PromptRequest(prompt) => Some(prompt.prompt),
+            ClientRequest::PromptRequest(prompt) => Some(
+                prompt
+                    .prompt
+                    .into_iter()
+                    .filter(|block| {
+                        !matches!(block, ContentBlock::Text(text)
+                            if text.meta.as_ref().and_then(|meta| meta.get(
+                                agent_runtime_protocol::domain::action::INVOCATION_CONTEXT_META
+                            )) == Some(&serde_json::Value::Bool(true)))
+                    })
+                    .collect(),
+            ),
             _ => None,
         })
         .collect()
@@ -681,15 +786,48 @@ async fn disconnected_session_owned_by(
     containers: &MockContainerManager,
     owner: model_owner::Owner,
 ) -> AgentSessionId {
+    // The coder bot: resume-on-disconnect only exists for managed sessions.
+    disconnected_session_of(
+        repo,
+        containers,
+        owner,
+        bot_id::MACRO_CODER_BOT_ID,
+        AgentKind::SandboxedCoder,
+    )
+    .await
+}
+
+/// [`disconnected_session`] served by Macro's in-process agent.
+async fn disconnected_in_memory_session(
+    repo: &InMemoryAgentSessionRepo,
+    containers: &MockContainerManager,
+) -> AgentSessionId {
     let command = open_command();
     let origin = mention_origin(&command);
-    // The coder bot: resume-on-disconnect only exists for managed sessions.
-    let bot_id = bot_id::MACRO_CODER_BOT_ID;
+    disconnected_session_of(
+        repo,
+        containers,
+        model_owner::Owner::User(origin.sender.clone()),
+        bot_id::MACRO_NEW_BOT_ID,
+        AgentKind::InMemory,
+    )
+    .await
+}
+
+async fn disconnected_session_of(
+    repo: &InMemoryAgentSessionRepo,
+    containers: &MockContainerManager,
+    owner: model_owner::Owner,
+    bot_id: BotId,
+    kind: AgentKind,
+) -> AgentSessionId {
+    let command = open_command();
+    let origin = mention_origin(&command);
     let id = AgentSessionId::new();
     agent_session::domain::ports::AgentSessionRepo::create(
         repo,
         CreateAgentSessionParams {
-            warm: false,
+            purpose: agent_session::domain::model::SessionPurpose::Standalone,
             repo_branch: None,
             id,
             owner_id: owner,
@@ -697,7 +835,12 @@ async fn disconnected_session_owned_by(
             thread_id: Some(origin.thread_id),
             originating_message_id: Some(origin.message_id),
             model: "claude".to_owned(),
-            harness: "opencode".to_owned(),
+            harness: if kind == AgentKind::InMemory {
+                "in-memory"
+            } else {
+                "opencode"
+            }
+            .to_owned(),
             repo_url: Some("https://github.com/macro-inc/macro".to_owned()),
             workspace: "/workspace".to_owned(),
             sandbox_size: agent_session::domain::model::SandboxSize::Default,
@@ -714,7 +857,7 @@ async fn disconnected_session_owned_by(
     containers
         .spawn(SpawnContainer {
             session_id: id,
-            kind: AgentKind::SandboxedCoder,
+            kind,
             size: agent_session::domain::model::SandboxSize::Default,
             egress: test_egress(),
         })
@@ -776,57 +919,6 @@ async fn open_creates_announces_and_delivers_the_mention() {
             "@claude fix the failing test"
         ))]]
     );
-}
-
-#[tokio::test]
-async fn claude_cloud_only_accepts_control_from_the_subscription_owner() {
-    let (service, _repo, containers, _announcer, _runtimes) = harness();
-    let mut command = open_command();
-    command.runtime.kind = AgentKind::ClaudeCloud;
-    command.runtime.harness = "claude-cloud".into();
-    let owner = command.origin.actor().clone();
-    let id = AgentSessionId::new();
-    let open = service.execute(id, HarnessCommand::Open(command));
-    let drive = async {
-        while containers.spawned() == 0 {
-            tokio::task::yield_now().await;
-        }
-        let container = containers.container(id).unwrap();
-        complete_handshake(&container).await;
-    };
-    let (opened, ()) = tokio::join!(open, drive);
-    opened.unwrap();
-    for actor in [None, Some(staff_sender())] {
-        let error = service
-            .control_event(
-                id,
-                ControlEvent {
-                    action: AgentAction::prompt("spend another user's subscription"),
-                    action_id: None,
-                    actor,
-                    context: None,
-                },
-            )
-            .await
-            .unwrap_err();
-        assert!(matches!(error, AgentSessionError::Forbidden));
-    }
-    // A non-turn control exercises the same owner gate without opening another turn.
-    let owner_action = service.control_event(
-        id,
-        ControlEvent {
-            action: AgentAction::prompt("owner follow-up"),
-            action_id: None,
-            actor: Some(owner),
-            context: None,
-        },
-    );
-    let drive = async {
-        let container = containers.container(id).unwrap();
-        container.agent().completes_prompt().await;
-    };
-    let (accepted, ()) = tokio::join!(owner_action, drive);
-    accepted.unwrap();
 }
 
 /// The agent's MCP selection is snapshotted onto the session row at open, so
@@ -1039,12 +1131,6 @@ async fn a_mention_its_sender_is_not_set_up_for_is_declined_in_the_thread() {
             "codex-cloud",
             SessionBlocker::CodexEnvironmentNotConfigured,
         ),
-        (
-            bot_id::CLAUDE_BOT_ID,
-            AgentKind::ClaudeCloud,
-            "claude-cloud",
-            SessionBlocker::ClaudeNotConnected,
-        ),
     ] {
         let (service, repo, containers, announcer, _runtimes) = harness();
         let id = AgentSessionId::new();
@@ -1070,6 +1156,7 @@ async fn a_mention_its_sender_is_not_set_up_for_is_declined_in_the_thread() {
             [DeclinedMention {
                 bot_id,
                 origin: AnnounceOrigin {
+                    reply_placement: Default::default(),
                     reuse_origin_message: false,
                     parent: origin.parent,
                     thread_id: origin.thread_id,
@@ -1497,6 +1584,54 @@ async fn forward_to_a_disconnected_session_resumes_acp_and_delivers_the_prompt()
         })
         .count();
     assert_eq!(prompt_logs, 1);
+    assert!(
+        service.inner.egress.provisioned().is_empty(),
+        "a sandbox's own token is restored, not replaced"
+    );
+}
+
+/// The in-process agent keeps its egress token only in the process that
+/// spawned it, and every turn refreshes its tools with the advertised
+/// credential. Resumed after a restart, it gets a new token, or it could not
+/// take a turn at all.
+#[tokio::test]
+async fn resuming_an_in_memory_session_after_a_restart_mints_a_new_token() {
+    let (service, repo, containers, _announcer, _runtimes) = harness();
+    let id = disconnected_in_memory_session(&repo, &containers).await;
+    containers.lose_tokens();
+
+    let forward = service.execute(
+        id,
+        HarnessCommand::Deliver(forward_message("continue after the restart")),
+    );
+    let drive_resume = async {
+        while containers.resumed() == 0 {
+            tokio::task::yield_now().await;
+        }
+        let resumed = containers
+            .container(id)
+            .expect("the resumed container is findable");
+        complete_resume(&resumed).await;
+        resumed
+    };
+    let (forwarded, resumed) = tokio::join!(forward, drive_resume);
+    forwarded.expect("forward should resume and deliver the prompt");
+
+    assert_eq!(service.inner.egress.provisioned().len(), 1);
+    assert_eq!(
+        repo.find_by_egress_token_hash("test-token-hash")
+            .await
+            .unwrap()
+            .expect("the row carries the new token's hash")
+            .id,
+        id
+    );
+    let ClientRequest::ResumeSessionRequest(request) = &resumed.agent().received_requests()[1]
+    else {
+        panic!("the session is resumed over ACP");
+    };
+    assert!(!request.mcp_servers.is_empty());
+    assert_eq!(request.mcp_servers, test_egress().acp_servers());
 }
 
 #[tokio::test]
@@ -1666,12 +1801,7 @@ async fn live_session(
 ) -> ContainerMock {
     let open = service.execute(id, HarnessCommand::Open(open_command()));
     let drive = async {
-        loop {
-            if containers.spawned() == 1 {
-                break;
-            }
-            tokio::task::yield_now().await;
-        }
+        containers.first_spawned().await;
         let container = containers
             .container(session_of(containers))
             .expect("the spawned container is findable");
@@ -2982,101 +3112,6 @@ async fn prompt(
 }
 
 #[tokio::test]
-async fn an_external_open_provisions_nothing_and_prompts_nobody() {
-    const INSTRUCTIONS: &str = "Never force-push.";
-    let composer = PromptComposerMock::default();
-    let (service, repo, containers, announcer, runtimes) =
-        harness_with_edges(PromptContextMock::default(), composer.clone());
-    let mut request = open_external_request("/home/operator/code");
-    request.profile = Some(agent_session::domain::ports::ManagedAgentProfile {
-        model: String::new(),
-        harness: harness_id::MACROD_HARNESS_SLUG.to_owned(),
-        instructions: INSTRUCTIONS.to_owned(),
-        mcp_servers: AgentMcpServers::OwnerConnections,
-    });
-
-    let session = service
-        .open_external_session(request)
-        .await
-        .expect("an external open needs no runtime yet");
-
-    // The row exists with the stated workspace, but nothing was provisioned,
-    // nothing was announced, and no prompt has gone anywhere: the runtime
-    // delivers the first prompt itself through the control endpoint after
-    // dialing in.
-    assert_eq!(session.workspace, "/home/operator/code");
-    assert_eq!(containers.spawned(), 0);
-    assert!(announcer.announced().is_empty());
-
-    // The operator's runtime dials in for the bot. Nothing happens to the
-    // session: no handshake, no ACP session, nothing sent - a session nobody
-    // is prompting costs the runtime nothing.
-    let runtime = ContainerMock::default();
-    runtimes.attach(harness_for_bot(session.bot_id), runtime.clone());
-    assert!(runtime.agent().received_requests().is_empty());
-    assert!(
-        repo.get(session.id)
-            .await
-            .expect("the session row exists")
-            .acp_session_id
-            .is_none()
-    );
-
-    // The runtime forwards the mention through control: that is what binds the
-    // session to the connection, handshakes, and lands the prompt.
-    let prompted = service.control_event(
-        session.id,
-        ControlEvent {
-            action: AgentAction::prompt("@claude fix the failing test"),
-            action_id: None,
-            actor: Some(sender()),
-            context: None,
-        },
-    );
-    let (result, ()) = tokio::join!(prompted, complete_bound_handshake(&runtime));
-    result.expect("the first prompt binds the session and reaches the runtime");
-    let requests = runtime.agent().received_requests();
-    let ClientRequest::NewSessionRequest(open) = &requests[1] else {
-        panic!("expected session/new")
-    };
-    assert_eq!(open.mcp_servers.len(), 2);
-    let agent_client_protocol::schema::v1::McpServer::Http(preview) = &open.mcp_servers[1] else {
-        panic!("expected preview HTTP MCP");
-    };
-    assert_eq!(preview.name, "macro-preview");
-    assert!(preview.url.ends_with("/mcp-preview"));
-    let agent_client_protocol::schema::v1::McpServer::Http(server) = &open.mcp_servers[0] else {
-        panic!("expected HTTP MCP")
-    };
-    assert_eq!(server.name, "macro_internal");
-    assert!(server.url.ends_with("/mcp/internal"));
-    assert!(
-        server
-            .headers
-            .iter()
-            .any(|header| header.name == "Authorization")
-    );
-
-    assert_eq!(
-        prompts(&runtime.agent()),
-        [vec![ContentBlock::from("@claude fix the failing test")]]
-    );
-    // Prompt delivery is ordered behind the `session/new` response, so the
-    // negotiated ACP session id has been persisted by now.
-    let row = repo.get(session.id).await.expect("the session row exists");
-    assert_eq!(row.acp_session_id, Some(SessionId::new("acp-test")));
-    assert_eq!(row.instructions.as_deref(), Some(INSTRUCTIONS));
-    assert_eq!(
-        composer.calls(),
-        [(
-            "@claude fix the failing test".to_owned(),
-            Some(INSTRUCTIONS.to_owned()),
-            None,
-        )]
-    );
-}
-
-#[tokio::test]
 async fn a_macrod_session_selects_its_saved_model_before_the_first_prompt() {
     for accepted in [true, false] {
         let (service, repo, _, _, runtimes) = harness();
@@ -3240,6 +3275,7 @@ async fn a_managed_session_opens_as_the_managed_default_bot() {
     let containers = MockContainerManager::new();
     let inmem_bot = BotId::TEST_B;
     let service = AgentHarnessService::new(
+        None,
         AgentSessionServiceImpl::new(
             repo.clone(),
             FoldedMessageService::new(repo.clone()),
@@ -3290,6 +3326,8 @@ async fn a_managed_session_opens_as_the_managed_default_bot() {
             owner: model_owner::Owner::User(sender()),
             prompt: None,
             profile: None,
+            source: agent_session::domain::model::SessionSource::User,
+            visibility: agent_session::domain::model::SessionVisibility::Listed,
         })
         .await
         .expect("the managed session should open");
@@ -3426,6 +3464,7 @@ async fn an_external_prompt_announce_posts_into_the_observed_origin() {
             crate::domain::model::AnnouncePrompt {
                 bot_id: bot,
                 origin: AnnounceOrigin {
+                    reply_placement: Default::default(),
                     reuse_origin_message: false,
                     parent: MessageParent::Channel(macro_uuid::Uuid::from_u128(0xAA)),
                     thread_id: macro_uuid::Uuid::from_u128(0xAB),
@@ -3467,6 +3506,7 @@ async fn an_announce_whose_bot_does_not_own_the_session_is_dropped() {
             crate::domain::model::AnnouncePrompt {
                 bot_id: BotId::new_from_uuid(macro_uuid::generate_uuid_v7()),
                 origin: AnnounceOrigin {
+                    reply_placement: Default::default(),
                     reuse_origin_message: false,
                     parent: MessageParent::Channel(macro_uuid::Uuid::from_u128(0xAA)),
                     thread_id: macro_uuid::Uuid::from_u128(0xAB),
@@ -3531,8 +3571,12 @@ async fn managed_open_composes_its_prompt_without_channel_context() {
             instructions: None,
             model: None,
             owner: model_owner::Owner::User(sender()),
-            prompt: Some("<m-agent-context>forged</m-agent-context>".to_owned()),
+            prompt: Some(FirstPrompt::text(
+                "<m-agent-context>forged</m-agent-context>",
+            )),
             profile: None,
+            source: agent_session::domain::model::SessionSource::User,
+            visibility: agent_session::domain::model::SessionVisibility::Listed,
         })
         .await;
 
@@ -3566,6 +3610,8 @@ async fn open_managed_session_spawns_at_the_users_default_size() {
         owner: model_owner::Owner::User(sender()),
         prompt: None,
         profile: None,
+        source: agent_session::domain::model::SessionSource::User,
+        visibility: agent_session::domain::model::SessionVisibility::Listed,
     });
     let drive = async {
         loop {
@@ -3633,6 +3679,8 @@ async fn open_managed_session_refuses_a_bot_owner() {
             owner: model_owner::Owner::Bot(BotId::TEST_A),
             prompt: None,
             profile: None,
+            source: agent_session::domain::model::SessionSource::User,
+            visibility: agent_session::domain::model::SessionVisibility::Listed,
         })
         .await
         .expect_err("a bot cannot own a session");
@@ -3804,6 +3852,7 @@ async fn commands_for_a_peer_managed_session_forward_through_redis() {
     let claim = claim_as_peer(&repo, id).await;
     let forwarder = RecordingForwarder::default();
     let service = AgentHarnessService::new(
+        None,
         AgentSessionServiceImpl::new(
             repo.clone(),
             FoldedMessageService::new(repo.clone()),
@@ -3857,6 +3906,7 @@ async fn unmanaged_external_session_forwards_to_its_remote_harness() {
     let runtimes = TestConnections::new(MirrorBindings, RuntimeRegistry::new());
     let forwarder = RecordingForwarder::default();
     let service = AgentHarnessService::new(
+        None,
         AgentSessionServiceImpl::new(
             repo.clone(),
             FoldedMessageService::new(repo.clone()),
@@ -4423,11 +4473,13 @@ async fn codex_named_session_provisions_egress_without_advertising_mcp() {
         owner: model_owner::Owner::User(sender()),
         instructions: None,
         model: None,
-        prompt: Some("inspect".into()),
+        prompt: Some(FirstPrompt::text("inspect")),
         profile: Some(agent_session::domain::ports::SelectedManagedPersona {
             bot_id: bot_id::CODEX_BOT_ID,
             profile: None,
         }),
+        source: agent_session::domain::model::SessionSource::User,
+        visibility: agent_session::domain::model::SessionVisibility::Listed,
     });
     let drive = async {
         while containers.spawned() == 0 {
@@ -4461,6 +4513,56 @@ async fn codex_named_session_provisions_egress_without_advertising_mcp() {
         panic!("expected session/new")
     };
     assert!(request.mcp_servers.is_empty());
+}
+
+/// A surface that already shows its first prompt names the id it shows it
+/// under, and the logged prompt carries that id, so the row confirms the
+/// bubble in place rather than adding a second one.
+#[tokio::test]
+async fn a_managed_open_delivers_its_first_prompt_under_the_callers_id() {
+    let (service, repo, containers, _, _) = harness();
+    let action_id = AgentActionId::mint();
+    let open = service.open_managed_session(OpenManagedSession {
+        id: None,
+        repo_url: None,
+        repo_branch: None,
+        owner: model_owner::Owner::User(sender()),
+        instructions: None,
+        model: None,
+        prompt: Some(FirstPrompt {
+            action_id: Some(action_id),
+            prompt: "inspect".to_owned(),
+            attachments: Vec::new(),
+        }),
+        profile: Some(agent_session::domain::ports::SelectedManagedPersona {
+            bot_id: bot_id::CODEX_BOT_ID,
+            profile: None,
+        }),
+        source: agent_session::domain::model::SessionSource::User,
+        visibility: agent_session::domain::model::SessionVisibility::Listed,
+    });
+    let drive = async {
+        let container = containers
+            .container(containers.first_spawned().await)
+            .unwrap();
+        complete_handshake(&container).await;
+    };
+    let (opened, ()) = tokio::join!(open, drive);
+    let session = opened.expect("the session opens and takes its prompt");
+
+    let prompt_ids: Vec<_> = repo
+        .list_by_session(session.id)
+        .await
+        .expect("session logs should be readable")
+        .into_iter()
+        .filter_map(|log| match log.entry.content {
+            Message::ToRuntime(ToRuntimeMessage::Acp(AcpMessage(RawJsonRpcMessage::Request(
+                request,
+            )))) if request.method.as_ref() == "session/prompt" => Some(request.id),
+            _ => None,
+        })
+        .collect();
+    assert_eq!(prompt_ids, vec![action_id.to_request_id()]);
 }
 
 #[tokio::test]
@@ -4511,6 +4613,7 @@ async fn codex_channel_mention_provisions_egress_without_advertising_mcp() {
     assert!(request.mcp_servers.is_empty());
 }
 
+mod reattach;
 mod reopen;
 
 /// The owner's reachable repositories, as the GitHub App would list them.
@@ -4562,6 +4665,8 @@ async fn a_chosen_model_is_the_session_model_from_creation() {
             bot_id: bot_id::CURSOR_BOT_ID,
             profile: None,
         }),
+        source: agent_session::domain::model::SessionSource::User,
+        visibility: agent_session::domain::model::SessionVisibility::Listed,
     });
     let drive = async {
         let session = containers.first_spawned().await;
@@ -4588,6 +4693,8 @@ async fn a_chosen_model_is_selected_on_a_runtime_that_does_not_read_the_row() {
         model: Some("openai/gpt-5.6".to_owned()),
         prompt: None,
         profile: None,
+        source: agent_session::domain::model::SessionSource::User,
+        visibility: agent_session::domain::model::SessionVisibility::Listed,
     });
     let drive = async {
         let session = containers.first_spawned().await;
@@ -4612,6 +4719,124 @@ async fn a_chosen_model_is_selected_on_a_runtime_that_does_not_read_the_row() {
     assert_eq!(request["value"], "openai/gpt-5.6");
 }
 
+/// A persisted persona's model and instructions apply unless the create
+/// names its own. The caller's pick is the session's from the row onwards.
+#[tokio::test]
+async fn a_managed_persona_profile_applies_unless_overridden() {
+    let (service, repo, containers, _, _) = harness();
+    let open = service.open_managed_session(OpenManagedSession {
+        id: None,
+        repo_url: None,
+        repo_branch: None,
+        owner: model_owner::Owner::User(sender()),
+        instructions: Some("Prefer small diffs.".to_owned()),
+        model: Some("claude-4.5-sonnet-thinking".to_owned()),
+        prompt: None,
+        profile: Some(agent_session::domain::ports::SelectedManagedPersona {
+            bot_id: BotId::TEST_B,
+            profile: Some(agent_session::domain::ports::ManagedAgentProfile {
+                model: "persona-model".to_owned(),
+                harness: "in-memory".to_owned(),
+                instructions: "persona instructions".to_owned(),
+                mcp_servers: AgentMcpServers::OwnerConnections,
+            }),
+        }),
+        source: agent_session::domain::model::SessionSource::User,
+        visibility: agent_session::domain::model::SessionVisibility::Listed,
+    });
+    let drive = async {
+        while containers.spawned() == 0 {
+            tokio::task::yield_now().await;
+        }
+        let container = containers.container(session_of(&containers)).unwrap();
+        complete_session_handshake(&container).await;
+    };
+    let (opened, _) = tokio::join!(open, drive);
+    let session = repo.get(opened.unwrap().id).await.unwrap();
+    assert_eq!(session.bot_id, BotId::TEST_B);
+    assert_eq!(session.harness, "in-memory");
+    assert_eq!(session.model, "claude-4.5-sonnet-thinking");
+    assert_eq!(session.instructions.as_deref(), Some("Prefer small diffs."));
+}
+
+#[tokio::test]
+async fn a_managed_persona_profile_is_used_when_nothing_overrides_it() {
+    let (service, repo, containers, _, _) = harness();
+    let open = service.open_managed_session(OpenManagedSession {
+        id: None,
+        repo_url: None,
+        repo_branch: None,
+        owner: model_owner::Owner::User(sender()),
+        instructions: None,
+        model: None,
+        prompt: None,
+        profile: Some(agent_session::domain::ports::SelectedManagedPersona {
+            bot_id: BotId::TEST_B,
+            profile: Some(agent_session::domain::ports::ManagedAgentProfile {
+                model: "persona-model".to_owned(),
+                harness: "in-memory".to_owned(),
+                instructions: "persona instructions".to_owned(),
+                mcp_servers: AgentMcpServers::OwnerConnections,
+            }),
+        }),
+        source: agent_session::domain::model::SessionSource::User,
+        visibility: agent_session::domain::model::SessionVisibility::Listed,
+    });
+    let drive = async {
+        while containers.spawned() == 0 {
+            tokio::task::yield_now().await;
+        }
+        let container = containers.container(session_of(&containers)).unwrap();
+        complete_session_handshake(&container).await;
+    };
+    let (opened, _) = tokio::join!(open, drive);
+    let session = repo.get(opened.unwrap().id).await.unwrap();
+    assert_eq!(session.bot_id, BotId::TEST_B);
+    assert_eq!(session.harness, "in-memory");
+    assert_eq!(session.model, "persona-model");
+    assert_eq!(
+        session.instructions.as_deref(),
+        Some("persona instructions")
+    );
+}
+
+/// `repoUrl` without a persona used to 422: the default sandboxed coder
+/// does not honor a repository. An explicit repository is a Cursor session.
+#[tokio::test]
+async fn a_repository_without_a_persona_opens_as_cursor() {
+    let (service, repo, containers, _, _) = harness();
+    let service = service.with_repositories(Arc::new(SelectedRepositories::urls(&[
+        "https://github.com/macro-inc/macro",
+    ])));
+    let open = service.open_managed_session(OpenManagedSession {
+        id: None,
+        repo_url: Some("https://github.com/macro-inc/macro".into()),
+        repo_branch: None,
+        owner: model_owner::Owner::User(sender()),
+        instructions: None,
+        model: None,
+        prompt: None,
+        profile: None,
+        source: agent_session::domain::model::SessionSource::User,
+        visibility: agent_session::domain::model::SessionVisibility::Listed,
+    });
+    let drive = async {
+        while containers.spawned() == 0 {
+            tokio::task::yield_now().await;
+        }
+        let container = containers.container(session_of(&containers)).unwrap();
+        complete_session_handshake(&container).await;
+    };
+    let (opened, _) = tokio::join!(open, drive);
+    let session = repo.get(opened.unwrap().id).await.unwrap();
+    assert_eq!(session.bot_id, bot_id::CURSOR_BOT_ID);
+    assert_eq!(session.harness, "cursor");
+    assert_eq!(
+        session.repo_url.as_deref(),
+        Some("https://github.com/macro-inc/macro")
+    );
+}
+
 /// The agents-view create path names the Cursor bot with no persisted
 /// profile. The deployment default harness is the sandboxed coder's
 /// `opencode`; Cursor sessions must not inherit it.
@@ -4630,6 +4855,8 @@ async fn a_cursor_managed_session_is_always_stamped_cursor() {
             bot_id: bot_id::CURSOR_BOT_ID,
             profile: None,
         }),
+        source: agent_session::domain::model::SessionSource::User,
+        visibility: agent_session::domain::model::SessionVisibility::Listed,
     });
     let drive = async {
         while containers.spawned() == 0 {
@@ -4642,6 +4869,29 @@ async fn a_cursor_managed_session_is_always_stamped_cursor() {
     let session = repo.get(opened.unwrap().id).await.unwrap();
     assert_eq!(session.bot_id, bot_id::CURSOR_BOT_ID);
     assert_eq!(session.harness, "cursor");
+}
+
+/// A repository goes only to a Cursor persona; one chosen explicitly that
+/// cannot take it is told so, by the field's wire name, before anything is
+/// provisioned.
+#[tokio::test]
+async fn a_repository_for_a_persona_that_cannot_take_one_is_refused_by_name() {
+    let (service, _, containers, _, _) = harness();
+    let mut request = explicit_cursor_request();
+    request.repo_branch = None;
+    request.profile = Some(agent_session::domain::ports::SelectedManagedPersona {
+        bot_id: bot_id::CODEX_BOT_ID,
+        profile: None,
+    });
+    let result = service.open_managed_session(request).await;
+    let Err(agent_session::domain::error::AgentSessionError::InvalidRepositorySelection(reason)) =
+        result
+    else {
+        panic!("expected a repository refusal, got {result:?}");
+    };
+    assert!(reason.contains("repoUrl"), "{reason}");
+    assert!(reason.contains("Cursor"), "{reason}");
+    assert_eq!(containers.spawned(), 0);
 }
 
 fn explicit_cursor_request() -> OpenManagedSession {
@@ -4662,6 +4912,8 @@ fn explicit_cursor_request() -> OpenManagedSession {
             bot_id: bot_id::CURSOR_BOT_ID,
             profile: None,
         }),
+        source: agent_session::domain::model::SessionSource::User,
+        visibility: agent_session::domain::model::SessionVisibility::Listed,
     }
 }
 

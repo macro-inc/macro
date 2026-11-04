@@ -338,9 +338,12 @@ impl IndexDocument {
                 .iter()
                 .find(|fact| &fact.attribute == attribute)
                 .is_some_and(|fact| {
-                    directional_cmp(fact.value.cmp(value), *direction)
-                        .then_with(|| directional_cmp(self.record_key.cmp(key), *tie_direction))
-                        == Ordering::Greater
+                    sorts_after(
+                        (fact.value, &self.record_key),
+                        (*value, key),
+                        *direction,
+                        *tie_direction,
+                    )
                 }),
             PredicateExpr::And(left, right) => self.matches(left) && self.matches(right),
             PredicateExpr::Or(left, right) => self.matches(left) || self.matches(right),
@@ -443,6 +446,16 @@ impl ValidatedIndexQuery {
             );
         }
         Self::new(query)
+    }
+
+    /// Whether a row sorts after a keyset boundary, as [`Self::after`] decides.
+    pub fn sorts_after(&self, row: (i64, &RecordKey), boundary: (i64, &RecordKey)) -> bool {
+        sorts_after(
+            row,
+            boundary,
+            self.0.sort_direction,
+            self.0.tie_break_direction,
+        )
     }
 
     /// Whether this query can inspect documents in `profile` and `partition`.
@@ -1055,6 +1068,17 @@ fn upper_matches(value: i64, bound: RangeBound) -> bool {
         RangeBound::Inclusive(upper) => value <= upper,
         RangeBound::Exclusive(upper) => value < upper,
     }
+}
+
+fn sorts_after(
+    (value, key): (i64, &RecordKey),
+    (boundary_value, boundary_key): (i64, &RecordKey),
+    direction: SortDirection,
+    tie_direction: SortDirection,
+) -> bool {
+    directional_cmp(value.cmp(&boundary_value), direction)
+        .then_with(|| directional_cmp(key.cmp(boundary_key), tie_direction))
+        == Ordering::Greater
 }
 
 fn directional_cmp(ordering: Ordering, direction: SortDirection) -> Ordering {

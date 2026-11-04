@@ -54,6 +54,19 @@ type ToolCatalogSource = {
   retry(): void;
 };
 
+export type ToolConnectionState =
+  | 'loading'
+  | 'error'
+  | 'available'
+  | 'disabled'
+  | 'connected'
+  | 'account-linked';
+export type ConnectedToolsSource = {
+  connected: Accessor<ReadonlySet<string>>;
+  state(slug: string): ToolConnectionState;
+  retry(): void;
+};
+
 export type Team = { name: string };
 export type TeamInvite = { id: string; invitedBy: string };
 
@@ -93,21 +106,46 @@ export type OnboardingContext = {
   connectInbox(): Promise<void>;
   createToolCatalog(): ToolCatalogSource;
   /**
-   * Slugs of connected tools; undefined until known. `poll` keeps re-checking
-   * while the user may be connecting one.
+   * Independent provider states. `poll` re-checks while connections change.
    */
-  createConnectedTools(options: {
-    poll: boolean;
-  }): Accessor<ReadonlySet<string> | undefined>;
-  /** Resolves when the hosted connect flow closes; reports its own failures. */
+  createConnectedTools(options: { poll: boolean }): ConnectedToolsSource;
+  /** GitHub uses native account OAuth; other tools use hosted connect. Reports its own failures. */
   connectTool(tool: Tool): Promise<void>;
+  /** Opens the native GitHub App repository selection, after account linking. */
+  configureGithubRepositories(): void;
   createTeamDirectory(): TeamDirectorySource;
   /** Rejects on failure; the capability reports its own errors. */
-  createTeam(input: { name: string; invites: string[] }): Promise<void>;
+  /** `allowDomainJoin` lets people on the owner's work domain join, and
+   * tells the owner's same-domain contacts the team exists. */
+  createTeam(input: {
+    name: string;
+    invites: string[];
+    allowDomainJoin: boolean;
+  }): Promise<void>;
   /** Rejects on failure; the capability reports its own errors. */
   joinTeam(inviteId: string): Promise<void>;
+  /**
+   * Copies the viewer's team invite link, creating the link when the team has
+   * none. Rejects on failure; the capability reports its own result.
+   */
+  copyTeamInviteLink(): Promise<void>;
+  /**
+   * Sends a referral invite to each address; no team is involved. Rejects
+   * when none was sent; the capability reports its own result.
+   */
+  sendReferralInvites(emails: string[]): Promise<void>;
+  /** Copies the viewer's referral sign-up link. Rejects on failure; the
+   * capability reports its own result. */
+  copyReferralLink(): Promise<void>;
   /** The invite promotion the account holds; null when it has none. */
   createInviteOffer(): Accessor<Loadable<InviteOffer | null>>;
+  createTrialEligibility(): {
+    eligibility: Accessor<Loadable<boolean>>;
+    existingSubscription: Accessor<boolean>;
+    managing: Accessor<boolean>;
+    manage(): Promise<void>;
+    retry(): void;
+  };
   createPlanCatalog(): {
     catalog: Accessor<Loadable<AiPlanCatalog>>;
     retry(): void;

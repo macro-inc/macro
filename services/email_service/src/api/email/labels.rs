@@ -22,3 +22,33 @@ pub fn router(state: ApiContext) -> Router<ApiContext> {
         ))
         .merge(hex_list_labels_routes)
 }
+
+pub(crate) fn settings_error(
+    error: email::domain::mailbox::MailboxError,
+) -> axum::response::Response {
+    use axum::response::IntoResponse;
+    let (status, headers) = match &error {
+        email::domain::mailbox::MailboxError::InvalidInput(_) => {
+            (axum::http::StatusCode::BAD_REQUEST, Default::default())
+        }
+        email::domain::mailbox::MailboxError::Provider(error) => (
+            super::provider_error::provider_error_status(error),
+            super::provider_error::provider_error_headers(error),
+        ),
+        email::domain::mailbox::MailboxError::Stale => {
+            (axum::http::StatusCode::CONFLICT, Default::default())
+        }
+        _ => (
+            axum::http::StatusCode::INTERNAL_SERVER_ERROR,
+            Default::default(),
+        ),
+    };
+    (
+        status,
+        headers,
+        axum::Json(model::response::ErrorResponse {
+            message: error.to_string().into(),
+        }),
+    )
+        .into_response()
+}

@@ -70,6 +70,9 @@ pub struct EmailNotification<'a> {
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub(crate) struct EmailCreateBundle {
+    /// A connected address verified by the producing domain, for a single recipient.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    destination: Option<MacroUserIdStr<'static>>,
     /// The email content (subject and body).
     content: EmailContent,
 
@@ -86,20 +89,27 @@ impl EmailCreateBundle {
         let rate_limit_key = notif.rate_limit_key();
         let content = notif.format_email();
         EmailCreateBundle {
+            destination: None,
             content,
             rate_limit_config,
             rate_limit_key,
         }
     }
 
+    pub(crate) fn with_destination(mut self, destination: MacroUserIdStr<'static>) -> Self {
+        self.destination = Some(destination);
+        self
+    }
+
     pub(crate) fn with_recipient<'a>(self, to: MacroUserIdStr<'a>) -> EmailNotification<'a> {
         let EmailCreateBundle {
+            destination,
             content,
             rate_limit_config,
             rate_limit_key,
         } = self;
         EmailNotification {
-            to,
+            to: destination.unwrap_or(to),
             content,
             rate_limit_config,
             rate_limit_key,

@@ -6,15 +6,19 @@
 
 pub(crate) mod helpers;
 
+mod blocked_domains;
 mod create_company;
 mod create_contact;
+mod domain_directory;
 mod get_company_for_team;
 mod get_contact_by_email_for_team;
 mod get_contact_for_team;
+mod has_depopulate_target;
 mod link_contact_pairs_with_sources;
 mod list_companies_for_soup;
 mod list_contacts_for_company;
 mod list_contacts_for_soup;
+mod personal_emails;
 mod populate_contact;
 mod resolve_association;
 mod search_contacts_for_team;
@@ -23,4 +27,5 @@ mod set_company_name;
 mod set_contact_hidden;
 mod set_contact_name;
 mod set_email_sync;
+mod team_crm_enabled;
 mod team_settings;

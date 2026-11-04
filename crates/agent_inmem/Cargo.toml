@@ -5,8 +5,10 @@ publish = false
 version = "0.1.0"
 
 [dependencies]
+agent_code_mode = { path = "../agent_code_mode" }
 ai_billing = { path = "../ai_billing" }
 agent = { path = "../agent" }
+agent_api_keys = { path = "../agent_api_keys" }
 # The egress proxy's domain service, driven in-process: the same verification,
 # resolution and stamping a sandbox reaches over the wire, minus the wire.
 agent_egress = { path = "../agent_egress" }
@@ -23,8 +25,10 @@ async-trait = { workspace = true }
 axum = { workspace = true }
 bot_id = { path = "../bot_id" }
 chat = { path = "../chat", default-features = false }
+cognition = { path = "../cognition" }
 dashmap = { workspace = true }
 futures = { workspace = true }
+feature_flags = { path = "../feature_flags" }
 genai_telemetry = { path = "../genai_telemetry" }
 macro_user_id = { path = "../macro_user_id" }
 model_owner = { path = "../model_owner" }
@@ -37,11 +41,13 @@ mcp_toolset = { path = "../mcp_toolset" }
 memory = { path = "../memory" }
 model-entity = { path = "../model-entity" }
 non_empty = { path = "../non_empty" }
+nom = { workspace = true }
 prompt = { path = "../prompt" }
 rmcp = { workspace = true, features = ["client", "transport-streamable-http-client"] }
 schemars = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
+skills = { path = "../skills" }
 sqlx = { workspace = true }
 sse-stream = { workspace = true }
 thiserror = { workspace = true }
@@ -49,9 +55,12 @@ tokio = { workspace = true, features = ["sync", "rt", "time", "macros"] }
 tokio-util = { workspace = true }
 tracing = { workspace = true }
 url = { workspace = true }
+uuid = { workspace = true }
 workspace-hack = { version = "0.1", path = "../workspace-hack" }
 
 [dev-dependencies]
+jev = { path = "../jev", features = ["outbound"] }
+rootcause = { workspace = true }
 agent_fold = { path = "../folds/agent_fold" }
 agent_session = { path = "../agent_session", features = ["test-utils"] }
 bot_id = { path = "../bot_id", features = ["test-utils"] }
@@ -61,4 +70,4 @@ opentelemetry = { workspace = true, features = ["trace"] }
 opentelemetry_sdk = { workspace = true, features = ["testing", "trace"] }
 tracing-opentelemetry = { workspace = true }
 tracing-subscriber = { workspace = true }
-tokio = { workspace = true, features = ["macros", "rt-multi-thread", "time"] }
+tokio = { workspace = true, features = ["macros", "rt-multi-thread", "time", "test-util"] }

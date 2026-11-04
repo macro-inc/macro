@@ -3,13 +3,13 @@
 ## What it is
 
 Part of Chat's shared infrastructure: the query layer for channel messages,
-participants, mentions, activity, and attachment references — the shared
-tables behind channel/document conversations.
+participants, mentions, and activity — the shared tables behind
+channel/document conversations.
 
 ## Start here
 
 - `src/lib.rs`: module list — one module per table area (`messages`,
-  `channels`, `participants`, `entity_mentions`, `activity`, `attachments`).
+  `channels`, `participants`, `entity_mentions`, `activity`).
 - `src/model.rs`: the shared row types (`Message`, etc.) returned by queries.
 - `src/messages/create_message.rs`: a representative `sqlx::query!` call site.
 

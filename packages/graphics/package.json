@@ -35,6 +35,7 @@
   "dependencies": {
     "fractional-indexing": "4.0.0",
     "loro-crdt": "catalog:",
-    "perfect-freehand": "1.2.3"
+    "perfect-freehand": "1.2.3",
+    "@loro-mirror/core": "workspace:*"
   }
 }

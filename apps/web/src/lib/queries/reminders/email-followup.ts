@@ -1,3 +1,4 @@
+import { fireAndForget } from '@core/util/fireAndForget';
 import { throwOnErr } from '@core/util/result';
 import { storageServiceClient } from '@service-storage/client';
 import type { EmailFollowup } from '@service-storage/generated/schemas/emailFollowup';
@@ -66,7 +67,10 @@ export async function executeEmailFollowup(
   );
   // Presentation/cache failures must not make the successful write retryable.
   queryClient.setQueryData(reminderKeys.email(threadId).queryKey, result);
-  void reconcileEmailFollowup(threadId, result, afterPersisted);
+  fireAndForget(
+    reconcileEmailFollowup(threadId, result, afterPersisted),
+    'email-followup'
+  );
   return result;
 }
 

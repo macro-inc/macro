@@ -1,0 +1,122 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT a.request, a.created_at, a.link_id, a.attempt_id, a.message_id, a.thread_id, a.send_time, a.cancelled,\n                  (a.sent OR COALESCE(m.is_sent, false)) AS \"sent!\",\n                  COALESCE(s.processing, false) AS \"processing!\",\n                  s.delivery_status AS \"delivery_status?\", s.delivery_started_at,\n                  s.delivery_claim_id,\n                  a.delivery_unconfirmed, d.state AS \"mailbox_state?\",\n                  d.error_code, d.checkpoint->>'stage' AS mailbox_stage\n           FROM email_send_attempts a\n           LEFT JOIN email_messages m ON m.id = a.message_id AND m.link_id = a.link_id\n           LEFT JOIN email_scheduled_messages s ON s.message_id = a.message_id AND s.link_id = a.link_id\n           LEFT JOIN email_mailbox_drafts d ON d.message_id = a.message_id AND d.link_id = a.link_id\n               WHERE a.user_id = $1 AND a.link_id = ANY($2) AND NOT a.cancelled AND NOT a.sent\n                 AND ($3::timestamptz IS NULL OR (a.created_at, a.link_id, a.attempt_id) < ($3, $4, $5))\n               ORDER BY a.created_at DESC, a.link_id DESC, a.attempt_id DESC LIMIT 51",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "request",
+        "type_info": "Jsonb"
+      },
+      {
+        "ordinal": 1,
+        "name": "created_at",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 2,
+        "name": "link_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 3,
+        "name": "attempt_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 4,
+        "name": "message_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 5,
+        "name": "thread_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 6,
+        "name": "send_time",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 7,
+        "name": "cancelled",
+        "type_info": "Bool"
+      },
+      {
+        "ordinal": 8,
+        "name": "sent!",
+        "type_info": "Bool"
+      },
+      {
+        "ordinal": 9,
+        "name": "processing!",
+        "type_info": "Bool"
+      },
+      {
+        "ordinal": 10,
+        "name": "delivery_status?",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 11,
+        "name": "delivery_started_at",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 12,
+        "name": "delivery_claim_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 13,
+        "name": "delivery_unconfirmed",
+        "type_info": "Bool"
+      },
+      {
+        "ordinal": 14,
+        "name": "mailbox_state?",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 15,
+        "name": "error_code",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 16,
+        "name": "mailbox_stage",
+        "type_info": "Text"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Text",
+        "UuidArray",
+        "Timestamptz",
+        "Uuid",
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      true,
+      false,
+      false,
+      false,
+      true,
+      true,
+      true,
+      false,
+      null,
+      null,
+      false,
+      true,
+      true,
+      false,
+      false,
+      true,
+      null
+    ]
+  },
+  "hash": "3b25b8737c0ee22878c9db73183214b244a76d66340b563bc718ed396abfcdda"
+}

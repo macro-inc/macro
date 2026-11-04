@@ -1,4 +1,4 @@
-import ChatCircleText from '@phosphor/chat-circle-text.svg';
+import ChatCircleText from '@icon/system/regular/chat-circle-text.svg';
 import { Button } from '@ui';
 import {
   type Accessor,
@@ -71,15 +71,16 @@ export function DocxMarginLayout(props: {
           style={{ top: `${props.selectionTop()}px` }}
         >
           <Button
+            aria-label="Comment"
+            tooltip="Comment"
             size="icon-md"
-            variant="cta"
-            label="Comment"
+            variant="primary"
             data-docx-comment-button
             onPointerDown={(event: PointerEvent) => event.preventDefault()}
             onMouseDown={(event: MouseEvent) => event.preventDefault()}
             onClick={() => props.comments.beginDraft()}
           >
-            <ChatCircleText />
+            <ChatCircleText class="size-4 touch:size-6 shrink-0 pointer-events-none" />
           </Button>
         </div>
       </Show>

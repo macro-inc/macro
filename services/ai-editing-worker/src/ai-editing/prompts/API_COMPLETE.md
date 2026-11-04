@@ -432,6 +432,7 @@ After:
 - `{ block: 'table', rows }`
 - `{ block: 'divider' }`
 - `{ block: 'document-card', documentId, documentName, blockName, blockParams? }` where `blockParams` is `Record<string, string>`. Use the ids supplied in the task -- do not invent them.
+- `{ block: 'database-query', query }` -- see Databases.
 - `{ block: 'html-render', html }`
 - `{ block: 'image', srcType, url, alt?, width?, height? }`
 - `{ block: 'video', srcType, url, controls?, width?, height? }`
@@ -460,4 +461,20 @@ After:
   <ul id="b3" listType="check"><li id="b4"><t id="t3">todo a</t></li><li id="b5" value="2"><t id="t4">todo b</t></li></ul>
   <custom-code id="b6" direction="null" format="" indent="0" version="1" language="ts"><t id="t5">const x = 1</t></custom-code>
 </doc>
+```
+
+## Databases
+
+The XML shows a saved database question as `<database-query queryId displayMode title? prompt chart? height?/>`: a live number (`displayMode="scalar"`, inside a paragraph), table, or `bar`/`line`/`area`/`scatter`/`pie` chart that re-runs for each viewer. An embedded database is `<document-card blockName="database" blockParams='{"tableId":…,"viewId":…}'/>`.
+
+- `insertDatabaseQueryAfter(id, query)` · `insertDatabaseQueryBefore(id, query)` · `appendDatabaseQuery(query)` -- `query` is the `<m-db-query>…</m-db-query>` block from the task, passed verbatim as a string. Never write or alter one yourself; without a block in the task, report that one is needed.
+- `insertInlineDatabaseQuery(blockId, at, query)` -- a `scalar` block inside a sentence.
+- `setDatabaseQueryView(id, { displayMode?, title?, chart?, height? })` -- change how an existing answer is shown; `null` removes `title`, `chart`, or `height`. The question itself never changes. Chart modes need `chart: { x, y: string[], color?, stack?, title? }` naming result columns: keep the existing chart's columns unless the task names others. A `scalar` cannot become a table or chart in place.
+- `setDatabaseLocation(cardId, { tableId, viewId? })` -- show another table or view of an embedded database. Use ids from the task or the card's `blockParams`; an omitted `viewId` shows the table's default view.
+- Embed a database: `{ block: 'document-card', documentId: databaseId, documentName, blockName: 'database', blockParams: { tableId, viewId } }`.
+
+```ts
+const chart = editor.insertDatabaseQueryAfter('h1', '<m-db-query>{"queryId":"q1","databaseId":"db1","title":"Deals by stage","prompt":"Deals by stage","displayMode":"bar","chart":{"x":"stage","y":["deals"]}}</m-db-query>');
+editor.setDatabaseQueryView(chart, { displayMode: 'pie' });
+editor.setDatabaseLocation('card1', { tableId: 'tbl2' });
 ```

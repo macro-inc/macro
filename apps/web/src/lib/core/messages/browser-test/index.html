@@ -1,0 +1,17 @@
+<!doctype html>
+<html lang="en">
+  <head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>Comment navigation regression</title></head>
+  <body>
+    <button id="navigate">Open comment</button>
+    <div id="viewport" style="height: 400px; width: 100%; max-width: 600px; overflow-y: auto">
+      <div id="content">
+        <div style="height: 2400px">Document body</div>
+        <div id="discussion">
+          <div data-message-id="target" style="height: 120px">Linked comment</div>
+        </div>
+        <div style="height: 400px"></div>
+      </div>
+    </div>
+    <script type="module" src="./fixture.ts"></script>
+  </body>
+</html>

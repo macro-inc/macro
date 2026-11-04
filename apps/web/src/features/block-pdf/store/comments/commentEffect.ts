@@ -1,5 +1,6 @@
 import { usePdfCommentRealtimeBehavior } from '@block-pdf/store/commentsResource';
 import { isPdfDraftThreadId } from '@block-pdf/type/comments';
+import { fireAndForget } from '@core/util/fireAndForget';
 import { createEffect, createMemo } from 'solid-js';
 import { usePdfComments } from '../../context/pdf-comments-context';
 import {
@@ -41,7 +42,7 @@ const useScrollToActiveThreadEffect = () => {
     if (!hasActiveThread()) return;
 
     if (!isPdfDraftThreadId(activeThreadId))
-      scrollToCommentThread(activeThreadId);
+      fireAndForget(scrollToCommentThread(activeThreadId), 'pdf-comments');
   });
 };
 

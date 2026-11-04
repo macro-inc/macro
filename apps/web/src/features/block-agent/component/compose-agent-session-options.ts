@@ -1,6 +1,5 @@
 import { isCoderHarness } from '@app/features/agents-view/core/agent-kind';
 import { modelLabel } from '@core/component/AI/constant/model-label';
-import { isClaudeBotId } from '@core/constant/claudeAgent';
 import { isCodexBotId } from '@core/constant/codexAgent';
 import { isCursorBotId } from '@core/constant/cursorAgent';
 import { MACRO_HARNESS_NAME } from '@core/constant/macroAgent';
@@ -45,7 +44,7 @@ export function harnessTitle(harness: string | undefined): string {
 
 /**
  * The harness slug a session should be labeled with. First-party cloud bots
- * own a fixed slug (Cursor / Codex / Claude Cloud), even when an older row
+ * own a fixed slug (Cursor / Codex), even when an older row
  * was stamped with the sandboxed-coder default (`opencode`).
  */
 export function sessionHarnessSlug(session: {
@@ -55,7 +54,6 @@ export function sessionHarnessSlug(session: {
   const botId = session.botId;
   if (botId && isCursorBotId(botId)) return 'cursor';
   if (botId && isCodexBotId(botId)) return 'codex-cloud';
-  if (botId && isClaudeBotId(botId)) return 'claude-cloud';
   return session.harness;
 }
 
@@ -81,8 +79,6 @@ export function harnessDisplayName(harness: string): string {
       return 'Cursor';
     case 'codex-cloud':
       return 'Codex';
-    case 'claude-cloud':
-      return 'Claude Cloud';
     default:
       return harness;
   }

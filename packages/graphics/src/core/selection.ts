@@ -12,6 +12,13 @@ import {
 } from './affine';
 import { duplicateNodes, type IdFactory } from './fragments';
 import type { Bounds, GraphicsDocument, GraphicsItem, Point } from './model';
+import { snapObjectResize } from './object-snap-resize';
+import {
+  createObjectSnapper,
+  type ObjectSnapper,
+  type ObjectSnapStats,
+  type SnapGuide,
+} from './object-snapping';
 import {
   dragRectangleRadius,
   isRadiusHandle,
@@ -55,11 +62,15 @@ export type SelectionState = Readonly<{
     geometries: Readonly<Record<string, Bounds>>;
     nodes: SceneOverrides;
     document?: GraphicsDocument;
+    snapGuides: readonly SnapGuide[];
+    snapStats?: ObjectSnapStats;
   }>;
 }>;
 export type SelectionHost = Readonly<{
   measureText?: TextMeasurer;
   getSnapUnit?: () => number | undefined;
+  getObjectSnapping?: () => boolean;
+  getScale?: () => number;
   getDocument: () => GraphicsDocument;
   commitDocument: (document: GraphicsDocument) => void;
   cancelDrawing: () => void;
@@ -88,6 +99,9 @@ export function createSelection(host: SelectionHost) {
         pivot: Point;
         nodes: SceneOverrides;
         originalSelection?: readonly string[];
+        bounds: Bounds;
+        snapper?: ObjectSnapper;
+        snapGuides: readonly SnapGuide[];
       }
     | undefined;
   const emit = () => host.onChange();
@@ -120,6 +134,8 @@ export function createSelection(host: SelectionHost) {
             geometries: Object.freeze(geometries),
             nodes: gesture.nodes,
             document: gesture.originalSelection ? gesture.base : undefined,
+            snapGuides: gesture.snapGuides,
+            snapStats: gesture.snapper?.stats(),
           })
         : undefined,
     });
@@ -153,6 +169,8 @@ export function createSelection(host: SelectionHost) {
     const node = resolvedShape(base, id) ?? base.items[id];
     const nodes: Record<string, GraphicsItem> = Object.create(null);
     const unit = host.getSnapUnit?.();
+    const scale = host.getScale?.() ?? 1;
+    let snapGuides: readonly SnapGuide[] = [];
     if (isRadiusHandle(handle)) {
       if (node?.type !== 'rectangle') return;
       nodes[id] = dragRectangleRadius(
@@ -175,7 +193,7 @@ export function createSelection(host: SelectionHost) {
       // Different child axes force uniform scaling for the entire selection,
       // including edge drags. This keeps the dragged box and content in sync.
       const proportional = modifiers.proportional || !frame.canDeform;
-      const resized = resizeBox(
+      const snapped = snapObjectResize(
         bounds,
         handle,
         {
@@ -186,8 +204,13 @@ export function createSelection(host: SelectionHost) {
           ...modifiers,
           proportional,
           snap: unit === undefined ? undefined : { x: unit, y: unit },
-        }
+        },
+        frame.transform,
+        gesture.snapper,
+        scale
       );
+      const resized = snapped.resized;
+      snapGuides = snapped.guides;
       const delta = multiply(
         frame.transform,
         multiply(resized.transform, fromWorld)
@@ -232,16 +255,26 @@ export function createSelection(host: SelectionHost) {
           ? { proportional: true, proportionalFit: 'project' as const }
           : {}),
       };
-      let resized = resizeBox(localBounds, handle, delta, {
-        ...resizeModifiers,
-        snap:
-          unit === undefined
-            ? undefined
-            : {
-                x: unit / Math.hypot(world[0], world[1]),
-                y: unit / Math.hypot(world[2], world[3]),
-              },
-      });
+      const snapped = snapObjectResize(
+        localBounds,
+        handle,
+        delta,
+        {
+          ...resizeModifiers,
+          snap:
+            unit === undefined
+              ? undefined
+              : {
+                  x: unit / Math.hypot(world[0], world[1]),
+                  y: unit / Math.hypot(world[2], world[3]),
+                },
+        },
+        world,
+        surface ? undefined : gesture.snapper,
+        scale
+      );
+      let resized = snapped.resized;
+      snapGuides = snapped.guides;
       if (surface && unit !== undefined) {
         const matrix = multiply(world, resized.transform);
         const outside = corners(localBounds).some((point) => {
@@ -271,32 +304,50 @@ export function createSelection(host: SelectionHost) {
       let dx = point.x - origin.x,
         dy = point.y - origin.y;
       const horizontal = Math.abs(dx) >= Math.abs(dy);
-      if (!handle && unit !== undefined) {
-        // A single shape's frame is local; moving always snaps in world space.
-        const anchor =
-          targets.length === 1 && isShape(base.items[targets[0]!])
-            ? worldBounds(base, targets[0]!)
-            : frame.bounds;
-        const snapped = snapTranslation(anchor, { x: dx, y: dy }, unit);
-        dx = snapped.x;
-        dy = snapped.y;
-      }
-      if (!handle && base.surface) {
-        const bounds = enclosing(
-          targets.flatMap((key) => nodeBoundsPoints(base, key))
-        );
-        dx = Math.max(
-          -bounds.x,
-          Math.min(base.surface.width - bounds.x - bounds.width, dx)
-        );
-        dy = Math.max(
-          -bounds.y,
-          Math.min(base.surface.height - bounds.y - bounds.height, dy)
-        );
-      }
-      if (!handle && modifiers.constrainAxis) {
-        if (horizontal) dy = 0;
-        else dx = 0;
+      if (!handle) {
+        if (modifiers.constrainAxis) {
+          if (horizontal) dy = 0;
+          else dx = 0;
+        }
+        const bounds = gesture.bounds;
+        const moving = { ...bounds, x: bounds.x + dx, y: bounds.y + dy };
+        const snapper = base.surface ? undefined : gesture.snapper;
+        const snapped = snapper?.snap(moving, scale, {
+          x:
+            modifiers.constrainAxis && !horizontal
+              ? []
+              : [
+                  moving.x,
+                  moving.x + moving.width / 2,
+                  moving.x + moving.width,
+                ],
+          y:
+            modifiers.constrainAxis && horizontal
+              ? []
+              : [
+                  moving.y,
+                  moving.y + moving.height / 2,
+                  moving.y + moving.height,
+                ],
+        });
+        const grid = snapTranslation(bounds, { x: dx, y: dy }, unit);
+        dx = snapped?.guides.some((g) => g.axis === 'x')
+          ? dx + snapped.offset.x
+          : grid.x;
+        dy = snapped?.guides.some((g) => g.axis === 'y')
+          ? dy + snapped.offset.y
+          : grid.y;
+        snapGuides = snapped?.guides ?? [];
+        if (base.surface) {
+          dx = Math.max(
+            -bounds.x,
+            Math.min(base.surface.width - bounds.x - bounds.width, dx)
+          );
+          dy = Math.max(
+            -bounds.y,
+            Math.min(base.surface.height - bounds.y - bounds.height, dy)
+          );
+        }
       }
       let delta = translation(dx, dy);
       if (handle === 'rotate') {
@@ -347,7 +398,7 @@ export function createSelection(host: SelectionHost) {
             })
           : Object.freeze({ ...node, transform });
     }
-    gesture = { ...gesture, nodes: Object.freeze(nodes) };
+    gesture = { ...gesture, nodes: Object.freeze(nodes), snapGuides };
     emit();
   }
   return {
@@ -465,6 +516,17 @@ export function createSelection(host: SelectionHost) {
         targets,
         frame,
         pivot: frame.center,
+        bounds: enclosing(
+          targets.flatMap((key) => nodeBoundsPoints(base, key))
+        ),
+        snapper:
+          host.getObjectSnapping?.() &&
+          !base.surface &&
+          handle !== 'rotate' &&
+          !isRadiusHandle(handle)
+            ? createObjectSnapper(base, targets)
+            : undefined,
+        snapGuides: [],
         nodes: Object.freeze({}),
       };
       emit();

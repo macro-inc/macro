@@ -7,6 +7,7 @@ version = "0.1.0"
 [features]
 # Calendar invitation extraction and resolution against the viewer's calendar.
 calendar_invitations = ["dep:calendar_events", "dep:chrono-tz", "dep:ical", "dep:url"]
+mailbox = ["ports", "dep:email_api_client", "dep:models_email", "dep:calendar_events", "dep:subtle"]
 all = [
   "ai_tools",
   "gmail_token",
@@ -25,7 +26,9 @@ ai_schema = ["dep:schemars"]
 ai_tools = [
   "dep:ai_toolset",
   "dep:async-trait",
+  "dep:email_validator",
   "dep:schemars",
+  "dep:specta",
   "ports",
 ]
 axum = [
@@ -46,6 +49,7 @@ ports = ["crm/ports", "dep:tokio", "frecency/ports"]
 s3 = ["dep:aws-sdk-s3", "ports"]
 
 [dependencies]
+subtle = { workspace = true, optional = true }
 calendar_events = { path = "../calendar_events", optional = true }
 ical = { version = "0.11", default-features = false, features = ["ical"], optional = true }
 chrono-tz = { workspace = true, optional = true }
@@ -59,6 +63,7 @@ async-trait = { workspace = true, optional = true }
 aws-sdk-s3 = { workspace = true, optional = true }
 base64 = { workspace = true }
 lexical_client = { path = "../lexical_client" }
+email_validator = { path = "../email_validator", optional = true }
 entity_access = { path = "../entity_access" }
 entity_access_management = { path = "../entity_access_management", default-features = false, features = [
   "ports",
@@ -71,10 +76,11 @@ crm = { path = "../crm", default-features = false }
 doppleganger = { workspace = true, features = ["chrono", "uuid"] }
 either = { workspace = true }
 email_utils = { path = "../email_utils" }
+email_db_client = { path = "../email_db_client" }
+email_api_client = { path = "../email_api_client", optional = true, features = ["ports"] }
 filter_ast = { path = "../filter_ast" }
 frecency = { path = "../frecency" }
 gmail_client = { path = "../gmail_client", optional = true }
-models_email = { path = "../models_email", optional = true }
 google_token = { path = "../google_token", optional = true }
 item_filters = { path = "../item_filters" }
 lol_html = { workspace = true }
@@ -89,10 +95,13 @@ model-entity = { path = "../model-entity" }
 non_empty = { path = "../non_empty", optional = true }
 model-error-response = { path = "../model-error-response", optional = true }
 models_pagination = { path = "../models_pagination" }
+models_email = { path = "../models_email", optional = true }
+rand = { workspace = true }
 recursion = { workspace = true }
 reqwest = { workspace = true, optional = true }
 rootcause = { workspace = true }
 schemars = { workspace = true, optional = true, features = ["uuid1"] }
+specta = { workspace = true, optional = true, features = ["uuid"] }
 serde = { workspace = true }
 serde_json = { workspace = true }
 serde_with = { workspace = true }
@@ -108,6 +117,7 @@ uuid = { workspace = true }
 workspace-hack = { version = "0.1", path = "../workspace-hack" }
 
 [dev-dependencies]
+models_email = { path = "../models_email" }
 email_db_client = { path = "../email_db_client" }
 crm = { path = "../crm", features = ["outbound"] }
 frecency = { path = "../frecency", features = ["outbound", "postgres"] }

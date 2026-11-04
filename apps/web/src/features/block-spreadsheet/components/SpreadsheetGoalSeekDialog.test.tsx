@@ -1,11 +1,7 @@
 import { cleanup, fireEvent, render, screen } from '@solidjs/testing-library';
-import type { ParentProps } from 'solid-js';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { SpreadsheetGoalSeekDialog } from './SpreadsheetGoalSeekDialog';
 
-vi.mock('@ui/components/Tooltip', () => ({
-  Tooltip: (props: ParentProps) => props.children,
-}));
 vi.mock('@core/mobile/isMobile', () => ({ isMobile: () => false }));
 vi.mock('@components/app/mobile/MobileDrawer', () => ({
   MobileDrawer: () => null,

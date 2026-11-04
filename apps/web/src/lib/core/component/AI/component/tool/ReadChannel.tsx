@@ -1,5 +1,5 @@
 import { useChannelName } from '@core/context/channels';
-import EyeIcon from '@phosphor-icons/core/regular/eye.svg';
+import EyeIcon from '@icon/system/regular/eye.svg';
 import {
   addDays,
   isEqual,
@@ -90,7 +90,7 @@ function formatReadChannelWindow(args: {
     .with({ windowType: 'aroundMessage' }, () => 'around message')
     .with({ windowType: 'messages' }, () => 'specific messages')
     .with({ windowType: 'latest' }, () => 'latest')
-    .exhaustive();
+    .exhaustive(() => 'latest');
 }
 
 export const readChannelMessagesHandler = createToolRenderer({

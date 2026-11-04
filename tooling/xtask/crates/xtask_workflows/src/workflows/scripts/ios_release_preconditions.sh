@@ -4,7 +4,7 @@ set -euo pipefail
 # every other check on the head commit passing. Pending checks are waited on
 # (the label often lands right after a push); anything failing stops the
 # release before the long build. Our own checks are excluded: the native
-# check is expected to be red until the release is live.
+# check is expected to be red until Apple approves the release.
 pr_json=$(gh pr view "$PR_NUMBER" --repo "$GH_REPO" --json isDraft,headRefOid)
 if [[ "$(jq -r '.isDraft' <<<"$pr_json")" == "true" ]]; then
   echo "PR #${PR_NUMBER} is a draft; mark it ready for review before adding ios-update." >&2
@@ -23,10 +23,19 @@ if [[ "$head_sha" != "$HEAD_SHA" ]]; then
   echo "PR #${PR_NUMBER} moved to ${head_sha:0:10} since this run started, but its native code is unchanged; continuing."
 fi
 
+# The gate compares the build's stamp with the native tree of the PR's merge
+# result, not of its head. A head that lacks iOS native code main gained since
+# the PR branched would go through App Review but could never pass the gate.
+if ! merge_result_native_check native_tree_hash native_tree_listing native_tree_fetch; then
+  echo "A build from this head could never pass the merge gate. Merge ${BASE_BRANCH} into the PR," \
+    "bump (doppler run --project ios-release --config prd -- just ios-bump), commit, and re-add ios-update." >&2
+  exit 1
+fi
+
 # Web App Status Check aggregates the gate, so it is red whenever the gate is;
 # its other inputs (Typecheck, Test, Build, ...) are separate checks and stay.
 # (`gh pr checks` names are job names, not workflow names.)
-ours='^(iOS Native Check|Re-run the iOS Native Check|Web App Status Check|iOS App Store Release|iOS Release Drift)'
+ours='^(iOS Native Check|Re-run the native check|Web App Status Check|iOS App Store Release|iOS Release Drift|Android Native Check)'
 deadline=$(( $(date +%s) + WAIT_MINUTES * 60 ))
 while true; do
   checks=$(gh pr checks "$PR_NUMBER" --repo "$GH_REPO" --json name,bucket \

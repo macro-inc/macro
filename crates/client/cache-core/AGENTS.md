@@ -19,11 +19,15 @@ GraphQL response shape for callers. A concrete `Storage` impl (e.g.
 
 - `src/engine.rs`: the `CacheEngine` — the crate's entry point, owns queued
   mutations, watched queries, and optimistic resolution.
+- `src/engine/window_observation.rs`: bounded immutable predicate-window proofs
+  over the complete change journal, selected dependencies and catalog input fields;
+  unknown evidence never suppresses invalidation.
 - `src/normalize.rs` / `src/denormalize.rs`: GraphQL response ↔ normalized record
   transforms.
 - `src/store.rs`: the `Storage` trait every backend (e.g. `cache-turso`) implements.
 - `src/predicate.rs` + `src/record_selection.rs`: the predicate/projection IR
   used to select which cached records satisfy a query.
+- `src/search.rs`: disposable Quick Access projection (version 4); email matches subjects and all embedded senders, never snippets or bodies; task projects (`GraphqlSoupInitiative`) index their display name with recency from `metadata`; whitespace and commas separate query tokens, as in the server's channel name search, and each token matches independently, so any order works.
 - `src/queue.rs`: the optimistic mutation queue.
 - `tests/`: the primary spec for engine behavior — one file per concern
   (optimistic updates, calendar range, search, subscriptions, fuzz).
@@ -49,14 +53,26 @@ GraphQL response shape for callers. A concrete `Storage` impl (e.g.
 - Change what a query can select: `src/predicate.rs` → `src/record_selection.rs`
   → `src/query_inspection.rs`.
 
+Live views retain at most 32 validated specifications. A registration token
+identifies one retained specification, not the caller's reusable view id.
+`resume_live_query` hydrates durable optimistic state before token lookup;
+the engine owner serializes token lookup and the read. Replacement, release,
+eviction and reset make it miss. A miss requires full registration and never reuses another specification.
+
 ## Checks
 
 - `cargo test -p cache-core` (`SQLX_OFFLINE` unset).
 
 ## Gotchas
 
+- Email send persistence and cancellation belong to the frontend email journal, not the normalized cache or its mutation queue.
+
 - Opaque JSON scalars must preserve floating-point values on reparse — `serde_json`
   is pulled in with the `float_roundtrip` feature; don't drop it.
+- `StoredMutation.created_at_ms` is the first-enqueue time hosts report as
+  `enqueuedAtMs`: a row replacing an unsent row for the same UUID inherits the
+  earlier time. Lease and backoff checks take `now_ms` separately; never read
+  `created_at_ms` as the current time.
 - Patches structural query changes in place instead of resending full results
   (#7825); a new query shape change needs a patch path, not just a resend.
 

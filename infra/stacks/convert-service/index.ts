@@ -6,13 +6,17 @@ import { ConvertService } from './service';
 
 const tags = {
   environment: stack,
-  tech_lead: 'hutch',
+  tech_lead: 'teo',
   project: 'convert',
 };
 
 const convertQueue = new Queue('convert-service', {
   tags,
   maxReceiveCount: 2,
+  // Above the slowest conversion (`conversion_timeout` in the service's
+  // utils.rs, 120s) even when it waits behind its batch, so a running
+  // conversion is not redelivered and a failed one retries after a pause.
+  visibilityTimeoutSeconds: 300,
 });
 
 export const convertQueueArn = convertQueue.queue.arn;

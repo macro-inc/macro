@@ -1,0 +1,15 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "UPDATE agent_conversation_turns SET reply_finalized = TRUE, updated_at = now() WHERE action_id = $1 AND outcome = $2",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Jsonb"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "9ed3bfdab7de7ee85a791801a65462bbe31c57fbd9a9d69f9d20ac93c5c49b23"
+}

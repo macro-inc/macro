@@ -52,6 +52,9 @@ internal object PushStore {
     fun configure(context: Context, recipient: String?) {
         val preferences = prefs(context)
         if (recipient != preferences.getString("recipient", null) || recipient == null) {
+            context.sendBroadcast(Intent("com.macro.call.RESET")
+                .setClassName(context.packageName, "com.macro.call.CallReceiver")
+                .putExtra("previousRecipient", preferences.getString("recipient", null)))
             generation++
             val old = records(context)
             old.keys().forEach { NotificationManagerCompat.from(context).cancel(it, 0) }

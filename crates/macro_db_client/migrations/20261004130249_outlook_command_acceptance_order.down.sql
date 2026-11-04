@@ -1,0 +1,2 @@
+DROP INDEX email_mailbox_commands_accepted_order;
+ALTER TABLE email_mailbox_commands DROP COLUMN accepted_order;

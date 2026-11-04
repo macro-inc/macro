@@ -1,5 +1,8 @@
 import { useFeatureFlag } from '@app/lib/analytics/posthog';
 import {
+  enableCalendarAddSharedEvent,
+  enableCalendarGuestInvites,
+  enableCalendarInvitationForward,
   enableCalendarPromptMobile,
   enableCalendarPromptWeb,
   enableCalendarSearchUi,
@@ -46,6 +49,24 @@ export function useCalendarPromptAllowed(): Accessor<boolean> {
  */
 export function useCalendarTeamOooFlag(): Accessor<boolean> {
   const flag = useFeatureFlag(enableCalendarTeamOoo);
+  return () => flag().enabled;
+}
+
+/** Whether a guest the organizer allows to invite may add guests. */
+export function useCalendarGuestInvitesFlag(): Accessor<boolean> {
+  const flag = useFeatureFlag(enableCalendarGuestInvites);
+  return () => flag().enabled;
+}
+
+/** Whether a guest who cannot add guests may forward the invitation instead. */
+export function useCalendarInvitationForwardFlag(): Accessor<boolean> {
+  const flag = useFeatureFlag(enableCalendarInvitationForward);
+  return () => flag().enabled;
+}
+
+/** Whether a channel member may add a shared event to their own calendar. */
+export function useCalendarAddSharedEventFlag(): Accessor<boolean> {
+  const flag = useFeatureFlag(enableCalendarAddSharedEvent);
   return () => flag().enabled;
 }
 

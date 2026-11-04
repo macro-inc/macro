@@ -1,10 +1,10 @@
 //! Bounded Slack discovery and roster policy over typed workspace reads.
 
-use super::{GatherMode, ImportServiceImpl, StageOutcome, gather_timeout};
+use super::{ImportServiceImpl, SLACK_DISCOVERY_TIMEOUT, StageOutcome};
 use crate::domain::models::{
-    ImportSource, Initiator, SlackChannelMeta, SlackConversation, SlackConversationId,
-    SlackConversationKind, SlackConversationPage, SlackMemberPage, SlackParticipant, SlackUser,
-    SlackUserId, SlackUserPage,
+    ImportSource, Initiator, SlackChannelMeta, SlackConversationId, SlackConversationKind,
+    SlackConversationPage, SlackMemberPage, SlackParticipant, SlackUser, SlackUserId,
+    SlackUserPage,
 };
 use crate::domain::ports::{
     CanonicalImportRepo, EntityCreator, ImportRepo, SlackSourceError, SlackWorkspaceSession,
@@ -23,10 +23,10 @@ mod test;
 const MAX_CONVERSATION_PAGES: usize = 10;
 const MAX_USER_PAGES: usize = 10;
 const MAX_MEMBER_PAGES: usize = 5;
-const MANUAL_MEMBER_BUDGET: usize = 100;
+const MEMBER_ENRICHMENT_BUDGET: usize = 100;
 const NOTIFY_EVERY: usize = 10;
 const RATE_LIMIT_MAX_SLEEP: Duration = Duration::from_secs(30);
-// Finish best-effort work before spawn_gather's hard timeout can fail usable rows.
+// Finish best-effort work before spawn_slack_discovery's hard timeout can fail usable rows.
 const ENRICHMENT_TIMEOUT_RESERVE: Duration = Duration::from_secs(10);
 
 /// Default for hosts that have not attached a live Slack workspace reader.
@@ -115,9 +115,9 @@ impl<Sess> Default for SlackBatch<Sess> {
 }
 
 impl<Sess: SlackWorkspaceSession> SlackBatch<Sess> {
-    pub(super) async fn resolve_emails<R, S, C, W>(
+    pub(super) async fn resolve_emails<R, S, C, W, N: Send + Sync + 'static>(
         &mut self,
-        service: &ImportServiceImpl<R, S, C, W>,
+        service: &ImportServiceImpl<R, S, C, W, N>,
         user: &MacroUserIdStr<'static>,
         team_id: Uuid,
         meta: &SlackChannelMeta,
@@ -223,21 +223,11 @@ pub(super) async fn resolve_members(
     Ok(resolved)
 }
 
-/// Prefer larger active channels, retaining listing order among ties.
-fn select_slack_candidates(
-    mut channels: Vec<SlackConversation>,
-    cap: usize,
-) -> Vec<SlackConversation> {
-    channels.retain(|channel| !channel.archived);
-    channels.sort_by_key(|channel| std::cmp::Reverse(channel.member_count.unwrap_or(0)));
-    channels.truncate(cap);
-    channels
-}
-
-pub(super) async fn gather_slack<R, S, C, W>(
-    service: &ImportServiceImpl<R, S, C, W>,
+/// Stage every visible public Slack channel for the user to pick from, then
+/// enrich staged rows with matched members until the deadline.
+pub(super) async fn discover_slack<R, S, C, W, N: Send + Sync + 'static>(
+    service: &ImportServiceImpl<R, S, C, W, N>,
     user: &MacroUserIdStr<'static>,
-    mode: GatherMode,
 ) -> Result<usize, SlackSourceError>
 where
     R: ImportRepo + CanonicalImportRepo + Clone,
@@ -246,9 +236,7 @@ where
     W: SlackWorkspaceSource,
 {
     // Anchor before opening/listing: discovery time consumes the enrichment budget.
-    // Slack admission before this call does not perform asynchronous work.
-    let enrichment_deadline =
-        Instant::now() + gather_timeout(ImportSource::Slack, mode) - ENRICHMENT_TIMEOUT_RESERVE;
+    let enrichment_deadline = Instant::now() + SLACK_DISCOVERY_TIMEOUT - ENRICHMENT_TIMEOUT_RESERVE;
     let session = service.slack_source.open(user).await?;
     let mut channels = Vec::new();
     let mut seen = HashSet::new();
@@ -263,13 +251,6 @@ where
             break;
         }
     }
-    let initiator = match mode {
-        GatherMode::Onboarding => {
-            channels = select_slack_candidates(channels, 15);
-            Initiator::Onboarding
-        }
-        GatherMode::Manual => Initiator::Manual,
-    };
     let roster = match service
         .repo
         .user_team_id(user)
@@ -300,7 +281,7 @@ where
         let outcome = service
             .stage_inner(
                 user,
-                initiator,
+                Initiator::Manual,
                 ImportSource::Slack,
                 channel.id.as_str(),
                 serde_json::to_value(&metadata).map_err(|e| SlackSourceError::Other(e.into()))?,
@@ -325,16 +306,12 @@ where
     if count == 0 || Instant::now() >= enrichment_deadline {
         return Ok(count);
     }
-    let budget = match mode {
-        GatherMode::Onboarding => count,
-        GatherMode::Manual => MANUAL_MEMBER_BUDGET,
-    };
     // Dropping this future stops reads/retries and notifications. Each metadata
     // upsert is atomic and only updates staged rows: cancellation leaves either
     // the original or enriched metadata, never an import claim to clean up.
     match timeout_at(
         enrichment_deadline,
-        enrich_slack(service, user, &session, &roster, staged, initiator, budget),
+        enrich_slack(service, user, &session, &roster, staged),
     )
     .await
     {
@@ -349,14 +326,12 @@ where
     Ok(count)
 }
 
-async fn enrich_slack<R, S, C, W>(
-    service: &ImportServiceImpl<R, S, C, W>,
+async fn enrich_slack<R, S, C, W, N: Send + Sync + 'static>(
+    service: &ImportServiceImpl<R, S, C, W, N>,
     user: &MacroUserIdStr<'static>,
     session: &W::Session,
     roster: &[MacroUserIdStr<'static>],
     mut staged: Vec<(SlackConversationId, SlackChannelMeta)>,
-    initiator: Initiator,
-    budget: usize,
 ) -> Result<(), SlackSourceError>
 where
     R: ImportRepo + CanonicalImportRepo + Clone,
@@ -373,7 +348,7 @@ where
     };
     staged.sort_by_key(|(_, metadata)| std::cmp::Reverse(metadata.member_count.unwrap_or(0)));
     let mut enriched = 0;
-    for (channel, mut metadata) in staged.into_iter().take(budget) {
+    for (channel, mut metadata) in staged.into_iter().take(MEMBER_ENRICHMENT_BUDGET) {
         let members = match resolve_members(session, &directory, &channel, roster).await {
             Ok(members) => members,
             Err(error) => {
@@ -387,7 +362,7 @@ where
         match service
             .stage_inner(
                 user,
-                initiator,
+                Initiator::Manual,
                 ImportSource::Slack,
                 channel.as_str(),
                 serde_json::to_value(metadata).map_err(|e| SlackSourceError::Other(e.into()))?,

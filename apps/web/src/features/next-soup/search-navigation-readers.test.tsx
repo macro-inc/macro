@@ -90,7 +90,7 @@ it('delivers cold and repeated Markdown targets, but never to another document i
   expect(test.navigateMarkdown).toHaveBeenCalledExactlyOnceWith({
     node_id: 'node',
   });
-  test.replay();
+  await test.replay();
   await test.router.settled();
   expect(test.navigateMarkdown).toHaveBeenCalledTimes(2);
   test.setDocument('other-document');
@@ -112,7 +112,7 @@ it('delivers complete PDF highlight requests and replays the same page', async (
     pdf_search_snippet: 'one & two',
     pdf_search_highlight_terms: '["one","two"]',
   });
-  test.replay();
+  await test.replay();
   await test.router.settled();
   expect(test.pdf()).toEqual(first);
   expect(test.pdf()).not.toBe(first);
@@ -124,7 +124,7 @@ it('keeps agent turn zero and creates a fresh scroll request for a repeated hit'
   const test = setup({ type: 'agent', messageTurn: 0, author: 'agent' });
   const first = test.agent();
   expect(first).toEqual({ messageTurn: 0, author: 'agent' });
-  test.replay();
+  await test.replay();
   await test.router.settled();
   expect(test.agent()).toEqual(first);
   expect(test.agent()).not.toBe(first);

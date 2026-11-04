@@ -54,7 +54,6 @@ exports[`real-world XLSX corpus > ironcalc-example-pivots-charts-comments… 1`]
   "warnings": [
     "Chart sheets and other non-grid sheets are not imported.",
     "Diagonal borders are not imported.",
-    "Excel tables are imported as ordinary cells; table formulas are converted to cell ranges.",
     "Frozen panes are retained for Excel export; Macro uses its own scrolling view.",
     "Hidden sheets are shown in Macro; their visibility is retained in Excel downloads.",
     "Merged ranges are shown as individual cells in Macro and restored on Excel export when their covered cells remain empty.",
@@ -188,8 +187,6 @@ exports[`real-world XLSX corpus > poi-data-validation-table-range-county-… 1`]
   "sheets": 2,
   "styledCells": 176,
   "warnings": [
-    "Excel table references are converted to cell ranges; tables are imported as ordinary cells.",
-    "Excel tables are imported as ordinary cells; table formulas are converted to cell ranges.",
     "Font sizes are rounded and limited to 8–36 pt.",
     "Merged ranges are shown as individual cells in Macro and restored on Excel export when their covered cells remain empty.",
   ],
@@ -227,7 +224,6 @@ exports[`real-world XLSX corpus > worldbank-commodity-prices-pink-sheet-m… 1`]
   "sheets": 5,
   "styledCells": 85343,
   "warnings": [
-    "Excel tables are imported as ordinary cells; table formulas are converted to cell ranges.",
     "Frozen panes are retained for Excel export; Macro uses its own scrolling view.",
     "Hidden sheets are shown in Macro; their visibility is retained in Excel downloads.",
     "Merged ranges are shown as individual cells in Macro and restored on Excel export when their covered cells remain empty.",

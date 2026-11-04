@@ -11,8 +11,14 @@
 
 import { hasToolRenderer } from '@core/component/AI/component/tool/handler';
 import { type JSX, Match, Show, Switch } from 'solid-js';
-import { rendersOwnView } from '../../state/tool-groups';
+import {
+  isCodeExecution,
+  presentedReviewId,
+  rendersOwnView,
+} from '../../state/tool-groups';
 import { settledToolStatus } from '../../ui';
+import { CodeExecutionPart } from '../../views/CodeExecutionPart';
+import { PresentedReviewPart } from '../../views/PresentedReviewPart';
 import { DisplayResultsToolCall } from './DisplayResultsToolCall';
 import { EditToolCall } from './EditToolCall';
 import { ExchangeToolCall } from './ExchangeToolCall';
@@ -42,38 +48,45 @@ export function ToolCallPart(props: {
     settledToolStatus(props.part.status, props.context.inFlight);
   // The chat block's failed-tool treatment: the same row, faded, with a quiet
   // trailing label — not a separate error card.
+  const stopped = () =>
+    (props.part.status === 'pending' || props.part.status === 'running') &&
+    status() === 'completed';
   const common = (): ToolCallCommon => ({
     id: props.part.id,
     label: toolLabel(props.part.name),
     status: status(),
     muted: failed(),
-    trailing: failed()
-      ? 'Failed'
-      : (props.part.status === 'pending' || props.part.status === 'running') &&
-          status() === 'completed'
-        ? 'Stopped'
-        : undefined,
+    stopped: stopped(),
+    trailing: failed() ? 'Failed' : stopped() ? 'Stopped' : undefined,
   });
 
   // Non-keyed matches preserve the disclosure when a streamed update replaces
   // its detail object; each child receives the current detail through an accessor.
   return (
     <Switch>
-      <Match
-        when={
-          rendersOwnView(props.part) &&
-          toolLabel(props.part.name) === 'DisplayResults'
-        }
-      >
-        <DisplayResultsToolCall
-          input={
-            'input' in props.part.detail ? props.part.detail.input : undefined
-          }
-          error={
-            'error' in props.part.detail ? props.part.detail.error : undefined
-          }
+      <Match when={presentedReviewId(props.part)}>
+        {(id) => (
+          <PresentedReviewPart
+            sessionId={props.context.sessionId}
+            reviewId={id()}
+          />
+        )}
+      </Match>
+      <Match when={isCodeExecution(props.part)}>
+        <CodeExecutionPart
+          part={props.part}
           common={common()}
+          context={props.context}
         />
+      </Match>
+      <Match when={props.part.detail.kind === 'view' && props.part.detail}>
+        {(detail) => (
+          <DisplayResultsToolCall
+            view={detail().view ?? undefined}
+            error={detail().error}
+            common={common()}
+          />
+        )}
       </Match>
       <Match when={props.part.detail.kind === 'terminal' && props.part.detail}>
         {(detail) => <TerminalToolCall detail={detail()} common={common()} />}
@@ -108,7 +121,10 @@ export function ToolCallPart(props: {
           <Show
             when={
               props.part.name.kind === 'mcp' &&
-              props.part.name.server === 'macro' &&
+              (props.part.name.server === 'macro' ||
+                (props.part.name.server === 'macro_internal' &&
+                  (props.part.name.tool === 'DescribeCodeTools' ||
+                    props.part.name.tool === 'ReadCodeDocs'))) &&
               hasToolRenderer(props.part.name.tool)
             }
             fallback={<ExchangeToolCall detail={detail()} common={common()} />}

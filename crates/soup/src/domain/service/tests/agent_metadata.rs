@@ -22,7 +22,8 @@ fn agent(id: AgentSessionId, pull_request: Option<&str>) -> SoupCandidate {
     SoupCandidate::plain(SoupItem::AgentSession(SoupAgentSession {
         id: id.as_uuid(),
         name: "Agent".to_owned(),
-        is_archived: false,
+        archived_by: None,
+        archived_at: None,
         owner_id: Owner::User(MacroUserIdStr::parse_from_str("macro|owner@example.com").unwrap()),
         bot_id: Uuid::now_v7(),
         harness: "macrod".to_owned(),
@@ -39,6 +40,8 @@ fn agent(id: AgentSessionId, pull_request: Option<&str>) -> SoupCandidate {
         updated_at: Utc::now(),
         viewed_at: None,
         extra: (),
+        source: models_soup::agent_session::AgentSessionSource::User,
+        visibility: models_soup::agent_session::AgentSessionVisibility::Listed,
     }))
 }
 

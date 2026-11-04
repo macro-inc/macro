@@ -1,0 +1,22 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT EXISTS(SELECT 1 FROM email_deferred_message_deletions WHERE message_id=$1) AS \"deferred!\"",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "deferred!",
+        "type_info": "Bool"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      null
+    ]
+  },
+  "hash": "2193daf8a46252c23d86e0fc634c56e61ae0e848fe0e7a1534bd2f032075b24d"
+}

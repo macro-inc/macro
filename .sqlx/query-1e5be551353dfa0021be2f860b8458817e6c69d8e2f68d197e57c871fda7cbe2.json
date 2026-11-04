@@ -1,0 +1,15 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n        UPDATE email_threads t SET is_signal = calc.signal\n        FROM (SELECT EXISTS (\n            SELECT 1 FROM email_messages m\n            JOIN email_message_mailbox_facts facts ON facts.id = m.id\n            LEFT JOIN email_contacts c ON c.id = m.from_contact_id\n            CROSS JOIN LATERAL (\n                SELECT COALESCE(bool_or(f.is_important) FILTER (WHERE lower(f.email_address) = lower(c.email_address)),false) AS address_true,\n                    COALESCE(bool_or(NOT f.is_important) FILTER (WHERE lower(f.email_address) = lower(c.email_address)),false) AS address_false,\n                    COALESCE(bool_or(f.is_important) FILTER (WHERE lower(f.email_domain) = lower(split_part(c.email_address,'@',2))),false) AS domain_true,\n                    COALESCE(bool_or(NOT f.is_important) FILTER (WHERE lower(f.email_domain) = lower(split_part(c.email_address,'@',2))),false) AS domain_false\n                FROM email_filters f WHERE f.link_id = m.link_id\n            ) rules\n            WHERE m.thread_id = $1 AND facts.is_present AND NOT facts.in_trash\n                AND lower(split_part(c.email_address,'@',2)) IS DISTINCT FROM $2\n                AND (rules.address_true OR (rules.domain_true AND NOT rules.address_false)\n                    OR (NOT (rules.address_false OR (rules.domain_false AND NOT rules.address_true)) AND facts.provider_is_primary))\n        ) AS signal) calc\n        WHERE t.id = $1 AND t.is_signal IS DISTINCT FROM calc.signal\n    ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Text"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "1e5be551353dfa0021be2f860b8458817e6c69d8e2f68d197e57c871fda7cbe2"
+}

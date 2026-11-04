@@ -1,5 +1,10 @@
 import { isServer } from 'solid-js/web';
 import { createDeferredPosthog } from './utilDeferredPosthog';
+import {
+  mobileCaptureDevice,
+  mobileCaptureSetOnce,
+  normalizeAnalyticsEmail,
+} from './utilMobileCaptureIdentity';
 
 declare const gtag: (
   command: 'config' | 'event' | 'js',
@@ -227,20 +232,29 @@ const createAnalytics = () => {
   };
 
   /**
-   * Attaches a known email to the current visitor across providers, so a lead
-   * captured on the site is the same person downstream marketing automation
-   * and the app's post-signup events see. Also feeds Meta's advanced matching
-   * (`em`), which materially improves ad attribution for the lead.
+   * Attaches the captured email to the current visitor before the submit
+   * event. PostHog's distinct id is the normalized email, so the event is
+   * captured on an identified person. Also feeds Meta's advanced matching
+   * (`em`) before the confirmation page fires Lead.
    */
-  const identifyEmail = (email: string) => {
+  const identifyMobileCapture = (email: string) => {
     if (disabled) {
       return;
     }
+    const distinctId = normalizeAnalyticsEmail(email);
+    if (!distinctId) return;
     tryCatch(() => {
-      gtag('config', GA_ID, { user_id: email, email });
-      fbq('init', META_PIXEL_ID, { em: email });
+      gtag('config', GA_ID, { user_id: distinctId, email: distinctId });
+      fbq('init', META_PIXEL_ID, { em: distinctId });
     }, '[Analytics] Failed to identify visitor:');
-    posthog?.identify(email);
+    posthog?.identify(
+      distinctId,
+      mobileCaptureSetOnce({
+        capturedAt: new Date().toISOString(),
+        device: mobileCaptureDevice(navigator.userAgent),
+        search: window.location.search,
+      })
+    );
   };
 
   const trackPosthog = (event: string, data?: Record<string, unknown>) => {
@@ -253,67 +267,8 @@ const createAnalytics = () => {
     trackPosthog,
     trackMeta,
     trackGoogleConversion,
-    identifyEmail,
+    identifyMobileCapture,
   };
 };
 
 export const analytics = createAnalytics();
-
-/**
- * Collect the Meta attribution signals available in the current browser
- * session. Passed through cal.com (via URL `metadata[...]` params for link
- * flows, or embed `config.metadata` for inline flows) so the backend's
- * server-side Lead event can include them in `user_data` — giving Meta
- * enough to match the conversion back to the originating ad/browser.
- *
- * `user_agent` is opt-in via `includeUserAgent` because it URL-encodes to
- * ~300 chars and bloats visible cal.com links. Embed flows default to
- * including it (it rides in a JS object, not a URL).
- */
-export const getCalBookingAttribution = (
-  options: { includeUserAgent?: boolean } = {}
-): Record<string, string> => {
-  const { includeUserAgent = true } = options;
-  const signals: Record<string, string> = {};
-
-  if (typeof document !== 'undefined') {
-    const cookies = document.cookie.split('; ');
-    for (const entry of cookies) {
-      const idx = entry.indexOf('=');
-      if (idx <= 0) continue;
-      const name = entry.slice(0, idx);
-      const value = decodeURIComponent(entry.slice(idx + 1));
-      if (name === '_fbp' && value) signals.fbp = value;
-      if (name === '_fbc' && value) signals.fbc = value;
-    }
-  }
-
-  if (
-    includeUserAgent &&
-    typeof navigator !== 'undefined' &&
-    navigator.userAgent
-  ) {
-    signals.user_agent = navigator.userAgent;
-  }
-
-  return signals;
-};
-
-/**
- * Build a cal.com link with attribution signals appended as
- * `?metadata[key]=value` params. Cal.com forwards these to the webhook
- * under `payload.metadata`. `user_agent` is omitted here to keep the URL
- * readable — embed flows still send it.
- */
-export const buildCalLinkWithAttribution = (baseUrl: string): string => {
-  const signals = getCalBookingAttribution({ includeUserAgent: false });
-  try {
-    const url = new URL(baseUrl);
-    for (const [key, value] of Object.entries(signals)) {
-      url.searchParams.set(`metadata[${key}]`, value);
-    }
-    return url.toString();
-  } catch {
-    return baseUrl;
-  }
-};

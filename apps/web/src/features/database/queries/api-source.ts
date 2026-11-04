@@ -1,5 +1,10 @@
 import { queryReadyGate } from '@queries/gate';
-import { type QueryClient, useQuery } from '@tanstack/solid-query';
+import {
+  type QueryClient,
+  type QueryKey,
+  queryOptions,
+  useQuery,
+} from '@tanstack/solid-query';
 import { err, ok, ResultAsync } from 'neverthrow';
 import { type Accessor, createSignal } from 'solid-js';
 import { v7 as uuidv7 } from 'uuid';
@@ -52,6 +57,59 @@ export async function readDatabasePages(
   });
 }
 
+function tableSchemaQueryOptions(
+  api: DatabaseApi,
+  key: QueryKey,
+  tableId: string
+) {
+  return queryOptions({
+    queryKey: [...key, 'schema'],
+    // Polls refetch the schema; stable columns keep cells from remounting previews.
+    reconcile: 'id',
+    queryFn: async () => {
+      const result = await api.readTable(tableId);
+      if (result.isErr()) throw result.error;
+      return result.value;
+    },
+  });
+}
+
+function tableRowsQueryOptions(
+  api: DatabaseApi,
+  key: QueryKey,
+  request: DatabaseRowRequest
+) {
+  return queryOptions({
+    queryKey: [...key, 'rows', request.query],
+    queryFn: async () => {
+      const result = await readDatabasePages(api, request);
+      if (result.isErr()) throw result.error;
+      return result.value;
+    },
+  });
+}
+
+function retainedRowsQueryOptions(
+  api: DatabaseApi,
+  key: QueryKey,
+  tableId: string,
+  rowIds: string[]
+) {
+  return queryOptions({
+    queryKey: [...key, 'retained', [...rowIds].sort()],
+    enabled: rowIds.length > 0,
+    queryFn: async () => {
+      const result = await readDatabasePages(api, {
+        tableId,
+        query: { filter: null },
+        rowIds,
+      });
+      if (result.isErr()) throw result.error;
+      return result.value;
+    },
+  });
+}
+
 /** Default data adapter for a paginated, database-shaped API. */
 export function createDatabaseApiSource(args: {
   api: DatabaseApi;
@@ -65,46 +123,16 @@ export function createDatabaseApiSource(args: {
     () => []
   );
   const table = useQuery(
-    () => ({
-      queryKey: [...key, 'schema'],
-      // Polls refetch the schema; stable columns keep cells from remounting previews.
-      reconcile: 'id',
-      queryFn: async () => {
-        const result = await api.readTable(tableId);
-        if (result.isErr()) throw result.error;
-        return result.value;
-      },
-    }),
+    () => tableSchemaQueryOptions(api, key, tableId),
     () => client
   );
   const rows = useQuery(
-    () => ({
-      queryKey: [...key, 'rows', args.view().query],
-      queryFn: async () => {
-        const result = await readDatabasePages(api, {
-          tableId,
-          query: args.view().query,
-        });
-        if (result.isErr()) throw result.error;
-        return result.value;
-      },
-    }),
+    () =>
+      tableRowsQueryOptions(api, key, { tableId, query: args.view().query }),
     () => client
   );
   const held = useQuery(
-    () => ({
-      queryKey: [...key, 'retained', [...retained()()].sort()],
-      enabled: retained()().length > 0,
-      queryFn: async () => {
-        const result = await readDatabasePages(api, {
-          tableId,
-          query: { filter: null },
-          rowIds: [...retained()()],
-        });
-        if (result.isErr()) throw result.error;
-        return result.value;
-      },
-    }),
+    () => retainedRowsQueryOptions(api, key, tableId, [...retained()()]),
     () => client
   );
   const schema = () => (queryReadyGate(table) ? table.data : undefined);

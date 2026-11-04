@@ -59,7 +59,16 @@ fn native_authorization_errors_reach_the_frontend_with_their_details() {
 
 #[test]
 fn immediate_notifications_preserve_the_title_and_optional_body() {
-    let request = notification_request("Macro — new message", Some("Hello 👋\nSecond line"));
+    let request = notification_request(
+        &notification_content(
+            "Macro — new message",
+            None,
+            Some("Hello 👋\nSecond line"),
+            None,
+            true,
+        ),
+        None,
+    );
     assert_eq!(request.content().title().to_string(), "Macro — new message");
     assert_eq!(
         request.content().body().to_string(),
@@ -67,17 +76,102 @@ fn immediate_notifications_preserve_the_title_and_optional_body() {
     );
     assert!(request.trigger().is_none());
 
-    let title_only = notification_request("Reminder", None);
+    let title_only = notification_request(
+        &notification_content("Reminder", None, None, None, true),
+        None,
+    );
     assert_eq!(title_only.content().title().to_string(), "Reminder");
     assert!(title_only.content().body().is_empty());
 }
 
 #[test]
+fn conversation_notifications_name_and_stack_their_conversation() {
+    let request = notification_request(
+        &notification_content(
+            "Ada",
+            Some("design"),
+            Some("Ship it"),
+            Some("channel-1"),
+            true,
+        ),
+        None,
+    );
+    assert_eq!(request.content().subtitle().to_string(), "design");
+    assert_eq!(
+        request.content().threadIdentifier().to_string(),
+        "channel-1"
+    );
+    assert!(request.content().sound().is_some());
+
+    let direct = notification_request(&notification_content("Ada", None, None, None, true), None);
+    assert!(direct.content().subtitle().is_empty());
+    assert!(direct.content().threadIdentifier().is_empty());
+}
+
+#[test]
+fn silent_notifications_leave_the_sound_to_the_app() {
+    let request = notification_request(
+        &notification_content("Ada", None, Some("Ship it"), None, false),
+        None,
+    );
+    assert!(request.content().sound().is_none());
+}
+
+#[test]
 fn repeated_notifications_do_not_replace_each_other() {
-    let first = notification_request("Same title", None);
-    let second = notification_request("Same title", None);
+    let first = notification_request(
+        &notification_content("Same title", None, None, None, true),
+        None,
+    );
+    let second = notification_request(
+        &notification_content("Same title", None, None, None, true),
+        None,
+    );
     assert_ne!(first.identifier(), second.identifier());
     assert!(Uuid::parse_str(&first.identifier().to_string()).is_ok());
+}
+
+#[test]
+fn delivered_notifications_keep_their_destination_without_webview_callbacks() {
+    let request = notification_request(
+        &notification_content("Message", None, None, None, true),
+        Some("first-notification"),
+    );
+    let second = notification_request(
+        &notification_content("Message", None, None, None, true),
+        Some("second-notification"),
+    );
+    let repeated = notification_request(
+        &notification_content("Message", None, None, None, true),
+        Some("first-notification"),
+    );
+    assert_ne!(request.identifier(), repeated.identifier());
+    for (request, expected) in [
+        (request, "first-notification"),
+        (second, "second-notification"),
+    ] {
+        let url = activation::notification_url(&request.identifier().to_string())
+            .expect("delivered notification has a navigation destination");
+        assert_eq!(url.path(), "/notification");
+        assert!(
+            url.query_pairs()
+                .any(|(key, value)| key == "notificationId" && value == expected)
+        );
+    }
+}
+
+#[test]
+fn legacy_and_unrelated_notification_identifiers_cannot_route() {
+    for identifier in [
+        "legacy-delivery-id",
+        "macro:///notification?notificationId=",
+        "macro:///notification?deliveryId=123",
+        "macro:///task/123?notificationId=123",
+        "https://example.com/notification?notificationId=123",
+        "macro://external/notification?notificationId=123",
+    ] {
+        assert!(activation::notification_url(identifier).is_none());
+    }
 }
 
 #[test]

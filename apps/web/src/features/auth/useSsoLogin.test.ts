@@ -17,13 +17,17 @@ const mocks = vi.hoisted(() => ({
   initEmailLink: vi.fn(),
   setPostLoginRedirect: vi.fn(),
   toastFailure: vi.fn(),
+  syncLoginStorage: vi.fn(),
 }));
 
 vi.mock('@app/lib/analytics/analytics-context', () => ({
   useAnalytics: () => ({ track: mocks.track }),
 }));
 vi.mock('@solidjs/router', () => ({ useLocation: () => mocks.location }));
-vi.mock('@core/constant/servers', () => ({ SERVER_HOSTS: mocks.servers }));
+vi.mock('@core/constant/servers', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@core/constant/servers')>()),
+  SERVER_HOSTS: mocks.servers,
+}));
 vi.mock('@core/mobile/isNativeMobilePlatform', () => ({
   isNativeMobilePlatform: () => mocks.nativeMobile,
 }));
@@ -46,6 +50,9 @@ vi.mock('@core/email-link', () => ({
 }));
 vi.mock('@core/util/fetchWithToken', () => ({
   unsetTokenPromise: mocks.unsetTokenPromise,
+}));
+vi.mock('@core/util/cookies', () => ({
+  syncLoginStorage: mocks.syncLoginStorage,
 }));
 vi.mock('@queries/auth/user-info', () => ({
   invalidateAllAfterLogin: mocks.invalidateAllAfterLogin,
@@ -103,6 +110,9 @@ describe('useSsoLogin', () => {
     expect(mocks.track).toHaveBeenCalledWith('login', { method: 'google' }, [
       'posthog',
     ]);
+    // The hosted return sets only HttpOnly cookies; without this hint the
+    // returning load never checks identity and shows sign-in again.
+    expect(mocks.syncLoginStorage).toHaveBeenCalledWith(true);
   });
 
   it('preserves the original browser destination through proxy SSO', async () => {
@@ -158,6 +168,8 @@ describe('useSsoLogin', () => {
       expect(mocks.track).toHaveBeenCalledWith('login', { method: 'google' }, [
         'posthog',
       ]);
+      // The session-code redemption enables the identity check itself.
+      expect(mocks.syncLoginStorage).not.toHaveBeenCalled();
     }
   );
 
@@ -218,6 +230,7 @@ describe('useSsoLogin', () => {
       expect(mocks.invalidateAllAfterLogin).toHaveBeenCalledOnce();
       expect(mocks.initEmailLink).toHaveBeenCalledOnce();
       expect(window.location.href).toBe(loginUrl);
+      expect(mocks.syncLoginStorage).not.toHaveBeenCalled();
     }
   );
 });

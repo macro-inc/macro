@@ -1,6 +1,7 @@
 import type { DataValidation } from '@macro-inc/spreadsheet/sheet-rules';
 import { describe, expect, it } from 'vitest';
 import {
+  choiceColors,
   dropdownOptions,
   listItems,
   type RangeValues,
@@ -51,8 +52,32 @@ describe('data validation', () => {
       )
     ).toEqual({ range: "'Lists'!A1:A2", rejectInvalid: false });
     expect(
+      dropdownOptions(
+        rule({
+          formulas: ['"Open,Done"'],
+          colors: [{ item: 'Done', color: '#d9ead3' }],
+        })
+      )
+    ).toEqual({
+      items: ['Open', 'Done'],
+      rejectInvalid: true,
+      colors: [{ item: 'Done', color: '#d9ead3' }],
+    });
+    expect(
       dropdownOptions(rule({ type: 'whole', formulas: ['1'] }))
     ).toBeUndefined();
+  });
+
+  it('looks up choice colors ignoring case', () => {
+    const colors = choiceColors(
+      rule({
+        formulas: ['"Open,Done"'],
+        colors: [{ item: 'In Review', color: '#c9daf8' }],
+      })
+    );
+    expect(colors?.get('in review')).toBe('#c9daf8');
+    expect(colors?.get('open')).toBeUndefined();
+    expect(choiceColors(rule({ formulas: ['"Open"'] }))).toBeUndefined();
   });
 
   it('lists quoted items, ranges, other sheets and names', () => {

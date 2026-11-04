@@ -1,7 +1,7 @@
 import type { Query, QueryKey } from '@tanstack/solid-query';
 import { queryClient } from '../client';
 import { calendarKeys } from './keys';
-import { calendarTeamKeys } from './team-keys';
+import { calendarTeamKeys, calendarTeamMutationKeys } from './team-keys';
 
 /** A missed poll may retain data briefly, but a hung request cannot retain it. */
 export const TEAM_CALENDAR_MAX_DATA_AGE_MS = 60_000;
@@ -63,11 +63,38 @@ export function resetTeamCalendarSession() {
   }
 }
 
-/** Clear payloads first: a revoked title must disappear even if refetch fails. */
-export async function resetTeamCalendarQueries() {
+/**
+ * Clear teammates' payloads unless the server excluded OOO changes: a revoked
+ * title must disappear even if the refetch fails. The viewer's own team and
+ * settings only refetch, so their controls never drop back to loading, and a
+ * setting with a save in flight waits for that save to refetch it.
+ */
+export async function refreshTeamCalendarQueries(options?: {
+  outOfOfficeChanged: boolean;
+}) {
+  const saving = (mutationKey: QueryKey) =>
+    queryClient.isMutating({ mutationKey }) > 0;
   await Promise.all([
-    queryClient.resetQueries({ queryKey: calendarTeamKeys._def }),
-    queryClient.resetQueries({ queryKey: calendarKeys.teamOutOfOffice._def }),
+    options?.outOfOfficeChanged === false
+      ? queryClient.invalidateQueries({
+          queryKey: calendarKeys.teamOutOfOffice._def,
+        })
+      : queryClient.resetQueries({
+          queryKey: calendarKeys.teamOutOfOffice._def,
+        }),
+    queryClient.invalidateQueries({
+      queryKey: calendarTeamKeys.identity._def,
+    }),
+    saving(calendarTeamMutationKeys.sharing)
+      ? undefined
+      : queryClient.invalidateQueries({
+          queryKey: calendarTeamKeys.sharing._def,
+        }),
+    saving(calendarTeamMutationKeys.availabilityCalendar)
+      ? undefined
+      : queryClient.invalidateQueries({
+          queryKey: calendarTeamKeys.availabilityCalendars._def,
+        }),
   ]);
 }
 

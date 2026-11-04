@@ -1,8 +1,8 @@
 import type { TextFont, TextGeometry, TextMeasurer } from '../core/shapes/text';
 export const textFonts: Readonly<Record<TextFont, string>> = {
-  sans: 'Arial, Helvetica, sans-serif',
-  serif: 'Georgia, serif',
-  mono: 'ui-monospace, SFMono-Regular, Menlo, monospace',
+  sans: '"Inter Variable", Arial, Helvetica, sans-serif',
+  serif: '"Playfair Display Variable", Georgia, serif',
+  mono: '"Roboto Mono Variable", ui-monospace, SFMono-Regular, Menlo, monospace',
 };
 export const textLayoutStyle = (geometry: TextGeometry) => ({
   'font-family': textFonts[geometry.fontFamily],

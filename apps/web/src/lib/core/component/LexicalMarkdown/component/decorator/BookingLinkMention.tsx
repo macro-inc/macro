@@ -1,6 +1,8 @@
 import { HoverCard } from '@core/component/HoverCard';
 import { openExternalUrl } from '@core/util/url';
 import { useNativeSplitNavigationHandler } from '@core/util/useSplitNavigationHandler';
+import OpenIcon from '@icon/system/regular/arrows-out.svg';
+import CalendarBlank from '@icon/system/regular/calendar-blank.svg';
 import {
   $isBookingLinkMentionNode,
   type BookingLinkMentionDecoratorProps,
@@ -9,8 +11,6 @@ import {
   SKIP_DOM_SELECTION_TAG,
   SKIP_SCROLL_INTO_VIEW_TAG,
 } from '@macro-inc/lexical-core';
-import OpenIcon from '@phosphor/arrows-out.svg';
-import CalendarBlank from '@phosphor/calendar-blank.svg';
 import { cn, Surface } from '@ui';
 import {
   $getNodeByKey,
@@ -42,7 +42,7 @@ function BookingLinkPreviewCard(props: {
 }) {
   return (
     <div class="select-none w-72 text-ink">
-      <Surface depth={3} class="glass bg-menu-glass rounded-xl">
+      <Surface depth={3} hideBorder class="menu-surface rounded-xl">
         <div class="w-full flex flex-col">
           <div class="flex items-center justify-between gap-2 p-2">
             <div class="flex items-center gap-2 min-w-0">
@@ -55,7 +55,7 @@ function BookingLinkPreviewCard(props: {
               href={props.url}
               target="_blank"
               rel="noreferrer"
-              class="shrink-0 text-link hover:text-link-hover visited:text-link-visited"
+              class="shrink-0 text-ink-muted hover:text-ink"
               onClick={(e) => e.stopPropagation()}
             >
               <OpenIcon class="size-4" />
@@ -107,7 +107,7 @@ function BookingLinkMentionContent(props: BookingLinkMentionDecoratorProps) {
       <span class="relative top-[0.125em] size-[1em] shrink-0 inline-flex mx-1">
         <BookingLinkIcon />
       </span>
-      <span class="flex min-w-0 items-baseline underline decoration-current/20 decoration-[max(1px,0.1em)] underline-offset-2">
+      <span class="flex min-w-0 items-baseline text-ink underline decoration-current/20 decoration-[max(1px,0.1em)] underline-offset-2">
         <span class="min-w-0 truncate">{label()}</span>
         <Show when={props.slug && label() !== props.slug}>
           <span class="shrink-0 whitespace-pre text-ink-extra-muted text-[0.8em]">

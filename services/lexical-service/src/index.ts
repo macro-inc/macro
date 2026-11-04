@@ -15,6 +15,7 @@ import { ImageMarkdownEndpoint } from './endpoints/image-markdown';
 import { MarkdownEndpoint } from './endpoints/markdown';
 import { MarkdownSnapshotEndpoint } from './endpoints/markdown-snapshot';
 import { MentionsEndpoint } from './endpoints/mentions';
+import { NotionSnapshotEndpoint } from './endpoints/notion-snapshot';
 import { PlaintextEndpoint } from './endpoints/plaintext';
 import { SearchTextEndpoint } from './endpoints/search-text';
 import { XmlEndpoint } from './endpoints/xml';
@@ -23,7 +24,6 @@ type Bindings = {
   INTERNAL_AUTH_KEY: string;
   SYNC_SERVICE_AUTH_KEY: string;
   SYNC_SERVICE_URL: string;
-  SYNC_SERVICE: Fetcher;
 };
 
 const app = new Hono<{ Bindings: Bindings }>();
@@ -78,6 +78,7 @@ openapi.get('/comment-mark/:docId/:markId', CommentMarkEndpoint);
 openapi.post('/comment-only-change', CommentOnlyChangeEndpoint);
 openapi.get('/xml/:docId', XmlEndpoint);
 openapi.post('/snapshot/markdown', MarkdownSnapshotEndpoint);
+openapi.post('/snapshot/notion', NotionSnapshotEndpoint);
 openapi.post('/html', HtmlEndpoint);
 openapi.post('/mentions', MentionsEndpoint);
 openapi.post('/extract-reply', ExtractReplyEndpoint);

@@ -31,9 +31,11 @@ function thread(scheduled: boolean): ApiThread {
     db_id: 'thread',
     link_id: 'inbox',
     inbox_visible: false,
+    has_received_mail: false,
     is_read: true,
     messages: [
       {
+        draft_generation: 0,
         attachments: [],
         attachments_draft: [],
         attachments_forwarded: [],

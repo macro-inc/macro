@@ -35,6 +35,103 @@ function setup(source: CanvasAssetSource) {
     return { editor, assets: createAssetState(canvas, source), canvas };
   });
 }
+function deferredUpload() {
+  let resolve!: (value: PreparedMedia) => void;
+  let reject!: (error: Error) => void;
+  const promise = new Promise<PreparedMedia>((res, rej) => {
+    resolve = res;
+    reject = rej;
+  });
+  const dispose = vi.fn();
+  const source: CanvasAssetSource = {
+    upload: (_file, onPreview) => {
+      onPreview?.({
+        media: {
+          ...media,
+          geometry: {
+            ...media.geometry,
+            source: { type: 'url', url: 'blob:local' },
+          },
+        },
+        dispose,
+      });
+      return promise;
+    },
+    media: async () => media,
+  };
+  return { resolve, reject, dispose, source };
+}
+
+it('shows local media during upload without putting blob URLs in the scene or history', async () => {
+  const upload = deferredUpload();
+  const { assets, editor } = setup(upload.source);
+  const pending = assets.files([new File(['a'], 'a.png')], { x: 300, y: 200 });
+  expect(assets.previews()).toMatchObject([
+    {
+      point: { x: 200, y: 150 },
+      media: { geometry: { source: { url: 'blob:local' } } },
+    },
+  ]);
+  expect(drawableIds(editor.document)).toHaveLength(0);
+  expect(editor.getSession().canUndo).toBe(false);
+  expect(upload.dispose).not.toHaveBeenCalled();
+  upload.resolve(media);
+  await pending;
+  expect(assets.previews()).toHaveLength(0);
+  expect(upload.dispose).toHaveBeenCalledOnce();
+  expect(JSON.stringify(editor.document)).not.toContain('blob:');
+  editor.undo();
+  expect(drawableIds(editor.document)).toHaveLength(0);
+  editor.redo();
+  expect(drawableIds(editor.document)).toHaveLength(1);
+  expect(JSON.stringify(editor.document)).not.toContain('blob:');
+});
+
+it('removes failed previews and releases their URLs', async () => {
+  const upload = deferredUpload();
+  const { assets, editor, canvas } = setup(upload.source);
+  const pending = assets.files([new File(['a'], 'a.png')], { x: 0, y: 0 });
+  upload.reject(new Error('Upload failed'));
+  await pending;
+  expect(assets.previews()).toHaveLength(0);
+  expect(upload.dispose).toHaveBeenCalledOnce();
+  expect(drawableIds(editor.document)).toHaveLength(0);
+  expect(canvas.notice()).toContain('1 could not be loaded');
+});
+
+it('releases previews on reset and ignores late upload completion', async () => {
+  const upload = deferredUpload();
+  const { assets, editor } = setup(upload.source);
+  const pending = assets.files([new File(['a'], 'a.png')], { x: 0, y: 0 });
+  assets.cancelPending();
+  expect(assets.previews()).toHaveLength(0);
+  expect(upload.dispose).toHaveBeenCalledOnce();
+  upload.resolve(media);
+  await pending;
+  expect(drawableIds(editor.document)).toHaveLength(0);
+  expect(upload.dispose).toHaveBeenCalledOnce();
+});
+
+it('keeps concurrent upload previews until their own batches finish', async () => {
+  const first = deferredUpload();
+  const second = deferredUpload();
+  const { assets } = setup({
+    upload: (file, onPreview) =>
+      (file.name === 'a.png' ? first : second).source.upload(file, onPreview),
+    media: async () => media,
+  });
+  const one = assets.files([new File(['a'], 'a.png')], { x: 0, y: 0 });
+  const two = assets.files([new File(['b'], 'b.png')], { x: 100, y: 100 });
+  expect(assets.previews()).toHaveLength(2);
+  first.resolve(media);
+  await one;
+  expect(assets.previews()).toHaveLength(1);
+  expect(second.dispose).not.toHaveBeenCalled();
+  second.resolve(media);
+  await two;
+  expect(assets.previews()).toHaveLength(0);
+  expect(second.dispose).toHaveBeenCalledOnce();
+});
 it('batches file inserts as one undo entry and preserves stable references on redo', async () => {
   const { editor, assets } = setup({
     upload: vi.fn(async () => media),

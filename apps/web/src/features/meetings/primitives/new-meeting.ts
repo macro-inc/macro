@@ -1,3 +1,4 @@
+import { fireAndForget } from '@core/util/fireAndForget';
 import { createSignal, onCleanup } from 'solid-js';
 import type {
   MeetingPreparation,
@@ -32,7 +33,7 @@ export function createNewMeeting(capabilities: NewMeetingCapabilities) {
 
   function cancel() {
     preparationGeneration += 1;
-    if (reservation) void cancelRoom(reservation.id);
+    if (reservation) fireAndForget(cancelRoom(reservation.id), 'meetings');
     reservation = undefined;
     warming = undefined;
   }

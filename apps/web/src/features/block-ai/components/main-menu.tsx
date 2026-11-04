@@ -3,7 +3,7 @@
  * an artboard as PNG) and View toggles. Presentational.
  */
 
-import List from '@phosphor/list.svg';
+import List from '@icon/system/regular/list.svg';
 import { Button } from '@ui/components/Button';
 import { createSignal, onCleanup, Show } from 'solid-js';
 import { type MenuItem, MenuItems } from './status-bar';
@@ -28,21 +28,21 @@ export function MainMenu(props: { items: (MenuItem | 'divider')[] }) {
       }}
     >
       <Button
+        aria-label="Main menu"
         variant="ghost"
         size="icon-md"
-        label="Main menu"
         tooltip={open() ? undefined : 'Main menu'}
         aria-haspopup="menu"
         aria-expanded={open()}
         data-testid="ai-main-menu"
         onClick={() => setOpen((o) => !o)}
       >
-        <List />
+        <List class="size-4 touch:size-6 shrink-0 pointer-events-none" />
       </Button>
       <Show when={open()}>
         <div
           role="menu"
-          class="absolute top-full left-0 z-50 mt-1 w-64 rounded-lg border border-edge-muted bg-menu p-1 text-xs shadow-lg"
+          class="menu-surface absolute top-full left-0 z-50 mt-1 w-64 p-1 text-xs"
         >
           <MenuItems items={props.items} onDone={() => setOpen(false)} />
         </div>

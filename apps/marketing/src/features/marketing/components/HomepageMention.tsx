@@ -21,72 +21,45 @@ const mentionIcons = {
   pdf: { icon: PdfIcon, color: 'text-pdf' },
 };
 
-import { HoverCard } from '@ui/components/HoverCard';
-import { createSignal } from 'solid-js';
-
-/** A local example entity, using the app's icon and hover-card primitives. */
+/** Inline entity link. Existing sources open in the demo; other links navigate normally. */
 export function HomepageMention(props: {
-  kind:
-    | 'md'
-    | 'pdf'
-    | 'task'
-    | 'email'
-    | 'channel'
-    | 'spreadsheet'
-    | 'call'
-    | 'calendar';
+  kind: keyof typeof mentionIcons;
   label: string;
   description: string;
   href: string;
+  onOpen?: (trigger: HTMLAnchorElement) => void;
 }) {
-  const [open, setOpen] = createSignal(false);
   return (
-    <HoverCard
-      triggerAs="span"
-      triggerClass="inline"
-      triggerTabIndex={-1}
-      open={open()}
-      onOpenChange={setOpen}
-      placement="top"
-      openDelay={180}
-      closeDelay={150}
-      trigger={
-        <>
-          <a
-            class="homepage-mention"
-            href={props.href}
-            onFocus={() => setOpen(true)}
-            onBlur={() => setOpen(false)}
-            onClick={() => setOpen(false)}
-            onKeyDown={(event) => {
-              if (event.key === 'Escape') setOpen(false);
-            }}
-          >
-            <Dynamic
-              component={mentionIcons[props.kind].icon}
-              class={`size-4.5 shrink-0 ${mentionIcons[props.kind].color}`}
-              aria-hidden="true"
-            />
-            <span>{props.label}</span>
-          </a>
-          {'\u2060'}
-        </>
+    <a
+      class="homepage-mention"
+      href={props.href}
+      target={
+        props.href.startsWith('/') && !props.onOpen ? '_blank' : undefined
       }
-      content={
-        <div class="workspace-demo glass max-w-72 rounded-2xl bg-panel p-4 text-sm text-ink shadow-lg">
-          <div class="mb-2 flex items-center gap-2 font-medium">
-            <Dynamic
-              component={mentionIcons[props.kind].icon}
-              class={`size-4.5 shrink-0 ${mentionIcons[props.kind].color}`}
-              aria-hidden="true"
-            />
-            <span>{props.label}</span>
-          </div>
-          <p class="m-0 text-xs leading-5 text-ink-muted">
-            {props.description}
-          </p>
-        </div>
+      rel={
+        props.href.startsWith('/') && !props.onOpen ? 'noreferrer' : undefined
       }
-    />
+      aria-description={props.description}
+      onClick={(event) => {
+        if (
+          !props.onOpen ||
+          event.metaKey ||
+          event.ctrlKey ||
+          event.shiftKey ||
+          event.altKey ||
+          event.button !== 0
+        )
+          return;
+        event.preventDefault();
+        props.onOpen(event.currentTarget);
+      }}
+    >
+      <Dynamic
+        component={mentionIcons[props.kind].icon}
+        class={`size-4.5 shrink-0 ${mentionIcons[props.kind].color}`}
+        aria-hidden="true"
+      />
+      <span>{props.label}</span>
+    </a>
   );
 }

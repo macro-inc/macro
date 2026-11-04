@@ -10,6 +10,7 @@ import {
 } from '@app/features/soup';
 import type { SoupAstBody, SoupAstItemsQueryArgs } from '@queries/soup/items';
 import { match } from 'ts-pattern';
+import { isExcludedEmailFolder } from '../constants';
 import { EMAIL_FACETS, type EmailFacetContext } from '../filters/email-facets';
 import type { EmailTab } from '../types';
 
@@ -36,6 +37,8 @@ export const emailViewForTab = (tab: EmailTab): string =>
     // Soup source on drafts so its query shape remains valid while disabled.
     .with('scheduled', () => 'drafts')
     .with('sent', () => 'sent')
+    .with('spam', () => 'spam')
+    .with('trash', () => 'trash')
     .with(
       'favorites',
       'calendar',
@@ -43,9 +46,11 @@ export const emailViewForTab = (tab: EmailTab): string =>
       'all',
       'reminders',
       'archived',
+      // Focus has a dedicated GraphQL list; the dormant Soup source stays valid.
+      'focus',
       () => 'all'
     )
-    .exhaustive();
+    .exhaustive(() => 'all');
 
 const anyThread = (): TargetExpr => clause.not(clause.eq('threadId', NIL_UUID));
 
@@ -99,9 +104,12 @@ function tabClause(context: EmailQueryContext): TargetExpr {
         'favorites',
         'all',
         'reminders',
+        'focus',
+        'spam',
+        'trash',
         anyThread
       )
-      .exhaustive()
+      .exhaustive(anyThread)
   );
 }
 
@@ -157,7 +165,11 @@ export function buildEmailQuery(
 
   // Newest activity first: `updated_at` is the thread's latest message time.
   return {
-    ...(context.aliasFilter ? { transport: 'graphql' as const } : {}),
+    ...(isExcludedEmailFolder(context.tab)
+      ? { transport: 'rest' as const }
+      : context.aliasFilter
+        ? { transport: 'graphql' as const }
+        : {}),
     params: {
       expand: true,
       limit: 100,

@@ -16,6 +16,7 @@ type WithMaybeSender<
     sender?: MessageSender;
     bot_profile?: { name: string; avatar_url?: string | null } | null;
     triggered_by?: string | null;
+    triggered_via?: string | null;
   },
 > = Omit<T, 'sender'> & { sender?: MessageSender };
 
@@ -39,7 +40,11 @@ export function senderFromStorageId(senderId: string): MessageSender {
   return { type: 'user', id: senderId };
 }
 
-/** Resolve a channel bot sender to its display name. */
+/**
+ * Resolve a channel bot sender to its display name. A bot post a user made
+ * through a client, such as an MCP client, is shown as that client's agent
+ * ("Claude Code"), not as the bot that carried it.
+ */
 export function getBotDisplayName(
   senderId: string,
   sender?: MessageSender,
@@ -52,6 +57,7 @@ export function getBotDisplayName(
   if (parsed.type !== 'bot' && !systemName) return undefined;
 
   return (
+    parsed.triggered_via ??
     parsed.name ??
     systemName ??
     bots.find((bot) => bot.id === parsed.id)?.name ??
@@ -69,6 +75,7 @@ export function normalizeMessageSender<
     sender?: MessageSender;
     bot_profile?: { name: string; avatar_url?: string | null } | null;
     triggered_by?: string | null;
+    triggered_via?: string | null;
   },
 >(message: T): T & { sender: MessageSender } {
   return message.sender
@@ -79,6 +86,7 @@ export function normalizeMessageSender<
           ...senderFromStorageId(message.sender_id),
           ...message.bot_profile,
           triggered_by: message.triggered_by,
+          triggered_via: message.triggered_via,
         },
       };
 }

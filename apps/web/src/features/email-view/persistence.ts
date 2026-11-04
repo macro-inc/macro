@@ -12,7 +12,12 @@ import {
 import { createUserScopedStorage } from '@core/util/userScopedStorage';
 import type { Accessor } from 'solid-js';
 import { z } from 'zod';
-import { DEFAULT_EMAIL_TAB, EMAIL_TAB_IDS } from './constants';
+import {
+  DEFAULT_EMAIL_FOCUS_SORT,
+  DEFAULT_EMAIL_TAB,
+  EMAIL_FOCUS_SORT_IDS,
+  EMAIL_TAB_IDS,
+} from './constants';
 import { normalizeInboxSelection } from './inbox-selection';
 import type { EmailViewState } from './types';
 
@@ -29,6 +34,12 @@ const aliasFilterSchema = z
   .object({ inboxId: z.string().min(1), emailAddress: z.string().email() })
   .optional()
   .catch(undefined);
+
+// An order no longer offered, such as the retired `priority`, restores as the
+// default. Touch layouts have no sort menu, so this is their only way off it.
+const emailFocusSortSchema = z
+  .enum(EMAIL_FOCUS_SORT_IDS)
+  .catch(DEFAULT_EMAIL_FOCUS_SORT);
 
 const emailEntryStateSchemaWithDefaults = z.object({
   version: z.literal(1).default(1),
@@ -116,6 +127,7 @@ const emailLocalStateSchemaWithDefaults = z.object({
   inboxIds: inboxIdsEntrySchema,
   aliasFilter: aliasFilterSchema,
   facets: emailFacetsSchema.default({}),
+  focusSort: emailFocusSortSchema.default(DEFAULT_EMAIL_FOCUS_SORT),
 });
 
 type EmailLocalState = z.infer<typeof emailLocalStateSchemaWithDefaults>;
@@ -133,6 +145,7 @@ function selectLocalState(state: EmailViewState): EmailLocalState {
     inboxIds: normalizeInboxSelection(state.inboxIds),
     aliasFilter: state.aliasFilter,
     facets: normalizeFacetSelection(state.facets),
+    focusSort: state.focusSort,
   };
 }
 
@@ -164,6 +177,7 @@ function createEmailLocalStateStorage(options: {
             : restored.inboxIds,
           aliasFilter: restored.aliasFilter,
           facets: normalizeFacetSelection(restored.facets),
+          focusSort: restored.focusSort,
         };
       } catch {
         return undefined;

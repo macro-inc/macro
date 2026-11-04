@@ -122,7 +122,41 @@ pub struct InitializedEntrypoint {
     logger_provider: Option<SdkLoggerProvider>,
 }
 
+/// Failure to flush telemetry before a serverless runtime freezes.
+#[derive(Debug, thiserror::Error)]
+pub enum TelemetryFlushError {
+    /// The blocking flush task could not finish.
+    #[error("telemetry flush task failed")]
+    Task(#[from] tokio::task::JoinError),
+    /// The trace exporter could not flush.
+    #[error("trace flush failed")]
+    Traces(#[source] opentelemetry_sdk::error::OTelSdkError),
+    /// The log exporter could not flush.
+    #[error("log flush failed")]
+    Logs(#[source] opentelemetry_sdk::error::OTelSdkError),
+}
+
 impl InitializedEntrypoint {
+    /// Flush completed telemetry before a serverless runtime freezes, without
+    /// shutting down providers needed by subsequent warm invocations.
+    ///
+    /// Run the blocking SDK flush off the async executor so gRPC can progress
+    /// even on a single-threaded runtime. Call after invocation spans close.
+    pub async fn force_flush(&self) -> Result<(), TelemetryFlushError> {
+        let tracer = self.tracer_provider.clone();
+        let logger = self.logger_provider.clone();
+        let (traces, logs) = tokio::task::spawn_blocking(move || {
+            (
+                tracer.map(|provider| provider.force_flush()),
+                logger.map(|provider| provider.force_flush()),
+            )
+        })
+        .await?;
+        traces.transpose().map_err(TelemetryFlushError::Traces)?;
+        logs.transpose().map_err(TelemetryFlushError::Logs)?;
+        Ok(())
+    }
+
     /// Gracefully shut down the OpenTelemetry providers.
     /// This should be called before the application exits to ensure all traces and logs are flushed.
     pub fn shutdown(&self) {

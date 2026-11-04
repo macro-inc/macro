@@ -14,7 +14,6 @@ fn denied() -> AiAdmissionError {
 struct Admission {
     error: Mutex<Option<AiAdmissionError>>,
     calls: AtomicUsize,
-    allow_first: bool,
 }
 
 impl Admission {
@@ -22,7 +21,6 @@ impl Admission {
         Arc::new(Self {
             error: Mutex::new(Some(error)),
             calls: AtomicUsize::new(0),
-            allow_first: false,
         })
     }
 }
@@ -35,14 +33,9 @@ impl AiAdmissionService for Admission {
     ) -> ai_billing::domain::admission::AdmissionFuture<'a> {
         assert_eq!(caller, &user());
         assert_eq!(feature, ai_usage::AiFeature::Import);
-        let call = self.calls.fetch_add(1, Ordering::SeqCst);
+        self.calls.fetch_add(1, Ordering::SeqCst);
         let error = *self.error.lock().unwrap();
-        Box::pin(async move {
-            if self.allow_first && call == 0 {
-                return Ok(());
-            }
-            error.map_or(Ok(()), Err)
-        })
+        Box::pin(async move { error.map_or(Ok(()), Err) })
     }
 }
 
@@ -73,17 +66,21 @@ impl Repo {
             user_id: user().to_string(),
             team_id: None,
             source,
+            kind: source.default_kind(),
             foreign_id: if source == ImportSource::Slack {
                 "C0123456789".into()
             } else {
                 Uuid::now_v7().to_string()
             },
+            parent_id: None,
+            review_id: None,
             status: ImportStatus::Staged,
-            initiator: Initiator::Onboarding,
+            initiator: Initiator::Chat,
             metadata: serde_json::json!({"title": "A page", "name": "general"}),
             entity_id: None,
             entity_type: None,
             last_error: None,
+            waiting_on: None,
             created_at: chrono::Utc::now(),
             updated_at: chrono::Utc::now(),
         };
@@ -157,7 +154,6 @@ impl ImportRepo for Repo {
         _: &MacroUserIdStr<'static>,
         source: ImportSource,
         from: &[RunStatus],
-        auto_import: bool,
     ) -> Result<bool> {
         let mut ledger = self.0.lock().unwrap();
         if let Some(run) = ledger.runs.iter_mut().find(|run| run.source == source) {
@@ -170,31 +166,13 @@ impl ImportRepo for Repo {
             ledger.runs.push(ImportRun {
                 source,
                 status: RunStatus::Running,
-                auto_import,
                 error: None,
                 updated_at: chrono::Utc::now(),
+                scanned: None,
+                review_id: None,
             });
         }
         Ok(true)
-    }
-    async fn start_manual_run(
-        &self,
-        user: &MacroUserIdStr<'static>,
-        source: ImportSource,
-        from: &[RunStatus],
-    ) -> Result<bool> {
-        let won = self.start_run(user, source, from, false).await?;
-        if won {
-            self.0
-                .lock()
-                .unwrap()
-                .runs
-                .iter_mut()
-                .find(|run| run.source == source)
-                .unwrap()
-                .auto_import = false;
-        }
-        Ok(won)
     }
     async fn finish_run(
         &self,
@@ -214,25 +192,6 @@ impl ImportRepo for Repo {
         }
         run.status = to;
         run.error = error.map(str::to_string);
-        Ok(true)
-    }
-    async fn transition_run(
-        &self,
-        _: &MacroUserIdStr<'static>,
-        source: ImportSource,
-        from: &[RunStatus],
-        to: RunStatus,
-    ) -> Result<bool> {
-        let mut ledger = self.0.lock().unwrap();
-        let run = ledger
-            .runs
-            .iter_mut()
-            .find(|run| run.source == source)
-            .unwrap();
-        if !from.contains(&run.status) {
-            return Ok(false);
-        }
-        run.status = to;
         Ok(true)
     }
     async fn get(
@@ -326,7 +285,7 @@ impl ImportRepo for Repo {
     async fn fail_stale_importing(&self, _: &MacroUserIdStr<'static>, _: i64) -> Result<u64> {
         Ok(0)
     }
-    async fn reconcile_auto_import_runs(&self, _: &MacroUserIdStr<'static>) -> Result<u64> {
+    async fn fail_stale_runs(&self, _: &MacroUserIdStr<'static>, _: i64) -> Result<u64> {
         Ok(0)
     }
     async fn touch_importing(&self, _: &MacroUserIdStr<'static>, _: &[Uuid]) -> Result<u64> {
@@ -359,6 +318,7 @@ impl ImportRepo for Repo {
         &self,
         _: &MacroUserIdStr<'static>,
         source: ImportSource,
+        _: ImportKind,
         initiator: Initiator,
         foreign_id: &str,
         metadata: &serde_json::Value,
@@ -388,6 +348,7 @@ impl ImportRepo for Repo {
         &self,
         _: &MacroUserIdStr<'static>,
         _: ImportSource,
+        _: ImportKind,
         _: Initiator,
         _: &str,
         _: &serde_json::Value,
@@ -395,35 +356,6 @@ impl ImportRepo for Repo {
         _: &str,
         _: Option<Uuid>,
     ) -> Result<ImportEntity> {
-        unreachable!()
-    }
-    async fn discard_staged_by_initiator(
-        &self,
-        _: &MacroUserIdStr<'static>,
-        _: Initiator,
-    ) -> Result<u64> {
-        unreachable!()
-    }
-    async fn delete_staged_by_initiator(
-        &self,
-        _: &MacroUserIdStr<'static>,
-        _: Initiator,
-    ) -> Result<u64> {
-        unreachable!()
-    }
-    async fn begin_auto_import(
-        &self,
-        _: &MacroUserIdStr<'static>,
-        _: ImportSource,
-    ) -> Result<Option<Vec<ImportEntity>>> {
-        Ok(None)
-    }
-    async fn finish_auto_import(
-        &self,
-        _: &MacroUserIdStr<'static>,
-        _: ImportSource,
-        _: &[Uuid],
-    ) -> Result<Option<RunStatus>> {
         unreachable!()
     }
 }
@@ -462,11 +394,12 @@ impl EntityCreator for Creator {
         self.0.fetch_add(1, Ordering::SeqCst);
         Ok(Uuid::now_v7().to_string())
     }
-    async fn create_markdown_doc(
+    async fn create_notion_document(
         &self,
         _: &MacroUserIdStr<'static>,
         _: &str,
         _: &str,
+        _: &NotionLinks,
         _: &ImportedDocumentProperties,
     ) -> anyhow::Result<String> {
         self.0.fetch_add(1, Ordering::SeqCst);
@@ -535,166 +468,6 @@ fn notion_tools(truncated: bool) -> Arc<Tools> {
 }
 
 #[tokio::test]
-async fn initial_gather_and_retry_refuse_before_running_or_connector_calls() {
-    for error in [denied(), AiAdmissionError::Unavailable] {
-        let admission = Admission::refusing(error);
-        let service = service(admission.clone());
-        for source in [ImportSource::Linear, ImportSource::Notion] {
-            assert!(
-                matches!(service.start_gather(user(), source, true).await, Err(ImportError::Admission(e)) if e == error)
-            );
-            assert!(service.repo.list_runs(&user()).await.unwrap().is_empty());
-            assert!(
-                matches!(service.retry_gather(user(), source).await, Err(ImportError::Admission(e)) if e == error)
-            );
-        }
-        service
-            .repo
-            .start_run(&user(), ImportSource::Linear, &[], true)
-            .await
-            .unwrap();
-        service
-            .repo
-            .finish_run(
-                &user(),
-                ImportSource::Linear,
-                RunStatus::Failed,
-                Some("old failure"),
-            )
-            .await
-            .unwrap();
-        assert!(
-            matches!(service.retry_gather(user(), ImportSource::Linear).await, Err(ImportError::Admission(e)) if e == error)
-        );
-        let run = service
-            .repo
-            .list_runs(&user())
-            .await
-            .unwrap()
-            .pop()
-            .unwrap();
-        assert_eq!(run.status, RunStatus::Failed);
-        assert!(run.auto_import);
-        assert_eq!(run.error.as_deref(), Some("old failure"));
-        service
-            .dismiss_run(user(), ImportSource::Linear)
-            .await
-            .unwrap();
-        let calls = admission.calls.load(Ordering::SeqCst);
-        assert!(
-            !service
-                .start_gather(user(), ImportSource::Linear, false)
-                .await
-                .unwrap()
-        );
-        assert_eq!(admission.calls.load(Ordering::SeqCst), calls);
-        assert_eq!(
-            service.state(user()).await.unwrap().runs[0].status,
-            RunStatus::Dismissed
-        );
-    }
-}
-
-#[tokio::test]
-async fn queued_gather_rechecks_and_finishes_failed_without_loading_tools() {
-    for error in [denied(), AiAdmissionError::Unavailable] {
-        let admission = Arc::new(Admission {
-            error: Mutex::new(Some(error)),
-            calls: AtomicUsize::new(0),
-            allow_first: true,
-        });
-        let service = service(admission.clone());
-        assert!(
-            service
-                .start_gather(user(), ImportSource::Notion, true)
-                .await
-                .unwrap()
-        );
-        tokio::time::timeout(Duration::from_secs(2), async {
-            loop {
-                let run = service
-                    .repo
-                    .list_runs(&user())
-                    .await
-                    .unwrap()
-                    .pop()
-                    .unwrap();
-                if run.status == RunStatus::Failed {
-                    assert!(run.error.unwrap().starts_with(error.code()));
-                    assert!(run.auto_import);
-                    break;
-                }
-                tokio::task::yield_now().await;
-            }
-        })
-        .await
-        .unwrap();
-        assert_eq!(admission.calls.load(Ordering::SeqCst), 2);
-    }
-}
-
-#[tokio::test]
-async fn active_gather_retries_are_noops_and_failed_retries_preserve_configuration() {
-    let admission = Admission::refusing(AiAdmissionError::Unavailable);
-    let service = service(admission.clone());
-    service
-        .repo
-        .start_run(&user(), ImportSource::Linear, &[], true)
-        .await
-        .unwrap();
-    assert!(
-        !service
-            .retry_gather(user(), ImportSource::Linear)
-            .await
-            .unwrap()
-    );
-    assert_eq!(admission.calls.load(Ordering::SeqCst), 0);
-    service
-        .repo
-        .finish_run(
-            &user(),
-            ImportSource::Linear,
-            RunStatus::Failed,
-            Some("interrupted"),
-        )
-        .await
-        .unwrap();
-
-    // Admission recovers for the retry, then fails again when the task starts.
-    let admission = Arc::new(Admission {
-        error: Mutex::new(Some(AiAdmissionError::Unavailable)),
-        calls: AtomicUsize::new(0),
-        allow_first: true,
-    });
-    let service = service.with_admission(admission);
-    assert!(
-        service
-            .retry_gather(user(), ImportSource::Linear)
-            .await
-            .unwrap()
-    );
-    tokio::time::timeout(Duration::from_secs(2), async {
-        loop {
-            let run = service
-                .repo
-                .list_runs(&user())
-                .await
-                .unwrap()
-                .pop()
-                .unwrap();
-            if run.status == RunStatus::Failed {
-                assert!(run.auto_import);
-                assert!(run.error.unwrap().starts_with("ai_billing_unavailable"));
-                break;
-            }
-            tokio::task::yield_now().await;
-        }
-    })
-    .await
-    .unwrap();
-}
-
-#[tokio::test]
 async fn default_constructor_keeps_admission_disabled() {
     let service = ImportServiceImpl::new(
         Repo::default(),
@@ -703,37 +476,6 @@ async fn default_constructor_keeps_admission_disabled() {
         Arc::new(ai_usage::NoOpUsageRecorder),
     );
     service.admit_ai(&user()).await.unwrap();
-    assert!(
-        service
-            .prepare_gather(&user(), ImportSource::Notion, &[])
-            .await
-            .unwrap()
-    );
-}
-
-#[tokio::test]
-async fn slack_agent_fallback_still_requires_admission() {
-    let admission = Admission::refusing(denied());
-    let service = service(admission.clone());
-    assert!(
-        service
-            .prepare_gather(&user(), ImportSource::Slack, &[])
-            .await
-            .unwrap()
-    );
-    assert_eq!(admission.calls.load(Ordering::SeqCst), 0);
-    let tools = Arc::new(Tools {
-        name: "unused",
-        result: serde_json::json!({}),
-        calls: AtomicUsize::new(0),
-    });
-    let error = service
-        .gather_agent_session(&user(), ImportSource::Slack, GATHER_MODEL, tools.clone())
-        .await
-        .unwrap_err();
-    assert_eq!(error.downcast_ref::<AiAdmissionError>(), Some(&denied()));
-    assert_eq!(admission.calls.load(Ordering::SeqCst), 1);
-    assert_eq!(tools.calls.load(Ordering::SeqCst), 0);
 }
 
 #[tokio::test]

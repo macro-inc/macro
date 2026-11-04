@@ -1,6 +1,7 @@
 import { useBlockEntityCommands } from '@app/features/next-soup/actions';
 import { FileSidePanelSections, SidePanel } from '@components/app/side-panel';
 import {
+  blockDataSignalAs,
   useBlockId,
   useBlockNestedContext,
   useIsNestedBlock,
@@ -12,6 +13,7 @@ import { useCanEdit } from '@core/signal/permissions';
 import { useSearchParams } from '@solidjs/router';
 import { Show } from 'solid-js';
 import type { CanvasView } from '../core/view';
+import type { CanvasData } from '../definition';
 import { CanvasDocument, type CanvasDocumentMethods } from './CanvasDocument';
 import { TopBar } from './TopBar';
 
@@ -22,6 +24,7 @@ export type BlockCanvasProps = {
 export default function BlockCanvas(props: BlockCanvasProps) {
   useBlockEntityCommands();
   const documentId = useBlockId();
+  const data = blockDataSignalAs<CanvasData>('canvas');
   const isNested = useIsNestedBlock();
   const nestedContext = useBlockNestedContext<'canvas'>();
   const canEdit = useCanEdit();
@@ -39,6 +42,7 @@ export default function BlockCanvas(props: BlockCanvasProps) {
         <CanvasDocument
           documentId={documentId}
           file={file()}
+          shared={data()?.shared}
           canEdit={canEdit()}
           isNested={isNested}
           view={props.view}

@@ -1,0 +1,36 @@
+/**
+ * The SDK entity directories agents discover, under `packages/sdk/src/entities/`.
+ * What each entity is for is its `@routing` sentence in the SDK's TSDoc.
+ */
+export const entityDirectories: readonly string[] = [
+  'agent-sessions',
+  'agents',
+  'api-keys',
+  'entity-mentions',
+  'github-pull-requests',
+  'initiatives',
+  'meetings',
+  'routines',
+  'unfurls',
+  'ai',
+  'bots',
+  'calendar',
+  'calls',
+  'channels',
+  'crm',
+  'databases',
+  'documents',
+  'email',
+  'favorites',
+  'foreign',
+  'forms',
+  'notifications',
+  'pins',
+  'projects',
+  'properties',
+  'referrals',
+  'tasks',
+  'teams',
+  'users',
+  'webhooks',
+];

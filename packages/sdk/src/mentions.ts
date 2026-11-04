@@ -24,9 +24,24 @@ export interface RichMessage {
   mentions: SimpleMention[];
 }
 
-/** Serialize a mention node to its `<tag>{json}</tag>` wire form. */
+const TAG_JSON_ESCAPES: Record<string, string> = {
+  '<': '\\u003c',
+  '>': '\\u003e',
+  '&': '\\u0026',
+};
+
+/**
+ * Serialize a mention node to its `<tag>{json}</tag>` wire form. Readers take
+ * everything up to the first closing tag, so `<`, `>` and `&` in the JSON are
+ * written as `\u` escapes: a document named `</m-document-mention>` would
+ * otherwise end the tag early. Decoding the JSON restores the original text.
+ */
 export function wrapXml(tag: string, data: unknown): string {
-  return `<${tag}>${JSON.stringify(data)}</${tag}>`;
+  const json = JSON.stringify(data).replace(
+    /[<>&]/g,
+    (char) => TAG_JSON_ESCAPES[char] ?? char,
+  );
+  return `<${tag}>${json}</${tag}>`;
 }
 
 function isMentionable(value: Interpolation): value is Mentionable {
@@ -65,9 +80,8 @@ export function msg(
   for (const [i, string] of strings.entries()) {
     content += string;
 
-    if (i >= values.length) continue;
-
     const value = values[i];
+    if (value === undefined) continue;
     if (isMentionable(value)) {
       const part = value.toMention();
       content += part.tag;

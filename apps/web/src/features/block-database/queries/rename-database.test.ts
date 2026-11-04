@@ -100,6 +100,25 @@ describe('rename database', () => {
     expect(cache.setQueryData).not.toHaveBeenCalled();
   });
 
+  it('reports a result type from a newer server as unreachable', async () => {
+    const client: RenameDatabaseClient = {
+      mutation: () => ({
+        toPromise: async () => ({
+          data: {
+            renameEntities: {
+              results: [JSON.parse('{"__typename":"GraphqlMutationQueued"}')],
+            },
+          },
+        }),
+      }),
+    };
+
+    expect(await renameDatabase(client, 'db', 'Roadmap')).toEqual(
+      err({ kind: 'unreachable' })
+    );
+    expect(cache.setQueryData).not.toHaveBeenCalled();
+  });
+
   it('refuses a blank name without sending it', async () => {
     const mutation = vi.fn<RenameDatabaseClient['mutation']>();
 

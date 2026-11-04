@@ -1,6 +1,6 @@
 use super::{ChannelToolContext, channel_mutation_error, parse_participants};
 use crate::domain::{
-    models::{GetOrCreateAction, GetOrCreateDmRequest, GetOrCreatePrivateRequest},
+    models::{GetOrCreateAction, GetOrCreateDmRequest, GetOrCreatePrivateRequest, Sender},
     ports::ChannelService,
 };
 use ai_toolset::{
@@ -80,7 +80,7 @@ where
                 .get_or_create_dm(
                     actor,
                     GetOrCreateDmRequest {
-                        recipient_id: recipient.clone(),
+                        recipient_id: Sender::new_from_user(recipient.clone()),
                     },
                 )
                 .await

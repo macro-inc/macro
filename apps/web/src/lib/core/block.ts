@@ -8,6 +8,7 @@ import type {
   LiveSyncSource,
   SyncError,
 } from '@macro-inc/collaboration/collab/source';
+import type { Span } from '@macro-inc/observability';
 import type { AccessLevel } from '@service-storage/generated/schemas/accessLevel';
 import type { DocumentMetadata } from '@service-storage/generated/schemas/documentMetadata';
 import type { GetDocumentResponseData } from '@service-storage/generated/schemas/getDocumentResponseData';
@@ -293,7 +294,8 @@ export type LoadFunction<
   S extends Source | P = Source | P,
 > = (
   source: NoInfer<S>,
-  intent: Intent
+  intent: Intent,
+  parentSpan?: Span
 ) => Promise<
   Result<S extends Source ? T | P : T, ResultError<keyof typeof LoadErrors>[]>
 >;
@@ -335,7 +337,8 @@ export interface BlockComponentProps extends Record<BlockName, ObjectLike> {
 }
 
 interface BlockComponentLoadData extends Record<BlockName, ObjectLike> {
-  canvas: DocumentBlockData & DssFileData;
+  canvas: DocumentBlockData &
+    ({ shared: true; dssFile?: never } | (DssFileData & { shared?: false }));
   pdf: DocumentBlockData;
   video: DocumentBlockData;
   md: DocumentBlockData &
@@ -393,8 +396,15 @@ export type BlockDefinition<
   /** flag to indicate wether this block should enable collaborative features. */
   liveTrackingEnabled?: boolean;
 
-  /** Whether mounting this block records entity-open analytics and history. */
+  /** Whether mounting this block records an entity-open history row and page view. */
   openTrackingEnabled?: boolean;
+
+  /**
+   * Whether mounting this block sends `open_entity`. Defaults to
+   * `openTrackingEnabled`; set it on a block without a history row whose opens
+   * are still a product signal, as `block-database` does.
+   */
+  openAnalyticsEnabled?: boolean;
 
   accepted: Record<string, string>;
 

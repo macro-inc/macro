@@ -24,7 +24,8 @@ vi.mock('@core/component/ParamsProvider', () => ({
   useParamNavigationCount: () => () => 0,
 }));
 vi.mock('@core/mobile/isTouchDevice', () => ({ isTouchDevice: () => false }));
-vi.mock('./scroll-to-rendered-target', () => ({
+vi.mock('./scroll-to-rendered-target', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('./scroll-to-rendered-target')>()),
   scrollToRenderedTarget: mocks.scroll,
 }));
 
@@ -192,7 +193,8 @@ describe('EntityDiscussion target ownership', () => {
       expect(view.getByRole('article').dataset.target).toBe('workbook-reply');
       expect(mocks.scroll).toHaveBeenCalledWith(
         expect.any(HTMLElement),
-        'workbook-reply'
+        'workbook-reply',
+        { onSettled: expect.any(Function) }
       );
     }
   );
@@ -485,9 +487,32 @@ it('hides cached comments when a linked message denies access and retries the li
   ));
   expect(view.queryAllByRole('article')).toHaveLength(0);
   expect(view.queryByRole('textbox')).toBeNull();
-  fireEvent.click(
-    view.getByRole('button', { name: 'Could not load comments. Retry' })
-  );
+  fireEvent.click(view.getByRole('button', { name: 'Retry' }));
   expect(refetch).toHaveBeenCalled();
   expect(mocks.refetchLink).toHaveBeenCalled();
 });
+
+it.each([false, true])(
+  'keeps a missing-parent error visible (hide empty: %s)',
+  (hideWhenEmpty) => {
+    mocks.timeline.mockReturnValue({
+      isPending: false,
+      isError: true,
+      error: new ThrownResultError([
+        { code: 'NOT_FOUND', message: 'message or parent not found' },
+      ]),
+    });
+    const view = render(() => (
+      <EntityConversation
+        parent={{ type: 'document', id: 'deleted' }}
+        canWrite
+        hideWhenEmpty={hideWhenEmpty}
+      />
+    ));
+    expect(view.getByRole('alert').textContent).toBe(
+      'Comments are unavailable for this item.'
+    );
+    expect(view.queryByRole('button', { name: 'Retry' })).toBeNull();
+    expect(view.queryByRole('textbox')).toBeNull();
+  }
+);

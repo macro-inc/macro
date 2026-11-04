@@ -1,4 +1,4 @@
-import { type Span, Telemetry } from '@macro-inc/observability';
+import { NOOP_SPAN, type Span, Telemetry } from '@macro-inc/observability';
 import { afterEach, describe, expect, test, vi } from 'vitest';
 import { disposeTelemetryFor, telemetrySpan } from './telemetry';
 
@@ -46,4 +46,20 @@ describe('telemetrySpan', () => {
     expect(span.setAttr).toHaveBeenCalledWith('document.id', documentId);
     expect(span.setAttr).toHaveBeenCalledWith('session.id', expect.any(String));
   });
+});
+
+test('creates document phases from an explicit caller without an ambient root', async () => {
+  const child = NOOP_SPAN;
+  const parent = NOOP_SPAN;
+  const makeChild = vi.spyOn(parent, 'span');
+  const ambient = vi.spyOn(Telemetry, 'span');
+  const phase = telemetrySpan(
+    documentId,
+    'doc.sync.catchup',
+    undefined,
+    parent
+  );
+  expect(phase).toBe(child);
+  expect(makeChild).toHaveBeenCalledWith('doc.sync.catchup');
+  expect(ambient).not.toHaveBeenCalled();
 });

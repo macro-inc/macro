@@ -433,6 +433,24 @@ describe('removeSoupEntities', () => {
     expect(getSoupItemId(cached.pages[1].items[0])).toBe('d-2');
   });
 
+  it('keeps another entity type with the same ID when removal is scoped', () => {
+    seedSoupQuery(
+      mockSoupCache([[mockDocumentItem('shared'), mockChannelItem('shared')]])
+    );
+    const transaction = removeSoupEntities(
+      new Set(['shared']),
+      (item) => item.tag === 'document'
+    );
+    expect(getSoupQuery()!.pages[0].items.map((item) => item.tag)).toEqual([
+      'channel',
+    ]);
+    transaction.rollback();
+    expect(getSoupQuery()!.pages[0].items.map((item) => item.tag)).toEqual([
+      'document',
+      'channel',
+    ]);
+  });
+
   it('rollback restores removed items', () => {
     seedSoupQuery(
       mockSoupCache([[mockDocumentItem('d-1'), mockChatItem('c-1')]])
@@ -552,6 +570,19 @@ describe('removeSearchEntities', () => {
     expect(getSearchQuery()!.pages[0].results[0]).toEqual(session);
   });
 
+  it('keeps a result of a type this build does not know', () => {
+    const fromNewerServer = JSON.parse('{"type":"newKind","id":"new-1"}');
+    seedSearchQuery(
+      mockSearchCache([
+        [fromNewerServer, mockSearchResult('document', 'doc-1')],
+      ])
+    );
+
+    removeSearchEntities(new Set(['doc-1']));
+
+    expect(getSearchQuery()!.pages[0].results).toEqual([fromNewerServer]);
+  });
+
   it('filters matching IDs from search results', () => {
     seedSearchQuery(
       mockSearchCache([
@@ -569,6 +600,28 @@ describe('removeSearchEntities', () => {
     expect(cached.pages[0].results).toHaveLength(1);
     expect(cached.pages[0].results[0].type).toBe('chat');
     expect(cached.pages[1].results).toHaveLength(0);
+  });
+
+  it('keeps search results of other types with the same ID', () => {
+    seedSearchQuery(
+      mockSearchCache([
+        [
+          mockSearchResult('document', 'shared'),
+          mockSearchResult('chat', 'shared'),
+        ],
+      ])
+    );
+    const transaction = removeSearchEntities(
+      new Set(['shared']),
+      (item) => item.type === 'document'
+    );
+    expect(getSearchQuery()!.pages[0].results.map((item) => item.type)).toEqual(
+      ['chat']
+    );
+    transaction.rollback();
+    expect(getSearchQuery()!.pages[0].results.map((item) => item.type)).toEqual(
+      ['document', 'chat']
+    );
   });
 
   it('rollback restores removed search results', () => {
@@ -924,6 +977,23 @@ describe('removeSoupEntities — grouped cache', () => {
     expect(done.totalCount).toBe(3);
   });
 
+  it('keeps grouped membership when the matching ID has another type', () => {
+    const key = seedGroupedAstQuery(
+      mockGroupedParentCache(
+        [mockTaskItem('shared', 'in_progress')],
+        [buildGroup('in_progress', ['shared'], 1, 0)]
+      )
+    );
+    removeSoupEntities(new Set(['shared']), (item) => item.tag === 'chat');
+    const cached =
+      testQueryClient.getQueryData<
+        InfiniteData<SoupAstItemsGroupedPage, unknown>
+      >(key)!;
+    expect(cached.pages[0].groups[0].itemIds).toEqual(['shared']);
+    expect(cached.pages[0].groups[0].totalCount).toBe(1);
+    expect(cached.pages[0].items.shared).toBeDefined();
+  });
+
   it('rollback restores grouped cache', () => {
     const items = [mockTaskItem('a-1', 'in_progress')];
     const groups = [buildGroup('in_progress', ['a-1'], 1, 0)];
@@ -943,6 +1013,86 @@ describe('removeSoupEntities — grouped cache', () => {
 });
 
 describe('optimisticUpdateSoupEntity — cross-group move', () => {
+  it.each([
+    ['2026-11-01T00:00:00Z', 'later'],
+    [null, 'missing'],
+  ])(
+    'moves a loaded date property to %s before refetch',
+    (value, destination) => {
+      const initial = mockTaskItem('date-item', 'unused');
+      if (initial.tag !== 'document')
+        throw new Error('Expected document fixture');
+      const property = initial.data.properties?.[0];
+      if (!property) throw new Error('Expected property fixture');
+      const item: SoupApiItem = {
+        ...initial,
+        data: {
+          ...initial.data,
+          properties: [
+            {
+              ...property,
+              value: { type: 'Date', value: '2026-10-31T23:59:59Z' },
+            },
+          ],
+        },
+      };
+      const groupBy: GroupByField = {
+        type: 'property',
+        propertyDefinitionId: STATUS_DEF,
+        bucketing: {
+          type: 'date_ranges',
+          ranges: [
+            { key: 'soon', start: null, end: '2026-11-01T00:00:00Z' },
+            { key: 'later', start: '2026-11-01T00:00:00Z', end: null },
+          ],
+          missingValueBucketKey: 'missing',
+        },
+      };
+      const key = [...soupKeys.astItems._def, {}, {}, groupBy];
+      const data = mockGroupedParentCache(
+        [item],
+        [
+          buildGroup('soon', ['date-item'], 8),
+          buildGroup('later', [], 5),
+          buildGroup('missing', [], 2),
+        ]
+      );
+      testQueryClient.setQueryDefaults(key, { meta: { groupBy } });
+      testQueryClient.setQueryData(key, data);
+      const updated: SoupApiItem = {
+        ...item,
+        data: {
+          ...item.data,
+          properties: [
+            {
+              ...property,
+              value: value === null ? null : { type: 'Date', value },
+            },
+          ],
+        },
+      };
+      mockNormalizer.getObjectById.mockReturnValue(updated);
+      testQueryClient.setQueryData(key, {
+        ...data,
+        pages: [{ ...data.pages[0], items: { 'date-item': updated } }],
+      });
+      optimisticUpdateSoupEntity(updated);
+      const page =
+        testQueryClient.getQueryData<
+          InfiniteData<SoupAstItemsGroupedPage, unknown>
+        >(key)!.pages[0];
+      expect(page.groups.find((group) => group.key === 'soon')).toMatchObject({
+        itemIds: [],
+        totalCount: 7,
+      });
+      expect(
+        page.groups.find((group) => group.key === destination)
+      ).toMatchObject({
+        itemIds: ['date-item'],
+        totalCount: destination === 'later' ? 6 : 3,
+      });
+    }
+  );
   it('moves item id between groups via itemIds mutations only', () => {
     const items = [
       mockTaskItem('a-1', 'in_progress'),
@@ -1771,5 +1921,84 @@ describe('insert gate (meta.insertFilter) — grouped cache', () => {
     expect(page.groups.find((g) => g.key === 'in_progress')!.itemIds).toEqual([
       'a-1',
     ]);
+  });
+});
+
+describe('raw grouped entity IDs', () => {
+  it('updates and removes memberships using entity IDs without changing pool keys', () => {
+    const item = mockTaskItem('a-1', 'in_progress');
+    const key = seedGroupedAstQuery({
+      pages: [
+        {
+          kind: 'grouped',
+          items: { 'a-1': item },
+          groups: [
+            buildGroup('in_progress', ['a-1'], 4),
+            buildGroup('done', [], 2),
+          ],
+          nextCursor: null,
+        },
+      ],
+      pageParams: [null],
+    });
+    const updated = mockTaskItem('a-1', 'done');
+    mockNormalizer.getObjectById.mockReturnValue(updated);
+    optimisticUpdateSoupEntity(updated);
+    const moved =
+      testQueryClient.getQueryData<InfiniteData<SoupAstItemsGroupedPage>>(key)!
+        .pages[0];
+    expect(Object.keys(moved.items)).toEqual(['a-1']);
+    expect(moved.items['a-1']).toEqual(updated);
+    expect(
+      moved.groups.map((group) => [group.key, group.itemIds, group.totalCount])
+    ).toEqual([
+      ['in_progress', [], 3],
+      ['done', ['a-1'], 3],
+    ]);
+    const transaction = removeSoupEntities(new Set(['a-1']));
+    const removed =
+      testQueryClient.getQueryData<InfiniteData<SoupAstItemsGroupedPage>>(key)!
+        .pages[0];
+    expect(removed.items).toEqual({});
+    expect(removed.groups[1].itemIds).toEqual([]);
+    expect(removed.groups[1].totalCount).toBe(2);
+    transaction.rollback();
+    expect(
+      testQueryClient.getQueryData<InfiniteData<SoupAstItemsGroupedPage>>(key)!
+        .pages[0]
+    ).toEqual(moved);
+  });
+
+  it('does not duplicate an entity from a later expanded-group page', () => {
+    const key = [...soupKeys.groupedGroup._def, 'raw-continuation'];
+    const item = mockTaskItem('a-1', 'in_progress');
+    type Page = { items: Record<string, SoupApiItem>; group: GroupMeta };
+    testQueryClient.setQueryDefaults(key, {
+      meta: { groupBy: STATUS_GROUP_BY, groupKey: 'in_progress' },
+    });
+    testQueryClient.setQueryData<InfiniteData<Page>>(key, {
+      pages: [
+        {
+          items: { 'a-2': mockTaskItem('a-2', 'in_progress') },
+          group: buildGroup('in_progress', ['a-2'], 5),
+        },
+        {
+          items: { 'a-1': item },
+          group: buildGroup('in_progress', ['a-1'], 5),
+        },
+      ],
+      pageParams: [null, 'cursor'],
+    });
+    mockNormalizer.getObjectById.mockReturnValue(item);
+    optimisticUpdateSoupEntity(item);
+    insertSoupEntity(item);
+    const pages = testQueryClient.getQueryData<InfiniteData<Page>>(key)!.pages;
+    expect(pages.map((page) => page.group.itemIds)).toEqual([['a-2'], ['a-1']]);
+    removeSoupEntities(new Set(['a-1']));
+    const removed =
+      testQueryClient.getQueryData<InfiniteData<Page>>(key)!.pages;
+    expect(removed[1].items).toEqual({});
+    expect(removed[1].group.itemIds).toEqual([]);
+    expect(removed[1].group.totalCount).toBe(4);
   });
 });

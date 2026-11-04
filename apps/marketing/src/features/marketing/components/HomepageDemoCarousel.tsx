@@ -52,12 +52,13 @@ function CarouselCaret(props: { direction: 'left' | 'right' }) {
   );
 }
 
-/** The live-site highlights over a workspace that is always interactive. */
+/** Manual highlights over the sample workspace. */
 export function HomepageDemoCarousel(props: {
   frame: () => HTMLIFrameElement;
 }) {
   const [active, setActive] = createSignal(0);
   const [ready, setReady] = createSignal(false);
+  let root!: HTMLDivElement;
   let document: Document | null = null;
   let transition: Animation | undefined;
   let swipe: { x: number; y: number; pointerId: number } | undefined;
@@ -74,9 +75,7 @@ export function HomepageDemoCarousel(props: {
         document?.querySelectorAll<HTMLButtonElement>(
           '.dummy-sidebar button'
         ) ?? []
-      ).find(
-        (button) => button.textContent?.trim() === 'Next steps for our team'
-      );
+      ).find((button) => button.textContent?.trim() === 'Homepage feedback');
       email?.click();
     }
     if (slide().target === 'Drive') {
@@ -85,7 +84,7 @@ export function HomepageDemoCarousel(props: {
           []
       )
         .find((button) =>
-          button.textContent?.trim().startsWith('Q3 launch plan')
+          button.textContent?.trim().startsWith('Website launch plan')
         )
         ?.click();
     }
@@ -97,14 +96,8 @@ export function HomepageDemoCarousel(props: {
         ?.click();
     }
     if (slide().target === 'Agents') {
-      Array.from(
-        document?.querySelectorAll<HTMLButtonElement>(
-          '.dummy-sidebar button'
-        ) ?? []
-      )
-        .find(
-          (button) => button.textContent?.trim() === 'Fix the deploy pipeline'
-        )
+      document
+        ?.querySelector<HTMLButtonElement>('[data-agent-session-row="deploy"]')
         ?.click();
     }
   };
@@ -122,6 +115,52 @@ export function HomepageDemoCarousel(props: {
 
   onMount(() => {
     const frame = props.frame();
+    let visible = typeof IntersectionObserver === 'undefined';
+    const navigateWithKeyboard = (event: KeyboardEvent) => {
+      if (
+        !ready() ||
+        !visible ||
+        window.document.hidden ||
+        event.defaultPrevented ||
+        event.isComposing ||
+        event.repeat ||
+        event.altKey ||
+        event.ctrlKey ||
+        event.metaKey ||
+        event.shiftKey ||
+        (event.key !== 'ArrowLeft' && event.key !== 'ArrowRight')
+      )
+        return;
+      const target = event.target;
+      if (
+        window.document.querySelector(
+          '[role="dialog"], [role="menu"], [role="listbox"]'
+        ) ||
+        (target instanceof Element &&
+          (target.closest(
+            'input, textarea, select, [contenteditable]:not([contenteditable="false"]), [role="textbox"], [role="slider"], [role="spinbutton"], [role="tablist"]'
+          ) ||
+            (!root.contains(target) &&
+              target.closest('button, a, [tabindex]'))))
+      )
+        return;
+      // Listen on the page so navigating does not require focusing an arrow.
+      // Events inside the embedded workspace stay with its editors and controls.
+      event.preventDefault();
+      select(active() + (event.key === 'ArrowRight' ? 1 : -1));
+    };
+    window.document.addEventListener('keydown', navigateWithKeyboard);
+    const visibility =
+      typeof IntersectionObserver === 'undefined'
+        ? undefined
+        : new IntersectionObserver(
+            ([entry]) => {
+              visible = entry.isIntersecting && entry.intersectionRatio >= 0.35;
+            },
+            { threshold: 0.35 }
+          );
+    visibility?.observe(root.previousElementSibling ?? root);
+
     const followNavigation = (event: Event) => {
       const target = event.target as Element | null;
       const button = target?.closest('.dummy-rail button[aria-label]');
@@ -154,6 +193,8 @@ export function HomepageDemoCarousel(props: {
     onCleanup(() => {
       document?.removeEventListener('click', followNavigation);
       observer.disconnect();
+      visibility?.disconnect();
+      window.document.removeEventListener('keydown', navigateWithKeyboard);
       transition?.cancel();
       frame.removeEventListener('load', attach);
     });
@@ -161,7 +202,9 @@ export function HomepageDemoCarousel(props: {
 
   return (
     <div
+      ref={root}
       class="homepage-demo-carousel"
+      data-active-scene={slide().label}
       aria-roledescription="carousel"
       role="region"
       aria-label="What you can do with Macro"
@@ -196,18 +239,7 @@ export function HomepageDemoCarousel(props: {
         swipe = undefined;
       }}
     >
-      <div
-        class="homepage-demo-slide-controls"
-        onKeyDown={(event) => {
-          if (
-            !ready() ||
-            (event.key !== 'ArrowLeft' && event.key !== 'ArrowRight')
-          )
-            return;
-          event.preventDefault();
-          select(active() + (event.key === 'ArrowRight' ? 1 : -1));
-        }}
-      >
+      <div class="homepage-demo-slide-controls">
         <button
           type="button"
           class="homepage-demo-arrow"

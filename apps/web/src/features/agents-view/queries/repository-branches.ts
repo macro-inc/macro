@@ -1,3 +1,4 @@
+import { fireAndForget } from '@core/util/fireAndForget';
 import { useAgentRepositoryBranchesQuery } from '@queries/agent-repositories/branches';
 import { type Accessor, createMemo } from 'solid-js';
 
@@ -26,6 +27,6 @@ export function createRepositoryBranches(
     branches,
     loading: () => query.isLoading,
     error: () => query.isError,
-    retry: () => void query.refetch(),
+    retry: () => fireAndForget(query.refetch(), 'agents-view'),
   };
 }

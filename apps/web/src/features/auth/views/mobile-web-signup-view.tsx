@@ -1,3 +1,4 @@
+import { fireAndForget } from '@core/util/fireAndForget';
 import { onMount, Show } from 'solid-js';
 import { MobileWebSignupSent } from '../components/mobile-web-signup-sent';
 import { MobileWebWelcome } from '../components/mobile-web-welcome';
@@ -21,7 +22,7 @@ export function MobileWebSignupView(props: {
       fallback={
         <Welcome
           pending={signup.pending()}
-          onSignUp={(email) => void signup.submit(email)}
+          onSignUp={(email) => fireAndForget(signup.submit(email), 'auth')}
           onLogin={() => {
             context.track('login_from_onboarding');
             props.onLogin();

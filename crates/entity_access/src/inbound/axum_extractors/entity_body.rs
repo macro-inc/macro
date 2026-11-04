@@ -98,21 +98,32 @@ where
             });
         }
 
-        let user = match authorization {
+        let (user, user_org_id) = match authorization {
             MacroAuthorization::User(user) | MacroAuthorization::Internal(Some(user)) => {
-                user.macro_user_id
+                let org_id = user.user_context.organization_id.map(i64::from);
+                (user.macro_user_id, org_id)
             }
             MacroAuthorization::Harness(_) => return Err(ExtractorError::Unauthorized),
             MacroAuthorization::Bot(_) | MacroAuthorization::Internal(None) => {
                 unreachable!("bot and identity-less internal access returned above")
             }
         };
-        let access_level = service
-            .get_access_level(Some(&user), &entity_id, entity_type)
-            .await
-            .map_err(ExtractorError::from)?
-            .ok_or(ExtractorError::Unauthorized)?;
-        let entity_permission = EntityPermission::AccessLevel { access_level };
+        // Channels require `get_entity_permission` with user_org_id for proper
+        // access checks on public/organization/team channels. Other entity
+        // types use the simpler `get_access_level`.
+        let entity_permission = if entity_type == EntityType::Channel {
+            service
+                .get_entity_permission(Some(&user), &entity_id, entity_type, user_org_id)
+                .await
+                .map_err(ExtractorError::from)?
+        } else {
+            let access_level = service
+                .get_access_level(Some(&user), &entity_id, entity_type)
+                .await
+                .map_err(ExtractorError::from)?
+                .ok_or(ExtractorError::Unauthorized)?;
+            EntityPermission::AccessLevel { access_level }
+        };
         if !entity_permission.satisfies::<T>() {
             return Err(ExtractorError::Unauthorized);
         }

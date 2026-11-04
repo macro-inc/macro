@@ -1,0 +1,32 @@
+{
+  "object": "data_source",
+  "id": "1a44be12-0953-4631-a1d6-7d4c2b1b4a2f",
+  "created_time": "2026-01-10T08:00:00.000Z",
+  "last_edited_time": "2026-03-02T10:15:00.000Z",
+  "title": [{"type": "text", "plain_text": "Roadmap"}],
+  "description": [],
+  "parent": {"type": "database_id", "database_id": "d9824bdc-8445-4327-be8b-5b47500af6ce"},
+  "database_parent": {"type": "page_id", "page_id": "c7f0aa50-1f0e-4a52-9a17-e2f6f3a3b0c1"},
+  "archived": false,
+  "in_trash": false,
+  "properties": {
+    "Name": {"id": "title", "name": "Name", "type": "title", "title": {}},
+    "Priority": {"id": "pR", "name": "Priority", "type": "select", "select": {"options": [
+      {"id": "o1", "name": "High", "color": "red"},
+      {"id": "o2", "name": "Low", "color": "green"}
+    ]}},
+    "Status": {"id": "sT", "name": "Status", "type": "status", "status": {
+      "options": [{"id": "s1", "name": "In progress", "color": "blue"}],
+      "groups": [{"id": "g1", "name": "In progress", "color": "blue", "option_ids": ["s1"]}]
+    }},
+    "Projects": {"id": "pJ", "name": "Projects", "type": "relation", "relation": {
+      "database_id": "aaaa0000-0000-4000-8000-000000000000",
+      "data_source_id": "bbbb0000-0000-4000-8000-000000000000",
+      "type": "dual_property",
+      "dual_property": {"synced_property_name": "Tasks", "synced_property_id": "xY"}
+    }},
+    "Ticket": {"id": "tK", "name": "Ticket", "type": "unique_id", "unique_id": {"prefix": "TASK"}},
+    "Budget": {"id": "bU", "name": "Budget", "type": "number", "number": {"format": "dollar"}},
+    "Run": {"id": "rN", "name": "Run", "type": "button", "button": {}}
+  }
+}

@@ -1,4 +1,4 @@
-import MagnifyingGlassIcon from '@phosphor/magnifying-glass.svg';
+import MagnifyingGlassIcon from '@icon/system/regular/magnifying-glass.svg';
 import { Badge, InputGroup, Scroll, SideNav } from '@ui';
 import { createMemo, createSignal, For, Show } from 'solid-js';
 import { type DocEntry, filterEntries, groupEntries } from '../registry';

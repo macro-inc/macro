@@ -1,8 +1,8 @@
 import { useSplitLayout } from '@components/app/split-layout/layout';
 import { toast } from '@core/component/Toast/Toast';
 import { formatDate } from '@core/util/date';
-import GitFork from '@phosphor-icons/core/regular/git-fork.svg?component-solid';
-import XIcon from '@phosphor-icons/core/regular/x.svg?component-solid';
+import GitFork from '@icon/system/regular/git-fork.svg?component-solid';
+import XIcon from '@icon/system/regular/x.svg?component-solid';
 import { Button } from '@ui';
 import { useMarkdownName } from '../component/MarkdownNameProvider';
 import { useMarkdownDocument } from '../context/markdown-document-context';
@@ -49,7 +49,7 @@ export function HistoryToolbar(props: { onClose: () => void }) {
         onClick={props.onClose}
         aria-label="Close history"
       >
-        <XIcon />
+        <XIcon class="size-3.5 touch:size-6 shrink-0 pointer-events-none" />
       </Button>
       <div class="min-w-0 flex-1">
         <h2 class="text-sm font-medium">Document history</h2>
@@ -68,7 +68,7 @@ export function HistoryToolbar(props: { onClose: () => void }) {
         Current version
       </Button>
       <Button
-        variant="outline"
+        variant="secondary"
         size="sm"
         onClick={handleFork}
         disabled={

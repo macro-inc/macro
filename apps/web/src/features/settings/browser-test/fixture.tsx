@@ -3,14 +3,18 @@ import '../../../index.css';
 import { ViewShell } from '@app/components/view-shell';
 import type { SettingsTab } from '@core/constant/SettingsState';
 import { SETTINGS_TAB_GROUPS } from '@core/constant/settingsTabsConfig';
+import { UserContextProvider } from '@core/context/user';
+import { authKeys } from '@queries/auth/keys';
+import { teamKeys } from '@queries/team/keys';
+import { QueryClient, QueryClientProvider } from '@tanstack/solid-query';
 import { ToggleSwitch } from '@ui';
 import { createMemo, createSignal, For, onMount, Show } from 'solid-js';
 import { render } from 'solid-js/web';
 import { macroDarkTheme } from '../../theme/themes/macro-dark';
 import { macroLightTheme } from '../../theme/themes/macro-light';
-import { themeCssVars } from '../../theme/utils/themeColorTokens';
+import { themeCssVars } from '../../theme/utils/themeCssVars';
 import { Appearance } from '../Appearance';
-import { DesktopAppInfo } from '../components/desktop-app';
+import { AppInfo } from '../components/app-info';
 import { SettingsSearchTarget } from '../components/settings-search-target';
 import { SettingsSidebar } from '../components/settings-sidebar';
 import { SignatureForm } from '../components/signature-form';
@@ -49,7 +53,7 @@ function Fixture() {
   };
   onMount(() => applyTheme(false));
   const groups = SETTINGS_TAB_GROUPS.filter(
-    (group) => group.label !== 'Admin'
+    (group) => !group.items.some((item) => item.tab === 'Admin')
   ).map((group) => ({
     ...group,
     items: group.items.filter((item) => !item.searchOnly),
@@ -100,14 +104,14 @@ function Fixture() {
       >
         <SettingsSection
           title="Accounts"
-          description="Connect Gmail accounts and manage their sync with Macro."
+          description="Connect email accounts and manage their sync with Macro."
         >
           <SettingsCard>
             <For each={['alex@example.com', 'alex@gmail.com']}>
               {(email) => (
                 <SettingsRow label={email} description="Up to date">
                   <Show when={email === 'alex@example.com'}>
-                    <Button variant="outline" size="md">
+                    <Button variant="secondary" size="md">
                       Enable calendar
                     </Button>
                   </Show>
@@ -119,9 +123,9 @@ function Fixture() {
             </For>
             <SettingsRow
               label="Add another inbox"
-              description="Connect more Gmail accounts."
+              description="Connect Gmail, Outlook.com, or Microsoft 365."
             >
-              <Button variant="outline" size="md">
+              <Button variant="secondary" size="md">
                 Add account
               </Button>
             </SettingsRow>
@@ -145,9 +149,12 @@ function Fixture() {
           when={page !== 'Desktop App'}
           fallback={
             <Show when={desktop()} fallback={<DesktopApp />}>
-              <DesktopAppInfo
+              <AppInfo
+                title="Desktop App (Alpha)"
+                description="Your installed version of Macro Alpha."
                 version="2.5.0"
                 buildDate={new Date('2026-10-01T16:30:00Z')}
+                bundleDate={new Date('2026-10-27T09:15:00Z')}
               />
             </Show>
           }
@@ -195,7 +202,6 @@ function Fixture() {
                 setTab(result.tab);
                 setSelected({ ...result });
               }}
-              onLogout={() => {}}
             />
           </ViewShell.Aside>
           <ViewShell.Main>
@@ -280,4 +286,20 @@ function FixtureSignature(props: { email: string }) {
   );
 }
 const root = document.getElementById('root');
-if (root) render(() => <Fixture />, root);
+// Appearance's Language section reads these; the fixture has no backend.
+const queryClient = new QueryClient({
+  defaultOptions: { queries: { staleTime: Infinity, retry: false } },
+});
+queryClient.setQueryData(authKeys.userLanguage.queryKey, { language: null });
+queryClient.setQueryData(teamKeys.currentTeam.queryKey, null);
+if (root)
+  render(
+    () => (
+      <QueryClientProvider client={queryClient}>
+        <UserContextProvider>
+          <Fixture />
+        </UserContextProvider>
+      </QueryClientProvider>
+    ),
+    root
+  );

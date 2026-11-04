@@ -1,3 +1,5 @@
+/// Agent-to-agent handoff counting for loop limits.
+pub mod agent_hops;
 /// Existing PDF annotation use cases and authorization.
 #[cfg(feature = "annotations")]
 pub mod annotations;
@@ -7,6 +9,9 @@ pub mod api;
 /// Contextual notifications and permission-aware realtime delivery.
 #[cfg(feature = "ports")]
 pub mod delivery;
+/// A parent's live discussions with all of their replies.
+#[cfg(feature = "ports")]
+pub mod discussions;
 /// Independent delivery of committed facts.
 #[cfg(feature = "ports")]
 pub mod effects;

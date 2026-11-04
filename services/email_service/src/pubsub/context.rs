@@ -3,10 +3,7 @@ use crate::util::redis::RedisClient;
 use connection_gateway_client::client::ConnectionGatewayClient;
 use contacts::domain::service::SqsContactsIngress;
 use contacts::outbound::ingress::SqsContactsQueue;
-use crm::domain::company_metadata_resolver::CompanyMetadataResolver;
-use crm::domain::model::DomainMetadata;
 use crm::domain::service::CrmServiceImpl;
-use crm::outbound::apollo_resolver::ApolloCompanyMetadataResolver;
 use crm::outbound::companies_repo::CompaniesRepositoryImpl;
 use crm::outbound::unfurl_resolver::UnfurlCompanyMetadataResolver;
 use document_storage_service_client::DocumentStorageServiceClient;
@@ -25,41 +22,22 @@ pub type PubSubEventBroker = MacroEventBrokerService<KafkaEventPublisher, TaskTr
 /// The concrete notification ingress service type.
 pub type NotificationIngressType = SqsNotificationIngress<SqsQueue>;
 
-/// The unfurl-backed resolver used when Apollo enrichment is disabled.
-type UnfurlResolver = UnfurlCompanyMetadataResolver<
+/// CRM company metadata resolved from the company's public homepage.
+pub type CrmMetadataResolver = UnfurlCompanyMetadataResolver<
     unfurl::domain::service::UnfurlServiceImpl<unfurl::outbound::ReqwestUnfurlFetcher>,
 >;
 
-/// CRM company-metadata resolver, chosen at startup from the
-/// `USE_APOLLO_CRM_ENRICHMENT` flag: Apollo.io when enabled, the
-/// unfurl-backed resolver otherwise. A single concrete type so it slots
-/// into [`CrmServiceType`] — `CompanyMetadataResolver` is RPITIT and thus
-/// not dyn-compatible, so we dispatch via an enum rather than `dyn`.
-#[derive(Clone)]
-pub enum CrmMetadataResolver {
-    /// Apollo.io organization enrichment.
-    Apollo(ApolloCompanyMetadataResolver),
-    /// Unfurl-backed homepage metadata.
-    Unfurl(UnfurlResolver),
-}
-
-impl CompanyMetadataResolver for CrmMetadataResolver {
-    async fn resolve(&self, domain: &str) -> DomainMetadata {
-        match self {
-            CrmMetadataResolver::Apollo(r) => r.resolve(domain).await,
-            CrmMetadataResolver::Unfurl(r) => r.resolve(domain).await,
-        }
-    }
-}
-
 /// The concrete CRM service type, backed by Postgres and the
-/// flag-selected [`CrmMetadataResolver`]. The resolver is consulted only
-/// on `crm_domain_directory` misses, so it isn't surfaced separately on
-/// [`PubSubContext`].
+/// homepage-backed [`CrmMetadataResolver`]. The resolver is consulted only
+/// on `crm_domain_directory` misses and for pending entries, so it isn't
+/// surfaced separately on [`PubSubContext`].
 pub type CrmServiceType = CrmServiceImpl<CompaniesRepositoryImpl, CrmMetadataResolver>;
 
 #[derive(Clone)]
 pub struct PubSubContext {
+    pub gmail_history: email::domain::mailbox::gmail_history::GmailHistoryService<
+        email::outbound::mailbox_pg::PgMailboxSync,
+    >,
     pub invitation_extractor: crate::pubsub::invitation_extraction::EmailInvitationExtractor,
     pub db: PgPool,
     pub sqs_worker: sqs_worker::SQSWorker,

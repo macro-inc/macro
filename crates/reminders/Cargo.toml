@@ -54,6 +54,10 @@ uuid = { workspace = true }
 workspace-hack = { version = "0.1", path = "../workspace-hack" }
 
 [dev-dependencies]
+crm = { path = "../crm", default-features = false, features = ["ports"] }
+email = { path = "../email", default-features = false, features = ["outbound"] }
+entity_access_management = { path = "../entity_access_management" }
+frecency = { path = "../frecency", features = ["postgres"] }
 http-body-util = { workspace = true }
 macro_db_migrator = { path = "../macro_db_migrator" }
 model_user = { path = "../model_user" }

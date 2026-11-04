@@ -1,6 +1,9 @@
 import { createRoot } from 'solid-js';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { createReplyComposerFocus } from './reply-composer-focus';
+import {
+  createReplyComposerFocus,
+  takesFocusOnMount,
+} from './reply-composer-focus';
 
 const disposers: (() => void)[] = [];
 beforeEach(() => {
@@ -87,5 +90,27 @@ describe('reply focus lifetime', () => {
     outside.focus();
     state.editorInput.focus();
     expect(document.activeElement).toBe(state.editorInput);
+  });
+});
+
+describe('takesFocusOnMount', () => {
+  const mount = {
+    savedReply: true,
+    requested: false,
+    restoredSend: false,
+    desktop: true,
+  };
+
+  it('leaves a saved reply that reappears with its thread unfocused on desktop', () => {
+    expect(takesFocusOnMount(mount)).toBe(false);
+  });
+
+  it.each([
+    ['a new reply', { savedReply: false }],
+    ['a requested reply', { requested: true }],
+    ['an undone send', { restoredSend: true }],
+    ['a touch drawer', { desktop: false }],
+  ])('focuses %s', (_case, change) => {
+    expect(takesFocusOnMount({ ...mount, ...change })).toBe(true);
   });
 });

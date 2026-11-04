@@ -1,0 +1,23 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT EXISTS(SELECT 1 FROM email_mailbox_settings_work WHERE link_id=$1 AND kind='delete_label' AND resource_key=$2 AND completed_revision<revision) AS \"exists!\"",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "exists!",
+        "type_info": "Bool"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Text"
+      ]
+    },
+    "nullable": [
+      null
+    ]
+  },
+  "hash": "1e7b50bfb59b4f27380e73b45f6eb3625e0efd2ce99bc4e595f9f724cf8f4987"
+}

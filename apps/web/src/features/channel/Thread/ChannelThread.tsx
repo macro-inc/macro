@@ -4,6 +4,7 @@ import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import { getDisplayName, tryMacroId } from '@core/user';
 import { thrownResultErrorHasCode } from '@core/util/result';
 import { MarkMessageNotifications } from '@notifications/components/MarkMessageNotifications';
+import { MessageReadVisibilityProvider } from '@notifications/components/MessageReadVisibility';
 import { queryReadyGate } from '@queries/gate';
 import { useThreadRepliesQuery } from '@queries/messages/thread-replies';
 import type { Message as EntityMessage } from '@service-storage/messages';
@@ -36,6 +37,7 @@ import {
 } from './utils/thread-reply-indicator-helpers';
 
 export function ChannelThread(props: ThreadProps) {
+  const [messageElement, setMessageElement] = createSignal<HTMLDivElement>();
   const userId = useUserId();
   const replyUserId = () => userId() ?? props.data().sender_id;
   const macroId = () => tryMacroId(replyUserId());
@@ -306,6 +308,7 @@ export function ChannelThread(props: ThreadProps) {
         onDismissNewMessages={props.threadActions?.onDismissNewMessages}
       >
         <div class="flex flex-col w-full">
+          {props.beforeMessage}
           {/* Rail segment along the root message: from the avatar's center
               (masked by the avatar's fill until its lower edge) to the
               message's bottom, where the reply-branch elbow takes over. A
@@ -315,24 +318,28 @@ export function ChannelThread(props: ThreadProps) {
               messages carry no rail. */}
           <div
             class="relative"
-            ref={(element) =>
+            ref={(element) => {
+              setMessageElement(element);
               notifyElementOnMount(
                 props.onMessageMount,
                 props.data().id,
                 element
-              )
-            }
+              );
+            }}
           >
             <Thread.RootRail
               visible={rootRailVisible()}
               grouped={props.listMeta?.isGroupedWithPrevious}
             />
             <MarkMessageNotifications
+              element={messageElement()}
               messageId={props.data().id}
               parent={props.parent()}
             >
               <DebugSuspense name="ChannelThread.message">
                 <ChannelMessage
+                  renderContent={props.renderMessageContent}
+                  hideTriggeredBy={props.hideTriggeredBy}
                   parent={props.parent()}
                   message={props.data()}
                   actions={props.getMessageActions?.(props.data())}
@@ -350,6 +357,7 @@ export function ChannelThread(props: ThreadProps) {
               </DebugSuspense>
             </MarkMessageNotifications>
           </div>
+          {props.afterMessage}
           <Show when={hasReplies() || hasInlineReplyInput()}>
             <div class="relative w-full">
               <Show when={!props.hideRail}>
@@ -505,8 +513,10 @@ export function ChannelThread(props: ThreadProps) {
 
 function ThreadReadBoundary(props: ParentProps<{ available: boolean }>) {
   return (
-    <DebugSuspense name="ChannelThread.root">
-      <Show when={props.available}>{props.children}</Show>
-    </DebugSuspense>
+    <MessageReadVisibilityProvider>
+      <DebugSuspense name="ChannelThread.root">
+        <Show when={props.available}>{props.children}</Show>
+      </DebugSuspense>
+    </MessageReadVisibilityProvider>
   );
 }

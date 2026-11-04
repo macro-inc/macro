@@ -8,6 +8,7 @@ import { getPermissions } from '@core/component/SharePermissions';
 import { toast } from '@core/component/Toast/Toast';
 import { ShareModal } from '@core/component/TopBar/ShareButton';
 import type { ShareModalInput } from '@core/component/TopBar/shareModal';
+import { fireAndForget } from '@core/util/fireAndForget';
 import { buildSimpleEntityUrl } from '@core/util/url';
 import { useCopyLink } from '@core/util/useCopyLink';
 import { getWebOrigin } from '@core/util/webOrigin';
@@ -49,7 +50,9 @@ export function createFormShareInput(options: {
             id: options.formId(),
           })}
           pending={audience.pending()}
-          onAudienceChange={(next) => void audience.change(next)}
+          onAudienceChange={(next) =>
+            fireAndForget(audience.change(next), 'form-share')
+          }
           onCopyFailure={() => options.notify.failure('Could not copy link.')}
         />
       )}
@@ -66,7 +69,7 @@ export function createFormShareInput(options: {
       owner: detail.form.ownerId,
       // The form's own access, as the service answered it.
       userPermissions: getPermissions(detail.access),
-      copyLink: () => void copyLink(link()),
+      copyLink: () => fireAndForget(copyLink(link()), 'form-share'),
       linkSharing,
     };
   };

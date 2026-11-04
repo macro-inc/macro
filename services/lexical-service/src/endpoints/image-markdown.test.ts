@@ -26,7 +26,7 @@ describe('image markdown endpoint', () => {
   it('serializes a real image node with dimensions and channel constraints', async () => {
     const response = await request(image);
     expect(response.status).toBe(200);
-    const { markdown } = await response.json<{ markdown: string }>();
+    const { markdown }: { markdown: string } = await response.json();
     const data = JSON.parse(
       markdown.slice('<m-image>'.length, -'</m-image>'.length)
     );

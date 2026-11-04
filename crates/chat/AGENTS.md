@@ -47,6 +47,11 @@ adapters, and lifecycle events. See `README.md` for the Kafka event schema.
   `null`, and `project_id: ""` means "removed from its project" (see `README.md`).
 - Sharing a chat with a team is gated through `SharePermission.team_share_*` and
   only the persisted owner may set `teamShareAccessLevel`.
+- `FREE_MODEL` is published as the `FreeTierModel` OpenAPI schema; the web
+  client's free tier is generated from it. After changing it, run
+  `bun run gen-api document-cognition` in `apps/web`, update the web model
+  catalog if the id is new, and keep `ai_projections::FREE_TIER_MODELS` equal
+  (`document_cognition_service` tests both).
 
 ## Related
 

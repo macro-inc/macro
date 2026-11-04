@@ -21,6 +21,8 @@ import type {
   Sizing,
   VectorNetwork,
 } from '@core/fig-engine/types';
+import { fireAndForget } from '@core/util/fireAndForget';
+import { Telemetry } from '@macro-inc/observability';
 import { createSignal, onCleanup } from 'solid-js';
 import type { FigSharing } from '../context/fig-viewer-context';
 import { type Alignment, alignOffset, distributeOffsets } from '../core/align';
@@ -344,11 +346,15 @@ export function createFigEditor(options: FigEditorOptions) {
     // Shared live, so nothing is lost while someone else stores the file.
     if (!stores()) return;
     setSaveState('unsaved');
-    saveTimer = setTimeout(() => void saveNow(), SAVE_DELAY_MS);
+    saveTimer = setTimeout(
+      () => fireAndForget(saveNow(), 'fig-editor'),
+      SAVE_DELAY_MS
+    );
   };
 
   const onHidden = () => {
-    if (document.visibilityState === 'hidden') void saveNow();
+    if (document.visibilityState === 'hidden')
+      fireAndForget(saveNow(), 'fig-editor');
   };
   document.addEventListener('visibilitychange', onHidden);
   // Whoever stores the file now (the one who did may have left) stores
@@ -996,7 +1002,7 @@ export function createFigEditor(options: FigEditorOptions) {
       to(network: VectorNetwork) {
         setVectorEdit((v) => v && { ...v, network });
         wanted = network;
-        void pump();
+        fireAndForget(pump(), 'fig-editor');
       },
       async end() {
         await pump();
@@ -1054,7 +1060,7 @@ export function createFigEditor(options: FigEditorOptions) {
       /** Total page-space offset from the drag's start. */
       to(dx: number, dy: number) {
         wanted = { x: dx, y: dy };
-        void pump();
+        fireAndForget(pump(), 'fig-editor');
       },
       async end(at?: Point) {
         await pump();
@@ -1106,7 +1112,7 @@ export function createFigEditor(options: FigEditorOptions) {
         if (!sharing || timer) return;
         timer = setTimeout(() => {
           timer = undefined;
-          void step(false);
+          fireAndForget(step(false), 'fig-editor');
         }, GESTURE_PUSH_MS);
       },
       async end(at?: Point) {
@@ -1128,10 +1134,19 @@ export function createFigEditor(options: FigEditorOptions) {
   const startResize = (ids: string[], start: Rect, known?: NodeInfo) => {
     const key = `resize-${++dragKey}`;
     const page = viewer.page();
-    const infos: Promise<NodeInfo[]> =
-      known && ids.length === 1 && ids[0] === known.id
-        ? Promise.resolve([known])
-        : Promise.all(ids.map((id) => engine.nodeInfo(page, id)));
+    const loadInfos = async (): Promise<NodeInfo[]> => {
+      if (known && ids.length === 1 && ids[0] === known.id) return [known];
+      try {
+        return await Promise.all(ids.map((id) => engine.nodeInfo(page, id)));
+      } catch (e) {
+        // Every step of the drag awaits this: rejecting would leave
+        // `running` set and the drag stuck.
+        Telemetry.error(e, { surface: 'fig-editor' });
+        options.notifyError(e instanceof Error ? e.message : String(e));
+        return [];
+      }
+    };
+    const infos = loadInfos();
     let wanted: Rect | undefined;
     let running = false;
     const pump = async () => {
@@ -1174,7 +1189,7 @@ export function createFigEditor(options: FigEditorOptions) {
     return {
       to(rect: Rect) {
         wanted = rect;
-        void pump();
+        fireAndForget(pump(), 'fig-editor');
       },
       async end() {
         await pump();
@@ -1201,7 +1216,7 @@ export function createFigEditor(options: FigEditorOptions) {
     return {
       to(degrees: number) {
         wanted = degrees;
-        void pump();
+        fireAndForget(pump(), 'fig-editor');
       },
       async end() {
         await pump();

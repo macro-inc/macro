@@ -1269,3 +1269,33 @@ async fn new_email_media_atts_excludes_preclaimed_attachments(pool: Pool<Postgre
 
     Ok(())
 }
+
+#[sqlx::test(
+    migrator = "MACRO_DB_MIGRATIONS",
+    fixtures(
+        path = "../../../../fixtures",
+        scripts("fetch_thread_attachments_for_backfill")
+    )
+)]
+async fn cloud_reference_documents_are_never_claimed_as_files(pool: Pool<Postgres>) -> Result<()> {
+    let thread = Uuid::parse_str("00000000-0000-0000-0000-000000000101")?;
+    let eligible = thread_document_atts_for_backfill(&pool, thread).await?;
+    assert_eq!(eligible.len(), 1);
+    let attachment = &eligible[0];
+    sqlx::query!("UPDATE email_attachments SET reference_url='https://outlook.office.com/mail/message' WHERE id=$1",attachment.attachment_db_id).execute(&pool).await?;
+    assert!(
+        thread_document_atts_for_backfill(&pool, thread)
+            .await?
+            .is_empty()
+    );
+    let link = sqlx::query_scalar!("SELECT link_id FROM email_threads WHERE id=$1", thread)
+        .fetch_one(&pool)
+        .await?;
+    assert!(
+        new_email_document_atts(&pool, link, &attachment.email_provider_id)
+            .await?
+            .is_empty()
+    );
+    assert!(!attachment_is_claimed(&pool, attachment.attachment_db_id).await?);
+    Ok(())
+}

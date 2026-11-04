@@ -22,6 +22,11 @@ const PRESENTATION_FIELDS: &[&str] = &[
     "channelType",
     "participants",
     "senders",
+    "isRead",
+    "isDraft",
+    "isImportant",
+    "inboxVisible",
+    "linkId",
 ];
 
 /// Retains only the projection/row fields needed for a before/after comparison.

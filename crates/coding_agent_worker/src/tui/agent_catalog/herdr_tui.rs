@@ -22,17 +22,17 @@ impl AgentPreset for HerdrTui {
     }
 
     fn detect(&self, commands: &dyn CommandLookup) -> Availability {
-        let missing: Vec<&'static str> = [self.0.herdr_kind(), "herdr"]
+        let Some(herdr) = crate::herdr::HerdrSession::detect() else {
+            return Availability::Unavailable {
+                missing: vec!["a herdr pane"],
+            };
+        };
+        let missing: Vec<&'static str> = [self.0.herdr_kind(), herdr.command()]
             .into_iter()
             .filter(|command| commands.resolve(command).is_none())
             .collect();
         if !missing.is_empty() {
             return Availability::Unavailable { missing };
-        }
-        if crate::herdr::HerdrSession::detect().is_none() {
-            return Availability::Unavailable {
-                missing: vec!["a herdr pane"],
-            };
         }
         let Ok(exe) = std::env::current_exe() else {
             return Availability::Unavailable {

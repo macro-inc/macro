@@ -1,9 +1,9 @@
+import ImageIcon from '@icon/system/regular/image.svg';
+import PencilSimple from '@icon/system/regular/pencil-simple.svg';
 import type {
   SheetChart,
   SheetDrawing,
 } from '@macro-inc/spreadsheet/sheet-drawings';
-import ImageIcon from '@phosphor/image.svg';
-import PencilSimple from '@phosphor/pencil-simple.svg';
 import { createMemo, createSignal, For, Match, Show, Switch } from 'solid-js';
 import type { ChartData } from '../core/chart-data';
 import { chartScene } from '../core/chart-scene';

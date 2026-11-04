@@ -73,6 +73,7 @@ import {
 } from 'lexical';
 import { match } from 'ts-pattern';
 import * as blocks from '../ai-toolkit/blocks';
+import * as databases from '../ai-toolkit/databases';
 import * as inline from '../ai-toolkit/inline';
 import * as lists from '../ai-toolkit/lists';
 import * as locate from '../ai-toolkit/locate';
@@ -80,6 +81,7 @@ import * as modify from '../ai-toolkit/modify';
 import type { LexicalSession } from '../ai-toolkit/session';
 import * as tables from '../ai-toolkit/tables';
 import type {
+  DatabaseQueryView,
   DocumentOp,
   Format,
   ListKind,
@@ -207,6 +209,12 @@ export class Doc implements DocReader, DocWriter {
       )
       .with({ kind: 'setDate' }, (e) =>
         this.setDate(e.node, e.date, e.displayFormat)
+      )
+      .with({ kind: 'setDatabaseQueryView' }, (e) =>
+        this.setDatabaseQueryView(e.node, e.view)
+      )
+      .with({ kind: 'setDatabaseLocation' }, (e) =>
+        this.setDatabaseLocation(e.node, e.tableId, e.viewId)
       )
       .exhaustive();
   }
@@ -615,24 +623,9 @@ export class Doc implements DocReader, DocWriter {
 
   private moveNode(node: NodeRef, at: Position): void {
     this.tx(() => {
-      const block = this.block(node);
-      if ('after' in at)
-        blocks.$moveBlock(
-          block,
-          { placement: 'after', id: at.after },
-          this.session
-        );
-      else if ('before' in at)
-        blocks.$moveBlock(
-          block,
-          { placement: 'before', id: at.before },
-          this.session
-        );
-      else {
-        block.remove();
-        if ('appendToRoot' in at) blocks.$appendBlock(block);
-        else blocks.$prependBlock(block);
-      }
+      const block = this.anchor(node);
+      block.remove();
+      this.place(block, at);
     });
   }
 
@@ -805,6 +798,27 @@ export class Doc implements DocReader, DocWriter {
       n.setDate(date);
       n.setDisplayFormat(displayFormat ?? date);
     });
+  }
+
+  private setDatabaseQueryView(node: NodeRef, view: DatabaseQueryView): void {
+    this.tx(() =>
+      databases.$setQueryView(locate.$byId(this.session, node), node, view)
+    );
+  }
+
+  private setDatabaseLocation(
+    node: NodeRef,
+    tableId: string,
+    viewId?: string
+  ): void {
+    this.tx(() =>
+      databases.$setLocation(
+        locate.$byId(this.session, node),
+        node,
+        tableId,
+        viewId
+      )
+    );
   }
 
   /** Resolve an insert anchor to a sibling node. Climbs past inline nodes (so a
@@ -986,6 +1000,9 @@ export function buildNode(spec: NodeSpec): LexicalNode {
     .with({ block: 'html-render' }, (s) =>
       $createHtmlRenderNode({ html: s.html })
     )
+    .with({ block: 'database-query' }, (s) =>
+      databases.$createQueryBlock(s.query)
+    )
     .with({ block: 'image' }, (session) =>
       $createImageNode({
         srcType: session.srcType,
@@ -1008,6 +1025,9 @@ export function buildNode(spec: NodeSpec): LexicalNode {
       $createEquationNode(session.tex, session.inline ?? false)
     )
     .with({ inline: 'linebreak' }, () => $createLineBreakNode())
+    .with({ inline: 'database-query' }, (s) =>
+      databases.$createInlineQuery(s.query)
+    )
     .with({ inline: 'equation' }, (session) =>
       $createEquationNode(session.tex, true)
     )

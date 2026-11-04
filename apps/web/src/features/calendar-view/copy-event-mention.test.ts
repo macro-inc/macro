@@ -1,5 +1,9 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { mapTeamCalendarItem } from '../calendar-team/queries/map';
+import {
+  type CalendarEvent,
+  DEFAULT_GUEST_POLICY,
+  NO_VIEWER_CAPABILITIES,
+} from '../calendar/types';
 import {
   copyCalendarEventMention,
   copyCalendarEventMentionTarget,
@@ -20,20 +24,26 @@ describe('copyCalendarEventMentionTarget', () => {
   beforeEach(() => writeClipboardData.mockClear());
 
   it('never copies a team projection as an independently resolvable event', async () => {
-    const event = mapTeamCalendarItem(
-      {
-        id: 'opaque',
-        ownerId: 'alice',
-        kind: 'busy',
-        contributesToAvailability: true,
-        time: {
-          kind: 'timed',
-          startsAt: '2026-10-07T10:00:00Z',
-          endsAt: '2026-10-07T11:00:00Z',
-        },
-      },
-      'Alice'
-    );
+    const calendar = { id: 'team-ooo:alice', name: 'Alice', color: 'gray' };
+    const event: CalendarEvent = {
+      id: 'opaque',
+      eventId: 'opaque',
+      occurrenceKey: '2026-10-07T10:00:00Z',
+      teamProjection: { ownerId: 'alice', kind: 'busy' },
+      isCancelled: false,
+      isReadOnly: true,
+      guestPolicy: DEFAULT_GUEST_POLICY,
+      viewerCan: NO_VIEWER_CAPABILITIES,
+      attendees: [],
+      recurrenceLines: [],
+      sourceCalendarIds: [],
+      title: 'Alice: Out of office',
+      start: '2026-10-07T10:00:00Z',
+      end: '2026-10-07T11:00:00Z',
+      allDay: false,
+      calendar,
+      visibleCalendars: [calendar],
+    };
     await copyCalendarEventMention(event);
     expect(writeClipboardData).not.toHaveBeenCalled();
   });

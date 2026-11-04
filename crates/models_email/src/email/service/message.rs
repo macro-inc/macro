@@ -16,6 +16,9 @@ use uuid::Uuid;
 
 #[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
 pub struct ParsedMessage {
+    /// Draft edit generation captured with this message snapshot.
+    #[serde(default)]
+    pub draft_generation: i32,
     pub db_id: Uuid,
     pub link_id: Uuid,
     pub thread_db_id: Uuid,
@@ -116,9 +119,11 @@ impl From<Message> for MessageWithBodyReplyless {
     }
 }
 
-impl From<MessageWithBodyReplyless> for ParsedMessage {
-    fn from(msg: MessageWithBodyReplyless) -> Self {
+impl ParsedMessage {
+    /// Preserve the generation read atomically with the message content.
+    pub fn with_generation(msg: MessageWithBodyReplyless, draft_generation: i32) -> Self {
         Self {
+            draft_generation,
             body_parsed: get_body_parsed_for_message(&msg),
             db_id: msg.inner.db_id,
             link_id: msg.inner.link_id,
@@ -174,7 +179,7 @@ fn extract_reply_to(headers_json: Option<&JsonValue>) -> Option<String> {
     let headers = headers_json?.as_array()?;
     for header in headers {
         let name = header.get("name")?.as_str()?;
-        if name == "Reply-To" {
+        if name.eq_ignore_ascii_case("Reply-To") {
             return header
                 .get("value")
                 .and_then(|v| v.as_str())

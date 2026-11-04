@@ -10,11 +10,13 @@ use crate::domain::{
     ports::MessagePromptContext,
 };
 use entity_access::domain::{
-    models::{EntityAccessReceipt, EntityType},
+    models::{AccessError, EntityAccessReceipt, EntityType},
     ports::EntityAccessService,
 };
 use macro_user_id::user_id::MacroUserIdStr;
-use messages::domain::{api::MessageReader, models::MessageParent, service::MessageWrite};
+use messages::domain::{
+    api::MessageReader, models::MessageParent, ports::MessageError, service::MessageWrite,
+};
 use std::sync::Arc;
 
 trait ContextAuthorizer: Send + Sync + 'static {
@@ -45,7 +47,36 @@ impl<Access: EntityAccessService> ContextAuthorizer for Access {
             },
         )
         .await
-        .map_err(|error| HarnessError::PromptContext(rootcause::report!(error).into()))
+        .map_err(access_refused)
+    }
+}
+
+/// An access check that answered no is final for the origin; one that could
+/// not answer may succeed later.
+fn access_refused(error: AccessError) -> HarnessError {
+    match error {
+        AccessError::Unauthorized
+        | AccessError::UnauthorizedWithMessage(_)
+        | AccessError::NotFound(_)
+        | AccessError::BadRequest(_) => {
+            HarnessError::InvalidOrigin(rootcause::report!(error).into())
+        }
+        AccessError::Unavailable(_) | AccessError::Internal(_) => {
+            HarnessError::PromptContext(rootcause::report!(error).into())
+        }
+    }
+}
+
+/// A message that is gone or out of the actor's reach is final for the
+/// origin; a read that failed may succeed later.
+fn read_refused(error: MessageError) -> HarnessError {
+    match error {
+        MessageError::NotFound | MessageError::Forbidden | MessageError::Invalid(_) => {
+            HarnessError::InvalidOrigin(rootcause::report!(error).into())
+        }
+        MessageError::Conflict | MessageError::Repository(_) => {
+            HarnessError::PromptContext(rootcause::report!(error).into())
+        }
     }
 }
 
@@ -73,17 +104,17 @@ impl<Access: ContextAuthorizer> MessagePromptContext for MessagePromptContextAda
             .capability(actor, &origin.parent)
             .await?
             .try_into_requirement()
-            .map_err(|error| HarnessError::PromptContext(rootcause::report!(error).into()))?;
+            .map_err(|error| HarnessError::InvalidOrigin(rootcause::report!(error).into()))?;
         let message = self
             .messages
             .get(access, origin.message_id)
             .await
-            .map_err(|error| HarnessError::PromptContext(rootcause::report!(error).into()))?;
+            .map_err(read_refused)?;
         if message.root_id() != origin.thread_id
             || message.parent != origin.parent
             || message.deleted_at.is_some()
         {
-            return Err(HarnessError::PromptContext(rootcause::report!(
+            return Err(HarnessError::InvalidOrigin(rootcause::report!(
                 "invalid agent message origin"
             )));
         }

@@ -4,7 +4,8 @@
 //! the company, its Contacts property names one of the company's contacts, or
 //! it references the company or one of those contacts. An item is associated
 //! with a contact when its Contacts property names the contact or it
-//! references the contact.
+//! references the contact. Activity matches properties only, and email
+//! participants from visible CRM domains and addresses in the user's own mailbox.
 //!
 //! The CRM service authorizes the record and expands a company to the
 //! contacts the viewer may see. The property and reference edges of those
@@ -21,11 +22,13 @@ use crm::domain::{
     auth::CrmTeamReceipt,
     model::CrmError,
 };
+use item_filters::ast::email::Email;
 use item_filters::ast::{
     agent_session::AgentSessionLiteral, calendar_event::CalendarEventLiteral, call::CallLiteral,
     chat::ChatLiteral, crm_contact::CrmContactLiteral, database_row::DatabaseRowLiteral,
     document::DocumentLiteral, initiative::InitiativeLiteral, project::ProjectLiteral,
 };
+use macro_user_id::email::EmailStr;
 use models_properties::EntityType as PropertyEntityType;
 use std::collections::BTreeSet;
 
@@ -56,7 +59,7 @@ pub(super) struct AssociatedEntities {
 }
 
 impl AssociatedEntities {
-    /// Group the property and reference edges of `scope` by source.
+    /// Group property and (for record associations) reference edges by source.
     pub(super) fn from_edges(
         record: CrmAssociation,
         property_edges: Vec<CrmPropertyEdge>,
@@ -128,9 +131,14 @@ impl AssociatedEntities {
         }
         // A record's own discussion does not make it associated with itself.
         match record {
-            CrmAssociation::Company(id) => entities.crm_companies.remove(&id),
-            CrmAssociation::Contact(id) => entities.crm_contacts.remove(&id),
-        };
+            CrmAssociation::Company(id) => {
+                entities.crm_companies.remove(&id);
+            }
+            CrmAssociation::Contact(id) => {
+                entities.crm_contacts.remove(&id);
+            }
+            CrmAssociation::Activity => {}
+        }
         entities
     }
 }
@@ -156,12 +164,15 @@ fn reference_targets(association: &CrmRecordAssociation) -> Vec<ReferenceTarget>
 
 /// Every CRM association a request names, resolved to its entities.
 #[derive(Debug, Default)]
-pub(super) struct ResolvedAssociations(HashMap<CrmAssociation, AssociatedEntities>);
+pub(super) struct ResolvedAssociations {
+    entities: HashMap<CrmAssociation, AssociatedEntities>,
+    activity_email: Option<Arc<Expr<EmailLiteral>>>,
+}
 
 impl ResolvedAssociations {
     /// The entities of a record resolved for this request.
     pub(super) fn get(&self, record: &CrmAssociation) -> Option<&AssociatedEntities> {
-        self.0.get(record)
+        self.entities.get(record)
     }
 
     /// Restrict `ast` to the resolved associations: every source to the
@@ -175,6 +186,13 @@ impl ResolvedAssociations {
         let Some(record) = ast.crm_association.take() else {
             return ast;
         };
+        if record == CrmAssociation::Activity {
+            let email = self
+                .activity_email
+                .clone()
+                .unwrap_or_else(|| Arc::new(Expr::val(EmailLiteral::ThreadId(Uuid::nil()))));
+            ast.email_filter.tree = Some(with_id_tree(email, ast.email_filter.tree.as_ref()));
+        }
         let Some(entities) = self.get(&record) else {
             return ast;
         };
@@ -189,11 +207,13 @@ impl ResolvedAssociations {
             &entities.projects,
             ProjectLiteral::ProjectIdSelf,
         );
-        constrain(
-            &mut ast.email_filter.tree,
-            &entities.email_threads,
-            EmailLiteral::ThreadId,
-        );
+        if record != CrmAssociation::Activity {
+            constrain(
+                &mut ast.email_filter.tree,
+                &entities.email_threads,
+                EmailLiteral::ThreadId,
+            );
+        }
         constrain(
             &mut ast.channel_filter,
             &entities.channels,
@@ -331,6 +351,7 @@ where
     F: GithubPullRequestListing,
 {
     /// Authorize and resolve every CRM record `ast` restricts to.
+    #[tracing::instrument(name = "soup.crm_associations", skip_all, err)]
     pub(super) async fn resolve_crm_associations(
         &self,
         user: &MacroUserIdStr<'_>,
@@ -354,6 +375,7 @@ where
             .transpose()
             .map_err(crm_error)?;
         let mut resolved = HashMap::with_capacity(records.len());
+        let mut activity_email = None;
         for record in records {
             let association = self
                 .crm_service
@@ -370,6 +392,9 @@ where
                         .map_err(SoupErr::from)
                 },
                 async {
+                    if record == CrmAssociation::Activity {
+                        return Ok(Vec::new());
+                    }
                     self.comms_service
                         .get_reference_sources(&targets)
                         .await
@@ -379,6 +404,34 @@ where
                         .map_err(|_| SoupErr::CommsErr)
                 },
             );
+            if record == CrmAssociation::Activity {
+                let values = association
+                    .domains
+                    .iter()
+                    .cloned()
+                    .map(Email::Domain)
+                    .chain(association.addresses.iter().filter_map(|address| {
+                        EmailStr::parse_from_str(address)
+                            .ok()
+                            .map(|email| Email::Complete(email.into_owned()))
+                    }));
+                activity_email = balanced_or_tree(
+                    values
+                        .map(|email| {
+                            Expr::or(
+                                Expr::or(
+                                    Expr::val(EmailLiteral::Sender(email.clone())),
+                                    Expr::val(EmailLiteral::Recipient(email.clone())),
+                                ),
+                                Expr::or(
+                                    Expr::val(EmailLiteral::Cc(email.clone())),
+                                    Expr::val(EmailLiteral::Bcc(email)),
+                                ),
+                            )
+                        })
+                        .collect(),
+                );
+            }
             let entities =
                 AssociatedEntities::from_edges(record, property_edges?, reference_sources?);
             tracing::debug!(
@@ -390,6 +443,9 @@ where
             );
             resolved.insert(record, entities);
         }
-        Ok(Some(ResolvedAssociations(resolved)))
+        Ok(Some(ResolvedAssociations {
+            entities: resolved,
+            activity_email,
+        }))
     }
 }

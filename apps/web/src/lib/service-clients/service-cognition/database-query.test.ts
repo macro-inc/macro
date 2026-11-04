@@ -1,9 +1,9 @@
 import { err, ok } from 'neverthrow';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-const { complete } = vi.hoisted(() => ({ complete: vi.fn() }));
+const { generate } = vi.hoisted(() => ({ generate: vi.fn() }));
 vi.mock('./client', () => ({
-  cognitionApiServiceClient: { structuredCompletion: complete },
+  cognitionApiServiceClient: { databaseQuery: generate },
 }));
 
 import { generateDatabaseQuery } from './database-query';
@@ -11,140 +11,58 @@ import { generateDatabaseQuery } from './database-query';
 const input = {
   prompt: 'Show tickets by status',
   sql: '',
-  schema: {
-    databaseId: 'support',
-    name: 'Support',
-    focusTableId: 'tickets',
-    tables: [],
-  },
+  schema: { databaseId: 'support', name: 'Support', tables: [] },
 };
 const proposal = {
   answerable: true,
-  sql: 'SELECT status, COUNT(*) AS total FROM tickets GROUP BY status',
-  explanation: 'Tickets by status.',
+  databaseId: 'support',
+  sql: 'SELECT Status, COUNT(*) AS Total FROM Tickets GROUP BY Status',
+  explanation: 'Counts tickets.',
+  title: 'Tickets by status',
   displayMode: 'bar',
-  chart: { x: 'status', y: ['total'], title: 'Tickets' },
+  chart: {
+    x: 'Status',
+    y: ['Total'],
+    title: 'Tickets',
+    color: null,
+    stack: false,
+  },
 };
-beforeEach(() => complete.mockReset());
+beforeEach(() => generate.mockReset());
 
-describe('database AI transport boundaries', () => {
-  it('gives document questions only read-only discovery and preserves chart configuration', async () => {
-    complete.mockResolvedValue(
-      ok({
-        outcome: { status: 'completed', result: proposal },
-        toolActivity: [],
-      })
-    );
+describe('database question transport', () => {
+  it('sends question inputs to the dedicated endpoint and preserves chart configuration', async () => {
+    generate.mockResolvedValue(ok(proposal));
     const result = await generateDatabaseQuery(
       input,
       'google/gemini-3.8-flash'
     );
-    expect(complete.mock.calls[0][0].model).toBe('google/gemini-3.8-flash');
-    const instructions = complete.mock.calls[0][0].additional_instructions;
-    expect(instructions).toContain('registered QueryDatabase tool reference');
-    expect(instructions).not.toContain('no aliases on items');
-    expect(instructions).not.toContain('GROUP BY both columns');
-    expect(instructions).not.toContain('schema changes are tools, not SQL');
-    expect(complete.mock.calls[0][0].toolset).toEqual({
-      type: 'databases_read_only',
+    expect(generate).toHaveBeenCalledWith({
+      model: 'google/gemini-3.8-flash',
+      ...input,
     });
-    expect(JSON.parse(complete.mock.calls[0][0].prompt).schema).toEqual(
-      input.schema
-    );
     expect(result._unsafeUnwrap()).toEqual(proposal);
+    expect(generate.mock.calls[0][0]).not.toHaveProperty('output_schema');
+    expect(generate.mock.calls[0][0]).not.toHaveProperty('toolset');
   });
-
-  it('asks for every chart mark and keeps the strict schema’s color and stack', async () => {
-    complete.mockResolvedValue(
-      ok({
-        outcome: {
-          status: 'completed',
-          result: {
-            ...proposal,
-            sql: 'SELECT month, team, COUNT(*) AS total FROM tickets GROUP BY month, team',
-            displayMode: 'area',
-            chart: {
-              x: 'month',
-              y: ['total'],
-              title: 'Tickets',
-              color: 'team',
-              stack: true,
-            },
-          },
-        },
-        toolActivity: [],
-      })
+  it('includes a failed proposal and its diagnostic for repair', async () => {
+    generate.mockResolvedValue(ok(proposal));
+    await generateDatabaseQuery(
+      { ...input, sql: 'SELECT bad FROM Tickets', error: 'Unknown column bad' },
+      'google/gemini-3.8-flash'
     );
+    expect(generate.mock.calls[0][0].error).toBe('Unknown column bad');
+    expect(generate.mock.calls[0][0].sql).toBe('SELECT bad FROM Tickets');
+  });
+  it('preserves service failures including admission and timeout errors', async () => {
+    const errors = [
+      { code: 'SERVER_ERROR', message: 'The model provider is unavailable.' },
+    ];
+    generate.mockResolvedValue(err(errors));
     const result = await generateDatabaseQuery(
       input,
       'google/gemini-3.8-flash'
     );
-    const schema = complete.mock.calls[0][0].output_schema.schema;
-    expect(schema.properties.displayMode.enum).toEqual([
-      'scalar',
-      'table',
-      'bar',
-      'line',
-      'area',
-      'scatter',
-      'pie',
-    ]);
-    expect(schema.properties.chart.anyOf[1].required).toEqual([
-      'x',
-      'y',
-      'title',
-      'color',
-      'stack',
-    ]);
-    expect(result._unsafeUnwrap()).toEqual({
-      ...proposal,
-      sql: 'SELECT month, team, COUNT(*) AS total FROM tickets GROUP BY month, team',
-      displayMode: 'area',
-      chart: {
-        x: 'month',
-        y: ['total'],
-        title: 'Tickets',
-        color: 'team',
-        stack: true,
-      },
-    });
-  });
-
-  it('reports an interrupted completion as a failure with its reason', async () => {
-    complete.mockResolvedValue(
-      ok({
-        outcome: {
-          status: 'interrupted',
-          reason: 'The model stopped after 12 tool calls.',
-        },
-        toolActivity: [],
-      })
-    );
-    const result = await generateDatabaseQuery(
-      input,
-      'google/gemini-3.8-flash'
-    );
-    expect(result._unsafeUnwrapErr()).toEqual({
-      kind: 'interrupted',
-      reason: 'The model stopped after 12 tool calls.',
-    });
-  });
-
-  it('keeps the service errors of a failed completion', async () => {
-    complete.mockResolvedValue(
-      err([
-        { code: 'SERVER_ERROR', message: 'The model provider is unavailable.' },
-      ])
-    );
-    const result = await generateDatabaseQuery(
-      input,
-      'google/gemini-3.8-flash'
-    );
-    expect(result._unsafeUnwrapErr()).toEqual({
-      kind: 'service',
-      errors: [
-        { code: 'SERVER_ERROR', message: 'The model provider is unavailable.' },
-      ],
-    });
+    expect(result._unsafeUnwrapErr()).toEqual({ kind: 'service', errors });
   });
 });

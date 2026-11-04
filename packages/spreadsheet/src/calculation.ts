@@ -20,6 +20,7 @@ import {
 } from './goal-seek';
 import { displayNumber, numericLiteral } from './number-display';
 import { type SheetPivotLayout, sheetPivotLayouts } from './pivot-layout';
+import { sheetTableLayouts } from './sheet-tables';
 import {
   formatCellAddress,
   parseCellAddress,
@@ -30,14 +31,21 @@ import {
   type SpreadsheetCellEdits,
   type SpreadsheetCells,
 } from './spreadsheet-document';
+import {
+  protectStructuredReferences,
+  resolveStructuredReferences,
+  type WorkbookTable,
+} from './structured-references';
 import type { WorkbookSheetMetadata } from './workbook-metadata';
-import { changeWorkbookAxis } from './workbook-structure';
+import { changeWorkbookAxis, moveWorkbookRange } from './workbook-structure';
 
 export type CalculatedCell = {
   display: string;
   number?: number;
   error?: string;
   warning?: string;
+  /** The number shows as a calendar date. */
+  date?: boolean;
   /** Included only for callers requesting typed results. */
   type?: 'blank' | 'number' | 'text' | 'boolean' | 'error';
   value?: string | number | boolean | null;
@@ -56,6 +64,8 @@ export type CalculationSheet = {
   metadata?: WorkbookSheetMetadata;
   /** The layouts of its pivot tables, when `metadata` leaves them out. */
   pivots?: SheetPivotLayout[];
+  /** Its tables with their column names, when `metadata` leaves them out. */
+  tables?: WorkbookTable[];
 };
 export type WorkbookCalculation = Record<string, SpreadsheetCalculation>;
 export type CalculationContext = { sheetNames: string[]; activeSheet: number };
@@ -84,6 +94,7 @@ export type SpreadsheetCalculator = {
     context?: CalculationContext
   ) => CompletionContext;
   changeAxis: typeof changeWorkbookAxis;
+  moveRange: typeof moveWorkbookRange;
   /** An incremental calculation for a workbook that is edited repeatedly. */
   session: () => WorkbookCalculationSession;
   /**
@@ -159,11 +170,12 @@ function dateMentionSerial(iso: string): number {
 }
 
 /**
- * IronCalc assigns date and time number formats to typed dates and to formulas
- * that operate on them, as Excel does. Honor those for cells without an
- * explicit Macro format; other inferred formats stay general.
+ * Whether an Excel number format shows a date or a time of day. IronCalc
+ * assigns such formats to typed dates and to formulas that operate on them,
+ * as Excel does. Cells without an explicit Macro format honor those; other
+ * inferred formats stay general.
  */
-function inferredFormat(numberFormat: string): 'date' | 'time' | undefined {
+function dateTimeFormat(numberFormat: string): 'date' | 'time' | undefined {
   const tokens = numberFormat.replace(/"[^"]*"|\\.|\[[^\]]*\]/g, '');
   if (/[dy]/i.test(tokens)) return 'date';
   if (/[hs]/i.test(tokens)) return 'time';
@@ -745,6 +757,8 @@ type EngineWorkbook = {
   sheets: CalculationSheet[];
   names: DefinedNames;
   rowCounts: Map<string, number>;
+  /** Every sheet's tables, which structured references resolve against. */
+  tables: WorkbookTable[];
   entered: EnteredSheet[];
 };
 
@@ -844,7 +858,7 @@ function enterCell(
   column: number,
   replace = false
 ) {
-  const { model, sheets, names, rowCounts } = workbook;
+  const { model, sheets, names, rowCounts, tables } = workbook;
   const sheet = sheets[sheetIndex];
   const entered = workbook.entered[sheetIndex];
   const area = {
@@ -887,8 +901,11 @@ function enterCell(
   let input = literal ? `'${value}` : value;
   if (!literal && value.startsWith('=')) {
     entered.formulas.set(address, { row, column });
+    // A table or column that no longer exists reads as Excel's #REF!.
     input = resolveNames(
-      value,
+      resolveStructuredReferences(value, tables, sheet.name, row, column, {
+        unresolved: '#REF!',
+      }) ?? value,
       sheetIndex,
       row,
       column,
@@ -925,8 +942,10 @@ function enterCell(
     }
   }
   if (!enteredArray) model.setUserInput(sheetIndex, row + 1, column + 1, input);
-  // A date pill is a date value: formulas referencing it inherit the format.
-  if (dateMention) model.updateRangeStyle(area, 'num_fmt', 'm/d/yyyy');
+  // A date pill or a number formatted as a date is a date value: formulas
+  // referencing it inherit the format.
+  if (dateMention || (cell.format === 'date' && numericLiteral.test(value)))
+    model.updateRangeStyle(area, 'num_fmt', 'm/d/yyyy');
   // Typed exponents get a 3-digit scientific format that formulas would
   // inherit; numeric literals never need an inferred display format.
   else if (!literal && /e/i.test(value) && numericLiteral.test(value))
@@ -988,7 +1007,7 @@ function readCell(
   // The engine infers display formats for typed dates and for formulas that
   // refer to them, as Excel does.
   const engineFormat = entered.inferable.has(address)
-    ? inferredFormat(model.getCellNumberFormat(sheetIndex, row + 1, column + 1))
+    ? dateTimeFormat(model.getCellNumberFormat(sheetIndex, row + 1, column + 1))
     : undefined;
   // IronCalc also formats a difference of two dates as a date, so
   // formula results only count as dates from 2000 onwards; a day
@@ -997,10 +1016,12 @@ function readCell(
     engineFormat !== 'date' ||
     !cell?.value.startsWith('=') ||
     number >= MIN_FORMULA_DATE_SERIAL;
-  let formatted = displayNumber(
-    number,
-    engineFormat && dateLike ? { ...cell!, format: engineFormat } : cell
-  );
+  const shown =
+    engineFormat && dateLike ? { ...cell!, format: engineFormat } : cell;
+  let formatted = displayNumber(number, shown);
+  const date = cell?.numberFormat
+    ? dateTimeFormat(cell.numberFormat) === 'date'
+    : shown?.format === 'date';
   let warning: string | undefined;
   if (cell?.numberFormat) {
     try {
@@ -1014,6 +1035,7 @@ function readCell(
     display: formatted,
     ...(warning && { warning }),
     number,
+    ...(date && { date }),
     ...(includeTypes && { type: 'number' as const, value: number }),
   };
 }
@@ -1099,6 +1121,9 @@ function buildWorkbook(sheets: CalculationSheet[]): EngineWorkbook {
       rowCounts: new Map(
         bounded.map((sheet) => [sheet.name.toLowerCase(), sheet.rowCount])
       ),
+      tables: bounded.flatMap(
+        (sheet) => sheet.tables ?? sheetTableLayouts(sheet)
+      ),
       entered: [],
     };
     for (const [sheetIndex, sheet] of bounded.entries()) {
@@ -1128,6 +1153,24 @@ function buildWorkbook(sheets: CalculationSheet[]): EngineWorkbook {
       )
     );
     if (pivots.length) model.setPivotTables(pivots);
+    // SUBTOTAL(1-11) leaves out the rows a table's filter hides, as Excel's.
+    const filtered = workbook.tables.flatMap((table) => {
+      const sheet = bounded.findIndex((item) => item.name === table.sheet);
+      return table.filtered && sheet >= 0
+        ? [
+            {
+              sheet,
+              range: [
+                table.top + 1,
+                table.left + 1,
+                table.bottom + 1,
+                table.right + 1,
+              ] as [number, number, number, number],
+            },
+          ]
+        : [];
+    });
+    if (filtered.length) model.setFilteredRanges(filtered);
     model.resumeEvaluation();
     model.evaluate();
     return workbook;
@@ -1208,6 +1251,7 @@ function sameCalculatedCell(left: CalculatedCell, right: CalculatedCell) {
     left.number === right.number &&
     left.error === right.error &&
     left.warning === right.warning &&
+    left.date === right.date &&
     left.type === right.type &&
     left.value === right.value &&
     left.spill?.rows === right.spill?.rows &&
@@ -1538,6 +1582,7 @@ export function createInitializedSpreadsheetCalculator(): SpreadsheetCalculator 
 
   return {
     changeAxis: changeWorkbookAxis,
+    moveRange: moveWorkbookRange,
     session() {
       if (disposed) throw new Error('The spreadsheet calculator is disposed.');
       return createWorkbookCalculationSession();
@@ -1587,7 +1632,14 @@ export function createInitializedSpreadsheetCalculator(): SpreadsheetCalculator 
           if (value.startsWith('=') && cell.format !== 'text') {
             // Use IronCalc's parser and displacement rules, including mixed
             // references, quoted strings, ranges, and sheet-qualified names.
-            model.setUserInput(sheet, from.row + 1, from.column + 1, value);
+            // Table references name columns, not cells, so they stay as written.
+            const references = protectStructuredReferences(value);
+            model.setUserInput(
+              sheet,
+              from.row + 1,
+              from.column + 1,
+              references.formula
+            );
             model.setSelectedCell(from.row + 1, from.column + 1);
             const clipboard = model.copyToClipboard();
             model.setSelectedCell(to.row + 1, to.column + 1);
@@ -1597,7 +1649,9 @@ export function createInitializedSpreadsheetCalculator(): SpreadsheetCalculator 
               clipboard.data,
               false
             );
-            value = model.getCellContent(sheet, to.row + 1, to.column + 1);
+            value = references.restore(
+              model.getCellContent(sheet, to.row + 1, to.column + 1)
+            );
           }
           edits[formatCellAddress(to.row, to.column)] = {
             ...SPREADSHEET_DEFAULT_STYLE,

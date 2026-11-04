@@ -1,8 +1,9 @@
 use super::*;
 use axum::body::{Body, to_bytes};
 use macro_authorization::{
-    INTERNAL_API_KEY_HEADER, InternalAuthConfig, JwtValidator, MacroAuthorizationError,
-    MacroAuthorizationServiceImpl, NoBotAuthorizer, NoUserApiKeyAuthorizer, ValidatedIdentity,
+    INTERNAL_API_KEY_HEADER, INTERNAL_MACRO_USER_ID_HEADER, InternalAuthConfig, JwtValidator,
+    MacroAuthorizationError, MacroAuthorizationServiceImpl, NoBotAuthorizer,
+    NoUserApiKeyAuthorizer, ValidatedIdentity,
 };
 use rootcause::Report;
 use serde_json::{Value, json};
@@ -17,14 +18,62 @@ const KEY: &str = "coding-test-internal-key";
 struct UserCredentials;
 
 impl JwtValidator for UserCredentials {
-    fn validate(&self, _: &str) -> Result<ValidatedIdentity, Report<MacroAuthorizationError>> {
-        Ok(ValidatedIdentity {
-            user_id: USER.into(),
-            fusion_user_id: "fusion-owner".into(),
-            organization_id: None,
-            permissions: None,
+    fn validate_credential(
+        &self,
+        _: &str,
+    ) -> Result<macro_authorization::ValidatedCredential, Report<MacroAuthorizationError>> {
+        Ok(macro_authorization::ValidatedCredential {
+            origin: macro_authorization::CredentialOrigin::Session,
+            identity: ValidatedIdentity {
+                agent_id: None,
+                agent_via: None,
+                user_id: USER.into(),
+                fusion_user_id: "fusion-owner".into(),
+                organization_id: None,
+                permissions: None,
+            },
         })
     }
+}
+
+#[tokio::test]
+async fn updates_use_the_authenticated_internal_acting_user() {
+    let service = Arc::new(ServiceSpy::default());
+    let response = app(service.clone())
+        .oneshot(
+            Request::builder()
+                .method("GET")
+                .uri("/internal/coding-agents/updates")
+                .header(INTERNAL_API_KEY_HEADER, KEY)
+                .header(INTERNAL_MACRO_USER_ID_HEADER, USER)
+                .body(Body::empty())
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(response.status(), StatusCode::OK);
+    assert_eq!(
+        body(response).await,
+        json!({"items":[],"truncated":false,"truncationNotice":null})
+    );
+    assert_eq!(
+        service.seen.lock().unwrap().as_slice(),
+        &[json!({"updates_user_id":USER})]
+    );
+
+    let denied = app(service.clone())
+        .oneshot(
+            Request::builder()
+                .method("GET")
+                .uri("/internal/coding-agents/updates")
+                .header(INTERNAL_API_KEY_HEADER, KEY)
+                .body(Body::empty())
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    assert_ne!(denied.status(), StatusCode::OK);
+    assert_eq!(service.seen.lock().unwrap().len(), 1);
 }
 
 #[derive(Default)]
@@ -34,6 +83,36 @@ struct ServiceSpy {
 }
 
 impl CodingAgentService for ServiceSpy {
+    fn list_updates(
+        &self,
+        user_id: MacroUserIdStr<'static>,
+    ) -> Pin<
+        Box<
+            dyn Future<Output = Result<crate::domain::updates::AgentUpdates, CodingAgentError>>
+                + Send
+                + '_,
+        >,
+    > {
+        Box::pin(async move {
+            self.seen
+                .lock()
+                .unwrap()
+                .push(json!({"updates_user_id": user_id}));
+            Ok(crate::domain::updates::AgentUpdates {
+                items: Vec::new(),
+                truncated: false,
+                truncation_notice: None,
+            })
+        })
+    }
+    fn create(
+        &self,
+        command: DispatchCodingAgentRequest,
+    ) -> Pin<Box<dyn Future<Output = Result<DispatchedCodingAgent, CodingAgentError>> + Send + '_>>
+    {
+        self.dispatch(command)
+    }
+
     fn list(
         &self,
         user_id: MacroUserIdStr<'static>,
@@ -106,7 +185,7 @@ async fn body(response: Response) -> Value {
 #[tokio::test]
 async fn internal_credentials_are_required_before_discovery_or_dispatch() {
     let service = Arc::new(ServiceSpy::default());
-    for operation in ["list", "dispatch"] {
+    for operation in ["list", "dispatch", "create-session"] {
         for (header, expected) in [
             (None, StatusCode::UNAUTHORIZED),
             (
@@ -131,7 +210,7 @@ async fn internal_credentials_are_required_before_discovery_or_dispatch() {
 #[tokio::test]
 async fn authenticated_commands_preserve_user_and_task_identity() {
     let service = Arc::new(ServiceSpy::default());
-    for operation in ["list", "dispatch"] {
+    for operation in ["list", "dispatch", "create-session"] {
         let command = command(operation);
         let response = app(service.clone())
             .oneshot(request(
@@ -156,7 +235,7 @@ async fn authenticated_commands_preserve_user_and_task_identity() {
 #[tokio::test]
 async fn malformed_identity_and_oversized_tasks_never_reach_the_domain() {
     let service = Arc::new(ServiceSpy::default());
-    for operation in ["list", "dispatch"] {
+    for operation in ["list", "dispatch", "create-session"] {
         for invalid in [None, Some(json!("invalid-user")), Some(Value::Null)] {
             let mut command = command(operation);
             command.as_object_mut().unwrap().remove("user_id");

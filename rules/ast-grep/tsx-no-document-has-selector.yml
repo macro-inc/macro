@@ -1,0 +1,13 @@
+id: tsx-no-document-has-selector
+language: tsx
+severity: error
+message: Don't anchor a :has() selector on html, body or :root.
+note: |-
+  While such a rule is in the stylesheet, Chrome restyles the whole document on
+  every element insertion or removal, which made typing in composers lag by
+  hundreds of milliseconds. Derive the state in JS instead.
+files:
+  - apps/web/**
+rule:
+  kind: string_fragment
+  regex: (^|[^-\w])(html|body|:root):has\(

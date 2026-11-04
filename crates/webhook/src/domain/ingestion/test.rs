@@ -703,6 +703,7 @@ fn message_event_cases() -> Vec<EventCase> {
         EventCase::new(
             TestBrokerEvent::Message(Event::with_schema_version(
                 MessageTopicEvent::Patched(MessagePatchedMetadata {
+                    completed_reply: None,
                     parent: channel.clone(),
                     message_id,
                     thread_id: None,
@@ -1697,6 +1698,7 @@ fn agent_session_lifecycle_event(
             uuid::Uuid::from_u128(3),
         )),
         audience: Vec::new(),
+        source: agent_session::domain::model::SessionSource::User,
     }))
 }
 

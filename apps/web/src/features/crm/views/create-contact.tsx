@@ -1,6 +1,7 @@
+import { fireAndForget } from '@core/util/fireAndForget';
 import { ThrownResultError } from '@core/util/result';
-import EnvelopeIcon from '@phosphor/envelope.svg';
-import XIcon from '@phosphor/x.svg';
+import EnvelopeIcon from '@icon/system/regular/envelope.svg';
+import XIcon from '@icon/system/regular/x.svg';
 import { Button, Dialog, EntityComposer, Panel } from '@ui';
 import { createMemo, createSignal, Show } from 'solid-js';
 import {
@@ -12,10 +13,14 @@ import {
   useQuickAccessCrmCompaniesQuery,
 } from './use-crm';
 
-// The part before the @: non-empty, no whitespace or a second @.
-const LOCAL_PART_PATTERN = /^[^\s@]+$/;
+// A plausible address; the server enforces the real rules.
+const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+const INVALID_EMAIL = 'Enter an email like jane@example.com, or leave it empty';
+// Matches the server's display-name limit.
+const MAX_NAME_CHARS = 200;
+const NAME_TOO_LONG = `Use a name of ${MAX_NAME_CHARS} characters or fewer`;
 
-function createErrorMessage(cause: unknown): string {
+export function contactCreationError(cause: unknown): string {
   if (cause instanceof ThrownResultError) {
     if (cause.errors.some((e) => e.code === 'CONFLICT')) {
       return 'A contact with this email already exists.';
@@ -23,29 +28,27 @@ function createErrorMessage(cause: unknown): string {
     if (cause.errors.some((e) => e.code === 'FORBIDDEN')) {
       return "CRM isn't enabled for your team.";
     }
+    if (cause.errors.some((e) => e.code === 'BAD_REQUEST')) {
+      return 'Check the name and email, then try again.';
+    }
   }
   return 'Failed to create contact. Try again.';
 }
 
-/** Companies without a domain cannot hold contacts, whose emails must match one. */
+/** Explicitly select any company, including one without a domain. */
 function ContactCompanySelect(props: {
   mount: HTMLElement | undefined;
+  disabled: boolean;
   value: CompanyOption | undefined;
   onChange: (company: CompanyOption) => void;
 }) {
   const suggestions = useQuickAccessCrmCompaniesQuery();
   const options = createMemo(() =>
-    suggestions.companies().flatMap((company) =>
-      company.domains[0]
-        ? [
-            {
-              id: company.id,
-              name: company.name,
-              domain: company.domains[0].domain,
-            },
-          ]
-        : []
-    )
+    suggestions.companies().map((company) => ({
+      id: company.id,
+      name: company.name,
+      domain: company.domains[0]?.domain,
+    }))
   );
   return (
     <CompanySelect
@@ -54,6 +57,7 @@ function ContactCompanySelect(props: {
       value={props.value}
       onChange={props.onChange}
       loading={suggestions.query.isLoading}
+      disabled={props.disabled}
       mount={props.mount}
     />
   );
@@ -61,37 +65,30 @@ function ContactCompanySelect(props: {
 
 export function CreateContactModal(props: {
   /** Opens the dialog; without a company, the dialog asks for one. */
-  target?: { company?: { companyId: string; domain: string } };
+  target?: { company?: { companyId: string } };
   onClose(): void;
   onCreated(id: string): void;
 }) {
   const createContactMutation = useCreateContactMutation();
   const [name, setName] = createSignal('');
-  const [localPart, setLocalPart] = createSignal('');
+  const [email, setEmail] = createSignal('');
   const [pickedCompany, setPickedCompany] = createSignal<CompanyOption>();
   // The panel clips overflow, so the company menu mounts on the dialog itself.
   const [dialog, setDialog] = createSignal<HTMLElement>();
   const [error, setError] = createSignal<string>();
   const company = () => {
     const picked = pickedCompany();
-    return (
-      props.target?.company ??
-      (picked && { companyId: picked.id, domain: picked.domain })
-    );
+    return props.target?.company ?? (picked && { companyId: picked.id });
   };
   const contactName = createMemo(() => name().trim());
-  const emailLocalPart = createMemo(() => localPart().trim().toLowerCase());
+  const contactEmail = createMemo(() => email().trim().toLowerCase());
   const canSubmit = createMemo(
-    () =>
-      contactName().length > 0 &&
-      emailLocalPart().length > 0 &&
-      company() !== undefined &&
-      !createContactMutation.isPending
+    () => contactName().length > 0 && !createContactMutation.isPending
   );
 
   function reset() {
     setName('');
-    setLocalPart('');
+    setEmail('');
     setPickedCompany(undefined);
     setError(undefined);
   }
@@ -106,47 +103,33 @@ export function CreateContactModal(props: {
     resetAndClose();
   }
 
-  // Pasting a full address is common — strip our fixed suffix so
-  // "jane@acme.com" collapses to "jane" instead of failing validation.
-  function handleLocalPartInput(value: string) {
-    const domain = company()?.domain;
-    const suffix = domain ? `@${domain}` : undefined;
-    setLocalPart(
-      suffix && value.toLowerCase().endsWith(suffix)
-        ? value.slice(0, -suffix.length)
-        : value
-    );
-    setError(undefined);
-  }
-
   async function submit() {
     if (createContactMutation.isPending) return;
-    const target = company();
-    if (!target) {
-      setError('Choose a company');
-      return;
-    }
     if (!contactName()) {
       setError('Enter a name');
       return;
     }
-    if (!LOCAL_PART_PATTERN.test(emailLocalPart())) {
-      setError('Enter the part of the email before the @');
+    if (Array.from(contactName()).length > MAX_NAME_CHARS) {
+      setError(NAME_TOO_LONG);
+      return;
+    }
+    if (contactEmail() && !EMAIL_PATTERN.test(contactEmail())) {
+      setError(INVALID_EMAIL);
       return;
     }
 
     setError(undefined);
     try {
       const { id } = await createContactMutation.mutateAsync({
-        companyId: target.companyId,
+        companyId: company()?.companyId,
         name: contactName(),
-        email: `${emailLocalPart()}@${target.domain}`,
+        email: contactEmail() || undefined,
       });
       resetAndClose();
       props.onCreated(id);
     } catch (cause) {
       console.error('Failed to create contact', cause);
-      setError(createErrorMessage(cause));
+      setError(contactCreationError(cause));
     }
   }
 
@@ -163,7 +146,7 @@ export function CreateContactModal(props: {
             aria-label="New contact"
             onSubmit={(event) => {
               event.preventDefault();
-              void submit();
+              fireAndForget(submit(), 'crm');
             }}
             onKeyDown={(event) => {
               if (
@@ -173,7 +156,7 @@ export function CreateContactModal(props: {
               ) {
                 event.preventDefault();
                 event.stopPropagation();
-                void submit();
+                fireAndForget(submit(), 'crm');
               }
             }}
           >
@@ -187,7 +170,9 @@ export function CreateContactModal(props: {
                     placeholder="Contact name"
                     autocomplete="off"
                     data-1p-ignore
-                    aria-invalid={error() === 'Enter a name'}
+                    aria-invalid={
+                      error() === 'Enter a name' || error() === NAME_TOO_LONG
+                    }
                     class="ph-no-capture w-full min-w-0 text-xl/7 font-medium outline-none bg-transparent placeholder:text-ink-placeholder"
                     value={name()}
                     disabled={createContactMutation.isPending}
@@ -198,14 +183,15 @@ export function CreateContactModal(props: {
                   />
                 </EntityComposer.Title>
                 <Button
+                  variant="ghost"
                   tabIndex={-1}
                   aria-label="Close"
                   tooltip="Close"
-                  size="icon-composer"
+                  size="icon-md"
                   disabled={createContactMutation.isPending}
                   onClick={close}
                 >
-                  <XIcon />
+                  <XIcon class="size-4 touch:size-6 shrink-0 pointer-events-none" />
                 </Button>
               </EntityComposer.Header>
               <EntityComposer.Main class="gap-4">
@@ -217,29 +203,27 @@ export function CreateContactModal(props: {
                   <span class="flex min-w-0 items-center">
                     <input
                       aria-label="Email"
-                      placeholder="jane"
+                      type="email"
+                      placeholder="Email (optional), like jane@example.com"
                       autocomplete="off"
                       spellcheck={false}
                       data-1p-ignore
-                      aria-invalid={
-                        error() === 'Enter the part of the email before the @'
-                      }
+                      aria-invalid={error() === INVALID_EMAIL}
                       class="ph-no-capture field-sizing-content max-w-full bg-transparent text-ink outline-none placeholder:text-ink-placeholder"
-                      value={localPart()}
+                      value={email()}
                       disabled={createContactMutation.isPending}
-                      onInput={(event) =>
-                        handleLocalPartInput(event.currentTarget.value)
-                      }
+                      onInput={(event) => {
+                        setEmail(event.currentTarget.value);
+                        setError(undefined);
+                      }}
                     />
-                    <span class="shrink-0 select-none text-ink-muted">
-                      @{company()?.domain ?? 'company domain'}
-                    </span>
                   </span>
                 </label>
                 <Show when={!props.target?.company}>
                   <EntityComposer.Properties class="px-2">
                     <ContactCompanySelect
                       mount={dialog()}
+                      disabled={createContactMutation.isPending}
                       value={pickedCompany()}
                       onChange={(picked) => {
                         setPickedCompany(picked);

@@ -1,0 +1,39 @@
+fragment SavedViewFields on GraphqlSavedView {
+  id
+  ownerId
+  name
+  config
+  sharedTeamId
+  revision
+  createdAt
+  updatedAt
+}
+
+query SavedViews($kind: String, $first: Int, $after: String) {
+  user {
+    id
+    savedViews(kind: $kind, first: $first, after: $after) {
+      nodes { ...SavedViewFields }
+      nextCursor
+    }
+  }
+}
+
+query SavedView($id: ID!) {
+  user {
+    id
+    savedView(id: $id) { ...SavedViewFields }
+  }
+}
+
+mutation CreateSavedView($input: CreateSavedViewInput!) {
+  createSavedView(input: $input) { ...SavedViewFields }
+}
+
+mutation UpdateSavedView($input: UpdateSavedViewInput!) {
+  updateSavedView(input: $input) { ...SavedViewFields }
+}
+
+mutation DeleteSavedView($input: DeleteSavedViewInput!) {
+  deleteSavedView(input: $input)
+}

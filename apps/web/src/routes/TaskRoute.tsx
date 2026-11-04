@@ -1,6 +1,7 @@
 import { isValidTeamTaskSlug } from '@app/features/settings/teamSlug';
 import { useIsAuthenticated } from '@core/auth';
 import { LoadingBlock } from '@core/component/LoadingBlock';
+import { fireAndForget } from '@core/util/fireAndForget';
 import { setPostLoginRedirect } from '@core/util/postLoginRedirect';
 import { thrownResultErrorHasCode } from '@core/util/result';
 import { useTeamTaskQuery } from '@queries/storage/team-task';
@@ -49,13 +50,13 @@ export function TaskRoute(props: { taskSlug: string }) {
       <Match when={taskQuery.isError && !taskQuery.isFetching}>
         <TaskRouteError
           notFound={taskNotFound()}
-          onRetry={() => void taskQuery.refetch()}
+          onRetry={() => fireAndForget(taskQuery.refetch(), 'task-route')}
         />
       </Match>
       <Match when={taskQuery.isSuccess}>
         <TaskRouteError
           notFound={false}
-          onRetry={() => void taskQuery.refetch()}
+          onRetry={() => fireAndForget(taskQuery.refetch(), 'task-route')}
         />
       </Match>
     </Switch>
@@ -78,7 +79,7 @@ function TaskRouteError(props: { notFound: boolean; onRetry?: () => void }) {
         </p>
         <div class="flex items-center gap-2">
           <Button
-            variant="outline"
+            variant="secondary"
             size="sm"
             onClick={() => navigate('/tasks')}
           >
@@ -86,7 +87,7 @@ function TaskRouteError(props: { notFound: boolean; onRetry?: () => void }) {
           </Button>
           <Show when={!props.notFound && props.onRetry}>
             {(onRetry) => (
-              <Button variant="outline" size="sm" onClick={onRetry()}>
+              <Button variant="secondary" size="sm" onClick={onRetry()}>
                 Try again
               </Button>
             )}

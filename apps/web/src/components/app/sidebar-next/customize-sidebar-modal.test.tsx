@@ -44,9 +44,12 @@ function Modal() {
       onOpenChange={() => {}}
       gates={{
         showCalendar: true,
+        showScheduling: true,
         showCustomers: true,
         showCalls: true,
         showReviews: true,
+        showActivity: true,
+        showExternal: true,
         get prefs() {
           return prefs();
         },
@@ -130,5 +133,72 @@ describe('sidebar customization drag sorting', () => {
         })
       ).checked
     ).toBe(true);
+  });
+
+  it('keeps Scheduling hidden for existing preferences until explicitly enabled', async () => {
+    localStorage.setItem(
+      'macro:sidebar:prefs',
+      JSON.stringify({ hidden: ['reviews'], order: ['tasks', 'mail'] })
+    );
+    const mount = () =>
+      render(() => (
+        <SidebarPrefsProvider>
+          <Modal />
+        </SidebarPrefsProvider>
+      ));
+    mount();
+    const scheduling = await screen.findByRole<HTMLInputElement>('checkbox', {
+      name: 'Scheduling',
+    });
+    expect(scheduling.checked).toBe(false);
+    expect(
+      screen.getByRole<HTMLInputElement>('checkbox', { name: 'Calls' }).checked
+    ).toBe(true);
+    fireEvent.click(scheduling);
+    expect(scheduling.checked).toBe(true);
+    cleanup();
+    mount();
+    expect(
+      (
+        await screen.findByRole<HTMLInputElement>('checkbox', {
+          name: 'Scheduling',
+        })
+      ).checked
+    ).toBe(true);
+    const stored = JSON.parse(localStorage.getItem('macro:sidebar:prefs')!);
+    expect(stored.order).toEqual(['tasks', 'mail']);
+    expect(stored.hidden).toEqual(['reviews', 'activity']);
+  });
+
+  it('keeps Activity hidden for version 1 preferences until explicitly enabled', async () => {
+    localStorage.setItem(
+      'macro:sidebar:prefs',
+      JSON.stringify({ version: 1, hidden: ['reviews'], order: [] })
+    );
+    const mount = () =>
+      render(() => (
+        <SidebarPrefsProvider>
+          <Modal />
+        </SidebarPrefsProvider>
+      ));
+    mount();
+    const activity = await screen.findByRole<HTMLInputElement>('checkbox', {
+      name: 'Activity',
+    });
+    expect(activity.checked).toBe(false);
+    fireEvent.click(activity);
+    expect(activity.checked).toBe(true);
+    cleanup();
+    mount();
+    expect(
+      (
+        await screen.findByRole<HTMLInputElement>('checkbox', {
+          name: 'Activity',
+        })
+      ).checked
+    ).toBe(true);
+    expect(
+      JSON.parse(localStorage.getItem('macro:sidebar:prefs')!).hidden
+    ).toEqual(['reviews']);
   });
 });

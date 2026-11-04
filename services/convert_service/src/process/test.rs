@@ -97,7 +97,10 @@ mod legacy_upgrade {
 
     fn zip_names(bytes: &[u8]) -> Vec<String> {
         let archive = zip::ZipArchive::new(std::io::Cursor::new(bytes)).unwrap();
-        archive.file_names().map(str::to_string).collect()
+        archive
+            .file_names()
+            .map(|name| name.unwrap().into_owned())
+            .collect()
     }
 
     fn assert_main_content_type(bytes: &[u8], content_type: &str) {
@@ -254,6 +257,29 @@ mod legacy_upgrade {
         );
 
         assert!(result.is_err());
+    }
+
+    #[test]
+    #[ignore = "needs LibreOfficeKit; see module docs"]
+    fn conversions_leave_no_libreoffice_scratch_files_outside_the_job_folder() {
+        // The worker only removes the job folder, and a child killed at its
+        // timeout never runs LibreOffice's own scratch cleanup.
+        let scratch = || {
+            let mut names: Vec<_> = std::fs::read_dir(std::env::temp_dir())
+                .unwrap()
+                .filter_map(|entry| entry.ok())
+                .map(|entry| entry.file_name().to_string_lossy().into_owned())
+                .filter(|name| name.starts_with("lu") && name.ends_with(".tmp"))
+                .collect();
+            names.sort();
+            names
+        };
+        let before = scratch();
+
+        let docx = upgrade("memo.doc", FileType::Doc, FileType::Docx);
+        convert_bytes(&docx, FileType::Docx, FileType::Pdf);
+
+        assert_eq!(scratch(), before);
     }
 
     #[test]

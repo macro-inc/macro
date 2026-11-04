@@ -9,12 +9,16 @@ use std::sync::Arc;
 use std::time::Duration;
 
 use lexical_client::LexicalClient;
+use lexical_client::notion::{
+    NotionSnapshotLinks, NotionSnapshotPage, NotionSnapshotRequest, NotionSnapshotUser,
+};
 use sync_service_client::{SyncServiceClient, initialize::SnapshotAlreadyExists};
 use tokio_retry::{RetryIf, strategy::FixedInterval};
 
 use crate::domain::models::DocumentError;
+use crate::domain::notion_markdown::NotionMarkdown;
 use crate::domain::ports::markdown::{
-    LexicalSnapshotPort, MarkdownInitializationPort, SyncInitializeSnapshotPort,
+    LexicalSnapshotPort, MarkdownInitializationPort, MarkdownSnapshot, SyncInitializeSnapshotPort,
 };
 
 impl LexicalSnapshotPort for LexicalClient {
@@ -23,6 +27,44 @@ impl LexicalSnapshotPort for LexicalClient {
         markdown: &str,
     ) -> impl Future<Output = anyhow::Result<Vec<u8>>> + Send {
         LexicalClient::markdown_to_loro_snapshot(self, markdown)
+    }
+
+    async fn notion_to_loro_snapshot(
+        &self,
+        notion: &NotionMarkdown,
+    ) -> anyhow::Result<MarkdownSnapshot> {
+        let request = NotionSnapshotRequest {
+            markdown: &notion.markdown,
+            links: NotionSnapshotLinks {
+                pages: notion
+                    .pages
+                    .iter()
+                    .map(|(notion_id, page)| {
+                        let page = NotionSnapshotPage {
+                            document_id: page.document_id.to_string(),
+                            name: page.name.clone(),
+                        };
+                        (notion_id.clone(), page)
+                    })
+                    .collect(),
+                users: notion
+                    .users
+                    .iter()
+                    .map(|(notion_id, user)| {
+                        let user = NotionSnapshotUser {
+                            user_id: user.user_id.clone(),
+                            email: user.email.clone(),
+                        };
+                        (notion_id.clone(), user)
+                    })
+                    .collect(),
+            },
+        };
+        let converted = LexicalClient::notion_to_loro_snapshot(self, &request).await?;
+        Ok(MarkdownSnapshot {
+            snapshot: converted.snapshot,
+            markdown: converted.markdown,
+        })
     }
 }
 
@@ -99,16 +141,47 @@ where
                 .map_err(DocumentError::Internal)?
         };
 
+        self.initialize_sync(document_id, &loro_snapshot).await?;
+        Ok(loro_snapshot)
+    }
+
+    #[tracing::instrument(skip(self, notion), fields(markdown_bytes = notion.markdown.len()), err)]
+    async fn initialize_existing_notion(
+        &self,
+        document_id: &str,
+        notion: &NotionMarkdown,
+    ) -> Result<MarkdownSnapshot, DocumentError> {
+        let converted = self
+            .lexical_client
+            .notion_to_loro_snapshot(notion)
+            .await
+            .map_err(DocumentError::Internal)?;
+        self.initialize_sync(document_id, &converted.snapshot)
+            .await?;
+        Ok(converted)
+    }
+}
+
+impl<L, S> LexicalSyncMarkdownInitializer<L, S>
+where
+    S: SyncInitializeSnapshotPort + 'static,
+{
+    /// Hand `loro_snapshot` to sync-service, awaited or detached.
+    async fn initialize_sync(
+        &self,
+        document_id: &str,
+        loro_snapshot: &[u8],
+    ) -> Result<(), DocumentError> {
         match self.sync_initialization {
             SyncInitialization::Awaited => {
-                initialize_with_retry(&*self.sync_service_client, document_id, &loro_snapshot)
+                initialize_with_retry(&*self.sync_service_client, document_id, loro_snapshot)
                     .await
                     .map_err(DocumentError::Internal)?;
             }
             SyncInitialization::Detached => {
                 let sync_service_client = Arc::clone(&self.sync_service_client);
                 let document_id = document_id.to_owned();
-                let snapshot = loro_snapshot.clone();
+                let snapshot = loro_snapshot.to_vec();
                 tokio::spawn(async move {
                     if let Err(error) =
                         initialize_with_retry(&*sync_service_client, &document_id, &snapshot).await
@@ -119,7 +192,7 @@ where
             }
         }
 
-        Ok(loro_snapshot)
+        Ok(())
     }
 }
 

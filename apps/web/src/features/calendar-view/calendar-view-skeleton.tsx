@@ -15,7 +15,10 @@ export function CalendarViewSkeleton() {
       aside={isMobile() ? false : { preserveDuringResize: false }}
     >
       <ViewSkeleton.Sidebar title="Calendar" createLabel="New" />
-      <ViewSkeleton.Main title={monthTitle()}>
+      <ViewSkeleton.Main
+        title={monthTitle()}
+        controls={['Booking links ⌄', 'Today ‹ ›', 'Week ⌄', '+ New ⌄', 1]}
+      >
         <div class="flex min-h-0 flex-1">
           <CalendarGridSkeleton dayCount={7} showDayHeader showAllDaySlot />
         </div>

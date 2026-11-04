@@ -19,6 +19,7 @@ import type {
   EditResult,
   SlideOutline,
 } from '@core/pptx-engine/types';
+import { fireAndForget } from '@core/util/fireAndForget';
 import { type Accessor, batch, createSignal, onCleanup } from 'solid-js';
 import type {
   EditOutcome,
@@ -254,7 +255,9 @@ export function createPresentationSession(
     const delay = options.autosaveDelay ?? 1500;
     if (delay <= 0) return;
     clearTimeout(timer);
-    timer = setTimeout(() => void save().catch(() => {}), delay);
+    timer = setTimeout(() => {
+      save().catch(() => {});
+    }, delay);
   }
 
   async function settle(outcome: EditOutcome): Promise<EditResult | null> {
@@ -365,7 +368,9 @@ export function createPresentationSession(
       );
     }
   }
-  const unwatch = options.watchStoredFile?.(() => void onStoredFileChanged());
+  const unwatch = options.watchStoredFile?.(() =>
+    fireAndForget(onStoredFileChanged(), 'pptx-editor')
+  );
   // Other people's edits: re-render, but leave saving them to their editor.
   const unsubscribeRemote = engine.onRemoteChange?.((result, state) => {
     if (disposed) return;

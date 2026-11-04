@@ -99,9 +99,27 @@ fn unusable_provider_grants_classify_as_no_gmail_grant() {
 fn rate_limiting_classifies_as_http_429() {
     let error = classify_provider_init_error(EmailApiError::RateLimited {
         retry_after: None,
-        origin: email_api_client::domain::models::RateLimitOrigin::Provider,
+        origin: email_api_client::domain::models::RateLimitOrigin::Provider { concurrency: false },
     });
     assert_eq!(error.status_code(), StatusCode::TOO_MANY_REQUESTS);
+}
+
+#[test]
+fn a_rate_limited_init_tells_the_client_when_to_retry() {
+    let response = InitError::ProviderError(EmailApiError::RateLimited {
+        retry_after: Some(std::time::Duration::from_millis(1_200)),
+        origin: email_api_client::domain::models::RateLimitOrigin::Local,
+    })
+    .into_response();
+
+    assert_eq!(response.status(), StatusCode::TOO_MANY_REQUESTS);
+    assert_eq!(
+        response
+            .headers()
+            .get(axum::http::header::RETRY_AFTER)
+            .and_then(|value| value.to_str().ok()),
+        Some("2")
+    );
 }
 
 #[tokio::test]
@@ -155,6 +173,7 @@ fn calendar_intent_follows_the_consent_request_not_the_grant() {
         .to_vec();
     let gmail_scope = "https://www.googleapis.com/auth/gmail.modify".to_owned();
     let in_progress = |requested: Vec<String>| InProgressUserLink {
+        email_provider: "GMAIL".into(),
         macro_user_id: Uuid::now_v7(),
         linked_email: None,
         requested_google_scopes: requested,

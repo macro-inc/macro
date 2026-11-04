@@ -76,6 +76,19 @@ vi.mock('@queries/soup/slash-menu-pull-requests', () => ({
     ],
   }),
 }));
+vi.mock('@queries/slash-menu-mcps', () => ({
+  useSlashMenuMcps: () => ({
+    loading: () => false,
+    error: () => false,
+    mcps: () => [
+      { id: 'pipedream:linear', name: 'Linear', appSlug: 'linear' },
+      { id: 'mcp:https://x.dev/mcp', name: 'Sentry MCP', appSlug: null },
+    ],
+  }),
+}));
+vi.mock('@core/pipedream/ConnectorIcon', () => ({
+  PipedreamConnectorIcon: () => null,
+}));
 vi.mock('../MentionsMenu/hooks/useEntityMention', () => ({
   useEntityMention: (options: { searchTerm: () => string }) => ({
     entities: () =>
@@ -187,7 +200,7 @@ describe('skill slash menu', () => {
 
   it('navigates across sections and inserts a PR chip then a command', () => {
     const { dispatch, menu } = setup();
-    for (let i = 0; i < 3; i++)
+    for (let i = 0; i < 5; i++)
       fireEvent.keyDown(document, { key: 'ArrowDown' });
     fireEvent.keyDown(document, { key: 'Enter' });
     expect(dispatch).toHaveBeenCalledWith(INSERT_PR_MENTION_COMMAND, {
@@ -195,7 +208,7 @@ describe('skill slash menu', () => {
       label: 'macro/app#42',
     });
     menu.openMenu();
-    for (let i = 0; i < 4; i++)
+    for (let i = 0; i < 6; i++)
       fireEvent.keyDown(document, { key: 'ArrowDown' });
     fireEvent.keyDown(document, { key: 'Enter' });
     expect(dispatch).toHaveBeenCalledWith(INSERT_AGENT_COMMAND_COMMAND, {
@@ -218,8 +231,36 @@ describe('skill slash menu', () => {
     );
   });
 
-  it('keeps regular chat menus limited to skills with the same edit controls', () => {
+  it('lists connected MCPs and inserts the chosen one by name', () => {
+    const { editor, dispatch, menu } = setup();
+    const update = vi.spyOn(editor, 'update');
+    expect(screen.getByText('Connections')).toBeTruthy();
+    expect(screen.getByText('Sentry MCP')).toBeTruthy();
+    fireEvent.click(screen.getByText('Linear'));
+    expect(dispatch).toHaveBeenCalledWith(
+      REMOVE_AGENT_COMMAND_SEARCH_COMMAND,
+      undefined
+    );
+    expect(update).toHaveBeenCalledTimes(1);
+    expect(menu.isOpen()).toBe(false);
+  });
+
+  it('selects MCPs from the keyboard between skills and PRs', () => {
+    const { editor, dispatch } = setup();
+    const update = vi.spyOn(editor, 'update');
+    for (let i = 0; i < 3; i++)
+      fireEvent.keyDown(document, { key: 'ArrowDown' });
+    fireEvent.keyDown(document, { key: 'Enter' });
+    expect(update).toHaveBeenCalledTimes(1);
+    expect(dispatch).not.toHaveBeenCalledWith(
+      INSERT_PR_MENTION_COMMAND,
+      expect.anything()
+    );
+  });
+
+  it('keeps regular chat menus to skills and MCPs with the same edit controls', () => {
     setup(false);
+    expect(screen.getByText('Linear')).toBeTruthy();
     expect(screen.queryByText('Pull requests')).toBeNull();
     expect(screen.queryByText('Commands')).toBeNull();
     expect(screen.getByRole('button', { name: 'Edit My skill' })).toBeTruthy();

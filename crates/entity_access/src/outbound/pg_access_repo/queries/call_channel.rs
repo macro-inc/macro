@@ -17,7 +17,7 @@ pub struct CallChannelRow {
 
 /// Look up a call's channel and share permission by call ID.
 ///
-/// Checks both active calls and archived call records.
+/// Resolves the durable identity for native and imported calls.
 #[tracing::instrument(err, skip(pool))]
 pub async fn get_call_channel(
     pool: &PgPool,
@@ -27,13 +27,8 @@ pub async fn get_call_channel(
         CallChannelRow,
         r#"
         SELECT channel_id AS "channel_id?", share_permission_id AS "share_permission_id!"
-        FROM calls
+        FROM call_entities
         WHERE id = $1
-        UNION ALL
-        SELECT channel_id, share_permission_id
-        FROM call_records
-        WHERE id = $1
-        LIMIT 1
         "#,
         call_id,
     )

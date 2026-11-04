@@ -1,3 +1,4 @@
+import { fireAndForget } from '@core/util/fireAndForget';
 import { impactFeedback } from '@tauri-apps/plugin-haptics';
 import { isNativeMobilePlatform } from './isNativeMobilePlatform';
 
@@ -5,7 +6,7 @@ type ImpactStyle = Parameters<typeof impactFeedback>[0];
 
 export function hapticImpact(style: ImpactStyle): void {
   if (!isNativeMobilePlatform()) return;
-  void performImpact(style);
+  fireAndForget(performImpact(style), 'haptics');
 }
 
 async function performImpact(style: ImpactStyle) {

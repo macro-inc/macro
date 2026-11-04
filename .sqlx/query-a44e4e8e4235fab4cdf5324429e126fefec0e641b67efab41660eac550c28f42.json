@@ -1,0 +1,46 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            SELECT\n                price_per_million_in AS \"price_per_million_in!\",\n                price_per_million_out AS \"price_per_million_out!\",\n                price_per_million_cache_read,\n                price_per_million_cache_write,\n                price_per_audio_minute\n            FROM ai_effective_pricing\n            WHERE model = $1\n            ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "price_per_million_in!",
+        "type_info": "Float4"
+      },
+      {
+        "ordinal": 1,
+        "name": "price_per_million_out!",
+        "type_info": "Float4"
+      },
+      {
+        "ordinal": 2,
+        "name": "price_per_million_cache_read",
+        "type_info": "Float4"
+      },
+      {
+        "ordinal": 3,
+        "name": "price_per_million_cache_write",
+        "type_info": "Float4"
+      },
+      {
+        "ordinal": 4,
+        "name": "price_per_audio_minute",
+        "type_info": "Float4"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Text"
+      ]
+    },
+    "nullable": [
+      true,
+      true,
+      true,
+      true,
+      true
+    ]
+  },
+  "hash": "a44e4e8e4235fab4cdf5324429e126fefec0e641b67efab41660eac550c28f42"
+}

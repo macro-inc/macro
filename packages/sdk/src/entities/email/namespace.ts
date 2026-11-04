@@ -1,8 +1,15 @@
-import type { ApiSortMethod } from '../../../generated/email/types.gen';
+import type { EmailConnectionProviders } from '../../../generated/auth/types.gen';
+import type {
+  ApiSortMethod,
+  TransferRecoveryResponse,
+} from '../../../generated/email/types.gen';
+import type { ListEmailRemindersData } from '../../../generated/storage/types.gen';
 import { paginate, unwrap } from '../../utils';
 import type { MacroClient } from '../../utils/client';
 import type { SearchOpts } from '../search';
 import { EmailAttachment } from './attachment';
+import { type DraftOptions, draftBody, EmailDraft } from './draft';
+import { EmailFilter, type EmailFilterOptions } from './filter';
 import { Label } from './label';
 import { Link } from './link';
 import { EmailMessage, type SendEmailOptions } from './message';
@@ -16,7 +23,118 @@ export interface InboxOptions {
   sort?: ApiSortMethod;
 }
 
+/**
+ * @routing Use when reading, searching, labelling, drafting or sending email, or working across several inboxes; not channel messages or calendar invites.
+ *
+ * @agent
+ * ## Email inboxes
+ *
+ * - A user can have more than one inbox: their primary one, others they connected, and inboxes teammates delegated to them. `macro.email.links()` lists them; most users have one.
+ * - Searching and listing span every inbox the user can access unless you pass one. When the user means a specific mailbox ("my work inbox", "the shared inbox"), find it in `links()` and pass that link; never guess an address.
+ * - Labels are per inbox: a label from one inbox does not apply to a thread in another. Change a thread's labels with labels from the inbox that owns the thread.
+ */
 export class EmailNamespace {
+  /** Create a draft without sending it; the inbox defaults to the caller's primary. */
+  async createDraft(options: DraftOptions, inbox?: Link): Promise<EmailDraft> {
+    const result = unwrap(
+      await this.client.email.createDraft({
+        body: { draft: draftBody(options) },
+        headers: inbox ? { 'X-Email-Link-Id': inbox.id } : undefined,
+      }),
+    );
+    if (!result.draft.db_id)
+      throw new Error('Draft response has no message id');
+    return EmailDraft.byId(this.client, result.draft.db_id);
+  }
+
+  /** Construct a lazy draft handle. */
+  draftById(id: string): EmailDraft {
+    return EmailDraft.byId(this.client, id);
+  }
+
+  /** Scheduled drafts, fetched lazily in bounded pages. */
+  async *scheduled(options?: {
+    pageSize?: number;
+    inbox?: Link;
+  }): AsyncGenerator<EmailDraft> {
+    const requestedLimit = options?.pageSize ?? 100;
+    if (!Number.isInteger(requestedLimit) || requestedLimit < 1)
+      throw new Error('pageSize must be positive');
+    const limit = Math.min(requestedLimit, 1000);
+    for (let offset = 0; ; offset += limit) {
+      const page = unwrap(
+        await this.client.email.getScheduledMessages({
+          query: { offset, limit },
+          headers: options?.inbox
+            ? { 'X-Email-Link-Id': options.inbox.id }
+            : undefined,
+        }),
+      );
+      for (const message of page.messages)
+        yield EmailDraft.byId(this.client, message.db_id);
+      if (page.messages.length < limit) return;
+    }
+  }
+
+  /** Importance filters. */
+  async filters(inbox?: Link): Promise<EmailFilter[]> {
+    return unwrap(
+      await this.client.email.listEmailFilters({
+        headers: inbox ? { 'X-Email-Link-Id': inbox.id } : undefined,
+      }),
+    ).filters.map((f) => EmailFilter.from(this.client, f, inbox));
+  }
+
+  /** Create or replace a filter matching an address or domain. */
+  async upsertFilter(
+    options: EmailFilterOptions,
+    inbox?: Link,
+  ): Promise<EmailFilter> {
+    return EmailFilter.from(
+      this.client,
+      unwrap(
+        await this.client.email.upsertEmailFilter({
+          headers: inbox ? { 'X-Email-Link-Id': inbox.id } : undefined,
+          body: {
+            email_address: options.emailAddress,
+            email_domain: options.emailDomain,
+            is_important: options.isImportant,
+          },
+        }),
+      ).filter,
+      inbox,
+    );
+  }
+
+  /** Address book contacts grouped by the service's interaction buckets. */
+  async contacts() {
+    return unwrap(await this.client.email.listContacts()).contacts;
+  }
+
+  /** Follow-up reminders with thread handles, automatically paginated. */
+  reminders(
+    options?: Omit<
+      NonNullable<ListEmailRemindersData['query']>,
+      'inboxIds' | 'cursor'
+    > & { inboxes?: Link[] },
+  ) {
+    const { inboxes, ...query } = options ?? {};
+    return paginate(async (cursor) => {
+      const page = unwrap(
+        await this.client.storage.listEmailReminders({
+          query: { ...query, inboxIds: inboxes?.map((i) => i.id), cursor },
+        }),
+      );
+      return {
+        items: page.items.map(({ threadId, ...item }) => ({
+          ...item,
+          thread: EmailThread.byId(this.client, threadId),
+        })),
+        nextCursor: page.nextCursor,
+      };
+    });
+  }
+
   constructor(private readonly client: MacroClient) {}
 
   /** A handle to an email thread by id. */
@@ -44,12 +162,34 @@ export class EmailNamespace {
     return Link.list(this.client);
   }
 
+  /** Providers the server currently permits this caller to connect. */
+  async connectionProviders(): Promise<EmailConnectionProviders> {
+    return unwrap(await this.client.auth.emailConnectionProviders());
+  }
+
+  /** Recover a draft move using its original operation UUID; never starts a new move.
+   * An empty committed result fences the old move so it cannot commit later. */
+  async recoverDraftTransfer(
+    operationId: string,
+  ): Promise<TransferRecoveryResponse> {
+    return unwrap(
+      await this.client.email.recoverDraftTransfer({
+        path: { id: operationId },
+      }),
+    );
+  }
+
   /** Send a new email message. */
   send(opts: SendEmailOptions): Promise<EmailMessage | undefined> {
     return EmailMessage.send(this.client, opts);
   }
 
-  /** Search email threads by subject and content. */
+  /**
+   * Search email threads by subject and content. To find a person's emails,
+   * search for their quoted email address, not their name: a name only
+   * matches where that display name appears. Resolve the address first, for
+   * example with `macro.users.search(name)`.
+   */
   search(query: string, opts?: SearchOpts): AsyncGenerator<EmailThread> {
     return EmailThread.search(this.client, query, opts);
   }
@@ -87,6 +227,14 @@ export class EmailNamespace {
   /** Create a user label. Returns the created label. */
   createLabel(name: string): Promise<Label> {
     return Label.create(this.client, name);
+  }
+
+  /**
+   * Archive many threads (or unarchive with `false`). Resolves to the threads
+   * whose state could not change.
+   */
+  archive(threads: EmailThread[], archived = true): Promise<EmailThread[]> {
+    return EmailThread.archiveMany(this.client, threads, archived);
   }
 
   /** Delete a label. */

@@ -1,0 +1,16 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "INSERT INTO email_address_book_folders(link_id,provider_id,is_default) VALUES ($1,$2,$3)\n                ON CONFLICT(link_id,provider_id) DO UPDATE SET is_default = email_address_book_folders.is_default OR EXCLUDED.is_default",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Text",
+        "Bool"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "bd4e41b24e0fc820acead1c173dbfe727508da7d29b7661fcb6ec65df84507d3"
+}

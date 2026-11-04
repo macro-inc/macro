@@ -1,5 +1,6 @@
 /** Gateway liveness for databases, apart from `./databases` to keep the websocket out of startup. */
 import { useUserId } from '@core/context/user';
+import { fireAndForget } from '@core/util/fireAndForget';
 import { Telemetry } from '@macro-inc/observability';
 import { createConnectionWebsocketEffect } from '@service-connection/websocket';
 import { storageServiceClient } from '@service-storage/client';
@@ -46,6 +47,8 @@ const databaseChangedSchema = z.object({ databaseId: z.string() });
 const awarenessRelaySchema: z.ZodType<AwarenessRelay> = z.object({
   databaseId: z.string(),
   userId: z.string(),
+  // Servers that predate it omit it; their viewers read as editors.
+  canEdit: z.boolean().default(true),
   state: awarenessSchema,
   relayedAt: z.number(),
 });
@@ -102,7 +105,7 @@ export function useDatabaseTableChangedSync(
 ) {
   const refresh = (change: { databaseId: string }) => {
     if (change.databaseId === databaseId())
-      void invalidateDatabase(change.databaseId);
+      fireAndForget(invalidateDatabase(change.databaseId), 'database-sync');
   };
   useDatabaseTableChanges(refresh);
   useDatabaseMetadataChanges(refresh);
@@ -115,10 +118,12 @@ export type LocalDatabaseAwareness = Omit<Awareness, 'left' | 'peerId'>;
 type RemoteDatabaseAwareness = Omit<Awareness, 'left' | 'editing'> & {
   userId: string;
   editing: boolean;
+  canEdit: boolean;
 };
 
 type HeldAwareness = {
   userId: string;
+  canEdit: boolean;
   state: Awareness;
   /** Server relay time, orders messages from the same peer. */
   relayedAt: number;
@@ -213,6 +218,7 @@ export function useDatabaseAwareness(
     if (current && current.relayedAt > relay.relayedAt) return;
     held.set(key, {
       userId: relay.userId,
+      canEdit: relay.canEdit,
       state: relay.state,
       relayedAt: relay.relayedAt,
       receivedAt: Date.now(),
@@ -235,8 +241,9 @@ export function useDatabaseAwareness(
   const remote = () =>
     [...held.values()]
       .filter(({ state }) => !state.left)
-      .map(({ userId, state }) => ({
+      .map(({ userId, canEdit, state }) => ({
         userId,
+        canEdit,
         peerId: state.peerId,
         tableId: state.tableId,
         rowId: state.rowId,

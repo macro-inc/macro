@@ -117,14 +117,12 @@ function Fixture() {
   };
 
   const start = async () => {
-    try {
-      const bytes = await initialDocument(params);
-      await open(bytes, params.get('file') ?? 'Illustration');
-    } catch (e) {
-      setError(e instanceof Error ? e.message : String(e));
-    }
+    const bytes = await initialDocument(params);
+    await open(bytes, params.get('file') ?? 'Illustration');
   };
-  void start();
+  start().catch((e: unknown) =>
+    setError(e instanceof Error ? e.message : String(e))
+  );
 
   const save = async (bytes: Uint8Array) => {
     if (params.has('reload')) {

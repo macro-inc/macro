@@ -1,25 +1,51 @@
+#[cfg(feature = "ports")]
 pub(crate) mod contact_listing;
 pub mod grouping;
+/// Numeric property and timestamp sort positions.
+pub mod sort;
+pub use sort::{DynamicSort, DynamicSortValue};
 
+#[cfg(feature = "ports")]
 mod exclusions;
 
-#[cfg(test)]
+#[cfg(all(test, feature = "ports"))]
 mod test;
 
-use call::domain::models::GetCallRecordsRequest;
-use channels::domain::models::{GetChannelsRequest, GetThreadReplyRowsRequest};
 use crm::domain::auth::CrmTeamReceipt;
 use crm::domain::companies_repo::{CrmCompanyListSort, CrmCompanySoupCursor};
-use email::domain::models::{GetEmailsRequest, PreviewView};
-use entity_access::domain::models::{EntityAccessReceipt, MemberTeamRole};
-use filter_ast::Expr;
-use foreign_entity::domain::{models::SourceId, ports::ForeignEntityListQuery};
+use email::domain::models::PreviewView;
+use entity_access::domain::models::MemberTeamRole;
+use foreign_entity::domain::models::SourceId;
 use frecency::domain::models::{AggregateFrecency, FrecencyQueryErr};
 use github_pull_requests::domain::models::GithubPullRequestError;
 use item_filters::{
     EntityFilters,
-    ast::{
-        EntityFilterAst, ExpandErr, LiteralTree,
+    ast::{EntityFilterAst, ExpandErr},
+};
+use macro_user_id::user_id::MacroUserIdStr;
+use model_entity::{Entity, EntityType};
+use models_grouping::GroupingConfig;
+use models_pagination::{
+    CursorWithValAndFilter, Frecency, NotifiedAt, Query, SimpleSortMethod, TouchedByMe,
+};
+use models_soup::SoupProperty;
+use models_soup::item::SoupItem;
+use non_empty::IsEmpty;
+use serde::{Deserialize, Serialize};
+use thiserror::Error;
+use uuid::Uuid;
+
+// Only the service's sub-request builders below use these.
+#[cfg(feature = "ports")]
+use {
+    call::domain::models::GetCallRecordsRequest,
+    channels::domain::models::{GetChannelsRequest, GetThreadReplyRowsRequest},
+    email::domain::models::GetEmailsRequest,
+    entity_access::domain::models::EntityAccessReceipt,
+    filter_ast::Expr,
+    foreign_entity::domain::ports::ForeignEntityListQuery,
+    item_filters::ast::{
+        LiteralTree,
         calendar_event::CalendarEventLiteral,
         call::CallLiteral,
         crm_company::CrmCompanyLiteral,
@@ -30,28 +56,18 @@ use item_filters::{
             properties_filter_matches_propertyless,
         },
     },
+    models_pagination::Cursor,
+    recursion::CollapsibleExt,
+    std::sync::Arc,
 };
-use macro_user_id::user_id::MacroUserIdStr;
-use model_entity::{Entity, EntityType};
-use models_grouping::GroupingConfig;
-use models_pagination::{
-    Cursor, CursorWithValAndFilter, Frecency, NotifiedAt, Query, SimpleSortMethod, TouchedByMe,
-};
-use models_soup::SoupProperty;
-use models_soup::item::SoupItem;
-use non_empty::IsEmpty;
-use recursion::CollapsibleExt;
-use serde::{Deserialize, Serialize};
-use std::sync::Arc;
-use thiserror::Error;
-use uuid::Uuid;
 
 /// Direction the merged Soup page is ordered in.
 ///
 /// Deliberately Soup's own type rather than one borrowed from the paginator:
 /// `Paginator` already exposes `sort_asc`/`sort_desc`, so this only has to name
 /// the choice, and doing it here keeps the shared pagination crate untouched.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, serde::Serialize, serde::Deserialize)]
+#[serde(rename_all = "snake_case")]
 pub enum SoupSortDirection {
     /// Smallest sort value first — oldest, or soonest for a future timestamp.
     Asc,
@@ -70,6 +86,14 @@ pub enum SoupType {
 }
 
 /// the parameters required for a [SimpleSortMethod]
+#[cfg(feature = "ports")]
+#[cfg_attr(
+    not(any(feature = "outbound", test)),
+    expect(
+        dead_code,
+        reason = "only the outbound Postgres repository and tests read it"
+    )
+)]
 #[derive(Debug, Clone)]
 pub struct SimpleSortRequest<'a> {
     /// the limit of the number of items to return
@@ -80,19 +104,16 @@ pub struct SimpleSortRequest<'a> {
     pub(crate) user_id: MacroUserIdStr<'a>,
 }
 
-/// Parameters for grouped soup queries.
-#[derive(Debug)]
-pub struct GroupedSortRequest<'a> {
-    /// the limit of the number of items to return
-    pub limit: u16,
-    /// the cursor/query
-    pub cursor: Query<Uuid, SimpleSortMethod, EntityFilterAst>,
-    /// the id of the user
-    pub user_id: MacroUserIdStr<'a>,
-    /// grouping configuration
-    pub grouping: GroupingConfig,
-}
+pub use grouping::query::GroupedSortRequest;
 
+#[cfg(feature = "ports")]
+#[cfg_attr(
+    not(any(feature = "outbound", test)),
+    expect(
+        dead_code,
+        reason = "only the outbound Postgres repository and tests read it"
+    )
+)]
 #[derive(Debug, Clone)]
 pub(crate) enum SimpleSortQuery {
     /// we dont have anything to filter out
@@ -103,8 +124,11 @@ pub(crate) enum SimpleSortQuery {
     ItemsFilter(Query<Uuid, SimpleSortMethod, EntityFilterAst>),
     /// we filter out items based on the input [EntityFilterAst] IN ADDITION to ANY items that DO have a [Frecency] score
     ItemsAndFrecencyFilter(Query<Uuid, SimpleSortMethod, (Frecency, EntityFilterAst)>),
+    /// Property sorting through the same dynamic source query.
+    Property(Query<Uuid, DynamicSort, EntityFilterAst>),
 }
 
+#[cfg(feature = "ports")]
 impl SimpleSortQuery {
     pub(crate) fn from_entity_cursor(
         cursor: Query<Uuid, SimpleSortMethod, Option<EntityFilterAst>>,
@@ -138,6 +162,7 @@ impl SimpleSortQuery {
     }
 }
 
+#[cfg(any(feature = "outbound", all(test, feature = "ports")))]
 impl SimpleSortQuery {
     pub(crate) fn sort_method(&self) -> &SimpleSortMethod {
         match self {
@@ -145,6 +170,7 @@ impl SimpleSortQuery {
             SimpleSortQuery::FilterFrecency(query) => query.sort_method(),
             SimpleSortQuery::ItemsFilter(query) => query.sort_method(),
             SimpleSortQuery::ItemsAndFrecencyFilter(query) => query.sort_method(),
+            SimpleSortQuery::Property(_) => &SimpleSortMethod::UpdatedAt,
         }
     }
 }
@@ -171,6 +197,8 @@ pub enum SoupQuery<T> {
     /// Query filtered and sorted by the user's latest notification per
     /// entity (the inbox's notified-at surface).
     Notified(NotifiedQueryInner<T>),
+    /// Numeric property ordering through the dynamic SQL query.
+    Property(Query<Uuid, DynamicSort, T>),
 }
 
 impl<T> SoupQuery<T> {
@@ -191,6 +219,7 @@ impl<T> SoupQuery<T> {
             SoupQuery::Notified(NotifiedQueryInner(i)) => {
                 SoupQuery::Notified(NotifiedQueryInner(i.map_filter(f)))
             }
+            SoupQuery::Property(query) => SoupQuery::Property(query.map_filter(f)),
         }
     }
 }
@@ -291,6 +320,7 @@ impl<T> SoupQuery<T> {
             SoupQuery::Frecency(FrecencyQueryInner(query)) => query.filter(),
             SoupQuery::Touched(TouchedQueryInner(query)) => query.filter(),
             SoupQuery::Notified(NotifiedQueryInner(query)) => query.filter(),
+            SoupQuery::Property(query) => query.filter(),
         }
     }
 }
@@ -310,6 +340,9 @@ impl SoupQuery<EntityFilters> {
             )),
             SoupQuery::Notified(NotifiedQueryInner(query)) => Ok(SoupQuery::Notified(
                 NotifiedQueryInner(query.try_map_filter(EntityFilterAst::new_from_filters)?),
+            )),
+            SoupQuery::Property(query) => Ok(SoupQuery::Property(
+                query.try_map_filter(EntityFilterAst::new_from_filters)?,
             )),
         }
     }
@@ -346,6 +379,24 @@ pub struct SoupRequest<T> {
     /// Empty when the caller has no inboxes — `build_email_request` returns
     /// `None` so the email branch is skipped, unless the request is CRM-scoped.
     pub link_ids: Vec<Uuid>,
+}
+
+/// A filter input that can be converted without constructing a query.
+pub trait IntoSoupFilterAst {
+    /// Convert filters into the authoritative entity AST.
+    fn into_filter_ast(self) -> Result<Option<EntityFilterAst>, ExpandErr>;
+}
+
+impl IntoSoupFilterAst for EntityFilters {
+    fn into_filter_ast(self) -> Result<Option<EntityFilterAst>, ExpandErr> {
+        EntityFilterAst::new_from_filters(self)
+    }
+}
+
+impl IntoSoupFilterAst for EntityFilterAst {
+    fn into_filter_ast(self) -> Result<Option<EntityFilterAst>, ExpandErr> {
+        Ok(if self.is_empty() { None } else { Some(self) })
+    }
 }
 
 /// trait which defines a type which can be fallibly converted into a SoupRequest with ast
@@ -402,6 +453,7 @@ impl IntoSoupReqAst for SoupRequest<EntityFilterAst> {
     }
 }
 
+#[cfg(feature = "ports")]
 impl<T> SoupRequest<T> {
     /// returns a reference to the filters to pass to the paginator
     /// this is used to prevent passing back the full ast on each server request
@@ -410,6 +462,7 @@ impl<T> SoupRequest<T> {
     }
 }
 
+#[cfg(feature = "ports")]
 impl SoupRequest<Option<EntityFilterAst>> {
     /// take the parts of the [SoupRequest] that are only relevant to email
     /// and move them into a [GetEmailsRequest] if it is possible to create one.
@@ -451,6 +504,7 @@ impl SoupRequest<Option<EntityFilterAst>> {
             macro_id: self.user.clone(),
             limit: Some(self.limit as u32),
             query: match &self.cursor {
+                SoupQuery::Property(_) => return None,
                 SoupQuery::Simple(SimpleQueryInner(Query::Sort(t, f))) => Some(Query::Sort(
                     *t,
                     with_properties_filter(
@@ -499,6 +553,7 @@ impl SoupRequest<Option<EntityFilterAst>> {
     /// The request's entity filter ast, regardless of cursor position.
     pub(crate) fn entity_ast(&self) -> Option<&EntityFilterAst> {
         match &self.cursor {
+            SoupQuery::Property(query) => query.filter().as_ref(),
             SoupQuery::Simple(SimpleQueryInner(Query::Sort(_, f))) => f.as_ref(),
             SoupQuery::Simple(SimpleQueryInner(Query::Cursor(CursorWithValAndFilter {
                 filter,
@@ -540,6 +595,7 @@ impl SoupRequest<Option<EntityFilterAst>> {
             user_id: self.user.clone(),
             limit: self.limit as u32,
             query: match &self.cursor {
+                SoupQuery::Property(_) => return None,
                 SoupQuery::Simple(SimpleQueryInner(Query::Sort(t, f))) => Some(Query::Sort(
                     *t,
                     with_call_properties_filter(
@@ -602,6 +658,7 @@ impl SoupRequest<Option<EntityFilterAst>> {
             Option<&EntityFilterAst>,
             Option<CrmCompanySoupCursor>,
         ) = match &self.cursor {
+            SoupQuery::Property(_) => return None,
             SoupQuery::Simple(SimpleQueryInner(Query::Sort(t, f))) => (*t, f.as_ref(), None),
             SoupQuery::Simple(SimpleQueryInner(Query::Cursor(CursorWithValAndFilter {
                 id,
@@ -661,6 +718,7 @@ impl SoupRequest<Option<EntityFilterAst>> {
             limit: Some(self.limit as u32),
             include_frecency: false,
             query: match &self.cursor {
+                SoupQuery::Property(_) => return None,
                 SoupQuery::Simple(SimpleQueryInner(Query::Sort(t, f))) => Some(Query::Sort(
                     *t,
                     f.as_ref().and_then(|f| f.channel_filter.clone()),
@@ -700,6 +758,7 @@ impl SoupRequest<Option<EntityFilterAst>> {
             return None;
         }
         let query = match &self.cursor {
+            SoupQuery::Property(_) => return None,
             SoupQuery::Simple(SimpleQueryInner(Query::Sort(t, f))) => Some(Query::Sort(
                 *t,
                 f.as_ref().and_then(|f| f.channel_thread_filter.clone()),
@@ -748,6 +807,7 @@ impl SoupRequest<Option<EntityFilterAst>> {
             return None;
         }
         match &self.cursor {
+            SoupQuery::Property(_) => None,
             SoupQuery::Simple(SimpleQueryInner(Query::Sort(t, f))) => Some(Query::Sort(
                 *t,
                 f.as_ref()
@@ -1028,6 +1088,7 @@ pub struct WorkFeedSoupPage {
 /// (status, time bounds, attendee, organizer) live in the calendar leg's
 /// query builder, which the candidate query cannot reach. Rejecting up front
 /// beats silently returning a feed with those events unfiltered.
+#[cfg(feature = "ports")]
 pub(crate) fn calendar_filter_supported_by_notified(
     tree: Option<&Expr<CalendarEventLiteral>>,
 ) -> bool {
@@ -1046,6 +1107,7 @@ pub(crate) fn calendar_filter_supported_by_notified(
 /// ANDs a properties filter into the email filter tree as thread-level
 /// [EmailLiteral::Property] conditions, so the email query returns exactly
 /// the threads that satisfy it.
+#[cfg(feature = "ports")]
 fn with_properties_filter(
     tree: Option<Arc<Expr<EmailLiteral>>>,
     properties_filter: Option<&Expr<PropertiesLiteral>>,
@@ -1060,6 +1122,7 @@ fn with_properties_filter(
     }))
 }
 
+#[cfg(feature = "ports")]
 fn map_properties_to_email(expr: &Expr<PropertiesLiteral>) -> Expr<EmailLiteral> {
     match expr {
         Expr::And(a, b) => Expr::and(map_properties_to_email(a), map_properties_to_email(b)),
@@ -1072,6 +1135,7 @@ fn map_properties_to_email(expr: &Expr<PropertiesLiteral>) -> Expr<EmailLiteral>
 /// ANDs a properties filter (mapped to [CallLiteral::Property] conditions) into
 /// the call filter tree, so the call query returns exactly the calls that also
 /// satisfy the tag filter.
+#[cfg(feature = "ports")]
 fn with_call_properties_filter(
     tree: Option<Arc<Expr<CallLiteral>>>,
     properties_filter: Option<&Expr<PropertiesLiteral>>,
@@ -1086,6 +1150,7 @@ fn with_call_properties_filter(
     }))
 }
 
+#[cfg(feature = "ports")]
 fn map_properties_to_call(expr: &Expr<PropertiesLiteral>) -> Expr<CallLiteral> {
     match expr {
         Expr::And(a, b) => Expr::and(map_properties_to_call(a), map_properties_to_call(b)),
@@ -1132,6 +1197,7 @@ pub struct GetCrmCompaniesRequest {
 
 /// Outcome of walking a `CrmCompanyLiteral` AST: the ids and the
 /// optional `hidden` constraint pulled out of the tree.
+#[cfg(feature = "ports")]
 #[derive(Debug, Default)]
 pub(crate) struct CrmCompanyFilterExtract {
     pub ids: Vec<Uuid>,
@@ -1145,6 +1211,7 @@ pub(crate) struct CrmCompanyFilterExtract {
 ///   - two `Hidden(_)` literals conflict (e.g. `Hidden(true) AND Hidden(false)`),
 ///   - an `Or(_, _)` branch mixes ids and a hidden literal (would change
 ///     set semantics in ways the simple extractor can't represent).
+#[cfg(feature = "ports")]
 fn extract_crm_company_filter(
     expr: &Expr<CrmCompanyLiteral>,
     out: &mut CrmCompanyFilterExtract,
@@ -1175,6 +1242,7 @@ fn extract_crm_company_filter(
 /// Helper for [`extract_crm_company_filter`]: an `Or` branch must be a
 /// pure id sub-tree (nested `Or` of `Id` literals) — any `Hidden`, `And`,
 /// or `Not` inside fails closed.
+#[cfg(feature = "ports")]
 fn or_is_ids_only(expr: &Expr<CrmCompanyLiteral>, out: &mut CrmCompanyFilterExtract) -> bool {
     match expr {
         Expr::Literal(CrmCompanyLiteral::Id(id)) => {
@@ -1219,6 +1287,8 @@ pub struct SoupProjectionHydration<Item = SoupItem<()>> {
     pub item: Item,
     /// Relation-backed document facts unavailable in direct Soup fields.
     pub document_server_facts: Option<SoupDocumentServerFacts>,
+    /// Signed property key produced by the same query; null for missing values.
+    pub sort_key: Option<f64>,
 }
 
 impl<Item> SoupProjectionHydration<Item> {
@@ -1230,6 +1300,7 @@ impl<Item> SoupProjectionHydration<Item> {
         SoupProjectionHydration {
             item: map(self.item),
             document_server_facts: self.document_server_facts,
+            sort_key: self.sort_key,
         }
     }
 }

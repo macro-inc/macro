@@ -29,7 +29,7 @@ type Item = {
 const ITEMS: Item[] = [
   { label: 'launch', page: 'messages', icon: HashIcon },
   { label: 'Thursday’s launch', page: 'email', icon: EmailIcon },
-  { label: 'Q3 launch plan', page: 'documents', icon: DocumentIcon },
+  { label: 'Website launch plan', page: 'documents', icon: DocumentIcon },
   { label: 'Launch checklist', page: 'tasks', icon: TaskIcon },
   {
     label: 'Plan Thursday’s launch',

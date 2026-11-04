@@ -1,4 +1,5 @@
 use async_graphql::{Enum, ID, SimpleObject, Union};
+use chrono::{DateTime, Utc};
 use rootcause::Report;
 use scheduled_action::domain::{
     event_trigger::{ActionTrigger, EventName, RoutineTrigger},
@@ -33,7 +34,17 @@ pub struct GraphqlScheduledAction {
 pub(crate) enum GraphqlScheduledActionTrigger {
     Cron(GraphqlScheduledActionCronTrigger),
     Events(GraphqlScheduledActionEventsTrigger),
+    Once(GraphqlScheduledActionOnceTrigger),
     Multiple(GraphqlScheduledActionMultipleTrigger),
+}
+
+/// A routine that runs a single time.
+#[derive(SimpleObject)]
+pub(crate) struct GraphqlScheduledActionOnceTrigger {
+    /// When the routine runs, as RFC 3339.
+    at: String,
+    /// Whether that run is still ahead. False once it has run.
+    pending: bool,
 }
 
 /// A routine that runs on a cron schedule.
@@ -52,6 +63,8 @@ pub(crate) struct GraphqlScheduledActionCronTrigger {
 pub(crate) struct GraphqlScheduledActionMultipleTrigger {
     /// Each schedule retains its own timezone and next firing.
     schedules: Vec<GraphqlScheduledActionCronTrigger>,
+    /// Single runs at exact times.
+    once: Vec<GraphqlScheduledActionOnceTrigger>,
     /// Events that can also trigger this routine.
     events: Option<GraphqlScheduledActionEventsTrigger>,
 }
@@ -70,8 +83,36 @@ pub(crate) struct GraphqlScheduledActionEventFilter {
     events: Vec<GraphqlScheduledActionEventName>,
     /// Entity ids that can satisfy this filter. Null matches every id; an empty list matches nothing.
     entity_ids: Option<Vec<ID>>,
+    /// Which GitHub App deliveries satisfy a `GITHUB` filter.
+    github: Option<GraphqlScheduledActionGithubSelector>,
+    /// Exact payload tests a GitHub delivery must pass, as a reader would state them.
+    payload_match: Vec<String>,
+    /// The task property that must have changed, and the values it must gain.
+    property: Option<GraphqlScheduledActionPropertySelector>,
     /// Yes/no question the triggering content must answer with yes before the routine runs.
     condition: Option<String>,
+}
+
+/// A task property a filter watches.
+#[derive(SimpleObject)]
+pub(crate) struct GraphqlScheduledActionPropertySelector {
+    /// The property definition that must have changed.
+    definition_id: ID,
+    /// Select option or referenced entity ids, one of which the change must add. Empty matches any change.
+    values: Vec<String>,
+}
+
+/// GitHub deliveries a filter watches. Empty lists match everything.
+#[derive(SimpleObject)]
+pub(crate) struct GraphqlScheduledActionGithubSelector {
+    /// GitHub event names, such as `workflow_run`.
+    events: Vec<String>,
+    /// Payload actions, such as `completed`.
+    actions: Vec<String>,
+    /// Repositories, as `owner/name`.
+    repositories: Vec<String>,
+    /// Whether deliveries caused by bots also match.
+    include_bots: bool,
 }
 
 /// The agent task a routine runs.
@@ -123,6 +164,12 @@ pub(crate) enum GraphqlScheduledActionEventName {
     ChannelMessagePatched,
     /// A channel message attachment was created.
     ChannelMessageAttachmentCreated,
+    /// A call the routine's owner started began.
+    CallStarted,
+    /// A call the routine's owner joined ended.
+    CallEnded,
+    /// Macro's GitHub App received a delivery.
+    Github,
 }
 
 impl From<EventName> for GraphqlScheduledActionEventName {
@@ -141,6 +188,9 @@ impl From<EventName> for GraphqlScheduledActionEventName {
             EventName::ChannelMentioned => Self::ChannelMentioned,
             EventName::ChannelMessagePatched => Self::ChannelMessagePatched,
             EventName::ChannelMessageAttachmentCreated => Self::ChannelMessageAttachmentCreated,
+            EventName::CallStarted => Self::CallStarted,
+            EventName::CallEnded => Self::CallEnded,
+            EventName::Github => Self::Github,
         }
     }
 }
@@ -202,7 +252,15 @@ fn trigger(action: &ScheduledAction) -> GraphqlScheduledActionTrigger {
                                     .flatten(),
                             })
                         }
-                        RoutineTrigger::Events { .. } => None,
+                        RoutineTrigger::Once { .. } | RoutineTrigger::Events { .. } => None,
+                    })
+                    .collect(),
+                once: triggers
+                    .as_slice()
+                    .iter()
+                    .filter_map(|trigger| match trigger {
+                        RoutineTrigger::Once { at } => Some(once_trigger(action, *at)),
+                        RoutineTrigger::Cron { .. } | RoutineTrigger::Events { .. } => None,
                     })
                     .collect(),
                 events: action.trigger.event_filters().map(event_filters),
@@ -211,6 +269,18 @@ fn trigger(action: &ScheduledAction) -> GraphqlScheduledActionTrigger {
         ActionTrigger::Events { filters } => {
             GraphqlScheduledActionTrigger::Events(event_filters(filters))
         }
+        ActionTrigger::Once { at } => {
+            GraphqlScheduledActionTrigger::Once(once_trigger(action, *at))
+        }
+    }
+}
+
+/// Pending firings never come after `next_run_at`, so a once time at or after
+/// it has yet to run.
+fn once_trigger(action: &ScheduledAction, at: DateTime<Utc>) -> GraphqlScheduledActionOnceTrigger {
+    GraphqlScheduledActionOnceTrigger {
+        at: at.to_rfc3339(),
+        pending: action.next_run_at.is_some_and(|next| next <= at),
     }
 }
 
@@ -243,6 +313,30 @@ fn event_filters(
                 entity_ids: filter
                     .ids()
                     .map(|ids| ids.iter().map(|id| ID(id.to_string())).collect()),
+                github: filter
+                    .github()
+                    .map(|selector| GraphqlScheduledActionGithubSelector {
+                        events: selector.events().to_vec(),
+                        actions: selector.actions().to_vec(),
+                        repositories: selector.repositories().to_vec(),
+                        include_bots: selector.include_bots(),
+                    }),
+                payload_match: filter
+                    .payload()
+                    .map(|conditions| {
+                        conditions
+                            .as_slice()
+                            .iter()
+                            .map(|condition| condition.describe())
+                            .collect()
+                    })
+                    .unwrap_or_default(),
+                property: filter.property().map(|selector| {
+                    GraphqlScheduledActionPropertySelector {
+                        definition_id: ID(selector.definition_id().to_string()),
+                        values: selector.values().to_vec(),
+                    }
+                }),
                 condition: filter
                     .condition()
                     .map(|condition| condition.as_str().to_owned()),

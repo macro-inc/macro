@@ -210,3 +210,28 @@ it('uses completed local states for reduced motion', () => {
   ).toContain('Completed');
   expect(view.container.querySelector('.demo-cursor')).toBeNull();
 });
+
+it('keeps Julia’s request and one completed Cursor PR response in the original bug thread', () => {
+  const view = render(() => <GithubConversationDemo agent />);
+  const thread = view.container.querySelector<HTMLElement>(
+    '[data-thread-id="bug"]'
+  )!;
+  expect(
+    within(thread).getByText(
+      'sign-in button does nothing on my phone. desktop is fine'
+    )
+  ).toBeTruthy();
+  expect(within(thread).getByText(/can you fix this/)).toBeTruthy();
+  expect(view.container.querySelector('[data-thread-id="request"]')).toBeNull();
+  visible(true);
+  vi.advanceTimersByTime(1400);
+  expect(thread.querySelectorAll('[data-agent="cursor"]')).toHaveLength(0);
+  expect(within(thread).queryByText('#491 · Fix mobile sign-in')).toBeNull();
+  vi.advanceTimersByTime(2800);
+  expect(within(thread).getByText('#491 · Fix mobile sign-in')).toBeTruthy();
+  expect(thread.querySelectorAll('[data-agent="cursor"]')).toHaveLength(1);
+  expect(within(thread).queryByText(/more replies/)).toBeNull();
+  vi.advanceTimersByTime(9900);
+  expect(within(thread).queryByText('#491 · Fix mobile sign-in')).toBeNull();
+  expect(within(thread).getByText(/can you fix this/)).toBeTruthy();
+});

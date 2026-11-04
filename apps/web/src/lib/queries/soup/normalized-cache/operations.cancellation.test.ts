@@ -220,7 +220,9 @@ describe('destination-folder refetch vs optimistic soup updates', () => {
     expect(observer.getCurrentResult().data).toEqual(['thread-1']);
 
     // Active observer + invalidation → refetch in flight.
-    testQueryClient.invalidateQueries({ queryKey: sourceListKey });
+    const invalidated = testQueryClient.invalidateQueries({
+      queryKey: sourceListKey,
+    });
     await vi.waitFor(() => {
       expect(source.state().fetchStatus).toBe('fetching');
     });
@@ -241,6 +243,7 @@ describe('destination-folder refetch vs optimistic soup updates', () => {
     source.setServerItems(['should-not-land']);
     await source.releaseNextFetch();
     expect(observer.getCurrentResult().data).toEqual(['thread-1']);
+    await invalidated;
   });
 
   it('channel-shaped partials (nested id) still cancel dependent queries', async () => {
@@ -248,7 +251,9 @@ describe('destination-folder refetch vs optimistic soup updates', () => {
     const { observer } = source.mount();
     await source.releaseNextFetch();
 
-    testQueryClient.invalidateQueries({ queryKey: sourceListKey });
+    const invalidated = testQueryClient.invalidateQueries({
+      queryKey: sourceListKey,
+    });
     await vi.waitFor(() => {
       expect(source.state().fetchStatus).toBe('fetching');
     });
@@ -271,6 +276,7 @@ describe('destination-folder refetch vs optimistic soup updates', () => {
     source.setServerItems(['should-not-land']);
     await source.releaseNextFetch();
     expect(observer.getCurrentResult().data).toEqual(['channel-1']);
+    await invalidated;
   });
 
   it('does not cancel a dependent query mid initial fetch (no data yet)', async () => {

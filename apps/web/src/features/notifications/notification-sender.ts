@@ -7,6 +7,7 @@ type SenderMetadataContent = {
   senderGithubLogin?: string;
   senderProfilePictureUrl?: string | null;
   botName?: string;
+  routineName?: string;
   mentionedBy?: string;
 };
 
@@ -29,6 +30,7 @@ export function getNotificationSenderFallbackName(
   return match(notification.notification_metadata.tag)
     .with('new_email', () => content?.sender ?? undefined)
     .with('ai_response', () => 'Macro agent')
+    .with('routine_run_finished', () => content?.routineName)
     .with(
       'agent_session_settled',
       'agent_session_waiting_for_input',
@@ -58,6 +60,13 @@ export function getNotificationSenderFallbackName(
       () => content?.senderGithubLogin ?? notification.sender_id ?? undefined
     )
     .otherwise(() => undefined);
+}
+
+/** The sender's avatar when the notification metadata carries one. */
+export function getNotificationSenderAvatarUrl(
+  notification: UnifiedNotification
+): string | undefined {
+  return senderContent(notification)?.senderProfilePictureUrl ?? undefined;
 }
 
 export type NotificationAgentSender = {

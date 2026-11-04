@@ -16,6 +16,7 @@
 import { IS_MAC } from '@core/constant/isMac';
 import type { FigEngine } from '@core/fig-engine/client';
 import type { NodeInfo, TextGeometry } from '@core/fig-engine/types';
+import { fireAndForget } from '@core/util/fireAndForget';
 import {
   createEffect,
   createSignal,
@@ -170,7 +171,9 @@ export function TextEditor(props: {
 
   // Edits from the panel, undo, and other people change the layout.
   createEffect(
-    on(props.viewer.editVersion, () => void load(), { defer: true })
+    on(props.viewer.editVersion, () => fireAndForget(load(), 'fig-editor'), {
+      defer: true,
+    })
   );
 
   let pending: Promise<unknown> = Promise.resolve();
@@ -215,7 +218,7 @@ export function TextEditor(props: {
       });
     }
     if (added > start) pendingStyle = undefined;
-    void send(ops, burstKey());
+    fireAndForget(send(ops, burstKey()), 'fig-editor');
   };
 
   /** Styles the selection, or what is typed next at a caret. */
@@ -226,13 +229,16 @@ export function TextEditor(props: {
       pendingStyle = { ...pendingStyle, ...patch };
       return;
     }
-    void send([
-      {
-        op: 'set',
-        ids: [props.id],
-        props: { ...patch, textRange: [start, end] },
-      },
-    ]);
+    fireAndForget(
+      send([
+        {
+          op: 'set',
+          ids: [props.id],
+          props: { ...patch, textRange: [start, end] },
+        },
+      ]),
+      'fig-editor'
+    );
   };
 
   const history = async (redo: boolean) => {
@@ -256,7 +262,8 @@ export function TextEditor(props: {
   const onDocumentDown = (e: PointerEvent) => {
     const target = e.target as Element | null;
     if (!target || root.contains(target)) return;
-    if (target.closest('[data-testid="fig-canvas"]')) void finish();
+    if (target.closest('[data-testid="fig-canvas"]'))
+      fireAndForget(finish(), 'fig-editor');
   };
   document.addEventListener('pointerdown', onDocumentDown, true);
   const onSelectionChange = () => {
@@ -279,7 +286,7 @@ export function TextEditor(props: {
     const mod = IS_MAC ? e.metaKey : e.ctrlKey;
     const k = e.key.toLowerCase();
     if (e.key === 'Escape') {
-      void finish();
+      fireAndForget(finish(), 'fig-editor');
       return true;
     }
     if (mod && !e.altKey && (k === 'b' || k === 'i' || k === 'u')) {
@@ -291,7 +298,7 @@ export function TextEditor(props: {
       return true;
     }
     if (mod && (k === 'z' || k === 'y')) {
-      void history(k === 'y' || e.shiftKey);
+      fireAndForget(history(k === 'y' || e.shiftKey), 'fig-editor');
       return true;
     }
     // Shift+Enter: Figma's line break within a paragraph.
@@ -324,10 +331,13 @@ export function TextEditor(props: {
       e.preventDefault();
       const { key, shiftKey } = e;
       // After what was typed is laid out.
-      void (async () => {
-        await pending;
-        moveByLine(key, shiftKey, vertical);
-      })();
+      fireAndForget(
+        (async () => {
+          await pending;
+          moveByLine(key, shiftKey, vertical);
+        })(),
+        'fig-editor'
+      );
       return;
     }
     goalX = undefined;

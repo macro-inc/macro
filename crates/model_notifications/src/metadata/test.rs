@@ -14,6 +14,78 @@ fn utc_datetime(value: &str) -> DateTime<Utc> {
         .with_timezone(&Utc)
 }
 
+#[test]
+fn calendar_join_requests_name_the_requester_and_the_event() {
+    let request = CalendarEventJoinRequestMetadata {
+        request_id: Uuid::nil(),
+        event_id: Uuid::nil(),
+        title: "Design review".into(),
+    };
+    let event: NotifEvent = serde_json::from_value(
+        serde_json::to_value(NotifEvent::CalendarEventJoinRequest(request.clone())).unwrap(),
+    )
+    .unwrap();
+    assert!(matches!(event, NotifEvent::CalendarEventJoinRequest(_)));
+    assert_eq!(
+        request
+            .format_title(Some(uid("macro|teo@macro.com")))
+            .unwrap(),
+        "teo@macro.com asked to join Design review"
+    );
+    assert_eq!(request.format_body(None).unwrap(), "Design review");
+    let untitled = CalendarEventJoinRequestMetadata {
+        title: String::new(),
+        ..request
+    };
+    assert_eq!(untitled.format_body(None).unwrap(), "(No title)");
+}
+
+#[test]
+fn calendar_join_requests_store_the_key_their_retirement_reads() {
+    let request_id = Uuid::now_v7();
+    let stored = serde_json::to_value(CalendarEventJoinRequestMetadata {
+        request_id,
+        event_id: Uuid::nil(),
+        title: "Design review".into(),
+    })
+    .unwrap();
+    assert_eq!(stored["requestId"], request_id.to_string());
+}
+
+#[test]
+fn view_access_notifications_preserve_permission_and_format_copy() {
+    let request = EntityAccessRequestedMetadata {
+        request_id: Uuid::nil(),
+        revision: 1,
+        entity_name: "Private document".into(),
+        file_type: Some("md".into()),
+        access_level: RequestedAccessLevel::View,
+    };
+    let encoded = serde_json::to_value(&request).unwrap();
+    assert_eq!(encoded["accessLevel"], "view");
+    let decoded: EntityAccessRequestedMetadata = serde_json::from_value(encoded).unwrap();
+    assert_eq!(decoded.access_level, RequestedAccessLevel::View);
+    assert!(
+        decoded
+            .format_title(Some(uid("macro|teo@macro.com")))
+            .unwrap()
+            .contains("requested view access")
+    );
+    let granted = EntityAccessGrantedMetadata {
+        request_id: request.request_id,
+        revision: 2,
+        entity_name: request.entity_name,
+        file_type: request.file_type,
+        access_level: RequestedAccessLevel::View,
+    };
+    assert!(
+        granted
+            .format_title(Some(uid("macro|owner@macro.com")))
+            .unwrap()
+            .contains("granted you view access")
+    );
+}
+
 fn channel_reaction() -> ChannelMessageReactionMetadata {
     ChannelMessageReactionMetadata {
         message_id: "message-1".to_string(),
@@ -1224,4 +1296,98 @@ fn agent_excerpt_flattens_whitespace_and_truncates() {
     let excerpt = agent_excerpt(&long);
     assert_eq!(excerpt.chars().count(), AGENT_EXCERPT_MAX_CHARS);
     assert!(excerpt.ends_with('…'));
+}
+
+#[test]
+fn agent_session_alerts_show_mentions_by_name() {
+    let settled = AgentSessionSettledMetadata {
+        session: agent_session_ref(),
+        turn: 0,
+        actor: None,
+        stop_reason: "end_turn".to_string(),
+        excerpt: Some(
+            r#"The most recent one was <m-user-mention>{"userId":"macro|user@example.com","email":"user@example.com"}</m-user-mention>, posted in <m-document-mention>{"documentId":"0195c94f-3b0c-79f0-8558-e5e509ac9dd8","documentName":"the request","blockName":"channel","blockParams":{}}</m-document-mention>; it returns Option<String>."#
+                .to_string(),
+        ),
+    };
+    assert_eq!(
+        settled.format_body(None).unwrap(),
+        "The most recent one was user@example.com, posted in the request; it returns Option<String>."
+    );
+
+    let waiting = AgentSessionWaitingForInputMetadata {
+        session: agent_session_ref(),
+        turn: 0,
+        question: r#"Should I ask <m-user-mention>{"userId":"macro|user@example.com","email":"user@example.com"}</m-user-mention>?"#.to_string(),
+    };
+    assert_eq!(
+        waiting.format_body(None).unwrap(),
+        "Should I ask user@example.com?"
+    );
+}
+
+#[test]
+fn agent_session_settled_with_only_hidden_tags_falls_back_to_the_session_name() {
+    let metadata = AgentSessionSettledMetadata {
+        session: agent_session_ref(),
+        turn: 0,
+        actor: None,
+        stop_reason: "end_turn".to_string(),
+        excerpt: Some(r#"<m-await>{"text":"thinking"}</m-await>"#.to_string()),
+    };
+    assert_eq!(metadata.format_body(None).unwrap(), "Fix the flaky test");
+}
+
+#[test]
+fn calendar_email_reminder_escapes_content_and_limits_each_distinct_alarm() {
+    use notification::domain::models::NotificationExtEmail;
+    let metadata = CalendarEventReminderMetadata {
+        event_id: Uuid::now_v7(),
+        occurrence_key: "one".into(),
+        title: "<img src=x> & Planning\r\nMeeting".into(),
+        starts_at: None,
+        ends_at: None,
+        start_date: Some(chrono::NaiveDate::from_ymd_opt(2026, 10, 5).unwrap()),
+        time_zone: Some("UTC".into()),
+        minutes_before: 10,
+    };
+    let email = metadata.format_email();
+    assert!(!email.body.contains("<img"));
+    assert!(email.body.contains("&lt;img"));
+    assert!(!email.subject.contains(['\r', '\n']));
+    assert!(email.body.contains("All day"));
+    let first = metadata.rate_limit_key();
+    let mut second = metadata.clone();
+    second.minutes_before = 5;
+    assert_ne!(first.as_bytes(), second.rate_limit_key().as_bytes());
+}
+
+#[test]
+fn routine_run_finished_names_the_routine_and_its_outcome() {
+    let failed = RoutineRunFinishedMetadata {
+        routine_id: Uuid::nil(),
+        routine_name: "Morning brief".to_string(),
+        outcome: RoutineRunOutcome::Failed,
+    };
+    let succeeded = RoutineRunFinishedMetadata {
+        outcome: RoutineRunOutcome::Succeeded,
+        ..failed.clone()
+    };
+
+    let value = serde_json::to_value(&failed).unwrap();
+    assert_eq!(value["routineId"], "00000000-0000-0000-0000-000000000000");
+    assert_eq!(value["routineName"], "Morning brief");
+    assert_eq!(value["outcome"], "failed");
+    assert_eq!(failed.format_title(None).unwrap(), "Morning brief failed");
+    assert_eq!(
+        succeeded.format_title(None).unwrap(),
+        "Morning brief finished"
+    );
+
+    let event: NotifEvent = serde_json::from_value(serde_json::json!({
+        "tag": "routine_run_finished",
+        "content": value,
+    }))
+    .unwrap();
+    assert!(matches!(event, NotifEvent::RoutineRunFinished(_)));
 }

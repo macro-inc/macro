@@ -32,6 +32,10 @@ not configured personal availability use the team schedule.
 Round robin assigns one available host, favoring the least assigned host. Public
 slots are displayed on the visitor's local date. Existing bookings retain their
 original event/schedule snapshots for management after a link is edited or removed.
+Replacement-slot requests accept `timeZone` with `date` to return starts on the
+visitor's local day, across host dates and daylight-saving boundaries. Requests
+without `timeZone` retain schedule-date semantics for existing clients and host
+administration. The booking's own reservation and calendar event remain excluded.
 
 Booking queries accept a half-open `from`/`to` range of start times, up to 733 days
 (room for two full comparison years across daylight-saving changes). They return the

@@ -1,0 +1,22 @@
+id: tsx-tabs-from-ui
+language: tsx
+severity: error
+message: Build tabs and segmented choices from @ui `Tabs` or `TabSelector`, not Kobalte directly.
+note: |-
+  Rule FE-60 in .agents/rules/web/design-system.md. `Tabs` is the one inline
+  single choice and `TabSelector` owns tabs with panels or a dynamic
+  collection; both carry the desktop pill treatment and the touch fallbacks.
+  The Fig editor keeps its editor-native panel tabs, and the mobile share
+  sheet keeps its underline tab bar.
+files:
+  - apps/web/src/**
+ignores:
+  - apps/web/src/components/ui/**
+  - apps/web/src/features/block-fig/**
+  - apps/web/src/lib/core/component/UnderlineTabs.tsx
+rule:
+  kind: string_fragment
+  regex: ^@kobalte/core/(tabs|segmented-control|toggle-group)$
+  inside:
+    kind: import_statement
+    stopBy: end

@@ -1,4 +1,5 @@
-import { type Accessor, createSignal } from 'solid-js';
+import { fireAndForget } from '@core/util/fireAndForget';
+import { type Accessor, createSignal, onCleanup } from 'solid-js';
 import type {
   EmailAttachmentStorage,
   EmailComposeFeedback,
@@ -10,6 +11,7 @@ import type { EmailFormContextValue } from './email-form-types';
 type AttachmentState = Pick<
   EmailFormContextValue['attachments'],
   | 'list'
+  | 'markUploadComplete'
   | 'assignAttachmentId'
   | 'markAttachmentUploaded'
   | 'clearAttachmentId'
@@ -19,9 +21,8 @@ type AttachmentState = Pick<
 >;
 
 /**
- * A queued save carries only text; file bytes live in the composer's memory
- * until a save commits, so adding attachments offline is refused rather than
- * silently missed. Resolves true when the add must not proceed.
+ * Attachment creation requires connectivity; existing files remain in the
+ * durable working copy while offline. Resolves true when the add must not proceed.
  */
 export async function refuseAttachmentsOffline(
   connectivity: EmailConnectivity,
@@ -40,10 +41,13 @@ export function createAttachmentPersistence(options: {
   attachments: AttachmentState;
   /** Durable working copies must not hide attachments still present on the server. */
   confirmRemoval?: boolean;
+  allowed?: Accessor<boolean>;
   draftId: Accessor<string | null | undefined>;
   inboxId: Accessor<string | undefined>;
+  draftGeneration?: Accessor<number>;
   services: Pick<
     EmailAttachmentStorage,
+    | 'completeAttachment'
     | 'uploadAttachments'
     | 'addForwardedAttachments'
     | 'removeAttachment'
@@ -53,6 +57,12 @@ export function createAttachmentPersistence(options: {
   // An assigned ID only proves that the attachment record exists. Every save
   // must also wait for content uploads started by earlier concurrent saves.
   const inFlight = new Set<Promise<void>>();
+  const pendingFiles = new Map<File, number>();
+  let disposed = false;
+  onCleanup(() => {
+    disposed = true;
+    generation += 1;
+  });
   const [uploading, setUploading] = createSignal(false);
   let generation = 0;
   const [removals, setRemovals] = createSignal(0);
@@ -75,20 +85,34 @@ export function createAttachmentPersistence(options: {
       return removed;
     },
     async upload(draftId: string, inbox = { inboxId: options.inboxId() }) {
+      if (disposed || options.allowed?.() === false) return;
       const uploadGeneration = generation;
+      const draftGeneration = options.draftGeneration?.() ?? 0;
       const stillCurrent = () =>
-        uploadGeneration === generation && options.draftId() === draftId;
+        !disposed &&
+        options.allowed?.() !== false &&
+        uploadGeneration === generation &&
+        draftGeneration === (options.draftGeneration?.() ?? 0) &&
+        options.draftId() === draftId &&
+        options.inboxId() === inbox.inboxId;
       for (const attachment of options.attachments.list()) {
         if (
           attachment.type !== 'local' ||
+          pendingFiles.get(attachment.file) === uploadGeneration ||
           !attachment.uploadPending ||
           !attachment.attachmentId
         )
           continue;
+        if (options.confirmRemoval) {
+          // Durable transport checks the latest receipt under a cross-tab upload lock.
+          options.attachments.clearAttachmentId(attachment.file);
+          continue;
+        }
         await options.services.removeAttachment({
           draftId,
           attachmentId: attachment.attachmentId,
           inboxId: inbox.inboxId,
+          draftGeneration,
         });
         if (!stillCurrent()) return;
         options.attachments.clearAttachmentId(attachment.file);
@@ -99,14 +123,19 @@ export function createAttachmentPersistence(options: {
           (
             attachment
           ): attachment is Extract<DraftFormAttachment, { type: 'local' }> =>
-            attachment.type === 'local' && !attachment.attachmentId
+            attachment.type === 'local' &&
+            !attachment.attachmentId &&
+            pendingFiles.get(attachment.file) !== uploadGeneration
         );
       let run: Promise<void> | undefined;
       if (attachments.length) {
+        for (const attachment of attachments)
+          pendingFiles.set(attachment.file, uploadGeneration);
         run = options.services.uploadAttachments({
           draftId: draftId,
           attachments: attachments.map((attachment) => attachment.file),
           inboxId: inbox.inboxId,
+          draftGeneration,
           onAttachmentAdded: (file, id) => {
             if (stillCurrent())
               options.attachments.assignAttachmentId(file, id);
@@ -125,15 +154,33 @@ export function createAttachmentPersistence(options: {
         );
         inFlight.add(settled);
         setUploading(true);
-        void settled.then(() => {
-          inFlight.delete(settled);
-          setUploading(inFlight.size > 0);
-        });
+        fireAndForget(
+          settled.then(() => {
+            for (const attachment of attachments)
+              if (pendingFiles.get(attachment.file) === uploadGeneration)
+                pendingFiles.delete(attachment.file);
+            inFlight.delete(settled);
+            setUploading(inFlight.size > 0);
+          }),
+          'email-compose'
+        );
       }
       while (inFlight.size) await Promise.all([...inFlight]);
       // All work has settled; rethrow this save's own upload failure.
       if (run) await run;
       if (!stillCurrent()) return;
+      for (const attachment of options.attachments.list()) {
+        if (attachment.type === 'remote' && attachment.uploadPending) {
+          await options.services.completeAttachment({
+            draftId,
+            attachmentId: attachment.attachmentId,
+            inboxId: inbox.inboxId,
+            draftGeneration,
+          });
+          if (stillCurrent())
+            options.attachments.markUploadComplete(attachment.attachmentId);
+        }
+      }
       const forwarded = options.attachments
         .list()
         .filter((attachment) => attachment.type === 'forwarded');
@@ -141,6 +188,7 @@ export function createAttachmentPersistence(options: {
         await options.services.addForwardedAttachments({
           draftId,
           inboxId: inbox.inboxId,
+          draftGeneration,
           attachments: forwarded.map(({ attachmentId }) => ({ attachmentId })),
         });
       }
@@ -162,6 +210,7 @@ export function createAttachmentPersistence(options: {
               draftId,
               attachmentId: attachment.attachmentId,
               inboxId: options.inboxId(),
+              draftGeneration: options.draftGeneration?.() ?? 0,
             }
           : undefined;
       if (options.confirmRemoval && request) {

@@ -1,6 +1,9 @@
+import { EntityRowTags } from '@property/tags';
+import { EntityType } from '@service-properties/generated/schemas/entityType';
 import { cn } from '@ui';
 import { Match, Show, Switch } from 'solid-js';
 import { Entity } from '../../entity';
+import { TaskPropertyControl } from '../../extractors-property/task-property-control';
 import {
   isChannelEntity,
   isChannelMessageEntity,
@@ -55,6 +58,11 @@ export function NarrowSingleLineLayout(props: LayoutProps) {
         placement="title"
         class="ph-no-capture flex min-w-0 items-center gap-2 truncate"
       >
+        <Show when={isTaskEntity(props.entity) && props.entity}>
+          {(task) => (
+            <TaskPropertyControl entity={task()} property="priority" />
+          )}
+        </Show>
         <div class="size-4 shrink-0">
           <Show
             when={props.icon}
@@ -110,10 +118,23 @@ export function NarrowSingleLineLayout(props: LayoutProps) {
           </Match>
         </Switch>
         {props.titleTrailing}
+        <Show when={isTaskEntity(props.entity) ? props.entity : undefined}>
+          {(task) => (
+            <EntityRowTags
+              entityId={task().id}
+              entityType={EntityType.TASK}
+              properties={task().properties}
+              maxVisible={0}
+              onFilterByTag={props.onFilterByTag}
+              class="ml-auto shrink-0"
+            />
+          )}
+        </Show>
       </Entity.Slot>
 
       <Show
         when={
+          props.referenceProperties ||
           props.scheduleStatus ||
           (!props.hasNotifications &&
             !(isChannelEntity(props.entity) && isSearchEntity(props.entity)))
@@ -123,14 +144,16 @@ export function NarrowSingleLineLayout(props: LayoutProps) {
           placement="timestamp"
           class="flex items-center justify-end gap-1 text-xs text-right text-ink-extra-muted font-light"
         >
+          {props.referenceProperties}
           {props.scheduleStatus}
           <Show when={!props.hasNotifications}>
             <Switch fallback={<Entity.Timestamp entity={props.entity} />}>
               <Match when={isTaskEntity(props.entity)}>
                 <Entity.Properties
                   entity={props.entity}
-                  maxUserStackUsers={0}
+                  maxUserStackUsers={1}
                   showCaret={false}
+                  hidePriority
                 />
               </Match>
               <Match

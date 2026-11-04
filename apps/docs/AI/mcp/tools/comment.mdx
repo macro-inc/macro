@@ -1,0 +1,20 @@
+---
+title: Comment
+description: >-
+  Add a comment to the Discussion of a document, task, Tasks project
+  (initiative), CRM company or CRM contact on behalf of the user, or reply in an
+  existing comment thread on any of them.
+---
+
+# Comment
+
+Add a comment to the Discussion of a document, task, Tasks project (initiative), CRM company or CRM contact on behalf of the user, or reply in an existing comment thread on any of them. For a new comment, address the item by entityType and entityId. For a reply, pass threadId; a thread id is enough to find its item, so entityType and entityId may be omitted. Thread ids come from ReadDiscussion, or from ReadContent for a document. Only use this when explicitly asked to comment or reply. Write content in Macro markdown and link people and items with the same mention tags as in documents; they render as chips and notify the people mentioned. To comment on a passage of text in a document, use CommentOnText instead; for a message in a channel, use SendChannelMessage.
+
+## Parameters
+
+| Parameter | Type | Required | Description |
+| --- | --- | --- | --- |
+| `entityType` | `"document"` \| `"initiative"` \| `"crm_company"` \| `"crm_contact"` | No | The kind of item to comment on. Required with entityId for a new comment; optional for a reply. |
+| `entityId` | string | No | The id of the item to comment on. Required with entityType for a new comment; optional for a reply. |
+| `threadId` | string | No | The id of the thread to reply in. Omit to start a new Discussion comment on the item. |
+| `content` | string | Yes | Comment content in Macro markdown, the same syntax as markdown documents, including mention tags. |

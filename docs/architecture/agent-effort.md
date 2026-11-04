@@ -49,8 +49,8 @@ Sources checked September 21, 2026:
 - Preflight capability cache identity includes the harness and model. A selection
   from another target is discarded. External harnesses expose controls after
   opening a session; model-specific preflight is not guessed.
-- A model chosen at creation is the session's model from its row. In-memory,
-  Cursor, and Claude cloud runtimes start on it; the harness selects it over ACP
+- A model chosen at creation is the session's model from its row. In-memory
+  and Cursor runtimes start on it; the harness selects it over ACP
   for the others and holds the first prompt until the runtime accepts it.
 - An effort chosen at creation waits for the runtime's reported configuration,
   checks the effort choices, then confirms effort before sending the prompt.
@@ -92,11 +92,16 @@ an external harness result.
 
 ## Model menu interaction
 
-Effort is a submenu of each model in new-chat and running-session selectors.
+The selected model also has a **speedometer-style effort** button beside its model selector
+in new-chat and running-session composers. It opens a compact desktop popover
+or a dedicated bottom sheet on mobile. Its needle reflects the selected level. A simple list shows the supported effort levels and checks the current choice. Selecting a level applies it and closes the menu; models with fewer than two choices hide the button.
+
+On desktop, effort remains available in each model’s submenu.
 Discovery runs when the submenu opens, scoped to that model and harness;
 the current session's advertised options take precedence for its selected model.
 The trigger displays the model and selected effort together. Keyboard Right Arrow
-and touch taps open the same submenu. Loading, discovery errors, and models with
+opens the submenu. On mobile, tapping a model selects it directly; use the adjacent
+effort button to adjust its supported effort levels. Loading, discovery errors, and models with
 no effort options keep ordinary model selection available.
 
 A combined running-session selection waits for the model's correlated ACP

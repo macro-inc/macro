@@ -2,19 +2,26 @@
 //! version's bytes in the document storage bucket, and new versions written
 //! the way the storage service's `simple_save` writes them. Presentations
 //! are read and written; designs, Photoshop documents, and Illustrator
-//! documents are read.
+//! documents are read. Word documents are stored as extracted parts and read
+//! back as the archive the storage service exports.
 
 use crate::domain::design::DesignFiles;
 use crate::domain::illustrator::IllustratorFiles;
 use crate::domain::photoshop::PhotoshopFiles;
 use crate::domain::presentation::PresentationFiles;
+use crate::domain::word_document::WordDocumentFiles;
 use anyhow::Context;
 use aws_sdk_s3::primitives::ByteStream;
+use futures::{StreamExt, TryStreamExt};
 use model::document::FileType;
+use pptx_engine::zip::{WriteData, Writer};
 use s3_key::build_cloud_storage_bucket_document_key;
 use sqlx::PgPool;
 
 const PPTX_MIME: &str = "application/vnd.openxmlformats-officedocument.presentationml.presentation";
+
+/// Word parts downloaded at once.
+const PART_DOWNLOADS: usize = 8;
 
 /// Reads and writes document versions through Postgres and S3.
 #[derive(Clone)]
@@ -32,6 +39,18 @@ impl S3DocumentFiles {
             s3,
             bucket: bucket.into(),
         }
+    }
+
+    /// The bytes of one stored object.
+    async fn object(&self, key: &str) -> anyhow::Result<Vec<u8>> {
+        let object = self
+            .s3
+            .get_object()
+            .bucket(&self.bucket)
+            .key(key)
+            .send()
+            .await?;
+        Ok(object.body.collect().await?.into_bytes().to_vec())
     }
 
     /// The latest version's bytes of a document of one of the `expected`
@@ -56,21 +75,44 @@ impl S3DocumentFiles {
                 .await
                 .context("finding the latest version")?;
         let key = build_cloud_storage_bucket_document_key(&document.owner, document_id, version);
-        let object = self
-            .s3
-            .get_object()
-            .bucket(&self.bucket)
-            .key(&key)
-            .send()
+        self.object(&key)
             .await
-            .with_context(|| format!("reading the {kind} file"))?;
-        Ok(object
-            .body
-            .collect()
+            .with_context(|| format!("reading the {kind} file"))
+    }
+}
+
+#[async_trait::async_trait]
+impl WordDocumentFiles for S3DocumentFiles {
+    /// The parts the upload worker extracted, zipped in path order as the
+    /// storage service's export zips them.
+    #[tracing::instrument(err, skip(self), fields(part_count))]
+    async fn original(&self, document_id: &str) -> anyhow::Result<Option<Vec<u8>>> {
+        let mut parts = macro_db_client::document::get_document_bom(self.db.clone(), document_id)
             .await
-            .with_context(|| format!("downloading the {kind} file"))?
-            .into_bytes()
-            .to_vec())
+            .context("loading the Word document's parts")?;
+        tracing::Span::current().record("part_count", parts.len());
+        if parts.is_empty() {
+            return Ok(None);
+        }
+        parts.sort_by(|a, b| a.path.cmp(&b.path));
+        let keys: Vec<String> = parts.iter().map(|part| part.sha.clone()).collect();
+        let contents: Vec<Vec<u8>> = futures::stream::iter(keys)
+            .map(|key| async move { self.object(&key).await })
+            .buffered(PART_DOWNLOADS)
+            .try_collect()
+            .await
+            .context("reading the Word document's parts")?;
+        let mut zip = Writer::new();
+        for (part, data) in parts.iter().zip(&contents) {
+            zip.add(
+                &part.path,
+                WriteData::Fresh {
+                    data,
+                    compress: false,
+                },
+            )?;
+        }
+        Ok(Some(zip.finish()?))
     }
 }
 

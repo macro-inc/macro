@@ -2,13 +2,22 @@ import {
   copyFragment,
   type GraphicsEditor,
   type GraphicsFragment,
+  type Point,
   parseFragment,
   pasteCommand,
+  screenToWorld,
+  worldBounds,
 } from '@macro-inc/graphics';
 import { importExcalidraw } from './core/excalidraw';
 import { validCanvasTextDocument } from './core/text-codec';
 
 const mime = 'application/x-macro-graphics';
+// Exact placement must not be shifted by the destination canvas's snap grid.
+const pasteAtPositionCommand: typeof pasteCommand = {
+  ...pasteCommand,
+  apply: (context, payload) =>
+    pasteCommand.apply({ ...context, snapUnit: undefined }, payload),
+};
 const editingText = (target: EventTarget | null) =>
   target instanceof Element &&
   !!target.closest(
@@ -20,8 +29,11 @@ export function createCanvasClipboard(
   editor: GraphicsEditor,
   notify: (message: string) => void,
   pasteText?: (text: string, html?: string) => void,
-  pasteFiles?: (files: File[]) => void
+  pasteFiles?: (files: File[]) => void,
+  placement?: { canvasId: string; center: () => Point }
 ) {
+  const canvasId = placement?.canvasId ?? crypto.randomUUID();
+  let viewport: HTMLElement | undefined;
   let pastedText = '',
     pasteCount = 0;
   const serialize = () => {
@@ -29,32 +41,64 @@ export function createCanvasClipboard(
       editor.document,
       editor.getSession().selectedIds
     );
-    return fragment ? JSON.stringify(fragment) : undefined;
+    return fragment
+      ? JSON.stringify({ ...fragment, sourceCanvasId: canvasId })
+      : undefined;
   };
-  const insert = (fragment: GraphicsFragment, text: string) => {
+  const insert = (
+    fragment: GraphicsFragment,
+    text: string,
+    sameCanvas: boolean,
+    inPlace: boolean
+  ) => {
     if (!validCanvasTextDocument(fragment.scene)) {
       notify('Clipboard has invalid Canvas Next text');
       return false;
     }
-    pasteCount = text === pastedText ? pasteCount + 1 : 1;
-    pastedText = text;
-    editor.execute(pasteCommand, {
-      fragment,
-      createId: () => crypto.randomUUID(),
-      offset: { x: 24 * pasteCount, y: 24 * pasteCount },
-    });
+    let offset: Point = { x: 0, y: 0 };
+    if (!inPlace && sameCanvas) {
+      pasteCount = text === pastedText ? pasteCount + 1 : 1;
+      pastedText = text;
+      offset = { x: 24 * pasteCount, y: 24 * pasteCount };
+    } else if (!inPlace) {
+      const center =
+        placement?.center() ??
+        screenToWorld(editor.getCamera(), {
+          x: (viewport?.clientWidth ?? 0) / 2,
+          y: (viewport?.clientHeight ?? 0) / 2,
+        });
+      const bounds = worldBounds(fragment.scene, fragment.scene.rootId);
+      offset = {
+        x: center.x - (bounds.x + bounds.width / 2),
+        y: center.y - (bounds.y + bounds.height / 2),
+      };
+    }
+    editor.execute(
+      sameCanvas && !inPlace ? pasteCommand : pasteAtPositionCommand,
+      {
+        fragment,
+        createId: () => crypto.randomUUID(),
+        offset,
+      }
+    );
     return true;
   };
-  const paste = (text: string, html?: string) => {
+  const paste = (text: string, html?: string, inPlace = false) => {
     const fragment = parseFragment(text);
     if (fragment) {
-      const pasted = insert(fragment, text);
+      const metadata: { sourceCanvasId?: unknown } = JSON.parse(text);
+      const pasted = insert(
+        fragment,
+        text,
+        metadata.sourceCanvasId === canvasId,
+        inPlace
+      );
       if (pasted) notify('Pasted selection');
       return pasted;
     }
     const excalidraw = importExcalidraw(text);
     if (excalidraw) {
-      const pasted = insert(excalidraw.fragment, text);
+      const pasted = insert(excalidraw.fragment, text, false, inPlace);
       if (pasted) notify(excalidrawNotice(excalidraw));
       return pasted;
     }
@@ -89,7 +133,7 @@ export function createCanvasClipboard(
   return {
     copy: () => copy(),
     cut: () => copy(true),
-    async paste() {
+    async paste(inPlace = false) {
       try {
         if (pasteFiles && navigator.clipboard.read) {
           const items = await navigator.clipboard.read();
@@ -116,13 +160,22 @@ export function createCanvasClipboard(
             }
           }
           if (files.length) pasteFiles(files);
-          else paste(text, html);
-        } else paste(await navigator.clipboard.readText());
+          else paste(text, html, inPlace);
+        } else paste(await navigator.clipboard.readText(), undefined, inPlace);
       } catch {
         notify('Clipboard permission denied. Use the paste keyboard shortcut.');
       }
     },
     attach(element: HTMLElement) {
+      viewport = element;
+      // ClipboardEvent has no modifier keys; capture them from native keyboard events.
+      let shiftHeld = false;
+      const modifiers = (event: KeyboardEvent) => {
+        shiftHeld = event.shiftKey;
+      };
+      const resetModifiers = () => {
+        shiftHeld = false;
+      };
       const write = (event: ClipboardEvent) => {
         if (
           event.defaultPrevented ||
@@ -158,7 +211,8 @@ export function createCanvasClipboard(
           paste(
             event.clipboardData.getData(mime) ||
               event.clipboardData.getData('text/plain'),
-            event.clipboardData.getData('text/html')
+            event.clipboardData.getData('text/html'),
+            shiftHeld
           )
         ) {
           event.preventDefault();
@@ -168,10 +222,19 @@ export function createCanvasClipboard(
       element.addEventListener('copy', write);
       element.addEventListener('cut', write);
       element.addEventListener('paste', read);
+      element.addEventListener('keydown', modifiers, true);
+      element.addEventListener('keyup', modifiers, true);
+      element.addEventListener('focusout', resetModifiers);
+      window.addEventListener('blur', resetModifiers);
       return () => {
         element.removeEventListener('copy', write);
         element.removeEventListener('cut', write);
         element.removeEventListener('paste', read);
+        element.removeEventListener('keydown', modifiers, true);
+        element.removeEventListener('keyup', modifiers, true);
+        element.removeEventListener('focusout', resetModifiers);
+        window.removeEventListener('blur', resetModifiers);
+        if (viewport === element) viewport = undefined;
       };
     },
   };

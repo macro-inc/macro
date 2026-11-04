@@ -5,24 +5,10 @@ mod test;
 
 use entity_access_db_utils::SimpleEntity;
 use model_entity::EntityType;
-use models_permissions::share_permission::access_level::AccessLevel;
 use sqlx::{PgPool, Postgres, QueryBuilder, Transaction};
 use uuid::Uuid;
 
-use crate::domain::{models::EntityAccessSourceType, ports::EntityAccessManagementRepository};
-
-/// A source entity we need to update permissions for
-#[derive(Clone, Debug)]
-struct ProjectSourceEntity {
-    /// The project entity that was shared
-    pub project_id: uuid::Uuid,
-    /// This could be a user, channel or a team
-    pub source_id: String,
-    /// The source type
-    pub source_type: EntityAccessSourceType,
-    /// The access level for the source entity
-    pub access_level: AccessLevel,
-}
+use crate::domain::ports::EntityAccessManagementRepository;
 
 /// PostgreSQL-backed implementation of [`EntityAccessManagementRepository`]
 #[derive(Clone)]
@@ -58,39 +44,6 @@ impl PgRepository {
     ) -> Result<Vec<uuid::Uuid>, sqlx::Error> {
         entity_access_db_utils::walk_up_project_tree(transaction, project_id).await
     }
-
-    /// Given a list of project ids, this will return a list of all source entities (source_id/source_type/access_level) entries that we need to insert rows for the new entity
-    #[tracing::instrument(skip(self, transaction), err)]
-    async fn get_all_source_entities_for_projects(
-        &self,
-        transaction: &mut Transaction<'_, Postgres>,
-        project_ids: &[uuid::Uuid],
-    ) -> Result<Vec<ProjectSourceEntity>, sqlx::Error> {
-        // Grab every instance of any project_ids being shared
-        // This will allow us to insert records for all these source entities for the new id
-        let result = sqlx::query!(
-            r#"
-            SELECT
-            entity_id,
-            source_id,
-            source_type as "source_type:EntityAccessSourceType",
-            access_level as "access_level:AccessLevel"
-            FROM entity_access
-            WHERE entity_id = ANY($1) AND entity_type = 'project' AND granted_from_project_id IS NULL
-            "#,
-            project_ids,
-        )
-        .map(|r| ProjectSourceEntity {
-            project_id: r.entity_id,
-            source_id: r.source_id,
-            source_type: r.source_type,
-            access_level: r.access_level,
-        })
-        .fetch_all(transaction.as_mut())
-        .await?;
-
-        Ok(result)
-    }
 }
 
 impl EntityAccessManagementRepository for PgRepository {
@@ -104,34 +57,15 @@ impl EntityAccessManagementRepository for PgRepository {
         project_id: &uuid::Uuid,
     ) -> Result<(), Self::Err> {
         let mut transaction = self.pool.begin().await?;
+        entity_access_db_utils::team_share::acquire_guard(&mut transaction).await?;
 
-        let walked_up_project_ids = self
-            .walk_up_project_tree(&mut transaction, project_id)
-            .await?;
-
-        let source_entities = self
-            .get_all_source_entities_for_projects(&mut transaction, &walked_up_project_ids)
-            .await?;
-
-        if !source_entities.is_empty() {
-            let entity_type_str: &str = entity_type.into();
-
-            let mut qb: QueryBuilder<Postgres> = QueryBuilder::new(
-                "INSERT INTO entity_access (entity_id, entity_type, source_id, source_type, access_level, granted_from_project_id) ",
-            );
-
-            qb.push_values(&source_entities, |mut b, source| {
-                b.push_bind(entity_id)
-                    .push_bind(entity_type_str)
-                    .push_bind(&source.source_id)
-                    .push_bind(source.source_type)
-                    .push_bind(source.access_level)
-                    .push_bind(source.project_id.to_string());
-            });
-
-            qb.push(" ON CONFLICT DO NOTHING");
-            qb.build().execute(transaction.as_mut()).await?;
-        }
+        entity_access_db_utils::project_grants::inherit_project_grants(
+            &mut transaction,
+            entity_id,
+            entity_type,
+            project_id,
+        )
+        .await?;
 
         transaction.commit().await?;
 
@@ -146,32 +80,16 @@ impl EntityAccessManagementRepository for PgRepository {
         old_project_id: &uuid::Uuid,
     ) -> Result<(), Self::Err> {
         let mut transaction = self.pool.begin().await?;
+        entity_access_db_utils::team_share::acquire_guard(&mut transaction).await?;
 
-        let walked_up_project_ids = self
-            .walk_up_project_tree(&mut transaction, old_project_id)
-            .await?;
-
-        if !walked_up_project_ids.is_empty() {
-            let entity_type_str: &str = entity_type.into();
-            sqlx::query!(
-                r#"
-                DELETE FROM entity_access
-                WHERE entity_id = $1
-                AND entity_type = $2
-                AND granted_from_project_id = ANY($3)
-                "#,
-                entity_id,
-                entity_type_str,
-                &walked_up_project_ids
-                    .into_iter()
-                    .map(|s| s.to_string())
-                    .collect::<Vec<String>>(),
-            )
-            .execute(transaction.as_mut())
-            .await?;
-
-            transaction.commit().await?;
-        }
+        entity_access_db_utils::project_grants::drop_project_grants(
+            &mut transaction,
+            entity_id,
+            entity_type,
+            old_project_id,
+        )
+        .await?;
+        transaction.commit().await?;
 
         Ok(())
     }
@@ -184,6 +102,7 @@ impl EntityAccessManagementRepository for PgRepository {
         new_project_id: Option<&uuid::Uuid>,
     ) -> Result<(), Self::Err> {
         let mut transaction = self.pool.begin().await?;
+        entity_access_db_utils::team_share::acquire_guard(&mut transaction).await?;
 
         // The project entities we will need to update (including the project itself)
         let project_entities = self
@@ -227,9 +146,11 @@ impl EntityAccessManagementRepository for PgRepository {
                 .await?;
 
             // get all source entities for the new walked up projects
-            let source_entities = self
-                .get_all_source_entities_for_projects(&mut transaction, &new_walked_up_project_ids)
-                .await?;
+            let source_entities = entity_access_db_utils::project_grants::project_grant_sources(
+                &mut transaction,
+                &new_walked_up_project_ids,
+            )
+            .await?;
 
             if !source_entities.is_empty() {
                 let mut qb: QueryBuilder<Postgres> = QueryBuilder::new(

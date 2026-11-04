@@ -1,12 +1,12 @@
 import { SidePanel } from '@components/app/side-panel/SidePanel';
-import ArrowSquareOut from '@phosphor/arrow-square-out.svg';
-import CheckCircle from '@phosphor/check-circle.svg';
-import Circle from '@phosphor/circle.svg';
-import CircleNotch from '@phosphor/circle-notch.svg';
-import GitMerge from '@phosphor/git-merge.svg';
-import GitPullRequest from '@phosphor/git-pull-request.svg';
-import MinusCircle from '@phosphor/minus-circle.svg';
-import XCircle from '@phosphor/x-circle.svg';
+import ArrowSquareOut from '@icon/system/regular/arrow-square-out.svg';
+import CheckCircle from '@icon/system/regular/check-circle.svg';
+import Circle from '@icon/system/regular/circle.svg';
+import CircleNotch from '@icon/system/regular/circle-notch.svg';
+import GitMerge from '@icon/system/regular/git-merge.svg';
+import GitPullRequest from '@icon/system/regular/git-pull-request.svg';
+import MinusCircle from '@icon/system/regular/minus-circle.svg';
+import XCircle from '@icon/system/regular/x-circle.svg';
 import type {
   GithubPullRequest,
   GithubPullRequestCheckRun,
@@ -22,12 +22,14 @@ const STATUS_ICON_CLASS: Record<string, string> = {
   open: 'text-success',
   merged: 'text-note',
   closed: 'text-failure',
+  draft: 'text-ink-muted',
 };
 
 const STATUS_TEXT_CLASS: Record<string, string> = {
   open: 'text-success',
   merged: 'text-note',
   closed: 'text-failure',
+  draft: 'text-ink-muted',
 };
 
 const PR_PILL_CLASS =
@@ -246,7 +248,7 @@ export function GithubPullRequestChecksContent(props: {
                       target="_blank"
                       rel="noreferrer"
                       aria-label={`Open ${check.name} on GitHub`}
-                      class="text-link hover:text-link-hover visited:text-link-visited transition-colors"
+                      class="text-ink-muted hover:text-ink transition-colors"
                     >
                       <ArrowSquareOut class="size-3" />
                     </a>

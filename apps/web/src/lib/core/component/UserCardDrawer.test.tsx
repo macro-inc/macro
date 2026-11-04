@@ -40,6 +40,8 @@ vi.mock('@core/context/user', () => ({
 }));
 
 vi.mock('@core/user', () => ({
+  isAgentAccount: () => false,
+  tryMacroId: () => undefined,
   useIsConnectedSecondaryInbox: () => () => false,
 }));
 
@@ -55,6 +57,10 @@ vi.mock('@app/features/crm/record-adapter', () => ({
 
 vi.mock('@queries/team/teams', () => ({
   useCurrentTeamQuery: () => ({ isSuccess: false, data: undefined }),
+}));
+
+vi.mock('@app/features/settings/bot-settings-user-action', () => ({
+  createBotSettingsUserCardAction: () => () => undefined,
 }));
 
 vi.mock('./UserIcon', () => ({

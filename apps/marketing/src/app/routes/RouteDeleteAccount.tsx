@@ -22,7 +22,7 @@ If you cannot access your account email, contact the same address and explain th
 
 1. Open Macro and sign in.
 2. Open Settings, then Account.
-3. Under Danger zone, select Delete account and follow the confirmation steps.
+3. Below Log out, select Delete account and follow the confirmation steps. The final step asks you to press and hold the delete button for 5 seconds.
 
 Account deletion is permanent. Save anything you need before confirming. Uninstalling the app does not delete your account.
 

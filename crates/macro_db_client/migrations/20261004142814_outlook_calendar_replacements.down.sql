@@ -1,0 +1,1 @@
+DROP TABLE calendar_event_replacements;

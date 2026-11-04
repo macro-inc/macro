@@ -1,0 +1,15 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "UPDATE email_provider_subscriptions SET provider_id=$2 WHERE id=$1 AND provider_id IS NULL",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Text"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "274fc5cf32368dd131dccd3d17b0973303ac53c97f185c140662027e8b6160ed"
+}

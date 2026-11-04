@@ -25,7 +25,7 @@ vi.mock('@entity/components/GithubLabelPill', () => ({
   GithubLabelPills: () => null,
 }));
 vi.mock('@notifications', () => ({
-  DebouncedNotificationReadMarker: () => null,
+  NotificationReadMarker: () => null,
 }));
 vi.mock('@queries/storage/github-pull-requests', () => ({
   useRefreshGithubPullRequest: (
@@ -47,6 +47,14 @@ vi.mock('../component/PrChanges', () => ({ PrChangesProvider: () => null }));
 vi.mock('../component/PrTimeline', () => ({ PrTimeline: () => null }));
 vi.mock('../component/sidepanel/PrSidePanelSections', () => ({
   PrSidePanelSections: () => null,
+}));
+// Keeps ForwardToChannel (and its websocket) out of this refresh-wiring unit.
+vi.mock('../hooks/usePrShare', () => ({
+  usePrShare: () => ({
+    openShare: () => undefined,
+    ShareModal: () => null,
+    isOpen: () => false,
+  }),
 }));
 
 import { githubPullRequestChangesKeys } from '@queries/storage/keys';

@@ -18,3 +18,19 @@ export function useSplitBackInterceptor(fn: SplitBackInterceptor) {
   setInterceptor(() => fn);
   onCleanup(() => setInterceptor(null));
 }
+
+/**
+ * Resolves one committed Back press — the split header's button or Android's
+ * system Back — so both route through the active view's interceptor instead of
+ * navigating straight away. Returns false when nothing consumed the press,
+ * which leaves Android's Back to the system.
+ */
+export function runSplitBack(navigation: {
+  canGoBack: () => boolean;
+  goBack: () => void;
+}): boolean {
+  if (!navigation.canGoBack()) return false;
+  if (interceptor()?.()) return true;
+  navigation.goBack();
+  return true;
+}

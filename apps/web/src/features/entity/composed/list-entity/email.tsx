@@ -2,7 +2,7 @@ import { inboxIconProps } from '@core/component/inboxIcon';
 import { UserIcon } from '@core/component/UserIcon';
 import { useEmailLinksContext } from '@core/context/emailLinks';
 import { cn } from '@ui';
-import { type Accessor, createMemo, Show } from 'solid-js';
+import { type Accessor, createMemo, type JSX, Show } from 'solid-js';
 import { DraftBadge } from '../../components/Badges';
 import { Entity } from '../../entity';
 import { HitSnippet } from '../../extractors-search/HitSnippet';
@@ -99,13 +99,45 @@ export function EmailNarrowBody(props: {
   chars: number;
   showHitSnippet: boolean;
   setContainerRef: (el: HTMLElement) => void;
+  previewLeading?: JSX.Element;
 }) {
   return (
     <Entity.Slot placement="body" class="flex flex-col pb-2 min-h-[2lh] pr-4">
       <Entity.Title entity={props.entity} />
+      <span class="flex min-w-0 items-center gap-1.5">
+        {props.previewLeading}
+        <span
+          ref={props.setContainerRef}
+          class="min-w-0 flex-1 truncate font-medium text-ink/50"
+        >
+          <EmailSnippet
+            entity={props.entity}
+            showHitSnippet={props.showHitSnippet}
+            chars={props.chars}
+          />
+        </span>
+      </span>
+    </Entity.Slot>
+  );
+}
+
+/** The narrow email row's one-line preview. */
+export function EmailNarrowSnippet(props: {
+  entity: EmailEntity;
+  chars: number;
+  showHitSnippet: boolean;
+  setContainerRef: (el: HTMLElement) => void;
+  previewLeading?: JSX.Element;
+}) {
+  return (
+    <Entity.Slot
+      placement="body"
+      class="ph-no-capture flex min-w-0 items-center gap-1.5 pr-3 pb-2.5"
+    >
+      {props.previewLeading}
       <span
         ref={props.setContainerRef}
-        class="text-ink/50 font-medium truncate"
+        class="min-w-0 flex-1 truncate text-ink/50"
       >
         <EmailSnippet
           entity={props.entity}

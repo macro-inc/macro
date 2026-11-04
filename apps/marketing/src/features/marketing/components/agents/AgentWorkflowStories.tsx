@@ -149,7 +149,7 @@ function WorkflowSources(props: {
       text={
         'Sources: @[customer-support](agent:support), @[File upload testing notes](agent:notes), and @[Upload size guidance task](agent:task).' +
         (props.meeting
-          ? '\n\n@[Dana’s latest email](agent:email) · @[Beacon discovery call](agent:call)'
+          ? '\n\n@[Valentina’s latest email](agent:email) · @[Beacon discovery call](agent:call)'
           : '')
       }
       mentions={{
@@ -236,7 +236,27 @@ export function AgentFeedbackWorkflow(props: { workspace: DummyWorkspace }) {
         id: 'feedback-after-3',
         person: 'jacob',
         time: '9:47 AM',
-        body: 'let’s leave guest access for now. fix those two first',
+        body: 'Let’s leave guest access for now. Fix those two first.',
+      },
+      {
+        id: 'feedback-coding-request',
+        person: 'teo',
+        time: '9:49 AM',
+        body: '@[Cursor](demo-mention:cursor), take upload recovery. Keep the selected files when an upload fails and add a regression test.',
+      },
+      {
+        id: 'feedback-coding-response',
+        replyTo: 'feedback-coding-request',
+        person: 'cursor',
+        time: '9:50 AM',
+        body: 'I found where the selection gets cleared on an error. I’ll keep it for retries and open a PR for you to review.',
+      },
+      {
+        id: 'feedback-reviewer',
+        replyTo: 'feedback-coding-request',
+        person: 'julia',
+        time: '9:51 AM',
+        body: 'Thanks. Send me the preview too. I can test it with Beacon’s files.',
       },
     ]);
   return (
@@ -248,7 +268,7 @@ export function AgentFeedbackWorkflow(props: { workspace: DummyWorkspace }) {
             return (
               <AgentAnswer
                 text={
-                  'Two fixes before the next release. I checked @[customer-support](agent:support), @[File upload testing notes](agent:notes), and existing tasks.\n\n- Upload recovery: failed uploads lose selected files. Confirmed in testing.\n- Reviewer visibility: requested by both Beacon and Westlake.\n\nSize guidance is already in progress. Guest access needs a decision.\n\nCreated @[Client file upload feedback](agent:brief) with the open work and sources.'
+                  'Two fixes are still open:\n\n- Keep selected files after a failed upload.\n- Show clients who is reviewing their files.\n\nI checked @[customer-support](agent:support) and @[File upload testing notes](agent:notes). Size guidance is already in progress. I put the remaining work in @[Client file upload feedback](agent:brief).'
                 }
                 mentions={{
                   support: {
@@ -446,7 +466,34 @@ export function AgentDeliverableStory() {
     root: () => root,
     steps: frames.length + 3,
     visibilityThreshold: 0.5,
-    reset: () => {},
+    loop: { hold: 9000 },
+    reset: () => {
+      if (pendingFrame !== undefined) cancelAnimationFrame(pendingFrame);
+      pendingFrame = undefined;
+      w.setData(
+        'documents',
+        (doc) => doc.id === FEEDBACK_BRIEF,
+        'body',
+        original
+      );
+      w.setData(
+        'documents',
+        (doc) => doc.id === FEEDBACK_BRIEF,
+        'comments',
+        (comments) =>
+          comments.filter((comment) => comment.id !== 'brief-update-result')
+      );
+      setTyping(false);
+      setCaret(undefined);
+      setResponseState('ready');
+      root
+        .querySelectorAll<HTMLElement>(
+          '.dummy-scroll, [aria-label="Document discussion"]'
+        )
+        .forEach((el) => {
+          el.scrollTop = 0;
+        });
+    },
     delay: (step) => {
       if (step <= 2) return 1600;
       if (step === frames.length + 3) return 260;
@@ -562,7 +609,19 @@ export function AgentMeetingStory() {
     root: () => root,
     steps: 6,
     visibilityThreshold: 0.5,
-    reset: () => {},
+    loop: { hold: 9000 },
+    reset: () => {
+      if (pendingFrame !== undefined) cancelAnimationFrame(pendingFrame);
+      pendingFrame = undefined;
+      w.setData('documents', (docs) =>
+        docs.filter((doc) => doc.id !== MEETING_BRIEF)
+      );
+      setPhase(0);
+      setToolsOpen(true);
+      setTurns([]);
+      const log = frame.querySelector('.agent-transcript');
+      if (log) log.scrollTop = 0;
+    },
     delay: (step) => (step === 5 ? 700 : step === 6 ? 450 : 1300),
     reduced: finish,
     advance: (step) => {
@@ -686,27 +745,41 @@ export function AgentTeamworkStory() {
       id: 'design-request',
       person: 'jacob',
       time: '10:04 AM',
-      body: '@Macro, mock this up from the client brief.',
+      body: '@Macro, can you sketch the upload screen from the client brief? Focus on uploading a whole project folder.',
     },
     {
       id: 'design-result',
       replyTo: 'design-request',
       person: 'macro',
       time: '10:05 AM',
-      body: 'Here’s the mockup.',
+      body: 'Here’s a first pass. Files and folders use the same drop area. The destination stays visible at the bottom.',
+    },
+    {
+      id: 'design-refinement',
+      replyTo: 'design-request',
+      person: 'julia',
+      time: '10:06 AM',
+      body: 'Yes, this is much clearer. Can we keep the folder structure? Clients usually send us a whole project, not individual files.',
+    },
+    {
+      id: 'design-revision',
+      replyTo: 'design-request',
+      person: 'macro',
+      time: '10:07 AM',
+      body: 'Yes. The folder option keeps nested folders together. I added it beside Add files so both paths are easy to find.',
     },
     {
       id: 'design-approval',
       replyTo: 'design-request',
       person: 'jacob',
-      time: '10:06 AM',
-      body: '@Cursor, build this.',
+      time: '10:08 AM',
+      body: '@Cursor, build this. Reuse the upload flow and preserve nested folders. Julia will check the preview.',
     },
     {
       id: 'code-result',
       replyTo: 'design-request',
       person: 'cursor',
-      time: '10:09 AM',
+      time: '10:14 AM',
       body: '',
     },
   ];
@@ -715,19 +788,20 @@ export function AgentTeamworkStory() {
       id: 'design-context',
       person: 'julia',
       time: '9:54 AM',
-      body: 'client brief is updated. they want to see who’s reviewing each upload',
+      body: 'Updated the client brief after the Beacon call. They’re uploading entire project folders one file at a time.',
+      documentId: FEEDBACK_BRIEF,
     },
     {
       id: 'design-question',
       person: 'teo',
       time: '9:56 AM',
-      body: 'same screen or a separate page?',
+      body: 'We already support files. We should be able to reuse that flow for folders.',
     },
     {
       id: 'design-answer',
       person: 'julia',
       time: '9:57 AM',
-      body: 'same screen. keep it simple',
+      body: 'Exactly. Keep the subfolders and make the destination obvious. That would save them a lot of setup.',
     },
   ];
   w.setData('channels', (all) => [
@@ -745,13 +819,14 @@ export function AgentTeamworkStory() {
     w.setData('channels', (c) => c.id === 'client-files', 'messages', [
       ...teamHistory,
       ...sceneMessages.slice(0, step + 2),
-      ...(step === 2
+      ...(step === 5
         ? [
             {
               id: 'design-followup',
               person: 'julia' as const,
-              time: '10:10 AM',
-              body: 'i’ll try the preview before we send it over',
+              time: '10:18 AM',
+              body: 'Tested the preview with their sample project. All three subfolders stayed intact. I’ll review the PR after lunch.',
+              replyTo: 'design-request',
             },
           ]
         : []),
@@ -759,11 +834,24 @@ export function AgentTeamworkStory() {
   };
   const playback = createProductWalkthrough({
     root: () => root,
-    steps: 2,
-    reset: () => {},
-    delay: () => 2000,
-    reduced: () => advance(2),
-    advance,
+    steps: 5,
+    loop: { hold: 10000 },
+    reset: () => {
+      advance(0);
+      setDetail(undefined);
+      setSessionTurns([]);
+      const log = root.querySelector('.sample-chat-log');
+      if (log) log.scrollTop = 0;
+    },
+    delay: (step) => (step >= 4 ? 3500 : 2600),
+    reduced: () => advance(5),
+    advance: (step) => {
+      advance(step);
+      queueMicrotask(() => {
+        const log = root.querySelector<HTMLElement>('.sample-chat-log');
+        if (log) log.scrollTo({ top: log.scrollHeight, behavior: 'smooth' });
+      });
+    },
   });
   let trigger: HTMLElement | undefined;
   const show = (next: 'design' | 'session' | 'pr') => {
@@ -802,7 +890,7 @@ export function AgentTeamworkStory() {
               renderMessageBody={(message) =>
                 message.id === 'design-request' ? (
                   <AgentAnswer
-                    text="@[Macro](agent:macro), mock this up from the @[client brief](agent:brief)."
+                    text="@[Macro](agent:macro), can you sketch the upload screen from the @[client brief](agent:brief)? Focus on uploading a whole project folder."
                     mentions={{
                       macro: { kind: 'person', person: 'macro' },
                       brief: {
@@ -813,7 +901,7 @@ export function AgentTeamworkStory() {
                   />
                 ) : message.id === 'design-approval' ? (
                   <AgentAnswer
-                    text="@[Cursor](agent:cursor), build this."
+                    text="@[Cursor](agent:cursor), build this. Reuse the upload flow and preserve nested folders. Julia will check the preview."
                     mentions={{ cursor: { kind: 'person', person: 'cursor' } }}
                   />
                 ) : undefined
@@ -834,8 +922,8 @@ export function AgentTeamworkStory() {
                     <DemoAgentChip
                       agentSessionId="portal-implementation"
                       requester="Jacob"
-                      request="@Cursor, build this."
-                      markdown="Ready for review."
+                      request="Add folder upload using the approved design."
+                      markdown="Folder upload is ready. Nested folders and mobile file selection checked. PR #248 is open for review."
                       onOpen={() => show('session')}
                       headerActions={null}
                       pullRequest={
@@ -877,7 +965,7 @@ export function AgentTeamworkStory() {
                 onSend={(text) => setSessionTurns((all) => [...all, text])}
               >
                 <AgentTurn>
-                  <AgentPrompt text="Build this from the mockup in the thread." />
+                  <AgentPrompt text="Use the approved mockup. Reuse the upload flow, preserve nested folders, and keep the destination visible." />
                 </AgentTurn>
                 <AgentTurn>
                   <AgentToolGroup
@@ -898,7 +986,7 @@ export function AgentTeamworkStory() {
                     ]}
                   />
                   <AgentAnswer
-                    text="Built the upload screen from the mockup. The PR is ready for review."
+                    text="Reused the upload component and added folder selection. Nested folders stay intact, and mobile file selection still works. PR #248 is ready for Julia’s review."
                     mentions={{}}
                   />
                   <button
@@ -927,7 +1015,7 @@ export function AgentTeamworkStory() {
                     repository: 'beacon/client-files',
                     number: 248,
                     description:
-                      '## Changes\n\n- Match the approved upload layout.\n- Support files and folders in the dropzone.\n- Keep the destination visible.\n\n## Review\n\nReady for a teammate to review. Guest access is outside this change.',
+                      '## Changes\n\n- Reuse the existing file upload flow.\n- Add folder selection with nested folders preserved.\n- Keep the destination visible.\n- Check mobile file selection.\n\n## Review\n\nReady for a teammate to review. Guest access is outside this change.',
                   }}
                 />
               </div>

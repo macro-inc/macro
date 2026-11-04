@@ -1,0 +1,34 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "UPDATE agent_preview_lease SET status = 'offline' WHERE replica_id = $1 AND status IN ('starting','ready') AND EXISTS (SELECT 1 FROM agent_preview_replica WHERE id = $1 AND expires_at <= now()) RETURNING metadata AS \"metadata: Json<StoredPreview>\", replica_id, status",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "metadata: Json<StoredPreview>",
+        "type_info": "Jsonb"
+      },
+      {
+        "ordinal": 1,
+        "name": "replica_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 2,
+        "name": "status",
+        "type_info": "Text"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      false,
+      true,
+      false
+    ]
+  },
+  "hash": "79aaa29870688d2b4bf939c9bfaa08b4341809ea14117ca95883e4cb78e685e5"
+}

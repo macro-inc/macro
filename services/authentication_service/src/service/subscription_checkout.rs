@@ -15,10 +15,26 @@ pub const ONBOARDING_TRIAL_DAYS: u8 = 30;
 /// Facts across the customer's entire subscription history, including canceled subscriptions.
 #[derive(Debug, Default, Clone, Copy)]
 pub struct SubscriptionHistory {
-    /// An active subscription already owns the customer's paid access.
-    pub has_active_subscription: bool,
+    /// A nonterminal subscription must be recovered or managed, never replaced.
+    pub has_existing_subscription: bool,
     /// Any previous subscription makes the customer ineligible for an introductory trial.
     pub has_previous_subscription: bool,
+}
+
+impl SubscriptionHistory {
+    pub(crate) fn trial_eligible(self) -> bool {
+        !self.has_existing_subscription && !self.has_previous_subscription
+    }
+}
+
+/// Whether the authenticated customer can receive the introductory Pro trial.
+#[derive(Debug, serde::Serialize, utoipa::ToSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct TrialEligibility {
+    /// Confirmed against the same subscription history used during checkout.
+    pub eligible: bool,
+    /// An existing subscription requires management instead of a new checkout.
+    pub existing_subscription: bool,
 }
 
 /// Authenticated purchase intent; the caller cannot choose a customer or price ID.
@@ -63,7 +79,7 @@ pub enum CheckoutError<E> {
     #[error("User does not have a stripe id")]
     MissingCustomer,
     /// A second subscription must not be created.
-    #[error("User already has an active subscription")]
+    #[error("You already have a subscription. Open Manage in Settings → Billing to update it.")]
     AlreadySubscribed,
     /// Never silently replace an advertised trial with an immediate charge.
     #[error("The 30-day trial is only available for your first Premium subscription")]
@@ -129,6 +145,29 @@ impl<G: CheckoutGateway> CheckoutService<G> {
         Self { gateway }
     }
 
+    /// Read eligibility without creating a checkout or granting an offer.
+    #[tracing::instrument(skip_all, err)]
+    pub async fn trial_eligibility(
+        &self,
+        user: &MacroUserIdStr<'_>,
+    ) -> Result<TrialEligibility, CheckoutError<G::Error>> {
+        let customer = self
+            .gateway
+            .customer(user)
+            .await
+            .map_err(CheckoutError::Gateway)?
+            .ok_or(CheckoutError::MissingCustomer)?;
+        let history = self
+            .gateway
+            .history(&customer)
+            .await
+            .map_err(CheckoutError::Gateway)?;
+        Ok(TrialEligibility {
+            eligible: history.trial_eligible(),
+            existing_subscription: history.has_existing_subscription,
+        })
+    }
+
     /// Create a paid checkout or a code-free first-subscription trial.
     pub async fn create(
         &self,
@@ -148,11 +187,11 @@ impl<G: CheckoutGateway> CheckoutService<G> {
             .history(&customer)
             .await
             .map_err(CheckoutError::Gateway)?;
-        if history.has_active_subscription {
+        if history.has_existing_subscription {
             return Err(CheckoutError::AlreadySubscribed);
         }
         let terms = if request.onboarding_trial {
-            if request.plan != SeatPlan::Premium || history.has_previous_subscription {
+            if request.plan != SeatPlan::Premium || !history.trial_eligible() {
                 return Err(CheckoutError::TrialUnavailable);
             }
             CheckoutTerms::Trial

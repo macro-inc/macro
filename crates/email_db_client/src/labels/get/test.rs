@@ -1,4 +1,4 @@
-use crate::labels::get::fetch_message_labels_in_bulk;
+use crate::labels::get::{fetch_message_labels_in_bulk, messages_changing_label};
 use anyhow::Result;
 use macro_db_migrator::MACRO_DB_MIGRATIONS;
 use models_email::db::label::{LabelListVisibility, LabelType, MessageListVisibility};
@@ -135,6 +135,30 @@ async fn fetch_message_labels_in_bulk_returns_empty_for_nonexistent_messages(
     let result = fetch_message_labels_in_bulk(&pool, &[nonexistent_message_id]).await?;
 
     assert!(result.is_empty());
+
+    Ok(())
+}
+
+#[sqlx::test(
+    migrator = "MACRO_DB_MIGRATIONS",
+    fixtures(path = "../../../fixtures", scripts("fetch_message_labels_in_bulk"))
+)]
+async fn messages_changing_label_skips_messages_already_in_the_requested_state(
+    pool: Pool<Postgres>,
+) -> Result<()> {
+    let link_id = Uuid::parse_str("00000000-0000-0000-0000-000000000801")?;
+    let in_inbox = Uuid::parse_str("00000000-0000-0000-0000-000000008501")?;
+    let important = Uuid::parse_str("00000000-0000-0000-0000-000000008502")?;
+    let unlabeled = Uuid::parse_str("00000000-0000-0000-0000-000000008503")?;
+    let messages = [in_inbox, important, unlabeled];
+
+    let mut gaining = messages_changing_label(&pool, link_id, &messages, "INBOX", true).await?;
+    gaining.sort();
+    assert_eq!(gaining, vec![important, unlabeled]);
+    assert_eq!(
+        messages_changing_label(&pool, link_id, &messages, "INBOX", false).await?,
+        vec![in_inbox]
+    );
 
     Ok(())
 }

@@ -2,13 +2,19 @@
 
 /// Event-to-activity mappings for this domain.
 pub mod activity;
+/// Edits of markdown documents by instructions, for HTTP callers.
+#[cfg(feature = "ai_tools")]
+pub mod ai_edit;
 #[cfg(feature = "ai_tools")]
 pub mod ai_editing;
 pub mod branch_name;
+#[cfg(feature = "ai_tools")]
+pub mod canvas;
 /// A document's comment threads, read through the shared message service.
 #[cfg(feature = "ai_tools")]
 pub mod comments;
 pub mod content;
+pub mod docx_export;
 /// Unified entity-mutation capability impls.
 #[cfg(feature = "service")]
 pub mod entity_mutation;
@@ -30,9 +36,13 @@ pub mod upload_finalize;
 pub mod legacy_office_upgrade;
 
 pub mod models;
+/// Notion page bodies a document can be created from.
+pub mod notion_markdown;
 #[cfg(feature = "axum")]
 pub mod permission_token;
 pub mod response;
+/// A skill's one-line routing description.
+pub mod skill_description;
 
 /// Permission-scoped spreadsheet inspection, calculation, and mutation.
 #[cfg(feature = "ai_tools")]
@@ -66,3 +76,7 @@ pub mod service;
 
 #[cfg(feature = "ports")]
 pub mod purge;
+
+/// Current Markdown and extracted text, authorized by document view capability.
+#[cfg(feature = "ports")]
+pub mod text;

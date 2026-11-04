@@ -15,6 +15,9 @@ for (const entity of ['project', 'channel']) {
     );
     if (entity === 'channel') {
       await expect(page.locator('#result')).toContainText(
+        'Open remotely read conversation: its dot clears; other dot stays'
+      );
+      await expect(page.locator('#result')).toContainText(
         'Equivalent participant filters: local'
       );
     }

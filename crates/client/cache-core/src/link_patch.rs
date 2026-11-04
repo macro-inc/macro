@@ -238,6 +238,10 @@ pub enum LinkPatchError {
     /// A path step encountered a value of the wrong shape.
     #[error("link patch path encountered an incompatible cache value")]
     WrongShape,
+    /// A nullable parent has no relation to update. Its query revalidation
+    /// can discover the relation after the mutation commits.
+    #[error("link patch path traverses a null parent")]
+    NullParent,
     /// A traversed list exceeds the defensive limit.
     #[error("link patch traversed list length {actual} exceeds limit {maximum}")]
     ListTooLarge { actual: usize, maximum: usize },
@@ -434,6 +438,10 @@ fn is_json_scalar(value: &Json) -> bool {
 /// Applies an already ordered patch set against effective records and writes
 /// only changed parent fields into `updates`.
 ///
+/// Null parents are always skipped: an absent optional relation cannot be
+/// patched, but does not make the accompanying mutation invalid.
+/// Query-rooted recipes also skip records or fields that have not been cached.
+/// Explicit record-rooted recipes still require their target to exist.
 /// When `skip_not_applicable` is true, stale/missing recipes are ignored. This
 /// mode is used during hydration and successful settlement, where stale query
 /// fields must never be recreated. Returns whether every recipe was applied.
@@ -458,7 +466,14 @@ pub fn apply_link_patches(
             updates,
             patch,
         ) {
-            if skip_not_applicable {
+            if skip_not_applicable
+                || matches!(error, LinkPatchError::NullParent)
+                || (patch.record_root.is_none()
+                    && matches!(
+                        error,
+                        LinkPatchError::MissingParent(_) | LinkPatchError::MissingField { .. }
+                    ))
+            {
                 all_applied = false;
                 continue;
             }
@@ -890,6 +905,10 @@ fn resolve_from_value(
                 operation,
             )?,
         });
+    }
+
+    if matches!(cursor.value, CacheValue::Null) {
+        return Err(LinkPatchError::NullParent);
     }
 
     if let CacheValue::Ref(key) = cursor.value {

@@ -1,5 +1,6 @@
 import OpenAiIcon from '@core/component/AI/assets/openai.svg';
-import ArrowUpRightIcon from '@phosphor/arrow-up-right.svg';
+import { fireAndForget } from '@core/util/fireAndForget';
+import ArrowUpRightIcon from '@icon/system/regular/arrow-up-right.svg';
 import { Button, confirmDialog } from '@ui';
 import { createSignal, Show } from 'solid-js';
 import { SettingsSelect } from '../../components/settings-select';
@@ -97,9 +98,8 @@ export function CodexConnection(props: {
                       </Show>
                       <Button
                         type="button"
-                        variant="outline"
+                        variant="secondary"
                         size="sm"
-                        depth={3}
                         class="gap-2"
                         disabled={props.pending}
                         onClick={props.onConnect}
@@ -137,9 +137,8 @@ export function CodexConnection(props: {
                   </p>
                   <Button
                     type="button"
-                    variant="outline"
+                    variant="secondary"
                     size="sm"
-                    depth={3}
                     disabled={props.pending}
                     onClick={props.onCancel}
                   >
@@ -199,7 +198,7 @@ export function CodexConnection(props: {
                   </a>
                   <Button
                     size="sm"
-                    variant="outline"
+                    variant="secondary"
                     onClick={props.onRetryEnvironments}
                   >
                     Retry environments
@@ -226,7 +225,7 @@ export function CodexConnection(props: {
                 </p>
                 <Button
                   size="sm"
-                  variant="outline"
+                  variant="secondary"
                   onClick={props.onRetryEnvironments}
                 >
                   Retry environments
@@ -240,9 +239,8 @@ export function CodexConnection(props: {
               <div class="flex gap-2">
                 <Button
                   type="button"
-                  variant="outline"
+                  variant="secondary"
                   size="sm"
-                  depth={3}
                   disabled={
                     props.pending || !hasChanges() || !selectedEnvironment()
                   }
@@ -264,11 +262,10 @@ export function CodexConnection(props: {
                 type="button"
                 variant="danger"
                 size="sm"
-                depth={3}
                 class="shrink-0"
                 aria-label="Disconnect ChatGPT"
                 disabled={props.pending}
-                onClick={() => void disconnect()}
+                onClick={() => fireAndForget(disconnect(), 'codex-settings')}
               >
                 Disconnect
               </Button>

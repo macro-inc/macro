@@ -71,6 +71,7 @@ function cachedVisibleCalendarsQueryOptions(host: CacheHost, enabled: boolean) {
     networkMode: 'offlineFirst' as const,
     enabled,
     placeholderData: keepPreviousData,
+    reconcile: 'id' as const,
   };
 }
 
@@ -79,9 +80,21 @@ function visibleCalendarsQueryOptions(enabled: boolean) {
     queryKey: calendarKeys.visibleCalendars.queryKey,
     queryFn: listCalendars,
     staleTime: CALENDAR_LIST_STALE_TIME,
+    refetchInterval: outlookCalendarRefetchInterval,
     enabled,
     placeholderData: keepPreviousData,
+    // Polls return new objects for unchanged calendars. Without reconciling,
+    // an open calendar picker rebuilds its rows and loses keyboard focus.
+    reconcile: 'id' as const,
   };
+}
+
+function outlookCalendarRefetchInterval(query: {
+  state: { data: VisibleCalendar[] | undefined };
+}): number | false {
+  return query.state.data?.some((calendar) => calendar.provider === 'outlook')
+    ? 30_000
+    : false;
 }
 
 async function listCalendars() {

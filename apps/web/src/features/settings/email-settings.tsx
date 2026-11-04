@@ -1,10 +1,17 @@
 import { useFeatureFlag } from '@app/lib/analytics/posthog';
-import { enableEmailSignatures } from '@core/constant/featureFlags';
+import { toast } from '@core/component/Toast/Toast';
+import {
+  enableEmailReadReceipts,
+  enableEmailSignatures,
+} from '@core/constant/featureFlags';
 import { useSettingsState } from '@core/constant/SettingsState';
 import { useSettingsTabAvailable } from '@core/constant/settingsTabsConfig';
 import { useUserId } from '@core/context/user';
 import { useEmailLinks } from '@core/email-link';
-import { Button } from '@ui';
+import { fireAndForget } from '@core/util/fireAndForget';
+import { useUpdateEmailSettingsMutation } from '@queries/email/settings';
+import type { Link as EmailLink } from '@service-email/generated/schemas';
+import { Button, ToggleSwitch } from '@ui';
 import { For, Show, Suspense } from 'solid-js';
 import { EmailCard } from './Email';
 import {
@@ -17,6 +24,7 @@ import { SignatureSection } from './SignatureSection';
 
 export function EmailSettings() {
   const signatures = useFeatureFlag(enableEmailSignatures);
+  const readReceipts = useFeatureFlag(enableEmailReadReceipts);
   const { openSettings } = useSettingsState();
   const isAvailable = useSettingsTabAvailable();
   return (
@@ -26,7 +34,7 @@ export function EmailSettings() {
     >
       <SettingsSection
         title="Accounts"
-        description="Connect Gmail accounts and manage their sync with Macro."
+        description="Connect email accounts and manage their sync with Macro."
       >
         <Suspense
           fallback={
@@ -41,7 +49,7 @@ export function EmailSettings() {
       <Show when={signatures().enabled}>
         <SettingsSection
           title="Signatures"
-          description="Create a signature for each of your email accounts. Format text, add links, or insert an image below."
+          description="Create a signature for each email account and preview it before sending."
         >
           <Suspense
             fallback={
@@ -51,6 +59,22 @@ export function EmailSettings() {
             }
           >
             <EmailSignatures />
+          </Suspense>
+        </SettingsSection>
+      </Show>
+      <Show when={readReceipts().enabled}>
+        <SettingsSection
+          title="Read receipts"
+          description="See when recipients open messages you send."
+        >
+          <Suspense
+            fallback={
+              <p role="status" class="text-sm text-ink-muted">
+                Loading accounts…
+              </p>
+            }
+          >
+            <EmailReadReceipts />
           </Suspense>
         </SettingsSection>
       </Show>
@@ -76,7 +100,7 @@ export function EmailSettings() {
               <SettingsRow
                 stackOnNarrow
                 label="Calendars"
-                description="Manage the calendars connected to your Google accounts."
+                description="Manage the calendars connected to your email accounts."
               >
                 <Button
                   variant="ghost"
@@ -97,17 +121,17 @@ export function EmailSettings() {
 function EmailSignatures() {
   const userId = useUserId();
   const { query } = useEmailLinks();
-  const links = () =>
-    query.isSuccess
-      ? query.data.links.filter((link) => link.macro_id === userId())
-      : [];
+  const links = () => (query.isSuccess ? query.data.links : []);
   return (
     <Show
       when={!query.isError}
       fallback={
         <SettingsCard>
           <SettingsRow label="Couldn't load signatures">
-            <Button variant="outline" onClick={() => void query.refetch()}>
+            <Button
+              variant="secondary"
+              onClick={() => fireAndForget(query.refetch(), 'email-settings')}
+            >
               Try again
             </Button>
           </SettingsRow>
@@ -138,11 +162,82 @@ function EmailSignatures() {
                 </p>
               }
             >
-              <SignatureSection link={link} />
+              <SignatureSection
+                link={link}
+                shared={link.macro_id !== userId()}
+              />
             </Suspense>
           )}
         </For>
       </Show>
     </Show>
+  );
+}
+
+function EmailReadReceipts() {
+  const userId = useUserId();
+  const { query } = useEmailLinks();
+  const links = () =>
+    (query.data?.links ?? []).filter((link) => link.macro_id === userId());
+  return (
+    <Show
+      when={!query.isPending}
+      fallback={
+        <p role="status" class="text-sm text-ink-muted">
+          Loading accounts…
+        </p>
+      }
+    >
+      <Show
+        when={query.data}
+        fallback={
+          <SettingsCard>
+            <SettingsRow label="Couldn't load accounts">
+              <Button
+                variant="outline"
+                onClick={() => fireAndForget(query.refetch(), 'email-settings')}
+              >
+                Try again
+              </Button>
+            </SettingsRow>
+          </SettingsCard>
+        }
+      >
+        <SettingsCard>
+          <For
+            each={links()}
+            fallback={
+              <SettingsRow label="Connect an email account above to use read receipts." />
+            }
+          >
+            {(link) => <ReadReceiptsRow link={link} />}
+          </For>
+        </SettingsCard>
+      </Show>
+    </Show>
+  );
+}
+
+function ReadReceiptsRow(props: { link: EmailLink }) {
+  const updateSettings = useUpdateEmailSettingsMutation();
+  return (
+    <SettingsRow label={props.link.email_address}>
+      <ToggleSwitch
+        size="md"
+        label={`Read receipts for ${props.link.email_address}`}
+        labelClass="sr-only"
+        checked={props.link.settings.read_receipts_enabled ?? true}
+        disabled={updateSettings.isPending}
+        onChange={(checked) =>
+          updateSettings.mutate(
+            {
+              linkId: props.link.id,
+              settings: { read_receipts_enabled: checked },
+            },
+            { onError: () => toast.failure('Failed to update read receipts.') }
+          )
+        }
+      />
+    </SettingsRow>
   );
 }

@@ -209,6 +209,19 @@ describe('makeGraphqlSoupInput', () => {
     });
   });
 
+  it('groups by entity type when a newer build saved a grouping this one does not know', () => {
+    const fromNewerBuild = JSON.parse('{"type":"assignee"}');
+    const input = makeGraphqlGroupedSoupInput({
+      params: { limit: 100, sort_method: 'updated_at' },
+      body: compileToAst(queryStateFrom({ include: { documentDone: false } })),
+      groupBy: fromNewerBuild,
+    });
+
+    expect(input).toMatchObject({
+      initial: { groupBy: { field: 'ENTITY_TYPE' } },
+    });
+  });
+
   it('maps grouped cursor continuations to GraphQL input', () => {
     expect(
       makeGraphqlGroupedSoupContinuationInput({
@@ -415,6 +428,51 @@ describe('makeGraphqlSoupInput', () => {
     ).toThrow('unknown file association');
   });
 
+  it('balances clause chains the server would reject as too deep', () => {
+    // Mirrors graphql_soup_filter_input::validate_json_bounds: the filters
+    // value is level 1 and every nested value, scalars included, adds one.
+    const serverDepth = (value: unknown): number =>
+      value && typeof value === 'object'
+        ? 1 + Math.max(0, ...Object.values(value).map(serverDepth))
+        : 1;
+    const channelIds = (input: ReturnType<typeof makeInput>) =>
+      [...JSON.stringify(input).matchAll(/"channelId":"([^"]+)"/g)].map(
+        (found) => found[1]
+      );
+
+    for (const count of [31, 32, 500]) {
+      const ids = Array.from(
+        { length: count },
+        (_, index) => `channel-${index}`
+      );
+      const input = makeInput({ include: { channelId: ids } });
+      expect(serverDepth(input.initial?.filters)).toBeLessThanOrEqual(64);
+      expect(channelIds(input)).toEqual(ids);
+    }
+  });
+
+  it('keeps the shape of clause chains that already fit the depth limit', () => {
+    expect(
+      makeInput({ include: { channelId: ['first', 'second', 'third'] } })
+    ).toMatchObject({
+      initial: {
+        filters: {
+          channelFilter: {
+            or: {
+              left: { literal: { channelId: 'first' } },
+              right: {
+                or: {
+                  left: { literal: { channelId: 'second' } },
+                  right: { literal: { channelId: 'third' } },
+                },
+              },
+            },
+          },
+        },
+      },
+    });
+  });
+
   it('preserves the stable favorites constraint without expanding entity IDs', () => {
     const body = { ...compileToAst(queryStateFrom({})), favorites_only: true };
     expect(
@@ -496,3 +554,107 @@ describe('makeGraphqlSoupInput', () => {
     ).toThrow('Unsupported GraphQL Soup AST');
   });
 });
+
+it('maps open-ended property date ranges and explicit no-date negation', () => {
+  const propertyDefinitionId = '00000001-0000-0000-0000-000000000004';
+  const range = makeGraphqlSoupInput({
+    params: {
+      sort_method: 'property',
+      sort_direction: 'asc',
+      sort_property_definition_id: propertyDefinitionId,
+    },
+    body: {
+      propf: {
+        l: {
+          pd: propertyDefinitionId,
+          et: 'TASK',
+          v: { dr: { end: UPDATED_AT } },
+        },
+      },
+    },
+  });
+  expect(range).toMatchObject({
+    initial: {
+      sortMethod: 'PROPERTY',
+      sortDirection: 'ASC',
+      sortPropertyDefinitionId: propertyDefinitionId,
+      filters: {
+        propertiesFilter: {
+          literal: {
+            propertyDefinitionId,
+            entityType: 'TASK',
+            value: { dateRange: { end: UPDATED_AT } },
+          },
+        },
+      },
+    },
+  });
+  const missing = makeGraphqlSoupInput({
+    params: {},
+    body: {
+      propf: {
+        '!': { l: { pd: propertyDefinitionId, et: 'TASK', v: { dr: {} } } },
+      },
+    },
+  });
+  expect(missing).toMatchObject({
+    initial: {
+      filters: {
+        propertiesFilter: {
+          not: {
+            literal: {
+              propertyDefinitionId,
+              entityType: 'TASK',
+              value: { dateRange: {} },
+            },
+          },
+        },
+      },
+    },
+  });
+  expect(
+    makeGraphqlSoupInput({
+      params: {},
+      body: { propf: { l: { pd: propertyDefinitionId, v: { dr: {} } } } },
+    })
+  ).toMatchObject({
+    initial: {
+      filters: {
+        propertiesFilter: { literal: { value: { dateRange: {} } } },
+      },
+    },
+  });
+});
+
+it.each([
+  ['asc', 'ASC'],
+  ['desc', 'DESC'],
+] as const)(
+  'maps property sort %s consistently for flat and grouped requests',
+  (direction, expected) => {
+    const propertyDefinitionId = '00000001-0000-0000-0000-000000000004';
+    const params = {
+      sort_method: 'property' as const,
+      sort_direction: direction,
+      sort_property_definition_id: propertyDefinitionId,
+    };
+    const body = { df: { l: { dst: 'task' } } };
+    const flat = makeGraphqlSoupInput({ params, body });
+    const grouped = makeGraphqlGroupedSoupInput({
+      params,
+      body,
+      groupBy: {
+        type: 'property',
+        propertyDefinitionId: '00000001-0000-0000-0000-000000000002',
+      },
+    });
+    expect(flat.initial?.sortMethod).toBe('PROPERTY');
+    expect(grouped.initial?.sortMethod).toBe('PROPERTY');
+    expect(flat.initial?.sortDirection).toBe(expected);
+    expect(grouped.initial?.sortDirection).toBe(expected);
+    expect(flat.initial?.sortPropertyDefinitionId).toBe(propertyDefinitionId);
+    expect(grouped.initial?.sortPropertyDefinitionId).toBe(
+      propertyDefinitionId
+    );
+  }
+);

@@ -111,7 +111,7 @@ fn build_query(req: &WorkFeedCandidateRequest<'_>) -> String {
         email_gate = email_gate(ID_SQL, filter),
         calendar_event_gate = calendar_event_gate(filter),
         foreign_entity_gate = foreign_entity_gate(filter),
-        agent_session_gate = agent_session_gate(),
+        agent_session_gate = agent_session_gate(filter),
     )
 }
 

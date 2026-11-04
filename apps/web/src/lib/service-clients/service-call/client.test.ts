@@ -5,7 +5,8 @@ const requests = vi.hoisted(() => ({
   authenticated: vi.fn(),
   public: vi.fn(),
 }));
-vi.mock('@core/constant/servers', () => ({
+vi.mock('@core/constant/servers', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@core/constant/servers')>()),
   SERVER_HOSTS: { 'document-storage-service': 'https://gateway.example/dss' },
 }));
 vi.mock('@core/util/fetchWithToken', () => ({
@@ -22,6 +23,32 @@ beforeEach(() => {
 });
 
 describe('meeting transport authorization', () => {
+  it('reads and posts guest chat with only the scoped RTC bearer', async () => {
+    await callServiceClient.getGuestChat('call-id', 'room-token');
+    await callServiceClient.postGuestChat('call-id', 'room-token', {
+      id: 'message-id',
+      content: 'Hello',
+    });
+    expect(requests.public).toHaveBeenNthCalledWith(
+      1,
+      'https://gateway.example/dss/call/guest-chat/call-id',
+      {
+        credentials: 'omit',
+        headers: { Authorization: 'Bearer room-token' },
+      }
+    );
+    expect(requests.public).toHaveBeenNthCalledWith(
+      2,
+      'https://gateway.example/dss/call/guest-chat/call-id',
+      {
+        method: 'POST',
+        credentials: 'omit',
+        headers: { Authorization: 'Bearer room-token' },
+        body: JSON.stringify({ id: 'message-id', content: 'Hello' }),
+      }
+    );
+    expect(requests.authenticated).not.toHaveBeenCalled();
+  });
   it.each([
     [400, 'Bad request: Invalid channel ID format', 'MEETINGS_UNAVAILABLE'],
     [400, 'Bad request: Invalid title', 'HTTP_ERROR'],

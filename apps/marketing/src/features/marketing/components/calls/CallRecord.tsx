@@ -505,7 +505,10 @@ export function CallRecordBody(props: {
                       src={homepagePeople[person].photo}
                       alt=""
                     />
-                    <span class="max-w-48 truncate">{callEmail(person)}</span>
+                    <span class="max-w-48 truncate">
+                      {props.call.participantEmails?.[person] ??
+                        callEmail(person)}
+                    </span>
                   </span>
                 )}
               </For>
@@ -546,7 +549,7 @@ export function CallRecordBody(props: {
                         <Show when={message.documentId}>
                           <span class="dummy-entity-link">
                             <FileIcon class="size-4 text-note" />
-                            Q3 launch plan
+                            Website launch plan
                           </span>
                         </Show>
                       </MessageRow>

@@ -5,7 +5,12 @@ const STORAGE_KEY = 'macro:sidebar:prefs';
 const LEGACY_PINNED_KEY = 'macro:sidebar:pinned-items';
 
 /** Items hidden from the rail by default (reachable via the More menu). */
-export const DEFAULT_HIDDEN_IDS = ['calls', 'reviews'] as const;
+export const DEFAULT_HIDDEN_IDS = [
+  'calls',
+  'reviews',
+  'booking-links',
+  'activity',
+] as const;
 
 export type SidebarPrefs = {
   /** Item ids hidden from the outer rail. Home is never included. */
@@ -15,6 +20,7 @@ export type SidebarPrefs = {
 };
 
 type StoredPrefs = {
+  version?: 1 | 2;
   hidden?: string[];
   order?: string[];
 };
@@ -31,8 +37,17 @@ function loadPrefs(): SidebarPrefs {
     const stored = localStorage.getItem(STORAGE_KEY);
     if (stored) {
       const parsed = JSON.parse(stored) as StoredPrefs;
+      const hidden = (parsed.hidden ?? []).filter((id) => id !== 'home');
+      // Scheduling was previously More-only, before it became customizable.
+      if (parsed.version === undefined && !hidden.includes('booking-links')) {
+        hidden.push('booking-links');
+      }
+      // Activity joined the rail after version 1; start it in More.
+      if ((parsed.version ?? 0) < 2 && !hidden.includes('activity')) {
+        hidden.push('activity');
+      }
       return {
-        hidden: new Set((parsed.hidden ?? []).filter((id) => id !== 'home')),
+        hidden: new Set(hidden),
         order: Array.isArray(parsed.order) ? parsed.order : [],
       };
     }
@@ -59,6 +74,7 @@ function loadPrefs(): SidebarPrefs {
 function savePrefs(prefs: SidebarPrefs): void {
   try {
     const payload: StoredPrefs = {
+      version: 2,
       hidden: [...prefs.hidden].filter((id) => id !== 'home'),
       order: prefs.order,
     };

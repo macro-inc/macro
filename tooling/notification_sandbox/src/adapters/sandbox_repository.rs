@@ -68,6 +68,16 @@ impl NotificationRepository for SandboxNotificationRepository {
             .await
     }
 
+    async fn notification_is_withdrawn(&self, notification_id: Uuid) -> Result<bool, Report> {
+        self.inner.notification_is_withdrawn(notification_id).await
+    }
+
+    async fn complete_notification_publication(&self, notification_id: Uuid) -> Result<(), Report> {
+        self.inner
+            .complete_notification_publication(notification_id)
+            .await
+    }
+
     async fn update_sent_status<'a>(
         &self,
         notification_id: Uuid,
@@ -230,9 +240,16 @@ impl NotificationRepository for SandboxNotificationRepository {
         device_token: &str,
         device_endpoint: &str,
         device_type: &DeviceType,
+        native_call_capable: bool,
     ) -> Result<(), Report> {
         self.inner
-            .upsert_device(user_id, device_token, device_endpoint, device_type)
+            .upsert_device(
+                user_id,
+                device_token,
+                device_endpoint,
+                device_type,
+                native_call_capable,
+            )
             .await
     }
 

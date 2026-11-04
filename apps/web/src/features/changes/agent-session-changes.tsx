@@ -7,6 +7,7 @@
 
 import { isCoderHarness } from '@app/features/agents-view/core/agent-kind';
 import { toast } from '@core/component/Toast/Toast';
+import { fireAndForget } from '@core/util/fireAndForget';
 import type { ParentProps } from 'solid-js';
 import { useAgentSession } from '../block-agent/context/AgentSessionContext';
 import { createBrowserChangesActions } from './browser-host';
@@ -46,7 +47,7 @@ export function AgentChangesProvider(props: ParentProps) {
     pullRequestTitle: () => pullRequestStats()?.title,
     scopeKey: session.sessionId,
     agent: {
-      send: (markdown) => void sendPrompt(markdown),
+      send: (markdown) => fireAndForget(sendPrompt(markdown), 'changes'),
       canSend: () =>
         session.sessionId() !== undefined &&
         !session.loadFailed() &&

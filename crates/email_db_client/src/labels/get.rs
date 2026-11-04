@@ -22,8 +22,8 @@ pub async fn fetch_message_label(
     let record = sqlx::query_as!(
         db::label::MessageLabel,
         r#"
-        SELECT ml.message_id, ml.label_id
-        FROM email_message_labels ml
+        SELECT ml.message_id AS "message_id!", ml.label_id AS "label_id!"
+        FROM email_effective_message_labels ml
         JOIN email_labels l ON ml.label_id = l.id
         WHERE ml.message_id = $1
         AND l.provider_label_id = $2
@@ -56,7 +56,7 @@ pub async fn fetch_message_labels(
             l.message_list_visibility as "message_list_visibility: _",
             l.label_list_visibility as "label_list_visibility: _",
             l.type as "type_: _"
-        FROM email_message_labels ml
+        FROM email_effective_message_labels ml
         JOIN email_labels l ON ml.label_id = l.id
         WHERE ml.message_id = $1
         ORDER BY l.name
@@ -97,7 +97,7 @@ where
         BulkLabelQueryResult,
         r#"
         SELECT
-            ml.message_id,
+            ml.message_id AS "message_id!",
             l.id,
             l.link_id,
             l.provider_label_id,
@@ -106,7 +106,7 @@ where
             l.message_list_visibility as "message_list_visibility: _",
             l.label_list_visibility as "label_list_visibility: _",
             l.type as "type_: _"
-        FROM email_message_labels ml
+        FROM email_effective_message_labels ml
         JOIN email_labels l ON ml.label_id = l.id
         WHERE
             ml.message_id = ANY($1)
@@ -199,7 +199,8 @@ pub async fn fetch_labels_by_link_id(
             label_list_visibility as "label_list_visibility: _",
             type as "type_: _"
         FROM email_labels
-        WHERE link_id = $1
+        WHERE link_id = $1 AND NOT EXISTS(SELECT 1 FROM email_mailbox_settings_work w WHERE w.link_id=email_labels.link_id
+            AND w.kind='delete_label' AND w.resource_key=email_labels.provider_label_id AND w.completed_revision<w.revision)
         ORDER BY name
         "#,
         link_id
@@ -244,4 +245,36 @@ pub async fn fetch_label_by_id(
     let service_label = db_label.map(Into::into);
 
     Ok(service_label)
+}
+
+/// Messages among `message_ids` that gain `provider_label_id` when `add` is
+/// true, or lose it when false.
+#[tracing::instrument(skip(executor, message_ids), err)]
+pub async fn messages_changing_label<'e, E>(
+    executor: E,
+    link_id: Uuid,
+    message_ids: &[Uuid],
+    provider_label_id: &str,
+    add: bool,
+) -> Result<Vec<Uuid>, sqlx::Error>
+where
+    E: sqlx::Executor<'e, Database = sqlx::Postgres>,
+{
+    sqlx::query_scalar!(
+        r#"
+        SELECT m.id AS "id!"
+        FROM unnest($1::uuid[]) AS m(id)
+        WHERE EXISTS (
+            SELECT 1 FROM email_effective_message_labels ml
+            JOIN email_labels l ON l.id = ml.label_id
+            WHERE ml.message_id = m.id AND l.link_id = $2 AND l.provider_label_id = $3
+        ) <> $4
+        "#,
+        message_ids,
+        link_id,
+        provider_label_id,
+        add,
+    )
+    .fetch_all(executor)
+    .await
 }

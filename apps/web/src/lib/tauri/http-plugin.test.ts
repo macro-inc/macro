@@ -85,4 +85,20 @@ describe('tauri http plugin fetch', () => {
 
     expect(unhandled).toEqual([]);
   });
+
+  it('ignores an abort that arrives while the body is streaming', async () => {
+    const controller = new AbortController();
+    const response = await fetch('https://example.com/', {
+      signal: controller.signal,
+    });
+    const reader = response.body!.getReader();
+    await reader.read();
+
+    controller.abort();
+    await expect(reader.read()).rejects.toBeDefined();
+    await reader.cancel().catch(() => {});
+    await new Promise((resolve) => setTimeout(resolve, 0));
+
+    expect(unhandled).toEqual([]);
+  });
 });

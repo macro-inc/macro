@@ -1,3 +1,4 @@
+import { fireAndForget } from '@core/util/fireAndForget';
 import { getNativeMobilePlatform } from '@core/util/platform';
 import { Button, Dialog, Surface } from '@ui';
 import { createSignal, Show } from 'solid-js';
@@ -52,24 +53,24 @@ export function NativeAppUpdateRequiredDialog(props: {
           <div class="flex justify-end gap-2">
             <Show when={platform}>
               <Button
-                variant="strong"
+                variant="secondary"
                 size="sm"
                 disabled={opening()}
-                onClick={() => void openStore()}
+                onClick={() => fireAndForget(openStore(), 'native-update-link')}
               >
                 Update app
               </Button>
             </Show>
             <Show when={props.onRestart}>
               <Button
-                variant="accent"
+                variant="primary"
                 size="sm"
                 onClick={() => props.onRestart?.()}
               >
                 Restart to update
               </Button>
             </Show>
-            <Button onClick={props.onClose} variant="strong" size="sm">
+            <Button onClick={props.onClose} variant="secondary" size="sm">
               OK
             </Button>
           </div>

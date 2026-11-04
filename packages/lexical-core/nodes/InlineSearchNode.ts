@@ -4,6 +4,7 @@ import {
   $createTextNode,
   $getNodeByKey,
   $getSelection,
+  $isElementNode,
   $isRangeSelection,
   $isTextNode,
   type EditorConfig,
@@ -51,6 +52,14 @@ export const SEARCH_NODE_TYPE_VALUES = {
  * happens where formatting splits one word across text nodes.
  */
 function $textBeforeCaret(anchorNode: LexicalNode, offset: number): string {
+  // Element offsets count children, as after inserting a soft line break.
+  if ($isElementNode(anchorNode)) {
+    return anchorNode
+      .getChildren()
+      .slice(0, offset)
+      .map((node) => node.getTextContent())
+      .join('');
+  }
   const text = anchorNode.getTextContent().slice(0, offset);
   if (text !== '' || !$isTextNode(anchorNode)) return text;
   const previous = anchorNode.getPreviousSibling();
@@ -90,14 +99,34 @@ export function validTriggerPosition(
 
     if (after === null) return true;
 
-    const afterText = anchorNode
-      .getTextContent()
-      .slice(selection.anchor.offset);
+    const afterText = $isElementNode(anchorNode)
+      ? anchorNode
+          .getChildren()
+          .slice(selection.anchor.offset)
+          .map((node) => node.getTextContent())
+          .join('')
+      : anchorNode.getTextContent().slice(selection.anchor.offset);
     return isEmptyOrMatches(afterText, after);
   });
 }
 
 const CLEAN_REGEX = /^[@:\/;#]/g; // Matches menu triggers to clean the search term.
+
+/**
+ * While a keyboard composes a word, Lexical keeps a zero-width space in the
+ * node's text and removes it only when the word is committed. Android
+ * keyboards compose every word, so without this the search would never match
+ * until the word ends.
+ */
+const COMPOSITION_PLACEHOLDER_REGEX = /\u200b/g;
+
+/** The search term typed after a menu trigger. */
+function inlineSearchTerm(text: string) {
+  return text
+    .replace(COMPOSITION_PLACEHOLDER_REGEX, '')
+    .trim()
+    .replace(CLEAN_REGEX, '');
+}
 
 export class InlineSearchNode extends TextNode {
   static getType() {
@@ -196,10 +225,7 @@ export function $handleInlineSearchNodeMutation(
         const search = state.read(() =>
           $getNodeByKey(nodeKey)?.getTextContent()
         );
-        if (search) {
-          let cleanedSearch = search.trim().replace(CLEAN_REGEX, '');
-          actions.onUpdate(cleanedSearch);
-        }
+        if (search) actions.onUpdate(inlineSearchTerm(search));
       }
     }
   }

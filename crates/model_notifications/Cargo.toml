@@ -8,12 +8,13 @@ version = "0.1.0"
 anyhow = { workspace = true }
 chrono = { workspace = true }
 chrono-tz = { workspace = true }
+html-escape = { workspace = true }
 macro_user_id = { path = "../macro_user_id" }
 mention_utils = { path = "../mention_utils" }
 model-entity = { path = "../model-entity" }
 model_owner = { path = "../model_owner" }
 models_pagination = { path = "../models_pagination" }
-notification = { path = "../notification" }
+notification = { path = "../notification", default-features = false }
 paste = { workspace = true }
 invite_email = { path = "../invite_email" }
 rootcause = { workspace = true }

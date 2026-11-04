@@ -1,5 +1,6 @@
 import { createRenderQueue } from '@app/lib/utils/create-render-queue';
 import { createAssertedContextProvider } from '@core/context/createContext';
+import { fireAndForget } from '@core/util/fireAndForget';
 import type { Calendar, DatesSetArg } from '@fullcalendar/core';
 import { createPager, type PagerController } from '@ui/components/Pager';
 import {
@@ -266,6 +267,22 @@ function createCalendarPagerContext(props: CalendarPagerContextProps) {
     scheduleActiveUpdate();
   };
 
+  const navigateToToday = () => {
+    const now = new Date();
+    gotoDate(now);
+    // Scroll after the active grid renders. A newer navigation clears this job
+    // together with the date update, so it cannot scroll an unrelated period.
+    renderQueue.enqueue('scroll-to-now', () => {
+      activePage()
+        ?.api()
+        ?.scrollToTime({
+          // Keep the current-time marker below the scroller's top fade.
+          minutes: Math.max(0, now.getHours() * 60 + now.getMinutes() - 60),
+        });
+      copyActiveScrollPosition();
+    });
+  };
+
   const finishDateNavigation = async (
     transition: Promise<boolean>,
     date: Date,
@@ -303,7 +320,7 @@ function createCalendarPagerContext(props: CalendarPagerContextProps) {
     setRequestedDate(target);
     const transition =
       direction === 'previous' ? pager.previous() : pager.next();
-    void finishDateNavigation(transition, target);
+    fireAndForget(finishDateNavigation(transition, target), 'calendar-pager');
   };
 
   const navigateToDate = (date: Date) => {
@@ -352,7 +369,10 @@ function createCalendarPagerContext(props: CalendarPagerContextProps) {
 
     const transition =
       direction === 'previous' ? pager.previous() : pager.next();
-    void finishDateNavigation(transition, date, synchronizeBuffers);
+    fireAndForget(
+      finishDateNavigation(transition, date, synchronizeBuffers),
+      'calendar-pager'
+    );
   };
 
   const changeView = (view: CalendarPeriodView) => {
@@ -389,7 +409,7 @@ function createCalendarPagerContext(props: CalendarPagerContextProps) {
     updateSize,
     gotoDate,
     navigateToDate,
-    navigateToToday: () => navigateToDate(new Date()),
+    navigateToToday,
     previousPeriod: () => navigatePeriod('previous'),
     nextPeriod: () => navigatePeriod('next'),
     changeView,

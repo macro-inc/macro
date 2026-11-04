@@ -73,7 +73,7 @@ Every initiative already has a required, distinct Markdown description document.
 | New discussions | [`MessageParent`](../../crates/messages/src/domain/models.rs) supports only channel/document. [Discussion delivery context](../../crates/messages/src/outbound/pg_discussion_context.rs) is document-specific. | Add initiative as a first-class parent throughout messages, access, persistence validation, delivery, notifications and client adapters. General project comments belong to the initiative ID. |
 | Share menu | Initiative PATCH supports share policy, but [generic entity mutations](../../services/document_storage_service/src/service/entity_mutation.rs) reject initiative sharing. The [global share modal's type set](../../apps/web/src/features/sharing/global-share-modal/shareable-entity.ts) excludes initiatives. | Add a view-compatible sharing adapter using the initiative service and existing share UI primitives, with current permission data. |
 | Cmd+K | Existing [project commands](../../apps/web/src/features/command/useCommandItems.ts) target folder entities; initiatives are not represented by Soup. | Add an initiative-backed command source, display as Projects, and open native project views. Preserve folder search and folder actions. |
-| Full MCP coverage | Initiative exposes only HTTP inbound adapters. [`ai_tools::tools_for`](../../crates/ai_tools/src/lib.rs) registers existing folder project tools but no initiative tools. [MCP service](../../services/mcp_service/src/main.rs) serves that assembled toolset. | Add domain-backed initiative tools plus coverage through property, activity, message and description tools; wire every supported host, generated schemas, result links and frontend renderers. |
+| Full MCP coverage | Initiative exposes only HTTP inbound adapters. [`ai_tools::tools_for`](../../crates/ai_tools/src/lib.rs) registers existing folder project tools but no initiative tools. [MCP service](../../services/agent_harness_service/src/public_mcp.rs) serves that assembled toolset. | Add domain-backed initiative tools plus coverage through property, activity, message and description tools; wire every supported host, generated schemas, result links and frontend renderers. |
 | Description last | [The description migration](../../crates/macro_db_client/migrations/20260917140621_add_initiative_description_document.up.sql) makes the document mandatory today. Failure compensation can log an orphan if purging fails. | Keep creating the empty backing document. Close lifecycle/cleanup gaps in PR 1, and add the description editor as the last frontend step in PR 6. General project discussions use the initiative parent. |
 
 ### Architectural assessment
@@ -90,7 +90,7 @@ Primary UI references: [project collection](https://linear.app/macro-eng/project
 
 | Area | Observed Linear decision | Macro implementation decision |
 | --- | --- | --- |
-| Collection navigation | Projects has All projects plus saved My Projects and Active projects views; a prominent New project action, filter and display controls. | Add **Projects** to the Tasks view's desktop navigation and mobile tabs. It switches to a project collection with its own filters/search state and New project action. Start with all accessible projects and assignee/status filters. |
+| Collection navigation | Projects has All projects plus saved My Projects and Active projects views; a prominent New project action, filter and display controls. | Keep a separate **Projects** section above Saved views in Tasks, with **My projects**, **All projects**, and **Created by me**. My projects matches Assignees; Created by me matches the owner. Replace individual-project shortcuts, and use one Projects picker on mobile. |
 | List layout | Compact horizontal rows; name/icon dominate the left, properties align in columns on the right. Collapsible groups have counts and a local create action. This workspace groups by status and subgroups by Linear initiative. | Use the Tasks view's density and tokens. Columns: name, status, priority, assignees, due date, task progress. Default to status grouping, with None available. Reuse column alignment and inline property controls. |
 | Display options | List, Board and Timeline; grouping, subgrouping, ordering, closed-project visibility and per-property visibility. | Implement the required list with sorting/grouping and sensible responsive columns. Board, Timeline, saved custom views and nested portfolio grouping are separate scope, not dependencies for this checklist. |
 | Detail navigation | Breadcrumb, project name, favorite/actions controls; Overview, Activity and Issues tabs; collapsible project details sidebar. | Native view within Tasks with project breadcrumbs and **Overview / Tasks** tabs in the top bar. Borrow channel tab positioning while retaining existing Macro tab styling. Put the existing Share menu and side-panel controls in the header; restore project identity and tab from navigation. |
@@ -116,7 +116,7 @@ The user request takes precedence over Linear differences: Macro Projects live u
 - New feature: `apps/web/src/features/projects/`; decode `Initiative*` transport DTOs to a feature-owned Project model.
 - Preserve existing folder `project`, `projectId`, `/projects` APIs, block routes and tools. New task relationship fields use `initiativeId`/`initiative` internally.
 - Register component splits through [componentRegistry](../../apps/web/src/components/app/split-layout/componentRegistry.tsx), using a project-specific component identity such as `initiative-view~<id>~<tab>`. Follow existing ID serialization patterns; component params alone are lost on URL restore. Host adapters translate all project links, command results and notification targets into this identity.
-- Existing task grouping named `project` currently means folder grouping in [task-query](../../apps/web/src/features/tasks-view/queries/task-query.ts). Add a distinct initiative grouping key if grouping is exposed, and label the existing folder operation clearly. Never silently reinterpret persisted folder filters.
+- Task grouping named `project` uses the Project property (initiative membership), matching the Project column. Legacy folder filters retain their existing meaning.
 
 ### Properties, permissions and membership
 
@@ -288,7 +288,7 @@ task/project discovery, and retain permission/lifecycle behavior from PR 1.
 | Requested outcome | Owning PRs |
 | --- | --- |
 | Native views; activity-style feature architecture | 6 |
-| Projects tab and unified list/grouping within Tasks | 2, 6 |
+| Projects navigation and unified list/grouping within Tasks | 2, 6 |
 | Status, priority, assignees and due dates | 2, 5, 6 |
 | Tasks associated with projects | 1–2, 5–6 |
 | Project chip column and task context menu | 2, 6 |

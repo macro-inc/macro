@@ -37,6 +37,7 @@ export function columnKindOf(column: ColumnDetail): FormColumnKind | undefined {
     .with('NUMBER', () => ({ type: 'number' }))
     .with('BOOLEAN', () => ({ type: 'boolean' }))
     .with('DATE', () => ({ type: 'date' }))
+    .with('DATE_RANGE', () => ({ type: 'date_range' }))
     .with('LINK', () => ({ type: 'link' }))
     .with('SELECT_STRING', () => ({ type: 'select', multi }))
     .with('SELECT_NUMBER', () => ({ type: 'select_number', multi }))
@@ -51,7 +52,7 @@ export function columnKindOf(column: ColumnDetail): FormColumnKind | undefined {
       const target = entityKind(definition.specific_entity_type);
       return target ? { type: 'entity', target, multi } : undefined;
     })
-    .exhaustive();
+    .exhaustive(() => undefined);
 }
 
 export function toFormColumn(column: ColumnDetail): FormColumn | undefined {

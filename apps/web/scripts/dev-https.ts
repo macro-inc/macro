@@ -3,6 +3,7 @@ import { mkdtempSync, readFileSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import type { ServerOptions } from 'node:https';
 import type { Plugin } from 'vite';
 
 /** Standalone browser development shares the local stack's stable CA. */
@@ -39,7 +40,12 @@ export function devHttps(
             https: {
               cert: readFileSync(join(directory, 'server.pem')),
               key: readFileSync(join(directory, 'server-key.pem')),
-            },
+              // Reloading mid-load cancels thousands of module streams at
+              // once. Node's HTTP/2 rapid-reset guard (1000 resets per burst)
+              // then tears down the session and the new page loads blank.
+              streamResetBurst: 1_000_000,
+              streamResetRate: 1_000_000,
+            } as ServerOptions,
             // Tailscale Serve proxies a remote devbox over HTTP/2 under its
             // MagicDNS name; Vite's HMR socket rejects hosts not listed here.
             allowedHosts: [hostname, '.ts.net'],

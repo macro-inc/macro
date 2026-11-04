@@ -1,4 +1,6 @@
 import type {
+  AgentMode,
+  AutoArchivePreferencesBody,
   CodingPreferencesBody,
   SandboxSize,
 } from '../../../generated/agent-harness/types.gen';
@@ -9,7 +11,35 @@ import {
   type SelectableRepository,
 } from './agent-session';
 
-/** Entry point for coding-agent sessions. */
+/**
+ * Entry point for coding-agent sessions.
+ *
+ * @routing Use when work happens in a code repository or with a coding agent: writing code, fixing a bug, opening or changing a pull request, or reading an agent session's history; not changes to Macro databases or documents.
+ *
+ * @agent
+ * ## Starting agent sessions
+ *
+ * Do repository and coding work yourself when you can. Start another agent session only when the user asks for one, or the work needs a repository runtime you do not have.
+ *
+ * Start sessions from ExecuteCode. macro.agents.list() returns the user's own configurable agents; choose by name and instructions, preferring an agent the user named, and pass it as `agent` to macro.agentSessions.createManaged. Never invent an agent or construct one by id. To use the default persona instead, omit `agent`. Read AgentSessionNamespace.createManaged with ReadCodeDocs before the first call.
+ *
+ * ```javascript
+ * export async function main({macro}) {
+ *   const agents = await macro.agents.list();
+ *   const names = await Promise.all(agents.map((agent) => agent.name()));
+ *   const agent = agents[names.indexOf('Web maintainer')];
+ *   if (!agent) return {data: {error: 'No agent named Web maintainer', available: names}};
+ *   const session = await macro.agentSessions.createManaged({
+ *     agent,
+ *     repoUrl: 'https://github.com/acme/web',
+ *     prompt: 'Fix the login redirect loop in acme/web. ...',
+ *   });
+ *   return {data: {sessionId: session.id}};
+ * }
+ * ```
+ *
+ * The prompt must be self-contained: the task, repository, relevant findings and links, constraints, and expected outcome. The new session does not receive this conversation. When the outcome is a pull request, require it to be ready for review, not a draft, with CI passing before the agent finishes. Create once per task and do not retry automatically after an uncertain failure. Link the session in your reply with its id. To check on it later, create a routine; never wait or poll inside an execution.
+ */
 export class AgentSessionNamespace {
   constructor(private readonly client: MacroClient) {}
 
@@ -18,9 +48,24 @@ export class AgentSessionNamespace {
     return AgentSession.byId(this.client, id);
   }
 
-  /** Create a managed agent session. */
+  /**
+   * Create a managed session as `agent` when one is named, otherwise the
+   * deployment's default coding persona. List personas with
+   * {@link AgentNamespace.list} and construct one with {@link Agent.byId}.
+   * Unknown or inaccessible personas fail. `model` and `instructions`
+   * outrank the persona's. `repoUrl` is honored for Cursor; omit `agent`
+   * and it starts as Cursor.
+   */
   createManaged(opts?: CreateManagedSessionOptions): Promise<AgentSession> {
     return AgentSession.createManaged(this.client, opts);
+  }
+
+  /**
+   * Whether `prompt` needs a chat agent (`'chat'`) or a coding agent
+   * (`'code'`), as the app's Auto mode decides before starting a session.
+   */
+  chooseMode(prompt: string): Promise<AgentMode> {
+    return AgentSession.chooseMode(this.client, prompt);
   }
 
   /**
@@ -63,9 +108,21 @@ export class AgentSessionNamespace {
     return AgentSession.codingPreferences(this.client);
   }
 
+  /** Which triggers archive the caller's sessions by default; each is off unless chosen. */
+  autoArchivePreferences(): Promise<AutoArchivePreferencesBody> {
+    return AgentSession.autoArchivePreferences(this.client);
+  }
+
+  /** Replace which triggers archive the caller's sessions by default. */
+  setAutoArchivePreferences(
+    preferences: AutoArchivePreferencesBody,
+  ): Promise<AutoArchivePreferencesBody> {
+    return AgentSession.setAutoArchivePreferences(this.client, preferences);
+  }
+
   /** Replace the caller's coding preferences. */
   setCodingPreferences(
-    preferences: CodingPreferencesBody
+    preferences: CodingPreferencesBody,
   ): Promise<CodingPreferencesBody> {
     return AgentSession.setCodingPreferences(this.client, preferences);
   }

@@ -21,6 +21,10 @@ pub enum LogEvent {
     Update(Value),
     /// The turn is over, with this ACP stop reason.
     TurnEnded(&'static str),
+    /// A `session/update` for an item that finished after its turn ended.
+    /// It is a finished turn of its own, unless a prompt is already waiting
+    /// for the agent's next turn.
+    LateUpdate(Value),
 }
 
 /// Bound tool output without splitting UTF-8 characters.

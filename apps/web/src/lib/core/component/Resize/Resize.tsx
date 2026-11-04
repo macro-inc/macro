@@ -217,6 +217,8 @@ function Zone(props: ParentProps<ZoneProps>) {
               return (
                 <Show when={visibleIndex < visibleLayouts().length - 1}>
                   <Gutter
+                    direction={direction()}
+                    gutterSize={gutterPx()}
                     offset={panel().offset + panel().size}
                     index={actualIndex}
                     resizable={gutterEnabled()}
@@ -398,13 +400,18 @@ function Panel(props: ParentProps<PanelProps>) {
 }
 
 /**
- * Props for the Gutter component (internal).
+ * Props for the Gutter component. It fills its positioned parent across the
+ * axis, so a zone, or any layout that positions its own panels, can place one.
  *
+ * @property direction - The flow of the panels it separates
+ * @property gutterSize - The layout gap it sits in, in pixels
  * @property offset - The offset position of the gutter in pixels
  * @property index - The index of the gutter in the layout
  * @property nudge - Function to call when the gutter is moved, with index and movement amount
  */
 type GutterProps = {
+  direction: 'horizontal' | 'vertical';
+  gutterSize: number;
   showDivider: boolean;
   offset: number;
   index: number;
@@ -423,15 +430,15 @@ type GutterProps = {
  */
 const GUTTER_HIT_AREA = 8;
 
-function Gutter(props: GutterProps) {
-  const ctx = useContext(ResizeZoneContext)!;
+export function Gutter(props: GutterProps) {
+  const horizontal = () => props.direction === 'horizontal';
   const hitSize = () =>
     props.resizable
-      ? Math.max(ctx.gutterSize(), GUTTER_HIT_AREA)
-      : ctx.gutterSize();
+      ? Math.max(props.gutterSize, GUTTER_HIT_AREA)
+      : props.gutterSize;
   const styles = createMemo(() => {
-    const inset = (hitSize() - ctx.gutterSize()) / 2;
-    if (ctx.direction() === 'horizontal') {
+    const inset = (hitSize() - props.gutterSize) / 2;
+    if (horizontal()) {
       return {
         top: '0px',
         bottom: '0px',
@@ -450,42 +457,54 @@ function Gutter(props: GutterProps) {
     }
   });
 
-  let [ptrDown, setPtrDown] = createSignal(false);
+  const [ptrDown, setPtrDown] = createSignal(false);
+  let pointerId: number | undefined;
   let lastPointerPosition: number | undefined;
+  let pendingPosition: number | undefined;
+  let frame: number | undefined;
 
   function getAxisZoom() {
     const root = props.root();
     if (!root) return 1;
 
     const rect = root.getBoundingClientRect();
-    const visualSize =
-      ctx.direction() === 'horizontal' ? rect.width : rect.height;
-    const layoutSize =
-      ctx.direction() === 'horizontal' ? root.offsetWidth : root.offsetHeight;
+    const visualSize = horizontal() ? rect.width : rect.height;
+    const layoutSize = horizontal() ? root.offsetWidth : root.offsetHeight;
 
     if (visualSize <= 0 || layoutSize <= 0) return 1;
     return visualSize / layoutSize;
   }
 
   function eventPosition(ev: PointerEvent) {
-    return ctx.direction() === 'horizontal' ? ev.clientX : ev.clientY;
+    return horizontal() ? ev.clientX : ev.clientY;
   }
 
   function onPointerDown(ev: PointerEvent) {
-    if (ev.button !== 0) return;
+    if (ev.button !== 0 || ptrDown()) return;
     props.onChangeStart();
     (ev.currentTarget as HTMLElement).setPointerCapture?.(ev.pointerId);
     window.addEventListener('pointermove', onPointerMove);
-    window.addEventListener('pointerup', onPointerUp, { once: true });
-    window.addEventListener('pointercancel', onPointerUp, { once: true });
+    window.addEventListener('pointerup', onPointerUp);
+    window.addEventListener('pointercancel', onPointerUp);
     lastPointerPosition = eventPosition(ev);
+    pointerId = ev.pointerId;
     setPtrDown(true);
     ev.preventDefault();
   }
 
   function onPointerMove(ev: PointerEvent) {
-    if (!ptrDown) return;
-    const position = eventPosition(ev);
+    if (!ptrDown() || ev.pointerId !== pointerId) return;
+    pendingPosition = eventPosition(ev);
+    // Read geometry and solve once per frame, not once per pointer sample.
+    if (frame === undefined) frame = requestAnimationFrame(flushResize);
+  }
+
+  function flushResize() {
+    if (frame !== undefined) cancelAnimationFrame(frame);
+    frame = undefined;
+    const position = pendingPosition;
+    pendingPosition = undefined;
+    if (position === undefined) return;
     const prevPosition = lastPointerPosition ?? position;
     lastPointerPosition = position;
 
@@ -493,17 +512,35 @@ function Gutter(props: GutterProps) {
     props.nudge(props.index, delta);
   }
 
-  function onPointerUp() {
+  function removeDragListeners() {
     window.removeEventListener('pointermove', onPointerMove);
     window.removeEventListener('pointerup', onPointerUp);
     window.removeEventListener('pointercancel', onPointerUp);
+  }
+
+  function onPointerUp(ev: PointerEvent) {
+    if (ev.pointerId !== pointerId) return;
+    // Persist the last position even when release precedes the queued frame.
+    if (ev.type === 'pointerup') pendingPosition = eventPosition(ev);
+    flushResize();
+    removeDragListeners();
     lastPointerPosition = undefined;
+    pointerId = undefined;
     setPtrDown(false);
     props.onChangeEnd();
   }
 
+  onCleanup(() => {
+    removeDragListeners();
+    if (frame !== undefined) cancelAnimationFrame(frame);
+    if (ptrDown()) {
+      pointerId = undefined;
+      props.onChangeEnd();
+    }
+  });
+
   function onKeyDown(ev: KeyboardEvent) {
-    if (ctx?.direction() === 'horizontal') {
+    if (horizontal()) {
       if (ev.key !== 'ArrowLeft' && ev.key !== 'ArrowRight') return;
     } else {
       if (ev.key !== 'ArrowUp' && ev.key !== 'ArrowDown') return;
@@ -515,7 +552,7 @@ function Gutter(props: GutterProps) {
 
     const step = ev.shiftKey ? 100 : 20;
     props.onChangeStart();
-    if (ctx?.direction() === 'horizontal') {
+    if (horizontal()) {
       const sign = ev.key === 'ArrowLeft' ? -1 : 1;
       props.nudge(props.index, sign * step);
     } else {
@@ -525,7 +562,6 @@ function Gutter(props: GutterProps) {
     queueMicrotask(props.onChangeEnd);
   }
 
-  const horizontal = () => ctx.direction() === 'horizontal';
   // Centre a bar of the given thickness on the gutter axis.
   const barStyle = (thickness: string) => ({
     left: horizontal() ? '50%' : '0',
@@ -537,7 +573,7 @@ function Gutter(props: GutterProps) {
 
   return (
     <div
-      class={cn('group', !props.resizable && 'pointer-events-none')}
+      class="group"
       role="separator"
       aria-orientation={horizontal() ? 'vertical' : 'horizontal'}
       aria-hidden={!props.resizable}
@@ -545,6 +581,8 @@ function Gutter(props: GutterProps) {
       aria-label={props.resizable ? `resize at ${props.index}` : undefined}
       style={{
         position: 'absolute',
+        // Inline, so a gutter inside a pass-through box still takes the drag.
+        'pointer-events': props.resizable ? 'auto' : 'none',
         cursor: props.resizable
           ? horizontal()
             ? 'col-resize'
@@ -553,13 +591,14 @@ function Gutter(props: GutterProps) {
         ...styles(),
       }}
       onPointerDown={props.resizable ? onPointerDown : undefined}
+      onLostPointerCapture={onPointerUp}
       onKeyDown={props.resizable ? onKeyDown : undefined}
     >
-      {/* Spaced panels can omit the divider while retaining resize feedback. */}
+      {/* Match the enclosing Surface border; spaced panels can omit the divider. */}
       <Show when={props.showDivider}>
         <div
           class={cn(
-            'absolute border-edge-frame touch:hidden',
+            'absolute border-edge touch:hidden',
             horizontal() ? 'border-l-[1px]' : 'border-t-[1px]'
           )}
           style={barStyle('1px')}

@@ -195,3 +195,101 @@ describe('live trial checkout', () => {
     expect(guest).toHaveBeenCalledOnce();
   });
 });
+
+it('offers paid Pro without trial copy to an ineligible returning customer', () => {
+  const { checkout } = setup(undefined, { trialEligible: false });
+  expect(screen.queryByText(/Free Claude & GPT/)).toBeNull();
+  expect(screen.queryByText(/first 30 days/)).toBeNull();
+  expect(
+    screen.queryByRole('button', { name: 'Start 30 day trial' })
+  ).toBeNull();
+  fireEvent.click(screen.getByRole('button', { name: 'Get Pro' }));
+  expect(checkout).toHaveBeenCalledWith('premium', 'standard');
+});
+
+it('offers a retry without advertising a trial or starting checkout when eligibility fails', () => {
+  const { checkout, fake } = setup(undefined, {
+    failures: { trialEligibility: 'offline' },
+  });
+  expect(screen.queryByText(/Free Claude & GPT/)).toBeNull();
+  const button = screen.getByRole('button', { name: 'Get Pro' });
+  expect(button.hasAttribute('disabled')).toBe(true);
+  fireEvent.click(button);
+  expect(checkout).not.toHaveBeenCalled();
+  fireEvent.click(screen.getByRole('button', { name: 'Try again' }));
+  expect(fake.calls()).toContain('retryTrialEligibility');
+});
+
+it('routes an existing subscription to management without starting a replacement checkout', () => {
+  const { checkout, fake } = setup(undefined, {
+    trialEligible: false,
+    existingSubscription: true,
+  });
+  expect(screen.queryByText('Start 30 day trial')).toBeNull();
+  expect(screen.queryByText('$40/user/month, billed monthly')).toBeNull();
+  fireEvent.click(screen.getByRole('button', { name: 'Manage subscription' }));
+  expect(fake.calls()).toContain('manageSubscription');
+  expect(checkout).not.toHaveBeenCalled();
+});
+
+it('keeps known subscription management available when eligibility refresh fails', () => {
+  const { checkout, fake } = setup(undefined, {
+    trialEligible: false,
+    existingSubscription: true,
+    failures: { trialEligibility: 'offline' },
+  });
+  const manage = screen.getByRole('button', { name: 'Manage subscription' });
+  expect(manage.hasAttribute('disabled')).toBe(false);
+  expect(screen.queryByText("Couldn't confirm your Pro offer.")).toBeNull();
+  fireEvent.click(manage);
+  expect(fake.calls()).toContain('manageSubscription');
+  expect(checkout).not.toHaveBeenCalled();
+});
+
+it('does not expose an invite checkout when eligibility fails', () => {
+  const { checkout } = setup(undefined, {
+    inviteOffer: {
+      firstName: 'Ada',
+      freeMonths: 3,
+      linkId: 'link-1',
+      promoCode: 'ADA3',
+      redeemedAt: '2026-10-01T00:00:00Z',
+    },
+    failures: { trialEligibility: 'offline' },
+  });
+  expect(
+    screen.queryByRole('button', { name: 'Claim your free months' })
+  ).toBeNull();
+  expect(
+    screen.getByRole('button', { name: 'Get Pro' }).hasAttribute('disabled')
+  ).toBe(true);
+  expect(screen.getByRole('button', { name: 'Try again' })).toBeTruthy();
+  expect(checkout).not.toHaveBeenCalled();
+});
+
+it('does not advertise a trial in the comparison to a returning customer', () => {
+  const { back, checkout } = setupComparison({ trialEligible: false });
+  expect(screen.queryByText(/30 days free/)).toBeNull();
+  fireEvent.click(screen.getByRole('button', { name: 'Continue with Pro' }));
+  expect(back).toHaveBeenCalledOnce();
+  expect(checkout).not.toHaveBeenCalled();
+});
+
+it('prevents replacement purchases from the comparison for an existing subscription', () => {
+  setupComparison({ trialEligible: false, existingSubscription: true });
+  expect(
+    screen
+      .getByRole('button', { name: 'Continue with Max' })
+      .hasAttribute('disabled')
+  ).toBe(true);
+  expect(
+    screen
+      .getByRole('button', { name: 'Continue with Pro' })
+      .hasAttribute('disabled')
+  ).toBe(true);
+  expect(
+    screen
+      .getByRole('button', { name: 'Continue with Free' })
+      .hasAttribute('disabled')
+  ).toBe(false);
+});

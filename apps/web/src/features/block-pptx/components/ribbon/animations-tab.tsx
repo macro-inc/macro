@@ -9,13 +9,14 @@ import type {
   AnimationOutline,
   AnimationStart,
 } from '@core/pptx-engine/types';
-import ArrowDown from '@phosphor/arrow-down.svg';
-import ArrowUp from '@phosphor/arrow-up.svg';
-import ListNumbers from '@phosphor/list-numbers.svg';
-import Play from '@phosphor/play.svg';
-import Plus from '@phosphor/plus.svg';
-import Sliders from '@phosphor/sliders-horizontal.svg';
-import Star from '@phosphor-fill/star-fill.svg';
+import { fireAndForget } from '@core/util/fireAndForget';
+import Star from '@icon/system/fill/star-fill.svg';
+import ArrowDown from '@icon/system/regular/arrow-down.svg';
+import ArrowUp from '@icon/system/regular/arrow-up.svg';
+import ListNumbers from '@icon/system/regular/list-numbers.svg';
+import Play from '@icon/system/regular/play.svg';
+import Plus from '@icon/system/regular/plus.svg';
+import Sliders from '@icon/system/regular/sliders-horizontal.svg';
 import { For, type JSX, Show } from 'solid-js';
 import {
   CLASS_LABELS,
@@ -170,7 +171,7 @@ export function AnimationsTab() {
     <>
       <RibbonGroup label="Preview">
         <RibbonTextButton
-          label="Preview"
+          aria-label="Preview"
           tooltip="Preview the slide's animations"
           data-testid="pptx-animation-preview"
           disabled={!env.slide()?.animations?.length}
@@ -195,7 +196,10 @@ export function AnimationsTab() {
               testId="pptx-animation-gallery-panel"
               onPick={(cls, effect) => {
                 close();
-                void c.animate(cls, effect, 'replace', anim.picked());
+                fireAndForget(
+                  c.animate(cls, effect, 'replace', anim.picked()),
+                  'pptx-editor'
+                );
               }}
             />
           )}
@@ -226,9 +230,12 @@ export function AnimationsTab() {
                           data-testid={`pptx-animation-option-${o.value}`}
                           onClick={() => {
                             close();
-                            void c.updateAnimations(indexes(), {
-                              direction: o.value,
-                            });
+                            fireAndForget(
+                              c.updateAnimations(indexes(), {
+                                direction: o.value,
+                              }),
+                              'pptx-editor'
+                            );
                           }}
                         >
                           {o.label}
@@ -248,7 +255,10 @@ export function AnimationsTab() {
                       data-testid="pptx-animation-sequence-object"
                       onClick={() => {
                         close();
-                        void c.setSequence(shape(), false);
+                        fireAndForget(
+                          c.setSequence(shape(), false),
+                          'pptx-editor'
+                        );
                       }}
                     >
                       As One Object
@@ -259,7 +269,10 @@ export function AnimationsTab() {
                       data-testid="pptx-animation-sequence-paragraph"
                       onClick={() => {
                         close();
-                        void c.setSequence(shape(), true);
+                        fireAndForget(
+                          c.setSequence(shape(), true),
+                          'pptx-editor'
+                        );
                       }}
                     >
                       By Paragraph
@@ -285,14 +298,14 @@ export function AnimationsTab() {
               testId="pptx-animation-add-panel"
               onPick={(cls, effect) => {
                 close();
-                void c.animate(cls, effect, 'add');
+                fireAndForget(c.animate(cls, effect, 'add'), 'pptx-editor');
               }}
             />
           )}
         </RibbonPopover>
         <RibbonTextButton
-          label="Animation pane"
-          variant={anim.pane() ? 'accent' : 'ghost'}
+          aria-label="Animation pane"
+          variant={anim.pane() ? 'primary' : 'ghost'}
           aria-pressed={anim.pane()}
           data-testid="pptx-animation-pane-toggle"
           onClick={anim.togglePane}
@@ -310,9 +323,12 @@ export function AnimationsTab() {
             disabled={ro() || !current()}
             value={current()?.start ?? 'onClick'}
             onChange={(e) =>
-              void c.updateAnimations(indexes(), {
-                start: e.currentTarget.value as AnimationStart,
-              })
+              fireAndForget(
+                c.updateAnimations(indexes(), {
+                  start: e.currentTarget.value as AnimationStart,
+                }),
+                'pptx-editor'
+              )
             }
           >
             <For each={Object.entries(START_LABELS)}>
@@ -333,9 +349,12 @@ export function AnimationsTab() {
           disabled={ro() || !current() || current()!.durationMs === 0}
           testId="pptx-animation-duration"
           onCommit={(v) =>
-            void c.updateAnimations(indexes(), {
-              durationMs: Math.round(v * 1000),
-            })
+            fireAndForget(
+              c.updateAnimations(indexes(), {
+                durationMs: Math.round(v * 1000),
+              }),
+              'pptx-editor'
+            )
           }
         />
         <span class="text-ink-muted text-xs">Delay</span>
@@ -351,26 +370,32 @@ export function AnimationsTab() {
           disabled={ro() || !current()}
           testId="pptx-animation-delay"
           onCommit={(v) =>
-            void c.updateAnimations(indexes(), {
-              delayMs: Math.round(v * 1000),
-            })
+            fireAndForget(
+              c.updateAnimations(indexes(), {
+                delayMs: Math.round(v * 1000),
+              }),
+              'pptx-editor'
+            )
           }
         />
         <RibbonButton
-          label="Move earlier"
+          aria-label="Move earlier"
           tooltip="Move Earlier"
           data-testid="pptx-animation-earlier"
           disabled={ro() || (anim.current() ?? 0) === 0}
           onClick={() => {
             const i = anim.current();
             if (i === undefined) return;
-            void c.moveAnimation(i, -1).then(() => anim.pick(i - 1));
+            fireAndForget(
+              c.moveAnimation(i, -1).then(() => anim.pick(i - 1)),
+              'pptx-editor'
+            );
           }}
         >
           <ArrowUp />
         </RibbonButton>
         <RibbonButton
-          label="Move later"
+          aria-label="Move later"
           tooltip="Move Later"
           data-testid="pptx-animation-later"
           disabled={
@@ -381,7 +406,10 @@ export function AnimationsTab() {
           onClick={() => {
             const i = anim.current();
             if (i === undefined) return;
-            void c.moveAnimation(i, 1).then(() => anim.pick(i + 1));
+            fireAndForget(
+              c.moveAnimation(i, 1).then(() => anim.pick(i + 1)),
+              'pptx-editor'
+            );
           }}
         >
           <ArrowDown />

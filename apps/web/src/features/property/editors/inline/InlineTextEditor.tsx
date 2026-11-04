@@ -1,4 +1,4 @@
-import { Show } from 'solid-js';
+import { type JSX, Show } from 'solid-js';
 import { useProperty } from '../../core/context';
 import { PropertyEmpty } from '../../extractors/PropertyEmpty';
 import { formatPropertyValue } from '../../utils';
@@ -9,7 +9,7 @@ import { useInlineEditor } from '../hooks/useInlineEditor';
  * button (matches existing CondensedPropertyValue / panel pill look); editing
  * mode swaps to a field-sizing textarea that grows with content.
  */
-export function InlineTextEditor() {
+export function InlineTextEditor(props: { emptyValue?: JSX.Element }) {
   const ctx = useProperty();
   const editor = useInlineEditor();
 
@@ -22,16 +22,6 @@ export function InlineTextEditor() {
   const hasValue = () => {
     const v = property().value;
     return typeof v === 'string' && v.length > 0;
-  };
-
-  const handleKeyDown = (e: KeyboardEvent) => {
-    if (e.key === 'Enter') {
-      e.preventDefault();
-      editor.save();
-    } else if (e.key === 'Escape') {
-      e.preventDefault();
-      editor.cancelEdit();
-    }
   };
 
   return (
@@ -47,7 +37,10 @@ export function InlineTextEditor() {
             'text-ink-muted': !supportsInline(),
           }}
         >
-          <Show when={hasValue()} fallback={<PropertyEmpty label="Empty" />}>
+          <Show
+            when={hasValue()}
+            fallback={props.emptyValue ?? <PropertyEmpty label="Empty" />}
+          >
             <span class="block max-w-full">
               {formatPropertyValue(property(), property().value as string)}
             </span>
@@ -66,8 +59,8 @@ export function InlineTextEditor() {
         value={editor.inputValue()}
         onInput={(e) => editor.setInputValue(e.currentTarget.value)}
         onBlur={editor.save}
-        onKeyDown={handleKeyDown}
-        disabled={editor.isSaving()}
+        onKeyDown={editor.handleKeyDown}
+        readOnly={editor.isSaving()}
         class="w-full field-sizing-content resize-none text-left text-ink px-2 py-0.5 bg-transparent focus:outline-none rounded-sm"
       />
     </Show>

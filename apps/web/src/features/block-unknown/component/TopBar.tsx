@@ -20,7 +20,7 @@ import {
 } from '@core/util/currentBlockDocumentName';
 import { downloadFile } from '@filesystem/download';
 import IconShared from '@icon/share.svg';
-import DownloadSimple from '@phosphor/download-simple.svg';
+import DownloadSimple from '@icon/system/regular/download-simple.svg';
 import { createCallback } from '@solid-primitives/rootless';
 import { useGetFileBlob } from '../signal/blockData';
 
@@ -33,7 +33,7 @@ export function TopBar(props: { onShare: () => void }) {
   const downloadDocument = createCallback(async () => {
     try {
       const blob = await getBlob();
-      downloadFile(blob, downloadName());
+      await downloadFile(blob, downloadName());
     } catch (e) {
       console.error('error downloading file', e);
       toast.failure('Error downloading file');

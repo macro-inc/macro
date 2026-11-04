@@ -41,7 +41,11 @@ import { watchAgentSessionLog } from './log';
 
 const SESSION = '01a0abed-279f-724c-9f49-60dbedc79b6e';
 
-function entry(n: number) {
+function entry(
+  n: number
+): NonNullable<
+  AgentSessionLogQuery['user']['agentSession']
+>['log']['entries'][number] {
   return {
     id: `00000000-0000-0000-0000-${n.toString(16).padStart(12, '0')}`,
     createdAt: new Date(Date.UTC(2026, 7, 13, 0, 0, n)).toISOString(),
@@ -121,6 +125,30 @@ afterEach(() => {
 const settle = () => vi.advanceTimersByTimeAsync(0);
 
 describe('watchAgentSessionLog', () => {
+  it('loads and follows notification frames over GraphQL', async () => {
+    const rows = vi.fn();
+    const gap = vi.fn();
+    const watch = watchAgentSessionLog(SESSION, 'cache-and-network', {
+      rows,
+      gap,
+    });
+    const data = logData([1]);
+    const notification = {
+      ...entry(2),
+      direction: 'notification',
+      content: { type: 'notification', notifications: [] },
+    };
+    data.user.agentSession?.log.entries.push(notification);
+    query.next(fromCache(data));
+    query.next(fromNetwork(data));
+    expect((await watch.cached)?.rows[1].direction).toBe('notification');
+    expect((await watch.fetched).rows[1].direction).toBe('notification');
+    appended.next(fromNetwork({ agentSessionLogAppended: [notification] }));
+    expect(rows.mock.calls[0][0][0].direction).toBe('notification');
+    expect(gap).not.toHaveBeenCalled();
+    watch.stop();
+  });
+
   it('says why the cache missed', async () => {
     const hit = watchAgentSessionLog(SESSION);
     query.next(fromCache(logData([1])));

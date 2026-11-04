@@ -1,13 +1,15 @@
 import { toast } from '@core/component/Toast/Toast';
+import { fireAndForget } from '@core/util/fireAndForget';
 import {
   useCodingPreferencesQuery,
   useSetCodingPreferencesMutation,
 } from '@queries/agents/coding-preferences';
 import type { CodingPreferencesBody } from '@service-agent-harness/client';
 import { ToggleSwitch } from '@ui';
+import { DefaultRepository } from '../DefaultRepository';
 import { SettingsCard, SettingsRow, SettingsSection } from '../primitives';
 
-/** What the user's new coding sessions do beyond their assignment. */
+/** Defaults for the user's new coding sessions: repository, tasks, and pull requests. */
 export function CodingPreferencesSetting() {
   const preferences = useCodingPreferencesQuery();
   const setPreferences = useSetCodingPreferencesMutation();
@@ -38,7 +40,10 @@ export function CodingPreferencesSetting() {
         disabled={!preferences.isSuccess}
         onChange={(enabled) => {
           if (!preferences.isSuccess) return;
-          void toggle(preferences.data, props.preference, enabled);
+          fireAndForget(
+            toggle(preferences.data, props.preference, enabled),
+            'coding-preferences'
+          );
         }}
       />
     </SettingsRow>
@@ -47,6 +52,7 @@ export function CodingPreferencesSetting() {
   return (
     <SettingsSection title="Coding sessions">
       <SettingsCard>
+        <DefaultRepository />
         <PreferenceRow
           preference="createTasks"
           label="Create tasks"

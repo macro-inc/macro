@@ -2,7 +2,9 @@
 //! the billing service, and the reconciliation sweep.
 
 pub mod admission;
+pub mod credit_grant;
 pub mod financial;
+pub mod invite_reward;
 pub mod ledger;
 pub mod models;
 pub mod period;
@@ -17,6 +19,11 @@ pub use admission::{
     AdmissionFuture, AiAdmissionError, AiAdmissionService, BillingAdmissionService,
     DisabledAiAdmissionService,
 };
+pub use credit_grant::{CreditGrant, CreditGrantRepo, CreditGrantService, GrantTarget};
+pub use invite_reward::{
+    FreeAllowanceBonusRepo, InviteReward, InviteRewardService, RewardOutcome,
+    capped_free_bonus_cents,
+};
 pub use ledger::{
     ReloadState, SettlementPlan, SettlementPolicy, SettlementState, plan_reload, plan_settlement,
 };
@@ -24,7 +31,8 @@ pub use models::{
     AUTO_RELOAD_DEFAULT_MINIMUM_CENTS, AUTO_RELOAD_DEFAULT_TARGET_CENTS,
     AUTO_RELOAD_TARGET_MAX_CENTS, AiUsageBilling, AllowanceDecision, AllowanceStore,
     AutoReloadSnapshot, AutoReloadThresholds, BillingError, BillingPeriod, BillingSettings,
-    CREDIT_PACKS_CENTS, CreditReloadStatus, DenyReason, Entitlement, MIN_STRIPE_CHARGE_CENTS,
+    CREDIT_PACKS_CENTS, CreditPurchase, CreditPurchaseSnapshot, CreditPurchaseStatus,
+    CreditReloadKind, CreditReloadStatus, DenyReason, Entitlement, MIN_STRIPE_CHARGE_CENTS,
     OVERAGE_CHARGE_THRESHOLD_CENTS, OVERAGE_LIMIT_MAX_CENTS, OVERAGE_LIMIT_MIN_CENTS,
     OpenPeriodStart, OverageChargeStatus, PayerScope, PeriodAllowance, PeriodLedger, PlanTier,
     Result, SeatAllowance, SeatGeneration, SeatUsage, SubscriptionScope, UsagePolicy,
@@ -32,8 +40,9 @@ pub use models::{
 };
 pub use ports::{
     BillingRepo, BillingService, CreditCheckoutRequest, CreditReloadRequest, EntitlementSource,
-    OverageChargeRequest, PaymentGateway, PendingCharge, PendingReload, ResolvedReload,
-    SettlementCandidates, SettlementOutcome, SettlementTrigger, UsageReader,
+    InvoicePayment, InvoiceVoid, OverageChargeRequest, PaymentGateway, PendingCharge,
+    PendingReload, PurchaseReservation, ResolvedReload, SettlementCandidates, SettlementOutcome,
+    SettlementTrigger, UsageReader,
 };
 pub use pricing::{
     AiPricing, IncludedAllowanceCents, OverageMarkupPercent, PlanAllowances, PricingError,

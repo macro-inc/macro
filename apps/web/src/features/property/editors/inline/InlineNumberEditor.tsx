@@ -1,4 +1,4 @@
-import { Show } from 'solid-js';
+import { type JSX, Show } from 'solid-js';
 import { useProperty } from '../../core/context';
 import { PropertyEmpty } from '../../extractors/PropertyEmpty';
 import { formatNumber } from '../../utils';
@@ -8,7 +8,7 @@ import { useInlineEditor } from '../hooks/useInlineEditor';
  * Click-to-edit number input. Step 0.0001 matches the existing
  * NUMBER_DECIMAL_PLACES rounding the save path applies.
  */
-export function InlineNumberEditor() {
+export function InlineNumberEditor(props: { emptyValue?: JSX.Element }) {
   const ctx = useProperty();
   const editor = useInlineEditor();
 
@@ -21,16 +21,6 @@ export function InlineNumberEditor() {
   const hasValue = () => property().value != null;
   const display = () =>
     hasValue() ? formatNumber(property().value as number) : '';
-
-  const handleKeyDown = (e: KeyboardEvent) => {
-    if (e.key === 'Enter') {
-      e.preventDefault();
-      editor.save();
-    } else if (e.key === 'Escape') {
-      e.preventDefault();
-      editor.cancelEdit();
-    }
-  };
 
   return (
     <Show
@@ -45,7 +35,10 @@ export function InlineNumberEditor() {
             'text-ink-muted': !supportsInline(),
           }}
         >
-          <Show when={hasValue()} fallback={<PropertyEmpty label="Empty" />}>
+          <Show
+            when={hasValue()}
+            fallback={props.emptyValue ?? <PropertyEmpty label="Empty" />}
+          >
             <span class="block truncate max-w-full">{display()}</span>
           </Show>
         </button>
@@ -58,8 +51,8 @@ export function InlineNumberEditor() {
         value={editor.inputValue()}
         onInput={(e) => editor.setInputValue(e.currentTarget.value)}
         onBlur={editor.save}
-        onKeyDown={handleKeyDown}
-        disabled={editor.isSaving()}
+        onKeyDown={editor.handleKeyDown}
+        readOnly={editor.isSaving()}
         placeholder="Enter number..."
         class="w-full text-left text-ink px-2 py-0.5 bg-transparent focus:outline-none rounded-sm"
       />

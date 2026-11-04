@@ -173,11 +173,11 @@ impl WireInput {
         Ok(match self {
             Self::Snapshot { rows } => FoldInput::Snapshot(
                 rows.into_iter()
-                    .map(|row| (row.cursor, row.frame.into_log(session)))
+                    .map(|row| (row.cursor, row.frame.into_log(session, row.cursor)))
                     .collect(),
             ),
             Self::Confirmed { row } => {
-                FoldInput::Confirmed(row.cursor, row.frame.into_log(session))
+                FoldInput::Confirmed(row.cursor, row.frame.into_log(session, row.cursor))
             }
             Self::Speculated {
                 action_id,
@@ -212,7 +212,7 @@ struct DurableEntry {
 }
 
 impl LogEntry {
-    fn into_log(self, session: AgentSessionId) -> AgentSessionLog {
+    fn into_log(self, session: AgentSessionId, cursor: LogCursor) -> AgentSessionLog {
         AgentSessionLog {
             agent_session_id: session,
             // A user id that will not parse is dropped rather than rejected:
@@ -222,6 +222,7 @@ impl LogEntry {
                 .user_id
                 .and_then(|id| MacroUserIdStr::try_from(id).ok()),
             content: self.message,
+            logged_at: Some(cursor.created_at),
         }
     }
 }

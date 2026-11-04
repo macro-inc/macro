@@ -79,7 +79,10 @@ vi.mock('@channel/channel-picture', () => ({}));
 vi.mock('@components/app/split-layout/components/SplitFileMenu', () => ({}));
 vi.mock('@components/app/split-layout/components/SplitLabel', () => ({}));
 vi.mock('@components/app/split-layout/components/SplitHeader', () => ({}));
-vi.mock('@core/context/channels', () => ({}));
+vi.mock('@core/context/channels', () => ({
+  useChannel: () => () => undefined,
+  useChannelCanCall: () => () => true,
+}));
 vi.mock('@core/context/user', () => ({}));
 vi.mock('@queries/call/call', () => ({}));
 vi.mock('@queries/channel/channel-participants', () => ({}));

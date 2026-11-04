@@ -224,51 +224,6 @@ pub async fn get_chat_share_permission(
 }
 
 #[tracing::instrument(skip(db))]
-pub async fn get_macro_share_permission(
-    db: &sqlx::Pool<sqlx::Postgres>,
-    macro_prompt_id: &str,
-) -> anyhow::Result<SharePermissionV2> {
-    let result = sqlx::query!(
-        r#"
-        SELECT
-                sp.id as id,
-                sp."linkShare" as "link_share?",
-                sp."linkShareAccessLevel" as "link_share_access_level?: AccessLevel",
-                sp.team_share_access_level as "team_share_access_level?: AccessLevel",
-                m."user_id" as owner,
-                COALESCE(
-                    json_agg(json_build_object(
-                        'channel_id', csp."channel_id",
-                        'access_level', csp."access_level"
-                    )) FILTER (WHERE csp."channel_id" IS NOT NULL),
-                    '[]'
-                ) as "channel_share_permissions?"
-            FROM
-                "MacroPromptPermission" mpp
-            JOIN "SharePermission" sp ON mpp."share_permission_id" = sp.id
-            JOIN "MacroPrompt" m ON mpp."macro_prompt_id" = m.id
-            LEFT JOIN "ChannelSharePermission" csp ON csp."share_permission_id" = sp.id
-            WHERE
-                mpp."macro_prompt_id" = $1
-            GROUP BY
-                sp.id, m."user_id"
-        "#,
-        macro_prompt_id,
-    )
-    .fetch_one(db)
-    .await?;
-
-    parse_share_permission(
-        result.id,
-        result.link_share,
-        result.link_share_access_level,
-        result.team_share_access_level,
-        result.owner,
-        result.channel_share_permissions,
-    )
-}
-
-#[tracing::instrument(skip(db))]
 pub async fn get_email_thread_permission(
     db: &sqlx::Pool<sqlx::Postgres>,
     thread_id: &str,

@@ -8,21 +8,33 @@ use sqlx::PgPool;
 use tokio_util::sync::CancellationToken;
 
 /// method that ingests sqs messages and calls the process function for each
+#[expect(
+    clippy::too_many_arguments,
+    reason = "mirrors the ScheduledContext fields"
+)]
 pub async fn run_worker(
     worker: sqs_worker::SQSWorker,
     db: PgPool,
     email_api: GmailApi,
+    attachment_bytes: std::sync::Arc<
+        dyn email::domain::attachment_access::AuthorizedAttachmentBytes,
+    >,
     s3_client: s3_client::S3,
     attachment_bucket: String,
     macro_event_broker: PubSubEventBroker,
+    read_receipts: crate::composition::ReadReceipts,
 ) {
     run_worker_with_cancellation(
-        worker,
-        db,
-        email_api,
-        s3_client,
-        attachment_bucket,
-        macro_event_broker,
+        ScheduledContext {
+            sqs_worker: worker,
+            db,
+            email_api,
+            attachment_bytes,
+            s3_client,
+            attachment_bucket,
+            macro_event_broker,
+            read_receipts,
+        },
         CancellationToken::new(),
     )
     .await;
@@ -32,26 +44,13 @@ pub async fn run_worker(
 ///
 /// A batch already returned by SQS is fully processed before shutdown.
 pub async fn run_worker_with_cancellation(
-    worker: sqs_worker::SQSWorker,
-    db: PgPool,
-    email_api: GmailApi,
-    s3_client: s3_client::S3,
-    attachment_bucket: String,
-    macro_event_broker: PubSubEventBroker,
+    ctx: ScheduledContext,
     cancellation_token: CancellationToken,
 ) {
-    let ctx = ScheduledContext {
-        db,
-        sqs_worker: worker.clone(),
-        email_api,
-        s3_client,
-        attachment_bucket,
-        macro_event_broker,
-    };
     loop {
         let worker_result = tokio::spawn({
             let ctx = ctx.clone();
-            let worker = worker.clone();
+            let worker = ctx.sqs_worker.clone();
             let cancellation_token = cancellation_token.clone();
             async move {
                 loop {

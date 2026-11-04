@@ -2,6 +2,10 @@ use std::sync::Arc;
 
 use crate::model::ReasoningEffort;
 use crate::model::types::Model;
+use rig_core::completion::{
+    CompletionError, CompletionModel, CompletionRequest, CompletionResponse,
+};
+use rig_core::streaming::StreamingCompletionResponse;
 use rig_core::{client::CompletionClient, http_client::HttpClientExt, providers::openai};
 
 /// Fireworks' Chat Completions `model` field is the account-scoped path, not
@@ -46,9 +50,11 @@ impl<'a, H: HttpClientExt + Clone + Default + std::fmt::Debug + 'static>
     ///
     /// Unlike the Responses API, the Chat Completions API does not coerce tools
     /// into a strict subset, so tools are already sent verbatim.
-    pub fn completion(&self) -> openai::completion::CompletionModel<H> {
-        self.client
-            .completion_model(completion_model_id(&self.model))
+    pub fn completion(&self) -> CompatibleCompletionModel<H> {
+        CompatibleCompletionModel(
+            self.client
+                .completion_model(completion_model_id(&self.model)),
+        )
     }
 
     /// Best-effort reasoning config, flattened into the request by rig, or
@@ -89,6 +95,59 @@ impl<'a, H: HttpClientExt + Clone + Default + std::fmt::Debug + 'static>
             );
 
         Some(serde_json::json!({ "reasoning_effort": effort }))
+    }
+}
+
+/// Compatible endpoints cannot carry images in tool messages. Preserve the
+/// result metadata and explain the unsupported transport instead of failing
+/// the next turn or sending encoded pixels as text, including on history replay.
+#[derive(Clone)]
+pub struct CompatibleCompletionModel<H>(openai::completion::CompletionModel<H>);
+
+fn compatible_media(mut request: CompletionRequest) -> CompletionRequest {
+    use rig_core::message::{Message, ToolResultContent, UserContent};
+    for message in request.chat_history.iter_mut() {
+        if let Message::User { content } = message {
+            for part in content.iter_mut() {
+                if let UserContent::ToolResult(result) = part {
+                    for output in result.content.iter_mut() {
+                        if matches!(output, ToolResultContent::Image(_)) {
+                            *output = ToolResultContent::text(
+                                "This model's Chat Completions transport cannot inspect tool images. The image was omitted, not converted to text. Use a native image-capable model such as Anthropic or OpenAI Responses to inspect it; do not claim visual verification.",
+                            );
+                        }
+                    }
+                }
+            }
+        }
+    }
+    request
+}
+
+impl<H: HttpClientExt + Clone + Default + std::fmt::Debug + 'static> CompletionModel
+    for CompatibleCompletionModel<H>
+{
+    type Response = <openai::completion::CompletionModel<H> as CompletionModel>::Response;
+    type StreamingResponse =
+        <openai::completion::CompletionModel<H> as CompletionModel>::StreamingResponse;
+    type Client = openai::CompletionsClient<H>;
+    fn make(client: &Self::Client, model: impl Into<String>) -> Self {
+        Self(openai::completion::CompletionModel::make(client, model))
+    }
+    async fn completion(
+        &self,
+        request: CompletionRequest,
+    ) -> Result<CompletionResponse<Self::Response>, CompletionError> {
+        self.0.completion(compatible_media(request)).await
+    }
+    async fn stream(
+        &self,
+        request: CompletionRequest,
+    ) -> Result<StreamingCompletionResponse<Self::StreamingResponse>, CompletionError> {
+        self.0.stream(compatible_media(request)).await
+    }
+    fn composes_native_output_with_tools(&self) -> bool {
+        self.0.composes_native_output_with_tools()
     }
 }
 

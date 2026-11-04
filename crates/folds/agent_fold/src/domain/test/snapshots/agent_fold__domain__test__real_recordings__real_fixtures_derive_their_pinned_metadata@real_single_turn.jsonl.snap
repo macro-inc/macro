@@ -4,6 +4,8 @@ expression: machine.metadata()
 input_file: crates/folds/agent_fold/fixtures/real/real_single_turn.jsonl
 ---
 SessionMetadata {
+    notifications: [],
+    noop_turn: None,
     harness: ClaudeCode,
     model: Some(
         "claude-fable-5[1m]",

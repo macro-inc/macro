@@ -10,6 +10,7 @@ import type {
   EmailThreadMessageFieldsFragment,
   EmailThreadPageFieldsFragment,
   GraphqlEntityAccessLevel,
+  GraphqlScheduledSendStatus,
 } from '@service-storage/graphql/generated/graphql';
 import { match } from 'ts-pattern';
 
@@ -32,7 +33,7 @@ function mapAccessLevel(
     .with('COMMENT', () => 'comment')
     .with('EDIT', () => 'edit')
     .with('OWNER', () => 'owner')
-    .exhaustive();
+    .exhaustive(() => 'view');
 }
 
 function mapContact(
@@ -71,6 +72,7 @@ export function mapGraphqlEmailMessage(
   > = new Map()
 ): ApiMessage {
   return {
+    draft_generation: message.draftGeneration,
     attachments: message.attachments.map((attachment) => ({
       db_id: attachment.id,
       provider_id: optional(attachment.providerId),
@@ -79,6 +81,7 @@ export function mapGraphqlEmailMessage(
       size_bytes: optional(attachment.sizeBytes),
       sfs_id: optional(attachment.sfsId),
       content_id: optional(attachment.contentId),
+      reference_url: optional(attachment.referenceUrl),
     })),
     attachments_draft: message.attachmentsDraft.map((attachment) => ({
       id: attachment.id,
@@ -88,6 +91,9 @@ export function mapGraphqlEmailMessage(
       sha: attachment.sha,
       size: attachment.size,
       s3_key: attachment.s3Key,
+      upload_pending: attachment.uploadPending,
+      content_id: attachment.contentId,
+      is_inline: attachment.isInline,
     })),
     attachments_forwarded: message.attachmentsForwarded.map((attachment) => ({
       attachment_id: attachment.attachmentId,
@@ -112,6 +118,14 @@ export function mapGraphqlEmailMessage(
     has_attachments: message.hasAttachments,
     internal_date_ts: message.internalDateTs,
     is_draft: message.isDraft,
+    operation_status: message.operationStatus
+      ? {
+          state: message.operationStatus.state,
+          revision: message.operationStatus.revision,
+          remote_version: message.operationStatus.remoteVersion,
+          issue: message.operationStatus.issue,
+        }
+      : undefined,
     is_read: message.isRead,
     is_sent: message.isSent,
     is_starred: message.isStarred,
@@ -122,6 +136,16 @@ export function mapGraphqlEmailMessage(
     provider_id: optional(message.providerId),
     replying_to_id: optional(message.replyingToId),
     scheduled_send_time: message.scheduledSendTime,
+    scheduled_send_status:
+      message.scheduledSendStatus == null
+        ? null
+        : match<GraphqlScheduledSendStatus>(message.scheduledSendStatus)
+            .with('PENDING', () => 'pending' as const)
+            .with('SENDING', () => 'sending' as const)
+            .with('FAILED', () => 'failed' as const)
+            .with('UNCONFIRMED', () => 'unconfirmed' as const)
+            // An unfamiliar delivery state cannot prove the draft is editable.
+            .exhaustive(() => 'unconfirmed' as const),
     sent_at: message.sentAt,
     snippet: message.snippet,
     subject: message.subject,
@@ -144,6 +168,7 @@ export function mapGraphqlEmailThreadPage(
     created_at: thread.createdAt,
     db_id: thread.id,
     inbox_visible: thread.inboxVisible,
+    has_received_mail: thread.hasReceivedMail,
     is_read: thread.isRead,
     latest_inbound_message_ts: thread.latestInboundMessageTs,
     link_id: thread.linkId,

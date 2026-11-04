@@ -1,7 +1,8 @@
+import { fireAndForget } from '@core/util/fireAndForget';
+import DotsIcon from '@icon/system/regular/dots-three.svg';
+import PlusIcon from '@icon/system/regular/plus.svg';
+import TrashIcon from '@icon/system/regular/trash.svg';
 import { Popover } from '@kobalte/core/popover';
-import DotsIcon from '@phosphor/dots-three.svg';
-import PlusIcon from '@phosphor/plus.svg';
-import TrashIcon from '@phosphor/trash.svg';
 import { ColorSwatches } from '@property/tags/components/color-swatches';
 import { Button } from '@ui/components/Button';
 import { DeleteDialog } from '@ui/components/DeleteDialog';
@@ -67,9 +68,13 @@ export function BoardLaneHeader(props: {
         </Show>
         <Show when={props.onAdd}>
           <Button
+            variant="ghost"
+            aria-label={`Add record to ${props.label}`}
+            tooltip={{
+              content: `Add record to ${props.label}`,
+              disabled: true,
+            }}
             size="icon-xs"
-            label={`Add record to ${props.label}`}
-            tooltipDisabled
             title={`Add record to ${props.label}`}
             onClick={props.onAdd}
           >
@@ -151,7 +156,7 @@ function LaneName(props: { option: EditableOption }) {
             });
           }}
           onInput={(event) => rename.setDraft(event.currentTarget.value)}
-          onBlur={() => void rename.save(false)}
+          onBlur={() => fireAndForget(rename.save(false), 'database')}
           onKeyDown={(event) => {
             if (event.isComposing) return;
             if (event.key === 'Escape') {
@@ -161,7 +166,7 @@ function LaneName(props: { option: EditableOption }) {
             } else if (event.key === 'Enter') {
               event.preventDefault();
               event.stopPropagation();
-              void rename.save(true);
+              fireAndForget(rename.save(true), 'database');
             }
           }}
         />
@@ -188,10 +193,14 @@ function LaneColor(props: { option: EditableOption; children: JSX.Element }) {
       onOpenChange={() => setError('')}
     >
       <Popover.Trigger
+        variant="ghost"
+        aria-label={`Change ${props.option.option.label} color`}
+        tooltip={{
+          content: `Change ${props.option.option.label} color`,
+          disabled: true,
+        }}
         as={Button}
         size="icon-xs"
-        label={`Change ${props.option.option.label} color`}
-        tooltipDisabled
         data-kanban-no-drag
       >
         {props.children}
@@ -202,15 +211,15 @@ function LaneColor(props: { option: EditableOption; children: JSX.Element }) {
           <ColorSwatches
             size="sm"
             value={props.option.option.color}
-            onChange={(color) =>
-              void props.option.editing
+            onChange={(color) => {
+              props.option.editing
                 .update(props.option.column.id, props.option.option.id, {
                   color: color.color,
                 })
                 .mapErr((failure) =>
                   setError(databaseOpMessage(failure, 'this group'))
-                )
-            }
+                );
+            }}
           />
           <Show when={props.option.column.sharedOutsideDatabase}>
             <p class="mt-2 text-ink-muted">
@@ -291,7 +300,7 @@ function LaneMenu(props: {
         pending={pending()}
         title={`Delete “${props.label}”?`}
         deleteLabel={pending() ? 'Deleting…' : 'Delete group'}
-        onDelete={() => void remove()}
+        onDelete={() => fireAndForget(remove(), 'database')}
         body={
           <>
             <p>

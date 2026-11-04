@@ -5,7 +5,7 @@ use ai_toolset::{
     AsyncToolCollection, RequestContext, RequestSchema, ToolResult, ToolSet as AiToolSet,
     ToolSetError,
 };
-use rig_agent::tool::{DynamicTool, ToolExecutionError, ToolOutput};
+use rig_agent::tool::{DynamicTool, ToolExecutionError};
 use std::sync::{Arc, RwLock};
 use tracing::Instrument as _;
 
@@ -174,7 +174,7 @@ impl ToolsetToolAdapter {
                                 telemetry.finish(&result);
                             }
                             match result {
-                                Ok(Ok(value)) => Ok(ToolOutput::json(value)),
+                                Ok(Ok(value)) => crate::tool_media::model_output(value),
                                 Ok(Err(e)) => {
                                     tracing::error!(error = ?e.internal_error, "toolset tool error");
                                     Err(ToolExecutionError::other(e.description))
@@ -292,7 +292,7 @@ impl DynToolSetAdapter {
                         .expect("request_context lock poisoned")
                         .clone();
                     match toolset.try_tool_call(ctx, req_ctx, &tool_name, &args).await {
-                        Ok(Ok(value)) => Ok(ToolOutput::json(value)),
+                        Ok(Ok(value)) => crate::tool_media::model_output(value),
                         Ok(Err(e)) => {
                             tracing::error!(error = ?e.internal_error, "tool error");
                             Err(ToolExecutionError::other(e.description))

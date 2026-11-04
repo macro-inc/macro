@@ -1,5 +1,6 @@
 import { analytics } from '@app/lib/analytics';
 import { toast } from '@core/component/Toast/Toast';
+import { fireAndForget } from '@core/util/fireAndForget';
 import { throwOnErr } from '@core/util/result';
 import type { CacheHost } from '@graphql-cache/index';
 import { queryClient } from '@queries/client';
@@ -50,8 +51,8 @@ const listChannelsQueryOptions = queryOptions({
   queryFn: ({ signal }) => fetchAllChannels(signal),
 });
 
-export function useListChannelsQuery() {
-  return useQuery(() => listChannelsQueryOptions);
+export function useListChannelsQuery(enabled: Accessor<boolean> = () => true) {
+  return useQuery(() => ({ ...listChannelsQueryOptions, enabled: enabled() }));
 }
 
 // The host is an app-level cache service, not component state; the key
@@ -119,7 +120,8 @@ export function useCreateChannelMutation(
             entityId: data.id,
           });
         },
-        onSettled: () => void invalidateListChannels(),
+        onSettled: () =>
+          fireAndForget(invalidateListChannels(), 'channel-list'),
       },
       callbacks
     ),
@@ -187,7 +189,8 @@ export function usePatchChannelMutation(callbacks?: PatchChannelCallbacks) {
           console.error('failed to update channel settings', error);
           toast.failure('Failed to update channel settings');
         },
-        onSettled: () => void invalidateListChannels(),
+        onSettled: () =>
+          fireAndForget(invalidateListChannels(), 'channel-list'),
       },
       callbacks
     ),

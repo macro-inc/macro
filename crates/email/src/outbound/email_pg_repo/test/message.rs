@@ -395,22 +395,24 @@ async fn test_forwarded_attachments_by_message_ids_empty_input(
     Ok(())
 }
 
-// ── scheduled_send_times_by_message_ids ─────────────────────────────
+// ── scheduled_sends_by_message_ids ─────────────────────────────
 
 #[sqlx::test(
     migrator = "MACRO_DB_MIGRATIONS",
     fixtures(path = "../../../../fixtures", scripts("email_message"))
 )]
-async fn test_scheduled_send_times_by_message_ids(pool: Pool<Postgres>) -> anyhow::Result<()> {
+async fn test_scheduled_sends_by_message_ids(pool: Pool<Postgres>) -> anyhow::Result<()> {
     let repo = EmailPgRepo::new(pool);
 
     let msg3 = Uuid::parse_str("ee000003-0000-0000-0000-000000000003")?;
-    let times = repo.scheduled_send_times_by_message_ids(&[msg3]).await?;
+    let times = repo.scheduled_sends_by_message_ids(&[msg3]).await?;
 
     assert_eq!(times.len(), 1, "msg3 has a pending scheduled send");
     let send_time = times.get(&msg3).expect("msg3 should have a send time");
     assert_eq!(
-        send_time.to_rfc3339_opts(chrono::SecondsFormat::Secs, true),
+        send_time
+            .send_time
+            .to_rfc3339_opts(chrono::SecondsFormat::Secs, true),
         "2025-03-01T09:00:00Z"
     );
 
@@ -428,7 +430,7 @@ async fn test_scheduled_send_times_excludes_already_sent(
 
     // msg2 has a scheduled send but sent=true
     let msg2 = Uuid::parse_str("ee000002-0000-0000-0000-000000000002")?;
-    let times = repo.scheduled_send_times_by_message_ids(&[msg2]).await?;
+    let times = repo.scheduled_sends_by_message_ids(&[msg2]).await?;
 
     assert!(
         times.is_empty(),
@@ -442,18 +444,82 @@ async fn test_scheduled_send_times_excludes_already_sent(
     migrator = "MACRO_DB_MIGRATIONS",
     fixtures(path = "../../../../fixtures", scripts("email_message"))
 )]
-async fn test_scheduled_send_times_by_message_ids_empty_input(
+async fn test_scheduled_sends_by_message_ids_empty_input(
     pool: Pool<Postgres>,
 ) -> anyhow::Result<()> {
     let repo = EmailPgRepo::new(pool);
 
-    let times = repo.scheduled_send_times_by_message_ids(&[]).await?;
+    let times = repo.scheduled_sends_by_message_ids(&[]).await?;
     assert!(times.is_empty());
 
     Ok(())
 }
 
 // ── process_scheduled_message ──────────────────────────────────────
+
+#[sqlx::test(
+    migrator = "MACRO_DB_MIGRATIONS",
+    fixtures(path = "../../../../fixtures", scripts("email_message"))
+)]
+async fn scheduled_send_status_distinguishes_preparation_from_submission(
+    pool: Pool<Postgres>,
+) -> anyhow::Result<()> {
+    use crate::domain::models::ScheduledSendStatus;
+
+    let repo = EmailPgRepo::new(pool.clone());
+    let message_id = Uuid::parse_str("ee000003-0000-0000-0000-000000000003")?;
+    let claim_id = Uuid::new_v4();
+    let cases = [
+        ("ready", false, None, false, ScheduledSendStatus::Pending),
+        (
+            "ready",
+            true,
+            Some(claim_id),
+            false,
+            ScheduledSendStatus::Pending,
+        ),
+        (
+            "ready",
+            true,
+            Some(claim_id),
+            true,
+            ScheduledSendStatus::Sending,
+        ),
+        ("ready", true, None, false, ScheduledSendStatus::Sending),
+        (
+            "failed",
+            true,
+            Some(claim_id),
+            false,
+            ScheduledSendStatus::Failed,
+        ),
+        (
+            "unconfirmed",
+            true,
+            Some(claim_id),
+            true,
+            ScheduledSendStatus::Unconfirmed,
+        ),
+    ];
+    for (status, processing, claim, started, expected) in cases {
+        sqlx::query!(
+            r#"UPDATE email_scheduled_messages
+               SET delivery_status = $2, processing = $3, delivery_claim_id = $4,
+                   delivery_started_at = CASE WHEN $5 THEN now() ELSE NULL END
+               WHERE message_id = $1"#,
+            message_id,
+            status,
+            processing,
+            claim,
+            started,
+        )
+        .execute(&pool)
+        .await?;
+        let schedules = repo.scheduled_sends_by_message_ids(&[message_id]).await?;
+        assert_eq!(schedules[&message_id].status, expected);
+    }
+    Ok(())
+}
 
 #[sqlx::test(
     migrator = "MACRO_DB_MIGRATIONS",
@@ -843,6 +909,9 @@ fn staged_attachment(draft_id: Uuid, id: Uuid) -> AttachmentDraft {
         sha: "f".repeat(64),
         size: 42,
         s3_key: format!("draft/{draft_id}/{id}"),
+        upload_pending: false,
+        content_id: None,
+        is_inline: false,
     }
 }
 
@@ -859,6 +928,8 @@ async fn insert_draft_attachment_records_the_attachment_on_the_inboxs_draft(
     let draft = Uuid::parse_str("ee000003-0000-0000-0000-000000000003")?;
     let id = Uuid::parse_str("dd000009-0000-0000-0000-000000000009")?;
 
+    // This fixture starts with a scheduled draft; cancel before staging a file.
+    repo.delete_scheduled_messages_batch(&[draft], link).await?;
     repo.insert_draft_attachment(link, &staged_attachment(draft, id))
         .await?;
 
@@ -871,6 +942,43 @@ async fn insert_draft_attachment_records_the_attachment_on_the_inboxs_draft(
     assert_eq!(staged.content_type, "application/pdf");
     assert_eq!(staged.size, 42);
     assert_eq!(staged.s3_key, format!("draft/{draft}/{id}"));
+    Ok(())
+}
+
+#[sqlx::test(
+    migrator = "MACRO_DB_MIGRATIONS",
+    fixtures(path = "../../../../fixtures", scripts("email_message"))
+)]
+async fn insert_draft_attachment_keeps_an_inline_part_inline(
+    pool: Pool<Postgres>,
+) -> anyhow::Result<()> {
+    // An invitation's calendar body is staged inline with no Content-ID;
+    // delivery reads the flag back to send it as the message's calendar part.
+    use crate::domain::ports::DraftAttachmentRepo;
+    let repo = EmailPgRepo::new(pool);
+    let link = Uuid::parse_str("aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa")?;
+    let draft = Uuid::parse_str("ee000003-0000-0000-0000-000000000003")?;
+    let id = Uuid::parse_str("dd000010-0000-0000-0000-000000000010")?;
+
+    repo.delete_scheduled_messages_batch(&[draft], link).await?;
+    repo.insert_draft_attachment(
+        link,
+        &AttachmentDraft {
+            file_name: "invite.ics".to_owned(),
+            content_type: "text/calendar; method=REQUEST".to_owned(),
+            is_inline: true,
+            ..staged_attachment(draft, id)
+        },
+    )
+    .await?;
+
+    let drafts = repo.draft_attachments_by_message_ids(&[draft]).await?;
+    let staged = drafts[&draft]
+        .iter()
+        .find(|a| a.id == id)
+        .expect("the staged attachment is recorded");
+    assert!(staged.is_inline);
+    assert_eq!(staged.content_id, None);
     Ok(())
 }
 
@@ -900,5 +1008,37 @@ async fn insert_draft_attachment_refuses_another_inboxs_draft(
         drafts[&draft].iter().all(|a| a.id != id),
         "a draft outside the inbox gains no attachment"
     );
+    Ok(())
+}
+
+#[sqlx::test(
+    migrator = "MACRO_DB_MIGRATIONS",
+    fixtures(path = "../../../../fixtures", scripts("email_message"))
+)]
+async fn insert_draft_attachment_refuses_non_drafts_sent_and_scheduled_messages(
+    pool: Pool<Postgres>,
+) -> anyhow::Result<()> {
+    use crate::domain::ports::DraftAttachmentRepo;
+    let repo = EmailPgRepo::new(pool);
+    let link = Uuid::parse_str("aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa")?;
+    for message in [
+        "ee000001-0000-0000-0000-000000000001", // Non-draft.
+        "ee000002-0000-0000-0000-000000000002", // Sent.
+        "ee000003-0000-0000-0000-000000000003", // Scheduled draft.
+    ] {
+        let message = Uuid::parse_str(message)?;
+        let attachment = staged_attachment(message, Uuid::new_v4());
+        let result = repo.insert_draft_attachment(link, &attachment).await;
+        assert!(
+            matches!(result, Err(sqlx::Error::RowNotFound)),
+            "locked message accepted an attachment: {result:?}"
+        );
+        let drafts = repo.draft_attachments_by_message_ids(&[message]).await?;
+        assert!(
+            drafts
+                .get(&message)
+                .is_none_or(|rows| rows.iter().all(|row| row.id != attachment.id))
+        );
+    }
     Ok(())
 }

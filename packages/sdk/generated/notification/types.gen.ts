@@ -175,6 +175,43 @@ export type BulkGetByEventItemIdsRequest = {
     eventItemIds: Array<string>;
 };
 
+export type BulkItem = {
+    item_id: string;
+    item_type: EntityType;
+};
+
+export type BulkRemoveItemsRequest = {
+    items: Array<BulkItem>;
+};
+
+export type BulkSetItemsRequest = {
+    items: Array<BulkItem>;
+    /**
+     * A future resume time. Omit to mute indefinitely.
+     */
+    snoozed_until?: string | null;
+};
+
+/**
+ * A channel member who sees a calendar event only through a channel share
+ * asked the person who shared it to add them as a guest. Sent to the sharer,
+ * with the requester as sender.
+ */
+export type CalendarEventJoinRequestMetadata = {
+    /**
+     * The shared calendar event entity the request is for.
+     */
+    eventId: string;
+    /**
+     * Stable request identity, answered from the event's details.
+     */
+    requestId: string;
+    /**
+     * Event title when the request was made.
+     */
+    title: string;
+};
+
 /**
  * A calendar event alarm came due. Like [`ReminderMetadata`], these are
  * self-notifications: `sender_id` must stay `None` or the only recipient is
@@ -486,6 +523,10 @@ export type DeviceRequest = {
      */
     deviceType: DeviceType;
     /**
+     * Whether this Android binary supports native Telecom incoming calls.
+     */
+    nativeCallCapable?: boolean;
+    /**
      * The device push notification token.
      */
     token: string;
@@ -535,9 +576,61 @@ export type Entity = {
 };
 
 /**
+ * A person granted you access to a shared entity.
+ */
+export type EntityAccessGrantedMetadata = {
+    /**
+     * Requested or granted permission.
+     */
+    accessLevel: RequestedAccessLevel;
+    /**
+     * Shared item's name.
+     */
+    entityName: string;
+    /**
+     * Document file type for routing.
+     */
+    fileType?: string | null;
+    /**
+     * Stable request identity.
+     */
+    requestId: string;
+    /**
+     * Revision that generated this notification.
+     */
+    revision: number;
+};
+
+/**
+ * A person requested access to a shared entity.
+ */
+export type EntityAccessRequestedMetadata = {
+    /**
+     * Requested or granted permission.
+     */
+    accessLevel: RequestedAccessLevel;
+    /**
+     * Shared item's name.
+     */
+    entityName: string;
+    /**
+     * Document file type for routing.
+     */
+    fileType?: string | null;
+    /**
+     * Stable request identity.
+     */
+    requestId: string;
+    /**
+     * Revision that generated this notification.
+     */
+    revision: number;
+};
+
+/**
  * The type of an entity in Macro
  */
-export type EntityType = 'user' | 'chat' | 'channel' | 'channel_message' | 'document' | 'project' | 'email_thread' | 'calendar_event' | 'team' | 'call' | 'foreign_entity' | 'static_file' | 'crm_company' | 'crm_contact' | 'crm_pipeline' | 'reminder' | 'skill' | 'agent_session' | 'scheduled_action' | 'initiative' | 'database' | 'database_row' | 'form';
+export type EntityType = 'user' | 'chat' | 'channel' | 'channel_message' | 'document' | 'project' | 'email_thread' | 'calendar_event' | 'team' | 'call' | 'foreign_entity' | 'static_file' | 'crm_company' | 'crm_contact' | 'crm_pipeline' | 'reminder' | 'skill' | 'agent_session' | 'scheduled_action' | 'initiative' | 'database' | 'database_row' | 'form' | 'external_chat';
 
 /**
  * A plain old json error response for use with axum.
@@ -549,6 +642,29 @@ export type ErrorResponse = {
      */
     message: string;
 };
+
+/**
+ * A live message in an independently shared external chat.
+ */
+export type ExternalChatMessageMetadata = {
+    /**
+     * The chat's name.
+     */
+    chatName: string;
+    /**
+     * Stable message id; retries use it as their notification id.
+     */
+    messageId: string;
+    /**
+     * The messaging service the chat lives in.
+     */
+    provider: ExternalChatProvider;
+};
+
+/**
+ * The messaging service an external chat lives in.
+ */
+export type ExternalChatProvider = 'whatsapp';
 
 /**
  * The strongly typed response for listing user notifications.
@@ -863,6 +979,18 @@ export type InviteToTeamMetadata = {
      */
     invitedBy: string;
     /**
+     * What the invitee gets by joining, as the team stood when the invite was sent.
+     */
+    inviteePlan?: InviteePlan;
+    /**
+     * Whether the invite creates an agent account.
+     */
+    isAgent?: boolean;
+    /**
+     * Whether this email reminds the invitee of an invite they have not answered.
+     */
+    reminder?: boolean;
+    /**
      * Role/permission level in the team
      */
     role?: string | null;
@@ -883,6 +1011,11 @@ export type InviteToTeamMetadata = {
      */
     teamName: string;
 };
+
+/**
+ * What a team invitee gets by joining.
+ */
+export type InviteePlan = 'free' | 'premium';
 
 /**
  * Metadata for when a item is shared with a user
@@ -1001,6 +1134,18 @@ export type NotifEvent = {
     tag: 'commented_on_document';
 } | {
     /**
+     * Someone requested more access to a shared entity.
+     */
+    content: EntityAccessRequestedMetadata;
+    tag: 'entity_access_requested';
+} | {
+    /**
+     * An owner granted requested access.
+     */
+    content: EntityAccessGrantedMetadata;
+    tag: 'entity_access_granted';
+} | {
+    /**
      * Someone commented, replied, or mentioned the recipient on a project.
      */
     content: InitiativeDiscussionMetadata;
@@ -1068,6 +1213,12 @@ export type NotifEvent = {
      */
     content: ReminderMetadata;
     tag: 'reminder';
+} | {
+    /**
+     * A live message in a shared external chat.
+     */
+    content: ExternalChatMessageMetadata;
+    tag: 'external_chat_message';
 } | {
     /**
      * A calendar event alarm came due.
@@ -1143,6 +1294,19 @@ export type NotifEvent = {
      */
     content: ChannelMessageReactionMetadata;
     tag: 'channel_message_reaction';
+} | {
+    /**
+     * A channel member asked to be added as a guest of an event the
+     * user shared with the channel.
+     */
+    content: CalendarEventJoinRequestMetadata;
+    tag: 'calendar_event_join_request';
+} | {
+    /**
+     * One of the user's routines finished a run, successfully or not.
+     */
+    content: RoutineRunFinishedMetadata;
+    tag: 'routine_run_finished';
 };
 
 /**
@@ -1181,16 +1345,44 @@ export type NotificationState = 'unseen' | 'seen' | 'done';
  */
 export type NotificationTypeName = string;
 
+/**
+ * the value we send as the payload in the ios notification
+ * This data is accessible to the client
+ */
 export type PushNotificationData = {
+    navigation?: null | PushNotificationNavigation;
     /**
      * The id of the notification record (UserNotification.id)
      */
     notificationId: string;
     /**
+     * Account that owns the receiving device, set during per-recipient delivery.
+     */
+    recipientId?: string | null;
+    /**
      * The sender's profile picture URL, used by the Notification Service Extension
      * to download and attach as a rich notification image.
      */
     senderProfilePictureUrl?: string | null;
+};
+
+/**
+ * Open a channel at a specific message.
+ */
+export type PushNotificationNavigation = {
+    /**
+     * Channel containing the message.
+     */
+    channelId: string;
+    /**
+     * Message to highlight.
+     */
+    messageId: string;
+    /**
+     * Root of the message's thread; null identifies a top-level message.
+     */
+    threadId: string | null;
+    type: 'channel';
 };
 
 /**
@@ -1310,6 +1502,35 @@ export type RepliedToDocumentCommentThreadMetadata = {
      */
     threadId: CommentRef;
 };
+
+/**
+ * Permission level used by an access request, excluding ownership.
+ */
+export type RequestedAccessLevel = 'view' | 'comment' | 'edit';
+
+/**
+ * One of the recipient's routines finished a run. Every run notifies,
+ * whether it succeeded or failed.
+ */
+export type RoutineRunFinishedMetadata = {
+    /**
+     * How the run ended.
+     */
+    outcome: RoutineRunOutcome;
+    /**
+     * The routine that ran.
+     */
+    routineId: string;
+    /**
+     * The routine's name when it ran.
+     */
+    routineName: string;
+};
+
+/**
+ * How a routine run ended, as its notification reports it.
+ */
+export type RoutineRunOutcome = 'succeeded' | 'failed';
 
 /**
  * Metadata for when a user is assigned to a task
@@ -1458,6 +1679,48 @@ export type UnsubscribeItemResponses = {
 };
 
 export type UnsubscribeItemResponse = UnsubscribeItemResponses[keyof UnsubscribeItemResponses];
+
+export type RemoveUnsubscribeItemsData = {
+    body: BulkRemoveItemsRequest;
+    path?: never;
+    query?: never;
+    url: '/unsubscribe/items';
+};
+
+export type RemoveUnsubscribeItemsErrors = {
+    400: ErrorResponse;
+    401: ErrorResponse;
+    500: ErrorResponse;
+};
+
+export type RemoveUnsubscribeItemsError = RemoveUnsubscribeItemsErrors[keyof RemoveUnsubscribeItemsErrors];
+
+export type RemoveUnsubscribeItemsResponses = {
+    200: EmptyResponse;
+};
+
+export type RemoveUnsubscribeItemsResponse = RemoveUnsubscribeItemsResponses[keyof RemoveUnsubscribeItemsResponses];
+
+export type UnsubscribeItemsData = {
+    body: BulkSetItemsRequest;
+    path?: never;
+    query?: never;
+    url: '/unsubscribe/items';
+};
+
+export type UnsubscribeItemsErrors = {
+    400: ErrorResponse;
+    401: ErrorResponse;
+    500: ErrorResponse;
+};
+
+export type UnsubscribeItemsError = UnsubscribeItemsErrors[keyof UnsubscribeItemsErrors];
+
+export type UnsubscribeItemsResponses = {
+    200: EmptyResponse;
+};
+
+export type UnsubscribeItemsResponse = UnsubscribeItemsResponses[keyof UnsubscribeItemsResponses];
 
 export type RemoveUnsubscribeAllData = {
     body?: never;

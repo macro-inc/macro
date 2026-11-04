@@ -2,7 +2,7 @@ import ArrowUp from '@phosphor/arrow-up.svg';
 import Paperclip from '@phosphor/paperclip.svg';
 import TextAa from '@phosphor/text-aa.svg';
 import { Button, ComposerSurface, SendButton } from '@ui';
-import { createSignal, For, onCleanup, Show } from 'solid-js';
+import { createSignal, For, type JSX, onCleanup, Show } from 'solid-js';
 import { Dynamic, render } from 'solid-js/web';
 import { homepagePeople } from '../core/homepage-demo-people';
 import {
@@ -17,6 +17,8 @@ export default function HomepageEmailCompose(
   props: {
     appChrome?: boolean;
     readOnly?: boolean;
+    /** Optional rich body for a prefilled local draft. */
+    bodyContent?: JSX.Element;
     draft?: {
       subject: string;
       to: string;
@@ -42,7 +44,7 @@ export default function HomepageEmailCompose(
 ) {
   const initialBody = props.draft?.body;
   const [subject, setSubject] = createSignal(
-    props.draft?.subject ?? 'Great meeting you — demo follow-up'
+    props.draft?.subject ?? 'Demo follow-up'
   );
   const [showBcc, setShowBcc] = createSignal(false);
   const [showFormat, setShowFormat] = createSignal(false);
@@ -53,7 +55,7 @@ export default function HomepageEmailCompose(
   let body: HTMLDivElement | undefined;
   let fileInput: HTMLInputElement | undefined;
   const [to, setTo] = createSignal(
-    props.draft?.to ?? 'Dana <dana@example.com>'
+    props.draft?.to ?? 'Valentina <valentina@coparse.com>'
   );
   const [cc, setCc] = createSignal(
     props.draft?.cc ?? 'Julia <julia@macro.com>'
@@ -97,9 +99,11 @@ export default function HomepageEmailCompose(
                 description={
                   item.kind === 'pdf'
                     ? 'Macro product overview and pricing, shared after the demo.'
-                    : 'The setup steps and owners for Dana’s team.'
+                    : 'The setup steps and owners for Valentina’s team.'
                 }
-                href="#email"
+                href={
+                  item.kind === 'md' ? '/demo?document=rollout' : '/documents'
+                }
               />
             ),
             mention
@@ -240,7 +244,7 @@ export default function HomepageEmailCompose(
             aria-multiline="true"
             aria-disabled={generating() || props.readOnly}
           >
-            {initialBody}
+            {props.bodyContent ?? initialBody}
           </div>
           <For each={attachments()}>
             {(file) => (

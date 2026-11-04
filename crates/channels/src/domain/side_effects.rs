@@ -23,6 +23,8 @@ use std::collections::HashSet;
 use tracing::Instrument as _;
 use uuid::Uuid;
 
+mod dm_email;
+
 /// Parse a mention entity id in the canonical `bot|<uuid>` principal form.
 fn mention_bot_id(entity_id: &str) -> Option<BotId> {
     BotIdStr::parse_from_str(entity_id)
@@ -208,6 +210,8 @@ pub enum ChannelNotificationEffect {
     },
     /// Participants were invited to a channel.
     Invite {
+        /// Stable identity for a DM email; ordinary invitations have no message key.
+        message_id: Option<Uuid>,
         /// Channel receiving participants.
         channel_id: Uuid,
         /// User that invited the participants.
@@ -236,6 +240,7 @@ pub struct ChannelSideEffectService<C, R, N, K, B = NoopMacroEventBroker> {
 }
 
 struct InviteNotificationRequest {
+    message_id: Option<Uuid>,
     channel_id: Uuid,
     invited_by_user_id: MacroUserIdStr<'static>,
     recipient_user_ids: Vec<MacroUserIdStr<'static>>,
@@ -454,9 +459,16 @@ where
     N: ChannelNotificationSender + Clone,
     K: ChannelContactsDispatcher + Clone,
 {
-    /// Resolve the public bot profile when the message sender is a bot.
+    /// Resolve the public bot profile when the message sender is a bot. A post
+    /// a user made through a client, such as an MCP client, is that client's.
     async fn bot_profile_for_message(&self, message: &MutatedMessage) -> Option<BotSenderProfile> {
         let bot_id = message.sender_id.as_bot()?.bot_id();
+        if let Some(client) = &message.triggered_via {
+            return Some(BotSenderProfile {
+                name: client.clone(),
+                avatar_url: None,
+            });
+        }
         if bot_id == bot_id::MACRO_AI_BOT_ID {
             return Some(BotSenderProfile {
                 name: bot_id::MACRO_AI_NAME.to_string(),
@@ -507,7 +519,7 @@ where
         } else {
             return;
         };
-        let context = match self
+        let mut context = match self
             .build_posted_message_context(
                 channel_id,
                 metadata,
@@ -524,6 +536,11 @@ where
                 return;
             }
         };
+
+        if notification_policy == PostMessageNotificationPolicy::Default {
+            self.send_unregistered_dm_email(channel_id, &message, &mut context)
+                .await;
+        }
 
         self.send_user_mention_notifications(channel_id, &message, has_attachments, &context)
             .await;
@@ -705,6 +722,27 @@ where
             return;
         }
 
+        // A mention inside a thread is thread news, like the reply carrying it:
+        // the notification is filed against the thread root, so sending it to
+        // the whole channel would pull members who never joined the thread into
+        // it. A top-level mention still reaches everyone, who see the message in
+        // the channel anyway.
+        let recipient_ids = match message.thread_id {
+            Some(_) => recipients_excluding(
+                context
+                    .thread_context
+                    .participants
+                    .iter()
+                    .map(|participant| participant.as_ref()),
+                context.sender.as_user().map(|user_id| user_id.as_ref()),
+            )
+            .collect(),
+            None => context.recipients_without_sender.clone(),
+        };
+        if recipient_ids.is_empty() {
+            return;
+        }
+
         for document in &context.document_mentions {
             self.send_notification(ChannelNotificationEffect::DocumentMention {
                 mention: ChannelMentionNotification {
@@ -718,7 +756,7 @@ where
                     sender: context.sender.clone(),
                 },
                 document: document.clone(),
-                recipient_ids: context.recipients_without_sender.clone(),
+                recipient_ids: recipient_ids.clone(),
             })
             .await;
         }
@@ -786,6 +824,8 @@ where
             }
         };
         self.send_invite_notification(InviteNotificationRequest {
+            message_id: (context.metadata.channel_type == ChannelType::DirectMessage)
+                .then_some(message.id),
             channel_id,
             invited_by_user_id,
             recipient_user_ids,
@@ -843,6 +883,7 @@ where
         };
 
         self.send_invite_notification(InviteNotificationRequest {
+            message_id: None,
             channel_id,
             invited_by_user_id,
             recipient_user_ids,
@@ -856,6 +897,7 @@ where
 
     async fn send_invite_notification(&self, req: InviteNotificationRequest) {
         let InviteNotificationRequest {
+            message_id,
             channel_id,
             invited_by_user_id,
             recipient_user_ids,
@@ -870,6 +912,7 @@ where
                 .partition(|id| existing_user_ids.contains(id.as_ref()));
 
         self.send_notification(ChannelNotificationEffect::Invite {
+            message_id,
             channel_id,
             invited_by_user_id,
             registered_recipient_ids,

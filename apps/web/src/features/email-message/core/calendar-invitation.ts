@@ -45,7 +45,8 @@ export type CalendarInvitationActions = {
   notice?: string;
   retryCalendar?: () => void;
   respond?: (response: InvitationResponse) => void;
-  openCalendar?: () => void;
+  /** Shift-click asks for a new split, as other app links do. */
+  openCalendar?: (options: { openInNewSplit: boolean }) => void;
   openExternal?: (url: string) => void;
   connectCalendar?: () => void;
   showDay?: () => void;
@@ -124,6 +125,20 @@ export function invitationIsCancelled(invite: CalendarInvitation): boolean {
   return (
     invite.method === 'cancel' || invite.status?.toUpperCase() === 'CANCELLED'
   );
+}
+
+/**
+ * Whether a saved event can be added to the viewer's calendar: a whole
+ * published event (a forwarded .ics) with a readable time, saved after its
+ * recurrence was recorded. The email service checks the same before importing.
+ */
+export function invitationCanBeAdded(invite: CalendarInvitation): boolean {
+  if (invite.method !== 'publish' || invitationIsCancelled(invite))
+    return false;
+  if (invite.recurrence_id_raw || invite.recurrence == null) return false;
+  const start = invite.start?.kind;
+  const end = invite.end?.kind;
+  return (start === 'date' || start === 'zoned') && (!end || end === start);
 }
 
 export function invitationSchedule(

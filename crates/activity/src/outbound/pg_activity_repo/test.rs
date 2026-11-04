@@ -7,6 +7,8 @@ use super::*;
 use crate::domain::models::{Action, ActionTag, Actor, CommonAction, PropertyChange};
 use crate::domain::ports::EntityActivityReads;
 
+mod teammate_feed;
+
 fn user(id: &str) -> MacroUserIdStr<'static> {
     MacroUserIdStr::try_from(id.to_string()).expect("valid user id")
 }

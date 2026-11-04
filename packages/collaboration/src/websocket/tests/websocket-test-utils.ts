@@ -26,8 +26,7 @@ export const stopClient = (
 ): Promise<void> =>
   new Promise<void>((resolve, reject) => {
     if (client === undefined) return resolve();
-    if (client.underlyingWebsocket?.readyState === WebSocket.CLOSED)
-      return resolve();
+    if (client.readyState === WebSocket.CLOSED) return resolve();
     rejectAfter(timeout, 'failed to stop client').catch((err) => reject(err));
     client.addEventListener(WebsocketEvent.Close, () => resolve(), {
       once: true,

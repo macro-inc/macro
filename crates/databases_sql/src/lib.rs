@@ -1,6 +1,9 @@
-//! SQL over Macro databases for agents: the `database_sql` engine run over
+//! SQL over Macro databases for authenticated HTTP clients and agents: the `database_sql` engine run over
 //! Soup, contacts and the databases service's ops, as the viewer.
 #![deny(missing_docs)]
+
+#[cfg(feature = "inbound")]
+pub mod inbound;
 
 mod catalog;
 mod ops_sink;
@@ -12,6 +15,7 @@ mod test_support;
 #[cfg(feature = "ai_tools")]
 pub mod toolset;
 mod view_only;
+pub mod view_rows;
 
 pub use outcome::{ResultColumn, ResultSet, SqlOutcome, SqlStatement};
 pub use service::{ChartColumns, DatabasesSql, SqlError, SqlRequest};

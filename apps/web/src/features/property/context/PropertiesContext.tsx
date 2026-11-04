@@ -37,7 +37,10 @@ interface PropertiesContextValue {
   onPropertyAddFailed?: (definitionId: string) => void;
   onPropertyDeleted: () => void;
   onPropertyPinned?: (propertyId: string) => void;
-  onPropertyUnpinned?: (propertyId: string) => void;
+  onPropertyUnpinned?: (
+    propertyId: string,
+    propertyDefinitionId?: string
+  ) => void;
   pinnedPropertyIds?: () => string[];
   addProperty?: (propertyDefinitionId: string) => Promise<void>;
   removeProperty?: (propertyId: string) => Promise<void>;
@@ -74,7 +77,10 @@ interface PropertiesProviderProps extends ParentProps {
   onPropertyAddFailed?: (definitionId: string) => void;
   onPropertyDeleted: () => void;
   onPropertyPinned?: (propertyId: string) => void;
-  onPropertyUnpinned?: (propertyId: string) => void;
+  onPropertyUnpinned?: (
+    propertyId: string,
+    propertyDefinitionId?: string
+  ) => void;
   pinnedPropertyIds?: () => string[];
   addProperty?: (propertyDefinitionId: string) => Promise<void>;
   removeProperty?: (propertyId: string) => Promise<void>;

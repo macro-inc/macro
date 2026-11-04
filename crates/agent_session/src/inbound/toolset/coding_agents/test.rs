@@ -12,6 +12,33 @@ struct Service {
 }
 
 impl CodingAgentService for Service {
+    fn list_updates(
+        &self,
+        user_id: MacroUserIdStr<'static>,
+    ) -> Pin<
+        Box<
+            dyn Future<Output = Result<crate::domain::updates::AgentUpdates, CodingAgentError>>
+                + Send
+                + '_,
+        >,
+    > {
+        Box::pin(async move {
+            self.list_callers.lock().unwrap().push(user_id);
+            Ok(crate::domain::updates::AgentUpdates {
+                items: Vec::new(),
+                truncated: false,
+                truncation_notice: None,
+            })
+        })
+    }
+    fn create(
+        &self,
+        command: DispatchCodingAgentRequest,
+    ) -> Pin<Box<dyn Future<Output = Result<DispatchedCodingAgent, CodingAgentError>> + Send + '_>>
+    {
+        self.dispatch(command)
+    }
+
     fn list(
         &self,
         user_id: MacroUserIdStr<'static>,
@@ -44,6 +71,7 @@ async fn tools_always_use_the_authenticated_request_identity() {
     let service = Arc::new(Service::default());
     let context = ServiceContext(CodingAgentToolContext {
         service: service.clone(),
+        sessions: service.clone(),
     });
     let caller = MacroUserIdStr::try_from("macro|requester@example.com".to_owned()).unwrap();
     let request = RequestContext::new(caller.clone());
@@ -53,6 +81,16 @@ async fn tools_always_use_the_authenticated_request_identity() {
         .unwrap();
     assert!(listed.agents.is_empty());
     assert_eq!(*service.list_callers.lock().unwrap(), vec![caller.clone()]);
+
+    let updates = ListAgentUpdates {}
+        .call(context.clone(), request.clone())
+        .await
+        .unwrap();
+    assert!(updates.items.is_empty());
+    assert_eq!(
+        *service.list_callers.lock().unwrap(),
+        vec![caller.clone(), caller.clone()]
+    );
 
     let tool = DispatchCodingAgent {
         agent_id: macro_uuid::generate_uuid_v7(),
@@ -76,6 +114,12 @@ fn tools_reject_an_ai_supplied_user_identity() {
         .is_err()
     );
     assert!(
+        serde_json::from_value::<ListAgentUpdates>(
+            serde_json::json!({"user_id": "macro|another@example.com"})
+        )
+        .is_err()
+    );
+    assert!(
         serde_json::from_value::<DispatchCodingAgent>(serde_json::json!({
             "agent_id": macro_uuid::generate_uuid_v7(),
             "prompt": "Fix the bug",
@@ -83,4 +127,25 @@ fn tools_reject_an_ai_supplied_user_identity() {
         }))
         .is_err()
     );
+}
+
+impl crate::domain::tool_actions::SessionActions for Service {
+    fn execute(
+        &self,
+        _user: MacroUserIdStr<'static>,
+        _id: Uuid,
+        _action: crate::domain::tool_actions::SessionAction,
+    ) -> Pin<
+        Box<
+            dyn Future<
+                    Output = Result<
+                        crate::domain::tool_actions::SessionActionResult,
+                        crate::domain::tool_actions::SessionActionError,
+                    >,
+                > + Send
+                + '_,
+        >,
+    > {
+        Box::pin(async { panic!("this test must not invoke session management") })
+    }
 }

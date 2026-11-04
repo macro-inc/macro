@@ -47,11 +47,17 @@ import {
   invalidatePullRequestMentions,
 } from '@queries/storage/pr-mention-sync';
 import { handleTaskDuplicateMatchesUpdated } from '@queries/storage/task-duplicates';
+import {
+  handleSystemStatusMessage,
+  invalidateCurrentSystemStatus,
+  SYSTEM_STATUS_MESSAGE_TYPE,
+} from '@queries/system-status/status';
 import { handleRefreshCalendar } from '../calendar/sync';
 // Side-effect import: registers the scheduled-action live-update websocket
 // listener. Must be imported somewhere that always loads on app start — this
 // provider is guaranteed to mount alongside the other sync handlers.
 import '@app/features/routines/queries/sync';
+import { fireAndForget } from '@core/util/fireAndForget';
 import {
   createConnectionWebsocketEffect,
   parseWebsocketPayload,
@@ -86,12 +92,19 @@ export function useQuerySync(userId: Accessor<string | undefined>): void {
   onCleanup(() =>
     ws.removeEventListener(WebsocketEvent.Open, invalidatePullRequestMentions)
   );
+  ws.addEventListener(WebsocketEvent.Open, invalidateCurrentSystemStatus);
+  onCleanup(() =>
+    ws.removeEventListener(WebsocketEvent.Open, invalidateCurrentSystemStatus)
+  );
 
   createConnectionWebsocketEffect((data) => {
     match(data)
       .with({ type: 'github_pull_request_updated' }, () => {
         withParsedWebsocketPayload(data.type, data.data, (payload) => {
-          void handlePullRequestUpdated(payload);
+          fireAndForget(
+            handlePullRequestUpdated(payload),
+            'websocket-query-sync'
+          );
         });
       })
       .with({ type: 'agent_session_preview' }, () => {
@@ -102,7 +115,7 @@ export function useQuerySync(userId: Accessor<string | undefined>): void {
         );
       })
       .with({ type: 'contacts_invalidation' }, () => {
-        invalidateContacts();
+        fireAndForget(invalidateContacts(), 'websocket-query-sync');
       })
       .with({ type: 'timeline_activity' }, () => {
         withParsedWebsocketPayload(
@@ -161,7 +174,10 @@ export function useQuerySync(userId: Accessor<string | undefined>): void {
           data.type,
           data.data,
           (event) => {
-            void handleAgentSessionChanges(event);
+            fireAndForget(
+              handleAgentSessionChanges(event),
+              'websocket-query-sync'
+            );
           }
         );
       })
@@ -198,9 +214,12 @@ export function useQuerySync(userId: Accessor<string | undefined>): void {
       // Signup seeding is fire-and-forget, so refresh Soup and the provisioned
       // properties and favorites when it finishes.
       .with({ type: 'starter_docs_initialized' }, () => {
-        void invalidateFavorites();
+        fireAndForget(invalidateFavorites(), 'websocket-query-sync');
         invalidateAllProperties();
         invalidateAllSoup();
+      })
+      .with({ type: SYSTEM_STATUS_MESSAGE_TYPE }, () => {
+        handleSystemStatusMessage(data.data);
       })
       .with({ type: 'task_duplicate_matches_updated' }, () => {
         withParsedWebsocketPayload(

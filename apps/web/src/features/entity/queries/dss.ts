@@ -1,7 +1,11 @@
+import { Telemetry, type TraceContext } from '@macro-inc/observability';
 /** Document-storage mutations used by entity surfaces. */
 
+import { databaseEntityMessage } from '@app/features/database/core/write-failure';
 import { scheduledActionKeys } from '@app/features/routines/queries/keys';
+import { trashDatabase } from '@block-database/queries/trash-database';
 import {
+  canDuplicateItemType,
   copyItem,
   deleteItem,
   moveToFolder,
@@ -11,6 +15,7 @@ import {
   enableGraphqlSoup,
   isFeatureEnabled,
 } from '@core/constant/featureFlags';
+import { fireAndForget } from '@core/util/fireAndForget';
 import { throwOnErr } from '@core/util/result';
 import { deleteAgentSession } from '@queries/agent-session/entity-mutations';
 import { callKeys } from '@queries/call/keys';
@@ -25,6 +30,7 @@ import {
   removeSoupEntitiesFromQueriesReferencing,
 } from '@queries/soup/cache';
 import { refreshActiveGraphqlSoupQueries } from '@queries/soup/graphql/active-queries';
+import { soupEntityKey } from '@queries/soup/graphql/entity-input';
 import {
   createGraphqlSoupDeletion,
   GRAPHQL_SOUP_DELETE_MUTATION_KEY,
@@ -32,8 +38,13 @@ import {
 } from '@queries/soup/graphql/optimistic-deletions';
 import { soupKeys } from '@queries/soup/keys';
 import { ownTouchStamp } from '@queries/soup/normalized-cache/own-touch';
+import { permanentlyDeleteEntity } from '@queries/storage/entity-mutations';
+import { databasesKeys, formsKeys } from '@queries/storage/keys';
 import { callServiceClient } from '@service-call/client';
 import { scheduledActionClient } from '@service-scheduled-action/client';
+import type { ListedDatabase } from '@service-storage/generated/schemas/listedDatabase';
+import type { ListedForm } from '@service-storage/generated/schemas/listedForm';
+import { getEntityGraphqlClient } from '@service-storage/graphql-soup';
 import { useMutation } from '@tanstack/solid-query';
 import { batch } from 'solid-js';
 import { type EntityData, getEntityProjectId } from '../types/entity';
@@ -41,7 +52,7 @@ import { BulkDeleteFailure } from './bulk-delete-result';
 
 function invalidateDeletedDssItems(entities: EntityData[]): void {
   if (entities.some((e) => e.type === 'call')) {
-    void queryClient.invalidateQueries({ queryKey: callKeys._def });
+    queryClient.invalidateQueries({ queryKey: callKeys._def });
   }
   if (entities.some((e) => e.type === 'routine')) {
     const deletedIds = new Set(
@@ -56,7 +67,7 @@ function invalidateDeletedDssItems(entities: EntityData[]): void {
         );
       }
     );
-    void queryClient.invalidateQueries({
+    queryClient.invalidateQueries({
       queryKey: scheduledActionKeys.list.queryKey,
     });
     for (const scheduleId of deletedIds) {
@@ -93,6 +104,31 @@ async function settleGraphqlDeletes(
   return results;
 }
 
+function removeDssEntityCaches(entities: EntityData[], typeScoped: boolean) {
+  const ids = new Set(entities.map((entity) => entity.id));
+  const keys = new Set(
+    entities.flatMap((entity) => {
+      const key = soupEntityKey(entity);
+      return key ? [key] : [];
+    })
+  );
+  if (!typeScoped)
+    return {
+      keys,
+      soupSnapshot: removeSoupEntities(ids),
+      searchSnapshot: removeSearchEntities(ids),
+    };
+  return {
+    keys,
+    soupSnapshot: removeSoupEntities(ids, (item, id) =>
+      keys.has(soupEntityKey({ type: item.tag, id }) ?? '')
+    ),
+    searchSnapshot: removeSearchEntities(ids, (item, id) =>
+      keys.has(soupEntityKey({ type: item.type, id }) ?? '')
+    ),
+  };
+}
+
 export function createBulkDeleteDssItemsMutation() {
   const graphqlSoupEnabled = isFeatureEnabled(enableGraphqlSoup);
   const isDeletable = (entity: EntityData) => {
@@ -103,7 +139,8 @@ export function createBulkDeleteDssItemsMutation() {
       type === 'document' ||
       type === 'project' ||
       type === 'call' ||
-      type === 'routine'
+      type === 'routine' ||
+      type === 'database'
     );
   };
   const isCurrentContext = (context: unknown) =>
@@ -126,6 +163,10 @@ export function createBulkDeleteDssItemsMutation() {
           return true;
         }
         if (e.type === 'call') {
+          if (isFeatureEnabled(enableGraphqlSoup)) {
+            await permanentlyDeleteEntity({ type: 'CALL', id: e.id });
+            return true;
+          }
           return throwOnErr(() =>
             callServiceClient.deleteCallRecord(e.id)
           ).then(() => true);
@@ -134,6 +175,17 @@ export function createBulkDeleteDssItemsMutation() {
           return throwOnErr(() =>
             scheduledActionClient.deleteSchedule({ scheduleId: e.id })
           ).then(() => true);
+        }
+        if (e.type === 'database') {
+          await throwOnErr(() =>
+            trashDatabase(getEntityGraphqlClient(), e.id).mapErr((failure) => [
+              {
+                code: failure.kind,
+                message: databaseEntityMessage(failure, 'delete'),
+              },
+            ])
+          );
+          return true;
         }
         return deleteItem({ id: e.id, itemType: e.type });
       });
@@ -145,14 +197,14 @@ export function createBulkDeleteDssItemsMutation() {
     },
     onMutate: async (entities: EntityData[]) => {
       const deletable = entities.filter(isDeletable);
-      const ids = new Set(deletable.map((e) => e.id));
-      const soupSnapshot = removeSoupEntities(ids);
-      const searchSnapshot = removeSearchEntities(ids);
+      const { keys, ...snapshots } = removeDssEntityCaches(
+        deletable,
+        graphqlSoupEnabled
+      );
       return {
-        soupSnapshot,
-        searchSnapshot,
+        ...snapshots,
         ...(graphqlSoupEnabled
-          ? { graphqlDeletion: createGraphqlSoupDeletion([...ids]) }
+          ? { graphqlDeletion: createGraphqlSoupDeletion([...keys]) }
           : {}),
       };
     },
@@ -167,14 +219,15 @@ export function createBulkDeleteDssItemsMutation() {
           }
           const outcomes =
             error instanceof BulkDeleteFailure ? error.results : results;
-          const deletedIds = entities
+          const deletedKeys = entities
             .filter(isDeletable)
-            .flatMap((entity, index) =>
-              outcomes?.[index] === true ? [entity.id] : []
-            );
+            .flatMap((entity, index) => {
+              const key = soupEntityKey(entity);
+              return outcomes?.[index] === true && key ? [key] : [];
+            });
           // API completion closes the mutation; display state survives it and
-          // independently retries revalidation. Failed ids are restored now.
-          context?.graphqlDeletion?.settle(deletedIds);
+          // independently retries revalidation. Failed keys are restored now.
+          context?.graphqlDeletion?.settle(deletedKeys);
         }
       : undefined,
     onError: (error, entities, context) => {
@@ -187,17 +240,13 @@ export function createBulkDeleteDssItemsMutation() {
         error instanceof BulkDeleteFailure &&
         error.deletedEntities.length > 0;
       if (partialFailure) {
-        const deletedIds = new Set(
-          error.deletedEntities.map((entity) => entity.id)
-        );
         // The legacy transactions hold whole snapshots. Restore failed rows,
         // then reapply confirmed removals in one reactive batch so successes
         // never reappear in REST fallback lists or search results.
         batch(() => {
           context?.soupSnapshot.rollback();
           context?.searchSnapshot.rollback();
-          removeSoupEntities(deletedIds);
-          removeSearchEntities(deletedIds);
+          removeDssEntityCaches(error.deletedEntities, true);
         });
       } else {
         context?.soupSnapshot.rollback();
@@ -207,6 +256,89 @@ export function createBulkDeleteDssItemsMutation() {
       toast.failure(partialFailure ? error.message : 'Failed to delete items');
     },
   }));
+}
+
+type FolderMovableType =
+  | 'document'
+  | 'chat'
+  | 'project'
+  | 'email'
+  | 'database'
+  | 'form';
+
+const isFolderMovable = (
+  entity: EntityData
+): entity is EntityData & { type: FolderMovableType } =>
+  entity.type === 'document' ||
+  entity.type === 'chat' ||
+  entity.type === 'project' ||
+  entity.type === 'email' ||
+  entity.type === 'database' ||
+  entity.type === 'form';
+
+/**
+ * Databases and forms reach Drive through their own lists, not Soup: refile
+ * them there at once, answering how to put them back.
+ */
+function refileListedEntities(
+  entities: readonly EntityData[],
+  projectId: string | null
+) {
+  const databaseIds = new Set(
+    entities.flatMap((e) => (e.type === 'database' ? [e.id] : []))
+  );
+  const formIds = new Set(
+    entities.flatMap((e) => (e.type === 'form' ? [e.id] : []))
+  );
+  const databases = queryClient.getQueryData<ListedDatabase[]>(
+    databasesKeys.list.queryKey
+  );
+  const forms = queryClient.getQueryData<ListedForm[]>(formsKeys.list.queryKey);
+  if (databases && databaseIds.size > 0) {
+    queryClient.setQueryData<ListedDatabase[]>(
+      databasesKeys.list.queryKey,
+      databases.map((listed) =>
+        databaseIds.has(listed.database.id)
+          ? {
+              ...listed,
+              database: { ...listed.database, project_id: projectId },
+            }
+          : listed
+      )
+    );
+  }
+  if (forms && formIds.size > 0) {
+    queryClient.setQueryData<ListedForm[]>(
+      formsKeys.list.queryKey,
+      forms.map((listed) =>
+        formIds.has(listed.form.id)
+          ? { ...listed, form: { ...listed.form, projectId } }
+          : listed
+      )
+    );
+  }
+  return {
+    rollback: () => {
+      if (databases && databaseIds.size > 0)
+        queryClient.setQueryData(databasesKeys.list.queryKey, databases);
+      if (forms && formIds.size > 0)
+        queryClient.setQueryData(formsKeys.list.queryKey, forms);
+    },
+  };
+}
+
+/** Re-read the database and form lists after their entities moved. */
+function invalidateListedEntities(entities: readonly EntityData[]) {
+  if (entities.some((e) => e.type === 'database'))
+    fireAndForget(
+      queryClient.invalidateQueries({ queryKey: databasesKeys.list.queryKey }),
+      'entity-move'
+    );
+  if (entities.some((e) => e.type === 'form'))
+    fireAndForget(
+      queryClient.invalidateQueries({ queryKey: formsKeys.list.queryKey }),
+      'entity-move'
+    );
 }
 
 function invalidateAfterMove(
@@ -283,26 +415,16 @@ export function createMoveToProjectDssEntityMutation() {
 }
 
 export function createBulkRemoveFromProjectDssEntityMutation() {
-  const isUnsupportedEntity = (entity: EntityData) => {
-    const type = entity.type;
-    return (
-      type !== 'chat' &&
-      type !== 'document' &&
-      type !== 'project' &&
-      type !== 'email'
-    );
-  };
-
   return useMutation(() => ({
     mutationFn: async ({ entities }: { entities: EntityData[] }) => {
-      if (entities.some(isUnsupportedEntity)) {
+      if (!entities.every(isFolderMovable)) {
         throw new Error(`Unsupported entity type provided`);
       }
 
       const results = await Promise.all(
         entities.map((entity) =>
           moveToFolder({
-            itemType: entity.type as 'document' | 'chat' | 'project' | 'email',
+            itemType: entity.type,
             id: entity.id,
             folderId: null,
           })
@@ -348,7 +470,8 @@ export function createBulkRemoveFromProjectDssEntityMutation() {
         removeSoupEntitiesFromQueriesReferencing(
           new Set(entities.map((e) => e.id)),
           sourceProjectIds
-        )
+        ),
+        refileListedEntities(entities, null)
       );
 
       return { txns, sourceProjectIds };
@@ -366,6 +489,7 @@ export function createBulkRemoveFromProjectDssEntityMutation() {
         );
         toast.failure('Failed to remove items from folder');
       }
+      invalidateListedEntities(entities);
 
       // Queries still containing the entities
       for (const entity of entities) {
@@ -396,11 +520,12 @@ function getSoupEntityProjectId(entityId: string): string | undefined {
 }
 
 export function createBulkCopyDssEntityMutation() {
-  // Only support chat + document, same as single-copy version
-  const isUnsupportedEntity = (entity: EntityData) => {
-    const type = entity.type;
-    return type !== 'chat' && type !== 'document';
-  };
+  const isUnsupportedEntity = (entity: EntityData) =>
+    (entity.type !== 'chat' &&
+      entity.type !== 'document' &&
+      entity.type !== 'project' &&
+      entity.type !== 'database') ||
+    !canDuplicateItemType(entity.type);
 
   return useMutation(() => ({
     mutationFn: async ({
@@ -417,7 +542,7 @@ export function createBulkCopyDssEntityMutation() {
       const results = await Promise.all(
         entities.map((e) =>
           copyItem({
-            itemType: e.type as 'document' | 'chat',
+            itemType: e.type,
             id: e.id,
             name: typeof name === 'function' ? name(e.name) : name,
           })
@@ -433,18 +558,18 @@ export function createBulkCopyDssEntityMutation() {
 
     onMutate: async () => {
       // For copy, no optimistic update — new IDs unknown until server
-      queryClient.cancelQueries({
+      await queryClient.cancelQueries({
         queryKey: soupKeys.items._def,
       });
-      queryClient.cancelQueries({
+      await queryClient.cancelQueries({
         queryKey: soupKeys.astItems._def,
       });
     },
 
     onSettled: (data, error, { entities }) => {
       if (error) {
+        // The copy action shows the failure, with the folder-size hint.
         console.error(`Failed bulk copy`, entities, data, error);
-        toast.failure('Failed to copy items');
       }
 
       // Trigger refetch so new items appear
@@ -463,35 +588,29 @@ export function createBulkCopyDssEntityMutation() {
 }
 
 export function createBulkMoveToProjectDssEntityMutation() {
-  const isUnsupportedEntity = (entity: EntityData) => {
-    const type = entity.type;
-    return (
-      type !== 'chat' &&
-      type !== 'document' &&
-      type !== 'project' &&
-      type !== 'email'
-    );
-  };
-
   return useMutation(() => ({
     mutationFn: async ({
       entities,
       project,
+      parentSpan,
     }: {
       entities: (EntityData & { name: string })[];
       project: { id: string; name: string };
+      parentSpan?: TraceContext;
     }) => {
-      if (entities.some(isUnsupportedEntity)) {
+      if (!entities.every(isFolderMovable)) {
         throw new Error(`Unsupported entity type provided`);
       }
 
       const results = await Promise.all(
         entities.map((entity) =>
-          moveToFolder({
-            itemType: entity.type as 'document' | 'chat' | 'project' | 'email',
-            id: entity.id,
-            folderId: project.id,
-          })
+          (parentSpan ?? Telemetry.captureContext()).run(() =>
+            moveToFolder({
+              itemType: entity.type,
+              id: entity.id,
+              folderId: project.id,
+            })
+          )
         )
       );
 
@@ -508,36 +627,43 @@ export function createBulkMoveToProjectDssEntityMutation() {
     }: {
       entities: (EntityData & { name: string })[];
       project: { id: string; name: string };
+      parentSpan?: TraceContext;
     }) => {
       const moveableEntities = entities.filter(
         (e): e is typeof e & { type: 'document' | 'chat' | 'email' } =>
           e.type === 'document' || e.type === 'chat' || e.type === 'email'
       );
-      return moveableEntities.map((e) => {
-        const current = getSoupEntityById(e.id);
-        const tag = e.type === 'email' ? 'emailThread' : e.type;
-        return optimisticUpdateSoupEntity({
-          tag,
-          data: { id: e.id, projectId: project.id },
-          frecency_score: current?.frecency_score ?? 0,
-          // A move is an Edited activity, i.e. a touch (own-touch.ts).
-          touched_at: ownTouchStamp(e.id),
-        });
-      });
+      return [
+        ...moveableEntities.map((e) => {
+          const current = getSoupEntityById(e.id);
+          const tag = e.type === 'email' ? 'emailThread' : e.type;
+          return optimisticUpdateSoupEntity({
+            tag,
+            data: { id: e.id, projectId: project.id },
+            frecency_score: current?.frecency_score ?? 0,
+            // A move is an Edited activity, i.e. a touch (own-touch.ts).
+            touched_at: ownTouchStamp(e.id),
+          });
+        }),
+        refileListedEntities(entities, project.id),
+      ];
     },
 
-    onSettled: (data, error, { entities, project }, context) => {
+    onSettled: (data, error, { entities, project, parentSpan }, context) => {
       const failed = data?.success === false || !!error;
       if (failed) {
         context?.forEach((txn) => txn.rollback());
         console.error(`Failed to bulk move dss items`, entities, data, error);
       }
+      invalidateListedEntities(entities);
 
-      return invalidateAfterMove(
-        entities.map((e) => e.id),
-        project.id,
-        entities.some((e) => e.type === 'project'),
-        failed
+      return (parentSpan ?? Telemetry.captureContext()).run(() =>
+        invalidateAfterMove(
+          entities.map((e) => e.id),
+          project.id,
+          entities.some((e) => e.type === 'project'),
+          failed
+        )
       );
     },
   }));

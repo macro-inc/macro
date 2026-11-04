@@ -1,0 +1,19 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "INSERT INTO agent_preview_credential (hash, kind, preview_id, user_id, expires_at)\n               SELECT $1, $2, id, $4, LEAST($5, expires_at) FROM agent_preview_lease l\n               WHERE id = $3 AND status = 'ready' AND expires_at > now()\n               AND EXISTS (SELECT 1 FROM agent_preview_replica r WHERE r.id = l.replica_id AND r.expires_at > now())\n               AND (SELECT count(*) FROM agent_preview_credential WHERE kind = $2 AND expires_at > now()) < $6",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Bytea",
+        "Text",
+        "Text",
+        "Text",
+        "Timestamptz",
+        "Int8"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "65ee7c87376a9507949139046dcc5e8ace5a8df2a5522a1498f27aa041b10ba3"
+}

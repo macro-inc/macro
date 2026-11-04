@@ -8,6 +8,7 @@
  */
 
 import type { ShapeGeometryInfo, ShapeOutline } from '@core/pptx-engine/types';
+import { fireAndForget } from '@core/util/fireAndForget';
 import {
   type Accessor,
   batch,
@@ -156,7 +157,7 @@ export function createEditPoints(options: EditPointsOptions) {
           staleDuringDrag = true;
           return;
         }
-        void reload();
+        fireAndForget(reload(), 'pptx-editor');
       },
       { defer: true }
     )

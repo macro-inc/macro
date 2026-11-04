@@ -1,3 +1,4 @@
+import { fireAndForget } from '@core/util/fireAndForget';
 import { type Accessor, createSignal, type Setter } from 'solid-js';
 import { NUMBER_DECIMAL_PLACES } from '../../constants';
 import { useProperty } from '../../core/context';
@@ -16,8 +17,8 @@ export function useInlineEditor(): {
   setInputValue: Setter<string>;
   isSaving: Accessor<boolean>;
   startEdit: () => void;
-  cancelEdit: () => void;
   save: () => Promise<void>;
+  handleKeyDown: (e: KeyboardEvent) => void;
 } {
   const ctx = useProperty();
   const [isEditing, setIsEditing] = createSignal(false);
@@ -45,7 +46,8 @@ export function useInlineEditor(): {
   };
 
   const save = async () => {
-    if (isSaving()) return;
+    // Removing a canceled input can still fire blur.
+    if (!isEditing() || isSaving()) return;
     const property = ctx.property();
     const trimmedValue = inputValue().trim();
     const currentRawValue = getCurrentRawValue();
@@ -73,11 +75,35 @@ export function useInlineEditor(): {
       }
       await ctx.onSave?.(property, apiValues);
       setIsEditing(false);
-      ctx.onRefresh?.();
     } catch {
       // onSave callers (mutations) own error UX via onError toasts.
     } finally {
       setIsSaving(false);
+    }
+  };
+
+  // Enter and Escape remove the focused field, which drops focus to the page.
+  // Tabbing or clicking away already put focus where the user wanted it.
+  const returnFocus = () => {
+    if (document.activeElement === document.body) ctx.closeEditor();
+  };
+
+  const saveFromKeyboard = async () => {
+    await save();
+    if (!isEditing()) returnFocus();
+  };
+
+  const handleKeyDown = (e: KeyboardEvent) => {
+    // An IME owns Enter and Escape while it composes; WebKit reports its
+    // confirming keydown as 229 after composition ends.
+    if (e.isComposing || e.keyCode === 229) return;
+    if (e.key === 'Enter') {
+      e.preventDefault();
+      fireAndForget(saveFromKeyboard(), 'property-editor');
+    } else if (e.key === 'Escape' && !isSaving()) {
+      e.preventDefault();
+      cancelEdit();
+      returnFocus();
     }
   };
 
@@ -87,7 +113,7 @@ export function useInlineEditor(): {
     setInputValue,
     isSaving,
     startEdit,
-    cancelEdit,
     save,
+    handleKeyDown,
   };
 }

@@ -22,6 +22,7 @@ import type { SpreadsheetWorkbookSheet } from '../core/workbook-document';
 import { createLocalSpreadsheetSource } from '../primitives/create-local-spreadsheet-source';
 import { createSpreadsheetStore } from '../primitives/create-spreadsheet-store';
 import { createSpreadsheetSession } from '../queries/spreadsheet-session';
+import { DateMentionMenu } from '../views/DateMentionMenu';
 import { SpreadsheetEditor } from '../views/SpreadsheetEditor';
 
 declare global {
@@ -132,26 +133,40 @@ function Fixture() {
                   <CellMentionEditor
                     {...props}
                     convertPaste={(value) => value}
-                    renderMenu={(menu, _anchor, pick) => (
-                      <button
-                        type="button"
-                        class="fixed right-4 top-4 z-[100]"
-                        aria-label="Mention Taylor"
-                        onPointerDown={(e) => e.preventDefault()}
-                        onMouseDown={(e) => e.preventDefault()}
-                        onClick={() =>
-                          pick(
-                            encodeCellMention({
-                              type: 'user',
-                              userId: 'macro|taylor@macro.com',
-                              email: 'taylor@macro.com',
-                              displayName: 'Taylor',
-                            })
-                          )
-                        }
-                      >
-                        Taylor ({menu.searchTerm()})
-                      </button>
+                    renderMenu={(menu, anchor, pick) => (
+                      <DateMentionMenu menu={menu} anchor={anchor} pick={pick}>
+                        {(pickDate) => (
+                          <div class="fixed right-4 top-4 z-[100] flex gap-2">
+                            <button
+                              type="button"
+                              aria-label="Mention Taylor"
+                              onPointerDown={(e) => e.preventDefault()}
+                              onMouseDown={(e) => e.preventDefault()}
+                              onClick={() =>
+                                pick(
+                                  encodeCellMention({
+                                    type: 'user',
+                                    userId: 'macro|taylor@macro.com',
+                                    email: 'taylor@macro.com',
+                                    displayName: 'Taylor',
+                                  })
+                                )
+                              }
+                            >
+                              Taylor ({menu.searchTerm()})
+                            </button>
+                            <button
+                              type="button"
+                              aria-label="Pick today"
+                              onPointerDown={(e) => e.preventDefault()}
+                              onMouseDown={(e) => e.preventDefault()}
+                              onClick={() => pickDate(new Date())}
+                            >
+                              Today
+                            </button>
+                          </div>
+                        )}
+                      </DateMentionMenu>
                     )}
                   />
                 ),

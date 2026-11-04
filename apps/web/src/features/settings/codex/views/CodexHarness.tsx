@@ -1,4 +1,5 @@
 import { toast } from '@core/component/Toast/Toast';
+import { fireAndForget } from '@core/util/fireAndForget';
 import {
   useBeginCodexLogin,
   useCancelCodexLogin,
@@ -112,11 +113,15 @@ function CodexHarnessContent() {
                 ? 'Could not check sign-in. Cancel and try again.'
                 : undefined)
           }
-          onConnect={() => void startLogin()}
-          onCancel={() => void cancelLogin()}
-          onDisconnect={() => void disconnectAccount()}
-          onRetryEnvironments={() => void environments.refetch()}
-          onSave={(config) => void save(config)}
+          onConnect={() => fireAndForget(startLogin(), 'codex-settings')}
+          onCancel={() => fireAndForget(cancelLogin(), 'codex-settings')}
+          onDisconnect={() =>
+            fireAndForget(disconnectAccount(), 'codex-settings')
+          }
+          onRetryEnvironments={() =>
+            fireAndForget(environments.refetch(), 'codex-settings')
+          }
+          onSave={(config) => fireAndForget(save(config), 'codex-settings')}
         />
       )}
     </Show>

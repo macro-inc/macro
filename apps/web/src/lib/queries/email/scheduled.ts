@@ -1,7 +1,7 @@
 import { throwOnErr } from '@core/util/result';
 import { emailClient } from '@service-email/client';
 import type { Message } from '@service-email/generated/schemas';
-import { useQuery } from '@tanstack/solid-query';
+import { queryOptions, useQuery } from '@tanstack/solid-query';
 import type { Accessor } from 'solid-js';
 import { emailKeys } from './keys';
 
@@ -43,19 +43,21 @@ export async function fetchScheduledMessages(
     );
 }
 
+function scheduledMessagesQueryOptions(linkIds: string[], enabled: boolean) {
+  const selectedLinkIds = [...linkIds].sort();
+  return queryOptions({
+    queryKey: emailKeys.scheduledMessages(selectedLinkIds).queryKey,
+    enabled: enabled && selectedLinkIds.length > 0,
+    queryFn: () => fetchScheduledMessages(selectedLinkIds),
+    refetchInterval: 15_000,
+    refetchOnReconnect: 'always',
+    refetchOnWindowFocus: 'always',
+  });
+}
+
 export function useScheduledMessagesQuery(
   linkIds: Accessor<string[]>,
   enabled: Accessor<boolean>
 ) {
-  return useQuery(() => {
-    const selectedLinkIds = [...linkIds()].sort();
-    return {
-      queryKey: emailKeys.scheduledMessages(selectedLinkIds).queryKey,
-      enabled: enabled() && selectedLinkIds.length > 0,
-      queryFn: () => fetchScheduledMessages(selectedLinkIds),
-      refetchInterval: 15_000,
-      refetchOnReconnect: 'always' as const,
-      refetchOnWindowFocus: 'always' as const,
-    };
-  });
+  return useQuery(() => scheduledMessagesQueryOptions(linkIds(), enabled()));
 }

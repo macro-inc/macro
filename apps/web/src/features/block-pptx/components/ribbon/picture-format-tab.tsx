@@ -7,18 +7,19 @@
  */
 
 import type { PictureRecolor, ShapeOutline } from '@core/pptx-engine/types';
+import { fireAndForget } from '@core/util/fireAndForget';
+import ArrowCounterClockwise from '@icon/system/regular/arrow-counter-clockwise.svg';
+import ArrowDown from '@icon/system/regular/arrow-down.svg';
+import ArrowUp from '@icon/system/regular/arrow-up.svg';
+import CaretDown from '@icon/system/regular/caret-down.svg';
+import Checkerboard from '@icon/system/regular/checkerboard.svg';
+import CropIcon from '@icon/system/regular/crop.svg';
+import ImagesIcon from '@icon/system/regular/images.svg';
+import Palette from '@icon/system/regular/palette.svg';
+import PenNib from '@icon/system/regular/pen-nib.svg';
+import Stack from '@icon/system/regular/stack.svg';
+import Sun from '@icon/system/regular/sun.svg';
 import { Popover } from '@kobalte/core/popover';
-import ArrowCounterClockwise from '@phosphor/arrow-counter-clockwise.svg';
-import ArrowDown from '@phosphor/arrow-down.svg';
-import ArrowUp from '@phosphor/arrow-up.svg';
-import CaretDown from '@phosphor/caret-down.svg';
-import Checkerboard from '@phosphor/checkerboard.svg';
-import CropIcon from '@phosphor/crop.svg';
-import ImagesIcon from '@phosphor/images.svg';
-import Palette from '@phosphor/palette.svg';
-import PenNib from '@phosphor/pen-nib.svg';
-import Stack from '@phosphor/stack.svg';
-import Sun from '@phosphor/sun.svg';
 import { cn } from '@ui';
 import { Button } from '@ui/components/Button';
 import { createSignal, For, type JSX, onMount, Show } from 'solid-js';
@@ -73,7 +74,7 @@ function useImage(
     const s = shape();
     setImage(s ? ((await images.load(s.id))?.image ?? null) : null);
   };
-  onMount(() => void load());
+  onMount(() => fireAndForget(load(), 'pptx-editor'));
   return image;
 }
 
@@ -148,7 +149,10 @@ function CorrectionsGallery(props: {
                   }
                   onClick={() => {
                     props.close();
-                    void env.commands.formatPicture({ brightness, contrast });
+                    fireAndForget(
+                      env.commands.formatPicture({ brightness, contrast }),
+                      'pptx-editor'
+                    );
                   }}
                 />
               )}
@@ -163,7 +167,10 @@ function CorrectionsGallery(props: {
           icon={<ArrowCounterClockwise />}
           onClick={() => {
             props.close();
-            void env.commands.formatPicture({ brightness: 0, contrast: 0 });
+            fireAndForget(
+              env.commands.formatPicture({ brightness: 0, contrast: 0 }),
+              'pptx-editor'
+            );
           }}
         />
         <PopoverItem
@@ -195,7 +202,7 @@ function ColorGallery(props: {
   });
   const pick = (recolor: PictureRecolor) => {
     props.close();
-    void env.commands.formatPicture({ recolor });
+    fireAndForget(env.commands.formatPicture({ recolor }), 'pptx-editor');
   };
   return (
     <div class="flex flex-col" data-testid="pptx-picture-color-gallery">
@@ -286,7 +293,10 @@ function TransparencyGallery(props: {
               active={near(props.picture.picture?.transparency, transparency)}
               onClick={() => {
                 props.close();
-                void env.commands.formatPicture({ transparency });
+                fireAndForget(
+                  env.commands.formatPicture({ transparency }),
+                  'pptx-editor'
+                );
               }}
             />
           )}
@@ -356,19 +366,18 @@ function CropButton(props: { crop: CropMode }) {
       data-pptx-crop-toggle
     >
       <Button
+        aria-label="Crop"
         variant="ghost"
-        size="sm"
-        square
+        size="icon-sm"
         class={cn(
           'h-7 gap-1 rounded-r-none rounded-l-md px-1.5 text-xs',
           props.crop.active() && 'text-accent'
         )}
-        label="Crop"
         tooltip="Crop: drag the black handles; Enter or Esc finishes"
         aria-pressed={props.crop.active()}
         disabled={disabled()}
         data-testid="pptx-picture-crop"
-        onClick={() => void props.crop.toggle()}
+        onClick={() => fireAndForget(props.crop.toggle(), 'pptx-editor')}
       >
         <CropIcon class="size-3.5" />
         <span>Crop</span>
@@ -380,12 +389,11 @@ function CropButton(props: { crop: CropMode }) {
         gutter={4}
       >
         <Popover.Trigger
+          aria-label="Crop options"
           as={Button}
           variant="ghost"
-          size="sm"
-          square
+          size="icon-sm"
           class="h-7 rounded-r-md rounded-l-none px-0.5"
-          label="Crop options"
           tooltip="Crop to shape, aspect ratio, fill, or fit"
           disabled={disabled()}
           data-testid="pptx-picture-crop-menu"
@@ -394,7 +402,7 @@ function CropButton(props: { crop: CropMode }) {
         </Popover.Trigger>
         <Popover.Portal>
           <Popover.Content
-            class="z-action-menu rounded-xl border border-edge bg-menu p-2 text-ink text-xs shadow-xl outline-none"
+            class="menu-surface z-action-menu p-2 text-xs outline-none"
             onCloseAutoFocus={(e) => e.preventDefault()}
           >
             <div class="flex w-44 flex-col">
@@ -402,7 +410,9 @@ function CropButton(props: { crop: CropMode }) {
                 label="Crop"
                 icon={<CropIcon />}
                 testId="pptx-crop-start"
-                onClick={run(() => void props.crop.enter())}
+                onClick={run(() =>
+                  fireAndForget(props.crop.enter(), 'pptx-editor')
+                )}
               />
               <FlyoutMenu
                 items={[
@@ -423,7 +433,7 @@ function CropButton(props: { crop: CropMode }) {
                         ]}
                         onPick={(preset) => {
                           setOpen(false);
-                          void c.setGeometry(preset);
+                          fireAndForget(c.setGeometry(preset), 'pptx-editor');
                         }}
                       />
                     ),
@@ -458,12 +468,16 @@ function CropButton(props: { crop: CropMode }) {
               <PopoverItem
                 label="Fill"
                 testId="pptx-crop-fill"
-                onClick={run(() => void c.fitPictures('fill'))}
+                onClick={run(() =>
+                  fireAndForget(c.fitPictures('fill'), 'pptx-editor')
+                )}
               />
               <PopoverItem
                 label="Fit"
                 testId="pptx-crop-fit"
-                onClick={run(() => void c.fitPictures('fit'))}
+                onClick={run(() =>
+                  fireAndForget(c.fitPictures('fit'), 'pptx-editor')
+                )}
               />
             </div>
           </Popover.Content>
@@ -530,7 +544,7 @@ export function PictureFormatTab(props: {
           )}
         </PictureGalleryMenu>
         <RibbonButton
-          label="Change picture"
+          aria-label="Change picture"
           tooltip="Change picture: keep the size and format, use another image"
           disabled={ro() || one()?.kind !== 'picture'}
           data-testid="pptx-picture-change"
@@ -552,7 +566,7 @@ export function PictureFormatTab(props: {
                 testId="pptx-picture-reset-picture"
                 onClick={() => {
                   close();
-                  void c.resetPictures(false);
+                  fireAndForget(c.resetPictures(false), 'pptx-editor');
                 }}
               />
               <PopoverItem
@@ -560,7 +574,7 @@ export function PictureFormatTab(props: {
                 testId="pptx-picture-reset-size"
                 onClick={() => {
                   close();
-                  void c.resetPictures(true);
+                  fireAndForget(c.resetPictures(true), 'pptx-editor');
                 }}
               />
             </div>
@@ -584,7 +598,7 @@ export function PictureFormatTab(props: {
       </RibbonGroup>
       <RibbonGroup label="Accessibility">
         <RibbonTextButton
-          label="Alt text"
+          aria-label="Alt text"
           disabled={ro()}
           onClick={() => env.openFormatPane('size')}
         >
@@ -593,7 +607,7 @@ export function PictureFormatTab(props: {
       </RibbonGroup>
       <RibbonGroup label="Arrange">
         <RibbonButton
-          label="Bring forward"
+          aria-label="Bring forward"
           tooltip="Bring forward (⌘])"
           disabled={ro()}
           onClick={() => c.arrange('forward')}
@@ -601,7 +615,7 @@ export function PictureFormatTab(props: {
           <ArrowUp />
         </RibbonButton>
         <RibbonButton
-          label="Send backward"
+          aria-label="Send backward"
           tooltip="Send backward (⌘[)"
           disabled={ro()}
           onClick={() => c.arrange('backward')}

@@ -1,6 +1,6 @@
 //! Value objects for yes/no classification.
 
-use std::fmt;
+use std::{collections::BTreeMap, fmt};
 
 use serde::{Deserialize, Serialize};
 
@@ -11,6 +11,75 @@ mod test;
 pub const MAX_QUESTION_CHARS: usize = 500;
 /// Most questions evaluated against one input in a single request.
 pub const MAX_QUESTIONS: usize = 32;
+/// Maximum compact serialized size of a named decision request, in bytes.
+pub const MAX_DECISION_REQUEST_BYTES: usize = 64 * 1024;
+/// Maximum length of a question's result key, in UTF-8 bytes.
+pub const MAX_DECISION_KEY_BYTES: usize = 80;
+
+/// Named yes/no questions to evaluate against one arbitrary JSON input.
+#[derive(Debug, Clone, Serialize, Deserialize, schemars::JsonSchema, utoipa::ToSchema)]
+#[serde(deny_unknown_fields)]
+pub struct DecisionRequest {
+    /// Data to classify. The entire compact request must fit in 64 KiB.
+    pub input: serde_json::Value,
+    /// One to 32 questions, each at most 500 characters. Keys must be nonblank
+    /// and at most 80 UTF-8 bytes; they are preserved in the response.
+    pub questions: BTreeMap<String, String>,
+}
+
+/// The probability of yes for every requested question, under its original key.
+#[derive(Debug, Clone, Serialize, Deserialize, schemars::JsonSchema, utoipa::ToSchema)]
+pub struct DecisionResponse {
+    /// Probabilities between zero and one, inclusive; not boolean decisions.
+    pub probabilities: BTreeMap<String, f32>,
+}
+
+/// Why a named decision request cannot be evaluated.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, thiserror::Error)]
+pub enum DecisionValidationError {
+    /// The request violates a size, count, or key constraint.
+    #[error("{0}")]
+    Invalid(&'static str),
+    /// A question is empty or too long.
+    #[error(transparent)]
+    Question(#[from] QuestionError),
+}
+
+impl DecisionRequest {
+    /// Validate the shared request contract without starting AI work.
+    pub fn validate(&self) -> Result<(), DecisionValidationError> {
+        self.validated_questions().map(|_| ())
+    }
+
+    pub(crate) fn validated_questions(
+        &self,
+    ) -> Result<(Vec<String>, Vec<YesNoQuestion>), DecisionValidationError> {
+        if !(1..=MAX_QUESTIONS).contains(&self.questions.len()) {
+            return Err(DecisionValidationError::Invalid(
+                "ask between 1 and 32 yes/no questions",
+            ));
+        }
+        let bytes = serde_json::to_vec(self)
+            .map_err(|_| DecisionValidationError::Invalid("decision input must be valid JSON"))?;
+        if bytes.len() > MAX_DECISION_REQUEST_BYTES {
+            return Err(DecisionValidationError::Invalid(
+                "the compact decision request must fit in 64 KiB",
+            ));
+        }
+        let mut names = Vec::with_capacity(self.questions.len());
+        let mut questions = Vec::with_capacity(self.questions.len());
+        for (name, question) in &self.questions {
+            if name.trim().is_empty() || name.len() > MAX_DECISION_KEY_BYTES {
+                return Err(DecisionValidationError::Invalid(
+                    "question keys must be nonblank and at most 80 UTF-8 bytes",
+                ));
+            }
+            names.push(name.clone());
+            questions.push(YesNoQuestion::try_from(question.as_str())?);
+        }
+        Ok((names, questions))
+    }
+}
 
 /// A natural-language yes/no question, trimmed and bounded.
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]

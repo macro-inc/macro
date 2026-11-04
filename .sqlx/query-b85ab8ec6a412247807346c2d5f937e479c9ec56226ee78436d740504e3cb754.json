@@ -1,0 +1,34 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT metadata AS \"metadata: Json<StoredPreview>\", replica_id, status\n               FROM agent_preview_lease l WHERE id = $1 AND expires_at > now()\n               AND status IN ('starting','ready') AND (replica_id IS NULL OR EXISTS\n               (SELECT 1 FROM agent_preview_replica r WHERE r.id = l.replica_id AND r.expires_at > now()))",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "metadata: Json<StoredPreview>",
+        "type_info": "Jsonb"
+      },
+      {
+        "ordinal": 1,
+        "name": "replica_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 2,
+        "name": "status",
+        "type_info": "Text"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Text"
+      ]
+    },
+    "nullable": [
+      false,
+      true,
+      false
+    ]
+  },
+  "hash": "b85ab8ec6a412247807346c2d5f937e479c9ec56226ee78436d740504e3cb754"
+}

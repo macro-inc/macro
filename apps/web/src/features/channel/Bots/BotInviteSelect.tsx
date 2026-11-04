@@ -1,4 +1,5 @@
 import { toast } from '@core/component/Toast/Toast';
+import { fireAndForget } from '@core/util/fireAndForget';
 import {
   Combobox,
   type ComboboxRootItemComponentProps,
@@ -135,7 +136,7 @@ export function BotInviteSelect(props: {
             <Combobox.Content
               as={Surface}
               depth={3}
-              class="z-action-menu mt-1 w-[var(--kb-popper-anchor-width)] min-w-72 rounded-xl p-1.5 glass bg-menu-glass"
+              class="menu-surface z-action-menu mt-1 w-[var(--kb-popper-anchor-width)] min-w-72 p-1.5"
             >
               <Combobox.Listbox class="peer max-h-64 overflow-y-auto empty:hidden" />
               <div class="hidden px-3 py-5 text-center text-xs text-ink-muted peer-empty:block">
@@ -148,9 +149,9 @@ export function BotInviteSelect(props: {
         </Combobox>
       </div>
       <Button
-        variant="outline"
+        variant="secondary"
         disabled={!selectedBot() || addBotMutation.isPending}
-        onClick={() => void inviteBot()}
+        onClick={() => fireAndForget(inviteBot(), 'channel-bots')}
       >
         {addBotMutation.isPending ? 'Inviting…' : 'Invite bot'}
       </Button>

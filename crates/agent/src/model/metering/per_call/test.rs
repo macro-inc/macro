@@ -61,8 +61,8 @@ fn prices_delivered_tier_and_each_calls_inclusive_prompt() {
 fn fast_claude_records_cache_writes_and_rejects_unknown_tiers() {
     let (pricing, recorder) = setup("anthropic/claude-opus-5-5", ModelSpeed::Fast);
     let usage = UsageEvidence::Reported(TrustedTokenUsage::from_disjoint(5, 10, 20, 30, 0));
-    pricing.record(usage.clone(), Some("fast")).unwrap();
-    assert!(pricing.record(usage.clone(), None).is_err());
+    pricing.record(usage, Some("fast")).unwrap();
+    assert!(pricing.record(usage, None).is_err());
     assert!(pricing.record(usage, Some("priority")).is_err());
     pricing
         .record(UsageEvidence::Missing(UnresolvedReason::Interrupted), None)

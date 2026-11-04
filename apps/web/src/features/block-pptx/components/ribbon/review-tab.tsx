@@ -3,13 +3,14 @@
  * Previous, Next, Show Comments), as in PowerPoint.
  */
 
-import ArrowLeft from '@phosphor/arrow-left.svg';
-import ArrowRight from '@phosphor/arrow-right.svg';
-import ChatText from '@phosphor/chat-text.svg';
-import Chats from '@phosphor/chats.svg';
-import CheckIcon from '@phosphor/check.svg';
-import TextAUnderline from '@phosphor/text-a-underline.svg';
-import Trash from '@phosphor/trash.svg';
+import { fireAndForget } from '@core/util/fireAndForget';
+import ArrowLeft from '@icon/system/regular/arrow-left.svg';
+import ArrowRight from '@icon/system/regular/arrow-right.svg';
+import ChatText from '@icon/system/regular/chat-text.svg';
+import Chats from '@icon/system/regular/chats.svg';
+import CheckIcon from '@icon/system/regular/check.svg';
+import TextAUnderline from '@icon/system/regular/text-a-underline.svg';
+import Trash from '@icon/system/regular/trash.svg';
 import { Show } from 'solid-js';
 import type { CommentsState } from '../../primitives/create-comments';
 import {
@@ -39,7 +40,7 @@ export function ReviewTab() {
           <>
             <RibbonGroup label="Proofing">
               <RibbonTextButton
-                label="Spelling"
+                aria-label="Spelling"
                 tooltip="Spelling (F7)"
                 disabled={ro()}
                 data-testid="pptx-review-spelling"
@@ -51,7 +52,7 @@ export function ReviewTab() {
             </RibbonGroup>
             <RibbonGroup label="Comments">
               <RibbonTextButton
-                label="New Comment"
+                aria-label="New Comment"
                 tooltip="New Comment (Ctrl+Alt+M)"
                 disabled={ro()}
                 data-testid="pptx-review-new-comment"
@@ -75,7 +76,7 @@ export function ReviewTab() {
                       disabled={none()}
                       onClick={() => {
                         close();
-                        void c().deleteCurrent();
+                        fireAndForget(c().deleteCurrent(), 'pptx-editor');
                       }}
                     />
                     <PopoverItem
@@ -84,7 +85,7 @@ export function ReviewTab() {
                       disabled={none()}
                       onClick={() => {
                         close();
-                        void c().deleteAll('slide');
+                        fireAndForget(c().deleteAll('slide'), 'pptx-editor');
                       }}
                     />
                     <PopoverItem
@@ -92,14 +93,17 @@ export function ReviewTab() {
                       testId="pptx-review-delete-all"
                       onClick={() => {
                         close();
-                        void c().deleteAll('presentation');
+                        fireAndForget(
+                          c().deleteAll('presentation'),
+                          'pptx-editor'
+                        );
                       }}
                     />
                   </div>
                 )}
               </RibbonPopover>
               <RibbonTextButton
-                label="Previous"
+                aria-label="Previous"
                 tooltip="Previous comment"
                 disabled={c().count() === 0}
                 data-testid="pptx-review-previous"
@@ -109,7 +113,7 @@ export function ReviewTab() {
                 Previous
               </RibbonTextButton>
               <RibbonTextButton
-                label="Next"
+                aria-label="Next"
                 tooltip="Next comment"
                 disabled={c().count() === 0}
                 data-testid="pptx-review-next"
@@ -119,7 +123,7 @@ export function ReviewTab() {
                 Next
               </RibbonTextButton>
               <RibbonTextButton
-                label="Show Comments"
+                aria-label="Show Comments"
                 tooltip="Show the Comments pane"
                 aria-pressed={c().paneOpen()}
                 data-testid="pptx-review-show-comments"

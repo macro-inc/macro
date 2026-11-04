@@ -29,7 +29,9 @@ export function bindNativeCallLifecycle(
           if (nativeSessionObserved) lifecycle.syncSession(undefined);
         }
       )
-      .exhaustive();
+      .exhaustive((unknown) =>
+        console.warn('[callkit] unknown native call snapshot', unknown)
+      );
   };
   const unsubscribeState = lifecycle.subscribe((state) => {
     if (state.t === 'joining') nativeSessionObserved = false;

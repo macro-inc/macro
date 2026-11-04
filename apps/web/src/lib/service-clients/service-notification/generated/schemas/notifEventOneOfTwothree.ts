@@ -4,14 +4,14 @@
  * notification_service
  * OpenAPI spec version: 0.1.0
  */
-import type { NewEmailMetadata } from './newEmailMetadata';
+import type { ChannelReplyMetadata } from './channelReplyMetadata';
 import type { NotifEventOneOfTwothreeTag } from './notifEventOneOfTwothreeTag';
 
 /**
- * A new email has been sent to the user.
+ * Someone replied to a thread in a channel that the user is part of.
  */
 export type NotifEventOneOfTwothree = {
-  /** A new email has been sent to the user. */
-  content: NewEmailMetadata;
+  /** Someone replied to a thread in a channel that the user is part of. */
+  content: ChannelReplyMetadata;
   tag: NotifEventOneOfTwothreeTag;
 };

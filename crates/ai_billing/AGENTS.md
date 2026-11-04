@@ -18,6 +18,9 @@ provider cost (plus markup for overage).
 - `src/domain/ledger.rs` + `src/domain/sweep.rs`: the credit/overage ledger
   and the settlement sweep.
 - `src/outbound/stripe_gateway.rs`: the only place Stripe is called.
+- `src/domain/invite_reward.rs`: the invite/referral reward — $10 prepaid
+  credit for a paid user's payer, or +$10 monthly free allowance (capped at
+  +$50, table `ai_free_allowance_bonus`) for a free user.
 
 ## Scope
 
@@ -39,6 +42,8 @@ provider cost (plus markup for overage).
 - Change a pricing number: Doppler (never hardcode) → `src/config.rs` →
   `src/domain/pricing.rs`.
 - Add an admission check: `src/domain/admission.rs` → `src/inbound/admission.rs`.
+- Grant a user credit (operator refund): `tooling/ai_billing_cli` →
+  `src/domain/credit_grant.rs` → `src/outbound/pg_credit_grant_repo.rs`.
 
 ## Checks
 
@@ -49,6 +54,13 @@ provider cost (plus markup for overage).
 - Usage is cost cents; credits/charges/caps/packs are customer cents — only
   `AiPricing`'s conversions cross that boundary; never multiply/compare the
   two directly.
+- `ai_credit_reload` holds both card-on-file charges: `kind = 'automatic'`
+  reloads and `kind = 'purchase'` one-time buys (with `purchased_by`). Both
+  count against the payer's monthly limit; automatic retries, orphan sweeps,
+  and auto-reload suspension must stay scoped to `automatic`.
+- A voided purchase is `failed` with `stripe_invoice_id` cleared, so limit,
+  retry, and sweep queries (which count failed rows only with an invoice)
+  ignore it without a separate status.
 
 ## Related
 

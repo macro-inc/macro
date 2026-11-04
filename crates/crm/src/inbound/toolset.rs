@@ -12,6 +12,7 @@ mod create_contact;
 mod get_company;
 mod list_companies;
 pub mod pipelines;
+pub mod transfer;
 
 #[cfg(test)]
 mod test;
@@ -478,9 +479,6 @@ pub(crate) fn crm_error_description(err: &CrmError) -> String {
         }
         CrmError::ContactAlreadyExistsForCompany => {
             "the company already has a contact with that email".to_string()
-        }
-        CrmError::ContactEmailDomainMismatch => {
-            "the contact's email domain must be one of the company's domains".to_string()
         }
         CrmError::StageEditRoleRequired(role) => format!(
             "editing deal stages requires the {} team role",

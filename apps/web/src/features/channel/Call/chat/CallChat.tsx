@@ -9,6 +9,7 @@ import { StaticMarkdownContext } from '@core/component/LexicalMarkdown/component
 import { useUserId } from '@core/context/user';
 import { MessageThread, threadListItem } from '@core/messages/MessageThread';
 import { MessageReferenceNavigation } from '@core/messages/message-reference-navigation';
+import { fireAndForget } from '@core/util/fireAndForget';
 import {
   newMessageId,
   useSendMessageMutation,
@@ -147,7 +148,7 @@ function CallChatContent(props: {
             <button
               type="button"
               class="mt-2 text-sm text-accent"
-              onClick={() => void chat.refresh()}
+              onClick={() => fireAndForget(chat.refresh(), 'channel-call')}
             >
               Retry
             </button>

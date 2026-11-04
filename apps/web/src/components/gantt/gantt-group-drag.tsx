@@ -1,15 +1,18 @@
+import { fireAndForget } from '@core/util/fireAndForget';
 import {
   type CollisionDetector,
   createDraggable,
   createDroppable,
   DragDropProvider,
   DragOverlay,
+  useDragDropContext,
 } from '@thisbeyond/solid-dnd';
 import { cn, Layer } from '@ui';
 import {
   createContext,
   createSignal,
   onCleanup,
+  onMount,
   type ParentProps,
   Show,
   useContext,
@@ -31,11 +34,14 @@ type DragItem = {
   groupId: string;
   label: string;
 };
+type Point = { x: number; y: number };
 const GroupDragContext = createContext<{
   active: () => DragItem | undefined;
   target: () => string | undefined;
   canDrag: (id: string) => boolean;
-  start: (event: MouseEvent, element: HTMLElement) => void;
+  start: (origin: Point, element: HTMLElement) => void;
+  /** Continue a pointer gesture another control began as a move between groups. */
+  handOff: (draggableId: string, origin: Point, event: PointerEvent) => void;
   move: () => GanttGroupMove | undefined;
   placement: () => GanttGroupPlacement | undefined;
   suppressClick: () => boolean;
@@ -62,6 +68,7 @@ export function GanttGroupDrag(
     element: HTMLElement;
     rect: DOMRectReadOnly;
   }>();
+  let handOff: GroupDragHandOff | undefined;
   let sourceElement: HTMLElement | undefined;
   const [origin, setOrigin] = createSignal<{ x: number; y: number }>();
   let scope: string | undefined;
@@ -136,7 +143,7 @@ export function GanttGroupDrag(
   const finish = () => {
     const move = request();
     if (!cancelled && move && canDrag(move.id) && props.canDrop(move)) {
-      void saveMove(move);
+      fireAndForget(saveMove(move), 'gantt-group-drag');
     }
     setActive(undefined);
     setTarget(undefined);
@@ -201,6 +208,14 @@ export function GanttGroupDrag(
           cancelled = true;
         }}
       />
+      <PointerHandOffSensor
+        ref={(sensor) => {
+          handOff = sensor;
+        }}
+        onCancel={() => {
+          cancelled = true;
+        }}
+      />
       <GroupDragContext.Provider
         value={{
           active,
@@ -212,12 +227,14 @@ export function GanttGroupDrag(
             const move = request();
             return move ? props.getPlacement?.(move) : undefined;
           },
-          start: (event, element) => {
+          start: (origin, element) => {
             sourceElement = element;
-            setOrigin({ x: event.clientX, y: event.clientY });
+            setOrigin(origin);
             cancelled = false;
             clearTimeout(clickTimeout);
           },
+          handOff: (draggableId, origin, event) =>
+            handOff?.(draggableId, origin, event),
         }}
       >
         {props.children}
@@ -250,24 +267,101 @@ export function GanttGroupDrag(
   );
 }
 
+type GroupDragHandOff = (
+  draggableId: string,
+  origin: Point,
+  event: PointerEvent
+) => void;
+
+/**
+ * Drives the drag session from a pointer gesture another control began, such
+ * as a bar's press that turned out to move up or down rather than across.
+ */
+function PointerHandOffSensor(props: {
+  ref: (handOff: GroupDragHandOff) => void;
+  onCancel: () => void;
+}) {
+  const context = useDragDropContext();
+  if (!context)
+    throw new Error('PointerHandOffSensor requires DragDropProvider');
+  const [state, actions] = context;
+  const id = 'gantt-pointer-hand-off';
+  let detach: (() => void) | undefined;
+  onMount(() => actions.addSensor({ id, activators: {} }));
+  onCleanup(() => {
+    detach?.();
+    actions.removeSensor(id);
+  });
+  props.ref((draggableId, origin, event) => {
+    if (state.active.sensor || detach) return;
+    const pointerId = event.pointerId;
+    const end = (cancel: boolean) => {
+      detach?.();
+      if (cancel) props.onCancel();
+      if (state.active.draggable) actions.dragEnd();
+      actions.sensorEnd();
+    };
+    const move = (next: PointerEvent) => {
+      if (next.pointerId !== pointerId) return;
+      next.preventDefault();
+      actions.sensorMove({ x: next.clientX, y: next.clientY });
+    };
+    const up = (next: PointerEvent) => {
+      if (next.pointerId === pointerId) end(false);
+    };
+    const cancel = () => end(true);
+    const cancelOnEscape = (next: KeyboardEvent) => {
+      if (next.key !== 'Escape') return;
+      next.preventDefault();
+      next.stopPropagation();
+      end(true);
+    };
+    window.addEventListener('pointermove', move);
+    window.addEventListener('pointerup', up);
+    window.addEventListener('pointercancel', cancel);
+    window.addEventListener('keydown', cancelOnEscape, true);
+    window.addEventListener('blur', cancel);
+    detach = () => {
+      window.removeEventListener('pointermove', move);
+      window.removeEventListener('pointerup', up);
+      window.removeEventListener('pointercancel', cancel);
+      window.removeEventListener('keydown', cancelOnEscape, true);
+      window.removeEventListener('blur', cancel);
+      detach = undefined;
+    };
+    actions.sensorStart(id, origin);
+    actions.dragStart(draggableId);
+    actions.sensorMove({ x: event.clientX, y: event.clientY });
+  });
+  return null;
+}
+
+const DragItemContext = createContext<{
+  /** Whether this item can move between groups now. */
+  canMove: () => boolean;
+  /** Continue a press on `element` that began at `origin` as a move between groups. */
+  handOff: (origin: Point, event: PointerEvent, element: HTMLElement) => void;
+}>();
+
+/** The group move of the Gantt.DragItem a control sits in, if any. */
+export const useGanttDragItem = () => useContext(DragItemContext);
+
 /** Wrap an entity row once; both its sidebar item and bar start the same group move. */
 export function GanttDragItem(props: ParentProps<DragItem>) {
   const drag = useGanttGroupDrag();
   const gantt = useGantt();
   if (!drag) return props.children;
-  const draggable = createDraggable(
-    `gantt-item:${typeof props.key}:${props.key}`,
-    {
-      get item() {
-        return {
-          id: props.id,
-          key: props.key,
-          groupId: props.groupId,
-          label: props.label,
-        };
-      },
-    }
-  );
+  const draggableId = () => `gantt-item:${typeof props.key}:${props.key}`;
+  const draggable = createDraggable(draggableId(), {
+    get item() {
+      return {
+        id: props.id,
+        key: props.key,
+        groupId: props.groupId,
+        label: props.label,
+      };
+    },
+  });
   return (
     <div
       ref={draggable.ref}
@@ -290,7 +384,7 @@ export function GanttDragItem(props: ParentProps<DragItem>) {
           '[data-gantt-bar-body], [data-gantt-label] button'
         );
         if (!element) return;
-        drag.start(event, element);
+        drag.start({ x: event.clientX, y: event.clientY }, element);
         draggable.dragActivators.onmousedown?.(event);
       }}
       onDragStart={(event) => event.preventDefault()}
@@ -303,7 +397,17 @@ export function GanttDragItem(props: ParentProps<DragItem>) {
         },
       }}
     >
-      {props.children}
+      <DragItemContext.Provider
+        value={{
+          canMove: () => !gantt.editing() && drag.canDrag(props.id),
+          handOff: (origin, event, element) => {
+            drag.start(origin, element);
+            drag.handOff(draggableId(), origin, event);
+          },
+        }}
+      >
+        {props.children}
+      </DragItemContext.Provider>
     </div>
   );
 }

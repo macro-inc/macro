@@ -5,6 +5,7 @@ import {
 } from '@core/hotkey/hotkeys';
 import { TOKENS } from '@core/hotkey/tokens';
 import { HOTKEY_PRIORITY_HIGH } from '@core/hotkey/types';
+import { Telemetry } from '@macro-inc/observability';
 import type {
   Message as EntityMessage,
   MessageListItem,
@@ -15,6 +16,9 @@ import type { MessageActions, MessageData } from '../Message';
 import { getMessageReplyPreviewTexts } from '../Message/browser-selection';
 import { scrollMessageIntoView } from '../scroll-utils';
 import { isBotMessage } from './utils/message-actions';
+
+const reportMessageActionError = (error: unknown) =>
+  Telemetry.error(error, { surface: 'channel-thread-hotkeys' });
 
 type CreateThreadHotkeysOptions = {
   messageListScopeId: string;
@@ -182,10 +186,12 @@ export function createThreadHotkeys(options: CreateThreadHotkeysOptions) {
       if (event?.repeat) return true;
       const parentMsg = options.parentMessage();
       const actions = options.getMessageActions(parentMsg);
-      actions?.onReply?.({
-        message: parentMsg,
-        ...getMessageReplyPreviewTexts(parentMsg.id),
-      });
+      Promise.resolve(
+        actions?.onReply?.({
+          message: parentMsg,
+          ...getMessageReplyPreviewTexts(parentMsg.id),
+        })
+      ).catch(reportMessageActionError);
       return true;
     },
   }).withGroup(group);
@@ -215,7 +221,9 @@ export function createThreadHotkeys(options: CreateThreadHotkeysOptions) {
       const reply = getReplyById(replyId);
       if (!reply) return false;
       const actions = options.getMessageActions(reply);
-      actions?.onEdit?.({ message: reply });
+      Promise.resolve(actions?.onEdit?.({ message: reply })).catch(
+        reportMessageActionError
+      );
       return true;
     },
   }).withGroup(group);
@@ -262,7 +270,9 @@ export function createThreadHotkeys(options: CreateThreadHotkeysOptions) {
       const reply = getReplyById(replyId);
       if (!reply) return false;
       const actions = options.getMessageActions(reply);
-      actions?.onDelete?.({ message: reply });
+      Promise.resolve(actions?.onDelete?.({ message: reply })).catch(
+        reportMessageActionError
+      );
       return true;
     },
   }).withGroup(group);

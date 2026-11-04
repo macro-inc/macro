@@ -71,10 +71,9 @@ until the backend is complete.
   if yours does, widen the constraint in a migration.
 - Regenerate every client that embeds `EntityType` (storage, cognition,
   connection, notification, properties, search): `cd apps/web && bun run gen-api`,
-  then `cd packages/sdk && just update-generated`. Run
-  `cd apps/web && bun run gen-dynamic-ui-schema` too; it regenerates
-  `crates/ai_tools/src/display_results/schema.generated.json`, which embeds
-  `EntityType`.
+  then `cd packages/sdk && just update-generated`. If views should show the
+  kind, add it to `EntityType` in `crates/dynamic_ui/src/view.rs` and run
+  `cd apps/web && just gen-dynamic-ui-types`.
 
 ## 2. Schema and migrations
 
@@ -88,8 +87,8 @@ migrations, the SQLx cache, and tests.
 - **Grant cleanup trigger:** `entity_access`, `entity_properties`, `favorite`, and
   collab surfaces have no foreign key to your table. Add an `AFTER DELETE` trigger
   that deletes the kind's `entity_access` rows, as `database_entities`,
-  `crm_pipeline_entities`, and `forms` do. Initiatives lack one, so deleting an
-  owner's account can orphan their grants.
+  `crm_pipeline_entities`, `calendar_events`, and `forms` do. Initiatives lack
+  one, so deleting an owner's account can orphan their grants.
 - **Enum values get their own migration.** `ALTER TYPE ... ADD VALUE` cannot be
   used in the transaction that adds it, and SQLx runs each file in one
   transaction. Add the value in one migration and backfill in the next (see
@@ -183,8 +182,11 @@ Postgres repo.
   databases, and pipelines are not there yet, so their trash is never emptied.
 - **Favorites (optional):** `crates/favorites/src/domain/mutation_service.rs`
   `validate_favoritable` is exhaustive; recent kinds return unsupported. If you
-  enable favorites, also update `crates/graphql_favorite` and clean up `favorite`
-  rows on delete, since nothing else does.
+  enable favorites, join your table in `list_favorites`
+  (`crates/favorites/src/outbound/pg_favorites_repo.rs`) so a favorite of a
+  deleted entity stops listing, as documents, projects, and agent sessions do.
+  Nothing reaps the `favorite` rows themselves; a delete-time cleanup is still
+  worth adding when the kind is deleted in bulk.
 
 ## 6. Properties (optional)
 
@@ -347,9 +349,9 @@ Four vocabularies must agree:
 - **Agent prompt:** add the kind to `crates/prompt/src/mentions.rs` and, if it has
   URLs, `crates/prompt/src/mcp_item_links.rs`. Without it agents linked forms as
   plain URLs.
-- **Deploy skew:** lexical-service deploys on every push to `main` that touches
-  `packages/lexical-core` or `services/lexical-service`, but the web app ships on
-  releases. New node data must parse in the old composer and vice versa; run
+- **Deploy skew:** lexical-service and the web app deploy separately, so either
+  can run against the other's previous release. New node data must parse in the
+  old composer and vice versa; run
   `bun run check` in `services/lexical-service`, and bump
   `MARKDOWN_VERSION_COUNTER` per `.agents/rules/web/lexical-nodes.md`.
 - Record mentions on create as well as on edit, or References misses them.
@@ -378,19 +380,22 @@ the skill doesn't cover:
   host-specific branches of `tools_for`), eager or deferred.
 - Give its context to every place `ToolServiceContext` is built:
   `crates/ai_tools/src/build_context.rs`,
-  `services/document_cognition_service/src/server.rs` and its
-  `services/document_cognition_service/src/api/context/test.rs`, and `services/mcp_service/src/context.rs`. Add it to
+  `services/agent_harness_service/src/cognition/server.rs` and its
+  `services/agent_harness_service/src/cognition/api/context/test.rs`, and `services/agent_harness_service/src/public_mcp/context.rs`. Add it to
   `with_actor` in `crates/ai_tools/src/tool_context.rs`, or agent writes are
   attributed to the default bot. Add a test in `crates/ai_tools/src/test.rs` that
   the tools resolve on every host; hosts have shipped with tools unwired.
-- Prompt guidance: a section in `crates/prompt/src/` (see `databases`,
-  `crm_pipelines`).
+- Agent guidance: a `@routing` sentence ("Use when …; not …") and, when agents
+  need rules beyond the API, an `@agent` block in the SDK namespace's TSDoc
+  (see `DatabaseNamespace`, `CrmNamespace`); generation fails without the
+  routing sentence.
 - Web: a renderer in `apps/web/src/lib/core/component/AI/component/tool/` with
   `handler.tsx`, and wording in `apps/web/src/features/block-agent/state/tool-approval-wording.ts`.
 - Regenerate: `cd apps/web && bun run gen-tools` and
   `cd apps/docs && bun run generate:tools` (never hand-edit the MCP tool pages).
-- Gemini rejects recursive schemas and drops records (`additionalProperties`).
-  Use key/value pair lists, and keep recursive input types out of tool schemas.
+- Gemini drops records (`additionalProperties`): use key/value pair lists. It
+  rejects a `$ref` loop of required fields, and so does schema generation:
+  recurse through an optional field or a list that may be empty.
 
 ## 14. SDK
 
@@ -411,8 +416,11 @@ adapter translates legacy block state into feature context (FE-34).
 `rules/ast-grep/{ts,tsx}-feature-*.yml` files.
 
 **Exhaustiveness.** New branches on a kind use `match().exhaustive()` or a
-`Record<Kind, ...>`, never `.otherwise`, `P._`, `default`, or `switch`. Never cast
-a string to `ItemType`; parse it with `stringToItemType` (FE-31, enforced by
+`Record<Kind, ...>`, never `.otherwise`, `P._`, `default`, or `switch`. Where the
+kind arrives from the wire (queries, service clients, workers, SDK hydrators),
+pass a fallback, `.exhaustive((unknown) => fallback)`, so older clients survive
+the new kind (FE-35). Never cast a string to `ItemType` or an `EntityType`; parse
+it with `stringToItemType` or `parseEntityType` (FE-31, enforced by
 `rules/ast-grep/ts-no-item-type-cast.yml`). Existing catch-alls hide the new kind,
 so grep for the sibling kind.
 

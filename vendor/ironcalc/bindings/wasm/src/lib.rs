@@ -1355,6 +1355,19 @@ impl Model {
         Ok(())
     }
 
+    /// MACRO: describes the host's filtered tables, whose hidden rows
+    /// SUBTOTAL(1-11) leaves out, from the next evaluation on.
+    #[wasm_bindgen(js_name = "setFilteredRanges")]
+    pub fn set_filtered_ranges(
+        &mut self,
+        #[wasm_bindgen(unchecked_param_type = "FilteredRange[]")] ranges: JsValue,
+    ) -> Result<(), JsError> {
+        let ranges: Vec<ironcalc_base::FilteredRange> =
+            serde_wasm_bindgen::from_value(ranges).map_err(|e| to_js_error(e.to_string()))?;
+        self.model.set_filtered_ranges(ranges);
+        Ok(())
+    }
+
     #[wasm_bindgen(js_name = "addConditionalFormatting")]
     pub fn add_conditional_formatting(
         &mut self,

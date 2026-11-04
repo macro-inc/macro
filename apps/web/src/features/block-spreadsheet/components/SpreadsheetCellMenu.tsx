@@ -1,14 +1,17 @@
 import { ContextMenuContent, MenuItem } from '@core/component/ContextMenu';
+import ArrowDown from '@icon/system/regular/arrow-down.svg?component-solid';
+import ArrowRight from '@icon/system/regular/arrow-right.svg?component-solid';
+import CaretCircleDown from '@icon/system/regular/caret-circle-down.svg?component-solid';
+import Chat from '@icon/system/regular/chat-circle.svg?component-solid';
+import CheckSquare from '@icon/system/regular/check-square.svg?component-solid';
+import Clipboard from '@icon/system/regular/clipboard.svg?component-solid';
+import Copy from '@icon/system/regular/copy.svg?component-solid';
+import Eraser from '@icon/system/regular/eraser.svg?component-solid';
+import Scissors from '@icon/system/regular/scissors.svg?component-solid';
+import Table from '@icon/system/regular/table.svg?component-solid';
+import Trash from '@icon/system/regular/trash.svg?component-solid';
 import { ContextMenu } from '@kobalte/core/context-menu';
-import ArrowDown from '@phosphor/arrow-down.svg?component-solid';
-import ArrowRight from '@phosphor/arrow-right.svg?component-solid';
-import CaretCircleDown from '@phosphor/caret-circle-down.svg?component-solid';
-import Chat from '@phosphor/chat-circle.svg?component-solid';
-import Clipboard from '@phosphor/clipboard.svg?component-solid';
-import Copy from '@phosphor/copy.svg?component-solid';
-import Eraser from '@phosphor/eraser.svg?component-solid';
-import Scissors from '@phosphor/scissors.svg?component-solid';
-import Trash from '@phosphor/trash.svg?component-solid';
+import XSquare from '@phosphor/x-square.svg?component-solid';
 import { type Component, type JSX, Show } from 'solid-js';
 import type { SpreadsheetCommand } from '../core/toolbar-types';
 
@@ -24,6 +27,9 @@ export type CellAction =
       | 'fill-down'
       | 'fill-right'
       | 'dropdown'
+      | 'table'
+      | 'insert-checkbox'
+      | 'remove-checkbox'
     >
   | 'comment';
 
@@ -34,6 +40,9 @@ export function SpreadsheetCellMenu(props: {
   hasComments?: boolean;
   canFillDown: boolean;
   canFillRight: boolean;
+  /** Whether the menu's cell is in a table, whose options it offers. */
+  inTable?: boolean;
+  hasCheckboxes: () => boolean;
   onAction: (action: CellAction) => void;
   onRestoreFocus: () => void;
   children: (open: (x: number, y: number) => void) => JSX.Element;
@@ -111,6 +120,15 @@ export function SpreadsheetCellMenu(props: {
           )}
           <ContextMenu.Separator class="my-1 border-t border-edge-muted" />
           {item('Dropdown…', 'dropdown', CaretCircleDown)}
+          {item('Insert checkbox', 'insert-checkbox', CheckSquare)}
+          <Show when={props.hasCheckboxes()}>
+            {item('Remove checkbox', 'remove-checkbox', XSquare)}
+          </Show>
+          {item(
+            props.inTable ? 'Table options' : 'Convert to table',
+            'table',
+            Table
+          )}
           <Show when={props.hasComments}>
             <ContextMenu.Separator class="my-1 border-t border-edge-muted" />
             {item('Comment', 'comment', Chat, !props.canComment)}

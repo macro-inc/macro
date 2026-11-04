@@ -143,6 +143,8 @@ function invalidate(id = SESSION) {
   for (const listener of updates.listeners) listener({ agentSessionId: id });
 }
 
+const analytics = vi.hoisted(() => ({ track: vi.fn() }));
+vi.mock('@app/lib/analytics', () => ({ analytics }));
 vi.mock('@core/agent-fold/client', () => fold);
 vi.mock('@service-agent-harness/client', () => ({
   agentHarnessServiceClient: harness,
@@ -310,6 +312,55 @@ describe('AgentSession', () => {
     live.release();
   });
 
+  it('counts an accepted prompt as an agent AI message, and nothing else', async () => {
+    harness.get.mockResolvedValue(ok({ ...session, botId: 'bot-id' }));
+    const live = AgentSession.acquire(SESSION);
+    await live.load();
+
+    await live.issue({ type: 'stop' });
+    await live.issue({ type: 'prompt', prompt: 'hi' });
+    harness.control.mockResolvedValueOnce(err([{ code: 'FORBIDDEN' }]));
+    await live.issue({ type: 'prompt', prompt: 'refused' });
+    await settle();
+
+    expect(analytics.track.mock.calls).toEqual([
+      [
+        'ai_message_sent',
+        {
+          surface: 'agent',
+          agentSessionId: SESSION,
+          agentId: 'bot-id',
+          newSession: false,
+          submitSurface: 'agent_session',
+          queued: false,
+          attachmentCount: 0,
+        },
+      ],
+    ]);
+    live.release();
+  });
+
+  it('reports the files an accepted prompt carries on its AI message', async () => {
+    const live = AgentSession.acquire(SESSION);
+    await live.load();
+
+    await live.issue({
+      type: 'prompt',
+      prompt: 'see these',
+      attachments: [
+        { uri: 'https://files.test/a', name: 'a.pdf' },
+        { uri: 'https://files.test/b', name: 'b.png' },
+      ],
+    });
+    await settle();
+
+    expect(analytics.track).toHaveBeenCalledExactlyOnceWith(
+      'ai_message_sent',
+      expect.objectContaining({ surface: 'agent', attachmentCount: 2 })
+    );
+    live.release();
+  });
+
   it('reissues the speculation under the id the harness minted instead', async () => {
     harness.control.mockResolvedValue(
       ok({ actionId: 'server-id', status: 'sent' })
@@ -417,7 +468,7 @@ describe('AgentSession', () => {
     logSource.fetched.mockReturnValue(log.promise);
     const live = AgentSession.acquire(SESSION);
 
-    void live.issue({ type: 'prompt', prompt: 'early' });
+    const issued = live.issue({ type: 'prompt', prompt: 'early' });
     await settle();
     expect(fold.pushSession).not.toHaveBeenCalled();
 
@@ -427,6 +478,7 @@ describe('AgentSession', () => {
       'snapshot',
       'speculated',
     ]);
+    await issued;
     live.release();
   });
 
@@ -664,6 +716,40 @@ describe('AgentSession', () => {
     live.release();
   });
 
+  it('refreshes on request and resolves once the refetched log is folded', async () => {
+    const live = AgentSession.acquire(SESSION);
+    await live.load();
+    const refetch = deferred<LogSnapshot>();
+    logSource.fetched.mockReturnValueOnce(refetch.promise);
+    const done = vi.fn();
+    const refreshed = live.refresh().then(done);
+    // A second request while the first is out rides the same run.
+    const joined = live.refresh().then(done);
+    await settle();
+    expect(done).not.toHaveBeenCalled();
+    logSource.fetched.mockResolvedValueOnce(logOf([row(1), row(2), row(3)]));
+    refetch.resolve(logOf([row(1), row(2)]));
+    await Promise.all([refreshed, joined]);
+    expect(done).toHaveBeenCalledTimes(2);
+    expect(inputs().at(-1)).toEqual({
+      kind: 'snapshot',
+      rows: [row(1), row(2), row(3)],
+    });
+    live.release();
+  });
+
+  it('resolves a refresh whose fetch fails, leaving the fold as it was', async () => {
+    const live = AgentSession.acquire(SESSION);
+    await live.load();
+    const before = inputs();
+    logSource.fetched.mockRejectedValueOnce(
+      new logSource.Unavailable(SESSION, 'failed')
+    );
+    await live.refresh();
+    expect(inputs()).toEqual(before);
+    live.release();
+  });
+
   /** A fold whose turn state is `state` from the moment it loads. */
   const loadedWith = async (state: string) => {
     fold.readSession.mockResolvedValue({
@@ -835,7 +921,9 @@ describe('AgentSession', () => {
 
     it('waits out a refusal and loads once the create is readable', async () => {
       vi.useFakeTimers();
-      onTestFinished(() => void vi.useRealTimers());
+      onTestFinished(() => {
+        vi.useRealTimers();
+      });
       // The create has answered, but what it wrote is not readable yet.
       harness.get
         .mockResolvedValueOnce(err([{ code: 'UNAUTHORIZED' }]))
@@ -853,7 +941,9 @@ describe('AgentSession', () => {
 
     it('waits out a 404 from a create whose row is not visible yet', async () => {
       vi.useFakeTimers();
-      onTestFinished(() => void vi.useRealTimers());
+      onTestFinished(() => {
+        vi.useRealTimers();
+      });
       harness.get
         .mockResolvedValueOnce(err([{ code: 'NOT_FOUND' }]))
         .mockResolvedValue(ok(session));
@@ -868,7 +958,9 @@ describe('AgentSession', () => {
 
     it('gives up as a retryable failure, not denied access, if it never clears', async () => {
       vi.useFakeTimers();
-      onTestFinished(() => void vi.useRealTimers());
+      onTestFinished(() => {
+        vi.useRealTimers();
+      });
       harness.get.mockResolvedValue(err([{ code: 'UNAUTHORIZED' }]));
 
       const live = AgentSession.acquire(SESSION);
@@ -1145,15 +1237,20 @@ describe('AgentSession', () => {
       live.rendered('fetched', [
         {
           agentSessionId: SESSION,
+          key: '0:user',
           turn: 0,
           author: { kind: 'user', userId: null },
           requestId: null,
           parts: [{ kind: 'text', text: 'Hi' }],
           stop: null,
           pending: false,
+          segments: [],
+          phase: null,
+          postedAt: null,
         },
         {
           agentSessionId: SESSION,
+          key: '0:agent',
           turn: 0,
           author: { kind: 'agent' },
           requestId: null,
@@ -1163,6 +1260,9 @@ describe('AgentSession', () => {
           ],
           stop: null,
           pending: false,
+          segments: [],
+          phase: null,
+          postedAt: null,
         },
       ]);
       const [span] = renderSpans();
@@ -1282,24 +1382,32 @@ describe('AgentSession', () => {
           kind: 'update',
           message: {
             agentSessionId: SESSION,
+            key: '1:user',
             turn: 1,
             author: { kind: 'user', userId: 'macro|wolf@macro.com' },
             requestId: actionId,
             parts: [{ kind: 'text', text: 'hi' }],
             stop: null,
             pending: false,
+            segments: [],
+            phase: null,
+            postedAt: null,
           },
         },
         {
           kind: 'new',
           message: {
             agentSessionId: SESSION,
+            key: '1:agent',
             turn: 1,
             author: { kind: 'agent' },
             requestId: null,
             parts: [{ kind: 'thought', text: 'thinking' }],
             stop: null,
             pending: false,
+            segments: [],
+            phase: null,
+            postedAt: null,
           },
         },
       ] satisfies FoldedStreamEvent[]);
@@ -1342,6 +1450,7 @@ describe('AgentSession', () => {
           kind: 'update',
           message: {
             agentSessionId: SESSION,
+            key: '1:agent',
             turn: 1,
             author: { kind: 'agent' },
             requestId: null,
@@ -1351,6 +1460,9 @@ describe('AgentSession', () => {
             ],
             stop: null,
             pending: false,
+            segments: [],
+            phase: null,
+            postedAt: null,
           },
         },
       ] satisfies FoldedStreamEvent[]);

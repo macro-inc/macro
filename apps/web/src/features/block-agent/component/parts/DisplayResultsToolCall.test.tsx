@@ -1,15 +1,14 @@
 /** @vitest-environment jsdom */
 
-import type { View } from '@app/features/dynamic-ui/schema';
+import type { View } from '@app/features/dynamic-ui/view';
 import { cleanup, render } from '@solidjs/testing-library';
 import type { JSX } from 'solid-js';
-import { createStore, reconcile } from 'solid-js/store';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { DisplayResultsToolCall } from './DisplayResultsToolCall';
 import type { ToolCallCommon } from './shared';
 
-// Keep the real dashboard schema validation and streaming behavior; replace
-// entity widgets and Lexical context with presentation markers.
+// Keep the real dashboard; replace entity widgets and Lexical context with
+// presentation markers.
 vi.mock('@app/features/dynamic-ui/DashboardToolView.lazy', async () => ({
   DashboardToolView: (
     await import('@app/features/dynamic-ui/DashboardToolView')
@@ -55,75 +54,49 @@ function common(
     label: 'DisplayResults',
     status,
     muted: status === 'failed',
+    stopped: false,
     trailing: status === 'failed' ? 'Failed' : undefined,
   };
 }
 
+const VIEW: View = {
+  title: 'This week',
+  widgets: [{ type: 'md', markdown: 'hi' }],
+};
+
 describe('DisplayResultsToolCall', () => {
-  it('renders completed results inline without a tool row', () => {
-    const view = {
-      title: 'This week',
-      widgets: [{ type: 'md', markdown: 'hi' }],
-    };
+  it('renders the returned view inline without a tool row', () => {
     const rendered = render(() => (
-      <DisplayResultsToolCall input={{ view }} common={common()} />
+      <DisplayResultsToolCall view={VIEW} common={common()} />
     ));
 
     expect(rendered.getByTestId('dashboard').textContent).toBe(
-      JSON.stringify(view)
+      JSON.stringify(VIEW)
     );
     expect(rendered.container.querySelector('[data-tool-row]')).toBeNull();
   });
 
-  it('waits for partial arguments, streams valid updates, and keeps the final view without a response', () => {
-    const [props, setProps] = createStore<{
-      input: unknown;
-      common: ToolCallCommon;
-    }>({ input: null, common: common('running') });
-    const rendered = render(() => <DisplayResultsToolCall {...props} />);
-
-    for (const status of ['pending', 'running'] as const) {
-      for (const input of [null, {}, { view: null }, { view: {} }]) {
-        setProps(reconcile({ input, common: common(status) }));
-        expect(rendered.container.textContent).toBe('');
-      }
-    }
-
-    const view = {
-      title: 'This week',
-      widgets: [{ type: 'md', markdown: 'First results' }],
-    };
-    setProps(reconcile({ input: { view }, common: common('running') }));
-    expect(rendered.getByTestId('dashboard').textContent).toBe(
-      JSON.stringify(view)
-    );
-
-    const finalView = {
-      title: 'All results',
-      widgets: [{ type: 'md', markdown: 'Final results' }],
-    };
-    setProps(reconcile({ input: { view: finalView }, common: common() }));
-    expect(rendered.getByTestId('dashboard').textContent).toBe(
-      JSON.stringify(finalView)
-    );
-    expect(rendered.container.querySelector('[data-tool-row]')).toBeNull();
-  });
-
-  it.each([null, {}, { view: null }, { view: { widgets: 'invalid-payload' } }])(
-    'reports malformed completed input without exposing its payload: %j',
-    (input) => {
+  it.each(['pending', 'running'] as const)(
+    'shows nothing while the call is %s',
+    (status) => {
       const rendered = render(() => (
-        <DisplayResultsToolCall input={input} common={common()} />
+        <DisplayResultsToolCall view={undefined} common={common(status)} />
       ));
 
-      expect(rendered.container.textContent).toContain(
-        "Couldn't render dashboard"
-      );
-      expect(rendered.container.textContent).not.toContain('invalid-payload');
-      expect(rendered.queryByTestId('dashboard')).toBeNull();
-      expect(rendered.queryByRole('button')).toBeNull();
+      expect(rendered.container.textContent).toBe('');
     }
   );
+
+  it('reports a finished call that returned no view', () => {
+    const rendered = render(() => (
+      <DisplayResultsToolCall view={undefined} common={common()} />
+    ));
+
+    expect(rendered.container.textContent).toContain(
+      "Couldn't render dashboard"
+    );
+    expect(rendered.queryByTestId('dashboard')).toBeNull();
+  });
 
   it.each([
     { status: 'failed', error: null },
@@ -132,9 +105,7 @@ describe('DisplayResultsToolCall', () => {
   ] as const)('shows only a failed summary for %j', ({ status, error }) => {
     const rendered = render(() => (
       <DisplayResultsToolCall
-        input={{
-          view: { widgets: [{ type: 'md', markdown: 'Hidden result' }] },
-        }}
+        view={VIEW}
         error={error}
         common={common(status)}
       />
@@ -155,7 +126,7 @@ describe('DisplayResultsToolCall', () => {
   it('reports a render error before showing the fallback', () => {
     const rendered = render(() => (
       <DisplayResultsToolCall
-        input={{ view: { title: 'throws', widgets: [] } }}
+        view={{ title: 'throws', widgets: [] }}
         common={common()}
       />
     ));

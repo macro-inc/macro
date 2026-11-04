@@ -4,7 +4,7 @@ import {
   $unwrapMarkNode,
   $wrapSelectionInMarkNode,
 } from '@lexical/mark';
-import { mergeRegister, registerNestedElementResolver } from '@lexical/utils';
+import { mergeRegister } from '@lexical/utils';
 import {
   $addSharedPeer,
   $createCommentNode,
@@ -13,17 +13,22 @@ import {
   $removePeerId,
   CommentNode,
 } from '@macro-inc/lexical-core';
+import { Telemetry } from '@macro-inc/observability';
 import {
+  $copyNode,
   $getNodeByKey,
   $getSelection,
   $isRangeSelection,
   $isTextNode,
   $nodesOfType,
+  CLICK_COMMAND,
   COMMAND_PRIORITY_EDITOR,
+  COMMAND_PRIORITY_LOW,
   createCommand,
   type LexicalEditor,
   type LexicalNode,
   type NodeKey,
+  type RangeSelection,
 } from 'lexical';
 import { v7 } from 'uuid';
 
@@ -107,6 +112,14 @@ export const markNodeKeysToIDs: Map<NodeKey, Array<string>> = new Map();
 type CommentPluginProps = {
   ops: CommentOperations;
   peerId: () => string | undefined;
+  documentId?: string;
+  /** Collaborative drafts keep their selection outside the document tree. */
+  draft?: {
+    current: () => string | undefined;
+    create: (id: string, selection: RangeSelection) => boolean;
+    discard: () => void;
+    commit: () => void;
+  };
 };
 
 function registerPlugin(editor: LexicalEditor, props: CommentPluginProps) {
@@ -160,40 +173,61 @@ function registerPlugin(editor: LexicalEditor, props: CommentPluginProps) {
     }
   };
 
-  return mergeRegister(
-    registerNestedElementResolver<CommentNode>(
-      editor,
-      CommentNode,
-      (from: CommentNode) => {
-        const newNode = $createCommentNode({
-          ids: from.getIDs(),
-          threadId: from.getThreadId(),
-          isDraft: from.getIsDraft(),
-        });
-        for (const id of newNode.getIDs()) {
-          markNodeMap.get(id)?.delete(from.getKey());
-          markNodeMap.get(id)?.add(newNode.getKey());
-        }
-        return newNode;
-      },
-      (from: CommentNode, to: CommentNode) => {
-        to.setIsDraft(from.getIsDraft());
+  const $selectMarksAtCaret = () => {
+    const localDraft = props.draft?.current();
+    if (localDraft) {
+      markSelected([localDraft]);
+      return;
+    }
+    const selection = $getSelection();
+    if (selection === null) return;
+    let hasActiveIds = false;
+    let newActiveIds: string[] | undefined;
 
-        // Merge the IDs
-        const ids = from.getIDs();
-        ids.forEach((id) => {
-          to.addID(id);
-          markNodeMap.get(id)?.delete(from.getKey());
-          markNodeMap.get(id)?.add(to.getKey());
-        });
-
-        // Add shared peers.
-        const fromPeerId = $getPeerId(from);
-        if (fromPeerId) {
-          $addSharedPeer(to, fromPeerId);
-        }
+    if ($isRangeSelection(selection)) {
+      const markIds = $getMarkIdsAtCaret(
+        selection.anchor.getNode(),
+        selection.anchor.offset
+      );
+      if (markIds != null) {
+        newActiveIds = markIds;
+        hasActiveIds = true;
       }
-    ),
+    }
+
+    if (!hasActiveIds) {
+      ops.setActiveIds([]);
+    }
+    markSelected(newActiveIds);
+  };
+
+  return mergeRegister(
+    // Drafts remain separate wrappers until posted. Merging a draft with a
+    // saved range gives both IDs one isDraft bit: either the composer vanishes
+    // or saving strips part of the existing comment from the shared document.
+    editor.registerNodeTransform(CommentNode, (node) => {
+      const parent = node.getParent();
+      if (
+        node.getIsDraft() ||
+        !$isCommentNode(parent) ||
+        parent.getIsDraft() ||
+        node.getChildren().some($isCommentNode)
+      )
+        return;
+
+      for (const id of parent.getIDs()) node.addID(id);
+      const parentPeerId = $getPeerId(parent);
+      if (parentPeerId) $addSharedPeer(node, parentPeerId);
+
+      const nextSiblings = node.getNextSiblings();
+      parent.insertAfter(node);
+      if (nextSiblings.length > 0) {
+        const remaining = $copyNode(parent);
+        node.insertAfter(remaining);
+        remaining.append(...nextSiblings);
+      }
+      if (parent.getChildrenSize() === 0) parent.remove();
+    }),
 
     editor.registerUpdateListener(({ editorState }) => {
       if (editorState.isEmpty()) return;
@@ -201,55 +235,82 @@ function registerPlugin(editor: LexicalEditor, props: CommentPluginProps) {
     }),
 
     editor.registerUpdateListener(({ editorState }) => {
-      editorState.read(() => {
-        const selection = $getSelection();
-        if (selection === null) return;
-        let hasActiveIds = false;
-        let newActiveIds: string[] | undefined;
-
-        if ($isRangeSelection(selection)) {
-          const markIds = $getMarkIdsAtCaret(
-            selection.anchor.getNode(),
-            selection.anchor.offset
-          );
-          if (markIds != null) {
-            newActiveIds = markIds;
-            hasActiveIds = true;
-          }
-        }
-
-        if (!hasActiveIds) {
-          ops.setActiveIds([]);
-        }
-        markSelected(newActiveIds);
-      });
+      editorState.read($selectMarksAtCaret);
     }),
+
+    // A click selects the comments at the caret even when the caret did not
+    // move, such as returning to text whose thread was closed from outside.
+    editor.registerCommand(
+      CLICK_COMMAND,
+      () => {
+        $selectMarksAtCaret();
+        return false;
+      },
+      COMMAND_PRIORITY_LOW
+    ),
 
     editor.registerCommand(
       CREATE_DRAFT_COMMENT_COMMAND,
       () => {
-        const selection = $getSelection();
-        if (
-          $isRangeSelection(selection) &&
-          selection.getTextContent().trim() !== ''
-        ) {
+        const span = Telemetry.span('comment.draft.create');
+        if (props.documentId) span.setAttr('document.id', props.documentId);
+        try {
+          const selection = $getSelection();
+          if (
+            !$isRangeSelection(selection) ||
+            selection.getTextContent().trim() === ''
+          ) {
+            span.setAttr('comment.outcome', 'no_selection');
+            Telemetry.warn('comment.draft.rejected', {
+              'document.id': props.documentId,
+              'comment.reason': 'no_selection',
+            });
+            return false;
+          }
+          // Retrying Comment while a composer is open must not create a second
+          // draft with the same UI thread ID.
+          const localDraft = props.draft?.current();
+          if (localDraft) {
+            markSelected([localDraft]);
+            span.setAttr('comment.outcome', 'existing_draft');
+            return true;
+          }
+          if (draftMarkId && markNodeMap.has(draftMarkId)) {
+            markSelected([draftMarkId]);
+            span.setAttr('comment.outcome', 'existing_draft');
+            return true;
+          }
           const markId = generateMarkId();
+          if (props.draft) {
+            const created = props.draft.create(markId, selection);
+            if (created) markSelected([markId]);
+            span.setAttr(
+              'comment.outcome',
+              created ? 'created' : 'unsynced_selection'
+            );
+            return created;
+          }
           draftMarkId = markId;
           $wrapSelectionInMarkNode(
             selection,
             selection.isBackward(),
             markId,
             (ids) => {
-              const comment = new CommentNode(ids, undefined, -1, true);
-              for (const id of ids) {
-                setMarkNodeMapEntry(id, comment.getKey());
-              }
+              const comment = $createCommentNode({
+                ids,
+                threadId: -1,
+                isDraft: true,
+              });
+              for (const id of ids) setMarkNodeMapEntry(id, comment.getKey());
               return comment;
             }
           );
+          span.setAttr('comment.mark_id', markId);
+          span.setAttr('comment.outcome', 'created');
           return true;
+        } finally {
+          span.end();
         }
-        return false;
       },
       COMMAND_PRIORITY_EDITOR
     ),
@@ -257,6 +318,7 @@ function registerPlugin(editor: LexicalEditor, props: CommentPluginProps) {
     editor.registerCommand(
       DISCARD_DRAFT_COMMENT_COMMAND,
       () => {
+        props.draft?.discard();
         if (draftMarkId) {
           draftMarkId = null;
         }
@@ -268,6 +330,10 @@ function registerPlugin(editor: LexicalEditor, props: CommentPluginProps) {
     editor.registerCommand(
       DELETE_COMMENT_COMMAND,
       ([markId, forceDelete]) => {
+        if (props.draft?.current() === markId) {
+          props.draft.discard();
+          return true;
+        }
         const markNodeKeys = markNodeMap.get(markId);
         if (!markNodeKeys) return false;
 
@@ -308,6 +374,10 @@ function registerPlugin(editor: LexicalEditor, props: CommentPluginProps) {
     editor.registerCommand(
       COMMIT_COMMENT_MARK_COMMAND,
       ({ markId }) => {
+        if (props.draft?.current() === markId) {
+          props.draft.commit();
+          return true;
+        }
         const markNodeKeys = markNodeMap.get(markId);
         if (!markNodeKeys) return false;
         for (const key of markNodeKeys) {
@@ -371,7 +441,9 @@ function registerPlugin(editor: LexicalEditor, props: CommentPluginProps) {
                 const isDraft = node.getIsDraft();
                 const hasServerThread = !isDraft;
                 const nodePeerId = $getPeerId(node);
-                const isLocal = Boolean(nodePeerId && nodePeerId === peerId());
+                const isLocal =
+                  id === draftMarkId ||
+                  Boolean(nodePeerId && nodePeerId === peerId());
                 ops.add(
                   id,
                   node,

@@ -177,25 +177,34 @@ it('commits on blur after starting a formula without a mention adapter', () => {
   expect(blur).toHaveBeenCalledOnce();
 });
 
-it('colors reference text while the textarea keeps the caret', () => {
+it('colors reference text while the textarea keeps the caret in the text color', () => {
   const view = render(() => (
-    <FormulaInput
-      label="Formula"
-      value="=A1+B2"
-      class=""
-      references={[
-        { start: 1, end: 3, color: 'var(--color-blue)' },
-        { start: 4, end: 6, color: 'var(--color-red)' },
-      ]}
-      onInput={vi.fn()}
-      onKeyDown={vi.fn()}
-      onBlur={vi.fn()}
-    />
+    <>
+      <style>{'textarea { color: rgb(255, 242, 204); }'}</style>
+      <FormulaInput
+        label="Formula"
+        value="=A1+B2"
+        class=""
+        references={[
+          { start: 1, end: 3, color: 'var(--color-blue)' },
+          { start: 4, end: 6, color: 'var(--color-red)' },
+        ]}
+        onInput={vi.fn()}
+        onKeyDown={vi.fn()}
+        onBlur={vi.fn()}
+      />
+    </>
   ));
   const input = view.getByRole('textbox', { name: 'Formula' });
-  expect(input.style.color).toBe('transparent');
-  const mirror = view.container.querySelector('[data-formula-mirror]')!;
+  expect(input.style.getPropertyValue('-webkit-text-fill-color')).toBe(
+    'transparent'
+  );
+  expect(getComputedStyle(input).color).toBe('rgb(255, 242, 204)');
+  const mirror = view.container.querySelector<HTMLElement>(
+    '[data-formula-mirror]'
+  )!;
   expect(mirror.textContent).toBe('=A1+B2');
+  expect(mirror.style.color).toBe('rgb(255, 242, 204)');
   const colored = [...mirror.querySelectorAll<HTMLSpanElement>('span span')]
     .filter((span) => span.style.color)
     .map((span) => [span.textContent, span.style.color]);

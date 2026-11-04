@@ -29,24 +29,35 @@ fn make_colleague_joined() -> ColleagueJoinedMacro {
     }
 }
 
+const COLLEAGUE_SUBJECT: &str = "A team has been created for your organization";
+
 #[test]
-fn colleague_joined_names_the_colleague_and_links_to_signup() {
+fn colleague_joined_is_an_organization_notice_that_links_to_signup() {
     let email = make_colleague_joined().format_email();
-    assert_eq!(email.subject, "Alice Example joined Macro");
+    assert_eq!(email.subject, COLLEAGUE_SUBJECT);
     assert!(
         email
             .body
-            .contains("Alice Example (alice@acme.com) joined Macro with the")
+            .contains("Alice Example (alice@acme.com) set up the")
     );
-    assert!(email.body.contains("<strong>Acme</strong> team."));
+    assert!(email.body.contains("<strong>Acme</strong> team on Macro"));
     assert!(
         email
             .body
             .contains("Sign up with <strong>bob@acme.com</strong>")
     );
+    assert!(email.body.contains("one-time notice"));
+    assert!(
+        email
+            .body
+            .contains("href=\"macro-unsubscribe:colleague_joined_macro\"")
+    );
+    assert!(email.body.contains("54 W 21st St, Suite 503, New York, NY"));
     assert!(email.body.contains("/app/signup\""));
     assert!(email.body.contains(">Join Acme</a"));
     assert!(!email.body.contains("referral_code"));
+    // The notice is not framed as someone signing up.
+    assert!(!email.body.contains("joined Macro"));
 }
 
 #[test]
@@ -57,8 +68,8 @@ fn colleague_joined_falls_back_to_the_email_without_a_usable_name() {
             ..make_colleague_joined()
         }
         .format_email();
-        assert_eq!(email.subject, "alice@acme.com joined Macro");
-        assert!(email.body.contains("alice@acme.com joined Macro with the"));
+        assert_eq!(email.subject, COLLEAGUE_SUBJECT);
+        assert!(email.body.contains("alice@acme.com set up the"));
         assert!(!email.body.contains("(alice@acme.com)"));
     }
 }
@@ -70,10 +81,11 @@ fn colleague_joined_puts_long_multiline_names_on_one_capped_line() {
         ..make_colleague_joined()
     }
     .format_email();
-    assert_eq!(
-        email.subject,
-        format!("Alice Example {} joined Macro", "x".repeat(50))
-    );
+    assert_eq!(email.subject, COLLEAGUE_SUBJECT);
+    assert!(email.body.contains(&format!(
+        "Alice Example {} (alice@acme.com)",
+        "x".repeat(50)
+    )));
 }
 
 #[test]
@@ -83,7 +95,7 @@ fn colleague_joined_escapes_the_untrusted_name_in_the_body() {
         ..make_colleague_joined()
     }
     .format_email();
-    assert_eq!(email.subject, "<b>x</b> joined Macro");
+    assert_eq!(email.subject, COLLEAGUE_SUBJECT);
     assert!(!email.body.contains("<b>x</b>"));
     assert!(
         email
@@ -98,6 +110,33 @@ fn colleague_joined_rate_limit_key_is_per_recipient() {
     let to_carol = ColleagueJoinedMacro {
         recipient_email: EmailStr::try_from("carol@acme.com".to_string()).unwrap(),
         ..make_colleague_joined()
+    };
+    assert_eq!(
+        to_bob.rate_limit_key().as_bytes(),
+        to_bob.clone().rate_limit_key().as_bytes()
+    );
+    assert_ne!(
+        to_bob.rate_limit_key().as_bytes(),
+        to_carol.rate_limit_key().as_bytes()
+    );
+}
+
+#[test]
+fn team_invite_rate_limit_key_is_per_invite() {
+    let to_bob = InviteToTeamMetadata {
+        team_name: "Acme".to_string(),
+        team_id: Uuid::from_u128(1),
+        team_invite_id: Uuid::from_u128(10),
+        invited_by: MacroUserIdStr::try_from_email("alice@acme.com").unwrap(),
+        role: None,
+        sender_profile_picture_url: None,
+        invitee_plan: InviteePlan::Free,
+        reminder: false,
+        is_agent: false,
+    };
+    let to_carol = InviteToTeamMetadata {
+        team_invite_id: Uuid::from_u128(11),
+        ..to_bob.clone()
     };
     assert_eq!(
         to_bob.rate_limit_key().as_bytes(),
@@ -130,6 +169,8 @@ fn make_channel_invite() -> ChannelInviteMetadata {
         invited_by: MacroUserIdStr::try_from_email("sender@example.com").unwrap(),
         channel_name: "general".to_string(),
         is_direct_message: false,
+        message_id: None,
+        email_recipient: None,
         message_content: None,
         sender_profile_picture_url: None,
     }
@@ -270,6 +311,32 @@ fn make_invite() -> InviteToMacro {
 }
 
 #[test]
+fn invitation_logos_keep_the_png_aspect_ratio() {
+    let team_invite = InviteToTeamMetadata {
+        team_name: "Acme".to_string(),
+        team_id: Uuid::nil(),
+        team_invite_id: Uuid::nil(),
+        invited_by: MacroUserIdStr::try_from_email("sender@example.com").unwrap(),
+        role: None,
+        sender_profile_picture_url: None,
+        invitee_plan: InviteePlan::Free,
+        reminder: false,
+        is_agent: false,
+    };
+    for email in [
+        make_invite().format_email(),
+        make_channel_invite().format_email(),
+        team_invite.format_email(),
+        make_colleague_joined().format_email(),
+    ] {
+        let body = email.body.split_whitespace().collect::<Vec<_>>().join(" ");
+        assert!(body.contains(
+            r#"src="https://static-file-service.macro.com/file/b911aba9-94a6-435c-aa16-8404739f13b0" width="54" height="36""#
+        ));
+    }
+}
+
+#[test]
 fn referral_url_does_not_panic() {
     let invite = make_invite();
     let _url = invite.referral_url();
@@ -359,4 +426,200 @@ fn deserialization_without_sender_email_uses_none() {
     }"#;
     let deserialized: InviteToMacro = serde_json::from_str(json).unwrap();
     assert!(deserialized.sender_email.is_none());
+}
+
+#[test]
+fn dm_emails_deduplicate_retries_without_suppressing_later_messages() {
+    let first = ChannelInviteMetadata {
+        is_direct_message: true,
+        message_id: Some(Uuid::new_v4()),
+        ..make_channel_invite()
+    };
+    let other_recipient = ChannelInviteMetadata {
+        email_recipient: Some(MacroUserIdStr::try_from_email("other@example.com").unwrap()),
+        ..first.clone()
+    };
+    assert_ne!(
+        first.rate_limit_key().as_bytes(),
+        other_recipient.rate_limit_key().as_bytes()
+    );
+    let next = ChannelInviteMetadata {
+        message_id: Some(Uuid::new_v4()),
+        ..first.clone()
+    };
+    assert_eq!(
+        first.rate_limit_key().as_bytes(),
+        first.clone().rate_limit_key().as_bytes()
+    );
+    assert_ne!(
+        first.rate_limit_key().as_bytes(),
+        next.rate_limit_key().as_bytes()
+    );
+    let channel = ChannelInviteMetadata {
+        is_direct_message: false,
+        ..first
+    };
+    let next_channel = ChannelInviteMetadata {
+        is_direct_message: false,
+        ..next
+    };
+    assert_eq!(
+        channel.rate_limit_key().as_bytes(),
+        next_channel.rate_limit_key().as_bytes()
+    );
+}
+
+fn make_team_invite(invitee_plan: InviteePlan) -> InviteToTeamMetadata {
+    InviteToTeamMetadata {
+        team_name: "Acme".to_string(),
+        team_id: Uuid::from_u128(1),
+        team_invite_id: Uuid::from_u128(10),
+        invited_by: MacroUserIdStr::try_from_email("alice@acme.com").unwrap(),
+        role: None,
+        sender_profile_picture_url: None,
+        invitee_plan,
+        reminder: false,
+        is_agent: false,
+    }
+}
+
+/// The rendered body with whitespace collapsed, so assertions read like the email.
+fn team_invite_text(invite: &InviteToTeamMetadata) -> String {
+    invite
+        .format_email()
+        .body
+        .split_whitespace()
+        .collect::<Vec<_>>()
+        .join(" ")
+}
+
+#[test]
+fn team_invite_names_the_inviter_and_the_team() {
+    let invite = make_team_invite(InviteePlan::Free);
+    let text = team_invite_text(&invite);
+
+    assert_eq!(
+        invite.format_email().subject,
+        "alice@acme.com invited you to join Acme on Macro"
+    );
+    assert!(text.contains("Join Acme on Macro </h1>"));
+    assert!(text.contains(
+        r#"<strong style="color: #222222">alice@acme.com</strong> invited you to the <strong style="color: #222222">Acme</strong> team."#
+    ));
+    assert!(text.contains(">Join Acme</a"));
+}
+
+#[test]
+fn team_invite_promises_pro_only_when_the_team_covers_the_seat() {
+    let pro = team_invite_text(&make_team_invite(InviteePlan::Premium));
+    assert!(pro.contains("Pro is included: Acme covers your seat."));
+    assert!(
+        pro.contains(
+            "Acme covers your seat, so you get every AI model and agent at no cost to you."
+        )
+    );
+    assert!(!pro.contains("Free to join"));
+
+    let free = team_invite_text(&make_team_invite(InviteePlan::Free));
+    assert!(free.contains("Free to join"));
+    assert!(free.contains("Accept the invite to start working with Acme in Macro."));
+    assert!(!free.contains("Pro is included"));
+    assert!(!free.contains("covers your seat"));
+}
+
+#[test]
+fn team_invite_links_the_button_and_a_pasteable_fallback() {
+    let invite = make_team_invite(InviteePlan::Free);
+    let url = invite.invite_url().to_string();
+    let body = invite.format_email().body;
+
+    assert!(url.ends_with("/app/team-invite?id=00000000-0000-0000-0000-00000000000a"));
+    // The button's href, the fallback link's href, and its visible text.
+    assert_eq!(body.matches(&url).count(), 3);
+}
+
+#[test]
+fn agent_team_invite_links_to_the_agent_signup_page() {
+    let invite = InviteToTeamMetadata {
+        is_agent: true,
+        ..make_team_invite(InviteePlan::Free)
+    };
+    let url = invite.invite_url().to_string();
+    let body = invite.format_email().body;
+
+    assert!(url.ends_with("/app/signup/agent?team_invite=00000000-0000-0000-0000-00000000000a"));
+    assert_eq!(body.matches(&url).count(), 3);
+}
+
+#[test]
+fn team_invite_escapes_the_team_name() {
+    let invite = InviteToTeamMetadata {
+        team_name: "<script>alert(1)</script>".to_string(),
+        ..make_team_invite(InviteePlan::Premium)
+    };
+    let body = invite.format_email().body;
+
+    assert!(!body.contains("<script>"));
+    assert!(body.contains("Join &#60;script&#62;alert(1)&#60;/script&#62; on Macro"));
+}
+
+#[test]
+fn team_invite_button_names_the_team_while_it_fits() {
+    assert_eq!(
+        make_team_invite(InviteePlan::Free).join_label(),
+        "Join Acme"
+    );
+    let long = InviteToTeamMetadata {
+        team_name: "Northwind Traders International".to_string(),
+        ..make_team_invite(InviteePlan::Free)
+    };
+    assert_eq!(long.join_label(), "Join team");
+}
+
+#[test]
+fn team_invite_plan_keeps_its_wire_shape() {
+    let wire = serde_json::to_value(make_team_invite(InviteePlan::Premium)).unwrap();
+    assert_eq!(wire["inviteePlan"], "premium");
+
+    let read: InviteToTeamMetadata = serde_json::from_value(wire).unwrap();
+    assert_eq!(read.invitee_plan, InviteePlan::Premium);
+}
+
+#[test]
+fn team_invite_sent_before_plans_were_recorded_reads_as_free() {
+    let wire = serde_json::json!({
+        "team_name": "Acme",
+        "team_id": "00000000-0000-0000-0000-000000000001",
+        "team_invite_id": "00000000-0000-0000-0000-00000000000a",
+        "invited_by": "macro|alice@acme.com",
+        "role": null,
+    });
+
+    let read: InviteToTeamMetadata = serde_json::from_value(wire).unwrap();
+    assert_eq!(read.invitee_plan, InviteePlan::Free);
+}
+
+#[test]
+fn team_invite_reminder_says_so_in_the_subject() {
+    let reminder = InviteToTeamMetadata {
+        reminder: true,
+        is_agent: false,
+        ..make_team_invite(InviteePlan::Free)
+    };
+    assert_eq!(
+        reminder.format_email().subject,
+        "Reminder: alice@acme.com invited you to join Acme on Macro"
+    );
+    assert_eq!(
+        make_team_invite(InviteePlan::Free).format_email().subject,
+        "alice@acme.com invited you to join Acme on Macro"
+    );
+}
+
+#[test]
+fn team_invites_queued_before_reminders_read_as_first_sends() {
+    let mut wire = serde_json::to_value(make_team_invite(InviteePlan::Free)).unwrap();
+    wire.as_object_mut().unwrap().remove("reminder");
+    let parsed: InviteToTeamMetadata = serde_json::from_value(wire).unwrap();
+    assert!(!parsed.reminder);
 }

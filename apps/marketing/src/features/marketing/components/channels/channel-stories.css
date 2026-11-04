@@ -1,5 +1,5 @@
 .channel-demo-frame { position: relative; }
-.channel-demo-cursor { z-index: 9; transition: transform 600ms cubic-bezier(.2,.8,.2,1); }
+.channel-demo-cursor { z-index: 9; }
 
 /* features/home on desktop: a ViewSidebar with a Home header, New chat, and date groups. */
 .chat-inbox-scene { outline: none; }

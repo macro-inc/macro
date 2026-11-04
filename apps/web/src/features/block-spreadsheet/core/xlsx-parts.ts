@@ -1,4 +1,5 @@
 import { SaxesParser, type SaxesTagNS } from 'saxes';
+import { SPREADSHEET_MAX_COLUMNS } from './spreadsheet-document';
 import type { XlsxArchive } from './xlsx-archive';
 
 export type Attributes = Record<string, string>;
@@ -69,4 +70,40 @@ export function relationships(archive: XlsxArchive, part: string) {
     });
   });
   return result;
+}
+
+export const EXCEL_MAX_ROWS = 1_048_576;
+
+/** Text with OOXML's `_xHHHH_` escapes for control characters decoded. */
+export function unescapeText(text: string) {
+  return text.includes('_x')
+    ? text.replace(/_x([0-9a-f]{4})_/gi, (_, code: string) =>
+        String.fromCharCode(Number.parseInt(code, 16))
+      )
+    : text;
+}
+
+export function parseExcelAddress(address: string) {
+  const match = /^([A-Z]{1,3})([1-9]\d{0,6})$/i.exec(address);
+  if (!match) return;
+  let column = 0;
+  for (const character of match[1].toUpperCase())
+    column = column * 26 + character.charCodeAt(0) - 64;
+  const row = Number(match[2]);
+  if (column > SPREADSHEET_MAX_COLUMNS || row > EXCEL_MAX_ROWS) return;
+  return { row: row - 1, column: column - 1 };
+}
+
+export function rangeBounds(reference: string) {
+  const [first, last = first] = reference.replaceAll('$', '').split(':');
+  const start = parseExcelAddress(first);
+  const end = parseExcelAddress(last);
+  if (!start || !end || start.row > end.row || start.column > end.column)
+    return;
+  return {
+    top: start.row,
+    left: start.column,
+    bottom: end.row,
+    right: end.column,
+  };
 }

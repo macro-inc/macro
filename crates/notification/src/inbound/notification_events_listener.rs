@@ -1,5 +1,8 @@
 //! Listener for notification database events.
 
+#[cfg(test)]
+mod test;
+
 use std::time::Duration;
 
 use macro_user_id::cowlike::CowLike;
@@ -39,6 +42,11 @@ where
         }
     }
 
+    #[tracing::instrument(
+        name = "notification.delete.publish",
+        skip_all,
+        fields(notification_id, recipient_count, published)
+    )]
     async fn handle_payload(&self, payload: &str) {
         let event = match serde_json::from_str::<NotificationDatabaseEvent>(payload) {
             Ok(event) => event,
@@ -53,17 +61,22 @@ where
                 notification_id,
                 user_ids,
             } => {
+                tracing::Span::current()
+                    .record("notification_id", tracing::field::display(notification_id));
                 let user_ids = user_ids
                     .into_iter()
                     .filter_map(|user_id| match MacroUserIdStr::parse_from_str(&user_id) {
                         Ok(user_id) => Some(user_id.into_owned()),
-                        Err(err) => {
-                            tracing::warn!(error = ?err, user_id, "invalid user id in notification delete event");
+                        Err(_) => {
+                            // User IDs contain email addresses; don't include invalid
+                            // values (or parser errors echoing them) in telemetry.
+                            tracing::warn!("invalid user id in notification delete event");
                             None
                         }
                     })
                     .collect::<Vec<_>>();
 
+                tracing::Span::current().record("recipient_count", user_ids.len());
                 if user_ids.is_empty() {
                     return;
                 }
@@ -75,9 +88,11 @@ where
                     }),
                 };
 
-                if let Err(err) = self.realtime.publish_updates(&payload).await {
+                let result = self.realtime.publish_updates(&payload).await;
+                tracing::Span::current().record("published", result.is_ok());
+                result.inspect_err(|err| {
                     tracing::warn!(error = ?err, "failed to publish notification delete realtime update");
-                }
+                }).ok();
             }
         }
     }

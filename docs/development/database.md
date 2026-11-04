@@ -12,7 +12,7 @@ explicit Nix invocation. See also [Rust development](rust.md).
 - Inspect migrations or use the [dump-schema skill](../../.agents/skills/dump-schema/SKILL.md)
   against the local database. Do not guess table or column spelling.
 - Quote camelCase identifiers and alias selected columns to their Rust field
-  names: `SELECT "userId" AS user_id FROM "UserInsights"`.
+  names: `SELECT "userId" AS user_id FROM "Chat"`.
 - Use the owning domain's database adapter; follow the `[db]` rules
   (CS-01–09) in [`rust/db.md`](../../.agents/rules/rust/db.md) and ownership rule
   (CS-27) in [`rust/architecture.md`](../../.agents/rules/rust/architecture.md).
@@ -44,6 +44,11 @@ starts with the MacroDB schema instead of replaying every migration. That
 replay used to be nearly all of the Rust test suite's runtime. Run the recipe
 locally only against a Postgres dedicated to one checkout; every database created
 on that server afterwards gets the schema too.
+
+Set `max_locks_per_transaction = 8192` on that dedicated server, as in
+[CI’s PostgreSQL setup](../../tooling/xtask/crates/xtask_workflows/src/workflows/scripts/configure_postgres.sh),
+and restart PostgreSQL before testing; replacing a pre-migrated schema can exceed
+the default lock capacity.
 
 Tests that build their own schema (`#[sqlx::test(migrations = false)]`, or a
 crate's test-only schema fixture) must first run
@@ -80,6 +85,7 @@ compatible with the service code currently deployed, not just the code in its PR
   obsolete schema in a later PR after deployment.
 - New columns and constraints must also support currently deployed code (for
   example, allow omitted values via nullability or defaults until writers migrate).
+- Consolidate unpublished branch migrations into the minimum deployment-safe final set; never rewrite migrations already deployed to a shared environment.
 
 ## Change queries or schema
 
@@ -135,6 +141,17 @@ checks (`just rust-check`, `just clippy`) don't compile tests, so test-only quer
 never need `.sqlx` metadata. Prepare with the root `prepare_db` wrapper only. Never
 pass `--tests` to `sqlx::prepare_db` or `cargo sqlx prepare`, and don't commit
 cache entries for test queries.
+
+### Checking query plans
+
+Local Postgres runs with default planner costs. Hosted MacroDB uses the
+parameter group in `infra/stacks/macrodb/index.ts` (`random_page_cost = 1.1`,
+`work_mem = 16MB`, `jit = off`). Plans can differ between the two, so `SET`
+those values in your session before reading `EXPLAIN (ANALYZE, BUFFERS)`
+output. Seed data at realistic volume: an empty table hides missing indexes.
+Local and dev run Postgres 18, but production runs the `engine_version` in
+`infra/stacks/macrodb/Pulumi.prod.yaml`, which is older and lacks skip scans.
+Check that the plans you rely on also hold on that version.
 
 ## Troubleshooting
 

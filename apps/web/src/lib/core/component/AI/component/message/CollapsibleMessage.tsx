@@ -1,4 +1,4 @@
-import CaretRight from '@phosphor/caret-right.svg?component-solid';
+import CaretRight from '@icon/system/regular/caret-right.svg?component-solid';
 import { cn } from '@ui';
 import { createSignal, type JSX, onCleanup, onMount, Show } from 'solid-js';
 

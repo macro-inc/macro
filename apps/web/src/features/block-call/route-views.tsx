@@ -1,27 +1,18 @@
-import { useAnalytics } from '@app/lib/analytics/analytics-context';
 import { createSearchParams, useRouteParams } from '@app/lib/split-router';
 import { callDetailRoute } from '@app/routes/routes';
 import { withAuth } from '@components/app/split-layout/split-router/app-route-shell';
-import { lazy, onMount } from 'solid-js';
+import { lazy } from 'solid-js';
 import { callDetailSearch } from './call-route';
 
-const StandaloneCallDetail = lazy(async () => ({
-  default: (await import('./views/CallDetailView')).StandaloneCallDetail,
+const CallDetailView = lazy(async () => ({
+  default: (await import('./views/CallDetailView')).CallDetailView,
 }));
 
 export const CallDetailRouteView = withAuth(() => {
   const params = useRouteParams(callDetailRoute);
   const [search] = createSearchParams(callDetailSearch);
-  const analytics = useAnalytics();
-  onMount(() => {
-    analytics.pageView('call');
-    analytics.track('open_entity', {
-      entityType: 'call',
-      entityId: params.callId,
-    });
-  });
   return (
-    <StandaloneCallDetail
+    <CallDetailView
       callId={params.callId}
       transcriptId={search.transcriptId}
       messageId={search.messageId}

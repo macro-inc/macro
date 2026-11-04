@@ -5,6 +5,6 @@ import { queryClient } from './client';
 export function useInvalidateQueriesOnReconnect(): void {
   createReconnectEffect(ws, () => {
     // Marks cached queries as stale and automatically refetches active queries in the background
-    void queryClient.invalidateQueries();
+    queryClient.invalidateQueries();
   });
 }

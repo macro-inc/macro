@@ -1,3 +1,4 @@
+import { fireAndForget } from '@core/util/fireAndForget';
 import { throwOnErr } from '@core/util/result';
 import type { AiPlanTier, PaidPlan } from '@service-auth/ai-billing-types';
 import { authServiceClient } from '@service-auth/client';
@@ -15,6 +16,20 @@ type UseAiBillingSummaryQueryOptions = {
   enabled?: boolean | (() => boolean);
 };
 
+function aiBillingSummaryQueryOptions(enabled: boolean) {
+  return {
+    queryKey: authKeys.aiBillingSummary.queryKey,
+    queryFn: async () =>
+      await throwOnErr(
+        async () => await authServiceClient.getAiBillingSummary()
+      ),
+    staleTime: AI_BILLING_SUMMARY_STALE_TIME,
+    throwOnError: false,
+    retry: 1,
+    enabled,
+  };
+}
+
 /**
  * The signed-in user's AI usage position for the current billing period:
  * included allowance, usage, credits, and overage settings. The backend
@@ -23,34 +38,26 @@ type UseAiBillingSummaryQueryOptions = {
 export function useAiBillingSummaryQuery(
   options?: UseAiBillingSummaryQueryOptions
 ) {
-  return useQuery(() => {
-    const enabled =
+  return useQuery(() =>
+    aiBillingSummaryQueryOptions(
       typeof options?.enabled === 'function'
         ? options.enabled()
-        : (options?.enabled ?? true);
-    return {
-      queryKey: authKeys.aiBillingSummary.queryKey,
-      queryFn: async () =>
-        await throwOnErr(
-          async () => await authServiceClient.getAiBillingSummary()
-        ),
-      staleTime: AI_BILLING_SUMMARY_STALE_TIME,
-      throwOnError: false,
-      retry: 1,
-      enabled,
-    };
-  });
+        : (options?.enabled ?? true)
+    )
+  );
 }
+
+const aiBillingPlansQueryOptions = {
+  queryKey: authKeys.aiBillingPlans.queryKey,
+  queryFn: async () =>
+    await throwOnErr(async () => await authServiceClient.getAiBillingPlans()),
+  staleTime: AI_BILLING_PLANS_STALE_TIME,
+  throwOnError: false,
+};
 
 /** The plan catalog, credit packs, and overage cap bounds. */
 export function useAiBillingPlansQuery() {
-  return useQuery(() => ({
-    queryKey: authKeys.aiBillingPlans.queryKey,
-    queryFn: async () =>
-      await throwOnErr(async () => await authServiceClient.getAiBillingPlans()),
-    staleTime: AI_BILLING_PLANS_STALE_TIME,
-    throwOnError: false,
-  }));
+  return useQuery(() => aiBillingPlansQueryOptions);
 }
 
 /**
@@ -142,6 +149,27 @@ export function useUpdateAiAutoReloadMutation() {
   }));
 }
 
+/** Buy a credit pack on the payer's card on file; updates the summary. */
+export function usePurchaseAiCreditsMutation() {
+  return useMutation(() => ({
+    mutationFn: async (args: { amountCents: number }) =>
+      await throwOnErr(
+        async () => await authServiceClient.purchaseAiCredits(args)
+      ),
+    onSuccess: (result) => {
+      if (result.snapshot) {
+        queryClient.setQueryData(
+          authKeys.aiBillingSummary.queryKey,
+          result.snapshot
+        );
+        return;
+      }
+      // The purchase happened but its summary could not be read.
+      fireAndForget(invalidateAiBillingSummary(), 'ai-billing');
+    },
+  }));
+}
+
 /** Start a Stripe Checkout for a credit pack; resolves to the hosted URL. */
 export function useCreateAiCreditCheckoutMutation() {
   return useMutation(() => ({
@@ -163,8 +191,8 @@ export function useChangePlanMutation() {
       await throwOnErr(async () => await authServiceClient.changePlan(args)),
     onSuccess: async () => {
       // Roles flip via webhook; the scheduled change is available immediately.
-      void invalidateUserInfo();
-      void invalidateAiBillingSummary();
+      fireAndForget(invalidateUserInfo(), 'ai-billing');
+      fireAndForget(invalidateAiBillingSummary(), 'ai-billing');
       await invalidateSubscriptionStatus();
     },
   }));

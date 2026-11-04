@@ -25,7 +25,7 @@ export default function HomepageTaskConversation() {
                 The invite in{' '}
                 <HomepageMention
                   kind="md"
-                  label="Q3 launch plan"
+                  label="Website launch plan"
                   description="Thursday’s launch plan and owners."
                   href="#documents"
                 />{' '}

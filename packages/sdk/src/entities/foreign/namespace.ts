@@ -43,6 +43,9 @@ function withoutNullLogin({
   return { ...user, login: login ?? undefined };
 }
 
+/**
+ * @routing Use when resolving a linked external entity, such as an imported item; not Macro's own items.
+ */
 export class ForeignEntityNamespace {
   constructor(private readonly client: MacroClient) {}
 
@@ -58,15 +61,15 @@ export class ForeignEntityNamespace {
    */
   async bySource(
     source: string,
-    foreignEntityId: string
+    foreignEntityId: string,
   ): Promise<ForeignEntity> {
     return ForeignEntity.fromRecord(
       this.client,
       unwrap(
         await this.client.storage.getForeignEntityBySource({
           path: { source, foreign_entity_id: foreignEntityId },
-        })
-      )
+        }),
+      ),
     );
   }
 
@@ -78,7 +81,7 @@ export class ForeignEntityNamespace {
    */
   async githubPullRequestFacets(): Promise<GithubPullRequestFacets> {
     const { repositories, authors, assignees, labels } = unwrap(
-      await this.client.storage.getGithubPullRequestFacets()
+      await this.client.storage.getGithubPullRequestFacets(),
     );
     return {
       repositories,

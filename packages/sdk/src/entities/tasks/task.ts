@@ -1,17 +1,33 @@
+import type { PropertyInput } from '../../../generated/storage/types.gen';
 import { unwrap } from '../../utils';
 import type { MacroClient } from '../../utils/client';
 import { Document } from '../documents/document';
+import type { Initiative } from '../initiatives/initiative';
 import type { Project } from '../projects/project';
 import { entitySearch } from '../search';
 import type { Team } from '../teams/team';
+import { User } from '../users/user';
 
 /**
- * The system Status property definition and its "Completed" option. Values
- * mirror `SystemPropertyKey::STATUS_UUID` and `StatusOption::COMPLETED_UUID`
- * in the backend's `system_properties` crate.
+ * System task property definitions and Status options. Values mirror
+ * `SystemPropertyKey` and `StatusOption` in the backend's `system_properties`
+ * crate.
  */
+const ASSIGNEES_PROPERTY_ID = '00000001-0000-0000-0000-000000000001';
 const STATUS_PROPERTY_ID = '00000001-0000-0000-0000-000000000002';
+const DUE_DATE_PROPERTY_ID = '00000001-0000-0000-0000-000000000004';
+const PROJECT_PROPERTY_ID = '00000001-0000-0000-0000-000000000014';
+const NOT_STARTED_STATUS_OPTION_ID = '00000001-0000-0000-0002-000000000001';
 const COMPLETED_STATUS_OPTION_ID = '00000001-0000-0000-0002-000000000004';
+
+/** A task's name and state from one batched read, without its content. */
+export interface TaskSummary {
+  task: Task;
+  name: string;
+  owner: User;
+  updatedAt?: string;
+  completed: boolean;
+}
 
 /** The `owner/repo/pull/number` key of a GitHub pull request URL. */
 function pullRequestKey(url: string): string {
@@ -26,6 +42,16 @@ function pullRequestKey(url: string): string {
   return `${match[1]}/${match[2]}/pull/${match[3]}`;
 }
 
+/** An existing task that looks like the same work as a proposed one. */
+export interface SimilarTask {
+  /** The existing task. */
+  task: Task;
+  /** The existing task's name. */
+  name: string;
+  /** Cosine similarity of the two tasks' embeddings, from 0 to 1. */
+  similarity: number;
+}
+
 /**
  * A Macro task: a document with sub-type `task`. Inherits the full document
  * surface ({@link Document.rename}, move, delete, restore, content, events)
@@ -38,17 +64,24 @@ export class Task extends Document {
   }
 
   /**
-   * Create a task. `team` scopes the team task number and may be omitted
-   * when the creator belongs to exactly one team; `shareWithTeam` defaults
-   * to true.
+   * Create a task, with its initiative, assignees and due date in the same
+   * request. The task starts Not started.
    */
   static async create(
     client: MacroClient,
     opts: {
       name: string;
       markdown?: string;
+      /** Folder the task document is filed in; unrelated to `initiative`. */
       project?: Project;
+      /** The initiative (shown as the task's Project in the app) it belongs to. */
+      initiative?: Initiative;
+      /** Assignees; defaults to the creator. Pass `[]` to leave it unassigned. */
+      assignees?: User[];
+      dueDate?: Date;
+      /** Scopes the team task number; may be omitted when the creator belongs to exactly one team. */
       team?: Team;
+      /** Defaults to true. */
       shareWithTeam?: boolean;
     },
   ): Promise<Task> {
@@ -60,10 +93,67 @@ export class Task extends Document {
           projectId: opts.project?.id ?? null,
           teamId: opts.team?.id ?? null,
           shareWithTeam: opts.shareWithTeam ?? true,
+          propertyValues: await initialProperties(client, opts),
         },
       }),
     );
     return new Task(client, documentId);
+  }
+
+  /**
+   * Names and state of many tasks in one request, in the order given. Tasks
+   * that no longer exist are left out.
+   */
+  static async summaries(
+    client: MacroClient,
+    tasks: Task[],
+  ): Promise<TaskSummary[]> {
+    if (tasks.length === 0) return [];
+    const { previews } = unwrap(
+      await client.storage.getBatchPreviewHandler({
+        body: { document_ids: tasks.map((task) => task.id) },
+      }),
+    );
+    const found = new Map(
+      previews.flatMap((preview) =>
+        preview.type === 'access' ? [[preview.document_id, preview]] : [],
+      ),
+    );
+    return tasks.flatMap((task) => {
+      const preview = found.get(task.id);
+      if (!preview) return [];
+      return [
+        {
+          task,
+          name: preview.document_name,
+          owner: User.byId(client, preview.owner),
+          updatedAt: preview.updated_at ?? undefined,
+          completed:
+            preview.sub_type?.type === 'task' && preview.sub_type.is_completed,
+        },
+      ];
+    });
+  }
+
+  /**
+   * Existing tasks of the caller or their team that look like the same work
+   * as a task with this title and body, most similar first. Creates and
+   * changes nothing; check it before creating a task.
+   */
+  static async findSimilar(
+    client: MacroClient,
+    opts: { title: string; body?: string },
+  ): Promise<SimilarTask[]> {
+    const { results } = unwrap(
+      await client.storage.taskSimilaritySearchHandler({
+        body: { taskName: opts.title, markdown: opts.body ?? null },
+      }),
+    );
+    return results.map((result) => ({
+      task: new Task(client, result.taskId),
+      name: result.taskName,
+      similarity: result.vectorScore,
+    }));
   }
 
   /**
@@ -112,4 +202,51 @@ export class Task extends Document {
     type: 'document',
     make: (client, hit) => new Task(client, hit.document_id),
   });
+}
+
+/**
+ * Property values for a new task, or `null` to keep the service's defaults
+ * (creator assigned, Not started). Sending any value replaces those defaults,
+ * so the defaults are spelled out here.
+ */
+async function initialProperties(
+  client: MacroClient,
+  opts: Parameters<typeof Task.create>[1],
+): Promise<PropertyInput[] | null> {
+  if (!opts.initiative && !opts.assignees && !opts.dueDate) return null;
+  const assignees = opts.assignees ?? [await User.me(client)];
+  const values: PropertyInput[] = [
+    {
+      propertyId: STATUS_PROPERTY_ID,
+      value: { type: 'select_option', option_id: NOT_STARTED_STATUS_OPTION_ID },
+    },
+  ];
+  if (assignees.length > 0) {
+    values.push({
+      propertyId: ASSIGNEES_PROPERTY_ID,
+      value: {
+        type: 'multi_entity_reference',
+        references: assignees.map((user) => ({
+          entity_id: user.id,
+          entity_type: 'USER',
+        })),
+      },
+    });
+  }
+  if (opts.initiative) {
+    values.push({
+      propertyId: PROJECT_PROPERTY_ID,
+      value: {
+        type: 'entity_reference',
+        reference: { entity_id: opts.initiative.id, entity_type: 'INITIATIVE' },
+      },
+    });
+  }
+  if (opts.dueDate) {
+    values.push({
+      propertyId: DUE_DATE_PROPERTY_ID,
+      value: { type: 'date', value: opts.dueDate.toISOString() },
+    });
+  }
+  return values;
 }

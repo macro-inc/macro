@@ -1,6 +1,11 @@
 import { toast } from '@core/component/Toast/Toast';
-import { useUserId } from '@core/context/user';
-import { ThrownResultError, throwOnErr } from '@core/util/result';
+import { useIsAuthenticated, useUserId } from '@core/context/user';
+import { fireAndForget } from '@core/util/fireAndForget';
+import {
+  catchToResult,
+  ThrownResultError,
+  throwOnErr,
+} from '@core/util/result';
 import {
   authServiceClient,
   type ToggleAutoJoinDomainErrorCode,
@@ -12,14 +17,12 @@ import { TeamRole } from '@service-auth/generated/schemas/teamRole';
 import type { TeamWithMembers } from '@service-auth/generated/schemas/teamWithMembers';
 import type { ToggleAutoJoinDomainResponse } from '@service-auth/generated/schemas/toggleAutoJoinDomainResponse';
 import type { ToggleNonAdminInvitesResponse } from '@service-auth/generated/schemas/toggleNonAdminInvitesResponse';
-import { useMutation, useQuery } from '@tanstack/solid-query';
+import { queryOptions, useMutation, useQuery } from '@tanstack/solid-query';
 import type { Accessor } from 'solid-js';
-
 import { authKeys } from '../auth';
 import { queryClient } from '../client';
 import { queryReadyGate } from '../gate';
 import { type MutationCallbacks, withCallbacks } from '../utils';
-
 import { teamKeys } from './keys';
 
 function fetchUserTeams() {
@@ -30,11 +33,14 @@ function fetchTeam() {
   return throwOnErr(() => authServiceClient.getTeam());
 }
 
-export function useUserTeamsQuery() {
-  return useQuery(() => ({
+export const userTeamsQueryOptions = () =>
+  queryOptions({
     queryKey: teamKeys.userTeams.queryKey,
     queryFn: fetchUserTeams,
-  }));
+  });
+
+export function useUserTeamsQuery() {
+  return useQuery(userTeamsQueryOptions);
 }
 
 export function useTeamQuery(teamId: Accessor<string>) {
@@ -47,10 +53,11 @@ export function useTeamQuery(teamId: Accessor<string>) {
 
 /** The current user's team, or `null` if they don't belong to one. */
 export function useCurrentTeamQuery(enabled?: Accessor<boolean>) {
+  const authenticated = useIsAuthenticated();
   return useQuery(() => ({
     queryKey: teamKeys.currentTeam.queryKey,
     queryFn: fetchTeam,
-    enabled: enabled?.() ?? true,
+    enabled: authenticated() === true && (enabled?.() ?? true),
   }));
 }
 
@@ -142,7 +149,7 @@ export function usePatchTeamMutation(callbacks?: PatchTeamCallbacks) {
     ...withCallbacks<void, Error, PatchTeamArgs>(
       {
         onSuccess: (_data, { teamId }) => {
-          invalidateTeam(teamId);
+          fireAndForget(invalidateTeam(teamId), 'team-settings');
           invalidateUserTeams();
           toast.success('Team updated');
         },
@@ -212,7 +219,7 @@ export function useToggleAutoJoinDomainMutation(
             teamKeys.currentTeam.queryKey,
             applyDomain
           );
-          invalidateTeam(teamId);
+          fireAndForget(invalidateTeam(teamId), 'team-settings');
           invalidateUserTeams();
           toast.success(
             data.auto_join_domain
@@ -277,7 +284,7 @@ export function useToggleNonAdminInvitesMutation(
             teamKeys.currentTeam.queryKey,
             applySetting
           );
-          invalidateTeam(teamId);
+          fireAndForget(invalidateTeam(teamId), 'team-settings');
           invalidateUserTeams();
           toast.success(
             data.allow_non_admin_invites
@@ -354,6 +361,10 @@ export function useDeleteTeamMutation(callbacks?: DeleteTeamCallbacks) {
 type CreateTeamWithInvitesArgs = {
   name: string;
   invites?: { email: string }[];
+  /** Whether people on the owner's work domain join automatically. When
+   * explicitly `true`, the owner's same-domain contacts are also told the
+   * team exists. Omitted keeps the server default without the notice. */
+  allowDomainJoin?: boolean;
 };
 type CreateTeamWithInvitesContext = { previousTeams: Team[] | undefined };
 type CreateTeamWithInvitesCallbacks = MutationCallbacks<
@@ -367,13 +378,31 @@ export function useCreateTeamWithInvitesMutation(
   callbacks?: CreateTeamWithInvitesCallbacks
 ) {
   return useMutation(() => ({
-    mutationFn: async ({ name, invites }: CreateTeamWithInvitesArgs) => {
+    mutationFn: async ({
+      name,
+      invites,
+      allowDomainJoin,
+    }: CreateTeamWithInvitesArgs) => {
       const team = await throwOnErr(() =>
-        authServiceClient.createTeam({ name })
+        authServiceClient.createTeam({
+          name,
+          allow_domain_join: allowDomainJoin,
+        })
       );
 
       if (invites && invites.length > 0) {
         await throwOnErr(() => authServiceClient.inviteToTeam({ invites }));
+      }
+
+      // After the invites, so invitees aren't also sent the notice. The
+      // team already exists, so a failed notice doesn't fail creation.
+      if (allowDomainJoin === true && team.auto_join_domain) {
+        const notice = await catchToResult(() =>
+          throwOnErr(() => authServiceClient.sendTeamDomainNotice())
+        );
+        if (notice.isErr()) {
+          console.error('Failed to send team domain notice', notice);
+        }
       }
 
       return team;

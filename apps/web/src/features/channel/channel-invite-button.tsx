@@ -1,7 +1,8 @@
 import { HeaderActionButton } from '@components/app/HeaderActionButton';
+import { HeaderActionGroup } from '@components/app/HeaderActionGroup';
 import { useUserId } from '@core/context/user';
 import { useCombinedRecipients } from '@core/signal/useCombinedRecipient';
-import UserPlusIcon from '@phosphor/user-plus.svg';
+import UserPlusIcon from '@icon/system/regular/user-plus.svg';
 import { useChannelParticipantsQuery } from '@queries/channel/channel-participants';
 import { useAddParticipantsMutation } from '@queries/channel/participants';
 import { useCurrentTeamQuery } from '@queries/team/teams';
@@ -24,12 +25,17 @@ export function ChannelInviteButton(props: {
 
   return (
     <Show when={canInvite()}>
-      <HeaderActionButton
-        label="Invite"
-        icon={<UserPlusIcon />}
-        tooltip="Invite people"
-        onClick={() => setOpen(true)}
-      />
+      <HeaderActionGroup label="Sharing">
+        <HeaderActionButton
+          grouped
+          label="Invite"
+          icon={
+            <UserPlusIcon class="size-3.5 touch:size-6 shrink-0 pointer-events-none" />
+          }
+          tooltip="Invite people"
+          onClick={() => setOpen(true)}
+        />
+      </HeaderActionGroup>
       <Suspense>
         <Show when={open()}>
           <ChannelInviteDialog

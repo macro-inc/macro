@@ -55,6 +55,11 @@ export type DatabaseSchemaChange<Value = void> = ResultAsync<
   DatabaseOpsError
 >;
 
+/** Announces the new column as soon as it can be edited, before persistence finishes. */
+export type CreateDatabaseColumn = (
+  onCreated?: (columnId: string) => void
+) => DatabaseSchemaChange<string>;
+
 /** What the grid says when the service refused a schema change. */
 export function columnSchemaMessage(error: DatabaseOpsError): string {
   return match(error)
@@ -152,6 +157,7 @@ export function castTargetOf(
     .with({ type: 'number' }, () => plain('NUMBER'))
     .with({ type: 'boolean' }, () => plain('BOOLEAN'))
     .with({ type: 'date' }, () => plain('DATE'))
+    .with({ type: 'date_range' }, () => plain('DATE_RANGE'))
     .with({ type: 'link' }, () => plain('LINK'))
     .with({ type: 'select' }, ({ multi }) => plain('SELECT_STRING', multi))
     .with({ type: 'select_number' }, ({ multi }) =>

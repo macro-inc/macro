@@ -66,6 +66,7 @@ function syncEventForMessage(message: FromRemote): SyncSourceEvent | null {
 interface MessageWaiter {
   match: (message: FromRemote) => boolean;
   resolve: (message: FromRemote) => void;
+  cancelOnDisconnect?: () => void;
 }
 
 export interface SyncServiceSourceOptions {
@@ -170,7 +171,10 @@ export class SyncServiceSource implements LiveSyncSource {
   public status: LiveSyncSource['status'] = () =>
     mapToSyncStatus(this.ws.connectionState);
 
-  public pushUpdate = async (updates: RawUpdate[]): Promise<boolean> => {
+  public pushUpdate: LiveSyncSource['pushUpdate'] = async (
+    updates,
+    options
+  ) => {
     if (!this.initialSyncReceived) return false;
     if (updates.length === 0) return true;
 
@@ -179,13 +183,18 @@ export class SyncServiceSource implements LiveSyncSource {
     // can't be missed.
     const acked = this.awaitMessage(
       (message) => message.isRemoteUpdateAck() && message.value.id === id,
-      TIMEOUTS.ACK
+      TIMEOUTS.ACK,
+      true
     ).then(
       () => true,
       () => false
     );
 
-    this.ws.send(FromPeer.fromPeerUpdate({ updates, id }));
+    this.ws.send(
+      options?.commentOnly
+        ? FromPeer.fromPeerCommentUpdate({ updates, id })
+        : FromPeer.fromPeerUpdate({ updates, id })
+    );
     return acked;
   };
 
@@ -285,11 +294,23 @@ export class SyncServiceSource implements LiveSyncSource {
    */
   private awaitMessage(
     match: (message: FromRemote) => boolean,
-    timeoutMs: number
+    timeoutMs: number,
+    cancelOnDisconnect = false
   ): Promise<FromRemote> {
-    const { promise, resolve, reject } = Promise.withResolvers<FromRemote>();
+    let resolve!: (message: FromRemote) => void;
+    let reject!: (error: unknown) => void;
+    const promise = new Promise<FromRemote>((settle, fail) => {
+      resolve = settle;
+      reject = fail;
+    });
     const waiter: MessageWaiter = {
       match,
+      cancelOnDisconnect: cancelOnDisconnect
+        ? () => {
+            remove();
+            reject(SyncError.connectionFailed());
+          }
+        : undefined,
       resolve: (message) => {
         remove();
         resolve(message);
@@ -337,6 +358,10 @@ export class SyncServiceSource implements LiveSyncSource {
     IFromPeer,
     FromRemote
   > = (_ws, event) => {
+    this.initialSyncReceived = false;
+    // Release pending WAL pushes before a fast reconnect can request replay.
+    // A disconnected socket cannot supply a durable acknowledgement.
+    for (const waiter of [...this.waiters]) waiter.cancelOnDisconnect?.();
     logSyncService({
       documentId: this.documentId,
       level: 'warn',

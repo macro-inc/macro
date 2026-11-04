@@ -1,5 +1,6 @@
 import {
   type Client,
+  CombinedError,
   type GraphQLRequest,
   gql,
   type Operation,
@@ -22,6 +23,7 @@ type Variables = { cursor: string | null };
 type FakeExecution = {
   variables: Variables;
   next(data: Page): void;
+  fail(error: CombinedError): void;
   readonly unsubscribed: boolean;
 };
 
@@ -44,6 +46,8 @@ function makeFakeClient(): {
       variables: request.variables,
       next: (data) =>
         subject.next({ operation, data } as OperationResult<Page, Variables>),
+      fail: (error) =>
+        subject.next({ operation, error } as OperationResult<Page, Variables>),
       get unsubscribed() {
         return unsubscribed;
       },
@@ -347,6 +351,149 @@ describe('createUrqlInfiniteQuery', () => {
 
     expect(query.data).toEqual(['first-refreshed']);
     expect(fake.executions).toHaveLength(3);
+  });
+
+  it('keeps loaded pages mounted while a refetch rebuilds the cursor chain', async () => {
+    const fake = makeFakeClient();
+    let query!: ReturnType<
+      typeof createUrqlInfiniteQuery<Page, Variables, string | null, string[]>
+    >;
+    const dispose = createRoot((rootDispose) => {
+      query = createUrqlInfiniteQuery<Page, Variables, string | null, string[]>(
+        () => ({
+          query: DOCUMENT,
+          client: fake.client,
+          initialPageParam: null,
+          variables: (cursor) => ({ cursor }),
+          getNextPageParam: (lastPage) => lastPage.nextCursor,
+          select: ({ pages }) => pages.flatMap((page) => page.values),
+        })
+      );
+      return rootDispose;
+    });
+    disposals.push(dispose);
+
+    fake.executions[0]?.next({ values: ['first'], nextCursor: 'cursor-1' });
+    const nextPage = query.fetchNextPage();
+    fake.executions[1]?.next({ values: ['second'], nextCursor: null });
+    await nextPage;
+    expect(query.data).toEqual(['first', 'second']);
+
+    const refetch = query.refetch();
+    expect(fake.executions).toHaveLength(3);
+    fake.executions[2]?.next({
+      values: ['first-refreshed'],
+      nextCursor: 'cursor-2',
+    });
+    await vi.waitFor(() => expect(fake.executions).toHaveLength(4));
+    expect(fake.executions[3]?.variables).toEqual({ cursor: 'cursor-2' });
+    expect(query.data).toEqual(['first-refreshed', 'second']);
+    expect(fake.executions[1]?.unsubscribed).toBe(false);
+
+    fake.executions[3]?.next({
+      values: ['second-refreshed'],
+      nextCursor: null,
+    });
+    await refetch;
+
+    expect(query.data).toEqual(['first-refreshed', 'second-refreshed']);
+    expect(fake.executions[1]?.unsubscribed).toBe(true);
+    expect(query.hasNextPage).toBe(false);
+  });
+
+  it('keeps the stale page and reports the error when a replacement page fails', async () => {
+    const fake = makeFakeClient();
+    let query!: ReturnType<
+      typeof createUrqlInfiniteQuery<Page, Variables, string | null, string[]>
+    >;
+    const dispose = createRoot((rootDispose) => {
+      query = createUrqlInfiniteQuery<Page, Variables, string | null, string[]>(
+        () => ({
+          query: DOCUMENT,
+          client: fake.client,
+          initialPageParam: null,
+          variables: (cursor) => ({ cursor }),
+          getNextPageParam: (lastPage) => lastPage.nextCursor,
+          select: ({ pages }) => pages.flatMap((page) => page.values),
+        })
+      );
+      return rootDispose;
+    });
+    disposals.push(dispose);
+
+    fake.executions[0]?.next({ values: ['first'], nextCursor: 'cursor-1' });
+    const nextPage = query.fetchNextPage();
+    fake.executions[1]?.next({ values: ['second'], nextCursor: null });
+    await nextPage;
+
+    const refetch = query.refetch();
+    fake.executions[2]?.next({
+      values: ['first-refreshed'],
+      nextCursor: 'cursor-2',
+    });
+    await vi.waitFor(() => expect(fake.executions).toHaveLength(4));
+    const offline = new CombinedError({ networkError: new Error('offline') });
+    fake.executions[3]?.fail(offline);
+    await refetch;
+
+    expect(query.data).toEqual(['first-refreshed', 'second']);
+    expect(query.error).toBe(offline);
+    expect(fake.executions[1]?.unsubscribed).toBe(false);
+    expect(fake.executions[3]?.unsubscribed).toBe(true);
+
+    const retry = query.refetch();
+    fake.executions[4]?.next({
+      values: ['first-refreshed'],
+      nextCursor: 'cursor-2',
+    });
+    await vi.waitFor(() => expect(fake.executions).toHaveLength(6));
+    fake.executions[5]?.next({
+      values: ['second-refreshed'],
+      nextCursor: null,
+    });
+    await retry;
+    expect(query.error).toBeNull();
+    expect(query.data).toEqual(['first-refreshed', 'second-refreshed']);
+  });
+
+  it('releases a pending replacement page as soon as the refetch is cancelled', async () => {
+    const fake = makeFakeClient();
+    let query!: ReturnType<
+      typeof createUrqlInfiniteQuery<Page, Variables, string | null, string[]>
+    >;
+    const dispose = createRoot((rootDispose) => {
+      query = createUrqlInfiniteQuery<Page, Variables, string | null, string[]>(
+        () => ({
+          query: DOCUMENT,
+          client: fake.client,
+          initialPageParam: null,
+          variables: (cursor) => ({ cursor }),
+          getNextPageParam: (lastPage) => lastPage.nextCursor,
+          select: ({ pages }) => pages.flatMap((page) => page.values),
+        })
+      );
+      return rootDispose;
+    });
+    disposals.push(dispose);
+
+    fake.executions[0]?.next({ values: ['first'], nextCursor: 'cursor-1' });
+    const nextPage = query.fetchNextPage();
+    fake.executions[1]?.next({ values: ['second'], nextCursor: null });
+    await nextPage;
+
+    const refetch = query.refetch();
+    fake.executions[2]?.next({
+      values: ['first-refreshed'],
+      nextCursor: 'cursor-2',
+    });
+    await vi.waitFor(() => expect(fake.executions).toHaveLength(4));
+    expect(fake.executions[3]?.unsubscribed).toBe(false);
+
+    query.resetToInitialPage();
+    expect(fake.executions[3]?.unsubscribed).toBe(true);
+    await refetch;
+    expect(query.data).toEqual(['first-refreshed']);
+    expect(fake.executions).toHaveLength(4);
   });
 
   it('disables page subscriptions and re-enables them', () => {

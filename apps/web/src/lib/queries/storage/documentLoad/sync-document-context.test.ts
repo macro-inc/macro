@@ -37,6 +37,7 @@ vi.mock('@core/auth/push-registration-lifecycle', () => ({
 }));
 vi.mock('@core/context/user-info-gate', () => ({
   enableUserInfoQuery: vi.fn(),
+  shouldQueryUserInfo: () => true,
 }));
 vi.mock('@service-auth/client', () => ({
   authServiceClient: { getLegacyUserPermissions: mocks.userInfo },
@@ -133,7 +134,7 @@ describe('native document identity bootstrap', () => {
   it('waits for identity restoration without waiting for a stalled auth fetch', async () => {
     const restored = Promise.withResolvers<PersistedQueryEntry | undefined>();
     mocks.restore.mockReturnValue(restored.promise);
-    void queryClient.prefetchQuery({
+    queryClient.prefetchQuery({
       queryKey: authKeys.userInfo.queryKey,
       queryFn: () => new Promise(() => {}),
     });

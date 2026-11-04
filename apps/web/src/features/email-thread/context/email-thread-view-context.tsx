@@ -1,4 +1,4 @@
-import { createContext, type JSX, useContext } from 'solid-js';
+import { type Accessor, createContext, type JSX, useContext } from 'solid-js';
 import type {
   EmailComposeContext,
   EmailComposeHost,
@@ -8,7 +8,14 @@ import type {
   EmailAttachment,
   EmailMessage,
 } from '../../email-message/core/email-message';
+import type { ReadReceipt } from '../../email-message/core/read-receipt';
+import type { InvitationRenderOptions } from '../../email-message/views/email-message';
 import type { EmailThreadContext } from './email-thread-context';
+
+export interface EmailThreadOrganizationStatus {
+  /** True when the user, not the opening of the thread, asked for its mark-as-read. */
+  announceRead: Accessor<boolean>;
+}
 
 export interface EmailThreadViewContext {
   thread: EmailThreadContext;
@@ -17,12 +24,20 @@ export interface EmailThreadViewContext {
   composeHost?: EmailComposeHost;
   rendering: {
     renderTags?: () => JSX.Element;
+    renderOrganizationStatus?: (
+      status: EmailThreadOrganizationStatus
+    ) => JSX.Element;
     renderInvitation?: (
       message: EmailMessage,
-      invitation: CalendarInvitation
+      invitation: CalendarInvitation,
+      options?: InvitationRenderOptions
     ) => JSX.Element;
+    renderOperation?: (message: EmailMessage) => JSX.Element;
     renderAvatar?: (message: EmailMessage) => JSX.Element;
+    readReceipt?: (message: EmailMessage) => ReadReceipt | undefined;
+    showReadReceiptPixel?: (message: EmailMessage) => boolean;
     openAttachment?: (attachment: EmailAttachment) => void;
+    downloadAttachment?: (attachment: EmailAttachment) => void;
   };
 }
 

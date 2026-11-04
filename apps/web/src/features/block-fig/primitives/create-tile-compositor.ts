@@ -33,6 +33,7 @@ import type {
   TileResult,
 } from '@core/fig-engine/client';
 import type { LiftPlan, Rect } from '@core/fig-engine/types';
+import { fireAndForget } from '@core/util/fireAndForget';
 import type { Camera, Point, Size } from '../core/camera';
 import {
   liftParts,
@@ -218,7 +219,7 @@ export function createTileCompositor(options: TileCompositorOptions) {
     } finally {
       if (previewPending?.id === job.id) {
         previewPending = undefined;
-        if (previewDirty) void requestPreview();
+        if (previewDirty) fireAndForget(requestPreview(), 'fig-render');
       }
     }
   };
@@ -408,7 +409,7 @@ export function createTileCompositor(options: TileCompositorOptions) {
   const afterEdit = () => {
     if (interactive) {
       previewDirty = true;
-      void requestPreview();
+      fireAndForget(requestPreview(), 'fig-render');
       return;
     }
     if (lastView) schedule(lastView, false);
@@ -654,7 +655,7 @@ export function createTileCompositor(options: TileCompositorOptions) {
       }
       engine.cancel(cancelled);
       previewDirty = true;
-      void requestPreview();
+      fireAndForget(requestPreview(), 'fig-render');
     },
 
     endInteractive() {
@@ -695,7 +696,7 @@ export function createTileCompositor(options: TileCompositorOptions) {
       lastView = view;
       if (interactive) {
         previewDirty = true;
-        void requestPreview();
+        fireAndForget(requestPreview(), 'fig-render');
         return;
       }
       requestLift();

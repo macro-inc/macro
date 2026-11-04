@@ -12,3 +12,7 @@ tauri = { workspace = true }
 
 [target.'cfg(target_os = "ios")'.dependencies]
 tauri = { workspace = true, features = ["wry"] }
+
+[target.'cfg(target_os = "android")'.dependencies]
+serde = { workspace = true, features = ["derive"] }
+serde_json = "1"

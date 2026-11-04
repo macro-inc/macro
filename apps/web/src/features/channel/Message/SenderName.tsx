@@ -31,5 +31,11 @@ export function SenderName(props: { message: MessageData }) {
     const name = props.message.imported_author?.name?.trim();
     return name ? name : undefined;
   };
-  return <>{importedName() ?? agentName() ?? displayName()}</>;
+  return (
+    <>
+      {props.message.guest_name
+        ? `${props.message.guest_name} (Guest)`
+        : (importedName() ?? agentName() ?? displayName())}
+    </>
+  );
 }

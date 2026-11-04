@@ -52,32 +52,30 @@ pub async fn list_links_handler(
     State(ctx): State<ApiContext>,
     authorization: MacroAuthorizationExtractor<AuthorizationService, UserOrInternal>,
 ) -> Result<Response, ListLinksError> {
-    let inboxes = email_db_client::links::get::fetch_inbox_details_for_macro_id(
-        &ctx.db,
-        &authorization.authorization.user.macro_user_id,
-    )
-    .await
-    .map_err(ListLinksError::DatabaseError)?;
-
+    let inboxes = ctx
+        .inbox_catalog
+        .list(&authorization.authorization.user.macro_user_id)
+        .await
+        .map_err(|error| ListLinksError::DatabaseError(anyhow::Error::new(error)))?;
     let links = inboxes
         .into_iter()
-        .map(|inbox| {
-            let sync_status = api::link::SyncStatus::derive(
-                inbox.link.is_sync_active,
-                inbox.link.needs_reauth,
-                inbox.latest_backfill_status,
-            );
-            let needs_calendar_permission =
-                !calendar_events::domain::models::GoogleScopeSet::from_scopes(
-                    inbox.google_granted_scopes,
-                )
-                .has_calendar_capability();
+        .map(|entry| {
+            let sync_status = match entry.sync_status {
+                email::domain::models::EmailSyncStatus::Syncing => api::link::SyncStatus::Syncing,
+                email::domain::models::EmailSyncStatus::UpToDate => api::link::SyncStatus::UpToDate,
+                email::domain::models::EmailSyncStatus::Error => api::link::SyncStatus::Error,
+                email::domain::models::EmailSyncStatus::NeedsReauth => {
+                    api::link::SyncStatus::NeedsReauth
+                }
+                email::domain::models::EmailSyncStatus::Inactive => api::link::SyncStatus::Inactive,
+            };
+            let inbox = entry.facts;
             api::link::Link::new(
                 inbox.link,
                 api::settings::Settings::from(inbox.settings),
                 sync_status,
                 inbox.photo_url,
-                needs_calendar_permission,
+                entry.needs_calendar_permission,
                 inbox.calendar_disabled,
                 inbox.has_calendar_data,
             )
