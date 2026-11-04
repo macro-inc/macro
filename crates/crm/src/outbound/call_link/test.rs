@@ -60,6 +60,47 @@ async fn seed_team(pool: &PgPool, crm_enabled: bool) -> Uuid {
     team_id
 }
 
+/// Another CRM-enabled team, owned by a new user `owner`.
+async fn other_team(pool: &PgPool, owner: &str) -> Uuid {
+    let macro_user_id = Uuid::now_v7();
+    sqlx::query(
+        "INSERT INTO macro_user (id, username, email, stripe_customer_id) VALUES ($1, $2, $2, $3)",
+    )
+    .bind(macro_user_id)
+    .bind(owner)
+    .bind(format!("stripe_{macro_user_id}"))
+    .execute(pool)
+    .await
+    .unwrap();
+    sqlx::query(r#"INSERT INTO "User" (id, email, macro_user_id) VALUES ($1, $1, $2)"#)
+        .bind(owner)
+        .bind(macro_user_id)
+        .execute(pool)
+        .await
+        .unwrap();
+    let team_id = Uuid::now_v7();
+    sqlx::query("INSERT INTO team (id, name, owner_id) VALUES ($1, 'other team', $2)")
+        .bind(team_id)
+        .bind(owner)
+        .execute(pool)
+        .await
+        .unwrap();
+    sqlx::query(
+        "INSERT INTO team_user (user_id, team_id, team_role) VALUES ($1, $2, 'owner'::team_role)",
+    )
+    .bind(owner)
+    .bind(team_id)
+    .execute(pool)
+    .await
+    .unwrap();
+    sqlx::query("INSERT INTO team_crm_settings (team_id, crm_enabled) VALUES ($1, true)")
+        .bind(team_id)
+        .execute(pool)
+        .await
+        .unwrap();
+    team_id
+}
+
 async fn insert_company(pool: &PgPool, team_id: Uuid, domain: &str, hidden: bool) -> Uuid {
     let company_id = Uuid::now_v7();
     sqlx::query(
@@ -547,4 +588,59 @@ async fn a_contact_email_outside_the_company_domain_takes_precedence_over_phone(
         linked_ids(&pool, call_id, SystemPropertyKey::Companies).await,
         [company.to_string()]
     );
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn a_number_links_and_is_learned_only_inside_each_team(pool: PgPool) {
+    const OTHER_OWNER: &str = "macro|owner-b@example.com";
+    let team_a = seed_team(&pool, true).await;
+    let team_b = other_team(&pool, OTHER_OWNER).await;
+    // No one on the call is on this team, so its CRM never sees the call.
+    let team_c = other_team(&pool, "macro|owner-c@example.com").await;
+    let acme = insert_company(&pool, team_a, "acme.example", false).await;
+    let ada = insert_contact(&pool, acme, "ada@acme.example").await;
+    let beta = insert_company(&pool, team_b, "beta.example", false).await;
+    let desk = insert_contact(&pool, beta, "desk@beta.example").await;
+    insert_phone(&pool, desk, "+1555010").await;
+    let gamma = insert_company(&pool, team_c, "gamma.example", false).await;
+    let outside = insert_contact(&pool, gamma, "desk@gamma.example").await;
+    insert_phone(&pool, outside, "+1555010").await;
+    let call_id = Uuid::now_v7();
+
+    // A call with one account from each of teams A and B.
+    let mut call = imported(&[(Some("ada@acme.example"), Some("+1555010"))]);
+    call.user_ids.push(
+        MacroUserIdStr::parse_from_str(OTHER_OWNER)
+            .unwrap()
+            .into_owned(),
+    );
+    linker(&pool)
+        .link_call_record(call_id, &call)
+        .await
+        .unwrap();
+
+    // Team A matches the guest by email, team B by number; team C not at all.
+    let sorted = |mut ids: Vec<String>| {
+        ids.sort();
+        ids
+    };
+    assert_eq!(
+        linked_ids(&pool, call_id, SystemPropertyKey::Contacts).await,
+        sorted(vec![ada.to_string(), desk.to_string()])
+    );
+    assert_eq!(
+        linked_ids(&pool, call_id, SystemPropertyKey::Companies).await,
+        sorted(vec![acme.to_string(), beta.to_string()])
+    );
+    // Only team A's email match learns the number, and only for its contact.
+    assert_eq!(
+        phones(&pool, ada).await,
+        [("+1555010".to_owned(), "call".to_owned())]
+    );
+    for contact in [desk, outside] {
+        assert_eq!(
+            phones(&pool, contact).await,
+            [("+1555010".to_owned(), "manual".to_owned())]
+        );
+    }
 }
