@@ -180,6 +180,8 @@ favorites, and CRM discussion notifications. A contact opens under People, so it
 breadcrumb returns to People. A split already showing that record is brought
 forward instead. Touch devices keep the standalone record pages; a Customers
 record URL redirects there unless it opens a linked item inside Customers.
+Legacy contact chips and `/app/contact/<email>` links show the viewer's team
+CRM contact with that email, or the record error state when there is none.
 Each record opened from the details appends a breadcrumb and a history entry: a
 contact from a company's Team tab gives `Companies > <company> > <contact>`, and
 a person's Company link gives `People > <contact> > <company>`. Opening a record
