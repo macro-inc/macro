@@ -169,6 +169,10 @@ pub struct MessageReceivedMetadata {
     pub is_spam_or_trash: bool,
     /// Provider-reported receive time.
     pub received_at: Option<DateTime<Utc>>,
+    /// Display names of the user labels (Gmail labels, Outlook categories)
+    /// the message arrived with. System labels are left out.
+    #[serde(default)]
+    pub labels: Vec<String>,
 }
 
 /// Metadata for [`EmailTopicEvent::MessageDraftSynced`].

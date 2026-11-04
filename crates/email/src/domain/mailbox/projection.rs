@@ -5,7 +5,7 @@ use crate::domain::events::*;
 use crate::domain::models::calendar_invitation::CalendarInvitation;
 use email_api_client::domain::models::CalendarPart;
 use macro_user_id::user_id::MacroUserIdStr;
-use models_email::service::{link::Link, message::Message};
+use models_email::service::{label::LabelType, link::Link, message::Message};
 use serde::{Deserialize, Serialize};
 use std::{collections::HashSet, future::Future};
 use uuid::Uuid;
@@ -464,6 +464,12 @@ fn live_event(
             attachment_count: message.attachments.len() as u32,
             is_spam_or_trash: current.in_trash || current.in_junk,
             received_at: message.internal_date_ts,
+            labels: message
+                .labels
+                .iter()
+                .filter(|label| label.type_ == Some(LabelType::User))
+                .filter_map(|label| label.name.clone())
+                .collect(),
         }))
     }
 }

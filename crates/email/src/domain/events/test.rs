@@ -68,6 +68,7 @@ fn message_received_wire_shape() {
             attachment_count: 2,
             is_spam_or_trash: false,
             received_at: Some(timestamp()),
+            labels: vec!["Clients/Acme".to_string()],
         }),
     );
 
@@ -93,6 +94,7 @@ fn message_received_wire_shape() {
                 "attachment_count": 2,
                 "is_spam_or_trash": false,
                 "received_at": "2026-01-02T03:04:05Z",
+                "labels": ["Clients/Acme"],
             },
         })
     );
@@ -280,6 +282,7 @@ fn event_type_strings_follow_dot_convention() {
                 attachment_count: 0,
                 is_spam_or_trash: false,
                 received_at: None,
+                labels: Vec::new(),
             }),
             "email.message_received",
         ),

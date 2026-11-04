@@ -26,6 +26,7 @@ fn received(thread_id: Uuid, is_spam_or_trash: bool) -> EmailTopicEvent {
         attachment_count: 0,
         is_spam_or_trash,
         received_at: None,
+        labels: Vec::new(),
     })
 }
 

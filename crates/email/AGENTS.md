@@ -103,6 +103,12 @@ tools — hexagonal, heavily feature-gated.
   never a newer write's change.
 - Sender discovery authorizes the inbox first. Gmail aliases use the sender
   provider; Outlook exposes its verified primary address without a Gmail lookup.
+- `EmailLiteral::Label` filters threads by provider label name (a Gmail label
+  or Outlook category) within each thread's own inbox, through
+  `email_effective_message_labels` probed by message id, like the
+  `UserLabel` view. `MessageReceivedMetadata::labels` lists the user label names
+  a new message arrived with; both producers (Gmail inbox sync, Outlook
+  projection) fill it, since routines match labels on it.
 - Outlook links have no system label rows. Move a thread in or out of the inbox
   through `set_thread_inbox`, and read Outlook inbox, trash, and junk state from
   `email_message_mailbox_facts`, never from labels.

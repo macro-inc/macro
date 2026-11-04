@@ -235,6 +235,7 @@ fn received_email_event(is_spam_or_trash: bool) -> EmailTopicEvent {
         attachment_count: 1,
         is_spam_or_trash,
         received_at: Some(Utc::now()),
+        labels: Vec::new(),
     })
 }
 

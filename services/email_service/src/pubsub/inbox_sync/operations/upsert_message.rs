@@ -32,6 +32,7 @@ use model_entity::EntityType;
 use model_notifications::NewEmailMetadata;
 use models_email::api::refresh::RefreshEmailEvent;
 use models_email::db::address::EmailRecipientType;
+use models_email::db::label::LabelType;
 use models_email::email::service::link;
 use models_email::email::service::message::SimpleMessage;
 use models_email::gmail::inbox_sync::{InboxSyncOperation, UpsertMessagePayload};
@@ -80,6 +81,23 @@ fn select_message_sync_event(
         Some(MessageSyncEventKind::Sent)
     } else {
         Some(MessageSyncEventKind::Received)
+    }
+}
+
+/// The user labels a stored message carries, by name. A failed read only
+/// leaves the names off the event: the message is already committed, so
+/// failing the step would suppress the event on redelivery.
+async fn user_label_names(db: &PgPool, message_id: Uuid) -> Vec<String> {
+    match email_db_client::labels::get::fetch_message_labels(db, message_id).await {
+        Ok(labels) => labels
+            .into_iter()
+            .filter(|label| label.type_ == LabelType::User)
+            .map(|label| label.name)
+            .collect(),
+        Err(error) => {
+            tracing::warn!(error = ?error, "message labels unavailable for message_received");
+            Vec::new()
+        }
     }
 }
 
@@ -297,6 +315,10 @@ pub async fn upsert_message(
     if let Some(event_kind) =
         select_message_sync_event(existing_message_was_draft, is_draft, is_sent)
     {
+        let received_labels = match event_kind {
+            MessageSyncEventKind::Received => user_label_names(&ctx.db, message_db_id).await,
+            MessageSyncEventKind::DraftSynced | MessageSyncEventKind::Sent => Vec::new(),
+        };
         let event = match event_kind {
             MessageSyncEventKind::DraftSynced => {
                 EmailMacroEvent::message_draft_synced(MessageDraftSyncedMetadata {
@@ -325,6 +347,7 @@ pub async fn upsert_message(
                     attachment_count: message_attachment_count as u32,
                     is_spam_or_trash,
                     received_at: event_received_at,
+                    labels: received_labels,
                 })
             }
             MessageSyncEventKind::Sent => EmailMacroEvent::message_sent(MessageSentMetadata {
