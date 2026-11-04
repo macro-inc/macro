@@ -9,6 +9,7 @@ export function CanvasArtifactView(
     active: boolean;
     onEnter: () => void;
     onExit: () => void;
+    onPresent: () => void;
   }
 ) {
   const flag = useFeatureFlag(enableCanvasArtifacts);
@@ -45,6 +46,9 @@ export function CanvasArtifactView(
           designWidth={props.item.geometry.designWidth}
           designHeight={props.item.geometry.designHeight}
           interactive={props.active}
+          onKey={(key) => {
+            if (key === 'Escape' && props.active) props.onExit();
+          }}
         />
         <div class="absolute right-2 top-2 flex items-center gap-1 opacity-0 group-hover:opacity-100 touch:opacity-100">
           <button
@@ -57,6 +61,16 @@ export function CanvasArtifactView(
             }}
           >
             {props.active ? 'Done' : 'Interact'}
+          </button>
+          <button
+            type="button"
+            class="menu-surface rounded px-2 py-1 text-xs text-accent hover:bg-hover"
+            onClick={(event) => {
+              event.stopPropagation();
+              props.onPresent();
+            }}
+          >
+            Present
           </button>
         </div>
       </Show>

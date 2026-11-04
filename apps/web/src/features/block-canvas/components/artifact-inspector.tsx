@@ -9,6 +9,10 @@ import { InspectorSection } from './inspector-section';
 export function ArtifactInspector(props: {
   item: ArtifactItem;
   onChange: (content: ArtifactContent) => void;
+  position: number;
+  count: number;
+  onMove: (delta: number) => void;
+  onPresent: () => void;
 }) {
   return (
     <InspectorSection title="Artifact">
@@ -33,6 +37,33 @@ export function ArtifactInspector(props: {
             props.onChange({ html: event.currentTarget.value })
           }
         />
+      </InspectorField>
+      <button
+        type="button"
+        class="w-full rounded px-2 py-1 text-xs text-accent hover:bg-hover"
+        onClick={props.onPresent}
+      >
+        Present
+      </button>
+      <InspectorField label={`Presented ${props.position} of ${props.count}`}>
+        <div class="flex gap-1">
+          <button
+            type="button"
+            class="flex-1 rounded px-2 py-1 text-xs text-accent hover:bg-hover disabled:text-ink-muted"
+            disabled={props.position <= 1}
+            onClick={() => props.onMove(-1)}
+          >
+            Earlier
+          </button>
+          <button
+            type="button"
+            class="flex-1 rounded px-2 py-1 text-xs text-accent hover:bg-hover disabled:text-ink-muted"
+            disabled={props.position >= props.count}
+            onClick={() => props.onMove(1)}
+          >
+            Later
+          </button>
+        </div>
       </InspectorField>
     </InspectorSection>
   );

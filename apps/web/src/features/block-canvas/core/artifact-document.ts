@@ -35,6 +35,20 @@ export function artifactThemeTokens(element: Element): Record<string, string> {
   );
 }
 
+/**
+ * Focus inside a frame keeps keys from the host, so the host cannot exit or step
+ * through a presentation. Forward the few it needs, unless the artifact handled
+ * them or the user is typing. The host trusts these only as navigation.
+ */
+const KEY_BRIDGE = `addEventListener('keydown', function (event) {
+  var escape = event.key === 'Escape';
+  if (!escape && event.defaultPrevented) return;
+  if (!escape && ['ArrowLeft', 'ArrowRight', ' ', 'PageUp', 'PageDown'].indexOf(event.key) === -1) return;
+  var target = event.target;
+  if (!escape && target.closest && target.closest('input,textarea,select,button,a,[contenteditable]')) return;
+  parent.postMessage({ macroArtifactKey: event.key }, '*');
+});`;
+
 /** Bounds cycles and fan-out between components that use each other. */
 const MAX_COMPONENT_EXPANSIONS = 500;
 
@@ -101,6 +115,9 @@ export function composeArtifactDocument(
   policy.httpEquiv = 'Content-Security-Policy';
   policy.content = ARTIFACT_CSP;
 
-  parsed.head.prepend(policy, theme);
+  const bridge = parsed.createElement('script');
+  bridge.textContent = KEY_BRIDGE;
+
+  parsed.head.prepend(policy, theme, bridge);
   return `<!doctype html>${parsed.documentElement.outerHTML}`;
 }
