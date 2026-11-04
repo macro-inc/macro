@@ -15,9 +15,10 @@ const CHANNEL: Uuid = Uuid::from_u128(0xC4);
 fn event(id: u128, kind: ExternalAgentEventKind) -> ExternalAgentEvent {
     let (parent, reply_thread_id) = match kind {
         ExternalAgentEventKind::DirectMessage => (MessageParent::Channel(DM), None),
-        ExternalAgentEventKind::Mention => {
-            (MessageParent::Channel(CHANNEL), Some(Uuid::from_u128(0x700)))
-        }
+        ExternalAgentEventKind::Mention => (
+            MessageParent::Channel(CHANNEL),
+            Some(Uuid::from_u128(0x700)),
+        ),
     };
     ExternalAgentEvent {
         id: Uuid::from_u128(id),
@@ -136,7 +137,10 @@ async fn a_mention_is_answered_in_its_thread() {
 
     assert_eq!(posted.parent, MessageParent::Channel(CHANNEL));
     assert_eq!(posted.thread_id, Some(Uuid::from_u128(0x700)));
-    assert_eq!(posts.lock().unwrap()[0].1.thread_id, Some(Uuid::from_u128(0x700)));
+    assert_eq!(
+        posts.lock().unwrap()[0].1.thread_id,
+        Some(Uuid::from_u128(0x700))
+    );
 }
 
 #[tokio::test]
@@ -236,8 +240,12 @@ async fn typing_shows_where_the_answer_will_appear() {
         messages,
     );
 
-    api.set_typing(AGENT, Uuid::from_u128(1), true).await.unwrap();
-    api.set_typing(AGENT, Uuid::from_u128(2), false).await.unwrap();
+    api.set_typing(AGENT, Uuid::from_u128(1), true)
+        .await
+        .unwrap();
+    api.set_typing(AGENT, Uuid::from_u128(2), false)
+        .await
+        .unwrap();
 
     assert_eq!(
         *typed.lock().unwrap(),

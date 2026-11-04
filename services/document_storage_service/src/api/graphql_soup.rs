@@ -21,8 +21,7 @@ use entity_registry_db_utils::OwnedEntityRegistrar;
 use graphql_soup::email_mutation_thread_loader;
 use macro_authorization::{
     BOT_SCOPE_HEADER, BOT_TOKEN_HEADER, BotOnly, MacroUserAuthentication,
-    OptionalMacroAuthorizationExtractor, UserOrInternalService,
-    UserOrInternalServiceAuthorization,
+    OptionalMacroAuthorizationExtractor, UserOrInternalService, UserOrInternalServiceAuthorization,
 };
 use macro_user_id::user_id::MacroUserIdStr;
 use uuid::Uuid;

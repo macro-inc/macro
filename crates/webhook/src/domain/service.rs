@@ -15,9 +15,9 @@ use super::{
     },
     ports::{WebhookError, WebhookRepo, WebhookService, WebhookValidationClient},
 };
-use rand::RngCore as _;
 use macro_event_broker::MacroEventBroker;
 use macro_user_id::user_id::MacroUserIdStr;
+use rand::RngCore as _;
 use std::net::IpAddr;
 use url::Url;
 

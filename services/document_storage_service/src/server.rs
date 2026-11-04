@@ -1352,12 +1352,13 @@ pub async fn run() -> anyhow::Result<()> {
             message_commands.clone(),
         )),
     );
-    let external_agent_inbox = external_agents::inbound::kafka_consumer::ExternalAgentInboxConsumer::new(
-        external_agents::domain::inbox::ExternalAgentInboxService::new(
-            external_agent_repo,
-            external_agent_endpoints,
-        ),
-    );
+    let external_agent_inbox =
+        external_agents::inbound::kafka_consumer::ExternalAgentInboxConsumer::new(
+            external_agents::domain::inbox::ExternalAgentInboxService::new(
+                external_agent_repo,
+                external_agent_endpoints,
+            ),
+        );
     let external_agent_brokers = config.kafka_brokers.as_ref().to_string();
     consumer_tracker.spawn({
         let cancellation_token = consumer_cancellation_token.clone();

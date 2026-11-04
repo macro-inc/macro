@@ -34,7 +34,10 @@ impl<B: BotService> AgentPersonas for BotServicePersonas<B> {
         caller: MacroUserIdStr<'static>,
         req: CreateAgentRequest,
     ) -> Result<Agent> {
-        self.0.create_agent(caller, req).await.map_err(persona_error)
+        self.0
+            .create_agent(caller, req)
+            .await
+            .map_err(persona_error)
     }
 
     async fn manageable(&self, caller: MacroUserIdStr<'static>, bot_id: BotId) -> Result<Agent> {
@@ -49,7 +52,10 @@ impl<B: BotService> AgentPersonas for BotServicePersonas<B> {
     }
 
     async fn delete(&self, caller: MacroUserIdStr<'static>, bot_id: BotId) -> Result<()> {
-        self.0.delete_bot(caller, bot_id).await.map_err(persona_error)
+        self.0
+            .delete_bot(caller, bot_id)
+            .await
+            .map_err(persona_error)
     }
 
     async fn issue_token(&self, caller: MacroUserIdStr<'static>, bot_id: BotId) -> Result<String> {

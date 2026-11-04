@@ -25,9 +25,6 @@ use graphql_activity::{
     resolve_form_activity,
 };
 use graphql_calendar::{CalendarMutationRoot, GraphqlCalendarQuery};
-use graphql_external_agent::{
-    ExternalAgentMutationRoot, GraphqlExternalAgentQuery, GraphqlExternalAgentViewer,
-};
 use graphql_channel::{
     ChannelActivityAuthorizer, ChannelActivityMutationService, ChannelMutationRoot,
     NoOpChannelActivityMutationService,
@@ -38,6 +35,9 @@ use graphql_email::{
     load_email_focus_thread_ids,
 };
 use graphql_entity_mutation::EntityMutationRoot;
+use graphql_external_agent::{
+    ExternalAgentMutationRoot, GraphqlExternalAgentQuery, GraphqlExternalAgentViewer,
+};
 use graphql_favorite::{
     EntityFavoriteEdgeReader, FavoriteMutationRoot, FavoriteQueryReader, FavoritesFilterInput,
     GraphqlFavorite, NoOpEntityFavoriteEdgeReader, NoOpFavoriteMutationService, resolve_favorites,

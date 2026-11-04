@@ -26,7 +26,10 @@ async fn registering_with_an_endpoint_creates_a_verified_persona_inbox_and_crede
     });
 
     let registered = registry
-        .register(user(OWNER), request(Some("https://agent.example.com/macro")))
+        .register(
+            user(OWNER),
+            request(Some("https://agent.example.com/macro")),
+        )
         .await
         .expect("registration succeeds");
 
@@ -77,7 +80,10 @@ async fn an_unreachable_endpoint_still_registers_the_agent_unverified() {
     });
 
     let registered = registry
-        .register(user(OWNER), request(Some("https://agent.example.com/macro")))
+        .register(
+            user(OWNER),
+            request(Some("https://agent.example.com/macro")),
+        )
         .await
         .expect("registration succeeds");
 
@@ -106,14 +112,17 @@ async fn a_rejected_endpoint_removes_the_agent_it_created() {
 async fn listing_returns_only_registered_external_agents_with_their_endpoints() {
     let registry = registry(FakeEndpoints::default());
     let pushed = registry
-        .register(user(OWNER), request(Some("https://agent.example.com/macro")))
+        .register(
+            user(OWNER),
+            request(Some("https://agent.example.com/macro")),
+        )
         .await
         .unwrap();
-    let polling = registry
-        .register(user(OWNER), request(None))
-        .await
-        .unwrap();
-    let in_macro = agent(BotId::new_from_uuid(uuid::Uuid::from_u128(0xC0DE)), "in-memory");
+    let polling = registry.register(user(OWNER), request(None)).await.unwrap();
+    let in_macro = agent(
+        BotId::new_from_uuid(uuid::Uuid::from_u128(0xC0DE)),
+        "in-memory",
+    );
     registry.personas.agents.lock().unwrap().push(in_macro);
 
     let mut listed = registry.list(user(OWNER)).await.unwrap();
@@ -140,10 +149,7 @@ async fn adding_an_endpoint_to_a_polling_agent_hands_over_its_new_secret() {
         verifies: true,
         ..FakeEndpoints::default()
     });
-    let polling = registry
-        .register(user(OWNER), request(None))
-        .await
-        .unwrap();
+    let polling = registry.register(user(OWNER), request(None)).await.unwrap();
     let bot_id = polling.agent.bot.id;
 
     let added = registry
@@ -165,8 +171,14 @@ async fn adding_an_endpoint_to_a_polling_agent_hands_over_its_new_secret() {
         )
         .await
         .unwrap();
-    assert!(moved.signing_secret.is_none(), "a moved endpoint keeps its secret");
-    assert_eq!(moved.agent.endpoint.unwrap().url, "https://agent.example.com/v2");
+    assert!(
+        moved.signing_secret.is_none(),
+        "a moved endpoint keeps its secret"
+    );
+    assert_eq!(
+        moved.agent.endpoint.unwrap().url,
+        "https://agent.example.com/v2"
+    );
 
     let removed = registry
         .set_endpoint(user(OWNER), bot_id, None)
@@ -174,7 +186,10 @@ async fn adding_an_endpoint_to_a_polling_agent_hands_over_its_new_secret() {
         .unwrap();
     assert!(removed.agent.endpoint.is_none());
     assert!(registry.endpoints.endpoints.lock().unwrap().is_empty());
-    assert_eq!(registry.repo.agents.lock().unwrap().get(&bot_id), Some(&None));
+    assert_eq!(
+        registry.repo.agents.lock().unwrap().get(&bot_id),
+        Some(&None)
+    );
 }
 
 #[tokio::test]
@@ -207,7 +222,10 @@ async fn an_agent_that_runs_in_macro_is_not_an_external_agent() {
 async fn deleting_removes_the_agent_its_endpoint_and_its_inbox() {
     let registry = registry(FakeEndpoints::default());
     let registered = registry
-        .register(user(OWNER), request(Some("https://agent.example.com/macro")))
+        .register(
+            user(OWNER),
+            request(Some("https://agent.example.com/macro")),
+        )
         .await
         .unwrap();
     let bot_id = registered.agent.bot.id;

@@ -19,7 +19,9 @@ use messages::domain::{
 use uuid::Uuid;
 
 use super::models::{AgentReply, ExternalAgentEvent, PostedReply};
-use super::ports::{AgentWriteAccess, ExternalAgentApi, ExternalAgentError, ExternalAgentRepo, Result};
+use super::ports::{
+    AgentWriteAccess, ExternalAgentApi, ExternalAgentError, ExternalAgentRepo, Result,
+};
 
 /// Most events one inbox read returns.
 pub const MAX_EVENTS_PER_READ: u16 = 100;

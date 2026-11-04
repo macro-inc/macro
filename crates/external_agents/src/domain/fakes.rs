@@ -71,7 +71,10 @@ impl AgentPersonas for FakePersonas {
     async fn create(&self, _: MacroUserIdStr<'static>, req: CreateAgentRequest) -> Result<Agent> {
         let mut next = self.next_id.lock().unwrap();
         *next += 1;
-        let mut created = agent(BotId::new_from_uuid(Uuid::from_u128(0xA000 + *next)), &req.harness);
+        let mut created = agent(
+            BotId::new_from_uuid(Uuid::from_u128(0xA000 + *next)),
+            &req.harness,
+        );
         created.bot.name = req.name.clone();
         created.bot.handle = req.handle.clone();
         created.default_model = req.default_model.clone();
@@ -147,7 +150,11 @@ impl AgentEndpoints for FakeEndpoints {
         })
     }
 
-    async fn get(&self, _: MacroUserIdStr<'static>, webhook_id: &str) -> Result<Option<AgentEndpoint>> {
+    async fn get(
+        &self,
+        _: MacroUserIdStr<'static>,
+        webhook_id: &str,
+    ) -> Result<Option<AgentEndpoint>> {
         Ok(self.endpoints.lock().unwrap().get(webhook_id).cloned())
     }
 
@@ -212,7 +219,9 @@ impl ExternalAgentRepo for FakeRepo {
 
     async fn set_webhook(&self, bot_id: BotId, webhook_id: Option<&str>) -> Result<()> {
         let mut agents = self.agents.lock().unwrap();
-        let slot = agents.get_mut(&bot_id).ok_or(ExternalAgentError::NotFound)?;
+        let slot = agents
+            .get_mut(&bot_id)
+            .ok_or(ExternalAgentError::NotFound)?;
         *slot = webhook_id.map(str::to_owned);
         Ok(())
     }

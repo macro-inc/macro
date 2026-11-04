@@ -53,7 +53,9 @@ fn addressed(
     }
 }
 
-impl<R: ExternalAgentRepo, E: AgentEndpoints> ExternalAgentInbox for ExternalAgentInboxService<R, E> {
+impl<R: ExternalAgentRepo, E: AgentEndpoints> ExternalAgentInbox
+    for ExternalAgentInboxService<R, E>
+{
     #[tracing::instrument(skip_all, fields(trigger_event_id = %trigger.event_id), err)]
     async fn record_trigger(&self, trigger: &Event<AgentTriggerTopicEvent>) -> Result<()> {
         let Some((bot_id, kind, message)) = addressed(&trigger.event) else {

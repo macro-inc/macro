@@ -66,7 +66,10 @@ async fn a_trigger_is_recorded_once_and_the_inbox_pages_in_order(pool: PgPool) {
     repo.record(event(3, OTHER), Uuid::now_v7()).await.unwrap();
 
     assert_eq!(first, event(1, AGENT));
-    assert_eq!(replayed, first, "a replayed trigger returns the stored event");
+    assert_eq!(
+        replayed, first,
+        "a replayed trigger returns the stored event"
+    );
     assert_eq!(
         repo.events(AGENT, None, 10)
             .await

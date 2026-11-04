@@ -329,11 +329,7 @@ where
     }
 
     #[tracing::instrument(skip(self, caller), err)]
-    async fn issue_token(
-        &self,
-        caller: MacroUserIdStr<'static>,
-        bot_id: BotId,
-    ) -> Result<String> {
+    async fn issue_token(&self, caller: MacroUserIdStr<'static>, bot_id: BotId) -> Result<String> {
         self.external(&caller, bot_id).await?;
         self.personas.issue_token(caller, bot_id).await
     }

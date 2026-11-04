@@ -153,7 +153,10 @@ impl TestQuery {
 
 fn schema(api: Arc<FakeApi>) -> Schema<TestQuery, ExternalAgentMutationRoot, EmptySubscription> {
     Schema::build(TestQuery, ExternalAgentMutationRoot, EmptySubscription)
-        .data(ExternalAgentGraphqlContext::new(Arc::new(FakeRegistry), api))
+        .data(ExternalAgentGraphqlContext::new(
+            Arc::new(FakeRegistry),
+            api,
+        ))
         .finish()
 }
 

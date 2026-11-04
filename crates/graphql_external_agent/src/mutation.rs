@@ -202,13 +202,9 @@ impl ExternalAgentMutationRoot {
     ) -> async_graphql::Result<bool> {
         let agent = require_agent(ctx)?;
         let api = &ctx.data::<ExternalAgentGraphqlContext>()?.api;
-        api.set_typing(
-            agent,
-            parse_uuid(&input.event_id, "eventId")?,
-            input.active,
-        )
-        .await
-        .map_err(agent_error)?;
+        api.set_typing(agent, parse_uuid(&input.event_id, "eventId")?, input.active)
+            .await
+            .map_err(agent_error)?;
         Ok(input.active)
     }
 }

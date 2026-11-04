@@ -20,9 +20,7 @@ use webhook::domain::{
     },
     ports::{WebhookError, WebhookEventEnqueuer, WebhookService},
 };
-use webhook::inbound::axum_router::{
-    validate_webhook_rate_limit, validate_webhook_rate_limit_key,
-};
+use webhook::inbound::axum_router::{validate_webhook_rate_limit, validate_webhook_rate_limit_key};
 
 use crate::domain::models::{
     AgentEndpoint, ExternalAgentEvent, MESSAGE_EVENT_SCHEMA_VERSION, MESSAGE_EVENT_TYPE,
@@ -169,7 +167,11 @@ where
         caller: MacroUserIdStr<'static>,
         webhook_id: &str,
     ) -> Result<Option<AgentEndpoint>> {
-        match self.webhooks.get_webhook(caller, webhook_id.to_owned()).await {
+        match self
+            .webhooks
+            .get_webhook(caller, webhook_id.to_owned())
+            .await
+        {
             Ok(webhook) => Ok(Some(endpoint(&webhook))),
             Err(WebhookError::NotFound(_)) => Ok(None),
             Err(error) => Err(webhook_error(error)),
@@ -248,8 +250,6 @@ where
         self.queue
             .enqueue(queued_event(webhook_id, event)?)
             .await
-            .map_err(|error| {
-                ExternalAgentError::Internal(rootcause::report!("{:#}", error.into()))
-            })
+            .map_err(|error| ExternalAgentError::Internal(rootcause::report!("{:#}", error.into())))
     }
 }

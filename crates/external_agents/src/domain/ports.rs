@@ -244,8 +244,7 @@ pub trait ExternalAgentRegistry: Send + Sync + 'static {
 
     /// Mint another bot token for the agent. Earlier tokens keep working
     /// until revoked.
-    async fn issue_token(&self, caller: MacroUserIdStr<'static>, bot_id: BotId)
-    -> Result<String>;
+    async fn issue_token(&self, caller: MacroUserIdStr<'static>, bot_id: BotId) -> Result<String>;
 
     /// Delete the agent, then its endpoint and inbox.
     async fn delete(&self, caller: MacroUserIdStr<'static>, bot_id: BotId) -> Result<()>;

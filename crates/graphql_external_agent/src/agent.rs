@@ -43,7 +43,10 @@ impl GraphqlExternalAgentViewer {
         #[graphql(validator(minimum = 1, maximum = 100))] limit: Option<i32>,
     ) -> async_graphql::Result<Vec<GraphqlExternalAgentEvent>> {
         let api = &ctx.data::<ExternalAgentGraphqlContext>()?.api;
-        let after = after.as_ref().map(|id| parse_uuid(id, "after")).transpose()?;
+        let after = after
+            .as_ref()
+            .map(|id| parse_uuid(id, "after"))
+            .transpose()?;
         let limit = limit
             .and_then(|limit| u16::try_from(limit).ok())
             .unwrap_or(DEFAULT_EVENTS_PER_READ);

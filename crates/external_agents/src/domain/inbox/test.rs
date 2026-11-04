@@ -67,9 +67,7 @@ fn channel_mention(thread: Option<u128>) -> Event<AgentTriggerTopicEvent> {
     ))
 }
 
-fn inbox(
-    webhook_id: Option<&str>,
-) -> ExternalAgentInboxService<FakeRepo, FakeEndpoints> {
+fn inbox(webhook_id: Option<&str>) -> ExternalAgentInboxService<FakeRepo, FakeEndpoints> {
     let repo = FakeRepo::default();
     repo.agents
         .lock()

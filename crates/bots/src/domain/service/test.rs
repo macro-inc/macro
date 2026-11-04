@@ -123,7 +123,6 @@ fn an_agent_keeps_whether_it_runs_on_the_external_harness() {
     );
     assert!(validate_harness_kept(&in_macro, &to("cursor").apply_to(&in_macro)).is_ok());
     assert!(
-        validate_harness_kept(&external, &PatchAgentRequest::default().apply_to(&external))
-            .is_ok()
+        validate_harness_kept(&external, &PatchAgentRequest::default().apply_to(&external)).is_ok()
     );
 }
