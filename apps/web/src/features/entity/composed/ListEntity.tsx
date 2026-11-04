@@ -109,6 +109,7 @@ export function ListEntity(props: ListEntityProps) {
   const titleTrailing = children(() => props.titleTrailing);
   const meta = children(() => props.meta);
   const metaEnd = children(() => props.metaEnd);
+  const previewLeading = children(() => props.previewLeading);
   const scheduleStatus = children(() => props.scheduleStatus);
 
   const unread = () => unreadFilterFn(props.entity);
@@ -172,6 +173,7 @@ export function ListEntity(props: ListEntityProps) {
     titleTrailing: titleTrailing(),
     meta: meta(),
     metaEnd: metaEnd(),
+    previewLeading: previewLeading(),
     scheduleStatus: scheduleStatus(),
     referenceProperties: referenceProperties(),
     authorDisplayName: props.authorDisplayName,

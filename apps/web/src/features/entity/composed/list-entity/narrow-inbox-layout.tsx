@@ -160,6 +160,7 @@ export function NarrowInboxLayout(props: LayoutProps) {
               chars={props.chars}
               showHitSnippet={props.showHitSnippet}
               setContainerRef={props.setSnippetContainerRef}
+              previewLeading={props.previewLeading}
             />
           )}
         </Match>
