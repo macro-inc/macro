@@ -74,6 +74,7 @@ event contract (schema, sanitization, delivery semantics).
 - `team_invite.is_agent` makes an address with no account sign up as an agent.
   `authentication_service`'s agent setup joins the team, so the seat is added
   without a separate acceptance. Existing accounts accept like any other invite.
+  Its email links to the agent signup page (`/app/signup/agent?team_invite=<id>`).
 
 ## Checks
 

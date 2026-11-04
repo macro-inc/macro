@@ -31,6 +31,11 @@ a background tab; adding Shift also switches to it. Tabs are not draggable.
 Tabs persist per user and restore on launch. In the browser and on other
 platforms the strip does not render.
 
+An inline preview in a background tab stays open there, so selecting its entity
+from another tab switches to that tab with the entity showing. A tab that opens
+onto an entity another tab already holds shows its list instead, without moving
+you or showing a toast.
+
 Reference captures (browser fixture with the desktop gates forced):
 [a three-split tab beside a second tab](media/desktop-tabs/three-split-tab.png)
 and [tabs restored after a reload](media/desktop-tabs/restored-tabs.png).
@@ -239,6 +244,7 @@ successfully rather than hashing the empty JavaScript placeholder.
 
 Each `~`-separated part of an app URL is a split (`/app/home/~/drive`). The
 pages outside the app (`/app/login`, `/app/welcome`, `/app/signup`,
+`/app/signup/agent`, `/app/agent-setup`,
 `/app/onboarding`, `/app/setup`, the invite pages, `/app/meet/...` and
 `/app/task-slug/...`) render without the split layout and take one part only.
 `/app/login/~/home` and URLs nothing matches, such as `/app/garbage`, are
@@ -1120,7 +1126,11 @@ natural date search (**tomorrow 9am**, **in 2 hours**) and an inline calendar wi
 time controls. Click **Add trigger** to confirm. Click a saved chip to edit it;
 **Done** applies changes and **Cancel** leaves it unchanged. The panel floats over
 the composer without moving it. Recurring schedules retain their time zones;
-one-off times use the browser’s local time.
+one-off times use the browser’s local time. A one-off saves a `once` trigger
+(`{type: 'once', at}`, the same one agents create through the SDK to check back
+later), runs within about a second of its time, runs as soon as it is saved when
+the time has passed, and then shows **Completed**; its chip reads **Once at**
+the time.
 
 The event menu groups Macro activity triggers by surface:
 

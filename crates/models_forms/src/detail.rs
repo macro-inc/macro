@@ -46,6 +46,14 @@ pub enum FormSectionDetail {
         description: String,
         /// Its questions, in order.
         questions: Vec<FormQuestionDetail>,
+        /// When to show it, from earlier shown sections' answers; absent,
+        /// it is always shown. Sent to every caller so a respondent's page
+        /// can skip it.
+        // utoipa does not apply `rename_all_fields`, so the wire name is explicit.
+        #[serde(rename = "showWhen", default, skip_serializing_if = "Option::is_none")]
+        #[schema(nullable = false)]
+        #[specta(optional)]
+        show_when: Option<FilterGroup>,
     },
     /// A check of earlier answers. The rules are sent to every caller so a
     /// respondent's page can stop them before submitting; respondents are

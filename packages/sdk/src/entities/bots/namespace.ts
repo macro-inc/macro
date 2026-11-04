@@ -5,6 +5,8 @@ import type { MacroClient } from '../../utils/client';
 /**
  * The authenticated bot's identity. Only meaningful with bot auth
  * (`auth: { type: 'bot', token }`).
+ *
+ * @routing Use when inspecting or managing bots and their channel access; not an agent's instructions, which are agents.
  */
 export class BotsNamespace {
   constructor(private readonly client: MacroClient) {}

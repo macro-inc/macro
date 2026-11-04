@@ -7550,9 +7550,27 @@ type GraphqlScheduledActionMultipleTrigger {
 	"""
 	schedules: [GraphqlScheduledActionCronTrigger!]!
 	"""
+	Single runs at exact times.
+	"""
+	once: [GraphqlScheduledActionOnceTrigger!]!
+	"""
 	Events that can also trigger this routine.
 	"""
 	events: GraphqlScheduledActionEventsTrigger
+}
+
+"""
+A routine that runs a single time.
+"""
+type GraphqlScheduledActionOnceTrigger {
+	"""
+	When the routine runs, as RFC 3339.
+	"""
+	at: String!
+	"""
+	Whether that run is still ahead. False once it has run.
+	"""
+	pending: Boolean!
 }
 
 """
@@ -7572,7 +7590,7 @@ type GraphqlScheduledActionPropertySelector {
 """
 The way a routine starts.
 """
-union GraphqlScheduledActionTrigger = GraphqlScheduledActionCronTrigger | GraphqlScheduledActionEventsTrigger | GraphqlScheduledActionMultipleTrigger
+union GraphqlScheduledActionTrigger = GraphqlScheduledActionCronTrigger | GraphqlScheduledActionEventsTrigger | GraphqlScheduledActionOnceTrigger | GraphqlScheduledActionMultipleTrigger
 
 """
 The persisted state of a scheduled delivery.

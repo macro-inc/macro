@@ -204,6 +204,7 @@ pub fn covered_by_code_sdk(name: &str, user_tool: bool) -> bool {
             name,
             "ReadContent"
                 | "ReadMetadata"
+                | "EditDocument"
                 | "RenameDocument"
                 | "MoveToProject"
                 | "MoveToTrash"

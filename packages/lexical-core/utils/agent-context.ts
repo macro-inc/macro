@@ -203,6 +203,7 @@ export type RoutineContext = {
 /** One of the ways a routine runs. */
 export type RoutineTrigger =
   | { type: 'schedule'; cron: string; timezone: string }
+  | { type: 'once'; at: string }
   | {
       type: 'events';
       events: string[];
@@ -1468,6 +1469,7 @@ function routineTriggerNode(trigger: RoutineTrigger): FxpNode {
     .with({ type: 'schedule' }, ({ cron, timezone }) =>
       el('schedule', [], { cron, timezone })
     )
+    .with({ type: 'once' }, ({ at }) => el('once', [], { at }))
     .with(
       { type: 'events' },
       ({ events, entity_ids, github, payload_match, condition }) =>
