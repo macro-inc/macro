@@ -155,6 +155,7 @@ where
         credential.origin,
     )?;
     user.agent_id = identity.agent_id;
+    user.agent_via = identity.agent_via;
     Ok(user)
 }
 

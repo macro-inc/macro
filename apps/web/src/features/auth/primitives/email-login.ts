@@ -104,6 +104,7 @@ export function createEmailLogin(
       const result = await context.sendEmailCode({
         email: address,
         password: passwordRequired() ? password() : undefined,
+        isAgent: options.intent === 'agent-signup',
       });
       switch (result.t) {
         case 'code-sent':
@@ -152,7 +153,7 @@ export function createEmailLogin(
     resendIn,
     canVerify: () => isCompleteCode(code()) && !verifying(),
     chooseEmail: () => {
-      if (options.intent === 'signup')
+      if (options.intent !== 'login')
         context.track('sign_up_click', { method: 'email' });
       setStep('email');
     },

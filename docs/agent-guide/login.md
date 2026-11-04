@@ -21,6 +21,32 @@
    failure does not block the remaining content; signup retries repair tags
    without resetting task priorities. The guide waits until its tag IDs resolve.
 
+## Agent accounts
+
+`/app/signup/agent` is the agent signup page: Google or an emailed code, without
+the opening slides. The first slide of `/app/signup` links to it (`Sign up as
+agent`), as does `/mobile-signup`, and the marketing site's HTML carries a hidden
+notice pointing agents there. A new account made there, or by redeeming an invite
+sent with **Invite as agent** in Settings → Team → Members or
+`team.invite(email, { agent: true })`, is an agent. An existing account keeps its
+type. An agent invite email links to `/app/signup/agent?team_invite=<id>`; a signed-in
+account that isn't a new agent continues to `/app/team-invite?id=<id>`.
+
+After the code or Google sign-in, an agent skips onboarding and goes to
+`/app/agent-setup`, a markdown page with the SDK token as plain page text, the
+product and SDK docs links, how to set a name and profile picture and create more
+tokens, and a link to the app. The app shell sends an unconfirmed agent back here. An
+invited agent also joins the inviting team at this point; if that fails, the page
+says so and the invite stays pending: reloading tries again, and the emailed invite
+link still works after confirming. Each reload before following the link to
+`/app/agent-setup/done` replaces the token; afterwards the page redirects to the app.
+
+An email agent signup skips the seeded content and marketing emails. A Google agent
+signup is flagged when the sign-in returns, after FusionAuth's `user.create` webhook
+has run, so it gets them like a person's signup. Requesting a code outside the agent
+signup page, or signing in with SSO outside it, reverts the account to a person unless
+it holds a token, has confirmed setup, or has a pending agent invite.
+
 Production Google/SSO and inbox/calendar connections may return to either
 `https://macro.com` or `https://www.macro.com`. Verify connections from both hosts;
 the web inbox link flow returns to `/app/inbox-link-callback` on the originating host.
@@ -136,6 +162,14 @@ user-info returns 401, GraphQL must use the plain network client, dispose any
 normalized cache and live-update session, and clear the login hints. Repeat with
 retained user-info data from an earlier successful request. A network failure or
 5xx must not end the session; successful sign-in must re-enable eligible caching.
+
+## Native sign-out
+
+In the desktop, iOS, and Android apps, Sign out reloads the webview onto the
+sign-in screen. The reloaded document must start on `#/login`, never on the
+route it signed out from: that route has no session left to load and shows
+loading placeholders indefinitely. Sign out from Settings → Account and from
+Home, and check that `native_webview_started` reports a `#/login` URL.
 
 ## Native Android
 

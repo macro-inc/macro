@@ -14,6 +14,26 @@ use serde_json::Value;
 use std::{sync::Arc, time::Duration};
 use uuid::Uuid;
 
+/// The scheduler's rejection text, which names a safe cause such as a deleted
+/// agent. Bounded so a proxy's error page cannot flood the tool result.
+async fn rejection_reason(mut response: reqwest::Response) -> String {
+    const MAX_REASON_BYTES: usize = 300;
+    let mut body = Vec::new();
+    while body.len() < MAX_REASON_BYTES {
+        match response.chunk().await {
+            Ok(Some(chunk)) => body.extend_from_slice(&chunk),
+            _ => break,
+        }
+    }
+    let reason = String::from_utf8_lossy(&body[..body.len().min(MAX_REASON_BYTES)]);
+    let reason = reason.trim();
+    if reason.is_empty() {
+        "no reason given".to_owned()
+    } else {
+        reason.to_owned()
+    }
+}
+
 /// Reusable client; internal credentials never come from model arguments.
 pub struct RoutineClient {
     client: Client,
@@ -23,30 +43,30 @@ pub struct RoutineClient {
 impl RoutineClient {
     /// Build with a trusted service URL and internal key from application configuration.
     pub fn new(base: &str, key: &str) -> Result<Arc<Self>> {
-        let base = Url::parse(&format!("{}/", base.trim_end_matches('/')))?;
-        ensure!(
-            matches!(base.scheme(), "http" | "https")
-                && base.host_str().is_some()
-                && base.username().is_empty()
-                && base.password().is_none()
-                && base.query().is_none()
-                && base.fragment().is_none(),
-            "Invalid routine service URL"
-        );
-        ensure!(
-            !key.trim().is_empty(),
-            "Routine service credentials are required"
-        );
-        let mut key = HeaderValue::from_str(key)?;
-        key.set_sensitive(true);
-        let client = Client::builder()
-            .connect_timeout(Duration::from_secs(5))
-            .timeout(Duration::from_secs(30))
-            .redirect(reqwest::redirect::Policy::none())
-            .retry(reqwest::retry::never())
-            .build()?;
-        Ok(Arc::new(Self { client, base, key }))
-    }
+    let base = Url::parse(&format!("{}/", base.trim_end_matches('/')))?;
+    ensure!(
+        matches!(base.scheme(), "http" | "https")
+            && base.host_str().is_some()
+            && base.username().is_empty()
+            && base.password().is_none()
+            && base.query().is_none()
+            && base.fragment().is_none(),
+        "Invalid routine service URL"
+    );
+    ensure!(
+        !key.trim().is_empty(),
+        "Routine service credentials are required"
+    );
+    let mut key = HeaderValue::from_str(key)?;
+    key.set_sensitive(true);
+    let client = Client::builder()
+        .connect_timeout(Duration::from_secs(5))
+        .timeout(Duration::from_secs(30))
+        .redirect(reqwest::redirect::Policy::none())
+        .retry(reqwest::retry::never())
+        .build()?;
+    Ok(Arc::new(Self { client, base, key }))
+}
     async fn request<T: serde::de::DeserializeOwned>(
         &self,
         user: &MacroUserIdStr<'static>,
@@ -64,9 +84,12 @@ impl RoutineClient {
         path: &str,
         body: Option<Value>,
     ) -> Result<Vec<u8>> {
+        let mut trace_headers = reqwest::header::HeaderMap::new();
+        macro_tower_layers::inject_trace_headers(&mut trace_headers);
         let mut request = self
             .client
             .request(method, self.base.join(path)?)
+            .headers(trace_headers)
             .header(INTERNAL_API_KEY_HEADER, self.key.clone())
             .header(INTERNAL_MACRO_USER_ID_HEADER, user.as_ref());
         if let Some(body) = body {
@@ -76,12 +99,17 @@ impl RoutineClient {
         match response.status().as_u16() {
             200..=299 => read_bounded(&mut response, MAX_RESPONSE_BYTES).await,
             400 => bail!(
-                "Invalid routine configuration or unavailable model/agent. Check the schedule and select an accessible agent from ListAgents using its bot.botId."
+                "Invalid routine configuration or unavailable model/agent ({}). Check the schedule and select an accessible agent from ListAgents using its bot.botId.",
+                rejection_reason(response).await
             ),
             422 => bail!(
-                "Invalid routine configuration, or a required app is not connected or unusable by the selected agent. Ask the user to connect each app in requiredApps (DiscoverConnectors gives a link) or remove it."
+                "Invalid routine configuration, or a required app is not connected or unusable by the selected agent ({}). Ask the user to connect each app in requiredApps (DiscoverConnectors gives a link) or remove it.",
+                rejection_reason(response).await
             ),
-            401 | 403 | 404 => bail!("Routine or target is unavailable to this user."),
+            401 | 403 | 404 => bail!(
+                "Routine or target is unavailable to this user ({}).",
+                rejection_reason(response).await
+            ),
             402 => {
                 let body = read_bounded(&mut response, MAX_REFUSAL_BYTES)
                     .await

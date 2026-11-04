@@ -157,7 +157,8 @@ export type AppEvents = {
   hotkey_use: Record<string, unknown>;
   mentions_menu_use: { itemType: string };
   snippets_menu_use: Record<string, unknown>;
-  split_created: { from: string };
+  /** `side` is where a split opened beside another; absent, it opened at the end. */
+  split_created: { from: string; side?: 'left' | 'right' | 'above' | 'below' };
 
   // --- Entity lifecycle ----------------------------------------------------
   // Fired at data-layer chokepoints (core/util/create.ts, FileList
@@ -371,7 +372,7 @@ export type AppEvents = {
 
   // --- CRM -----------------------------------------------------------------
   crm_company_created: { companyId: string };
-  crm_contact_created: { companyId: string; contactId: string };
+  crm_contact_created: { companyId?: string; contactId: string };
   /**
    * A committed pipeline write: inserted rows are entries added, updated
    * rows include stage moves and other cell edits.

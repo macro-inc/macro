@@ -127,6 +127,12 @@ impl ScheduledActionRepo for FakeRepository {
     async fn get_execution_records(&self, _action_id: &Uuid) -> Result<Vec<ActionExecutionRecord>> {
         Ok(Vec::new())
     }
+    async fn last_runs(
+        &self,
+        _: &[Uuid],
+    ) -> Result<std::collections::HashMap<Uuid, crate::domain::models::LastRun>> {
+        Ok(std::collections::HashMap::new())
+    }
 
     async fn update_next_run_at(&self, _id: &Uuid) -> Result<()> {
         Ok(())

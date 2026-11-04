@@ -12,7 +12,7 @@ test('keeps the mobile editor focused as forms appear above it and Enter adds a 
     exact: true,
   });
   const original = await input.elementHandle();
-  await input.fill('notification clicks are broken');
+  await input.fill('notification clicks are broken on iOS');
   const title = page.getByRole('textbox', { name: 'Title', exact: true });
   await expect(title).toBeVisible();
   await expect(input).toBeFocused();
@@ -21,14 +21,14 @@ test('keeps the mobile editor focused as forms appear above it and Enter adds a 
   await input.press('Enter');
   await input.pressSequentially('priority urgent');
   await expect(input).toHaveValue(
-    'notification clicks are broken\npriority urgent'
+    'notification clicks are broken on iOS\npriority urgent'
   );
   expect(
     await original?.evaluate((element) => element === document.activeElement)
   ).toBe(true);
   await title.fill('Fix mobile notification routing');
   await input.fill(
-    'notification clicks are broken\npriority urgent\nInclude Android\nInclude iOS\nInclude tablets\nCheck navigation\nAdd regression coverage'
+    'notification clicks are broken on iOS\npriority urgent\nInclude Android\nInclude iOS\nInclude tablets\nCheck navigation\nAdd regression coverage'
   );
   await expect(title).toHaveText('Fix mobile notification routing');
   const description = page.getByRole('textbox', {
@@ -99,7 +99,7 @@ test('replaces the normal results and filter tabs with the card until the input 
   await expect(filters).toBeVisible();
   await expect(results).toBeVisible();
   const original = await input.elementHandle();
-  await input.fill('notification clicks are broken');
+  await input.fill('notification clicks are broken on iOS');
   await expect(
     page.getByRole('button', { name: 'Create task', exact: true })
   ).toBeEnabled();
@@ -131,7 +131,7 @@ test('keeps mobile email unsent until Send and submits the visible draft once', 
     name: 'Search or create',
     exact: true,
   });
-  await input.fill('Email John that I’ll be late');
+  await input.fill('Email John that I’ll be late today');
   const send = page.getByRole('button', { name: 'Send email', exact: true });
   await expect(send).toBeEnabled();
   await expect(page.getByTestId('command-submission-count')).toHaveText('0');
@@ -165,7 +165,7 @@ test('waits for IME composition before predicting from the mobile editor', async
     textarea.dispatchEvent(
       new CompositionEvent('compositionstart', { bubbles: true })
     );
-    textarea.value = 'notification clicks are broken';
+    textarea.value = 'notification clicks are broken on iOS';
     textarea.dispatchEvent(
       new InputEvent('input', { bubbles: true, isComposing: true })
     );
@@ -176,7 +176,7 @@ test('waits for IME composition before predicting from the mobile editor', async
   ).not.toBeVisible();
   await input.dispatchEvent('compositionend');
   await expect(page.getByTestId('mobile-query')).toHaveText(
-    'notification clicks are broken'
+    'notification clicks are broken on iOS'
   );
   await expect(
     page.getByRole('button', { name: 'Create task', exact: true })
@@ -233,12 +233,12 @@ test('keeps ordinary mobile search when the rollout flag is off and closes clean
     .getByRole('button', { name: 'Open mobile search', exact: true })
     .tap();
   const input = page.getByRole('textbox', { name: 'Search', exact: true });
-  await input.fill('notification clicks are broken');
+  await input.fill('notification clicks are broken on iOS');
   await input.press('End');
   await input.press('Enter');
   await input.pressSequentially('priority urgent');
   await expect(input).toHaveValue(
-    'notification clicks are broken\npriority urgent'
+    'notification clicks are broken on iOS\npriority urgent'
   );
   await expect(input).toBeFocused();
   await expect(

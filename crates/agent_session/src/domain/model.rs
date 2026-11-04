@@ -225,18 +225,16 @@ impl SessionPurpose {
     }
 
     /// Where a session created for this purpose is shown. Speculative,
-    /// DM-backing and inline @macro thread sessions are reached through what
-    /// they back, so they are hidden; a routine's run follows its routine.
-    pub fn visibility(
-        self,
-        bot_id: BotId,
-        thread_id: Option<Uuid>,
-        hide_agent_dms: bool,
-    ) -> SessionVisibility {
+    /// DM-backing and thread sessions (any agent started by a mention or an
+    /// assignment in a thread) are reached through what they back, so they
+    /// are hidden until someone prompts them directly (see
+    /// [`AgentSessionRepo::add_follower`](super::ports::AgentSessionRepo::add_follower));
+    /// a routine's run follows its routine.
+    pub fn visibility(self, thread_id: Option<Uuid>, hide_agent_dms: bool) -> SessionVisibility {
         let hidden = match self {
             Self::Warm => true,
             Self::AgentDm => hide_agent_dms,
-            Self::Standalone => bot_id == bot_id::MACRO_NEW_BOT_ID && thread_id.is_some(),
+            Self::Standalone => thread_id.is_some(),
             Self::Dispatched => false,
             Self::Routine { visibility } => return visibility,
         };
@@ -361,6 +359,40 @@ pub struct CreateAgentSessionParams {
     pub egress_token_hash: Option<String>,
 }
 
+/// Who or what archived a session.
+#[derive(
+    Debug,
+    Clone,
+    Copy,
+    PartialEq,
+    Eq,
+    strum::AsRefStr,
+    strum::EnumString,
+    serde::Serialize,
+    serde::Deserialize,
+)]
+#[cfg_attr(feature = "schema", derive(utoipa::ToSchema))]
+#[cfg_attr(feature = "ai_tools", derive(schemars::JsonSchema))]
+#[serde(rename_all = "snake_case")]
+#[strum(serialize_all = "snake_case")]
+pub enum ArchiveCause {
+    /// A person archived it.
+    User,
+    /// Every pull request linked to it closed, with at least one merged.
+    PullRequestMerged,
+    /// The runtime session backing it was deliberately closed.
+    RuntimeClosed,
+}
+
+/// A session's archive.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct SessionArchive {
+    /// Who or what archived it.
+    pub by: ArchiveCause,
+    /// When it was archived.
+    pub at: DateTime<Utc>,
+}
+
 /// A running or historical agent coding session.
 #[derive(Debug, Clone)]
 pub struct AgentSession {
@@ -368,8 +400,9 @@ pub struct AgentSession {
     pub id: AgentSessionId,
     /// User-facing session name.
     pub name: String,
-    /// Whether the session is archived and therefore read-only.
-    pub is_archived: bool,
+    /// Who archived the session and when, or `None` while it is active. An archived session
+    /// is read-only.
+    pub archived: Option<SessionArchive>,
     /// Who created and owns the session. Immutable for its life.
     pub owner_id: Owner,
     /// The root message where the bot was originally invoked, if any.
@@ -422,6 +455,11 @@ pub struct AgentSession {
 }
 
 impl AgentSession {
+    /// Whether the session is archived and therefore read-only.
+    pub fn is_archived(&self) -> bool {
+        self.archived.is_some()
+    }
+
     /// The user this session runs as; see [`session_owner_user`].
     pub fn owner_user(&self) -> Result<&MacroUserIdStr<'static>, AgentSessionError> {
         self.owner_id

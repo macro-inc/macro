@@ -1,4 +1,6 @@
 import { throwOnErr } from '@core/util/result';
+import { Telemetry } from '@macro-inc/observability';
+import { refreshActiveGraphqlSoupQueries } from '@queries/soup/graphql/active-queries';
 import { soupKeys } from '@queries/soup/keys';
 import { invalidateCachedCrmContacts } from '@service-storage/crm-contacts';
 import type { CrmContactResponse } from '@service-storage/generated/schemas/crmContactResponse';
@@ -6,6 +8,7 @@ import { queryOptions, useMutation, useQuery } from '@tanstack/solid-query';
 import type { Accessor } from 'solid-js';
 import type { CrmRecordDependencies } from './dependencies';
 import { crmKeys } from './keys';
+import { listCanIncludeCrmContacts } from './list-refresh';
 
 const CONTACT_STALE_TIME = 60 * 1000;
 
@@ -95,7 +98,7 @@ export function useSetContactNameMutation(deps: CrmRecordDependencies) {
         name,
       }: {
         contactId: string;
-        companyId: string;
+        companyId?: string | null;
         name: string;
       }) => throwOnErr(() => deps.storage.setContactName({ contactId, name })),
       onMutate: async ({ contactId, name }) => {
@@ -129,9 +132,10 @@ export function useSetContactNameMutation(deps: CrmRecordDependencies) {
           deps.client.invalidateQueries({
             queryKey: crmKeys.contact(contactId).queryKey,
           }),
-          deps.client.invalidateQueries({
-            queryKey: crmKeys.company(companyId).queryKey,
-          }),
+          companyId &&
+            deps.client.invalidateQueries({
+              queryKey: crmKeys.company(companyId).queryKey,
+            }),
           deps.client.invalidateQueries({ queryKey: soupKeys._def }),
         ]);
       },
@@ -142,12 +146,13 @@ export function useSetContactNameMutation(deps: CrmRecordDependencies) {
 
 /**
  * Toggles `crm_contacts.hidden` via `PUT /crm/contacts/{id}/hidden`.
- * Hidden contacts disappear from the parent company's contact list
- * (non-admin view) and from any soup surface that filters them.
+ * Hidden contacts disappear from normal company Team lists for every role
+ * and from any soup surface that filters them. Authorized detail reads still
+ * include hidden contacts for restoration.
  *
- * Returns the invalidation promise from `onSuccess` so the mutation
- * stays pending until both the contact query and the soup queries
- * refetch — the toggle state and any dependent UI all flip in one beat.
+ * Awaits cache invalidation in the visibility trace so the mutation
+ * stays pending until active contact, company and soup queries refetch.
+ * Inactive company queries become stale and reload when revisited.
  */
 export function useSetContactHiddenMutation(deps: CrmRecordDependencies) {
   return useMutation(
@@ -159,16 +164,48 @@ export function useSetContactHiddenMutation(deps: CrmRecordDependencies) {
         contactId: string;
         hidden: boolean;
       }) =>
-        throwOnErr(() => deps.storage.setContactHidden({ contactId, hidden })),
-      onSuccess: async (_data, { contactId }) => {
-        await invalidateCachedCrmContacts(contactId);
-        return Promise.all([
-          deps.client.invalidateQueries({ queryKey: soupKeys._def }),
-          deps.client.invalidateQueries({
-            queryKey: crmKeys.contact(contactId).queryKey,
-          }),
-        ]);
-      },
+        Telemetry.span('crm.visibility_change', async (span) => {
+          span.setAttr('crm.record_type', 'contact');
+          span.setAttr('crm.record_id', contactId);
+          span.setAttr('crm.hidden', hidden);
+          try {
+            const result = await throwOnErr(() =>
+              deps.storage.setContactHidden({ contactId, hidden })
+            );
+            await span.span(
+              'crm.visibility_change.refresh',
+              async (refresh) => {
+                try {
+                  await invalidateCachedCrmContacts(contactId);
+                  await Promise.all([
+                    refreshActiveGraphqlSoupQueries({
+                      where: listCanIncludeCrmContacts,
+                      throwOnError: true,
+                    }),
+                    deps.client.invalidateQueries({ queryKey: soupKeys._def }),
+                    deps.client.invalidateQueries({
+                      queryKey: crmKeys.contact(contactId).queryKey,
+                    }),
+                    // Company responses embed contacts. Invalidate the family
+                    // even when no contact detail (or company ID) is cached.
+                    deps.client.invalidateQueries({
+                      queryKey: crmKeys.company._def,
+                    }),
+                  ]);
+                } catch (error) {
+                  refresh.error('Contact visibility refresh failed');
+                  throw error;
+                }
+              }
+            );
+            span.setAttr('crm.visibility.outcome', 'success');
+            return result;
+          } catch (error) {
+            span.setAttr('crm.visibility.outcome', 'error');
+            span.error('Contact visibility update failed');
+            throw error;
+          }
+        }),
     }),
     () => deps.client
   );

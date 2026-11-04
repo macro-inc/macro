@@ -668,6 +668,12 @@ impl ScheduledActionRepo for UnusedRepo {
     async fn get_execution_records(&self, _: &Uuid) -> Result<Vec<ActionExecutionRecord>> {
         unimplemented!()
     }
+    async fn last_runs(
+        &self,
+        _: &[Uuid],
+    ) -> Result<std::collections::HashMap<Uuid, crate::domain::models::LastRun>> {
+        unimplemented!()
+    }
     async fn update_next_run_at(&self, _: &Uuid) -> Result<()> {
         unimplemented!()
     }

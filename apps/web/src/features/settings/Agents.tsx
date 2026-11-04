@@ -80,6 +80,7 @@ import {
 } from './agentSettingsState';
 import { CursorConnectPage } from './CursorConnectPage';
 import { AgentSetupStrips } from './components/agent-setup-strips';
+import { AutoArchiveSetting } from './components/auto-archive-setting';
 import { CodingPreferencesSetting } from './components/coding-preferences-setting';
 import { AgentInstructionsEditor } from './components/instructions-editor';
 import { SettingsSelect } from './components/settings-select';
@@ -403,6 +404,7 @@ export function Agents(props: {
           </section>
 
           <CodingPreferencesSetting />
+          <AutoArchiveSetting />
         </SettingsPage>
       </Show>
 
@@ -940,42 +942,100 @@ function AgentEditorPage(props: {
         : 'Agent API keys are part of the Premium and Max plans.';
     if (saved && saved.provider !== provider.id)
       return `The saved ${apiKeyProviderName(saved.provider)} key isn’t used with this model.`;
-    return 'Bill usage to your own API key.';
+    return `Bills this agent’s usage to your ${provider.name} account instead of Macro. Leave it empty to run on Macro.`;
   };
+  // Optional, so it stays a one-line offer until asked for or already set.
+  const [apiKeyOpen, setApiKeyOpen] = createSignal(false);
+  const apiKeyShown = () =>
+    apiKeyOpen() || savedApiKey() !== undefined || apiKeyDraft().length > 0;
   const apiKeyField = () => (
     <Show when={keyProvider()}>
       {(provider) => (
-        <div class="flex max-w-[420px] flex-col gap-1.5">
-          <span class="text-xs font-medium text-ink-muted">
-            {provider().name} API key
-          </span>
-          <div class="flex min-w-0 items-center gap-2">
-            <ApiKeyInput
-              aria-label={`${provider().name} API key`}
-              class="flex-1"
-              prefix={provider().prefix}
-              saved={savedApiKey()?.provider === provider().id}
-              disabled={busy() || apiKeyLocked()}
-              value={apiKeyDraft()}
-              onValueChange={setApiKeyDraft}
-            />
-            <Show when={savedApiKey()}>
-              <Button
-                type="button"
-                variant="ghost"
-                size="sm"
-                disabled={busy()}
-                onClick={() => {
-                  setApiKeyDraft('');
-                  setRemovingApiKey(true);
-                }}
+        <Show
+          when={apiKeyShown()}
+          fallback={
+            <div class="flex max-w-[420px] items-center justify-between gap-3">
+              <div class="min-w-0">
+                <div class="text-xs font-medium text-ink-muted">
+                  {provider().name} API key{' '}
+                  <span class="whitespace-nowrap font-normal text-ink-extra-muted">
+                    · Optional
+                  </span>
+                </div>
+                <p class="mt-0.5 text-xs text-ink-extra-muted">
+                  {apiKeyLocked()
+                    ? apiKeyHelp(provider())
+                    : 'Runs on Macro usage unless you add one.'}
+                </p>
+              </div>
+              <Show when={!apiKeyLocked()}>
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="sm"
+                  class="shrink-0 text-ink"
+                  disabled={busy()}
+                  onClick={() => setApiKeyOpen(true)}
+                >
+                  Add key
+                </Button>
+              </Show>
+            </div>
+          }
+        >
+          <div class="flex max-w-[420px] flex-col gap-1.5">
+            <span class="text-xs font-medium text-ink-muted">
+              {provider().name} API key{' '}
+              <span class="whitespace-nowrap font-normal text-ink-extra-muted">
+                · Optional
+              </span>
+            </span>
+            <div class="flex min-w-0 items-center gap-2">
+              <ApiKeyInput
+                aria-label={`${provider().name} API key`}
+                class="flex-1"
+                prefix={provider().prefix}
+                saved={savedApiKey()?.provider === provider().id}
+                disabled={busy() || apiKeyLocked()}
+                value={apiKeyDraft()}
+                onValueChange={setApiKeyDraft}
+              />
+              <Show
+                when={savedApiKey()}
+                fallback={
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="sm"
+                    aria-label="Cancel API key"
+                    disabled={busy()}
+                    onClick={() => {
+                      setApiKeyDraft('');
+                      setApiKeyOpen(false);
+                    }}
+                  >
+                    Cancel
+                  </Button>
+                }
               >
-                Remove
-              </Button>
-            </Show>
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="sm"
+                  disabled={busy()}
+                  onClick={() => {
+                    setApiKeyDraft('');
+                    setApiKeyOpen(true);
+                    setRemovingApiKey(true);
+                  }}
+                >
+                  Remove
+                </Button>
+              </Show>
+            </div>
+            <p class="text-xs text-ink-extra-muted">{apiKeyHelp(provider())}</p>
           </div>
-          <p class="text-xs text-ink-extra-muted">{apiKeyHelp(provider())}</p>
-        </div>
+        </Show>
       )}
     </Show>
   );

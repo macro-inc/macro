@@ -20,12 +20,12 @@ use crate::inbound::template_router::{
 
 use crate::domain::event_trigger::{
     ActionTrigger, EventFilter, EventFilters, EventName, GithubSelectorInput,
-    PayloadConditionInput, PayloadScalar,
+    PayloadConditionInput, PayloadScalar, PropertySelector,
 };
 use crate::domain::models::{
     ActionConfiguration, ActionConfigurationUpdate, ActionExecutionRecord, ActionKind, AgentTask,
     AgentTaskAgent, ExecutionResource, ExecutionResourceType, ExecutionResult, InProgressExecution,
-    RoutineModelId, Schedule, ScheduledAction, ScheduledActionUpdate,
+    LastRun, RoutineModelId, Schedule, ScheduledAction, ScheduledActionUpdate,
 };
 use ai_billing::inbound::admission::AiAdmissionErrorBody;
 use model::response::EmptyResponse;
@@ -71,6 +71,7 @@ use model::response::EmptyResponse;
             GithubSelectorInput,
             PayloadConditionInput,
             PayloadScalar,
+            PropertySelector,
             SetScheduledActionEnabled,
             Schedule,
             ActionKind,
@@ -82,6 +83,7 @@ use model::response::EmptyResponse;
             ExecutionResult,
             InProgressExecution,
             ActionExecutionRecord,
+            LastRun,
             ScheduledActionUpdate,
             EmptyResponse,
             crate::domain::templates::RoutineTemplate,

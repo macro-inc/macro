@@ -322,6 +322,11 @@ export type AgentMcpServers = {
 export type AgentPullRequestState = 'open' | 'draft' | 'closed' | 'merged';
 
 /**
+ * Who or what archived an agent session.
+ */
+export type AgentSessionArchiveCause = 'user' | 'pull_request_merged' | 'runtime_closed';
+
+/**
  * Filters for agent sessions.
  */
 export type AgentSessionFilters = {
@@ -451,6 +456,21 @@ export type AgentTyping = {
  * What a typing agent is doing.
  */
 export type AgentTypingPhase = 'thinking' | 'writing' | 'working' | 'waiting';
+
+/**
+ * Public admission error payload. Handlers with additional fields can reuse the
+ * domain error's code and message and [`admission_status`].
+ */
+export type AiAdmissionErrorBody = {
+    /**
+     * Stable denial or unavailability code.
+     */
+    code: string;
+    /**
+     * Human-readable explanation, without internal billing diagnostics.
+     */
+    error: string;
+};
 
 export type Anchor = PdfAnchor;
 
@@ -4120,9 +4140,25 @@ export type CreateCrmCompanyRequest = {
 export type CreateCrmContactRequest = {
     /**
      * The contact's email address, including personal email providers.
-     * It need not match a company domain.
+     * It need not match a company domain. Optional: omit it to add the
+     * contact by name only.
      */
-    email: string;
+    email?: string | null;
+    /**
+     * Display name for the contact.
+     */
+    name: string;
+};
+
+/**
+ * Request body for `POST /crm/contacts`.
+ */
+export type CreateCrmTeamContactRequest = {
+    /**
+     * The contact's email address, of any domain. Optional: omit it to
+     * add the contact by name only.
+     */
+    email?: string | null;
     /**
      * Display name for the contact.
      */
@@ -4804,6 +4840,20 @@ export type CrmAssociation = {
 } | 'activity';
 
 /**
+ * A domain the team keeps out of email sync.
+ */
+export type CrmBlockedDomainResponse = {
+    /**
+     * When it was added.
+     */
+    created_at: string;
+    /**
+     * The blocked domain, lowercase.
+     */
+    domain: string;
+};
+
+/**
  * The crm company filters used to narrow which CRM companies appear in soup.
  */
 export type CrmCompanyFilters = {
@@ -4883,17 +4933,19 @@ export type CrmCompanyResponse = {
  */
 export type CrmContactResponse = {
     /**
-     * The id of the company the contact belongs to.
+     * The id of the company the contact belongs to; absent for a
+     * contact without a company.
      */
-    companyId: string;
+    companyId?: string | null;
     /**
      * When the contact record was created.
      */
     createdAt: string;
     /**
-     * The contact's email address.
+     * The contact's email address; absent for contacts added by name
+     * alone.
      */
-    email: string;
+    email?: string | null;
     /**
      * Earliest known interaction with this contact.
      */
@@ -5020,6 +5072,11 @@ export type CrmTeamSettingsResponse = {
      */
     edit_stages_role: CrmPermissionRole;
     /**
+     * Whether email sync keeps personal-provider addresses (gmail.com
+     * etc.) out of the CRM.
+     */
+    exclude_personal_emails: boolean;
+    /**
      * System stage option id to team stage option id for seeded stages.
      */
     legacy_stage_ids: {
@@ -5079,6 +5136,10 @@ export type Database = {
      * Owning user.
      */
     owner_id: string;
+    /**
+     * The folder it is filed in; `null` at the root.
+     */
+    project_id: string | null;
     /**
      * Set when trashed.
      */
@@ -5365,6 +5426,75 @@ export type DirectAccess = {
      * Recipient.
      */
     userId: string;
+};
+
+/**
+ * The edit failed after it started, so it may have partly applied. Read the
+ * document before retrying.
+ */
+export type DocumentAiEditFailed = {
+    /**
+     * Always `edit_failed`.
+     */
+    error: DocumentAiEditFailedCode;
+    /**
+     * What to do next; the cause is logged, never returned.
+     */
+    message: string;
+};
+
+/**
+ * Error code of an edit that failed after it started.
+ */
+export type DocumentAiEditFailedCode = 'edit_failed';
+
+/**
+ * The editor could not do the edit; nothing changed.
+ */
+export type DocumentAiEditRefused = {
+    /**
+     * Always `edit_refused`.
+     */
+    error: DocumentAiEditRefusedCode;
+    /**
+     * Why, in the editor's words: what it needs to know or cannot do.
+     */
+    reason: string;
+};
+
+/**
+ * Error code of an edit the editor refused.
+ */
+export type DocumentAiEditRefusedCode = 'edit_refused';
+
+/**
+ * What to change, in words.
+ */
+export type DocumentAiEditRequest = {
+    /**
+     * Run the single-model fast pipeline, for one small, contained edit.
+     */
+    fast?: boolean;
+    /**
+     * Natural-language instructions. Name the section or quote the text to
+     * change, describe the outcome, and say what must stay as it is.
+     */
+    instructions: string;
+};
+
+/**
+ * A completed edit by instructions.
+ */
+export type DocumentAiEdited = {
+    /**
+     * What the editor needs to know to finish, when it applied part of the
+     * edit and stopped; the applied part stays.
+     */
+    clarification?: string | null;
+    /**
+     * The document's version after the edit, as sync-service encodes it.
+     */
+    revision: string;
 };
 
 /**
@@ -6036,6 +6166,16 @@ export type DocumentUpdatedMetadata = {
      * Whether share permissions were updated.
      */
     share_permission_updated: boolean;
+};
+
+/**
+ * Request body for duplicating a database.
+ */
+export type DuplicateDatabaseRequest = {
+    /**
+     * The copy's name; left out, "<name> copy".
+     */
+    name?: string | null;
 };
 
 export type EditAnchorRequest = EditPdfAnchorRequest & {
@@ -7752,6 +7892,12 @@ export type ForeignEntityFilters = {
  */
 export type Form = {
     /**
+     * Whether nobody, the owner included, can see who gave which response.
+     * Who responded is kept apart from the responses, only so nobody
+     * responds twice. Fixed once anyone has responded.
+     */
+    anonymous: boolean;
+    /**
      * Who may respond.
      */
     audience: Audience;
@@ -7799,10 +7945,19 @@ export type Form = {
      */
     ownerId: string;
     /**
+     * The folder it is filed in; `null` at the root.
+     */
+    projectId: string | null;
+    /**
      * The person column each signed-in submission names its respondent in;
-     * `null` once deleted.
+     * `null` once deleted, and on a form created anonymous. An anonymous
+     * form never writes it.
      */
     respondentColumnId: string | null;
+    /**
+     * Whether people with View may read individual response rows.
+     */
+    responsesVisible: boolean;
     /**
      * Whether its owner closed it.
      */
@@ -7826,8 +7981,9 @@ export type Form = {
 };
 
 /**
- * The caller's level on a form: view responds, edit changes questions and
- * reads responses, owner also sets the audience, closes and trashes it.
+ * The caller's level on a form: view responds (and reads responses when
+ * they are shared), edit changes questions and reads responses, owner
+ * also sets the audience, closes and trashes it.
  */
 export type FormAccess = 'view' | 'edit' | 'owner';
 
@@ -7887,7 +8043,7 @@ export type FormDetail = {
 /**
  * What went wrong with a forms request.
  */
-export type FormErrorCode = 'tableAlreadyHasForm' | 'notFound' | 'forbidden' | 'ownerOnly' | 'signInRequired' | 'closed' | 'tableGone' | 'alreadyResponded' | 'noResponse' | 'unknownQuestion' | 'repeatedAnswer' | 'missingAnswer' | 'invalidAnswer' | 'widgetMismatch' | 'fileUploadNeedsSignIn' | 'invalidLayout' | 'invalidName' | 'invalidSharing' | 'tallyHidden' | 'invalidBranding' | 'conflict' | 'internal';
+export type FormErrorCode = 'tableAlreadyHasForm' | 'notFound' | 'forbidden' | 'ownerOnly' | 'signInRequired' | 'closed' | 'tableGone' | 'alreadyResponded' | 'noResponse' | 'anonymousResponseFinal' | 'unknownQuestion' | 'repeatedAnswer' | 'missingAnswer' | 'invalidAnswer' | 'widgetMismatch' | 'fileUploadNeedsSignIn' | 'invalidLayout' | 'invalidName' | 'invalidSharing' | 'tallyHidden' | 'invalidBranding' | 'conflict' | 'internal';
 
 /**
  * Why a forms request was refused or failed.
@@ -8143,6 +8299,11 @@ export type FormSectionDetail = {
  * Where a new form's responses go.
  */
 export type FormSource = {
+    /**
+     * Make the form anonymous from the start: its table gets no
+     * Respondent column.
+     */
+    anonymous?: boolean;
     /**
      * Keep the form, and the database made for it, out of Drive, as
      * for a channel poll.
@@ -10738,8 +10899,7 @@ export type MessageTopicEvent = {
 };
 
 /**
- * A signed-in respondent's own response, with its answers as the row
- * holds them now.
+ * A signed-in respondent's own response.
  */
 export type MyResponse = {
     /**
@@ -10748,14 +10908,17 @@ export type MyResponse = {
      */
     answers: Array<Answer>;
     /**
-     * The form's booking step, while the saved row still passes the form's
-     * current required questions and gates.
+     * The form's booking step, while the saved row still passes the
+     * form's current required questions and gates.
      */
     booking?: UnlockedBooking;
+    kind: 'saved';
     /**
      * The ledger entry.
      */
     response: FormResponse;
+} | {
+    kind: 'anonymous';
 };
 
 /**
@@ -13040,6 +13203,11 @@ export type SoupAgentSessionSoupPropertiesField = {
     properties: Array<SoupProperty>;
 } & {
     /**
+     * When the session was archived, or `None` while it is active.
+     */
+    archivedAt?: string | null;
+    archivedBy?: null | AgentSessionArchiveCause;
+    /**
      * The bot running this session
      */
     botId: string;
@@ -13055,10 +13223,6 @@ export type SoupAgentSessionSoupPropertiesField = {
      * The agent session uuid
      */
     id: string;
-    /**
-     * Whether the session is archived and read-only.
-     */
-    isArchived: boolean;
     /**
      * The user-facing name of the session
      */
@@ -13653,21 +13817,21 @@ export type SoupCrmContactSoupPropertiesField = {
     properties: Array<SoupProperty>;
 } & {
     /**
-     * Parent company ID.
+     * Parent company ID; `None` for a contact without a company.
      */
-    companyId: string;
+    companyId?: string | null;
     /**
-     * Parent company's display name.
+     * Parent company's display name; `None` without a company.
      */
-    companyName: string;
+    companyName?: string | null;
     /**
      * Record creation time.
      */
     createdAt: string;
     /**
-     * Full email address.
+     * Full email address; `None` for a contact added by name alone.
      */
-    email: string;
+    email?: string | null;
     /**
      * Earliest interaction for this team record.
      */
@@ -15075,6 +15239,13 @@ export type TallyBucket = {
      * The value.
      */
     value: TallyValue;
+    /**
+     * Who chose it, as Macro user ids in submission order: present only
+     * for the form's editors, or its viewers when it shares its responses,
+     * and never when it hides respondents. Rows no signed-in respondent
+     * submitted count without a voter.
+     */
+    voters?: Array<string> | null;
 };
 
 /**
@@ -15888,6 +16059,11 @@ export type UpdateCrmTeamSettingsRequest = {
     default_team_view_id?: string | null;
     delete_records_role?: null | CrmPermissionRole;
     edit_stages_role?: null | CrmPermissionRole;
+    /**
+     * Whether email sync keeps personal-provider addresses out of the
+     * CRM. Admin/owner only.
+     */
+    exclude_personal_emails?: boolean | null;
     move_closed_deals_role?: null | CrmPermissionRole;
     /**
      * Replacement team-views array (whole-blob, last write wins).
@@ -15905,6 +16081,11 @@ export type UpdateForm = {
      * A new accent color, or `null` for the default.
      */
     accentColor?: string | null;
+    /**
+     * Whether nobody can see who gave which response; refused once anyone
+     * has responded.
+     */
+    anonymous?: boolean;
     /**
      * Who may respond from now on.
      */
@@ -15929,6 +16110,10 @@ export type UpdateForm = {
      * A new logo, or `null` to remove it.
      */
     logoFileId?: string | null;
+    /**
+     * Whether people with View may read individual response rows.
+     */
+    responsesVisible?: boolean;
     /**
      * Open or close it.
      */
@@ -19257,6 +19442,80 @@ export type GetChannelsResponses = {
 
 export type GetChannelsResponse = GetChannelsResponses[keyof GetChannelsResponses];
 
+export type ListCrmBlockedDomainsData = {
+    body?: never;
+    path?: never;
+    query?: never;
+    url: '/crm/blocked-domains';
+};
+
+export type ListCrmBlockedDomainsErrors = {
+    401: ErrorResponse;
+    500: ErrorResponse;
+};
+
+export type ListCrmBlockedDomainsError = ListCrmBlockedDomainsErrors[keyof ListCrmBlockedDomainsErrors];
+
+export type ListCrmBlockedDomainsResponses = {
+    200: Array<CrmBlockedDomainResponse>;
+};
+
+export type ListCrmBlockedDomainsResponse = ListCrmBlockedDomainsResponses[keyof ListCrmBlockedDomainsResponses];
+
+export type UnblockCrmDomainData = {
+    body?: never;
+    path: {
+        /**
+         * A bare domain like acme.com
+         */
+        domain: string;
+    };
+    query?: never;
+    url: '/crm/blocked-domains/{domain}';
+};
+
+export type UnblockCrmDomainErrors = {
+    400: ErrorResponse;
+    401: ErrorResponse;
+    403: ErrorResponse;
+    500: ErrorResponse;
+};
+
+export type UnblockCrmDomainError = UnblockCrmDomainErrors[keyof UnblockCrmDomainErrors];
+
+export type UnblockCrmDomainResponses = {
+    204: void;
+};
+
+export type UnblockCrmDomainResponse = UnblockCrmDomainResponses[keyof UnblockCrmDomainResponses];
+
+export type BlockCrmDomainData = {
+    body?: never;
+    path: {
+        /**
+         * A bare domain like acme.com
+         */
+        domain: string;
+    };
+    query?: never;
+    url: '/crm/blocked-domains/{domain}';
+};
+
+export type BlockCrmDomainErrors = {
+    400: ErrorResponse;
+    401: ErrorResponse;
+    403: ErrorResponse;
+    500: ErrorResponse;
+};
+
+export type BlockCrmDomainError = BlockCrmDomainErrors[keyof BlockCrmDomainErrors];
+
+export type BlockCrmDomainResponses = {
+    204: void;
+};
+
+export type BlockCrmDomainResponse = BlockCrmDomainResponses[keyof BlockCrmDomainResponses];
+
 export type CreateCrmCompanyData = {
     body: CreateCrmCompanyRequest;
     path?: never;
@@ -19473,6 +19732,29 @@ export type SearchContactsResponses = {
 };
 
 export type SearchContactsResponse2 = SearchContactsResponses[keyof SearchContactsResponses];
+
+export type CreateCrmTeamContactData = {
+    body: CreateCrmTeamContactRequest;
+    path?: never;
+    query?: never;
+    url: '/crm/contacts';
+};
+
+export type CreateCrmTeamContactErrors = {
+    400: ErrorResponse;
+    401: ErrorResponse;
+    403: ErrorResponse;
+    409: ErrorResponse;
+    500: ErrorResponse;
+};
+
+export type CreateCrmTeamContactError = CreateCrmTeamContactErrors[keyof CreateCrmTeamContactErrors];
+
+export type CreateCrmTeamContactResponses = {
+    200: CrmContactResponse;
+};
+
+export type CreateCrmTeamContactResponse = CreateCrmTeamContactResponses[keyof CreateCrmTeamContactResponses];
 
 export type GetContactByEmailData = {
     body?: never;
@@ -19765,6 +20047,22 @@ export type TrashCrmPipelineResponses = {
 };
 
 export type TrashCrmPipelineResponse = TrashCrmPipelineResponses[keyof TrashCrmPipelineResponses];
+
+export type GetCrmPipelineViewPositionsData = {
+    body?: never;
+    path: {
+        id: string;
+        view: string;
+    };
+    query?: never;
+    url: '/crm/pipelines/{id}/views/{view}/positions';
+};
+
+export type GetCrmPipelineViewPositionsResponses = {
+    200: Array<CardPosition>;
+};
+
+export type GetCrmPipelineViewPositionsResponse = GetCrmPipelineViewPositionsResponses[keyof GetCrmPipelineViewPositionsResponses];
 
 export type GetCrmTeamSettingsData = {
     body?: never;
@@ -20159,6 +20457,31 @@ export type UndoDatabaseChangeResponses = {
 };
 
 export type UndoDatabaseChangeResponse = UndoDatabaseChangeResponses[keyof UndoDatabaseChangeResponses];
+
+export type DuplicateDatabaseData = {
+    body: DuplicateDatabaseRequest;
+    path: {
+        id: string;
+    };
+    query?: never;
+    url: '/databases/{id}/duplicate';
+};
+
+export type DuplicateDatabaseErrors = {
+    400: ErrorResponse;
+    401: ErrorResponse;
+    403: ErrorResponse;
+    404: ErrorResponse;
+    500: ErrorResponse;
+};
+
+export type DuplicateDatabaseError = DuplicateDatabaseErrors[keyof DuplicateDatabaseErrors];
+
+export type DuplicateDatabaseResponses = {
+    201: Database;
+};
+
+export type DuplicateDatabaseResponse = DuplicateDatabaseResponses[keyof DuplicateDatabaseResponses];
 
 export type ImportDatabaseTableData = {
     body: ImportTable;
@@ -21275,6 +21598,65 @@ export type SaveDocumentHandlerResponses = {
 };
 
 export type SaveDocumentHandlerResponse = SaveDocumentHandlerResponses[keyof SaveDocumentHandlerResponses];
+
+export type EditDocumentWithAiData = {
+    body: DocumentAiEditRequest;
+    path: {
+        /**
+         * Document identity
+         */
+        document_id: string;
+    };
+    query?: never;
+    url: '/documents/{document_id}/ai-edit';
+};
+
+export type EditDocumentWithAiErrors = {
+    /**
+     * Not a markdown document, or empty instructions
+     */
+    400: ErrorResponse;
+    /**
+     * Authentication required
+     */
+    401: unknown;
+    /**
+     * AI allowance exhausted
+     */
+    402: AiAdmissionErrorBody;
+    /**
+     * Document edit access denied
+     */
+    403: unknown;
+    /**
+     * Document not found
+     */
+    404: unknown;
+    /**
+     * The editor could not do the edit; nothing changed
+     */
+    422: DocumentAiEditRefused;
+    /**
+     * The edit could not start
+     */
+    500: ErrorResponse;
+    /**
+     * The edit failed and may have partly applied
+     */
+    502: DocumentAiEditFailed;
+    /**
+     * AI usage validation unavailable; retry later
+     */
+    503: AiAdmissionErrorBody;
+};
+
+export type EditDocumentWithAiError = EditDocumentWithAiErrors[keyof EditDocumentWithAiErrors];
+
+export type EditDocumentWithAiResponses = {
+    200: DocumentAiEdited;
+};
+
+export type EditDocumentWithAiResponse = EditDocumentWithAiResponses[keyof EditDocumentWithAiResponses];
 
 export type GetDocumentBranchNameData = {
     body?: never;

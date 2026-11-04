@@ -2342,25 +2342,27 @@ export const CreateCalendarEvent = z.object({
   addMacroCall: z.boolean().optional(),
   addConference: z.boolean().optional(),
   eventType: z
-    .any()
-    .superRefine((x, ctx) => {
-      const schemas = [z.literal('default'), z.literal('out_of_office')];
-      const errors = schemas.reduce<z.ZodError[]>(
-        (errors, schema) =>
-          ((result) => (result.error ? [...errors, result.error] : errors))(
-            schema.safeParse(x)
-          ),
-        []
-      );
-      if (schemas.length - errors.length !== 1) {
-        ctx.addIssue({
-          path: ctx.path,
-          code: 'invalid_union',
-          unionErrors: errors,
-          message: 'Invalid input: Should pass single schema',
-        });
-      }
-    })
+    .intersection(
+      z.any().superRefine((x, ctx) => {
+        const schemas = [z.literal('default'), z.literal('out_of_office')];
+        const errors = schemas.reduce<z.ZodError[]>(
+          (errors, schema) =>
+            ((result) => (result.error ? [...errors, result.error] : errors))(
+              schema.safeParse(x)
+            ),
+          []
+        );
+        if (schemas.length - errors.length !== 1) {
+          ctx.addIssue({
+            path: ctx.path,
+            code: 'invalid_union',
+            unionErrors: errors,
+            message: 'Invalid input: Should pass single schema',
+          });
+        }
+      }),
+      z.any().default('default')
+    )
     .optional(),
   outOfOffice: z
     .union([
@@ -2605,25 +2607,27 @@ export const CreateConfirmedCalendarEvent = z.object({
   addMacroCall: z.boolean().optional(),
   addConference: z.boolean().optional(),
   eventType: z
-    .any()
-    .superRefine((x, ctx) => {
-      const schemas = [z.literal('default'), z.literal('out_of_office')];
-      const errors = schemas.reduce<z.ZodError[]>(
-        (errors, schema) =>
-          ((result) => (result.error ? [...errors, result.error] : errors))(
-            schema.safeParse(x)
-          ),
-        []
-      );
-      if (schemas.length - errors.length !== 1) {
-        ctx.addIssue({
-          path: ctx.path,
-          code: 'invalid_union',
-          unionErrors: errors,
-          message: 'Invalid input: Should pass single schema',
-        });
-      }
-    })
+    .intersection(
+      z.any().superRefine((x, ctx) => {
+        const schemas = [z.literal('default'), z.literal('out_of_office')];
+        const errors = schemas.reduce<z.ZodError[]>(
+          (errors, schema) =>
+            ((result) => (result.error ? [...errors, result.error] : errors))(
+              schema.safeParse(x)
+            ),
+          []
+        );
+        if (schemas.length - errors.length !== 1) {
+          ctx.addIssue({
+            path: ctx.path,
+            code: 'invalid_union',
+            unionErrors: errors,
+            message: 'Invalid input: Should pass single schema',
+          });
+        }
+      }),
+      z.any().default('default')
+    )
     .optional(),
   outOfOffice: z
     .union([
@@ -2675,15 +2679,15 @@ export const CreateConfirmedCalendarEvent = z.object({
 });
 
 export const CreateContact = z.object({
-  companyId: z.string().uuid(),
+  companyId: z.union([z.string().uuid(), z.null()]).optional(),
   name: z.string(),
-  email: z.string(),
+  email: z.union([z.string(), z.null()]).optional(),
 });
 
 export const CreateContactResponse = z.object({
   contactId: z.string().uuid(),
-  companyId: z.string().uuid(),
-  email: z.string(),
+  companyId: z.union([z.string().uuid(), z.null()]).optional(),
+  email: z.union([z.string(), z.null()]).optional(),
   name: z.union([z.string(), z.null()]).optional(),
 });
 
@@ -2705,6 +2709,7 @@ export const CreateForm = z.object({
     const schemas = [
       z.object({
         isHiddenInDrive: z.boolean().optional(),
+        anonymous: z.boolean().optional(),
         kind: z.literal('new'),
       }),
       z.object({
@@ -3528,6 +3533,8 @@ export const MutationResult = z.object({
             }
           }),
           tallyVisible: z.boolean(),
+          responsesVisible: z.boolean(),
+          anonymous: z.boolean(),
           status: z.any().superRefine((x, ctx) => {
             const schemas = [z.literal('open'), z.literal('closed')];
             const errors = schemas.reduce<z.ZodError[]>(
@@ -3558,6 +3565,7 @@ export const MutationResult = z.object({
           }),
           createdAt: z.string().datetime({ offset: true }),
           updatedAt: z.string().datetime({ offset: true }),
+          projectId: z.union([z.string(), z.null()]).optional(),
           isHiddenInDrive: z.boolean(),
         }),
         layout: z.object({
@@ -4877,13 +4885,13 @@ export const DispatchCodingAgent = z
   .object({ agent_id: z.string().uuid(), prompt: z.string() })
   .strict();
 
-export const DisplayResults = z.object({ view: z.any() });
-
-export const DisplayResultsResponse = z.object({ message: z.string() });
-
 export const DuplicateItem = z.object({
   entityType: z.any().superRefine((x, ctx) => {
-    const schemas = [z.literal('document'), z.literal('chat')];
+    const schemas = [
+      z.literal('document'),
+      z.literal('database'),
+      z.literal('chat'),
+    ];
     const errors = schemas.reduce<z.ZodError[]>(
       (errors, schema) =>
         ((result) => (result.error ? [...errors, result.error] : errors))(
@@ -4906,7 +4914,11 @@ export const DuplicateItem = z.object({
 
 export const DuplicateItemResponse = z.object({
   entityType: z.any().superRefine((x, ctx) => {
-    const schemas = [z.literal('document'), z.literal('chat')];
+    const schemas = [
+      z.literal('document'),
+      z.literal('database'),
+      z.literal('chat'),
+    ];
     const errors = schemas.reduce<z.ZodError[]>(
       (errors, schema) =>
         ((result) => (result.error ? [...errors, result.error] : errors))(
@@ -9143,7 +9155,7 @@ export const GetCompanyResponse = z.object({
   contacts: z.array(
     z.object({
       id: z.string().uuid(),
-      email: z.string(),
+      email: z.union([z.string(), z.null()]).optional(),
       name: z.union([z.string(), z.null()]).optional(),
       lastInteraction: z.string().datetime({ offset: true }),
     })
@@ -10772,7 +10784,34 @@ export const ListEntitiesResponse = z.object({
           name: z.string(),
           ownerId: z.string(),
           botId: z.string().uuid(),
-          isArchived: z.boolean(),
+          archivedBy: z
+            .union([
+              z.any().superRefine((x, ctx) => {
+                const schemas = [
+                  z.literal('user'),
+                  z.literal('pull_request_merged'),
+                  z.literal('runtime_closed'),
+                ];
+                const errors = schemas.reduce<z.ZodError[]>(
+                  (errors, schema) =>
+                    ((result) =>
+                      result.error ? [...errors, result.error] : errors)(
+                      schema.safeParse(x)
+                    ),
+                  []
+                );
+                if (schemas.length - errors.length !== 1) {
+                  ctx.addIssue({
+                    path: ctx.path,
+                    code: 'invalid_union',
+                    unionErrors: errors,
+                    message: 'Invalid input: Should pass single schema',
+                  });
+                }
+              }),
+              z.null(),
+            ])
+            .optional(),
           status: z.string(),
           turnState: z.union([z.string(), z.null()]).optional(),
           repoUrl: z.union([z.string(), z.null()]).optional(),
@@ -11032,6 +11071,8 @@ export const ListResult = z.object({
           }
         }),
         tallyVisible: z.boolean(),
+        responsesVisible: z.boolean(),
+        anonymous: z.boolean(),
         status: z.any().superRefine((x, ctx) => {
           const schemas = [z.literal('open'), z.literal('closed')];
           const errors = schemas.reduce<z.ZodError[]>(
@@ -11061,6 +11102,7 @@ export const ListResult = z.object({
         }),
         createdAt: z.string().datetime({ offset: true }),
         updatedAt: z.string().datetime({ offset: true }),
+        projectId: z.union([z.string(), z.null()]).optional(),
         isHiddenInDrive: z.boolean(),
       }),
       access: z.any().superRefine((x, ctx) => {
@@ -12387,7 +12429,36 @@ export const SessionConversation = z.object({
   name: z.string(),
   ownerId: z.string(),
   botId: z.string().uuid(),
-  isArchived: z.boolean(),
+  archivedBy: z
+    .union([
+      z.any().superRefine((x, ctx) => {
+        const schemas = [
+          z.literal('user'),
+          z.literal('pull_request_merged'),
+          z.literal('runtime_closed'),
+        ];
+        const errors = schemas.reduce<z.ZodError[]>(
+          (errors, schema) =>
+            ((result) => (result.error ? [...errors, result.error] : errors))(
+              schema.safeParse(x)
+            ),
+          []
+        );
+        if (schemas.length - errors.length !== 1) {
+          ctx.addIssue({
+            path: ctx.path,
+            code: 'invalid_union',
+            unionErrors: errors,
+            message: 'Invalid input: Should pass single schema',
+          });
+        }
+      }),
+      z.null(),
+    ])
+    .optional(),
+  archivedAt: z
+    .union([z.string().datetime({ offset: true }), z.null()])
+    .optional(),
   harness: z.string(),
   model: z.string(),
   status: z.string(),
@@ -13781,6 +13852,8 @@ export const ReadResult = z.any().superRefine((x, ctx) => {
             }
           }),
           tallyVisible: z.boolean(),
+          responsesVisible: z.boolean(),
+          anonymous: z.boolean(),
           status: z.any().superRefine((x, ctx) => {
             const schemas = [z.literal('open'), z.literal('closed')];
             const errors = schemas.reduce<z.ZodError[]>(
@@ -13811,6 +13884,7 @@ export const ReadResult = z.any().superRefine((x, ctx) => {
           }),
           createdAt: z.string().datetime({ offset: true }),
           updatedAt: z.string().datetime({ offset: true }),
+          projectId: z.union([z.string(), z.null()]).optional(),
           isHiddenInDrive: z.boolean(),
         }),
         layout: z.object({
@@ -14399,6 +14473,8 @@ export const ReadResult = z.any().superRefine((x, ctx) => {
             }
           }),
           tallyVisible: z.boolean(),
+          responsesVisible: z.boolean(),
+          anonymous: z.boolean(),
           status: z.any().superRefine((x, ctx) => {
             const schemas = [z.literal('open'), z.literal('closed')];
             const errors = schemas.reduce<z.ZodError[]>(
@@ -14429,6 +14505,7 @@ export const ReadResult = z.any().superRefine((x, ctx) => {
           }),
           createdAt: z.string().datetime({ offset: true }),
           updatedAt: z.string().datetime({ offset: true }),
+          projectId: z.union([z.string(), z.null()]).optional(),
           isHiddenInDrive: z.boolean(),
         }),
         access: z.any().superRefine((x, ctx) => {
@@ -16299,6 +16376,8 @@ export const SetFormAccess = z.object({
         .union([z.string().datetime({ offset: true }), z.null()])
         .optional(),
       tallyVisible: z.boolean(),
+      responsesVisible: z.union([z.boolean(), z.null()]).optional(),
+      anonymous: z.union([z.boolean(), z.null()]).optional(),
       channelGrants: z
         .array(
           z.any().superRefine((x, ctx) => {
@@ -17673,6 +17752,7 @@ export const CodeToolsDescription = z.object({
           z.object({
             name: z.string(),
             description: z.string(),
+            guide: z.union([z.string(), z.null()]).optional(),
             index: z.union([z.string(), z.null()]).optional(),
           })
         ),
@@ -17715,6 +17795,7 @@ export const CodeToolsDescription = z.object({
     z.object({
       name: z.string(),
       description: z.string(),
+      guide: z.union([z.string(), z.null()]).optional(),
       index: z.union([z.string(), z.null()]).optional(),
     })
   ),

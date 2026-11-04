@@ -26,6 +26,17 @@ a title does not enter the grid, and a failed rename shows a toast. Reload to ve
 the saved name persists. Viewers cannot enter rename from either entry point and
 see the split header's `viewer` badge instead.
 
+**Database actions → Duplicate** (any grant, viewers included) copies the database
+into a new one named "<name> copy" that you own, and opens it in the same split.
+The copy has every table, column (options and colours, formulas, relations within
+the database), view (filters, sorts, layouts and hand-placed board cards) and
+record, under new ids. A relation into another database stays only if you can see
+that database; otherwise the column and its view references are left out.
+Sharing, forms, webhooks, saved queries and row history stay with the original.
+Drive and list rows offer the same **Duplicate**, and agents use `DuplicateItem`
+with `entityType: "database"`. Verify by editing a record in the copy and
+checking the original is unchanged.
+
 Reopening a loaded table or view shows its cached rows while a background read
 checks for changes. Wait for refreshing to finish before asserting server
 reconciliation; visible rows alone do not mean the network read has completed.
@@ -331,7 +342,11 @@ after, so a 1 PM to 5 PM range contains its day. Properties of type **Time range
 edit with the same fields.
 Invalid numbers remain in the editor for correction.
 Drag across table cells to select a rectangle, or Shift-click another cell to
-extend from the first cell. Delete or Backspace clears editable cells in that
+extend from the first cell. From the keyboard, Shift+Arrow grows or shrinks the
+rectangle from the focused cell, Shift+Cmd/Ctrl+Arrow runs to the edge of the
+data, Shift+Home/End to the ends of the row, and Cmd/Ctrl+A selects every loaded
+cell; a plain arrow collapses it. Inside an open cell editor Shift+Arrow selects
+text as usual. Delete or Backspace clears editable cells in that
 rectangle as one undoable change; read-only cells are skipped. Newly saved rows
 can be included immediately; unsaved insertion rows are excluded. Escape clears
 the selection. Other participants see the selected range with a colored outline and
@@ -466,8 +481,9 @@ destination is revealed. Starting a new card reveals the lane's draft at the
 bottom and focuses its title, including after the lane was offscreen.
 
 Lane headers show a color or type icon, a name, and an adjacent record count.
-Cards use the Tasks board's header and compact, wrapping property layout rather than
-stacked field rows. Cards without fields do not render an empty property area.
+Cards use the Tasks board's header, with wrapping titles and each configured field's
+label above its full-width value. Unset fields show a dash. Cards without fields
+do not render an empty property area.
 Title editing keeps the displayed title's typography, wrapping, and spacing.
 Cards have a six-dot drag handle; their custom fields share a CSS grid with the title
 and align below its left edge. **Open record details** (the expand
@@ -480,8 +496,11 @@ medium-size icon buttons as Drive. View tabs and New use the shared Button styli
 A board has a lane per option (or person). Records without a grouping value are
 currently omitted from the board; they remain available in the table. Drag a card within
 a lane or into another lane; it moves at once, and moving it to another lane also
-sets its Select value. The order is saved for everyone and survives a reload. A
-sorted board keeps the sort's order, so dragging a card asks **Remove sort to
+sets its Select value. The order is saved for everyone and survives a reload.
+Switching boards during a save clears the previous board's temporary placement;
+the response updates only the board where the move started. Verify both a successful
+save and a refused move without changing the newly selected board's order.
+A sorted board keeps the sort's order, so dragging a card asks **Remove sort to
 arrange cards manually?**; **Remove sort** clears the sort and then places the
 card. The insertion marker stays visible above the first card when reordering
 within a lane. Drag a lane header to reorder lanes. Click an editable option lane's name to
@@ -494,7 +513,7 @@ be cleared, but records will not be deleted; **Delete group** uses danger stylin
 **Hide empty lanes** remains only in the board's **Board menu**, with a right-side
 checkmark when enabled. The card's **Move …** menu offers the same moves without
 dragging. Click a card’s title or field to edit it in place using the same editors
-as the table. Card-field inline editors fill the value area beside their icon and
+as the table. Card-field inline editors fill the value area below their label and
 keep its width, height, and typography; longer drafts scroll inside rather than
 pushing neighboring fields.
 Inline field edits save on Enter or leaving the field. Each save changes only that
@@ -701,6 +720,15 @@ Double-click that title (or focus it and press F2) to rename it inline; Enter sa
 Escape cancels. Renaming keeps the question and its saved query unchanged. A saved
 query names databases, tables, and columns by their display names, so renaming one
 it reads makes the answer fail until the question is updated.
+
+AI document editing (the selection toolbar's **AI edit**, `EditDocument`) works with
+database blocks.
+It inserts a saved answer or chart from the `<m-db-query>` block that
+`SaveDatabaseQuery` returns, can change an existing answer's chart type, title,
+or height without changing its question, and can switch an embedded database
+to another table or view. To check, have chat save a chart and add it to a
+document, then select nearby text, choose **AI edit**, and ask for a pie chart; the same question
+should redraw as a pie.
 
 An existing document keeps its answer label when Databases is off and does not
 fetch its database results; see [Feature flag](#feature-flag).

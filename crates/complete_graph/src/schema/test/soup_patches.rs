@@ -453,7 +453,8 @@ async fn pr_and_linked_session_updates_serialize_current_metadata() {
         SoupItem::AgentSession(SoupAgentSession {
             id: session_id,
             name: "Linked session".into(),
-            is_archived: false,
+            archived_by: None,
+            archived_at: None,
             owner_id: model_owner::Owner::from_principal_str(VALID_USER_ID).unwrap(),
             bot_id: Uuid::now_v7(),
             harness: "claude".into(),

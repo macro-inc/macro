@@ -5,6 +5,11 @@
  * These are plain data — nothing here imports Lexical.
  */
 
+import type {
+  DatabaseQueryChart,
+  DatabaseQueryDisplayMode,
+} from '@macro-inc/lexical-core/nodes/databaseQueryData';
+
 /** A durable node id (the `{id}` / `<t id>` the model sees). */
 export type NodeId = string;
 
@@ -52,6 +57,8 @@ export type NodeSpec =
       blockParams?: Record<string, string>;
     }
   | { block: 'html-render'; html: string }
+  /** `query` is a saved question's `<m-db-query>…</m-db-query>` markdown. */
+  | { block: 'database-query'; query: string }
   | {
       block: 'image';
       srcType: string;
@@ -72,7 +79,9 @@ export type NodeSpec =
   | { inline: 'linebreak' }
   | { inline: 'equation'; tex: string }
   | { inline: 'date'; date: string; displayFormat?: string }
-  | { inline: 'mention'; mention: MentionSpec };
+  | { inline: 'mention'; mention: MentionSpec }
+  /** A scalar `<m-db-query>` answer inside a sentence. */
+  | { inline: 'database-query'; query: string };
 
 export type ListKind = 'bullet' | 'number' | 'check';
 
@@ -112,6 +121,15 @@ export type MentionSpec =
       name: string;
       color?: string;
     };
+
+/** Presentation of a saved database question; `null` removes a field. The
+ *  question and its SQL never change here: a new question is a new block. */
+export type DatabaseQueryView = {
+  displayMode?: DatabaseQueryDisplayMode;
+  title?: string | null;
+  chart?: DatabaseQueryChart | null;
+  height?: number | null;
+};
 
 /** Block-type targets for `setBlockType`. */
 export type BlockType = 'paragraph' | 'heading' | 'quote' | 'code';
@@ -228,6 +246,14 @@ export type DocumentOp =
   | { kind: 'setImageUrl'; node: NodeRef; url: string }
   | { kind: 'setVideoUrl'; node: NodeRef; url: string }
   | { kind: 'setVideoControls'; node: NodeRef; controls: boolean }
-  | { kind: 'setDate'; node: NodeRef; date: string; displayFormat?: string };
+  | { kind: 'setDate'; node: NodeRef; date: string; displayFormat?: string }
+  // databases
+  | { kind: 'setDatabaseQueryView'; node: NodeRef; view: DatabaseQueryView }
+  | {
+      kind: 'setDatabaseLocation';
+      node: NodeRef;
+      tableId: string;
+      viewId?: string;
+    };
 
 export type DocumentOpKind = DocumentOp['kind'];

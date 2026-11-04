@@ -1,7 +1,9 @@
+import type { AppliedOps } from '@service-storage/generated/schemas/appliedOps';
+import type { CardPosition } from '@service-storage/generated/schemas/cardPosition';
 import type { DatabaseView } from '@service-storage/generated/schemas/databaseView';
 import type { TableDetail } from '@service-storage/generated/schemas/tableDetail';
 import { QueryClient } from '@tanstack/solid-query';
-import { errAsync, okAsync } from 'neverthrow';
+import { errAsync, okAsync, ResultAsync } from 'neverthrow';
 import { afterEach, expect, it, vi } from 'vitest';
 import { allRecordsView } from '../../database/core/views';
 import type { Pipeline } from '../core/pipeline';
@@ -35,6 +37,92 @@ const stored = (overrides: Partial<DatabaseView> = {}): DatabaseView => ({
   ...overrides,
 });
 const clients: QueryClient[] = [];
+it('settles positions in the originating board cache without a stale refetch overwriting them', async () => {
+  const { client, views, applyCrmPipelineOps } = setup();
+  const first = {
+    row: 'first',
+    lane: { kind: 'none' as const },
+    position: '40',
+  };
+  const moved = {
+    row: 'second',
+    lane: { kind: 'none' as const },
+    position: '80',
+  };
+  client.setQueryData(crmKeys.pipelinePositions('pipeline', 'view').queryKey, [
+    first,
+  ]);
+  client.setQueryData(
+    crmKeys.pipelinePositions('pipeline', 'other').queryKey,
+    []
+  );
+  const write = Promise.withResolvers<AppliedOps>();
+  applyCrmPipelineOps.mockReturnValue(
+    ResultAsync.fromSafePromise(write.promise)
+  );
+  const moving = views.moveCard(stored(), {
+    row: 'second',
+    lane: { kind: 'none' },
+    before: 'first',
+    after: null,
+  });
+  await vi.waitFor(() => expect(applyCrmPipelineOps).toHaveBeenCalled());
+  const read = Promise.withResolvers<CardPosition[]>();
+  const refetch = client
+    .fetchQuery({
+      queryKey: crmKeys.pipelinePositions('pipeline', 'view').queryKey,
+      queryFn: () => read.promise,
+    })
+    .catch(() => undefined);
+  write.resolve({
+    results: [
+      {
+        kind: 'view',
+        table: 'records',
+        view: 'view',
+        tableVersion: 2,
+        change: { kind: 'card_moved', positions: [moved] },
+      },
+    ],
+    changes: [],
+  });
+  await moving;
+  read.resolve([first]);
+  await refetch;
+  expect(
+    client.getQueryData(crmKeys.pipelinePositions('pipeline', 'view').queryKey)
+  ).toEqual([first, moved]);
+  expect(
+    client.getQueryData(crmKeys.pipelinePositions('pipeline', 'other').queryKey)
+  ).toEqual([]);
+});
+
+it('keeps the saved lane and order when a card move is refused', async () => {
+  const { client, views, applyCrmPipelineOps } = setup();
+  const key = crmKeys.pipelinePositions(pipeline.id, 'view').queryKey;
+  const saved: CardPosition[] = [
+    { row: 'second', lane: { kind: 'option', id: 'lead' }, position: '40' },
+    { row: 'first', lane: { kind: 'option', id: 'lead' }, position: '80' },
+  ];
+  client.setQueryData(key, saved);
+  applyCrmPipelineOps.mockImplementation(() => {
+    expect(client.getQueryData(key)).toEqual(saved);
+    return errAsync([
+      { code: 'INVALID_OP', message: 'Required field missing', refusal: null },
+    ]);
+  });
+
+  const result = await views.moveCard(stored(), {
+    row: 'second',
+    lane: { kind: 'option', id: 'qualified' },
+    before: null,
+    after: null,
+  });
+
+  expect(result.isErr()).toBe(true);
+  expect(client.getQueryData(key)).toEqual(saved);
+});
+
 afterEach(() => {
   for (const client of clients.splice(0)) client.clear();
 });

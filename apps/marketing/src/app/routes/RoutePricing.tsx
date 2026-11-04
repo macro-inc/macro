@@ -786,9 +786,9 @@ const faqItems: Array<{ q: string; a: JSX.Element }> = [
     a: (
       <>
         Yes, under our AGPL license, though the hosted version is our primary
-        focus today. The hosted version has the iOS app, Apple/Google/GitHub
-        approvals, runs on AWS, and maintains a SOC 2 Type II audit. For HIPAA,
-        FedRAMP, or other needs, contact{' '}
+        focus today. The hosted version has the iOS and Android apps,
+        Apple/Google/GitHub approvals, runs on AWS, and maintains a SOC 2 Type
+        II audit. For HIPAA, FedRAMP, or other needs, contact{' '}
         <a href="mailto:self-host@macro.com">self-host@macro.com</a>.
       </>
     ),

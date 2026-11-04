@@ -416,6 +416,7 @@ pub fn run_with(builder: tauri::Builder<AppRuntime>, configure_window: Configure
             graphql_cache_plugin::commands::graphql_cache_read_records_by_keys,
             graphql_cache_plugin::commands::graphql_cache_search,
             graphql_cache_plugin::commands::graphql_cache_entity_filter,
+            graphql_cache_plugin::commands::graphql_cache_entity_filter_resume,
             graphql_cache_plugin::commands::graphql_cache_calendar_range,
             graphql_cache_plugin::commands::graphql_cache_calendar_commit,
             graphql_cache_plugin::commands::graphql_cache_write,
@@ -435,6 +436,7 @@ pub fn run_with(builder: tauri::Builder<AppRuntime>, configure_window: Configure
             macro_bundle_updater_plugin::inbound::plugin::grant_bundle_update,
             macro_bundle_updater_plugin::inbound::plugin::perform_update,
             macro_bundle_updater_plugin::inbound::plugin::ack_bundle_update_reload,
+            macro_bundle_updater_plugin::inbound::plugin::set_bundle_reload_hold,
             macro_bundle_updater_plugin::inbound::plugin::check_for_update,
             macro_bundle_updater_plugin::inbound::plugin::get_bundle_debug_info,
             macro_bundle_updater_plugin::inbound::plugin::get_bundle_update_status,
@@ -458,6 +460,8 @@ pub fn run_with(builder: tauri::Builder<AppRuntime>, configure_window: Configure
             desktop::macrod::macrod_stop,
             #[cfg(desktop)]
             desktop::macrod::macrod_status,
+            #[cfg(desktop)]
+            desktop::pasteboard::stage_desktop_pasteboard_files,
         ])
         .setup(move |app| {
             #[cfg(desktop)]
@@ -682,6 +686,7 @@ fn emit_navigate_for_deep_link(url: Url, handle: &AppHandle) -> Result<(), Repor
     let payload = NavigatePayload {
         path: macro_scheme.0.path(),
         query: macro_scheme.0.query().unwrap_or_default(),
+        fragment: macro_scheme.0.fragment(),
     };
     // we send a navigate event instead of calling navigate directly
     // because navigate performs a full browser navigation

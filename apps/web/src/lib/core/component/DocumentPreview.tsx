@@ -468,7 +468,7 @@ function CalendarEventPreviewDetails(props: {
           <div class="mt-2 flex items-start text-[0.8em] text-ink-muted">
             <TextAlignLeftIcon class="relative mx-1 mt-0.5 size-3 shrink-0" />
             <div
-              class="line-clamp-4 min-w-0 wrap-anywhere [&_a]:text-accent [&_a]:underline [&_ol]:list-decimal [&_ol]:pl-4 [&_p+p]:mt-1 [&_ul]:list-disc [&_ul]:pl-4"
+              class="line-clamp-4 min-w-0 wrap-anywhere [&_a]:text-link [&_a:hover]:text-link-hover [&_a:visited]:text-link-visited [&_a]:underline [&_ol]:list-decimal [&_ol]:pl-4 [&_p+p]:mt-1 [&_ul]:list-disc [&_ul]:pl-4"
               innerHTML={html()}
               onClick={openDescriptionLink}
             />

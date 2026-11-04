@@ -164,6 +164,61 @@ async fn create_action_returns_id_and_is_listable_by_owner(pool: PgPool) {
 }
 
 #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn last_runs_report_each_actions_latest_finished_run(pool: PgPool) {
+    insert_user(&pool, USER_A).await;
+    let repo = test_repo(pool);
+    let failing = repo
+        .create_action(sample_action(user_owner(USER_A), "failing"), None)
+        .await
+        .unwrap()
+        .id
+        .unwrap();
+    let recovered = repo
+        .create_action(sample_action(user_owner(USER_A), "recovered"), None)
+        .await
+        .unwrap()
+        .id
+        .unwrap();
+    let never_ran = repo
+        .create_action(sample_action(user_owner(USER_A), "never ran"), None)
+        .await
+        .unwrap()
+        .id
+        .unwrap();
+    let start = Utc::now() - chrono::Duration::hours(2);
+    let runs = [
+        (failing, 0, true),
+        (failing, 1, false),
+        (recovered, 0, false),
+        (recovered, 1, true),
+    ];
+    for (action_id, hour, is_success) in runs {
+        let end_time = start + chrono::Duration::hours(hour);
+        repo.create_execution_record(ActionExecutionRecord {
+            id: None,
+            action_id,
+            resource_id: None,
+            start_time: end_time,
+            end_time,
+            is_success,
+            result: json!(null),
+            created_at: end_time,
+        })
+        .await
+        .unwrap();
+    }
+
+    let last_runs = repo
+        .last_runs(&[failing, recovered, never_ran])
+        .await
+        .unwrap();
+
+    assert_eq!(last_runs.len(), 2);
+    assert!(!last_runs[&failing].is_success);
+    assert!(last_runs[&recovered].is_success);
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
 async fn get_owned_actions_excludes_other_principals(pool: PgPool) {
     insert_user(&pool, USER_A).await;
     insert_user(&pool, USER_B).await;
