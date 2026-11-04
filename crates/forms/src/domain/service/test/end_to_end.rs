@@ -95,6 +95,7 @@ async fn a_form_over_a_new_database_writes_a_passing_response_as_a_row_and_stops
                 title: "".into(),
                 description: "".into(),
                 questions: vec![],
+                show_when: None,
             }],
         }
     );
@@ -273,6 +274,7 @@ async fn a_form_over_a_new_database_writes_a_passing_response_as_a_row_and_stops
                                 widget: Some(Widget::Date),
                             },
                         ],
+                        show_when: None,
                     },
                     FormSection::Gate {
                         id: ELIGIBILITY,
@@ -311,6 +313,7 @@ async fn a_form_over_a_new_database_writes_a_passing_response_as_a_row_and_stops
                             required: false,
                             widget: Some(Widget::Paragraph),
                         }],
+                        show_when: None,
                     },
                 ],
             },
@@ -357,6 +360,7 @@ async fn a_form_over_a_new_database_writes_a_passing_response_as_a_row_and_stops
                         widget: Some(Widget::Date),
                     },
                 ],
+                show_when: None,
             },
             FormSectionDetail::Gate {
                 id: ELIGIBILITY,
@@ -397,6 +401,7 @@ async fn a_form_over_a_new_database_writes_a_passing_response_as_a_row_and_stops
                     required: false,
                     widget: Some(Widget::Paragraph),
                 }],
+                show_when: None,
             },
         ]
     );

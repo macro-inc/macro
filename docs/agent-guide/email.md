@@ -65,7 +65,22 @@ view. `Shift+M` mutes the selected rows or the open thread, and `S` and
 `Shift+M` also work on a thread opened in its own split. In a thread, `O` opens
 or closes the selected message (the latest when none is selected), `Shift+O`
 opens every message including the collapsed middle run, and `N`/`P` step
-messages like the arrows. `Cmd+Up`/`Cmd+Down` jump to either end of a list.
+messages like the arrows. `B` in an open thread, or `Create event` in its
+title menu, opens the event composer with the subject as the title and every
+From, To and Cc address except the viewer's as guests (Bcc and drafts are left
+out); both are hidden while the calendar is off. With `enable-universal-input`
+on, the composer also sends the subject and latest message to
+`/universal_input/extract` (`intent: 'calendar'`, the Cmd+K event extractor)
+and, while "Reading the email for a time and place…" shows, fills in the
+suggested title, time, location and repeat rule. Suggestions that arrive after
+any edit are dropped. The desktop reply and standalone composers have the same
+action as a calendar button between attach and the schedule clock (tooltip
+`Create event`, plus `B` in a reply). It uses the draft instead: subject, To
+and Cc as guests, and the written text (with the replied-to message in a
+reply) for extraction. The button is accented while the written text, above
+any quoted thread, pairs a meeting word with a time (`proposesMeeting` in
+`email-compose/core/meeting-intent.ts`, a keyword heuristic until a classifier
+replaces it). `Cmd+Up`/`Cmd+Down` jump to either end of a list.
 In every composer `Cmd+Shift+.`, `Cmd+Shift+,` and `Cmd+Shift+D` discard the
 draft exactly like its trash button, `Cmd+Shift+U` opens the attach picker, and
 `Cmd+Shift+X`, `7`, `8` and `9` apply strikethrough, numbered list, bulleted
@@ -150,6 +165,14 @@ across threads. Verify in Mail and in Search with the Email filter and an empty
 query: load more threads from the same address, then check that existing row
 names and their hover cards do not change. Repeat with a text query to exercise
 the search-service results.
+
+Hovering a sender's name in a Mail row or a collapsed thread message shows the
+sender's card. Clicking the name, or anywhere else on the row, opens that email
+or message; clicking inside the card (its actions, padding, or name) never
+opens the row underneath. On touch, tapping a collapsed message's sender
+picture opens the message. The backend-free desktop/phone regression is
+`bunx playwright test --config src/features/entity/browser-test/playwright.config.ts`
+from `apps/web`.
 
 `Favorites`, directly below Inbox on desktop, lists starred Macro emails across
 Signal, Noise, and archived mail. It respects the selected inboxes and filters; search

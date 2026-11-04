@@ -60,6 +60,7 @@ fn fixture_layout() -> FormLayout {
                         widget: None,
                     },
                 ],
+                show_when: None,
             },
             FormSection::Gate {
                 id: SCREENING,
@@ -82,6 +83,7 @@ fn fixture_layout() -> FormLayout {
                 title: "Details".to_owned(),
                 description: String::new(),
                 questions: vec![],
+                show_when: None,
             },
         ],
     }
@@ -118,12 +120,14 @@ fn shared_layout() -> FormLayout {
                         widget: None,
                     },
                 ],
+                show_when: None,
             },
             FormSection::Questions {
                 id: DETAILS,
                 title: "Details".to_owned(),
                 description: String::new(),
                 questions: vec![],
+                show_when: None,
             },
         ],
     }

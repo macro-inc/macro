@@ -8,6 +8,8 @@ import { afterEach, expect, it } from 'vitest';
 import { createPredicatesStore } from '../../next-soup/filters/filter-store/predicates-store';
 import { createQueryStore } from '../../next-soup/filters/filter-store/query-store';
 import {
+  crmCompanyActiveFilter,
+  crmCompanyHiddenFilter,
   crmContactActiveFilter,
   crmContactHiddenFilter,
 } from '../collection-filters';
@@ -47,7 +49,12 @@ function setup() {
     FilterContext,
     PredicateConfig<EntityData, string, FilterContext>
   >({
-    configs: [crmContactActiveFilter, crmContactHiddenFilter],
+    configs: [
+      crmContactActiveFilter,
+      crmContactHiddenFilter,
+      crmCompanyActiveFilter,
+      crmCompanyHiddenFilter,
+    ],
     initial: { or: ['crm-contact-hidden'] },
   });
   const visibility = createPeopleVisibility({
@@ -183,4 +190,22 @@ it('keeps an explicitly selected removed view scoped when a shared filter replac
   });
   expect(queryFilters.state.include.crmContactTeamId).toEqual(['team-1']);
   expect(visibility.showRemoved()).toBe(true);
+});
+
+it('selects archived-only companies without changing search or unrelated filters', () => {
+  const { visibility, queryFilters, predicates, setActiveTab, setAdmin } =
+    mount();
+  setActiveTab('active');
+  queryFilters.set({ include: { crmCompanyId: ['company-1'] } });
+  visibility.setShowRemoved(true);
+  expect(queryFilters.state.include.crmCompanyHidden).toBe(true);
+  expect(queryFilters.state.include.crmCompanyId).toEqual(['company-1']);
+  expect(predicates.andIds()).toEqual(['crm-company-hidden']);
+  visibility.setShowRemoved(false);
+  expect(queryFilters.state.include.crmCompanyHidden).toBe(false);
+  expect(predicates.andIds()).toEqual(['crm-company-active']);
+  visibility.setShowRemoved(true);
+  setAdmin(false);
+  setAdmin(true);
+  expect(visibility.showRemoved()).toBe(false);
 });

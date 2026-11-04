@@ -151,6 +151,7 @@ function NewTop(props: { channelId: string }) {
       name: ch.name ?? 'New Channel',
       blockName: 'channel',
       channelType: ch.channel_type,
+      teamId: ch.team_id ?? undefined,
       ownerId: ch.owner_id,
       isParticipant: participantsQuery.isSuccess
         ? (participantsQuery.data ?? []).some(
@@ -319,11 +320,24 @@ export function NewChannelBlockAdapter(props: BlockChannelProps) {
   // The layout context exists during construction; its global signal is set later.
   const splitLayout = useContext(SplitLayoutContext);
   blockHotkeyScopeSignal.set(splitPanel.splitHotkeyScope);
-  useBlockEntityCommands();
   const canAutofocusSplitContent = useCanAutofocusSplitContent();
   const { navigatedFromJK } = useNavigatedFromJK();
   const channelId = useBlockId();
   const conversationChannel = useChannel(channelId);
+  useBlockEntityCommands({
+    resolveEntity: () => {
+      const channel = conversationChannel();
+      if (!channel) return undefined;
+      return buildEntityData({
+        id: channelId,
+        name: channel.name ?? 'New Channel',
+        blockName: 'channel',
+        ownerId: channel.owner_id,
+        channelType: channel.channel_type,
+        teamId: channel.team_id ?? undefined,
+      });
+    },
+  });
   const canCall = useChannelCanCall(channelId);
   const blockHandle = blockHandleSignal.get;
   const [searchParams, setSearchParams] = useSearchParams();
