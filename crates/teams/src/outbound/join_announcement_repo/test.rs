@@ -22,7 +22,7 @@ fn team1_claims(emails: &[&str]) -> Vec<(String, String)> {
 }
 
 async fn claim(repo: &JoinAnnouncementRepositoryImpl, emails: &[&str]) -> Vec<(String, String)> {
-    repo.claim(TEAM1, &users(emails))
+    repo.claim(TEAM1, &users(emails), 25)
         .await
         .unwrap()
         .into_iter()
@@ -124,8 +124,8 @@ async fn concurrent_claims_never_share_an_address(pool: PgPool) {
     let candidates: Vec<MacroUserIdStr<'static>> = emails.iter().map(|email| user(email)).collect();
 
     let (left, right) = tokio::join!(
-        left_repo.claim(TEAM1, &candidates),
-        right_repo.claim(TEAM1, &candidates)
+        left_repo.claim(TEAM1, &candidates, 100),
+        right_repo.claim(TEAM1, &candidates, 100)
     );
 
     let left: HashSet<String> = left
@@ -177,4 +177,87 @@ async fn deleting_the_team_deletes_its_claims(pool: PgPool) {
         .unwrap();
 
     assert!(ledger(&pool).await.is_empty());
+}
+
+#[sqlx::test(
+    migrator = "MACRO_DB_MIGRATIONS",
+    fixtures(path = "../../../fixtures", scripts("teams"))
+)]
+async fn people_already_on_macro_are_not_claimed(pool: PgPool) {
+    set_auto_join_domain(&pool, "user.com").await;
+    let macro_user_id = Uuid::from_u128(0xe1);
+    sqlx::query!(
+        r#"INSERT INTO macro_user (id, username, email, stripe_customer_id) VALUES ($1, $2, $2, 'cus_existing')"#,
+        macro_user_id,
+        "Existing@user.com",
+    )
+    .execute(&pool)
+    .await
+    .unwrap();
+    sqlx::query!(
+        r#"INSERT INTO "User" (id, email, macro_user_id) VALUES ($1, $2, $3)"#,
+        "macro|Existing@user.com",
+        "Existing@user.com",
+        macro_user_id,
+    )
+    .execute(&pool)
+    .await
+    .unwrap();
+    let repo = JoinAnnouncementRepositoryImpl::new(pool.clone());
+
+    assert_eq!(
+        claim(&repo, &["existing@user.com", "new@user.com"]).await,
+        team1_claims(&["new@user.com"])
+    );
+}
+
+#[sqlx::test(
+    migrator = "MACRO_DB_MIGRATIONS",
+    fixtures(path = "../../../fixtures", scripts("teams"))
+)]
+async fn claims_stop_at_the_team_limit_across_calls(pool: PgPool) {
+    set_auto_join_domain(&pool, "user.com").await;
+    let repo = JoinAnnouncementRepositoryImpl::new(pool.clone());
+
+    let first = repo
+        .claim(TEAM1, &users(&["a@user.com", "b@user.com"]), 3)
+        .await
+        .unwrap();
+    let second = repo
+        .claim(
+            TEAM1,
+            &users(&["a@user.com", "c@user.com", "d@user.com"]),
+            3,
+        )
+        .await
+        .unwrap();
+
+    assert_eq!(first.len(), 2);
+    assert_eq!(second.len(), 1);
+    assert_eq!(
+        ledger(&pool).await,
+        vec!["a@user.com", "b@user.com", "c@user.com"]
+    );
+}
+
+#[sqlx::test(
+    migrator = "MACRO_DB_MIGRATIONS",
+    fixtures(path = "../../../fixtures", scripts("teams"))
+)]
+async fn concurrent_claims_share_the_team_limit(pool: PgPool) {
+    set_auto_join_domain(&pool, "user.com").await;
+    let left_repo = JoinAnnouncementRepositoryImpl::new(pool.clone());
+    let right_repo = JoinAnnouncementRepositoryImpl::new(pool.clone());
+    let left_emails: Vec<String> = (0..20).map(|i| format!("left{i:02}@user.com")).collect();
+    let right_emails: Vec<String> = (0..20).map(|i| format!("right{i:02}@user.com")).collect();
+    let left_candidates: Vec<_> = left_emails.iter().map(|email| user(email)).collect();
+    let right_candidates: Vec<_> = right_emails.iter().map(|email| user(email)).collect();
+
+    let (left, right) = tokio::join!(
+        left_repo.claim(TEAM1, &left_candidates, 25),
+        right_repo.claim(TEAM1, &right_candidates, 25)
+    );
+
+    assert_eq!(left.unwrap().len() + right.unwrap().len(), 25);
+    assert_eq!(ledger(&pool).await.len(), 25);
 }

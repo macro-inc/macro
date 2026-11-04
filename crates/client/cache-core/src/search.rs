@@ -408,9 +408,17 @@ fn score_normalized_query(document: &SearchDocument, normalized: &str, now_ms: i
     }
     let mut score = 0.0;
     let mut tokens = 0usize;
-    for token in normalized.split_whitespace() {
+    // Commas separate tokens as in the server's channel name search. Left on a
+    // token, a comma would only match a name with one after it.
+    for token in normalized
+        .split([' ', ','])
+        .filter(|token| !token.is_empty())
+    {
         tokens += 1;
         score += subsequence_score(&document.search_text, token)?;
+    }
+    if tokens == 0 {
+        return None;
     }
     let fuzzy = score / tokens as f64;
     let age = now_ms.saturating_sub(document.timestamp_ms).max(0) as f64;

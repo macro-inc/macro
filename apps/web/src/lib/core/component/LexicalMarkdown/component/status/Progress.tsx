@@ -64,15 +64,17 @@ export function ProgressChip(props: ProgressProps) {
             )}
             aria-label={progress.tooltip()}
           >
-            <div
-              class="h-1.5 w-14 overflow-hidden rounded-full bg-edge-muted"
-              aria-hidden="true"
-            >
+            <Show when={props.stats.completed > 0}>
               <div
-                class="h-full rounded-full bg-accent transition-[width] duration-200 ease-out"
-                style={{ width: progress.percentage() }}
-              />
-            </div>
+                class="h-1.5 w-14 overflow-hidden rounded-full bg-edge-muted"
+                aria-hidden="true"
+              >
+                <div
+                  class="h-full rounded-full bg-accent transition-[width] duration-200 ease-out"
+                  style={{ width: progress.percentage() }}
+                />
+              </div>
+            </Show>
             <span class="shrink-0 tabular-nums text-ink-muted">
               {progress.count()}
             </span>

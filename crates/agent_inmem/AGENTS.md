@@ -58,6 +58,8 @@ retains notification ACP inputs and their replies; the transcript fold separatel
 omits system input from its message projection. PresentReview, GetReview and
 DecideReview are eager internal tools in both standard and code modes.
 
+- Owner memory is composed by the memory domain on each read; daily generation is hosted by cognition, not agent turns.
+
 ## Checks
 
 - `cargo test -p agent_inmem` (`SQLX_OFFLINE` unset).

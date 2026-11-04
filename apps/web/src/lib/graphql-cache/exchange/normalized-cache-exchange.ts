@@ -80,6 +80,7 @@ import {
   type QueryRevalidationWire,
   type ReadResult,
 } from '../protocol';
+import { classifyCacheError } from '../telemetry';
 import { createDeferredQueryRereads } from './deferred-query-rereads';
 import {
   createDocumentQueryReader,
@@ -121,6 +122,14 @@ const AFFECTED_READ_CONTEXT_KEY = 'normalizedCacheAffectedRead';
 const REPLACEMENT_REGISTRATION_ONLY_CONTEXT_KEY =
   'normalizedCacheReplacementRegistrationOnly';
 /** Marks a query as network-to-cache hydration with a projected result. */
+
+declare module '@urql/core' {
+  interface OperationContext {
+    /** Publish the network result without storing it in the cache. */
+    persistResult?: false;
+  }
+}
+
 export const HYDRATE_ONLY_CONTEXT_KEY = 'normalizedCacheHydrateOnly';
 /** Retains the client-annotated document while the transport uses a stripped copy. */
 const HYDRATION_DOCUMENT_CONTEXT_KEY = 'normalizedCacheHydrationDocument';
@@ -661,11 +670,10 @@ export function normalizedCacheExchange(
       const operation = activeOps.get(key);
       if (!operation) return;
       const state = queryState(key);
-      // Supersede the initial cache snapshot. An affected reread carries newer
-      // local/optimistic state, so let it complete even if network persistence
-      // finishes first; only teardown/remount may discard that update.
-      state.cacheReadVersion += 1;
-      const generation = cacheGeneration;
+      // Supersede the initial cache snapshot, but let a newer published result
+      // supersede this read too. Pending local edits are reconciled against the
+      // new server snapshot after persistence, never through an older snapshot.
+      const readVersion = beginCacheRead(key);
       await documentReader
         .read({
           opKey: operation.key,
@@ -677,12 +685,7 @@ export function normalizedCacheExchange(
         })
         .then((read) => {
           const active = activeOps.get(key);
-          if (
-            generation !== cacheGeneration ||
-            read.kind !== 'hit' ||
-            !active ||
-            queryStates.get(key) !== state
-          )
+          if (!readVersion.isCurrent() || read.kind !== 'hit' || !active)
             return;
           // Preserve the authoritative request while immediately surfacing the
           // newer local view. Its eventual result still gets the deferred
@@ -1239,8 +1242,14 @@ export function normalizedCacheExchange(
         span?: Span
       ): Promise<boolean> {
         let applied = true;
+        span?.setAttr('cache.effect_count', effects.length);
         for (const effect of effects) {
           if (!isCurrent()) return false;
+          const effectSpan = span?.span(
+            effect.kind === 'write'
+              ? 'graphql.subscription.cache_write'
+              : 'graphql.subscription.cache_delete'
+          );
           try {
             if (effect.kind === 'write') {
               await host.writeQuery({
@@ -1255,9 +1264,14 @@ export function normalizedCacheExchange(
           } catch (error) {
             applied = false;
             span?.error('Subscription cache effect failed');
+            span?.setAttr('cache.failure', classifyCacheError(error));
+            effectSpan?.setAttr('cache.failure', classifyCacheError(error));
             // One failed cache effect must neither skip later effects nor
             // prevent delivery of the original operation result.
+            effectSpan?.error('Subscription cache effect failed');
             options.onCacheError?.(error, op);
+          } finally {
+            effectSpan?.end();
           }
         }
         return applied && isCurrent();
@@ -1505,7 +1519,10 @@ export function normalizedCacheExchange(
           // Publication, not persistence, supersedes an older cache snapshot.
           // A failed network request still permits a slower offline cache hit.
           if (result.data != null && !result.error) state.cacheReadVersion += 1;
-          const persistence = persistQueryResult(result, state, version);
+          const persistence =
+            op.context.persistResult === false
+              ? Promise.resolve(undefined)
+              : persistQueryResult(result, state, version);
           return withResultMetadata(result, {
             source: 'live-network',
             persistence,

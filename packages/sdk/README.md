@@ -483,6 +483,9 @@ returns thread handles alongside reminder snapshots.
 permissions and trash operations live on the pipeline. `pipeline.table()` returns
 its table handle, with column and row handles. `rows()` and `queryRows({ rows, query })`
 fetch through the pipeline's authorization boundary and auto-paginate.
+`(await pipeline.table()).views()` returns scoped `PipelineView` handles;
+`view.detail()` reads its definition and `view.positions()` reads its saved board
+order through pipeline permissions.
 `pipeline.applyOps(ops, { baseVersions: [{ table, version }] })` accepts the generated
 atomic database operation contract, including batch-local UUIDs, like
 `Database.applyOps`. Table and column reads share a schema cache invalidated by
@@ -529,14 +532,6 @@ when mutations invalidate metadata. `update`, `cancel`, `invite(email)`,
 `teamOutOfOffice(viewport)` reports `hasMore` when its bounded results are truncated.
 `availabilityCalendars`, `calendar.setContributesToAvailability`, `teamSharing` and
 `setTeamSharing` manage availability and sharing preferences.
-
-`calendar.noteDocuments(query)` suggests owned markdown and optional team handles.
-Use `event.linkNote(document, occurrence, { team })` to grant meeting viewers view
-access; omit `team` for meeting access only. One-time notes follow reschedules;
-recurring notes stay on the selected occurrence. `event.notes(occurrence)` returns
-`CalendarNote` handles with `setTeam(team?)` and `unlink()`. Existing editing and
-other document sharing stay unchanged. Owners can discover every durable grant
-through `document.meetingNotes()` and unlink it even when the meeting is unavailable.
 
 ### Document lifecycle and other resources
 

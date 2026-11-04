@@ -19,3 +19,6 @@ External agents (assistants outside Macro that people DM and mention):
 [architecture and integration contract](architecture/external-agents.md).
 
 Document sync: [DSS sync router](architecture/sync-router.md).
+
+Bots: [building a bot](guides/bots.md) (set one up in the app, then search and
+post from the TypeScript SDK).

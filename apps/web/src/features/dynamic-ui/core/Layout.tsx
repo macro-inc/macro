@@ -47,7 +47,12 @@ export function View(props: {
   const [local] = splitProps(props, ['title', 'class', 'children']);
 
   return (
-    <div class={cn('flex w-full flex-col gap-3', local.class)}>
+    <div
+      class={cn(
+        '@container/results flex w-full min-w-0 flex-col gap-3',
+        local.class
+      )}
+    >
       <Show when={local.title}>
         <h2 class="text-ink text-base font-semibold">{local.title}</h2>
       </Show>
@@ -76,16 +81,11 @@ export function Row(props: {
   return (
     <div
       class={cn(
-        'flex flex-row',
-        // Non-wrapping rows must always fit their children on one line, so
-        // items are given a zero basis (flex-1) and no min-width floor and
-        // simply shrink evenly to fit. A wrapping row needs the opposite:
-        // items need a real min-width floor so the browser's line-breaking
-        // algorithm can tell when they no longer fit and start a new line,
-        // instead of shrinking indefinitely to stay on one line forever.
+        '@container/results flex w-full min-w-0 flex-col @2xl/results:flex-row',
+        // Container width, rather than viewport width, controls split-pane reflow.
         local.wrap
-          ? '[&>*]:min-w-40 [&>*]:flex-1 [&>*]:basis-40'
-          : '[&>*]:min-w-0 [&>*]:flex-1',
+          ? '[&>*]:min-w-0 @2xl/results:[&>*]:min-w-40 @2xl/results:[&>*]:flex-1 @2xl/results:[&>*]:basis-40'
+          : '[&>*]:min-w-0 @2xl/results:[&>*]:flex-1',
         gapClass(local.gap),
         alignClass(local.align),
         justifyClass(local.justify),
@@ -116,7 +116,7 @@ export function Col(props: {
   return (
     <div
       class={cn(
-        'flex flex-col',
+        '@container/results flex w-full min-w-0 flex-col',
         gapClass(local.gap),
         alignClass(local.align),
         justifyClass(local.justify),

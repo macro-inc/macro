@@ -5,6 +5,8 @@
  * OpenAPI spec version: 0.1.0
  */
 import type { AgentSessionResponseAcpSessionId } from './agentSessionResponseAcpSessionId';
+import type { AgentSessionResponseArchivedAt } from './agentSessionResponseArchivedAt';
+import type { AgentSessionResponseArchivedBy } from './agentSessionResponseArchivedBy';
 import type { AgentSessionResponseExternal } from './agentSessionResponseExternal';
 import type { AgentSessionResponseInstructions } from './agentSessionResponseInstructions';
 import type { AgentSessionResponseOriginatingMessageId } from './agentSessionResponseOriginatingMessageId';
@@ -25,6 +27,9 @@ Clients deserialize this, so both derives are used.
 export interface AgentSessionResponse {
   /** The ACP session id, if one exists. */
   acpSessionId?: AgentSessionResponseAcpSessionId;
+  /** When the session was archived, or `None` while it is active. */
+  archivedAt?: AgentSessionResponseArchivedAt;
+  archivedBy?: AgentSessionResponseArchivedBy;
   /** The bot running the agent. */
   botId: string;
   /** Whether the caller may drive the session - prompt it, answer its
@@ -41,8 +46,6 @@ creator owns the session, so a create response always says so. */
   /** Instructions the session's runtime works under, when any were stated
 at creation. Absent otherwise, so existing payloads are unchanged. */
   instructions?: AgentSessionResponseInstructions;
-  /** Whether the session is archived and read-only. */
-  isArchived: boolean;
   /** Model slug. */
   model: string;
   /** When the session was last modified. */

@@ -1299,6 +1299,46 @@ fn agent_excerpt_flattens_whitespace_and_truncates() {
 }
 
 #[test]
+fn agent_session_alerts_show_mentions_by_name() {
+    let settled = AgentSessionSettledMetadata {
+        session: agent_session_ref(),
+        turn: 0,
+        actor: None,
+        stop_reason: "end_turn".to_string(),
+        excerpt: Some(
+            r#"The most recent one was <m-user-mention>{"userId":"macro|user@example.com","email":"user@example.com"}</m-user-mention>, posted in <m-document-mention>{"documentId":"0195c94f-3b0c-79f0-8558-e5e509ac9dd8","documentName":"the request","blockName":"channel","blockParams":{}}</m-document-mention>; it returns Option<String>."#
+                .to_string(),
+        ),
+    };
+    assert_eq!(
+        settled.format_body(None).unwrap(),
+        "The most recent one was user@example.com, posted in the request; it returns Option<String>."
+    );
+
+    let waiting = AgentSessionWaitingForInputMetadata {
+        session: agent_session_ref(),
+        turn: 0,
+        question: r#"Should I ask <m-user-mention>{"userId":"macro|user@example.com","email":"user@example.com"}</m-user-mention>?"#.to_string(),
+    };
+    assert_eq!(
+        waiting.format_body(None).unwrap(),
+        "Should I ask user@example.com?"
+    );
+}
+
+#[test]
+fn agent_session_settled_with_only_hidden_tags_falls_back_to_the_session_name() {
+    let metadata = AgentSessionSettledMetadata {
+        session: agent_session_ref(),
+        turn: 0,
+        actor: None,
+        stop_reason: "end_turn".to_string(),
+        excerpt: Some(r#"<m-await>{"text":"thinking"}</m-await>"#.to_string()),
+    };
+    assert_eq!(metadata.format_body(None).unwrap(), "Fix the flaky test");
+}
+
+#[test]
 fn calendar_email_reminder_escapes_content_and_limits_each_distinct_alarm() {
     use notification::domain::models::NotificationExtEmail;
     let metadata = CalendarEventReminderMetadata {
@@ -1320,4 +1360,34 @@ fn calendar_email_reminder_escapes_content_and_limits_each_distinct_alarm() {
     let mut second = metadata.clone();
     second.minutes_before = 5;
     assert_ne!(first.as_bytes(), second.rate_limit_key().as_bytes());
+}
+
+#[test]
+fn routine_run_finished_names_the_routine_and_its_outcome() {
+    let failed = RoutineRunFinishedMetadata {
+        routine_id: Uuid::nil(),
+        routine_name: "Morning brief".to_string(),
+        outcome: RoutineRunOutcome::Failed,
+    };
+    let succeeded = RoutineRunFinishedMetadata {
+        outcome: RoutineRunOutcome::Succeeded,
+        ..failed.clone()
+    };
+
+    let value = serde_json::to_value(&failed).unwrap();
+    assert_eq!(value["routineId"], "00000000-0000-0000-0000-000000000000");
+    assert_eq!(value["routineName"], "Morning brief");
+    assert_eq!(value["outcome"], "failed");
+    assert_eq!(failed.format_title(None).unwrap(), "Morning brief failed");
+    assert_eq!(
+        succeeded.format_title(None).unwrap(),
+        "Morning brief finished"
+    );
+
+    let event: NotifEvent = serde_json::from_value(serde_json::json!({
+        "tag": "routine_run_finished",
+        "content": value,
+    }))
+    .unwrap();
+    assert!(matches!(event, NotifEvent::RoutineRunFinished(_)));
 }

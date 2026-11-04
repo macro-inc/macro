@@ -82,6 +82,7 @@ import {
 } from './agentSettingsState';
 import { CursorConnectPage } from './CursorConnectPage';
 import { AgentSetupStrips } from './components/agent-setup-strips';
+import { AutoArchiveSetting } from './components/auto-archive-setting';
 import { CodingPreferencesSetting } from './components/coding-preferences-setting';
 import { AgentInstructionsEditor } from './components/instructions-editor';
 import { SettingsSelect } from './components/settings-select';
@@ -208,10 +209,15 @@ export function Agents(props: {
         );
         return {
           id: target.harnessId ?? '',
-          name:
-            harness?.owner.type === 'team'
-              ? `${harness.name} · Team`
-              : (harness?.name ?? 'macrod'),
+          // Offline runtimes stay selectable: binding an agent to a machine
+          // that is merely asleep is normal, and the label says what to expect.
+          name: [
+            harness?.name ?? 'macrod',
+            harness?.owner.type === 'team' ? 'Team' : undefined,
+            harness && !harness.connected ? 'Offline' : undefined,
+          ]
+            .filter(Boolean)
+            .join(' · '),
           kind: 'macrod',
           allowPermissionBypass: harness?.allow_permission_bypass ?? false,
           target,
@@ -413,6 +419,7 @@ export function Agents(props: {
           />
 
           <CodingPreferencesSetting />
+          <AutoArchiveSetting />
         </SettingsPage>
       </Show>
 

@@ -15,7 +15,11 @@ import {
 import { MultiSelectCheckbox } from '../../components/MultiSelectCheckbox';
 import { UnreadIndicator } from '../../components/UnreadIndicator';
 import type { EntityRowConfig } from '../../extractors-notification';
-import type { EntityData, ProjectEntity } from '../../types/entity';
+import type {
+  EntityData,
+  EntityWithProperties,
+  ProjectEntity,
+} from '../../types/entity';
 import type { WithNotification } from '../../types/notification';
 import type { ContentHitData, SearchLocation } from '../../types/search';
 import { isSearchEntity } from '../../types/search';
@@ -36,6 +40,8 @@ export interface BaseListEntityProps<E extends EntityData = EntityData>
   hovered?: boolean;
   /** Caller-owned quick actions, revealed on pointer hover or keyboard focus. */
   actions?: JSX.Element;
+  /** Persistent controls for touch devices, before the timestamp. */
+  touchActions?: JSX.Element;
   /** Persistent status/action immediately before the timestamp. */
   leadingAction?: JSX.Element;
   /** Caller-owned marker between the icon and the title, e.g. a priority. */
@@ -77,7 +83,7 @@ export interface BaseListEntityProps<E extends EntityData = EntityData>
 const WIDE_BREAKPOINT = 512; // @lg container query = 32rem
 
 export interface LayoutProps {
-  entity: WithNotification<EntityData>;
+  entity: WithNotification<EntityWithProperties<EntityData>>;
   /** Persistent schedule metadata, including on touch and notification rows. */
   scheduleStatus?: JSX.Element;
   actions?: JSX.Element;

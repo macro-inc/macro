@@ -32,14 +32,72 @@ The root adapters construct production dependencies. `context` defines the
 capabilities; it does not import their implementations. Views consume these
 capabilities, primitives receive narrow inputs, and components render props.
 Core modules remain independent of Solid, service clients, and app state.
+`features/notifications/mark-row-seen.ts` integrates with shared list activation so
+opening a company or contact clears its row's unread notifications immediately.
+It uses the row's attached notifications before falling back to an entity read;
+the shared notification source owns optimistic state and failure rollback.
+The REST fallback waits for the notification feed before reading its snapshot.
+The discussion's message reader remains visibility-gated and reads a separate
+global feed, so it cannot guarantee that opening a record clears its row's dot.
 UI rollout gates read `useFeatureFlag` directly where used; do not pass rollout
 booleans through component props or the CRM source contract.
 
 Shared entity representations, transport clients, property editors, and
 collection mechanics remain shared. CRM owns its record queries and cache updates.
+Pipeline board positions load through the pipeline-authorized endpoint and are
+cached by pipeline and view. Move results update the originating view's cache,
+even if the viewer switches boards while saving. The adapter supplies the selected
+view ID so switching boards also retires unfinished visual moves and sort prompts.
+`browser-test/board.tsx` exercises shared cards, lane composition, and saved ordering with synthetic data.
+
+Successful domain block and unblock mutations evict indexed company rows and
+contact suggestions from the GraphQL cache before refreshing CRM and Soup
+queries. Refresh mounted GraphQL lists that can contain CRM records too: the
+REST mutation returns no changed rows, and hidden records are absent from the
+search index. Failed mutations leave those cached records intact.
+Company selection snapshots and deduplicates the company's domains, waits for
+every domain request, and retains failed domains for retry after the company
+disappears from suggestions. Keep successful blocks when another domain fails.
 CRM supplies row/header/empty state slots, filter choices, grouping policy, and
 its own collection state to the shared collection renderer. Shared collection code must not acquire CRM hooks or
 CRM-specific state again.
+
+Company Overview and contact headers expose `RecordVisibilityAction` for removal
+and restoration through the existing hidden mutations. Keep admin/owner checks,
+confirmation of the company-wide contact cascade, and the restore action on the
+open record. Do not duplicate visibility controls in the information panel: contacts
+have no Sharing section, and company Sharing contains only Sync Emails.
+Company Team lists filter hidden contacts for every role without changing the
+underlying response or admin detail access. Contact visibility mutations invalidate
+the company query family because those responses embed contacts: mounted lists
+refetch before completion, and inactive lists reload when revisited. No company ID
+is required, so unfiled contacts use the same mutation safely. Contact visibility
+also awaits explicit refresh of mounted GraphQL contact lists; normalized-record
+eviction and TanStack invalidation alone cannot refresh their membership.
+
+People display options offer **Show removed people** only for current-team
+admins/owners. `people-visibility` owns a local explicit choice, resets it on
+account/team/role/list changes, and sanitizes shared or persisted filters.
+Retained team data preserves the choice through a background refetch error;
+current-user membership and admin/owner checks still apply.
+Removed mode queries `crmf` with hidden=true and the administered team ID, using
+the existing server search, deduplication and cursor pagination. The client
+predicate also checks that team scope so retained rows cannot cross the display
+boundary. Normal People remains viewer-wide and hidden=false. Removed mode
+includes effective hidden state from a hidden parent company; restoring a
+contact does not restore its company. No-company contacts remain supported.
+`browser-test/people` uses the production filter compiler, predicates, GraphQL
+live page source, display controls and eye confirmation with a synthetic API;
+cache-host persistence and full app routing remain outside that fixture.
+`browser-test/team` exercises the real Team component, visibility action and query
+adapters with a synthetic storage client on desktop and phone; entity row metadata
+and app navigation are isolated. Run its `playwright.config.ts` from `apps/web`.
+Both hidden mutations emit `crm.visibility_change` through request and cache
+refresh completion, with the opaque record ID, record type, requested hidden
+state, and outcome. `crm.visibility_change.refresh` times cache invalidation and
+the dependent query refreshes before the mutation stops being pending.
+`crm.people_visibility` measures the display choice through the next paint;
+Soup retains its existing query/loading instrumentation.
 
 `task-composer.ts` owns the CRM task preset: Companies/Contacts are visible,
 Status remains a task default but is not initially shown. CRM registers live

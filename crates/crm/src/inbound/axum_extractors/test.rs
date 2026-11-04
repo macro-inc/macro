@@ -65,6 +65,7 @@ impl JwtValidator for FakeJwtValidator {
                 origin: macro_authorization::CredentialOrigin::Session,
                 identity: ValidatedIdentity {
                     agent_id: None,
+                    agent_via: None,
                     user_id: USER_ID.to_string(),
                     fusion_user_id: "test-fusion-user".to_string(),
                     organization_id: None,
@@ -306,7 +307,7 @@ impl CrmService for FakeCrmService {
         &self,
         _access: &CrmTeamReceipt<MemberTeamRole>,
         _name: &str,
-        _domain: &str,
+        _domain: Option<&str>,
     ) -> Result<CrmCompanyWithContacts, CrmError> {
         panic!("unexpected create_company call")
     }
@@ -315,7 +316,7 @@ impl CrmService for FakeCrmService {
         &self,
         _access: &CrmCompanyReceipt<ViewAccessLevel>,
         _name: &str,
-        _email: &str,
+        _email: Option<&str>,
     ) -> Result<CrmContact, CrmError> {
         panic!("unexpected create_contact call")
     }
@@ -433,6 +434,31 @@ impl CrmService for FakeCrmService {
         _patch: crate::domain::model::CrmTeamSettingsPatch,
     ) -> Result<crate::domain::model::CrmTeamSettings, CrmError> {
         panic!("unexpected update_team_settings call")
+    }
+
+    async fn create_team_contact(
+        &self,
+        _access: &CrmTeamReceipt<MemberTeamRole>,
+        _name: &str,
+        _email: Option<&str>,
+    ) -> Result<CrmContact, CrmError> {
+        panic!("unexpected create_team_contact call")
+    }
+
+    async fn list_blocked_domains(
+        &self,
+        _access: &CrmTeamReceipt<MemberTeamRole>,
+    ) -> Result<Vec<crate::domain::model::CrmBlockedDomain>, CrmError> {
+        panic!("unexpected list_blocked_domains call")
+    }
+
+    async fn set_domain_blocked(
+        &self,
+        _access: &CrmTeamReceipt<MemberTeamRole>,
+        _domain: &str,
+        _blocked: bool,
+    ) -> Result<String, CrmError> {
+        panic!("unexpected set_domain_blocked call")
     }
 }
 

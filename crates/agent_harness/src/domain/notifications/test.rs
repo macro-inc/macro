@@ -219,19 +219,15 @@ fn routine_settled(turn: u32, stop_reason: &str) -> AgentSessionLifecycleEvent {
 }
 
 #[test]
-fn a_routine_run_that_finished_normally_notifies_nobody() {
-    assert!(coder(&routine_settled(0, "end_turn")).is_empty());
-    assert!(plan(&routine_settled(0, "end_turn"), false).is_empty());
-}
-
-#[test]
-fn a_routine_run_that_failed_still_notifies() {
-    for stop_reason in ["cancelled", "error", "max_tokens", "refusal"] {
-        let notify = one_settled(coder(&routine_settled(0, stop_reason)));
-        assert_eq!(notify.metadata.stop_reason, stop_reason);
-        assert_eq!(
-            notify.recipients,
-            vec![owner(), user("alice@macro.com"), user("bob@macro.com")]
+fn a_routine_runs_own_turn_notifies_nobody_however_it_ended() {
+    for stop_reason in ["end_turn", "cancelled", "error", "max_tokens", "refusal"] {
+        assert!(
+            coder(&routine_settled(0, stop_reason)).is_empty(),
+            "{stop_reason}"
+        );
+        assert!(
+            plan(&routine_settled(0, stop_reason), false).is_empty(),
+            "{stop_reason}"
         );
     }
 }

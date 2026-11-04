@@ -45,7 +45,8 @@ export function createAgentHistoryMetadata(
             ownerId: session.ownerId,
             botId: session.botId,
             harness: session.harness,
-            isArchived: session.isArchived,
+            archivedBy: session.archivedBy,
+            archivedAt: session.archivedAt,
             createdAt: session.createdAt,
             updatedAt: session.modifiedAt,
             status:

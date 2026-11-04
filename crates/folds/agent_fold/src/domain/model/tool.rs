@@ -154,8 +154,8 @@ impl From<ToolCallStatus> for ToolStatus {
 /// kind ACP defines - only for `switch_mode` (nothing a reader would want
 /// rendered) and a kind this fold does not yet know about.
 ///
-/// Three variants are chosen by *name* rather than kind: Macro's own tools
-/// ([`Self::Macro`], [`Self::UserTool`]) arrive as ACP `other`, and what a
+/// Four variants are chosen by *name* rather than kind: Macro's own tools
+/// ([`Self::Macro`], [`Self::View`], [`Self::UserTool`]) arrive as ACP `other`, and what a
 /// reader wants for them is the tool's own JSON, not a generic card; a
 /// delegation ([`Self::Subagent`]) is a tool call by whatever name its
 /// harness gives it. The harness layer decides which names are which.
@@ -252,6 +252,15 @@ pub enum ToolDetail {
         /// completes.
         #[specta(type = specta_typescript::Unknown)]
         output: Option<serde_json::Value>,
+        /// The error text, when the call failed.
+        error: Option<String>,
+    },
+    /// A view shown to the person: Macro's `DisplayResults`, or the call the
+    /// harness presents for `execution.views.present`. The server decodes
+    /// the view into its result, so this is the view a reader renders.
+    View {
+        /// The view, once the call has returned one that decodes.
+        view: Option<dynamic_ui::View>,
         /// The error text, when the call failed.
         error: Option<String>,
     },

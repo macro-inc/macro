@@ -14,9 +14,11 @@ import {
   useNavigate,
   useRouteParams,
 } from '@app/lib/split-router';
+import { beginInteraction } from '@app/observability/flow';
 import { usePreference } from '@app/preferences/use-preference';
 import { emailSplitRoute, emailThreadRoute } from '@app/routes/routes';
 import { createPreviewSelectionGuard } from '@components/app/createPreviewSelectionGuard';
+import { useGlobalNotificationSource } from '@components/app/GlobalAppState';
 import {
   useSplitPanelOrThrow,
   withSplitPanelOwner,
@@ -25,6 +27,7 @@ import { createAssertedContextProvider } from '@core/context/createContext';
 import { useUserId } from '@core/context/user';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import { fireAndForget } from '@core/util/fireAndForget';
+import { markRowNotificationsSeenOnOpen } from '@notifications/mark-row-seen';
 import { listTagOptions } from '@property/tags/list-tag-options';
 import { useTagSets, useTagSetsReady } from '@property/tags/tag-sets-context';
 import { useEmailLinksQuery } from '@queries/email/link';
@@ -267,6 +270,7 @@ export const [EmailViewProvider, useEmailView] = createAssertedContextProvider<
       'email-view'
     );
   };
+  const notificationSource = useGlobalNotificationSource();
   const openThread = (
     thread: EmailThreadTarget,
     options?: EntityDetailNavigationOptions & { replace?: boolean }
@@ -276,6 +280,11 @@ export const [EmailViewProvider, useEmailView] = createAssertedContextProvider<
     // The router may refuse a claimed destination. Check compatibility without
     // claiming it until the accepted route changes.
     if (!selectPreview.canSelect(selection)) return true;
+    const row = source
+      .items()
+      .find((row) => row.kind === 'entity' && row.entity.id === thread.id);
+    if (row?.kind === 'entity')
+      markRowNotificationsSeenOnOpen(row.entity, notificationSource);
     fireAndForget(
       navigate(
         { route: emailThreadRoute, params: { threadId: thread.id } },
@@ -354,14 +363,24 @@ export const [EmailViewProvider, useEmailView] = createAssertedContextProvider<
       closeThread();
       return;
     }
-    setState(
-      produce((draft) => {
-        if (draft.tab === 'reminders' || tab === 'reminders') draft.search = '';
-        draft.tab = tab;
-        draft.facets = {};
-      })
-    );
-    closeThread();
+    // The list's email.list flow restarts for the tab and joins this.
+    const interaction = beginInteraction('email.tab', {
+      attributes: { 'email.tab': tab },
+      closeOnJoin: true,
+    });
+    try {
+      setState(
+        produce((draft) => {
+          if (draft.tab === 'reminders' || tab === 'reminders')
+            draft.search = '';
+          draft.tab = tab;
+          draft.facets = {};
+        })
+      );
+      closeThread();
+    } finally {
+      interaction.end();
+    }
   };
 
   const setInboxIds = (ids: string[] | undefined) => {
