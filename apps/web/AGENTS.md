@@ -389,6 +389,7 @@ resolved session ID; keep the existing `AgentSessionProvider` subscription to
 `agent_session` rather than enabling legacy block tracking of placeholder IDs.
 
 - Share URL recognition with `packages/lexical-core/utils/auto-link.ts`; preserve explicit unlink markers when saving and rendering messages. See `packages/lexical-core/README.md` at the repository root.
+- Keep ordinary Markdown hyperlinks on the theme's link colors (blue by default) in renderers and editors; mention decorators keep their own neutral styling.
 - CRM creation accepts name-only companies and full contact email addresses.
   Company selection is explicit; a matching domain only suggests a company.
   Keep the standalone and pipeline forms consistent (see
