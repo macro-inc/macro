@@ -150,9 +150,7 @@ describe('RuntimeShareDialog', () => {
     mocks.confirm.mockResolvedValue(true);
     open(harness({ shared_team_ids: ['team-1'] }));
 
-    fireEvent.click(
-      await screen.findByRole('switch', { name: 'Team access' })
-    );
+    fireEvent.click(await screen.findByRole('switch', { name: 'Team access' }));
 
     await waitFor(() =>
       expect(mocks.setTeamAccess).toHaveBeenCalledWith({

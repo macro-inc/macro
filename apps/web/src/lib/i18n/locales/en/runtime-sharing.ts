@@ -36,7 +36,7 @@ export default {
     other:
       '{{names}} live on this computer and need this access to keep running. Removing it shuts these agents down until access is given back.',
   },
-  shutDownConfirm: 'Remove access and shut down',
+  shutDownConfirm: 'Shut down',
   runtimes: 'Runtimes',
   online: 'Online',
   offline: 'Offline',

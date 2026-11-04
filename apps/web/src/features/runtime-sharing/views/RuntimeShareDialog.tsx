@@ -18,7 +18,14 @@ import {
 import { useCurrentTeamQuery } from '@queries/team/teams';
 import type { Harness, HarnessResident } from '@service-storage/client';
 import { Button, confirmDialog, ToggleSwitch } from '@ui';
-import { createMemo, createSignal, For, Show } from 'solid-js';
+import {
+  createMemo,
+  createSignal,
+  For,
+  getOwner,
+  type Owner,
+  Show,
+} from 'solid-js';
 import {
   type RuntimeAccessHolders,
   residentsLosingAccessWithTeam,
@@ -26,15 +33,22 @@ import {
 } from '../core/residents';
 
 /** Removing access a resident depends on takes the owner's explicit go-ahead. */
-async function confirmShutdown(losing: readonly HarnessResident[]) {
+async function confirmShutdown(
+  losing: readonly HarnessResident[],
+  owner: Owner | null
+) {
   if (losing.length === 0) return true;
   const names = losing.map((resident) => resident.name).join(', ');
-  return confirmDialog({
-    title: t('runtimeSharing.shutDownTitle', { count: losing.length, names }),
-    body: t('runtimeSharing.shutDownBody', { count: losing.length, names }),
-    confirmLabel: t('runtimeSharing.shutDownConfirm'),
-    tone: 'danger',
-  });
+  return confirmDialog(
+    {
+      title: t('runtimeSharing.shutDownTitle', { count: losing.length, names }),
+      body: t('runtimeSharing.shutDownBody', { count: losing.length, names }),
+      confirmLabel: t('runtimeSharing.shutDownConfirm'),
+      tone: 'danger',
+    },
+    // Stacked under the menu, so its Cancel or Escape leaves the menu open.
+    { owner }
+  );
 }
 
 /**
@@ -47,6 +61,17 @@ export function RuntimeShareDialog(props: {
   open: boolean;
   onOpenChange: (open: boolean) => void;
 }) {
+  return (
+    <ShareDialogFrame open={props.open} onOpenChange={props.onOpenChange}>
+      <RuntimeShareMenu harness={props.harness} open={props.open} />
+    </ShareDialogFrame>
+  );
+}
+
+function RuntimeShareMenu(props: { harness: Harness; open: boolean }) {
+  // Inside the sheet: a warning opened under this owner joins its dismiss
+  // stack, so a tap on the warning is not a tap outside the menu.
+  const owner = getOwner();
   const userId = useUserId();
   const source = createSharingSource(
     () => shareEntity('harness', props.harness.id),
@@ -97,7 +122,8 @@ export function RuntimeShareDialog(props: {
   };
   const removePerson = async (id: string) => {
     const go = await confirmShutdown(
-      residentsLosingAccessWithUser(residents(), holders(), id)
+      residentsLosingAccessWithUser(residents(), holders(), id),
+      owner
     );
     if (go) await report(() => source.setGrant(id, null));
   };
@@ -106,7 +132,8 @@ export function RuntimeShareDialog(props: {
     if (!teamId) return;
     if (!enabled) {
       const go = await confirmShutdown(
-        residentsLosingAccessWithTeam(residents(), holders(), teamId)
+        residentsLosingAccessWithTeam(residents(), holders(), teamId),
+        owner
       );
       if (!go) return;
     }
@@ -130,199 +157,192 @@ export function RuntimeShareDialog(props: {
   };
 
   return (
-    <ShareDialogFrame open={props.open} onOpenChange={props.onOpenChange}>
-      <ShareCard
-        header={
-          <span class="text-sm font-medium text-ink">
-            {t('runtimeSharing.shareTitle', { name: props.harness.name })}
-          </span>
-        }
-        bodyClass="flex flex-col gap-4 p-4"
-      >
-        <p class="text-sm text-ink-muted">{t('runtimeSharing.explain')}</p>
+    <ShareCard
+      header={
+        <span class="text-sm font-medium text-ink">
+          {t('runtimeSharing.shareTitle', { name: props.harness.name })}
+        </span>
+      }
+      bodyClass="flex flex-col gap-4 p-4"
+    >
+      <p class="text-sm text-ink-muted">{t('runtimeSharing.explain')}</p>
 
-        <Show when={currentTeam()}>
-          {(current) => (
-            <div class="flex items-center justify-between gap-3">
-              <div class="flex min-w-0 flex-col gap-1">
-                <span class="font-medium text-ink">
-                  {t('runtimeSharing.teamAccess')}
-                </span>
-                <span class="text-sm text-ink-muted">
-                  {teamOpen()
-                    ? t('runtimeSharing.teamAccessOn', {
-                        team: current().team.name,
-                      })
-                    : t('runtimeSharing.teamAccessOff')}
-                </span>
-              </div>
-              <ToggleSwitch
-                label={t('runtimeSharing.teamAccess')}
-                labelClass="sr-only"
-                checked={teamOpen()}
-                disabled={setTeamAccess.isPending}
-                onChange={(enabled) =>
-                  fireAndForget(toggleTeam(enabled), 'runtime-sharing')
-                }
-              />
+      <Show when={currentTeam()}>
+        {(current) => (
+          <div class="flex items-center justify-between gap-3">
+            <div class="flex min-w-0 flex-col gap-1">
+              <span class="font-medium text-ink">
+                {t('runtimeSharing.teamAccess')}
+              </span>
+              <span class="text-sm text-ink-muted">
+                {teamOpen()
+                  ? t('runtimeSharing.teamAccessOn', {
+                      team: current().team.name,
+                    })
+                  : t('runtimeSharing.teamAccessOff')}
+              </span>
+            </div>
+            <ToggleSwitch
+              label={t('runtimeSharing.teamAccess')}
+              labelClass="sr-only"
+              checked={teamOpen()}
+              disabled={setTeamAccess.isPending}
+              onChange={(enabled) =>
+                fireAndForget(toggleTeam(enabled), 'runtime-sharing')
+              }
+            />
+          </div>
+        )}
+      </Show>
+
+      <section
+        class="flex flex-col gap-2"
+        aria-label={t('runtimeSharing.people')}
+      >
+        <div class="flex items-center justify-between gap-2">
+          <OwnerLabel ownerId={userId() ?? ''} />
+          <span class="text-xs text-ink-muted">
+            {t('runtimeSharing.owner')}
+          </span>
+        </div>
+        <For each={residents()}>
+          {(resident) => (
+            <div
+              class="flex items-center justify-between gap-2"
+              data-runtime-resident
+            >
+              <span class="min-w-0 truncate text-sm text-ink">
+                {resident.name}
+              </span>
+              <span class="text-xs text-ink-muted">
+                {t('runtimeSharing.resident')}
+              </span>
             </div>
           )}
-        </Show>
+        </For>
+        <For each={source.grants()}>
+          {(grant) => (
+            <div
+              class="flex flex-wrap items-center justify-between gap-2"
+              data-runtime-grant
+            >
+              <OwnerLabel ownerId={grant.userId} />
+              <div class="flex items-center gap-2">
+                <span class="text-xs text-ink-muted">
+                  {t('runtimeSharing.canUse')}
+                </span>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  disabled={source.busy()}
+                  onClick={() =>
+                    fireAndForget(removePerson(grant.userId), 'runtime-sharing')
+                  }
+                >
+                  {t('runtimeSharing.remove')}
+                </Button>
+              </div>
+            </div>
+          )}
+        </For>
+      </section>
 
+      <Show when={(source.state()?.requests.length ?? 0) > 0}>
         <section
           class="flex flex-col gap-2"
-          aria-label={t('runtimeSharing.people')}
+          aria-label={t('runtimeSharing.requests')}
         >
-          <div class="flex items-center justify-between gap-2">
-            <OwnerLabel ownerId={userId() ?? ''} />
-            <span class="text-xs text-ink-muted">
-              {t('runtimeSharing.owner')}
-            </span>
-          </div>
-          <For each={residents()}>
-            {(resident) => (
-              <div
-                class="flex items-center justify-between gap-2"
-                data-runtime-resident
-              >
-                <span class="min-w-0 truncate text-sm text-ink">
-                  {resident.name}
-                </span>
-                <span class="text-xs text-ink-muted">
-                  {t('runtimeSharing.resident')}
-                </span>
-              </div>
-            )}
-          </For>
-          <For each={source.grants()}>
-            {(grant) => (
+          <h3 class="font-medium text-ink">{t('runtimeSharing.requests')}</h3>
+          <For each={source.state()?.requests ?? []}>
+            {(request) => (
               <div
                 class="flex flex-wrap items-center justify-between gap-2"
-                data-runtime-grant
+                data-runtime-request
               >
-                <OwnerLabel ownerId={grant.userId} />
+                <div class="flex min-w-0 flex-col gap-1">
+                  <OwnerLabel ownerId={request.requesterId} />
+                  <Show when={request.requestedByAgent}>
+                    <span class="text-xs text-ink-muted">
+                      {t('runtimeSharing.viaAgent')}
+                    </span>
+                  </Show>
+                </div>
                 <div class="flex items-center gap-2">
-                  <span class="text-xs text-ink-muted">
-                    {t('runtimeSharing.canUse')}
-                  </span>
                   <Button
                     variant="ghost"
                     size="sm"
                     disabled={source.busy()}
-                    onClick={() =>
-                      fireAndForget(
-                        removePerson(grant.userId),
-                        'runtime-sharing'
-                      )
-                    }
+                    onClick={() => decide(request.id, null)}
                   >
-                    {t('runtimeSharing.remove')}
+                    {t('runtimeSharing.deny')}
+                  </Button>
+                  <Button
+                    variant="primary"
+                    size="sm"
+                    disabled={source.busy()}
+                    onClick={() => decide(request.id, 'edit')}
+                  >
+                    {t('runtimeSharing.approve')}
                   </Button>
                 </div>
               </div>
             )}
           </For>
         </section>
+      </Show>
 
-        <Show when={(source.state()?.requests.length ?? 0) > 0}>
-          <section
-            class="flex flex-col gap-2"
-            aria-label={t('runtimeSharing.requests')}
-          >
-            <h3 class="font-medium text-ink">{t('runtimeSharing.requests')}</h3>
-            <For each={source.state()?.requests ?? []}>
-              {(request) => (
+      <section
+        class="flex flex-col gap-2"
+        aria-label={t('runtimeSharing.addTeammates')}
+      >
+        <h3 class="font-medium text-ink">{t('runtimeSharing.addTeammates')}</h3>
+        <SearchBar
+          label={t('runtimeSharing.filterTeammates')}
+          placeholder={t('runtimeSharing.filterTeammates')}
+          value={filter()}
+          onValueChange={setFilter}
+        />
+        <Show
+          when={addable().length > 0}
+          fallback={
+            <p class="text-sm text-ink-muted">
+              {t('runtimeSharing.noTeammates')}
+            </p>
+          }
+        >
+          <div class="flex max-h-56 flex-col gap-1 overflow-y-auto">
+            <For each={addable()}>
+              {(id) => (
                 <div
-                  class="flex flex-wrap items-center justify-between gap-2"
-                  data-runtime-request
+                  class="flex items-center justify-between gap-2 touch:min-h-[44px]"
+                  data-runtime-teammate
                 >
-                  <div class="flex min-w-0 flex-col gap-1">
-                    <OwnerLabel ownerId={request.requesterId} />
-                    <Show when={request.requestedByAgent}>
-                      <span class="text-xs text-ink-muted">
-                        {t('runtimeSharing.viaAgent')}
-                      </span>
-                    </Show>
-                  </div>
-                  <div class="flex items-center gap-2">
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      disabled={source.busy()}
-                      onClick={() => decide(request.id, null)}
-                    >
-                      {t('runtimeSharing.deny')}
-                    </Button>
-                    <Button
-                      variant="primary"
-                      size="sm"
-                      disabled={source.busy()}
-                      onClick={() => decide(request.id, 'edit')}
-                    >
-                      {t('runtimeSharing.approve')}
-                    </Button>
-                  </div>
+                  <OwnerLabel ownerId={id} />
+                  <Button
+                    variant="secondary"
+                    size="sm"
+                    disabled={source.busy()}
+                    onClick={() =>
+                      fireAndForget(
+                        report(() => source.setGrant(id, 'edit')),
+                        'runtime-sharing'
+                      )
+                    }
+                  >
+                    {t('runtimeSharing.add')}
+                  </Button>
                 </div>
               )}
             </For>
-          </section>
+          </div>
         </Show>
+      </section>
 
-        <section
-          class="flex flex-col gap-2"
-          aria-label={t('runtimeSharing.addTeammates')}
-        >
-          <h3 class="font-medium text-ink">
-            {t('runtimeSharing.addTeammates')}
-          </h3>
-          <SearchBar
-            label={t('runtimeSharing.filterTeammates')}
-            placeholder={t('runtimeSharing.filterTeammates')}
-            value={filter()}
-            onValueChange={setFilter}
-          />
-          <Show
-            when={addable().length > 0}
-            fallback={
-              <p class="text-sm text-ink-muted">
-                {t('runtimeSharing.noTeammates')}
-              </p>
-            }
-          >
-            <div class="flex max-h-56 flex-col gap-1 overflow-y-auto">
-              <For each={addable()}>
-                {(id) => (
-                  <div
-                    class="flex items-center justify-between gap-2 touch:min-h-[44px]"
-                    data-runtime-teammate
-                  >
-                    <OwnerLabel ownerId={id} />
-                    <Button
-                      variant="secondary"
-                      size="sm"
-                      disabled={source.busy()}
-                      onClick={() =>
-                        fireAndForget(
-                          report(() => source.setGrant(id, 'edit')),
-                          'runtime-sharing'
-                        )
-                      }
-                    >
-                      {t('runtimeSharing.add')}
-                    </Button>
-                  </div>
-                )}
-              </For>
-            </div>
-          </Show>
-        </section>
-
-        <Show when={source.error()}>
-          <p role="alert" class="text-xs text-failure-ink">
-            {t('runtimeSharing.loadFailed')}
-          </p>
-        </Show>
-      </ShareCard>
-    </ShareDialogFrame>
+      <Show when={source.error()}>
+        <p role="alert" class="text-xs text-failure-ink">
+          {t('runtimeSharing.loadFailed')}
+        </p>
+      </Show>
+    </ShareCard>
   );
 }
