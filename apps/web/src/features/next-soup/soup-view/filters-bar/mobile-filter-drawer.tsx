@@ -31,19 +31,13 @@ import { enableMultiInbox } from '@core/constant/featureFlags';
 import { useUserId } from '@core/context/user';
 import { useAddInboxFlow } from '@core/email-link';
 import { fireAndForget } from '@core/util/fireAndForget';
-import ArrowLeftIcon from '@icon/system/regular/arrow-left.svg';
 import SearchIcon from '@icon/system/regular/magnifying-glass.svg';
 import PlusIcon from '@icon/system/regular/plus.svg';
 import { Accordion } from '@kobalte/core/accordion';
 import { useContacts } from '@queries/contacts/contacts';
-import { Button } from '@ui';
 import { batch, createMemo, createSignal, For, Show } from 'solid-js';
 import { ConsolidatedFilterChip } from './consolidated-filter-chip';
 import { useInboxPicker } from './inbox-picker';
-import {
-  type SearchableOption,
-  SearchableSelectView,
-} from './searchable-multi-select';
 import {
   buildContactLabel,
   type FilterOption,
@@ -450,20 +444,6 @@ export const MobileFilterDrawer = (props: {
             >
               {/* Search */}
               <div class="flex min-h-11 items-center gap-2 rounded-[20px] px-3 py-2 bg-ink/5 mb-1">
-                <Show when={assigneePicker.navigation().back}>
-                  {(back) => (
-                    <Button
-                      variant="ghost"
-                      size="icon-sm"
-                      aria-label={back().label}
-                      onPointerDown={(event) => event.preventDefault()}
-                      onMouseDown={(event) => event.preventDefault()}
-                      onClick={() => navigateAssignees(false)}
-                    >
-                      <ArrowLeftIcon class="size-4" />
-                    </Button>
-                  )}
-                </Show>
                 <SearchIcon class="size-3.5 text-ink-muted shrink-0" />
                 <input
                   ref={assigneeInput}
@@ -475,51 +455,39 @@ export const MobileFilterDrawer = (props: {
                   class="min-w-0 flex-1 bg-transparent text-base outline-none placeholder:text-ink-placeholder"
                 />
               </div>
-              <SearchableSelectView view={assigneePicker.navigation().view}>
-                {(active) => {
-                  const viewOptions = createMemo<SearchableOption[]>(
-                    (previous) =>
-                      active() ? filteredAssigneeOptions() : (previous ?? [])
-                  );
-                  return (
-                    <>
-                      <div class="max-h-[calc(50*var(--dvh))] overflow-y-auto scrollbar-hidden">
-                        <For each={viewOptions()}>
-                          {(option) => {
-                            const active = () =>
-                              assigneeFilter().includes(option.id);
-                            return (
-                              <FilterDrawer.Option
-                                checked={active()}
-                                onChange={() => toggleAssignee(option.id)}
-                                icon={option.icon?.()}
-                              >
-                                {option.label}
-                              </FilterDrawer.Option>
-                            );
-                          }}
-                        </For>
-                      </div>
-
-                      <AssigneeDiscoveryControls
-                        discovery={assigneePicker}
-                        onDiscover={() => navigateAssignees(true)}
-                      />
-                      <Show
-                        when={
-                          viewOptions().length === 0 &&
-                          (!assigneePicker.discovering() ||
-                            !assigneePicker.otherPeopleEmpty())
-                        }
+              <div class="max-h-[calc(50*var(--dvh))] overflow-y-auto scrollbar-hidden">
+                <For each={filteredAssigneeOptions()}>
+                  {(option) => {
+                    const active = () => assigneeFilter().includes(option.id);
+                    return (
+                      <FilterDrawer.Option
+                        checked={active()}
+                        onChange={() => toggleAssignee(option.id)}
+                        icon={option.icon?.()}
                       >
-                        <div class="px-4 py-2 text-sm text-ink-muted">
-                          {t('viewMenus.noResults')}
-                        </div>
-                      </Show>
-                    </>
-                  );
-                }}
-              </SearchableSelectView>
+                        {option.label}
+                      </FilterDrawer.Option>
+                    );
+                  }}
+                </For>
+              </div>
+              <Show
+                when={
+                  filteredAssigneeOptions().length === 0 &&
+                  (!assigneePicker.discovering() ||
+                    !assigneePicker.otherPeopleEmpty())
+                }
+              >
+                <div class="px-4 py-2 text-sm text-ink-muted">
+                  {t('viewMenus.noResults')}
+                </div>
+              </Show>
+              <AssigneeDiscoveryControls
+                discovery={assigneePicker}
+                onNavigate={() =>
+                  navigateAssignees(!assigneePicker.discovering())
+                }
+              />
             </FilterDrawer.Section>
           </Show>
 

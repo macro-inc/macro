@@ -12,7 +12,6 @@ import {
   Entity,
   type EntityData,
 } from '@entity';
-import ArrowLeftIcon from '@icon/system/regular/arrow-left.svg';
 import CheckIcon from '@icon/system/regular/check.svg';
 import SearchIcon from '@icon/system/regular/magnifying-glass.svg';
 import { useSearchInputFocus } from '@property/utils';
@@ -20,7 +19,6 @@ import { useSearchSoupQuery } from '@queries/soup/search';
 import type { EntityType } from '@service-properties/generated/schemas/entityType';
 import { debounce } from '@solid-primitives/scheduled';
 import { Button, cn } from '@ui';
-import { Stepper } from '@ui/components/Stepper';
 import * as EmailValidator from 'email-validator';
 import {
   batch,
@@ -66,11 +64,6 @@ type EntityInputProps = {
   action?: { label: string; onSelect: () => void };
   /** Override empty-result content; null hides the default message. */
   emptyState?: JSX.Element;
-  /** Generic drill-in navigation; the search input stays mounted between views. */
-  navigation?: {
-    view: number;
-    back?: { label: string; onSelect: () => void };
-  };
 };
 
 function getEntityTypePluralLabel(
@@ -155,6 +148,7 @@ export function PropertyEntitySelector(props: EntityInputProps) {
       onSelect();
     });
     searchInputRef.focus();
+    if (scrollContainerRef) scrollContainerRef.scrollTop = 0;
   };
   const runAction = () => {
     const action = props.action;
@@ -469,40 +463,24 @@ export function PropertyEntitySelector(props: EntityInputProps) {
   const fills = () => props.config.fillHeight === true;
   const keepSearchFocus = (event: Event) => event.preventDefault();
 
-  const Results = (viewProps: { view: number }) => {
-    const active = () => viewProps.view === (props.navigation?.view ?? 0);
-    // Retain the outgoing view until Stepper finishes its exit animation.
-    const viewEntities = createMemo<CombinedEntity[]>((previous) =>
-      active() ? sortedEntities() : (previous ?? [])
-    );
-    const viewCustomEmail = createMemo<string | undefined>((previous) =>
-      active() ? customEmail() : previous
-    );
-    const viewAction = createMemo<EntityInputProps['action']>((previous) =>
-      active() ? props.action : previous
-    );
-    const viewEmptyState = createMemo<JSX.Element>((previous) =>
-      active() ? props.emptyState : previous
-    );
-    const viewResultCount = () =>
-      viewEntities().length + (viewCustomEmail() ? 1 : 0);
+  const Results = () => {
     const shouldShowSelectedDivider = (index: number) => {
       if (!props.config.isMultiSelect || searchTerm() || index === 0)
         return false;
-      const items = viewEntities();
+      const items = sortedEntities();
+      const previous = items[index - 1];
+      const current = items[index];
       return (
-        openedSelectedIds.has(items[index - 1].id) &&
-        !openedSelectedIds.has(items[index].id)
+        previous &&
+        current &&
+        openedSelectedIds.has(previous.id) &&
+        !openedSelectedIds.has(current.id)
       );
     };
 
     return (
-      <div
-        class={cn(fills() && 'flex h-full min-h-0 flex-col')}
-        inert={!active()}
-        aria-hidden={!active()}
-      >
-        <Show when={viewResultCount() > 0}>
+      <div class={cn(fills() && 'flex h-full min-h-0 flex-col')}>
+        <Show when={resultCount() > 0}>
           {/* Picking a row keeps focus in the search field: a tap that moved
             it would drop the phone keyboard until the refocus below. iOS
             devices still send mousedown after a cancelled pointerdown. */}
@@ -511,7 +489,7 @@ export function PropertyEntitySelector(props: EntityInputProps) {
             onPointerDown={keepSearchFocus}
             onMouseDown={keepSearchFocus}
           >
-            <Show when={viewEntities().length > 0}>
+            <Show when={sortedEntities().length > 0}>
               <div
                 ref={scrollContainerRef}
                 style={{
@@ -522,7 +500,7 @@ export function PropertyEntitySelector(props: EntityInputProps) {
                   fills() && 'min-h-0 flex-1'
                 )}
               >
-                <For each={viewEntities()}>
+                <For each={sortedEntities()}>
                   {(entity, index) => {
                     const isSelected = () =>
                       props.selectedOptions().has(entity.id);
@@ -628,9 +606,9 @@ export function PropertyEntitySelector(props: EntityInputProps) {
                 </For>
               </div>
             </Show>
-            <Show when={viewCustomEmail()}>
+            <Show when={customEmail()}>
               {(email) => {
-                const rowIndex = () => viewEntities().length;
+                const rowIndex = () => sortedEntities().length;
                 const entity = () => customEmailEntity();
                 return (
                   <div
@@ -669,9 +647,9 @@ export function PropertyEntitySelector(props: EntityInputProps) {
           </div>
         </Show>
 
-        <Show when={viewResultCount() === 0}>
-          {viewEmptyState() !== undefined ? (
-            viewEmptyState()
+        <Show when={resultCount() === 0}>
+          {props.emptyState !== undefined ? (
+            props.emptyState
           ) : (
             <div class="text-center py-4 text-ink-muted text-sm">
               <Show
@@ -684,7 +662,7 @@ export function PropertyEntitySelector(props: EntityInputProps) {
             </div>
           )}
         </Show>
-        <Show when={viewAction()}>
+        <Show when={props.action}>
           <div
             class="shrink-0 border-t border-edge-muted p-1.5"
             onPointerDown={keepSearchFocus}
@@ -693,13 +671,13 @@ export function PropertyEntitySelector(props: EntityInputProps) {
             <Button
               variant="ghost"
               size="sm"
-              class={cn(selectedIndex() === viewResultCount() && 'bg-hover')}
+              class={cn(selectedIndex() === resultCount() && 'bg-hover')}
               onClick={runAction}
               onMouseEnter={() => {
-                if (!keyboardMode()) setSelectedIndex(viewResultCount());
+                if (!keyboardMode()) setSelectedIndex(resultCount());
               }}
             >
-              {viewAction()?.label}
+              {props.action?.label}
             </Button>
           </div>
         </Show>
@@ -711,20 +689,6 @@ export function PropertyEntitySelector(props: EntityInputProps) {
     <div class={cn(fills() && 'flex min-h-0 flex-1 flex-col')}>
       <div class="relative shrink-0">
         <div class="flex w-full items-center py-2 gap-2 px-2 border-b border-edge-muted">
-          <Show when={props.navigation?.back}>
-            {(back) => (
-              <Button
-                variant="ghost"
-                size="icon-sm"
-                aria-label={back().label}
-                onPointerDown={keepSearchFocus}
-                onMouseDown={keepSearchFocus}
-                onClick={() => navigate(back().onSelect)}
-              >
-                <ArrowLeftIcon class="size-4" />
-              </Button>
-            )}
-          </Show>
           <SearchIcon class="size-4 text-ink-muted" />
           <input
             class="w-full caret-accent"
@@ -744,19 +708,7 @@ export function PropertyEntitySelector(props: EntityInputProps) {
         </div>
       </div>
 
-      <Stepper
-        step={props.navigation?.view ?? 0}
-        transition={Stepper.transitions.slide}
-        class={cn('overflow-hidden', fills() && 'min-h-0 flex-1')}
-      >
-        <For each={[props.navigation?.view ?? 0]}>
-          {(view) => (
-            <Stepper.Step index={view}>
-              <Results view={view} />
-            </Stepper.Step>
-          )}
-        </For>
-      </Stepper>
+      <Results />
     </div>
   );
 }

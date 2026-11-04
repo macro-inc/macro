@@ -1,6 +1,5 @@
 import type { ListControlOption } from '@app/components/view-shell/ListDropdowns';
 import { MobileFilterDrawer } from '@app/components/view-shell/MobileFilterDrawer';
-import { SearchableSelectView } from '@app/features/next-soup/soup-view/filters-bar/searchable-multi-select';
 import { MobileDrawer } from '@components/app/mobile/MobileDrawer';
 import { fireAndForget } from '@core/util/fireAndForget';
 import ArrowLeftIcon from '@icon/system/regular/arrow-left.svg';
@@ -224,6 +223,22 @@ export function TasksFilterDrawer() {
                         </Button>
                       )}
                     </Show>
+                    <Show when={group().navigation?.back}>
+                      {(back) => (
+                        <div class="border-t border-edge-muted p-1">
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            onPointerDown={(event) => event.preventDefault()}
+                            onMouseDown={(event) => event.preventDefault()}
+                            onClick={() => navigateAssignees(back().onSelect)}
+                          >
+                            <ArrowLeftIcon class="size-4" />
+                            {back().label}
+                          </Button>
+                        </div>
+                      )}
+                    </Show>
                     {group().footer}
                   </>
                 );
@@ -236,20 +251,6 @@ export function TasksFilterDrawer() {
                   >
                     <Show when={group().id === 'assignees'}>
                       <div class="flex items-center gap-2 px-3 pb-2">
-                        <Show when={group().navigation?.back}>
-                          {(back) => (
-                            <Button
-                              variant="ghost"
-                              size="icon-sm"
-                              aria-label={back().label}
-                              onPointerDown={(event) => event.preventDefault()}
-                              onMouseDown={(event) => event.preventDefault()}
-                              onClick={() => navigateAssignees(back().onSelect)}
-                            >
-                              <ArrowLeftIcon class="size-4" />
-                            </Button>
-                          )}
-                        </Show>
                         <Input
                           ref={assigneeInput}
                           class="min-w-0 flex-1"
@@ -262,23 +263,7 @@ export function TasksFilterDrawer() {
                         />
                       </div>
                     </Show>
-                    <Show
-                      when={group().navigation}
-                      fallback={renderOptions(visibleOptions)}
-                    >
-                      {(navigation) => (
-                        <SearchableSelectView view={navigation().view}>
-                          {(active) => {
-                            const options = createMemo<
-                              ListControlOption<string>[]
-                            >((previous) =>
-                              active() ? visibleOptions() : (previous ?? [])
-                            );
-                            return renderOptions(options);
-                          }}
-                        </SearchableSelectView>
-                      )}
-                    </Show>
+                    {renderOptions(visibleOptions)}
                   </MobileFilterDrawer.Section>
                 );
               }}

@@ -9,6 +9,7 @@ import { UserIcon } from '@core/component/UserIcon';
 import { isBotPrincipalId } from '@core/constant/macroAgent';
 import { useUserId } from '@core/context/user';
 import type { IUser } from '@core/user/types';
+import ArrowLeftIcon from '@icon/system/regular/arrow-left.svg';
 import CircleDashedIcon from '@icon/system/regular/circle-dashed.svg';
 import { nonTeamUserOptions } from '@property/editors/selectors/scoped-user-options';
 import { useAgentAssignees } from '@property/queries/agent-assignees';
@@ -120,7 +121,6 @@ export function useAssigneePicker(
           : 'viewMenus.searchAssignees'
       ),
     navigation: (): SearchableSelectNavigation => ({
-      view: discovering() ? 1 : 0,
       back: discovering()
         ? {
             label: t('viewMenus.backToAssignees'),
@@ -148,11 +148,13 @@ export type AssigneeDiscovery = ReturnType<typeof useAssigneePicker>;
 
 export function AssigneeDiscoveryControls(props: {
   discovery: AssigneeDiscovery;
-  onDiscover?: () => void;
+  onNavigate?: () => void;
 }) {
   return (
     <div class="border-t border-edge-muted p-1">
-      <Show when={props.discovery.action()}>
+      <Show
+        when={props.discovery.navigation().back ?? props.discovery.action()}
+      >
         {(action) => (
           <Button
             variant="ghost"
@@ -160,8 +162,11 @@ export function AssigneeDiscoveryControls(props: {
             class="w-fit"
             onPointerDown={(event) => event.preventDefault()}
             onMouseDown={(event) => event.preventDefault()}
-            onClick={props.onDiscover ?? action().onSelect}
+            onClick={props.onNavigate ?? action().onSelect}
           >
+            <Show when={props.discovery.discovering()}>
+              <ArrowLeftIcon class="size-4" />
+            </Show>
             {action().label}
           </Button>
         )}

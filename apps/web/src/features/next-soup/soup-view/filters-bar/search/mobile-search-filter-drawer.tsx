@@ -17,10 +17,7 @@ import {
   Switch,
 } from 'solid-js';
 import { createStore } from 'solid-js/store';
-import {
-  type SearchableOption,
-  SearchableSelectView,
-} from '../searchable-multi-select';
+import type { SearchableOption } from '../searchable-multi-select';
 import { type SearchFacetVM, useSearchFacets } from './search-facets';
 import { createSearchFiltersController } from './search-filters-state';
 
@@ -149,6 +146,22 @@ function MultiFacetContent(props: {
           </Button>
         )}
       </Show>
+      <Show when={props.facet.navigation?.().back}>
+        {(back) => (
+          <div class="border-t border-edge-muted p-1">
+            <Button
+              variant="ghost"
+              size="sm"
+              onPointerDown={(event) => event.preventDefault()}
+              onMouseDown={(event) => event.preventDefault()}
+              onClick={() => navigate(back().onSelect)}
+            >
+              <ArrowLeftIcon class="size-4" />
+              {back().label}
+            </Button>
+          </div>
+        )}
+      </Show>
       {props.facet.footer?.()}
     </>
   );
@@ -196,20 +209,6 @@ function MultiFacetContent(props: {
         }
       >
         <div class="flex min-h-11 items-center gap-2 rounded-[20px] px-3 py-2 bg-ink/5 mb-1">
-          <Show when={props.facet.navigation?.().back}>
-            {(back) => (
-              <Button
-                variant="ghost"
-                size="icon-sm"
-                aria-label={back().label}
-                onPointerDown={(event) => event.preventDefault()}
-                onMouseDown={(event) => event.preventDefault()}
-                onClick={() => navigate(back().onSelect)}
-              >
-                <ArrowLeftIcon class="size-4" />
-              </Button>
-            )}
-          </Show>
           <SearchIcon class="size-3.5 text-ink-muted shrink-0" />
           <input
             ref={searchInput}
@@ -225,21 +224,7 @@ function MultiFacetContent(props: {
         </div>
       </Show>
 
-      <Show
-        when={props.facet.navigation}
-        fallback={renderOptions(filteredOptions)}
-      >
-        {(navigation) => (
-          <SearchableSelectView view={navigation()().view}>
-            {(active) => {
-              const options = createMemo<SearchableOption[]>((previous) =>
-                active() ? filteredOptions() : (previous ?? [])
-              );
-              return renderOptions(options);
-            }}
-          </SearchableSelectView>
-        )}
-      </Show>
+      {renderOptions(filteredOptions)}
     </>
   );
 }

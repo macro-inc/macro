@@ -94,10 +94,11 @@ title-row tags retain their compact height.
 
 The system Assignees property lists selected assignees first, then available
 agents, then the current team roster. The compact **Find other people…** action
-slides to eligible non-team people from the existing Quick Access people pool,
-without teammates or agents. A back button beside search restores the main
-Assignees view. The search placeholder follows the view; navigation clears the
-query without remounting the focused input. Selections survive both transitions.
+switches directly to eligible non-team people from the existing Quick Access
+people pool, without teammates or agents. A compact footer back button restores
+the main Assignees view. The search placeholder follows the view; navigation
+clears the query without animating or remounting the focused input. Selections
+survive both directions.
 An empty non-team pool shows **No other people available.** Selected outsiders
 remain visible and removable in the main view, including references absent from
 contacts. Closing and reopening starts in team mode.
@@ -109,7 +110,7 @@ strictly team-only, and custom people properties keep their existing pool.
 `queries/team-members.ts` shares the non-suspending roster with Assignee filters.
 The property-aware wrapper in `editors/popover/EntityEditor.tsx` owns roster and
 contacts switching, outsider retention, and roster-status UI. Keep that policy out
-of `PropertyEntitySelector`; its extension points are generic actions, navigation,
+of `PropertyEntitySelector`; its extension points are generic actions,
 empty-state content, and priority ids. The command-menu composer/bulk editor lives in
 `editor/entity-property-editor.tsx`; both editor compositions share
 `editors/selectors/scoped-user-options.ts`.

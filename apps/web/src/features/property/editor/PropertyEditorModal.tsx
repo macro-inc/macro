@@ -271,14 +271,14 @@ export function PropertyEditorDialog(props: {
     createSignal<string | null>(null);
   const defaultPlaceholder = 'Choose a property...';
   const [placeholder, setPlaceholder] = createSignal('');
-  const [headerAction, setHeaderAction] = createSignal<{
+  const [footerAction, setFooterAction] = createSignal<{
     label: string;
     onSelect: () => void;
   }>();
   let searchInputRef: HTMLInputElement | undefined;
-  const updateHeaderAction = (
+  const updateFooterAction = (
     action: { label: string; onSelect: () => void } | undefined
-  ) => setHeaderAction(action);
+  ) => setFooterAction(action);
   let editorRevision = 0;
   onCleanup(() => editorRevision++);
 
@@ -357,7 +357,7 @@ export function PropertyEditorDialog(props: {
       setSearchValue('');
       setPlaceholder('');
       setInputType('text');
-      setHeaderAction(undefined);
+      setFooterAction(undefined);
     })
   );
 
@@ -373,31 +373,9 @@ export function PropertyEditorDialog(props: {
     >
       <CommandMenuShell depth={2} class="rounded-xl max-h-108 text-sm">
         <CommandMenuShell.Header>
-          <Show
-            when={headerAction()}
-            fallback={
-              <span class="pl-2 text-ink-extra-muted/55 pointer-events-none">
-                <PropertiesIcon class="size-3" />
-              </span>
-            }
-          >
-            {(action) => (
-              <Button
-                variant="ghost"
-                size="icon-sm"
-                aria-label={action().label}
-                onPointerDown={(event) => event.preventDefault()}
-                onMouseDown={(event) => event.preventDefault()}
-                onKeyDown={(event) => event.stopPropagation()}
-                onClick={() => {
-                  action().onSelect();
-                  searchInputRef?.focus();
-                }}
-              >
-                <ArrowLeftIcon class="size-4" />
-              </Button>
-            )}
-          </Show>
+          <span class="pl-2 text-ink-extra-muted/55 pointer-events-none">
+            <PropertiesIcon class="size-3" />
+          </span>
           <SearchInput
             placeHolder={placeholder() || defaultPlaceholder}
             inputRef={(element) => {
@@ -460,7 +438,7 @@ export function PropertyEditorDialog(props: {
                 setSelectedIndex={setSelectedIndex}
                 setKeybindings={keybindings}
                 setPlaceholder={setPlaceholder}
-                setHeaderAction={updateHeaderAction}
+                setFooterAction={updateFooterAction}
                 setInputType={setInputType}
                 onSave={handlePropertySave}
                 selectedEntities={props.state.selectedEntities}
@@ -479,6 +457,26 @@ export function PropertyEditorDialog(props: {
             </Match>
           </Switch>
         </CommandMenuShell.Body>
+        <Show when={footerAction()}>
+          {(action) => (
+            <CommandMenuShell.Footer>
+              <Button
+                variant="ghost"
+                size="sm"
+                onPointerDown={(event) => event.preventDefault()}
+                onMouseDown={(event) => event.preventDefault()}
+                onKeyDown={(event) => event.stopPropagation()}
+                onClick={() => {
+                  action().onSelect();
+                  searchInputRef?.focus();
+                }}
+              >
+                <ArrowLeftIcon class="size-4" />
+                {action().label}
+              </Button>
+            </CommandMenuShell.Footer>
+          )}
+        </Show>
       </CommandMenuShell>
       <Show when={createPropertyInitialName()}>
         {(initialName) => (
@@ -1353,7 +1351,7 @@ function PropertyValueEditor(props: {
   setSelectedIndex: Setter<number>;
   setKeybindings: (binding: ListNavActions) => void;
   setPlaceholder: Setter<string>;
-  setHeaderAction: (
+  setFooterAction: (
     action: { label: string; onSelect: () => void } | undefined
   ) => void;
   setInputType: Setter<'text' | 'number'>;
@@ -1432,7 +1430,7 @@ function PropertyValueEditor(props: {
           onSubmit={handleSubmit}
           setKeybindings={props.setKeybindings}
           setPlaceholder={props.setPlaceholder}
-          setHeaderAction={props.setHeaderAction}
+          setFooterAction={props.setFooterAction}
           selectedEntityCount={
             props.properties ? 1 : props.selectedEntities.length
           }

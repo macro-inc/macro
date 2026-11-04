@@ -6,7 +6,6 @@ import { Combobox, useComboboxContext } from '@kobalte/core/combobox';
 import { makeEventListener } from '@solid-primitives/event-listener';
 import { Button, cn, Layer } from '@ui';
 import { MultiSelectItemContent } from '@ui/components/MultiSelectItemContent';
-import { Stepper } from '@ui/components/Stepper';
 import {
   applyMultiSelectSelection,
   createMultiSelectIntent,
@@ -16,7 +15,6 @@ import {
   batch,
   createMemo,
   createSignal,
-  For,
   type JSX,
   Show,
 } from 'solid-js';
@@ -42,42 +40,8 @@ export type SearchableSelectAction = {
 };
 
 export type SearchableSelectNavigation = {
-  view: number;
   back?: { label: string; onSelect: () => void };
 };
-
-/** Slide result views without replacing the focused search field. */
-export function SearchableSelectView(props: {
-  view: number;
-  children: (active: Accessor<boolean>) => JSX.Element;
-}) {
-  const View = (viewProps: { view: number }) => {
-    const active = () => props.view === viewProps.view;
-    return (
-      <div inert={!active()} aria-hidden={!active()}>
-        {props.children(active)}
-      </div>
-    );
-  };
-  return (
-    <Stepper
-      step={props.view}
-      transition={(direction) => ({
-        ...Stepper.transitions.slide(direction),
-        mode: 'outin',
-      })}
-      class="overflow-hidden"
-    >
-      <For each={[props.view]}>
-        {(view) => (
-          <Stepper.Step index={view}>
-            <View view={view} />
-          </Stepper.Step>
-        )}
-      </For>
-    </Stepper>
-  );
-}
 
 /**
  * Sentinel id for the action row. It rides the option collection so kobalte's
@@ -278,7 +242,6 @@ const VirtualizedListbox = (props: {
   onOnly?: (id: string) => void;
   isSoleActive?: (id: string) => boolean;
   selectionIntent: ReturnType<typeof createMultiSelectIntent>;
-  active?: Accessor<boolean>;
 }) => {
   let handle: VirtualizerHandle | undefined;
   // Kobalte supplies the collection after applying the combobox search
@@ -290,7 +253,6 @@ const VirtualizedListbox = (props: {
   return (
     <Combobox.Listbox<SearchableOption>
       scrollToItem={(key) => {
-        if (props.active && !props.active()) return;
         const idx = Array.from(visibleItems?.() ?? []).findIndex(
           (item) => item.rawValue.id === key
         );
@@ -300,10 +262,7 @@ const VirtualizedListbox = (props: {
     >
       {(items) => {
         visibleItems = items;
-        const rows = createMemo<CollectionNode<SearchableOption>[]>(
-          (previous) =>
-            !props.active || props.active() ? [...items()] : (previous ?? [])
-        );
+        const rows = createMemo(() => [...items()]);
         return (
           <Virtualizer
             ref={(h) => {
@@ -499,21 +458,6 @@ export const SearchableMultiSelect = (props: SearchableMultiSelectProps) => {
             )}
           >
             <div class="flex items-center gap-2 px-3 py-2 border-b border-edge-muted">
-              <Show when={props.navigation?.back}>
-                {(back) => (
-                  <Button
-                    variant="ghost"
-                    size="icon-sm"
-                    aria-label={back().label}
-                    onPointerDown={keepComboboxFocus}
-                    onMouseDown={keepComboboxFocus}
-                    onKeyDown={(event) => event.stopPropagation()}
-                    onClick={() => navigate(back().onSelect)}
-                  >
-                    <ArrowLeftIcon class="size-4" />
-                  </Button>
-                )}
-              </Show>
               <SearchIcon class="size-3.5 text-ink-muted shrink-0" />
               <PickerSearchInput
                 onReady={(element, clear) => {
@@ -523,52 +467,49 @@ export const SearchableMultiSelect = (props: SearchableMultiSelectProps) => {
                 placeholder={props.placeholder}
               />
             </div>
-            <SearchableSelectView view={props.navigation?.view ?? 0}>
-              {(active) => {
-                const viewMatches = createMemo<boolean>((previous) =>
-                  active() ? hasMatches() : (previous ?? false)
-                );
-                const viewQuery = createMemo<string>((previous) =>
-                  active() ? searchQuery() : (previous ?? '')
-                );
-                const viewFooter = createMemo<JSX.Element>((previous) =>
-                  active() ? props.footer : previous
-                );
-                return (
-                  <>
-                    <div class="p-1">
-                      <Show
-                        when={viewMatches()}
-                        fallback={
-                          <Show
-                            when={
-                              !props.navigation ||
-                              !viewFooter() ||
-                              viewQuery().trim()
-                            }
-                          >
-                            <div class="py-3 px-2 text-center text-xs text-ink-muted">
-                              {viewQuery().trim()
-                                ? `No options match "${viewQuery()}"`
-                                : 'No options available'}
-                            </div>
-                          </Show>
-                        }
-                      >
-                        <VirtualizedListbox
-                          active={active}
-                          class={props.listboxClass}
-                          onOnly={handleOnly}
-                          isSoleActive={isSoleActive}
-                          selectionIntent={selectionIntent}
-                        />
-                      </Show>
+            <div class="p-1">
+              <Show
+                when={hasMatches()}
+                fallback={
+                  <Show
+                    when={
+                      !props.navigation || !props.footer || searchQuery().trim()
+                    }
+                  >
+                    <div class="py-3 px-2 text-center text-xs text-ink-muted">
+                      {searchQuery().trim()
+                        ? `No options match "${searchQuery()}"`
+                        : 'No options available'}
                     </div>
-                    {viewFooter()}
-                  </>
-                );
-              }}
-            </SearchableSelectView>
+                  </Show>
+                }
+              >
+                <VirtualizedListbox
+                  class={props.listboxClass}
+                  onOnly={handleOnly}
+                  isSoleActive={isSoleActive}
+                  selectionIntent={selectionIntent}
+                />
+              </Show>
+            </div>
+            <Show when={props.navigation?.back}>
+              {(back) => (
+                <div class="border-t border-edge-muted p-1">
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onPointerDown={keepComboboxFocus}
+                    onMouseDown={keepComboboxFocus}
+                    onKeyDown={(event) => event.stopPropagation()}
+                    onClick={() => navigate(back().onSelect)}
+                  >
+                    <ArrowLeftIcon class="size-4" />
+                    {back().label}
+                  </Button>
+                </div>
+              )}
+            </Show>
+            {props.footer}
           </Combobox.Content>
         </Layer>
       </Combobox.Portal>
@@ -728,21 +669,6 @@ export const SearchableMultiSelectInline = (
         ref={selectionIntent.track}
         class="flex items-center gap-2 px-3 py-2 border-b border-edge-muted"
       >
-        <Show when={props.navigation?.back}>
-          {(back) => (
-            <Button
-              variant="ghost"
-              size="icon-sm"
-              aria-label={back().label}
-              onPointerDown={keepComboboxFocus}
-              onMouseDown={keepComboboxFocus}
-              onKeyDown={(event) => event.stopPropagation()}
-              onClick={() => navigate(back().onSelect)}
-            >
-              <ArrowLeftIcon class="size-4" />
-            </Button>
-          )}
-        </Show>
         <SearchIcon class="size-3.5 text-ink-muted shrink-0" />
         <PickerSearchInput
           onReady={(element, clear) => {
@@ -754,47 +680,44 @@ export const SearchableMultiSelectInline = (
           placeholder={props.placeholder}
         />
       </div>
-      <SearchableSelectView view={props.navigation?.view ?? 0}>
-        {(active) => {
-          const viewMatches = createMemo<boolean>((previous) =>
-            active() ? hasMatches() : (previous ?? false)
-          );
-          const viewQuery = createMemo<string>((previous) =>
-            active() ? searchQuery() : (previous ?? '')
-          );
-          const viewFooter = createMemo<JSX.Element>((previous) =>
-            active() ? props.footer : previous
-          );
-          return (
-            <>
-              <div ref={selectionIntent.track} class="p-1">
-                <Show
-                  when={viewMatches()}
-                  fallback={
-                    <Show
-                      when={
-                        !props.navigation || !viewFooter() || viewQuery().trim()
-                      }
-                    >
-                      <div class="py-3 px-2 text-center text-xs text-ink-muted">
-                        No options match "{viewQuery()}"
-                      </div>
-                    </Show>
-                  }
-                >
-                  <VirtualizedListbox
-                    active={active}
-                    class={props.listboxClass}
-                    selectionIntent={selectionIntent}
-                    onOnly={(id) => props.onChange([id])}
-                  />
-                </Show>
+      <div ref={selectionIntent.track} class="p-1">
+        <Show
+          when={hasMatches()}
+          fallback={
+            <Show
+              when={!props.navigation || !props.footer || searchQuery().trim()}
+            >
+              <div class="py-3 px-2 text-center text-xs text-ink-muted">
+                No options match "{searchQuery()}"
               </div>
-              {viewFooter()}
-            </>
-          );
-        }}
-      </SearchableSelectView>
+            </Show>
+          }
+        >
+          <VirtualizedListbox
+            class={props.listboxClass}
+            selectionIntent={selectionIntent}
+            onOnly={(id) => props.onChange([id])}
+          />
+        </Show>
+      </div>
+      <Show when={props.navigation?.back}>
+        {(back) => (
+          <div class="border-t border-edge-muted p-1">
+            <Button
+              variant="ghost"
+              size="sm"
+              onPointerDown={keepComboboxFocus}
+              onMouseDown={keepComboboxFocus}
+              onKeyDown={(event) => event.stopPropagation()}
+              onClick={() => navigate(back().onSelect)}
+            >
+              <ArrowLeftIcon class="size-4" />
+              {back().label}
+            </Button>
+          </div>
+        )}
+      </Show>
+      {props.footer}
     </Combobox>
   );
 };

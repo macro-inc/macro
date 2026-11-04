@@ -1089,8 +1089,8 @@ Keep eligible non-team people behind the compact **Find other people…** action
 that view excludes teammates, agents, and filter-only Me/Unassigned choices.
 Preserve selections across views and show an explicit empty state.
 List selected assignees first, then agents, then other people in the main view.
-Return through a back button beside search; update its placeholder, clear the
-query on navigation, and slide results with `Stepper` without remounting the input.
+Return through a compact footer back button; update the search placeholder and
+clear the query on navigation without animating or remounting the input.
 Keep company owners team-only and unrelated people/contact fields unchanged.
 Keep the shared filter Assignee picker in `src/features/soup/assignee-picker.tsx`;
 import it directly from Tasks and legacy `next-soup` consumers.

@@ -9,7 +9,6 @@ import {
   CommandMenuList,
   createCommandListController,
 } from '@ui';
-import { Stepper } from '@ui/components/Stepper';
 import {
   type Accessor,
   batch,
@@ -17,7 +16,6 @@ import {
   createMemo,
   createSignal,
   createUniqueId,
-  For,
   Match,
   onCleanup,
   type Setter,
@@ -66,7 +64,7 @@ export function EntityPropertyEditor(props: {
   ) => void;
   setKeybindings: (binding: ListNavActions) => void;
   setPlaceholder: Setter<string>;
-  setHeaderAction: (
+  setFooterAction: (
     action: { label: string; onSelect: () => void } | undefined
   ) => void;
   selectedEntityCount: number;
@@ -116,7 +114,7 @@ export function EntityPropertyEditor(props: {
       syncedSelectionKey = nextSelectionKey;
       setOpenOrderFrozen(false);
       setFindingOtherPeople(false);
-      props.setHeaderAction(undefined);
+      props.setFooterAction(undefined);
       setLocalSelectedRefs(refs);
       setOrderedSelectedIds(new Set(refs.map((ref) => ref.entity_id)));
       return;
@@ -148,9 +146,9 @@ export function EntityPropertyEditor(props: {
   const navigate = (discovering: boolean) => {
     batch(() => {
       props.setSearchValue('');
-      props.setSelectedIndex(0);
+      listController.setSelectedIndex(0, { scrollIntoView: true });
       setFindingOtherPeople(discovering);
-      props.setHeaderAction(
+      props.setFooterAction(
         discovering
           ? {
               label: t('viewMenus.backToAssignees'),
@@ -160,7 +158,7 @@ export function EntityPropertyEditor(props: {
       );
     });
   };
-  onCleanup(() => props.setHeaderAction(undefined));
+  onCleanup(() => props.setFooterAction(undefined));
 
   createEffect(() => {
     props.searchValue();
@@ -370,114 +368,88 @@ export function EntityPropertyEditor(props: {
     },
   });
 
-  const Results = (viewProps: { view: number }) => {
-    const listId = createUniqueId();
-    const active = () => viewProps.view === (findingOtherPeople() ? 1 : 0);
-    const viewRows = createMemo<EntityPropertyRow[]>((previous) =>
-      active() ? rows() : (previous ?? [])
-    );
-    return (
-      <div inert={!active()} aria-hidden={!active()}>
-        <Show
-          when={viewRows().length > 0}
-          fallback={
-            <CommandMenuEmptyState>
-              <Switch
-                fallback={
-                  props.searchValue().trim()
-                    ? 'No matching entities found'
-                    : 'No entities available'
-                }
-              >
-                <Match when={isAssignees() && team.isLoading()}>
-                  {t('viewMenus.loadingTeamMembers')}
-                </Match>
-                <Match when={isAssignees() && team.isError()}>
-                  {t('viewMenus.teamMembersUnavailable')}
-                </Match>
-                <Match when={findingOtherPeople() && peopleLoading()}>
-                  Loading...
-                </Match>
-                <Match
-                  when={findingOtherPeople() && otherPeople().length === 0}
-                >
-                  <span role="status">{t('viewMenus.noOtherPeople')}</span>
-                </Match>
-              </Switch>
-            </CommandMenuEmptyState>
+  const listId = createUniqueId();
+  return (
+    <div>
+      <Show
+        when={rows().length > 0}
+        fallback={
+          <CommandMenuEmptyState>
+            <Switch
+              fallback={
+                props.searchValue().trim()
+                  ? 'No matching entities found'
+                  : 'No entities available'
+              }
+            >
+              <Match when={isAssignees() && team.isLoading()}>
+                {t('viewMenus.loadingTeamMembers')}
+              </Match>
+              <Match when={isAssignees() && team.isError()}>
+                {t('viewMenus.teamMembersUnavailable')}
+              </Match>
+              <Match when={findingOtherPeople() && peopleLoading()}>
+                Loading...
+              </Match>
+              <Match when={findingOtherPeople() && otherPeople().length === 0}>
+                <span role="status">{t('viewMenus.noOtherPeople')}</span>
+              </Match>
+            </Switch>
+          </CommandMenuEmptyState>
+        }
+      >
+        <Show when={isAssignees() && (team.isLoading() || team.isError())}>
+          <div role="status" class="px-3 py-2 text-sm text-ink-muted">
+            {team.isLoading()
+              ? t('viewMenus.loadingTeamMembers')
+              : t('viewMenus.teamMembersUnavailable')}
+          </div>
+        </Show>
+        <CommandMenuList
+          items={rows()}
+          selectedIndex={props.selectedIndex()}
+          scrollSelectedIntoView={listController.shouldScrollSelectedIntoView()}
+          itemId={(_, index) => `${listId}-entity-option-${index}`}
+          itemClass={(row) => (row.type === 'discovery' ? 'w-fit' : undefined)}
+          beforeItem={(row) =>
+            row.separatorBefore ? (
+              <div class="mx-2 my-1 h-px bg-edge-muted/50" />
+            ) : null
+          }
+          onSelect={(row, _, event) => selectRow(row, event)}
+          onItemMouseMove={(index) =>
+            listController.setSelectedIndexFromPointer(index)
           }
         >
-          <Show when={isAssignees() && (team.isLoading() || team.isError())}>
-            <div role="status" class="px-3 py-2 text-sm text-ink-muted">
-              {team.isLoading()
-                ? t('viewMenus.loadingTeamMembers')
-                : t('viewMenus.teamMembersUnavailable')}
-            </div>
-          </Show>
-          <CommandMenuList
-            items={viewRows()}
-            selectedIndex={props.selectedIndex()}
-            scrollSelectedIntoView={listController.shouldScrollSelectedIntoView()}
-            itemId={(_, index) => `${listId}-entity-option-${index}`}
-            itemClass={(row) =>
-              row.type === 'discovery' ? 'w-fit' : undefined
-            }
-            beforeItem={(row) =>
-              row.separatorBefore ? (
-                <div class="mx-2 my-1 h-px bg-edge-muted/50" />
-              ) : null
-            }
-            onSelect={(row, _, event) => selectRow(row, event)}
-            onItemMouseMove={(index) =>
-              listController.setSelectedIndexFromPointer(index)
-            }
-          >
-            {(row) => (
-              <Switch>
-                <Match when={row.type === 'clear'}>
-                  <CircleDashedEmpty class="size-4 text-ink-muted opacity-50" />
-                  <span class="min-w-0 flex-1 truncate text-ink-muted">
-                    Clear all{' '}
-                    {props.property?.displayName.toLowerCase() ?? 'entities'}
-                  </span>
-                </Match>
-                <Match when={row.type === 'discovery'}>
-                  <SearchIcon class="size-4 text-ink-muted" />
-                  <span class="min-w-0 flex-1 truncate text-ink-muted">
-                    {t('viewMenus.findOtherPeople')}
-                  </span>
-                </Match>
-                <Match when={row.type === 'entity' && row.entity}>
-                  {(entity) => (
-                    <EntityRowContent
-                      entity={entity()}
-                      multiselect={canGroupMultiValues()}
-                      selected={localSelectedIds().has(entity().id)}
-                    />
-                  )}
-                </Match>
-              </Switch>
-            )}
-          </CommandMenuList>
-        </Show>
-      </div>
-    );
-  };
-
-  return (
-    <Stepper
-      step={findingOtherPeople() ? 1 : 0}
-      transition={Stepper.transitions.slide}
-      class="overflow-hidden"
-    >
-      <For each={[findingOtherPeople() ? 1 : 0]}>
-        {(view) => (
-          <Stepper.Step index={view}>
-            <Results view={view} />
-          </Stepper.Step>
-        )}
-      </For>
-    </Stepper>
+          {(row) => (
+            <Switch>
+              <Match when={row.type === 'clear'}>
+                <CircleDashedEmpty class="size-4 text-ink-muted opacity-50" />
+                <span class="min-w-0 flex-1 truncate text-ink-muted">
+                  Clear all{' '}
+                  {props.property?.displayName.toLowerCase() ?? 'entities'}
+                </span>
+              </Match>
+              <Match when={row.type === 'discovery'}>
+                <SearchIcon class="size-4 text-ink-muted" />
+                <span class="min-w-0 flex-1 truncate text-ink-muted">
+                  {t('viewMenus.findOtherPeople')}
+                </span>
+              </Match>
+              <Match when={row.type === 'entity' && row.entity}>
+                {(entity) => (
+                  <EntityRowContent
+                    entity={entity()}
+                    multiselect={canGroupMultiValues()}
+                    selected={localSelectedIds().has(entity().id)}
+                  />
+                )}
+              </Match>
+            </Switch>
+          )}
+        </CommandMenuList>
+      </Show>
+    </div>
   );
 }
 

@@ -189,24 +189,15 @@ function EntityEditorSelector(
             fillHeight: props.fillHeight,
           }}
           priorityIds={isAssignees ? priorityIds() : undefined}
-          navigation={
+          action={
             isAssignees
               ? {
-                  view: findingOtherPeople() ? 1 : 0,
-                  back: findingOtherPeople()
-                    ? {
-                        label: t('viewMenus.backToAssignees'),
-                        onSelect: () => setFindingOtherPeople(false),
-                      }
-                    : undefined,
-                }
-              : undefined
-          }
-          action={
-            isAssignees && !findingOtherPeople()
-              ? {
-                  label: t('viewMenus.findOtherPeople'),
-                  onSelect: () => setFindingOtherPeople(true),
+                  label: t(
+                    findingOtherPeople()
+                      ? 'viewMenus.backToAssignees'
+                      : 'viewMenus.findOtherPeople'
+                  ),
+                  onSelect: () => setFindingOtherPeople((finding) => !finding),
                 }
               : undefined
           }
