@@ -225,9 +225,11 @@ impl CallState {
 }
 
 /// Whether the external party called in or was called.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize, Serialize, strum::AsRefStr)]
+#[derive(
+    Debug, Clone, Copy, PartialEq, Eq, Deserialize, Serialize, strum::AsRefStr, strum::EnumString,
+)]
 #[serde(rename_all = "snake_case")]
-#[strum(serialize_all = "snake_case")]
+#[strum(serialize_all = "snake_case", ascii_case_insensitive)]
 pub enum Direction {
     /// The external party called the Dialpad user.
     Inbound,
@@ -255,8 +257,8 @@ pub struct Target {
 /// The external party, matching `external_number`. `email` is often empty.
 #[derive(Debug, Clone, Default, Deserialize, Serialize)]
 pub struct Contact {
-    /// Dialpad's contact id; may be a URL.
-    #[serde(default)]
+    /// Dialpad's contact id; may be a URL, or sent as a number.
+    #[serde(default, deserialize_with = "lenient::text")]
     pub id: Option<String>,
     /// Display name; Dialpad uses the number when it has none.
     #[serde(default)]
@@ -270,27 +272,30 @@ pub struct Contact {
 }
 
 /// The fields of a Dialpad call event (or call list item) Macro uses.
-/// Timestamps are Unix milliseconds.
+/// Timestamps are Unix milliseconds. Dialpad's shapes vary, so fields that
+/// have been seen in more than one shape decode leniently; what is stored
+/// is always the shape declared here.
 #[derive(Debug, Clone, Deserialize, Serialize)]
 pub struct CallEvent {
     /// Dialpad's call id.
     pub call_id: DialpadId,
     /// The state this event reports.
     pub state: CallState,
-    /// Who placed the call.
-    #[serde(default)]
+    /// Who placed the call; `None` when Dialpad sends a direction Macro
+    /// does not know.
+    #[serde(default, deserialize_with = "lenient::direction")]
     pub direction: Option<Direction>,
     /// When Dialpad began handling the call.
-    #[serde(default)]
+    #[serde(default, deserialize_with = "lenient::millis")]
     pub date_started: Option<i64>,
     /// When both sides were connected; absent for unanswered calls.
-    #[serde(default)]
+    #[serde(default, deserialize_with = "lenient::millis")]
     pub date_connected: Option<i64>,
     /// When the call ended.
-    #[serde(default)]
+    #[serde(default, deserialize_with = "lenient::millis")]
     pub date_ended: Option<i64>,
     /// When this event happened.
-    #[serde(default)]
+    #[serde(default, deserialize_with = "lenient::millis")]
     pub event_timestamp: Option<i64>,
     /// The external party's number.
     #[serde(default)]
@@ -313,14 +318,86 @@ pub struct CallEvent {
     /// Dialpad's AI summary, on `recap_summary` events.
     #[serde(default)]
     pub recap_summary: Option<String>,
-    /// Dialpad's AI action items, on `recap_action_items` events.
-    #[serde(default)]
+    /// Dialpad's AI action items, on `recap_action_items` events, sent as
+    /// strings or as `{"content": ...}` objects.
+    #[serde(default, deserialize_with = "lenient::action_items")]
     pub recap_action_items: Option<Vec<String>>,
+}
+
+/// Decoders for fields Dialpad sends in more than one shape.
+mod lenient {
+    use super::Direction;
+    use serde::{Deserialize, Deserializer, de::Error};
+    use serde_json::Value;
+
+    pub fn direction<'de, D: Deserializer<'de>>(
+        deserializer: D,
+    ) -> Result<Option<Direction>, D::Error> {
+        Ok(Option::<Value>::deserialize(deserializer)?
+            .as_ref()
+            .and_then(Value::as_str)
+            .and_then(|direction| direction.parse().ok()))
+    }
+
+    /// A string or a number, as text.
+    pub fn text<'de, D: Deserializer<'de>>(deserializer: D) -> Result<Option<String>, D::Error> {
+        match Option::<Value>::deserialize(deserializer)? {
+            None | Some(Value::Null) => Ok(None),
+            Some(Value::String(text)) => Ok(Some(text)),
+            Some(Value::Number(number)) => Ok(Some(number.to_string())),
+            Some(_) => Err(D::Error::custom("expected a string or a number")),
+        }
+    }
+
+    /// Unix milliseconds as a number or a numeric string; blank is absent.
+    pub fn millis<'de, D: Deserializer<'de>>(deserializer: D) -> Result<Option<i64>, D::Error> {
+        let number = match Option::<Value>::deserialize(deserializer)? {
+            None | Some(Value::Null) => return Ok(None),
+            Some(Value::Number(number)) => number,
+            Some(Value::String(text)) if text.trim().is_empty() => return Ok(None),
+            Some(Value::String(text)) => text
+                .trim()
+                .parse()
+                .map_err(|_| D::Error::custom("expected a numeric timestamp"))?,
+            Some(_) => return Err(D::Error::custom("expected a numeric timestamp")),
+        };
+        number
+            .as_i64()
+            .or_else(|| number.as_f64().map(|millis| millis.trunc() as i64))
+            .map(Some)
+            .ok_or_else(|| D::Error::custom("expected a numeric timestamp"))
+    }
+
+    /// Strings or `{"content": ...}` objects; items without text are skipped.
+    pub fn action_items<'de, D: Deserializer<'de>>(
+        deserializer: D,
+    ) -> Result<Option<Vec<String>>, D::Error> {
+        let Some(items) = Option::<Vec<Value>>::deserialize(deserializer)? else {
+            return Ok(None);
+        };
+        items
+            .into_iter()
+            .filter_map(|item| match item {
+                Value::Null => None,
+                Value::String(text) => Some(Ok(text)),
+                Value::Object(mut item) => match item.remove("content") {
+                    Some(Value::String(text)) => Some(Ok(text)),
+                    None | Some(Value::Null) => None,
+                    Some(_) => Some(Err(D::Error::custom("expected text content"))),
+                },
+                _ => Some(Err(D::Error::custom(
+                    "expected a string or an object with content",
+                ))),
+            })
+            .collect::<Result<Vec<_>, _>>()
+            .map(Some)
+    }
 }
 
 impl CallEvent {
     /// Decode one event, or name the field that does not fit: its path only,
-    /// never a value, since events carry call details.
+    /// since serde's messages can quote the value and events carry call
+    /// details.
     pub fn decode(value: serde_json::Value) -> std::result::Result<Self, String> {
         serde_path_to_error::deserialize(value).map_err(|error| error.path().to_string())
     }
@@ -422,8 +499,9 @@ impl std::fmt::Debug for AccessToken {
 /// Why a webhook delivery was not accepted.
 #[derive(Debug, thiserror::Error)]
 pub enum SyncError {
-    /// The signature, connection or payload did not check out.
-    #[error("Invalid webhook signature or payload")]
+    /// The connection or the signature did not check out. A signed event
+    /// that cannot be read is acknowledged and dropped instead.
+    #[error("Invalid webhook signature")]
     InvalidDelivery,
     /// Sync cannot accept deliveries on this deployment.
     #[error("Dialpad sync is not configured")]
@@ -450,3 +528,6 @@ impl From<rootcause::Report> for SyncError {
         Self::Internal(error)
     }
 }
+
+#[cfg(test)]
+mod test;

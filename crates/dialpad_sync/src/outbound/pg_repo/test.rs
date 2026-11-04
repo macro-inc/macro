@@ -1215,3 +1215,67 @@ async fn a_failing_backfill_backs_off_behind_the_others_and_says_so(pool: PgPool
         assert_eq!(issue(service.status(&user).await.unwrap()), None);
     }
 }
+
+#[sqlx::test(
+    migrator = "MACRO_DB_MIGRATIONS",
+    fixtures(path = "../../../fixtures", scripts("users"))
+)]
+async fn signed_events_are_read_leniently_and_unreadable_ones_acknowledged(pool: PgPool) {
+    let calls = Arc::new(Calls::default());
+    let service = service(pool, GrantState::Active, calls.clone());
+    service.connect(&user(), Backfill::None).await.unwrap();
+    service.complete(&user()).await.unwrap();
+    let id = service.repo.by_user(&user()).await.unwrap().unwrap().id;
+    let secret = service.dialpad.secret();
+
+    // Shapes Dialpad has been seen to vary still import.
+    let lenient = signed(
+        &secret,
+        call_event(1, "hangup", 2),
+        json!({
+            "direction": "sideways",
+            "date_connected": "1746469010000",
+            "contact": {"id": 4501, "name": "Jane Doe", "phone": "+1604311"},
+        }),
+    );
+    service.receive(id, &lenient).await.unwrap();
+
+    // Signed but unreadable: acknowledged, never stored.
+    let unreadable = signed(
+        &secret,
+        call_event(2, "hangup", 2),
+        json!({"date_started": "soon"}),
+    );
+    let mut undated = call_event(3, "hangup", 2);
+    for field in ["event_timestamp", "date_started", "date_ended"] {
+        undated[field] = json!(null);
+    }
+    let undated = signed(&secret, undated, json!({}));
+    for body in [&unreadable, &undated] {
+        service.receive(id, body).await.unwrap();
+    }
+
+    // Only a bad signature is refused.
+    let forged = signed("not-the-secret", call_event(4, "hangup", 2), json!({}));
+    assert!(matches!(
+        service.receive(id, &forged).await,
+        Err(SyncError::InvalidDelivery)
+    ));
+
+    drain(&service).await;
+    let imported: Vec<String> = calls
+        .0
+        .lock()
+        .unwrap()
+        .iter()
+        .map(|(call_id, _, _)| call_id.clone())
+        .collect();
+    assert_eq!(imported, ["1"]);
+    let stored = sqlx::query_scalar!(
+        r#"SELECT count(*) AS "count!" FROM dialpad_sync_events WHERE call_id <> 1"#
+    )
+    .fetch_one(&service.repo.pool)
+    .await
+    .unwrap();
+    assert_eq!(stored, 0);
+}

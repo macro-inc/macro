@@ -143,6 +143,7 @@ pub trait Dialpad: Send + Sync {
 
 /// Checks a delivery's signature before anything reads it.
 pub trait DeliveryVerifier: Send + Sync {
-    /// The event a delivery carries, when `secret` signed it.
-    fn verify(&self, secret: &SigningSecret, body: &[u8]) -> Option<CallEvent>;
+    /// The claims a delivery carries, when `secret` signed it. The claims
+    /// are not yet read as an event.
+    fn verify(&self, secret: &SigningSecret, body: &[u8]) -> Option<serde_json::Value>;
 }

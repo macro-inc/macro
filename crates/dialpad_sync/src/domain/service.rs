@@ -4,6 +4,7 @@ use base64::{Engine, engine::general_purpose::URL_SAFE_NO_PAD};
 use call::domain::imports::CallImportService;
 use macro_user_id::user_id::MacroUserIdStr;
 use rand::RngCore;
+use serde::Deserialize;
 use std::sync::Arc;
 use tracing::Instrument;
 use uuid::Uuid;
@@ -29,7 +30,8 @@ pub trait SyncService: Send + Sync {
     async fn complete(&self, user: &MacroUserIdStr<'static>) -> Result<SyncStatus>;
     /// Stop syncing and remove the Dialpad connection from Macro Connect. Imported calls stay.
     async fn disconnect(&self, user: &MacroUserIdStr<'static>) -> Result<()>;
-    /// Verify and store one webhook delivery.
+    /// Verify and store one webhook delivery. Only an unknown connection or
+    /// a bad signature is refused.
     async fn receive(&self, id: Uuid, body: &[u8]) -> std::result::Result<(), SyncError>;
     /// Import one queued delivery. Returns whether there was work.
     async fn tick(&self) -> Result<bool>;
@@ -409,18 +411,51 @@ impl<R: SyncRepository, G: Grants, D: Dialpad, V: DeliveryVerifier> SyncService
             .secret
             .as_ref()
             .ok_or(SyncError::InvalidDelivery)?;
-        let event = self
+        let claims = self
             .verifier
             .verify(secret, body)
             .ok_or(SyncError::InvalidDelivery)?;
+        // Read the ids first, so an event that fails to decode can still be
+        // traced. A state Macro does not know is not logged.
+        let call_id = claims
+            .get("call_id")
+            .and_then(|id| DialpadId::deserialize(id).ok());
+        let state = claims
+            .get("state")
+            .and_then(serde_json::Value::as_str)
+            .and_then(|state| state.parse::<CallState>().ok());
         let span = tracing::Span::current();
-        span.record("call_id", tracing::field::display(event.call_id));
-        span.record("state", event.state.as_ref());
+        if let Some(call_id) = call_id {
+            span.record("call_id", tracing::field::display(call_id));
+        }
+        if let Some(state) = state {
+            span.record("state", state.as_ref());
+        }
+        // Dialpad signed it, so refusing would only make it resend the same
+        // payload: acknowledge it and store nothing. Logs ids and the field
+        // path only, never content.
+        let unreadable = |problem: &str| {
+            tracing::error!(
+                connection_id = %id,
+                call_id = ?call_id.map(|id| id.0),
+                state = ?state.map(|state| state.as_ref().to_owned()),
+                problem,
+                "dropped a signed Dialpad event that could not be read"
+            );
+        };
+        let event = match CallEvent::decode(claims) {
+            Ok(event) => event,
+            Err(path) => {
+                unreadable(&format!("unexpected value at {path}"));
+                return Ok(());
+            }
+        };
         if !CallState::SUBSCRIBED.contains(&event.state) {
             return Ok(());
         }
         if event.occurred_at().is_none() {
-            return Err(SyncError::InvalidDelivery);
+            unreadable("no timestamp");
+            return Ok(());
         }
         // Mid-setup the Dialpad user may not be read yet, so only a missing
         // target is dropped here; the import checks the owner again.

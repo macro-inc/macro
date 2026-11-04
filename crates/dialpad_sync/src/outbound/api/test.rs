@@ -86,7 +86,15 @@ async fn past_calls_are_listed_for_the_user_not_the_company() {
         .and(query_param("started_after", "1746469000000"))
         .and(query_param("cursor", "page-2"))
         .respond_with(ResponseTemplate::new(200).set_body_json(json!({
-            "items": [{"call_id": 1, "state": "missed"}, {"call_id": "2", "state": "hangup"}],
+            "items": [
+                {"call_id": 1, "state": "missed", "date_started": 1_746_469_000_000_i64},
+                {
+                    "call_id": "2", "state": "hangup",
+                    // Dialpad's call list sends its dates as strings.
+                    "date_started": "1746469100000", "date_connected": "1746469110000",
+                    "date_ended": "1746469170000",
+                },
+            ],
             "cursor": ""
         })))
         .mount(&server)
@@ -100,6 +108,12 @@ async fn past_calls_are_listed_for_the_user_not_the_company() {
     let ids: Vec<i64> = page.calls.iter().map(|call| call.call_id.0).collect();
     assert_eq!(ids, vec![1, 2]);
     assert_eq!(page.calls[0].state, CallState::Other);
+    assert_eq!(page.calls[0].date_started, Some(1_746_469_000_000));
+    assert_eq!(page.calls[1].date_connected, Some(1_746_469_110_000));
+    assert_eq!(
+        page.calls[1].occurred_at(),
+        DateTime::from_timestamp_millis(1_746_469_170_000)
+    );
     assert!(page.cursor.is_none(), "an empty cursor ends the listing");
 }
 

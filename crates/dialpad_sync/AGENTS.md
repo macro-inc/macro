@@ -58,6 +58,11 @@ unreadable item is skipped and logged by call id and field path.
 - A call with an active delivery lease cannot be claimed again, including newly
   arrived events; concurrent claims serialize briefly on the connection row.
 - Dialpad sends no event id: deliveries dedupe on (call, state, timestamp).
+- The signature is checked before the event is read. A bad one is a 401; a
+  signed event that does not decode, or has no timestamp, is acknowledged and
+  dropped (refusing only makes Dialpad resend it), logging ids and the field
+  path, never content. Fields Dialpad sends in more than one shape decode in
+  `models::lenient`; events are stored in the declared shape.
 - Call failures are read from pending events, never stored in `last_error`,
   so one call's success cannot hide another's failure. A call retries with
   backoff `MAX_CALL_ATTEMPTS` times, then waits at `available_at = 'infinity'`
