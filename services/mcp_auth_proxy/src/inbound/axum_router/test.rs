@@ -208,6 +208,7 @@ async fn authorize_offers_chatgpt_a_sign_in_choice() {
     let harness = Harness::new();
     let redirect_uri = "https://chatgpt.com/connector/oauth/abc";
     let registration = send(&harness, register_request(redirect_uri)).await;
+    assert_eq!(registration.status, StatusCode::OK);
     let client_id = registration.json()["client_id"]
         .as_str()
         .expect("registration returns a client_id")
