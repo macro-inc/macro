@@ -703,6 +703,50 @@ describe('composeAgentContextPrompt with a trigger', () => {
     );
   });
 
+  it('renders a routine fired by an email label with the labels added', () => {
+    const markdown = composeAgentContextPrompt({
+      promptMarkdown: 'Brief me on the client.',
+      trigger: {
+        kind: 'routine',
+        routine_id: 'r-5',
+        name: 'Client briefs',
+        owner: {
+          id: 'macro|julia@example.com',
+          name: 'Julia',
+          email: 'julia@example.com',
+        },
+        instructions: 'Summarise the thread.',
+        triggers: [{ type: 'events', events: ['email.label_added'] }],
+        firing: {
+          type: 'event',
+          event: {
+            event: 'email_label_added',
+            email: {
+              thread_id: 'e-2',
+              subject: 'Kickoff',
+              from: 'pm@acme.test',
+              to: ['julia@example.com'],
+              received_at: '2026-10-08T08:15:00Z',
+              body: 'See you Monday.',
+            },
+            labels: ['Clients/Acme'],
+          },
+        },
+      },
+    });
+
+    expect(hiddenContext(markdown)).toContain(
+      [
+        '  <event type="email_label_added">',
+        '    <change labels_added="Clients/Acme"/>',
+        '    <email thread="e-2" subject="Kickoff" from="pm@acme.test" to="julia@example.com" received_at="2026-10-08T08:15:00Z">',
+        '      <body>See you Monday.</body>',
+        '    </email>',
+        '  </event>',
+      ].join('\n')
+    );
+  });
+
   it('renders a routine fired by a channel attachment without claiming the reply goes there', () => {
     const markdown = composeAgentContextPrompt({
       promptMarkdown: 'File the attachment.',

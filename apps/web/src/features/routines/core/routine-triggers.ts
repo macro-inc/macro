@@ -62,6 +62,7 @@ export const routineTriggerSchema = z.discriminatedUnion('kind', [
           'task.priority_changed',
           'task.property_changed',
           'email.message_received',
+          'email.label_added',
           'channel.created',
           'channel.message_posted',
           'channel.mentioned',
@@ -78,6 +79,8 @@ export const routineTriggerSchema = z.discriminatedUnion('kind', [
     github: githubSelectorSchema.optional(),
     /** Only for `github`: payload tests that must all pass. */
     match: z.array(payloadTestSchema).optional(),
+    /** Only for email: label names, one of which the email must carry. */
+    labels: z.array(z.string()).optional(),
     /** Yes/no question the event's content must answer with yes. */
     condition: z.string().optional(),
   }),
@@ -178,6 +181,13 @@ export const routineEvents: {
     group: 'Email',
     description:
       'New mail arrives in your inbox. Excludes spam, trash, drafts and historical imports.',
+  },
+  {
+    value: 'email.label_added',
+    label: 'Email label added',
+    group: 'Email',
+    description:
+      'A Gmail label or Outlook category is added to a thread in your inbox, in Macro or in Gmail or Outlook.',
   },
   {
     value: 'call.started',
@@ -319,6 +329,7 @@ export function eventScopeKind(trigger: EventTriggerDraft): EventScopeKind {
 }
 
 export const MAX_CONDITION_CHARS = 500;
+export const MAX_EMAIL_LABELS = 20;
 
 export function conditionPlaceholder(trigger: EventTriggerDraft) {
   return match(eventScopeKind(trigger))
@@ -336,9 +347,18 @@ export function isGlobalEvent(events: readonly RoutineEventName[]) {
     (event) =>
       event.endsWith('.created') ||
       event === 'email.message_received' ||
+      event === 'email.label_added' ||
       event === 'call.started' ||
       event === 'call.ended' ||
       event === 'github'
+  );
+}
+
+/** Email events can require labels: those a message arrived with, or just added. */
+export function takesEmailLabels(events: readonly RoutineEventName[]) {
+  return events.every(
+    (event) =>
+      event === 'email.message_received' || event === 'email.label_added'
   );
 }
 
@@ -393,7 +413,7 @@ export function eventTriggerDescription(trigger: EventTriggerDraft) {
 export function eventTriggerLabel(trigger: EventTriggerDraft) {
   if (trigger.events.includes('github'))
     return githubTriggerLabel(trigger.github);
-  return trigger.events
+  const events = trigger.events
     .map(
       (event) =>
         routineEvents.find((item) => item.value === event)?.label ??
@@ -401,6 +421,9 @@ export function eventTriggerLabel(trigger: EventTriggerDraft) {
         event
     )
     .join(', ');
+  return trigger.labels?.length
+    ? `${events}: ${trigger.labels.join(', ')}`
+    : events;
 }
 export type TriggerFrequency = ScheduleTriggerDraft['frequency'];
 export const triggerFrequencies: { value: TriggerFrequency; label: string }[] =
@@ -438,6 +461,8 @@ function validateEventTrigger(
     return 'Choose up to 100 items per event trigger.';
   if ([...(trigger.condition?.trim() ?? '')].length > MAX_CONDITION_CHARS)
     return `Keep the condition under ${MAX_CONDITION_CHARS} characters.`;
+  if ((trigger.labels?.length ?? 0) > MAX_EMAIL_LABELS)
+    return `Choose up to ${MAX_EMAIL_LABELS} labels.`;
   return (
     validateGithubSelector(trigger.github) ??
     validatePayloadTests(trigger.match)

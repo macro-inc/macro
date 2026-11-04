@@ -26,6 +26,35 @@ describe('routine trigger mapping', () => {
     }
   );
 
+  it('round trips email label filters and names them on the trigger', () => {
+    const config = {
+      type: 'events' as const,
+      filters: [
+        {
+          events: [
+            'email.message_received' as const,
+            'email.label_added' as const,
+          ],
+          labels: ['Clients/Acme'],
+        },
+      ],
+    };
+    const triggers = parseRoutineTriggers(config)!;
+    expect(triggers[0]).toMatchObject({ labels: ['Clients/Acme'] });
+    expect(serializeTriggers(triggers)).toEqual(config);
+    const [trigger] = triggers;
+    if (trigger.kind !== 'event') throw new Error('expected an event trigger');
+    expect(eventTriggerLabel(trigger)).toBe(
+      'New email received, Email label added: Clients/Acme'
+    );
+    // Clearing every label drops the key rather than sending an empty list,
+    // which the server rejects.
+    expect(serializeTriggers([{ ...trigger, labels: [] }])).toEqual({
+      type: 'events',
+      filters: [{ events: config.filters[0].events }],
+    });
+  });
+
   it('round trips multiple schedules with different time zones and Macro events', () => {
     const configuration = {
       type: 'multiple' as const,

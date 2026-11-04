@@ -278,6 +278,18 @@ function readFiring(trigger: Element): Firing {
           : undefined,
       };
     })
+    .with('email_label_added', () => {
+      const labels = attribute(child(event, 'change'), 'labels_added');
+      return {
+        tail: labels ? `· email labeled ${labels}` : '· email labeled',
+        destination: email
+          ? {
+              kind: 'email_thread' as const,
+              threadId: attribute(email, 'thread') ?? '',
+            }
+          : undefined,
+      };
+    })
     .with('channel_created', () => {
       const name = attribute(channel, 'name');
       return {

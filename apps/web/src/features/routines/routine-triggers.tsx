@@ -1,6 +1,8 @@
 import { useFeatureFlag } from '@app/lib/analytics/posthog';
 import { enableRoutineConditions } from '@core/constant/featureFlags';
+import { useEmailLabelNamesQuery } from '@queries/email/labels';
 import { Show, Suspense } from 'solid-js';
+import { RoutineEmailLabels } from './components/routine-email-labels';
 import { RoutineEventCondition } from './components/routine-event-condition';
 import { RoutineGithubConnect } from './components/routine-github-connect';
 import { RoutineGithubSettings } from './components/routine-github-settings';
@@ -11,6 +13,7 @@ import {
   eventScopeKind,
   isGlobalEvent,
   type RoutineTriggerDraft,
+  takesEmailLabels,
 } from './core/routine-triggers';
 import { createGithubConnection } from './queries/github-link';
 import { createGithubRepositoryOptions } from './queries/github-repositories';
@@ -40,6 +43,7 @@ export function RoutineTriggers(props: {
   onChange: (triggers: RoutineTriggerDraft[]) => void;
 }) {
   const conditions = useFeatureFlag(enableRoutineConditions);
+  const labelNames = useEmailLabelNamesQuery();
   const github = createGithubConnection();
   const repositories = createGithubRepositoryOptions(
     () =>
@@ -78,26 +82,36 @@ export function RoutineTriggers(props: {
           : undefined
       }
       renderEventSettings={(trigger, onChange) => (
-        <Show when={trigger().github}>
-          {(selector) => (
-            <Show
-              when={github().linked !== false}
-              fallback={connect(
-                'GitHub isn’t connected, so this trigger can’t run. Connect it to turn the routine on.'
-              )}
-            >
-              <RoutineGithubSettings
-                selector={selector()}
-                repositories={repositories()}
-                onChange={(github) => onChange({ github })}
-              />
-              <RoutinePayloadTests
-                tests={trigger().match ?? []}
-                onChange={(match) => onChange({ match })}
-              />
-            </Show>
-          )}
-        </Show>
+        <>
+          <Show when={takesEmailLabels(trigger().events)}>
+            <RoutineEmailLabels
+              names={labelNames.isSuccess ? labelNames.data : []}
+              loading={labelNames.isPending}
+              selected={trigger().labels ?? []}
+              onChange={(labels) => onChange({ labels })}
+            />
+          </Show>
+          <Show when={trigger().github}>
+            {(selector) => (
+              <Show
+                when={github().linked !== false}
+                fallback={connect(
+                  'GitHub isn’t connected, so this trigger can’t run. Connect it to turn the routine on.'
+                )}
+              >
+                <RoutineGithubSettings
+                  selector={selector()}
+                  repositories={repositories()}
+                  onChange={(github) => onChange({ github })}
+                />
+                <RoutinePayloadTests
+                  tests={trigger().match ?? []}
+                  onChange={(match) => onChange({ match })}
+                />
+              </Show>
+            )}
+          </Show>
+        </>
       )}
       renderEventLabel={(trigger) => (
         <Show

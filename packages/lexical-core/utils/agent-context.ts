@@ -257,6 +257,8 @@ export type RoutineEvent =
   /** The event does not record which property changed. */
   | { event: 'task_property_changed'; task: TaskSnapshot }
   | { event: 'email_received'; email: EmailSnapshot }
+  /** The thread's newest email and the label names just added to it. */
+  | { event: 'email_label_added'; email: EmailSnapshot; labels: string[] }
   | { event: 'channel_created'; id: string; name?: string }
   | { event: 'channel_message_posted'; discussion: DiscussionContext }
   | { event: 'channel_mentioned'; discussion: DiscussionContext }
@@ -1367,6 +1369,16 @@ function routineEventChildren(event: RoutineEvent): FxpNode[] {
       taskNode(task),
     ])
     .with({ event: 'email_received' }, ({ email }) => [
+      el('email', [el('body', [text(email.body)])], {
+        thread: email.thread_id,
+        subject: email.subject,
+        from: email.from,
+        to: email.to.join(', '),
+        received_at: email.received_at,
+      }),
+    ])
+    .with({ event: 'email_label_added' }, ({ email, labels }) => [
+      el('change', [], { labels_added: labels.join(', ') }),
       el('email', [el('body', [text(email.body)])], {
         thread: email.thread_id,
         subject: email.subject,

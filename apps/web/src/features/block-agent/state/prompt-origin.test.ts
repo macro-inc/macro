@@ -496,6 +496,29 @@ describe('promptOrigin', () => {
       routine({
         type: 'event',
         event: {
+          event: 'email_label_added',
+          email: {
+            thread_id: 'e-2',
+            subject: 'Kickoff',
+            from: 'pm@acme.test',
+            to: ['julia@example.com'],
+            received_at: '2026-10-15T09:00:00Z',
+            body: 'See you Monday.',
+          },
+          labels: ['Clients/Acme', 'Urgent'],
+        },
+      })
+    ).toEqual({
+      lead: 'via routine',
+      place: 'Watcher',
+      tail: '· email labeled Clients/Acme, Urgent',
+      destination: { kind: 'email_thread', threadId: 'e-2' },
+    });
+
+    expect(
+      routine({
+        type: 'event',
+        event: {
           event: 'channel_message_attachment_created',
           entity_type: 'document',
           entity_id: 'doc-q3',

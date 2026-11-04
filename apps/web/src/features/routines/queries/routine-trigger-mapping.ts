@@ -65,6 +65,7 @@ function serializeFilter(trigger: EventTriggerDraft): EventFilter {
     ...(trigger.match?.length
       ? { match: trigger.match.map(serializePayloadTest) }
       : {}),
+    ...(trigger.labels?.length ? { labels: trigger.labels } : {}),
     ...(condition ? { condition } : {}),
   };
 }
@@ -140,6 +141,7 @@ export function parseRoutineTriggers(
             }
           : undefined,
         match: filter.match?.map(parsePayloadTest),
+        labels: filter.labels ?? undefined,
         condition: filter.condition ?? undefined,
       }));
     const draft = {
