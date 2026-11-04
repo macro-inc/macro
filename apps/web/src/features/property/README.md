@@ -93,6 +93,10 @@ editors, and touch picker sheets. References remain `USER` values; discovery
 does not add arbitrary email addresses or CRM-only records. Company owner stays
 strictly team-only, and custom people properties keep their existing pool.
 `queries/team-members.ts` shares the non-suspending roster with Assignee filters.
+The command-menu composer/bulk editor lives in `editor/entity-property-editor.tsx`;
+its source and the row/sheet picker share `editors/selectors/scoped-user-options.ts`.
+Removing an outsider removes that row from team mode immediately; finding that
+person again requires explicit discovery.
 
 ## Side-panel collections
 

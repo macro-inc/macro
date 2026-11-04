@@ -325,6 +325,7 @@ describe('team-first assignees', () => {
     };
     const onSave = setup(undefined, assigned);
     fireEvent.click(screen.getByText('former@example.com'));
+    expect(screen.queryByText('former@example.com')).toBeNull();
     fireEvent.click(screen.getByText('Dismiss'));
     await waitFor(() =>
       expect(onSave).toHaveBeenCalledWith(

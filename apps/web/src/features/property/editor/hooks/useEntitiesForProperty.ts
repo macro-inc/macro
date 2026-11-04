@@ -3,6 +3,14 @@ import { type IUser, useAugmentUserWithDmActivity } from '@core/user';
 import { createFreshSearch } from '@core/util/freshSort';
 import type { EmailEntity } from '@entity';
 import { createEmailsInfiniteQuery } from '@entity';
+import { useSearchSoupQuery } from '@queries/soup/search';
+import { debounce } from '@solid-primitives/scheduled';
+import {
+  type Accessor,
+  createEffect,
+  createMemo,
+  createSignal,
+} from 'solid-js';
 import {
   type CombinedEntity,
   createEntitySearchConfig,
@@ -15,16 +23,9 @@ import {
   threadMapper,
   useQuickAccessEntities,
   userToEntity,
-} from '@property';
-import type { Property, PropertyDefinitionDomain } from '@property/types';
-import { useSearchSoupQuery } from '@queries/soup/search';
-import { debounce } from '@solid-primitives/scheduled';
-import {
-  type Accessor,
-  createEffect,
-  createMemo,
-  createSignal,
-} from 'solid-js';
+} from '../../editors/selectors/entityUtils';
+import { scopedUserOptions } from '../../editors/selectors/scoped-user-options';
+import type { Property, PropertyDefinitionDomain } from '../../types';
 
 export function useEntitiesForProperty(
   property: Accessor<Property | PropertyDefinitionDomain | undefined>,
@@ -33,6 +34,9 @@ export function useEntitiesForProperty(
     /** Explicit pool for USER pickers (e.g. company owner → team members);
      * when it returns a list, it replaces the quick-access people list. */
     users?: Accessor<IUser[] | undefined>;
+    /** Selected USER references stay removable outside an explicit user pool. */
+    selectedIds?: Accessor<ReadonlySet<string> | undefined>;
+    includeOtherUsers?: Accessor<boolean>;
   }
 ) {
   const [searchTerm, setSearchTerm] = createSignal('');
@@ -103,7 +107,18 @@ export function useEntitiesForProperty(
     if (entityType === 'USER') {
       const pool = options?.users?.();
       if (pool) {
-        return pool.map((user) =>
+        const selectedIds = options?.selectedIds?.();
+        const users = selectedIds
+          ? scopedUserOptions(
+              pool,
+              quickAccessItems().flatMap((item) =>
+                item.kind === 'user' ? [item.data] : []
+              ),
+              selectedIds,
+              options?.includeOtherUsers?.() ?? false
+            )
+          : pool;
+        return users.map((user) =>
           userToEntity(augmentUserWithDmActivity(user))
         );
       }
@@ -158,7 +173,19 @@ export function useEntitiesForProperty(
 
     // When no search query, sort self to top BEFORE slicing
     if (!query) {
-      return sortEntitiesWithSelfFirst(available, userId).slice(0, MAX_RESULTS);
+      const visible = sortEntitiesWithSelfFirst(available, userId).slice(
+        0,
+        MAX_RESULTS
+      );
+      const selectedIds = options?.selectedIds?.();
+      if (selectedIds) {
+        const visibleIds = new Set(visible.map((entity) => entity.id));
+        for (const entity of available) {
+          if (selectedIds.has(entity.id) && !visibleIds.has(entity.id))
+            visible.push(entity);
+        }
+      }
+      return visible;
     }
 
     const localResults = entitySearch(available, query)

@@ -3,7 +3,6 @@ import { UserIcon } from '@core/component/UserIcon';
 import { isBotPrincipalId } from '@core/constant/macroAgent';
 import { useEmail, useUserId } from '@core/context/user';
 import { emailToId, useAugmentUserWithDmActivity } from '@core/user';
-import { idToDisplayName, idToEmail } from '@core/user/util';
 import { createFreshSearch } from '@core/util/freshSort';
 import { useKeyPressed } from '@core/util/useKeyPressed';
 import { useSelectedFirst } from '@core/util/useSelectedFirst';
@@ -44,6 +43,7 @@ import {
   userToEntity,
 } from './entityUtils';
 import { OptionCheckBox } from './OptionCheckBox';
+import { scopedUserOptions } from './scoped-user-options';
 import type { EntitySelectorConfig, PinnedOption } from './types';
 
 type EntityInputProps = {
@@ -225,35 +225,21 @@ export function PropertyEntitySelector(props: EntityInputProps) {
     if (props.config.specificEntityType !== 'USER' || !props.config.users) {
       return undefined;
     }
-    const users = new Map(
-      [
-        ...props.config.users(),
-        ...(props.config.additionalUsers?.() ?? []),
-      ].map((user) => [user.id, user])
-    );
-    if (hasUserDiscovery()) {
-      const selectedIds = new Set([
-        ...openedSelectedIds,
-        ...props.selectedOptions(),
-      ]);
-      for (const item of quickAccessItems()) {
-        if (item.kind !== 'user' || users.has(item.id)) continue;
-        if (findOtherUsers() || selectedIds.has(item.id)) {
-          users.set(item.id, item.data);
-        }
-      }
-      for (const id of selectedIds) {
-        if (users.has(id)) continue;
-        users.set(id, {
-          id,
-          email: isBotPrincipalId(id) ? '' : idToEmail(id),
-          name: isBotPrincipalId(id) ? 'Agent' : idToDisplayName(id),
-        });
-      }
-    }
-    return [...users.values()].map((user) =>
-      userToEntity(augmentUserWithDmActivity(user))
-    );
+    const users = [
+      ...props.config.users(),
+      ...(props.config.additionalUsers?.() ?? []),
+    ];
+    const pool = hasUserDiscovery()
+      ? scopedUserOptions(
+          users,
+          quickAccessItems().flatMap((item) =>
+            item.kind === 'user' ? [item.data] : []
+          ),
+          props.selectedOptions(),
+          findOtherUsers()
+        )
+      : users;
+    return pool.map((user) => userToEntity(augmentUserWithDmActivity(user)));
   });
 
   // Convert quickAccess items to CombinedEntity format.
