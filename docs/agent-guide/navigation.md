@@ -1084,13 +1084,13 @@ The event menu groups Macro activity triggers by surface:
 - **Channels:** **Channel created**, **Message sent in channel**, and **@ mentioned in channel**.
 - **Documents:** **Document created** and **Document deleted**. Tasks are separate.
 - **Tasks:** **Task created**, **Status changed**, **Priority changed**, and **Any property changed**.
-- **Email:** **New email received** in the routine owner's inbox, excluding spam, trash, drafts, and historical imports.
+- **Email:** **New email received** in the routine owner's inbox, excluding spam, trash, drafts, and historical imports; and **Email label added**, when a Gmail label or Outlook category is added to one of the owner's threads, in Macro or at the provider. Both panels have a **Labels** list of the owner's labels: checking some runs the routine only for email carrying one of them (for **New email received**, the labels it arrived with). None checked means any email.
 - **Calls:** **Call started**, for calls the routine owner starts (receives the call and who has joined so far); and **Call ended**, for channel calls and meetings the owner joined (receives participants and transcript, cut short for long calls).
 - **GitHub:** presets for **Workflow failed**, **Workflow finished**, **Pull request opened**, **Pull request merged**, **Review requested**, **Review submitted**, **Issue opened**, **Comment added**, **Code pushed**, **Release published**, and **Any GitHub event**, from repositories Macro's GitHub app reaches for the routine owner. Until the owner connects GitHub, the group shows **Connect GitHub** instead.
 
 For messages, mentions, deletion, and task changes, choose specific accessible
 channels/documents/tasks or any accessible item in the same panel. Creation
-triggers cover newly created accessible items; email covers the owner's inbox;
+triggers cover newly created accessible items; both email triggers cover the owner's inbox;
 **Call started** shows **Calls you start** and **Call ended** shows **Calls you
 join** — neither has an item picker. Calls the owner did not start never trigger
 **Call started**; calls they did not join never trigger **Call ended**. Mentions match only @ mentions of the routine owner. **Any property changed**

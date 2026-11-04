@@ -37,6 +37,15 @@ filter on any other tab keeps that tab's title.
 Unlike Calls, it lists only personal tags; team-shared tags are hidden,
 and its `New tag` action creates a personal tag with no Team sharing option.
 
+A **Labels** sidebar section, above Tags, lists the Gmail labels and Outlook
+categories of every connected inbox by name (shown only when there are any;
+Gmail labels hidden from Gmail's label list are left out). Choosing one switches
+to All and shows threads carrying that label in any inbox; the header shows the
+label name. The filter menu has a matching **Labels** group, and desktop list
+rows and the open thread's participant line show a thread's labels as
+read-only pills with a tag glyph, beside Macro tags. Labels are one-way: Macro
+never writes a label or tag back to the provider from these surfaces.
+
 Full email client. Desktop groups `Signal` and `Noise` under one `Inbox` sidebar
 item, with pill tabs beside the Inbox title in the content header, matching the
 Chat sidebar tabs; with the Focus flags on, a `Focus` tab leads them. Selecting
@@ -44,7 +53,7 @@ Inbox from another mailbox opens Signal; selecting it while in Focus or Noise
 keeps that tab.
 The desktop sidebar continues with `Favorites`, `Drafts`, `Sent`, `Scheduled`,
 and `Reminders` (when reminders are enabled), followed by a **Library** section containing `All mail`,
-`Archived`, and `Shared`, then **Tags**. Sidebar number shortcuts follow that
+`Archived`, and `Shared`, then **Labels** and **Tags**. Sidebar number shortcuts follow that
 order; `Tab` and `Shift+Tab` move between the Inbox tabs (from another mailbox,
 `Tab` opens the first, Focus when it shows, else Signal, and `Shift+Tab` Noise).
 While the email list itself has focus, `Tab` moves browser focus instead; use
