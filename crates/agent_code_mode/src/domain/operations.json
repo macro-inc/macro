@@ -470,6 +470,7 @@
   "storage.shareCrmPipeline": "Share Crm Pipeline",
   "storage.getCrmPipelineTable": "Get Crm Pipeline Table",
   "storage.trashCrmPipeline": "Trash Crm Pipeline",
+  "storage.getCrmPipelineViewPositions": "Get Crm Pipeline View Positions",
   "storage.getCrmTeamSettings": "Get Crm Team Settings",
   "storage.putCrmTeamSettings": "Put Crm Team Settings",
   "storage.resetCrmTeamStages": "Reset Crm Team Stages",

@@ -483,6 +483,9 @@ returns thread handles alongside reminder snapshots.
 permissions and trash operations live on the pipeline. `pipeline.table()` returns
 its table handle, with column and row handles. `rows()` and `queryRows({ rows, query })`
 fetch through the pipeline's authorization boundary and auto-paginate.
+`(await pipeline.table()).views()` returns scoped `PipelineView` handles;
+`view.detail()` reads its definition and `view.positions()` reads its saved board
+order through pipeline permissions.
 `pipeline.applyOps(ops, { baseVersions: [{ table, version }] })` accepts the generated
 atomic database operation contract, including batch-local UUIDs, like
 `Database.applyOps`. Table and column reads share a schema cache invalidated by
