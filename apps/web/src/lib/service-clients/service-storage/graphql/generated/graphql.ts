@@ -1306,7 +1306,10 @@ export type GraphqlEmailFilterAst = {
 export type GraphqlEmailFocusCategory =
   /** Automated, bulk or templated mail. */
   | 'AUTOMATED'
-  /** A calendar invite, update or RSVP. */
+  /**
+   * In Focus, a reschedule, update, cancellation or proposed new time for an
+   * event that isn't over. Left out, a new invite or an RSVP notice.
+   */
   | 'CALENDAR'
   /** A customer, client or user asking for help or giving feedback. */
   | 'CUSTOMER'
