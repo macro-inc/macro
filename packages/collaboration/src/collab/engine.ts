@@ -239,6 +239,15 @@ export class SyncEngine<S extends GenericRootSchema, D> {
     await this.syncLock.runExclusive(async () => {
       if (generation !== this.lifecycleGeneration) return;
       this.log('info', 'engine.reset: starting');
+      // The snapshot replaces this document, and this peer's unsent edits
+      // can't be merged into it locally afterwards; deliver them first so the
+      // server's snapshot already holds them.
+      try {
+        await this.syncs.wal.flush();
+      } catch {
+        // The WAL reports its own failures; reset with what the server has.
+      }
+      if (generation !== this.lifecycleGeneration) return;
       const snapshot = await (snapshotThunk ?? this.defaultSnapshotThunk)();
       if (generation !== this.lifecycleGeneration) return;
       if (snapshot.isErr()) {
@@ -259,6 +268,15 @@ export class SyncEngine<S extends GenericRootSchema, D> {
 
     if (wasRunning && generation === this.lifecycleGeneration) {
       this.start();
+      // The binding still shows the replaced document, and local edits sync
+      // its whole state; hand it the new state before any edit can write the
+      // stale one back over remote changes.
+      const state = this.loroManager.state?.state;
+      if (state) {
+        await this.syncLock.runExclusive(() =>
+          this.bindings.onRemoteState(state)
+        );
+      }
     }
   }
 
