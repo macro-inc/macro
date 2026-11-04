@@ -53,6 +53,9 @@ unreadable item is skipped and logged by call id and field path.
   Events can be sparse: details merge field by field, newest value first.
 - Setup success and failure must both match the lease that stored the secret.
   If activation fails, retire the newly created registration before returning.
+- Setup first removes a registration a stopped sync left behind. Dialpad's 403
+  and 404 count as removed; any other failure fails setup and keeps the old
+  ids for the hourly retry, so a sync never has two live subscriptions.
 - Backfill commits must match the enrollment and cursor read before fetching.
 - Grant checks may finish after a reconnect: stop/flag only the observed enrollment.
 - A call with an active delivery lease cannot be claimed again, including newly

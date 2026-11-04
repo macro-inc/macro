@@ -102,9 +102,17 @@ impl DialpadApi {
         Ok(serde_json::from_value::<Id>(body)?.id)
     }
 
+    /// Gone already, or no longer this token's to delete (403), is success.
     async fn delete(&self, token: &AccessToken, path: &str) -> Result<()> {
-        self.request(token, Method::DELETE, path, &[], None).await?;
-        Ok(())
+        let reply = self.send(token, Method::DELETE, path, &[], None).await?;
+        match reply.status {
+            status if status.is_success() => Ok(()),
+            StatusCode::NOT_FOUND | StatusCode::FORBIDDEN => Ok(()),
+            StatusCode::UNAUTHORIZED => {
+                Err(rootcause::report!("Dialpad rejected the access token"))
+            }
+            status => Err(rootcause::report!("Dialpad API returned HTTP {status}")),
+        }
     }
 }
 

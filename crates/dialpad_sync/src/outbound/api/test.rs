@@ -141,3 +141,38 @@ async fn an_unreadable_past_call_is_skipped_not_the_page() {
     assert_eq!(ids, [DialpadId(1), DialpadId(3)]);
     assert_eq!(page.cursor.as_deref(), Some("page-2"));
 }
+
+#[tokio::test]
+async fn removing_what_is_already_gone_succeeds_and_other_errors_fail() {
+    let server = MockServer::start().await;
+    for (resource, status) in [
+        ("/subscriptions/call/33", 403),
+        ("/webhooks/11", 404),
+        ("/subscriptions/call/34", 500),
+        ("/webhooks/12", 401),
+    ] {
+        Mock::given(method("DELETE"))
+            .and(path(resource))
+            .respond_with(ResponseTemplate::new(status))
+            .mount(&server)
+            .await;
+    }
+    let api = DialpadApi::new(server.uri()).unwrap();
+    let registration = |webhook, subscription| Registration {
+        webhook_id: DialpadId(webhook),
+        subscription_id: DialpadId(subscription),
+    };
+    api.unregister(&token(), registration(11, 33))
+        .await
+        .unwrap();
+    assert!(
+        api.unregister(&token(), registration(11, 34))
+            .await
+            .is_err(),
+        "an outage is not gone"
+    );
+    assert!(
+        api.delete_webhook(&token(), DialpadId(12)).await.is_err(),
+        "a rejected token is not gone"
+    );
+}

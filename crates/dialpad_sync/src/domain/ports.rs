@@ -121,9 +121,10 @@ pub trait Dialpad: Send + Sync {
         webhook: DialpadId,
         user: DialpadId,
     ) -> Result<DialpadId>;
-    /// Delete the subscription, then the webhook. Already-gone is success.
+    /// Delete the subscription, then the webhook. Already gone, or no longer
+    /// the token's to delete, is success.
     async fn unregister(&self, token: &AccessToken, registration: Registration) -> Result<()>;
-    /// Delete a webhook. Already-gone is success.
+    /// Delete a webhook. Already gone, or no longer the token's, is success.
     async fn delete_webhook(&self, token: &AccessToken, webhook: DialpadId) -> Result<()>;
     /// `None` when the call has no transcript, or transcripts are off for
     /// the company.

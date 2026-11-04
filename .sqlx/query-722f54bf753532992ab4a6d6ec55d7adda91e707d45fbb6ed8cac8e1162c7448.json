@@ -1,0 +1,12 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "UPDATE dialpad_sync_connections SET setup_started_at = now() - interval '2 hours'",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": []
+    },
+    "nullable": []
+  },
+  "hash": "722f54bf753532992ab4a6d6ec55d7adda91e707d45fbb6ed8cac8e1162c7448"
+}

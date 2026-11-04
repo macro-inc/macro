@@ -840,24 +840,44 @@ async fn backfill_reports_a_lost_grant_without_waiting_for_a_delivery(pool: PgPo
     migrator = "MACRO_DB_MIGRATIONS",
     fixtures(path = "../../../fixtures", scripts("users"))
 )]
-async fn a_refused_old_cleanup_does_not_block_reconnect(pool: PgPool) {
+async fn a_failed_old_cleanup_fails_setup_and_keeps_the_old_ids_to_retry(pool: PgPool) {
     let service = service(pool, GrantState::Active, Arc::new(Calls::default()));
     service.connect(&user(), Backfill::None).await.unwrap();
     service.complete(&user()).await.unwrap();
-    let old = service.repo.by_user(&user()).await.unwrap().unwrap();
+    let old = service
+        .repo
+        .by_user(&user())
+        .await
+        .unwrap()
+        .unwrap()
+        .registration
+        .unwrap();
     *service.dialpad.fail_unregister.lock().unwrap() = true;
     service.disconnect(&user()).await.unwrap();
     service.connect(&user(), Backfill::None).await.unwrap();
-    service.complete(&user()).await.unwrap();
+
+    // The old subscription is still live, so no second one is made.
+    assert!(service.complete(&user()).await.is_err());
+    let failed = service.repo.by_user(&user()).await.unwrap().unwrap();
+    assert!(!failed.enabled);
+    assert_eq!(failed.last_error, Some(SyncIssue::SetupFailed));
+    assert_eq!(failed.registration, Some(old));
+    assert_eq!(service.dialpad.webhooks.lock().unwrap().len(), 1);
+
+    // The retry removes it, then sets up.
+    *service.dialpad.fail_unregister.lock().unwrap() = false;
+    sqlx::query!(
+        "UPDATE dialpad_sync_connections SET setup_started_at = now() - interval '2 hours'"
+    )
+    .execute(&service.repo.pool)
+    .await
+    .unwrap();
+    service.reconcile().await.unwrap();
     let current = service.repo.by_user(&user()).await.unwrap().unwrap();
     assert!(current.enabled);
-    assert!(
-        service
-            .dialpad
-            .unregistered
-            .lock()
-            .unwrap()
-            .contains(&old.registration.unwrap())
+    assert_eq!(
+        service.dialpad.unregistered.lock().unwrap().last(),
+        Some(&old)
     );
 }
 

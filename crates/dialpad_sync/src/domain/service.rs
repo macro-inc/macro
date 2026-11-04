@@ -163,13 +163,12 @@ impl<R: SyncRepository, G: Grants, D: Dialpad, V: DeliveryVerifier> Service<R, G
         token: &AccessToken,
         secret: &SigningSecret,
     ) -> Result<()> {
-        // Left behind when a sync stopped without a usable token. A refused
-        // delete must not block setup forever; the old webhook's secret is
-        // replaced, so its deliveries fail verification.
+        // Left behind when a sync stopped without a usable token. Until they
+        // are removed, setup fails and keeps their ids to retry, so a new
+        // registration never leaves the old one subscribed. Already gone
+        // counts as removed.
         if let Some(old) = connection.registration {
-            let _ = self.dialpad.unregister(token, old).await.inspect_err(
-                |error| tracing::warn!(error = ?error, "could not remove old Dialpad subscription"),
-            );
+            self.dialpad.unregister(token, old).await?;
         }
         let me = self.dialpad.me(token).await?;
         let url = format!(
