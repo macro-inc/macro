@@ -65,6 +65,7 @@ const firstVariables: FavoriteUnreadPresenceQueryVariables = {
     initial: {
       limit: PAGE_SIZE,
       expand: true,
+      sortMethod: 'UPDATED_AT',
       filters: { favoritesOnly: true },
     },
   },

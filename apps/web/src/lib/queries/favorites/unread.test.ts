@@ -101,7 +101,13 @@ describe('favorite unread presence', () => {
     const queries = () => operations.filter((op) => op.kind === 'query');
     await vi.waitFor(() => expect(queries()).toHaveLength(1));
     expect(queries()[0].variables).toMatchObject({
-      input: { initial: { limit: 100, filters: { favoritesOnly: true } } },
+      input: {
+        initial: {
+          limit: 100,
+          sortMethod: 'UPDATED_AT',
+          filters: { favoritesOnly: true },
+        },
+      },
     });
     const respond = (
       index: number,
