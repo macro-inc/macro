@@ -246,79 +246,103 @@ where
             .await
     }
 
-    /// Classify up to `limit` stale threads from the last `window`, newest
-    /// first. Stops at the first sign the classifier is unavailable, or after a
-    /// run of rejections.
+    /// Check up to `limit` stale threads from the last `window`, newest first,
+    /// and classify those that need it. Stops at the first sign the classifier is
+    /// unavailable, or after a run of rejections.
+    ///
+    /// A thread checked without storing a result stays stale in the store, so the
+    /// sweep pages past those: taking only the newest `limit` would hand every
+    /// sweep the same threads once enough of them pile up, and never reach older
+    /// ones.
     #[tracing::instrument(skip(self), err)]
     pub async fn sweep(&self, window: Duration, limit: i64) -> Result<SweepReport, Report> {
         let mut report = SweepReport::default();
         if self.enabled_domains.is_empty() {
             return Ok(report);
         }
-        let candidates = self
-            .store
-            .stale_threads(Utc::now() - window, &self.enabled_domains, limit)
-            .await?;
-        report.candidates = candidates.len();
-        // Only this sweep's candidates can be skipped, so the map stays as
-        // small as one sweep.
-        let stale = candidates
-            .iter()
-            .map(|candidate| candidate.thread_id)
-            .collect::<HashSet<_>>();
-        self.settled()
-            .retain(|thread_id, _| stale.contains(thread_id));
-
+        let since = Utc::now() - window;
+        let mut seen = HashSet::new();
+        let mut after = None;
+        let mut checks = 0;
+        let mut saw_them_all = false;
         let mut rejections_in_a_row = 0;
-        for StaleThread {
-            thread_id,
-            latest_at,
-        } in candidates
-        {
-            if self.settled().get(&thread_id) == Some(&latest_at) {
-                report.skipped += 1;
-                continue;
+        'pages: loop {
+            let page = self
+                .store
+                .stale_threads(since, &self.enabled_domains, after, limit)
+                .await?;
+            report.candidates += page.len();
+            let last_page = i64::try_from(page.len()).is_ok_and(|len| len < limit);
+            after = page.last().copied();
+            if after.is_none() {
+                saw_them_all = true;
+                break;
             }
-            let outcome = self.classify_thread(thread_id).await;
-            if !matches!(outcome, Ok(ClassifyOutcome::Rejected)) {
-                rejections_in_a_row = 0;
-            }
-            match outcome {
-                Ok(ClassifyOutcome::Classified(_)) => {
-                    report.classified += 1;
-                    self.settled().remove(&thread_id);
+            for StaleThread {
+                thread_id,
+                latest_at,
+            } in page
+            {
+                seen.insert(thread_id);
+                if self.settled().get(&thread_id) == Some(&latest_at) {
+                    report.skipped += 1;
+                    continue;
                 }
-                Ok(ClassifyOutcome::Redecided(_)) => {
-                    report.redecided += 1;
-                    self.settled().remove(&thread_id);
+                if checks >= limit {
+                    break 'pages;
                 }
-                Ok(ClassifyOutcome::Unavailable) => {
-                    report.failed += 1;
-                    report.stopped_early = true;
-                    break;
+                checks += 1;
+                let outcome = self.classify_thread(thread_id).await;
+                if !matches!(outcome, Ok(ClassifyOutcome::Rejected)) {
+                    rejections_in_a_row = 0;
                 }
-                Ok(ClassifyOutcome::Rejected) => {
-                    report.failed += 1;
-                    self.settled().insert(thread_id, latest_at);
-                    rejections_in_a_row += 1;
-                    if rejections_in_a_row >= MAX_REJECTIONS_IN_A_ROW {
-                        tracing::warn!(
-                            rejections_in_a_row,
-                            "focus sweep stopped: the classifier rejects every thread"
-                        );
+                match outcome {
+                    Ok(ClassifyOutcome::Classified(_)) => {
+                        report.classified += 1;
+                        self.settled().remove(&thread_id);
+                    }
+                    Ok(ClassifyOutcome::Redecided(_)) => {
+                        report.redecided += 1;
+                        self.settled().remove(&thread_id);
+                    }
+                    Ok(ClassifyOutcome::Unavailable) => {
+                        report.failed += 1;
                         report.stopped_early = true;
-                        break;
+                        break 'pages;
+                    }
+                    Ok(ClassifyOutcome::Rejected) => {
+                        report.failed += 1;
+                        self.settled().insert(thread_id, latest_at);
+                        rejections_in_a_row += 1;
+                        if rejections_in_a_row >= MAX_REJECTIONS_IN_A_ROW {
+                            tracing::warn!(
+                                rejections_in_a_row,
+                                "focus sweep stopped: the classifier rejects every thread"
+                            );
+                            report.stopped_early = true;
+                            break 'pages;
+                        }
+                    }
+                    Ok(_) => {
+                        report.skipped += 1;
+                        self.settled().insert(thread_id, latest_at);
+                    }
+                    Err(error) => {
+                        tracing::warn!(error = ?error, %thread_id, "focus sweep could not classify a thread");
+                        report.failed += 1;
                     }
                 }
-                Ok(_) => {
-                    report.skipped += 1;
-                    self.settled().insert(thread_id, latest_at);
-                }
-                Err(error) => {
-                    tracing::warn!(error = ?error, %thread_id, "focus sweep could not classify a thread");
-                    report.failed += 1;
-                }
             }
+            if last_page {
+                saw_them_all = true;
+                break;
+            }
+        }
+        // Only stale threads can be skipped, so the map stays as small as one
+        // full sweep. A sweep that stopped short hasn't seen the rest.
+        if saw_them_all {
+            self.settled()
+                .retain(|thread_id, _| seen.contains(thread_id));
         }
         Ok(report)
     }

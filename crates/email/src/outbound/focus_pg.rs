@@ -316,6 +316,7 @@ impl FocusStore for FocusPgRepository {
         &self,
         since: DateTime<Utc>,
         domains: &[String],
+        after: Option<StaleThread>,
         limit: i64,
     ) -> Result<Vec<StaleThread>, Report> {
         let rows = sqlx::query!(
@@ -380,7 +381,12 @@ impl FocusStore for FocusPgRepository {
                   OR f.classified_message_ts
                      < GREATEST(t.latest_inbound_message_ts, t.latest_outbound_message_ts)
               )
-            ORDER BY GREATEST(t.latest_inbound_message_ts, t.latest_outbound_message_ts) DESC
+              AND (
+                  $7::timestamptz IS NULL
+                  OR (GREATEST(t.latest_inbound_message_ts, t.latest_outbound_message_ts), t.id)
+                     < ($7, $8::uuid)
+              )
+            ORDER BY GREATEST(t.latest_inbound_message_ts, t.latest_outbound_message_ts) DESC, t.id DESC
             LIMIT $3
             "#,
             since,
@@ -389,6 +395,8 @@ impl FocusStore for FocusPgRepository {
             FOCUS_RULE_VERSION,
             since - Duration::days(RECENT_CONTACT_DAYS),
             change_subject_pattern(),
+            after.map(|after| after.latest_at),
+            after.map(|after| after.thread_id),
         )
         .fetch_all(&self.0)
         .await?;

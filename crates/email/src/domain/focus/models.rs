@@ -111,7 +111,10 @@ pub enum CalendarPart {
         until: DateTime<Utc>,
     },
     /// Saved components that invite or publish, and change nothing.
-    NewInvite,
+    NewInvite {
+        /// When the event is over, should the message's subject say it changed.
+        until: DateTime<Utc>,
+    },
     /// Saved components that are only attendees' replies.
     Rsvp,
     /// A calendar file with no saved component to read.

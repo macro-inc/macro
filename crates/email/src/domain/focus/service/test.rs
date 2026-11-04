@@ -69,10 +69,23 @@ impl FocusStore for FakeStore {
         &self,
         _since: DateTime<Utc>,
         domains: &[String],
-        _limit: i64,
+        after: Option<StaleThread>,
+        limit: i64,
     ) -> Result<Vec<StaleThread>, Report> {
         *self.stale_domains.lock().unwrap() = domains.to_vec();
-        Ok(self.stale.lock().unwrap().clone())
+        let stale = self.stale.lock().unwrap();
+        let start = after.map_or(0, |after| {
+            stale
+                .iter()
+                .position(|thread| *thread == after)
+                .map_or(stale.len(), |index| index + 1)
+        });
+        Ok(stale
+            .iter()
+            .skip(start)
+            .take(usize::try_from(limit).unwrap())
+            .copied()
+            .collect())
     }
 
     async fn focus_thread_ids(
@@ -431,6 +444,72 @@ async fn sweep_leaves_rejected_and_settled_threads_until_new_mail() {
 }
 
 #[tokio::test]
+async fn sweeps_reach_threads_behind_ones_that_never_store_a_result() {
+    let store = FakeStore::default();
+    let classifier = FakeClassifier::answering(Ok(relevant()));
+    let service = service(&store, &classifier, &["acme.example"]);
+    // More non-signal threads than one sweep's limit, newest first, then a thread
+    // that is worth classifying.
+    let mut stale = (0..5)
+        .map(|_| {
+            let mut noise = thread("owner@acme.example");
+            noise.is_signal = false;
+            insert(&store, noise)
+        })
+        .collect::<Vec<_>>();
+    let older = insert(&store, thread("owner@acme.example"));
+    stale.push(older);
+    set_stale(&store, &stale, noon());
+
+    // Two checks a sweep: the third sweep gets there, past the settled ones.
+    for _ in 0..2 {
+        let report = service.sweep(Duration::days(30), 2).await.unwrap();
+        assert_eq!(report.classified, 0);
+    }
+    let reads_so_far = *store.mail_reads.lock().unwrap();
+    assert_eq!(reads_so_far, 4);
+    let report = service.sweep(Duration::days(30), 2).await.unwrap();
+    assert_eq!(report.classified, 1);
+    assert_eq!(*store.mail_reads.lock().unwrap(), reads_so_far + 2);
+    assert_eq!(classifier.inputs.lock().unwrap().len(), 1);
+
+    // Everything is settled or stored now, however far back the sweep looks.
+    store.stale.lock().unwrap().pop();
+    let report = service.sweep(Duration::days(30), 2).await.unwrap();
+    assert_eq!(report.skipped, 5);
+    assert_eq!(*store.mail_reads.lock().unwrap(), reads_so_far + 2);
+}
+
+#[tokio::test]
+async fn only_a_full_sweep_forgets_what_it_settled() {
+    let store = FakeStore::default();
+    let classifier = FakeClassifier::answering(Err(FocusClassifierError::Unavailable));
+    let service = service(&store, &classifier, &["acme.example"]);
+    let mut noise = thread("owner@acme.example");
+    noise.is_signal = false;
+    let noise = insert(&store, noise);
+    let down = insert(&store, thread("owner@acme.example"));
+    set_stale(&store, &[noise], noon());
+    service.sweep(Duration::days(30), 100).await.unwrap();
+    assert_eq!(*store.mail_reads.lock().unwrap(), 1);
+
+    // Cut short before it reached the settled thread: that says nothing about it.
+    set_stale(&store, &[down, noise], noon());
+    let report = service.sweep(Duration::days(30), 100).await.unwrap();
+    assert!(report.stopped_early);
+    assert_eq!(*store.mail_reads.lock().unwrap(), 2);
+    set_stale(&store, &[noise], noon());
+    let report = service.sweep(Duration::days(30), 100).await.unwrap();
+    assert_eq!(report.skipped, 1);
+    assert_eq!(*store.mail_reads.lock().unwrap(), 2);
+
+    // A full sweep that no longer finds it forgets it, so the map stays small.
+    set_stale(&store, &[], noon());
+    service.sweep(Duration::days(30), 100).await.unwrap();
+    assert!(service.settled().is_empty());
+}
+
+#[tokio::test]
 async fn sweep_stops_when_the_classifier_rejects_everything() {
     let store = FakeStore::default();
     let classifier = FakeClassifier::answering(Err(FocusClassifierError::Rejected));
@@ -559,7 +638,9 @@ async fn outside_the_signal_inbox_only_key_mail_reaches_the_classifier() {
     // Neither is a new invite, or a change to an event that is already over.
     let mut new_invite = thread("owner@acme.example");
     new_invite.is_signal = false;
-    new_invite.messages[0].calendar_part = Some(CalendarPart::NewInvite);
+    new_invite.messages[0].calendar_part = Some(CalendarPart::NewInvite {
+        until: Utc::now() + Duration::days(2),
+    });
     let new_invite = insert(&store, new_invite);
     assert_eq!(
         service.classify_thread(new_invite).await.unwrap(),

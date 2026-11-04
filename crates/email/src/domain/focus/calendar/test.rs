@@ -85,7 +85,7 @@ fn subjects_tell_changes_from_new_invites_and_rsvps() {
         "Proposed new time: Demo @ Thu",
     ] {
         assert_eq!(
-            notice_in_subject(subject, received()),
+            notice_in_subject(subject, fallback()),
             Some(CalendarNotice::Change { until: fallback() }),
             "{subject}"
         );
@@ -96,7 +96,7 @@ fn subjects_tell_changes_from_new_invites_and_rsvps() {
         "NEW EVENT: Offsite",
     ] {
         assert_eq!(
-            notice_in_subject(subject, received()),
+            notice_in_subject(subject, fallback()),
             Some(CalendarNotice::NewInvite),
             "{subject}"
         );
@@ -108,7 +108,7 @@ fn subjects_tell_changes_from_new_invites_and_rsvps() {
         "DECLINED: Prod Deploy",
     ] {
         assert_eq!(
-            notice_in_subject(subject, received()),
+            notice_in_subject(subject, fallback()),
             Some(CalendarNotice::Rsvp),
             "{subject}"
         );
@@ -121,7 +121,7 @@ fn subjects_tell_changes_from_new_invites_and_rsvps() {
         "Greg x Teo",
         "",
     ] {
-        assert_eq!(notice_in_subject(subject, received()), None, "{subject}");
+        assert_eq!(notice_in_subject(subject, fallback()), None, "{subject}");
     }
 }
 
@@ -149,16 +149,21 @@ fn a_saved_change_or_rsvp_decides_whatever_the_subject_says() {
 
 #[test]
 fn a_new_invite_or_unread_file_reads_as_its_subject_or_as_new() {
-    for part in [CalendarPart::NewInvite, CalendarPart::Unparsed] {
+    let event_end = received() + Duration::days(30);
+    for (part, until) in [
+        (CalendarPart::NewInvite { until: event_end }, event_end),
+        (CalendarPart::Unparsed, fallback()),
+    ] {
         assert_eq!(
             notice_in_message(&message("See you there", Some(part))),
             Some(CalendarNotice::NewInvite),
             "{part:?}"
         );
-        // Not every tool bumps the sequence; a change subject is enough.
+        // Not every tool bumps the sequence; a change subject is enough, and the
+        // saved event's own time still decides how long it holds.
         assert_eq!(
             notice_in_message(&message("Rescheduled: Demo", Some(part))),
-            Some(CalendarNotice::Change { until: fallback() }),
+            Some(CalendarNotice::Change { until }),
             "{part:?}"
         );
         assert_eq!(
@@ -168,6 +173,10 @@ fn a_new_invite_or_unread_file_reads_as_its_subject_or_as_new() {
         );
     }
     assert_eq!(notice_in_message(&message("Plain mail", None)), None);
+    assert_eq!(
+        notice_in_message(&message("Rescheduled: Demo", None)),
+        Some(CalendarNotice::Change { until: fallback() })
+    );
 }
 
 #[test]
@@ -190,7 +199,7 @@ fn saved_methods_tell_changes_from_new_invites_and_rsvps() {
     ] {
         assert_eq!(
             CalendarPart::from_saved(&[new], received()),
-            Some(CalendarPart::NewInvite)
+            Some(CalendarPart::NewInvite { until: event_end })
         );
     }
     assert_eq!(
@@ -207,7 +216,7 @@ fn saved_methods_tell_changes_from_new_invites_and_rsvps() {
             ],
             received()
         ),
-        Some(CalendarPart::NewInvite)
+        Some(CalendarPart::NewInvite { until: event_end })
     );
 }
 

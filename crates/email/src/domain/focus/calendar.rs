@@ -57,14 +57,14 @@ fn fallback_hold(at: DateTime<Utc>) -> DateTime<Utc> {
 }
 
 /// The calendar notice a subject reads as, e.g. "Accepted: Demo @ Fri" is an
-/// RSVP. `at` is when the message arrived.
-fn notice_in_subject(subject: &str, at: DateTime<Utc>) -> Option<CalendarNotice> {
+/// RSVP. A change holds until `change_until`.
+fn notice_in_subject(subject: &str, change_until: DateTime<Utc>) -> Option<CalendarNotice> {
     let subject = subject.to_lowercase();
     if has_subject_prefix(&subject, &RSVP_PREFIXES) {
         Some(CalendarNotice::Rsvp)
     } else if has_subject_prefix(&subject, &CHANGE_PREFIXES) {
         Some(CalendarNotice::Change {
-            until: fallback_hold(at),
+            until: change_until,
         })
     } else if has_subject_prefix(&subject, &NEW_INVITE_PREFIXES) {
         Some(CalendarNotice::NewInvite)
@@ -74,22 +74,24 @@ fn notice_in_subject(subject: &str, at: DateTime<Utc>) -> Option<CalendarNotice>
 }
 
 /// The calendar notice one message is. A saved change or RSVP decides. Otherwise
-/// the subject does, since only it can say an event moved when the file doesn't,
-/// and a calendar file that says nothing more is a new invite.
+/// the subject does, since not every tool bumps an event's sequence when it
+/// changes, and a calendar file that says nothing more is a new invite.
 pub(super) fn notice_in_message(message: &FocusMessage) -> Option<CalendarNotice> {
-    let from_subject = || {
+    let from_subject = |change_until| {
         message
             .subject
             .as_deref()
-            .and_then(|subject| notice_in_subject(subject, message.at))
+            .and_then(|subject| notice_in_subject(subject, change_until))
     };
+    let fallback = fallback_hold(message.at);
     match message.calendar_part {
         Some(CalendarPart::Change { until }) => Some(CalendarNotice::Change { until }),
         Some(CalendarPart::Rsvp) => Some(CalendarNotice::Rsvp),
-        Some(CalendarPart::NewInvite | CalendarPart::Unparsed) => {
-            from_subject().or(Some(CalendarNotice::NewInvite))
+        Some(CalendarPart::NewInvite { until }) => {
+            from_subject(until).or(Some(CalendarNotice::NewInvite))
         }
-        None => from_subject(),
+        Some(CalendarPart::Unparsed) => from_subject(fallback).or(Some(CalendarNotice::NewInvite)),
+        None => from_subject(fallback),
     }
 }
 
@@ -147,24 +149,23 @@ impl CalendarPart {
     /// What the saved components of a message received at `at` say, if it has
     /// any. Any change makes it one, held until the last changed event is over.
     pub fn from_saved(invites: &[CalendarInvitation], at: DateTime<Utc>) -> Option<Self> {
-        let until = invites
+        let hold = |invite: &CalendarInvitation| change_hold(invite, at);
+        if let Some(until) = invites
             .iter()
             .filter(|invite| is_change(invite))
-            .map(|invite| change_hold(invite, at))
-            .max();
-        if let Some(until) = until {
+            .map(hold)
+            .max()
+        {
             return Some(Self::Change { until });
         }
-        if invites.is_empty() {
-            return None;
-        }
+        let until = invites.iter().map(hold).max()?;
         let only_replies = invites
             .iter()
             .all(|invite| invite.method == InvitationMethod::Reply);
         Some(if only_replies {
             Self::Rsvp
         } else {
-            Self::NewInvite
+            Self::NewInvite { until }
         })
     }
 }

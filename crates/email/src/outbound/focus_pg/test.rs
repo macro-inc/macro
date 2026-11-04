@@ -251,7 +251,7 @@ async fn stale_threads_cover_enabled_inbox_signal_mail_in_the_window(
     let enabled = vec!["acme.example".to_owned()];
     let stale = async |limit| -> Result<Vec<Uuid>, Report> {
         Ok(repo
-            .stale_threads(since, &enabled, limit)
+            .stale_threads(since, &enabled, None, limit)
             .await?
             .into_iter()
             .map(|stale| stale.thread_id)
@@ -260,8 +260,24 @@ async fn stale_threads_cover_enabled_inbox_signal_mail_in_the_window(
 
     assert_eq!(stale(10).await?, vec![INVOICE, BULK]);
     assert_eq!(stale(1).await?, vec![INVOICE]);
-    assert!(repo.stale_threads(since, &[], 10).await?.is_empty());
+    assert!(repo.stale_threads(since, &[], None, 10).await?.is_empty());
 
+    // Each page starts past the last thread of the one before.
+    let first = repo.stale_threads(since, &enabled, None, 1).await?;
+    let second = repo
+        .stale_threads(since, &enabled, first.last().copied(), 1)
+        .await?;
+    assert_eq!(
+        second
+            .iter()
+            .map(|stale| stale.thread_id)
+            .collect::<Vec<_>>(),
+        vec![BULK]
+    );
+    let third = repo
+        .stale_threads(since, &enabled, second.last().copied(), 1)
+        .await?;
+    assert!(third.is_empty());
     // Classified at an older message: still stale. At the latest: done.
     let thread = load_thread(&repo, INVOICE).await?.unwrap();
     repo.save(&record(INVOICE, FIRST_MESSAGE, thread.messages[0].at, 50))
@@ -273,6 +289,41 @@ async fn stale_threads_cover_enabled_inbox_signal_mail_in_the_window(
     assert_eq!(stale(10).await?, vec![BULK]);
     let stored = load_thread(&repo, INVOICE).await?.unwrap().classified;
     assert_eq!(stored.map(|stored| stored.message_id), Some(LATEST_MESSAGE));
+    Ok(())
+}
+
+#[sqlx::test(
+    migrator = "MACRO_DB_MIGRATIONS",
+    fixtures(path = "../../../fixtures", scripts("email_focus"))
+)]
+async fn threads_with_the_same_latest_mail_do_not_fall_between_pages(
+    pool: Pool<Postgres>,
+) -> Result<(), Report> {
+    let repo = FocusPgRepository(pool.clone());
+    let since = Utc::now() - Duration::days(30);
+    let enabled = vec!["acme.example".to_owned()];
+    sqlx::query!(
+        r#"
+        UPDATE email_threads
+        SET latest_inbound_message_ts = $1, latest_outbound_message_ts = NULL
+        WHERE id = ANY($2)
+        "#,
+        Utc::now(),
+        &[INVOICE, BULK],
+    )
+    .execute(&pool)
+    .await?;
+    let first = repo.stale_threads(since, &enabled, None, 1).await?;
+    let second = repo
+        .stale_threads(since, &enabled, first.last().copied(), 1)
+        .await?;
+    let mut both = first
+        .iter()
+        .chain(&second)
+        .map(|stale| stale.thread_id)
+        .collect::<Vec<_>>();
+    both.sort_unstable();
+    assert_eq!(both, vec![INVOICE, BULK]);
     Ok(())
 }
 
@@ -557,7 +608,7 @@ async fn a_thread_of_only_sent_mail_stays_out(pool: Pool<Postgres>) -> Result<()
     let inbox = repo.thread_inbox(ONLY_SENT).await?.expect("thread");
     assert!(!inbox.inbox_visible);
     let stale = repo
-        .stale_threads(since, &["acme.example".to_owned()], 100)
+        .stale_threads(since, &["acme.example".to_owned()], None, 100)
         .await?;
     assert!(!stale.iter().any(|stale| stale.thread_id == ONLY_SENT));
     // Failing the classifier proves it was never asked.
@@ -658,7 +709,7 @@ async fn a_reschedule_reaches_focus_from_outside_the_signal_inbox(
 
     // The sweep finds only the change; the others have no reason to be read.
     let stale = repo
-        .stale_threads(since, &["acme.example".to_owned()], 100)
+        .stale_threads(since, &["acme.example".to_owned()], None, 100)
         .await?
         .into_iter()
         .map(|stale| stale.thread_id)
@@ -814,7 +865,7 @@ async fn read_at(
 async fn is_stale(repo: &FocusPgRepository, thread: Uuid) -> Result<bool, Report> {
     let since = Utc::now() - Duration::days(30);
     let enabled = vec!["acme.example".to_owned()];
-    let stale = repo.stale_threads(since, &enabled, 100).await?;
+    let stale = repo.stale_threads(since, &enabled, None, 100).await?;
     Ok(stale.iter().any(|stale| stale.thread_id == thread))
 }
 
@@ -1051,6 +1102,58 @@ async fn a_thread_in_focus_for_more_than_the_hold_stays_after_the_event(
     assert!(listed && focus.is_focus);
     let (listed, focus) = read_at(&repo, outside, end).await?;
     assert!(!listed && !focus.is_focus);
+    Ok(())
+}
+
+#[sqlx::test(
+    migrator = "MACRO_DB_MIGRATIONS",
+    fixtures(
+        path = "../../../fixtures",
+        scripts("email_focus", "email_focus_waiting")
+    )
+)]
+async fn a_change_subject_on_a_first_revision_holds_by_the_events_own_time(
+    pool: Pool<Postgres>,
+) -> Result<(), Report> {
+    let repo = FocusPgRepository(pool.clone());
+    let now = Utc::now();
+    let at = now - Duration::hours(1);
+
+    // Further ahead than the fallback: still held when the fallback would have ended.
+    let end = now + Duration::days(20);
+    let ahead = notice_thread(
+        &pool,
+        "Updated invitation: Demo",
+        Some(invite(InvitationMethod::Request, 0, end)),
+        at,
+        true,
+    )
+    .await?;
+    assert_held(&repo, ahead).await?;
+    let (listed, _) = read_at(&repo, ahead, now + Duration::days(10)).await?;
+    assert!(listed);
+    let (listed, _) = read_at(&repo, ahead, end).await?;
+    assert!(!listed);
+
+    // Already over: not held at all, and the classifier is never asked.
+    let over = notice_thread(
+        &pool,
+        "Updated invitation: Demo",
+        Some(invite(
+            InvitationMethod::Request,
+            0,
+            now - Duration::minutes(5),
+        )),
+        at,
+        true,
+    )
+    .await?;
+    assert_eq!(
+        worker(&repo, Err(FocusClassifierError::Rejected))
+            .classify_thread(over)
+            .await?,
+        ClassifyOutcome::NotSignal
+    );
     Ok(())
 }
 
@@ -1358,7 +1461,7 @@ async fn mail_from_a_recent_contact_is_found_and_pinned_outside_the_signal_inbox
     let thread = load_thread(&repo, RECENT_CONTACT).await?.expect("thread");
     assert!(!thread.is_signal);
     let stale = repo
-        .stale_threads(since, &["acme.example".to_owned()], 100)
+        .stale_threads(since, &["acme.example".to_owned()], None, 100)
         .await?;
     assert!(stale.iter().any(|stale| stale.thread_id == RECENT_CONTACT));
 
@@ -1495,7 +1598,7 @@ async fn rows_from_an_older_rule_read_right_and_are_decided_again_without_the_cl
     assert!(stored.needs_reply && !stored.needs_follow_up);
 
     // The sweep finds it even though its latest message was classified.
-    let stale = repo.stale_threads(since, &enabled, 10).await?;
+    let stale = repo.stale_threads(since, &enabled, None, 10).await?;
     assert!(stale.iter().any(|stale| stale.thread_id == INVOICE));
 
     // Failing the classifier proves it was never asked.
@@ -1515,7 +1618,7 @@ async fn rows_from_an_older_rule_read_right_and_are_decided_again_without_the_cl
     let classified = classified.expect("stored");
     assert_eq!(classified.rule_version, FOCUS_RULE_VERSION);
     assert_eq!(classified.model, "jev-earlier");
-    let stale = repo.stale_threads(since, &enabled, 10).await?;
+    let stale = repo.stale_threads(since, &enabled, None, 10).await?;
     assert!(!stale.iter().any(|stale| stale.thread_id == INVOICE));
     assert_eq!(
         worker.classify_thread(INVOICE).await?,
@@ -1544,7 +1647,7 @@ async fn a_row_from_an_older_rule_is_swept_even_outside_the_signal_inbox(
     repo.save(&record(NOISE, latest.id, latest.at, 40)).await?;
 
     // Under the current rule there is nothing to do for it.
-    let stale = repo.stale_threads(since, &enabled, 100).await?;
+    let stale = repo.stale_threads(since, &enabled, None, 100).await?;
     assert!(!stale.iter().any(|stale| stale.thread_id == NOISE));
 
     sqlx::query!(
@@ -1553,7 +1656,7 @@ async fn a_row_from_an_older_rule_is_swept_even_outside_the_signal_inbox(
     )
     .execute(&pool)
     .await?;
-    let stale = repo.stale_threads(since, &enabled, 100).await?;
+    let stale = repo.stale_threads(since, &enabled, None, 100).await?;
     assert!(stale.iter().any(|stale| stale.thread_id == NOISE));
     Ok(())
 }

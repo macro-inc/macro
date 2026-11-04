@@ -31,11 +31,13 @@ pub trait FocusStore: Send + Sync + 'static {
 
     /// Inbox threads that may belong in Focus with mail since `since` and no
     /// classification of their latest message under the current rule, newest
-    /// first, from inboxes whose address is at one of `domains`.
+    /// first, from inboxes whose address is at one of `domains`. `after` is the
+    /// last thread of the previous page.
     fn stale_threads(
         &self,
         since: DateTime<Utc>,
         domains: &[String],
+        after: Option<StaleThread>,
         limit: i64,
     ) -> impl Future<Output = Result<Vec<StaleThread>, Report>> + Send;
 

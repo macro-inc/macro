@@ -13,7 +13,7 @@ use email::domain::focus::{FocusClassifier, FocusService, FocusStore, ProfileSou
 use rootcause::Report;
 use tokio_util::sync::CancellationToken;
 
-/// Threads one sweep classifies at most; the next sweep continues.
+/// Threads one sweep checks at most; the next sweep continues past them.
 const SWEEP_LIMIT: i64 = 2_000;
 
 /// Sweep every `interval` over the last `window_days` until `shutdown`.
