@@ -1,4 +1,5 @@
 import { isMobile } from '@core/mobile/isMobile';
+import type { EntityData } from '@entity';
 import {
   getGithubSenderAvatarUrl,
   isGithubNotificationType,
@@ -9,10 +10,14 @@ import {
   getNotificationSenderFallbackName,
 } from '@notifications/notification-sender';
 import type { UnifiedNotification } from '@notifications/types';
-import { Avatar, Tooltip } from '@ui';
+import { Avatar, cn, Tooltip } from '@ui';
 import { type JSX, Match, Show, Switch } from 'solid-js';
 import type { InboxCardKind } from '../core/inbox-row';
-import { InboxKindIcon, inboxKindLabel } from './inbox-kind-icon';
+import {
+  InboxKindIcon,
+  inboxEntityColor,
+  inboxKindLabel,
+} from './inbox-kind-icon';
 
 /** Whether Macro knows a picture for who sent a notification. */
 const hasKnownSender = (notification: UnifiedNotification) =>
@@ -27,11 +32,14 @@ const hasKnownSender = (notification: UnifiedNotification) =>
  * Who a notification is from: their avatar, an initial for a sender Macro only
  * knows by name, such as an email's, or the kind of notification for one that
  * comes from no one, such as a reminder. With `badged`, a person's avatar also
- * says what kind of notification it is on its corner. A phone shows it larger.
+ * says what kind of notification it is on its corner, in the color of the entity
+ * it is on. A phone shows it larger.
  */
 export function InboxSenderAvatar(props: {
   notification: UnifiedNotification | undefined;
   kind: InboxCardKind;
+  /** What the notification is on, which colors its kind. */
+  entity: EntityData;
   badged?: boolean;
 }) {
   const known = () =>
@@ -53,16 +61,22 @@ export function InboxSenderAvatar(props: {
         <Tooltip
           as="span"
           label={inboxKindLabel(props.kind)}
-          class="absolute -right-1.5 -bottom-1.5"
+          class="absolute -right-1.5 -bottom-1.5 mobile:-right-[7px] mobile:-bottom-[7px]"
         >
           <span
             role="img"
             aria-label={inboxKindLabel(props.kind)}
             data-kind-badge={props.kind}
             // Cuts the badge out of the avatar, in the color of the card behind it.
-            class="flex size-3.5 items-center justify-center rounded-full bg-control-raised text-ink-muted ring-2 ring-(--inbox-card-surface) mobile:size-5"
+            class={cn(
+              'flex size-[18px] items-center justify-center rounded-full bg-control-raised ring-2 ring-(--inbox-card-surface) mobile:size-6',
+              inboxEntityColor(props.entity)
+            )}
           >
-            <InboxKindIcon kind={props.kind} class="size-[9px] mobile:size-3" />
+            <InboxKindIcon
+              kind={props.kind}
+              class="size-[11px] mobile:size-3.5"
+            />
           </span>
         </Tooltip>
       </Show>
@@ -72,7 +86,12 @@ export function InboxSenderAvatar(props: {
   return (
     <Switch
       fallback={
-        <span class="flex size-6 items-center justify-center rounded-full border border-edge-button text-ink-extra-muted mobile:size-10">
+        <span
+          class={cn(
+            'flex size-6 items-center justify-center rounded-full border border-edge-button mobile:size-10',
+            inboxEntityColor(props.entity)
+          )}
+        >
           <InboxKindIcon kind={props.kind} class="size-3.5 mobile:size-5" />
         </span>
       }

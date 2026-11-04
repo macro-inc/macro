@@ -19,7 +19,8 @@ entity's comments stay on one card even when one mentions you. The server decide
 all of this (`crates/notification_inbox/src/domain/rows.rs`), so live updates and
 reads stack the same way. A card shows who it is from (an avatar, an initial for a
 sender known only by name such as an email's, or the kind of notification for a
-reminder), with a badge on the avatar's corner saying what kind it is (Channel,
+reminder), with a badge on the avatar's corner saying what kind it is, in the theme's color for
+the entity it is on, as on that entity's icon elsewhere (Channel,
 Message, Mention, Reply, Reaction, Email, Comment, Invite, Access, Agent, Task, Pull
 request, Event or Reminder; a stack's newest notification decides, except that a
 mention stays one). It is as tall as it has something to say: who did it (for example

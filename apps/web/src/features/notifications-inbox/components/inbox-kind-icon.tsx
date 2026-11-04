@@ -1,4 +1,6 @@
 import { t } from '@app/lib/i18n';
+import { getEntityIconType, getIconConfig } from '@core/component/EntityIcon';
+import type { EntityData } from '@entity';
 import ArrowBendUpLeftIcon from '@icon/system/regular/arrow-bend-up-left.svg';
 import AtIcon from '@icon/system/regular/at.svg';
 import BellIcon from '@icon/system/regular/bell.svg';
@@ -54,6 +56,16 @@ export const inboxKindLabel = (kind: InboxCardKind) =>
     .with('reminder', () => t('notificationsInbox.kindReminder'))
     .with('other', () => t('notificationsInbox.kindOther'))
     .exhaustive();
+
+/**
+ * The app's color for what a notification is on, such as a document, an email or
+ * an agent session, which follows the theme. An email keeps its color once read:
+ * the card says that itself.
+ */
+export const inboxEntityColor = (entity: EntityData) => {
+  const type = getEntityIconType(entity);
+  return getIconConfig(type === 'emailRead' ? 'email' : type).foreground;
+};
 
 /** The glyph for a kind of notification. */
 export function InboxKindIcon(props: { kind: InboxCardKind; class?: string }) {

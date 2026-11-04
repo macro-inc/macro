@@ -532,6 +532,7 @@ export function NotificationsView(props: NotificationsViewProps) {
             <InboxSenderAvatar
               notification={card.row().content.notifications[0]}
               kind={inboxCardKind(card.row())}
+              entity={card.row().content.entity}
               badged
             />
           }
@@ -597,6 +598,7 @@ export function NotificationsView(props: NotificationsViewProps) {
           <InboxSenderAvatar
             notification={entry.notification()}
             kind={inboxCardKind(entry.row())}
+            entity={entry.row().content.entity}
           />
         }
         by={item().by}
@@ -636,7 +638,7 @@ export function NotificationsView(props: NotificationsViewProps) {
           </div>
           <For each={[0, 1, 2, 3, 4]}>
             {() => (
-              <ListSkeleton.Row class="mb-2.5 h-[83px] gap-2.5 rounded-xl px-[13px] mobile:mb-3 mobile:h-[89px]">
+              <ListSkeleton.Row class="mb-2.5 h-[83px] gap-3 rounded-xl px-[13px] mobile:mb-3 mobile:h-[89px]">
                 <ListSkeleton.Bar class="size-6 shrink-0 rounded-full mobile:size-10" />
                 <div class="flex min-w-0 flex-1 flex-col gap-2">
                   <ListSkeleton.Bar class="w-1/3" />

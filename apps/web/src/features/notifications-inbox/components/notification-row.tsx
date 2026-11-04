@@ -79,7 +79,7 @@ export function NotificationRow(props: NotificationRowProps) {
             : 'mobile:[--inbox-card-surface:var(--color-panel)]'
         )}
       >
-        <div class="flex gap-2.5 px-3 py-3 touch:min-h-[44px]">
+        <div class="flex gap-3 px-3 py-3 touch:min-h-[44px]">
           <span
             class={cn('shrink-0', !props.unseen && 'mobile:opacity-60')}
             data-card-avatar=""
