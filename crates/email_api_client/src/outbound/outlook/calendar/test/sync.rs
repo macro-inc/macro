@@ -9,7 +9,8 @@ async fn serve_scan(server: &MockServer) {
     let now = Utc::now();
     let mut readable = event("AAMkReadable");
     readable["start"]["dateTime"] = json!((now + chrono::Duration::days(1)).to_rfc3339());
-    readable["end"]["dateTime"] = json!((now + chrono::Duration::days(1) + chrono::Duration::hours(1)).to_rfc3339());
+    readable["end"]["dateTime"] =
+        json!((now + chrono::Duration::days(1) + chrono::Duration::hours(1)).to_rfc3339());
     let mut unreadable = event("AAMkHourly");
     unreadable["type"] = json!("seriesMaster");
     unreadable["recurrence"] = json!({"pattern":{"type":"hourly","interval":1},"range":{"type":"noEnd","startDate":"2026-11-02"}});

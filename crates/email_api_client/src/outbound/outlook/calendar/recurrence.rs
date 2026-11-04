@@ -127,7 +127,11 @@ pub(super) fn from_graph(event: &Value) -> Result<Vec<String>, Rejected> {
                 fields.push(format!("UNTIL={}", date.format("%Y%m%d")));
             } else {
                 let end = range_zone(event)
-                    .from_local_datetime(&date.and_hms_opt(23, 59, 59).ok_or_else(|| range("endDate"))?)
+                    .from_local_datetime(
+                        &date
+                            .and_hms_opt(23, 59, 59)
+                            .ok_or_else(|| range("endDate"))?,
+                    )
                     .latest()
                     .ok_or_else(|| range("endDate"))?;
                 fields.push(format!(

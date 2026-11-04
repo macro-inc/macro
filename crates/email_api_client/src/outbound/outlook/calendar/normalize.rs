@@ -266,8 +266,7 @@ pub(super) fn projection(
         let original = original(&instance).map_err(|e| e.under("instances"))?;
         let recurrence_id = original.as_ref().map(EventStart::occurrence_key);
         if instance["type"].as_str() == Some("exception") {
-            let original_time =
-                original.ok_or_else(|| Rejected::at("instances.originalStart"))?;
+            let original_time = original.ok_or_else(|| Rejected::at("instances.originalStart"))?;
             let instance_preferences = preferences(&instance);
             // Graph may omit inherited extended properties. Preserve the series'
             // extra reminders unless this instance carries its own settings or
