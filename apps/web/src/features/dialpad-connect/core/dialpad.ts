@@ -53,6 +53,8 @@ export function dialpadIssueLabel(
       return 'Retrying';
     case 'calls_abandoned':
       return 'Some calls not imported';
+    case 'backfill_failed':
+      return 'Past calls retrying';
     default:
       return undefined;
   }

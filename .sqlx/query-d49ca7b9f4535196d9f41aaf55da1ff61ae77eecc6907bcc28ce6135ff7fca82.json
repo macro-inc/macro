@@ -1,0 +1,17 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "UPDATE dialpad_sync_connections\n            SET backfill_failures = backfill_failures + 1,\n                -- 30 seconds, doubling to at most an hour.\n                backfill_due_at = now() + make_interval(\n                    secs => least(30 * power(2, least(backfill_failures, 7)), 3600))\n            WHERE id = $1 AND enabled AND enrolled_at = $2\n                AND backfill_since = $3 AND backfill_cursor IS NOT DISTINCT FROM $4",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Timestamptz",
+        "Timestamptz",
+        "Text"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "d49ca7b9f4535196d9f41aaf55da1ff61ae77eecc6907bcc28ce6135ff7fca82"
+}

@@ -54,4 +54,24 @@ fn status_reflects_setup_and_issues() {
         issue(Some(SyncIssue::NeedsReauth), CallHealth::Abandoned),
         Some(SyncIssue::NeedsReauth)
     );
+    let backfill_failing = |calls| match status_of(Some(Connection {
+        calls,
+        backfill: BackfillState::Pending {
+            since: chrono::Utc::now(),
+            cursor: None,
+            failures: 1,
+        },
+        ..connection(true, None)
+    })) {
+        SyncStatus::Connected { issue, .. } => issue,
+        status => panic!("expected a running sync, got {status:?}"),
+    };
+    assert_eq!(
+        backfill_failing(CallHealth::Retrying),
+        Some(SyncIssue::BackfillFailed)
+    );
+    assert_eq!(
+        backfill_failing(CallHealth::Abandoned),
+        Some(SyncIssue::CallsAbandoned)
+    );
 }

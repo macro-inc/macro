@@ -1,0 +1,22 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT id FROM dialpad_sync_connections\n            WHERE enabled AND backfill_since IS NOT NULL AND backfill_due_at <= now()\n            ORDER BY backfill_due_at, enrolled_at LIMIT $1",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Uuid"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Int8"
+      ]
+    },
+    "nullable": [
+      false
+    ]
+  },
+  "hash": "450252bf8c6c59b4ee9dff800a0c39f32ebb1c678d9b41d04b3e4c61fa46d4ac"
+}

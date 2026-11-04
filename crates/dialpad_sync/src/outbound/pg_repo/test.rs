@@ -25,6 +25,12 @@ fn user() -> MacroUserIdStr<'static> {
         .into_owned()
 }
 
+fn other_user() -> MacroUserIdStr<'static> {
+    MacroUserIdStr::parse_from_str("macro|dialpad-b@example.com")
+        .unwrap()
+        .into_owned()
+}
+
 #[derive(Clone, Copy, PartialEq)]
 enum GrantState {
     Active,
@@ -82,6 +88,8 @@ struct FakeDialpad {
     transcript_fails: Mutex<Option<bool>>,
     /// Calls whose recap fetch fails.
     failing_calls: Mutex<Vec<DialpadId>>,
+    fail_listing: Mutex<bool>,
+    listings: Mutex<usize>,
 }
 
 impl FakeDialpad {
@@ -172,6 +180,10 @@ impl Dialpad for FakeDialpad {
         _: Option<&str>,
     ) -> Result<CallPage> {
         *self.listed_since.lock().unwrap() = Some(since);
+        *self.listings.lock().unwrap() += 1;
+        if *self.fail_listing.lock().unwrap() {
+            return Err(rootcause::report!("Dialpad API returned HTTP 503"));
+        }
         Ok(self.pages.lock().unwrap().pop_front().unwrap_or(CallPage {
             calls: vec![],
             cursor: None,
@@ -1139,4 +1151,67 @@ async fn a_transcript_outage_imports_the_call_without_it(pool: PgPool) {
         issue(service.status(&user()).await.unwrap()),
         Some(SyncIssue::CallSyncFailed)
     );
+}
+
+#[sqlx::test(
+    migrator = "MACRO_DB_MIGRATIONS",
+    fixtures(path = "../../../fixtures", scripts("users"))
+)]
+async fn a_failing_backfill_backs_off_behind_the_others_and_says_so(pool: PgPool) {
+    let service = service(pool, GrantState::Active, Arc::new(Calls::default()));
+    for user in [user(), other_user()] {
+        service.connect(&user, Backfill::Week).await.unwrap();
+        service.complete(&user).await.unwrap();
+    }
+    let a = service.repo.by_user(&user()).await.unwrap().unwrap();
+    let b = service.repo.by_user(&other_user()).await.unwrap().unwrap();
+    let due = || async {
+        service
+            .repo
+            .backfilling(10)
+            .await
+            .unwrap()
+            .into_iter()
+            .map(|connection| connection.id)
+            .collect::<Vec<_>>()
+    };
+    assert_eq!(due().await, [a.id, b.id]);
+    // Each page moves a backfill behind the others, so they take turns.
+    service
+        .repo
+        .advance_backfill(&a, vec![], Some("next".into()))
+        .await
+        .unwrap();
+    assert_eq!(due().await, [b.id, a.id]);
+    // A failed page backs off, and Settings says so.
+    service.repo.backfill_failed(&b).await.unwrap();
+    assert_eq!(due().await, [a.id]);
+    assert_eq!(
+        issue(service.status(&other_user()).await.unwrap()),
+        Some(SyncIssue::BackfillFailed)
+    );
+    assert_eq!(issue(service.status(&user()).await.unwrap()), None);
+
+    // A failing listing is not retried on every reconcile.
+    *service.dialpad.fail_listing.lock().unwrap() = true;
+    service.reconcile().await.unwrap();
+    service.reconcile().await.unwrap();
+    assert_eq!(*service.dialpad.listings.lock().unwrap(), 1);
+    assert_eq!(
+        issue(service.status(&user()).await.unwrap()),
+        Some(SyncIssue::BackfillFailed)
+    );
+
+    // Once Dialpad answers, both finish and the issue clears.
+    *service.dialpad.fail_listing.lock().unwrap() = false;
+    sqlx::query!("UPDATE dialpad_sync_connections SET backfill_due_at = now()")
+        .execute(&service.repo.pool)
+        .await
+        .unwrap();
+    service.reconcile().await.unwrap();
+    for user in [user(), other_user()] {
+        let connection = service.repo.by_user(&user).await.unwrap().unwrap();
+        assert_eq!(connection.backfill, BackfillState::Done);
+        assert_eq!(issue(service.status(&user).await.unwrap()), None);
+    }
 }

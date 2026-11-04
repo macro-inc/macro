@@ -137,6 +137,8 @@ pub enum BackfillState {
         since: DateTime<Utc>,
         /// Dialpad's cursor for the next page, after the first.
         cursor: Option<String>,
+        /// Pages that failed in a row; each failure backs off further.
+        failures: i32,
     },
 }
 
@@ -160,6 +162,9 @@ pub enum SyncIssue {
     /// new event for it.
     #[strum(serialize = "Some calls could not be imported")]
     CallsAbandoned,
+    /// A page of past calls failed to import; it retries with backoff.
+    #[strum(serialize = "Importing past calls failed; retrying")]
+    BackfillFailed,
     /// The user disconnected Dialpad, or never finished connecting. The row
     /// stays so a reconnect keeps the import namespace.
     #[strum(serialize = "Disconnected")]
@@ -314,6 +319,12 @@ pub struct CallEvent {
 }
 
 impl CallEvent {
+    /// Decode one event, or name the field that does not fit: its path only,
+    /// never a value, since events carry call details.
+    pub fn decode(value: serde_json::Value) -> std::result::Result<Self, String> {
+        serde_path_to_error::deserialize(value).map_err(|error| error.path().to_string())
+    }
+
     /// When the event happened; a call list item falls back to its end.
     pub fn occurred_at(&self) -> Option<DateTime<Utc>> {
         self.event_timestamp

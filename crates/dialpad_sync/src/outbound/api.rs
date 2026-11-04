@@ -267,7 +267,7 @@ impl Dialpad for DialpadApi {
         #[derive(Deserialize)]
         struct Page {
             #[serde(default)]
-            items: Vec<CallEvent>,
+            items: Vec<Value>,
             cursor: Option<String>,
         }
         // Without a target, an admin's token lists the whole company's calls.
@@ -284,8 +284,27 @@ impl Dialpad for DialpadApi {
             .await?
             .ok_or_else(|| rootcause::report!("Dialpad call listing is unavailable"))?;
         let page: Page = serde_json::from_value(body)?;
+        // One unreadable call must not hold up the rest of the page.
+        let calls = page
+            .items
+            .into_iter()
+            .filter_map(|item| {
+                let call_id = item
+                    .get("call_id")
+                    .and_then(|id| DialpadId::deserialize(id).ok());
+                CallEvent::decode(item)
+                    .inspect_err(|path| {
+                        tracing::warn!(
+                            call_id = ?call_id,
+                            path = %path,
+                            "skipped a past Dialpad call that could not be read"
+                        );
+                    })
+                    .ok()
+            })
+            .collect();
         Ok(CallPage {
-            calls: page.items,
+            calls,
             cursor: page.cursor.filter(|cursor| !cursor.is_empty()),
         })
     }

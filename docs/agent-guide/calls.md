@@ -71,7 +71,8 @@ phone number when there is no name), the transcript, and Dialpad's AI recap
 and action items as the summary. If Dialpad cannot serve the transcript, the
 call imports without it. A call that keeps failing retries for about three
 hours; Settings then shows **Some calls not imported** until Dialpad sends a
-new event for it.
+new event for it. If importing past calls fails, Settings shows **Past calls
+retrying** while it backs off and tries again.
 Missed calls and voicemails are not imported. Webhooks need the same public
 HTTPS cognition origin as Granola (tunnel `/cognition/integrations/dialpad/webhooks`
 locally).

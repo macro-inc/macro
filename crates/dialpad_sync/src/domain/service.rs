@@ -82,12 +82,18 @@ fn status_of(connection: Option<Connection>) -> SyncStatus {
         }) => SyncStatus::NotConnected,
         Some(connection) if connection.enabled => SyncStatus::Connected {
             last_synced_at: connection.last_synced_at,
-            // A reconnect prompt outranks call failures.
-            issue: connection.last_error.or(match connection.calls {
-                CallHealth::Healthy => None,
-                CallHealth::Retrying => Some(SyncIssue::CallSyncFailed),
-                CallHealth::Abandoned => Some(SyncIssue::CallsAbandoned),
-            }),
+            // A reconnect prompt outranks import failures, and calls that
+            // gave up outrank anything still retrying.
+            issue: connection
+                .last_error
+                .or(match (connection.calls, &connection.backfill) {
+                    (CallHealth::Abandoned, _) => Some(SyncIssue::CallsAbandoned),
+                    (_, BackfillState::Pending { failures, .. }) if *failures > 0 => {
+                        Some(SyncIssue::BackfillFailed)
+                    }
+                    (CallHealth::Retrying, _) => Some(SyncIssue::CallSyncFailed),
+                    (CallHealth::Healthy, _) => None,
+                }),
         },
         Some(Connection {
             last_error: Some(issue),
@@ -207,7 +213,7 @@ impl<R: SyncRepository, G: Grants, D: Dialpad, V: DeliveryVerifier> Service<R, G
         err(Display)
     )]
     async fn backfill_page(&self, connection: Connection) -> Result<()> {
-        let BackfillState::Pending { since, cursor } = &connection.backfill else {
+        let BackfillState::Pending { since, cursor, .. } = &connection.backfill else {
             return Ok(());
         };
         let Some(dialpad_user) = connection.dialpad_user_id else {
@@ -221,6 +227,8 @@ impl<R: SyncRepository, G: Grants, D: Dialpad, V: DeliveryVerifier> Service<R, G
             }
             Grant::NeedsReauth => {
                 self.repo.flag(&connection, SyncIssue::NeedsReauth).await?;
+                // Keep checking the grant, behind backfills that can run.
+                self.repo.defer_backfill(&connection).await?;
                 return Ok(());
             }
         };
@@ -469,8 +477,9 @@ impl<R: SyncRepository, G: Grants, D: Dialpad, V: DeliveryVerifier> SyncService
             }
         }
         for connection in self.repo.backfilling(RECONCILE_BATCH).await? {
-            if let Err(error) = self.backfill_page(connection).await {
+            if let Err(error) = self.backfill_page(connection.clone()).await {
                 tracing::warn!(error = %error, "Dialpad backfill page failed; will retry");
+                self.repo.backfill_failed(&connection).await?;
             }
         }
         Ok(())

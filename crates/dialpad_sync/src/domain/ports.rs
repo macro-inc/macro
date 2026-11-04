@@ -54,16 +54,22 @@ pub trait SyncRepository: Send + Sync {
     /// namespace. `unregistered` forgets the Dialpad resources once they
     /// were removed; otherwise the next setup removes them.
     async fn disconnect(&self, connection: &Connection, unregistered: bool) -> Result<()>;
-    /// Running syncs with past calls left to import.
+    /// Running syncs with past calls left to import and due for a page,
+    /// least recently tried first.
     async fn backfilling(&self, limit: i64) -> Result<Vec<Connection>>;
     /// Queue a page and advance only if enrollment and backfill progress still
-    /// match `connection`; `None` finishes it.
+    /// match `connection`; `None` finishes it. Clears any failures.
     async fn advance_backfill(
         &self,
         connection: &Connection,
         calls: Vec<CallEvent>,
         cursor: Option<String>,
     ) -> Result<()>;
+    /// Count a failed page and back off, only if enrollment and backfill
+    /// progress still match `connection`.
+    async fn backfill_failed(&self, connection: &Connection) -> Result<()>;
+    /// Move a backfill behind the others without counting a failure.
+    async fn defer_backfill(&self, connection: &Connection) -> Result<()>;
     /// Persist a verified delivery once; repeats are ignored.
     async fn enqueue(&self, id: Uuid, event: CallEvent, traceparent: Option<String>) -> Result<()>;
     /// Lease the pending deliveries of the next due call, if any. Deliveries

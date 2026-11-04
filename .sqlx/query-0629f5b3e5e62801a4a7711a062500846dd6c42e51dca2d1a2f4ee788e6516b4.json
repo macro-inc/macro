@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "SELECT c.id, c.namespace, c.user_id, c.enabled, c.dialpad_user_id, c.webhook_id,\n                c.subscription_id, c.signing_secret, c.setup_started_at, c.backfill_since,\n                c.backfill_cursor, c.enrolled_at, c.last_synced_at, c.last_error,\n                EXISTS (\n                    SELECT 1 FROM dialpad_sync_events e\n                    WHERE e.connection_id = c.id AND e.completed_at IS NULL\n                        AND e.available_at = 'infinity'\n                ) AS \"calls_abandoned!\",\n                EXISTS (\n                    -- A leased event's latest attempt is still running.\n                    SELECT 1 FROM dialpad_sync_events e\n                    WHERE e.connection_id = c.id AND e.completed_at IS NULL\n                        AND e.attempts > CASE WHEN e.lease_id IS NULL THEN 0 ELSE 1 END\n                ) AS \"calls_retrying!\"\n            FROM dialpad_sync_connections c WHERE c.id = $1",
+  "query": "SELECT c.id, c.namespace, c.user_id, c.enabled, c.dialpad_user_id, c.webhook_id,\n                c.subscription_id, c.signing_secret, c.setup_started_at, c.backfill_since,\n                c.backfill_cursor, c.backfill_failures, c.enrolled_at, c.last_synced_at,\n                c.last_error,\n                EXISTS (\n                    SELECT 1 FROM dialpad_sync_events e\n                    WHERE e.connection_id = c.id AND e.completed_at IS NULL\n                        AND e.available_at = 'infinity'\n                ) AS \"calls_abandoned!\",\n                EXISTS (\n                    -- A leased event's latest attempt is still running.\n                    SELECT 1 FROM dialpad_sync_events e\n                    WHERE e.connection_id = c.id AND e.completed_at IS NULL\n                        AND e.attempts > CASE WHEN e.lease_id IS NULL THEN 0 ELSE 1 END\n                ) AS \"calls_retrying!\"\n            FROM dialpad_sync_connections c WHERE c.id = $1",
   "describe": {
     "columns": [
       {
@@ -60,26 +60,31 @@
       },
       {
         "ordinal": 11,
+        "name": "backfill_failures",
+        "type_info": "Int4"
+      },
+      {
+        "ordinal": 12,
         "name": "enrolled_at",
         "type_info": "Timestamptz"
       },
       {
-        "ordinal": 12,
+        "ordinal": 13,
         "name": "last_synced_at",
         "type_info": "Timestamptz"
       },
       {
-        "ordinal": 13,
+        "ordinal": 14,
         "name": "last_error",
         "type_info": "Text"
       },
       {
-        "ordinal": 14,
+        "ordinal": 15,
         "name": "calls_abandoned!",
         "type_info": "Bool"
       },
       {
-        "ordinal": 15,
+        "ordinal": 16,
         "name": "calls_retrying!",
         "type_info": "Bool"
       }
@@ -102,11 +107,12 @@
       true,
       true,
       false,
+      false,
       true,
       true,
       null,
       null
     ]
   },
-  "hash": "7da9536c606e29f3372f5b2bea8b6fa62928522655896e7458dcb59d5e93df38"
+  "hash": "0629f5b3e5e62801a4a7711a062500846dd6c42e51dca2d1a2f4ee788e6516b4"
 }

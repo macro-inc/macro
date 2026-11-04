@@ -18,7 +18,9 @@ and subscribes to that user's call states. Dialpad posts HS256 JWTs to
 its `traceparent`. The worker leases a call's pending events together, so
 one import covers them: it rebuilds the call from all of its events, fetches
 the transcript, and ingests through `call::domain::imports`.
-A first-connect backfill pages `GET /call` one page per reconcile.
+A first-connect backfill pages `GET /call` one page per reconcile; backfills
+take turns, a failed page backs off (30 seconds, doubling to an hour), and an
+unreadable item is skipped and logged by call id and field path.
 
 ## Start here
 

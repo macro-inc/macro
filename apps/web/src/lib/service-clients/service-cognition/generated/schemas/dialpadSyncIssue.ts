@@ -18,4 +18,5 @@ export const DialpadSyncIssue = {
   setup_failed: 'setup_failed',
   call_sync_failed: 'call_sync_failed',
   calls_abandoned: 'calls_abandoned',
+  backfill_failed: 'backfill_failed',
 } as const;

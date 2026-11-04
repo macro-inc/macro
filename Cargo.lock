@@ -6438,6 +6438,7 @@ dependencies = [
  "row_cipher",
  "serde",
  "serde_json",
+ "serde_path_to_error",
  "sqlx",
  "strum 0.27.2",
  "thiserror 2.0.18",

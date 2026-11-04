@@ -102,3 +102,28 @@ async fn past_calls_are_listed_for_the_user_not_the_company() {
     assert_eq!(page.calls[0].state, CallState::Other);
     assert!(page.cursor.is_none(), "an empty cursor ends the listing");
 }
+
+#[tokio::test]
+async fn an_unreadable_past_call_is_skipped_not_the_page() {
+    let server = MockServer::start().await;
+    Mock::given(method("GET"))
+        .and(path("/call"))
+        .respond_with(ResponseTemplate::new(200).set_body_json(json!({
+            "items": [
+                {"call_id": 1, "state": "hangup"},
+                {"call_id": 2, "state": "hangup", "target": "not an object"},
+                {"call_id": 3, "state": "hangup"},
+            ],
+            "cursor": "page-2"
+        })))
+        .mount(&server)
+        .await;
+    let api = DialpadApi::new(server.uri()).unwrap();
+    let page = api
+        .calls(&token(), DialpadId(22), Utc::now(), None)
+        .await
+        .unwrap();
+    let ids: Vec<DialpadId> = page.calls.iter().map(|call| call.call_id).collect();
+    assert_eq!(ids, [DialpadId(1), DialpadId(3)]);
+    assert_eq!(page.cursor.as_deref(), Some("page-2"));
+}

@@ -74,7 +74,8 @@ impl SyncRepository for PgSyncRepository {
         let row = sqlx::query!(
             r#"SELECT c.id, c.namespace, c.user_id, c.enabled, c.dialpad_user_id, c.webhook_id,
                 c.subscription_id, c.signing_secret, c.setup_started_at, c.backfill_since,
-                c.backfill_cursor, c.enrolled_at, c.last_synced_at, c.last_error,
+                c.backfill_cursor, c.backfill_failures, c.enrolled_at, c.last_synced_at,
+                c.last_error,
                 EXISTS (
                     SELECT 1 FROM dialpad_sync_events e
                     WHERE e.connection_id = c.id AND e.completed_at IS NULL
@@ -116,6 +117,7 @@ impl SyncRepository for PgSyncRepository {
                 Some(since) => BackfillState::Pending {
                     since,
                     cursor: row.backfill_cursor,
+                    failures: row.backfill_failures,
                 },
                 None => BackfillState::Done,
             },
@@ -147,7 +149,11 @@ impl SyncRepository for PgSyncRepository {
                 backfill_since = CASE WHEN dialpad_sync_connections.enabled
                     THEN dialpad_sync_connections.backfill_since ELSE EXCLUDED.backfill_since END,
                 backfill_cursor = CASE WHEN dialpad_sync_connections.enabled
-                    THEN dialpad_sync_connections.backfill_cursor ELSE NULL END"#,
+                    THEN dialpad_sync_connections.backfill_cursor ELSE NULL END,
+                backfill_failures = CASE WHEN dialpad_sync_connections.enabled
+                    THEN dialpad_sync_connections.backfill_failures ELSE 0 END,
+                backfill_due_at = CASE WHEN dialpad_sync_connections.enabled
+                    THEN dialpad_sync_connections.backfill_due_at ELSE now() END"#,
             id,
             user.as_ref(),
             backfill_since
@@ -305,8 +311,8 @@ impl SyncRepository for PgSyncRepository {
     async fn backfilling(&self, limit: i64) -> Result<Vec<Connection>> {
         let ids = sqlx::query_scalar!(
             r#"SELECT id FROM dialpad_sync_connections
-            WHERE enabled AND backfill_since IS NOT NULL
-            ORDER BY enrolled_at LIMIT $1"#,
+            WHERE enabled AND backfill_since IS NOT NULL AND backfill_due_at <= now()
+            ORDER BY backfill_due_at, enrolled_at LIMIT $1"#,
             limit
         )
         .fetch_all(&self.pool)
@@ -323,6 +329,7 @@ impl SyncRepository for PgSyncRepository {
         let BackfillState::Pending {
             since,
             cursor: previous_cursor,
+            ..
         } = &connection.backfill
         else {
             return Ok(());
@@ -331,7 +338,9 @@ impl SyncRepository for PgSyncRepository {
         let changed = sqlx::query!(
             r#"UPDATE dialpad_sync_connections
             SET backfill_cursor = $2,
-                backfill_since = CASE WHEN $2::text IS NULL THEN NULL ELSE backfill_since END
+                backfill_since = CASE WHEN $2::text IS NULL THEN NULL ELSE backfill_since END,
+                -- To the back of the line, so every backfill takes turns.
+                backfill_failures = 0, backfill_due_at = now()
             WHERE id = $1 AND enabled AND enrolled_at = $3
                 AND backfill_since = $4 AND backfill_cursor IS NOT DISTINCT FROM $5"#,
             connection.id,
@@ -364,6 +373,39 @@ impl SyncRepository for PgSyncRepository {
             .await?;
         }
         tx.commit().await?;
+        Ok(())
+    }
+
+    async fn backfill_failed(&self, connection: &Connection) -> Result<()> {
+        let BackfillState::Pending { since, cursor, .. } = &connection.backfill else {
+            return Ok(());
+        };
+        sqlx::query!(
+            r#"UPDATE dialpad_sync_connections
+            SET backfill_failures = backfill_failures + 1,
+                -- 30 seconds, doubling to at most an hour.
+                backfill_due_at = now() + make_interval(
+                    secs => least(30 * power(2, least(backfill_failures, 7)), 3600))
+            WHERE id = $1 AND enabled AND enrolled_at = $2
+                AND backfill_since = $3 AND backfill_cursor IS NOT DISTINCT FROM $4"#,
+            connection.id,
+            connection.enrolled_at,
+            since,
+            cursor.as_deref()
+        )
+        .execute(&self.pool)
+        .await?;
+        Ok(())
+    }
+
+    async fn defer_backfill(&self, connection: &Connection) -> Result<()> {
+        sqlx::query!(
+            "UPDATE dialpad_sync_connections SET backfill_due_at = now() WHERE id = $1 AND enrolled_at = $2",
+            connection.id,
+            connection.enrolled_at
+        )
+        .execute(&self.pool)
+        .await?;
         Ok(())
     }
 

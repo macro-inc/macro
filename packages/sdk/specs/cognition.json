@@ -4044,7 +4044,8 @@
           "needs_reauth",
           "setup_failed",
           "call_sync_failed",
-          "calls_abandoned"
+          "calls_abandoned",
+          "backfill_failed"
         ]
       },
       "DismissedPrompts": {
