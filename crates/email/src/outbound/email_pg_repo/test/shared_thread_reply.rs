@@ -178,3 +178,44 @@ async fn reply_cannot_adopt_a_draft_planted_for_an_unshared_message(
     assert!(matches!(result, Err(EmailErr::MessageNotFound(id)) if id == parent));
     Ok(())
 }
+
+#[sqlx::test(
+    migrator = "MACRO_DB_MIGRATIONS",
+    fixtures(path = "../../../../fixtures", scripts("email_draft"))
+)]
+async fn revoked_share_keeps_the_reply_draft_when_switching_inboxes(
+    pool: Pool<Postgres>,
+) -> anyhow::Result<()> {
+    let owner_inbox = Uuid::parse_str("aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa")?;
+    let parent = Uuid::parse_str("ee000001-0000-0000-0000-000000000001")?;
+    let recipient_inbox = insert_recipient_inbox(&pool).await?;
+    let other_inbox = Uuid::parse_str("dddddddd-0000-0000-0000-00000000000e")?;
+    sqlx::query!(
+        "INSERT INTO email_links (id, macro_id, fusionauth_user_id, email_address, provider, is_sync_active, created_at, updated_at)
+         VALUES ($1, 'macro|user2@example.com', 'fa-user-2', 'user2-alt@example.com', 'GMAIL', true, NOW(), NOW())",
+        other_inbox
+    )
+    .execute(&pool)
+    .await?;
+    let saved = service(pool.clone(), GrantsInbox(owner_inbox))
+        .save_draft_for_user_impl(recipient(), Some(recipient_inbox), reply_to(parent))
+        .await?;
+
+    // The share is revoked, then the recipient picks their other inbox.
+    let mut switch = reply_to(parent);
+    switch.db_id = Some(saved.draft.db_id);
+    switch.draft_generation = saved.draft.draft_generation;
+    let result = service(pool.clone(), NoSharedThreadReplies)
+        .save_draft_for_user_impl(recipient(), Some(other_inbox), switch)
+        .await;
+
+    assert!(matches!(result, Err(EmailErr::MessageNotFound(id)) if id == parent));
+    let kept = sqlx::query_scalar!(
+        "SELECT link_id FROM email_messages WHERE id = $1",
+        saved.draft.db_id
+    )
+    .fetch_optional(&pool)
+    .await?;
+    assert_eq!(kept, Some(recipient_inbox));
+    Ok(())
+}

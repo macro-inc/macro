@@ -470,12 +470,17 @@ where
             input.provider_id = None;
             input.provider_thread_id = None;
         }
+        // Authorize the reply target before validate_existing_message can move
+        // the draft to another inbox, so a refused target leaves it in place.
+        let reply_target = self
+            .authorized_reply_target(&input, &accessible_link_ids)
+            .await?;
         let source_inbox = self
             .validate_existing_message(link_id, accessible_inboxes, &mut input, defer_inbox_move)
             .await?;
 
         let source_message_id = input.db_id;
-        self.validate_replying_to(link_id, &accessible_link_ids, &mut input)
+        self.validate_replying_to(link_id, reply_target.as_ref(), &mut input)
             .await?;
         if source_inbox.is_some() && input.db_id != source_message_id {
             return Err(EmailErr::InvalidSendSnapshot(
@@ -692,24 +697,34 @@ where
         Ok(None)
     }
 
-    async fn validate_replying_to(
+    /// The reply target, authorized on every save, before an existing reply
+    /// draft is reused: that draft is found by a header the client can write.
+    async fn authorized_reply_target(
         &self,
-        link_id: Uuid,
+        input: &CreateDraftInput,
         accessible_link_ids: &[Uuid],
-        input: &mut CreateDraftInput,
-    ) -> Result<(), EmailErr> {
+    ) -> Result<Option<SimpleMessageInfo>, EmailErr> {
         let Some(replying_to_id) = input.replying_to_id else {
-            return Ok(());
+            return Ok(None);
         };
-
-        // Authorize the target on every save, before an existing reply draft
-        // is reused: that draft is found by a header the client can write.
         let reply_target = self
             .reply_target(input.actor.as_ref(), replying_to_id, accessible_link_ids)
             .await?;
         if reply_target.is_draft {
             return Err(EmailErr::CannotReplyToDraft);
         }
+        Ok(Some(reply_target))
+    }
+
+    async fn validate_replying_to(
+        &self,
+        link_id: Uuid,
+        reply_target: Option<&SimpleMessageInfo>,
+        input: &mut CreateDraftInput,
+    ) -> Result<(), EmailErr> {
+        let Some(reply_target) = reply_target else {
+            return Ok(());
+        };
 
         // An explicit, validated identity must never be retargeted to a newer
         // reply draft by a delayed save from an obsolete composer.
@@ -719,13 +734,13 @@ where
         // The draft replying to this message lives in the inbox being sent from.
         if let Some(existing_draft) = self
             .email_repo
-            .get_draft_replying_to(link_id, replying_to_id)
+            .get_draft_replying_to(link_id, reply_target.db_id)
             .await
             .map_err(anyhow::Error::from)?
         {
             self.apply_existing_draft(input, existing_draft);
         } else {
-            apply_reply_target(link_id, input, &reply_target);
+            apply_reply_target(link_id, input, reply_target);
         }
 
         Ok(())
