@@ -615,7 +615,7 @@ async fn create_converts_input_into_a_domain_draft() {
         description: Some("Quarterly".to_string()),
         location: None,
         attendees: vec![AttendeeInput {
-            email: "guest@example.com".to_string(),
+            email: EmailAddress::try_new("guest@example.com".to_string()).unwrap(),
             is_optional: true,
         }],
         recurrence_lines: vec!["RRULE:FREQ=WEEKLY".to_string()],
@@ -775,7 +775,7 @@ fn macro_call_tool() -> CreateCalendarEvent {
         description: Some("<p>Agenda</p>".to_string()),
         location: None,
         attendees: vec![AttendeeInput {
-            email: "guest@example.com".to_string(),
+            email: EmailAddress::try_new("guest@example.com".to_string()).unwrap(),
             is_optional: false,
         }],
         recurrence_lines: Vec::new(),
@@ -949,7 +949,7 @@ async fn update_converts_input_into_a_domain_patch() {
         location: None,
         time: None,
         attendees: Some(vec![AttendeeInput {
-            email: "guest@example.com".to_string(),
+            email: EmailAddress::try_new("guest@example.com".to_string()).unwrap(),
             is_optional: false,
         }]),
         recurrence_lines: None,
@@ -1247,7 +1247,7 @@ async fn update_answers_after_applying_the_patch() {
         location: None,
         time: None,
         attendees: Some(vec![AttendeeInput {
-            email: "guest@example.com".to_string(),
+            email: EmailAddress::try_new("guest@example.com".to_string()).unwrap(),
             is_optional: false,
         }]),
         recurrence_lines: None,

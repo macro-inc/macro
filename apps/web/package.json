@@ -43,6 +43,7 @@
     "ui-audit": "bun scripts/ui-audit.ts",
     "gen-agent-fold-types": "just gen-agent-fold-types",
     "gen-database-sql-types": "just gen-database-sql-types",
+    "gen-agent-review-types": "just gen-agent-review-types",
     "type-check": "bun ../../node_modules/typescript-native/bin/tsc --noEmit --skipLibCheck --project tsconfig.json",
     "check": "bun check-graphql-cache-schema && bun type-check && bun biome check",
     "preview": "vite preview -c vite.config.ts --outDir dist --base /app",

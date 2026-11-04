@@ -23,7 +23,7 @@ import { blockNameToDefaultFile } from '@core/constant/allBlocks';
 import { ENABLE_MARKDOWN_SIDE_PANEL } from '@core/constant/featureFlags';
 import { createMethodRegistration } from '@core/orchestrator';
 import SpinnerIcon from '@icon/system/regular/spinner.svg';
-import { DocumentDebouncedNotificationReadMarker } from '@notifications';
+import { DocumentNotificationReadMarker } from '@notifications';
 import { useItemRawName } from '@queries/preview';
 import { Button } from '@ui';
 import { createComputed, type JSX, Match, Show, Switch } from 'solid-js';
@@ -128,7 +128,7 @@ function MarkdownDetailContent(props: {
             <div class="absolute top-1.5 right-4 z-action-menu flex justify-end">
               <FindAndReplace hotkeyScope={panel.splitHotkeyScope} />
             </div>
-            <DocumentDebouncedNotificationReadMarker
+            <DocumentNotificationReadMarker
               notificationSource={notificationSource}
               documentId={props.documentId}
             />

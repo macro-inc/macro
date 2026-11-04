@@ -174,7 +174,12 @@ function EmailDesktopLayout(props: {
 const MOBILE_EMAIL_TABS: PillTabItem<EmailTab>[] = [
   ...EMAIL_TABS.filter((tab) => tab.id === 'focus'),
   ...EMAIL_TABS.filter((tab) => tab.id !== 'focus'),
-].map((tab) => ({ value: tab.id, label: tab.label }));
+].map((tab) => ({
+  value: tab.id,
+  get label() {
+    return tab.label;
+  },
+}));
 
 function EmailMobileLayout(props: ParentProps) {
   const isVisible = useVisibleEmailTab();

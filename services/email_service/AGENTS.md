@@ -19,6 +19,9 @@ the gateway `/email` prefix.
   `src/backfill_completion_service.rs`: Gmail history backfill orchestration.
 - `src/crm_enrichment_worker.rs`: periodic pass that resolves pending CRM
   company directory entries (names/logos) left by binaries without a resolver.
+- `src/mailbox_sync_worker.rs`: the Outlook mailbox loops (sync, projections,
+  contacts, drafts, commands, settings, watches) and `run_health`, the
+  per-minute Outlook health snapshot.
 - `src/bin/`: standalone binaries — `pubsub_workers` (the queue consumer
   process), plus one-off backfill/cleanup scripts.
 
@@ -158,6 +161,14 @@ the gateway `/email` prefix.
   visibility while processing. Don't raise its receive batch: messages queued
   behind a long mailbox purge would be redelivered and purged twice.
   `PurgePacing` (`email_db_client::links::delete`) sets the purge's write rate.
+- `run_health` runs in every `pubsub_workers` task: each flushes its in-memory
+  Outlook import counts every minute, and the task that wins the Redis key
+  `outlook:health_snapshot` logs one "outlook mailbox health" line per Outlook
+  mailbox. Its fields, the `outlook.sync.*`, `outlook.graph_request` and
+  `outlook.token.acquire` spans and the import lifecycle logs are read by the
+  Outlook sync monitors in `infra/stacks/monitoring`; rename them only
+  together. Loops whose domain service logs its own deferrals use `reported`,
+  the others `record`, which logs gate refusals at DEBUG.
 - `GET /opens/{token}` is public and must return the same uncacheable GIF for
   every token. Gmail sends add the pixel only to the provider copy in
   `outbound/scheduled_delivery.rs`; Outlook adds it through the materializer

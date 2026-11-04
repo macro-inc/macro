@@ -12,7 +12,6 @@ export function PersistedReview(props: {
   sessionId: string;
   reviewId: string;
   canAct: boolean;
-  ownerId?: string;
   eventId?: string;
   onDecision?: () => void;
   onDecisionFailed?: () => void;
@@ -63,22 +62,21 @@ export function PersistedReview(props: {
       </Show>
       <Show when={query.isSuccess ? query.data : undefined}>
         {(record) => {
-          const canAct = () =>
-            props.canAct && userId() === (record().actingUser ?? props.ownerId);
+          const canAct = () => props.canAct && userId() === record().actingUser;
           // A review's kind is fixed when it is saved.
-          return match(record().kind)
-            .with('import', () => (
+          return match(record())
+            .with({ kind: 'import' }, (review) => (
               <ImportReview
-                review={record()}
+                review={review}
                 canAct={canAct()}
                 actions={decisions('import')}
               />
             ))
-            .with('email', 'calendar', (kind) => (
+            .with({ kind: 'email' }, { kind: 'calendar' }, (review) => (
               <ReviewStack
-                review={record()}
+                review={review}
                 canAct={canAct()}
-                actions={decisions(kind)}
+                actions={decisions(review.kind)}
               />
             ))
             .exhaustive();
