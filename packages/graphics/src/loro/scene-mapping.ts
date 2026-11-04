@@ -6,12 +6,7 @@ import {
   sameMatrix,
 } from '../core/affine';
 import { resolveAppearance } from '../core/appearance';
-import type {
-  GraphicsDocument,
-  GraphicsItem,
-  ShapeGeometryMap,
-  ShapeKind,
-} from '../core/model';
+import type { GraphicsDocument, GraphicsItem, ShapeKind } from '../core/model';
 import { sortKeysBetween } from '../core/ordering';
 import {
   children,
@@ -20,7 +15,7 @@ import {
   worldMatrix,
 } from '../core/scene';
 import { canLabel } from '../core/shapes/label';
-import { isShape, shapePayload } from '../core/shapes/registry';
+import { isShape, isShapeKind, shapePayload } from '../core/shapes/registry';
 import type { CanvasForest, NodeData } from './schema';
 
 export function readScene(forest: CanvasForest, rootId: string) {
@@ -37,6 +32,10 @@ export function readScene(forest: CanvasForest, rootId: string) {
         pose = node.data.pose;
       if (!id || !kind || !pose || Object.hasOwn(items, id))
         throw new Error('Invalid shared scene node');
+
+      // A newer client's kind: leave it, and its subtree, out of this projection.
+      if (kind !== 'group' && !isShapeKind(kind)) return;
+
       const matchingFrame = pose.parentId === parentId;
       const transform = matchingFrame
         ? pose.transform
@@ -97,7 +96,7 @@ function poseGeometry(node: GraphicsItem | undefined) {
 }
 function restoreText(
   kind: ShapeKind,
-  geometry: ShapeGeometryMap[ShapeKind],
+  geometry: object,
   content: string | null,
   labelStyle: NodeData['labelStyle']
 ) {
@@ -124,9 +123,13 @@ export function writeScene(
   if (before.rootId !== next.rootId || next.surface)
     throw new Error('Shared graphics backend supports one unbounded surface');
   const data = new Map<string, NodeData>();
+  const previousChildren = new Map<string, CanvasForest>([
+    [before.rootId, forest],
+  ]);
   function collect(nodes: CanvasForest) {
     for (const node of nodes) {
       data.set(node.data.id, node.data);
+      previousChildren.set(node.data.id, node.children);
       collect(node.children);
     }
   }
@@ -136,6 +139,12 @@ export function writeScene(
       throw new Error('Shared node kinds are immutable');
   }
   function project(parent: string): CanvasForest {
+    return keepNewerKinds(
+      previousChildren.get(parent) ?? [],
+      projectKnown(parent)
+    );
+  }
+  function projectKnown(parent: string): CanvasForest {
     return children(next, parent).map((id) => {
       const node = next.items[id]!,
         old = before.items[id],
@@ -206,4 +215,28 @@ export function writeScene(
     });
   }
   return project(next.rootId);
+}
+
+const isNewerKind = (node: CanvasForest[number]) =>
+  node.data.kind !== 'group' && !isShapeKind(node.data.kind);
+
+/** Nodes of kinds this client cannot read keep their registers, subtree and
+ * place after the sibling that preceded them; writing the projection alone
+ * would delete them. */
+function keepNewerKinds(previous: CanvasForest, known: CanvasForest) {
+  if (!previous.some(isNewerKind)) return known;
+
+  const result = [...known];
+  let insertAt = 0;
+  for (const node of previous) {
+    if (isNewerKind(node)) {
+      result.splice(insertAt, 0, node);
+      insertAt += 1;
+      continue;
+    }
+
+    const index = result.findIndex((item) => item.data.id === node.data.id);
+    if (index !== -1) insertAt = index + 1;
+  }
+  return result;
 }

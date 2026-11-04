@@ -547,8 +547,8 @@ email at all. A bot or agent reply posted for a person shares, as that person, t
 (chips or attachments) that the replying bot created for them while answering: those with a
 `created` activity row by that bot on the person's behalf since the person's latest message in
 the thread before the reply, or, for a bot message that starts its own thread (a poll card
-posted top-level), their latest message in the channel. Forms an agent creates through code
-mode (its SDK token) are attributed to its bot like native tool creations. Activity arrives asynchronously, so missing rows are re-checked
+posted top-level), their latest message in the channel. Forms and databases an agent creates
+through code mode (its SDK token) are attributed to its bot like native tool creations. Activity arrives asynchronously, so missing rows are re-checked
 after 5 and 30 seconds. Existing items it links, plain URLs, and bot posts with no person
 behind them share nothing. The bot never asks whether to share; it calls `ShareWithChannel` when asked to
 share an existing item. Private and confidential calendar events stay unshared, and a
@@ -1429,11 +1429,21 @@ produce one connection; leaving from either control ends the same call. Navigate
 away and return while connected to check that the call and its controls remain
 usable.
 
-The **Open chat** button in its own island at the far right of the bottom toolbar
-opens the chat beside the video. The panel has no header or divider above the
-composer. The media controls stay centered. On narrow screens it overlays the
-video. The same toolbar button, now **Close chat**, or Escape closes the panel
-and returns focus to the chat button; reopening preserves the draft and scroll
+The **Open chat** button at the bottom-right opens chat beside the video.
+**Copy Meeting Url** sits at the bottom-left on desktop and becomes icon-only in narrow panes.
+Active phone calls keep the channel header island and place Copy Meeting Url
+in a matching header island using the shared `CopyButton`. The media control bar
+fills the space beside the separate chat button, below the video and within side
+insets. Back keeps the call running. Controls and header islands stay visible;
+idle auto-hide is disabled. Phone calls hide the app's bottom navigation and
+channel Invite action; Invite returns when leaving the live call tab. Tap or click a participant to
+focus them and tap again to return to the grid; speakers have an accent border.
+The panel has a **Call chat** heading and
+spans the full call content height, including the media controls row. The controls
+stay centered under the video on wide panes. In narrow desktop panes, chat overlays
+the video. On phones, chat opens in the shared bottom sheet; drag the handle, tap the backdrop, or press Escape
+to dismiss it. On desktop, **Close chat** or Escape closes the panel. Closing
+returns focus to the chat button, and reopening preserves the draft and scroll
 position. The call continues while chat is open or closed.
 
 Signed-in participants in channel, quick, and scheduled calls use the same chat
@@ -1526,8 +1536,9 @@ cancellation, and focus restoration before sending invites.
 
 Inset tabs sit in the channel header:
 `Messages` / `Attachments` / `Calls` / `Participants`.
-`Ask Macro`, `Invite`, and `Call` actions remain in the header. On narrow desktop
-panes, the tabs collapse from text labels to icons. Standalone mobile channels
+`Ask Macro`, `Invite`, and `Call` actions remain in channel headers, with the
+live-phone-call exceptions described above. On narrow desktop panes, the tabs
+collapse from text labels to icons. Standalone mobile channels
 keep view selection in the title menu. In both a single channel and an adjacent
 channel split, the message composer stays fully visible at the bottom. The
 `Calls` tab lists
