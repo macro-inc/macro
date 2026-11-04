@@ -137,3 +137,38 @@ it('routes the installed global fetch to the native transport without recursing'
   expect(nativeFetch).toHaveBeenCalledTimes(2);
   expect(browser).toHaveBeenCalledTimes(1);
 });
+
+it('routes installed loopback and localhost-named URLs by service and origin', async () => {
+  const browser = vi
+    .fn<typeof fetch>()
+    .mockResolvedValue(new Response('browser'));
+  vi.stubGlobal('fetch', browser);
+  installPlatformFetch();
+  await fetch('/auth/user/legacy_user_permissions');
+  await fetch('https://images.example/image?localhost=true');
+  await fetch('/src/index.tsx');
+  expect(nativeFetch).toHaveBeenCalledTimes(2);
+  expect(browser).toHaveBeenCalledTimes(1);
+});
+
+it.each([
+  'asset://localhost/',
+  'http://asset.localhost/',
+  'https://asset.localhost/',
+])(
+  'keeps installed fetches of local files on the webview asset protocol %s',
+  async (endpoint) => {
+    vi.stubGlobal('__TAURI_INTERNALS__', {
+      convertFileSrc: (path: string, protocol: string) =>
+        `${endpoint.replace('asset', protocol)}${encodeURIComponent(path)}`,
+    });
+    const browser = vi
+      .fn<typeof fetch>()
+      .mockResolvedValue(new Response('browser'));
+    vi.stubGlobal('fetch', browser);
+    installPlatformFetch();
+    await fetch(convertFileSrc('/media/preview.jpg'));
+    expect(browser).toHaveBeenCalledTimes(1);
+    expect(nativeFetch).not.toHaveBeenCalled();
+  }
+);
