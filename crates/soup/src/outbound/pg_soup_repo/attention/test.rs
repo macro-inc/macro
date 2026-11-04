@@ -29,6 +29,7 @@ const LINK_1: &str = "55555555-aaaa-aaaa-aaaa-aaaaaaaaaaaa";
 const PROJECT_1: &str = "66666666-aaaa-aaaa-aaaa-aaaaaaaaaaaa";
 const COMPANY_1: &str = "88888888-0000-0000-0000-000000000001";
 const CONTACT_1: &str = "88888888-1111-0000-0000-000000000001";
+const CONTACT_3: &str = "88888888-1111-0000-0000-000000000003";
 const DISCUSSION_TYPES: &[EntityType] = &[
     EntityType::Initiative,
     EntityType::CrmCompany,
@@ -369,10 +370,12 @@ async fn discussions_on_visible_projects_and_crm_records_are_candidates(
     request.crm = true;
     let page = attention_soup_page(&pool, request).await?;
 
-    // Hidden company-2 and contact-2 and company-3 on another team stay out.
+    // Hidden company-2 with its contact-4, hidden contact-2 and company-3 on
+    // another team stay out; company-less contact-3 is in.
     assert_eq!(
         keys(&page),
         vec![
+            (EntityType::CrmContact, CONTACT_3.to_string()),
             (EntityType::Initiative, PROJECT_1.to_string()),
             (EntityType::CrmContact, CONTACT_1.to_string()),
             (EntityType::CrmCompany, COMPANY_1.to_string()),
