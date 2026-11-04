@@ -33,4 +33,11 @@ export default {
 
   // Picker sheet
   done: 'Done',
+
+  // Launch screen when the session check fails
+  sessionCheckNetwork: 'Unable to connect. Please check your network.',
+  sessionCheckServer: 'Macro isn’t responding. Please try again in a moment.',
+  sessionCheckUnexpected: 'Something went wrong while loading Macro.',
+  retry: 'Retry',
+  retrying: 'Retrying…',
 };

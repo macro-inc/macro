@@ -1,5 +1,6 @@
 import { DEFAULT_ROUTE } from '@app/constants/defaultRoute';
 import { useCheckoutCompletionListener } from '@app/features/paywall/use-checkout-completion-listener';
+import { t } from '@app/lib/i18n';
 import { prefetchChannelTarget } from '@channel/queries/prefetch-channel-target';
 import {
   getCurrentQueryString,
@@ -9,8 +10,10 @@ import { isNativeMobilePlatform } from '@core/mobile/isNativeMobilePlatform';
 import { hasLoginCookie } from '@core/util/cookies';
 import { fireAndForget } from '@core/util/fireAndForget';
 import { consumePostLoginRedirect } from '@core/util/postLoginRedirect';
-import { thrownResultErrorHasCode } from '@core/util/result';
+import { isResponseFreeNetworkError } from '@core/util/request-error';
+import { ThrownResultError, thrownResultErrorHasCode } from '@core/util/result';
 import { releaseNotificationCover } from '@macro/tauri/push-api';
+import { Telemetry } from '@macro-inc/observability';
 import {
   notificationLaunchPath,
   pendingNotificationNavigation,
@@ -24,8 +27,10 @@ import {
   Match,
   on,
   onMount,
+  Show,
   Switch,
 } from 'solid-js';
+import { match } from 'ts-pattern';
 
 function shouldShowNativeSessionVerificationFallback(
   userInfoQuery: ReturnType<typeof useUserInfoQuery>
@@ -39,12 +44,53 @@ function shouldShowNativeSessionVerificationFallback(
   );
 }
 
+type SessionCheckFailure = 'network' | 'server' | 'unexpected';
+
+/** What stopped the session check: the device's connection, Macro, or the app. */
+function sessionCheckFailure(error: unknown): SessionCheckFailure {
+  if (isResponseFreeNetworkError(error)) return 'network';
+  if (
+    error instanceof ThrownResultError &&
+    error.errors.length > 0 &&
+    error.errors.every(
+      ({ code }) => code === 'SERVER_ERROR' || code === 'HTTP_ERROR'
+    )
+  ) {
+    return 'server';
+  }
+  return 'unexpected';
+}
+
+function errorDetail(error: unknown): string {
+  if (error instanceof ThrownResultError) {
+    return error.errors
+      .map(({ code, message }) => `${code}: ${message}`)
+      .join('\n');
+  }
+  if (error instanceof Error) return `${error.name}: ${error.message}`;
+  return String(error);
+}
+
 function SessionVerificationFallback(props: {
+  error: unknown;
   onRetry: () => Promise<unknown>;
 }) {
   onMount(() =>
     fireAndForget(releaseNotificationCover(), 'notification-launch')
   );
+  // Report every failed check, including retries: when the app can't start,
+  // this screen is the only signal that it happened.
+  createEffect(
+    on(
+      () => props.error,
+      (error) =>
+        Telemetry.error(error, {
+          surface: 'session-verification',
+          failure: sessionCheckFailure(error),
+        })
+    )
+  );
+  const failure = () => sessionCheckFailure(props.error);
   const [retrying, setRetrying] = createSignal(false);
 
   const handleRetry = async () => {
@@ -58,14 +104,26 @@ function SessionVerificationFallback(props: {
 
   return (
     <div class="flex flex-col items-center justify-center gap-4 size-full text-ink-muted">
-      <p class="text-sm">Unable to connect. Please check your network.</p>
+      <p class="text-sm">
+        {match(failure())
+          .with('network', () => t('mobile.sessionCheckNetwork'))
+          .with('server', () => t('mobile.sessionCheckServer'))
+          .with('unexpected', () => t('mobile.sessionCheckUnexpected'))
+          .exhaustive()}
+      </p>
+      {/* Lets a screenshot of this screen say what failed. */}
+      <Show when={failure() === 'unexpected'}>
+        <p class="max-w-80 px-4 text-center text-xs text-ink-extra-muted whitespace-pre-line break-words select-text">
+          {errorDetail(props.error)}
+        </p>
+      </Show>
       <Button
         class="mt-2"
         disabled={retrying()}
         onClick={handleRetry}
         variant="secondary"
       >
-        {retrying() ? 'Retrying…' : 'Retry'}
+        {retrying() ? t('mobile.retrying') : t('mobile.retry')}
       </Button>
     </div>
   );
@@ -145,7 +203,10 @@ export function BasePathComponent() {
           unusable: the data branch above enters the local app first. Block only
           when native has a login marker but no locally verifiable identity. */}
       <Match when={shouldShowNativeSessionVerificationFallback(userInfoQuery)}>
-        <SessionVerificationFallback onRetry={() => userInfoQuery.refetch()} />
+        <SessionVerificationFallback
+          error={userInfoQuery.error}
+          onRetry={() => userInfoQuery.refetch()}
+        />
       </Match>
       {/* Backstop: the user-info query sets networkMode 'always', so it never
           pauses on navigator.onLine (which misreports offline during native
