@@ -1058,6 +1058,28 @@ and bot personas share one renderer; keep surface sizing in the caller.
 - Advertise Mail v5 capsules only for the current browser engine or a verified supported installed native build; OTA bundle version alone cannot establish native capability.
 - Bound native Mail capability discovery to 1.5 seconds and cache the legacy profile on failure or timeout so stalled IPC cannot block GraphQL transport; record the selected profile and bounded outcome in HTTP and WebSocket setup spans without error text.
 
+### Inline comment drafts
+
+Use `MessageLoadError` for compact discussion/thread failures; missing resources
+show an unavailable state without a retry action or composer.
+
+Keep collaborative drafts as cursor-based overlays outside the shared editor tree.
+Flush pending text, catch up missing server history before publication, then
+publish the mark from an isolated peer with `PeerCommentUpdate`,
+and post the message only after acknowledgement. Refused operations never enter
+the editor's WAL. Preserve input on failure. Cancelled publications retry mark
+cleanup from the user/document-scoped IndexedDB queue; preserve marks when a
+message request's outcome is uncertain. Keep failed cleanup entries queued without
+blocking later entries. Overlapping comments must retain each
+saved range through cancel, save, and collaboration updates.
+Comment controls preserve editor focus on both pointerdown and mousedown.
+The backend-free browser regression is
+`bunx playwright test --config src/features/block-md/comments/browser-test/playwright.config.ts`.
+It exercises selection, press, cancel, retry, and repeated posting in editor and
+commenter modes. The collaboration fixture includes concurrent remote edits and
+rejected updates; provider tests cover message metadata arriving on either side
+of posting, multi-paragraph anchors, saved ranges, and cancellation during posting.
+
 ## Performance
 
 ### Tracing
