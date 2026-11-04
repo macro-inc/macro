@@ -3,8 +3,17 @@ import { MobileDrawer } from '@components/app/mobile/MobileDrawer';
 import ChevronDownIcon from '@icon/system/regular/caret-down.svg';
 import SearchIcon from '@icon/system/regular/magnifying-glass.svg';
 import { Accordion } from '@kobalte/core/accordion';
-import { cn } from '@ui';
-import { createMemo, createSignal, For, Match, Show, Switch } from 'solid-js';
+import { Button, cn } from '@ui';
+import {
+  createMemo,
+  createSignal,
+  For,
+  Match,
+  onCleanup,
+  Show,
+  Switch,
+} from 'solid-js';
+import { createStore } from 'solid-js/store';
 import { type SearchFacetVM, useSearchFacets } from './search-facets';
 import { createSearchFiltersController } from './search-filters-state';
 
@@ -34,8 +43,17 @@ function SingleFacetContent(props: { facet: SingleFacet }) {
   );
 }
 
-function MultiFacetContent(props: { facet: MultiFacet }) {
-  const [query, setQuery] = createSignal('');
+function MultiFacetContent(props: {
+  facet: MultiFacet;
+  query?: string;
+  onQueryChange?: (query: string) => void;
+}) {
+  const [localQuery, setLocalQuery] = createSignal('');
+  const query = () => props.query ?? localQuery();
+  onCleanup(() => {
+    props.onQueryChange?.('');
+    props.facet.onPickerClose?.();
+  });
 
   const filteredOptions = createMemo(() => {
     const q = query().toLowerCase();
@@ -89,14 +107,21 @@ function MultiFacetContent(props: { facet: MultiFacet }) {
         </div>
       </Show>
 
-      <Show when={props.facet.options().length > SEARCHABLE_OPTION_COUNT}>
+      <Show
+        when={
+          props.facet.action ||
+          props.facet.options().length > SEARCHABLE_OPTION_COUNT
+        }
+      >
         <div class="flex min-h-11 items-center gap-2 rounded-[20px] px-3 py-2 bg-ink/5 mb-1">
           <SearchIcon class="size-3.5 text-ink-muted shrink-0" />
           <input
             type="text"
             aria-label={props.facet.placeholder}
             value={query()}
-            onInput={(e) => setQuery(e.currentTarget.value)}
+            onInput={(e) =>
+              (props.onQueryChange ?? setLocalQuery)(e.currentTarget.value)
+            }
             placeholder={props.facet.placeholder}
             class="min-w-0 flex-1 bg-transparent text-base outline-none placeholder:text-ink-placeholder"
           />
@@ -145,11 +170,31 @@ function MultiFacetContent(props: { facet: MultiFacet }) {
           <div class="px-4 py-2 text-sm text-ink-muted">No results</div>
         </Show>
       </div>
+      <Show when={props.facet.action?.()}>
+        {(action) => (
+          <Button
+            variant="ghost"
+            size="sm"
+            fullWidth
+            class="justify-start"
+            onPointerDown={(event) => event.preventDefault()}
+            onMouseDown={(event) => event.preventDefault()}
+            onClick={action().onSelect}
+          >
+            {action().label}
+          </Button>
+        )}
+      </Show>
+      {props.facet.footer?.()}
     </>
   );
 }
 
-function FacetSection(props: { facet: SearchFacetVM }) {
+function FacetSection(props: {
+  facet: SearchFacetVM;
+  query?: string;
+  onQueryChange?: (query: string) => void;
+}) {
   return (
     <MobileDrawer.Section
       as={Accordion.Item}
@@ -189,7 +234,13 @@ function FacetSection(props: { facet: SearchFacetVM }) {
             {(facet) => <SingleFacetContent facet={facet()} />}
           </Match>
           <Match when={props.facet.kind === 'multi' && props.facet}>
-            {(facet) => <MultiFacetContent facet={facet()} />}
+            {(facet) => (
+              <MultiFacetContent
+                facet={facet()}
+                query={props.query}
+                onQueryChange={props.onQueryChange}
+              />
+            )}
           </Match>
         </Switch>
       </Accordion.Content>
@@ -208,6 +259,7 @@ function FacetSection(props: { facet: SearchFacetVM }) {
 export const MobileSearchFilterDrawer = (props: { class?: string }) => {
   const controller = createSearchFiltersController();
   const facets = useSearchFacets(controller);
+  const [queries, setQueries] = createStore<Record<string, string>>({});
 
   const activeCount = createMemo(
     () => facets().filter((facet) => !facet.isDefault()).length
@@ -223,9 +275,35 @@ export const MobileSearchFilterDrawer = (props: { class?: string }) => {
       label="Search filters"
       activeCount={activeCount()}
       onClear={resetAll}
+      onOpenChange={(open) => {
+        if (!open) {
+          for (const facet of facets()) {
+            if (facet.kind === 'multi' && facet.onPickerClose) {
+              setQueries(facet.id, '');
+              facet.onPickerClose();
+            }
+          }
+        }
+      }}
     >
       <Accordion multiple collapsible defaultValue={['type']}>
-        <For each={facets()}>{(facet) => <FacetSection facet={facet} />}</For>
+        <For each={facets()}>
+          {(facet) => (
+            <FacetSection
+              facet={facet}
+              query={
+                facet.kind === 'multi' && facet.onPickerClose
+                  ? (queries[facet.id] ?? '')
+                  : undefined
+              }
+              onQueryChange={
+                facet.kind === 'multi' && facet.onPickerClose
+                  ? (query) => setQueries(facet.id, query)
+                  : undefined
+              }
+            />
+          )}
+        </For>
       </Accordion>
     </MobileFilterDrawer>
   );

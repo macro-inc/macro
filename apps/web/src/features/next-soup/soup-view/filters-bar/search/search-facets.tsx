@@ -1,4 +1,5 @@
 import { useCalendarSearchUiFlag } from '@app/features/calendar/hooks/use-calendar-ui-flag';
+import { NO_ASSIGNEE } from '@app/features/next-soup/filters';
 import type {
   CallStatus,
   PropertyFilter,
@@ -16,8 +17,12 @@ import {
   TASK_PRIORITY_OPTIONS,
   TASK_STATUS_OPTIONS,
 } from '../../../core/search-options';
+import { AssigneeDiscoveryStatus, useAssigneePicker } from '../assignee-picker';
 import { useInboxPicker } from '../inbox-picker';
-import type { SearchableOption } from '../searchable-multi-select';
+import type {
+  SearchableOption,
+  SearchableSelectAction,
+} from '../searchable-multi-select';
 import { useTagOptions } from '../tag-filter';
 import type { TagFilter } from '../tag-filter-state';
 import type {
@@ -134,6 +139,9 @@ export type SearchFacetVM = FacetBase &
         preserveOrder?: boolean;
         onOnly?: (id: string) => void;
         mode?: FacetModeVM;
+        action?: Accessor<SearchableSelectAction>;
+        footer?: () => JSX.Element;
+        onPickerClose?: () => void;
       }
   );
 
@@ -260,6 +268,10 @@ export function useSearchFacets(
 ): Accessor<SearchFacetVM[]> {
   const channelOptions = useChannelPicker();
   const personOptions = usePersonPicker();
+  const assigneePicker = useAssigneePicker(
+    controller.taskAssignees,
+    () => controller.type() === 'task'
+  );
   const inboxPicker = useInboxPicker({
     selectedIds: controller.emailInbox,
     setSelectedIds: controller.setEmailInbox,
@@ -432,15 +444,21 @@ export function useSearchFacets(
     onChange: controller.setTaskPriority,
   });
 
-  const taskAssignee = multiFacet({
-    id: 'task-assignee',
-    label: 'Assignee',
-    neutralLabel: 'Anyone',
-    placeholder: 'Search assignees...',
-    options: personOptions,
-    activeIds: controller.taskAssignees,
-    onChange: controller.setTaskAssignees,
-  });
+  const taskAssignee: SearchFacetVM = {
+    ...multiFacet({
+      id: 'task-assignee',
+      label: 'Assignee',
+      neutralLabel: 'Anyone',
+      placeholder: 'Search assignees...',
+      options: () =>
+        assigneePicker.options().filter((option) => option.id !== NO_ASSIGNEE),
+      activeIds: controller.taskAssignees,
+      onChange: controller.setTaskAssignees,
+    }),
+    action: assigneePicker.action,
+    footer: () => <AssigneeDiscoveryStatus discovery={assigneePicker} />,
+    onPickerClose: () => assigneePicker.setDiscovering(false),
+  };
 
   const taskCreatedBy = multiFacet({
     id: 'task-created-by',

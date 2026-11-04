@@ -8,6 +8,7 @@ import {
   createSignal,
   For,
   Match,
+  onCleanup,
   Show,
   Switch,
 } from 'solid-js';
@@ -123,6 +124,7 @@ const MultiValueSegment = (props: {
 }) => {
   const panel = useSplitPanel();
   const [open, setOpen] = createSignal(false);
+  onCleanup(() => props.facet.onPickerClose?.());
 
   return (
     <SearchableMultiSelect
@@ -133,11 +135,14 @@ const MultiValueSegment = (props: {
       onOnly={props.facet.onOnly}
       placeholder={props.facet.placeholder}
       preserveOrder={props.facet.preserveOrder}
+      action={props.facet.action?.()}
+      footer={props.facet.footer?.()}
       placement="bottom-start"
       open={open}
       onOpenChange={(v) => {
         setOpen(v);
         if (!v) {
+          props.facet.onPickerClose?.();
           queueMicrotask(() =>
             props.onPickerClose
               ? props.onPickerClose()
