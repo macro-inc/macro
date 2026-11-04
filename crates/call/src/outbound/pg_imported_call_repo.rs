@@ -117,11 +117,11 @@ impl ImportedCallRepository for PgImportedCallRepository {
             .execute(tx.as_mut()).await?;
         let participants = serde_json::to_value(&call.participants)?;
         sqlx::query!(
-            r#"INSERT INTO call_entity_participants (call_id, id, display_name, email, phone)
-            SELECT $1, id, "displayName", email, phone FROM jsonb_to_recordset($2::jsonb)
-                AS p(id uuid, "displayName" text, email text, phone text)
-            ON CONFLICT (call_id, id) DO UPDATE SET display_name = EXCLUDED.display_name,
-                email = EXCLUDED.email, phone = EXCLUDED.phone"#,
+            r#"INSERT INTO call_entity_participants (call_id, id, user_id, display_name, email, phone)
+            SELECT $1, id, "userId", "displayName", email, phone FROM jsonb_to_recordset($2::jsonb)
+                AS p(id uuid, "userId" text, "displayName" text, email text, phone text)
+            ON CONFLICT (call_id, id) DO UPDATE SET user_id = EXCLUDED.user_id,
+                display_name = EXCLUDED.display_name, email = EXCLUDED.email, phone = EXCLUDED.phone"#,
             id,
             participants
         )

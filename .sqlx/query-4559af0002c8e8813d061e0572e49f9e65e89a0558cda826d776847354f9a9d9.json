@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "\n        SELECT LOWER(email) AS email, phone\n        FROM call_entity_participants\n        WHERE call_id = $1 AND (email IS NOT NULL OR phone IS NOT NULL)\n        ORDER BY id\n        ",
+  "query": "\n        SELECT LOWER(email) AS email, phone\n        FROM call_entity_participants\n        WHERE call_id = $1 AND user_id IS NULL AND (email IS NOT NULL OR phone IS NOT NULL)\n        ORDER BY id\n        ",
   "describe": {
     "columns": [
       {
@@ -24,5 +24,5 @@
       true
     ]
   },
-  "hash": "c7b1852a0132a9ee11eec0215e1c412a7ae7fe081e328fb494d6f0d7da25f02f"
+  "hash": "4559af0002c8e8813d061e0572e49f9e65e89a0558cda826d776847354f9a9d9"
 }

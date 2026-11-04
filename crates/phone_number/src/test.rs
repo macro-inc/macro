@@ -27,3 +27,10 @@ fn numbers_without_a_country_code_are_rejected() {
         assert_eq!(PhoneNumber::parse(text), None, "{text}");
     }
 }
+
+#[test]
+fn numbers_without_a_known_grouping_read_as_stored() {
+    let readable = |text: &str| PhoneNumber::parse(text).unwrap().readable();
+    assert_eq!(readable("+1555010"), "+1555010");
+    assert_eq!(readable("+4420555"), "+4420555");
+}

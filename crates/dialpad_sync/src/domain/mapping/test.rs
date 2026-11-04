@@ -129,7 +129,12 @@ fn a_call_is_rebuilt_from_all_its_events_in_any_order() {
         caller.email, None,
         "Dialpad's empty email is not an address"
     );
-    assert!(rep.user_id.is_none() && caller.user_id.is_none());
+    assert_eq!(
+        rep.user_id.as_ref(),
+        Some(&connection().user_id),
+        "the rep is the connected Macro user"
+    );
+    assert!(caller.user_id.is_none());
 
     let transcript = call.transcript.unwrap();
     let lines: Vec<(&str, Option<i64>)> = transcript

@@ -3964,6 +3964,7 @@ dependencies = [
  "models_permissions",
  "notification",
  "pgvector",
+ "phone_number",
  "rate_limit",
  "rootcause",
  "schemars 1.2.1",

@@ -1976,7 +1976,10 @@ impl CallRepository for PgCallRepo {
         }
 
         let mut conn = self.pool.acquire().await?;
-        guests_by_call.extend(imported::imported_guests(&mut conn, &imported_ids).await?);
+        for (call_id, people) in imported::imported_people(&mut conn, &imported_ids).await? {
+            participants_by_call.insert(call_id, people.participants);
+            guests_by_call.insert(call_id, people.guests);
+        }
         let mut sources = imported::imported_sources(&mut conn, &imported_ids).await?;
         drop(conn);
 

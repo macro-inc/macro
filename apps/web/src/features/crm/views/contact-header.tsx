@@ -2,6 +2,7 @@ import { ListSkeleton } from '@app/components/view-shell/ListSkeleton';
 import { EntityIcon } from '@core/component/EntityIcon';
 import { InlineTitleEditor } from '@core/component/InlineTitleEditor';
 import { isMobile } from '@core/mobile/isMobile';
+import { readablePhone } from '@core/util/phone';
 import { formatDateAndTime, formatRelativeTimestamp } from '@entity';
 import ContactIcon from '@icon/system/regular/address-book.svg';
 import ClockIcon from '@icon/system/regular/clock.svg';
@@ -74,28 +75,29 @@ function CompanyPill(props: {
  */
 function PhonePill(props: { phone: string }) {
   const href = () => `tel:${props.phone}`;
+  const number = () => readablePhone(props.phone);
   return (
     <Show
       when={!isMobile()}
       fallback={
         <a
           href={href()}
-          aria-label={`Call ${props.phone}`}
+          aria-label={`Call ${number()}`}
           class={badgeTriggerClasses({ variant: 'outline', size: 'sm' })}
         >
           <PhoneIcon class="size-3" />
-          {props.phone}
+          {number()}
         </a>
       }
     >
       <span class="inline-flex items-center gap-1">
         <Badge variant="outline" size="sm">
           <PhoneIcon class="size-3" />
-          {props.phone}
+          {number()}
         </Badge>
         <a
           href={href()}
-          aria-label={`Call ${props.phone}`}
+          aria-label={`Call ${number()}`}
           class={badgeTriggerClasses({ variant: 'outline', size: 'sm' })}
         >
           Call

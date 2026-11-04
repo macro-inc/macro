@@ -225,3 +225,66 @@ async fn an_imported_call_s_people_are_its_owner_and_participants(
     );
     Ok(())
 }
+
+#[sqlx::test(
+    migrator = "MACRO_DB_MIGRATIONS",
+    fixtures(path = "../../../../fixtures", scripts("import_users"))
+)]
+async fn an_attendee_with_an_account_is_a_participant_not_a_guest(
+    pool: Pool<Postgres>,
+) -> anyhow::Result<()> {
+    let mut call = granola_meeting("import-a");
+    call.participants.push(CallParticipant {
+        id: macro_uuid::generate_uuid_v7(),
+        user_id: Some(user("import-a")),
+        display_name: Some("Sam Rep".into()),
+        email: Some("sam@example.com".into()),
+        phone: Some("+1555011".into()),
+        external_id: None,
+        attendance: vec![],
+    });
+    if let Some(transcript) = call.transcript.as_mut() {
+        transcript.segments[1].speaker_label = Some("sam rep".into());
+    }
+    let call_id = PgImportedCallRepository::new(pool.clone())
+        .upsert(call)
+        .await?;
+    let repo = PgCallRepo::new(pool);
+    let owner = user("import-a").to_string();
+
+    let record = repo
+        .get_call_record_by_call_id(&call_id)
+        .await?
+        .expect("imported call should be readable");
+    let participants: Vec<&str> = record
+        .participants
+        .iter()
+        .map(|p| p.user_id.as_str())
+        .collect();
+    assert_eq!(participants, vec![owner.as_str()]);
+    let guests: Vec<&str> = record
+        .guests
+        .iter()
+        .map(|g| g.display_name.as_str())
+        .collect();
+    assert_eq!(guests, vec!["Ada"]);
+    assert_eq!(
+        record.transcript[1].speaker_id, owner,
+        "their label names their account"
+    );
+
+    let listed = repo
+        .get_call_records_by_user(user("import-a").copied(), 10, &None, LATEST_FIRST)
+        .await?;
+    assert_eq!(listed[0].participants.len(), 1);
+    assert_eq!(listed[0].guests.len(), 1);
+
+    let people = repo.get_call_record_people(&call_id).await?;
+    let emails: Vec<Option<String>> = people.guests.into_iter().map(|g| g.email).collect();
+    assert_eq!(
+        emails,
+        vec![Some("ada@example.com".into())],
+        "only guests are matched to CRM records"
+    );
+    Ok(())
+}

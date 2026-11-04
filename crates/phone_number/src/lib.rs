@@ -47,6 +47,18 @@ impl PhoneNumber {
     pub fn as_str(&self) -> &str {
         &self.0
     }
+
+    /// The number for people to read. North American numbers are grouped as
+    /// `+1 NNN-NNN-NNNN`; others stay as stored, since their grouping varies
+    /// by country.
+    pub fn readable(&self) -> String {
+        match self.0.strip_prefix("+1") {
+            Some(digits) if digits.len() == 10 => {
+                format!("+1 {}-{}-{}", &digits[..3], &digits[3..6], &digits[6..])
+            }
+            _ => self.0.clone(),
+        }
+    }
 }
 
 impl fmt::Display for PhoneNumber {

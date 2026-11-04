@@ -81,9 +81,11 @@ pub fn imported_call(
 
     let target = details.target.clone().unwrap_or_default();
     let contact = details.contact.clone().unwrap_or_default();
+    // The subscription targets the connected user, so their side of the call
+    // is them in Macro.
     let user_participant = CallParticipant {
         id: macro_uuid::generate_uuid_v7(),
-        user_id: None,
+        user_id: Some(connection.user_id.clone()),
         display_name: non_empty(target.name.as_deref()),
         email: non_empty(target.email.as_deref()),
         phone: target
@@ -119,7 +121,7 @@ pub fn imported_call(
 
     let title = match (&caller_name, &caller_phone) {
         (Some(name), _) => format!("Call with {name}"),
-        (None, Some(phone)) => format!("Call with {phone}"),
+        (None, Some(phone)) => format!("Call with {}", phone.readable()),
         (None, None) => "Dialpad call".to_owned(),
     };
     let transcript = transcript.and_then(map_transcript);
