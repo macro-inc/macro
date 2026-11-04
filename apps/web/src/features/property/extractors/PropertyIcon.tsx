@@ -1,9 +1,11 @@
 import { UserIcon } from '@core/component/UserIcon';
 import ProjectIcon from '@icon/system/regular/cube.svg';
+import SourceIcon from '@icon/system/regular/link.svg';
 import CalendarIcon from '@phosphor/calendar-blank.svg';
 import { PropertyValueIcon } from '@property/component/propertyValue/PropertyValueIcon';
 import { cn } from '@ui';
 import { type JSX, Show } from 'solid-js';
+import { SYSTEM_PROPERTY_IDS } from '../identifiers';
 import type { Property } from '../types';
 import { getEntityValues, getSelectValues } from '../utils';
 
@@ -16,6 +18,7 @@ type Props = {
  * Renders the icon associated with a property's value:
  * - SELECT_*: option icon for the first value (status/priority icons).
  * - ENTITY+USER: avatar for the first user.
+ * - Source: link icon.
  * - ENTITY+INITIATIVE: project icon when the property has a value.
  * - DATE: calendar icon.
  * - everything else: null (extractor stays uninvolved).
@@ -23,6 +26,9 @@ type Props = {
  * Uses compact defaults; callers can override sizing and spacing.
  */
 export function PropertyIcon(props: Props): JSX.Element {
+  if (props.property.propertyDefinitionId === SYSTEM_PROPERTY_IDS.SOURCE) {
+    return <SourceIcon class={cn('size-3 shrink-0', props.class)} />;
+  }
   if (props.property.valueType === 'DATE') {
     return <CalendarIcon class={cn('size-3 shrink-0', props.class)} />;
   }

@@ -1,4 +1,6 @@
 import { usePending } from '@app/observability/flow';
+import { useGlobalNotificationSource } from '@components/app/GlobalAppState';
+import { markRowNotificationsSeenOnOpen } from '@notifications/mark-row-seen';
 import { QueuedSendStatus } from '../../email-compose/queued-send-status';
 import '@entity/composed/ListEntity.css';
 import {
@@ -6,6 +8,7 @@ import {
   type ListKey,
   useListInteractions,
 } from '@app/components/list';
+import { StickyVirtualizer } from '@app/components/list/StickyVirtualizer';
 import { CommandState } from '@app/features/command/state';
 import {
   resolveEntityActionViewContext,
@@ -20,11 +23,13 @@ import {
   viewedProjectIdFromContent,
 } from '@app/features/soup';
 import { DEBUG_SETTING_KEYS, useDebugSetting } from '@app/lib/debugSettings';
+import { t } from '@app/lib/i18n';
 import { makePersistedState } from '@app/lib/persistence';
 import { PullToRefresh } from '@components/app/mobile/PullToRefresh';
 import { SwipableRowProvider } from '@components/app/mobile/SwipableRow';
 import { useSplitPanelOrThrow } from '@components/app/split-layout/layoutUtils';
 import { createSplitAutofocus } from '@components/app/split-layout/utils/createSplitAutofocus';
+import { toast } from '@core/component/Toast/Toast';
 import { TOKENS } from '@core/hotkey/tokens';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import { createScrollTopFade } from '@core/util/createScrollTopFade';
@@ -41,6 +46,7 @@ import BellIcon from '@icon/system/regular/bell-simple.svg';
 import CaretDownIcon from '@icon/system/regular/caret-down.svg';
 import CheckIcon from '@icon/system/regular/check.svg';
 import SpinnerIcon from '@icon/system/regular/spinner.svg';
+import { useRestoreEmailFolderMutation } from '@queries/email/folders';
 import { createElementSize } from '@solid-primitives/resize-observer';
 import { Button, cn } from '@ui';
 import { tourTarget } from '@ui/components/Tour';
@@ -58,13 +64,14 @@ import {
   Switch,
 } from 'solid-js';
 import type { CacheSnapshot } from 'virtua';
-import { Virtualizer, type VirtualizerHandle } from 'virtua/solid';
+import type { VirtualizerHandle } from 'virtua/solid';
 import { canMarkNotDone } from '../../next-soup/actions/can-mark-not-done';
 import {
   persistSoupNavigationTouchHighlight,
   soupNavigationTouchHighlight,
 } from '../../next-soup/soup-view/soup-navigation-touch-highlight';
 import { openEntityInSplitFromUnifiedList } from '../../next-soup/utils';
+import { isExcludedEmailFolder } from '../constants';
 import {
   type EmailListActivationMetadata,
   useEmailView,
@@ -74,6 +81,7 @@ import {
   DEFAULT_EMAIL_LIST_STATE,
   type EmailListStateSnapshot,
 } from '../persistence';
+import { createEmailFolderRestore } from '../primitives/folder-restore';
 import { createEmailRowActionState } from '../primitives/row-action-state';
 import { createScrollAnchor } from '../primitives/scroll-anchor';
 import type { EmailDataSourceItem } from '../queries/use-email-query';
@@ -118,6 +126,9 @@ const savedLayouts = new Map<
 >();
 const MAX_SAVED_LAYOUTS = 20;
 
+const isGroupHeaderRow = (row: EmailDataSourceItem) =>
+  row.kind === 'group-header';
+
 export function EmailList(props: EmailListProps) {
   const {
     state,
@@ -130,6 +141,7 @@ export function EmailList(props: EmailListProps) {
   } = useEmailView();
   usePending('email.list.items', () => source.isLoading());
   const panel = useSplitPanelOrThrow();
+  const notificationSource = useGlobalNotificationSource();
 
   function openEntity(
     entity: EntityData,
@@ -138,6 +150,7 @@ export function EmailList(props: EmailListProps) {
       openInNewSplit?: boolean;
     } = {}
   ) {
+    markRowNotificationsSeenOnOpen(entity, notificationSource);
     const finishTouchHighlight = options.event
       ? persistSoupNavigationTouchHighlight(options.event)
       : undefined;
@@ -200,8 +213,12 @@ export function EmailList(props: EmailListProps) {
       activeTab: state.tab,
     });
 
+  // Focus's day headers stay pinned while its chronological list scrolls.
+  const pinsDateHeaders = () =>
+    state.tab === 'focus' && state.focusSort === 'recent';
   const [viewport, setViewport] = createSignal<HTMLDivElement>();
-  createScrollTopFade(viewport);
+  // The top-edge fade would wash out a pinned header.
+  createScrollTopFade(() => (pinsDateHeaders() ? undefined : viewport()));
   const [topSpacer, setTopSpacer] = createSignal<HTMLDivElement>();
   const topSpacerSize = createElementSize(topSpacer);
   // The virtualizer's item offsets exclude this; its scroll offset includes it.
@@ -409,6 +426,33 @@ export function EmailList(props: EmailListProps) {
   }
 
   const rowActionState = createEmailRowActionState();
+  const restoreFolder = useRestoreEmailFolderMutation();
+  const restoreLabel = () =>
+    state.tab === 'spam'
+      ? t('entityActions.notSpam')
+      : t('entityActions.restoreEmail');
+  const restoreFolderThreads = createEmailFolderRestore({
+    tab: () => state.tab,
+    isPending: () => restoreFolder.isPending,
+    selection: list.selection.requestedKeys,
+    clearSelection: listInteractions.selection.clear,
+    restore: (input) => restoreFolder.mutateAsync(input),
+    onRestored: () =>
+      toast.success(t('entityActions.toastEmailRestoreRequested')),
+    onFailed: (count) =>
+      toast.failure(t('entityActions.toastEmailRestoreFailed', { count })),
+  });
+  function restoreThreads(
+    entities: EntityData[],
+    action: { clearSelection?: boolean } = {}
+  ) {
+    return restoreFolderThreads(
+      entities
+        .filter((entity) => entity.type === 'email')
+        .map((entity) => entity.id),
+      action
+    );
+  }
 
   async function runRowAction(
     row: EmailActionRow,
@@ -440,7 +484,23 @@ export function EmailList(props: EmailListProps) {
         archived={archived()}
         canArchive={entityActionViewContext().supportsMarkDone}
         canUnarchive={canMarkNotDone(props.row.entity)}
-        pending={rowActionState.isPending(props.row.rowId)}
+        pending={
+          rowActionState.isPending(props.row.rowId) || restoreFolder.isPending
+        }
+        restore={
+          isExcludedEmailFolder(state.tab)
+            ? {
+                label: restoreLabel(),
+                run: () =>
+                  fireAndForget(
+                    restoreThreads([props.row.entity], {
+                      clearSelection: false,
+                    }),
+                    'email-view'
+                  ),
+              }
+            : undefined
+        }
         onFocus={() => focusActionRow(props.row)}
         onArchive={() =>
           fireAndForget(
@@ -492,7 +552,13 @@ export function EmailList(props: EmailListProps) {
     const top = listStartMargin() + handle.getItemOffset(focused);
     const bottom = top + handle.getItemSize(focused);
     const viewTop = handle.scrollOffset;
-    if (top < viewTop || bottom > viewTop + handle.viewportSize) {
+    // A pinned header can cover a row within these bounds; the sticky handle
+    // allows for it and leaves a row that is really in view alone.
+    if (
+      pinsDateHeaders() ||
+      top < viewTop ||
+      bottom > viewTop + handle.viewportSize
+    ) {
       handle.scrollToIndex(focused, { align: 'nearest' });
     }
   }
@@ -724,12 +790,16 @@ export function EmailList(props: EmailListProps) {
                   {/* A row subtree that suspends (the project crumb's preview query, say)
                       detaches only itself, not the list and its scroll position. */}
                   <Suspense>
-                    <Virtualizer
+                    <StickyVirtualizer
                       ref={registerVirtualizer}
                       cache={initialCache}
                       data={rows()}
                       scrollRef={viewport()}
                       startMargin={listStartMargin()}
+                      isSticky={
+                        pinsDateHeaders() ? isGroupHeaderRow : undefined
+                      }
+                      stickyInset={listStartMargin()}
                       bufferSize={500}
                       itemSize={44}
                       keepMounted={
@@ -867,6 +937,20 @@ export function EmailList(props: EmailListProps) {
                                           />
                                         </Show>
                                       }
+                                      touchActions={
+                                        <Show
+                                          when={isExcludedEmailFolder(
+                                            state.tab
+                                          )}
+                                        >
+                                          <RowActions
+                                            row={{
+                                              entity: entityRow().entity,
+                                              rowId: entityRow().id,
+                                            }}
+                                          />
+                                        </Show>
+                                      }
                                       checked={list.selection.isSelected(
                                         entityRow().id
                                       )}
@@ -980,7 +1064,7 @@ export function EmailList(props: EmailListProps) {
                           </Match>
                         </Switch>
                       )}
-                    </Virtualizer>
+                    </StickyVirtualizer>
                   </Suspense>
                   <Show when={isTouchDevice()}>
                     <div
@@ -999,7 +1083,22 @@ export function EmailList(props: EmailListProps) {
             selected={selectedEntities()}
             onClear={listInteractions.selection.clear}
             analyticsSource="email_view_selection_toolbar"
-          />
+          >
+            <Show when={isExcludedEmailFolder(state.tab)}>
+              <Button
+                size="sm"
+                disabled={restoreFolder.isPending}
+                onClick={() =>
+                  fireAndForget(
+                    restoreThreads(selectedEntities()),
+                    'email-view'
+                  )
+                }
+              >
+                {restoreLabel()}
+              </Button>
+            </Show>
+          </EntitySelectionToolbar>
         </Show>
       </div>
     </MaybeSoupEntityActionDrawerManager>

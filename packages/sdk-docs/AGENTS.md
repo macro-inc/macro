@@ -3,8 +3,7 @@
 ## Start here
 
 - `src/render.ts`: the shared TypeDoc conversion and Markdown/HTML outputs.
-- `scripts/generate.ts`: reference generation, build-only mode and stale-output check.
-- `reference/`: checked-in TypeDoc Markdown; regenerate when SDK source changes.
+- `scripts/generate.ts`: renders Markdown and HTML into ignored `dist/docs/`.
 - `README.md`: local documentation preview commands.
 
 ## Scope
@@ -17,18 +16,17 @@
 ## Checks
 
 - `bun run type-check`
-- `bun run generate` updates the checked-in Markdown after SDK changes.
-- `bun run test` renders fresh build outputs, checks the reference without
-  rewriting it, and tests linked public contracts and stale-output detection.
+- `bun run test` renders fresh build outputs and tests linked public contracts.
 - `bun run docs:dev` serves the generated HTML for browser verification.
 
 ## Gotchas
 
-- `reference/` is generated and committed; `dist/docs/{markdown,html}` are
-  ignored build outputs. Edit the SDK source, not generated pages; retain links
-  to generated API request/response types. Never regenerate the reference before
-  checking it in CI, because that hides stale documentation.
-- Wrangler uses build-only mode so preview and deployment never rewrite `reference/`.
+- Nothing generated is committed: `dist/docs/{markdown,html}` are build
+  outputs. Edit the SDK source; retain links to generated API request/response
+  types.
+- `reference/` is an unused, no longer maintained copy awaiting deletion in its
+  own pull request (its 5,500 files exceed GitHub's pull request limits); do
+  not regenerate or read it.
 - TypeDoc and its Markdown plugin must use the same TypeDoc runtime instance.
   The workspace also contains other versions; preserve the peer resolution in
   `src/render.ts` and test actual generation after dependency changes.

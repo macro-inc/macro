@@ -556,6 +556,7 @@ use utoipa::OpenApi;
         crm::inbound::pipelines::list,
         crm::inbound::pipelines::read,
         crm::inbound::pipelines::table,
+        crm::inbound::pipelines::view_positions,
         crm::inbound::pipelines::rows,
         crm::inbound::pipelines::query_rows,
         crm::inbound::pipelines::apply_ops,

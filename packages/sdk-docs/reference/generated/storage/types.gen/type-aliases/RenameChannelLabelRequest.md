@@ -1,8 +1,8 @@
 # Type Alias: RenameChannelLabelRequest
 
-> **RenameChannelLabelRequest** = \{ `name`: `string`; `rule?`: `null` \| [`ChannelLabelRule`](ChannelLabelRule.md); `targetScope?`: `null` \| [`ChannelLabelScopeSelection`](ChannelLabelScopeSelection.md); \}
+> **RenameChannelLabelRequest** = \{ `name`: `string`; `rule?`: `null` \| [`ChannelLabelRule`](ChannelLabelRule.md); \}
 
-Request body for updating a label's name, smart rule, or sharing scope.
+Request body for renaming a label.
 
 ## Properties
 
@@ -10,4 +10,3 @@ Request body for updating a label's name, smart rule, or sharing scope.
 | ------ | ------ | ------ |
 | <a id="property-name"></a> `name` | `string` | New display name. |
 | <a id="property-rule"></a> `rule?` | `null` \| [`ChannelLabelRule`](ChannelLabelRule.md) | - |
-| <a id="property-targetscope"></a> `targetScope?` | `null` \| [`ChannelLabelScopeSelection`](ChannelLabelScopeSelection.md) | - |

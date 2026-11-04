@@ -64,6 +64,7 @@ impl ConnectorCapabilities for Directory {
 
 struct Store {
     enabled: Option<bool>,
+    provider: crate::domain::models::ConnectionProvider,
     overlaid: bool,
     seen: Mutex<Vec<String>>,
 }
@@ -120,7 +121,7 @@ impl ConnectionStore for Store {
             server_name: "Linear".into(),
             account_id: "account".into(),
             enabled,
-            provider: crate::domain::models::ConnectionProvider::Pipedream,
+            provider: self.provider,
         }))
     }
 }
@@ -138,6 +139,7 @@ fn service(
         })),
         Arc::new(Store {
             enabled,
+            provider: crate::domain::models::ConnectionProvider::Pipedream,
             overlaid: false,
             seen: Mutex::default(),
         }),
@@ -271,6 +273,7 @@ async fn overlaid_apps_report_their_native_connection_not_pipedream() {
             })),
             Arc::new(Store {
                 enabled: Some(true),
+                provider: crate::domain::models::ConnectionProvider::Pipedream,
                 overlaid: true,
                 seen: Mutex::default(),
             }),
@@ -282,6 +285,31 @@ async fn overlaid_apps_report_their_native_connection_not_pipedream() {
             panic!("inspection expected")
         };
         assert_eq!(connected, native.is_some());
-        assert!(svc.connections.seen.lock().unwrap().is_empty());
+    }
+}
+
+#[tokio::test]
+async fn a_connect_grant_outranks_an_overlay() {
+    for enabled in [true, false] {
+        let svc = ConnectorDiscovery::new(
+            Some(Arc::new(Directory {
+                fail_tools: false,
+                tool_count: 1,
+                seen: Mutex::default(),
+            })),
+            Arc::new(Store {
+                enabled: Some(enabled),
+                provider: crate::domain::models::ConnectionProvider::Connect,
+                overlaid: true,
+                seen: Mutex::default(),
+            }),
+            Arc::new(Native(Some("Linear".to_owned()))),
+        );
+        let DiscoveryResult::Inspect { connected, .. } =
+            svc.discover(&user(), &inspect("linear")).await.unwrap()
+        else {
+            panic!("inspection expected")
+        };
+        assert_eq!(connected, enabled);
     }
 }

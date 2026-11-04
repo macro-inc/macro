@@ -10256,6 +10256,61 @@ export const trashCrmPipelineBody = zod
   .describe('Trash\/restore input.');
 
 /**
+ * @summary Read saved board positions through pipeline access.
+ */
+export const getCrmPipelineViewPositionsParams = zod.object({
+  id: zod.uuid(),
+  view: zod.uuid(),
+});
+
+export const getCrmPipelineViewPositionsResponseItem = zod
+  .object({
+    lane: zod
+      .union([
+        zod
+          .object({
+            id: zod
+              .uuid()
+              .describe(
+                "The cards holding this option of the board's select column."
+              ),
+            kind: zod.enum(['option']),
+          })
+          .describe(
+            "The cards holding this option of the board's select column."
+          ),
+        zod
+          .object({
+            id: zod
+              .string()
+              .describe(
+                "The cards naming this person in the board's person column."
+              ),
+            kind: zod.enum(['user']),
+          })
+          .describe(
+            "The cards naming this person in the board's person column."
+          ),
+        zod
+          .object({
+            kind: zod.enum(['none']),
+          })
+          .describe('The cards whose grouping cell is empty.'),
+      ])
+      .describe(
+        "A lane of a board, named by what its cards' grouping cells hold: one\noption of a select, one person, or nothing."
+      ),
+    position: zod.string().describe("The card's key in that lane."),
+    row: zod.uuid().describe("The card's row."),
+  })
+  .describe(
+    'Where one card sits on a board: its lane, and its fractional key there.\nA card whose row has since moved to another lane has no place until it is\nmoved again.'
+  );
+export const getCrmPipelineViewPositionsResponse = zod.array(
+  getCrmPipelineViewPositionsResponseItem
+);
+
+/**
  * @summary Read the caller's team CRM configuration. Any team member may read;
 teams without a settings row get the defaults.
  */

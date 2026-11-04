@@ -60,12 +60,12 @@ afterAll(async () => {
 	);
 });
 
-async function seed(verdict: Verdict) {
+async function seed(verdict: Verdict, instance = mf) {
 	const id = crypto.randomUUID();
 	verdicts.set(id, verdict);
 	const doc = new LoroDoc();
 	doc.getMap("root").set("title", id);
-	const response = await mf.dispatchFetch(
+	const response = await instance.dispatchFetch(
 		`http://localhost/document/${id}/initialize`,
 		{
 			method: "POST",
@@ -79,7 +79,11 @@ async function seed(verdict: Verdict) {
 	return id;
 }
 
-async function connect(id: string, access: "comment" | "edit") {
+async function connect(
+	id: string,
+	access: "view" | "comment" | "edit",
+	instance = mf,
+) {
 	const token = jwt.sign(
 		{
 			document_id: id,
@@ -89,7 +93,7 @@ async function connect(id: string, access: "comment" | "edit") {
 		},
 		"local",
 	);
-	const response = await mf.dispatchFetch(
+	const response = await instance.dispatchFetch(
 		`http://localhost/document/${id}/connect?token=${token}`,
 		{
 			headers: { Upgrade: "websocket" },
@@ -114,16 +118,18 @@ type Client = Awaited<ReturnType<typeof connect>>;
 async function send(
 	client: Client,
 	write: (doc: LoroDoc) => void,
+	commentOnly = false,
 ): Promise<boolean> {
 	const from = client.doc.oplogVersion();
 	write(client.doc);
 	client.doc.commit();
 	const id = crypto.randomUUID();
+	const update = { updates: [client.doc.export({ mode: "update", from })], id };
 	client.send(
-		FromPeer.fromPeerUpdate({
-			updates: [client.doc.export({ mode: "update", from })],
-			id,
-		}).encode(),
+		(commentOnly
+			? FromPeer.fromPeerCommentUpdate(update)
+			: FromPeer.fromPeerUpdate(update)
+		).encode(),
 	);
 	try {
 		for (;;) {
@@ -137,8 +143,8 @@ async function send(
 	}
 }
 
-async function stored(id: string) {
-	const response = await mf.dispatchFetch(
+async function stored(id: string, instance = mf) {
+	const response = await instance.dispatchFetch(
 		`http://localhost/document/${id}/raw`,
 		{
 			headers: { "x-internal-auth-key": "local" },
@@ -215,4 +221,70 @@ test("an editor update is stored without a check", async () => {
 
 	expect(checks).toEqual([]);
 	expect(await stored(id)).toEqual({ root: { title: id, body: "rewritten" } });
+});
+
+test.each(["comment", "edit"] as const)(
+	"staged comment publication validates %s access",
+	async (access) => {
+		const id = await seed("not_comment_only");
+		const client = await connect(id, access);
+		expect(
+			await send(
+				client,
+				(doc) => doc.getMap("root").set("body", "moved text"),
+				true,
+			),
+		).toBe(false);
+		expect(await stored(id)).toEqual({ root: { title: id } });
+		const accepted = await seed("comment_only");
+		const fresh = await connect(accepted, access);
+		expect(
+			await send(fresh, (doc) => doc.getMap("root").set("mark", "saved"), true),
+		).toBe(true);
+		expect(await stored(accepted)).toEqual({
+			root: { title: accepted, mark: "saved" },
+		});
+	},
+);
+
+test("staged publication grants no write access to viewers", async () => {
+	const id = await seed("comment_only");
+	const viewer = await connect(id, "view");
+	expect(
+		await send(viewer, (doc) => doc.getMap("root").set("mark", "saved"), true),
+	).toBe(false);
+	expect(await stored(id)).toEqual({ root: { title: id } });
+});
+
+// A missing deployment binding must never let commenters edit body content.
+test("missing lexical credentials leave commenter anchors local and editors writable", async () => {
+	const address = server.address();
+	if (!address || typeof address === "string")
+		throw new Error("Missing stand-in address");
+	const missingKey = await setupMiniflare({
+		lexicalServiceUrl: `http://127.0.0.1:${address.port}`,
+		lexicalServiceAuthKey: null,
+	});
+	try {
+		const id = await seed("comment_only", missingKey);
+		const commenter = await connect(id, "comment", missingKey);
+		expect(
+			await send(commenter, (doc) =>
+				doc.getMap("root").set("mark", "local-mark"),
+			),
+		).toBe(false);
+		expect(commenter.doc.toJSON()).toEqual({
+			root: { title: id, mark: "local-mark" },
+		});
+		expect(await stored(id, missingKey)).toEqual({ root: { title: id } });
+		const fresh = await connect(id, "edit", missingKey);
+		expect(fresh.doc.toJSON()).toEqual({ root: { title: id } });
+		expect(
+			await send(fresh, (doc) =>
+				doc.getMap("root").set("body", "editor change"),
+			),
+		).toBe(true);
+	} finally {
+		await missingKey.dispose();
+	}
 });

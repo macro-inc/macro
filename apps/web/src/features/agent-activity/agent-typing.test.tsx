@@ -126,6 +126,7 @@ function typing(phase: 'thinking' | 'writing' | 'working' | 'waiting') {
 function writing(text: string): FoldedMessage {
   return {
     agentSessionId: 'session',
+    key: '1:agent',
     turn: 1,
     author: { kind: 'agent' },
     requestId: null,

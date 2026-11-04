@@ -26,6 +26,7 @@ export function InitialInteractiveOnboardingModal() {
     isMobile() &&
     !isNativeMobilePlatform() &&
     userInfoQuery.data?.authenticated === true &&
+    !userInfoQuery.data.isAgent &&
     (userInfoQuery.data.tutorialComplete === false || onboardingStarted());
 
   createEffect(() => {
@@ -44,6 +45,7 @@ export function InitialInteractiveOnboardingModal() {
   createEffect(() => {
     const data = userInfoQuery.data;
     if (data?.authenticated !== true || data.tutorialComplete !== false) return;
+    if (data.isAgent) return;
     if (emailInitForUserId === data.id) return;
     emailInitForUserId = data.id;
 

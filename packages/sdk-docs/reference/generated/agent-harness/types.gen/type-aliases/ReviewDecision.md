@@ -1,6 +1,6 @@
 # Type Alias: ReviewDecision
 
-> **ReviewDecision** = \{ `action`: `"edit"`; `draft`: `unknown`; `item`: `string`; `revision`: `number`; \} \| \{ `action`: `"submit"`; `items`: `string`[]; `revision`: `number`; \} \| \{ `action`: `"dismiss"`; `items`: `string`[]; `revision`: `number`; \}
+> **ReviewDecision** = \{ `action`: `"edit"`; `draft`: \{\[`key`: `string`\]: `unknown`; \}; `item`: `string`; `revision`: `number`; \} \| \{ `action`: `"submit"`; `items`: `string`[]; `revision`: `number`; \} \| \{ `action`: `"dismiss"`; `items`: `string`[]; `revision`: `number`; \}
 
 One atomic user decision against the displayed revision.
 
@@ -8,12 +8,12 @@ One atomic user decision against the displayed revision.
 
 ### Type Literal
 
-\{ `action`: `"edit"`; `draft`: `unknown`; `item`: `string`; `revision`: `number`; \}
+\{ `action`: `"edit"`; `draft`: \{\[`key`: `string`\]: `unknown`; \}; `item`: `string`; `revision`: `number`; \}
 
 | Name | Type | Description |
 | ------ | ------ | ------ |
 | `action` | `"edit"` | - |
-| `draft` | `unknown` | Replacement action arguments. |
+| `draft` | \{\[`key`: `string`\]: `unknown`; \} | Replacement action arguments, keyed by the review's kind. |
 | `item` | `string` | Pending item to update. |
 | `revision` | `number` | Revision displayed by the caller. |
 

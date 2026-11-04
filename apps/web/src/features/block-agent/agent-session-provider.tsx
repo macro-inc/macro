@@ -81,6 +81,7 @@ export function AgentSessionProvider(
     return [
       {
         agentSessionId: sessionId() ?? props.blockId,
+        key: '0:user',
         turn: 0,
         author: { kind: 'user', userId: userId() ?? null },
         requestId: null,

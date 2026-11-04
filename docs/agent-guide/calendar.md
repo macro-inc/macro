@@ -459,6 +459,8 @@ call instead of creating duplicates. The invitation includes
 the call link in its description and, when no location was entered, its location.
 Event details show a plain icon row with a standard gray `Join Macro call` button
 and `Copy call link`, without an enclosing border or the full URL.
+Day-view chips, which show an event's location under its time on desktop and phone,
+leave out a location that is only the call link and keep a location typed beside it.
 Editing or rescheduling an owned event retains and updates its selected Macro call.
 Selecting `Macro call` on an owned editable event without one adds a call on save;
 choosing another option removes its generated Macro link from the invitation.

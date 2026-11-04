@@ -7115,6 +7115,48 @@
         }
       }
     },
+    "/crm/pipelines/{id}/views/{view}/positions": {
+      "get": {
+        "tags": ["crm::inbound::pipelines"],
+        "summary": "Read saved board positions through pipeline access.",
+        "operationId": "get_crm_pipeline_view_positions",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "view",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/CardPosition"
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/crm/settings": {
       "get": {
         "tags": ["crm::inbound::axum_router::team_settings"],

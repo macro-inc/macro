@@ -20,4 +20,4 @@ the label so clients can warn accurately before a delete.
 | <a id="property-rule"></a> `rule?` | `null` \| [`ChannelLabelRule`](ChannelLabelRule.md) | - |
 | <a id="property-sortorder"></a> `sortOrder` | `number` | Manual ordering value within the scope; lower sorts first. |
 | <a id="property-teamid"></a> `teamId?` | `string` \| `null` | Owning team, or `None` for account-private labels. |
-| <a id="property-updatedat"></a> `updatedAt` | `string` | When the label's name, rule, scope, or order last changed. |
+| <a id="property-updatedat"></a> `updatedAt` | `string` | When the label was last renamed or reordered. |
