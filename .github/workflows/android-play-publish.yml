@@ -59,17 +59,25 @@ jobs:
         # Android Play Publish runs main's copy for every completed Android Play
         # Release run. That run executed the PR's own copy of the workflow, so its
         # name, artifact and outcome prove nothing on their own: any PR can add a
-        # workflow named "Android Play Release" that runs on any event. Publish only
-        # a build that the `android-update` label started — the label is the release
-        # decision — by checking, with GitHub's records rather than the run's:
+        # workflow named "Android Play Release" that runs on any event. The
+        # `android-update` label is the release decision, so publish only a build
+        # tied to the person who added it, checking GitHub's records rather than
+        # the run's:
         #
         #   1. it ran the release workflow file and its release job succeeded;
         #   2. its branch is the head of exactly one open same-repository PR into main;
         #   3. that PR still carries the label, and the label's latest event is an
         #      add by a person (not a bot or token) with write access;
-        #   4. that person started this run, within minutes of adding the label: a
-        #      run created by a later push, or by an earlier add that a newer one has
-        #      superseded, is not the run the label asked for.
+        #   4. that person started this run, within minutes of adding the label, so
+        #      a run from before a newer add, or from much later, does not qualify.
+        #
+        # This binds the build to that person, not to the label event itself: GitHub
+        # doesn't record which activity created a run, and the branch's own copy of
+        # the release workflow decides which activities build. A branch that edits
+        # that workflow could also build on the person's other PR activity inside
+        # the window, after a push they did not review. That gives nobody more than
+        # adding the label already does: pushing to a same-repository branch needs
+        # write access, which is all adding the label needs.
         #
         # The head guard (a later step) then checks the PR's native code is still the
         # built one. Needs GH_TOKEN, GH_REPO, RUN_ID, RUN_ATTEMPT, RUN_PATH,

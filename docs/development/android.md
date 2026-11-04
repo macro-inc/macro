@@ -203,10 +203,14 @@ To release:
    **`Android Play Publish`** (`.github/workflows/android-play-publish.yml`,
    a `workflow_run` workflow, so `main`'s copy) takes over. It treats the
    build and its artifact as untrusted, since PR code produced them, and
-   publishes only a build that the label started: the build job succeeded,
-   the branch is the head of one open same-repository PR into `main`, the PR
-   still carries the label, and its latest label event is an add by a person
-   with write access who started the build run within minutes of adding it.
+   publishes only a build tied to whoever added the label: the build job
+   succeeded, the branch is the head of one open same-repository PR into
+   `main`, the PR still carries the label, and its latest label event is an
+   add by a person with write access who started the build run within
+   minutes of adding it. GitHub doesn't record which PR activity created a
+   run, so a branch that edits its release workflow could also build on that
+   person's other activity in the window; that grants nothing beyond adding
+   the label, since pushing to the branch already needs write access.
    It then repeats the head guard, writes the release notes' provenance
    stamp (`native tree <hash> for PR #<n>`, the twin of the iOS TestFlight
    stamp) from `main`'s hashing script, uploads the bundle to the
