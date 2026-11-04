@@ -12,9 +12,15 @@ HTML worker belong to `packages/sdk-docs`.
   the directory it is given; `crates/code_mode_assets` runs it at build time.
 - `scripts/typedoc.ts`: index each entity and split linked Markdown into
   per-symbol references (classes, methods, types).
-- `scripts/catalog.ts`: compact entity descriptions; agent and harness docs share
-  a topic, as do native channels, external chats and WhatsApp, so discovery stays
-  within its 32-question classifier limit.
+- `scripts/catalog.ts`: the entity directories agents discover; agent and
+  harness docs share a topic, as do native channels, external chats and
+  WhatsApp.
+- Each entity's description is its one `@routing` sentence ("Use when …; not
+  …") and its `guide` every `@agent` block, both from the SDK's TSDoc and
+  collected by `packages/sdk-docs/src/render.ts`. Generation fails for an
+  entity without exactly one `@routing` sentence, or a tag outside every
+  entity. Agents route on the sentence; the guide is how that area works,
+  inlined into unrouted prompts and loaded with the entity on routed turns.
 - `src/index.ts`: public SDK exports used by programs.
 
 ## Tool contracts

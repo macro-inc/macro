@@ -360,6 +360,7 @@ impl EditingWorkerService for ReqwestEditingWorkerClient {
             edits_applied: body["ops"].as_array().map(|a| a.len()).unwrap_or(0),
             usage,
             clarification: body["clarification"].as_str().map(str::to_owned),
+            revision: body["revision"].as_str().map(str::to_owned),
         })
     }
 

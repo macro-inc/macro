@@ -347,6 +347,10 @@ const routineTrigger = z.discriminatedUnion('type', [
     timezone: z.string().min(1),
   }),
   z.object({
+    type: z.literal('once'),
+    at: z.string().min(1),
+  }),
+  z.object({
     type: z.literal('events'),
     events: z.array(z.string().min(1)),
     entity_ids: z.array(z.string().min(1)).optional(),

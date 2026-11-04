@@ -14,6 +14,7 @@ import { registerMacroLinkInterceptor } from './macroLinkInterceptor';
 type NavigateEvent = {
   path: string;
   query: string;
+  fragment?: string;
 };
 
 /// this must be used as a child of router
@@ -44,9 +45,9 @@ export function useTauriNavigationEffect() {
         }
         return;
       }
-      const path = ev.payload.query
-        ? `${ev.payload.path}?${ev.payload.query}`
-        : ev.payload.path;
+      const query = ev.payload.query ? `?${ev.payload.query}` : '';
+      const fragment = ev.payload.fragment ? `#${ev.payload.fragment}` : '';
+      const path = `${ev.payload.path}${query}${fragment}`;
       if (
         getNativeMobilePlatform() === 'android' &&
         ev.payload.path !== '/login'
