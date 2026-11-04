@@ -35,6 +35,8 @@ const aliasFilterSchema = z
   .optional()
   .catch(undefined);
 
+// An order no longer offered, such as the retired `priority`, restores as the
+// default. Touch layouts have no sort menu, so this is their only way off it.
 const emailFocusSortSchema = z
   .enum(EMAIL_FOCUS_SORT_IDS)
   .catch(DEFAULT_EMAIL_FOCUS_SORT);

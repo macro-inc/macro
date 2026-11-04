@@ -34,6 +34,7 @@ function list(ids: string[]) {
         const row = document.createElement('div');
         row.id = id;
         row.setAttribute('role', 'row');
+        row.toggleAttribute('data-soup-entity', true);
         row.getBoundingClientRect = () =>
           ({ top: index * 44 - scrollTop }) as DOMRect;
         return row;
@@ -99,6 +100,27 @@ it('keeps the anchor through the removal of the row it was on', () => {
 
   // row-11 stays where it was; nothing jumps.
   expect(dom.scroller.scrollTop).toBe(440);
+});
+
+it('anchors on threads, not a date header pinned at the top', () => {
+  const ids = Array.from({ length: 20 }, (_, index) => `row-${index}`);
+  const { dom, anchor, update } = setup(ids);
+  dom.scrollTo(440);
+  const pinnedHeader = () => {
+    const header = document.createElement('div');
+    header.id = 'pinned-header';
+    header.setAttribute('role', 'row');
+    header.getBoundingClientRect = () => ({ top: 0 }) as DOMRect;
+    dom.scroller.append(header);
+  };
+  pinnedHeader();
+  anchor.capture();
+
+  dom.layout(['new-mail', ...ids]);
+  pinnedHeader();
+  update(['new-mail', ...ids]);
+
+  expect(dom.scroller.scrollTop).toBe(440 + 44);
 });
 
 it('leaves the list at the top so new mail shows there', () => {
