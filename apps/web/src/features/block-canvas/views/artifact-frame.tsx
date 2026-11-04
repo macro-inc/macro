@@ -140,7 +140,6 @@ export function ArtifactFrame(props: {
 
             return (
               <iframe
-                ref={frame}
                 title={props.title}
                 data-canvas-artifact-frame
                 sandbox={ARTIFACT_SANDBOX}
@@ -148,7 +147,10 @@ export function ArtifactFrame(props: {
                 referrerPolicy="no-referrer"
                 srcdoc={frame.content}
                 tabIndex={props.interactive ? 0 : -1}
-                ref={element}
+                ref={(iframe) => {
+                  element = iframe;
+                  frame = iframe;
+                }}
                 onLoad={() => {
                   // The message and the load event can arrive in either order.
                   loads += 1;
