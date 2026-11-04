@@ -612,10 +612,8 @@ async function connectThroughMacroConnect(
         setTimeout(resolve, MACRO_CONNECT_POLL_MS)
       );
     }
-    if (failure) {
-      finishMacroConnectTab(popup, 'error');
-      throw new ThrownResultError(failure);
-    }
+    finishMacroConnectTab(popup, 'error');
+    if (failure) throw new ThrownResultError(failure);
     return 'closed';
   });
 }
