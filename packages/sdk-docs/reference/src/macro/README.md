@@ -130,6 +130,12 @@ Re-exports [CreateReviewOptions](../entities/agent-sessions/review/type-aliases/
 
 ***
 
+### CreateTaskTemplateOptions
+
+Re-exports [CreateTaskTemplateOptions](../entities/task-templates/task-template/interfaces/CreateTaskTemplateOptions.md)
+
+***
+
 ### CrmPipeline
 
 Re-exports [CrmPipeline](../entities/crm/pipeline/classes/CrmPipeline.md)
@@ -712,6 +718,18 @@ Re-exports [TaskSummary](../entities/tasks/task/interfaces/TaskSummary.md)
 
 ***
 
+### TaskTemplate
+
+Re-exports [TaskTemplate](../entities/task-templates/task-template/classes/TaskTemplate.md)
+
+***
+
+### TaskTemplateProperty
+
+Re-exports [TaskTemplateProperty](../entities/task-templates/task-template/interfaces/TaskTemplateProperty.md)
+
+***
+
 ### TeamInvite
 
 Re-exports [TeamInvite](../entities/teams/invite/classes/TeamInvite.md)
@@ -739,6 +757,12 @@ Re-exports [ToolApproval](../entities/agent-sessions/tool-approval/classes/ToolA
 ### UpdateMeOptions
 
 Re-exports [UpdateMeOptions](../entities/me/namespace/interfaces/UpdateMeOptions.md)
+
+***
+
+### UpdateTaskTemplateOptions
+
+Re-exports [UpdateTaskTemplateOptions](../entities/task-templates/task-template/interfaces/UpdateTaskTemplateOptions.md)
 
 ***
 

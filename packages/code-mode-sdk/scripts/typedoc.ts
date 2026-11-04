@@ -89,11 +89,13 @@ export function packageEntityDocs(
         ? ['agents', 'harnesses']
         : directory === 'channels'
           ? ['channels', 'external-chat', 'whatsapp']
-          : directory === 'ai'
-            ? ['ai', 'images']
-            : directory === 'users'
-              ? ['users', 'me']
-              : [directory]
+          : directory === 'tasks'
+            ? ['tasks', 'task-templates']
+            : directory === 'ai'
+              ? ['ai', 'images']
+              : directory === 'users'
+                ? ['users', 'me']
+                : [directory]
       ).map((value) => `src/entities/${value}/`),
     })),
     {

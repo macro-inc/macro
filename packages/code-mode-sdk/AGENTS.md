@@ -12,8 +12,8 @@ HTML worker belong to `packages/sdk-docs`.
 - `scripts/typedoc.ts`: index each entity and split linked Markdown into
   per-symbol references (classes, methods, types).
 - `scripts/catalog.ts`: compact entity descriptions; agent and harness docs share
-  a topic, as do native channels, external chats and WhatsApp, so discovery stays
-  within its 32-question classifier limit.
+  a topic, as do native channels, external chats and WhatsApp; tasks and task templates
+  also share a topic so discovery stays within its 32-question classifier limit.
 - `src/index.ts`: public SDK exports used by programs.
 
 ## Tool contracts

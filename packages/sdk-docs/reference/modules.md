@@ -123,6 +123,8 @@
 - [src/entities/search](src/entities/search/README.md)
 - [src/entities/sharing/access](src/entities/sharing/access/README.md)
 - [src/entities/sharing/permissions](src/entities/sharing/permissions/README.md)
+- [src/entities/task-templates/namespace](src/entities/task-templates/namespace/README.md)
+- [src/entities/task-templates/task-template](src/entities/task-templates/task-template/README.md)
 - [src/entities/tasks/namespace](src/entities/tasks/namespace/README.md)
 - [src/entities/tasks/task](src/entities/tasks/task/README.md)
 - [src/entities/teams/invite](src/entities/teams/invite/README.md)

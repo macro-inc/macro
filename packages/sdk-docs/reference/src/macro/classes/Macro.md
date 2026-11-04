@@ -59,6 +59,7 @@
 | <a id="property-referrals"></a> `referrals` | `readonly` | [`ReferralNamespace`](../../entities/referrals/namespace/classes/ReferralNamespace.md) | Share the caller's referral link and email invites to join Macro. |
 | <a id="property-routines"></a> `routines` | `readonly` | [`RoutineNamespace`](../../entities/routines/namespace/classes/RoutineNamespace.md) | routines resources and operations. |
 | <a id="property-tasks"></a> `tasks` | `readonly` | [`TaskNamespace`](../../entities/tasks/namespace/classes/TaskNamespace.md) | - |
+| <a id="property-tasktemplates"></a> `taskTemplates` | `readonly` | [`TaskTemplateNamespace`](../../entities/task-templates/namespace/classes/TaskTemplateNamespace.md) | Reusable personal and team task fields, defaults, and description Markdown. |
 | <a id="property-teams"></a> `teams` | `readonly` | [`TeamNamespace`](../../entities/teams/namespace/classes/TeamNamespace.md) | - |
 | <a id="property-unfurls"></a> `unfurls` | `readonly` | [`UnfurlNamespace`](../../entities/unfurls/namespace/classes/UnfurlNamespace.md) | unfurls resources and operations. |
 | <a id="property-users"></a> `users` | `readonly` | [`UserNamespace`](../../entities/users/namespace/classes/UserNamespace.md) | - |
