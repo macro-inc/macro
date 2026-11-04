@@ -28,6 +28,11 @@ import {
   type EntityFilterCacheResult,
   INITIAL_CACHE_REVISION,
 } from '../protocol';
+import type {
+  SyncLaneState,
+  SyncRunOutcome,
+  SyncStartArgs,
+} from '../sync-protocol';
 import {
   createTauriCacheHost,
   NativeCacheUpgradeRequiredError,
@@ -1812,6 +1817,136 @@ describe('createTauriCacheHost', () => {
           command === 'graphql_cache_calendar_range' ? range : null
         );
         await expect(host.calendarRange(rangeArgs)).resolves.toEqual(range);
+      } finally {
+        host.dispose();
+      }
+    });
+  });
+
+  describe('streamed sync', () => {
+    const syncArgs: SyncStartArgs = {
+      url: 'https://example.test/items/soup/graphql/stream',
+      headers: { 'x-macro-mail-cache-profile': 'v5' },
+      lanes: [
+        {
+          id: 'tasks',
+          query: 'query SyncTasks { user { id } }',
+          variables: {},
+          paging: 'soup',
+          kind: { kind: 'hydrate' },
+          passStartedAt: '2026-11-01T00:00:00.000Z',
+        },
+      ],
+    };
+    const completed: SyncRunOutcome = {
+      ok: true,
+      result: {
+        reason: 'complete',
+        durationMs: 12,
+        bytes: 340,
+        lanes: [{ id: 'tasks', pages: 1, items: 2, writeMs: 3, done: true }],
+      },
+    };
+
+    it('runs natively for as long as the stream lasts', async () => {
+      vi.useFakeTimers();
+      const host = createTauriCacheHost({
+        scope: 'sync-start',
+        requestTimeoutMs: 50,
+      });
+      try {
+        const run = Promise.withResolvers<SyncRunOutcome>();
+        invokeMock.mockImplementation((command: string) =>
+          command === 'graphql_cache_sync_start'
+            ? run.promise
+            : Promise.resolve(null)
+        );
+        const outcome = host.syncStart!(syncArgs);
+        await vi.dynamicImportSettled();
+        // Longer than the IPC timeout every other command has.
+        await vi.advanceTimersByTimeAsync(60);
+        run.resolve(completed);
+
+        await expect(outcome).resolves.toEqual(completed);
+        expect(invokeMock).toHaveBeenCalledWith('graphql_cache_sync_start', {
+          args: syncArgs,
+        });
+      } finally {
+        host.dispose();
+        vi.useRealTimers();
+      }
+    });
+
+    it('answers invalid plans and failed calls with failures', async () => {
+      invokeMock.mockImplementation(async (command: string) => {
+        if (command === 'graphql_cache_sync_start')
+          throw 'graphql cache not initialized';
+        return null;
+      });
+      const host = createTauriCacheHost({ scope: 'sync-failures' });
+      try {
+        await expect(
+          host.syncStart!({ ...syncArgs, url: 'ftp://example.test/stream' })
+        ).resolves.toEqual({
+          ok: false,
+          failure: { kind: 'stream', message: 'invalid sync plan' },
+        });
+        expect(invokeMock).not.toHaveBeenCalledWith(
+          'graphql_cache_sync_start',
+          expect.anything()
+        );
+        await expect(host.syncStart!(syncArgs)).resolves.toEqual({
+          ok: false,
+          failure: { kind: 'aborted' },
+        });
+      } finally {
+        host.dispose();
+      }
+    });
+
+    it('stops runs and reads lane state through the native commands', async () => {
+      const lanes: SyncLaneState[] = [
+        {
+          id: 'tasks',
+          nextVariables: { input: { continuation: { cursor: 'c1' } } },
+          pages: 1,
+          items: 2,
+          passStartedAt: '2026-11-01T00:00:00.000Z',
+          completedAt: null,
+          watermark: null,
+          coverage: null,
+        },
+      ];
+      invokeMock.mockImplementation(async (command: string) =>
+        command === 'graphql_cache_sync_state' ? lanes : null
+      );
+      const host = createTauriCacheHost({ scope: 'sync-state' });
+      try {
+        await host.syncStop!();
+        await expect(host.syncState!()).resolves.toEqual(lanes);
+        expect(invokeMock).toHaveBeenCalledWith('graphql_cache_sync_stop', {});
+        expect(invokeMock).toHaveBeenCalledWith('graphql_cache_sync_state', {});
+      } finally {
+        host.dispose();
+      }
+    });
+
+    it('has no run to stop when the native cache failed to start', async () => {
+      invokeMock.mockImplementation((command: string) =>
+        command === 'graphql_cache_init_with_schema'
+          ? Promise.reject(new Error('init failed'))
+          : Promise.resolve(null)
+      );
+      const host = createTauriCacheHost({
+        scope: 'sync-no-cache',
+        onInitializationError: () => {},
+      });
+      try {
+        await expect(host.syncStop!()).resolves.toBeUndefined();
+        expect(invokeMock).not.toHaveBeenCalledWith(
+          'graphql_cache_sync_stop',
+          expect.anything()
+        );
       } finally {
         host.dispose();
       }

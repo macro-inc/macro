@@ -612,6 +612,17 @@ export const enableGraphqlCalendar = defineFlag({
   default: DEV_MODE_ENV || undefined,
 });
 
+/**
+ * Fills the cache through one streamed response per pass instead of the paged
+ * backfill. Off, or on a host that cannot stream (an
+ * older native build), the paged backfill runs as before.
+ */
+export const enableStreamedCacheSync = defineFlag({
+  key: 'enable-streamed-cache-sync',
+  env: 'ENABLE_STREAMED_CACHE_SYNC',
+  default: onInDev,
+});
+
 /** Independent emergency stop. Any true env/PostHog source wins. */
 export const disableBrowserTursoCache = defineFlag({
   key: 'disable-browser-turso-cache',

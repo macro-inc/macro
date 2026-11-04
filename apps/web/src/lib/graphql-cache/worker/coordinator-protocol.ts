@@ -26,6 +26,7 @@ import {
   isValidCalendarCommitArgs,
   isValidCalendarRangeArgs,
   isValidNormalizedRecordKey,
+  isValidSyncStartArgs,
   isWorkerMessage,
   MAX_MAIL_THROUGH_ROWS,
   MAX_RECONCILIATION_BASELINE,
@@ -44,7 +45,7 @@ function isPeopleTraceparent(value: unknown): boolean {
 }
 
 /** Version of the topology envelope and routed cache RPC surface. */
-export const CACHE_COORDINATOR_PROTOCOL_VERSION = 18 as const;
+export const CACHE_COORDINATOR_PROTOCOL_VERSION = 19 as const;
 /**
  * Startup phases in order. The engine may touch storage only in
  * `opening-database`, which begins once it holds the database owner lock. It
@@ -963,7 +964,14 @@ export function isCacheRequest(value: unknown): value is CacheRequest {
         hasOnlyKeys(value, ['id', 'kind', 'keys']) && isStringArray(value.keys)
       );
     case 'clear':
+    case 'sync-stop':
+    case 'sync-state':
       return hasOnlyKeys(value, ['id', 'kind']);
+    case 'sync-start':
+      return (
+        hasOnlyKeys(value, ['id', 'kind', 'args']) &&
+        isValidSyncStartArgs(value.args)
+      );
     default:
       return false;
   }

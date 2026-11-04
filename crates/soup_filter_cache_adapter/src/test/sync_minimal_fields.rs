@@ -35,7 +35,8 @@ const PROPERTY_VALUE_FRAGMENT: &str = r#"fragment SoupPropertyValueFields on Gra
   ... on GraphqlLinkPropertyValue { urls }
 }"#;
 
-/// Section 3 of SYNC-STREAM.md, as proposed: `(response key, selection)`.
+/// "Minimal fields" in `docs/architecture/streamed-cache-sync.md`, as first
+/// proposed: `(response key, selection)`.
 const PROPOSED: [(&str, &str); 11] = [
     ("name", "name"),
     ("ownerId", "ownerId"),

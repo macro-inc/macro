@@ -364,6 +364,79 @@ describe('coordinator runtime protocol', () => {
     ).toBe(false);
   });
 
+  it('validates streamed sync requests', () => {
+    const tasks = {
+      id: 'tasks',
+      query: 'query SoupBackfillSyncTasks { user { id } }',
+      operationName: 'SoupBackfillSyncTasks',
+      variables: { input: { initial: { limit: 500 } } },
+      paging: 'soup',
+      maxItems: 1000,
+      kind: { kind: 'hydrate' },
+      passStartedAt: '2026-11-01T00:00:00.000Z',
+      coverage: { entity: 'task', scope: 'all' },
+    };
+    const ids = {
+      ...tasks,
+      id: 'tasks-ids',
+      maxItems: undefined,
+      kind: { kind: 'membership', scopes: ['tasks'] },
+    };
+    const calendar = {
+      ...tasks,
+      id: 'calendar-0',
+      paging: 'calendar',
+      maxItems: undefined,
+      kind: {
+        kind: 'calendar',
+        coverage: [{ kind: 'timed', start: 0, end: 10 }],
+      },
+    };
+    const args = {
+      url: 'https://api.example.test/items/soup/graphql/stream',
+      headers: { 'x-macro-mail-cache-profile': 'v2' },
+      lanes: [tasks, ids, calendar],
+      maxPages: 20,
+    };
+    const valid = (value: unknown) =>
+      isCacheRequest({ id: 1, kind: 'sync-start', args: value });
+    expect(valid(args)).toBe(true);
+    expect(valid({ ...args, lanes: [], maxPages: 0 })).toBe(true);
+    expect(isCacheRequest({ id: 1, kind: 'sync-stop' })).toBe(true);
+    expect(isCacheRequest({ id: 1, kind: 'sync-state' })).toBe(true);
+    for (const invalid of [
+      { ...args, url: 'file:///stream' },
+      { ...args, headers: { bad: 1 } },
+      { ...args, maxPages: -1 },
+      { ...args, extra: true },
+      { ...args, lanes: [tasks, tasks] },
+      { ...args, lanes: [{ ...tasks, id: 'Tasks' }] },
+      { ...args, lanes: [{ ...tasks, id: 'a'.repeat(65) }] },
+      { ...args, lanes: [{ ...tasks, maxItems: 0 }] },
+      { ...args, lanes: [{ ...ids, maxItems: 10 }] },
+      {
+        ...args,
+        lanes: [{ ...ids, kind: { kind: 'membership', scopes: [] } }],
+      },
+      { ...args, lanes: [{ ...calendar, paging: 'soup' }] },
+      {
+        ...args,
+        lanes: [
+          {
+            ...calendar,
+            kind: {
+              kind: 'calendar',
+              coverage: [{ kind: 'timed', start: 10, end: 0 }],
+            },
+          },
+        ],
+      },
+      { ...args, lanes: Array(33).fill(tasks) },
+    ]) {
+      expect(valid(invalid)).toBe(false);
+    }
+  });
+
   it('validates calendar range, commit, and uncertain-event requests', () => {
     const range = { startMs: 0, endMs: 10, startDay: 0, endDay: 1 };
     const rangeRequest = (request: unknown) =>

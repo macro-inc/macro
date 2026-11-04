@@ -637,6 +637,7 @@ export function operationCategoryForRequest(
       'people-context',
       'entity-filter',
       'calendar-range',
+      'sync-state',
       () => 'read' as const
     )
     .with(
@@ -645,6 +646,7 @@ export function operationCategoryForRequest(
       'calendar-commit',
       'people-update',
       'contact-reconcile',
+      'sync-start',
       () => 'write' as const
     )
     .with(
@@ -668,6 +670,7 @@ export function operationCategoryForRequest(
       'current-authority',
       'transition-authority',
       'inspect-mutations',
+      'sync-stop',
       () => 'lifecycle' as const
     )
     .exhaustive(() => 'lifecycle' as const);

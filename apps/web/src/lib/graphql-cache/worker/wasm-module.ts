@@ -54,6 +54,7 @@ import { workerCacheTelemetry } from '../telemetry-relay';
 import type { CompiledEngineExchange } from './compiled-engine';
 import type { StaleDatabaseRemovalOutcome } from './stale-databases';
 import { compileCacheWasm } from './wasm-compile';
+import type { SyncEngine } from './sync-driver';
 
 /** Stable, payload-free marker latched on reset-required WASM errors. */
 export interface CacheStorageResetRequiredError extends Error {
@@ -100,7 +101,7 @@ export type CacheEngineHydrationResult = WriteResult &
     projectionsReread?: true;
   };
 
-export interface CacheEngine {
+export interface CacheEngine extends SyncEngine {
   currentAuthority(
     identity: string
   ): Promise<import('../authority').CacheAuthority>;

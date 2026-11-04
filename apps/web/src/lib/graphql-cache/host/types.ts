@@ -44,6 +44,7 @@ import type {
   SearchCachePage,
   WriteResult,
 } from '../protocol';
+import type { SyncHost } from '../sync-protocol';
 
 export interface CacheReadArgs {
   /** urql operation key; registers the op for re-execution when set. */
@@ -237,6 +238,16 @@ export interface CacheHost {
   teardown(opKey: number): Promise<void>;
   /** Wipe all cached state (logout). */
   clear(): Promise<CacheRevision>;
+
+  /**
+   * Streamed cache sync (see `sync-protocol.ts`): the cache opens the stream
+   * and writes it itself. Absent on hosts that cannot stream.
+   */
+  syncStart?: SyncHost['syncStart'];
+  /** Stops the run in progress, if any; written pages are kept. */
+  syncStop?: SyncHost['syncStop'];
+  /** Saved lane state from the cache database. */
+  syncState?: SyncHost['syncState'];
 
   /**
    * Subscribes to "these urql operation keys must re-execute" pushes

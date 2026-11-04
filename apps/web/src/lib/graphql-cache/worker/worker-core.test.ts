@@ -4111,4 +4111,135 @@ describe('CacheWorkerCore', () => {
       expect(messages.at(-1)).toMatchObject({ id: 2, ok: true });
     });
   });
+
+  describe('streamed sync', () => {
+    const args = {
+      url: 'https://api.example.test/items/soup/graphql/stream',
+      headers: {},
+      lanes: [
+        {
+          id: 'tasks',
+          query: 'query SoupBackfillSyncTasks { user { id } }',
+          variables: {},
+          paging: 'soup' as const,
+          kind: { kind: 'hydrate' as const },
+          passStartedAt: '2026-11-01T00:00:00.000Z',
+        },
+      ],
+    };
+    const result = {
+      reason: 'complete',
+      durationMs: 1,
+      bytes: 3,
+      lanes: [{ id: 'tasks', pages: 1, items: 1, writeMs: 1, done: true }],
+    };
+
+    afterEach(() => vi.unstubAllGlobals());
+
+    async function startedCore(engine: Record<string, unknown>) {
+      loadCacheWasmMock.mockResolvedValue({
+        openCache: vi.fn().mockResolvedValue(engine),
+      });
+      const messages: unknown[] = [];
+      const port = {
+        postMessage: (message: unknown) => messages.push(message),
+      };
+      const core = new CacheWorkerCore();
+      core.addPort(port);
+      await core.handleRequest(port, { id: 1, kind: 'init', scope: 'scope-1' });
+      return { core, port, messages };
+    }
+
+    it('writes pages through the engine queue and publishes them like hydration', async () => {
+      const engine = {
+        syncBegin: vi.fn().mockResolvedValue('{"lanes":[]}'),
+        syncFeed: vi.fn().mockResolvedValue(1),
+        syncApplyNext: vi.fn().mockResolvedValue({
+          kind: 'hydrated',
+          lane: 'tasks',
+          write: {
+            revision: '2',
+            revisionAdvanced: true,
+            searchChangedBuckets: ['task'],
+            changed: [],
+            affectedOps: [],
+            reset: false,
+            revalidations: [],
+          },
+        }),
+        syncFinish: vi.fn().mockResolvedValue({ ok: true, result }),
+        syncAbort: vi.fn(),
+        syncState: vi.fn().mockResolvedValue([{ id: 'tasks' }]),
+      };
+      vi.stubGlobal(
+        'fetch',
+        vi.fn(async () => new Response('{}\n'))
+      );
+      const { core, port, messages } = await startedCore(engine);
+
+      await core.handleRequest(port, { id: 2, kind: 'sync-start', args });
+      await core.handleRequest(port, { id: 3, kind: 'sync-state' });
+
+      expect(messages).toContainEqual({
+        kind: 'cache-hydrated',
+        revision: '2',
+        searchChangedBuckets: ['task'],
+      });
+      expect(messages).toContainEqual({
+        id: 2,
+        ok: true,
+        result: { ok: true, result },
+      });
+      expect(messages).toContainEqual({
+        id: 3,
+        ok: true,
+        result: [{ id: 'tasks' }],
+      });
+    });
+
+    it('aborts a run when the engine drains, replying before the drain ends', async () => {
+      const engine = {
+        syncBegin: vi.fn().mockResolvedValue('{"lanes":[]}'),
+        syncFeed: vi.fn(),
+        syncApplyNext: vi.fn(),
+        syncFinish: vi.fn(),
+        syncAbort: vi.fn().mockResolvedValue({ ...result, reason: 'maxPages' }),
+        syncState: vi.fn(),
+        close: vi.fn().mockResolvedValue(undefined),
+      };
+      let fetched!: () => void;
+      const fetchedOnce = new Promise<void>((resolve) => {
+        fetched = resolve;
+      });
+      vi.stubGlobal(
+        'fetch',
+        vi.fn((_url: unknown, init: RequestInit) => {
+          fetched();
+          // The request stays open until it is aborted.
+          return new Promise((_resolve, reject) =>
+            init.signal?.addEventListener('abort', () =>
+              reject(new DOMException('aborted', 'AbortError'))
+            )
+          );
+        })
+      );
+      const { core, port, messages } = await startedCore(engine);
+
+      const run = core.handleRequest(port, { id: 2, kind: 'sync-start', args });
+      await fetchedOnce;
+      await core.drain();
+      await run;
+
+      expect(messages).toContainEqual({
+        id: 2,
+        ok: true,
+        result: {
+          ok: false,
+          failure: { kind: 'aborted' },
+          partial: { ...result, reason: 'maxPages' },
+        },
+      });
+      expect(engine.close).toHaveBeenCalledOnce();
+    });
+  });
 });

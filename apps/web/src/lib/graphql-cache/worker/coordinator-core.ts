@@ -496,7 +496,7 @@ export class CoordinatorCore {
 
     this.inFlight.delete(routeId);
     const actions = this.broadcastCacheChanges(
-      this.cacheChanges.requestCompleted(this.inFlight.size === 0)
+      this.cacheChanges.requestCompleted(this.repliesInFlight() === 0)
     );
     if (this.tabs.includes(request.tabId)) {
       actions.push({
@@ -519,7 +519,7 @@ export class CoordinatorCore {
     // Only the coordinator knows how much accepted work remains in transit.
     this.cacheChanges.add(push);
     if (
-      this.inFlight.size <= 1 ||
+      this.repliesInFlight() <= 1 ||
       (push.kind === 'cache-changed' && push.reset)
     ) {
       return this.broadcastCacheChanges(this.cacheChanges.flush());
@@ -730,11 +730,23 @@ export class CoordinatorCore {
     }
     this.removeTabRecord(tabId);
     this.retiringTabs.delete(tabId);
-    if (this.inFlight.size === 0) {
+    if (this.repliesInFlight() === 0) {
       actions.push(...this.broadcastCacheChanges(this.cacheChanges.flush()));
     }
     this.assertInvariants();
     return actions;
+  }
+
+  /**
+   * In-flight requests whose replies end a burst of cache work. A sync run
+   * stays in flight for its whole stream, so it never holds refresh hints.
+   */
+  private repliesInFlight(): number {
+    let count = 0;
+    for (const request of this.inFlight.values()) {
+      if (request.request.kind !== 'sync-start') count += 1;
+    }
+    return count;
   }
 
   resumeAfterLoss(): CoordinatorAction[] {

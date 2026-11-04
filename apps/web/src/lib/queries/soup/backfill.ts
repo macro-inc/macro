@@ -1,6 +1,18 @@
-import { ENABLE_GRAPHQL_BACKFILL } from '@core/constant/featureFlags';
+import { useFeatureFlag } from '@app/lib/analytics/posthog';
+import {
+  ENABLE_GRAPHQL_BACKFILL,
+  enableGraphqlCalendar,
+  enableStreamedCacheSync,
+  isFeatureEnabled,
+} from '@core/constant/featureFlags';
 import { createTabLeaderSignal } from '@core/cross-tab/tab-leader';
 import type { CacheHost } from '@graphql-cache/host/types';
+import type {
+  SyncFailure,
+  SyncHost,
+  SyncRunOutcome,
+  SyncRunResult,
+} from '@graphql-cache/sync-protocol';
 import { Telemetry } from '@macro-inc/observability';
 import {
   type GraphqlEmailExpr,
@@ -19,6 +31,7 @@ import { createSharedMailBackfillFetcher } from '@service-storage/shared-mail-ba
 import * as Cause from 'effect/Cause';
 import * as Effect from 'effect/Effect';
 import * as Fiber from 'effect/Fiber';
+import * as Option from 'effect/Option';
 import * as Schedule from 'effect/Schedule';
 import { type Accessor, createEffect, createSignal, onCleanup } from 'solid-js';
 import {
@@ -42,6 +55,12 @@ import {
   type SoupBackfillCheckpoint,
   saveSoupBackfillCheckpoint,
 } from './backfill-checkpoint';
+  isSyncHost,
+  nextSecondPassPages,
+  SECOND_PASS_STREAM,
+} from './sync/host';
+import type { SyncPass } from './sync/lanes';
+import type { SyncPassOptions } from './sync/run';
 
 const PAGE_LIMIT = 100;
 // Five threads × twenty messages reaches the backend's 100-message cap.
@@ -55,9 +74,9 @@ const BACKFILL_PROGRESS_PAGE_INTERVAL = 10;
 const EXCLUDED_ENTITY_ID = '00000000-0000-0000-0000-000000000000';
 const DAY_MS = 24 * 60 * 60 * 1000;
 
-/** Email threads of one signal classification whose latest message is at most
- * `days` old. */
-type EmailRecencyWindow = { signal: boolean; days: number };
+/** Email threads whose latest message is at most `days` old, of one signal
+ * classification, or of both when `signal` is omitted. */
+export type EmailRecencyWindow = { signal?: boolean; days: number };
 
 const SIGNAL_EMAIL_WINDOW: EmailRecencyWindow = { signal: true, days: 90 };
 const NOISE_EMAIL_WINDOW: EmailRecencyWindow = { signal: false, days: 30 };
@@ -177,7 +196,7 @@ export const INITIATIVE_SOUP_BACKFILL_LANE: SoupBackfillParams = {
  * Email threads and the first message page used by the thread view, excluding
  * every other entity variant with an impossible id filter.
  */
-const EMAIL_THREAD_PAGES_INPUT: GraphqlSoupInitialInput = {
+export const EMAIL_THREAD_PAGES_INPUT: GraphqlSoupInitialInput = {
   limit: EMAIL_CONTENT_PAGE_LIMIT,
   expand: true,
   // Orders by the latest-message timestamp that emailRecency bounds, so each
@@ -387,7 +406,7 @@ export function withUpdatedSince(
  * Restricts email threads to those matching any window. In the ALL view the
  * email updatedAt literal compares the latest non-spam message timestamp.
  */
-function withEmailRecency(
+export function withEmailRecency(
   input: GraphqlSoupInitialInput,
   windows: readonly EmailRecencyWindow[] | undefined,
   now: number
@@ -395,18 +414,17 @@ function withEmailRecency(
   if (!windows?.length) return input;
 
   const recency = windows
-    .map(
-      ({ signal, days }): GraphqlEmailExpr => ({
-        and: {
-          left: { literal: { importance: signal } },
-          right: {
-            literal: {
-              updatedAt: { gte: new Date(now - days * DAY_MS).toISOString() },
-            },
-          },
+    .map(({ signal, days }): GraphqlEmailExpr => {
+      const updatedAt: GraphqlEmailExpr = {
+        literal: {
+          updatedAt: { gte: new Date(now - days * DAY_MS).toISOString() },
         },
-      })
-    )
+      };
+      if (signal === undefined) return updatedAt;
+      return {
+        and: { left: { literal: { importance: signal } }, right: updatedAt },
+      };
+    })
     .reduce((left, right) => ({ or: { left, right } }));
   const filters = input.filters ?? {};
   return {
@@ -705,6 +723,222 @@ export const runSoupBackfills = Effect.fn('runSoupBackfills')(function* (
   );
 });
 
+const SYNC_RETRY_COUNT = 5;
+const SYNC_RETRY_SCHEDULE = Schedule.exponential('2 seconds');
+/**
+ * A lane that fails this many times in one pass is left out of that pass's
+ * later streams; it resumes from its saved state on the next pass.
+ */
+export const SYNC_LANE_FAILURES = 3;
+/** Pause before re-running a failed lane, doubled per failure. */
+const SYNC_LANE_RETRY_PAUSE_MS = 2_000;
+
+/** Failures per lane over one pass's streams. */
+type LaneFailures = Map<string, number>;
+
+/**
+ * Counts the lanes `result` reports failed. Returns the pause before the
+ * stream that retries them, or `undefined` when none may be retried.
+ */
+function recordFailedLanes(
+  failures: LaneFailures,
+  result: SyncRunResult
+): number | undefined {
+  let retry: number | undefined;
+  for (const lane of result.lanes) {
+    if (lane.error === undefined) continue;
+    const count = (failures.get(lane.id) ?? 0) + 1;
+    failures.set(lane.id, count);
+    if (count < SYNC_LANE_FAILURES) {
+      retry = Math.max(retry ?? 0, SYNC_LANE_RETRY_PAUSE_MS * 2 ** (count - 1));
+    } else {
+      console.warn('[graphql-soup-sync] lane failed; it resumes next pass', {
+        lane: lane.id,
+        failures: count,
+      });
+    }
+  }
+  return retry;
+}
+
+/** Plan options leaving out lanes that reached `SYNC_LANE_FAILURES`. */
+function skipFailedLanes(failures: LaneFailures): {
+  skipLanes?: ReadonlySet<string>;
+} {
+  const skip = new Set(
+    [...failures]
+      .filter(([, count]) => count >= SYNC_LANE_FAILURES)
+      .map(([id]) => id)
+  );
+  return skip.size === 0 ? {} : { skipLanes: skip };
+}
+
+type StreamedSyncHost = CacheHost & SyncHost;
+
+function recordSyncTelemetry(pass: SyncPass, outcome: SyncRunOutcome): void {
+  try {
+    const span = Telemetry.anonymousSpan('graphql_cache.sync');
+    const result = outcome.ok ? outcome.result : outcome.partial;
+    span.setAttr('cache.sync_pass', pass);
+    span.setAttr(
+      'cache.sync_outcome',
+      outcome.ok ? outcome.result.reason : outcome.failure.kind
+    );
+    if (result) {
+      span.setAttr('cache.duration_ms', result.durationMs);
+      span.setAttr('cache.sync_bytes', result.bytes);
+      span.setAttr('cache.sync_lanes', result.lanes.length);
+      span.setAttr(
+        'cache.sync_pages',
+        result.lanes.reduce((sum, lane) => sum + lane.pages, 0)
+      );
+      span.setAttr(
+        'cache.sync_items',
+        result.lanes.reduce((sum, lane) => sum + lane.items, 0)
+      );
+      span.setAttr(
+        'cache.sync_failed_lanes',
+        result.lanes.filter((lane) => lane.error !== undefined).length
+      );
+    }
+    span.end();
+  } catch {
+    // Observability must never affect cache sync.
+  }
+}
+
+/**
+ * One stream of `pass`, retried with backoff (except `unsupported`). Every
+ * attempt re-plans from the cache's saved lane state, so it resumes rather
+ * than restarts. Interrupting it stops the host's run. With `stopAfterMs`,
+ * an attempt still running then is stopped (pages written so far are kept)
+ * and the stream resolves to `None` instead of a result.
+ */
+const runSyncStream = (
+  host: StreamedSyncHost,
+  pass: SyncPass,
+  options: SyncPassOptions,
+  stopAfterMs?: number
+) =>
+  Effect.tryPromise({
+    // Loaded on use: the plan builder reads this module's lane filters.
+    try: async () =>
+      (await import('./sync/run')).runSyncPass(host, pass, options),
+    catch: (error): SyncFailure => ({
+      kind: 'stream',
+      message: error instanceof Error ? error.message : String(error),
+    }),
+  }).pipe(
+    Effect.tap((outcome) =>
+      Effect.sync(() => recordSyncTelemetry(pass, outcome))
+    ),
+    Effect.flatMap(
+      (outcome): Effect.Effect<Option.Option<SyncRunResult>, SyncFailure> =>
+        outcome.ok
+          ? Effect.succeed(Option.some(outcome.result))
+          : Effect.fail(outcome.failure)
+    ),
+    Effect.onInterrupt(() =>
+      Effect.tryPromise(() => host.syncStop()).pipe(Effect.ignore)
+    ),
+    // Per attempt, so a failing stream still exhausts its retries.
+    (attempt) =>
+      stopAfterMs === undefined
+        ? attempt
+        : attempt.pipe(
+            Effect.timeoutOption(stopAfterMs),
+            Effect.map(Option.flatten)
+          ),
+    Effect.retry({
+      times: SYNC_RETRY_COUNT,
+      schedule: SYNC_RETRY_SCHEDULE,
+      while: (failure: SyncFailure) => failure.kind !== 'unsupported',
+    })
+  );
+
+/**
+ * The streamed cache sync: the first pass as one stream, then the second pass
+ * as streams sized by time and bytes (`SECOND_PASS_STREAM`) with a short
+ * pause between them, until a stream completes. A lane that fails (the
+ * server's `laneError`) does not stop the others: each pass re-runs it, from
+ * its saved state, until it has failed `SYNC_LANE_FAILURES` times.
+ */
+export const runStreamedSync = Effect.fn('runStreamedSync')(function* (
+  host: StreamedSyncHost
+) {
+  const calendar = isFeatureEnabled(enableGraphqlCalendar);
+  const firstPassStartedAt = new Date().toISOString();
+  const firstFailures: LaneFailures = new Map();
+  while (true) {
+    const result = yield* runSyncStream(host, 'first', {
+      calendar,
+      completedSince: firstPassStartedAt,
+      ...skipFailedLanes(firstFailures),
+    });
+    const retry = Option.isSome(result)
+      ? recordFailedLanes(firstFailures, result.value)
+      : undefined;
+    if (retry === undefined) break;
+    yield* Effect.sleep(retry);
+  }
+  const secondPassStartedAt = new Date().toISOString();
+  const secondFailures: LaneFailures = new Map();
+  let previous: { pages: number; result?: SyncRunResult } | undefined;
+  while (true) {
+    const pages = nextSecondPassPages(previous);
+    const result = yield* runSyncStream(
+      host,
+      'second',
+      {
+        calendar,
+        completedSince: secondPassStartedAt,
+        maxPages: pages,
+        ...skipFailedLanes(secondFailures),
+      },
+      SECOND_PASS_STREAM.stopAfterMs
+    );
+    const retry = Option.isSome(result)
+      ? recordFailedLanes(secondFailures, result.value)
+      : undefined;
+    if (
+      Option.isSome(result) &&
+      result.value.reason === 'complete' &&
+      retry === undefined
+    ) {
+      return;
+    }
+    previous = { pages, result: Option.getOrUndefined(result) };
+    yield* Effect.sleep(Math.max(SECOND_PASS_STREAM.pauseMs, retry ?? 0));
+  }
+});
+
+/**
+ * Keeps the cache synced: through the streamed sync when `streamed` is on and
+ * the host can stream, otherwise through the paged backfill. A host that
+ * reports it cannot stream (an older native build) falls back to the paged
+ * backfill too.
+ */
+export function runCacheSync(
+  userId: string,
+  host: CacheHost,
+  streamed: boolean
+): Effect.Effect<void> {
+  const paged = runSoupBackfills(userId, host).pipe(Effect.ignore);
+  if (!streamed || !isSyncHost(host)) return paged;
+  return runStreamedSync(host).pipe(
+    Effect.catchIf(
+      (failure: SyncFailure) => failure.kind === 'unsupported',
+      () => paged,
+      (failure) =>
+        Effect.sync(() =>
+          console.warn('[graphql-soup-sync] stopped after retries', {
+            failure: failure.kind,
+          })
+        )
+    )
+  );
+}
+
 const waitForGraphqlSoupCacheHost = Effect.suspend(() => {
   const host = getGraphqlSoupCacheHost();
   return !host || host.disabled
@@ -718,10 +952,10 @@ const waitForGraphqlSoupCacheHost = Effect.suspend(() => {
 );
 
 /**
- * Runs the checkpointed backfill Effect while this tab owns leadership.
- * Interrupting the fiber cancels cache readiness waits, active fetches, and
- * inter-page sleeps. Engine handoffs resume durable checkpoints; only loss of
- * stored cache data resets cursors so they cannot point past wiped records.
+ * Keeps the signed-in user's cache synced while this tab owns leadership;
+ * waits while `userId` is unknown. A user, leadership, flag or cache
+ * generation change interrupts the run (stopping the host's stream) and starts
+ * another, which resumes from the state saved in the cache database.
  */
 /** Runs the signed-in user's soup backfills; waits while `userId` is unknown.
  * `directoryChannels` feeds contact facts: the complete channel directory. */
@@ -729,11 +963,13 @@ export function useSoupBackfills(
   userId: Accessor<string | undefined>,
   directoryChannels: Accessor<readonly ContextChannel[] | undefined>
 ): void {
+  const streamedSyncFlag = useFeatureFlag(enableStreamedCacheSync);
+  const streamedSync = () => streamedSyncFlag().enabled;
   const isLeader = createTabLeaderSignal(
     `graphql-soup-backfill:v${BACKFILL_VERSION}:coordinator`
   );
   // Sender metadata must be durable before the first composer is opened.
-  // This small catalog runs alongside the paged backfill, never behind it.
+  // This small catalog runs alongside the sync, never behind it.
   useMailAccountsQuery(
     () => ENABLE_GRAPHQL_BACKFILL && isLeader() && !!userId()
   );
@@ -776,9 +1012,7 @@ export function useSoupBackfills(
     if (!host || !id) return;
     cacheGeneration();
 
-    const fiber = Effect.runFork(
-      runSoupBackfills(id, host).pipe(Effect.ignore)
-    );
+    const fiber = Effect.runFork(runCacheSync(id, host, streamedSync()));
     onCleanup(() => {
       Effect.runFork(Fiber.interrupt(fiber));
     });

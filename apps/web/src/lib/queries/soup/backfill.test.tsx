@@ -71,7 +71,14 @@ const mockCacheHost = {
 
 vi.mock('@core/constant/featureFlags', () => ({
   ENABLE_GRAPHQL_BACKFILL: true,
+  enableGraphqlCalendar: { key: 'enable-graphql-calendar' },
+  enableStreamedCacheSync: { key: 'enable-streamed-cache-sync' },
+  isFeatureEnabled: () => false,
 }));
+
+// The streamed sync's plans and host calls are mocked here.
+const runSyncPass = vi.hoisted(() => vi.fn());
+vi.mock('./sync/run', () => ({ runSyncPass }));
 
 vi.mock('@core/cross-tab/tab-leader', () => ({
   createTabLeaderSignal: leaderMocks.createTabLeaderSignal,
@@ -141,6 +148,88 @@ function BackfillRunner(props: { userId: string }) {
   );
   return null;
 }
+
+/** A cache host that can stream, as the browser worker host is. */
+const syncCacheHost = {
+  ...mockCacheHost,
+  syncStart: vi.fn(),
+  syncStop: vi.fn(async () => {}),
+  syncState: vi.fn(async () => []),
+};
+
+describe('streamed cache sync', () => {
+  /** Turns the streamed sync flag on or off; every other flag stays on. */
+  function streamedSync(enabled: boolean) {
+    featureFlagMocks.useFeatureFlag
+      .mockReset()
+      .mockImplementation((flag: { key: string }) => () => ({
+        enabled: flag.key === 'enable-streamed-cache-sync' ? enabled : true,
+        payload: undefined,
+      }));
+  }
+
+  beforeEach(() => {
+    localStorage.clear();
+    cacheGenerationCallbacks.clear();
+    mockCacheHost.currentStorageGeneration
+      .mockReset()
+      .mockResolvedValue('storage-1');
+    graphqlMocks.getGraphqlSoupCacheHost
+      .mockReset()
+      .mockReturnValue(syncCacheHost);
+    graphqlMocks.hydrateGraphqlSoup
+      .mockReset()
+      .mockResolvedValue({ nextCursor: null });
+    leaderMocks.createTabLeaderSignal.mockReset().mockReturnValue(() => true);
+    telemetryMocks.anonymousSpan.mockReset().mockImplementation(() => ({
+      setAttr: vi.fn(),
+      end: vi.fn(),
+    }));
+    runSyncPass.mockReset().mockReturnValue(new Promise(() => {}));
+  });
+
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
+  it('streams instead of paging when the flag is on and the host can stream', async () => {
+    streamedSync(true);
+    const rendered = render(() => <BackfillRunner userId="user-1" />);
+
+    await vi.waitFor(() => expect(runSyncPass).toHaveBeenCalled());
+    expect(runSyncPass.mock.calls[0]?.[0]).toBe(syncCacheHost);
+    expect(runSyncPass.mock.calls[0]?.[1]).toBe('first');
+    expect(graphqlMocks.hydrateGraphqlSoup).not.toHaveBeenCalled();
+    rendered.unmount();
+  });
+
+  it('pages as before when the flag is off', async () => {
+    streamedSync(false);
+    const rendered = render(() => <BackfillRunner userId="user-1" />);
+
+    await vi.waitFor(() =>
+      expect(graphqlMocks.hydrateGraphqlSoup).toHaveBeenCalled()
+    );
+    expect(runSyncPass).not.toHaveBeenCalled();
+    rendered.unmount();
+  });
+
+  it('falls back to paging when the host cannot stream', async () => {
+    streamedSync(true);
+    // An older native build answers that it has no sync.
+    runSyncPass.mockResolvedValue({
+      ok: false,
+      failure: { kind: 'unsupported' },
+    });
+    const rendered = render(() => <BackfillRunner userId="user-1" />);
+
+    await vi.waitFor(() =>
+      expect(graphqlMocks.hydrateGraphqlSoup).toHaveBeenCalled()
+    );
+    expect(runSyncPass).toHaveBeenCalledOnce();
+    rendered.unmount();
+  });
+});
 
 describe('runSoupBackfills', () => {
   beforeEach(() => {

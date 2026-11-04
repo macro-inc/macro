@@ -1,5 +1,6 @@
 import type { PeopleCache } from '../people/host';
 import { PEOPLE_UNSUPPORTED } from '../people/protocol';
+import type { SyncStartArgs } from '../sync-protocol';
 import { createNoopCacheHost } from './noop-host';
 import type { CacheHost } from './types';
 
@@ -119,6 +120,20 @@ export function createRetirableCacheHost(inner: CacheHost): CacheHost {
       current.deleteRecords(keys, generation),
     teardown: (opKey) => current.teardown(opKey),
     clear: () => current.clear(),
+    // Keep sync absent when the wrapped host cannot stream; after retirement
+    // the no-op host has no sync either, so calls report `unsupported`.
+    ...(inner.syncStart
+      ? {
+          syncStart: (args: SyncStartArgs) =>
+            current.syncStart?.(args) ??
+            Promise.resolve({
+              ok: false as const,
+              failure: { kind: 'unsupported' as const },
+            }),
+          syncStop: () => current.syncStop?.() ?? Promise.resolve(),
+          syncState: () => current.syncState?.() ?? Promise.resolve([]),
+        }
+      : {}),
     onOpsAffected: (cb) =>
       current.onOpsAffected((...args) => {
         if (current === inner) cb(...args);

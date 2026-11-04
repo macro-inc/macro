@@ -161,3 +161,51 @@ Rules:
   the other lanes carry on. The run result reports it as the lane summary's
   `error`. A frame for the lane after that, a second `laneError`, or
   `end: error` breaks the stream and fails the run.
+
+## Minimal fields
+
+The first pass selects minimal rows: what a row renders plus every field lists
+filter, sort or group by. Rows must stay complete for the local filter index
+(`crates/soup_filter_cache_adapter`): a document-kind record is indexed only
+when it has `cacheProjection`, `ownerId`, `fileType`, `projectId`,
+`createdAt`, `updatedAt`, `subType`, `properties`, `notifications` and
+`isFavorited`. Without one of them, rows are written but silently stay out of
+local filtering; `soup_filter_cache_adapter/src/test/sync_minimal_fields.rs`
+pins the selection. The selections live in
+`apps/web/src/lib/queries/soup/sync/minimal.ts`. A channel row carries what
+the channel list renders plus what the filter index needs; a contact row is
+`__typename id`. Property definitions are not sent with every item.
+
+## Load order
+
+First pass (one stream, no `maxPages`): `contacts`, `channels`, `tasks`,
+`task-projects`, `email-recent` (60 days, no bodies), `email-shared`,
+`documents-recent` (1,000 most recently viewed or updated), `calendar-near-*`
+(2 months each way), then the membership lanes `tasks-ids`,
+`task-projects-ids`, `contacts-ids`, `channels-ids`, `documents-ids` and
+`email-shared-ids`.
+
+Second pass (repeated streams, each resuming from saved state, 2 s apart):
+`crm-contacts`, `core-rest`, `documents-rest`, `calendar-far-*` (12 months
+each way), `email-older` (back to 1 year, at most 10,000 threads), then full
+details for tasks and documents and email message pages
+(`email-content`). The first stream asks for 20 pages; each later one for as
+many as the previous stream's rate says fit 15 s and 32 MiB (10 to 2,000
+pages), and a stream still running after 30 s is stopped, keeping its written
+pages (`SECOND_PASS_STREAM` in `apps/web/src/lib/queries/soup/sync/host.ts`).
+
+A completed lane runs again on later passes with "changed since its
+watermark"; membership lanes run in full every time. Channel messages and
+threads, and calls, are not synced.
+
+## App
+
+`useSoupBackfills` (`apps/web/src/lib/queries/soup/backfill.ts`) runs the
+streamed sync in the leader tab when the remote flag
+`enable-streamed-cache-sync` is on and the cache host can stream
+(`isSyncHost`). Otherwise, and when a host answers `unsupported` (a native
+build older than the sync commands answers `Command … not found`), the paged
+backfill runs as before. A lane that fails is re-run in the same pass after
+2 s, then 4 s; after three failures it is left out of the pass and resumes on
+the next one. Each stream is recorded as a `graphql_cache.sync` span (pass,
+outcome, duration, bytes, lanes, pages, items, failed lanes).

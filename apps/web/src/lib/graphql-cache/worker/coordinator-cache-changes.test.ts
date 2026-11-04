@@ -355,3 +355,33 @@ it('keeps ordinary single-request updates immediate', () => {
     { kind: 'broadcast-push', push: { kind: 'cache-changed', revision: '1' } },
   ]);
 });
+
+it('never holds hydration hints behind a streamed sync run that stays in flight', () => {
+  const { push, reply } = resume([
+    {
+      id: 1,
+      kind: 'sync-start',
+      args: { url: 'https://api.example.test/stream', headers: {}, lanes: [] },
+    },
+    { id: 2, kind: 'read', query: 'query Viewer { user { id } }' },
+  ]);
+  // Only the read is a reply that ends cache work, so each page's hint flushes.
+  expect(
+    push({ kind: 'cache-hydrated', revision: parseCacheRevision('1') })
+  ).toEqual([
+    {
+      kind: 'broadcast-push',
+      push: { kind: 'cache-hydrated', revision: '1' },
+    },
+  ]);
+  expect(reply(1)).toHaveLength(1);
+  expect(
+    push({ kind: 'cache-hydrated', revision: parseCacheRevision('2') })
+  ).toEqual([
+    {
+      kind: 'broadcast-push',
+      push: { kind: 'cache-hydrated', revision: '2' },
+    },
+  ]);
+  expect(reply(0)).toHaveLength(1);
+});

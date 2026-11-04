@@ -18,6 +18,7 @@ import type {
   PeopleSearch,
   PeopleSqlRequest,
 } from './people/generated';
+import type { SyncLanePlan, SyncStartArgs } from './sync-protocol';
 
 /**
  * Wire protocol between page contexts and the cache worker (the `CacheHost`
@@ -538,6 +539,93 @@ export function isValidCalendarCommitArgs(
   );
 }
 
+/** Lanes in one sync request; the server rejects more. */
+export const MAX_SYNC_LANES = 32;
+const SYNC_LANE_ID = /^[a-z0-9-]{1,64}$/;
+
+const isSyncLaneId = (value: unknown): value is string =>
+  typeof value === 'string' && SYNC_LANE_ID.test(value);
+
+const isPositiveSafeInteger = (value: unknown): boolean =>
+  Number.isSafeInteger(value) && (value as number) > 0;
+
+function isValidSyncLanePlan(value: unknown): value is SyncLanePlan {
+  if (
+    !isRecord(value) ||
+    !hasOnlyCalendarKeys(value, [
+      'id',
+      'query',
+      'operationName',
+      'variables',
+      'paging',
+      'maxItems',
+      'kind',
+      'passStartedAt',
+      'coverage',
+    ]) ||
+    !isSyncLaneId(value.id) ||
+    typeof value.query !== 'string' ||
+    value.query.length === 0 ||
+    (value.operationName !== undefined &&
+      typeof value.operationName !== 'string') ||
+    !isRecord(value.variables) ||
+    (value.paging !== 'soup' && value.paging !== 'calendar') ||
+    (value.maxItems !== undefined && !isPositiveSafeInteger(value.maxItems)) ||
+    typeof value.passStartedAt !== 'string' ||
+    value.passStartedAt.length === 0 ||
+    !isRecord(value.kind)
+  ) {
+    return false;
+  }
+  const kind = value.kind;
+  if (kind.kind === 'hydrate') return hasOnlyCalendarKeys(kind, ['kind']);
+  if (kind.kind === 'membership') {
+    return (
+      hasOnlyCalendarKeys(kind, ['kind', 'scopes']) &&
+      value.maxItems === undefined &&
+      Array.isArray(kind.scopes) &&
+      kind.scopes.length > 0 &&
+      kind.scopes.every(isSyncLaneId)
+    );
+  }
+  return (
+    kind.kind === 'calendar' &&
+    hasOnlyCalendarKeys(kind, ['kind', 'coverage']) &&
+    value.paging === 'calendar' &&
+    Array.isArray(kind.coverage) &&
+    kind.coverage.every(
+      (span) =>
+        isCalendarSpanWire(span) &&
+        (span.start as number) <= (span.end as number)
+    )
+  );
+}
+
+/** Non-throwing sync plan validation for wire ingress; the engine re-checks it. */
+export function isValidSyncStartArgs(value: unknown): value is SyncStartArgs {
+  if (
+    !isRecord(value) ||
+    !hasOnlyCalendarKeys(value, ['url', 'headers', 'lanes', 'maxPages']) ||
+    typeof value.url !== 'string' ||
+    !/^https?:\/\//.test(value.url) ||
+    !isRecord(value.headers) ||
+    !Object.values(value.headers).every(
+      (header) => typeof header === 'string'
+    ) ||
+    !Array.isArray(value.lanes) ||
+    value.lanes.length > MAX_SYNC_LANES ||
+    !value.lanes.every(isValidSyncLanePlan) ||
+    (value.maxPages !== undefined &&
+      !(
+        Number.isSafeInteger(value.maxPages) && (value.maxPages as number) >= 0
+      ))
+  ) {
+    return false;
+  }
+  const ids = value.lanes.map((lane: SyncLanePlan) => lane.id);
+  return new Set(ids).size === ids.length;
+}
+
 export function validateRecordSelectionKeys(keys: string[]): string[] {
   if (keys.length > MAX_RECORD_SELECTION_PAGE_SIZE) {
     throw new RangeError(
@@ -992,6 +1080,15 @@ export type CacheRequest = {
   /** Apply explicit server-provided cache-deletion effects. */
   | { kind: 'delete-records'; keys: string[] }
   | { kind: 'clear' }
+  /**
+   * Streamed cache sync: the engine worker opens the stream and writes it.
+   * Replies with a `SyncRunOutcome` when the run ends; never replayed.
+   */
+  | { kind: 'sync-start'; args: SyncStartArgs }
+  /** Stops the run in progress, if any, after its current write. */
+  | { kind: 'sync-stop' }
+  /** Saved lane state (`SyncLaneState[]`). */
+  | { kind: 'sync-state' }
 );
 
 /** Stable machine-readable cache RPC rejection codes. */
