@@ -282,6 +282,10 @@ impl EntityAccessService for GrantingAccess {
     }
 }
 
+/// A duplicate asked for: the source, the owner, the acting agent and the
+/// name.
+pub(super) type Duplicate = (String, String, Option<BotId>, Option<String>);
+
 /// Records the batches that reached it, and answers each with no results,
 /// or with `refusal` when one is set; records the conversions asked for and
 /// answers each with `conversion`. The routes under test call nothing else.
@@ -291,8 +295,8 @@ pub(super) struct RecordingService {
     pub(super) refusal: Mutex<Option<DatabaseError>>,
     pub(super) conversions: Mutex<Vec<(TableId, ColumnId, ColumnKind)>>,
     pub(super) conversion: Mutex<Option<ColumnConversion>>,
-    /// Every duplicate asked for: the source, the owner and the name.
-    pub(super) duplicates: Mutex<Vec<(String, String, Option<String>)>>,
+    /// Every duplicate asked for.
+    pub(super) duplicates: Mutex<Vec<Duplicate>>,
     /// Every create asked for.
     pub(super) creates: Mutex<Vec<CreateDatabase>>,
 }
@@ -484,11 +488,13 @@ impl crate::domain::duplicate::DatabaseDuplicateService for RecordingService {
         &self,
         receipt: EntityAccessReceipt<ViewAccessLevel>,
         owner: MacroUserIdStr<'static>,
+        acting_bot: Option<BotId>,
         name: Option<String>,
     ) -> Result<Database, DatabaseError> {
         self.duplicates.lock().unwrap().push((
             receipt.entity().entity_id.to_string(),
             owner.to_string(),
+            acting_bot,
             name.clone(),
         ));
         Ok(Database {

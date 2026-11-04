@@ -1023,6 +1023,7 @@ async fn view_access_duplicates_a_database_for_the_caller() {
         vec![(
             database.to_string(),
             fakes::USER.to_string(),
+            None,
             Some("Plans 2027".to_string())
         )]
     );
@@ -1050,7 +1051,7 @@ async fn a_duplicate_without_a_body_name_reaches_the_service_unnamed() {
         .unwrap();
 
     assert_eq!(response.status(), StatusCode::CREATED);
-    assert_eq!(service.duplicates.lock().unwrap()[0].2, None);
+    assert_eq!(service.duplicates.lock().unwrap()[0].3, None);
 }
 
 #[tokio::test]
@@ -1077,5 +1078,35 @@ async fn a_database_an_agent_creates_with_its_sdk_token_is_attributed_to_the_age
         assert_eq!(creates.len(), 1, "{token}");
         assert_eq!(creates[0].owner_id.as_ref(), fakes::USER, "{token}");
         assert_eq!(creates[0].acting_bot, bot, "{token}");
+    }
+}
+
+#[tokio::test]
+async fn a_database_an_agent_duplicates_with_its_sdk_token_is_attributed_to_the_agent() {
+    use axum::body::Body;
+    use axum::http::{Request, header};
+    use entity_access::domain::models::AccessLevel;
+    use tower::ServiceExt;
+
+    let database = Uuid::from_u128(0x0dbb);
+    for (token, bot) in [("agent", Some(fakes::AGENT)), ("valid", None)] {
+        let (router, service) = fakes::duplicate_router(AccessLevel::View);
+        let response = router
+            .oneshot(
+                Request::post(format!("/{database}/duplicate"))
+                    .header(header::AUTHORIZATION, format!("Bearer {token}"))
+                    .header(header::CONTENT_TYPE, "application/json")
+                    .body(Body::from("{}"))
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+
+        assert_eq!(response.status(), StatusCode::CREATED, "{token}");
+        assert_eq!(
+            *service.duplicates.lock().unwrap(),
+            vec![(database.to_string(), fakes::USER.to_string(), bot, None)],
+            "{token}"
+        );
     }
 }

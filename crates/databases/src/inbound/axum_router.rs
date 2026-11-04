@@ -212,6 +212,23 @@ pub(crate) fn viewer_of<Authorization>(
     }
 }
 
+/// The agent an SDK token (code mode) carries, recorded on the current span.
+/// A creation made with it is attributed to the agent, like the native tool's,
+/// so channel delivery can share what the agent made for the request; access
+/// checks still run as the plain user ([`viewer_of`]).
+pub(crate) fn agent_attribution<Authorization>(
+    user: &MacroAuthorizationExtractor<Authorization, UserOrInternal>,
+) -> Option<bot_id::BotId> {
+    let acting_bot = user.authorization.user.agent_id;
+    tracing::Span::current().record(
+        "acting_bot",
+        tracing::field::display(
+            acting_bot.map_or_else(|| "none".to_owned(), |bot| bot.to_string()),
+        ),
+    );
+    acting_bot
+}
+
 /// Request body for creating a database.
 #[derive(Debug, Deserialize, utoipa::ToSchema)]
 #[serde(rename_all = "camelCase")]
@@ -283,16 +300,7 @@ where
     EntityAccess: EntityAccessService,
     Authorization: MacroAuthorizationService,
 {
-    // An agent's SDK token (code mode) creates as its user, attributed to the
-    // agent like the native tool's creations, so channel delivery can share
-    // what it made for the request.
-    let acting_bot = user.authorization.user.agent_id;
-    tracing::Span::current().record(
-        "acting_bot",
-        tracing::field::display(
-            acting_bot.map_or_else(|| "none".to_owned(), |bot| bot.to_string()),
-        ),
-    );
+    let acting_bot = agent_attribution(&user);
     let database = state
         .service
         .create_database(CreateDatabase {
