@@ -1,6 +1,7 @@
 //! Exact mappings for the recurrence patterns supported by Microsoft Graph.
 use super::*;
 use chrono::{Datelike, NaiveDate, TimeZone};
+use chrono_tz::Tz;
 use std::collections::BTreeMap;
 
 const DAYS: [(&str, &str); 7] = [
@@ -20,21 +21,24 @@ const INDICES: [(&str, &str); 5] = [
     ("-1", "last"),
 ];
 
-pub(super) fn from_graph(event: &Value) -> Result<Vec<String>, CalendarProviderError> {
+pub(super) fn from_graph(event: &Value) -> Result<Vec<String>, Rejected> {
     let recurrence = &event["recurrence"];
     if recurrence.is_null() {
         return Ok(vec![]);
     }
     let p = &recurrence["pattern"];
     let r = &recurrence["range"];
-    let kind = string(p, "type")?;
-    let (_, _, start, _) = normalize::time_body(&normalize::event_time(event)?)?;
+    let pattern = |key: &str| Rejected::at(key).under("recurrence.pattern");
+    let range = |key: &str| Rejected::at(key).under("recurrence.range");
+    let kind = field(p, "type").map_err(|e| e.under("recurrence.pattern"))?;
+    let (_, _, start, _) = normalize::time_body(&normalize::event_time(event)?)
+        .map_err(|_| Rejected::at("start.timeZone"))?;
     let frequency = match kind {
         "daily" => "DAILY",
         "weekly" => "WEEKLY",
         "absoluteMonthly" | "relativeMonthly" => "MONTHLY",
         "absoluteYearly" | "relativeYearly" => "YEARLY",
-        _ => return Err(invalid()),
+        _ => return Err(pattern("type")),
     };
     let mut fields = vec![
         format!("FREQ={frequency}"),
@@ -43,23 +47,23 @@ pub(super) fn from_graph(event: &Value) -> Result<Vec<String>, CalendarProviderE
             p["interval"]
                 .as_u64()
                 .filter(|n| *n > 0)
-                .ok_or_else(invalid)?
+                .ok_or_else(|| pattern("interval"))?
         ),
     ];
     if matches!(kind, "weekly" | "relativeMonthly" | "relativeYearly") {
         let days: Vec<_> = p["daysOfWeek"]
             .as_array()
-            .ok_or_else(invalid)?
+            .ok_or_else(|| pattern("daysOfWeek"))?
             .iter()
             .map(|v| {
                 DAYS.iter()
                     .find(|d| Some(d.1) == v.as_str())
                     .map(|d| d.0)
-                    .ok_or_else(invalid)
+                    .ok_or_else(|| pattern("daysOfWeek"))
             })
             .collect::<Result<_, _>>()?;
         if days.is_empty() {
-            return Err(invalid());
+            return Err(pattern("daysOfWeek"));
         }
         if !kind.starts_with("relative") {
             fields.push(format!("BYDAY={}", days.join(",")));
@@ -68,7 +72,7 @@ pub(super) fn from_graph(event: &Value) -> Result<Vec<String>, CalendarProviderE
             let index = INDICES
                 .iter()
                 .find(|i| Some(i.1) == p["index"].as_str())
-                .ok_or_else(invalid)?
+                .ok_or_else(|| pattern("index"))?
                 .0;
             if days.len() == 1 {
                 fields.push(format!("BYDAY={index}{}", days[0]));
@@ -82,7 +86,7 @@ pub(super) fn from_graph(event: &Value) -> Result<Vec<String>, CalendarProviderE
         let day = p["dayOfMonth"]
             .as_u64()
             .filter(|n| (1..=31).contains(n))
-            .ok_or_else(invalid)?;
+            .ok_or_else(|| pattern("dayOfMonth"))?;
         // A DTSTART-aligned pattern is the same rule the shared editor emits.
         // Keep explicit selectors only when omitting them would change dates.
         if day != u64::from(start.day()) {
@@ -93,7 +97,7 @@ pub(super) fn from_graph(event: &Value) -> Result<Vec<String>, CalendarProviderE
         let month = p["month"]
             .as_u64()
             .filter(|n| (1..=12).contains(n))
-            .ok_or_else(invalid)?;
+            .ok_or_else(|| pattern("month"))?;
         if month != u64::from(start.month()) {
             fields.push(format!("BYMONTH={month}"));
         }
@@ -106,31 +110,26 @@ pub(super) fn from_graph(event: &Value) -> Result<Vec<String>, CalendarProviderE
             .unwrap_or("SU");
         fields.push(format!("WKST={day}"));
     }
-    match string(r, "type")? {
+    match field(r, "type").map_err(|e| e.under("recurrence.range"))? {
         "numbered" => fields.push(format!(
             "COUNT={}",
             r["numberOfOccurrences"]
                 .as_u64()
                 .filter(|n| *n > 0)
-                .ok_or_else(invalid)?
+                .ok_or_else(|| range("numberOfOccurrences"))?
         )),
         "endDate" => {
-            let date = NaiveDate::parse_from_str(string(r, "endDate")?, "%Y-%m-%d")
-                .map_err(|_| invalid())?;
+            let date = r["endDate"]
+                .as_str()
+                .and_then(|date| NaiveDate::parse_from_str(date, "%Y-%m-%d").ok())
+                .ok_or_else(|| range("endDate"))?;
             if event["isAllDay"].as_bool() == Some(true) {
                 fields.push(format!("UNTIL={}", date.format("%Y%m%d")));
             } else {
-                let zone = zones::zone(
-                    r["recurrenceTimeZone"]
-                        .as_str()
-                        .or(event["originalStartTimeZone"].as_str())
-                        .unwrap_or("UTC"),
-                )
-                .ok_or_else(invalid)?;
-                let end = zone
-                    .from_local_datetime(&date.and_hms_opt(23, 59, 59).ok_or_else(invalid)?)
-                    .single()
-                    .ok_or_else(invalid)?;
+                let end = range_zone(event)
+                    .from_local_datetime(&date.and_hms_opt(23, 59, 59).ok_or_else(|| range("endDate"))?)
+                    .latest()
+                    .ok_or_else(|| range("endDate"))?;
                 fields.push(format!(
                     "UNTIL={}",
                     end.with_timezone(&chrono::Utc).format("%Y%m%dT%H%M%SZ")
@@ -138,9 +137,24 @@ pub(super) fn from_graph(event: &Value) -> Result<Vec<String>, CalendarProviderE
             }
         }
         "noEnd" => {}
-        _ => return Err(invalid()),
+        _ => return Err(range("type")),
     }
     Ok(vec![format!("RRULE:{}", fields.join(";"))])
+}
+
+/// The zone the series' end date is in. Graph names a legacy custom zone
+/// (`tzone://Microsoft/Custom`) Macro cannot resolve, so fall back as
+/// `normalize::event_time` does, to the zone the event's time is kept in:
+/// `to_graph` writes the end date back in that zone.
+fn range_zone(event: &Value) -> Tz {
+    [
+        &event["recurrence"]["range"]["recurrenceTimeZone"],
+        &event["originalStartTimeZone"],
+        &event["start"]["timeZone"],
+    ]
+    .into_iter()
+    .find_map(|name| name.as_str().and_then(zones::zone))
+    .unwrap_or(chrono_tz::UTC)
 }
 
 pub(super) fn to_graph(lines: &[String], time: &EventTime) -> Result<Value, CalendarProviderError> {

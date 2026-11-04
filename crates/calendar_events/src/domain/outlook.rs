@@ -72,6 +72,22 @@ pub enum OutlookCalendarProgress {
     Reset,
 }
 
+/// One provider event read back for synchronization.
+pub enum OutlookEventRefresh {
+    /// The current event or complete series, normalized.
+    Refreshed(Box<CalendarEventUpsert>),
+    /// Microsoft no longer has the event on this calendar.
+    Gone,
+    /// Microsoft has the event, but Macro cannot represent it. The sync skips
+    /// it and keeps any copy stored before, as Google sync does with an event
+    /// it cannot normalize.
+    Unreadable {
+        /// Path of the Graph property Macro rejected, such as
+        /// `recurrence.range.endDate` or `instances.start.dateTime`.
+        field: String,
+    },
+}
+
 /// Provider reads with normalized results and no persistence policy.
 pub trait OutlookCalendarReader: Send + Sync + 'static {
     /// Discover all visible calendars, following every page.
@@ -94,7 +110,7 @@ pub trait OutlookCalendarReader: Send + Sync + 'static {
         token: &str,
         target: &ProviderCalendarTarget,
         id: &str,
-    ) -> impl Future<Output = Result<Option<CalendarEventUpsert>, CalendarProviderError>> + Send;
+    ) -> impl Future<Output = Result<OutlookEventRefresh, CalendarProviderError>> + Send;
 }
 
 /// Calendar-owned persistence and exact-generation leases.
@@ -195,7 +211,23 @@ impl<
         }
         Ok(true)
     }
+    #[tracing::instrument(
+        name = "calendar.outlook_sync",
+        skip_all,
+        fields(
+            work_id = %lease.id,
+            account_id = %lease.account_id,
+            calendar_id = lease.target.as_ref().map(|target| tracing::field::display(target.calendar_id)),
+            step = tracing::field::Empty,
+            provider_event_id = tracing::field::Empty,
+            outcome = tracing::field::Empty,
+            rejected_field = tracing::field::Empty,
+            error_kind = tracing::field::Empty,
+        ),
+        err(level = tracing::Level::DEBUG)
+    )]
     async fn run_claim(&self, lease: &OutlookCalendarLease) -> Result<(), CalendarProviderError> {
+        let span = tracing::Span::current();
         let token = self
             .tokens
             .fetch_access_token(&lease.token_identity)
@@ -210,29 +242,51 @@ impl<
                     },
                     "Microsoft calendar credential acquisition failed",
                 )
-            })?;
+            })
+            .inspect_err(|error| record_failure(&span, error))?;
         let work = async {
             if let Some(target) = &lease.target {
                 let progress = if let Some(id) = lease.pending_ids.first() {
-                    let upsert = self
+                    span.record("step", "event");
+                    span.record("provider_event_id", id.as_str());
+                    let exists = match self
                         .provider
                         .refresh_calendar_event(&token, target, id)
-                        .await?;
-                    let exists = upsert.is_some();
-                    if let Some(upsert) = upsert {
-                        self.repository
-                            .upsert_event(CalendarEventWrite::OutlookSync {
-                                lease: Box::new(lease.clone()),
-                                upsert,
-                            })
-                            .await
-                            .map_err(storage_error)?;
-                    }
+                        .await?
+                    {
+                        OutlookEventRefresh::Refreshed(upsert) => {
+                            span.record("outcome", "refreshed");
+                            self.repository
+                                .upsert_event(CalendarEventWrite::OutlookSync {
+                                    lease: Box::new(lease.clone()),
+                                    upsert: *upsert,
+                                })
+                                .await
+                                .map_err(storage_error)?;
+                            true
+                        }
+                        OutlookEventRefresh::Gone => {
+                            span.record("outcome", "gone");
+                            false
+                        }
+                        OutlookEventRefresh::Unreadable { field } => {
+                            span.record("outcome", "unreadable");
+                            span.record("rejected_field", field.as_str());
+                            tracing::warn!(
+                                calendar_id = %target.calendar_id,
+                                provider_event_id = %id,
+                                rejected_field = %field,
+                                "skipping an Outlook event Macro cannot read"
+                            );
+                            true
+                        }
+                    };
                     OutlookCalendarProgress::Event {
                         id: id.clone(),
                         exists,
                     }
                 } else if lease.page_loaded {
+                    span.record("step", "finish");
                     automatic_decline::run(
                         &self.repository,
                         &self.provider,
@@ -243,6 +297,7 @@ impl<
                     .await?;
                     OutlookCalendarProgress::Finish
                 } else {
+                    span.record("step", "page");
                     match self
                         .provider
                         .calendar_page(
@@ -267,6 +322,7 @@ impl<
                     .await
                     .map_err(storage_error)?;
             } else {
+                span.record("step", "discover");
                 let calendars = self.provider.calendars(&token, lease.binding).await?;
                 self.repository
                     .commit_outlook_calendars(lease, calendars)
@@ -291,7 +347,13 @@ impl<
             futures::future::Either::Left((result, _))
             | futures::future::Either::Right((result, _)) => result,
         }
+        .inspect_err(|error| record_failure(&span, error))
     }
+}
+
+fn record_failure(span: &tracing::Span, error: &CalendarProviderError) {
+    span.record("outcome", "failed");
+    span.record("error_kind", tracing::field::debug(error.kind()));
 }
 
 fn storage_error(_error: Report) -> CalendarProviderError {
