@@ -370,6 +370,9 @@ impl MailboxInitializationRepository for PgMailboxInitialization {
         sqlx::query!("INSERT INTO email_projection_outbox (id,link_id,generation,payload) VALUES ($1,$2,$3,$4)",macro_uuid::generate_uuid_v7(),link_id,link.sync_generation,event)
             .execute(&mut *tx).await.map_err(unavailable)?;
         tx.commit().await.map_err(unavailable)?;
+        if restart {
+            email::domain::mailbox::progress::log_import_started(link_id, link.sync_generation);
+        }
         Ok(link_id)
     }
 }

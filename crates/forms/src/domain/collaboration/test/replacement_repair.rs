@@ -49,12 +49,14 @@ fn repaired_layout() -> FormLayout {
                         widget: None,
                     },
                 ],
+                show_when: None,
             },
             FormSection::Questions {
                 id: DETAILS,
                 title: "More details".to_owned(),
                 description: String::new(),
                 questions: vec![],
+                show_when: None,
             },
         ],
     }

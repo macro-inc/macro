@@ -52,14 +52,15 @@ pub struct OpsAffectedEvent {
     pub field_changes: Option<Vec<cache_core::field_changes::RecordFieldChange>>,
     /// Registered operation ids (`"{clientId}:{urqlKey}"`) to re-execute.
     pub op_ids: Vec<String>,
-    /// Changed entity keys, for diagnostics/advanced consumers.
-    pub keys: Vec<String>,
 }
 
 /// Payload of [`CACHE_CHANGED_EVENT`].
 #[derive(Clone, Debug, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct CacheChangedEvent {
+    /// Exact displayed windows unaffected by every change in this notification.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    unchanged_views: Option<Vec<String>>,
     /// Known query-write changes; missing metadata requests a conservative refresh.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub search_changed_buckets: Option<std::collections::BTreeSet<String>>,
@@ -113,37 +114,41 @@ impl CacheState {
 fn emit_ops_affected<R: Runtime>(
     app: &AppHandle<R>,
     op_ids: &[String],
-    keys: &[String],
     field_changes: Option<&Vec<cache_core::field_changes::RecordFieldChange>>,
 ) {
     if op_ids.is_empty() {
         return;
     }
-    app.emit(
+    emit_cache_event(
+        app,
         OPS_AFFECTED_EVENT,
         OpsAffectedEvent {
             field_changes: field_changes.cloned(),
             op_ids: op_ids.to_vec(),
-            keys: keys.to_vec(),
         },
-    )
-    .inspect_err(|e| tracing::error!(error=?e, "failed to emit graphql cache change event"))
-    .ok();
+    );
 }
 
 fn emit_cache_changed<R: Runtime>(app: &AppHandle<R>, revision: &str, reset: bool) {
-    emit_cache_changed_with_search_changes(app, revision, reset, None);
+    emit_cache_changed_with_hints(app, revision, reset, None, None);
 }
 
-fn emit_cache_changed_with_search_changes<R: Runtime>(
+fn emit_cache_changed_with_hints<R: Runtime>(
     app: &AppHandle<R>,
     revision: &str,
     reset: bool,
     search_changed_buckets: Option<&std::collections::BTreeSet<String>>,
+    unchanged_views: Option<&Vec<String>>,
 ) {
-    app.emit(
+    emit_cache_event(
+        app,
         CACHE_CHANGED_EVENT,
         CacheChangedEvent {
+            unchanged_views: if reset {
+                None
+            } else {
+                unchanged_views.cloned()
+            },
             search_changed_buckets: if reset {
                 None
             } else {
@@ -152,9 +157,7 @@ fn emit_cache_changed_with_search_changes<R: Runtime>(
             revision: revision.to_owned(),
             reset: reset.then_some(true),
         },
-    )
-    .inspect_err(|e| tracing::error!(error=?e, "failed to emit graphql cache change event"))
-    .ok();
+    );
 }
 
 fn emit_mutation_settled<R: Runtime>(
@@ -166,7 +169,8 @@ fn emit_mutation_settled<R: Runtime>(
     error_code: Option<String>,
     replacement_transaction_id: Option<String>,
 ) {
-    app.emit(
+    emit_cache_event(
+        app,
         MUTATION_SETTLED_EVENT,
         MutationSettledEvent {
             transaction_id,
@@ -176,7 +180,23 @@ fn emit_mutation_settled<R: Runtime>(
             error_code,
             replacement_transaction_id,
         },
-    )
-    .inspect_err(|e| tracing::error!(error=?e, "failed to emit graphql mutation settlement"))
-    .ok();
+    );
+}
+
+/// Serialize notifications once, recording their wire size without copying the
+/// payload back through a second JSON encoder for diagnostics.
+#[tracing::instrument(
+    name = "graphql_cache.ipc.notification",
+    skip_all,
+    fields(event.name = event, graphql_cache.ipc.payload_bytes = tracing::field::Empty)
+)]
+fn emit_cache_event<R: Runtime, S: Serialize>(app: &AppHandle<R>, event: &str, payload: S) {
+    let emit = || -> tauri::Result<()> {
+        let json = serde_json::to_string(&payload)?;
+        tracing::Span::current().record("graphql_cache.ipc.payload_bytes", json.len());
+        app.emit_str(event, json)
+    };
+    emit()
+        .inspect_err(|e| tracing::error!(error=?e, "failed to emit graphql cache event"))
+        .ok();
 }

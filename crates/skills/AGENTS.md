@@ -13,6 +13,9 @@ instructions an agent follows when the skill is referenced in its input.
   default implementation.
 - `src/inbound/toolset.rs`: the three AI tools — `search_skills.rs`,
   `list_skills.rs`, `read_skill.rs`.
+- `src/domain/selection.rs`: `select_skills`, the Jev router agents use to
+  load the user's skills a request needs (`agent.skill_selection` span).
+  Design: `docs/architecture/agent-skills.md`.
 - `src/outbound/`: `document_skill_reader.rs` (reads skill content),
   `search_service_searcher.rs` (search), `soup_skill_lister.rs` (listing).
 
@@ -27,7 +30,8 @@ instructions an agent follows when the skill is referenced in its input.
 - Depends on: `document_sub_type`, `entity_access` (ports); `outbound` feature
   additionally needs `documents`, `search_service_client`, `soup`,
   `lexical_client`, `item_filters`, `filter_ast`.
-- Used by: `ai_tools`.
+- Used by: `ai_tools`, `agent_inmem` (skill routing). Descriptions come from
+  `documents` (`skill_descriptions`); system skills have none.
 
 ## Recipes
 

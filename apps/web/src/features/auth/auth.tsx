@@ -50,6 +50,7 @@ export function Login(props: { signupMode?: boolean }) {
             : undefined
         }
         onSignIn={() => navigate('/login')}
+        onAgentSignup={() => navigate('/signup/agent')}
         // Desktop sign-up resolves into onboarding's frame either way.
         pending={desktopSignup() ? () => <OnboardingPending /> : undefined}
         signedIn={(user) => <PostAuthGate user={user()} />}
@@ -58,22 +59,70 @@ export function Login(props: { signupMode?: boolean }) {
   );
 }
 
+/**
+ * /signup/agent: Google or an emailed code, without the opening slides. An
+ * agent invite links here with `team_invite`, which an existing account still
+ * has to accept; a new agent joins the team during setup.
+ */
+export function AgentSignup() {
+  const [params] = useSearchParams();
+  const teamInvite = () =>
+    typeof params.team_invite === 'string' ? params.team_invite : undefined;
+  return (
+    <AuthProvider value={createAppAuthContext()}>
+      <AuthView
+        intent="agent-signup"
+        showApple={false}
+        compact={virtualKeyboardVisible()}
+        token={sessionTokenParam(params.token)}
+        signedIn={(user) => (
+          <PostLoginRedirect
+            target={agentSignupDestination(user(), teamInvite())}
+          />
+        )}
+      />
+    </AuthProvider>
+  );
+}
+
+function agentSignupDestination(user: AuthUser, teamInvite?: string) {
+  if (needsAgentSetup(user)) return AGENT_SETUP_PATH;
+  if (teamInvite) return `/team-invite?id=${encodeURIComponent(teamInvite)}`;
+  return '/';
+}
+
+const AGENT_SETUP_PATH = '/agent-setup';
+
+function needsAgentSetup(user: AuthUser) {
+  return user.isAgent && !user.tutorialComplete;
+}
+
 function PostAuthGate(props: { user: AuthUser }) {
   const needsOnboarding = () =>
-    !isMobile() && !isNativeMobilePlatform() && !props.user.tutorialComplete;
+    !isMobile() &&
+    !isNativeMobilePlatform() &&
+    !props.user.tutorialComplete &&
+    !props.user.isAgent;
   return (
-    <Show when={needsOnboarding()} fallback={<PostLoginRedirect />}>
+    <Show
+      when={needsOnboarding()}
+      fallback={
+        <PostLoginRedirect
+          target={needsAgentSetup(props.user) ? AGENT_SETUP_PATH : '/'}
+        />
+      }
+    >
       <Onboarding />
     </Show>
   );
 }
 
 /** Login init runs in the per-method handlers; this only navigates. */
-function PostLoginRedirect() {
+function PostLoginRedirect(props: { target: string }) {
   const navigate = useNavigate();
   onMount(() => {
     clearSignupDraft();
-    navigate('/', { replace: true });
+    navigate(props.target, { replace: true });
   });
   return <LoadingBlock />;
 }

@@ -37,7 +37,9 @@ import {
 import { useTauriNavigationEffect } from './navigation';
 
 let dispose: (() => void) | undefined;
-let receive: (event: { payload: { path: string; query: string } }) => void;
+let receive: (event: {
+  payload: { path: string; query: string; fragment?: string };
+}) => void;
 
 beforeEach(() => {
   vi.clearAllMocks();
@@ -160,5 +162,25 @@ describe('native link session routing', () => {
 
     expect(mocks.navigate).toHaveBeenCalledWith('/task/123?view=comments');
     expect(mocks.setPostLoginRedirect).not.toHaveBeenCalled();
+  });
+
+  it('keeps the private token of a booking receipt link on desktop', () => {
+    mocks.platform = 'macos';
+    receive({
+      payload: { path: '/booking/123', query: '', fragment: 'token' },
+    });
+
+    expect(mocks.navigate).toHaveBeenCalledWith('/booking/123#token');
+  });
+
+  it('retains a booking receipt token while Android checks the session', () => {
+    receive({
+      payload: { path: '/booking/123', query: '', fragment: 'token' },
+    });
+
+    expect(mocks.setPostLoginRedirect).toHaveBeenCalledWith(
+      '/booking/123#token'
+    );
+    expect(mocks.navigate).toHaveBeenCalledWith('/');
   });
 });

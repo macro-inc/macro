@@ -1,3 +1,4 @@
+import * as uiOperations from '@app/observability/ui-operation';
 import {
   cleanup,
   fireEvent,
@@ -6,14 +7,17 @@ import {
   waitFor,
   within,
 } from '@solidjs/testing-library';
-import { errAsync } from 'neverthrow';
-import { afterEach, beforeAll, describe, expect, it } from 'vitest';
+import { errAsync, ResultAsync } from 'neverthrow';
+import { afterEach, beforeAll, describe, expect, it, vi } from 'vitest';
 import { FormProvider } from '../context/form-context';
 import type { FormDetail } from '../core/form-model';
 import { createMockFormContext } from '../tests/mock-context';
 import { RespondView } from './respond-view';
 
-afterEach(cleanup);
+afterEach(() => {
+  cleanup();
+  vi.restoreAllMocks();
+});
 
 // jsdom has no layout, so no scrolling into view.
 beforeAll(() => {
@@ -33,7 +37,10 @@ function offsite(): FormDetail {
       status: 'open',
       closesAt: null,
       tallyVisible: false,
+      responsesVisible: false,
+      anonymous: false,
       confirmationMessage: 'See you there!',
+      branding: { logoFileId: null, coverFileId: null, accentColor: null },
       submittedColumnId: null,
       respondentColumnId: null,
     },
@@ -46,6 +53,7 @@ function offsite(): FormDetail {
           kind: 'questions',
           gateRules: null,
           gateMessage: '',
+          showWhen: null,
           bookingTarget: null,
           questions: [
             {
@@ -84,6 +92,7 @@ function offsite(): FormDetail {
             ],
           },
           gateMessage: 'The offsite is for employees.',
+          showWhen: null,
           bookingTarget: null,
           questions: [],
         },
@@ -94,6 +103,7 @@ function offsite(): FormDetail {
           kind: 'questions',
           gateRules: null,
           gateMessage: '',
+          showWhen: null,
           bookingTarget: null,
           questions: [
             {
@@ -131,6 +141,100 @@ function offsite(): FormDetail {
 }
 
 describe('RespondView', () => {
+  it('cancels only the retired view measurement while a pending submission still saves', async () => {
+    const detail = offsite();
+    detail.layout.sections = detail.layout.sections.slice(-1);
+    const { context, calls } = createMockFormContext({ detail });
+    let release!: () => void;
+    const pending = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    const submit = context.responses.submit;
+    context.responses.submit = (id, answers) =>
+      ResultAsync.fromSafePromise(pending).andThen(() => submit(id, answers));
+    const stopTelemetry = uiOperations.initializeUiOperationTelemetry();
+    const start = vi.spyOn(uiOperations, 'startUiOperation');
+    const scroll = vi.spyOn(Element.prototype, 'scrollIntoView');
+    const view = render(() => (
+      <FormProvider value={context}>
+        <RespondView
+          detail={detail}
+          compact={false}
+          refetch={async () => true}
+        />
+      </FormProvider>
+    ));
+    fireEvent.input(screen.getByLabelText('Dietary needs'), {
+      target: { value: 'Synthetic pending answer' },
+    });
+    fireEvent.click(screen.getByRole('button', { name: /Submit/ }));
+    const operation = start.mock.results[0].value;
+    const paint = vi.spyOn(operation, 'afterPaint');
+    expect(operation.ended).toBe(false);
+    try {
+      view.unmount();
+      expect(operation.ended).toBe(true);
+      release();
+      await waitFor(() => expect(calls.submitted).toHaveLength(1));
+      expect(calls.submitted[0]).toEqual([
+        {
+          question: 'q-diet',
+          value: { type: 'text', value: 'Synthetic pending answer' },
+        },
+      ]);
+      expect(paint).not.toHaveBeenCalled();
+      expect(scroll).not.toHaveBeenCalled();
+    } finally {
+      release();
+      stopTelemetry();
+    }
+  });
+
+  it('shows the owner’s logo, cover and accent, and Macro’s look when none is set', () => {
+    const plain = offsite();
+    const branded = offsite();
+    branded.form.branding = {
+      logoFileId: 'logo-1',
+      coverFileId: 'cover-1',
+      accentColor: '#ffd400',
+    };
+    const { context } = createMockFormContext({ detail: branded });
+    render(() => (
+      <FormProvider value={context}>
+        <RespondView
+          detail={plain}
+          compact={false}
+          refetch={async () => true}
+        />
+        <RespondView
+          detail={branded}
+          compact={false}
+          refetch={async () => true}
+        />
+      </FormProvider>
+    ));
+    const [plainPage, brandedPage] = screen
+      .getAllByRole('heading', { name: 'Q4 offsite RSVP' })
+      .map((heading) => heading.closest<HTMLElement>('[data-form-respond]'));
+    expect(plainPage!.querySelectorAll('img')).toHaveLength(0);
+    expect(plainPage!.classList.contains('form-branded')).toBe(false);
+    expect(
+      [...brandedPage!.querySelectorAll('img')].map((image) =>
+        image.getAttribute('src')
+      )
+    ).toEqual([
+      'https://static.example.com/file/cover-1?size=medium',
+      'https://static.example.com/file/logo-1?size=small',
+    ]);
+    expect(brandedPage!.classList.contains('form-branded')).toBe(true);
+    expect(brandedPage!.style.getPropertyValue('--form-accent')).toBe(
+      '#ffd400'
+    );
+    expect(brandedPage!.style.getPropertyValue('--form-accent-contrast')).toBe(
+      '#000000'
+    );
+  });
+
   it('answers section by section, submits once, and shows the confirmation with the receipt', async () => {
     const { context, calls } = createMockFormContext({ detail: offsite() });
     render(() => (
@@ -306,6 +410,39 @@ describe('RespondView', () => {
     ).toBeTruthy();
   });
 
+  it('shows an anonymous respondent that they responded, with no answers to show or edit', () => {
+    const detail = offsite();
+    detail.form.responsesVisible = true;
+    detail.form.anonymous = true;
+    const { context } = createMockFormContext({
+      detail,
+      mine: {
+        status: 'submitted',
+        booking: null,
+        submittedAt: undefined,
+        answers: [],
+        anonymous: true,
+      },
+    });
+    let opened = 0;
+    render(() => (
+      <FormProvider value={context}>
+        <RespondView
+          detail={detail}
+          compact={false}
+          refetch={async () => true}
+          onOpenResponses={() => opened++}
+        />
+      </FormProvider>
+    ));
+    expect(screen.queryByRole('button', { name: 'Edit my response' })).toBe(
+      null
+    );
+    expect(screen.queryByRole('region', { name: 'Your answers' })).toBe(null);
+    fireEvent.click(screen.getByRole('button', { name: 'See responses' }));
+    expect(opened).toBe(1);
+  });
+
   it('shows a closed form’s saved response with the reason it can no longer be edited', () => {
     const detail = offsite();
     detail.form.status = 'closed';
@@ -473,6 +610,7 @@ describe('RespondView', () => {
           kind: 'booking',
           gateRules: null,
           gateMessage: '',
+          showWhen: null,
           bookingTarget: target,
           questions: [],
         },

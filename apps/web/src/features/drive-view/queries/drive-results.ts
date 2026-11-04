@@ -28,6 +28,8 @@ function entityMatchesFolder(
     case 'document':
     case 'chat':
     case 'project':
+    case 'database':
+    case 'form':
       return entity.projectId === projectId;
     case 'email':
       if (entity.projectId) return entity.projectId === projectId;

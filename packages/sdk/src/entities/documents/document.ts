@@ -20,7 +20,6 @@ import {
 } from '../../mentions';
 import { MacroApiError, mapConcurrently, paginate, unwrap } from '../../utils';
 import type { MacroClient } from '../../utils/client';
-import { CalendarNote } from '../calendar/note';
 import { PropertiedEntity } from '../entity';
 import {
   MessageThread,
@@ -31,6 +30,11 @@ import { Project } from '../projects/project';
 import { entitySearch } from '../search';
 import { EntityAccess } from '../sharing/access';
 import { User } from '../users/user';
+import {
+  type DocumentEditOptions,
+  type DocumentEditResult,
+  editWithInstructions,
+} from './ai-edit';
 import { DocumentAnchor } from './anchor';
 import { Comment } from './comment';
 import { DocumentVersion } from './version';
@@ -56,20 +60,6 @@ export class Document
   extends PropertiedEntity<DocumentDetail>
   implements Mentionable
 {
-  /** Meeting links visible to the reader. Owners also receive unavailable grants and may unlink them to revoke meeting/team access. */
-  async meetingNotes(): Promise<
-    Array<{ note: CalendarNote; eventTitle: string }>
-  > {
-    const links = unwrap(
-      await this.client.calendar.documentNoteLinks({
-        path: { document_id: this.id },
-      }),
-    );
-    return links.map((link) => ({
-      note: CalendarNote.fromDocumentLink(this.client, this, link),
-      eventTitle: link.eventTitle,
-    }));
-  }
   /** PDF annotations in this document. */
   async anchors(): Promise<DocumentAnchor[]> {
     return unwrap(
@@ -224,16 +214,23 @@ export class Document
 
   /**
    * Create a skill: a markdown document containing instructions that AI reads
-   * and follows when the skill is referenced in an AI input.
+   * and follows when the skill is referenced in an AI input, or when a request
+   * matches its `description`.
    */
   static async createSkill(
     client: MacroClient,
-    opts: { name: string; markdown?: string; project?: Project },
+    opts: {
+      name: string;
+      description: string;
+      markdown?: string;
+      project?: Project;
+    },
   ): Promise<Document> {
     const { documentId } = unwrap(
       await client.storage.createSkillHandler({
         body: {
           skillName: opts.name,
+          description: opts.description,
           markdown: opts.markdown ?? null,
           projectId: opts.project?.id ?? null,
         },
@@ -339,6 +336,82 @@ export class Document
         message: 'failed to download document content',
       });
     return res.text();
+  }
+
+  /**
+   * Edit a markdown document or task body by natural-language instructions,
+   * which an AI editor carries out, merging with anyone editing at the same
+   * time.
+   *
+   * Write instructions like a precise request to a careful editor:
+   * - Say where: name the section or heading, or quote the text to change.
+   * - Describe the outcome, not keystrokes: "make the steps a numbered list",
+   *   not "add a 1. before each line".
+   * - Say what must stay as it is ("keep the headings").
+   * - One coherent edit per call; split unrelated changes into separate calls.
+   *
+   * It can rewrite, insert, delete, move and format text, headings, lists,
+   * tables, links, mentions and dates. It cannot read or write other
+   * documents or see comments or history. It returns the new revision, not a
+   * diff: read `content()` afterwards to see what changed.
+   *
+   * Throws `DocumentEditRefusedError` with the editor's reason when it can't do
+   * the edit (nothing changed), `EditOutcomeUnknownError` when the outcome is
+   * unknown (read before retrying), and `AbortError` when `options.signal`
+   * aborts: what the editor applied before the abort stays, nothing after it.
+   * When it applies part of the edit and then needs more information, it
+   * resolves with `clarification` set; send only the rest.
+   *
+   * AI usage is billed as for any AI edit. A full edit can take tens of
+   * seconds: pass `fast: true` for small edits, and keep one edit per call
+   * within the run's deadline.
+   *
+   * @example Rewrite a section.
+   * ```js
+   * const { webUrl } = await document.edit(
+   *   'Rewrite the "Summary" section as three short bullet points covering ' +
+   *     'scope, timeline and owners. Keep the "Summary" heading.',
+   * );
+   * return { data: { markdown: await document.content(), url: webUrl } };
+   * ```
+   *
+   * @example Fix formatting.
+   * ```js
+   * try {
+   *   await task.edit(
+   *     'Make every line under "Steps" a checklist item, and bold the word "blocked" wherever it appears.',
+   *     { fast: true },
+   *   );
+   * } catch (error) {
+   *   if (error.name === 'DocumentEditRefusedError') return { data: { refused: error.reason } };
+   *   throw error;
+   * }
+   * ```
+   *
+   * @example Cancel the other edits once one fails.
+   * ```js
+   * const controller = new AbortController();
+   * const results = await Promise.allSettled(
+   *   tasks.map((task) =>
+   *     task
+   *       .edit('Replace "Q3" with "Q4" in the "Timeline" section.', {
+   *         fast: true,
+   *         signal: controller.signal,
+   *       })
+   *       .catch((error) => {
+   *         controller.abort();
+   *         throw error;
+   *       }),
+   *   ),
+   * );
+   * // Edits still running reject with AbortError, keeping what they applied.
+   * ```
+   */
+  edit(
+    instructions: string,
+    options: DocumentEditOptions = {},
+  ): Promise<DocumentEditResult> {
+    return editWithInstructions(this.client, this, instructions, options);
   }
 
   /** Rename the document. */
@@ -477,6 +550,33 @@ export class Document
     );
   }
 
+  /**
+   * When to use this skill: one line starting "Use when". `undefined` for a
+   * skill created before descriptions existed.
+   */
+  async skillDescription(): Promise<string | undefined> {
+    const { description } = unwrap(
+      await this.client.storage.getSkillDescription({
+        path: { document_id: this.id },
+      }),
+    );
+    return description ?? undefined;
+  }
+
+  /**
+   * Set when to use this skill: one line starting "Use when", at most 300
+   * characters, e.g. "Use when drafting release notes; not changelogs".
+   * Agents load the skill for requests it describes.
+   */
+  async setSkillDescription(description: string): Promise<void> {
+    await this.mutate((c) =>
+      c.storage.setSkillDescription({
+        path: { document_id: this.id },
+        body: { description },
+      }),
+    );
+  }
+
   /** GitHub pull requests associated with the document. */
   async githubPullRequests(): Promise<GithubPullRequest[]> {
     const { pullRequests } = unwrap(
@@ -500,6 +600,11 @@ export class Document
   /** The document's URL in the Macro web app. */
   webUrl(): string {
     return `${this.client.webAppUrl}/app/md/${this.id}`;
+  }
+
+  /** Identity, loaded detail and {@link webUrl}, so serialized handles carry their link. */
+  override toJSON() {
+    return { ...super.toJSON(), url: this.webUrl() };
   }
 
   /** Search documents by name and content, most relevant first, auto-paginated. */

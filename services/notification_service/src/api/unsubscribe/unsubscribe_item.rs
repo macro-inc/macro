@@ -20,7 +20,7 @@ pub struct UnsubscribeItemPathParams {
     pub item_id: String,
 }
 
-fn deserialize_item_type<'de, D: serde::Deserializer<'de>>(
+pub(super) fn deserialize_item_type<'de, D: serde::Deserializer<'de>>(
     deserializer: D,
 ) -> Result<EntityType, D::Error> {
     let value = String::deserialize(deserializer)?;

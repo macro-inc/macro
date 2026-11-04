@@ -1,6 +1,5 @@
 import { ViewShell } from '@app/components/view-shell';
 import { startPendingSession } from '@app/features/block-agent/context/pending-session';
-import { markAgentSessionNotificationsSeenOnOpen } from '@app/features/block-agent/mark-session-notifications-seen';
 import { AgentSettings } from '@app/features/settings/AgentSettings';
 import { IntegrationsPage } from '@app/features/settings/IntegrationsPage';
 import { withEntityNotifications } from '@app/features/soup/entity-notifications';
@@ -22,6 +21,7 @@ import { useUserId } from '@core/context/user';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import { ListEntityMetadataQueryProvider } from '@entity';
 import SpinnerIcon from '@icon/system/regular/spinner.svg';
+import { markRowNotificationsSeenOnOpen } from '@notifications/mark-row-seen';
 import { useWarmAgentSessionQuery } from '@queries/agent-session/warm';
 import { useSoupAstItemsQuery } from '@queries/soup/items';
 import {
@@ -39,8 +39,11 @@ import {
 import { routineContent } from '../../routines/routine-navigation';
 import { RoutinesPage } from '../../routines/routines-page';
 import '../agents-view.css';
+import { useFeatureFlag } from '@app/lib/analytics/posthog';
 import { ComposerGreeting } from '@core/component/ComposerGreeting';
+import { enableAgentUpdates } from '@core/constant/featureFlags';
 import { fireAndForget } from '@core/util/fireAndForget';
+import type { AgentSessionEntity } from '@entity';
 import { AgentSessionPane } from '../components/AgentSessionPane';
 import { AgentsSidebar } from '../components/AgentsSidebar';
 import { Topbar } from '../components/Topbar';
@@ -57,6 +60,7 @@ import {
 } from '../core/recent-conversations';
 import { kindForBot } from '../core/roster';
 import { type AgentsRoute, agentsRouteId } from '../core/route';
+import { createPersistedComposerDraft } from '../primitives/composer-draft';
 import { createConversationListView } from '../primitives/conversation-list-view';
 import { createWorkspaceMode } from '../primitives/workspace-mode';
 import { agentConversationsQuery } from '../queries/agent-conversations-query';
@@ -86,6 +90,7 @@ function AgentsWorkspace(props: { route?: AgentsRoute }) {
   const layout = useSplitLayout();
   const orchestrator = useGlobalBlockOrchestrator();
   const userId = useUserId();
+  const updatesFlag = useFeatureFlag(enableAgentUpdates);
   useWarmAgentSessionQuery(userId);
   const notifications = useGlobalNotificationSource();
   const mode = (): AgentsMode => props.route?.mode ?? 'chat';
@@ -144,7 +149,7 @@ function AgentsWorkspace(props: { route?: AgentsRoute }) {
   );
   const dataMode = () => dataModeFor(selected() ? mode() : workspace.mode());
   const [mobileList, setMobileList] = createSignal(!isRoutinesPage());
-  const [draft, setDraft] = createSignal('');
+  const persistedDraft = createPersistedComposerDraft(undefined, userId);
   const [search, setSearch] = createSignal('');
   // Routines that run often leave their runs unlisted; those stay a click
   // away instead of in the list.
@@ -168,6 +173,10 @@ function AgentsWorkspace(props: { route?: AgentsRoute }) {
     )
   );
   const partitioned = createMemo(() => partitionArchived(conversations()));
+  const updateSessions = () =>
+    (query.isPending ? [] : (query.data?.entities ?? [])).filter(
+      (entity): entity is AgentSessionEntity => entity.type === 'agent_session'
+    );
   const modeForConversation = (conversation: AgentConversationEntity) =>
     conversationMode(conversation, (botId) =>
       kindForBot(botId, rosterSource.roster())
@@ -201,9 +210,10 @@ function AgentsWorkspace(props: { route?: AgentsRoute }) {
         const content = panel.handle.content();
         if (
           content.type === 'component' &&
-          typeof content.params?.draft === 'string'
+          typeof content.params?.draft === 'string' &&
+          content.params.draft.length > 0
         )
-          setDraft(content.params.draft);
+          persistedDraft.setDraft(content.params.draft);
         showComposer();
       }
     )
@@ -368,7 +378,7 @@ function AgentsWorkspace(props: { route?: AgentsRoute }) {
       showUnlistedRuns={showUnlistedRuns()}
       onShowUnlistedRunsChange={setShowUnlistedRuns}
       onOpenConversation={(conversation, event) => {
-        markAgentSessionNotificationsSeenOnOpen(conversation, notifications);
+        markRowNotificationsSeenOnOpen(conversation, notifications);
         openConversation(
           conversation,
           event,
@@ -452,6 +462,21 @@ function AgentsWorkspace(props: { route?: AgentsRoute }) {
                                 classList={{ hidden: page() !== 'new' }}
                               >
                                 <NewChatPage
+                                  showUpdates={
+                                    updatesFlag().enabled && page() === 'new'
+                                  }
+                                  updateSessions={updateSessions()}
+                                  onOpenUpdateSession={(id) => {
+                                    const session = updateSessions().find(
+                                      (item) => item.id === id
+                                    );
+                                    if (session)
+                                      openConversation(
+                                        session,
+                                        undefined,
+                                        modeForConversation(session)
+                                      );
+                                  }}
                                   mode={workspace.mode()}
                                   onModeChange={workspace.setMode}
                                   active={
@@ -462,8 +487,8 @@ function AgentsWorkspace(props: { route?: AgentsRoute }) {
                                     composerFocus = focus;
                                   }}
                                   workspaceId={panel.handle.id}
-                                  draft={draft()}
-                                  onDraftChange={setDraft}
+                                  draft={persistedDraft.draft()}
+                                  onDraftChange={persistedDraft.setDraft}
                                   roster={rosterSource.roster()}
                                   rosterLoading={rosterSource.loading()}
                                   availabilityLoading={rosterSource.availabilityLoading()}

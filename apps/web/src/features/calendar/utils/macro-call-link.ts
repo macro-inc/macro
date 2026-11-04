@@ -79,6 +79,14 @@ export function removeCalendarMacroCall(
   };
 }
 
+/** The location event details show: empty when it is only the meeting's Macro call link. */
+export function calendarEventLocation(event: CalendarCallContent) {
+  return removeCalendarMacroCall(
+    { location: event.location },
+    calendarMacroCallUrl(event)
+  ).location.trim();
+}
+
 /** Attach one invitation link without replacing a physical location or notes. */
 export function attachCalendarMacroCall(
   content: Pick<CalendarCallContent, 'description' | 'location'>,

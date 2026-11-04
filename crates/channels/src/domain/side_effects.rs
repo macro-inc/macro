@@ -459,9 +459,16 @@ where
     N: ChannelNotificationSender + Clone,
     K: ChannelContactsDispatcher + Clone,
 {
-    /// Resolve the public bot profile when the message sender is a bot.
+    /// Resolve the public bot profile when the message sender is a bot. A post
+    /// a user made through a client, such as an MCP client, is that client's.
     async fn bot_profile_for_message(&self, message: &MutatedMessage) -> Option<BotSenderProfile> {
         let bot_id = message.sender_id.as_bot()?.bot_id();
+        if let Some(client) = &message.triggered_via {
+            return Some(BotSenderProfile {
+                name: client.clone(),
+                avatar_url: None,
+            });
+        }
         if bot_id == bot_id::MACRO_AI_BOT_ID {
             return Some(BotSenderProfile {
                 name: bot_id::MACRO_AI_NAME.to_string(),
@@ -715,6 +722,27 @@ where
             return;
         }
 
+        // A mention inside a thread is thread news, like the reply carrying it:
+        // the notification is filed against the thread root, so sending it to
+        // the whole channel would pull members who never joined the thread into
+        // it. A top-level mention still reaches everyone, who see the message in
+        // the channel anyway.
+        let recipient_ids = match message.thread_id {
+            Some(_) => recipients_excluding(
+                context
+                    .thread_context
+                    .participants
+                    .iter()
+                    .map(|participant| participant.as_ref()),
+                context.sender.as_user().map(|user_id| user_id.as_ref()),
+            )
+            .collect(),
+            None => context.recipients_without_sender.clone(),
+        };
+        if recipient_ids.is_empty() {
+            return;
+        }
+
         for document in &context.document_mentions {
             self.send_notification(ChannelNotificationEffect::DocumentMention {
                 mention: ChannelMentionNotification {
@@ -728,7 +756,7 @@ where
                     sender: context.sender.clone(),
                 },
                 document: document.clone(),
-                recipient_ids: context.recipients_without_sender.clone(),
+                recipient_ids: recipient_ids.clone(),
             })
             .await;
         }

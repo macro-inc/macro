@@ -27,6 +27,7 @@ pub struct Service<Fs: FsRepo> {
     bundle_routes: BundleRoutes,
     pending_reload_bundle_build: Option<u64>,
     reload_dispatched_at: Option<Instant>,
+    reload_held: bool,
 }
 
 enum WorkerCommand {
@@ -43,6 +44,8 @@ pub enum ApplyUpdateResult {
     ReloadNeeded,
     /// The bundle root was already applied and a reload has already been dispatched.
     ReloadAlreadyDispatched,
+    /// The page is holding reloads, so anything pending stays pending.
+    Held,
 }
 
 /// Main thread sends on this to start the checker loop.
@@ -563,6 +566,7 @@ impl<Fs: FsRepo> Service<Fs> {
             bundle_routes,
             pending_reload_bundle_build: None,
             reload_dispatched_at: None,
+            reload_held: false,
         }
     }
 
@@ -624,6 +628,10 @@ impl<Fs: FsRepo> Service<Fs> {
     /// The worker remains in `Completed` until the reloaded webview acknowledges
     /// that it mounted with the new bundle root.
     pub async fn apply_update(&mut self, cache_dir: &Path) -> Result<ApplyUpdateResult, Report> {
+        if self.reload_held {
+            return Ok(ApplyUpdateResult::Held);
+        }
+
         if self.pending_reload_bundle_build.is_some() {
             return Ok(if self.reload_dispatched_at.is_some() {
                 ApplyUpdateResult::ReloadAlreadyDispatched
@@ -662,6 +670,11 @@ impl<Fs: FsRepo> Service<Fs> {
         self.reload_dispatched_at = None;
 
         Ok(ApplyUpdateResult::ReloadNeeded)
+    }
+
+    /// Hold or release automatic reloads for work the page would lose to one.
+    pub fn set_reload_held(&mut self, held: bool) {
+        self.reload_held = held;
     }
 
     /// Record that the pending reload was successfully dispatched to the webview.
@@ -1419,6 +1432,7 @@ mod tests {
                 bundle_routes: BundleRoutes::new(embedded_bundle_build),
                 pending_reload_bundle_build: None,
                 reload_dispatched_at: None,
+                reload_held: false,
             },
             start_rx,
         )
@@ -2014,6 +2028,7 @@ mod tests {
             bundle_routes: BundleRoutes::new(0),
             pending_reload_bundle_build: None,
             reload_dispatched_at: None,
+            reload_held: false,
         };
 
         assert!(service.retry_waiting_for_wifi().unwrap());

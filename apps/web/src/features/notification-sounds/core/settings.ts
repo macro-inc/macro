@@ -4,6 +4,12 @@ import {
   notificationSoundCategory,
   soundCategoryForEvent,
 } from './categories';
+import {
+  DEFAULT_QUIET_HOURS,
+  isWithinQuietHours,
+  parseQuietHours,
+  type QuietHours,
+} from './quiet-hours';
 import { isNotificationSoundId, type NotificationSoundId } from './sounds';
 
 export type NotificationSoundCategorySettings = {
@@ -20,6 +26,8 @@ export type NotificationSoundSettings = {
     NotificationSoundCategoryId,
     NotificationSoundCategorySettings
   >;
+  /** Weekly schedule that silences sounds and desktop alerts. */
+  quietHours: QuietHours;
 };
 
 function categorySettings(
@@ -49,6 +57,7 @@ export const DEFAULT_NOTIFICATION_SOUND_SETTINGS: NotificationSoundSettings = {
     const category = notificationSoundCategory(id);
     return { enabled: category.defaultEnabled, sound: category.defaultSound };
   }),
+  quietHours: DEFAULT_QUIET_HOURS,
 };
 
 const storedSettingsSchema = z.object({
@@ -60,6 +69,7 @@ const storedSettingsSchema = z.object({
       z.object({ enabled: z.boolean().optional(), sound: z.unknown() })
     )
     .optional(),
+  quietHours: z.unknown().optional(),
 });
 
 /**
@@ -84,6 +94,7 @@ export function parseNotificationSoundSettings(
   return {
     enabled: stored.enabled ?? defaults.enabled,
     volume: stored.volume ?? defaults.volume,
+    quietHours: parseQuietHours(stored.quietHours),
     categories: categorySettings((id) => {
       const saved = stored.categories?.[id];
       const sound = saved?.sound;
@@ -103,8 +114,10 @@ export function parseNotificationSoundSettings(
  */
 export function soundForNotification(
   eventTag: string,
-  settings: NotificationSoundSettings
+  settings: NotificationSoundSettings,
+  now = new Date()
 ): NotificationSoundId | null {
+  if (isWithinQuietHours(settings.quietHours, now)) return null;
   if (!settings.enabled || settings.volume === 0) return null;
   const categoryId = soundCategoryForEvent(eventTag);
   if (!categoryId) return null;

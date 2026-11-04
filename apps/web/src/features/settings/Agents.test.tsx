@@ -57,6 +57,9 @@ vi.mock('./components/instructions-editor', () => ({
 vi.mock('./components/coding-preferences-setting', () => ({
   CodingPreferencesSetting: () => null,
 }));
+vi.mock('./components/auto-archive-setting', () => ({
+  AutoArchiveSetting: () => null,
+}));
 
 const [searchParams, updateSearchParams] = createStore<{
   createAgent?: string;
@@ -1287,6 +1290,7 @@ describe('Agents', () => {
     fireEvent.input(within(dialog).getByLabelText('Name'), {
       target: { value: 'Bug fixer' },
     });
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Add key' }));
     fireEvent.input(within(dialog).getByLabelText('Anthropic API key'), {
       target: { value: 'sk-ant-api03-abc' },
     });
@@ -1301,6 +1305,35 @@ describe('Agents', () => {
       );
       expect(screen.queryByRole('dialog')).toBeNull();
     });
+  });
+
+  it('offers an optional API key without asking for one', async () => {
+    render(() => <Agents {...agentsPageProps} />);
+    fireEvent.click(screen.getByRole('button', { name: 'Add agent' }));
+
+    const dialog = screen.getByRole('region', { name: /^(New|Edit) agent$/ });
+    expect(within(dialog).queryByLabelText('Anthropic API key')).toBeNull();
+    expect(
+      within(dialog).getByText('Runs on Macro usage unless you add one.')
+    ).toBeTruthy();
+
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Add key' }));
+    fireEvent.click(
+      within(dialog).getByRole('button', { name: 'Cancel API key' })
+    );
+    expect(within(dialog).queryByLabelText('Anthropic API key')).toBeNull();
+
+    fireEvent.input(within(dialog).getByLabelText('Name'), {
+      target: { value: 'Bug fixer' },
+    });
+    fireEvent.click(
+      within(dialog).getByRole('button', { name: 'Create agent' })
+    );
+    await waitFor(() => {
+      expect(screen.queryByRole('dialog')).toBeNull();
+    });
+    expect(apiKeyMocks.save).not.toHaveBeenCalled();
+    expect(apiKeyMocks.remove).not.toHaveBeenCalled();
   });
 
   it("removes an agent's saved API key, and locks the field on a free plan", async () => {
@@ -1371,10 +1404,10 @@ describe('Agents', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Edit Bug fixer' }));
     const dialog = screen.getByRole('region', { name: /^(New|Edit) agent$/ });
 
+    expect(within(dialog).queryByLabelText('Anthropic API key')).toBeNull();
     expect(
-      (within(dialog).getByLabelText('Anthropic API key') as HTMLInputElement)
-        .disabled
-    ).toBe(true);
+      within(dialog).queryByRole('button', { name: 'Add key' })
+    ).toBeNull();
     expect(
       within(dialog).getByText(
         'Agent API keys are part of the Premium and Max plans.'

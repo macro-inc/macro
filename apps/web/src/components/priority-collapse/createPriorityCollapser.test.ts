@@ -175,15 +175,18 @@ describe('createPriorityCollapser', () => {
         set(value);
       };
 
-    collapser.register({
-      id: 'tabs',
-      priority: 1,
-      collapsed: tabsCollapsed,
-      setCollapsed: track('tabs', setTabsCollapsed),
-    });
+    const registerTabs = () =>
+      collapser.register({
+        id: 'tabs',
+        priority: 1,
+        collapsed: tabsCollapsed,
+        setCollapsed: track('tabs', setTabsCollapsed),
+      });
+    const unregisterTabs = registerTabs();
     collapser.register({
       id: 'cap',
       priority: Number.MAX_SAFE_INTEGER,
+      reclaimSpaceOnExpand: true,
       collapsed: capped,
       setCollapsed: track('cap', setCapped),
     });
@@ -201,6 +204,8 @@ describe('createPriorityCollapser', () => {
         retryWidth = width;
       },
       tabsCollapsed,
+      registerTabs,
+      unregisterTabs,
       capped,
       transitions,
     };
@@ -230,6 +235,45 @@ describe('createPriorityCollapser', () => {
         .filter(({ collapsed, silent }) => !collapsed && !silent)
         .map(({ id }) => id)
     ).toEqual(['cap', 'tabs']);
+
+    harness.dispose();
+  });
+
+  it('collapses re-registered items before keeping the title capped', () => {
+    const harness = createLastResortCapHarness();
+
+    // An active picker freezes its chips while a new tag consumes title space.
+    harness.unregisterTabs();
+    harness.setAvailableWidth(75);
+    harness.invalidate();
+    expect(harness.tabsCollapsed()).toBe(false);
+    expect(harness.capped()).toBe(true);
+
+    // Closing the picker restores tag registrations without resizing the row.
+    harness.registerTabs();
+    harness.invalidate();
+    expect(harness.tabsCollapsed()).toBe(true);
+    expect(harness.capped()).toBe(false);
+
+    harness.dispose();
+  });
+
+  it('collapses re-registered items even when the title still needs truncation', () => {
+    const harness = createLastResortCapHarness();
+
+    harness.unregisterTabs();
+    harness.setAvailableWidth(50);
+    harness.invalidate();
+    expect(harness.capped()).toBe(true);
+
+    harness.transitions.length = 0;
+    harness.registerTabs();
+    harness.invalidate();
+    expect(harness.tabsCollapsed()).toBe(true);
+    expect(harness.capped()).toBe(true);
+    expect(
+      harness.transitions.filter(({ id, silent }) => id === 'cap' && !silent)
+    ).toEqual([]);
 
     harness.dispose();
   });
@@ -272,6 +316,25 @@ describe('createPriorityCollapser', () => {
         .filter(({ collapsed }) => collapsed)
         .map(({ id }) => id)
     ).toEqual(['first']);
+
+    harness.dispose();
+  });
+
+  it('preserves fitting controls when another control cannot expand', () => {
+    const harness = createHarness();
+    const selector = harness.register('selector', 2, 100, 10);
+    harness.invalidate();
+    expect(selector()).toBe(true);
+
+    const tabs = harness.register('tabs', 1, 50, 20);
+    harness.transitions.length = 0;
+    harness.invalidate();
+
+    expect(selector()).toBe(true);
+    expect(tabs()).toBe(false);
+    expect(
+      harness.transitions.filter(({ id, silent }) => id === 'tabs' && !silent)
+    ).toEqual([]);
 
     harness.dispose();
   });

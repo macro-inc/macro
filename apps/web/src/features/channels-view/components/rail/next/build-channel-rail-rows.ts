@@ -84,6 +84,7 @@ export function buildChannelSectionRows(options: {
 
 type SectionOptions = {
   preferences: Partial<Record<ChannelSectionKey, ChannelSectionPreferences>>;
+  order?: readonly ChannelSectionKey[];
   channelById: (id: string) => ChannelEntity | undefined;
   unreadChannelIds: ReadonlySet<string>;
   /** Referenced-channel feedback; include custom sections only while expanded. */
@@ -271,47 +272,29 @@ export function buildChannelRailRows(
     });
   }
 
-  const labelledIds = new Set(
-    channelSectionRows.flatMap((row) =>
-      row.kind === 'conversation' && row.labelId ? [row.channel.id] : []
-    )
-  );
-  // Membership still hides channels when their section is collapsed.
-  for (const row of channelSectionRows) {
-    if (row.kind === 'label') {
-      for (const id of row.label.channelIds) {
-        labelledIds.add(id);
-      }
-    }
-  }
+  rows.push({
+    kind: 'section',
+    id: 'section:team_channels',
+    group: 'team_channels',
+  });
 
-  for (const group of ['team_channels', 'channels'] as const) {
-    const channels = items[group].filter(
-      (channel) => !labelledIds.has(channel.id)
-    );
-
-    if (group === 'channels' && channels.length === 0) {
-      continue;
-    }
-
-    rows.push({ kind: 'section', id: `section:${group}`, group });
-
-    if (!expandedGroups[group]) {
-      continue;
-    }
-
-    for (const channel of channels) {
+  if (expandedGroups.team_channels) {
+    for (const channel of items.team_channels) {
       rows.push({
         kind: 'conversation',
         id: rowKeyForChannel(channel.id),
-        group,
-        scope: group,
+        group: 'team_channels',
+        scope: 'team_channels',
         localIndex: 0,
         channel,
       });
     }
 
-    rows.push({ kind: 'status', id: `status:${group}`, group });
+    rows.push({
+      kind: 'status',
+      id: 'status:team_channels',
+      group: 'team_channels',
+    });
   }
 
   let previousLabelId: string | undefined;
@@ -347,8 +330,10 @@ export function buildChannelRailRows(
     appendReferenceStatus(`label:${previousLabelId}`, 'team_channels');
   }
 
+  const ordered = orderChannelRailSections(rows, sectionOptions?.order ?? []);
+
   // Retain visual-order indexes for callers using the flat keyboard list.
-  rows.forEach((row, index) => {
+  ordered.forEach((row, index) => {
     if (
       (row.kind === 'conversation' && row.group !== 'direct_messages') ||
       row.kind === 'label'
@@ -357,7 +342,9 @@ export function buildChannelRailRows(
     }
   });
 
-  return sectionOptions ? applySectionPreferences(rows, sectionOptions) : rows;
+  return sectionOptions
+    ? applySectionPreferences(ordered, sectionOptions)
+    : ordered;
 }
 
 export type ChannelRailSectionRows = {
@@ -380,6 +367,22 @@ export function groupChannelRailSections(rows: readonly ChannelRailRow[]) {
   }
 
   return sections;
+}
+
+/** Keep saved sections in order and append new sections in source order. */
+export function orderChannelRailSections(
+  rows: readonly ChannelRailRow[],
+  order: readonly ChannelSectionKey[]
+): ChannelRailRow[] {
+  const sections = groupChannelRailSections(rows);
+  const keys = [...new Set(order)].filter((key) => sections.has(key));
+  const missing = [...sections.keys()].filter((key) => !keys.includes(key));
+  keys.push(...missing);
+
+  return keys.flatMap((key) => {
+    const section = sections.get(key);
+    return section ? [section.heading, ...section.rows] : [];
+  });
 }
 
 /** Page at the rendered section boundary, not a source tail hidden by a label. */

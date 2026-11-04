@@ -38,6 +38,7 @@ import { match, P } from 'ts-pattern';
 import { shareEntity } from '../access-requests/core/types';
 import { externalChatContent } from '../external-view/hosted-content';
 import { projectRouteId } from '../projects/core/route';
+import { routineContent } from '../routines/routine-navigation';
 import {
   getDocumentCommentLocation,
   type NotificationEntityOverride,
@@ -648,6 +649,14 @@ function getSupportedHandler(
         };
       })
       .with('inbox_reauth_required', () => null)
+      .with('routine_run_finished', () => {
+        return async (lm: SplitManager, newSplit: boolean = false) =>
+          openContent(lm, routineContent(notification.entity_id), {
+            newSplit,
+            sourceHandle,
+            onApplied,
+          });
+      })
       .exhaustive(() => null)
   );
 }
