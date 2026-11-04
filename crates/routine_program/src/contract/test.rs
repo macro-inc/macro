@@ -64,7 +64,14 @@ fn each_code_step_sees_the_outputs_of_the_steps_before_it() {
     let files = routine.check_files();
     let names: Vec<_> = files.iter().map(|file| file.name.as_str()).collect();
     assert_eq!(names, ["step_0.ts", "step_1.ts"]);
-    let context = |file: &CheckFile| file.source.lines().last().unwrap().to_owned();
+    // The context's type, then the check that `main` takes it.
+    let context = |file: &CheckFile| file.source.lines().rev().nth(1).unwrap().to_owned();
+    for file in &files {
+        assert_eq!(
+            file.source.lines().last(),
+            Some("main satisfies (context: StepContext) => unknown;")
+        );
+    }
     assert_eq!(
         context(&files[0]),
         "type StepContext = RoutineStepContext<{  }, {  }>;"
@@ -100,7 +107,7 @@ fn a_step_sees_its_knobs_typed_but_not_their_values() {
     };
     let files = with("Low", 7.0).check_files();
     assert_eq!(
-        files[0].source.lines().last().unwrap(),
+        files[0].source.lines().rev().nth(1).unwrap(),
         r#"type StepContext = RoutineStepContext<{  }, { priority: "Low" | "High \"now\""; days: number; note: string; urgent: string; notify: boolean }>;"#
     );
     // Changing a value changes nothing the checker sees.

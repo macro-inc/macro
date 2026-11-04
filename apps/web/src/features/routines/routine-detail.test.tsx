@@ -797,6 +797,29 @@ describe('routine editor triggers', () => {
     });
   });
 
+  it('refreshes clean settings rewritten on the server at the same revision', async () => {
+    render(() => <Routine />);
+    // A code upgrade changes the configuration but keeps its revision.
+    setSchedules([{ ...cron, name: 'Rewritten elsewhere' }]);
+    mocks.changePrompt('Edit after the rewrite');
+    await vi.advanceTimersByTimeAsync(300);
+    expect(mocks.update).toHaveBeenCalledWith({
+      scheduleId: cron.id,
+      body: expect.objectContaining({ name: 'Rewritten elsewhere' }),
+    });
+  });
+
+  it('does not overwrite a same-revision rewrite while a local edit is queued', async () => {
+    render(() => <Routine />);
+    mocks.changePrompt('Unsaved local instructions');
+    setSchedules([{ ...cron, name: 'Rewritten elsewhere' }]);
+    await vi.advanceTimersByTimeAsync(300);
+    expect(mocks.update).not.toHaveBeenCalled();
+    expect(screen.getByRole('alert').textContent).toContain(
+      'changed elsewhere'
+    );
+  });
+
   it('supports keyboard switching between settings and run history', async () => {
     render(() => <Routine />);
     const settings = screen.getByRole('tab', { name: 'Overview' });

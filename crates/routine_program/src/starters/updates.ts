@@ -1,7 +1,7 @@
 export async function main({ macro, trigger, knobs }: StepContext) {
   if (trigger.kind !== 'event') return { posted: false };
   const name = trigger.item.item?.name ?? 'A task';
-  for (const channel of await macro.channels.list()) {
+  for await (const channel of macro.channels.list()) {
     if ((await channel.name()) === knobs.channel) {
       await channel.send(`Done: ${name}`);
       return { posted: true };

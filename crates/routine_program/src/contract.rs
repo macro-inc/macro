@@ -242,6 +242,9 @@ impl Walk {
                         self.outputs(),
                         knobs(code)
                     ));
+                    // The runner calls `main` with the context; a step without
+                    // it, or one taking something else, would fail every run.
+                    source.push_str("main satisfies (context: StepContext) => unknown;\n");
                     self.files.push(CheckFile {
                         index,
                         title: code.title.trim().to_owned(),

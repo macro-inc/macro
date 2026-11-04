@@ -66,8 +66,17 @@ pub trait RoutineCredentials: Send + Sync + 'static {
 
 impl RoutineCredentials for MacroApiTokenSigner {
     async fn mint(&self, owner: &MacroUserIdStr<'static>) -> anyhow::Result<String> {
-        // Writes are the owner's own, not an agent's.
-        Ok(self.mint_for(owner, TOKEN_LIFETIME_SECONDS).await?)
+        // The owner's access, attributed to Macro acting for them, as an agent
+        // step's writes are: routines start only on people's actions, so a
+        // step posting where its routine listens doesn't start it again.
+        Ok(self
+            .mint_for_agent(
+                owner,
+                TOKEN_LIFETIME_SECONDS,
+                Some(bot_id::MACRO_NEW_BOT_ID.as_uuid()),
+                None,
+            )
+            .await?)
     }
 }
 

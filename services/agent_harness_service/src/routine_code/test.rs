@@ -448,6 +448,18 @@ export async function main({ macro, trigger, steps, run }: StepContext) {
             .await
             .unwrap();
         assert!(!old.is_empty());
+        // The runner calls `main` with the context, so a step whose `main`
+        // takes something else, or that has none, fails here, not every run.
+        for source in [
+            "export async function main(value: string) { return value.toUpperCase(); }",
+            "export async function run() { return 1; }",
+        ] {
+            assert_eq!(
+                code.check_program(&checked(source)).await.unwrap().len(),
+                1,
+                "{source}"
+            );
+        }
         assert_eq!(
             code.sdk().unwrap(),
             routine_program::code_version(code_execution::domain::sdk_fingerprint())

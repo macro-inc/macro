@@ -55,8 +55,9 @@ export function createRoutineDetail(
     if (!previous || !editableTrigger()) {
       throw new Error('This routine is no longer editable.');
     }
+    // A code upgrade changes the configuration but not its revision.
     if (
-      previous.revision > baselineRevision &&
+      previous.revision >= baselineRevision &&
       previous.configurationKey !== baselineKey
     )
       throw new RoutineConflictError();
@@ -127,19 +128,18 @@ export function createRoutineDetail(
     options.onRename(current.name);
   }
 
-  // A server revision refreshes clean settings, while a pending edit keeps its
+  // A server change refreshes clean settings, while a pending edit keeps its
   // original revision so a conflicting remote change cannot be overwritten.
+  // A code upgrade rewrites steps without a new revision.
   createEffect(
     on(
-      () => schedule()?.revision,
-      (revision) => {
+      () => [schedule()?.revision, schedule()?.configurationKey] as const,
+      ([revision, key]) => {
         if (revision === undefined) return;
-        if (
-          !state() ||
-          (revision > baselineRevision &&
-            !autosave.dirty() &&
-            !autosave.saving())
-        )
+        const changed =
+          revision > baselineRevision ||
+          (revision === baselineRevision && key !== baselineKey);
+        if (!state() || (changed && !autosave.dirty() && !autosave.saving()))
           initializeDraft();
       }
     )

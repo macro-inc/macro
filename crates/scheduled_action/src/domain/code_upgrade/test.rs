@@ -359,3 +359,24 @@ async fn a_rewrite_must_still_suit_the_steps_that_read_its_output() {
             .starts_with("type StepContext = RoutineStepContext<")
     );
 }
+
+/// A later step reads outputs that don't exist before the run, so its
+/// rewrite stands on the joint type check rather than a dry run.
+#[tokio::test]
+async fn a_rewritten_later_step_is_checked_but_not_dry_run() {
+    let code = Code {
+        dry_run_fails: true,
+        ..Code::default()
+    };
+    let upgrades = Upgrades::default();
+    let action = action(json!({ "steps": [
+        { "type": "code", "id": "count", "title": "Count tasks", "source": "return { n: 1 }" },
+        { "type": "code", "title": "Report", "source": "await macro.tasks.create(steps.count.n)" },
+    ], "sdk": "0.2.0+old" }));
+    let program = upgrade(&code, &upgrades, &action).await.unwrap();
+    assert_eq!(
+        program.code_steps()[1].source,
+        "await macro.tasks.add(steps.count.n)"
+    );
+    assert!(code.dry_runs.lock().unwrap().is_empty());
+}

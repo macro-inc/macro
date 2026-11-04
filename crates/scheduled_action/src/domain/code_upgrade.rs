@@ -137,7 +137,14 @@ async fn rewrite(
     let outputs: Vec<String> = program
         .check_files()
         .into_iter()
-        .map(|file| file.source.lines().last().unwrap_or_default().to_owned())
+        .map(|file| {
+            file.source
+                .lines()
+                .rev()
+                .find(|line| line.starts_with("type StepContext = "))
+                .unwrap_or_default()
+                .to_owned()
+        })
         .collect();
     // Which code steps, in program order, were rewritten.
     let mut rewritten = Vec::new();
@@ -192,12 +199,13 @@ async fn rewrite(
     if let Some(run) = dry.get_mut("run").and_then(Value::as_object_mut) {
         run.insert("dryRun".into(), Value::Bool(true));
     }
-    for (step, rewritten) in program.code_steps().into_iter().zip(rewritten) {
+    // Only the first code step can run now: later ones read earlier steps'
+    // outputs, which aren't known before the run, so the check stands for them.
+    for (step, rewritten) in program.code_steps().into_iter().zip(rewritten).take(1) {
         if !rewritten {
             continue;
         }
-        // Earlier steps' outputs aren't known before the run; the dry run
-        // shows the step works on this trigger and changes nothing.
+        // The dry run shows the step works on this trigger and changes nothing.
         let outcome = code
             .run(
                 owner,
