@@ -121,6 +121,9 @@ function CollapsibleBody(props: { children: JSX.Element }) {
           collapsed() && 'overflow-hidden',
           expanded() && 'max-h-[50vh] overflow-y-auto'
         )}
+        // Safari never focuses a scroll box on its own, so without this a
+        // keyboard could not scroll a comment that has no links.
+        tabIndex={expanded() ? 0 : undefined}
         // Tabbing to a link under the cut (or in the fade) reveals it
         // instead of focusing something hidden.
         onFocusIn={(event) => {
