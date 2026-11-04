@@ -121,6 +121,7 @@ vi.mock('@channel/queries/prefetch-channel-target', () => ({
   prefetchChannelTarget: vi.fn(async () => {}),
 }));
 
+import { Telemetry } from '@macro-inc/observability';
 import {
   receiveNotificationTap,
   setPendingNotificationNavigationId,
@@ -137,6 +138,11 @@ const UNAUTHORIZED_ERROR = () =>
 const SERVER_ERROR = () =>
   new ThrownResultError([
     { code: 'SERVER_ERROR', message: 'Internal server error' },
+  ]);
+
+const NETWORK_ERROR = () =>
+  new ThrownResultError([
+    { code: 'NETWORK_ERROR', message: 'Network error occurred' },
   ]);
 
 let dispose: (() => void) | undefined;
@@ -182,6 +188,7 @@ beforeEach(() => {
 });
 
 afterEach(() => {
+  vi.restoreAllMocks();
   vi.unstubAllGlobals();
   dispose?.();
   dispose = undefined;
@@ -473,17 +480,55 @@ describe('BasePathComponent', () => {
     expect(container.textContent).toBe('');
   });
 
-  it('asks native users to verify their session when no local identity is available', async () => {
-    mocks.nativeMobile = true;
-    mocks.fetchUserInfo.mockRejectedValue(SERVER_ERROR());
+  it.each([
+    {
+      failure: 'network',
+      error: NETWORK_ERROR,
+      text: 'Unable to connect. Please check your network.',
+      detail: null,
+    },
+    {
+      failure: 'server',
+      error: SERVER_ERROR,
+      text: 'Macro isn’t responding. Please try again in a moment.',
+      detail: null,
+    },
+    {
+      failure: 'unexpected',
+      error: () =>
+        new ThrownResultError([
+          {
+            code: 'UNKNOWN_ERROR',
+            message:
+              'An unknown error occurred: RangeError: Maximum call stack size exceeded',
+          },
+        ]),
+      text: 'Something went wrong while loading Macro.',
+      detail:
+        'UNKNOWN_ERROR: An unknown error occurred: RangeError: Maximum call stack size exceeded',
+    },
+  ])(
+    'names a $failure failure when no local identity is available',
+    async ({ failure, error, text, detail }) => {
+      const report = vi.spyOn(Telemetry, 'error').mockImplementation(() => {});
+      mocks.nativeMobile = true;
+      mocks.fetchUserInfo.mockRejectedValue(error());
 
-    const container = renderRoute();
+      const container = renderRoute();
 
-    await vi.waitFor(() => {
-      expect(container.textContent).toContain('Unable to connect.');
-    });
-    expect(mocks.navigate).not.toHaveBeenCalled();
-  });
+      await vi.waitFor(() => {
+        expect(container.textContent).toContain(text);
+      });
+      expect(container.querySelector('.select-text')?.textContent ?? null).toBe(
+        detail
+      );
+      expect(report).toHaveBeenCalledExactlyOnceWith(expect.anything(), {
+        surface: 'session-verification',
+        failure,
+      });
+      expect(mocks.navigate).not.toHaveBeenCalled();
+    }
+  );
 
   it('enters the native app with a cached identity when its refresh fails', async () => {
     mocks.nativeMobile = true;
@@ -499,13 +544,13 @@ describe('BasePathComponent', () => {
     });
     await flush();
 
-    expect(container.textContent).not.toContain('Unable to connect.');
+    expect(container.querySelector('button')).toBeNull();
   });
 
   it('enters the app after session verification succeeds', async () => {
     mocks.nativeMobile = true;
     mocks.fetchUserInfo
-      .mockRejectedValueOnce(SERVER_ERROR())
+      .mockRejectedValueOnce(NETWORK_ERROR())
       .mockResolvedValue({ authenticated: true });
 
     const container = renderRoute();
