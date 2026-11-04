@@ -28,8 +28,8 @@ import { createVisibleRefresh } from '../visible-refresh';
 export const FOCUS_WINDOW_DAYS = 30;
 
 /**
- * The viewer's Focus threads as email rows, highest priority first, each
- * carrying its classification in `focus`.
+ * The viewer's Focus threads as email rows, in the server's newest-first order,
+ * each carrying its classification in `focus`.
  */
 export function mapEmailFocus(data: EmailFocusQuery): EmailEntity[] {
   const threads: EmailEntity[] = [];

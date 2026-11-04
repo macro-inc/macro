@@ -33,7 +33,7 @@ import type {
 const timestamp = (value: DateValue | null | undefined) =>
   value instanceof Date ? value.getTime() : Date.parse(value ?? '') || 0;
 
-// The same recency the other tabs order and group by.
+// The latest message in either direction, as `mapEmailFocus` dates each row.
 const recency = (email: EmailEntity) =>
   timestamp(email.sortTs ?? email.updatedAt ?? email.createdAt);
 
@@ -51,9 +51,11 @@ function matchesSearch(email: EmailEntity, text: string): boolean {
 }
 
 /**
- * Applies the view's inbox scope, filters and search to the Focus list, and
- * orders it here whatever order the server sent. Done threads leave at once, as on Signal: the server drops archived
- * threads only on the next read. Focus has no Status or Done filters.
+ * Applies the view's inbox scope, filters and search to the Focus list, then
+ * orders it. The server already sends it newest first, but sorting here keeps
+ * rows under their day headers, which go by each row's own date. Done threads
+ * leave at once, as on Signal: the server drops archived threads only on the
+ * next read. Focus has no Status or Done filters.
  */
 export function selectFocusEmails(
   emails: readonly EmailEntity[],
@@ -97,9 +99,9 @@ export function buildFocusRows(
 }
 
 /**
- * The Focus tab: signal threads the email focus worker found worth the
- * owner's attention. The whole list arrives in one read, so filtering and
- * ordering happen here rather than on the server.
+ * The Focus tab: inbox threads the email focus worker found worth the owner's
+ * attention. The whole list arrives in one read, so filtering and the chosen
+ * order are applied here.
  */
 export function useFocusEmailSource(
   state: EmailDataSourceInput,
