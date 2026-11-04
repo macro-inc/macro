@@ -21,10 +21,12 @@ export function MediaImageActions(props: { item: MediaItem }) {
   });
 
   return (
+    // Hidden buttons ignore the pointer, so a tap on a touchscreen laptop
+    // (where this mounts) opens the viewer instead of an unseen action.
     <div
       class={cn(
-        'absolute right-2 top-2 z-10 flex items-center rounded-full bg-surface/90 opacity-0 transition-opacity group-hover/media:opacity-100 group-focus-within/media:opacity-100',
-        actions.isBusy() && 'opacity-100'
+        'pointer-events-none absolute right-2 top-2 z-10 flex items-center rounded-full bg-surface/90 opacity-0 transition-opacity group-hover/media:pointer-events-auto group-hover/media:opacity-100 group-focus-within/media:pointer-events-auto group-focus-within/media:opacity-100',
+        actions.isBusy() && 'pointer-events-auto opacity-100'
       )}
       onClick={(event) => event.stopPropagation()}
     >
