@@ -15,6 +15,7 @@ import {
   useDeleteHarnessMutation,
   useHarnessesQuery,
 } from '@queries/harnesses/harnesses';
+import { useIsTeamOwner } from '@queries/team/teams';
 import type { Harness as RegisteredHarness } from '@service-storage/client';
 import { useSearchParams } from '@solidjs/router';
 import { ApiKeyInput, Button, confirmDialog, Dialog, Panel } from '@ui';
@@ -48,6 +49,7 @@ export function Harness(
   const cursorRegistered = () =>
     cursorStatus.isSuccess ? cursorStatus.data.registered : false;
   const harnessesQuery = useHarnessesQuery();
+  const isTeamOwner = useIsTeamOwner();
   const deleteHarnessMutation = useDeleteHarnessMutation();
   const [pairingDialog, setPairingDialog] = createSignal<
     | {
@@ -142,6 +144,7 @@ export function Harness(
             harnesses={harnessesQuery.isSuccess ? harnessesQuery.data : []}
             error={harnessesQuery.isError}
             onRemove={setRemovingHarness}
+            canRemoveShared={isTeamOwner()}
           />
           <LocalRuntimeCard />
           <div>

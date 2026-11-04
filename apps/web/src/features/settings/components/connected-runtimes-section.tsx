@@ -71,6 +71,8 @@ export function ConnectedRuntimesSection(props: {
   /** The runtimes could not be loaded; say so rather than show an empty page. */
   error: boolean;
   onRemove: (harness: RegisteredHarness) => void;
+  /** A team's owner can also take a machine the team runs on out of service. */
+  canRemoveShared: boolean;
 }) {
   const connectedCount = () =>
     props.harnesses.filter((harness) => harness.connected).length;
@@ -112,11 +114,19 @@ export function ConnectedRuntimesSection(props: {
                   <Show when={harness.access === 'owner'}>
                     <ShareRuntime harness={harness} />
                   </Show>
-                  <ConnectAction
-                    label="Remove"
-                    variant="danger"
-                    onClick={() => props.onRemove(harness)}
-                  />
+                  <Show
+                    when={
+                      harness.access === 'owner' ||
+                      (props.canRemoveShared &&
+                        harness.shared_team_ids.length > 0)
+                    }
+                  >
+                    <ConnectAction
+                      label="Remove"
+                      variant="danger"
+                      onClick={() => props.onRemove(harness)}
+                    />
+                  </Show>
                 </div>
               </div>
             )}

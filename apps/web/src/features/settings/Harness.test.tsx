@@ -145,6 +145,7 @@ vi.mock('@app/features/access-requests/access-requests', () => ({
 
 vi.mock('@queries/team/teams', () => ({
   useCurrentTeamQuery: () => ({ data: { team: { id: 'team-1' } } }),
+  useIsTeamOwner: () => () => false,
 }));
 
 vi.mock('@solidjs/router', () => ({
@@ -458,8 +459,23 @@ describe('Harness', () => {
     expect(screen.queryByText('Dev box')).toBeNull();
   });
 
-  it('confirms before removing a harness', async () => {
+  it('offers Share and Remove only to the runtime owner', () => {
     harnessMocks.query.data = [REGISTERED_HARNESS];
+    const { unmount } = render(() => <Harness />);
+    expect(screen.queryByRole('button', { name: /^Share/ })).toBeNull();
+    expect(screen.queryByRole('button', { name: 'Remove' })).toBeNull();
+    unmount();
+
+    harnessMocks.query.data = [{ ...REGISTERED_HARNESS, access: 'owner' }];
+    render(() => <Harness />);
+    expect(
+      screen.getByRole('button', { name: 'Share, 2 access requests' })
+    ).toBeTruthy();
+    expect(screen.getByRole('button', { name: 'Remove' })).toBeTruthy();
+  });
+
+  it('confirms before removing a harness', async () => {
+    harnessMocks.query.data = [{ ...REGISTERED_HARNESS, access: 'owner' }];
 
     render(() => <Harness />);
     fireEvent.click(screen.getByRole('button', { name: 'Remove' }));
