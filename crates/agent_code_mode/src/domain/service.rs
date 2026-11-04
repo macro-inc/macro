@@ -226,6 +226,8 @@ pub fn covered_by_code_sdk(name: &str, user_tool: bool) -> bool {
                 | "ReadThread"
                 | "UpdateThreadLabels"
                 | "SetSenderPolicy"
+                // macro.email.sendConfirmed runs the tool itself.
+                | "SendConfirmedEmail"
                 | "CreateChannel"
                 | "SendChannelMessage"
                 | "EditChannelMessage"

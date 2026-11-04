@@ -2921,6 +2921,46 @@ export type DecisionsResponses = {
 
 export type DecisionsResponse = DecisionsResponses[keyof DecisionsResponses];
 
+export type SendConfirmedEmailData = {
+    /**
+     * SendConfirmedEmail arguments: SendEmail's, plus userConfirmation
+     */
+    body: {
+        [key: string]: unknown;
+    };
+    path?: never;
+    query?: never;
+    url: '/email/send-confirmed';
+};
+
+export type SendConfirmedEmailErrors = {
+    /**
+     * Malformed, or missing userConfirmation
+     */
+    400: GenericErrorResponse;
+    /**
+     * Unauthorized
+     */
+    401: unknown;
+    /**
+     * Not sent: a blank confirmation, an inbox or attachment the user cannot use, or a delivery failure
+     */
+    422: GenericErrorResponse;
+};
+
+export type SendConfirmedEmailError = SendConfirmedEmailErrors[keyof SendConfirmedEmailErrors];
+
+export type SendConfirmedEmailResponses = {
+    /**
+     * SendEmailResponse
+     */
+    200: {
+        [key: string]: unknown;
+    };
+};
+
+export type SendConfirmedEmailResponse = SendConfirmedEmailResponses[keyof SendConfirmedEmailResponses];
+
 export type HealthHandlerData = {
     body?: never;
     path?: never;

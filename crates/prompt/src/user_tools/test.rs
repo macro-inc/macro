@@ -5,3 +5,10 @@ fn code_mode_reviews_leave_questions_on_acp() {
     assert!(instructions.contains("not a saved review"));
     assert!(instructions.contains("email drafts and calendar proposals"));
 }
+
+#[test]
+fn code_mode_thread_prompts_send_email_through_the_confirmed_sdk_method() {
+    let instructions = crate::CODE_MODE_SESSION_TOOL_USE_PROMPT.to_string();
+    assert!(instructions.contains("`macro.email.sendConfirmed` in ExecuteCode"));
+    assert!(!instructions.contains("SendConfirmedEmail"));
+}

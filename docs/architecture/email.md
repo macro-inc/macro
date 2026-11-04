@@ -645,3 +645,17 @@ The format-4 browser cache starts a separate physical database. Old nonempty
 general mutation queues are retained but are not imported into it; verify their
 recovery separately during the cache rollout. The email journal is independent
 of these cache files and retains its draft working copies and send attempts.
+
+## Agent program sends
+
+An agent's program (a code-mode run, marked by `x-macro-code-execution`, or a
+token with agent attribution; `macro_authorization::is_agent_run`) never sends
+an email the user has not seen. The REST send (`POST /email/messages`) and
+schedule (`PUT /email/drafts/scheduled/{id}`) routes answer it 403. It sends
+through a session review (`execution.reviews.create({kind: 'email'})`), whose
+card the user submits, or, for a prompt from a channel or document thread,
+through `macro.email.sendConfirmed`: the harness's
+`POST /cognition/email/send-confirmed` runs the `SendConfirmedEmail` tool,
+with its Markdown rendering, inbox choice, reply threading and document
+attachments, on the user's quoted approval.
+

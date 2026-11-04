@@ -83,7 +83,10 @@ export class EmailDraft extends EmailMessage {
     );
   }
 
-  /** Schedule this draft for sending. */
+  /**
+   * Schedule this draft for sending; an agent's program is refused (403),
+   * since the draft would go out unseen, and sends through a review instead.
+   */
   async schedule(
     sendTime: string,
     options?: { includeSignature?: boolean },

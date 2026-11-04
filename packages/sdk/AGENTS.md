@@ -124,6 +124,11 @@ the existing gateway prefixes.
 - Pipeline schema reads share the parent's cache; successful op batches clear it.
 - Email sends and other writes against hosted data are real actions; use mocks
   for automated SDK mutation tests.
+- `email.send`, `EmailThread.reply` and `EmailDraft.schedule` are refused
+  (403) for an agent's program. Programs send through
+  `execution.reviews.create({kind: 'email'})` or `email.sendConfirmed`, whose
+  cognition body and response are the generated `SendEmail` and
+  `SendEmailResponse` review types (the OpenAPI schema is opaque).
 
 - Carry the generation read with the draft through each mutation, including
   transfer and save. Attachment handles retain their reservation generation

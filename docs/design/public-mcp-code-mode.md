@@ -119,9 +119,11 @@ selection status. Trace headers already reach SDK calls.
 
 ## Decisions
 
-- **Email send.** Allowed. The SDK's `email.send` works over MCP code mode;
-  the MCP client's own approval before each `ExecuteCode` call is the gate, as
-  it is for every other MCP write.
+- **Email send.** Only on the user's quoted approval. The email routes refuse
+  a program's `email.send`, thread reply and draft schedule; MCP code mode has
+  no reviews, so a program sends with `email.sendConfirmed`, quoting the
+  user's reply approving that email. The MCP client's approval of an
+  `ExecuteCode` call does not show the user the email itself.
 - **Tool-result budget.** 32 KiB of references per task response. A first
   local run at 80 KiB produced an 87K-character response that Claude Code moved
   out of context into a file. Entities that do not fit whole fall back to their

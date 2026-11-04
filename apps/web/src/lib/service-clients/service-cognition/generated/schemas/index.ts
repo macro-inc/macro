@@ -276,6 +276,8 @@ export * from './sendChatMessagePayloadAllOf';
 export * from './sendChatMessagePayloadAllOfAdditionalInstructions';
 export * from './sendChatMessagePayloadAllOfAttachments';
 export * from './sendChatMessageResponse';
+export * from './sendConfirmedEmail200';
+export * from './sendConfirmedEmailBody';
 export * from './serverResponse';
 export * from './setPricingRequest';
 export * from './setPricingRequestPricePerAudioMinute';

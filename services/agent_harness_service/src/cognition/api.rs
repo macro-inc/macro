@@ -14,6 +14,7 @@ mod citations;
 mod completions;
 pub mod context;
 mod decisions;
+mod email_send;
 mod health;
 mod id_mapping;
 mod preview;
@@ -107,6 +108,10 @@ fn api_router(api_context: ApiContext) -> Router {
             post(structured_completion::structured_completion),
         )
         .route("/decisions", decisions::route())
+        .route(
+            "/email/send-confirmed",
+            post(email_send::send_confirmed_email),
+        )
         .route("/chat/completions", post(completions::handler))
         .route(
             "/database-query",

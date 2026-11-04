@@ -715,8 +715,9 @@ names who is being waited on. Once answered, the area shows the agent's passage 
 A prompt the agent read out of a channel or document thread opens no review card at all:
 the reply writes the whole email or calendar event into the thread and asks whether to go
 ahead, and a reply in that same thread approving it ("yes, send it" / "go ahead") is the
-confirmation - the agent then sends or creates directly (`SendConfirmedEmail`,
-`CreateConfirmedCalendarEvent`), with no session visit needed. Being asked to send or
+confirmation - the agent then sends or creates directly (`SendConfirmedEmail`, or
+`macro.email.sendConfirmed` in code mode, and `CreateConfirmedCalendarEvent`), with no
+session visit needed. Being asked to send or
 schedule something only produces the draft; nothing goes out before that approving reply.
 Images made with `GenerateImage` are saved to static file service. The bot embeds
 the returned URL as a Markdown image in its channel reply; generated images have

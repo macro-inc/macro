@@ -1,4 +1,9 @@
 import type {
+  EmailRecipient,
+  SendEmail,
+  SendEmailResponse,
+} from '../../../generated/agent-reviews';
+import type {
   ApiDraftContactInfo,
   GetMessageResponses,
   MessageOperationResponse,
@@ -8,6 +13,7 @@ import type {
 } from '../../../generated/email/types.gen';
 import { unwrap } from '../../utils';
 import type { MacroClient } from '../../utils/client';
+import type { Document } from '../documents/document';
 import { MacroEntity } from '../entity';
 import type { Label } from './label';
 import { Link } from './link';
@@ -28,6 +34,56 @@ export interface SendEmailOptions {
   subject: string;
   /** Plain-text body. */
   bodyText: string;
+}
+
+// The HTTP schema is opaque: the server serializes the Rust tool response,
+// whose TypeScript contract is generated from the same Rust type.
+function sendEmailResponse(response: unknown): SendEmailResponse {
+  return response as SendEmailResponse;
+}
+
+/** An email the user has approved in conversation, for `email.sendConfirmed`. */
+export interface ConfirmedEmailOptions {
+  /** Recipients. */
+  to: EmailRecipient[];
+  /** Cc recipients. */
+  cc?: EmailRecipient[];
+  /** Bcc recipients. */
+  bcc?: EmailRecipient[];
+  /** Subject line. */
+  subject: string;
+  /** The body, written as Markdown; it is rendered to HTML on send. */
+  body: string;
+  /**
+   * The connected inbox to send from. Omit it unless you know which inbox is
+   * right: a reply then goes out from the inbox that received the message it
+   * answers, and a new email from the user's primary inbox.
+   */
+  from?: Link;
+  /** The message this answers; the email is then sent as a reply in its thread. */
+  replyingTo?: EmailMessage;
+  /**
+   * Macro documents to attach as files: uploaded files (PDFs, images,
+   * spreadsheets, Word documents) the user can view, 18 MB together. An
+   * editor-native document has no file; link to it in the body instead.
+   */
+  attachments?: Document[];
+  /** `false` leaves the inbox signature off this one email; omit for the inbox's default. */
+  includeSignature?: boolean;
+  /**
+   * The user's own reply approving this specific email, quoted verbatim, such
+   * as their "yes, send it" after you wrote the email out for them. Never the
+   * request that asked you to write it, and never your own words.
+   */
+  userConfirmation: string;
+}
+
+/** A sent email: the message and the thread it belongs to. */
+export interface SentEmail {
+  /** The sent message. */
+  message: EmailMessage;
+  /** The thread the message belongs to. */
+  thread: EmailThread;
 }
 
 /**
@@ -51,7 +107,11 @@ export class EmailMessage extends MacroEntity<EmailMessageData> {
     return new EmailMessage(client, data.db_id, data);
   }
 
-  /** Send a new email message. Returns a handle when the API reports the created message's id. */
+  /**
+   * Send a new plain-text email; an agent's program is refused (403) and
+   * sends through a review or {@link EmailMessage.sendConfirmed} instead.
+   * Returns a handle when the API reports the created message's id.
+   */
   static async send(
     client: MacroClient,
     opts: SendEmailOptions,
@@ -70,6 +130,36 @@ export class EmailMessage extends MacroEntity<EmailMessageData> {
       }),
     );
     return message.db_id ? EmailMessage.byId(client, message.db_id) : undefined;
+  }
+
+  /** Send an email the user approved in conversation, quoting their approval; see `EmailNamespace.sendConfirmed`. */
+  static async sendConfirmed(
+    client: MacroClient,
+    opts: ConfirmedEmailOptions,
+  ): Promise<SentEmail> {
+    const email: SendEmail & { userConfirmation: string } = {
+      subject: opts.subject,
+      body: opts.body,
+      to: opts.to,
+      cc: opts.cc,
+      bcc: opts.bcc,
+      from: opts.from ? await opts.from.emailAddress() : undefined,
+      replyingToId: opts.replyingTo?.id,
+      includeSignature: opts.includeSignature,
+      attachments: opts.attachments?.map((document) => ({
+        documentId: document.id,
+      })),
+      userConfirmation: opts.userConfirmation,
+    };
+    const response = sendEmailResponse(
+      unwrap(await client.cognition.sendConfirmedEmail({ body: email })),
+    );
+    if (typeof response === 'string' || !response.sent)
+      throw new Error('The confirmed send did not report a sent message');
+    return {
+      message: EmailMessage.byId(client, response.sent.message_id),
+      thread: EmailThread.byId(client, response.sent.thread_id),
+    };
   }
 
   /** The message's subject line. */

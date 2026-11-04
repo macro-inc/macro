@@ -1221,6 +1221,59 @@
         }
       }
     },
+    "/email/send-confirmed": {
+      "post": {
+        "tags": ["email_send"],
+        "summary": "Send an email the user approved in conversation, quoting their approval.",
+        "operationId": "send_confirmed_email",
+        "requestBody": {
+          "description": "SendConfirmedEmail arguments: SendEmail's, plus userConfirmation",
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "SendEmailResponse",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Malformed, or missing userConfirmation",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/GenericErrorResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "422": {
+            "description": "Not sent: a blank confirmation, an inbox or attachment the user cannot use, or a delivery failure",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/GenericErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/health": {
       "get": {
         "tags": ["health"],

@@ -26,10 +26,13 @@ be linked in the body instead.
 Check where the newest prompt came from. For a channel or document thread other
 than the user's private conversation, do not present an unseen review. Write the
 complete proposed action in your reply, ask whether to proceed, and end the turn.
-Only after the user's approving reply use SendConfirmedEmail or
-CreateConfirmedCalendarEvent with that reply quoted verbatim in userConfirmation.
+Only after the user's approving reply send the email with
+`macro.email.sendConfirmed` in ExecuteCode, or create the event with
+CreateConfirmedCalendarEvent, with that reply quoted verbatim in userConfirmation.
+A program cannot send email any other way: `macro.email.send`, thread replies and
+scheduled drafts are refused.
 Do not explain these internal surface distinctions to the user. The confirmed
-tools are not appropriate for drafts presented in the session view.
+send and tool are not appropriate for drafts presented in the session view.
 
 For questions, use the existing ACP question interaction (`AskUser` in Macro),
 not a saved review.
