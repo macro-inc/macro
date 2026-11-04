@@ -19,6 +19,9 @@ export const emailKeys = createQueryKeys('email', {
   threadReadReceipts: (threadId: string) => ({
     queryKey: ['read-receipts', threadId],
   }),
+  threadPersonProfiles: (threadId: string) => ({
+    queryKey: ['person-profiles', threadId],
+  }),
   messageInbox: (messageId: string | undefined) => ({
     queryKey: ['message-inbox', messageId],
   }),

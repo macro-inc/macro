@@ -84,6 +84,9 @@ vi.mock('./calendar-invitation', () => ({
 vi.mock('./read-receipts', () => ({
   createThreadReadReceipts: () => () => undefined,
 }));
+vi.mock('./person-profiles', () => ({
+  createThreadPersonProfiles: () => () => undefined,
+}));
 vi.mock('./thread-action-adapter', () => ({
   createThreadActionAdapter: vi.fn(),
 }));

@@ -53,6 +53,7 @@ import type {
   SendMessageRequest,
   SendMessageResponse,
   SharedInboxConflictResponse,
+  ThreadPersonProfiles,
   ThreadReadReceipts,
   TransferDraftRequest,
   TransferDraftResponse,
@@ -231,6 +232,11 @@ export const emailClient = {
   async getThreadReadReceipts(threadId: string) {
     return emailFetch<ThreadReadReceipts>(
       `/email/threads/${threadId}/read-receipts`
+    );
+  },
+  async getThreadPersonProfiles(threadId: string) {
+    return emailFetch<ThreadPersonProfiles>(
+      `/email/threads/${threadId}/person-profiles`
     );
   },
   async init(args?: { linkId?: string; forceShare?: boolean }) {

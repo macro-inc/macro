@@ -66,6 +66,7 @@ import type {
   SendMessageRequest,
   SendMessageResponse,
   SharedInboxConflictResponse,
+  ThreadPersonProfiles,
   ThreadReadReceipts,
   TransferDraftRequest,
   TransferDraftResponse,
@@ -4042,6 +4043,61 @@ export const copyThreadCalendarInvitation = async (
     status: res.status,
     headers: res.headers,
   } as copyThreadCalendarInvitationResponse;
+};
+
+export type getThreadPersonProfilesResponse200 = {
+  data: ThreadPersonProfiles;
+  status: 200;
+};
+
+export type getThreadPersonProfilesResponse401 = {
+  data: void;
+  status: 401;
+};
+
+export type getThreadPersonProfilesResponse403 = {
+  data: void;
+  status: 403;
+};
+
+export type getThreadPersonProfilesResponseSuccess =
+  getThreadPersonProfilesResponse200 & {
+    headers: Headers;
+  };
+export type getThreadPersonProfilesResponseError = (
+  | getThreadPersonProfilesResponse401
+  | getThreadPersonProfilesResponse403
+) & {
+  headers: Headers;
+};
+
+export type getThreadPersonProfilesResponse =
+  | getThreadPersonProfilesResponseSuccess
+  | getThreadPersonProfilesResponseError;
+
+export const getGetThreadPersonProfilesUrl = (threadId: string) => {
+  return `/email/threads/${threadId}/person-profiles`;
+};
+
+export const getThreadPersonProfiles = async (
+  threadId: string,
+  options?: RequestInit
+): Promise<getThreadPersonProfilesResponse> => {
+  const res = await fetch(getGetThreadPersonProfilesUrl(threadId), {
+    ...options,
+    method: 'GET',
+  });
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+
+  const data: getThreadPersonProfilesResponse['data'] = body
+    ? JSON.parse(body)
+    : {};
+  return {
+    data,
+    status: res.status,
+    headers: res.headers,
+  } as getThreadPersonProfilesResponse;
 };
 
 /**

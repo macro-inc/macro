@@ -2,6 +2,7 @@ import { EmailUserTooltip } from '@app/features/email-message/components/email-u
 import { isViewerAddress } from '@app/features/email-message/core/email-user';
 import { UserIcon, type UserIconProps } from '@core/component/UserIcon';
 import { emailToMacroId } from '@core/user/macroId';
+import { proxyImageUrl } from '@core/util/imageProxy';
 import { Key } from '@solid-primitives/keyed';
 import { Badge, Button, badgeTriggerClasses } from '@ui';
 import { createMemo, createSignal, Show } from 'solid-js';
@@ -71,10 +72,20 @@ export function EmailParticipants() {
     return p.email.split('@')[0];
   };
 
+  const profileFor = (p: Participant) =>
+    viewContext.rendering.personProfile?.(p.email);
+
+  // A synced contact photo wins; the public profile photo fills the gap.
+  const photoFor = (p: Participant) => {
+    if (p.photoUrl) return p.photoUrl;
+    const photo = profileFor(p)?.photoUrl;
+    return photo ? proxyImageUrl(photo) : undefined;
+  };
+
   const getIconProps = (p: Participant): UserIconProps => {
     const macroId = emailToMacroId(p.email);
-    if (macroId) return { id: macroId, photoUrl: p.photoUrl };
-    return { email: p.email, photoUrl: p.photoUrl };
+    if (macroId) return { id: macroId, photoUrl: photoFor(p) };
+    return { email: p.email, photoUrl: photoFor(p) };
   };
 
   return (
@@ -92,7 +103,8 @@ export function EmailParticipants() {
         {(participant) => (
           <EmailUserTooltip
             recipient={{ email: participant().email, name: participant().name }}
-            photoUrl={participant().photoUrl}
+            photoUrl={photoFor(participant())}
+            profile={profileFor(participant())}
             // A flex trigger keeps the pill off the text baseline, which an
             // initials avatar would otherwise lower.
             triggerClass="flex"

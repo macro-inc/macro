@@ -44,6 +44,7 @@ import type {
 } from './context/email-thread-context';
 import type { EmailThreadOrganizationStatus } from './context/email-thread-view-context';
 import { EmailThreadOperations } from './email-thread-operations';
+import { createThreadPersonProfiles } from './person-profiles';
 import { createOptimisticThreadSend } from './primitives/optimistic-send';
 import { createThreadReadReceipts } from './read-receipts';
 import { createThreadActionAdapter } from './thread-action-adapter';
@@ -146,6 +147,7 @@ export function EmailThread(props: EmailThreadProps) {
         <EmailSenderIcon message={message} />
       ),
       readReceipt: createThreadReadReceipts(() => props.threadId()),
+      personProfile: createThreadPersonProfiles(() => props.threadId()),
       showReadReceiptPixel: (message: EmailMessage) =>
         showsReadReceiptPixel(message, compose.accounts.inboxes()),
     },

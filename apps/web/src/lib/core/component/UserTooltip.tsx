@@ -1,7 +1,7 @@
 import IconCheck from '@icon/system/regular/check.svg';
 import { debounce } from '@solid-primitives/scheduled';
 import { Surface } from '@ui';
-import { createSignal, For, Show } from 'solid-js';
+import { createSignal, For, type JSX, Show } from 'solid-js';
 import { Dynamic } from 'solid-js/web';
 import { UserIcon } from './UserIcon';
 import {
@@ -12,6 +12,8 @@ import {
 
 type UserTooltipProps = UserCardTarget & {
   onClose?: () => void;
+  /** Extra facts about the person, shown under their name. */
+  details?: JSX.Element;
 };
 
 /**
@@ -53,6 +55,8 @@ export function UserTooltip(props: UserTooltipProps) {
             </Show>
           </div>
         </div>
+
+        {props.details}
 
         <Show when={actions().length > 0}>
           <div class="border-t border-edge"></div>

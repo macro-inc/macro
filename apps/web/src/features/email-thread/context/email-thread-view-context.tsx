@@ -8,6 +8,7 @@ import type {
   EmailAttachment,
   EmailMessage,
 } from '../../email-message/core/email-message';
+import type { PersonProfile } from '../../email-message/core/person-profile';
 import type { ReadReceipt } from '../../email-message/core/read-receipt';
 import type { InvitationRenderOptions } from '../../email-message/views/email-message';
 import type { EmailThreadContext } from './email-thread-context';
@@ -35,6 +36,7 @@ export interface EmailThreadViewContext {
     renderOperation?: (message: EmailMessage) => JSX.Element;
     renderAvatar?: (message: EmailMessage) => JSX.Element;
     readReceipt?: (message: EmailMessage) => ReadReceipt | undefined;
+    personProfile?: (email: string) => PersonProfile | undefined;
     showReadReceiptPixel?: (message: EmailMessage) => boolean;
     openAttachment?: (attachment: EmailAttachment) => void;
     downloadAttachment?: (attachment: EmailAttachment) => void;
