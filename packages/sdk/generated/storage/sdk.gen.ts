@@ -20,7 +20,7 @@ export type Options<TData extends TDataShape = TDataShape, ThrowOnError extends 
 
 class HeyApiClient {
     protected client: Client;
-    
+
     constructor(args?: {
         client?: Client;
     }) {
@@ -30,9 +30,9 @@ class HeyApiClient {
 
 class HeyApiRegistry<T> {
     private readonly defaultKey = 'default';
-    
+
     private readonly instances: Map<string, T> = new Map();
-    
+
     get(key?: string): T {
         const instance = this.instances.get(key ?? this.defaultKey);
         if (!instance) {
@@ -40,7 +40,7 @@ class HeyApiRegistry<T> {
         }
         return instance;
     }
-    
+
     set(value: T, key?: string): void {
         this.instances.set(key ?? this.defaultKey, value);
     }
@@ -48,7 +48,7 @@ class HeyApiRegistry<T> {
 
 export class Sdk extends HeyApiClient {
     public static readonly __registry: HeyApiRegistry<Sdk> = new HeyApiRegistry<Sdk>();
-    
+
     constructor(args?: {
         client?: Client;
         key?: string;
@@ -56,14 +56,14 @@ export class Sdk extends HeyApiClient {
         super(args);
         Sdk.__registry.set(this, args?.key);
     }
-    
+
     /**
      * Handler for `GET /agents`.
      */
     public listAgents<ThrowOnError extends boolean = false>(options?: Options<ListAgentsData, ThrowOnError>): RequestResult<ListAgentsResponses, ListAgentsErrors, ThrowOnError> {
         return (options?.client ?? this.client).get<ListAgentsResponses, ListAgentsErrors, ThrowOnError>({ url: '/agents', ...options });
     }
-    
+
     /**
      * Handler for `POST /agents`.
      */
@@ -77,7 +77,7 @@ export class Sdk extends HeyApiClient {
             }
         });
     }
-    
+
     /**
      * Handler for `PUT /agents/{agent_id}`.
      */
@@ -91,7 +91,7 @@ export class Sdk extends HeyApiClient {
             }
         });
     }
-    
+
     /**
      * Deletes a highlight and any attached discussion under the annotation policy.
      */
@@ -105,7 +105,7 @@ export class Sdk extends HeyApiClient {
             }
         });
     }
-    
+
     /**
      * Edits a single anchor for a document
      */
@@ -119,14 +119,14 @@ export class Sdk extends HeyApiClient {
             }
         });
     }
-    
+
     /**
      * Gets a set of comment anchors for a document
      */
     public getDocumentAnchors<ThrowOnError extends boolean = false>(options: Options<GetDocumentAnchorsData, ThrowOnError>): RequestResult<GetDocumentAnchorsResponses, GetDocumentAnchorsErrors, ThrowOnError> {
         return (options.client ?? this.client).get<GetDocumentAnchorsResponses, GetDocumentAnchorsErrors, ThrowOnError>({ url: '/annotations/anchors/document/{document_id}', ...options });
     }
-    
+
     /**
      * Creates an unthreaded anchor for a document
      * Attach a discussion through the shared message API.
@@ -141,14 +141,14 @@ export class Sdk extends HeyApiClient {
             }
         });
     }
-    
+
     /**
      * Handler for `GET /bots/me`.
      */
     public getSelfBot<ThrowOnError extends boolean = false>(options?: Options<GetSelfBotData, ThrowOnError>): RequestResult<GetSelfBotResponses, GetSelfBotErrors, ThrowOnError> {
         return (options?.client ?? this.client).get<GetSelfBotResponses, GetSelfBotErrors, ThrowOnError>({ url: '/bots/me', ...options });
     }
-    
+
     /**
      * Handler for `GET /bots/profiles`.
      *
@@ -159,28 +159,28 @@ export class Sdk extends HeyApiClient {
     public getBotOwnerProfiles<ThrowOnError extends boolean = false>(options?: Options<GetBotOwnerProfilesData, ThrowOnError>): RequestResult<GetBotOwnerProfilesResponses, GetBotOwnerProfilesErrors, ThrowOnError> {
         return (options?.client ?? this.client).get<GetBotOwnerProfilesResponses, GetBotOwnerProfilesErrors, ThrowOnError>({ url: '/bots/profiles', ...options });
     }
-    
+
     /**
      * Handler for `GET /bots/{bot_id}/channels`.
      */
     public listBotChannels<ThrowOnError extends boolean = false>(options: Options<ListBotChannelsData, ThrowOnError>): RequestResult<ListBotChannelsResponses, ListBotChannelsErrors, ThrowOnError> {
         return (options.client ?? this.client).get<ListBotChannelsResponses, ListBotChannelsErrors, ThrowOnError>({ url: '/bots/{bot_id}/channels', ...options });
     }
-    
+
     /**
      * Handler for `DELETE /bots/{bot_id}/channels/{channel_id}`.
      */
     public removeBotFromChannelByBot<ThrowOnError extends boolean = false>(options: Options<RemoveBotFromChannelByBotData, ThrowOnError>): RequestResult<RemoveBotFromChannelByBotResponses, RemoveBotFromChannelByBotErrors, ThrowOnError> {
         return (options.client ?? this.client).delete<RemoveBotFromChannelByBotResponses, RemoveBotFromChannelByBotErrors, ThrowOnError>({ url: '/bots/{bot_id}/channels/{channel_id}', ...options });
     }
-    
+
     /**
      * Return calendar occurrences visible to the authenticated requester.
      */
     public listOccurrences<ThrowOnError extends boolean = false>(options: Options<ListOccurrencesData, ThrowOnError>): RequestResult<ListOccurrencesResponses, ListOccurrencesErrors, ThrowOnError> {
         return (options.client ?? this.client).get<ListOccurrencesResponses, ListOccurrencesErrors, ThrowOnError>({ url: '/calendar-events', ...options });
     }
-    
+
     /**
      * Resolve mentioned calendar events to the requester's own projections.
      */
@@ -194,21 +194,21 @@ export class Sdk extends HeyApiClient {
             }
         });
     }
-    
+
     /**
      * Query authorized projections in a bounded viewport.
      */
     public listTeamCalendar<ThrowOnError extends boolean = false>(options: Options<ListTeamCalendarData, ThrowOnError>): RequestResult<ListTeamCalendarResponses, unknown, ThrowOnError> {
         return (options.client ?? this.client).get<ListTeamCalendarResponses, unknown, ThrowOnError>({ url: '/calendar-events/team', ...options });
     }
-    
+
     /**
      * Return teammates' out-of-office occurrences in the requested viewport.
      */
     public listTeamOutOfOffice<ThrowOnError extends boolean = false>(options: Options<ListTeamOutOfOfficeData, ThrowOnError>): RequestResult<ListTeamOutOfOfficeResponses, ListTeamOutOfOfficeErrors, ThrowOnError> {
         return (options.client ?? this.client).get<ListTeamOutOfOfficeResponses, ListTeamOutOfOfficeErrors, ThrowOnError>({ url: '/calendar-events/team-out-of-office', ...options });
     }
-    
+
     /**
      * Export an event the requester can see — their own, or one shared with a
      * channel they belong to — as an iCalendar file named after its title.
@@ -216,14 +216,14 @@ export class Sdk extends HeyApiClient {
     public eventIcs<ThrowOnError extends boolean = false>(options: Options<EventIcsData, ThrowOnError>): RequestResult<EventIcsResponses, EventIcsErrors, ThrowOnError> {
         return (options.client ?? this.client).get<EventIcsResponses, EventIcsErrors, ThrowOnError>({ url: '/calendar-events/{event_id}/ics', ...options });
     }
-    
+
     /**
      * List pending requests to join an event the requester can change.
      */
     public listJoinRequests<ThrowOnError extends boolean = false>(options: Options<ListJoinRequestsData, ThrowOnError>): RequestResult<ListJoinRequestsResponses, ListJoinRequestsErrors, ThrowOnError> {
         return (options.client ?? this.client).get<ListJoinRequestsResponses, ListJoinRequestsErrors, ThrowOnError>({ url: '/calendar-events/{event_id}/join-requests', ...options });
     }
-    
+
     /**
      * Ask the person who shared an event with one of the requester's channels
      * to add them as a guest. Asking again while the request is pending or
@@ -233,7 +233,7 @@ export class Sdk extends HeyApiClient {
     public requestToJoin<ThrowOnError extends boolean = false>(options: Options<RequestToJoinData, ThrowOnError>): RequestResult<RequestToJoinResponses, RequestToJoinErrors, ThrowOnError> {
         return (options.client ?? this.client).post<RequestToJoinResponses, RequestToJoinErrors, ThrowOnError>({ url: '/calendar-events/{event_id}/join-requests', ...options });
     }
-    
+
     /**
      * Handler for `GET /call/active`.
      *
@@ -244,14 +244,14 @@ export class Sdk extends HeyApiClient {
     public getActiveCalls<ThrowOnError extends boolean = false>(options?: Options<GetActiveCallsData, ThrowOnError>): RequestResult<GetActiveCallsResponses, GetActiveCallsErrors, ThrowOnError> {
         return (options?.client ?? this.client).get<GetActiveCallsResponses, GetActiveCallsErrors, ThrowOnError>({ url: '/call/active', ...options });
     }
-    
+
     /**
      * Read the live call discussion as a verified guest.
      */
     public guestCallChatRead<ThrowOnError extends boolean = false>(options: Options<GuestCallChatReadData, ThrowOnError>): RequestResult<GuestCallChatReadResponses, GuestCallChatReadErrors, ThrowOnError> {
         return (options.client ?? this.client).get<GuestCallChatReadResponses, GuestCallChatReadErrors, ThrowOnError>({ url: '/call/guest-chat/{call_id}', ...options });
     }
-    
+
     /**
      * Append text to the same saved discussion used by account participants.
      */
@@ -265,14 +265,14 @@ export class Sdk extends HeyApiClient {
             }
         });
     }
-    
+
     /**
      * Handle `GET /call/join/{token}` through the call domain service.
      */
     public meetingLookup<ThrowOnError extends boolean = false>(options: Options<MeetingLookupData, ThrowOnError>): RequestResult<MeetingLookupResponses, MeetingLookupErrors, ThrowOnError> {
         return (options.client ?? this.client).get<MeetingLookupResponses, MeetingLookupErrors, ThrowOnError>({ url: '/call/join/{token}', ...options });
     }
-    
+
     /**
      * Handle `POST /call/join/{token}` through the call domain service.
      */
@@ -286,28 +286,28 @@ export class Sdk extends HeyApiClient {
             }
         });
     }
-    
+
     /**
      * Handle `POST /call/join/{token}/leave` through the call domain service.
      */
     public meetingLeave<ThrowOnError extends boolean = false>(options: Options<MeetingLeaveData, ThrowOnError>): RequestResult<MeetingLeaveResponses, MeetingLeaveErrors, ThrowOnError> {
         return (options.client ?? this.client).post<MeetingLeaveResponses, MeetingLeaveErrors, ThrowOnError>({ url: '/call/join/{token}/leave', ...options });
     }
-    
+
     /**
      * Read a standalone meeting preview without admitting a guest to the room.
      */
     public meetingGuestParticipants<ThrowOnError extends boolean = false>(options: Options<MeetingGuestParticipantsData, ThrowOnError>): RequestResult<MeetingGuestParticipantsResponses, MeetingGuestParticipantsErrors, ThrowOnError> {
         return (options.client ?? this.client).get<MeetingGuestParticipantsResponses, MeetingGuestParticipantsErrors, ThrowOnError>({ url: '/call/join/{token}/participants', ...options });
     }
-    
+
     /**
      * Handle `GET /call/meetings` through the call domain service.
      */
     public meetingList<ThrowOnError extends boolean = false>(options?: Options<MeetingListData, ThrowOnError>): RequestResult<MeetingListResponses, MeetingListErrors, ThrowOnError> {
         return (options?.client ?? this.client).get<MeetingListResponses, MeetingListErrors, ThrowOnError>({ url: '/call/meetings', ...options });
     }
-    
+
     /**
      * Handle `POST /call/meetings` through the call domain service.
      */
@@ -321,21 +321,21 @@ export class Sdk extends HeyApiClient {
             }
         });
     }
-    
+
     /**
      * List the authenticated actor's active quick calls.
      */
     public meetingListActive<ThrowOnError extends boolean = false>(options?: Options<MeetingListActiveData, ThrowOnError>): RequestResult<MeetingListActiveResponses, MeetingListActiveErrors, ThrowOnError> {
         return (options?.client ?? this.client).get<MeetingListActiveResponses, MeetingListActiveErrors, ThrowOnError>({ url: '/call/meetings/active', ...options });
     }
-    
+
     /**
      * Read the authenticated caller's invitation capability without exposing the creator.
      */
     public meetingInvitePermissions<ThrowOnError extends boolean = false>(options: Options<MeetingInvitePermissionsData, ThrowOnError>): RequestResult<MeetingInvitePermissionsResponses, MeetingInvitePermissionsErrors, ThrowOnError> {
         return (options.client ?? this.client).get<MeetingInvitePermissionsResponses, MeetingInvitePermissionsErrors, ThrowOnError>({ url: '/call/meetings/invite/{token}', ...options });
     }
-    
+
     /**
      * Queue an owner-authorized guest invitation email.
      */
@@ -349,7 +349,7 @@ export class Sdk extends HeyApiClient {
             }
         });
     }
-    
+
     /**
      * Ring registered teammates selected by the standalone meeting owner.
      */
@@ -363,42 +363,42 @@ export class Sdk extends HeyApiClient {
             }
         });
     }
-    
+
     /**
      * Handle `POST /call/meetings/join/{token}` through the call domain service.
      */
     public meetingJoin<ThrowOnError extends boolean = false>(options: Options<MeetingJoinData, ThrowOnError>): RequestResult<MeetingJoinResponses, MeetingJoinErrors, ThrowOnError> {
         return (options.client ?? this.client).post<MeetingJoinResponses, MeetingJoinErrors, ThrowOnError>({ url: '/call/meetings/join/{token}', ...options });
     }
-    
+
     /**
      * Read the participant preview for an authenticated invitation holder.
      */
     public meetingParticipants<ThrowOnError extends boolean = false>(options: Options<MeetingParticipantsData, ThrowOnError>): RequestResult<MeetingParticipantsResponses, MeetingParticipantsErrors, ThrowOnError> {
         return (options.client ?? this.client).get<MeetingParticipantsResponses, MeetingParticipantsErrors, ThrowOnError>({ url: '/call/meetings/join/{token}/participants', ...options });
     }
-    
+
     /**
      * Reserve a room while the authenticated caller configures a new call.
      */
     public meetingPrepare<ThrowOnError extends boolean = false>(options?: Options<MeetingPrepareData, ThrowOnError>): RequestResult<MeetingPrepareResponses, MeetingPrepareErrors, ThrowOnError> {
         return (options?.client ?? this.client).post<MeetingPrepareResponses, MeetingPrepareErrors, ThrowOnError>({ url: '/call/meetings/prepare', ...options });
     }
-    
+
     /**
      * Cancel an unused room; the domain owns ownership and activation checks.
      */
     public meetingCancelPreparation<ThrowOnError extends boolean = false>(options: Options<MeetingCancelPreparationData, ThrowOnError>): RequestResult<MeetingCancelPreparationResponses, MeetingCancelPreparationErrors, ThrowOnError> {
         return (options.client ?? this.client).delete<MeetingCancelPreparationResponses, MeetingCancelPreparationErrors, ThrowOnError>({ url: '/call/meetings/prepare/{preparation_id}', ...options });
     }
-    
+
     /**
      * Handle `DELETE /call/meetings/{meeting_id}` through the call domain service.
      */
     public meetingCancel<ThrowOnError extends boolean = false>(options: Options<MeetingCancelData, ThrowOnError>): RequestResult<MeetingCancelResponses, MeetingCancelErrors, ThrowOnError> {
         return (options.client ?? this.client).delete<MeetingCancelResponses, MeetingCancelErrors, ThrowOnError>({ url: '/call/meetings/{meeting_id}', ...options });
     }
-    
+
     /**
      * Handle owner-authorized meeting title and schedule edits.
      */
@@ -412,7 +412,7 @@ export class Sdk extends HeyApiClient {
             }
         });
     }
-    
+
     /**
      * Handler for `POST /call/record/preview`.
      *
@@ -431,7 +431,7 @@ export class Sdk extends HeyApiClient {
             }
         });
     }
-    
+
     /**
      * Handler for `DELETE /call/record/{call_id}`.
      *
@@ -441,7 +441,7 @@ export class Sdk extends HeyApiClient {
     public deleteCallRecord<ThrowOnError extends boolean = false>(options: Options<DeleteCallRecordData, ThrowOnError>): RequestResult<DeleteCallRecordResponses, DeleteCallRecordErrors, ThrowOnError> {
         return (options.client ?? this.client).delete<DeleteCallRecordResponses, DeleteCallRecordErrors, ThrowOnError>({ url: '/call/record/{call_id}', ...options });
     }
-    
+
     /**
      * Handler for `GET /call/record/{call_id}`.
      *
@@ -452,7 +452,7 @@ export class Sdk extends HeyApiClient {
     public getCallRecord<ThrowOnError extends boolean = false>(options: Options<GetCallRecordData, ThrowOnError>): RequestResult<GetCallRecordResponses, GetCallRecordErrors, ThrowOnError> {
         return (options.client ?? this.client).get<GetCallRecordResponses, GetCallRecordErrors, ThrowOnError>({ url: '/call/record/{call_id}', ...options });
     }
-    
+
     /**
      * Handler for `PATCH /call/record/{call_id}`.
      *
@@ -472,7 +472,7 @@ export class Sdk extends HeyApiClient {
             }
         });
     }
-    
+
     /**
      * Handler for `POST /call/record/{call_id}/decline`.
      *
@@ -484,14 +484,14 @@ export class Sdk extends HeyApiClient {
     public declineCall<ThrowOnError extends boolean = false>(options: Options<DeclineCallData, ThrowOnError>): RequestResult<DeclineCallResponses, DeclineCallErrors, ThrowOnError> {
         return (options.client ?? this.client).post<DeclineCallResponses, DeclineCallErrors, ThrowOnError>({ url: '/call/record/{call_id}/decline', ...options });
     }
-    
+
     /**
      * Handle `POST /call/record/{call_id}/link` through the call domain service.
      */
     public meetingShare<ThrowOnError extends boolean = false>(options: Options<MeetingShareData, ThrowOnError>): RequestResult<MeetingShareResponses, MeetingShareErrors, ThrowOnError> {
         return (options.client ?? this.client).post<MeetingShareResponses, MeetingShareErrors, ThrowOnError>({ url: '/call/record/{call_id}/link', ...options });
     }
-    
+
     /**
      * Handler for `POST /call/record/{call_id}/share-with-team/toggle`.
      *
@@ -503,7 +503,7 @@ export class Sdk extends HeyApiClient {
     public toggleShareWithTeam<ThrowOnError extends boolean = false>(options: Options<ToggleShareWithTeamData, ThrowOnError>): RequestResult<ToggleShareWithTeamResponses, ToggleShareWithTeamErrors, ThrowOnError> {
         return (options.client ?? this.client).post<ToggleShareWithTeamResponses, ToggleShareWithTeamErrors, ThrowOnError>({ url: '/call/record/{call_id}/share-with-team/toggle', ...options });
     }
-    
+
     /**
      * Handler for `PATCH /call/record/{call_id}/transcript`.
      *
@@ -521,7 +521,7 @@ export class Sdk extends HeyApiClient {
             }
         });
     }
-    
+
     /**
      * Handler for `GET /call/ring-status/{call_id}`.
      *
@@ -536,7 +536,7 @@ export class Sdk extends HeyApiClient {
     public getRingStatus<ThrowOnError extends boolean = false>(options: Options<GetRingStatusData, ThrowOnError>): RequestResult<GetRingStatusResponses, GetRingStatusErrors, ThrowOnError> {
         return (options.client ?? this.client).get<GetRingStatusResponses, GetRingStatusErrors, ThrowOnError>({ url: '/call/ring-status/{call_id}', ...options });
     }
-    
+
     /**
      * Handler for `POST /call/ring-status/{call_id}/decline`.
      *
@@ -549,7 +549,7 @@ export class Sdk extends HeyApiClient {
     public declineRing<ThrowOnError extends boolean = false>(options: Options<DeclineRingData, ThrowOnError>): RequestResult<DeclineRingResponses, DeclineRingErrors, ThrowOnError> {
         return (options.client ?? this.client).post<DeclineRingResponses, DeclineRingErrors, ThrowOnError>({ url: '/call/ring-status/{call_id}/decline', ...options });
     }
-    
+
     /**
      * Handler for `POST /call/webhook`.
      *
@@ -560,14 +560,14 @@ export class Sdk extends HeyApiClient {
     public callWebhook<ThrowOnError extends boolean = false>(options?: Options<CallWebhookData, ThrowOnError>): RequestResult<CallWebhookResponses, CallWebhookErrors, ThrowOnError> {
         return (options?.client ?? this.client).post<CallWebhookResponses, CallWebhookErrors, ThrowOnError>({ url: '/call/webhook', ...options });
     }
-    
+
     /**
      * Handler for `DELETE /call/{channel_id}`.
      */
     public leaveOrEndCall<ThrowOnError extends boolean = false>(options: Options<LeaveOrEndCallData, ThrowOnError>): RequestResult<LeaveOrEndCallResponses, LeaveOrEndCallErrors, ThrowOnError> {
         return (options.client ?? this.client).delete<LeaveOrEndCallResponses, LeaveOrEndCallErrors, ThrowOnError>({ url: '/call/{channel_id}', ...options });
     }
-    
+
     /**
      * Handler for `GET /call/{channel_id}`.
      *
@@ -577,7 +577,7 @@ export class Sdk extends HeyApiClient {
     public getOrCreateCall<ThrowOnError extends boolean = false>(options: Options<GetOrCreateCallData, ThrowOnError>): RequestResult<GetOrCreateCallResponses, GetOrCreateCallErrors, ThrowOnError> {
         return (options.client ?? this.client).get<GetOrCreateCallResponses, GetOrCreateCallErrors, ThrowOnError>({ url: '/call/{channel_id}', ...options });
     }
-    
+
     /**
      * Handler for `GET /call/{channel_id}/active`.
      *
@@ -586,7 +586,7 @@ export class Sdk extends HeyApiClient {
     public checkActiveCall<ThrowOnError extends boolean = false>(options: Options<CheckActiveCallData, ThrowOnError>): RequestResult<CheckActiveCallResponses, CheckActiveCallErrors, ThrowOnError> {
         return (options.client ?? this.client).get<CheckActiveCallResponses, CheckActiveCallErrors, ThrowOnError>({ url: '/call/{channel_id}/active', ...options });
     }
-    
+
     /**
      * Handler for `POST /call/{channel_id}/transcript`.
      *
@@ -604,14 +604,14 @@ export class Sdk extends HeyApiClient {
             }
         });
     }
-    
+
     /**
      * List the caller's shared or private labels.
      */
     public listChannelLabels<ThrowOnError extends boolean = false>(options?: Options<ListChannelLabelsData, ThrowOnError>): RequestResult<ListChannelLabelsResponses, ListChannelLabelsErrors, ThrowOnError> {
         return (options?.client ?? this.client).get<ListChannelLabelsResponses, ListChannelLabelsErrors, ThrowOnError>({ url: '/channel-labels', ...options });
     }
-    
+
     /**
      * Create a label for the caller's authorized scope.
      */
@@ -625,7 +625,7 @@ export class Sdk extends HeyApiClient {
             }
         });
     }
-    
+
     /**
      * Move a channel into a label of the caller's authorized scope, or out of any label.
      */
@@ -639,7 +639,7 @@ export class Sdk extends HeyApiClient {
             }
         });
     }
-    
+
     /**
      * Preview visible channels matched by a smart tag, without creating it.
      */
@@ -653,14 +653,14 @@ export class Sdk extends HeyApiClient {
             }
         });
     }
-    
+
     /**
      * Delete a label of the caller's authorized scope. Its channels return to the plain list.
      */
     public deleteChannelLabel<ThrowOnError extends boolean = false>(options: Options<DeleteChannelLabelData, ThrowOnError>): RequestResult<DeleteChannelLabelResponses, DeleteChannelLabelErrors, ThrowOnError> {
         return (options.client ?? this.client).delete<DeleteChannelLabelResponses, DeleteChannelLabelErrors, ThrowOnError>({ url: '/channel-labels/{label_id}', ...options });
     }
-    
+
     /**
      * Rename a label of the caller's authorized scope.
      */
@@ -674,7 +674,7 @@ export class Sdk extends HeyApiClient {
             }
         });
     }
-    
+
     /**
      * Handler for `POST /channels`.
      */
@@ -688,14 +688,14 @@ export class Sdk extends HeyApiClient {
             }
         });
     }
-    
+
     /**
      * Handler for `GET /channels/activity`.
      */
     public getActivity<ThrowOnError extends boolean = false>(options?: Options<GetActivityData, ThrowOnError>): RequestResult<GetActivityResponses, GetActivityErrors, ThrowOnError> {
         return (options?.client ?? this.client).get<GetActivityResponses, GetActivityErrors, ThrowOnError>({ url: '/channels/activity', ...options });
     }
-    
+
     /**
      * Handler for `POST /channels/activity`.
      */
@@ -709,14 +709,14 @@ export class Sdk extends HeyApiClient {
             }
         });
     }
-    
+
     /**
      * Handler for `GET /channels/attachments/{entity_type}/{entity_id}/references`.
      */
     public getAttachmentReferences<ThrowOnError extends boolean = false>(options: Options<GetAttachmentReferencesData, ThrowOnError>): RequestResult<GetAttachmentReferencesResponses, GetAttachmentReferencesErrors, ThrowOnError> {
         return (options.client ?? this.client).get<GetAttachmentReferencesResponses, GetAttachmentReferencesErrors, ThrowOnError>({ url: '/channels/attachments/{entity_type}/{entity_id}/references', ...options });
     }
-    
+
     /**
      * Handler for `POST /channels/get_or_create_dm`.
      */
@@ -730,7 +730,7 @@ export class Sdk extends HeyApiClient {
             }
         });
     }
-    
+
     /**
      * Handler for `POST /channels/get_or_create_private`.
      */
@@ -744,14 +744,14 @@ export class Sdk extends HeyApiClient {
             }
         });
     }
-    
+
     /**
      * Handler for `POST /channels/join/{join_code}`.
      */
     public joinChannelByCode<ThrowOnError extends boolean = false>(options: Options<JoinChannelByCodeData, ThrowOnError>): RequestResult<JoinChannelByCodeResponses, JoinChannelByCodeErrors, ThrowOnError> {
         return (options.client ?? this.client).post<JoinChannelByCodeResponses, JoinChannelByCodeErrors, ThrowOnError>({ url: '/channels/join/{join_code}', ...options });
     }
-    
+
     /**
      * Handler for `POST /channels/mentions`.
      */
@@ -765,14 +765,14 @@ export class Sdk extends HeyApiClient {
             }
         });
     }
-    
+
     /**
      * Handler for `DELETE /channels/mentions/{mention_id}`.
      */
     public deleteEntityMention<ThrowOnError extends boolean = false>(options: Options<DeleteEntityMentionData, ThrowOnError>): RequestResult<DeleteEntityMentionResponses, DeleteEntityMentionErrors, ThrowOnError> {
         return (options.client ?? this.client).delete<DeleteEntityMentionResponses, DeleteEntityMentionErrors, ThrowOnError>({ url: '/channels/mentions/{mention_id}', ...options });
     }
-    
+
     /**
      * Handler for `POST /channels/preview`.
      */
@@ -786,21 +786,21 @@ export class Sdk extends HeyApiClient {
             }
         });
     }
-    
+
     /**
      * Handler for `DELETE /channels/{channel_id}`.
      */
     public deleteChannel<ThrowOnError extends boolean = false>(options: Options<DeleteChannelData, ThrowOnError>): RequestResult<DeleteChannelResponses, DeleteChannelErrors, ThrowOnError> {
         return (options.client ?? this.client).delete<DeleteChannelResponses, DeleteChannelErrors, ThrowOnError>({ url: '/channels/{channel_id}', ...options });
     }
-    
+
     /**
      * Handler for `GET /channels/{channel_id}`.
      */
     public getChannel<ThrowOnError extends boolean = false>(options: Options<GetChannelData, ThrowOnError>): RequestResult<GetChannelResponses, GetChannelErrors, ThrowOnError> {
         return (options.client ?? this.client).get<GetChannelResponses, GetChannelErrors, ThrowOnError>({ url: '/channels/{channel_id}', ...options });
     }
-    
+
     /**
      * Handler for `PATCH /channels/{channel_id}`.
      */
@@ -814,14 +814,14 @@ export class Sdk extends HeyApiClient {
             }
         });
     }
-    
+
     /**
      * Handler for `GET /channels/{channel_id}/attachments`.
      */
     public getChannelAttachments<ThrowOnError extends boolean = false>(options: Options<GetChannelAttachmentsData, ThrowOnError>): RequestResult<GetChannelAttachmentsResponses, GetChannelAttachmentsErrors, ThrowOnError> {
         return (options.client ?? this.client).get<GetChannelAttachmentsResponses, GetChannelAttachmentsErrors, ThrowOnError>({ url: '/channels/{channel_id}/attachments', ...options });
     }
-    
+
     /**
      * Handler for `POST /channels/{channel_id}/bots/scoped`.
      */
@@ -835,28 +835,28 @@ export class Sdk extends HeyApiClient {
             }
         });
     }
-    
+
     /**
      * Handler for `POST /channels/{channel_id}/join`.
      */
     public joinChannel<ThrowOnError extends boolean = false>(options: Options<JoinChannelData, ThrowOnError>): RequestResult<JoinChannelResponses, JoinChannelErrors, ThrowOnError> {
         return (options.client ?? this.client).post<JoinChannelResponses, JoinChannelErrors, ThrowOnError>({ url: '/channels/{channel_id}/join', ...options });
     }
-    
+
     /**
      * Handler for `GET /channels/{channel_id}/join-link`.
      */
     public getChannelJoinLink<ThrowOnError extends boolean = false>(options: Options<GetChannelJoinLinkData, ThrowOnError>): RequestResult<GetChannelJoinLinkResponses, GetChannelJoinLinkErrors, ThrowOnError> {
         return (options.client ?? this.client).get<GetChannelJoinLinkResponses, GetChannelJoinLinkErrors, ThrowOnError>({ url: '/channels/{channel_id}/join-link', ...options });
     }
-    
+
     /**
      * Handler for `POST /channels/{channel_id}/leave`.
      */
     public leaveChannel<ThrowOnError extends boolean = false>(options: Options<LeaveChannelData, ThrowOnError>): RequestResult<LeaveChannelResponses, LeaveChannelErrors, ThrowOnError> {
         return (options.client ?? this.client).post<LeaveChannelResponses, LeaveChannelErrors, ThrowOnError>({ url: '/channels/{channel_id}/leave', ...options });
     }
-    
+
     /**
      * Handler for `DELETE /channels/{channel_id}/participants`.
      */
@@ -870,14 +870,14 @@ export class Sdk extends HeyApiClient {
             }
         });
     }
-    
+
     /**
      * Handler for `GET /channels/{channel_id}/participants`.
      */
     public getChannelParticipants<ThrowOnError extends boolean = false>(options: Options<GetChannelParticipantsData, ThrowOnError>): RequestResult<GetChannelParticipantsResponses, GetChannelParticipantsErrors, ThrowOnError> {
         return (options.client ?? this.client).get<GetChannelParticipantsResponses, GetChannelParticipantsErrors, ThrowOnError>({ url: '/channels/{channel_id}/participants', ...options });
     }
-    
+
     /**
      * Handler for `POST /channels/{channel_id}/participants`.
      */
@@ -891,7 +891,7 @@ export class Sdk extends HeyApiClient {
             }
         });
     }
-    
+
     /**
      * Set a channel or group chat profile picture. Requires channel participation.
      */
@@ -905,7 +905,7 @@ export class Sdk extends HeyApiClient {
             }
         });
     }
-    
+
     /**
      * Handler for `POST /channels/{channel_id}/webhook`.
      */
@@ -919,21 +919,21 @@ export class Sdk extends HeyApiClient {
             }
         });
     }
-    
+
     /**
      * Soft-delete a collab surface.
      */
     public deleteCollabSurface<ThrowOnError extends boolean = false>(options: Options<DeleteCollabSurfaceData, ThrowOnError>): RequestResult<DeleteCollabSurfaceResponses, DeleteCollabSurfaceErrors, ThrowOnError> {
         return (options.client ?? this.client).delete<DeleteCollabSurfaceResponses, DeleteCollabSurfaceErrors, ThrowOnError>({ url: '/collab_surfaces/{id}', ...options });
     }
-    
+
     /**
      * Fetch a collab surface.
      */
     public getCollabSurface<ThrowOnError extends boolean = false>(options: Options<GetCollabSurfaceData, ThrowOnError>): RequestResult<GetCollabSurfaceResponses, GetCollabSurfaceErrors, ThrowOnError> {
         return (options.client ?? this.client).get<GetCollabSurfaceResponses, GetCollabSurfaceErrors, ThrowOnError>({ url: '/collab_surfaces/{id}', ...options });
     }
-    
+
     /**
      * Idempotently ensure a collab surface exists (load-or-create).
      *
@@ -952,21 +952,21 @@ export class Sdk extends HeyApiClient {
             }
         });
     }
-    
+
     /**
      * Mint a sync-service connection token for a surface.
      */
     public createCollabSurfaceToken<ThrowOnError extends boolean = false>(options: Options<CreateCollabSurfaceTokenData, ThrowOnError>): RequestResult<CreateCollabSurfaceTokenResponses, CreateCollabSurfaceTokenErrors, ThrowOnError> {
         return (options.client ?? this.client).post<CreateCollabSurfaceTokenResponses, CreateCollabSurfaceTokenErrors, ThrowOnError>({ url: '/collab_surfaces/{id}/token', ...options });
     }
-    
+
     /**
      * Handle channel list requests for `GET /comms/channels`.
      */
     public getChannels<ThrowOnError extends boolean = false>(options?: Options<GetChannelsData, ThrowOnError>): RequestResult<GetChannelsResponses, GetChannelsErrors, ThrowOnError> {
         return (options?.client ?? this.client).get<GetChannelsResponses, GetChannelsErrors, ThrowOnError>({ url: '/comms/channels', ...options });
     }
-    
+
     /**
      * List the domains the caller's team keeps out of email sync,
      * alphabetically. Any team member may read.
@@ -974,7 +974,7 @@ export class Sdk extends HeyApiClient {
     public listCrmBlockedDomains<ThrowOnError extends boolean = false>(options?: Options<ListCrmBlockedDomainsData, ThrowOnError>): RequestResult<ListCrmBlockedDomainsResponses, ListCrmBlockedDomainsErrors, ThrowOnError> {
         return (options?.client ?? this.client).get<ListCrmBlockedDomainsResponses, ListCrmBlockedDomainsErrors, ThrowOnError>({ url: '/crm/blocked-domains', ...options });
     }
-    
+
     /**
      * Unblock a domain: email sync resumes for it, and what blocking hid is
      * shown again. Idempotent. Requires an admin/owner team role (403).
@@ -982,7 +982,7 @@ export class Sdk extends HeyApiClient {
     public unblockCrmDomain<ThrowOnError extends boolean = false>(options: Options<UnblockCrmDomainData, ThrowOnError>): RequestResult<UnblockCrmDomainResponses, UnblockCrmDomainErrors, ThrowOnError> {
         return (options.client ?? this.client).delete<UnblockCrmDomainResponses, UnblockCrmDomainErrors, ThrowOnError>({ url: '/crm/blocked-domains/{domain}', ...options });
     }
-    
+
     /**
      * Block a domain: email sync stops creating or updating CRM records for
      * it, and the company and contacts the CRM holds for it are hidden.
@@ -991,7 +991,7 @@ export class Sdk extends HeyApiClient {
     public blockCrmDomain<ThrowOnError extends boolean = false>(options: Options<BlockCrmDomainData, ThrowOnError>): RequestResult<BlockCrmDomainResponses, BlockCrmDomainErrors, ThrowOnError> {
         return (options.client ?? this.client).put<BlockCrmDomainResponses, BlockCrmDomainErrors, ThrowOnError>({ url: '/crm/blocked-domains/{domain}', ...options });
     }
-    
+
     /**
      * Manually create a CRM company for the caller's team. Any team member
      * may create one. A domain, when given, must not already be tracked by the team
@@ -1009,7 +1009,7 @@ export class Sdk extends HeyApiClient {
             }
         });
     }
-    
+
     /**
      * Fetch a single CRM company by id, hydrated with its domains, the
      * primary domain's directory display metadata (name + description),
@@ -1022,7 +1022,7 @@ export class Sdk extends HeyApiClient {
     public getCompany<ThrowOnError extends boolean = false>(options: Options<GetCompanyData, ThrowOnError>): RequestResult<GetCompanyResponses, GetCompanyErrors, ThrowOnError> {
         return (options.client ?? this.client).get<GetCompanyResponses, GetCompanyErrors, ThrowOnError>({ url: '/crm/companies/{company_id}', ...options });
     }
-    
+
     /**
      * List the contacts of a CRM company. Access is enforced by
      * [`CrmCompanyAccessLevelExtractor`]: the user must be on the team that
@@ -1033,7 +1033,7 @@ export class Sdk extends HeyApiClient {
     public listCompanyContacts<ThrowOnError extends boolean = false>(options: Options<ListCompanyContactsData, ThrowOnError>): RequestResult<ListCompanyContactsResponses, ListCompanyContactsErrors, ThrowOnError> {
         return (options.client ?? this.client).get<ListCompanyContactsResponses, ListCompanyContactsErrors, ThrowOnError>({ url: '/crm/companies/{company_id}/contacts', ...options });
     }
-    
+
     /**
      * Manually create a contact under a CRM company. Access is enforced by
      * [`CrmCompanyAccessLevelExtractor`]: the caller must be on the team
@@ -1052,7 +1052,7 @@ export class Sdk extends HeyApiClient {
             }
         });
     }
-    
+
     /**
      * Toggle `email_sync` on a CRM company. Purely a visibility flag —
      * it gates whether team members can see each other's emails with
@@ -1068,7 +1068,7 @@ export class Sdk extends HeyApiClient {
             }
         });
     }
-    
+
     /**
      * Toggle `hidden` on a CRM company. Hiding also disables
      * `email_sync` and soft-hides every contact under the company.
@@ -1086,7 +1086,7 @@ export class Sdk extends HeyApiClient {
             }
         });
     }
-    
+
     /**
      * Rename a CRM company. Access is enforced by
      * [`CrmCompanyAccessLevelExtractor`]: the caller must be on the team
@@ -1104,7 +1104,7 @@ export class Sdk extends HeyApiClient {
             }
         });
     }
-    
+
     /**
      * Search the caller's team's CRM contacts by email or name. Any team member
      * may search visible contacts; admin/owner callers also match hidden
@@ -1113,7 +1113,7 @@ export class Sdk extends HeyApiClient {
     public searchContacts<ThrowOnError extends boolean = false>(options?: Options<SearchContactsData, ThrowOnError>): RequestResult<SearchContactsResponses, SearchContactsErrors, ThrowOnError> {
         return (options?.client ?? this.client).get<SearchContactsResponses, SearchContactsErrors, ThrowOnError>({ url: '/crm/contacts', ...options });
     }
-    
+
     /**
      * Manually create a contact without a company for the caller's team.
      * Any team member may create one. The team must not already have a
@@ -1130,7 +1130,7 @@ export class Sdk extends HeyApiClient {
             }
         });
     }
-    
+
     /**
      * Look up a CRM contact by email in the caller's team. Returns a null
      * `contact` when no visible contact exists. Any team member may resolve a
@@ -1141,7 +1141,7 @@ export class Sdk extends HeyApiClient {
     public getContactByEmail<ThrowOnError extends boolean = false>(options: Options<GetContactByEmailData, ThrowOnError>): RequestResult<GetContactByEmailResponses, GetContactByEmailErrors, ThrowOnError> {
         return (options.client ?? this.client).get<GetContactByEmailResponses, GetContactByEmailErrors, ThrowOnError>({ url: '/crm/contacts/by-email', ...options });
     }
-    
+
     /**
      * Fetch a single CRM contact by id. Access is enforced by
      * [`CrmContactAccessLevelExtractor`]: the user must be on the team that
@@ -1152,7 +1152,7 @@ export class Sdk extends HeyApiClient {
     public getContact<ThrowOnError extends boolean = false>(options: Options<GetContactData, ThrowOnError>): RequestResult<GetContactResponses, GetContactErrors, ThrowOnError> {
         return (options.client ?? this.client).get<GetContactResponses, GetContactErrors, ThrowOnError>({ url: '/crm/contacts/{contact_id}', ...options });
     }
-    
+
     /**
      * Toggle `hidden` on a CRM contact. Hiding is a display-only opt-out
      * scoped to the team that owns the contact's company.
@@ -1167,7 +1167,7 @@ export class Sdk extends HeyApiClient {
             }
         });
     }
-    
+
     /**
      * Rename a CRM contact. Access is enforced by
      * [`CrmContactAccessLevelExtractor`]: the caller must be on the team
@@ -1185,14 +1185,14 @@ export class Sdk extends HeyApiClient {
             }
         });
     }
-    
+
     /**
      * List the caller's live pipelines in their CRM.
      */
     public listCrmPipelines<ThrowOnError extends boolean = false>(options?: Options<ListCrmPipelinesData, ThrowOnError>): RequestResult<ListCrmPipelinesResponses, unknown, ThrowOnError> {
         return (options?.client ?? this.client).get<ListCrmPipelinesResponses, unknown, ThrowOnError>({ url: '/crm/pipelines', ...options });
     }
-    
+
     /**
      * Create a private or team-shared pipeline.
      */
@@ -1206,14 +1206,14 @@ export class Sdk extends HeyApiClient {
             }
         });
     }
-    
+
     /**
      * Read one pipeline by its entity identity.
      */
     public getCrmPipeline<ThrowOnError extends boolean = false>(options: Options<GetCrmPipelineData, ThrowOnError>): RequestResult<GetCrmPipelineResponses, unknown, ThrowOnError> {
         return (options.client ?? this.client).get<GetCrmPipelineResponses, unknown, ThrowOnError>({ url: '/crm/pipelines/{id}', ...options });
     }
-    
+
     /**
      * Rename a pipeline.
      */
@@ -1227,7 +1227,7 @@ export class Sdk extends HeyApiClient {
             }
         });
     }
-    
+
     /**
      * Edit pipeline schema or records with the common typed operations.
      */
@@ -1241,14 +1241,14 @@ export class Sdk extends HeyApiClient {
             }
         });
     }
-    
+
     /**
      * Read the owner, team grant and channel recipients of a pipeline the caller can edit.
      */
     public getCrmPipelinePermissions<ThrowOnError extends boolean = false>(options: Options<GetCrmPipelinePermissionsData, ThrowOnError>): RequestResult<GetCrmPipelinePermissionsResponses, unknown, ThrowOnError> {
         return (options.client ?? this.client).get<GetCrmPipelinePermissionsResponses, unknown, ThrowOnError>({ url: '/crm/pipelines/{id}/permissions', ...options });
     }
-    
+
     /**
      * Share a pipeline the caller can edit with channels, or change or remove
      * their access. Team access changes through `/sharing`; there is no share link.
@@ -1263,14 +1263,14 @@ export class Sdk extends HeyApiClient {
             }
         });
     }
-    
+
     /**
      * Read pipeline records through pipeline access.
      */
     public getCrmPipelineRows<ThrowOnError extends boolean = false>(options: Options<GetCrmPipelineRowsData, ThrowOnError>): RequestResult<GetCrmPipelineRowsResponses, unknown, ThrowOnError> {
         return (options.client ?? this.client).get<GetCrmPipelineRowsResponses, unknown, ThrowOnError>({ url: '/crm/pipelines/{id}/rows', ...options });
     }
-    
+
     /**
      * Query rows through pipeline access using the shared view protocol.
      */
@@ -1284,7 +1284,7 @@ export class Sdk extends HeyApiClient {
             }
         });
     }
-    
+
     /**
      * Update sharing.
      */
@@ -1298,14 +1298,14 @@ export class Sdk extends HeyApiClient {
             }
         });
     }
-    
+
     /**
      * Read requirements by stable stage and field identities.
      */
     public getCrmPipelineStageRequirements<ThrowOnError extends boolean = false>(options: Options<GetCrmPipelineStageRequirementsData, ThrowOnError>): RequestResult<GetCrmPipelineStageRequirementsResponses, unknown, ThrowOnError> {
         return (options.client ?? this.client).get<GetCrmPipelineStageRequirementsResponses, unknown, ThrowOnError>({ url: '/crm/pipelines/{id}/stage-requirements', ...options });
     }
-    
+
     /**
      * Replace the required fields for one stage. An empty list removes its rule.
      */
@@ -1319,14 +1319,14 @@ export class Sdk extends HeyApiClient {
             }
         });
     }
-    
+
     /**
      * Read the host-owned table schema.
      */
     public getCrmPipelineTable<ThrowOnError extends boolean = false>(options: Options<GetCrmPipelineTableData, ThrowOnError>): RequestResult<GetCrmPipelineTableResponses, unknown, ThrowOnError> {
         return (options.client ?? this.client).get<GetCrmPipelineTableResponses, unknown, ThrowOnError>({ url: '/crm/pipelines/{id}/table', ...options });
     }
-    
+
     /**
      * Trash or restore a pipeline.
      */
@@ -1340,7 +1340,7 @@ export class Sdk extends HeyApiClient {
             }
         });
     }
-    
+
     /**
      * Read the caller's team CRM configuration. Any team member may read;
      * teams without a settings row get the defaults.
@@ -1348,7 +1348,7 @@ export class Sdk extends HeyApiClient {
     public getCrmTeamSettings<ThrowOnError extends boolean = false>(options?: Options<GetCrmTeamSettingsData, ThrowOnError>): RequestResult<GetCrmTeamSettingsResponses, GetCrmTeamSettingsErrors, ThrowOnError> {
         return (options?.client ?? this.client).get<GetCrmTeamSettingsResponses, GetCrmTeamSettingsErrors, ThrowOnError>({ url: '/crm/settings', ...options });
     }
-    
+
     /**
      * Partially update the caller's team CRM configuration. Any team
      * member may update the views fields (`team_views`,
@@ -1367,14 +1367,14 @@ export class Sdk extends HeyApiClient {
             }
         });
     }
-    
+
     /**
      * Reset the team's deal stages to the defaults; gated like `PUT /crm/stages`.
      */
     public resetCrmTeamStages<ThrowOnError extends boolean = false>(options?: Options<ResetCrmTeamStagesData, ThrowOnError>): RequestResult<ResetCrmTeamStagesResponses, ResetCrmTeamStagesErrors, ThrowOnError> {
         return (options?.client ?? this.client).delete<ResetCrmTeamStagesResponses, ResetCrmTeamStagesErrors, ThrowOnError>({ url: '/crm/stages', ...options });
     }
-    
+
     /**
      * Replace the team's deal stages; requires `edit_stages_role` (403 otherwise).
      */
@@ -1388,14 +1388,14 @@ export class Sdk extends HeyApiClient {
             }
         });
     }
-    
+
     /**
      * List the caller's databases.
      */
     public listDatabases<ThrowOnError extends boolean = false>(options?: Options<ListDatabasesData, ThrowOnError>): RequestResult<ListDatabasesResponses, ListDatabasesErrors, ThrowOnError> {
         return (options?.client ?? this.client).get<ListDatabasesResponses, ListDatabasesErrors, ThrowOnError>({ url: '/databases', ...options });
     }
-    
+
     /**
      * Create a database owned by the caller; its first table, "Table 1", holds a
      * "Name" text column.
@@ -1410,7 +1410,7 @@ export class Sdk extends HeyApiClient {
             }
         });
     }
-    
+
     /**
      * Save an immutable query. Editing a question saves a new one.
      */
@@ -1424,14 +1424,14 @@ export class Sdk extends HeyApiClient {
             }
         });
     }
-    
+
     /**
      * A saved query's definition, for its creator or a viewer of its database.
      */
     public getDatabaseQuery<ThrowOnError extends boolean = false>(options: Options<GetDatabaseQueryData, ThrowOnError>): RequestResult<GetDatabaseQueryResponses, GetDatabaseQueryErrors, ThrowOnError> {
         return (options.client ?? this.client).get<GetDatabaseQueryResponses, GetDatabaseQueryErrors, ThrowOnError>({ url: '/databases/queries/{query_id}', ...options });
     }
-    
+
     /**
      * Run one statement as the authenticated user. The viewer's catalog authorizes reads;
      * the SQL domain service obtains an edit receipt for every written database.
@@ -1446,14 +1446,14 @@ export class Sdk extends HeyApiClient {
             }
         });
     }
-    
+
     /**
      * Create a small example once for the authenticated user, if they have no databases.
      */
     public ensureStarterHandler<ThrowOnError extends boolean = false>(options?: Options<EnsureStarterHandlerData, ThrowOnError>): RequestResult<EnsureStarterHandlerResponses, EnsureStarterHandlerErrors, ThrowOnError> {
         return (options?.client ?? this.client).post<EnsureStarterHandlerResponses, EnsureStarterHandlerErrors, ThrowOnError>({ url: '/databases/starter', ...options });
     }
-    
+
     /**
      * Insert rows through a webhook. The body is a JSON object, one row, or
      * an array of up to 100 objects, one row each. Keys name columns by name
@@ -1471,14 +1471,14 @@ export class Sdk extends HeyApiClient {
             }
         });
     }
-    
+
     /**
      * Schema detail of one database.
      */
     public getDatabase<ThrowOnError extends boolean = false>(options: Options<GetDatabaseData, ThrowOnError>): RequestResult<GetDatabaseResponses, GetDatabaseErrors, ThrowOnError> {
         return (options.client ?? this.client).get<GetDatabaseResponses, GetDatabaseErrors, ThrowOnError>({ url: '/databases/{id}', ...options });
     }
-    
+
     /**
      * Tell a database's other viewers where the caller is.
      */
@@ -1492,7 +1492,7 @@ export class Sdk extends HeyApiClient {
             }
         });
     }
-    
+
     /**
      * Undo one of your own committed changes: its inverse applies as a new,
      * journaled batch, under the table's lock, guarded against what others
@@ -1504,7 +1504,7 @@ export class Sdk extends HeyApiClient {
     public undoDatabaseChange<ThrowOnError extends boolean = false>(options: Options<UndoDatabaseChangeData, ThrowOnError>): RequestResult<UndoDatabaseChangeResponses, UndoDatabaseChangeErrors, ThrowOnError> {
         return (options.client ?? this.client).post<UndoDatabaseChangeResponses, UndoDatabaseChangeErrors, ThrowOnError>({ url: '/databases/{id}/changes/{change}/undo', ...options });
     }
-    
+
     /**
      * Copy a database, with its tables, columns, views and rows, into a new one
      * the caller owns. Its sharing, forms, webhooks and history stay behind.
@@ -1519,7 +1519,7 @@ export class Sdk extends HeyApiClient {
             }
         });
     }
-    
+
     /**
      * Import a new table and every row atomically; retries carry the same request ID.
      */
@@ -1533,7 +1533,7 @@ export class Sdk extends HeyApiClient {
             }
         });
     }
-    
+
     /**
      * Apply a batch of typed ops, the one write surface of a database: add,
      * rename, remove and order tables and columns, change a column's type, add
@@ -1554,7 +1554,7 @@ export class Sdk extends HeyApiClient {
             }
         });
     }
-    
+
     /**
      * Read recipients and the team share for a database owned by the caller.
      * Link sharing is always `null`: databases do not support it.
@@ -1562,7 +1562,7 @@ export class Sdk extends HeyApiClient {
     public getDatabasePermissions<ThrowOnError extends boolean = false>(options: Options<GetDatabasePermissionsData, ThrowOnError>): RequestResult<GetDatabasePermissionsResponses, GetDatabasePermissionsErrors, ThrowOnError> {
         return (options.client ?? this.client).get<GetDatabasePermissionsResponses, GetDatabasePermissionsErrors, ThrowOnError>({ url: '/databases/{id}/permissions', ...options });
     }
-    
+
     /**
      * Update channel recipients and the team share after proving database
      * ownership. Turning on link sharing is refused; ownership cannot be
@@ -1579,7 +1579,7 @@ export class Sdk extends HeyApiClient {
             }
         });
     }
-    
+
     /**
      * What changed in a table since a version, from the change journal: the
      * rows that changed, each once as it stands now (`insert`, `update` or
@@ -1590,7 +1590,7 @@ export class Sdk extends HeyApiClient {
     public getDatabaseTableChanges<ThrowOnError extends boolean = false>(options: Options<GetDatabaseTableChangesData, ThrowOnError>): RequestResult<GetDatabaseTableChangesResponses, GetDatabaseTableChangesErrors, ThrowOnError> {
         return (options.client ?? this.client).get<GetDatabaseTableChangesResponses, GetDatabaseTableChangesErrors, ThrowOnError>({ url: '/databases/{id}/tables/{table_id}/changes', ...options });
     }
-    
+
     /**
      * What changing one column to each type of the type menu would do to its
      * values: safe, checked (with how many values would not convert and a few
@@ -1599,7 +1599,7 @@ export class Sdk extends HeyApiClient {
     public listDatabaseColumnCasts<ThrowOnError extends boolean = false>(options: Options<ListDatabaseColumnCastsData, ThrowOnError>): RequestResult<ListDatabaseColumnCastsResponses, ListDatabaseColumnCastsErrors, ThrowOnError> {
         return (options.client ?? this.client).get<ListDatabaseColumnCastsResponses, ListDatabaseColumnCastsErrors, ThrowOnError>({ url: '/databases/{id}/tables/{table_id}/columns/{column_id}/casts', ...options });
     }
-    
+
     /**
      * What one column's values become under another type: the values that
      * convert, with the options they need, for a new column of that type beside
@@ -1617,7 +1617,7 @@ export class Sdk extends HeyApiClient {
             }
         });
     }
-    
+
     /**
      * Settle a new empty text column's type.
      */
@@ -1631,7 +1631,7 @@ export class Sdk extends HeyApiClient {
             }
         });
     }
-    
+
     /**
      * A row's history, from the change journal: every committed change that
      * touched it, newest first, with who made it, when, and the values of the
@@ -1641,7 +1641,7 @@ export class Sdk extends HeyApiClient {
     public getDatabaseRowHistory<ThrowOnError extends boolean = false>(options: Options<GetDatabaseRowHistoryData, ThrowOnError>): RequestResult<GetDatabaseRowHistoryResponses, GetDatabaseRowHistoryErrors, ThrowOnError> {
         return (options.client ?? this.client).get<GetDatabaseRowHistoryResponses, GetDatabaseRowHistoryErrors, ThrowOnError>({ url: '/databases/{id}/tables/{table_id}/rows/{row_id}/history', ...options });
     }
-    
+
     /**
      * Where a board's cards sit, for drawing it: the views come with the
      * database's detail, their cards' places from here.
@@ -1649,14 +1649,14 @@ export class Sdk extends HeyApiClient {
     public getDatabaseViewPositions<ThrowOnError extends boolean = false>(options: Options<GetDatabaseViewPositionsData, ThrowOnError>): RequestResult<GetDatabaseViewPositionsResponses, GetDatabaseViewPositionsErrors, ThrowOnError> {
         return (options.client ?? this.client).get<GetDatabaseViewPositionsResponses, GetDatabaseViewPositionsErrors, ThrowOnError>({ url: '/databases/{id}/views/{view_id}/positions', ...options });
     }
-    
+
     /**
      * The database's webhooks.
      */
     public listDatabaseWebhooks<ThrowOnError extends boolean = false>(options: Options<ListDatabaseWebhooksData, ThrowOnError>): RequestResult<ListDatabaseWebhooksResponses, ListDatabaseWebhooksErrors, ThrowOnError> {
         return (options.client ?? this.client).get<ListDatabaseWebhooksResponses, ListDatabaseWebhooksErrors, ThrowOnError>({ url: '/databases/{id}/webhooks', ...options });
     }
-    
+
     /**
      * Create a webhook: a secret URL whose calls insert rows into one of the
      * database's tables, writing with the creator's access.
@@ -1671,14 +1671,14 @@ export class Sdk extends HeyApiClient {
             }
         });
     }
-    
+
     /**
      * Delete a webhook; its URL stops working.
      */
     public deleteDatabaseWebhook<ThrowOnError extends boolean = false>(options: Options<DeleteDatabaseWebhookData, ThrowOnError>): RequestResult<DeleteDatabaseWebhookResponses, DeleteDatabaseWebhookErrors, ThrowOnError> {
         return (options.client ?? this.client).delete<DeleteDatabaseWebhookResponses, DeleteDatabaseWebhookErrors, ThrowOnError>({ url: '/databases/{id}/webhooks/{webhook_id}', ...options });
     }
-    
+
     /**
      * Transcribe a transient recording with OpenAI Whisper.
      *
@@ -1696,14 +1696,14 @@ export class Sdk extends HeyApiClient {
             }
         });
     }
-    
+
     /**
      * Gets the users documents to populate their recent document list
      */
     public getUserDocumentsHandler<ThrowOnError extends boolean = false>(options: Options<GetUserDocumentsHandlerData, ThrowOnError>): RequestResult<GetUserDocumentsHandlerResponses, GetUserDocumentsHandlerErrors, ThrowOnError> {
         return (options.client ?? this.client).get<GetUserDocumentsHandlerResponses, GetUserDocumentsHandlerErrors, ThrowOnError>({ url: '/documents', ...options });
     }
-    
+
     /**
      * Handler for `POST /documents`.
      *
@@ -1720,7 +1720,7 @@ export class Sdk extends HeyApiClient {
             }
         });
     }
-    
+
     /**
      * Creates and initializes a Canvas in one backend-owned lifecycle.
      */
@@ -1734,7 +1734,7 @@ export class Sdk extends HeyApiClient {
             }
         });
     }
-    
+
     /**
      * Creates and initializes a markdown document in one backend-owned lifecycle.
      */
@@ -1748,7 +1748,7 @@ export class Sdk extends HeyApiClient {
             }
         });
     }
-    
+
     /**
      * Creates a skill document with initialized markdown content in one
      * backend-owned lifecycle. Skills are markdown documents containing
@@ -1765,7 +1765,7 @@ export class Sdk extends HeyApiClient {
             }
         });
     }
-    
+
     /**
      * Creates a snippet document with initialized markdown content in one
      * backend-owned lifecycle. Snippets are created personal; team sharing is
@@ -1781,7 +1781,7 @@ export class Sdk extends HeyApiClient {
             }
         });
     }
-    
+
     /**
      * Creates a task document with properties and initialized markdown content in
      * one backend-owned lifecycle.
@@ -1796,7 +1796,7 @@ export class Sdk extends HeyApiClient {
             }
         });
     }
-    
+
     /**
      * Handler for `POST /documents/github_prs/tasks`.
      *
@@ -1813,18 +1813,18 @@ export class Sdk extends HeyApiClient {
             }
         });
     }
-    
+
     public initializeUserDocuments<ThrowOnError extends boolean = false>(options?: Options<InitializeUserDocumentsData, ThrowOnError>): RequestResult<InitializeUserDocumentsResponses, InitializeUserDocumentsErrors, ThrowOnError> {
         return (options?.client ?? this.client).post<InitializeUserDocumentsResponses, InitializeUserDocumentsErrors, ThrowOnError>({ url: '/documents/initialize_user_documents', ...options });
     }
-    
+
     /**
      * Gets a list of all the user's documents so they are able to be searched on
      */
     public getDocumentListHandler<ThrowOnError extends boolean = false>(options?: Options<GetDocumentListHandlerData, ThrowOnError>): RequestResult<GetDocumentListHandlerResponses, GetDocumentListHandlerErrors, ThrowOnError> {
         return (options?.client ?? this.client).get<GetDocumentListHandlerResponses, GetDocumentListHandlerErrors, ThrowOnError>({ url: '/documents/list', ...options });
     }
-    
+
     /**
      * Validates the provided document permissions token
      */
@@ -1838,14 +1838,14 @@ export class Sdk extends HeyApiClient {
             }
         });
     }
-    
+
     /**
      * Generates a document permissions token for a provided document id
      */
     public getDocumentPermissionsToken<ThrowOnError extends boolean = false>(options: Options<GetDocumentPermissionsTokenData, ThrowOnError>): RequestResult<GetDocumentPermissionsTokenResponses, GetDocumentPermissionsTokenErrors, ThrowOnError> {
         return (options.client ?? this.client).post<GetDocumentPermissionsTokenResponses, GetDocumentPermissionsTokenErrors, ThrowOnError>({ url: '/documents/permissions_token/{document_id}', ...options });
     }
-    
+
     /**
      * Takes the docx document bom parts and generates presigned urls to upload
      * any new content
@@ -1862,7 +1862,7 @@ export class Sdk extends HeyApiClient {
             }
         });
     }
-    
+
     public getBatchPreviewHandler<ThrowOnError extends boolean = false>(options: Options<GetBatchPreviewHandlerData, ThrowOnError>): RequestResult<GetBatchPreviewHandlerResponses, GetBatchPreviewHandlerErrors, ThrowOnError> {
         return (options.client ?? this.client).post<GetBatchPreviewHandlerResponses, GetBatchPreviewHandlerErrors, ThrowOnError>({
             url: '/documents/preview',
@@ -1873,7 +1873,7 @@ export class Sdk extends HeyApiClient {
             }
         });
     }
-    
+
     /**
      * Handler for `POST /documents/similarity_search`.
      *
@@ -1890,7 +1890,7 @@ export class Sdk extends HeyApiClient {
             }
         });
     }
-    
+
     /**
      * Handler for `GET /documents/slug/{slug}`.
      *
@@ -1899,14 +1899,14 @@ export class Sdk extends HeyApiClient {
     public getDocumentByTeamSlug<ThrowOnError extends boolean = false>(options: Options<GetDocumentByTeamSlugData, ThrowOnError>): RequestResult<GetDocumentByTeamSlugResponses, GetDocumentByTeamSlugErrors, ThrowOnError> {
         return (options.client ?? this.client).get<GetDocumentByTeamSlugResponses, GetDocumentByTeamSlugErrors, ThrowOnError>({ url: '/documents/slug/{slug}', ...options });
     }
-    
+
     /**
      * Resolves the current user's starter documents.
      */
     public handler<ThrowOnError extends boolean = false>(options?: Options<HandlerData, ThrowOnError>): RequestResult<HandlerResponses, HandlerErrors, ThrowOnError> {
         return (options?.client ?? this.client).get<HandlerResponses, HandlerErrors, ThrowOnError>({ url: '/documents/starter_docs', ...options });
     }
-    
+
     /**
      * Lists the built-in system skills. System skills are static, code-defined
      * AI instructions (see the `system_skills` crate); they surface in the
@@ -1916,7 +1916,7 @@ export class Sdk extends HeyApiClient {
     public getSystemSkillsHandler<ThrowOnError extends boolean = false>(options?: Options<GetSystemSkillsHandlerData, ThrowOnError>): RequestResult<GetSystemSkillsHandlerResponses, GetSystemSkillsHandlerErrors, ThrowOnError> {
         return (options?.client ?? this.client).get<GetSystemSkillsHandlerResponses, GetSystemSkillsHandlerErrors, ThrowOnError>({ url: '/documents/system_skills', ...options });
     }
-    
+
     /**
      * Handler for `DELETE /documents/{document_id}`.
      *
@@ -1925,7 +1925,7 @@ export class Sdk extends HeyApiClient {
     public deleteDocument<ThrowOnError extends boolean = false>(options: Options<DeleteDocumentData, ThrowOnError>): RequestResult<DeleteDocumentResponses, DeleteDocumentErrors, ThrowOnError> {
         return (options.client ?? this.client).delete<DeleteDocumentResponses, DeleteDocumentErrors, ThrowOnError>({ url: '/documents/{document_id}', ...options });
     }
-    
+
     /**
      * Handler for `GET /documents/{document_id}`.
      *
@@ -1934,7 +1934,7 @@ export class Sdk extends HeyApiClient {
     public getDocument<ThrowOnError extends boolean = false>(options: Options<GetDocumentData, ThrowOnError>): RequestResult<GetDocumentResponses, GetDocumentErrors, ThrowOnError> {
         return (options.client ?? this.client).get<GetDocumentResponses, GetDocumentErrors, ThrowOnError>({ url: '/documents/{document_id}', ...options });
     }
-    
+
     /**
      * Handler for `PATCH /documents/{document_id}`.
      *
@@ -1952,7 +1952,7 @@ export class Sdk extends HeyApiClient {
             }
         });
     }
-    
+
     /**
      * Creates a new version of a document
      */
@@ -1966,7 +1966,7 @@ export class Sdk extends HeyApiClient {
             }
         });
     }
-    
+
     /**
      * Handler for `GET /documents/{document_id}/branch_name`.
      *
@@ -1976,7 +1976,7 @@ export class Sdk extends HeyApiClient {
     public getDocumentBranchName<ThrowOnError extends boolean = false>(options: Options<GetDocumentBranchNameData, ThrowOnError>): RequestResult<GetDocumentBranchNameResponses, GetDocumentBranchNameErrors, ThrowOnError> {
         return (options.client ?? this.client).get<GetDocumentBranchNameResponses, GetDocumentBranchNameErrors, ThrowOnError>({ url: '/documents/{document_id}/branch_name', ...options });
     }
-    
+
     /**
      * Handler for `POST /documents/{document_id}/copy`.
      *
@@ -1993,7 +1993,7 @@ export class Sdk extends HeyApiClient {
             }
         });
     }
-    
+
     /**
      * Generates a presigned url to download the raw content of the document
      * For files with modification layers, they will not be applied in the downloaded file.
@@ -2001,7 +2001,7 @@ export class Sdk extends HeyApiClient {
     public exportDocument<ThrowOnError extends boolean = false>(options: Options<ExportDocumentData, ThrowOnError>): RequestResult<ExportDocumentResponses, ExportDocumentErrors, ThrowOnError> {
         return (options.client ?? this.client).get<ExportDocumentResponses, ExportDocumentErrors, ThrowOnError>({ url: '/documents/{document_id}/export', ...options });
     }
-    
+
     /**
      * Handler for `GET /documents/{document_id}/github_prs`.
      *
@@ -2011,14 +2011,14 @@ export class Sdk extends HeyApiClient {
     public getDocumentGithubPullRequests<ThrowOnError extends boolean = false>(options: Options<GetDocumentGithubPullRequestsData, ThrowOnError>): RequestResult<GetDocumentGithubPullRequestsResponses, GetDocumentGithubPullRequestsErrors, ThrowOnError> {
         return (options.client ?? this.client).get<GetDocumentGithubPullRequestsResponses, GetDocumentGithubPullRequestsErrors, ThrowOnError>({ url: '/documents/{document_id}/github_prs', ...options });
     }
-    
+
     /**
      * Gets the presigned url(s) for the document. aka location
      */
     public getLocationHandler<ThrowOnError extends boolean = false>(options: Options<GetLocationHandlerData, ThrowOnError>): RequestResult<GetLocationHandlerResponses, GetLocationHandlerErrors, ThrowOnError> {
         return (options.client ?? this.client).get<GetLocationHandlerResponses, GetLocationHandlerErrors, ThrowOnError>({ url: '/documents/{document_id}/location', ...options });
     }
-    
+
     /**
      * Handler for `GET /documents/{document_id}/location_v3`.
      *
@@ -2027,35 +2027,35 @@ export class Sdk extends HeyApiClient {
     public getDocumentLocationV3<ThrowOnError extends boolean = false>(options: Options<GetDocumentLocationV3Data, ThrowOnError>): RequestResult<GetDocumentLocationV3Responses, GetDocumentLocationV3Errors, ThrowOnError> {
         return (options.client ?? this.client).get<GetDocumentLocationV3Responses, GetDocumentLocationV3Errors, ThrowOnError>({ url: '/documents/{document_id}/location_v3', ...options });
     }
-    
+
     /**
      * Permanently deletes a document.
      */
     public permanentlyDeleteDocument<ThrowOnError extends boolean = false>(options: Options<PermanentlyDeleteDocumentData, ThrowOnError>): RequestResult<PermanentlyDeleteDocumentResponses, PermanentlyDeleteDocumentErrors, ThrowOnError> {
         return (options.client ?? this.client).delete<PermanentlyDeleteDocumentResponses, PermanentlyDeleteDocumentErrors, ThrowOnError>({ url: '/documents/{document_id}/permanent', ...options });
     }
-    
+
     /**
      * Fetches the document pdf processing result for a given document id
      */
     public getDocumentProcessingResult<ThrowOnError extends boolean = false>(options: Options<GetDocumentProcessingResultData, ThrowOnError>): RequestResult<GetDocumentProcessingResultResponses, GetDocumentProcessingResultErrors, ThrowOnError> {
         return (options.client ?? this.client).get<GetDocumentProcessingResultResponses, GetDocumentProcessingResultErrors, ThrowOnError>({ url: '/documents/{document_id}/processing', ...options });
     }
-    
+
     /**
      * Fetches the document processing result for a given document id and job id
      */
     public jobProcessingResultHandler<ThrowOnError extends boolean = false>(options: Options<JobProcessingResultHandlerData, ThrowOnError>): RequestResult<JobProcessingResultHandlerResponses, JobProcessingResultHandlerErrors, ThrowOnError> {
         return (options.client ?? this.client).get<JobProcessingResultHandlerResponses, JobProcessingResultHandlerErrors, ThrowOnError>({ url: '/documents/{document_id}/processing/{job_id}', ...options });
     }
-    
+
     /**
      * Deletes a specific document
      */
     public revertDeleteDocument<ThrowOnError extends boolean = false>(options: Options<RevertDeleteDocumentData, ThrowOnError>): RequestResult<RevertDeleteDocumentResponses, RevertDeleteDocumentErrors, ThrowOnError> {
         return (options.client ?? this.client).put<RevertDeleteDocumentResponses, RevertDeleteDocumentErrors, ThrowOnError>({ url: '/documents/{document_id}/revert_delete', ...options });
     }
-    
+
     /**
      * Handler for `GET /documents/{document_id}/short_id`.
      *
@@ -2064,7 +2064,7 @@ export class Sdk extends HeyApiClient {
     public getDocumentShortId<ThrowOnError extends boolean = false>(options: Options<GetDocumentShortIdData, ThrowOnError>): RequestResult<GetDocumentShortIdResponses, GetDocumentShortIdErrors, ThrowOnError> {
         return (options.client ?? this.client).get<GetDocumentShortIdResponses, GetDocumentShortIdErrors, ThrowOnError>({ url: '/documents/{document_id}/short_id', ...options });
     }
-    
+
     /**
      * For any file that isn't PDF or DOCX, use this endpoint for saving.
      * This endpoint will allow you to save the document by providing the file content as part of a multipart request. Use key 'file' along with the file bytes.
@@ -2073,7 +2073,7 @@ export class Sdk extends HeyApiClient {
     public simpleSave<ThrowOnError extends boolean = false>(options: Options<SimpleSaveData, ThrowOnError>): RequestResult<SimpleSaveResponses, SimpleSaveErrors, ThrowOnError> {
         return (options.client ?? this.client).put<SimpleSaveResponses, SimpleSaveErrors, ThrowOnError>({ url: '/documents/{document_id}/simple_save', ...options });
     }
-    
+
     /**
      * Gets the team-share state of a document. The team is resolved from the
      * document owner's team membership; `teamId` is omitted when the owner does
@@ -2082,7 +2082,7 @@ export class Sdk extends HeyApiClient {
     public getDocumentTeamShare<ThrowOnError extends boolean = false>(options: Options<GetDocumentTeamShareData, ThrowOnError>): RequestResult<GetDocumentTeamShareResponses, GetDocumentTeamShareErrors, ThrowOnError> {
         return (options.client ?? this.client).get<GetDocumentTeamShareResponses, GetDocumentTeamShareErrors, ThrowOnError>({ url: '/documents/{document_id}/team_share', ...options });
     }
-    
+
     /**
      * Sets explicit team sharing. Requires a verified acting identity matching
      * the persisted document owner, not merely effective Edit or Owner access.
@@ -2099,42 +2099,42 @@ export class Sdk extends HeyApiClient {
             }
         });
     }
-    
+
     /**
      * Read current Markdown or extracted file text with the document's view receipt.
      */
     public getDocumentTextContent<ThrowOnError extends boolean = false>(options: Options<GetDocumentTextContentData, ThrowOnError>): RequestResult<GetDocumentTextContentResponses, GetDocumentTextContentErrors, ThrowOnError> {
         return (options.client ?? this.client).get<GetDocumentTextContentResponses, GetDocumentTextContentErrors, ThrowOnError>({ url: '/documents/{document_id}/text-content', ...options });
     }
-    
+
     /**
      * Gets the list of users who have viewed a given document
      */
     public getDocumentViewsHandler<ThrowOnError extends boolean = false>(options: Options<GetDocumentViewsHandlerData, ThrowOnError>): RequestResult<GetDocumentViewsHandlerResponses, GetDocumentViewsHandlerErrors, ThrowOnError> {
         return (options.client ?? this.client).get<GetDocumentViewsHandlerResponses, GetDocumentViewsHandlerErrors, ThrowOnError>({ url: '/documents/{document_id}/views', ...options });
     }
-    
+
     /**
      * Gets a particular document by its id
      */
     public getDocumentVersion<ThrowOnError extends boolean = false>(options: Options<GetDocumentVersionData, ThrowOnError>): RequestResult<GetDocumentVersionResponses, GetDocumentVersionErrors, ThrowOnError> {
         return (options.client ?? this.client).get<GetDocumentVersionResponses, GetDocumentVersionErrors, ThrowOnError>({ url: '/documents/{document_id}/{document_version_id}', ...options });
     }
-    
+
     /**
      * State access request state through the domain service.
      */
     public accessRequestsState<ThrowOnError extends boolean = false>(options: Options<AccessRequestsStateData, ThrowOnError>): RequestResult<AccessRequestsStateResponses, AccessRequestsStateErrors, ThrowOnError> {
         return (options.client ?? this.client).get<AccessRequestsStateResponses, AccessRequestsStateErrors, ThrowOnError>({ url: '/entities/{entity_type}/{entity_id}/access-requests', ...options });
     }
-    
+
     /**
      * Cancel access request state through the domain service.
      */
     public accessRequestsCancel<ThrowOnError extends boolean = false>(options: Options<AccessRequestsCancelData, ThrowOnError>): RequestResult<AccessRequestsCancelResponses, AccessRequestsCancelErrors, ThrowOnError> {
         return (options.client ?? this.client).delete<AccessRequestsCancelResponses, AccessRequestsCancelErrors, ThrowOnError>({ url: '/entities/{entity_type}/{entity_id}/access-requests/mine', ...options });
     }
-    
+
     /**
      * Submit access request state through the domain service.
      */
@@ -2148,7 +2148,7 @@ export class Sdk extends HeyApiClient {
             }
         });
     }
-    
+
     /**
      * Resolve access request state through the domain service.
      */
@@ -2162,21 +2162,21 @@ export class Sdk extends HeyApiClient {
             }
         });
     }
-    
+
     /**
      * Direct access request state through the domain service.
      */
     public accessRequestsDirect<ThrowOnError extends boolean = false>(options: Options<AccessRequestsDirectData, ThrowOnError>): RequestResult<AccessRequestsDirectResponses, AccessRequestsDirectErrors, ThrowOnError> {
         return (options.client ?? this.client).get<AccessRequestsDirectResponses, AccessRequestsDirectErrors, ThrowOnError>({ url: '/entities/{entity_type}/{entity_id}/direct-access', ...options });
     }
-    
+
     /**
      * Remove direct access request state through the domain service.
      */
     public accessRequestsRemoveDirect<ThrowOnError extends boolean = false>(options: Options<AccessRequestsRemoveDirectData, ThrowOnError>): RequestResult<AccessRequestsRemoveDirectResponses, AccessRequestsRemoveDirectErrors, ThrowOnError> {
         return (options.client ?? this.client).delete<AccessRequestsRemoveDirectResponses, AccessRequestsRemoveDirectErrors, ThrowOnError>({ url: '/entities/{entity_type}/{entity_id}/direct-access/{user_id}', ...options });
     }
-    
+
     /**
      * Set direct access request state through the domain service.
      */
@@ -2190,21 +2190,21 @@ export class Sdk extends HeyApiClient {
             }
         });
     }
-    
+
     /**
      * Get the current user's permission for a given entity.
      */
     public getEntityPermission<ThrowOnError extends boolean = false>(options: Options<GetEntityPermissionData, ThrowOnError>): RequestResult<GetEntityPermissionResponses, GetEntityPermissionErrors, ThrowOnError> {
         return (options.client ?? this.client).get<GetEntityPermissionResponses, GetEntityPermissionErrors, ThrowOnError>({ url: '/entity/{entity_type}/{entity_id}/permissions', ...options });
     }
-    
+
     /**
      * List external chats the caller can view, including without a provider account.
      */
     public externalChats<ThrowOnError extends boolean = false>(options?: Options<ExternalChatsData, ThrowOnError>): RequestResult<ExternalChatsResponses, unknown, ThrowOnError> {
         return (options?.client ?? this.client).get<ExternalChatsResponses, unknown, ThrowOnError>({ url: '/external-chats', ...options });
     }
-    
+
     /**
      * Add one of the caller's provider chats as their own external chat.
      */
@@ -2218,21 +2218,21 @@ export class Sdk extends HeyApiClient {
             }
         });
     }
-    
+
     /**
      * Stop syncing the chat, locally. Owner only, in their own session.
      */
     public externalChatRemove<ThrowOnError extends boolean = false>(options: Options<ExternalChatRemoveData, ThrowOnError>): RequestResult<ExternalChatRemoveResponses, unknown, ThrowOnError> {
         return (options.client ?? this.client).delete<ExternalChatRemoveResponses, unknown, ThrowOnError>({ url: '/external-chats/{chat_id}', ...options });
     }
-    
+
     /**
      * An external chat the caller can read.
      */
     public externalChat<ThrowOnError extends boolean = false>(options: Options<ExternalChatData, ThrowOnError>): RequestResult<ExternalChatResponses, unknown, ThrowOnError> {
         return (options.client ?? this.client).get<ExternalChatResponses, unknown, ThrowOnError>({ url: '/external-chats/{chat_id}', ...options });
     }
-    
+
     /**
      * Stage one attachment for a later media send in this chat.
      */
@@ -2247,7 +2247,7 @@ export class Sdk extends HeyApiClient {
             }
         });
     }
-    
+
     /**
      * The caller's send progress for intents or messages.
      */
@@ -2261,14 +2261,14 @@ export class Sdk extends HeyApiClient {
             }
         });
     }
-    
+
     /**
      * Newest-first timeline through ordinary view access.
      */
     public externalChatMessages<ThrowOnError extends boolean = false>(options: Options<ExternalChatMessagesData, ThrowOnError>): RequestResult<ExternalChatMessagesResponses, unknown, ThrowOnError> {
         return (options.client ?? this.client).get<ExternalChatMessagesResponses, unknown, ThrowOnError>({ url: '/external-chats/{chat_id}/messages', ...options });
     }
-    
+
     /**
      * Attachment states of messages, by message id (at most 100).
      */
@@ -2282,21 +2282,21 @@ export class Sdk extends HeyApiClient {
             }
         });
     }
-    
+
     /**
      * One message of the timeline, as the timeline shows it.
      */
     public externalChatMessage<ThrowOnError extends boolean = false>(options: Options<ExternalChatMessageData, ThrowOnError>): RequestResult<ExternalChatMessageResponses, unknown, ThrowOnError> {
         return (options.client ?? this.client).get<ExternalChatMessageResponses, unknown, ThrowOnError>({ url: '/external-chats/{chat_id}/messages/{message_id}', ...options });
     }
-    
+
     /**
      * Generic Share dialog policy.
      */
     public externalChatPermissions<ThrowOnError extends boolean = false>(options: Options<ExternalChatPermissionsData, ThrowOnError>): RequestResult<ExternalChatPermissionsResponses, unknown, ThrowOnError> {
         return (options.client ?? this.client).get<ExternalChatPermissionsResponses, unknown, ThrowOnError>({ url: '/external-chats/{chat_id}/permissions', ...options });
     }
-    
+
     /**
      * The owner, in their own session, updates link, team and channel sharing.
      */
@@ -2310,7 +2310,7 @@ export class Sdk extends HeyApiClient {
             }
         });
     }
-    
+
     /**
      * Advance this viewer's read position.
      */
@@ -2324,14 +2324,14 @@ export class Sdk extends HeyApiClient {
             }
         });
     }
-    
+
     /**
      * Caller-owned pending, failed and uncertain sends.
      */
     public externalChatSends<ThrowOnError extends boolean = false>(options: Options<ExternalChatSendsData, ThrowOnError>): RequestResult<ExternalChatSendsResponses, unknown, ThrowOnError> {
         return (options.client ?? this.client).get<ExternalChatSendsResponses, unknown, ThrowOnError>({ url: '/external-chats/{chat_id}/sends', ...options });
     }
-    
+
     /**
      * Send to the chat from the caller's own provider account (one request per second per user).
      */
@@ -2345,14 +2345,14 @@ export class Sdk extends HeyApiClient {
             }
         });
     }
-    
+
     /**
      * List the caller's favorites.
      */
     public listFavorites<ThrowOnError extends boolean = false>(options?: Options<ListFavoritesData, ThrowOnError>): RequestResult<ListFavoritesResponses, ListFavoritesErrors, ThrowOnError> {
         return (options?.client ?? this.client).get<ListFavoritesResponses, ListFavoritesErrors, ThrowOnError>({ url: '/favorites', ...options });
     }
-    
+
     /**
      * Favorite an entity in the caller's collection.
      */
@@ -2366,7 +2366,7 @@ export class Sdk extends HeyApiClient {
             }
         });
     }
-    
+
     /**
      * Persist a manual order for the caller's favorites.
      */
@@ -2380,14 +2380,14 @@ export class Sdk extends HeyApiClient {
             }
         });
     }
-    
+
     /**
      * Remove a favorite by entity.
      */
     public removeFavoriteByEntity<ThrowOnError extends boolean = false>(options: Options<RemoveFavoriteByEntityData, ThrowOnError>): RequestResult<RemoveFavoriteByEntityResponses, RemoveFavoriteByEntityErrors, ThrowOnError> {
         return (options.client ?? this.client).delete<RemoveFavoriteByEntityResponses, RemoveFavoriteByEntityErrors, ThrowOnError>({ url: '/favorites/{entity_type}/{entity_id}', ...options });
     }
-    
+
     /**
      * Get a visible foreign entity by the identifier its source system assigned.
      *
@@ -2403,14 +2403,14 @@ export class Sdk extends HeyApiClient {
     public getForeignEntityBySource<ThrowOnError extends boolean = false>(options: Options<GetForeignEntityBySourceData, ThrowOnError>): RequestResult<GetForeignEntityBySourceResponses, GetForeignEntityBySourceErrors, ThrowOnError> {
         return (options.client ?? this.client).get<GetForeignEntityBySourceResponses, GetForeignEntityBySourceErrors, ThrowOnError>({ url: '/foreign_entity/by_source/{source}/{foreign_entity_id}', ...options });
     }
-    
+
     /**
      * Get a visible foreign entity by its internal ID.
      */
     public getForeignEntity<ThrowOnError extends boolean = false>(options: Options<GetForeignEntityData, ThrowOnError>): RequestResult<GetForeignEntityResponses, GetForeignEntityErrors, ThrowOnError> {
         return (options.client ?? this.client).get<GetForeignEntityResponses, GetForeignEntityErrors, ThrowOnError>({ url: '/foreign_entity/{id}', ...options });
     }
-    
+
     /**
      * The live forms over a database the caller can see, for the grid's chip
      * and the delete-table confirmation.
@@ -2418,7 +2418,7 @@ export class Sdk extends HeyApiClient {
     public listForms<ThrowOnError extends boolean = false>(options: Options<ListFormsData, ThrowOnError>): RequestResult<ListFormsResponses, ListFormsErrors, ThrowOnError> {
         return (options.client ?? this.client).get<ListFormsResponses, ListFormsErrors, ThrowOnError>({ url: '/forms', ...options });
     }
-    
+
     /**
      * Create a form owned by the caller: over a new database named like it, or
      * over an existing table of a database the caller owns. Database Edit is
@@ -2435,7 +2435,7 @@ export class Sdk extends HeyApiClient {
             }
         });
     }
-    
+
     /**
      * Every live form the caller holds a grant on, newest first, with their
      * level: what Drive and Quick Access list. Public forms reached only by
@@ -2444,7 +2444,7 @@ export class Sdk extends HeyApiClient {
     public listAccessibleForms<ThrowOnError extends boolean = false>(options?: Options<ListAccessibleFormsData, ThrowOnError>): RequestResult<ListAccessibleFormsResponses, ListAccessibleFormsErrors, ThrowOnError> {
         return (options?.client ?? this.client).get<ListAccessibleFormsResponses, ListAccessibleFormsErrors, ThrowOnError>({ url: '/forms/accessible', ...options });
     }
-    
+
     /**
      * A form with its layout, each question joined with its column's title,
      * type and options. Never rows. Readable by anyone when the form is public.
@@ -2452,7 +2452,7 @@ export class Sdk extends HeyApiClient {
     public getForm<ThrowOnError extends boolean = false>(options: Options<GetFormData, ThrowOnError>): RequestResult<GetFormResponses, GetFormErrors, ThrowOnError> {
         return (options.client ?? this.client).get<GetFormResponses, GetFormErrors, ThrowOnError>({ url: '/forms/{id}', ...options });
     }
-    
+
     /**
      * Change a form's facts. The description and confirmation message take
      * edit; who responds, open or closed, the closing time and tallies take
@@ -2468,7 +2468,7 @@ export class Sdk extends HeyApiClient {
             }
         });
     }
-    
+
     /**
      * Open the editor-only collaborative layout, or publish its latest valid
      * revision. Content stays in the existing collaboration surface.
@@ -2476,7 +2476,7 @@ export class Sdk extends HeyApiClient {
     public collaborateForm<ThrowOnError extends boolean = false>(options: Options<CollaborateFormData, ThrowOnError>): RequestResult<CollaborateFormResponses, CollaborateFormErrors, ThrowOnError> {
         return (options.client ?? this.client).post<CollaborateFormResponses, CollaborateFormErrors, ThrowOnError>({ url: '/forms/{id}/collaboration', ...options });
     }
-    
+
     /**
      * Save a validated replacement in the shared layout and report publication.
      * A 200 response with `publicationError` means the draft is saved, while
@@ -2492,7 +2492,7 @@ export class Sdk extends HeyApiClient {
             }
         });
     }
-    
+
     /**
      * A form's recipients, for its owner. Link and team sharing are always
      * `null`: a form's public audience is its own setting.
@@ -2500,7 +2500,7 @@ export class Sdk extends HeyApiClient {
     public getFormPermissions<ThrowOnError extends boolean = false>(options: Options<GetFormPermissionsData, ThrowOnError>): RequestResult<GetFormPermissionsResponses, GetFormPermissionsErrors, ThrowOnError> {
         return (options.client ?? this.client).get<GetFormPermissionsResponses, GetFormPermissionsErrors, ThrowOnError>({ url: '/forms/{id}/permissions', ...options });
     }
-    
+
     /**
      * Change a form's channel recipients, for its owner. Turning on link or
      * team sharing is refused.
@@ -2515,7 +2515,7 @@ export class Sdk extends HeyApiClient {
             }
         });
     }
-    
+
     /**
      * Respond to a form. A gate that stops the response answers `stopped` and
      * writes nothing to the table. A public form takes anonymous responses.
@@ -2530,14 +2530,14 @@ export class Sdk extends HeyApiClient {
             }
         });
     }
-    
+
     /**
      * The signed-in caller's own response, with the row's current cells.
      */
     public getMyFormResponse<ThrowOnError extends boolean = false>(options: Options<GetMyFormResponseData, ThrowOnError>): RequestResult<GetMyFormResponseResponses, GetMyFormResponseErrors, ThrowOnError> {
         return (options.client ?? this.client).get<GetMyFormResponseResponses, GetMyFormResponseErrors, ThrowOnError>({ url: '/forms/{id}/responses/mine', ...options });
     }
-    
+
     /**
      * Replace the signed-in caller's answers while the form is open. A gate
      * that stops the edit leaves the saved response as it was.
@@ -2552,14 +2552,14 @@ export class Sdk extends HeyApiClient {
             }
         });
     }
-    
+
     /**
      * Response counts for the form's editors.
      */
     public getFormResponseSummary<ThrowOnError extends boolean = false>(options: Options<GetFormResponseSummaryData, ThrowOnError>): RequestResult<GetFormResponseSummaryResponses, GetFormResponseSummaryErrors, ThrowOnError> {
         return (options.client ?? this.client).get<GetFormResponseSummaryResponses, GetFormResponseSummaryErrors, ThrowOnError>({ url: '/forms/{id}/responses/summary', ...options });
     }
-    
+
     /**
      * Option counts of the form's choice questions: for respondents when the
      * owner shows them, for editors always.
@@ -2567,35 +2567,35 @@ export class Sdk extends HeyApiClient {
     public getFormTally<ThrowOnError extends boolean = false>(options: Options<GetFormTallyData, ThrowOnError>): RequestResult<GetFormTallyResponses, GetFormTallyErrors, ThrowOnError> {
         return (options.client ?? this.client).get<GetFormTallyResponses, GetFormTallyErrors, ThrowOnError>({ url: '/forms/{id}/tally', ...options });
     }
-    
+
     /**
      * Redirects an authenticated user to the github sync app installation page.
      */
     public installSync<ThrowOnError extends boolean = false>(options?: Options<InstallSyncData, ThrowOnError>): RequestResult<unknown, InstallSyncErrors, ThrowOnError> {
         return (options?.client ?? this.client).get<unknown, InstallSyncErrors, ThrowOnError>({ url: '/github/install-sync', ...options });
     }
-    
+
     /**
      * List the repositories and authors among the GitHub pull requests visible to the caller.
      */
     public getGithubPullRequestFacets<ThrowOnError extends boolean = false>(options?: Options<GetGithubPullRequestFacetsData, ThrowOnError>): RequestResult<GetGithubPullRequestFacetsResponses, GetGithubPullRequestFacetsErrors, ThrowOnError> {
         return (options?.client ?? this.client).get<GetGithubPullRequestFacetsResponses, GetGithubPullRequestFacetsErrors, ThrowOnError>({ url: '/github_pull_requests/facets', ...options });
     }
-    
+
     /**
      * Get the pull request behind a foreign entity record the caller can view.
      */
     public getGithubPullRequest<ThrowOnError extends boolean = false>(options: Options<GetGithubPullRequestData, ThrowOnError>): RequestResult<GetGithubPullRequestResponses, GetGithubPullRequestErrors, ThrowOnError> {
         return (options.client ?? this.client).get<GetGithubPullRequestResponses, GetGithubPullRequestErrors, ThrowOnError>({ url: '/github_pull_requests/{id}', ...options });
     }
-    
+
     /**
      * Get the changes of the pull request behind a foreign entity record the caller can view.
      */
     public getGithubPullRequestChanges<ThrowOnError extends boolean = false>(options: Options<GetGithubPullRequestChangesData, ThrowOnError>): RequestResult<GetGithubPullRequestChangesResponses, GetGithubPullRequestChangesErrors, ThrowOnError> {
         return (options.client ?? this.client).get<GetGithubPullRequestChangesResponses, GetGithubPullRequestChangesErrors, ThrowOnError>({ url: '/github_pull_requests/{id}/changes', ...options });
     }
-    
+
     /**
      * Get the patch of changes of the pull request behind a foreign entity record the caller can
      * view.
@@ -2603,7 +2603,7 @@ export class Sdk extends HeyApiClient {
     public getGithubPullRequestChangesPatch<ThrowOnError extends boolean = false>(options: Options<GetGithubPullRequestChangesPatchData, ThrowOnError>): RequestResult<GetGithubPullRequestChangesPatchResponses, GetGithubPullRequestChangesPatchErrors, ThrowOnError> {
         return (options.client ?? this.client).get<GetGithubPullRequestChangesPatchResponses, GetGithubPullRequestChangesPatchErrors, ThrowOnError>({ url: '/github_pull_requests/{id}/changes/patch', ...options });
     }
-    
+
     /**
      * Handler for `POST /harness-pairings`.
      *
@@ -2621,14 +2621,14 @@ export class Sdk extends HeyApiClient {
             }
         });
     }
-    
+
     /**
      * Handler for `GET /harness-pairings/{code}`.
      */
     public getHarnessPairing<ThrowOnError extends boolean = false>(options: Options<GetHarnessPairingData, ThrowOnError>): RequestResult<GetHarnessPairingResponses, GetHarnessPairingErrors, ThrowOnError> {
         return (options.client ?? this.client).get<GetHarnessPairingResponses, GetHarnessPairingErrors, ThrowOnError>({ url: '/harness-pairings/{code}', ...options });
     }
-    
+
     /**
      * Handler for `POST /harness-pairings/{code}/approve`.
      */
@@ -2642,7 +2642,7 @@ export class Sdk extends HeyApiClient {
             }
         });
     }
-    
+
     /**
      * Handler for `POST /harness-pairings/{pairing_id}/claim`.
      *
@@ -2660,14 +2660,14 @@ export class Sdk extends HeyApiClient {
             }
         });
     }
-    
+
     /**
      * Handler for `GET /harnesses`.
      */
     public listHarnesses<ThrowOnError extends boolean = false>(options?: Options<ListHarnessesData, ThrowOnError>): RequestResult<ListHarnessesResponses, ListHarnessesErrors, ThrowOnError> {
         return (options?.client ?? this.client).get<ListHarnessesResponses, ListHarnessesErrors, ThrowOnError>({ url: '/harnesses', ...options });
     }
-    
+
     /**
      * Handler for `DELETE /harnesses/me`.
      *
@@ -2676,70 +2676,70 @@ export class Sdk extends HeyApiClient {
     public deleteSelfHarness<ThrowOnError extends boolean = false>(options?: Options<DeleteSelfHarnessData, ThrowOnError>): RequestResult<DeleteSelfHarnessResponses, DeleteSelfHarnessErrors, ThrowOnError> {
         return (options?.client ?? this.client).delete<DeleteSelfHarnessResponses, DeleteSelfHarnessErrors, ThrowOnError>({ url: '/harnesses/me', ...options });
     }
-    
+
     /**
      * Handler for `GET /harnesses/me`.
      */
     public getSelfHarness<ThrowOnError extends boolean = false>(options?: Options<GetSelfHarnessData, ThrowOnError>): RequestResult<GetSelfHarnessResponses, GetSelfHarnessErrors, ThrowOnError> {
         return (options?.client ?? this.client).get<GetSelfHarnessResponses, GetSelfHarnessErrors, ThrowOnError>({ url: '/harnesses/me', ...options });
     }
-    
+
     /**
      * Handler for `GET /harnesses/me/agents`.
      */
     public listHarnessAgents<ThrowOnError extends boolean = false>(options?: Options<ListHarnessAgentsData, ThrowOnError>): RequestResult<ListHarnessAgentsResponses, ListHarnessAgentsErrors, ThrowOnError> {
         return (options?.client ?? this.client).get<ListHarnessAgentsResponses, ListHarnessAgentsErrors, ThrowOnError>({ url: '/harnesses/me/agents', ...options });
     }
-    
+
     /**
      * Handler for `GET /harnesses/me/sessions`.
      */
     public listHarnessSessions<ThrowOnError extends boolean = false>(options?: Options<ListHarnessSessionsData, ThrowOnError>): RequestResult<ListHarnessSessionsResponses, ListHarnessSessionsErrors, ThrowOnError> {
         return (options?.client ?? this.client).get<ListHarnessSessionsResponses, ListHarnessSessionsErrors, ThrowOnError>({ url: '/harnesses/me/sessions', ...options });
     }
-    
+
     /**
      * Handler for `DELETE /harnesses/{harness_id}`.
      */
     public deleteHarness<ThrowOnError extends boolean = false>(options: Options<DeleteHarnessData, ThrowOnError>): RequestResult<DeleteHarnessResponses, DeleteHarnessErrors, ThrowOnError> {
         return (options.client ?? this.client).delete<DeleteHarnessResponses, DeleteHarnessErrors, ThrowOnError>({ url: '/harnesses/{harness_id}', ...options });
     }
-    
+
     /**
      * Health check
      */
     public healthHandler<ThrowOnError extends boolean = false>(options?: Options<HealthHandlerData, ThrowOnError>): RequestResult<HealthHandlerResponses, unknown, ThrowOnError> {
         return (options?.client ?? this.client).get<HealthHandlerResponses, unknown, ThrowOnError>({ url: '/health', ...options });
     }
-    
+
     /**
      * Gets the users history
      */
     public getHistoryHandler<ThrowOnError extends boolean = false>(options?: Options<GetHistoryHandlerData, ThrowOnError>): RequestResult<GetHistoryHandlerResponses, GetHistoryHandlerErrors, ThrowOnError> {
         return (options?.client ?? this.client).get<GetHistoryHandlerResponses, GetHistoryHandlerErrors, ThrowOnError>({ url: '/history', ...options });
     }
-    
+
     /**
      * Deletes an item from the user's history
      */
     public deleteHistoryHandler<ThrowOnError extends boolean = false>(options: Options<DeleteHistoryHandlerData, ThrowOnError>): RequestResult<DeleteHistoryHandlerResponses, DeleteHistoryHandlerErrors, ThrowOnError> {
         return (options.client ?? this.client).delete<DeleteHistoryHandlerResponses, DeleteHistoryHandlerErrors, ThrowOnError>({ url: '/history/{item_type}/{item_id}', ...options });
     }
-    
+
     /**
      * Upserts an item into the user's history and performs other necessary tracking actions
      */
     public upsertHistoryHandler<ThrowOnError extends boolean = false>(options: Options<UpsertHistoryHandlerData, ThrowOnError>): RequestResult<UpsertHistoryHandlerResponses, UpsertHistoryHandlerErrors, ThrowOnError> {
         return (options.client ?? this.client).post<UpsertHistoryHandlerResponses, UpsertHistoryHandlerErrors, ThrowOnError>({ url: '/history/{item_type}/{item_id}', ...options });
     }
-    
+
     /**
      * List initiatives the caller can view.
      */
     public listInitiatives<ThrowOnError extends boolean = false>(options?: Options<ListInitiativesData, ThrowOnError>): RequestResult<ListInitiativesResponses, ListInitiativesErrors, ThrowOnError> {
         return (options?.client ?? this.client).get<ListInitiativesResponses, ListInitiativesErrors, ThrowOnError>({ url: '/initiatives', ...options });
     }
-    
+
     /**
      * Create an initiative owned by the caller.
      */
@@ -2753,21 +2753,21 @@ export class Sdk extends HeyApiClient {
             }
         });
     }
-    
+
     /**
      * Delete the initiative the caller owns.
      */
     public deleteInitiative<ThrowOnError extends boolean = false>(options: Options<DeleteInitiativeData, ThrowOnError>): RequestResult<DeleteInitiativeResponses, DeleteInitiativeErrors, ThrowOnError> {
         return (options.client ?? this.client).delete<DeleteInitiativeResponses, DeleteInitiativeErrors, ThrowOnError>({ url: '/initiatives/{initiative_id}', ...options });
     }
-    
+
     /**
      * Fetch one initiative the caller can view.
      */
     public getInitiative<ThrowOnError extends boolean = false>(options: Options<GetInitiativeData, ThrowOnError>): RequestResult<GetInitiativeResponses, GetInitiativeErrors, ThrowOnError> {
         return (options.client ?? this.client).get<GetInitiativeResponses, GetInitiativeErrors, ThrowOnError>({ url: '/initiatives/{initiative_id}', ...options });
     }
-    
+
     /**
      * Update fields the caller can edit.
      */
@@ -2781,28 +2781,28 @@ export class Sdk extends HeyApiClient {
             }
         });
     }
-    
+
     /**
      * Gets the instructions document for the current user
      */
     public getInstructionsHandler<ThrowOnError extends boolean = false>(options?: Options<GetInstructionsHandlerData, ThrowOnError>): RequestResult<GetInstructionsHandlerResponses, GetInstructionsHandlerErrors, ThrowOnError> {
         return (options?.client ?? this.client).get<GetInstructionsHandlerResponses, GetInstructionsHandlerErrors, ThrowOnError>({ url: '/instructions', ...options });
     }
-    
+
     /**
      * Creates an instructions document for the current user
      */
     public createInstructionsHandler<ThrowOnError extends boolean = false>(options?: Options<CreateInstructionsHandlerData, ThrowOnError>): RequestResult<CreateInstructionsHandlerResponses, CreateInstructionsHandlerErrors, ThrowOnError> {
         return (options?.client ?? this.client).post<CreateInstructionsHandlerResponses, CreateInstructionsHandlerErrors, ThrowOnError>({ url: '/instructions', ...options });
     }
-    
+
     /**
      * Gets the items the user has access to
      */
     public getItemsSoup<ThrowOnError extends boolean = false>(options?: Options<GetItemsSoupData, ThrowOnError>): RequestResult<GetItemsSoupResponses, GetItemsSoupErrors, ThrowOnError> {
         return (options?.client ?? this.client).get<GetItemsSoupResponses, GetItemsSoupErrors, ThrowOnError>({ url: '/items/soup', ...options });
     }
-    
+
     /**
      * Gets the items the user has access to
      */
@@ -2816,7 +2816,7 @@ export class Sdk extends HeyApiClient {
             }
         });
     }
-    
+
     /**
      * Gets the items the user has access to using AST filters
      */
@@ -2830,7 +2830,7 @@ export class Sdk extends HeyApiClient {
             }
         });
     }
-    
+
     /**
      * Gets the items grouped by the specified field using AST filters.
      */
@@ -2844,14 +2844,14 @@ export class Sdk extends HeyApiClient {
             }
         });
     }
-    
+
     /**
      * Read a bounded timeline with lazy thread previews.
      */
     public messageTimeline<ThrowOnError extends boolean = false>(options: Options<MessageTimelineData, ThrowOnError>): RequestResult<MessageTimelineResponses, unknown, ThrowOnError> {
         return (options.client ?? this.client).get<MessageTimelineResponses, unknown, ThrowOnError>({ url: '/messages/{parent_type}/{parent_id}', ...options });
     }
-    
+
     /**
      * Create a root message or reply.
      */
@@ -2865,21 +2865,21 @@ export class Sdk extends HeyApiClient {
             }
         });
     }
-    
+
     /**
      * Tombstone one message; deleting a discussion's root deletes the discussion.
      */
     public entityMessageDeleteMessage<ThrowOnError extends boolean = false>(options: Options<EntityMessageDeleteMessageData, ThrowOnError>): RequestResult<EntityMessageDeleteMessageResponses, unknown, ThrowOnError> {
         return (options.client ?? this.client).delete<EntityMessageDeleteMessageResponses, unknown, ThrowOnError>({ url: '/messages/{parent_type}/{parent_id}/items/{id}', ...options });
     }
-    
+
     /**
      * Resolve a message within its parent.
      */
     public entityMessageGetMessage<ThrowOnError extends boolean = false>(options: Options<EntityMessageGetMessageData, ThrowOnError>): RequestResult<EntityMessageGetMessageResponses, unknown, ThrowOnError> {
         return (options.client ?? this.client).get<EntityMessageGetMessageResponses, unknown, ThrowOnError>({ url: '/messages/{parent_type}/{parent_id}/items/{id}', ...options });
     }
-    
+
     /**
      * Edit an owned message.
      */
@@ -2893,7 +2893,7 @@ export class Sdk extends HeyApiClient {
             }
         });
     }
-    
+
     /**
      * Change the caller's reaction.
      */
@@ -2907,28 +2907,28 @@ export class Sdk extends HeyApiClient {
             }
         });
     }
-    
+
     /**
      * Resolve an old link under current parent permissions.
      */
     public entityMessageLegacy<ThrowOnError extends boolean = false>(options: Options<EntityMessageLegacyData, ThrowOnError>): RequestResult<EntityMessageLegacyResponses, unknown, ThrowOnError> {
         return (options.client ?? this.client).get<EntityMessageLegacyResponses, unknown, ThrowOnError>({ url: '/messages/{parent_type}/{parent_id}/legacy/{legacy_id}', ...options });
     }
-    
+
     /**
      * Explicitly remove a discussion.
      */
     public entityMessageDeleteThread<ThrowOnError extends boolean = false>(options: Options<EntityMessageDeleteThreadData, ThrowOnError>): RequestResult<EntityMessageDeleteThreadResponses, unknown, ThrowOnError> {
         return (options.client ?? this.client).delete<EntityMessageDeleteThreadResponses, unknown, ThrowOnError>({ url: '/messages/{parent_type}/{parent_id}/threads/{id}', ...options });
     }
-    
+
     /**
      * Open a specific discussion from a link or annotation.
      */
     public entityMessageGetThread<ThrowOnError extends boolean = false>(options: Options<EntityMessageGetThreadData, ThrowOnError>): RequestResult<EntityMessageGetThreadResponses, unknown, ThrowOnError> {
         return (options.client ?? this.client).get<EntityMessageGetThreadResponses, unknown, ThrowOnError>({ url: '/messages/{parent_type}/{parent_id}/threads/{id}', ...options });
     }
-    
+
     /**
      * Update a discussion's lifecycle and placement.
      */
@@ -2942,14 +2942,14 @@ export class Sdk extends HeyApiClient {
             }
         });
     }
-    
+
     /**
      * Read a bounded window of messages and the parent's activity, ordered by the server.
      */
     public messageTimelineEntries<ThrowOnError extends boolean = false>(options: Options<MessageTimelineEntriesData, ThrowOnError>): RequestResult<MessageTimelineEntriesResponses, unknown, ThrowOnError> {
         return (options.client ?? this.client).get<MessageTimelineEntriesResponses, unknown, ThrowOnError>({ url: '/messages/{parent_type}/{parent_id}/timeline', ...options });
     }
-    
+
     /**
      * Broadcast typing within an authorized discussion.
      */
@@ -2963,14 +2963,14 @@ export class Sdk extends HeyApiClient {
             }
         });
     }
-    
+
     /**
      * Gets the users pinned items
      */
     public getPinsHandler<ThrowOnError extends boolean = false>(options?: Options<GetPinsHandlerData, ThrowOnError>): RequestResult<GetPinsHandlerResponses, GetPinsHandlerErrors, ThrowOnError> {
         return (options?.client ?? this.client).get<GetPinsHandlerResponses, GetPinsHandlerErrors, ThrowOnError>({ url: '/pins', ...options });
     }
-    
+
     /**
      * Saves the updated order of the pins for the user
      */
@@ -2984,7 +2984,7 @@ export class Sdk extends HeyApiClient {
             }
         });
     }
-    
+
     /**
      * Deletes the pin for the user
      */
@@ -2998,7 +2998,7 @@ export class Sdk extends HeyApiClient {
             }
         });
     }
-    
+
     /**
      * Pins the item for the user
      */
@@ -3012,14 +3012,14 @@ export class Sdk extends HeyApiClient {
             }
         });
     }
-    
+
     /**
      * List projects visible to the authenticated user.
      */
     public getProjectsHandler<ThrowOnError extends boolean = false>(options?: Options<GetProjectsHandlerData, ThrowOnError>): RequestResult<GetProjectsHandlerResponses, GetProjectsHandlerErrors, ThrowOnError> {
         return (options?.client ?? this.client).get<GetProjectsHandlerResponses, GetProjectsHandlerErrors, ThrowOnError>({ url: '/projects', ...options });
     }
-    
+
     /**
      * Create a project, optionally beneath an existing project.
      */
@@ -3033,14 +3033,14 @@ export class Sdk extends HeyApiClient {
             }
         });
     }
-    
+
     /**
      * List pending root projects owned by the authenticated user.
      */
     public getPendingProjectsHandler<ThrowOnError extends boolean = false>(options?: Options<GetPendingProjectsHandlerData, ThrowOnError>): RequestResult<GetPendingProjectsHandlerResponses, GetPendingProjectsHandlerErrors, ThrowOnError> {
         return (options?.client ?? this.client).get<GetPendingProjectsHandlerResponses, GetPendingProjectsHandlerErrors, ThrowOnError>({ url: '/projects/pending', ...options });
     }
-    
+
     /**
      * Get previews for a batch of project IDs.
      */
@@ -3054,7 +3054,7 @@ export class Sdk extends HeyApiClient {
             }
         });
     }
-    
+
     /**
      * Upload a folder tree and create its upload destinations.
      */
@@ -3068,7 +3068,7 @@ export class Sdk extends HeyApiClient {
             }
         });
     }
-    
+
     /**
      * Create a request for extracting an uploaded folder archive.
      */
@@ -3082,77 +3082,77 @@ export class Sdk extends HeyApiClient {
             }
         });
     }
-    
+
     /**
      * Soft-delete a project and all of its children.
      */
     public deleteProjectHandler<ThrowOnError extends boolean = false>(options: Options<DeleteProjectHandlerData, ThrowOnError>): RequestResult<DeleteProjectHandlerResponses, DeleteProjectHandlerErrors, ThrowOnError> {
         return (options.client ?? this.client).delete<DeleteProjectHandlerResponses, DeleteProjectHandlerErrors, ThrowOnError>({ url: '/projects/{id}', ...options });
     }
-    
+
     /**
      * Get project metadata.
      */
     public getProjectHandler<ThrowOnError extends boolean = false>(options: Options<GetProjectHandlerData, ThrowOnError>): RequestResult<GetProjectHandlerResponses, GetProjectHandlerErrors, ThrowOnError> {
         return (options.client ?? this.client).get<GetProjectHandlerResponses, GetProjectHandlerErrors, ThrowOnError>({ url: '/projects/{id}', ...options });
     }
-    
+
     /**
      * Get the caller's project access level.
      */
     public getProjectUserAccessLevel<ThrowOnError extends boolean = false>(options: Options<GetProjectUserAccessLevelData, ThrowOnError>): RequestResult<GetProjectUserAccessLevelResponses, GetProjectUserAccessLevelErrors, ThrowOnError> {
         return (options.client ?? this.client).get<GetProjectUserAccessLevelResponses, GetProjectUserAccessLevelErrors, ThrowOnError>({ url: '/projects/{id}/access_level', ...options });
     }
-    
+
     /**
      * Get a project's immediate children.
      */
     public getProjectContentHandler<ThrowOnError extends boolean = false>(options: Options<GetProjectContentHandlerData, ThrowOnError>): RequestResult<GetProjectContentHandlerResponses, GetProjectContentHandlerErrors, ThrowOnError> {
         return (options.client ?? this.client).get<GetProjectContentHandlerResponses, GetProjectContentHandlerErrors, ThrowOnError>({ url: '/projects/{id}/content', ...options });
     }
-    
+
     /**
      * Permanently delete a soft-deleted project and all of its children.
      */
     public permanentlyDeleteProject<ThrowOnError extends boolean = false>(options: Options<PermanentlyDeleteProjectData, ThrowOnError>): RequestResult<PermanentlyDeleteProjectResponses, PermanentlyDeleteProjectErrors, ThrowOnError> {
         return (options.client ?? this.client).delete<PermanentlyDeleteProjectResponses, PermanentlyDeleteProjectErrors, ThrowOnError>({ url: '/projects/{id}/permanent', ...options });
     }
-    
+
     /**
      * Get a project's share permissions.
      */
     public getProjectPermissionsV2<ThrowOnError extends boolean = false>(options: Options<GetProjectPermissionsV2Data, ThrowOnError>): RequestResult<GetProjectPermissionsV2Responses, GetProjectPermissionsV2Errors, ThrowOnError> {
         return (options.client ?? this.client).get<GetProjectPermissionsV2Responses, GetProjectPermissionsV2Errors, ThrowOnError>({ url: '/projects/{id}/permissions', ...options });
     }
-    
+
     /**
      * Restore a soft-deleted project and its children.
      */
     public revertDeleteProject<ThrowOnError extends boolean = false>(options: Options<RevertDeleteProjectData, ThrowOnError>): RequestResult<RevertDeleteProjectResponses, RevertDeleteProjectErrors, ThrowOnError> {
         return (options.client ?? this.client).put<RevertDeleteProjectResponses, RevertDeleteProjectErrors, ThrowOnError>({ url: '/projects/{id}/revert_delete', ...options });
     }
-    
+
     /**
      * Gets the users recently deleted items.
      */
     public recentlyDeleted<ThrowOnError extends boolean = false>(options?: Options<RecentlyDeletedData, ThrowOnError>): RequestResult<RecentlyDeletedResponses, RecentlyDeletedErrors, ThrowOnError> {
         return (options?.client ?? this.client).get<RecentlyDeletedResponses, RecentlyDeletedErrors, ThrowOnError>({ url: '/recents/deleted', ...options });
     }
-    
+
     /**
      * List original email threads with caller-private reminder work.
      */
     public listEmailReminders<ThrowOnError extends boolean = false>(options?: Options<ListEmailRemindersData, ThrowOnError>): RequestResult<ListEmailRemindersResponses, ListEmailRemindersErrors, ThrowOnError> {
         return (options?.client ?? this.client).get<ListEmailRemindersResponses, ListEmailRemindersErrors, ThrowOnError>({ url: '/reminders/email/collection', ...options });
     }
-    
+
     /**
      * Read an email follow-up and reconcile inbound reply cancellation.
      */
     public getEmailFollowup<ThrowOnError extends boolean = false>(options: Options<GetEmailFollowupData, ThrowOnError>): RequestResult<GetEmailFollowupResponses, GetEmailFollowupErrors, ThrowOnError> {
         return (options.client ?? this.client).get<GetEmailFollowupResponses, GetEmailFollowupErrors, ThrowOnError>({ url: '/reminders/email/{thread_id}', ...options });
     }
-    
+
     /**
      * Schedule, edit or remove one email follow-up as an idempotent operation.
      */
@@ -3166,11 +3166,11 @@ export class Sdk extends HeyApiClient {
             }
         });
     }
-    
+
     public getViewsHandler<ThrowOnError extends boolean = false>(options?: Options<GetViewsHandlerData, ThrowOnError>): RequestResult<GetViewsHandlerResponses, GetViewsHandlerErrors, ThrowOnError> {
         return (options?.client ?? this.client).get<GetViewsHandlerResponses, GetViewsHandlerErrors, ThrowOnError>({ url: '/saved_views', ...options });
     }
-    
+
     public createViewHandler<ThrowOnError extends boolean = false>(options: Options<CreateViewHandlerData, ThrowOnError>): RequestResult<CreateViewHandlerResponses, CreateViewHandlerErrors, ThrowOnError> {
         return (options.client ?? this.client).post<CreateViewHandlerResponses, CreateViewHandlerErrors, ThrowOnError>({
             url: '/saved_views',
@@ -3181,7 +3181,7 @@ export class Sdk extends HeyApiClient {
             }
         });
     }
-    
+
     public excludeDefaultViewHandler<ThrowOnError extends boolean = false>(options: Options<ExcludeDefaultViewHandlerData, ThrowOnError>): RequestResult<ExcludeDefaultViewHandlerResponses, ExcludeDefaultViewHandlerErrors, ThrowOnError> {
         return (options.client ?? this.client).post<ExcludeDefaultViewHandlerResponses, ExcludeDefaultViewHandlerErrors, ThrowOnError>({
             url: '/saved_views/exclude_default',
@@ -3192,11 +3192,11 @@ export class Sdk extends HeyApiClient {
             }
         });
     }
-    
+
     public deleteViewHandler<ThrowOnError extends boolean = false>(options: Options<DeleteViewHandlerData, ThrowOnError>): RequestResult<DeleteViewHandlerResponses, DeleteViewHandlerErrors, ThrowOnError> {
         return (options.client ?? this.client).delete<DeleteViewHandlerResponses, DeleteViewHandlerErrors, ThrowOnError>({ url: '/saved_views/{saved_view_id}', ...options });
     }
-    
+
     public patchViewHandler<ThrowOnError extends boolean = false>(options: Options<PatchViewHandlerData, ThrowOnError>): RequestResult<PatchViewHandlerResponses, PatchViewHandlerErrors, ThrowOnError> {
         return (options.client ?? this.client).patch<PatchViewHandlerResponses, PatchViewHandlerErrors, ThrowOnError>({
             url: '/saved_views/{saved_view_id}',
@@ -3207,14 +3207,14 @@ export class Sdk extends HeyApiClient {
             }
         });
     }
-    
+
     /**
      * List this administrator's team receipts, effective server limits and source binding.
      */
     public listSlackImports<ThrowOnError extends boolean = false>(options?: Options<ListSlackImportsData, ThrowOnError>): RequestResult<ListSlackImportsResponses, unknown, ThrowOnError> {
         return (options?.client ?? this.client).get<ListSlackImportsResponses, unknown, ThrowOnError>({ url: '/slack/imports', ...options });
     }
-    
+
     /**
      * Create or replay a job using a scoped idempotency token and full selected metadata.
      * Missing creation timestamps and unknown message counts are represented as null.
@@ -3229,28 +3229,28 @@ export class Sdk extends HeyApiClient {
             }
         });
     }
-    
+
     /**
      * Read sanitized progress; foreign jobs are indistinguishable from missing jobs.
      */
     public getSlackImport<ThrowOnError extends boolean = false>(options: Options<GetSlackImportData, ThrowOnError>): RequestResult<GetSlackImportResponses, GetSlackImportErrors, ThrowOnError> {
         return (options.client ?? this.client).get<GetSlackImportResponses, GetSlackImportErrors, ThrowOnError>({ url: '/slack/imports/{job_id}', ...options });
     }
-    
+
     /**
      * Stop unclaimed work. Active leases may settle; cancellation does not roll back history.
      */
     public cancelSlackImport<ThrowOnError extends boolean = false>(options: Options<CancelSlackImportData, ThrowOnError>): RequestResult<CancelSlackImportResponses, CancelSlackImportErrors, ThrowOnError> {
         return (options.client ?? this.client).post<CancelSlackImportResponses, CancelSlackImportErrors, ThrowOnError>({ url: '/slack/imports/{job_id}/cancel', ...options });
     }
-    
+
     /**
      * Close registration idempotently; never-ready conversations are skipped, not queued work.
      */
     public finalizeSlackImport<ThrowOnError extends boolean = false>(options: Options<FinalizeSlackImportData, ThrowOnError>): RequestResult<FinalizeSlackImportResponses, FinalizeSlackImportErrors, ThrowOnError> {
         return (options.client ?? this.client).post<FinalizeSlackImportResponses, FinalizeSlackImportErrors, ThrowOnError>({ url: '/slack/imports/{job_id}/finalize', ...options });
     }
-    
+
     /**
      * Issue short-lived, checksum/length-bound, create-only PUT grants. Do not log or persist URLs.
      * Retry a PUT returning 412 by completing/verifying the existing object, not overwriting it.
@@ -3265,7 +3265,7 @@ export class Sdk extends HeyApiClient {
             }
         });
     }
-    
+
     /**
      * Verify storage checksums and lengths for registered objects. A seal fixes the ENTIRE
      * descriptor set (contiguous indices, sizes and hashes), not just this completion batch.
@@ -3282,7 +3282,7 @@ export class Sdk extends HeyApiClient {
             }
         });
     }
-    
+
     public bulkWakeupSyncServiceDocuments<ThrowOnError extends boolean = false>(options: Options<BulkWakeupSyncServiceDocumentsData, ThrowOnError>): RequestResult<BulkWakeupSyncServiceDocumentsResponses, BulkWakeupSyncServiceDocumentsErrors, ThrowOnError> {
         return (options.client ?? this.client).post<BulkWakeupSyncServiceDocumentsResponses, BulkWakeupSyncServiceDocumentsErrors, ThrowOnError>({
             url: '/sync_service/wakeup',
@@ -3293,7 +3293,7 @@ export class Sdk extends HeyApiClient {
             }
         });
     }
-    
+
     /**
      * Edits the share permissions of a thread.
      */
@@ -3307,14 +3307,14 @@ export class Sdk extends HeyApiClient {
             }
         });
     }
-    
+
     /**
      * List the caller's API keys.
      */
     public listUserApiKeys<ThrowOnError extends boolean = false>(options?: Options<ListUserApiKeysData, ThrowOnError>): RequestResult<ListUserApiKeysResponses, ListUserApiKeysErrors, ThrowOnError> {
         return (options?.client ?? this.client).get<ListUserApiKeysResponses, ListUserApiKeysErrors, ThrowOnError>({ url: '/user-api-keys', ...options });
     }
-    
+
     /**
      * Mint a new API key for the caller.
      */
@@ -3328,28 +3328,28 @@ export class Sdk extends HeyApiClient {
             }
         });
     }
-    
+
     /**
      * Delete one of the caller's API keys.
      */
     public deleteUserApiKey<ThrowOnError extends boolean = false>(options: Options<DeleteUserApiKeyData, ThrowOnError>): RequestResult<DeleteUserApiKeyResponses, DeleteUserApiKeyErrors, ThrowOnError> {
         return (options.client ?? this.client).delete<DeleteUserApiKeyResponses, DeleteUserApiKeyErrors, ThrowOnError>({ url: '/user-api-keys/{id}', ...options });
     }
-    
+
     /**
      * Deletes a document location for the user
      */
     public deleteUserDocumentViewLocation<ThrowOnError extends boolean = false>(options: Options<DeleteUserDocumentViewLocationData, ThrowOnError>): RequestResult<DeleteUserDocumentViewLocationResponses, DeleteUserDocumentViewLocationErrors, ThrowOnError> {
         return (options.client ?? this.client).delete<DeleteUserDocumentViewLocationResponses, DeleteUserDocumentViewLocationErrors, ThrowOnError>({ url: '/user_document_view_location/{document_id}', ...options });
     }
-    
+
     /**
      * Gets a UserPdfDocumentLocation entry
      */
     public getUserDocumentViewLocation<ThrowOnError extends boolean = false>(options: Options<GetUserDocumentViewLocationData, ThrowOnError>): RequestResult<GetUserDocumentViewLocationResponses, GetUserDocumentViewLocationErrors, ThrowOnError> {
         return (options.client ?? this.client).get<GetUserDocumentViewLocationResponses, GetUserDocumentViewLocationErrors, ThrowOnError>({ url: '/user_document_view_location/{document_id}', ...options });
     }
-    
+
     public upsertUserDocumentViewLocation<ThrowOnError extends boolean = false>(options: Options<UpsertUserDocumentViewLocationData, ThrowOnError>): RequestResult<UpsertUserDocumentViewLocationResponses, UpsertUserDocumentViewLocationErrors, ThrowOnError> {
         return (options.client ?? this.client).post<UpsertUserDocumentViewLocationResponses, UpsertUserDocumentViewLocationErrors, ThrowOnError>({
             url: '/user_document_view_location/{document_id}',
@@ -3360,14 +3360,14 @@ export class Sdk extends HeyApiClient {
             }
         });
     }
-    
+
     /**
      * Gets the current documents share permissions
      */
     public getDocumentPermissionsV2<ThrowOnError extends boolean = false>(options: Options<GetDocumentPermissionsV2Data, ThrowOnError>): RequestResult<GetDocumentPermissionsV2Responses, GetDocumentPermissionsV2Errors, ThrowOnError> {
         return (options.client ?? this.client).get<GetDocumentPermissionsV2Responses, GetDocumentPermissionsV2Errors, ThrowOnError>({ url: '/v2/documents/{document_id}/permissions', ...options });
     }
-    
+
     /**
      * Edit project metadata and sharing settings.
      */
@@ -3381,21 +3381,21 @@ export class Sdk extends HeyApiClient {
             }
         });
     }
-    
+
     /**
      * Stream matching broker events to the caller over Server-Sent Events.
      */
     public streamEvents<ThrowOnError extends boolean = false>(options: Options<StreamEventsData, ThrowOnError, StreamEventsResponse>): Promise<ServerSentEventsResult<StreamEventsResponses>> {
         return (options.client ?? this.client).sse.get<StreamEventsResponses, StreamEventsErrors, ThrowOnError>({ url: '/webhook/events/stream', ...options });
     }
-    
+
     /**
      * List the caller's webhooks.
      */
     public listWebhooks<ThrowOnError extends boolean = false>(options?: Options<ListWebhooksData, ThrowOnError>): RequestResult<ListWebhooksResponses, ListWebhooksErrors, ThrowOnError> {
         return (options?.client ?? this.client).get<ListWebhooksResponses, ListWebhooksErrors, ThrowOnError>({ url: '/webhook/webhooks', ...options });
     }
-    
+
     /**
      * Create a webhook.
      */
@@ -3409,21 +3409,21 @@ export class Sdk extends HeyApiClient {
             }
         });
     }
-    
+
     /**
      * Delete a webhook.
      */
     public deleteWebhook<ThrowOnError extends boolean = false>(options: Options<DeleteWebhookData, ThrowOnError>): RequestResult<DeleteWebhookResponses, DeleteWebhookErrors, ThrowOnError> {
         return (options.client ?? this.client).delete<DeleteWebhookResponses, DeleteWebhookErrors, ThrowOnError>({ url: '/webhook/webhooks/{webhook_id}', ...options });
     }
-    
+
     /**
      * Get a webhook.
      */
     public getWebhook<ThrowOnError extends boolean = false>(options: Options<GetWebhookData, ThrowOnError>): RequestResult<GetWebhookResponses, GetWebhookErrors, ThrowOnError> {
         return (options.client ?? this.client).get<GetWebhookResponses, GetWebhookErrors, ThrowOnError>({ url: '/webhook/webhooks/{webhook_id}', ...options });
     }
-    
+
     /**
      * Patch a webhook.
      */
@@ -3437,21 +3437,21 @@ export class Sdk extends HeyApiClient {
             }
         });
     }
-    
+
     /**
      * Validate a webhook endpoint.
      */
     public validateWebhook<ThrowOnError extends boolean = false>(options: Options<ValidateWebhookData, ThrowOnError>): RequestResult<ValidateWebhookResponses, ValidateWebhookErrors, ThrowOnError> {
         return (options.client ?? this.client).post<ValidateWebhookResponses, ValidateWebhookErrors, ThrowOnError>({ url: '/webhook/webhooks/{webhook_id}/validate', ...options });
     }
-    
+
     /**
      * The caller's own account.
      */
     public whatsappAccount<ThrowOnError extends boolean = false>(options?: Options<WhatsappAccountData, ThrowOnError>): RequestResult<WhatsappAccountResponses, unknown, ThrowOnError> {
         return (options?.client ?? this.client).get<WhatsappAccountResponses, unknown, ThrowOnError>({ url: '/whatsapp/account', ...options });
     }
-    
+
     /**
      * The caller's WhatsApp chat list (groups and direct chats), newest
      * activity first, with what can be added to Macro.
@@ -3459,7 +3459,7 @@ export class Sdk extends HeyApiClient {
     public whatsappChats<ThrowOnError extends boolean = false>(options?: Options<WhatsappChatsData, ThrowOnError>): RequestResult<WhatsappChatsResponses, unknown, ThrowOnError> {
         return (options?.client ?? this.client).get<WhatsappChatsResponses, unknown, ThrowOnError>({ url: '/whatsapp/chats', ...options });
     }
-    
+
     /**
      * Start or resume the caller's pairing transaction.
      */
@@ -3473,7 +3473,7 @@ export class Sdk extends HeyApiClient {
             }
         });
     }
-    
+
     /**
      * End the caller's observation consent.
      */
@@ -3487,7 +3487,7 @@ export class Sdk extends HeyApiClient {
             }
         });
     }
-    
+
     /**
      * Import earlier messages of the caller's chats that wait for their phone
      * (`backfill.state` `waiting_for_phone`). WhatsApp must be open on the phone.
@@ -3495,7 +3495,7 @@ export class Sdk extends HeyApiClient {
     public whatsappImportHistory<ThrowOnError extends boolean = false>(options?: Options<WhatsappImportHistoryData, ThrowOnError>): RequestResult<WhatsappImportHistoryResponses, unknown, ThrowOnError> {
         return (options?.client ?? this.client).post<WhatsappImportHistoryResponses, unknown, ThrowOnError>({ url: '/whatsapp/history-import', ...options });
     }
-    
+
     /**
      * Ask whether a phone number has a WhatsApp account, to start a direct chat
      * with it; poll the lookup until it is no longer `pending`. Found numbers
@@ -3511,28 +3511,28 @@ export class Sdk extends HeyApiClient {
             }
         });
     }
-    
+
     /**
      * Poll the caller's phone-number lookup.
      */
     public whatsappLookup<ThrowOnError extends boolean = false>(options: Options<WhatsappLookupData, ThrowOnError>): RequestResult<WhatsappLookupResponses, unknown, ThrowOnError> {
         return (options.client ?? this.client).get<WhatsappLookupResponses, unknown, ThrowOnError>({ url: '/whatsapp/lookups/{id}', ...options });
     }
-    
+
     /**
      * Cancel the caller's pairing transaction.
      */
     public whatsappCancelPairing<ThrowOnError extends boolean = false>(options: Options<WhatsappCancelPairingData, ThrowOnError>): RequestResult<WhatsappCancelPairingResponses, unknown, ThrowOnError> {
         return (options.client ?? this.client).delete<WhatsappCancelPairingResponses, unknown, ThrowOnError>({ url: '/whatsapp/pairing/{id}', ...options });
     }
-    
+
     /**
      * Poll the caller's pairing transaction, including its current QR code.
      */
     public whatsappPairing<ThrowOnError extends boolean = false>(options: Options<WhatsappPairingData, ThrowOnError>): RequestResult<WhatsappPairingResponses, unknown, ThrowOnError> {
         return (options.client ?? this.client).get<WhatsappPairingResponses, unknown, ThrowOnError>({ url: '/whatsapp/pairing/{id}', ...options });
     }
-    
+
     /**
      * Forward the owner's WebAuthn assertion to the pairing replica.
      */
