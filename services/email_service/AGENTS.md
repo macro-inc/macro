@@ -18,7 +18,9 @@ the gateway `/email` prefix.
 - `src/backfill_outbox.rs`, `src/backfill_init_service.rs`,
   `src/backfill_completion_service.rs`: Gmail history backfill orchestration.
 - `src/crm_enrichment_worker.rs`: periodic pass that resolves pending CRM
-  company directory entries (names/logos) left by binaries without a resolver.
+  company directory entries (names/logos) left by binaries without a resolver,
+  using the public-homepage `UnfurlCompanyMetadataResolver` wired in
+  `pubsub_workers`. It requires no enrichment-provider key or selection flag.
 - `src/mailbox_sync_worker.rs`: the Outlook mailbox loops (sync, projections,
   contacts, drafts, commands, settings, watches) and `run_health`, the
   per-minute Outlook health snapshot.

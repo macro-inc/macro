@@ -2491,6 +2491,7 @@
       "crates/trigger_context",
       "crates/unfurl",
       "crates/upstream_error",
+      "crates/user_api_key",
       "crates/user_language",
       "crates/user_quota",
       "crates/workspace-hack",

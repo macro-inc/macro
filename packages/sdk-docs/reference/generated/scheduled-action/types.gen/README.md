@@ -80,6 +80,7 @@
 - [ListScheduledActionsResponses](type-aliases/ListScheduledActionsResponses.md)
 - [PayloadCondition](type-aliases/PayloadCondition.md)
 - [PayloadScalar](type-aliases/PayloadScalar.md)
+- [PropertySelector](type-aliases/PropertySelector.md)
 - [RoutineCodeGuideData](type-aliases/RoutineCodeGuideData.md)
 - [RoutineCodeGuideError](type-aliases/RoutineCodeGuideError.md)
 - [RoutineCodeGuideErrors](type-aliases/RoutineCodeGuideErrors.md)

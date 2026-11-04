@@ -23,6 +23,7 @@ type BaseUserName = {
   id: string;
   firstName?: string;
   lastName?: string;
+  isAgent?: boolean;
 };
 
 type UserNameLoading = { loading: true } & BaseUserName;

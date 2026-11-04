@@ -1206,21 +1206,21 @@ The event menu groups Macro activity triggers by surface:
 
 - **Channels:** **Channel created**, **Message sent in channel**, and **@ mentioned in channel**.
 - **Documents:** **Document created** and **Document deleted**. Tasks are separate.
-- **Tasks:** **Task created**, **Status changed**, **Priority changed**, and **Any property changed**.
+- **Tasks:** **Task created**, **Status changed**, **Priority changed**, **Assignees changed**, **Due date changed**, **Project changed**, **Effort changed**, and **Any property changed**. Under **Changes to**, choose the values that start the routine, such as **Completed**, or leave **Any status**. A value counts only when the change adds it. Tags aren't properties and have no trigger.
 - **Email:** **New email received** in the routine owner's inbox, excluding spam, trash, drafts, and historical imports.
 - **Calls:** **Call started**, for calls the routine owner starts (receives the call and who has joined so far); and **Call ended**, for channel calls and meetings the owner joined (receives participants and transcript, cut short for long calls).
 - **GitHub:** presets for **Workflow failed**, **Workflow finished**, **Pull request opened**, **Pull request merged**, **Review requested**, **Review submitted**, **Issue opened**, **Comment added**, **Code pushed**, **Release published**, and **Any GitHub event**, from repositories Macro's GitHub app reaches for the routine owner. Until the owner connects GitHub, the group shows **Connect GitHub** instead.
 
-For messages, mentions, deletion, and task changes, choose specific accessible
-channels/documents/tasks or any accessible item. Creation triggers cover newly
-created accessible items; email covers the owner's inbox; **Call started**
-watches **Calls you start** and **Call ended** **Calls you join**, neither with
-an item picker. Calls the owner did not start never trigger **Call started**;
-calls they did not join never trigger **Call ended**. Mentions match only @
-mentions of the routine owner. **Any property changed** also includes status and
-priority; overlapping selectors start only one run for the same event.
-Bot-authored or delegated Macro changes do not retrigger routines. Saved legacy
-selectors remain editable but are no longer offered in the new-trigger menu.
+For messages, mentions, deletion, and task changes, use **Applies to** in the
+same panel to choose any accessible item or specific channels/documents/tasks. Creation
+triggers cover newly created accessible items; email covers the owner's inbox;
+**Call started** shows **Calls you start** and **Call ended** shows **Calls you
+join** — neither has an item picker. Calls the owner did not start never trigger
+**Call started**; calls they did not join never trigger **Call ended**. Mentions match only @ mentions of the routine owner. **Any property changed**
+also includes status and priority; overlapping selectors start only one run for
+the same event. Bot-authored or delegated Macro changes do not retrigger
+routines. Saved legacy selectors remain
+editable but are no longer offered in the new-trigger menu.
 
 A GitHub trigger reads **in All repositories** (or the repository, or **N
 repositories**) on the routine's page; that token opens its panel. The panel

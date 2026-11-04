@@ -19,7 +19,7 @@ use crate::inbound::template_router::{
 
 use crate::domain::event_trigger::{
     ActionTrigger, EventFilter, EventFilters, EventName, GithubSelectorInput,
-    PayloadConditionInput, PayloadScalar,
+    PayloadConditionInput, PayloadScalar, PropertySelector,
 };
 use crate::domain::models::{
     ActionConfiguration, ActionConfigurationUpdate, ActionExecutionRecord, ActionKind,
@@ -79,6 +79,7 @@ use model::response::EmptyResponse;
             GithubSelectorInput,
             PayloadConditionInput,
             PayloadScalar,
+            PropertySelector,
             SetScheduledActionEnabled,
             Schedule,
             ActionKind,

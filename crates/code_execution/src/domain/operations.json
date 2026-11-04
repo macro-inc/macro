@@ -839,6 +839,12 @@
     "path": "/team/user/invites",
     "write": false
   },
+  "auth.agentSetup": {
+    "label": "Agent Setup",
+    "method": "POST",
+    "path": "/user/agent_setup",
+    "write": true
+  },
   "auth.getUserNames": {
     "label": "Get User Names",
     "method": "POST",
@@ -921,6 +927,18 @@
     "label": "Put Profile Picture",
     "method": "PUT",
     "path": "/user/profile_picture",
+    "write": true
+  },
+  "auth.createProfilePictureUpload": {
+    "label": "Create Profile Picture Upload",
+    "method": "POST",
+    "path": "/user/profile_picture/file",
+    "write": true
+  },
+  "auth.putProfilePictureFile": {
+    "label": "Put Profile Picture File",
+    "method": "PUT",
+    "path": "/user/profile_picture/file",
     "write": true
   },
   "auth.postProfilePictures": {

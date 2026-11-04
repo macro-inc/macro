@@ -154,6 +154,9 @@ function EmailStep(props: { login: EmailLogin }) {
       email={props.login.email()}
       password={props.login.password()}
       passwordRequired={props.login.passwordRequired()}
+      showAgentToggle={props.login.showAgentToggle()}
+      isAgent={props.login.isAgent()}
+      onIsAgentChange={props.login.setIsAgent}
       sending={props.login.sending()}
       error={props.login.sendError()}
       onEmailInput={props.login.setEmail}

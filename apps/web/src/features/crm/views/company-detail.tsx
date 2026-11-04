@@ -41,7 +41,6 @@ type CompanyProps = {
   companyId: string;
   section?: CompanySection;
   headerToggle?: boolean;
-  onHidden?: () => void;
   onOpenContact?: (contact: CompanyContact) => void;
   onOpenPipeline?: (pipelineId: string) => void;
 };
@@ -193,7 +192,7 @@ function CompanyContent(props: CompanyProps) {
         </Suspense>
       </Show>
       <SidePanel.Section id="company-sharing" title="Sharing" order={25}>
-        <CompanySharingSection company={company()} onHidden={props.onHidden} />
+        <CompanySharingSection company={company()} />
       </SidePanel.Section>
       <SidePanel.Section id="company-references" title="References" order={30}>
         <RecordReferencesSection scope={scope()} />

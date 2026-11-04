@@ -251,13 +251,9 @@ impl World {
         );
         let crm_service = crm::domain::service::CrmServiceImpl::new(
             crm::outbound::companies_repo::CompaniesRepositoryImpl::new(db.clone()),
-            CrmMetadataResolver::Unfurl(
-                crm::outbound::unfurl_resolver::UnfurlCompanyMetadataResolver::new(Arc::new(
-                    unfurl::domain::service::UnfurlServiceImpl::new(
-                        unfurl::outbound::ReqwestUnfurlFetcher::new().expect("unfurl fetcher"),
-                    ),
-                )),
-            ),
+            CrmMetadataResolver::new(Arc::new(unfurl::domain::service::UnfurlServiceImpl::new(
+                unfurl::outbound::ReqwestUnfurlFetcher::new().expect("unfurl fetcher"),
+            ))),
         );
         let sync_context = |retry_worker: bool, queue: &str| PubSubContext {
             gmail_history: email::domain::mailbox::gmail_history::GmailHistoryService(

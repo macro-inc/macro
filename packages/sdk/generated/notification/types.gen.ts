@@ -983,6 +983,10 @@ export type InviteToTeamMetadata = {
      */
     inviteePlan?: InviteePlan;
     /**
+     * Whether the invite creates an agent account.
+     */
+    isAgent?: boolean;
+    /**
      * Whether this email reminds the invitee of an invite they have not answered.
      */
     reminder?: boolean;

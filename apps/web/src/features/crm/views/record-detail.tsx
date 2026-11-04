@@ -240,7 +240,6 @@ export function CrmRecordDetail(props: {
                         companyId={record.id}
                         section={companySection()}
                         headerToggle={false}
-                        onHidden={back}
                         onOpenPipeline={props.onOpenPipeline}
                         onOpenContact={(contact) =>
                           open({

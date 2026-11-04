@@ -121,8 +121,9 @@ export const authExcluded = [
   'putCursorApiKey',
   'putCursorDefaultModel',
   'putProfilePicture',
+  // Internal to the web app's agent signup; the token is shown in its modal.
+  'agentSetup',
   'putUserLanguage',
-  'putUserName',
   'redeemGtmInviteLink',
   'refresh',
   'rejectInvitation',

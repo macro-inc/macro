@@ -51,7 +51,15 @@ test('downloads the original video from the message and expanded viewer', async 
   const secondDownload = page.waitForEvent('download');
   await clickDownload();
   expect((await secondDownload).suggestedFilename()).toBe('Team demo.webm');
-  await page.keyboard.press('Escape');
+  await expect(
+    page
+      .getByRole('dialog')
+      .getByRole('button', { name: 'Download', exact: true })
+  ).toBeFocused();
+  await page
+    .getByRole('dialog')
+    .getByRole('button', { name: 'Close', exact: true })
+    .click();
   await expect(
     page.getByRole('button', { name: 'Open video viewer', exact: true }).first()
   ).toBeFocused();
@@ -59,6 +67,38 @@ test('downloads the original video from the message and expanded viewer', async 
     'scrollWidth',
     await page.locator('body').evaluate((body) => body.clientWidth)
   );
+});
+
+test('Space controls video playback when the viewer opens and reopens', async ({
+  page,
+}) => {
+  const downloads: string[] = [];
+  page.on('download', (download) =>
+    downloads.push(download.suggestedFilename())
+  );
+  const opener = page
+    .getByRole('button', { name: 'Open video viewer', exact: true })
+    .first();
+
+  for (let opening = 0; opening < 2; opening++) {
+    await opener.click();
+    const video = page.getByRole('dialog').locator('video');
+    // Keep the short fixture playing until the keyboard pauses it.
+    await video.evaluate((element: HTMLVideoElement) => {
+      element.loop = true;
+    });
+    await expect(video).toHaveJSProperty('paused', false);
+    await page.keyboard.press('Space');
+    await expect(video).toHaveJSProperty('paused', true);
+    await expect(video).toBeFocused();
+    await page.keyboard.press('Space');
+    await expect(video).toHaveJSProperty('paused', false);
+    expect(downloads).toEqual([]);
+
+    await page.keyboard.press('Escape');
+    await expect(page.getByRole('dialog')).toHaveCount(0);
+    await expect(opener).toBeFocused();
+  }
 });
 
 test('recovers from a failed transfer and never opens the viewer when downloading', async ({

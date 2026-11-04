@@ -592,6 +592,10 @@ describe('routine composer execution selection', () => {
       'Task created',
       'Status changed',
       'Priority changed',
+      'Assignees changed',
+      'Due date changed',
+      'Project changed',
+      'Effort changed',
       'Any property changed',
       'New email received',
     ]) {
