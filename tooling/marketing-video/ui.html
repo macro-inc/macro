@@ -213,7 +213,7 @@ function shellOf(states, keys) {
   const comp = (i) => tr(keys.map(([b, n, d, z]) => [b, states[n][i], d, z]));
   const ch = [0, 1, 2].map((c) => tr(keys.map(([b, n, d, z]) => [b, hexRGB(states[n][5])[c], d, z])));
   SHELL = { el, x: comp(0), y: comp(1), w: comp(2), h: comp(3), r: comp(4), ch, cur: null };
-  keys.slice(1).forEach(([b]) => cue(b, "swish", 0.22));
+  keys.slice(1).forEach(([b]) => { cue(b, "swish", 0.22); if (MUSIC.edits) MUSIC.edits.push(+(b - 1).toFixed(2)); });
 }
 function shellFx(t) {
   const S = SHELL, c = { x: S.x(t), y: S.y(t), w: S.w(t), h: S.h(t), r: S.r(t) };
@@ -887,7 +887,12 @@ let CAM_TABS = null;
 // =====================================================================
 // boot
 // =====================================================================
-const MUSIC = { track: "gimme-groove", bpm: BPM, beats: BEATS, vibe: "funk" };
+// The soundtrack: the kit's stock track by default; ?music=score swaps in the kit's composed score (audio/score.py),
+// funk at the same 112 BPM, which needs no download. Its acts are 0-based beats: the drop lands on beat 2 (the first
+// action), the groove runs to bar 7, and it settles as the UI returns to frame 0. The shell's morphs get swells.
+const MUSIC = Q.get("music") === "score"
+  ? { track: "score", bpm: BPM, beats: BEATS, vibe: "funk", seed: "macro-ui-" + AD, score: { turn: 1, groove: 1, release: 24, end: 28 }, edits: [] }
+  : { track: "gimme-groove", bpm: BPM, beats: BEATS, vibe: "funk" };
 let AdFx = null;
 function init() {
   const ad = ADS[AD]();
