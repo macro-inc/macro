@@ -1,27 +1,232 @@
+import { ComposeFieldRow } from '@app/features/email-compose/components/compose-field-row';
 import { t } from '@app/lib/i18n';
 import { clamp } from '@core/util/math';
 import ArrowUpIcon from '@icon/system/regular/arrow-up.svg';
-import CheckIcon from '@icon/system/regular/check.svg';
-import EnvelopeIcon from '@icon/system/regular/envelope.svg';
-import FlowArrowIcon from '@icon/system/regular/tree-structure.svg';
+import BracesIcon from '@icon/system/regular/brackets-curly.svg';
+import PlusIcon from '@icon/system/regular/plus.svg';
+import XIcon from '@icon/system/regular/x.svg';
 import type { Step } from '@service-email/generated/schemas';
-import { Button, Checkbox, ComposerSurface, Input, TextField } from '@ui';
-import { Index, Show } from 'solid-js';
+import { Button, Checkbox, ComposerSurface, Dropdown, Input } from '@ui';
+import { For, Index, Show } from 'solid-js';
 import type { Sender } from '../context/sequences-context';
 import {
+  insertToken,
   isReplyStep,
   PERSONALIZATION_TOKENS,
+  type PersonalizationToken,
   SEQUENCE_LIMITS,
   type SequenceDraft,
   stepSubject,
 } from '../core/sequence';
 import { OptionSelect } from './option-select';
 
+const TOKEN_LABELS = {
+  '{{firstName}}': 'sequences.tokenFirstName',
+  '{{name}}': 'sequences.tokenName',
+  '{{email}}': 'sequences.tokenEmail',
+} as const satisfies Record<PersonalizationToken, string>;
+
 /** Whole days within the limit; an emptied field reads as 0. */
 function clampDelay(value: number) {
   return Number.isFinite(value)
     ? clamp(Math.trunc(value), 0, SEQUENCE_LIMITS.delayDays)
     : 0;
+}
+
+/** When a follow-up goes out and whether it replies in the thread. */
+function StepTiming(props: {
+  step: Step;
+  position: number;
+  disabled: boolean;
+  onChange: (patch: Partial<Step>) => void;
+}) {
+  return (
+    <div class="flex flex-wrap items-center gap-x-5 gap-y-2 px-1 py-3 text-xs text-ink-muted">
+      <label class="flex items-center gap-2">
+        {t('sequences.wait')}
+        <Input
+          aria-label={t('sequences.delayDays', { position: props.position })}
+          type="number"
+          min="0"
+          max={SEQUENCE_LIMITS.delayDays}
+          size="xs"
+          class="w-14"
+          value={props.step.delayDays}
+          disabled={props.disabled}
+          onInput={(event) =>
+            props.onChange({
+              delayDays: clampDelay(event.currentTarget.valueAsNumber),
+            })
+          }
+        />
+        {t('sequences.days', { count: props.step.delayDays })}
+      </label>
+      <Checkbox
+        class="flex items-center gap-2 text-xs"
+        checked={props.step.asReply === true}
+        disabled={props.disabled}
+        onChange={(checked: boolean) => props.onChange({ asReply: checked })}
+      >
+        <Checkbox.Control />
+        <Checkbox.Label>{t('sequences.replyInThread')}</Checkbox.Label>
+      </Checkbox>
+    </div>
+  );
+}
+
+function StepCard(props: {
+  steps: readonly Step[];
+  index: number;
+  disabled: boolean;
+  onChange: (patch: Partial<Step>) => void;
+  onMoveUp: () => void;
+  onRemove: () => void;
+}) {
+  let subjectEl: HTMLInputElement | undefined;
+  let bodyEl: HTMLTextAreaElement | undefined;
+  let lastField: 'subject' | 'body' = 'body';
+  let inserted = false;
+  const step = () => props.steps[props.index];
+  const position = () => props.index + 1;
+  const reply = () => isReplyStep(props.steps, props.index);
+
+  // Personalization goes where the caret last was, in the subject or message.
+  const insert = (token: PersonalizationToken) => {
+    const field = lastField === 'subject' && !reply() ? 'subject' : 'body';
+    const el = field === 'subject' ? subjectEl : bodyEl;
+    if (!el) return;
+    const next = insertToken(
+      el.value,
+      el.selectionStart ?? el.value.length,
+      el.selectionEnd ?? el.value.length,
+      token
+    );
+    props.onChange({ [field]: next.value });
+    inserted = true;
+    requestAnimationFrame(() => {
+      el.focus();
+      el.setSelectionRange(next.caret, next.caret);
+    });
+  };
+
+  return (
+    <article aria-label={t('sequences.emailNumber', { position: position() })}>
+      <ComposerSurface
+        as="div"
+        class="relative overflow-clip touch:rounded-xl touch:border touch:border-edge-muted"
+      >
+        <div class="flex min-h-11 items-center justify-between gap-2 px-4 pt-2">
+          <h3 class="text-sm font-medium">
+            {t('sequences.emailNumber', { position: position() })}
+          </h3>
+          <Show when={!props.disabled}>
+            <div class="flex items-center gap-1">
+              <Dropdown placement="bottom-end">
+                <Dropdown.Trigger
+                  variant="ghost"
+                  size="sm"
+                  aria-label={t('sequences.insertInto', {
+                    position: position(),
+                  })}
+                >
+                  <BracesIcon class="size-4" aria-hidden="true" />
+                  {t('sequences.insert')}
+                </Dropdown.Trigger>
+                <Dropdown.Content
+                  class="min-w-40"
+                  onCloseAutoFocus={(event: Event) => {
+                    if (!inserted) return;
+                    inserted = false;
+                    event.preventDefault();
+                  }}
+                >
+                  <Dropdown.Group>
+                    <For each={PERSONALIZATION_TOKENS}>
+                      {(token) => (
+                        <Dropdown.Item onSelect={() => insert(token)}>
+                          {t(TOKEN_LABELS[token])}
+                        </Dropdown.Item>
+                      )}
+                    </For>
+                  </Dropdown.Group>
+                </Dropdown.Content>
+              </Dropdown>
+              <Button
+                type="button"
+                variant="ghost"
+                size="icon-sm"
+                aria-label={t('sequences.moveEmailUp', {
+                  position: position(),
+                })}
+                tooltip={t('sequences.moveUp')}
+                disabled={props.index === 0}
+                onClick={() => props.onMoveUp()}
+              >
+                <ArrowUpIcon class="size-4" aria-hidden="true" />
+              </Button>
+              <Button
+                type="button"
+                variant="ghost"
+                size="icon-sm"
+                aria-label={t('sequences.removeEmail', {
+                  position: position(),
+                })}
+                tooltip={t('sequences.remove')}
+                disabled={props.steps.length === 1}
+                onClick={() => props.onRemove()}
+              >
+                <XIcon class="size-4" aria-hidden="true" />
+              </Button>
+            </div>
+          </Show>
+        </div>
+        <div class="px-4 pb-3">
+          <ComposeFieldRow label={t('sequences.subject')}>
+            <Show
+              when={!reply()}
+              fallback={
+                <p class="ph-no-capture truncate text-sm text-ink-muted">
+                  {stepSubject(props.steps, props.index)}
+                </p>
+              }
+            >
+              <input
+                ref={subjectEl}
+                type="text"
+                aria-label={t('sequences.subjectOf', { position: position() })}
+                class="ph-no-capture w-full bg-transparent text-sm text-ink outline-none placeholder:text-ink-placeholder"
+                placeholder={t('sequences.subjectPlaceholder')}
+                maxLength={SEQUENCE_LIMITS.subject}
+                value={step()?.subject ?? ''}
+                disabled={props.disabled}
+                onFocus={() => (lastField = 'subject')}
+                onInput={(event) =>
+                  props.onChange({
+                    subject: event.currentTarget.value.replace(/[\r\n]+/g, ' '),
+                  })
+                }
+              />
+            </Show>
+          </ComposeFieldRow>
+          <textarea
+            ref={bodyEl}
+            aria-label={t('sequences.messageOf', { position: position() })}
+            class="ph-no-capture field-sizing-content block min-h-40 w-full resize-none bg-transparent py-3 text-sm leading-6 text-ink outline-none placeholder:text-ink-placeholder"
+            placeholder={t('sequences.messagePlaceholder', {
+              token: PERSONALIZATION_TOKENS[0],
+            })}
+            maxLength={SEQUENCE_LIMITS.body}
+            value={step()?.body ?? ''}
+            disabled={props.disabled}
+            onFocus={() => (lastField = 'body')}
+            onInput={(event) =>
+              props.onChange({ body: event.currentTarget.value })
+            }
+          />
+        </div>
+      </ComposerSurface>
+    </article>
+  );
 }
 
 export function SequenceEditor(props: {
@@ -44,227 +249,61 @@ export function SequenceEditor(props: {
     change({ steps });
   };
   return (
-    <div class="mx-auto w-full max-w-3xl space-y-7 pb-12">
-      <div class="grid gap-4 sm:grid-cols-2">
-        <label class="space-y-2 text-xs font-medium">
-          {t('sequences.name')}
-          <Input
-            value={props.draft.name}
-            maxLength={SEQUENCE_LIMITS.name}
-            disabled={props.disabled}
-            onInput={(event) => change({ name: event.currentTarget.value })}
-          />
-        </label>
-        <div class="space-y-2 text-xs font-medium">
-          <span>{t('sequences.sendFrom')}</span>
-          <OptionSelect
-            label={t('sequences.sendFrom')}
-            value={props.draft.linkId ?? undefined}
-            placeholder={
-              props.senders.length
-                ? t('sequences.chooseInbox')
-                : t('sequences.noInbox')
-            }
-            disabled={props.disabled}
-            personal
-            options={props.senders.map((sender) => ({
-              value: sender.id,
-              label: sender.ready
-                ? sender.email
-                : t('sequences.inboxNeedsReconnect', { email: sender.email }),
-              disabled: !sender.ready,
-            }))}
-            onChange={(linkId) => change({ linkId })}
-          />
-        </div>
+    <div class="mx-auto w-full max-w-3xl pb-12">
+      <ComposeFieldRow label={t('sequences.from')}>
+        <OptionSelect
+          label={t('sequences.sendFrom')}
+          value={props.draft.linkId ?? undefined}
+          placeholder={
+            props.senders.length
+              ? t('sequences.chooseInbox')
+              : t('sequences.noInbox')
+          }
+          disabled={props.disabled}
+          personal
+          options={props.senders.map((sender) => ({
+            value: sender.id,
+            label: sender.ready
+              ? sender.email
+              : t('sequences.inboxNeedsReconnect', { email: sender.email }),
+            disabled: !sender.ready,
+          }))}
+          onChange={(linkId) => change({ linkId })}
+        />
+      </ComposeFieldRow>
+      <div class="pt-5">
+        <Index each={props.draft.steps}>
+          {(step, index) => (
+            <>
+              <Show when={index > 0}>
+                <StepTiming
+                  step={step()}
+                  position={index + 1}
+                  disabled={props.disabled}
+                  onChange={(patch) => changeStep(index, patch)}
+                />
+              </Show>
+              <StepCard
+                steps={props.draft.steps}
+                index={index}
+                disabled={props.disabled}
+                onChange={(patch) => changeStep(index, patch)}
+                onMoveUp={() => moveUp(index)}
+                onRemove={() =>
+                  change({
+                    steps: props.draft.steps.filter((_, at) => at !== index),
+                  })
+                }
+              />
+            </>
+          )}
+        </Index>
       </div>
-      <div class="flex items-center gap-3 rounded-lg border border-edge-muted px-4 py-3">
-        <span class="flex size-8 shrink-0 items-center justify-center rounded-full bg-accent/10 text-accent">
-          <FlowArrowIcon class="size-4" aria-hidden="true" />
-        </span>
-        <p class="text-sm font-medium">{t('sequences.starts')}</p>
-      </div>
-      <Index each={props.draft.steps}>
-        {(step, index) => {
-          const position = () => index + 1;
-          const reply = () => isReplyStep(props.draft.steps, index);
-          return (
-            <div>
-              <div class="ml-7 h-5 border-l border-dashed border-edge" />
-              <article
-                aria-label={t('sequences.emailNumber', {
-                  position: position(),
-                })}
-              >
-                <ComposerSurface
-                  as="div"
-                  class="relative overflow-clip touch:rounded-xl touch:border touch:border-edge-muted touch:bg-composer"
-                >
-                  <div class="flex flex-wrap items-center justify-between gap-2 border-b border-edge-muted px-6 py-4">
-                    <div class="flex items-center gap-3">
-                      <span class="flex size-7 items-center justify-center rounded-lg border border-edge text-ink-muted">
-                        <EnvelopeIcon class="size-4" aria-hidden="true" />
-                      </span>
-                      <h3 class="text-sm font-medium">
-                        {t('sequences.emailNumber', { position: position() })}
-                      </h3>
-                    </div>
-                    <Show when={!props.disabled}>
-                      <div class="flex items-center gap-1">
-                        <Button
-                          type="button"
-                          variant="ghost"
-                          size="icon-xs"
-                          aria-label={t('sequences.moveEmailUp', {
-                            position: position(),
-                          })}
-                          tooltip={t('sequences.moveUp')}
-                          disabled={index === 0}
-                          onClick={() => moveUp(index)}
-                        >
-                          <ArrowUpIcon aria-hidden="true" class="size-4" />
-                        </Button>
-                        <Button
-                          type="button"
-                          variant="danger-ghost"
-                          size="xs"
-                          aria-label={t('sequences.removeEmail', {
-                            position: position(),
-                          })}
-                          disabled={props.draft.steps.length === 1}
-                          onClick={() =>
-                            change({
-                              steps: props.draft.steps.filter(
-                                (_, at) => at !== index
-                              ),
-                            })
-                          }
-                        >
-                          {t('sequences.remove')}
-                        </Button>
-                      </div>
-                    </Show>
-                  </div>
-                  <div class="space-y-4 px-6 pt-4 pb-6">
-                    {/* The first email goes out at the enrollment's start. */}
-                    <Show
-                      when={index > 0}
-                      fallback={
-                        <p class="text-xs text-ink-muted">
-                          {t('sequences.sendsAtStart')}
-                        </p>
-                      }
-                    >
-                      <label class="flex flex-wrap items-center gap-2 text-xs text-ink-muted">
-                        {t('sequences.delayAfterPrevious')}
-                        <Input
-                          aria-label={t('sequences.delayDays', {
-                            position: position(),
-                          })}
-                          type="number"
-                          min="0"
-                          max={SEQUENCE_LIMITS.delayDays}
-                          size="xs"
-                          class="w-16"
-                          value={step().delayDays}
-                          disabled={props.disabled}
-                          onInput={(event) =>
-                            changeStep(index, {
-                              delayDays: clampDelay(
-                                event.currentTarget.valueAsNumber
-                              ),
-                            })
-                          }
-                        />
-                      </label>
-                    </Show>
-                    <Show when={index > 0}>
-                      <Checkbox
-                        checked={step().asReply === true}
-                        disabled={props.disabled}
-                        onChange={(checked: boolean) =>
-                          changeStep(index, { asReply: checked })
-                        }
-                        class="text-xs text-ink-muted"
-                      >
-                        <Checkbox.Control />
-                        <Checkbox.Label>
-                          {t('sequences.replyInThread')}
-                        </Checkbox.Label>
-                      </Checkbox>
-                    </Show>
-                    <Show
-                      when={!reply()}
-                      fallback={
-                        <div class="space-y-2 text-xs font-medium">
-                          <p>{t('sequences.subject')}</p>
-                          <p class="ph-no-capture text-sm font-normal text-ink-muted">
-                            {stepSubject(props.draft.steps, index)}
-                          </p>
-                        </div>
-                      }
-                    >
-                      <TextField
-                        class="gap-2"
-                        value={step().subject}
-                        disabled={props.disabled}
-                        onChange={(value) =>
-                          changeStep(index, {
-                            subject: value.replace(/[\r\n]+/g, ' '),
-                          })
-                        }
-                      >
-                        <TextField.Label class="text-xs">
-                          {t('sequences.subject')}
-                        </TextField.Label>
-                        <TextField.Input
-                          class="ph-no-capture"
-                          aria-label={t('sequences.subjectOf', {
-                            position: position(),
-                          })}
-                          placeholder={t('sequences.subjectPlaceholder')}
-                          maxLength={SEQUENCE_LIMITS.subject}
-                        />
-                      </TextField>
-                    </Show>
-                    <TextField
-                      class="gap-2"
-                      value={step().body}
-                      disabled={props.disabled}
-                      onChange={(value) => changeStep(index, { body: value })}
-                    >
-                      <TextField.Label class="text-xs">
-                        {t('sequences.message')}
-                      </TextField.Label>
-                      <TextField.TextArea
-                        class="ph-no-capture min-h-36"
-                        autoResize
-                        aria-label={t('sequences.messageOf', {
-                          position: position(),
-                        })}
-                        placeholder={t('sequences.messagePlaceholder', {
-                          token: PERSONALIZATION_TOKENS[0],
-                        })}
-                        maxLength={SEQUENCE_LIMITS.body}
-                      />
-                    </TextField>
-                    <p class="text-xs text-ink-muted">
-                      {t('sequences.personalizeHint', {
-                        tokens: PERSONALIZATION_TOKENS.join(', '),
-                      })}
-                    </p>
-                  </div>
-                </ComposerSurface>
-              </article>
-            </div>
-          );
-        }}
-      </Index>
       <Show when={!props.disabled}>
         <Button
           type="button"
           variant="secondary"
-          fullWidth
+          class="mt-4"
           disabled={props.draft.steps.length >= SEQUENCE_LIMITS.steps}
           onClick={() =>
             change({
@@ -275,25 +314,23 @@ export function SequenceEditor(props: {
             })
           }
         >
+          <PlusIcon class="size-4" aria-hidden="true" />
           {t('sequences.addEmail')}
         </Button>
       </Show>
-      <div class="space-y-3 rounded-lg bg-panel/50 px-4 py-3">
-        <div class="flex items-center gap-3">
-          <CheckIcon class="size-4 text-success" aria-hidden="true" />
-          <p class="text-sm font-medium">{t('sequences.ends')}</p>
-        </div>
-        <label class="block space-y-2 text-xs font-medium">
-          {t('sequences.footer')}
-          <Input
-            class="ph-no-capture"
+      <div class="mt-6">
+        <ComposeFieldRow label={t('sequences.footer')}>
+          <input
+            type="text"
+            aria-label={t('sequences.footer')}
+            class="ph-no-capture w-full bg-transparent text-sm text-ink outline-none placeholder:text-ink-placeholder"
             value={props.draft.footer}
             maxLength={SEQUENCE_LIMITS.footer}
             disabled={props.disabled}
             placeholder={t('sequences.footerPlaceholder')}
             onInput={(event) => change({ footer: event.currentTarget.value })}
           />
-        </label>
+        </ComposeFieldRow>
       </div>
     </div>
   );

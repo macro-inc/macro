@@ -1,5 +1,8 @@
 import { crmSequenceContent } from '@app/features/crm/crm-hosted-content';
-import { useCrmPeopleSearch } from '@app/features/crm/record-adapter';
+import {
+  useCrmCompanyPeople,
+  useCrmPeopleSearch,
+} from '@app/features/crm/record-adapter';
 import { useSplitLayout } from '@components/app/split-layout/layout';
 import { toast } from '@core/component/Toast/Toast';
 import { useUserId } from '@core/context/user';
@@ -66,6 +69,20 @@ function createPeople(search: Accessor<string>): PeopleSource {
   };
 }
 
+function createCompanyPeople(
+  companyIds: Accessor<readonly string[]>
+): PeopleSource {
+  const results = useCrmCompanyPeople(companyIds, SEQUENCE_LIMITS.contacts + 1);
+  const people = createMemo(() =>
+    results.people().map((person) => ({
+      id: person.id,
+      name: person.name,
+      email: person.email,
+    }))
+  );
+  return { people, pending: results.pending, failed: results.failed };
+}
+
 function createAppSequencesContext(): SequencesContext {
   return {
     createSequenceList,
@@ -73,6 +90,7 @@ function createAppSequencesContext(): SequencesContext {
     createEnrollment,
     createEnrollmentCommands,
     createPeople,
+    createCompanyPeople,
     createEnroller,
     createSenders,
     createContactEnrollments,
@@ -125,13 +143,17 @@ export function ContactSequences(props: { contactId: string }) {
   );
 }
 
-/** The "Add to sequence" dialog for selected People, mounted by the app shell. */
+/** The "Add to sequence" dialog for selected people and companies, mounted by the app shell. */
 export function AddToSequenceHost() {
   return (
-    <Show when={addToSequenceDialog.people()} keyed>
-      {(people) => (
+    <Show when={addToSequenceDialog.request()} keyed>
+      {(request) => (
         <AppSequences>
-          <EnrollView initial={people} onClose={addToSequenceDialog.close} />
+          <EnrollView
+            initial={request.people}
+            companyIds={request.companyIds}
+            onClose={addToSequenceDialog.close}
+          />
         </AppSequences>
       )}
     </Show>

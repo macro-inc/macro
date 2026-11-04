@@ -45,6 +45,8 @@ export function EnrollDialog(props: {
   onConsent: (value: boolean) => void;
   canEnroll: boolean;
   busy: boolean;
+  /** A note about the selection, such as a batch that was cut short. */
+  notice?: string;
   error?: string;
   outcome?: EnrollOutcome;
   onEnroll: () => void;
@@ -148,6 +150,13 @@ export function EnrollDialog(props: {
                   <Checkbox.Control />
                   <Checkbox.Label>{t('sequences.consent')}</Checkbox.Label>
                 </Checkbox>
+                <Show when={props.notice}>
+                  {(notice) => (
+                    <p class="text-xs text-ink-muted" role="status">
+                      {notice()}
+                    </p>
+                  )}
+                </Show>
                 <Show when={props.error}>
                   {(error) => (
                     <p class="text-xs text-failure" role="alert">

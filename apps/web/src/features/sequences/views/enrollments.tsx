@@ -84,14 +84,12 @@ export function EnrollmentsView(props: {
             class="h-auto py-10"
             title={t('sequences.noEnrollments')}
             description={
-              props.onEnroll
-                ? t('sequences.noEnrollmentsHint')
-                : t('sequences.activateToEnroll')
+              props.onEnroll ? undefined : t('sequences.activateToEnroll')
             }
             primaryAction={
               props.onEnroll
                 ? {
-                    label: t('sequences.enrollPeople'),
+                    label: t('sequences.addPeople'),
                     onClick: props.onEnroll,
                   }
                 : undefined

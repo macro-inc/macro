@@ -540,17 +540,22 @@ CRM on for the team, the section and its links behave the same way.
   number counts enrollments that need attention) or the mobile view strip; the
   list is `sN.crm.tab=sequences` and one sequence opens at
   `/app/companies/sequence/<uuid>`. Only its owner sees it.
-- **Create and activate:** **New sequence**, then edit the name, **Send from**
-  inbox, emails (the first sends at the start; each later one waits days after
-  the previous and can reply in the same thread; subject, message with
-  `{{firstName}}`, `{{name}}`, `{{email}}`) and footer; the server adds an
-  unsubscribe link. **Save** keeps a draft; **Activate** saves and starts
-  it. Editing needs a draft or paused sequence; edits apply to people enrolled
-  afterwards. A save over a copy changed elsewhere asks to **Reload**.
-- **Enroll:** an active sequence's **Enroll people** searches CRM People (up to
-  50 at a time) and takes a start time in your time zone. Selected People rows
-  also offer **Add to sequence** in their right-click and selection command menus.
-  Skipped people (no email, unsubscribed, already enrolled) are listed with why.
+- **Create and activate:** **New** creates an Untitled sequence and opens it with
+  the title focused; rename it in the header. Set **From**, the emails (the
+  first sends at the start; each later one waits days after the previous and
+  can reply in the same thread; **Insert** adds `{{firstName}}`, `{{name}}` or
+  `{{email}}` at the caret) and the footer; the server adds an unsubscribe
+  link. Edits save on their own (**Saving…** shows beside the status), and
+  **Activate** starts it; Delete is in the ⋯ menu. Editing needs a draft or
+  paused sequence; edits apply to people added afterwards. A save over a copy
+  changed elsewhere asks to **Reload**.
+- **Add people:** an active sequence's **Add people** searches CRM People (up to
+  50 at a time) and takes a start time in your time zone. Selected People or
+  Companies rows also offer **Add to sequence** in their right-click and
+  selection command menus; a company brings all its people, so filter or group
+  Companies by Stage to add a pipeline stage. Past 50 people, only the first
+  50 are selected. Skipped people (no email, unsubscribed, already added) are
+  listed with why.
 - **Statuses:** a sequence is Draft, Active or Paused. A person is Active, Paused,
   Needs attention, Stopped or Completed, with a reason (replied, bounced,
   unsubscribed, removed from Customers, send failed, …). Rows offer Pause,

@@ -29,6 +29,21 @@ export const PERSONALIZATION_TOKENS = [
   '{{email}}',
 ] as const;
 
+export type PersonalizationToken = (typeof PERSONALIZATION_TOKENS)[number];
+
+/** `value` with `token` in place of the selection, and the caret after it. */
+export function insertToken(
+  value: string,
+  start: number,
+  end: number,
+  token: PersonalizationToken
+) {
+  return {
+    value: value.slice(0, start) + token + value.slice(end),
+    caret: start + token.length,
+  };
+}
+
 /** What the editor changes: everything but status and version. */
 export type SequenceDraft = Pick<
   Sequence,

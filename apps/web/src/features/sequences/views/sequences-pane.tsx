@@ -1,4 +1,4 @@
-import { type JSX, Show } from 'solid-js';
+import { createSignal, type JSX, Show } from 'solid-js';
 import { SequenceDetailView } from './sequence-detail';
 import { SequenceListView } from './sequence-list';
 
@@ -10,6 +10,8 @@ export function SequencesPane(props: {
   onBack: () => void;
   onOpenContact: (contactId: string) => void;
 }) {
+  // A sequence created from the list opens with its title ready to type.
+  const [created, setCreated] = createSignal<string>();
   return (
     <div class="flex min-h-0 min-w-0 flex-1 flex-col">
       <Show
@@ -19,6 +21,10 @@ export function SequencesPane(props: {
           <SequenceListView
             navigation={props.navigation}
             onOpen={props.onOpen}
+            onCreated={(sequenceId) => {
+              setCreated(sequenceId);
+              props.onOpen(sequenceId);
+            }}
           />
         }
       >
@@ -26,6 +32,7 @@ export function SequencesPane(props: {
           <SequenceDetailView
             sequenceId={sequenceId}
             navigation={props.navigation}
+            autofocusTitle={created() === sequenceId}
             onBack={props.onBack}
             onOpenContact={props.onOpenContact}
           />

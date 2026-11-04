@@ -2,7 +2,12 @@ import type { CrmContactEntity } from '@entity';
 import { queryReadyGate } from '@queries/gate';
 import { soupKeys } from '@queries/soup/keys';
 import { fetchCrmContacts } from '@service-storage/crm-contacts';
-import { infiniteQueryOptions, useInfiniteQuery } from '@tanstack/solid-query';
+import {
+  infiniteQueryOptions,
+  queryOptions,
+  useInfiniteQuery,
+  useQuery,
+} from '@tanstack/solid-query';
 import { type Accessor, createMemo } from 'solid-js';
 import type { CrmRecordDependencies } from './dependencies';
 import { toCrmContactEntity } from './graphql';
@@ -41,6 +46,36 @@ export function useCrmContactsQuery(
 ) {
   return useInfiniteQuery(
     () => crmContactsQueryOptions(search().trim(), limit, enabled()),
+    () => deps.client
+  );
+}
+
+function crmCompanyContactsQueryOptions(
+  companyIds: readonly string[],
+  limit: number
+) {
+  return queryOptions({
+    queryKey: [
+      ...soupKeys.crmPeople('all').queryKey,
+      'companies',
+      [...companyIds].sort(),
+      limit,
+    ],
+    enabled: companyIds.length > 0,
+    staleTime: 60_000,
+    queryFn: async ({ signal }) =>
+      (await fetchCrmContacts({ companyIds, limit, signal })).contacts,
+  });
+}
+
+/** Visible contacts at any of the companies, newest first, up to `limit`. */
+export function useCrmCompanyContactsQuery(
+  deps: Pick<CrmRecordDependencies, 'client'>,
+  companyIds: Accessor<readonly string[]>,
+  limit: number
+) {
+  return useQuery(
+    () => crmCompanyContactsQueryOptions(companyIds(), limit),
     () => deps.client
   );
 }

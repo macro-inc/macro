@@ -3,7 +3,7 @@ import { getDefaultTimezone } from '@core/util/cron';
 import { debouncedDependent } from '@core/util/debounce';
 import { fireAndForget } from '@core/util/fireAndForget';
 import { addMinutes, format, isValid, roundToNearestMinutes } from 'date-fns';
-import { createSignal, Match, Switch } from 'solid-js';
+import { createMemo, createSignal, Match, Switch } from 'solid-js';
 import { EnrollDialog, type EnrollOutcome } from '../components/enroll-dialog';
 import { failureMessage } from '../components/failure-message';
 import { InlineFailure } from '../components/inline-failure';
@@ -23,6 +23,11 @@ function defaultStart() {
     }),
     "yyyy-MM-dd'T'HH:mm"
   );
+}
+
+function uniqueById(people: readonly Person[]) {
+  const seen = new Set<string>();
+  return people.filter((person) => !seen.has(person.id) && seen.add(person.id));
 }
 
 /** Choose a sequence among the owner's sending ones. */
@@ -64,33 +69,52 @@ function SequencePicker(props: {
 }
 
 /**
- * Enroll CRM People into a sequence. With no `sequence` the dialog asks for
- * one, as "Add to sequence" on selected people does.
+ * Add CRM people to a sequence. With no `sequence` the dialog asks for one, as
+ * "Add to sequence" on a selection does; a selected company brings its people.
  */
 export function EnrollView(props: {
   sequence?: { id: string; name: string };
   initial?: readonly Person[];
+  companyIds?: readonly string[];
   onClose: () => void;
 }) {
   const context = useSequences();
   const [search, setSearch] = createSignal('');
   const people = context.createPeople(debouncedDependent(search, 250));
+  const companyPeople = context.createCompanyPeople(
+    () => props.companyIds ?? []
+  );
   const enroller = context.createEnroller();
   const [picked, setPicked] = createSignal<string>();
   const sequenceId = () => props.sequence?.id ?? picked();
-  const [selected, setSelected] = createSignal<readonly Person[]>(
-    props.initial?.slice(0, SEQUENCE_LIMITS.contacts) ?? []
+  const [chosen, setChosen] = createSignal<readonly Person[]>(
+    props.initial ?? []
   );
+  // Company people stay selected until unchecked.
+  const [dropped, setDropped] = createSignal<ReadonlySet<string>>(new Set());
+  const candidates = createMemo(() =>
+    uniqueById([
+      ...chosen(),
+      ...companyPeople.people().filter((person) => !dropped().has(person.id)),
+    ])
+  );
+  const selected = () => candidates().slice(0, SEQUENCE_LIMITS.contacts);
   const [start, setStart] = createSignal(defaultStart());
   const [consent, setConsent] = createSignal(false);
   const [error, setError] = createSignal<string>();
   const [outcome, setOutcome] = createSignal<EnrollOutcome>();
   const select = (person: Person, checked: boolean) => {
     setError(undefined);
-    setSelected((current) => [
+    setChosen((current) => [
       ...current.filter((item) => item.id !== person.id),
       ...(checked ? [person] : []),
     ]);
+    setDropped((current) => {
+      const next = new Set(current);
+      if (checked) next.delete(person.id);
+      else next.add(person.id);
+      return next;
+    });
   };
 
   async function enroll() {
@@ -101,9 +125,9 @@ export function EnrollView(props: {
       setError(t('sequences.errorInvalidStart'));
       return;
     }
-    const chosen = selected();
+    const batch = selected();
     const result = await enroller.enroll(id, {
-      crmContactIds: chosen.map((person) => person.id),
+      crmContactIds: batch.map((person) => person.id),
       start: startAt.toISOString(),
       timezone: getDefaultTimezone(),
     });
@@ -111,7 +135,7 @@ export function EnrollView(props: {
       setError(failureMessage(result.error));
       return;
     }
-    const byId = new Map(chosen.map((person) => [person.id, person]));
+    const byId = new Map(batch.map((person) => [person.id, person]));
     const enrolled = result.value.filter((item) => item.enrollmentId).length;
     const skipped = result.value.flatMap((item) =>
       item.skipped
@@ -157,9 +181,14 @@ export function EnrollView(props: {
       search={search()}
       onSearch={setSearch}
       people={people.people()}
-      peoplePending={people.pending()}
-      peopleFailed={people.failed()}
+      peoplePending={people.pending() || companyPeople.pending()}
+      peopleFailed={people.failed() || companyPeople.failed()}
       selected={selected()}
+      notice={
+        candidates().length > SEQUENCE_LIMITS.contacts
+          ? t('sequences.firstPeopleOnly', { count: SEQUENCE_LIMITS.contacts })
+          : undefined
+      }
       onSelect={select}
       start={start()}
       onStart={(value) => {

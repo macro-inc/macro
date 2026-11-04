@@ -275,7 +275,7 @@ export function AppChrome(props: ParentProps) {
     () => contactCreation.target() !== undefined
   );
   const addToSequenceUsed = hasOpened(
-    () => addToSequenceDialog.people() !== undefined
+    () => addToSequenceDialog.request() !== undefined
   );
 
   return (

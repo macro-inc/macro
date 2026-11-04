@@ -1,10 +1,12 @@
 import { ListSkeleton } from '@app/components/view-shell/ListSkeleton';
 import { t } from '@app/lib/i18n';
+import { InlineTitleEditor } from '@core/component/InlineTitleEditor';
 import { fireAndForget } from '@core/util/fireAndForget';
 import ArrowLeftIcon from '@icon/system/regular/arrow-left.svg';
-import TrashIcon from '@icon/system/regular/trash.svg';
+import DotsThreeIcon from '@icon/system/regular/dots-three.svg';
+import TrashIcon from '@icon/system/regular/trash-simple.svg';
 import type { Sequence } from '@service-email/generated/schemas';
-import { Button, DeleteDialog, EmptyStatePanel, Tabs } from '@ui';
+import { Button, DeleteDialog, Dropdown, EmptyStatePanel, Tabs } from '@ui';
 import {
   createMemo,
   createSignal,
@@ -44,6 +46,7 @@ function SequenceDetailContent(props: {
   source: SequenceSource;
   sequence: Sequence;
   navigation?: JSX.Element;
+  autofocusTitle?: boolean;
   onBack: () => void;
   onOpenContact: (contactId: string) => void;
 }) {
@@ -55,14 +58,13 @@ function SequenceDetailContent(props: {
   const [deleting, setDeleting] = createSignal(false);
   const status = () => props.sequence.status;
   const editable = () => isEditable(status());
-  const busy = () => props.source.updating() || props.source.removing();
-  const enrolled = createMemo(() => props.source.enrollments().length);
+  const busy = () => props.source.removing() || props.source.updating();
   const tabs = createMemo(() => [
     { value: 'steps' as const, label: t('sequences.steps') },
     {
       value: 'people' as const,
       label: t('sequences.people'),
-      count: enrolled(),
+      count: props.source.enrollments().length,
     },
   ]);
   const noSender = () =>
@@ -71,14 +73,12 @@ function SequenceDetailContent(props: {
   const senderDisconnected = () =>
     status() === 'active' && !props.sequence.linkId;
 
-  async function save(next?: Sequence['status']) {
+  async function setStatus(next: Sequence['status']) {
     if (!(await draft.save(next))) return;
     context.feedback.success(
       next === 'active'
         ? t('sequences.noticeActivated')
-        : next === 'paused'
-          ? t('sequences.noticePaused')
-          : t('sequences.noticeSaved')
+        : t('sequences.noticePaused')
     );
   }
   async function remove() {
@@ -94,6 +94,10 @@ function SequenceDetailContent(props: {
   const reload = () => {
     draft.discard();
     fireAndForget(props.source.refresh(), SURFACE);
+  };
+  const rename = (name: string) => {
+    const current = draft.draft();
+    if (current) draft.change({ ...current, name });
   };
 
   return (
@@ -112,10 +116,31 @@ function SequenceDetailContent(props: {
             >
               <ArrowLeftIcon class="size-4" aria-hidden="true" />
             </Button>
-            <h2 class="min-w-0 truncate text-sm font-semibold">
-              {props.sequence.name || t('sequences.untitled')}
-            </h2>
+            <Show
+              when={editable()}
+              fallback={
+                <h2 class="min-w-0 truncate px-1 text-sm font-semibold">
+                  {props.sequence.name || t('sequences.untitled')}
+                </h2>
+              }
+            >
+              <span class="flex min-w-0 px-1">
+                <InlineTitleEditor
+                  value={draft.draft()?.name ?? props.sequence.name}
+                  placeholder={t('sequences.untitled')}
+                  ariaLabel={t('sequences.name')}
+                  class="text-sm"
+                  autofocus={props.autofocusTitle}
+                  onRename={rename}
+                />
+              </span>
+            </Show>
             <SequenceStatusBadge status={status()} />
+            <Show when={draft.saving()}>
+              <span class="text-xs text-ink-muted" role="status">
+                {t('sequences.saving')}
+              </span>
+            </Show>
             <Tabs<DetailTab>
               aria-label={t('sequences.views')}
               value={tab()}
@@ -126,17 +151,25 @@ function SequenceDetailContent(props: {
         }
         actions={
           <>
-            <Button
-              type="button"
-              variant="ghost"
-              size="icon-md"
-              aria-label={t('common.delete')}
-              tooltip={t('common.delete')}
-              disabled={busy()}
-              onClick={() => setDeleting(true)}
-            >
-              <TrashIcon class="size-4" aria-hidden="true" />
-            </Button>
+            <Dropdown placement="bottom-end">
+              <Dropdown.Trigger
+                variant="ghost"
+                size="icon-md"
+                aria-label={t('sequences.actions')}
+                tooltip={t('sequences.actions')}
+                disabled={busy()}
+              >
+                <DotsThreeIcon class="size-4" aria-hidden="true" />
+              </Dropdown.Trigger>
+              <Dropdown.Content class="min-w-44">
+                <Dropdown.Group>
+                  <Dropdown.Item onSelect={() => setDeleting(true)}>
+                    <TrashIcon class="size-4" aria-hidden="true" />
+                    {t('common.delete')}
+                  </Dropdown.Item>
+                </Dropdown.Group>
+              </Dropdown.Content>
+            </Dropdown>
             <Show
               when={editable()}
               fallback={
@@ -145,7 +178,7 @@ function SequenceDetailContent(props: {
                     type="button"
                     variant="secondary"
                     disabled={busy()}
-                    onClick={() => fireAndForget(save('paused'), SURFACE)}
+                    onClick={() => fireAndForget(setStatus('paused'), SURFACE)}
                   >
                     {t('sequences.pauseSequence')}
                   </Button>
@@ -155,24 +188,16 @@ function SequenceDetailContent(props: {
                     disabled={busy()}
                     onClick={() => setEnrolling(true)}
                   >
-                    {t('sequences.enrollPeople')}
+                    {t('sequences.addPeople')}
                   </Button>
                 </>
               }
             >
               <Button
                 type="button"
-                variant="secondary"
-                disabled={busy() || !draft.changed()}
-                onClick={() => fireAndForget(save(), SURFACE)}
-              >
-                {t('sequences.save')}
-              </Button>
-              <Button
-                type="button"
                 variant="primary"
                 disabled={busy()}
-                onClick={() => fireAndForget(save('active'), SURFACE)}
+                onClick={() => fireAndForget(setStatus('active'), SURFACE)}
               >
                 {status() === 'paused'
                   ? t('sequences.resumeSequence')
@@ -206,23 +231,6 @@ function SequenceDetailContent(props: {
             </p>
           )}
         </Match>
-        <Match when={draft.changed()}>
-          <Notice
-            action={
-              <Button
-                type="button"
-                variant="ghost"
-                size="xs"
-                disabled={busy()}
-                onClick={draft.discard}
-              >
-                {t('sequences.discardChanges')}
-              </Button>
-            }
-          >
-            <span class="text-ink-muted">{t('sequences.unsavedChanges')}</span>
-          </Notice>
-        </Match>
       </Switch>
       <Show when={senderDisconnected()}>
         <Notice>{t('sequences.senderDisconnected')}</Notice>
@@ -248,7 +256,7 @@ function SequenceDetailContent(props: {
           }
         >
           <Show when={!editable()}>
-            <p class="mx-auto mb-5 max-w-3xl text-xs text-ink-muted">
+            <p class="mx-auto mb-4 max-w-3xl text-xs text-ink-muted">
               {t('sequences.pauseToEdit')}
             </p>
           </Show>
@@ -257,7 +265,7 @@ function SequenceDetailContent(props: {
               <SequenceEditor
                 draft={current()}
                 senders={senders.senders()}
-                disabled={!editable() || busy()}
+                disabled={!editable() || props.source.removing()}
                 onChange={draft.change}
               />
             )}
@@ -289,6 +297,7 @@ function SequenceDetailContent(props: {
 export function SequenceDetailView(props: {
   sequenceId: string;
   navigation?: JSX.Element;
+  autofocusTitle?: boolean;
   onBack: () => void;
   onOpenContact: (contactId: string) => void;
 }) {
@@ -301,6 +310,7 @@ export function SequenceDetailView(props: {
             source={source}
             sequence={sequence()}
             navigation={props.navigation}
+            autofocusTitle={props.autofocusTitle}
             onBack={props.onBack}
             onOpenContact={props.onOpenContact}
           />

@@ -98,6 +98,8 @@ export type SequencesContext = {
   createEnrollment(enrollmentId: Accessor<string>): EnrollmentSource;
   createEnrollmentCommands(sequenceId: Accessor<string>): EnrollmentCommands;
   createPeople(search: Accessor<string>): PeopleSource;
+  /** People at the companies, past the batch limit so a cut can be shown. */
+  createCompanyPeople(companyIds: Accessor<readonly string[]>): PeopleSource;
   createEnroller(): Enroller;
   createSenders(): SendersSource;
   createContactEnrollments(

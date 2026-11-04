@@ -1,38 +1,48 @@
 import { useFocusLock } from '@core/util/createControlledOpenSignal';
-import { type EntityData, isCrmContactEntity } from '@entity/types/entity';
+import {
+  type EntityData,
+  isCrmCompanyEntity,
+  isCrmContactEntity,
+} from '@entity/types/entity';
 import { createSignal } from 'solid-js';
 import type { Person } from './context/sequences-context';
 import { SEQUENCE_LIMITS } from './core/sequence';
 
+/** Who to add: chosen people, and companies whose people are all added. */
+type AddRequest = { people: readonly Person[]; companyIds: readonly string[] };
+
 // Selection actions open the one dialog the app shell mounts on first use.
-const [people, setPeople] = createSignal<readonly Person[]>();
+const [request, setRequest] = createSignal<AddRequest>();
 const lock = useFocusLock('add-to-sequence');
 
-/** Selected People fit one enrollment batch. */
+/** Selected people and companies fit one batch. */
 export function canAddToSequence(entities: readonly EntityData[]) {
   return (
     entities.length > 0 &&
     entities.length <= SEQUENCE_LIMITS.contacts &&
-    entities.every(isCrmContactEntity)
+    entities.every(
+      (entity) => isCrmContactEntity(entity) || isCrmCompanyEntity(entity)
+    )
   );
 }
 
 export function openAddToSequence(entities: readonly EntityData[]) {
   if (!canAddToSequence(entities)) return;
   lock.acquire();
-  setPeople(
-    entities.filter(isCrmContactEntity).map((entity) => ({
+  setRequest({
+    people: entities.filter(isCrmContactEntity).map((entity) => ({
       id: entity.id,
       name: entity.name,
       email: entity.email,
-    }))
-  );
+    })),
+    companyIds: entities.filter(isCrmCompanyEntity).map((entity) => entity.id),
+  });
 }
 
 export const addToSequenceDialog = {
-  people,
+  request,
   close() {
     lock.release();
-    setPeople(undefined);
+    setRequest(undefined);
   },
 };

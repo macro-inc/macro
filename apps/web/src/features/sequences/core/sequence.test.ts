@@ -7,6 +7,7 @@ import { describe, expect, it } from 'vitest';
 import {
   draftChanges,
   enrollmentActions,
+  insertToken,
   isRetry,
   shownStatus,
   toDraft,
@@ -130,5 +131,18 @@ describe('draft changes', () => {
         steps: [{ ...sequence.steps[0], delayDays: 3 }],
       }).steps[0].delayDays
     ).toBe(0);
+  });
+});
+
+describe('personalization', () => {
+  it('replaces the selection with the token and puts the caret after it', () => {
+    expect(insertToken('Hi there,', 3, 8, '{{firstName}}')).toEqual({
+      value: 'Hi {{firstName}},',
+      caret: 16,
+    });
+    expect(insertToken('', 0, 0, '{{email}}')).toEqual({
+      value: '{{email}}',
+      caret: 9,
+    });
   });
 });

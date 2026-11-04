@@ -2,9 +2,8 @@ import { ListHeaderSearch } from '@app/components/view-shell/ListHeader';
 import { ViewCreateButton } from '@app/components/view-shell/ViewCreateButton';
 import { t } from '@app/lib/i18n';
 import { fireAndForget } from '@core/util/fireAndForget';
-import { createSignal, type JSX, Show } from 'solid-js';
+import { createSignal, type JSX } from 'solid-js';
 import { failureMessage } from '../components/failure-message';
-import { NewSequenceDialog } from '../components/new-sequence-dialog';
 import { SectionHeader } from '../components/section-header';
 import { SequenceList } from '../components/sequence-list';
 import { useSequences } from '../context/sequences-context';
@@ -14,37 +13,33 @@ const SURFACE = 'sequences.list';
 export function SequenceListView(props: {
   navigation?: JSX.Element;
   onOpen: (sequenceId: string) => void;
+  onCreated: (sequenceId: string) => void;
 }) {
   const context = useSequences();
   const source = context.createSequenceList();
   const senders = context.createSenders();
   const [search, setSearch] = createSignal('');
-  const [creating, setCreating] = createSignal(false);
-  const [error, setError] = createSignal<string>();
   const shown = () => {
     const query = search().trim().toLowerCase();
     return source
       .sequences()
       .filter((sequence) => sequence.name.toLowerCase().includes(query));
   };
-  const openCreate = () => {
-    setError(undefined);
-    setCreating(true);
-  };
-  async function create(name: string) {
+  async function create() {
+    if (source.creating()) return;
     const result = await source.create({
-      name,
+      name: '',
       footer: '',
       linkId: senders.senders().find((sender) => sender.ready)?.id ?? null,
       steps: [{ delayDays: 0, subject: '', body: '' }],
     });
     if (result.isErr()) {
-      setError(failureMessage(result.error));
+      context.feedback.failure(failureMessage(result.error));
       return;
     }
-    setCreating(false);
-    props.onOpen(result.value.id);
+    props.onCreated(result.value.id);
   }
+  const openCreate = () => fireAndForget(create(), SURFACE);
   return (
     <>
       <SectionHeader
@@ -82,14 +77,6 @@ export function SequenceListView(props: {
           onOpen={props.onOpen}
         />
       </div>
-      <Show when={creating()}>
-        <NewSequenceDialog
-          busy={source.creating()}
-          error={error()}
-          onClose={() => setCreating(false)}
-          onCreate={(name) => fireAndForget(create(name), SURFACE)}
-        />
-      </Show>
     </>
   );
 }

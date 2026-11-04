@@ -5,7 +5,7 @@ import type {
 import { err, ok, type Result } from 'neverthrow';
 import { createRoot, createSignal } from 'solid-js';
 import { createStore, reconcile } from 'solid-js/store';
-import { describe, expect, it, vi } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import type { SequenceFailure } from '../core/errors';
 import { createSequenceDraft } from './sequence-draft';
 
@@ -29,7 +29,10 @@ function setup(answer?: SequenceFailure) {
     ): Promise<Result<Sequence, SequenceFailure>> =>
       answer ? err(answer) : ok({ ...SEQUENCE, version: request.version + 1 })
   );
-  return { draft: createRoot(() => createSequenceDraft({ sequence, update })) };
+  return {
+    draft: createRoot(() => createSequenceDraft({ sequence, update })),
+    update,
+  };
 }
 
 describe('createSequenceDraft', () => {
@@ -75,5 +78,69 @@ describe('createSequenceDraft', () => {
     draft.discard();
     expect(draft.conflict()).toBe(false);
     expect(draft.draft()?.name).toBe('Intro');
+  });
+
+  describe('autosave', () => {
+    afterEach(() => {
+      vi.useRealTimers();
+    });
+
+    it('saves once after edits pause', async () => {
+      vi.useFakeTimers();
+      const { draft, update } = setup();
+      draft.change({ ...draft.draft()!, name: 'Int' });
+      draft.change({ ...draft.draft()!, name: 'Intro to Macro' });
+
+      await vi.advanceTimersByTimeAsync(799);
+      expect(update).not.toHaveBeenCalled();
+      await vi.advanceTimersByTimeAsync(1);
+
+      expect(update).toHaveBeenCalledTimes(1);
+      expect(update).toHaveBeenCalledWith({
+        version: 3,
+        name: 'Intro to Macro',
+      });
+    });
+
+    it('keeps edits made during a save and sends them over the new version', async () => {
+      vi.useFakeTimers();
+      // Like the query cache, the source takes each saved sequence.
+      const [sequence, setSequence] = createSignal<Sequence | undefined>(
+        SEQUENCE
+      );
+      const saved = (next: Sequence) => {
+        setSequence(next);
+        return ok<Sequence, SequenceFailure>(next);
+      };
+      let finishFirst!: (result: Result<Sequence, SequenceFailure>) => void;
+      const update = vi
+        .fn<
+          (
+            request: UpdateSequenceRequest
+          ) => Promise<Result<Sequence, SequenceFailure>>
+        >()
+        .mockImplementationOnce(
+          () =>
+            new Promise((resolve) => {
+              finishFirst = resolve;
+            })
+        )
+        .mockImplementation(async (request) =>
+          saved({ ...SEQUENCE, footer: 'AB', version: request.version + 1 })
+        );
+      const draft = createRoot(() => createSequenceDraft({ sequence, update }));
+
+      draft.change({ ...draft.draft()!, footer: 'A' });
+      await vi.advanceTimersByTimeAsync(800);
+      expect(update).toHaveBeenCalledWith({ version: 3, footer: 'A' });
+
+      draft.change({ ...draft.draft()!, footer: 'AB' });
+      finishFirst(saved({ ...SEQUENCE, footer: 'A', version: 4 }));
+      await vi.advanceTimersByTimeAsync(800);
+
+      expect(update).toHaveBeenCalledTimes(2);
+      expect(update).toHaveBeenLastCalledWith({ version: 4, footer: 'AB' });
+      expect(draft.draft()?.footer).toBe('AB');
+    });
   });
 });
