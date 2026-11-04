@@ -29,31 +29,49 @@ for (const width of [320, 390]) {
     await page.goto('/src/features/channel/Input/browser-test/draft.html?edit');
     const add = page.getByRole('button', { name: 'Add', exact: true });
     await expect(add).toBeVisible({ timeout: 60_000 });
-    await add.tap();
-    const format = page.locator('[data-composer-add-item="format-text"]');
-    await expect(format).toBeVisible();
-    await format.tap();
-    const ribbon = page.locator('[data-input-format-ribbon]');
+    await page.locator('[data-collapsed-input-preview]').tap();
     const editor = page.locator('[data-markdown-editable]');
-    await expect(ribbon).toBeVisible();
     await expect(editor).toBeFocused();
     await expect(editor).toHaveText('formatted draft');
 
-    // Selection in the real editor must survive tapping the ribbon control.
+    // The existing partial selection must survive opening the add drawer.
     await editor.evaluate((element) => {
-      element.focus();
+      const text = document
+        .createTreeWalker(element, NodeFilter.SHOW_TEXT)
+        .nextNode();
+      if (!text) throw new Error('Formatted draft text missing');
       const range = document.createRange();
-      range.selectNodeContents(element);
+      range.setStart(text, 0);
+      range.setEnd(text, 'formatted'.length);
       const selection = window.getSelection();
       selection?.removeAllRanges();
       selection?.addRange(range);
       document.dispatchEvent(new Event('selectionchange'));
     });
+    expect(await page.evaluate(() => window.getSelection()?.toString())).toBe(
+      'formatted'
+    );
+    await add.tap();
+    const format = page.locator('[data-composer-add-item="format-text"]');
+    await expect(format).toBeVisible();
+    await format.tap();
+    const ribbon = page.locator('[data-input-format-ribbon]');
+    await expect(ribbon).toBeVisible();
+    await expect(editor).toBeFocused();
+    expect(await page.evaluate(() => window.getSelection()?.toString())).toBe(
+      'formatted'
+    );
+    await ribbon.tap({ position: { x: 2, y: 2 } });
+    await expect(editor).toBeFocused();
+    expect(await page.evaluate(() => window.getSelection()?.toString())).toBe(
+      'formatted'
+    );
     const strike = ribbon.getByRole('button', { name: 'Strikethrough' });
     await expect(strike).toHaveAttribute('aria-pressed', 'true');
     await strike.tap();
     await expect(strike).toHaveAttribute('aria-pressed', 'false');
     await expect(editor).toBeFocused();
+    await expect(editor.locator('.md-strike')).toHaveText(' draft');
 
     // The final control stays reachable without widening the page.
     const quote = ribbon.getByRole('button', { name: 'Blockquote' });
@@ -67,7 +85,9 @@ for (const width of [320, 390]) {
     await expect(ribbon).toHaveCount(0);
     await expect(editor).toHaveText('formatted draft');
     await page.getByRole('button', { name: 'Send message', exact: true }).tap();
-    await expect(page.getByLabel('Sent message')).toHaveText('formatted draft');
+    await expect(page.getByLabel('Sent message')).toHaveText(
+      'formatted ~~draft~~'
+    );
     await context.close();
   });
 }

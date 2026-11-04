@@ -420,6 +420,7 @@ italic, strikethrough, inline code, lists, checklists, and blockquotes; scroll
 the ribbon horizontally to reach all controls. Verify that selecting struck-through
 text, tapping Strikethrough, and saving removes the formatting while preserving
 the text. Toggling the ribbon keeps the draft and returns focus to the editor.
+Tapping the ribbon's padding or dividers also keeps the editor focused.
 On desktop, select draft text to open the floating formatting toolbar. Its
 compact frame uses 4px outer padding with concentric button corners, a white
 light-mode background, a thin border, and a soft downward shadow. Check

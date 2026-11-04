@@ -26,9 +26,10 @@ a rejected send restores its draft, and a rejection preserves a newer draft
 typed while delivery was pending. The fixture controls completion locally.
 
 The formatting regression mounts the production message editor on 320px and
-390px touch screens. It opens the ribbon from the collapsed input's add drawer,
-removes strikethrough from selected text, hides the ribbon, and saves the edit.
-It also checks editor focus and that the last ribbon control stays reachable
+390px touch screens. It selects part of a draft before opening the add drawer,
+opens the ribbon, removes strikethrough only from that selection, hides the
+ribbon, and saves the edit. It also checks that tapping ribbon padding keeps
+editor focus and the selection, and that the last control stays reachable
 without widening the composer.
 
 The code-paste regression types three backticks to open a code block in the

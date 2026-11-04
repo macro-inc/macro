@@ -1,3 +1,4 @@
+import { t } from '@app/lib/i18n';
 import { useMacroMentionLinkResolver } from '@components/app/split-layout/split-router/mention-links';
 import { EntityIcon } from '@core/component/EntityIcon';
 import { ComposerEditor } from '@core/component/LexicalMarkdown/component/ComposerEditor';
@@ -499,7 +500,7 @@ export function ChannelInput(props: ChannelInputProps) {
       return [
         {
           id: 'gif',
-          label: 'GIF',
+          label: t('channelComposer.gif'),
           icon: <GifIcon class="size-5" />,
           onSelect: () =>
             runInEditor((editor) => action.action(editor, actionContext), {
@@ -519,7 +520,7 @@ export function ChannelInput(props: ChannelInputProps) {
             ? [
                 {
                   id: 'mention',
-                  label: 'Mention',
+                  label: t('channelComposer.mention'),
                   icon: <AtIcon class="size-5" />,
                   hint: '@',
                   onSelect: () =>
@@ -532,7 +533,7 @@ export function ChannelInput(props: ChannelInputProps) {
             ? [
                 {
                   id: 'format-text',
-                  label: 'Format text',
+                  label: t('channelComposer.formatText'),
                   icon: <FormatIcon class="size-5" />,
                   onSelect: () => {
                     collapsedInput.expand();
@@ -545,7 +546,7 @@ export function ChannelInput(props: ChannelInputProps) {
             : []),
           {
             id: 'attach',
-            label: 'Attach files',
+            label: t('channelComposer.attachFiles'),
             icon: <PaperclipIcon class="size-5" />,
             onSelect: () => collapsedInput.attach(),
           },
@@ -553,28 +554,28 @@ export function ChannelInput(props: ChannelInputProps) {
         ],
       },
       {
-        label: 'Create',
+        label: t('channelComposer.create'),
         items: !features().createItems
           ? []
           : [
               ...create(
                 'task',
-                'New task',
+                t('channelComposer.newTask'),
                 <EntityIcon targetType="task" size="xs" />
               ),
               ...create(
                 'poll',
-                'New poll',
+                t('channelComposer.newPoll'),
                 <ChartBarIcon class="size-3.5 text-violet" />
               ),
               ...create(
                 'form',
-                'New form',
+                t('channelComposer.newForm'),
                 <EntityIcon targetType="form" size="xs" />
               ),
               ...create(
                 'document',
-                'New document',
+                t('channelComposer.newDocument'),
                 <EntityIcon targetType="md" size="xs" />
               ),
             ],
@@ -585,7 +586,7 @@ export function ChannelInput(props: ChannelInputProps) {
             ? [
                 {
                   id: 'ask-macro',
-                  label: 'Ask Macro',
+                  label: t('channelComposer.askMacro'),
                   icon: <EntityIcon targetType="agent" size="xs" />,
                   hint: '@macro',
                   onSelect: () =>
@@ -615,7 +616,9 @@ export function ChannelInput(props: ChannelInputProps) {
             ? [
                 {
                   id: 'call',
-                  label: callInProgress ? 'Join call' : 'Start a call',
+                  label: callInProgress
+                    ? t('channelComposer.joinCall')
+                    : t('channelComposer.startCall'),
                   icon: (
                     <PhoneIcon
                       class={cn('size-3.5', callInProgress && 'text-success')}
@@ -776,7 +779,12 @@ export function ChannelInput(props: ChannelInputProps) {
         >
           <Input.DropOverlay />
           <Input.Layout.Body>
-            <Input.FormatRibbon class="overflow-x-auto">
+            <Input.FormatRibbon
+              class="overflow-x-auto"
+              data-keep-keyboard
+              onPointerDown={(event) => event.preventDefault()}
+              onMouseDown={(event) => event.preventDefault()}
+            >
               <FormatButtons
                 selectionState={() => markdownEditor.selection}
                 onInlineFormat={(format) =>
