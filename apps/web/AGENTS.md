@@ -87,8 +87,10 @@ searches, and picks by keyboard:
 Focus rows have a backend-free browser regression over the real row and mapping
 at wide, one-line, stacked, phone, and tablet widths: one reason per row, no
 extra height or lost subject, touch rows of at least 44px, and the importance
-meter only under its sort:
+meter only under its sort, with the direction in its label while importance moves:
 `bunx playwright test --config src/features/email-view/browser-test/playwright.config.ts`.
+The fixture has its own sort buttons: the real touch layouts have no sort menu, so
+that coverage proves the meter's layout there, not that touch users can reach it.
 
 Discussion link scrolling has a backend-free browser regression:
 `bunx playwright test --config src/lib/core/messages/browser-test/playwright.config.ts`.
@@ -1143,7 +1145,9 @@ Keep collaborative drafts as cursor-based overlays outside the shared editor tre
 Flush pending text, catch up missing server history before publication, then
 publish the mark from an isolated peer with `PeerCommentUpdate`,
 and post the message only after acknowledgement. Refused operations never enter
-the editor's WAL. Preserve input on failure. Cancelled publications retry mark
+the editor's WAL, so a session without edit access writes nothing to Loro, not
+even state its editor derives; only editors remove a deleted comment's mark.
+Preserve input on failure. Cancelled publications retry mark
 cleanup from the user/document-scoped IndexedDB queue; preserve marks when a
 message request's outcome is uncertain. Keep failed cleanup entries queued without
 blocking later entries. Overlapping comments must retain each
@@ -1152,8 +1156,8 @@ Comment controls preserve editor focus on both pointerdown and mousedown.
 The backend-free browser regression is
 `bunx playwright test --config src/features/block-md/comments/browser-test/playwright.config.ts`.
 It exercises selection, press, cancel, retry, and repeated posting in editor and
-commenter modes. The collaboration fixture includes concurrent remote edits and
-rejected updates; provider tests cover message metadata arriving on either side
+commenter modes. The collaboration fixture includes concurrent remote edits,
+rejected updates, and a server that refuses a commenter's non-comment updates; provider tests cover message metadata arriving on either side
 of posting, multi-paragraph anchors, saved ranges, and cancellation during posting.
 
 ## Performance

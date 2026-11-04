@@ -111,6 +111,7 @@ function thread(
       importance: 50,
       needsReply: false,
       needsFollowUp: false,
+      importanceTrend: 'FLAT',
       ...focus,
     },
   };
@@ -127,11 +128,13 @@ const ROWS = mapEmailFocus({
         category: 'CUSTOMER',
         importance: 92,
         needsReply: true,
+        importanceTrend: 'UP',
       }),
       thread('follow-up', 'Blair Quinn', LONG_SUBJECT, {
         category: 'TEAM',
         importance: 71,
         needsFollowUp: true,
+        importanceTrend: 'DOWN',
       }),
       thread('both', 'Casey Moore', 'Both flags set', {
         category: 'KNOWN',
@@ -146,10 +149,12 @@ const ROWS = mapEmailFocus({
       thread('customer', 'Emery Lane', 'Question about our invoice', {
         category: 'CUSTOMER',
         importance: 44,
+        importanceTrend: 'UP',
       }),
       thread('team', 'Finley Ross', 'Notes from the review', {
         category: 'TEAM',
         importance: 33,
+        importanceTrend: 'DOWN',
       }),
       thread('contact', 'Gray Ellis', 'Good to see you last week', {
         category: 'KNOWN',
@@ -163,6 +168,7 @@ const ROWS = mapEmailFocus({
       thread('unknown', 'Indigo Hart', 'From a newer server', {
         category: JSON.parse('"NEWLY_ADDED"'),
         importance: 2,
+        importanceTrend: JSON.parse('"NEWLY_ADDED"'),
       }),
     ],
   },

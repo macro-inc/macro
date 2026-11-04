@@ -11,8 +11,8 @@ use uuid::Uuid;
 use crate::{
     domain::focus::{
         CalendarPart, FOCUS_RULE_VERSION, FocusAnswers, FocusCategory, FocusInbox, FocusMail,
-        FocusMessage, FocusRecord, FocusStore, RECENT_CONTACT_DAYS, SentNote, StaleThread,
-        StoredClassification, ThreadFocus, change_subject_pattern,
+        FocusMessage, FocusRecord, FocusStore, ImportanceTrend, RECENT_CONTACT_DAYS, SentNote,
+        StaleThread, StoredClassification, ThreadFocus, change_subject_pattern, importance_at,
     },
     outbound::invitation_pg,
 };
@@ -268,9 +268,9 @@ impl FocusStore for FocusPgRepository {
             INSERT INTO email_thread_focus (
                 thread_id, link_id, classified_message_id, classified_message_ts, is_focus,
                 category, importance, needs_reply, needs_follow_up, scores, model, classified_at,
-                rule_version, pinned, awaiting_reply, calendar_hold_until
+                rule_version, pinned, awaiting_reply, calendar_hold_until, importance_rate
             )
-            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16)
+            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17)
             ON CONFLICT (thread_id) DO UPDATE SET
                 link_id = EXCLUDED.link_id,
                 classified_message_id = EXCLUDED.classified_message_id,
@@ -286,7 +286,8 @@ impl FocusStore for FocusPgRepository {
                 rule_version = EXCLUDED.rule_version,
                 pinned = EXCLUDED.pinned,
                 awaiting_reply = EXCLUDED.awaiting_reply,
-                calendar_hold_until = EXCLUDED.calendar_hold_until
+                calendar_hold_until = EXCLUDED.calendar_hold_until,
+                importance_rate = EXCLUDED.importance_rate
             WHERE email_thread_focus.classified_message_ts <= EXCLUDED.classified_message_ts
             "#,
             record.thread_id,
@@ -305,6 +306,7 @@ impl FocusStore for FocusPgRepository {
             record.verdict.pinned,
             record.verdict.awaiting_reply,
             record.verdict.calendar_hold_until,
+            i16::from(record.verdict.importance_rate),
         )
         .execute(&self.0)
         .await?;
@@ -488,6 +490,7 @@ impl FocusStore for FocusPgRepository {
             threads = thread_ids.len(),
             waiting = tracing::field::Empty,
             calendar_held = tracing::field::Empty,
+            trending = tracing::field::Empty,
         ),
         err
     )]
@@ -517,7 +520,10 @@ impl FocusStore for FocusPgRepository {
                        OR now_state.waiting
                        AS "needs_follow_up!",
                    now_state.waiting AS "waiting!",
-                   now_state.calendar_held AS "calendar_held!"
+                   now_state.calendar_held AS "calendar_held!",
+                   f.classified_message_ts,
+                   f.importance_rate,
+                   now_state.untouched AS "untouched!"
             FROM email_thread_focus f
             JOIN email_threads t ON t.id = f.thread_id AND t.link_id = f.link_id
             LEFT JOIN LATERAL (
@@ -543,7 +549,8 @@ impl FocusStore for FocusPgRepository {
                                f.calendar_hold_until > $4
                                    AND latest.at <= f.classified_message_ts,
                                false
-                           ) AS calendar_held
+                           ) AS calendar_held,
+                       COALESCE(latest.at <= f.classified_message_ts, false) AS untouched
             ) now_state
             WHERE f.thread_id = ANY($1)
               AND f.link_id IN (
@@ -565,6 +572,12 @@ impl FocusStore for FocusPgRepository {
             "calendar_held",
             rows.iter().filter(|row| row.calendar_held).count(),
         );
+        span.record(
+            "trending",
+            rows.iter()
+                .filter(|row| row.untouched && row.importance_rate != 0)
+                .count(),
+        );
         Ok(rows
             .into_iter()
             .filter_map(|row| {
@@ -578,15 +591,29 @@ impl FocusStore for FocusPgRepository {
                         })
                         .ok()?
                 };
+                // The rate judged the classified message, so newer mail stops it
+                // before the worker gets to the thread.
+                let rate = if row.untouched {
+                    i8::try_from(row.importance_rate).unwrap_or(0)
+                } else {
+                    0
+                };
+                let importance = importance_at(
+                    u8::try_from(row.importance.clamp(0, 100)).unwrap_or(0),
+                    rate,
+                    row.classified_message_ts,
+                    now,
+                );
                 Some((
                     row.thread_id,
                     ThreadFocus {
                         is_focus: row.is_focus,
                         category,
-                        importance: u8::try_from(row.importance.clamp(0, 100)).unwrap_or(0),
+                        importance,
                         needs_reply: row.needs_reply,
                         needs_follow_up: row.needs_follow_up,
                         classified_at: row.classified_at,
+                        importance_trend: ImportanceTrend::of(rate, importance),
                     },
                 ))
             })

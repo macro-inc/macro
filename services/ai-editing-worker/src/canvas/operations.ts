@@ -307,6 +307,14 @@ export function prepareCanvasEdit(
                           height: op.height,
                         },
                       }))
+                      .with({ type: 'artifact' }, (item) => ({
+                        ...item,
+                        geometry: {
+                          ...item.geometry,
+                          width: op.width,
+                          height: op.height,
+                        },
+                      }))
                       .exhaustive(),
                   },
                 },
