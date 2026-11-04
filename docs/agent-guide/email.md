@@ -71,11 +71,13 @@ From, To and Cc address except the viewer's as guests (Bcc and drafts are left
 out); both are hidden while the calendar is off. With `enable-universal-input`
 on, the composer also sends the subject and latest message to
 `/universal_input/extract` (`intent: 'calendar'`, the Cmd+K event extractor)
-and, while "Reading the email for a time and place…" shows, fills in the
-suggested title, time, location and repeat rule. Suggestions that arrive after
+and, while a small spinner shows left of Cancel (left of Create event on phones),
+fills in
+the suggested title, time, location and repeat rule. Suggestions that arrive after
 any edit are dropped. The desktop reply and standalone composers have the same
 action as a calendar button between attach and the schedule clock (tooltip
-`Create event`, plus `B` in a reply). It uses the draft instead: subject, To
+`Create event` and `B`; in the standalone composer `B` works while focus is
+outside the editor, as in a reply it works from the thread). It uses the draft instead: subject, To
 and Cc as guests, and the written text (with the replied-to message in a
 reply) for extraction. The button is accented while the written text, above
 any quoted thread, pairs a meeting word with a time (`proposesMeeting` in
@@ -209,21 +211,29 @@ has no inbox state, so Mark Done could not remove it. Each row says why it is
 there with one tag pill: `Reply needed`, else `Follow up`, else its category as
 `Calendar change`, `Customer`, `Teammate` or `Contact`; other categories show no
 pill. While the list is sorted by Importance, the 0-100 score and five bars
-colored by band join it, red through green; Most recent hides them. Rows at least
-40rem wide keep both just before the date. Narrower Focus rows stack, on touch
-too, with the subject on its own line and both ahead of the preview. The desktop
+colored by band join it, red through green; Most recent hides them. The meter's
+tooltip and label add `rising` or `falling` while a thread's importance is moving:
+Jev judges per thread whether it gets more pressing or matters less as it sits, and
+the read moves the score from the time of its classified message until newer mail
+arrives. Threads classified before those questions stay flat until their next
+message. Rows at least 40rem wide keep both just before the date. Narrower Focus
+rows stack, on touch too, with the subject on its own line and both ahead of the
+preview, so a narrow desktop window still shows the meter. The desktop
 header's sort dropdown (`Sort Focus`, among the view options) switches between
 **Most recent**, the default, and **Importance**, which
-is flat with no day headers; touch layouts have no dropdown and keep the saved
-order. A saved order that no longer exists restores as Most recent. The filter menu adds a Focus group (Reply
+is flat with no day headers. Touch layouts, phone or tablet, have no dropdown and
+keep the saved order: Most recent, which shows no meter, unless that browser had
+already saved Importance. A saved order
+that no longer exists restores as Most recent. The filter menu adds a Focus group (Reply
 needed, Follow up) on this tab only and has no Status or Done group there. The
 list is one `user.emailFocus` GraphQL read filtered on the client. New mail
 reaches an open Focus tab within seconds: when the worker stores a
 classification it pushes `refresh_email` (`focus_updated`) to the inbox's owner
 and delegates, and the tab reads the list again without a reload. A hidden tab
 reads once when it next shows, and any other tab reads when Focus opens. Time
-passing stores nothing and pushes nothing, so a follow-up coming due or a
-calendar change whose event ends shows at the tab's next read. Mark
+passing stores nothing and pushes nothing, so a follow-up coming due, a
+calendar change whose event ends or importance moving shows at the tab's next
+read. Mark
 Done hides the row at once and archives the thread; Undo brings it back. The
 worker classifies only inboxes on its `FOCUS_ENABLED_EMAIL_DOMAINS` allowlist, so
 other accounts see the empty state `You're caught up`, whose **See the rest of

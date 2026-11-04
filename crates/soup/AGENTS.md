@@ -49,7 +49,8 @@ rows, initiatives, ...) and get back a single unified, paginated result.
   collaborator is needed.
 - Add a filter/sort option: `item_filters`/`filter_ast` (the filter language) →
   `src/domain/models.rs` → the matching `src/outbound/pg_soup_repo/*` query.
-- Change which candidates attention feeds (Home's work feed) page:
+- Change which candidates attention feeds (Home's work feed, the
+  notifications inbox) page:
   `src/domain/service/tests/attention.rs` → `src/outbound/pg_soup_repo/attention.rs`
   (`attention/query.sql`). Channel-thread keying applies only to
   `AttentionKeying::ThreadScoped`; keep it in step with `attention_feed`'s
