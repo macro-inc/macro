@@ -50,6 +50,13 @@ While the email list itself has focus, `Tab` moves browser focus instead; use
 `g i` or `g o`. Calendar mail remains available through the calendar filter and
 existing Calendar route. Mobile keeps its original tabs and order, including
 separate Signal, Noise, and Calendar tabs, with `Focus` (flagged) first.
+The top of Signal shows a pinned **Learn how to use Macro Mail** row
+(`EmailTutorialRow`). Clicking it opens the tutorial video in a dialog at 80% of
+the window (a bottom sheet on phones) that never autoplays: the big play button
+starts it and brings up the native controls. The row's X (on hover, always on
+touch) hides it on that device for good (`localStorage`
+`email-tutorial-row-dismissed`). It is outside the virtualized rows, so list
+keyboard focus skips it.
 Compose via the `Email` button (or `Create` → `Email E`). On a fresh local user it
 shows `Connect your email`; Gmail/Google Workspace and enabled Outlook connections
 use provider consent. Most functionality needs a connected account. Search is `Ctrl+F` or `/` within the surface.

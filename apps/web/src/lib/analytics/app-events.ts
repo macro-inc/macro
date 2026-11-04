@@ -262,6 +262,12 @@ export type AppEvents = {
     action: 'add' | 'remove';
   };
 
+  // In-product tutorial videos (the pinned row at the top of an inbox).
+  tutorial_video: {
+    tutorial: 'macro-mail';
+    action: 'opened' | 'played' | 'dismissed';
+  };
+
   // --- Calls ---------------------------------------------------------------
   // Frontend call interactions only. Recordings, transcripts and summaries
   // are produced server-side and send no PostHog events yet; the call service

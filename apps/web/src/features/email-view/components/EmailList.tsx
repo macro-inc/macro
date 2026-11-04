@@ -96,6 +96,7 @@ import {
   emailFocusOf,
 } from './EmailFocusBadges';
 import { EmailRowActions, EmailStarAction } from './EmailRowActions';
+import { EmailTutorialRow } from './EmailTutorialRow';
 
 type EmailActionRow = {
   entity: WithNotification<EntityData>;
@@ -214,8 +215,8 @@ export function EmailList(props: EmailListProps) {
   const [topSpacer, setTopSpacer] = createSignal<HTMLDivElement>();
   const topSpacerSize = createElementSize(topSpacer);
   // The virtualizer's item offsets exclude this; its scroll offset includes it.
-  const listStartMargin = () =>
-    isTouchDevice() ? (topSpacerSize.height ?? 0) : 0;
+  // The top spacer holds the touch inset and the pinned tutorial row.
+  const listStartMargin = () => topSpacerSize.height ?? 0;
   const [emptyViewport, setEmptyViewport] = createSignal<HTMLDivElement>();
   const [grid, setGrid] = createSignal<HTMLDivElement>();
   // Coming back from a thread, or toggling the reading pane, remounts the
@@ -768,11 +769,15 @@ export function EmailList(props: EmailListProps) {
                   class="scrollbar-hidden min-h-0 flex-1 overflow-y-auto overscroll-none"
                 >
                   {/* Keep insets inside the scroller so rows slide under the floating chrome. */}
-                  <div
-                    ref={setTopSpacer}
-                    aria-hidden="true"
-                    class="h-0 touch:h-(--mobile-content-inset-top)"
-                  />
+                  <div ref={setTopSpacer}>
+                    <div
+                      aria-hidden="true"
+                      class="h-0 touch:h-(--mobile-content-inset-top)"
+                    />
+                    <Show when={state.tab === 'important'}>
+                      <EmailTutorialRow />
+                    </Show>
+                  </div>
                   {/* A row subtree that suspends (the project crumb's preview query, say)
                       detaches only itself, not the list and its scroll position. */}
                   <Suspense>
