@@ -67,6 +67,15 @@ export function MentionsMenuItem(props: {
 
   const icon = () => {
     switch (props.item.kind) {
+      case 'agent':
+        return (
+          <UserIcon
+            id={props.item.data.id}
+            size="sm"
+            isDeleted={false}
+            photoUrl={props.item.data.photoUrl}
+          />
+        );
       case 'user':
         return (
           <UserIcon

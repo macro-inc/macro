@@ -578,6 +578,12 @@ the shimmer.
   badge appears in the `@` menu, where offline agents cannot be mentioned at all
   (clicking or pressing Enter leaves the menu open and inserts nothing).
   The built-in sandbox and paired macrod runtimes are not offered here.
+- In the New conversation and Home composers, `@` also lists **Agents** first.
+  Picking one sets it as the active agent, exactly like the picker: the typed
+  `@query` disappears, no chip is added, the trigger shows the agent, and the
+  mode follows its kind (Chat or Code, including from Auto). Agents that need
+  setup stay in the picker. An existing session's agent is fixed, so its
+  composer does not offer this.
 - With the `enable-agent-updates` flag, the New conversation page shows a stack
   of pending updates from your coding sessions under the composer: one card per
   permission request, question, or tool approval of a blocked session, plus

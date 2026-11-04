@@ -282,6 +282,9 @@ export function createItemHandler(dependencies: HandlerDependencies) {
       undefined
     );
     switch (item.kind) {
+      case 'agent':
+        dependencies.onAgentMention?.(item.id);
+        return;
       case 'user':
         return await handleUserMention(item.data, dependencies);
       case 'date':

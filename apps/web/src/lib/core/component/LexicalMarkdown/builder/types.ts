@@ -21,7 +21,10 @@ import type { Action } from '../plugins/actions/types';
 import type { TagMentionLifecycle } from '../plugins/tags';
 import type { MentionLinkResolver } from '../plugins/text-paste/textPastePlugin';
 import type { createMenuOperations } from '../shared/inlineMenu';
-import type { UserMentionRecord } from '../utils/mentionsUtils';
+import type {
+  AgentMentionItem,
+  UserMentionRecord,
+} from '../utils/mentionsUtils';
 
 export interface ActionsOptions {
   useBlockBoundary?: boolean;
@@ -45,6 +48,10 @@ export interface MentionsOptions {
   entities?: () => import('@core/context/quickAccess').EntityItem[];
   /** Override users data source (e.g. sandbox contacts for onboarding). */
   users?: () => import('@core/user/types').IUser[];
+  /** Agents the host can switch to, listed first. */
+  agents?: () => AgentMentionItem[];
+  /** An agent was picked; the typed `@query` is removed and nothing is inserted. */
+  onAgentMention?: (agentId: string) => void;
   /** Skip backend mention tracking (e.g. for sandbox/onboarding). */
   disableMentionTracking?: boolean;
 }

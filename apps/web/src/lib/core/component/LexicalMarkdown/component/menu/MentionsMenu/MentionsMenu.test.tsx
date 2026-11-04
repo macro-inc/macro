@@ -592,3 +592,51 @@ it('marks an offline agent and refuses to mention it', () => {
   expect(onPick).not.toHaveBeenCalled();
   expect(menu.isOpen()).toBe(true);
 });
+
+it('lists agents first, filters them as you type, and refuses an offline one', async () => {
+  vi.useFakeTimers();
+  Element.prototype.scrollIntoView = vi.fn();
+  mockNoEmails();
+  const menu = createMenuOperations();
+  menu.openMenu();
+  const onPick = vi.fn();
+  const agent = (id: string, name: string, offline?: boolean) => ({
+    kind: 'agent' as const,
+    id,
+    searchText: `${name} ${id}`,
+    data: { id: `bot|${id}`, name, offline },
+  });
+  render(() => (
+    <MentionsMenu
+      menu={menu}
+      entities={() => []}
+      users={() => manyUsers}
+      agents={() => [
+        agent('cursor', 'Cursor'),
+        agent('dev-box', 'Dev box agent', true),
+      ]}
+      sources={['agents', 'users']}
+      anchor={document.createElement('div')}
+      onPick={onPick}
+    />
+  ));
+
+  const headings = screen
+    .getAllByText(/^(Agents|People)/)
+    .map((heading) => heading.textContent);
+  expect(headings[0]).toContain('Agents');
+
+  fireEvent.click(screen.getByTitle('Dev box agent — offline'));
+  expect(onPick).not.toHaveBeenCalled();
+
+  fireEvent.click(screen.getByText('Cursor'));
+  expect(onPick).toHaveBeenCalledWith(
+    expect.objectContaining({ kind: 'agent', id: 'cursor' })
+  );
+
+  menu.openMenu();
+  menu.setSearchTerm('dev-b');
+  await vi.advanceTimersByTimeAsync(100);
+  expect(screen.queryByText('Cursor')).toBeNull();
+  expect(screen.getByTitle('Dev box agent — offline')).toBeTruthy();
+});
