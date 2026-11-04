@@ -1,21 +1,20 @@
-import { defaultEditorInitialValues } from '@app/features/calendar/components/composer/event-form-model';
-import { useCalendarUiFlag } from '@app/features/calendar/hooks/use-calendar-ui-flag';
-import { useOpenEventComposer } from '@app/features/calendar-view/components/use-open-event-composer';
 import { openCalendarEventSplit } from '@app/features/calendar-view/open-calendar-event';
 import { AskMacroButton } from '@app/features/chat/ChatWithAgentButton';
-import { isPlaceholderSubject } from '@app/features/email-compose/core/subject-text';
+import { useCreateEmailEvent } from '@app/features/email-compose/email-event';
 import type {
   EmailThreadHost,
   EmailThreadSource,
 } from '@app/features/email-thread/context/email-thread-context';
 import { useEmailThreadState } from '@app/features/email-thread/context/email-thread-state-context';
-import { selectThreadParticipants } from '@app/features/email-thread/core/thread-messages';
+import {
+  selectThreadMessages,
+  selectThreadParticipants,
+} from '@app/features/email-thread/core/thread-messages';
 import {
   EmailThread,
   type EmailThreadProps,
 } from '@app/features/email-thread/email-thread';
 import { taskSourceComposerContext } from '@app/features/task-composer/source-context';
-import { useUniversalInputEnabled } from '@app/features/universal-input/use-universal-input';
 import { HeaderActionGroup } from '@components/app/HeaderActionGroup';
 import { SidePanel } from '@components/app/side-panel';
 import { useSplitLayout } from '@components/app/split-layout/layout';
@@ -31,7 +30,6 @@ import { Show } from 'solid-js';
 import { QueuedSendStatus } from '../email-compose/queued-send-status';
 import { EmailTaskButton } from './component/EmailTaskButton';
 import { EmailSidePanelSections } from './component/sidepanel/EmailSidePanelSections';
-import { suggestThreadEvent } from './thread-event-suggestions';
 
 export type EmailThreadHostViewContext = {
   createTask: () => void;
@@ -78,35 +76,23 @@ export function EmailThreadHostView(props: EmailThreadHostViewProps) {
       },
     });
 
-  const calendarEnabled = useCalendarUiFlag();
-  const extractionEnabled = useUniversalInputEnabled();
-  const openEventComposer = useOpenEventComposer();
+  const emailEvent = useCreateEmailEvent();
   const emailLinks = useEmailLinksQuery();
   const viewerEmail = useInboxEmail(() => props.source.thread()?.link_id);
   const loginEmail = useEmail();
   // Until the inbox addresses load, the viewer's own alias would be invited.
   const canCreateEvent = () =>
-    calendarEnabled() && !!props.source.thread() && queryReadyGate(emailLinks);
+    emailEvent.enabled() &&
+    !!props.source.thread() &&
+    queryReadyGate(emailLinks);
   const createEvent = () => {
     const thread = props.source.thread();
     if (!thread || !canCreateEvent()) return false;
-    const title = isPlaceholderSubject(props.title) ? '' : props.title;
-    openEventComposer({
-      suggestedValues: extractionEnabled()
-        ? suggestThreadEvent(thread, title)
-        : undefined,
-      initialValues: {
-        // The composer settles the Macro call default once its flag loads.
-        ...defaultEditorInitialValues(new Date(), true),
-        title,
-        guests: selectThreadParticipants(
-          thread,
-          viewerEmail(),
-          loginEmail()
-        ).join(', '),
-      },
+    return emailEvent.open({
+      subject: props.title,
+      guests: selectThreadParticipants(thread, viewerEmail(), loginEmail()),
+      text: selectThreadMessages(thread).filtered.at(-1)?.body_text ?? '',
     });
-    return true;
   };
   const context: EmailThreadHostViewContext = {
     createTask,

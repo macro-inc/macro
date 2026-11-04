@@ -1,6 +1,5 @@
-import { message, thread } from '@app/features/email-thread/tests/fixtures';
 import { afterEach, expect, it, vi } from 'vitest';
-import { suggestThreadEvent } from './thread-event-suggestions';
+import { suggestEmailEvent } from './email-event';
 
 const extract = vi.hoisted(() => vi.fn());
 vi.mock('@service-agent-harness/universal-input', () => ({
@@ -9,24 +8,7 @@ vi.mock('@service-agent-harness/universal-input', () => ({
 
 afterEach(() => extract.mockReset());
 
-const conversation = thread([
-  message('first', {
-    body_text: 'Can we meet?',
-    internal_date_ts: '2026-11-01T10:00:00Z',
-  }),
-  message('latest', {
-    body_text: 'Tuesday at 2pm in Room 4, every week until March.',
-    internal_date_ts: '2026-11-02T10:00:00Z',
-  }),
-  message('draft', {
-    is_draft: true,
-    replying_to_id: 'latest',
-    body_text: 'Unsent reply',
-    internal_date_ts: '2026-11-03T10:00:00Z',
-  }),
-]);
-
-it('reads the latest sent or received message and maps the extracted event', async () => {
+it('sends the subject and text and maps the extracted event', async () => {
   extract.mockResolvedValue({
     revision: 0,
     intent: 'calendar',
@@ -48,7 +30,10 @@ it('reads the latest sent or received message and maps the extracted event', asy
     },
   });
 
-  const suggested = await suggestThreadEvent(conversation, 'Planning');
+  const suggested = await suggestEmailEvent(
+    'Planning',
+    'Tuesday at 2pm in Room 4, every week until March.'
+  );
 
   expect(extract).toHaveBeenCalledWith(
     'Planning\n\nTuesday at 2pm in Room 4, every week until March.',
@@ -80,5 +65,5 @@ it('suggests nothing for fields the email does not state', async () => {
     },
   });
 
-  expect(await suggestThreadEvent(conversation, 'Planning')).toEqual({});
+  expect(await suggestEmailEvent('Planning', 'Thanks!')).toEqual({});
 });
