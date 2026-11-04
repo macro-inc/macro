@@ -62,9 +62,11 @@ vi.mock('@app/features/calendar/components/composer/EventForm', () => ({
   EventForm: (props: {
     controller: CalendarEventFormController;
     guestsAction?: JSX.Element;
+    status?: JSX.Element;
   }) => (
     <>
       {props.guestsAction}
+      {props.status}
       <output aria-label="Conference">
         {props.controller.state().conference}
       </output>

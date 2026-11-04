@@ -71,7 +71,8 @@ From, To and Cc address except the viewer's as guests (Bcc and drafts are left
 out); both are hidden while the calendar is off. With `enable-universal-input`
 on, the composer also sends the subject and latest message to
 `/universal_input/extract` (`intent: 'calendar'`, the Cmd+K event extractor)
-and, while a small spinner shows in the composer's top-right corner, fills in
+and, while a small spinner shows left of Cancel (left of Create event on phones),
+fills in
 the suggested title, time, location and repeat rule. Suggestions that arrive after
 any edit are dropped. The desktop reply and standalone composers have the same
 action as a calendar button between attach and the schedule clock (tooltip

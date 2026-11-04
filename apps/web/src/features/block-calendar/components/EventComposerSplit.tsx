@@ -171,20 +171,18 @@ function EventComposerContent(
   }
 
   return (
-    <div
-      ref={attachHotkeys}
-      class="relative flex h-full min-h-0 flex-col p-4 text-ink"
-    >
-      {/* In the corner's padding, so its coming and going moves nothing. */}
-      <Show when={suggesting()}>
-        <Spinner
-          size="sm"
-          label="Reading the email for a time and place"
-          class="absolute top-1 right-1 size-3.5 text-ink-extra-muted"
-        />
-      </Show>
+    <div ref={attachHotkeys} class="flex h-full min-h-0 flex-col p-4 text-ink">
       <PanelEventForm
         controller={controller}
+        status={
+          <Show when={suggesting()}>
+            <Spinner
+              size="sm"
+              label="Reading the email for a time and place"
+              class="text-ink-extra-muted"
+            />
+          </Show>
+        }
         macroCallsEnabled={macroCallsEnabled()}
         isEdit={isEdit()}
         saveError={editor.saveError()}
