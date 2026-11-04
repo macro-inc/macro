@@ -21280,6 +21280,11 @@ export const externalChatResponse = zod
                         .describe(
                           'Their id at the provider (WhatsApp: phone-number or LID JID).'
                         ),
+                      name: zod
+                        .string()
+                        .describe(
+                          'What to call them: their provider name, else their phone number,\nelse a generic name.'
+                        ),
                     })
                     .describe(
                       'Someone in an external chat; Macro access is a separate grant.'
