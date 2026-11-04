@@ -104,7 +104,7 @@ beforeEach(() => {
 });
 
 describe('RuntimeShareDialog', () => {
-  it('offers teammates, at the one level a runtime has', async () => {
+  it('adds teammates as users', async () => {
     open(harness());
     fireEvent.click(await screen.findByRole('button', { name: 'Add' }));
     await waitFor(() =>
@@ -150,7 +150,9 @@ describe('RuntimeShareDialog', () => {
     mocks.confirm.mockResolvedValue(true);
     open(harness({ shared_team_ids: ['team-1'] }));
 
-    fireEvent.click(await screen.findByRole('switch', { name: 'Team access' }));
+    fireEvent.click(
+      await screen.findByRole('switch', { name: 'Team machine' })
+    );
 
     await waitFor(() =>
       expect(mocks.setTeamAccess).toHaveBeenCalledWith({

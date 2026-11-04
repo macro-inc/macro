@@ -668,7 +668,7 @@ async fn only_the_owner_opens_a_runtime_to_a_team_they_belong_to() {
 
     // Someone holding a grant cannot pass it on.
     let repo = FakeRepo {
-        access: HarnessAccess::Use,
+        access: HarnessAccess::User,
         user_has_team: true,
         ..FakeRepo::default()
     };
@@ -691,7 +691,7 @@ async fn only_the_owner_opens_a_runtime_to_a_team_they_belong_to() {
 }
 
 #[tokio::test]
-async fn residents_are_visible_only_to_people_who_may_use_the_runtime() {
+async fn residents_are_visible_to_readers_and_users_only() {
     let repo = FakeRepo {
         access: HarnessAccess::None,
         ..FakeRepo::default()
@@ -702,7 +702,16 @@ async fn residents_are_visible_only_to_people_who_may_use_the_runtime() {
     assert!(matches!(result, Err(HarnessError::Unauthorized)));
 
     let repo = FakeRepo {
-        access: HarnessAccess::Use,
+        access: HarnessAccess::User,
+        ..FakeRepo::default()
+    };
+    service(repo)
+        .list_residents(caller(MEMBER_ID), HarnessId::TEST_A)
+        .await
+        .unwrap();
+
+    let repo = FakeRepo {
+        access: HarnessAccess::Read,
         ..FakeRepo::default()
     };
     service(repo)

@@ -20,16 +20,20 @@ its webhook feed from.
 ## Scope
 
 - Owns: harness registration, pairing, team access, and the agent-binding list.
-- Every harness has one person as owner; a team runtime is a team grant in
-  `entity_access`. The SQL function `harness_access_level` is the one rule for
-  who may use a runtime, and a direct grant counts only while its holder shares
-  a team with the owner.
+- Every harness has one person as owner. Everyone else has a role: No Access
+  (sees it exists), Read (`view`, cannot run agents), User (`edit`, can run
+  agents), or their agent is a Resident. A team machine is a team grant in
+  `entity_access` that makes every member a User.
+- The SQL function `harness_access_level` is the one rule for a person's level,
+  and `harness_can_run` for running agents on it; check the latter wherever
+  something runs. A direct grant counts only while its holder shares a team with
+  the owner.
 - Opening a runtime takes the owner's own session
   (`MacroUserAuthentication::is_human_session`): agents can ask, never grant.
 - A resident is a bound agent with `is_coding` false. There is no move-in or
   eviction flow yet; the binding is all there is.
 - Direct grants and access requests go through `crates/access_requests`
-  (`ShareEntityType::Harness`, whose one level is `edit`, shown as "Can use").
+  (`ShareEntityType::Harness`, whose levels are `view` and `edit`).
 - Not here: running an agent session or the ACP protocol itself →
   `crates/agent_session`, `coding_agent_worker`.
 

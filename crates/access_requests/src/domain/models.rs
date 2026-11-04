@@ -29,7 +29,8 @@ pub enum ShareEntityType {
     /// External chats added to Macro.
     #[serde(rename = "external_chat")]
     ExternalChat,
-    /// Runtimes: shared only with teammates, and only by the owner in person.
+    /// Runtimes, with Read and User roles: shared only with teammates, and only
+    /// by the owner in person.
     Harness,
 }
 impl From<ShareEntityType> for EntityType {

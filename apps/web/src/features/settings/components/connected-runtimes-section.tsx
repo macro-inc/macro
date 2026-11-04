@@ -99,7 +99,9 @@ export function ConnectedRuntimesSection(props: {
                       {harness.name}
                     </p>
                     <span class="inline-flex h-5 shrink-0 items-center whitespace-nowrap rounded-md border border-edge-muted px-2 text-xxs/none font-medium uppercase text-ink-extra-muted">
-                      {harness.shared_team_ids.length > 0 ? 'Team' : 'Private'}
+                      {harness.shared_team_ids.length > 0
+                        ? 'Team machine'
+                        : 'Private'}
                     </span>
                     <StatusDot
                       state={harness.connected ? 'connected' : 'disconnected'}

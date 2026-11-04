@@ -120,7 +120,8 @@ pub trait BotRepo: Send + Sync + 'static {
         team_id: Uuid,
     ) -> impl Future<Output = Result<bool, Self::Err>> + Send;
 
-    /// Whether a user may use a harness: its owner, or through a live grant.
+    /// Whether a user may run agents on a harness: its owner, or a user through
+    /// a live grant. Readers may not.
     fn user_may_use_harness(
         &self,
         harness_id: HarnessId,

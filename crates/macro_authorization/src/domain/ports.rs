@@ -126,8 +126,8 @@ pub trait HarnessAuthorizationRepo: Clone + Send + Sync + 'static {
         macro_user_id: &str,
     ) -> impl Future<Output = Result<Option<ResolvedBotActingUser>, Self::Err>> + Send;
 
-    /// Check whether a user may use a harness: its owner, or through a live
-    /// direct or team grant.
+    /// Check whether a user may run agents on a harness: its owner, or a user
+    /// through a live direct or team grant. Readers may not.
     fn user_may_use_harness(
         &self,
         harness_id: HarnessId,

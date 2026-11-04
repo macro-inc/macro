@@ -47,7 +47,10 @@ export class Harness extends MacroEntity<HarnessRecord> {
     User.byId(this.client, owner.user_id),
   );
 
-  /** What the caller may do with the host: `owner`, `use`, or `none`. */
+  /**
+   * The caller's role: `owner`, `user` (can run agents), `read` (can see what is
+   * on it, cannot run agents), or `none` (can only see it exists).
+   */
   readonly callerAccess = this.field('access');
 
   /**
@@ -55,17 +58,17 @@ export class Harness extends MacroEntity<HarnessRecord> {
    * agent asked.
    *
    * Agents: call this only when the user asked for it or agreed after being
-   * offered it, typically after `callerAccess()` was `none` or a prompt to an
+   * offered it, typically after `callerAccess()` was `none` or `read`, or a prompt to an
    * agent on this host was refused; never request access on your own. It never
    * grants access: agents cannot approve requests or share a host, even one
    * their own user owns. Tell the user it is pending with `owner()`, and check
    * `callerAccess()` later.
    */
-  async requestAccess(): Promise<AccessRequest> {
-    return this.access.request('edit');
+  async requestAccess(role: 'read' | 'user' = 'user'): Promise<AccessRequest> {
+    return this.access.request(role === 'read' ? 'view' : 'edit');
   }
 
-  /** Agents living on the host, for callers who may use it. */
+  /** Agents living on the host, for callers with at least `read`. */
   async residents(): Promise<Agent[]> {
     return unwrap(
       await this.client.storage.listHarnessResidents({

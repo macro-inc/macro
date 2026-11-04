@@ -647,7 +647,7 @@ async fn the_directory_lists_teammates_runtimes_with_the_callers_access(pool: Pg
 
     grant_directly(&pool, harness, OWNER_ID).await;
     let usable = repo.list_usable_harnesses(user(OWNER_ID)).await.unwrap();
-    assert_eq!(usable[0].access, HarnessAccess::Use);
+    assert_eq!(usable[0].access, HarnessAccess::User);
     assert_eq!(
         repo.list_usable_harnesses(user(TEAMMATE_ID)).await.unwrap()[0].access,
         HarnessAccess::Owner
@@ -662,7 +662,7 @@ async fn a_direct_grant_lasts_only_while_its_holder_shares_a_team_with_the_owner
     grant_directly(&pool, harness, OWNER_ID).await;
     assert_eq!(
         repo.harness_access(harness, user(OWNER_ID)).await.unwrap(),
-        HarnessAccess::Use
+        HarnessAccess::User
     );
 
     sqlx::query!(
@@ -697,7 +697,7 @@ async fn closing_a_runtime_to_a_team_ends_its_members_access(pool: PgPool) {
     );
     assert_eq!(
         repo.harness_access(harness, user(OWNER_ID)).await.unwrap(),
-        HarnessAccess::Use
+        HarnessAccess::User
     );
 
     repo.set_team_access(harness, team_id, false).await.unwrap();
@@ -735,6 +735,40 @@ async fn approving_for_a_team_keeps_a_person_as_owner_and_grants_the_team(pool: 
         repo.harness_access(harness.id, user(TEAMMATE_ID))
             .await
             .unwrap(),
-        HarnessAccess::Use
+        HarnessAccess::User
+    );
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn a_reader_sees_a_runtime_but_cannot_run_on_it(pool: PgPool) {
+    let repo = PgHarnessRepo::new(pool.clone());
+    team_of(&pool, &[OWNER_ID, TEAMMATE_ID]).await;
+    let harness = private_harness(&pool, TEAMMATE_ID).await;
+    sqlx::query!(
+        r#"
+        INSERT INTO entity_access (entity_id, entity_type, source_id, source_type, access_level)
+        VALUES ($1, 'harness', $2, 'user', 'view')
+        "#,
+        harness.as_uuid(),
+        OWNER_ID,
+    )
+    .execute(&pool)
+    .await
+    .unwrap();
+
+    assert_eq!(
+        repo.harness_access(harness, user(OWNER_ID)).await.unwrap(),
+        HarnessAccess::Read
+    );
+    assert!(
+        repo.list_usable_harnesses(user(OWNER_ID))
+            .await
+            .unwrap()
+            .is_empty(),
+        "a reader cannot pick it to run agents on"
+    );
+    assert_eq!(
+        repo.list_directory_harnesses(user(OWNER_ID)).await.unwrap()[0].access,
+        HarnessAccess::Read
     );
 }

@@ -2,6 +2,7 @@ DROP TABLE team_invite_harness_grant;
 
 ALTER TABLE entity_access_request DROP COLUMN requested_by_agent;
 
+DROP FUNCTION harness_can_run(uuid, text);
 DROP FUNCTION harness_access_level(uuid, text);
 
 -- Grants made since cannot be expressed by the old model: a runtime with a team

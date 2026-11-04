@@ -52,7 +52,8 @@ struct HarnessRow {
 fn harness_access(level: Option<AccessLevel>) -> HarnessAccess {
     match level {
         Some(AccessLevel::Owner) => HarnessAccess::Owner,
-        Some(AccessLevel::Edit | AccessLevel::Comment | AccessLevel::View) => HarnessAccess::Use,
+        Some(AccessLevel::Edit) => HarnessAccess::User,
+        Some(AccessLevel::Comment | AccessLevel::View) => HarnessAccess::Read,
         None => HarnessAccess::None,
     }
 }
@@ -394,7 +395,7 @@ impl HarnessRepo for PgHarnessRepo {
                 ) AS shared_team_ids
             FROM harnesses h
             WHERE h.deleted_at IS NULL
-              AND harness_access_level(h.id, $1) IS NOT NULL
+              AND harness_can_run(h.id, $1)
               AND (
                 h.owner_user_id = $1
                 OR h.created_by = $1

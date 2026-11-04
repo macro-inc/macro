@@ -53,8 +53,8 @@ fn team_reviewers(facts: &SharingFacts) -> Vec<MacroUserIdStr<'static>> {
 pub fn supported_levels(kind: ShareEntityType, file_type: Option<&str>) -> Vec<AccessLevel> {
     use AccessLevel::{Comment, Edit, View};
     match kind {
-        // "Can use": edit is the one level a runtime has.
-        ShareEntityType::Harness => vec![Edit],
+        // A runtime's readers and users.
+        ShareEntityType::Harness => vec![View, Edit],
         ShareEntityType::ExternalChat | ShareEntityType::EmailThread => vec![View],
         ShareEntityType::Document => match file_type {
             Some("md" | "docx" | "spreadsheet" | "pptx") => vec![View, Comment, Edit],

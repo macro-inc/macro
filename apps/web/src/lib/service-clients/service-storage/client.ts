@@ -346,9 +346,9 @@ export type Harness = {
   kind: 'macrod';
   name: string;
   owner: HarnessOwner;
-  /** What the viewer may do with it. */
-  access: 'owner' | 'use' | 'none';
-  /** Teams whose every member may use it. */
+  /** The viewer's role. Only `owner` and `user` can run agents on it. */
+  access: 'owner' | 'user' | 'read' | 'none';
+  /** Teams it is a team machine for: their every member is a user of it. */
   shared_team_ids: string[];
   created_by: string;
   created_at: string;

@@ -156,3 +156,72 @@ async fn a_resident_runs_on_its_owners_access_and_a_coding_agent_on_the_prompter
     assert_eq!(facts.actor_may_use, None);
     assert!(facts.may_run(), "its owner's own agent runs unprompted");
 }
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn a_reader_cannot_prompt_a_coding_agent(pool: PgPool) {
+    let laptop = insert_harness(&pool).await;
+    let coding = BotId::new_from_uuid(insert_bot(&pool, laptop).await);
+    let reader = MacroUserIdStr::try_from("macro|reader@example.com".to_owned()).unwrap();
+    let team_id = macro_uuid::generate_uuid_v7();
+    for (id, email) in [
+        (OWNER, "bindings@example.com"),
+        (reader.as_ref(), "reader@example.com"),
+    ] {
+        let macro_user = macro_uuid::generate_uuid_v7();
+        sqlx::query!(
+            "INSERT INTO macro_user (id, username, email, stripe_customer_id) VALUES ($1, $2, $2, $3)",
+            macro_user,
+            email,
+            format!("stripe_{macro_user}"),
+        )
+        .execute(&pool)
+        .await
+        .unwrap();
+        sqlx::query!(
+            r#"INSERT INTO "User" (id, email, macro_user_id) VALUES ($1, $2, $3)"#,
+            id,
+            email,
+            macro_user,
+        )
+        .execute(&pool)
+        .await
+        .unwrap();
+    }
+    sqlx::query!(
+        "INSERT INTO team (id, name, owner_id) VALUES ($1, 'Team', $2)",
+        team_id,
+        OWNER,
+    )
+    .execute(&pool)
+    .await
+    .unwrap();
+    for id in [OWNER, reader.as_ref()] {
+        sqlx::query!(
+            "INSERT INTO team_user (user_id, team_id, team_role) VALUES ($1, $2, 'member'::team_role)",
+            id,
+            team_id,
+        )
+        .execute(&pool)
+        .await
+        .unwrap();
+    }
+    sqlx::query!(
+        r#"
+        INSERT INTO entity_access (entity_id, entity_type, source_id, source_type, access_level)
+        VALUES ($1, 'harness', $2, 'user', 'view')
+        "#,
+        laptop.as_uuid(),
+        reader.as_ref(),
+    )
+    .execute(&pool)
+    .await
+    .unwrap();
+
+    let facts = PgHarnessBindings::new(pool)
+        .access_facts(coding, Some(&reader))
+        .await
+        .unwrap()
+        .unwrap();
+    assert_eq!(facts.actor_may_use, Some(false));
+    assert!(!facts.may_run());
+}

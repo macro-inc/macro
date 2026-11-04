@@ -148,7 +148,7 @@ async function openMenu(page: Page) {
   await expect(page.getByText('Share Mac mini')).toBeVisible();
 }
 
-test('adds a teammate at the one level a runtime has', async ({ page }) => {
+test('adds a teammate as a user', async ({ page }) => {
   const net = await serve(page);
   await openMenu(page);
   await expect(page.getByText('alice@example.com')).toBeVisible();
@@ -198,19 +198,40 @@ test('warns before removing access a resident depends on', async ({ page }) => {
   expect(net.writes.at(-1)?.path).toContain(encodeURIComponent(ALICE));
 });
 
+test('warns before making a resident owner a reader', async ({ page }) => {
+  const net = await serve(page);
+  await openMenu(page);
+  const grant = page.locator('[data-runtime-grant]', {
+    hasText: 'alice@example.com',
+  });
+  await expect(grant.getByRole('button', { name: 'Role' })).toHaveText('User');
+
+  await grant.getByRole('button', { name: 'Role' }).click();
+  await page.getByRole('menuitem', { name: 'Read' }).click();
+  const warning = page.getByRole('dialog', {
+    name: 'Shut down Resident Agent?',
+  });
+  await settled(warning);
+  expect(net.writes).toEqual([]);
+
+  await press(page, warning.getByRole('button', { name: 'Shut down' }));
+  await expect(grant.getByRole('button', { name: 'Role' })).toHaveText('Read');
+  expect(net.writes.at(-1)?.body).toMatchObject({ accessLevel: 'view' });
+});
+
 test('opens the runtime to the team with the switch', async ({ page }) => {
   const net = await serve(page);
   await openMenu(page);
   await expect(
-    page.getByText('Only you and the people below can use this runtime.')
+    page.getByText('Only you and the people below have access.')
   ).toBeVisible();
 
   await page
-    .getByRole('switch', { name: 'Team access' })
+    .getByRole('switch', { name: 'Team machine' })
     .dispatchEvent('click');
 
   await expect(
-    page.getByText('Everyone on Sample team can use this runtime.')
+    page.getByText('Everyone on Sample team is a user of this machine.')
   ).toBeVisible();
   expect(net.writes.at(-1)?.body).toEqual({ team_id: TEAM, enabled: true });
 });

@@ -136,7 +136,7 @@ describe('MacroForbiddenError', () => {
 describe('Harness access', () => {
   const harnessId = '0198a4cc-e138-7670-a308-a6b766602732';
 
-  test('asks for the one level a runtime has', async () => {
+  test('asks to be a user unless told otherwise', async () => {
     const requests: Request[] = [];
     globalThis.fetch = (async (input, init) => {
       const request =
@@ -144,7 +144,7 @@ describe('Harness access', () => {
       requests.push(request.clone());
       return Response.json(
         request.method === 'GET'
-          ? { ...state(null), accessLevel: null, supportedLevels: ['edit'] }
+          ? { ...state(null), accessLevel: null, supportedLevels: ['view', 'edit'] }
           : record('pending', 1),
       );
     }) as typeof fetch;

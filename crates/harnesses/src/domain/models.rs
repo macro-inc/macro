@@ -28,9 +28,11 @@ pub enum HarnessOwner {
 pub enum HarnessAccess {
     /// The caller owns it: they manage who else can use it.
     Owner,
-    /// The caller may run agents on it, through a direct or team grant.
-    Use,
-    /// The caller can see it exists and ask for access.
+    /// A user: the caller may run agents on it, through a direct or team grant.
+    User,
+    /// A reader: the caller may see what is on it, but not run agents on it.
+    Read,
+    /// No access: the caller can see it exists and ask for access.
     #[default]
     None,
 }
@@ -82,7 +84,7 @@ pub struct Harness {
     /// in question, such as to the daemon itself.
     #[serde(default)]
     pub access: HarnessAccess,
-    /// Teams whose every member may use it.
+    /// Teams it is a team machine for: their every member is a user of it.
     #[serde(default)]
     pub shared_team_ids: Vec<Uuid>,
     /// User that registered this harness.

@@ -53,6 +53,15 @@ AS $$
     WHERE h.id = p_harness AND h.deleted_at IS NULL
 $$;
 
+-- Who may run agents on a runtime: its owner and its users, not its readers.
+CREATE FUNCTION harness_can_run(p_harness uuid, p_user text)
+RETURNS boolean
+LANGUAGE sql
+STABLE
+AS $$
+    SELECT COALESCE(harness_access_level(p_harness, p_user) IN ('edit', 'owner'), false)
+$$;
+
 -- The agent that asked on its user's behalf, shown to whoever reviews it.
 ALTER TABLE entity_access_request ADD COLUMN requested_by_agent uuid;
 

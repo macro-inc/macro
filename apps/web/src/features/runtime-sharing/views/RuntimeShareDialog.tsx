@@ -1,5 +1,8 @@
 import { SearchBar } from '@app/components/view-shell';
-import { shareEntity } from '@app/features/access-requests/core/types';
+import {
+  type AccessLevel,
+  shareEntity,
+} from '@app/features/access-requests/core/types';
 import { createSharingSource } from '@app/features/access-requests/queries/source';
 import { t } from '@app/lib/i18n';
 import { toast } from '@core/component/Toast/Toast';
@@ -11,13 +14,14 @@ import { useUserId } from '@core/context/user';
 import { getDisplayName, tryMacroId } from '@core/user';
 import { fireAndForget } from '@core/util/fireAndForget';
 import { OwnerLabel } from '@entity/owner/owner-display';
+import CaretDownIcon from '@icon/system/regular/caret-down.svg';
 import {
   useHarnessResidentsQuery,
   useSetHarnessTeamAccessMutation,
 } from '@queries/harnesses/harnesses';
 import { useCurrentTeamQuery } from '@queries/team/teams';
 import type { Harness, HarnessResident } from '@service-storage/client';
-import { Button, confirmDialog, ToggleSwitch } from '@ui';
+import { Button, confirmDialog, Dropdown, ToggleSwitch } from '@ui';
 import {
   createMemo,
   createSignal,
@@ -31,6 +35,12 @@ import {
   residentsLosingAccessWithTeam,
   residentsLosingAccessWithUser,
 } from '../core/residents';
+
+function roleLabel(level: AccessLevel) {
+  return level === 'edit'
+    ? t('runtimeSharing.roleUser')
+    : t('runtimeSharing.roleRead');
+}
 
 /** Removing access a resident depends on takes the owner's explicit go-ahead. */
 async function confirmShutdown(
@@ -54,7 +64,7 @@ async function confirmShutdown(
 /**
  * The runtime Share menu: the document menu's frame and rows, narrowed to what
  * a runtime allows. No links, no channels, nobody outside the owner's team, and
- * one level, so there is no level to choose.
+ * two roles: Read and User.
  */
 export function RuntimeShareDialog(props: {
   harness: Harness;
@@ -94,9 +104,16 @@ function RuntimeShareMenu(props: { harness: Harness; open: boolean }) {
   const grantedIds = createMemo(() =>
     source.grants().map((grant) => grant.userId)
   );
+  // Only users keep a resident running; a reader cannot run anything.
+  const userIds = createMemo(() =>
+    source
+      .grants()
+      .filter((grant) => grant.accessLevel === 'edit')
+      .map((grant) => grant.userId)
+  );
   const holders = (): RuntimeAccessHolders => ({
     ownerId: userId() ?? '',
-    grantedUserIds: grantedIds(),
+    grantedUserIds: userIds(),
     teamMemberIds: teamOpen()
       ? (currentTeam()?.members.map((member) => member.user_id) ?? [])
       : [],
@@ -127,6 +144,13 @@ function RuntimeShareMenu(props: { harness: Harness; open: boolean }) {
     );
     if (go) await report(() => source.setGrant(id, null));
   };
+  const makeReader = async (id: string) => {
+    const go = await confirmShutdown(
+      residentsLosingAccessWithUser(residents(), holders(), id),
+      owner
+    );
+    if (go) await report(() => source.setGrant(id, 'view'));
+  };
   const toggleTeam = async (enabled: boolean) => {
     const teamId = currentTeam()?.team.id;
     if (!teamId) return;
@@ -145,7 +169,7 @@ function RuntimeShareMenu(props: { harness: Harness; open: boolean }) {
       })
     );
   };
-  const decide = (requestId: string, level: 'edit' | null) => {
+  const decide = (requestId: string, level: AccessLevel | null) => {
     const request = source
       .state()
       ?.requests.find((candidate) => candidate.id === requestId);
@@ -172,18 +196,18 @@ function RuntimeShareMenu(props: { harness: Harness; open: boolean }) {
           <div class="flex items-center justify-between gap-3">
             <div class="flex min-w-0 flex-col gap-1">
               <span class="font-medium text-ink">
-                {t('runtimeSharing.teamAccess')}
+                {t('runtimeSharing.teamMachine')}
               </span>
               <span class="text-sm text-ink-muted">
                 {teamOpen()
-                  ? t('runtimeSharing.teamAccessOn', {
+                  ? t('runtimeSharing.teamMachineOn', {
                       team: current().team.name,
                     })
-                  : t('runtimeSharing.teamAccessOff')}
+                  : t('runtimeSharing.teamMachineOff')}
               </span>
             </div>
             <ToggleSwitch
-              label={t('runtimeSharing.teamAccess')}
+              label={t('runtimeSharing.teamMachine')}
               labelClass="sr-only"
               checked={teamOpen()}
               disabled={setTeamAccess.isPending}
@@ -228,9 +252,51 @@ function RuntimeShareMenu(props: { harness: Harness; open: boolean }) {
             >
               <OwnerLabel ownerId={grant.userId} />
               <div class="flex items-center gap-2">
-                <span class="text-xs text-ink-muted">
-                  {t('runtimeSharing.canUse')}
-                </span>
+                <Show
+                  when={!teamOpen()}
+                  fallback={
+                    <span class="text-xs text-ink-muted">
+                      {t('runtimeSharing.roleUserTeamMachine')}
+                    </span>
+                  }
+                >
+                  <Dropdown>
+                    <Dropdown.Trigger
+                      variant="secondary"
+                      disabled={source.busy()}
+                      aria-label={t('runtimeSharing.role')}
+                    >
+                      {roleLabel(grant.accessLevel)}
+                      <CaretDownIcon class="size-3.5" aria-hidden="true" />
+                    </Dropdown.Trigger>
+                    <Dropdown.Content portalScope="local">
+                      <Dropdown.Group>
+                        <Dropdown.Item
+                          onSelect={() =>
+                            fireAndForget(
+                              report(() =>
+                                source.setGrant(grant.userId, 'edit')
+                              ),
+                              'runtime-sharing'
+                            )
+                          }
+                        >
+                          {t('runtimeSharing.roleUser')}
+                        </Dropdown.Item>
+                        <Dropdown.Item
+                          onSelect={() =>
+                            fireAndForget(
+                              makeReader(grant.userId),
+                              'runtime-sharing'
+                            )
+                          }
+                        >
+                          {t('runtimeSharing.roleRead')}
+                        </Dropdown.Item>
+                      </Dropdown.Group>
+                    </Dropdown.Content>
+                  </Dropdown>
+                </Show>
                 <Button
                   variant="ghost"
                   size="sm"
@@ -261,6 +327,11 @@ function RuntimeShareMenu(props: { harness: Harness; open: boolean }) {
               >
                 <div class="flex min-w-0 flex-col gap-1">
                   <OwnerLabel ownerId={request.requesterId} />
+                  <span class="text-xs text-ink-muted">
+                    {t('runtimeSharing.requestedRole', {
+                      role: roleLabel(request.requestedLevel),
+                    })}
+                  </span>
                   <Show when={request.requestedByAgent}>
                     <span class="text-xs text-ink-muted">
                       {t('runtimeSharing.viaAgent')}
@@ -280,7 +351,7 @@ function RuntimeShareMenu(props: { harness: Harness; open: boolean }) {
                     variant="primary"
                     size="sm"
                     disabled={source.busy()}
-                    onClick={() => decide(request.id, 'edit')}
+                    onClick={() => decide(request.id, request.requestedLevel)}
                   >
                     {t('runtimeSharing.approve')}
                   </Button>

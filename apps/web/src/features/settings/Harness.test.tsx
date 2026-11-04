@@ -167,7 +167,7 @@ const REGISTERED_HARNESS = {
   kind: 'macrod',
   name: 'Dev box',
   owner: { type: 'user', user_id: 'macro|teammate@example.com' },
-  access: 'use',
+  access: 'user',
   shared_team_ids: ['team-1'],
   created_by: 'macro|user@example.com',
   created_at: '2026-08-27T12:00:00Z',
@@ -413,7 +413,7 @@ describe('Harness', () => {
       screen.getByRole('heading', { name: 'Connected runtimes' })
     ).toBeTruthy();
     expect(screen.getByText('Dev box')).toBeTruthy();
-    expect(screen.getByText('Team')).toBeTruthy();
+    expect(screen.getByText('Team machine')).toBeTruthy();
     expect(screen.getByRole('img', { name: 'Connected' })).toBeTruthy();
     expect(screen.getByText(/Last connected /)).toBeTruthy();
     expect(screen.queryByText('Never connected')).toBeNull();

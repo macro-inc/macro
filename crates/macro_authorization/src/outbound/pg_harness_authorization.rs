@@ -178,7 +178,7 @@ impl HarnessAuthorizationRepo for PgHarnessAuthorizationRepo {
         macro_user_id: &str,
     ) -> Result<bool, Self::Err> {
         let may_use = sqlx::query_scalar!(
-            r#"SELECT harness_access_level($1, $2) IS NOT NULL AS "may_use!""#,
+            r#"SELECT harness_can_run($1, $2) AS "may_use!""#,
             harness_id.as_uuid(),
             macro_user_id,
         )

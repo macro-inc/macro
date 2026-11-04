@@ -63,7 +63,7 @@ impl HarnessBindings for PgHarnessBindings {
                 NOT ac.is_coding AS "resident!",
                 CASE
                     WHEN b.owner_user_id IS NOT NULL
-                        THEN harness_access_level(ac.harness_id, b.owner_user_id) IS NOT NULL
+                        THEN harness_can_run(ac.harness_id, b.owner_user_id)
                     ELSE EXISTS (
                         SELECT 1 FROM entity_access ea
                         WHERE ea.entity_id = ac.harness_id
@@ -72,7 +72,7 @@ impl HarnessBindings for PgHarnessBindings {
                           AND ea.source_id = b.team_id::text
                     )
                 END AS "agent_owner_may_use!",
-                harness_access_level(ac.harness_id, $2) IS NOT NULL AS "actor_may_use!"
+                harness_can_run(ac.harness_id, $2) AS "actor_may_use!"
             FROM agent_configs ac
             JOIN bots b ON b.id = ac.bot_id
             JOIN harnesses h ON h.id = ac.harness_id

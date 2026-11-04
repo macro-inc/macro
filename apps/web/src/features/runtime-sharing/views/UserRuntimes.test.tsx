@@ -10,7 +10,7 @@ vi.mock('@queries/harnesses/harnesses', () => ({
         id: 'a',
         name: 'Open to me',
         owner: { type: 'user', user_id: 'macro|teammate@x.test' },
-        access: 'use',
+        access: 'user',
         connected: true,
       },
       {
@@ -22,6 +22,13 @@ vi.mock('@queries/harnesses/harnesses', () => ({
       },
       {
         id: 'c',
+        name: 'Readable',
+        owner: { type: 'user', user_id: 'macro|teammate@x.test' },
+        access: 'read',
+        connected: true,
+      },
+      {
+        id: 'd',
         name: 'Someone else',
         owner: { type: 'user', user_id: 'macro|other@x.test' },
         access: 'none',
@@ -45,6 +52,9 @@ describe('UserRuntimes', () => {
     expect(screen.queryByText('Someone else')).toBeNull();
     expect(screen.queryByRole('button', { name: 'request a' })).toBeNull();
     expect(screen.getByRole('button', { name: 'request b' })).toBeTruthy();
+    // A reader can see it but cannot run agents on it, so can still ask.
+    expect(screen.getByRole('button', { name: 'request c' })).toBeTruthy();
+    expect(screen.getByText(/Online · Read/)).toBeTruthy();
   });
 
   it('shows nothing for someone with no runtimes', () => {

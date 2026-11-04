@@ -44,7 +44,7 @@ export type RuntimeLike = {
   id: string;
   name: string;
   connected: boolean;
-  access?: 'owner' | 'use' | 'none';
+  access?: 'owner' | 'user' | 'read' | 'none';
 };
 
 type RosterShare = 'system' | 'team' | 'private';
@@ -146,10 +146,12 @@ function persistedAgent(
   const connected = runtimeConnected(agent.harness, harnessId, input);
   // A resident answers anyone who can reach it; a coding agent needs the person
   // prompting it to have access to its machine.
+  const runtimeAccess = input.runtimes.find(
+    (runtime) => runtime.id === harnessId
+  )?.access;
   const needsRuntimeAccess =
     agent.is_coding !== false &&
-    input.runtimes.find((runtime) => runtime.id === harnessId)?.access ===
-      'none';
+    (runtimeAccess === 'none' || runtimeAccess === 'read');
   return {
     id: agent.bot.id,
     botId: agent.bot.id,

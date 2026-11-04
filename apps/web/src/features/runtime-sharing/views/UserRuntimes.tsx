@@ -33,9 +33,15 @@ export function UserRuntimes(props: { userId: string; class?: string }) {
                   {harness.connected
                     ? t('runtimeSharing.online')
                     : t('runtimeSharing.offline')}
+                  <Show when={harness.access === 'read'}>
+                    {' · '}
+                    {t('runtimeSharing.roleRead')}
+                  </Show>
                 </div>
               </div>
-              <Show when={harness.access === 'none'}>
+              <Show
+                when={harness.access === 'none' || harness.access === 'read'}
+              >
                 <RuntimeAccessAction harnessId={harness.id} />
               </Show>
             </div>

@@ -126,7 +126,7 @@ pub trait HarnessRepo: Send + Sync + 'static {
         token: HashedHarnessToken,
     ) -> impl Future<Output = Result<Option<Harness>, Self::Err>> + Send;
 
-    /// List active harnesses the caller owns or holds a grant on.
+    /// List active harnesses the caller may run agents on.
     fn list_usable_harnesses(
         &self,
         caller: MacroUserIdStr<'static>,
@@ -230,7 +230,7 @@ pub trait HarnessService: Send + Sync + 'static {
         req: ClaimPairingRequest,
     ) -> impl Future<Output = Result<ClaimOutcome, HarnessError>> + Send;
 
-    /// List harnesses the caller may use.
+    /// List harnesses the caller may run agents on.
     fn list_harnesses(
         &self,
         caller: MacroUserIdStr<'static>,
@@ -251,7 +251,7 @@ pub trait HarnessService: Send + Sync + 'static {
         req: SetHarnessTeamAccessRequest,
     ) -> impl Future<Output = Result<(), HarnessError>> + Send;
 
-    /// List the agents living on a harness the caller may use.
+    /// List the agents living on a harness the caller may at least read.
     fn list_residents(
         &self,
         caller: MacroUserIdStr<'static>,

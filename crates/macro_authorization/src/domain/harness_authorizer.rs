@@ -34,8 +34,8 @@ where
 {
     /// Resolve and verify the user this harness request acts for.
     ///
-    /// A forwarded claim must name someone who may use the harness: its owner,
-    /// or anyone holding a live direct or team grant. The default is the owner.
+    /// A forwarded claim must name someone who may run agents on the harness: its
+    /// owner, or a user through a live direct or team grant. The default is the owner.
     async fn resolve_acting_user(
         &self,
         token: &HarnessTokenAuthorization,

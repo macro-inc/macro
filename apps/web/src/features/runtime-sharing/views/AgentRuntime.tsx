@@ -38,7 +38,9 @@ export function AgentRuntime(props: { botId: string; class?: string }) {
                 ? t('runtimeSharing.online')
                 : t('runtimeSharing.offline')}
             </div>
-            <Show when={harness().access === 'none'}>
+            <Show
+              when={harness().access === 'none' || harness().access === 'read'}
+            >
               <RuntimeAccessAction harnessId={harness().id} />
             </Show>
           </div>

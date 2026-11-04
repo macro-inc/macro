@@ -905,12 +905,12 @@ async fn a_runtime_is_shared_only_among_the_owners_teammates(pool: PgPool) {
         Err(RequestError::Forbidden)
     ));
 
-    // "Can use" is the only level on offer.
+    // Read and User are the only roles on offer.
     assert!(matches!(
         s.submit(
             user("teammate"),
             runtime,
-            ask(AccessLevel::View, None),
+            ask(AccessLevel::Comment, None),
             None
         )
         .await,
@@ -932,7 +932,10 @@ async fn a_runtime_is_shared_only_among_the_owners_teammates(pool: PgPool) {
     let state = s.state(user("owner"), runtime, 0).await.unwrap();
     assert!(state.can_review);
     assert_eq!(state.access_level, Some(AccessLevel::Owner));
-    assert_eq!(state.supported_levels, [AccessLevel::Edit]);
+    assert_eq!(
+        state.supported_levels,
+        [AccessLevel::View, AccessLevel::Edit]
+    );
     assert_eq!(state.requests[0].requested_by_agent, Some(agent));
 
     s.resolve(
