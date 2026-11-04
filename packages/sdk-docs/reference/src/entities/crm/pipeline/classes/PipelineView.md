@@ -27,7 +27,9 @@ The current view definition from the pipeline's shared schema cache.
 
 > **positions**(): `Promise`\<[`CardPosition`](../../../../../generated/storage/types.gen/type-aliases/CardPosition.md)[]\>
 
-Saved card lanes and positions; unplaced cards follow in row order.
+Read only cards with saved positions; unplaced cards are omitted.
+A saved lane may be stale after a row's grouping value changes outside a
+card move. Compare each lane with the row's current grouping before using it.
 
 #### Returns
 
