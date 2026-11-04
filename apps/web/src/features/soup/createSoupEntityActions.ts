@@ -54,7 +54,6 @@ import { isMobile } from '@core/mobile/isMobile';
 import { fireAndForget } from '@core/util/fireAndForget';
 import type { EntityData } from '@entity';
 import { isEmailEntity, isGithubPrEntity, isTaskEntity } from '@entity';
-import SmileyIcon from '@icon/system/regular/smiley.svg';
 import { markRowNotificationsSeenOnOpen } from '@notifications/mark-row-seen';
 import { SYSTEM_PROPERTY_IDS } from '@property/constants';
 import type { Component, JSX } from 'solid-js';
@@ -355,7 +354,6 @@ export function createSoupEntityActions(
     ) {
       middleItems.push({
         id: 'change-icon',
-        icon: SmileyIcon,
         label: t('appearance.title'),
         onClick: () => {
           changeIcon(entity);

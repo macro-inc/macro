@@ -135,17 +135,17 @@ describe('project actions dropdown', () => {
       />
     ));
     await openMenu();
-    expect(screen.getByRole('menuitem', { name: 'Change icon…' })).toBeTruthy();
+    expect(screen.getByRole('menuitem', { name: 'Change icon' })).toBeTruthy();
 
     setEditing(false);
     expect(screen.getByRole('menu')).toBeTruthy();
-    expect(screen.queryByRole('menuitem', { name: 'Change icon…' })).toBeNull();
+    expect(screen.queryByRole('menuitem', { name: 'Change icon' })).toBeNull();
 
     setRows([
       { project: { ...original.project, id: 'other' }, properties: [] },
     ]);
     setEditing(true);
-    click(screen.getByRole('menuitem', { name: 'Change icon…' }));
+    click(screen.getByRole('menuitem', { name: 'Change icon' }));
     await waitFor(() => expect(changeIcon).toHaveBeenCalledWith(original));
   });
 

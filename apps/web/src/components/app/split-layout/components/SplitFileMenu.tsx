@@ -51,7 +51,6 @@ import ProjectIcon from '@icon/system/regular/cube.svg';
 import DotsThree from '@icon/system/regular/dots-three.svg';
 import Link from '@icon/system/regular/link.svg';
 import Rename from '@icon/system/regular/pencil-line.svg';
-import Smiley from '@icon/system/regular/smiley.svg';
 import Star from '@icon/system/regular/star.svg';
 import Tag from '@icon/system/regular/tag.svg';
 import Trash from '@icon/system/regular/trash-simple.svg';
@@ -126,10 +125,14 @@ function SplitMenuItemContent(
 ) {
   return (
     <>
-      <Dynamic
-        component={props.icon as Component<JSX.SvgSVGAttributes<SVGSVGElement>>}
-        class="size-4 shrink-0"
-      />
+      <Show when={props.icon}>
+        {(icon) => (
+          <Dynamic
+            component={icon() as Component<JSX.SvgSVGAttributes<SVGSVGElement>>}
+            class="size-4 shrink-0"
+          />
+        )}
+      </Show>
       <div class="flex-1 truncate">{props.label}</div>
       <Show when={props.showHotkey !== false && props.hotkeyToken}>
         <Hotkey
@@ -418,7 +421,6 @@ export function SplitFileMenu(props: SplitFileMenuProps) {
       return;
     return {
       label: t('appearance.title'),
-      icon: Smiley,
       group: 'file',
       action: () => {
         setOpen(false);

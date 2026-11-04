@@ -87,7 +87,9 @@ first. Recent includes only currently selectable names. Icon search matches
 stored names, nouns, and emoji. Both catalogs and search results use virtualized
 rows; keyboard navigation reaches unmounted rows, and focused choices survive
 Recent reordering. The Emoji tab groups the shared catalog and pins category
-navigation. Arrow keys move between cells and Enter selects.
+navigation. Both tabs show a compact shared-visibility footer. Arrow keys move
+between cells and Enter selects. Editing actions read “Change icon” without an
+ellipsis or a leading menu icon.
 
 Colors appear only on Icons. Default is a ring in the entity type color, followed
 by the same twelve fixed colors as tags, in tag-palette order; swatches wrap in

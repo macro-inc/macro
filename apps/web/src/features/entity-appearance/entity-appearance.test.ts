@@ -57,7 +57,7 @@ describe('header icon editing', () => {
         }),
       { container }
     );
-    fireEvent.click(screen.getByRole('button', { name: 'Change icon…' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Change icon' }));
     expect(openDialog).toHaveBeenCalledOnce();
     expect(vi.mocked(openDialog).mock.calls[0][1]).toMatchObject({
       entity: DOCUMENT,

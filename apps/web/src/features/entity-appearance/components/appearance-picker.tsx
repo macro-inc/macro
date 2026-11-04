@@ -552,15 +552,7 @@ export function AppearancePicker(props: {
           {props.error}
         </p>
       </Show>
-      <Show
-        when={tab() === 'emoji'}
-        fallback={
-          <div class="flex shrink-0 items-center gap-2 border-t border-edge-muted px-4 py-3 text-xs text-ink-muted">
-            <UsersIcon class="size-3" />
-            {t('appearance.shared')}
-          </div>
-        }
-      >
+      <Show when={tab() === 'emoji'}>
         <div
           class="grid shrink-0 grid-cols-9 place-items-center border-t border-edge-muted p-2"
           role="group"
@@ -592,6 +584,10 @@ export function AppearancePicker(props: {
           </For>
         </div>
       </Show>
+      <div class="flex shrink-0 items-center gap-2 border-t border-edge-muted px-4 py-1.5 text-xs text-ink-muted">
+        <UsersIcon class="size-3 shrink-0" />
+        {t('appearance.shared')}
+      </div>
       <span class="sr-only" aria-live="polite">
         {props.saving ? t('appearance.saving') : ''}
       </span>
