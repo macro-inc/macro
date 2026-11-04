@@ -848,6 +848,22 @@ the recipient's copy, then check the sender's status; the sender's own views
 must not change it. Opens need the email service's public URL, which the local
 Docker stack cannot serve.
 
+### Participant profiles
+
+Hovering a participant pill under the thread subject opens their user card.
+When the thread's person profiles are known, the card adds the person's
+LinkedIn headline (else their title and company) under the email address and a
+**LinkedIn** link that opens their profile in a new tab or the system browser,
+and a participant without a contact photo shows the profile photo. The viewer's
+own inboxes never get a profile. Profiles come from
+`GET /email/threads/{thread_id}/person-profiles`, which looks unknown
+participants up with Apollo.io only when the email service runs with
+`USE_APOLLO_PERSON_ENRICHMENT=true` and an Apollo key; otherwise it serves only
+stored profiles, so a card shows no profile section. Each address is looked up
+at most once per 90 days, misses included, and one thread open looks up at most
+ten new people. Verify on a thread from someone with a public LinkedIn profile:
+the first open fills the card, and reopening the thread makes no new lookup.
+
 Sending a reply from an inbox thread marks that thread done but stays on it.
 Send and mark done (Shift+Cmd+Enter) and Mark done open the next email, counted
 from where the thread sat when it was opened (a reply draft lifts its thread to
