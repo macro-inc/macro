@@ -21,7 +21,9 @@ use std::time::Instant;
 
 use anyhow::Context;
 use macro_entrypoint::MacroEntrypoint;
+use sqlx::postgres::PgConnectOptions;
 use sqlx::postgres::PgPoolOptions;
+use std::str::FromStr;
 
 struct Stats {
     total_messages_scanned: usize,
@@ -54,7 +56,10 @@ async fn main() -> anyhow::Result<()> {
     let db_pool = PgPoolOptions::new()
         .min_connections(2)
         .max_connections(10)
-        .connect(&config.database_url)
+        .connect_with(
+            PgConnectOptions::from_str(&config.database_url)?
+                .application_name("reverse_sfs_mappings"),
+        )
         .await
         .context("Failed to connect to database")?;
     println!("Connected.\n");

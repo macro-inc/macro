@@ -12,7 +12,9 @@ use bots::outbound::pg_bots_repo::PgBotsRepo;
 use clap::Parser;
 use entity_registry::OwnerGrantPolicy;
 use entity_registry_db_utils::OwnedEntityRegistrar;
+use sqlx::postgres::PgConnectOptions;
 use sqlx::postgres::PgPoolOptions;
+use std::str::FromStr;
 
 #[derive(Parser)]
 struct Args {
@@ -29,7 +31,10 @@ async fn main() -> anyhow::Result<()> {
     let args = Args::parse();
     let pool = PgPoolOptions::new()
         .max_connections(1)
-        .connect(&args.database_url)
+        .connect_with(
+            PgConnectOptions::from_str(&args.database_url)?
+                .application_name("backfill_turn_states"),
+        )
         .await?;
     let result = backfill_turn_states(
         &PgAgentSessionRepo::new(

@@ -23,7 +23,9 @@ mod process;
 
 use macro_entrypoint::MacroEntrypoint;
 use rootcause::prelude::{Report, ResultExt as _};
+use sqlx::postgres::PgConnectOptions;
 use sqlx::postgres::PgPoolOptions;
+use std::str::FromStr;
 
 #[tokio::main]
 async fn main() -> Result<(), Report> {
@@ -38,7 +40,10 @@ async fn run() -> Result<(), Report> {
     let db_pool = PgPoolOptions::new()
         .min_connections(1)
         .max_connections(config.concurrency as u32)
-        .connect(&config.database_url)
+        .connect_with(
+            PgConnectOptions::from_str(&config.database_url)?
+                .application_name("backfill_outlook_snippets"),
+        )
         .await
         .context("could not connect to the database")?;
 

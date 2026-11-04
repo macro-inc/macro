@@ -175,7 +175,9 @@ use soup_realtime::{
         soup_consumer::SoupTopicConsumer,
     },
 };
+use sqlx::postgres::PgConnectOptions;
 use sqlx::postgres::PgPoolOptions;
+use std::str::FromStr;
 use std::{sync::Arc, time::Duration};
 use sync_service_client::SyncServiceClient;
 use system_properties::{PgSystemPropertiesRepository, SystemPropertiesServiceImpl};
@@ -238,7 +240,10 @@ pub async fn run() -> anyhow::Result<()> {
     let db = PgPoolOptions::new()
         .min_connections(min_connections)
         .max_connections(max_connections)
-        .connect(&config.database_url)
+        .connect_with(
+            PgConnectOptions::from_str(&config.database_url)?
+                .application_name("document_storage_service"),
+        )
         .await
         .context("could not connect to db")?;
 
@@ -256,11 +261,16 @@ pub async fn run() -> anyhow::Result<()> {
         Environment::Production | Environment::Local => (min_connections, max_connections),
     };
 
-    let readonly_db = match PgPoolOptions::new()
-        .min_connections(readonly_min_connections)
-        .max_connections(readonly_max_connections)
-        .connect(&config.database_url_readonly)
-        .await
+    let readonly_db = match async {
+        let options = PgConnectOptions::from_str(&config.database_url_readonly)?
+            .application_name("document_storage_service");
+        PgPoolOptions::new()
+            .min_connections(readonly_min_connections)
+            .max_connections(readonly_max_connections)
+            .connect_with(options)
+            .await
+    }
+    .await
     {
         Ok(pool) => {
             tracing::trace!(

@@ -49,7 +49,9 @@ use properties::{
 };
 use rdkafka::consumer::CommitMode;
 use rdkafka::message::{BorrowedMessage, Message as _};
+use sqlx::postgres::PgConnectOptions;
 use sqlx::postgres::PgPoolOptions;
+use std::str::FromStr;
 use std::sync::Arc;
 use system_properties::{
     PgSystemPropertiesRepository, SystemPropertiesService, SystemPropertiesServiceImpl,
@@ -132,7 +134,10 @@ async fn run() -> anyhow::Result<()> {
     let pool = PgPoolOptions::new()
         .min_connections(1)
         .max_connections(5)
-        .connect(config.database_url.as_ref())
+        .connect_with(
+            PgConnectOptions::from_str(config.database_url.as_ref())?
+                .application_name("agent_trigger_service"),
+        )
         .await
         .context("failed to connect to macrodb")?;
 

@@ -13,7 +13,9 @@ use lambda_runtime::{
 };
 use macro_entrypoint::MacroEntrypoint;
 use macro_event_broker::{GlobalSpawner, KafkaEventPublisher};
+use sqlx::postgres::PgConnectOptions;
 use sqlx::postgres::PgPoolOptions;
+use std::str::FromStr;
 use std::sync::Arc;
 
 #[tokio::main]
@@ -35,7 +37,10 @@ async fn main() -> Result<(), Error> {
     let db = PgPoolOptions::new()
         .min_connections(3)
         .max_connections(3) // We want 1 db connection per dss item (document, project, chat)
-        .connect(&config.database_url)
+        .connect_with(
+            PgConnectOptions::from_str(&config.database_url)?
+                .application_name("deleted_item_poller"),
+        )
         .await
         .context("could not connect to db")?;
 

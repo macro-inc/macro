@@ -27,7 +27,9 @@ use anyhow::Context;
 use futures::future::join_all;
 use macro_entrypoint::MacroEntrypoint;
 use sqlx::PgPool;
+use sqlx::postgres::PgConnectOptions;
 use sqlx::postgres::PgPoolOptions;
+use std::str::FromStr;
 use tokio::sync::mpsc;
 use uuid::Uuid;
 
@@ -123,7 +125,9 @@ async fn connect_to_database(database_url: &str) -> anyhow::Result<PgPool> {
     PgPoolOptions::new()
         .min_connections(5)
         .max_connections(20)
-        .connect(database_url)
+        .connect_with(
+            PgConnectOptions::from_str(database_url)?.application_name("find_used_sfs_ids"),
+        )
         .await
         .context("Failed to connect to database")
 }

@@ -10,7 +10,9 @@ use clap::{Parser, Subcommand};
 use macro_env_var::env_var;
 use macro_user_id::user_id::MacroUserIdStr;
 use macro_uuid::Uuid;
+use sqlx::postgres::PgConnectOptions;
 use sqlx::postgres::PgPoolOptions;
+use std::str::FromStr;
 
 env_var! {
     struct DatabaseUrl;
@@ -72,7 +74,9 @@ async fn run(cli: Cli) -> Result<(), rootcause::Report> {
     let user = MacroUserIdStr::try_from(user)?;
     let pool = PgPoolOptions::new()
         .max_connections(2)
-        .connect(&DatabaseUrl::new()?)
+        .connect_with(
+            PgConnectOptions::from_str(&DatabaseUrl::new()?)?.application_name("ai_billing_cli"),
+        )
         .await?;
     let service = pg_credit_grant_service(pool);
     let grant = CreditGrant {

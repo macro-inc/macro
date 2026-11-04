@@ -13,7 +13,9 @@ use config::Config;
 use handler::handler;
 use lambda_runtime::{Error, LambdaEvent, run, service_fn};
 use macro_entrypoint::MacroEntrypoint;
+use sqlx::postgres::PgConnectOptions;
 use sqlx::postgres::PgPoolOptions;
+use std::str::FromStr;
 use std::sync::Arc;
 
 #[tokio::main]
@@ -26,7 +28,10 @@ async fn main() -> Result<(), Error> {
     let db = PgPoolOptions::new()
         .min_connections(1)
         .max_connections(1)
-        .connect(&config.database_url)
+        .connect_with(
+            PgConnectOptions::from_str(&config.database_url)?
+                .application_name("email_scheduled_handler"),
+        )
         .await
         .context("could not connect to db")?;
 

@@ -8,7 +8,9 @@ use channels::{
 use database_env_vars::DatabaseUrl;
 use macro_entrypoint::MacroEntrypoint;
 use macro_user_id::user_id::MacroUserIdStr;
+use sqlx::postgres::PgConnectOptions;
 use sqlx::postgres::PgPoolOptions;
+use std::str::FromStr;
 use teams::{domain::team_repo::TeamRepository, outbound::team_repo::TeamRepositoryImpl};
 
 const PAGE_SIZE: u32 = 100;
@@ -29,7 +31,10 @@ async fn main() -> anyhow::Result<()> {
     let db = PgPoolOptions::new()
         .min_connections(1)
         .max_connections(5)
-        .connect(database_url.as_ref())
+        .connect_with(
+            PgConnectOptions::from_str(database_url.as_ref())?
+                .application_name("backfill_teammate_dms"),
+        )
         .await
         .context("could not connect to db")?;
 

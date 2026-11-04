@@ -18,6 +18,8 @@ use crate::{
     config::{EnvVars, SeedCliContext},
     service::s3::S3,
 };
+use sqlx::postgres::PgConnectOptions;
+use std::str::FromStr;
 
 /// The Seed CLI for populating Macro with seed data.
 #[derive(Debug, Parser)]
@@ -51,7 +53,7 @@ pub async fn main() -> anyhow::Result<()> {
     let db = PgPoolOptions::new()
         .min_connections(1)
         .max_connections(95)
-        .connect(&database_url)
+        .connect_with(PgConnectOptions::from_str(&database_url)?.application_name("seed_cli"))
         .await
         .context("could not connect to db")?;
     tracing::trace!("initialized db");

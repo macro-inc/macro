@@ -17,8 +17,10 @@ use macro_service_urls::{
 use notification::domain::service::SqsNotificationIngress;
 use notification::outbound::queue::SqsQueue;
 use sqlx::PgPool;
+use sqlx::postgres::PgConnectOptions;
 use sqlx::postgres::PgPoolOptions;
 use static_file_service_client::StaticFileServiceClient;
+use std::str::FromStr;
 use std::sync::Arc;
 use std::time::Duration;
 use system_properties::{PgSystemPropertiesRepository, SystemPropertiesServiceImpl};
@@ -80,14 +82,20 @@ async fn main() -> anyhow::Result<()> {
     let db = PgPoolOptions::new()
         .min_connections(min_connections)
         .max_connections(max_connections)
-        .connect(&config.macro_db_url)
+        .connect_with(
+            PgConnectOptions::from_str(&config.macro_db_url)?
+                .application_name("email_service_pubsub_workers"),
+        )
         .await
         .context("could not connect to db")?;
 
     let db_backfill = PgPoolOptions::new()
         .min_connections(min_connections_backfill)
         .max_connections(max_connections_backfill)
-        .connect(&config.macro_db_url)
+        .connect_with(
+            PgConnectOptions::from_str(&config.macro_db_url)?
+                .application_name("email_service_pubsub_workers_backfill"),
+        )
         .await
         .context("could not connect to backfill db")?;
 

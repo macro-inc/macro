@@ -3,7 +3,9 @@ use std::sync::Arc;
 use anyhow::Context;
 use macro_entrypoint::MacroEntrypoint;
 use sha_cleanup_worker::{config::Config, process::process, service};
+use sqlx::postgres::PgConnectOptions;
 use sqlx::postgres::PgPoolOptions;
+use std::str::FromStr;
 
 #[tokio::main]
 async fn main() -> Result<(), anyhow::Error> {
@@ -27,7 +29,10 @@ async fn main() -> Result<(), anyhow::Error> {
 
     let db = PgPoolOptions::new()
         .min_connections(1)
-        .connect(&config.database_url)
+        .connect_with(
+            PgConnectOptions::from_str(&config.database_url)?
+                .application_name("sha_cleanup_worker"),
+        )
         .await
         .context("could not connect to db")?;
 

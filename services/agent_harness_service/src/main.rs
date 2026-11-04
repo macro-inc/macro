@@ -169,6 +169,8 @@ use tracing::Instrument as _;
 
 use agent_session::domain::ports::{NoOpAgentSessionNameGenerator, NoOpTurnObserver};
 use runtime_commands::consume_runtime_commands;
+use sqlx::postgres::PgConnectOptions;
+use std::str::FromStr;
 
 /// Consumer group owning this harness's agent-session offsets.
 ///
@@ -264,7 +266,10 @@ async fn run() -> anyhow::Result<()> {
     let pool = PgPoolOptions::new()
         .min_connections(1)
         .max_connections(config.database_max_connections)
-        .connect(config.database_url.as_ref())
+        .connect_with(
+            PgConnectOptions::from_str(config.database_url.as_ref())?
+                .application_name("agent_harness_service"),
+        )
         .await
         .context("failed to connect to macrodb")?;
 

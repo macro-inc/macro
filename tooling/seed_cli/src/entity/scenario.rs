@@ -14,6 +14,8 @@ use serde::Deserialize;
 
 use crate::config::{EnvVars, SeedCliContext};
 use crate::entity::{channel, channel_message, document};
+use sqlx::postgres::PgConnectOptions;
+use std::str::FromStr;
 
 const LOCAL_E2E_MANIFEST_JSON: &str = include_str!("../../seed/local_e2e/manifest.json");
 const LOCAL_E2E_RESET_SQL: &str = include_str!("../../seed/local_e2e/reset.sql");
@@ -314,9 +316,11 @@ impl ScenarioArgs {
         // schema wipes every table (and the migrations ledger) while the
         // connections survive.
         println!("--force: resetting the local database schema");
-        let pool = sqlx::PgPool::connect(database_url)
-            .await
-            .context("connecting for schema reset")?;
+        let pool = sqlx::PgPool::connect_with(
+            PgConnectOptions::from_str(database_url)?.application_name("seed_cli"),
+        )
+        .await
+        .context("connecting for schema reset")?;
         for statement in [
             "DROP SCHEMA public CASCADE",
             "CREATE SCHEMA public",

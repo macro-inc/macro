@@ -2,15 +2,19 @@ use anyhow::Context;
 use email_db_client::attachments::provider::upload_filters::ATTACHMENT_MIME_TYPE_FILTERS_WITH_MEDIA;
 use models_email::service::attachment::AttachmentUploadMetadata;
 use sqlx::PgPool;
+use sqlx::postgres::PgConnectOptions;
 use sqlx::postgres::PgPoolOptions;
 use sqlx_core::row::Row;
+use std::str::FromStr;
 
 /// Creates and returns a new PostgreSQL connection pool.
 pub async fn create_db_pool(database_url: &str, min_connections: u32) -> anyhow::Result<PgPool> {
     PgPoolOptions::new()
         .min_connections(min_connections)
         .max_connections(60)
-        .connect(database_url)
+        .connect_with(
+            PgConnectOptions::from_str(database_url)?.application_name("backfill_sfs_attachments"),
+        )
         .await
         .context("Could not connect to db")
 }

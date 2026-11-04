@@ -6,7 +6,9 @@ use lambda_runtime::{
 };
 use macro_entrypoint::MacroEntrypoint;
 use macro_env_var::env_vars;
+use sqlx::postgres::PgConnectOptions;
 use sqlx::postgres::PgPoolOptions;
+use std::str::FromStr;
 
 env_vars! {
     struct DatabaseUrl;
@@ -24,7 +26,10 @@ async fn main() -> Result<(), Error> {
     let db = PgPoolOptions::new()
         .min_connections(1)
         .max_connections(1) // We want 1 db connection per dss item (document, project, chat)
-        .connect(database_url.as_ref())
+        .connect_with(
+            PgConnectOptions::from_str(database_url.as_ref())?
+                .application_name("user_link_cleanup_handler"),
+        )
         .await
         .context("could not connect to db")?;
 

@@ -40,6 +40,8 @@ use adapters::logging_realtime::LoggingRealtimeSender;
 use adapters::mpsc_queue::MpscQueue;
 use adapters::noop_rate_limiter::NoOpRateLimitPort;
 use adapters::sandbox_repository::SandboxNotificationRepository;
+use sqlx::postgres::PgConnectOptions;
+use std::str::FromStr;
 
 /// Configuration collected from the interactive wizard.
 struct SandboxConfig {
@@ -86,7 +88,9 @@ async fn main() -> Result<(), Report> {
 
     let db = PgPoolOptions::new()
         .max_connections(5)
-        .connect(&database_url)
+        .connect_with(
+            PgConnectOptions::from_str(&database_url)?.application_name("notification_sandbox"),
+        )
         .await?;
     println!("Connected to Postgres.");
 

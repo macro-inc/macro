@@ -27,7 +27,9 @@ use anyhow::Context;
 use futures::stream::{StreamExt as FuturesStreamExt, TryStreamExt};
 use macro_entrypoint::MacroEntrypoint;
 use sqlx::PgPool;
+use sqlx::postgres::PgConnectOptions;
 use sqlx::postgres::PgPoolOptions;
+use std::str::FromStr;
 
 /// Statistics for tracking deletion operations.
 struct DeletionStats {
@@ -160,7 +162,10 @@ async fn connect_to_database(config: &config::Config) -> anyhow::Result<PgPool> 
     PgPoolOptions::new()
         .min_connections(5)
         .max_connections(config.bulk_concurrency as u32 + 5)
-        .connect(&config.database_url)
+        .connect_with(
+            PgConnectOptions::from_str(&config.database_url)?
+                .application_name("cleanup_unused_sfs"),
+        )
         .await
         .context("Failed to connect to database")
 }

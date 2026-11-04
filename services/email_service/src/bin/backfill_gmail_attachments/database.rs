@@ -4,7 +4,9 @@ use email_db_client::attachments::provider::upload_filters::{
 };
 use models_email::service::attachment::AttachmentUploadMetadata;
 use sqlx::PgPool;
+use sqlx::postgres::PgConnectOptions;
 use sqlx::postgres::PgPoolOptions;
+use std::str::FromStr;
 use uuid::Uuid;
 
 /// Attachments for a thread should be uploaded if any message in the
@@ -159,7 +161,10 @@ pub async fn create_db_pool(database_url: &str, min_connections: u32) -> anyhow:
     PgPoolOptions::new()
         .min_connections(min_connections)
         .max_connections(60)
-        .connect(database_url)
+        .connect_with(
+            PgConnectOptions::from_str(database_url)?
+                .application_name("backfill_gmail_attachments"),
+        )
         .await
         .context("Could not connect to db")
 }

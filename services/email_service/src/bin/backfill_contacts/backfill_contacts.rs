@@ -3,7 +3,9 @@ mod process;
 
 use anyhow::Context;
 use macro_entrypoint::MacroEntrypoint;
+use sqlx::postgres::PgConnectOptions;
 use sqlx::postgres::PgPoolOptions;
+use std::str::FromStr;
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
     println!("Loading configuration...");
@@ -14,7 +16,9 @@ async fn main() -> anyhow::Result<()> {
     let db_pool = PgPoolOptions::new()
         .min_connections(5)
         .max_connections(60)
-        .connect(&config.database_url)
+        .connect_with(
+            PgConnectOptions::from_str(&config.database_url)?.application_name("backfill_contacts"),
+        )
         .await
         .context("Could not connect to db")?;
 

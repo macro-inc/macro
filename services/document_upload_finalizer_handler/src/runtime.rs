@@ -12,6 +12,8 @@ use sync_service_client::SyncServiceClient;
 
 use crate::app::{DocumentUploadFinalizer, ObjectCreated};
 use crate::outbound::{PgDocumentUploadPort, S3DocumentObjectReader, S3LegacyOfficeUpgradeStorage};
+use sqlx::postgres::PgConnectOptions;
+use std::str::FromStr;
 
 env_vars! {
     struct DatabaseUrl;
@@ -53,7 +55,10 @@ impl AppContext {
 
         let db_pool = PgPoolOptions::new()
             .max_connections(5)
-            .connect(database_url.as_ref())
+            .connect_with(
+                PgConnectOptions::from_str(database_url.as_ref())?
+                    .application_name("document_upload_finalizer_handler"),
+            )
             .await
             .context("failed to connect to postgres")?;
 

@@ -27,7 +27,9 @@ use macro_event_broker::{KafkaEventPublisher, MacroEventBrokerService};
 use macro_service_urls::{
     AppServiceUrl, AuthServiceUrl, ConnectionGatewayUrl, DocumentStorageServiceUrl,
 };
+use sqlx::postgres::PgConnectOptions;
 use sqlx::postgres::PgPoolOptions;
+use std::str::FromStr;
 use tokio_util::{sync::CancellationToken, task::TaskTracker};
 
 const EVENT_BROKER_DRAIN_TIMEOUT: Duration = Duration::from_secs(10);
@@ -60,7 +62,9 @@ async fn main() -> anyhow::Result<()> {
     let db = PgPoolOptions::new()
         .min_connections(min_connections)
         .max_connections(max_connections)
-        .connect(&config.macro_db_url)
+        .connect_with(
+            PgConnectOptions::from_str(&config.macro_db_url)?.application_name("calendar_service"),
+        )
         .await
         .context("could not connect to db")?;
 

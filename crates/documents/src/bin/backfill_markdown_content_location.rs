@@ -16,7 +16,9 @@ use documents::outbound::s3_markdown_source::S3MarkdownObjectReader;
 use lexical_client::LexicalClient;
 use macro_env_var::env_vars;
 use macro_service_urls::{LexicalServiceUrl, SyncServiceUrl};
+use sqlx::postgres::PgConnectOptions;
 use sqlx::postgres::PgPoolOptions;
+use std::str::FromStr;
 use sync_service_client::SyncServiceClient;
 
 env_vars! {
@@ -116,7 +118,10 @@ async fn main() -> anyhow::Result<()> {
 
     let db = PgPoolOptions::new()
         .max_connections(5)
-        .connect(database_url.as_ref())
+        .connect_with(
+            PgConnectOptions::from_str(database_url.as_ref())?
+                .application_name("backfill_markdown_content_location"),
+        )
         .await
         .context("failed to connect to postgres")?;
 

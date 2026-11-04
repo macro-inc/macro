@@ -102,6 +102,8 @@ use crate::{
     },
     outbound::team_owned_entity_cleanup::TeamOwnedEntityCleanupAdapter,
 };
+use sqlx::postgres::PgConnectOptions;
+use std::str::FromStr;
 use std::{sync::Arc, time::Duration};
 use tokio_util::{sync::CancellationToken, task::TaskTracker};
 
@@ -166,7 +168,10 @@ pub async fn run() -> anyhow::Result<()> {
     let db = PgPoolOptions::new()
         .min_connections(min_connections)
         .max_connections(max_connections)
-        .connect(&config.database_url)
+        .connect_with(
+            PgConnectOptions::from_str(&config.database_url)?
+                .application_name("authentication_service"),
+        )
         .await
         .context("could not connect to db")?;
 

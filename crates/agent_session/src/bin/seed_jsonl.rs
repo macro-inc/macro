@@ -42,9 +42,11 @@ use entity_registry_db_utils::OwnedEntityRegistrar;
 use macro_user_id::user_id::MacroUserIdStr;
 use macro_uuid::Uuid;
 use serde::Deserialize;
+use sqlx::postgres::PgConnectOptions;
 use sqlx::postgres::PgPoolOptions;
 use std::path::{Path, PathBuf};
 use std::process::ExitCode;
+use std::str::FromStr;
 use std::time::{Duration, Instant};
 
 /// The `Macro Coder` system bot, seeded by migration, which owns agent
@@ -228,15 +230,19 @@ async fn seed(args: &Args) -> Result<(), SeedError> {
     let owner = MacroUserIdStr::try_from(args.owner.clone())
         .map_err(|error| SeedError::Owner(anyhow::anyhow!("{error}")))?;
 
+    let connect_error = |source| SeedError::Connect {
+        url: args.database_url.clone(),
+        source,
+    };
+    let options = PgConnectOptions::from_str(&args.database_url)
+        .map_err(connect_error)?
+        .application_name("seed_jsonl");
     let pool = PgPoolOptions::new()
         .max_connections(1)
         .acquire_timeout(Duration::from_secs(10))
-        .connect(&args.database_url)
+        .connect_with(options)
         .await
-        .map_err(|source| SeedError::Connect {
-            url: args.database_url.clone(),
-            source,
-        })?;
+        .map_err(connect_error)?;
     // The same repo answers every port, exactly as the composition root in
     // `document_storage_service` wires them.
     let repo = PgAgentSessionRepo::new(

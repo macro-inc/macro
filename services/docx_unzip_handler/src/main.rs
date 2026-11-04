@@ -19,7 +19,9 @@ use lambda_runtime::{
 };
 use macro_entrypoint::MacroEntrypoint;
 use macro_sha_count_client::Redis;
+use sqlx::postgres::PgConnectOptions;
 use sqlx::postgres::PgPoolOptions;
+use std::str::FromStr;
 
 #[tokio::main]
 async fn main() -> Result<(), Error> {
@@ -34,7 +36,10 @@ async fn main() -> Result<(), Error> {
     let db = PgPoolOptions::new()
         .min_connections(1)
         .max_connections(3)
-        .connect(&config.database_url)
+        .connect_with(
+            PgConnectOptions::from_str(&config.database_url)?
+                .application_name("docx_unzip_handler"),
+        )
         .await
         .context("could not connect to db")?;
 

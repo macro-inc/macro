@@ -10,7 +10,9 @@ use lambda_runtime::{
 };
 use macro_entrypoint::MacroEntrypoint;
 use macro_env_var::env_vars;
+use sqlx::postgres::PgConnectOptions;
 use sqlx::postgres::PgPoolOptions;
+use std::str::FromStr;
 
 env_vars! {
     struct DatabaseUrl;
@@ -44,7 +46,10 @@ async fn main() -> Result<(), Error> {
         PgPoolOptions::new()
             .min_connections(1)
             .max_connections(1) // we only ever need one connection per lambda
-            .connect(database_url.as_ref())
+            .connect_with(
+                PgConnectOptions::from_str(database_url.as_ref())?
+                    .application_name("organization_retention_trigger"),
+            )
             .await
             .context("could not connect to db")?,
     );

@@ -18,8 +18,10 @@ use macro_authorization::{
 use macro_entrypoint::MacroEntrypoint;
 use macro_service_urls::ConnectionGatewayUrl;
 use rate_limit::{RateLimitServiceImpl, RedisRateLimitAdapter};
+use sqlx::postgres::PgConnectOptions;
 use sqlx::postgres::PgPoolOptions;
 use sqs_worker::SQSWorker;
+use std::str::FromStr;
 use utoipa::OpenApi;
 use utoipa_swagger_ui::SwaggerUi;
 
@@ -35,7 +37,9 @@ async fn connect_to_database(config: &Config) -> anyhow::Result<sqlx::PgPool> {
     let db = PgPoolOptions::new()
         .min_connections(min_connections)
         .max_connections(max_connections)
-        .connect(database_url)
+        .connect_with(
+            PgConnectOptions::from_str(database_url)?.application_name("contacts_service"),
+        )
         .await
         .context("could not connect to db")?;
     Ok(db)

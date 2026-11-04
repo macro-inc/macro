@@ -26,7 +26,9 @@ use opensearch_client::OpensearchClient;
 #[cfg(feature = "pdf")]
 use rust_embed::RustEmbed;
 use sqlx::PgPool;
+use sqlx::postgres::PgConnectOptions;
 use sqlx::postgres::PgPoolOptions;
+use std::str::FromStr;
 #[cfg(feature = "processing")]
 use tokio_retry::{Retry, strategy::FixedInterval};
 use tokio_util::{sync::CancellationToken, task::TaskTracker};
@@ -68,11 +70,16 @@ pub type AgentSessionIndexer = domain::agent_session_index::AgentSessionIndexSer
 /// dev cannot reach the VPC-gated read replica).
 async fn resolve_readonly_pool(read_only_db_url: DatabaseUrlReadonly) -> Option<PgPool> {
     if let Some(url) = read_only_db_url.value() {
-        match PgPoolOptions::new()
-            .min_connections(1)
-            .max_connections(10)
-            .connect(url)
-            .await
+        match async {
+            let options =
+                PgConnectOptions::from_str(url)?.application_name("search_processing_service");
+            PgPoolOptions::new()
+                .min_connections(1)
+                .max_connections(10)
+                .connect_with(options)
+                .await
+        }
+        .await
         {
             Ok(pool) => Some(pool),
             Err(e) => {
@@ -171,7 +178,10 @@ async fn main() -> anyhow::Result<()> {
     let db = PgPoolOptions::new()
         .min_connections(min_connections)
         .max_connections(max_connections)
-        .connect(config.database_url.as_ref())
+        .connect_with(
+            PgConnectOptions::from_str(config.database_url.as_ref())?
+                .application_name("search_processing_service"),
+        )
         .await
         .context("could not connect to db")?;
 
@@ -236,9 +246,10 @@ async fn main() -> anyhow::Result<()> {
         ),
     );
     // Waiting advisory locks must not exhaust the pool used to read ACP logs.
-    let session_lock_pool = PgPoolOptions::new()
-        .max_connections(10)
-        .connect_lazy(config.database_url.as_ref())?;
+    let session_lock_pool = PgPoolOptions::new().max_connections(10).connect_lazy_with(
+        PgConnectOptions::from_str(config.database_url.as_ref())?
+            .application_name("search_processing_service_session_locks"),
+    );
     let agent_session_indexer = Arc::new(AgentSessionIndexer::new(
         agent_session::domain::search::indexing::SearchSnapshotServiceImpl::new(
             agent_session::outbound::postgres::search::PgSearchIndexingRepo::new(

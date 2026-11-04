@@ -6,6 +6,7 @@ use entity_access::{
 };
 use macro_entrypoint::MacroEntrypoint;
 use macro_user_id::user_id::MacroUserIdStr;
+use sqlx::postgres::PgConnectOptions;
 use sqlx::postgres::PgPoolOptions;
 use std::str::FromStr;
 
@@ -54,7 +55,9 @@ async fn main() -> anyhow::Result<()> {
     let pool = PgPoolOptions::new()
         .min_connections(1)
         .max_connections(5)
-        .connect(database_url.as_ref())
+        .connect_with(
+            PgConnectOptions::from_str(database_url.as_ref())?.application_name("explain_access"),
+        )
         .await?;
 
     let service = ExplainAccessServiceImpl::new(PgExplainAccessRepository::new(pool));

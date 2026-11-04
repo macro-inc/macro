@@ -3,7 +3,9 @@ use contacts::domain::service::ContactsDomainService;
 use contacts::inbound::worker::ContactsWorker;
 use contacts::outbound::repository::DbContactsRepository;
 use macro_entrypoint::MacroEntrypoint;
+use sqlx::postgres::PgConnectOptions;
 use sqlx::postgres::PgPoolOptions;
+use std::str::FromStr;
 use std::sync::Arc;
 
 #[tokio::main]
@@ -26,7 +28,10 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let db = PgPoolOptions::new()
         .min_connections(1)
         .max_connections(5)
-        .connect(database_url)
+        .connect_with(
+            PgConnectOptions::from_str(database_url)?
+                .application_name("contacts_service_example_worker"),
+        )
         .await
         .context("could not connect to db")?;
 

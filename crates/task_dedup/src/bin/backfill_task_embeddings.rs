@@ -14,6 +14,8 @@ use lexical_client::LexicalClient;
 use macro_env_var::env_var;
 use macro_service_urls::LexicalServiceUrl;
 use secretsmanager_client::{SecretManager, SecretsManager};
+use sqlx::postgres::PgConnectOptions;
+use std::str::FromStr;
 use task_dedup::outbound::postgres::PgTaskVectorDb;
 
 /// Target environment for the backfill.
@@ -271,9 +273,12 @@ struct Context {
 
 impl Context {
     async fn connect(config: ResolvedConfig) -> Result<Self> {
-        let pg = sqlx::PgPool::connect(&config.database_url)
-            .await
-            .map_err(anyhow::Error::from)?;
+        let pg = sqlx::PgPool::connect_with(
+            PgConnectOptions::from_str(&config.database_url)?
+                .application_name("backfill_task_embeddings"),
+        )
+        .await
+        .map_err(anyhow::Error::from)?;
         let lexical =
             LexicalClient::new(config.internal_api_secret_key, config.lexical_service_url);
         let embedder = TextEmbedding3Small::new(config.openai_api_key);

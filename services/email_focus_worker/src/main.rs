@@ -39,6 +39,8 @@ use crate::{
         memory_profile::MemoryProfiles,
     },
 };
+use sqlx::postgres::PgConnectOptions;
+use std::str::FromStr;
 
 #[tokio::main]
 async fn main() -> Result<(), Report> {
@@ -65,7 +67,10 @@ async fn main() -> Result<(), Report> {
     let db = PgPoolOptions::new()
         .min_connections(1)
         .max_connections(5)
-        .connect(config.macro_db_url.as_ref())
+        .connect_with(
+            PgConnectOptions::from_str(config.macro_db_url.as_ref())?
+                .application_name("email_focus_worker"),
+        )
         .await?;
     let shutdown = CancellationToken::new();
     let notifications = TaskTracker::new();

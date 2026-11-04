@@ -42,7 +42,9 @@ use macro_env::Environment;
 use macro_tower_layers::MacroRequestIdAndTracingLayer;
 use service::dynamodb::create_dynamo_db_connection_manager;
 use service::redis::poll_messages;
+use sqlx::postgres::PgConnectOptions;
 use sqlx::postgres::PgPoolOptions;
+use std::str::FromStr;
 use stream::outbound::redis_pg::{RedisPostgresStreamManager, RedisPostgresStreamRepo};
 use tower_http::cors::CorsLayer;
 
@@ -109,7 +111,10 @@ async fn main() -> Result<()> {
     let pgpool = PgPoolOptions::new()
         .min_connections(3)
         .max_connections(20)
-        .connect(config.macro_db_url.as_ref())
+        .connect_with(
+            PgConnectOptions::from_str(config.macro_db_url.as_ref())?
+                .application_name("connection_gateway"),
+        )
         .await?;
 
     let stream_service = RedisPostgresStreamRepo::new((*redis_client).clone(), pgpool.clone());

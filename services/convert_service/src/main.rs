@@ -8,7 +8,9 @@ use macro_authorization::{
 };
 use macro_entrypoint::MacroEntrypoint;
 use process::runner::run_worker;
+use sqlx::postgres::PgConnectOptions;
 use sqlx::postgres::PgPoolOptions;
+use std::str::FromStr;
 use std::sync::Arc;
 
 mod api;
@@ -73,7 +75,9 @@ async fn main() -> anyhow::Result<()> {
     let db = PgPoolOptions::new()
         .min_connections(1)
         .max_connections(5)
-        .connect(&config.database_url)
+        .connect_with(
+            PgConnectOptions::from_str(&config.database_url)?.application_name("convert_service"),
+        )
         .await
         .context("could not connect to db")?;
 

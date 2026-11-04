@@ -1,0 +1,50 @@
+id: rust-pg-pool-application-name
+language: rust
+severity: error
+message: Open Postgres pools with `connect_with` and options that set `application_name`.
+note: |-
+  Datadog Database Monitoring tags `postgresql.activity.*` by the session's
+  `application_name`, so an unnamed pool leaves long-open or idle-in-
+  transaction sessions without an owner. Build the options with
+  `PgConnectOptions::from_str(url)?.application_name("<service>")` and pass
+  them to `connect_with` / `connect_lazy_with`, or clone an already named
+  pool's `connect_options()`. Tests are exempt.
+files:
+  - crates/**
+  - services/**
+  - tooling/**
+ignores:
+  - '**/test.rs'
+  - '**/tests.rs'
+  - '**/*_tests.rs'
+  - '**/test/**'
+  - '**/tests/**'
+  - crates/integration_tests/**
+  - crates/whatsapp_e2e/**
+rule:
+  all:
+    - any:
+        - pattern: PgPool::connect($$$ARGS)
+        - pattern: PgPool::connect_lazy($$$ARGS)
+        - pattern: sqlx::PgPool::connect($$$ARGS)
+        - pattern: sqlx::PgPool::connect_lazy($$$ARGS)
+        - all:
+            - kind: call_expression
+            - has:
+                field: function
+                kind: field_expression
+                all:
+                  - has:
+                      field: field
+                      regex: ^(connect|connect_lazy)$
+                  - has:
+                      field: value
+                      stopBy: end
+                      regex: PgPoolOptions::new\(\)
+    - not:
+        inside:
+          kind: mod_item
+          stopBy: end
+          has:
+            field: name
+            regex: ^tests?$

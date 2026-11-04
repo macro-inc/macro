@@ -29,7 +29,9 @@ use slack_integration::{
         sqs_queue::SqsImportQueue,
     },
 };
+use sqlx::postgres::PgConnectOptions;
 use sqlx::postgres::PgPoolOptions;
+use std::str::FromStr;
 use tokio_util::sync::CancellationToken;
 use uuid::Uuid;
 
@@ -57,7 +59,10 @@ async fn run() -> Result<(), rootcause::Report> {
         // Leave capacity for lease heartbeats while imports hold transactions.
         .max_connections(12)
         .acquire_timeout(std::time::Duration::from_secs(20))
-        .connect(config.database_url.as_ref())
+        .connect_with(
+            PgConnectOptions::from_str(config.database_url.as_ref())?
+                .application_name("slack_import_worker"),
+        )
         .await
         .map_err(|_| ImportError::Retryable)?;
     let repo = PgSlackImportRepo::new(pool.clone(), limits);

@@ -30,7 +30,9 @@ use macro_event_broker::{GlobalSpawner, KafkaEventPublisher, MacroEventBrokerSer
 use macro_service_urls::ConnectionGatewayUrl;
 use secretsmanager_client::SecretManager;
 use sha2::Sha256;
+use sqlx::postgres::PgConnectOptions;
 use sqlx::postgres::PgPoolOptions;
+use std::str::FromStr;
 use std::sync::Arc;
 
 mod api;
@@ -57,7 +59,10 @@ pub async fn main() -> anyhow::Result<()> {
     let db = PgPoolOptions::new()
         .min_connections(min_connections)
         .max_connections(max_connections)
-        .connect(config.database_url.as_ref())
+        .connect_with(
+            PgConnectOptions::from_str(config.database_url.as_ref())?
+                .application_name("notification_service"),
+        )
         .await
         .context("could not connect to db")?;
 

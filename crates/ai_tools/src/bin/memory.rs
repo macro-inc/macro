@@ -7,7 +7,9 @@ use memory::config::Config;
 mod context;
 use context::build_tool_service_context;
 
+use sqlx::postgres::PgConnectOptions;
 use sqlx::postgres::PgPoolOptions;
+use std::str::FromStr;
 use std::time::Duration;
 use tokio_util::task::TaskTracker;
 
@@ -24,7 +26,7 @@ async fn main() -> anyhow::Result<()> {
 
     let pool = PgPoolOptions::new()
         .max_connections(5)
-        .connect(&config.database_url)
+        .connect_with(PgConnectOptions::from_str(&config.database_url)?.application_name("memory"))
         .await?;
 
     let event_broker_tracker = TaskTracker::new();

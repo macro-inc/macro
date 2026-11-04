@@ -50,6 +50,8 @@ use macro_service_urls::LexicalServiceUrl;
 use secretsmanager_client::{SecretManager, SecretsManager};
 use serde_json::json;
 use sqlx::PgPool;
+use sqlx::postgres::PgConnectOptions;
+use std::str::FromStr;
 use task_dedup::eval::{CorpusTask, EvalCorpus, TaskSource};
 
 /// Fictitious names used to anonymize employee emails. Real owner/assignee
@@ -335,9 +337,11 @@ async fn main() -> Result<()> {
         lexical_service_url,
     );
 
-    let pool = PgPool::connect(&database_url)
-        .await
-        .context("failed to connect to database")?;
+    let pool = PgPool::connect_with(
+        PgConnectOptions::from_str(&database_url)?.application_name("pull_task_corpus"),
+    )
+    .await
+    .context("failed to connect to database")?;
     let ctx = Arc::new(Ctx {
         lexical: LexicalClient::new(internal_api_secret_key, lexical_service_url),
         recorder: NoopRecorder,

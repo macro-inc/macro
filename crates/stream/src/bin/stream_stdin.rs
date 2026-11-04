@@ -1,5 +1,7 @@
 use model_entity::EntityType;
+use sqlx::postgres::PgConnectOptions;
 use std::io::{self, BufRead};
+use std::str::FromStr;
 use stream::domain::StreamId;
 use stream::outbound::redis_pg::RedisPostgresStreamRepo;
 
@@ -28,7 +30,10 @@ fn main() -> anyhow::Result<()> {
 
     rt.block_on(async move {
         let client = redis::Client::open(redis_url)?;
-        let pool = sqlx::PgPool::connect(&database_url).await?;
+        let pool = sqlx::PgPool::connect_with(
+            PgConnectOptions::from_str(&database_url)?.application_name("stream_stdin"),
+        )
+        .await?;
         let service = RedisPostgresStreamRepo::new(client, pool);
         let _ = service.cleanup_stream(&stream_id).await;
         let stream_service = service.obj();

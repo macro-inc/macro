@@ -41,8 +41,10 @@ use macro_event_broker::{KafkaEventPublisher, MacroEventBrokerService};
 use macro_service_urls::{
     AuthServiceUrl, ConnectionGatewayUrl, DocumentStorageServiceUrl, StaticFileServiceUrl,
 };
+use sqlx::postgres::PgConnectOptions;
 use sqlx::postgres::PgPoolOptions;
 use static_file_service_client::StaticFileServiceClient;
+use std::str::FromStr;
 use std::{sync::Arc, time::Duration};
 use system_properties::{PgSystemPropertiesRepository, SystemPropertiesServiceImpl};
 use tokio_util::task::TaskTracker;
@@ -76,7 +78,9 @@ pub async fn run() -> anyhow::Result<()> {
     let db = PgPoolOptions::new()
         .min_connections(min_connections)
         .max_connections(max_connections)
-        .connect(&config.macro_db_url)
+        .connect_with(
+            PgConnectOptions::from_str(&config.macro_db_url)?.application_name("email_service"),
+        )
         .await
         .context("could not connect to db")?;
 

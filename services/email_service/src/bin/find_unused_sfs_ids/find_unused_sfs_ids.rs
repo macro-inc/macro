@@ -20,7 +20,9 @@ use std::time::Instant;
 
 use anyhow::Context;
 use macro_entrypoint::MacroEntrypoint;
+use sqlx::postgres::PgConnectOptions;
 use sqlx::postgres::PgPoolOptions;
+use std::str::FromStr;
 
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
@@ -119,7 +121,10 @@ async fn fetch_mappings_from_database(
     let db_pool = PgPoolOptions::new()
         .min_connections(1)
         .max_connections(5)
-        .connect(&config.database_url)
+        .connect_with(
+            PgConnectOptions::from_str(&config.database_url)?
+                .application_name("find_unused_sfs_ids"),
+        )
         .await
         .context("Failed to connect to database")?;
 
