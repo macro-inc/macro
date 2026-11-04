@@ -1242,7 +1242,8 @@ installed binaries omit the token and keep receiving full requests. Empty record
 selections fetch only the current revision, with no unused fragment.
 
 `graphql_cache.ipc.request` is a `perf`-class span (`sampling: 'perf'`) that
-records command and outcome. The webview does not re-encode read
+records command and outcome, plus `graphql_cache.ipc.page_stall_ms` when a page
+stall extended its deadline. The webview does not re-encode read
 arguments to count bytes or create spans for notification callbacks.
 `graphql_cache.ipc.notification` in the native emitter measures serialization and
 emission, recording the single serialized payload's byte count. Native read, watch,

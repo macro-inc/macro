@@ -223,6 +223,7 @@ export function createTauriCacheHost(options: TauriHostOptions): CacheHost {
     const wireArgs = traceparent ? { ...args, traceparent } : args;
     let timer: ReturnType<typeof setTimeout> | undefined;
     let timedOut = false;
+    let pageStallMs = 0;
     try {
       const operation = span.run(() => invoke<T>(command, wireArgs));
       const deadline = TIMED_COMMANDS.has(command)
@@ -230,7 +231,9 @@ export function createTauriCacheHost(options: TauriHostOptions): CacheHost {
             const arm = () => {
               const due = performance.now() + requestTimeoutMs;
               timer = setTimeout(() => {
-                if (performance.now() - due > PAGE_STALL_MS) {
+                const late = performance.now() - due;
+                if (late > PAGE_STALL_MS) {
+                  pageStallMs += late;
                   arm();
                   return;
                 }
@@ -257,6 +260,11 @@ export function createTauriCacheHost(options: TauriHostOptions): CacheHost {
       throw error instanceof Error ? error : new Error(String(error));
     } finally {
       clearTimeout(timer);
+      if (pageStallMs > 0)
+        span.setAttr(
+          'graphql_cache.ipc.page_stall_ms',
+          Math.round(pageStallMs)
+        );
       span.end();
     }
   }
