@@ -6,6 +6,8 @@ use crate::domain::models::{
 use crate::domain::outlook::*;
 use crate::domain::ports::CalendarProviderErrorKind;
 
+mod unreadable_events;
+
 async fn mailbox(pool: &PgPool) -> (PgCalendarRepository, Uuid, String) {
     let owner = "macro|outlook-owner@example.com".to_owned();
     insert_user(pool, &owner).await;

@@ -19,6 +19,7 @@ Graph and token spans, so find them by their fields:
 | Its Graph requests | Spans: `@outlook.throttle_origin:* @mailbox.link_id:<id>` |
 | Token lookups | Spans: `@outlook.token_cache:*` |
 | Deferral logs | Logs: `"mailbox sync work deferred"`, grouped by `@defer_reason` |
+| Calendar events sync skipped | Logs: `"Skipped an Outlook event Macro cannot read"`, grouped by `@field`, with `@calendar_id` and `@provider_event_id` |
 
 Failed, deferred, throttled and slow (over 5 s) Outlook spans are always
 indexed, with their whole trace; successes are sampled.

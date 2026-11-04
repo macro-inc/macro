@@ -89,6 +89,7 @@ pub trait OutlookCalendarReader: Send + Sync + 'static {
         cursor: Option<&str>,
     ) -> impl Future<Output = Result<OutlookCalendarPage, CalendarProviderError>> + Send;
     /// Refresh one event or complete recurring series, bounded to the target window.
+    /// An event it cannot read fails with [`CalendarProviderError::unreadable_field`].
     fn refresh_calendar_event(
         &self,
         token: &str,
@@ -214,20 +215,38 @@ impl<
         let work = async {
             if let Some(target) = &lease.target {
                 let progress = if let Some(id) = lease.pending_ids.first() {
-                    let upsert = self
+                    let exists = match self
                         .provider
                         .refresh_calendar_event(&token, target, id)
-                        .await?;
-                    let exists = upsert.is_some();
-                    if let Some(upsert) = upsert {
-                        self.repository
-                            .upsert_event(CalendarEventWrite::OutlookSync {
-                                lease: Box::new(lease.clone()),
-                                upsert,
-                            })
-                            .await
-                            .map_err(storage_error)?;
-                    }
+                        .await
+                    {
+                        Ok(Some(upsert)) => {
+                            self.repository
+                                .upsert_event(CalendarEventWrite::OutlookSync {
+                                    lease: Box::new(lease.clone()),
+                                    upsert,
+                                })
+                                .await
+                                .map_err(storage_error)?;
+                            true
+                        }
+                        Ok(None) => false,
+                        Err(error) => {
+                            let Some(field) = error.unreadable_field() else {
+                                return Err(error);
+                            };
+                            // One event Macro cannot read must not hold back the
+                            // rest of the calendar. It still exists, so its stored
+                            // copy and scan membership stay and Finish keeps it.
+                            tracing::warn!(
+                                calendar_id = %target.calendar_id,
+                                provider_event_id = %id,
+                                field,
+                                "Skipped an Outlook event Macro cannot read"
+                            );
+                            true
+                        }
+                    };
                     OutlookCalendarProgress::Event {
                         id: id.clone(),
                         exists,

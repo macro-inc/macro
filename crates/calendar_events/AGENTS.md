@@ -359,6 +359,12 @@ reminder dispatch, team availability, and provider/Postgres persistence.
   removing a source whose typed `event_type` is out of office raises it, since
   every sync of a removed meeting's attendees reaches their teammates' calendars
   and the hint blanks their overlay.
+- One Outlook event the adapter cannot read never stops a scan:
+  `OutlookCalendarSync` logs its id and `CalendarProviderError::unreadable_field`
+  at warn and acknowledges it. It counts as existing, so its stored copy stays
+  and a full scan's `Finish` does not retire it; a first import just lacks it
+  until it changes. Any other failure keeps the event pending, retrying. The
+  calendar still reports a clean sync: nothing stores the skip count yet.
 - A sync of a `ready`, already synced account stays `ready`, on Google as on
   Outlook, including after a re-grant that kept calendar access, whose sync tokens
   survive. Any other state is catching up and marks it `syncing`: a first import,
