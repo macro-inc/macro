@@ -110,7 +110,6 @@ function CallChatContent(props: {
         <CallChatPanel
           id={props.id}
           open={props.open}
-          onClose={props.onClose}
           composer={
             <div inert={!canSend()} classList={{ 'opacity-50': !canSend() }}>
               <Show when={sendFailed()}>

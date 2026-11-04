@@ -150,7 +150,7 @@ function NewMeetingSetup(props: {
         },
         disconnect: call.meetingSession.disconnect,
       }}
-      renderCall={(onLeave, name) => (
+      renderCall={(onLeave, name, _credentials, header) => (
         <div class="flex h-full min-h-0 flex-col">
           <Show when={draft.inviteError()}>
             <div
@@ -173,6 +173,7 @@ function NewMeetingSetup(props: {
               onLeave={onLeave}
               localName={name()}
               showTeamSharing={false}
+              header={header}
             />
           </div>
         </div>

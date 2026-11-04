@@ -1429,11 +1429,11 @@ produce one connection; leaving from either control ends the same call. Navigate
 away and return while connected to check that the call and its controls remain
 usable.
 
-The **Open chat** button in its own island at the far right of the bottom toolbar
-opens the chat beside the video. The panel has no header or divider above the
-composer. The media controls stay centered. On narrow screens it overlays the
-video. The same toolbar button, now **Close chat**, or Escape closes the panel
-and returns focus to the chat button; reopening preserves the draft and scroll
+The **Open chat** button in the island at the right of the call's top row opens
+the call sidebar on its **Chat** tab, beside the video (see
+[Calls](calls.md)). On narrow screens the sidebar overlays the video. The same
+button, now **Close chat**, **Close sidebar**, or Escape closes it and returns
+focus to the button that opened it; reopening preserves the draft and scroll
 position. The call continues while chat is open or closed.
 
 Signed-in participants in channel, quick, and scheduled calls use the same chat

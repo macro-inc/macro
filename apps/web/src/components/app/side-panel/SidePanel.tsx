@@ -597,6 +597,24 @@ function SidePanelOutlet(props: {
   }
 }
 
+/**
+ * Renders the registered sections without the docked or overlay chrome, for a
+ * host that owns the panel frame and its open state (the call side panel).
+ */
+function Outlet(props: { floating?: boolean }) {
+  const ctx = useContext(SidePanelContext);
+  if (!ctx)
+    throw new Error('<SidePanel.Outlet> must be inside <SidePanel.Root>');
+  return (
+    <SidePanelOutlet
+      floating={props.floating}
+      sections={ctx.sections}
+      openIds={ctx.openSectionIds}
+      setOpenIds={ctx.setOpenSectionIds}
+    />
+  );
+}
+
 /** Unheaded metadata appears before the panel's interactive sections. */
 function Footer(props: ParentProps) {
   const ctx = useContext(SidePanelContext);
@@ -863,6 +881,7 @@ export const SidePanel = {
   Toggle,
   HeaderActions,
   HeaderActionsOutlet,
+  Outlet,
   Section,
   Footer,
   Grid,

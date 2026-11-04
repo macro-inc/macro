@@ -30,7 +30,6 @@ it('preserves the draft and content nodes when closing and reopening', () => {
     <CallChatPanel
       id="chat"
       open={open()}
-      onClose={() => setOpen(false)}
       composer={<input aria-label="Message" />}
     >
       <p>Earlier message</p>
@@ -38,20 +37,18 @@ it('preserves the draft and content nodes when closing and reopening', () => {
   ));
   const input = screen.getByRole('textbox') as HTMLInputElement;
   fireEvent.input(input, { target: { value: 'Unsent draft' } });
-  const panel = screen.getByRole('complementary', { name: 'Call chat' });
+  const panel = screen.getByRole('region', { name: 'Call chat' });
   setOpen(false);
   expect(panel.hidden).toBe(true);
   expect(screen.queryByRole('textbox')).toBeNull();
   setOpen(true);
   expect(screen.getByRole('textbox')).toBe(input);
   expect(input.value).toBe('Unsent draft');
-  fireEvent.keyDown(input, { key: 'Escape' });
-  expect(panel.hidden).toBe(true);
 });
 
 it('follows new messages at the bottom without jumping while reading history', () => {
   const result = render(() => (
-    <CallChatPanel id="chat" open onClose={() => {}} composer={null}>
+    <CallChatPanel id="chat" open composer={null}>
       <p>Messages</p>
     </CallChatPanel>
   ));

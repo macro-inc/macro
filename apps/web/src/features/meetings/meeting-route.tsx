@@ -128,7 +128,7 @@ export function MeetingRouteContent(props: {
           }),
         disconnect: call.meetingSession.disconnect,
       }}
-      renderCall={(onLeave, name, credentials) => (
+      renderCall={(onLeave, name, credentials, header) => (
         <CallOverlay
           onLeave={onLeave}
           localName={name()}
@@ -140,6 +140,7 @@ export function MeetingRouteContent(props: {
             authenticated() === false ? credentials() : undefined
           }
           showTeamSharing={canShareWithTeam()}
+          header={header}
           sharedWithTeam={
             record.isSuccess ? record.data.shareWithTeam : undefined
           }
