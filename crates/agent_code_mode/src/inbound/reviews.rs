@@ -1,5 +1,9 @@
 //! A saved review presentation is a completed tool call, never a suspended approval.
-use crate::domain::reviews::{CreateReview, ReviewDecision, ReviewId, ReviewService};
+use crate::domain::ExecutionId;
+use crate::domain::reviews::{
+    CalendarDraft, CreateReview, EmailDraft, ImportDraft, ReviewDecision, ReviewId, ReviewKind,
+    ReviewService, ReviewTitle,
+};
 use agent_session::domain::model::AgentSession;
 use ai_toolset::{
     AsyncTool, AsyncToolCollection, RequestContext, ServiceContext, ToolAnnotated, ToolAnnotations,
@@ -31,25 +35,42 @@ pub fn toolset() -> AsyncToolCollection<ReviewToolContext> {
 }
 
 /// Persist editable drafts and immediately present their review component.
-#[derive(JsonSchema)]
+#[derive(Deserialize, JsonSchema)]
+#[serde(transparent)]
 #[schemars(
     title = "PresentReview",
-    description = "Present an editable email stack, calendar event stack, or import plan to the user without pausing the conversation. Returns immediately after the saved review is displayed; it does not send email, create an event, import anything, or wait for approval. User decisions later deliver their recorded outcomes as typed system events. Use the existing ACP question tool for questions. Supply a review object containing kind (email, calendar, import), title, and 1–100 drafts. Email drafts use SendEmail arguments (Markdown body); calendar drafts use CreateCalendarEvent arguments; an import review has exactly one draft {\"source\":\"notion\" | \"linear\" | \"jira\"} and presents the plan ImportFromNotion, ImportFromLinear or ImportFromJira staged. executionId is optional and should be omitted outside ExecuteCode. Do not automatically submit these drafts or duplicate completed actions. After presenting, end your message by asking \"Should I kick it off?\"; if the person whose account the review uses says yes, submit it with DecideReview."
+    description = "Present an editable email stack, calendar event stack, or import plan to the user without pausing the conversation. Returns immediately after the saved review is displayed; it does not send email, create an event, import anything, or wait for approval. User decisions later deliver their recorded outcomes as typed system events. Use the existing ACP question tool for questions. Supply kind (email, calendar, import), title, and 1–100 drafts. Email drafts use SendEmail arguments (Markdown body); calendar drafts use CreateCalendarEvent arguments; an import review has exactly one draft {\"source\":\"notion\" | \"linear\" | \"jira\"} and presents the plan ImportFromNotion, ImportFromLinear or ImportFromJira staged. executionId is optional and should be omitted outside ExecuteCode. Do not automatically submit these drafts or duplicate completed actions. After presenting, end your message by asking \"Should I kick it off?\"; if the person whose account the review uses says yes, submit it with DecideReview."
 )]
-pub struct PresentReview {
-    /// Review kind, title and drafts to present for approval.
-    review: CreateReview,
+pub struct PresentReview(#[schemars(with = "PresentReviewSchema")] CreateReview);
+
+/// The model-facing shape of [`CreateReview`]. Its flattened kind-tagged drafts
+/// would put a union at the schema root, which Anthropic rejects for every
+/// request carrying the tool; here the union sits under `drafts.items` and
+/// deserialization still pairs each kind with its drafts.
+#[derive(JsonSchema)]
+#[serde(rename_all = "camelCase")]
+#[expect(dead_code, reason = "schema only")]
+struct PresentReviewSchema {
+    /// Optional code execution that prepared these drafts.
+    #[serde(default)]
+    execution_id: Option<ExecutionId>,
+    /// Stack label.
+    title: ReviewTitle,
+    /// The review's kind; every draft must match it.
+    kind: ReviewKind,
+    /// 1–100 SendEmail arguments for email, 1–100 CreateCalendarEvent
+    /// arguments for calendar, or exactly one import plan selection.
+    drafts: Vec<AnyReviewDraft>,
 }
 
-// Agents may still hold the previously advertised flat arguments during a rollout.
-// Only the named property is advertised by JsonSchema.
-impl<'de> Deserialize<'de> for PresentReview {
-    fn deserialize<D: serde::Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
-        let input = Value::deserialize(deserializer)?;
-        let review = input.get("review").unwrap_or(&input);
-        let review = CreateReview::deserialize(review).map_err(serde::de::Error::custom)?;
-        Ok(Self { review })
-    }
+/// A draft of any kind, for [`PresentReviewSchema`].
+#[derive(JsonSchema)]
+#[serde(untagged)]
+#[expect(dead_code, reason = "schema only")]
+enum AnyReviewDraft {
+    Email(EmailDraft),
+    Calendar(CalendarDraft),
+    Import(ImportDraft),
 }
 
 impl ToolAnnotated for PresentReview {
@@ -68,7 +89,7 @@ impl AsyncTool<ReviewToolContext> for PresentReview {
     ) -> ToolResult<Self::Output> {
         let record = context
             .service
-            .create_for_session(&context.session, &request.user_id, self.review.clone())
+            .create_for_session(&context.session, &request.user_id, self.0.clone())
             .await
             .map_err(|error| ToolCallError {
                 description: error.to_string(),

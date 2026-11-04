@@ -1,50 +1,46 @@
-use super::*;
+use super::PresentReview;
+use ai_toolset::schema::generate_validated_input_schema;
+use serde_json::json;
 
 #[test]
-fn review_toolset_passes_provider_schema_validation() {
-    let tools = toolset();
-    let schema = &tools.tools["PresentReview"].input_schema;
-    assert_eq!(schema["required"], json!(["review"]));
-    assert!(schema.get("anyOf").is_none());
-    assert_eq!(
-        schema["properties"]["review"]["anyOf"]
-            .as_array()
+fn review_toolset_passes_schema_validation() {
+    let _ = super::toolset();
+}
+
+/// Anthropic rejects every request whose tools include a root `oneOf`,
+/// `allOf` or `anyOf`, and PresentReview ships to every harness.
+#[test]
+fn present_review_schema_has_no_root_union() {
+    let schema = serde_json::to_value(
+        generate_validated_input_schema::<PresentReview>()
             .unwrap()
-            .len(),
-        3
-    );
+            .schema,
+    )
+    .unwrap();
+
+    for keyword in ["oneOf", "allOf", "anyOf"] {
+        assert!(schema.get(keyword).is_none(), "root {keyword}: {schema}");
+    }
+    assert_eq!(schema["type"], "object");
+    assert!(schema["properties"]["kind"].is_object());
+    assert!(schema["properties"]["title"].is_object());
+    assert_eq!(schema["properties"]["drafts"]["type"], "array");
 }
 
 #[test]
-fn present_review_accepts_named_and_previously_advertised_flat_arguments() {
-    for review in [
-        json!({"kind": "email", "title": "Draft", "drafts": [{
-            "subject": "Review", "body": "Draft body", "to": [{"email": "user@example.com"}]
-        }]}),
-        json!({"kind": "calendar", "title": "Draft", "drafts": [{
-            "title": "Meeting", "time": {"kind": "timed", "startsAt": "2026-01-01T10:00:00Z", "endsAt": "2026-01-01T11:00:00Z"}
-        }]}),
-        json!({"kind": "import", "title": "Import", "drafts": [{"source": "notion"}]}),
-    ] {
-        let flat: PresentReview = serde_json::from_value(review.clone()).unwrap();
-        let wrapped: PresentReview = serde_json::from_value(json!({"review": review})).unwrap();
-        assert_eq!(
-            serde_json::to_value(flat.review).unwrap(),
-            serde_json::to_value(wrapped.review).unwrap()
-        );
-    }
-}
+fn present_review_still_decodes_kind_tagged_drafts() {
+    let import: PresentReview = serde_json::from_value(json!({
+        "title": "Notion import",
+        "kind": "import",
+        "drafts": [{"source": "notion"}],
+    }))
+    .unwrap();
+    assert_eq!(import.0.title.as_ref(), "Notion import");
 
-#[test]
-fn present_review_preserves_missing_field_errors() {
-    let review = json!({"kind": "import", "drafts": [{"source": "notion"}]});
-    for input in [review.clone(), json!({"review": review})] {
-        let error = serde_json::from_value::<PresentReview>(input)
-            .err()
-            .unwrap();
-        assert!(
-            error.to_string().contains("missing field `title`"),
-            "{error}"
-        );
-    }
+    let mismatched = serde_json::from_value::<PresentReview>(json!({
+        "title": "Notion import",
+        "kind": "email",
+        "drafts": [{"source": "notion"}],
+    }));
+    assert!(mismatched.is_err());
 }

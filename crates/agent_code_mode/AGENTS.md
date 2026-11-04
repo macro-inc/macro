@@ -59,9 +59,6 @@ session presentation. Never replay an uncertain submitted action.
 
 ## Tool contracts
 
-- `PresentReview` advertises `{review: {kind, title, drafts, executionId?}}` so
-  its typed alternatives stay below the tool schema root. Previously advertised
-  flat arguments remain accepted during rollouts; SDK and HTTP review inputs stay flat.
 - Keep native `NameSearch` and `ListEntities` available for session-aware discovery; agent SDK documentation excludes legacy chats and workspace feeds.
 
 Reviews write `review.decided` and `review.settled` through the injected
@@ -81,6 +78,8 @@ longer delivery state.
 
 - `cargo test -p agent_code_mode --lib` from the repository root, with live local
   database configuration and `SQLX_OFFLINE` unset.
+- The review toolset test builds every review tool through shared provider schema
+  validation.
 - Keep generated discovery topics within the classifier's 32-question limit.
 - Regenerate SDK documentation through `packages/code-mode-sdk`; never edit
   `src/domain/documentation.json` by hand.
