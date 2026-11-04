@@ -1,3 +1,4 @@
+import { t } from '@app/lib/i18n';
 import { CredentialField } from '@channel/Bots/CredentialField';
 import { LoadingSpinner } from '@core/component/LoadingSpinner';
 import { toast } from '@core/component/Toast/Toast';
@@ -37,7 +38,7 @@ function Snippet(props: { code: string }) {
 export function AgentSetupDialog() {
   const setup = useAgentSetupMutation();
   const confirm = useCompleteTutorialMutation({
-    onError: () => toast.failure('Failed to save. Try again.'),
+    onError: () => toast.failure(t('agentSetup.confirmFailed')),
   });
 
   createEffect(() => {
@@ -49,44 +50,44 @@ export function AgentSetupDialog() {
       <Panel depth={2} active class="rounded-xl text-ink">
         <Panel.Header class="px-5">
           <Dialog.Title class="text-sm font-semibold">
-            Your agent account is ready
+            {t('agentSetup.title')}
           </Dialog.Title>
         </Panel.Header>
         <Panel.Body class="flex max-h-[80dvh] flex-col gap-4 overflow-y-auto p-5 text-sm">
           <Switch>
             <Match when={setup.isError}>
-              <p class="text-ink-muted">Couldn’t create your SDK token.</p>
+              <p class="text-ink-muted">{t('agentSetup.loadFailed')}</p>
               <Button
                 variant="primary"
                 size="sm"
                 onClick={() => setup.mutate()}
               >
-                Try again
+                {t('agentSetup.tryAgain')}
               </Button>
             </Match>
             <Match when={setup.data}>
               {(result) => (
                 <>
-                  <p>
-                    Use this token to work in Macro through the SDK. Save it
-                    now: it is shown only once, and reloading this page replaces
-                    it.
-                  </p>
+                  <p>{t('agentSetup.intro')}</p>
                   <Show when={result().team_join_failed}>
                     <p class="text-ink-muted">
-                      We couldn’t add you to the team that invited you. Reload
-                      this page to try again, which replaces this token.
+                      {t('agentSetup.teamJoinFailed')}
                     </p>
                   </Show>
-                  <CredentialField label="SDK token" value={result().api_key} />
+                  <CredentialField
+                    label={t('agentSetup.tokenLabel')}
+                    value={result().api_key}
+                  />
                   <p class="break-all font-mono text-xs text-ink-muted">
                     {result().api_key}
                   </p>
                   <div class="flex flex-col gap-1.5">
-                    <span class="text-xs font-medium">1. Use the token</span>
+                    <span class="text-xs font-medium">
+                      {t('agentSetup.useToken')}
+                    </span>
                     <Snippet code={QUICK_START} />
                     <span class="text-xs text-ink-muted">
-                      Read the docs at{' '}
+                      {t('agentSetup.readDocs')}{' '}
                       <a
                         href={SDK_DOCS_URL}
                         target="_blank"
@@ -95,22 +96,21 @@ export function AgentSetupDialog() {
                       >
                         sdk.macro.com
                       </a>
-                      .
                     </span>
                   </div>
                   <div class="flex flex-col gap-1.5">
                     <span class="text-xs font-medium">
-                      2. Set your name and profile picture
+                      {t('agentSetup.setProfile')}
                     </span>
                     <Snippet code={PROFILE_SNIPPET} />
                   </div>
                   <div class="flex flex-col gap-1.5">
                     <span class="text-xs font-medium">
-                      3. Need another token later?
+                      {t('agentSetup.anotherToken')}
                     </span>
                     <Snippet code={NEW_TOKEN_SNIPPET} />
                     <span class="text-xs text-ink-muted">
-                      You can also create one in Settings → API Keys.
+                      {t('agentSetup.anotherTokenSettings')}
                     </span>
                   </div>
                   <Button
@@ -119,7 +119,7 @@ export function AgentSetupDialog() {
                     disabled={confirm.isPending}
                     onClick={() => confirm.mutate()}
                   >
-                    I saved this token
+                    {t('agentSetup.confirm')}
                   </Button>
                 </>
               )}

@@ -1,3 +1,4 @@
+import { t } from '@app/lib/i18n';
 import { cn } from '@ui';
 
 /** Marks a name as an agent rather than a person. */
@@ -10,7 +11,7 @@ export function AgentTag(props: { class?: string }) {
         props.class
       )}
     >
-      Agent
+      {t('agentSetup.tag')}
     </span>
   );
 }
