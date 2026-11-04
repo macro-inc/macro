@@ -1,9 +1,10 @@
 import { AgentTyping } from '@app/features/agent-activity/agent-typing';
 import { idToDisplayName } from '@core/user';
+import { useBotProfile } from '@queries/bots/profiles';
+import { queryReadyGate } from '@queries/gate';
 import { getTypingAgents, getTypingUsers } from '@queries/messages/typing';
 import type { MessageParent } from '@service-storage/messages';
-import { createMemo, Show } from 'solid-js';
-import { match } from 'ts-pattern';
+import { createMemo, type JSX, Match, Show, Switch } from 'solid-js';
 
 type ThreadTypingIndicatorProps = {
   parent: MessageParent;
@@ -18,10 +19,6 @@ export function ThreadTypingIndicator(props: ThreadTypingIndicatorProps) {
     return Array.from(users).filter((user) => !agents.has(user));
   });
 
-  const typingText = createMemo(() => {
-    return getThreadTypingIndicatorText(typingUsers());
-  });
-
   const isActive = () => typingUsers().length > 0;
 
   return (
@@ -29,7 +26,7 @@ export function ThreadTypingIndicator(props: ThreadTypingIndicatorProps) {
       <AgentTyping parent={props.parent} threadId={props.threadId} />
       <div class="flex flex-row items-stretch justify-start ml-[calc(var(--message-padding-x)+var(--user-icon-width)+--spacing(2))] min-h-7">
         <Show when={isActive()}>
-          <ThreadTypingIndicatorContent text={typingText()} />
+          <ThreadTypingIndicatorContent ids={typingUsers()} />
         </Show>
       </div>
     </>
@@ -37,7 +34,7 @@ export function ThreadTypingIndicator(props: ThreadTypingIndicatorProps) {
 }
 
 type ThreadTypingIndicatorContentProps = {
-  text: string;
+  ids: string[];
 };
 
 function ThreadTypingIndicatorContent(
@@ -45,9 +42,39 @@ function ThreadTypingIndicatorContent(
 ) {
   return (
     <div class="flex items-center text-ink-extra-muted">
-      <span class="text-xs">{props.text}</span>
+      <span class="text-xs">
+        <Switch fallback="Multiple people are typing">
+          <Match when={props.ids.length === 1}>
+            <TypingName id={props.ids[0]} /> is typing
+          </Match>
+          <Match when={props.ids.length === 2}>
+            <TypingName id={props.ids[0]} /> and{' '}
+            <TypingName id={props.ids[1]} /> are typing
+          </Match>
+        </Switch>
+      </span>
       <ThreadTypingIndicatorDots />
     </div>
+  );
+}
+
+const BOT_PRINCIPAL_PREFIX = 'bot|';
+
+/** A person by display name, or a bot that types without an agent session by its profile. */
+function TypingName(props: { id: string }): JSX.Element {
+  const botId = () =>
+    props.id.startsWith(BOT_PRINCIPAL_PREFIX)
+      ? props.id.slice(BOT_PRINCIPAL_PREFIX.length)
+      : '';
+  const profile = useBotProfile(botId);
+  const botName = () => {
+    if (queryReadyGate(profile)) return profile.data?.name ?? 'Agent';
+    return profile.isError ? 'Agent' : '';
+  };
+  return (
+    <Show when={botId()} fallback={idToDisplayName(props.id)}>
+      {botName()}
+    </Show>
   );
 }
 
@@ -59,16 +86,4 @@ function ThreadTypingIndicatorDots() {
       <span class="animate-typing-dot [animation-delay:400ms]">.</span>
     </span>
   );
-}
-
-function getThreadTypingIndicatorText(userIds: string[]): string {
-  return match(userIds.length)
-    .with(0, () => '')
-    .with(1, () => `${idToDisplayName(userIds[0])} is typing`)
-    .with(
-      2,
-      () =>
-        `${idToDisplayName(userIds[0])} and ${idToDisplayName(userIds[1])} are typing`
-    )
-    .otherwise(() => 'Multiple people are typing');
 }

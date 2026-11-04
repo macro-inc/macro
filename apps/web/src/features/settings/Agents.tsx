@@ -4,6 +4,8 @@ import {
   isCoderHarness,
 } from '@app/features/agents-view/core/agent-kind';
 import { AGENTS_TOUR } from '@app/features/agents-view/tour';
+import { EXTERNAL_HARNESS } from '@app/features/external-agents/core/external-agent';
+import { ExternalAgentsSection } from '@app/features/external-agents/views/external-agents-section';
 import { ModelCatalogPicker } from '@core/component/AI/component/input/ModelCatalogPicker';
 import { MODEL_PRETTYNAME, Model } from '@core/component/AI/constant/model';
 import { modelLabel } from '@core/component/AI/constant/model-label';
@@ -238,8 +240,11 @@ export function Agents(props: {
     );
   const agents = createMemo(() =>
     (agentsQuery.isSuccess ? agentsQuery.data : [])
-      .filter((agent) =>
-        canManageAgent(agent.bot, currentUserId(), currentTeamId())
+      // External agents have their own section and editor.
+      .filter(
+        (agent) =>
+          agent.harness !== EXTERNAL_HARNESS &&
+          canManageAgent(agent.bot, currentUserId(), currentTeamId())
       )
       .map((agent) =>
         summarizeAgent(agent, connectedHarnesses(), channelOptions())
@@ -396,6 +401,16 @@ export function Agents(props: {
               </SettingsCard>
             </SettingsSurface>
           </section>
+
+          <ExternalAgentsSection
+            currentTeamId={currentTeamId()}
+            onMessage={
+              agentDm
+                ? (id) => fireAndForget(messageAgent(id), 'agent-settings')
+                : undefined
+            }
+            messagePending={agentDm?.pending()}
+          />
 
           <CodingPreferencesSetting />
         </SettingsPage>

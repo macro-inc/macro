@@ -73,6 +73,15 @@ const policies = {
     'authoritative: irreversible deletion requires server confirmation',
   DuplicateEntities: 'authoritative: server assigns the copy identity',
   SetEntityFavorite: 'inactive: UI uses SetFavorite',
+  RegisterExternalAgent:
+    'authoritative: server mints the agent, its token, and signing secret',
+  SetExternalAgentEndpoint:
+    'authoritative: endpoint verification is the server calling the URL',
+  VerifyExternalAgentEndpoint:
+    'authoritative: verification is the endpoint answering the server',
+  IssueExternalAgentToken: 'authoritative: server mints the token',
+  DeleteExternalAgent:
+    'authoritative: list membership refreshes after server deletion',
 } satisfies Record<
   string,
   | 'resolver'

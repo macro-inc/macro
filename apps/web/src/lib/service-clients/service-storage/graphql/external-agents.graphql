@@ -1,0 +1,59 @@
+fragment ExternalAgentFields on GraphqlExternalAgent {
+  id
+  name
+  handle
+  description
+  avatarUrl
+  teamId
+  createdAt
+  endpoint {
+    url
+    verified
+  }
+}
+
+query ExternalAgents {
+  user {
+    id
+    externalAgents {
+      ...ExternalAgentFields
+    }
+  }
+}
+
+mutation RegisterExternalAgent($input: RegisterExternalAgentInput!) {
+  registerExternalAgent(input: $input) {
+    botToken
+    signingSecret
+    agent {
+      ...ExternalAgentFields
+    }
+  }
+}
+
+mutation SetExternalAgentEndpoint($input: SetExternalAgentEndpointInput!) {
+  setExternalAgentEndpoint(input: $input) {
+    signingSecret
+    agent {
+      ...ExternalAgentFields
+    }
+  }
+}
+
+mutation VerifyExternalAgentEndpoint($agentId: ID!) {
+  verifyExternalAgentEndpoint(agentId: $agentId) {
+    responseStatus
+    message
+    agent {
+      ...ExternalAgentFields
+    }
+  }
+}
+
+mutation IssueExternalAgentToken($agentId: ID!) {
+  issueExternalAgentToken(agentId: $agentId)
+}
+
+mutation DeleteExternalAgent($agentId: ID!) {
+  deleteExternalAgent(agentId: $agentId)
+}
