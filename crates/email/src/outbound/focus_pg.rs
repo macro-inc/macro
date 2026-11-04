@@ -418,8 +418,8 @@ impl FocusStore for FocusPgRepository {
                       -- measured here, and a newer reply ends it before the worker
                       -- gets to the thread.
                       f.awaiting_reply
-                      AND f.classified_message_ts <= $3
                       AND latest.is_sent
+                      AND latest.at <= $3
                   )
               )
             -- Newest first, so the limit keeps the newest threads.
@@ -464,7 +464,7 @@ impl FocusStore for FocusPgRepository {
             FROM email_thread_focus f
             JOIN email_threads t ON t.id = f.thread_id AND t.link_id = f.link_id
             LEFT JOIN LATERAL (
-                SELECT m.is_sent
+                SELECT COALESCE(m.internal_date_ts, m.created_at) AS at, m.is_sent
                 FROM email_messages m
                 WHERE m.thread_id = t.id
                   AND NOT m.is_draft
@@ -479,8 +479,7 @@ impl FocusStore for FocusPgRepository {
                 SELECT COALESCE(latest.is_sent, false) AS owner_latest,
                        f.awaiting_reply
                            AND t.inbox_visible
-                           AND f.classified_message_ts <= $3
-                           AND COALESCE(latest.is_sent, false) AS waiting
+                           AND COALESCE(latest.is_sent AND latest.at <= $3, false) AS waiting
             ) now_state
             WHERE f.thread_id = ANY($1)
               AND f.link_id IN (

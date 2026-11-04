@@ -493,6 +493,40 @@ async fn a_thread_the_owner_answered_last_reaches_the_list_after_the_wait(
         scripts("email_focus", "email_focus_waiting")
     )
 )]
+async fn the_owner_writing_again_restarts_the_wait(pool: Pool<Postgres>) -> Result<(), Report> {
+    project_threads(&pool).await?;
+    let repo = FocusPgRepository(pool.clone());
+    let worker = worker(&repo, Ok(LOW_ANSWERS.to_vec()));
+    let queries = FocusQueries::new(repo);
+    worker.classify_thread(REPLIED_LAST).await?;
+    assert!(
+        queries
+            .focus_thread_ids(&owner(), 30)
+            .await?
+            .contains(&REPLIED_LAST)
+    );
+
+    // Ahead of the worker, the stored row still describes the older message.
+    insert_message(&pool, REPLIED_LAST, true, Utc::now()).await?;
+    assert!(
+        !queries
+            .focus_thread_ids(&owner(), 30)
+            .await?
+            .contains(&REPLIED_LAST)
+    );
+    let focus = queries.focus_for_threads(&owner(), &[REPLIED_LAST]).await?;
+    let restarted = focus.get(&REPLIED_LAST).expect("stored");
+    assert!(!restarted.is_focus && !restarted.needs_follow_up);
+    Ok(())
+}
+
+#[sqlx::test(
+    migrator = "MACRO_DB_MIGRATIONS",
+    fixtures(
+        path = "../../../fixtures",
+        scripts("email_focus", "email_focus_waiting")
+    )
+)]
 async fn a_thread_of_only_sent_mail_stays_out(pool: Pool<Postgres>) -> Result<(), Report> {
     project_threads(&pool).await?;
     let repo = FocusPgRepository(pool);

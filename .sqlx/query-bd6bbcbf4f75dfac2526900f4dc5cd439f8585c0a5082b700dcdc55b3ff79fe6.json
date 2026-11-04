@@ -1,0 +1,25 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            SELECT f.thread_id\n            FROM email_thread_focus f\n            JOIN email_threads t ON t.id = f.thread_id AND t.link_id = f.link_id\n            -- Who wrote last comes from the mail itself: editing a draft moves\n            -- the thread's own timestamps. An indexed per-thread top-one probe.\n            CROSS JOIN LATERAL (\n                SELECT COALESCE(m.internal_date_ts, m.created_at) AS at, m.is_sent\n                FROM email_messages m\n                WHERE m.thread_id = t.id\n                  AND NOT m.is_draft\n                  AND EXISTS (\n                      SELECT 1 FROM email_message_mailbox_facts facts\n                      WHERE facts.id = m.id AND facts.is_present AND NOT facts.in_trash\n                  )\n                ORDER BY COALESCE(m.internal_date_ts, m.created_at) DESC, m.id DESC\n                LIMIT 1\n            ) latest\n            WHERE f.link_id IN (\n                    -- The owner's inboxes, as Soup lists them: their own and linked ones.\n                    SELECT el.id FROM email_links el WHERE el.macro_id = $1\n                    UNION\n                    SELECT mul.link_id FROM macro_user_links mul WHERE mul.primary_macro_id = $1\n                )\n              -- Both ways in, indexed by email_thread_focus_list_idx and\n              -- email_thread_focus_waiting_idx.\n              AND (f.is_focus OR f.awaiting_reply)\n              AND t.inbox_visible\n              -- Never earlier than the latest mail, so this spares most probes.\n              AND GREATEST(t.latest_inbound_message_ts, t.latest_outbound_message_ts) >= $2\n              AND latest.at >= $2\n              AND (\n                  (f.is_focus AND (t.is_signal OR f.pinned))\n                  OR (\n                      -- Nothing reclassifies a thread as it ages, so the wait is\n                      -- measured here, and a newer reply ends it before the worker\n                      -- gets to the thread.\n                      f.awaiting_reply\n                      AND latest.is_sent\n                      AND latest.at <= $3\n                  )\n              )\n            -- Newest first, so the limit keeps the newest threads.\n            ORDER BY latest.at DESC, f.thread_id\n            LIMIT $4\n            ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "thread_id",
+        "type_info": "Uuid"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Text",
+        "Timestamptz",
+        "Timestamptz",
+        "Int8"
+      ]
+    },
+    "nullable": [
+      false
+    ]
+  },
+  "hash": "bd6bbcbf4f75dfac2526900f4dc5cd439f8585c0a5082b700dcdc55b3ff79fe6"
+}
