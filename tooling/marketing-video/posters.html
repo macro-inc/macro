@@ -7,7 +7,9 @@
   Static poster ads in a different format from "X wasn't built like Macro": a centered serif headline with
   one highlighted phrase, a short line under it, one hero image and a pill CTA. `raise` and `raise-dotcom`
   are announcement cards. The hero images are frames of the blocks v3 ads (img/posters/).
-    ?c=price|replace|call|raise|raise-dotcom   &mode=light|dark   &fmt=45|916|11
+  `orbs3`, `orbs12` and `orbs-price` draw macro.com's homepage hero (the tool orbs around Macro) and run on the
+  site's cream; the `eng-*` posters are for engineers: the PR split from ui.html, and code cards in Geist Mono.
+    ?c=price|replace|call|raise|raise-dotcom|orbs3|orbs12|orbs-price|eng-pr|eng-mcp|eng-oss   &mode=light|dark   &fmt=45|916|11
   Render a PNG with: PAGE=posters.html FMT=45 QS="&c=price&mode=dark" node render.mjs stills <dir> 0
   Headlines never run past two lines (fit() steps the size down), and in 9:16 everything stays inside the
   middle ~800 px, because tall phones crop the sides of a 9:16 story.
@@ -15,6 +17,7 @@
 <style>
 @font-face { font-family: "Inter"; src: url("fonts/inter-variable.woff2") format("woff2"); font-weight: 100 900; font-display: block; }
 @font-face { font-family: "display"; src: url("fonts/roboto-slab-variable.woff2") format("woff2"); font-weight: 100 900; font-display: block; }
+@font-face { font-family: "mono"; src: url("fonts/GeistMono-Variable.woff2") format("woff2"); font-weight: 100 900; font-display: block; }
 :root {
   --page: #f2f2eb; --ink: #1a1917; --body: #4a4844; --lab: #77756f; --card: #fff; --rule: #ecebe6;
   --hl: #e8b13a66; --hl-ink: var(--ink); --cta: #1a1917; --cta-ink: #f5f4ef; --panel: #0e0e0e;
@@ -59,14 +62,60 @@ h1 .hl { background: linear-gradient(transparent 8%, var(--hl) 8%, var(--hl) 92%
 .news .panel { margin: 0 44px 44px; border-radius: 24px; background: var(--panel); display: flex; align-items: center; justify-content: center; overflow: hidden; }
 html.dark .news .panel { box-shadow: inset 0 0 0 1px rgba(255, 255, 255, .06); }
 .news .panel img { display: block; }
+/* macro.com's cream (apps/marketing cream-preview.css), for the orb and engineer posters in light mode */
+html.cream { --page: #f5f1e8; --ink: #1d1c1a; --body: #54524f; --lab: #72706c; --card: #fcfbf8; --rule: #e6e1d7; --cta: #1d1c1a; --cta-ink: #f5f1e8; }
+/* a UI still with its own edge (ui.html ?hero=1): no soft mask, and a shadow drawn for this page */
+.hero img.flat { -webkit-mask-image: none; mask-image: none; max-width: 95%; filter: drop-shadow(0 28px 44px rgba(29, 28, 26, .2)) drop-shadow(0 2px 6px rgba(29, 28, 26, .08)); }
+html.dark .hero img.flat { filter: drop-shadow(0 28px 60px rgba(0, 0, 0, .6)); }
+/* the homepage hero (apps/marketing WelcomeSteps.tsx ContextScene), drawn around a 0×0 point at the hero's center and
+   scaled to fit it; --s is that scale, so hairlines stay hairlines */
+.orbs { position: absolute; left: 50%; top: 50%; width: 0; height: 0; transform-origin: 0 0; --hair: calc(1.4px / var(--s, 1)); }
+.orbs > * { position: absolute; left: 0; top: 0; }
+.orbs .halo { overflow: visible; fill: none; stroke: var(--ink); stroke-width: calc(1px / var(--s, 1)); }
+.orbs .ring { border-radius: 50%; transform: translate(-50%, -50%); border: var(--hair) solid color-mix(in srgb, var(--ink) 7%, transparent); background: color-mix(in srgb, var(--ink) 2%, transparent); }
+.orbs .ring.in { border-color: color-mix(in srgb, var(--ink) 12%, transparent); background: color-mix(in srgb, var(--ink) 3%, transparent); }
+/* the site's `glass` utility, light palette: a white top edge and rim, a hint of ink below, a soft cast shadow */
+.orb { transform: translate(-50%, -50%); border-radius: 50%; display: flex; align-items: center; justify-content: center; color: var(--ink);
+  background: color-mix(in srgb, var(--page), var(--ink) 8%);
+  --rim: linear-gradient(135deg, rgba(255, 255, 255, .525) 0%, transparent 24%, transparent 76%, rgba(255, 255, 255, .3) 100%);
+  --rim-shade: color-mix(in srgb, var(--ink) 7%, transparent);
+  box-shadow: inset 0 var(--hair) 0 rgba(255, 255, 255, .55), inset 0 calc(-1 * var(--hair)) 0 color-mix(in srgb, var(--ink) 8%, transparent), 0 11px 26px -18px rgba(0, 0, 0, .28); }
+html.dark .orb {
+  --rim: linear-gradient(135deg, rgba(212, 212, 212, .135) 0%, transparent 24%, transparent 76%, rgba(212, 212, 212, .09) 100%);
+  --rim-shade: transparent;
+  box-shadow: inset 0 var(--hair) 0 rgba(212, 212, 212, .06), inset 0 calc(-1 * var(--hair)) 0 rgba(0, 0, 0, .4), 0 11px 26px -18px rgba(0, 0, 0, .55); }
+.orb::after { content: ""; position: absolute; inset: 0; border-radius: inherit; padding: var(--hair); background: var(--rim); background-color: var(--rim-shade);
+  -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0); -webkit-mask-composite: xor;
+  mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0); mask-composite: exclude; }
+.orb.macro { background: color-mix(in srgb, var(--page), var(--ink) 12%); }
+.orb > span { display: flex; width: 44%; height: 44%; }
+.orb.macro > span { width: 50%; height: 50%; }
+.orb svg { width: 100%; height: 100%; display: block; }
+.orbs .lab { transform: translateX(-50%); font-size: 14px; font-weight: 500; color: var(--body); white-space: nowrap; letter-spacing: -0.005em; }
+.orbs .tag { transform: translate(-50%, -50%); padding: 3px 10px; border-radius: 99px; background: var(--card); box-shadow: var(--card-sh); font-size: 15px; font-weight: 600; color: var(--ink); white-space: nowrap; }
+.orbs .tag.hl { background: #e8b13a; color: #141312; box-shadow: none; }
+/* a code card: the engineer posters' terminal and repo */
+.term { flex: none; min-width: 760px; background: var(--card); border-radius: 30px; box-shadow: var(--card-sh); overflow: hidden; }
+.term .bar { display: flex; align-items: center; gap: 14px; height: 76px; padding: 0 30px; border-bottom: 1px solid var(--rule); font-size: 24px; font-weight: 500; color: var(--ink); }
+.term .bar svg { width: 30px; height: 30px; flex: none; }
+.term .bar .r { margin-left: auto; font-size: 17px; font-weight: 600; letter-spacing: .08em; color: var(--lab); padding: 7px 14px; border-radius: 99px; background: color-mix(in srgb, var(--ink) 5%, transparent); }
+.term pre { padding: 30px 36px 34px; font: 400 29px/1.6 "mono"; color: var(--ink); white-space: pre; letter-spacing: -0.01em; }
+.term .cm { color: var(--lab); }
+.term .pr { color: var(--lab); }
+.term .ft { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; max-width: 840px; padding: 0 36px 36px; }
+.term .ft .k { font-size: 17px; font-weight: 600; letter-spacing: .08em; color: var(--lab); margin-right: 6px; }
+.term .chip { font: 500 21px "mono"; padding: 8px 14px; border-radius: 12px; background: color-mix(in srgb, var(--ink) 5%, transparent); color: var(--body); }
 </style>
 </head>
 <body>
 <div id="stage"></div>
+<script src="orb-logos.js"></script>
 <script>
 const Q = new URLSearchParams(location.search);
 const FMT = Q.get("fmt") || "45", C = Q.get("c") || "price", DARK = Q.get("mode") === "dark";
 if (DARK) document.documentElement.classList.add("dark");
+// the orb and engineer posters sit on macro.com's cream in light mode
+else if (/^(orbs|eng)/.test(C)) document.documentElement.classList.add("cream");
 // each format is laid out on a 1080-wide canvas; 1x1 is drawn at 1080 and scaled to 1440
 const H = { "45": 1350, "916": 1920, "11": 1080 }[FMT];
 const SCALE = FMT === "11" ? 1440 / 1080 : 1;
@@ -74,6 +123,54 @@ const ARROW = `<svg viewBox="0 0 256 256" fill="currentColor"><path d="M221.66 1
 const CTA = `<div class="cta">Get started at macro.com${ARROW}</div>`;
 const LOGO = `<img class="logo" src="img/macro-logo.svg" alt="Macro">`;
 const img = (light, dark) => `<img src="img/posters/${DARK ? dark : light}.webp" alt="">`;
+
+
+// ---- macro.com's homepage hero (apps/marketing WelcomeSteps.tsx ContextScene) ----
+// Two rings, 54 faint circles and glass orbs around the Macro orb; positions are % of the site's 448×288 box.
+const SITE = [["Linear", 50, 11, 54], ["Google", 82, 39, 48], ["GitHub", 70, 82, 44], ["Notion", 27, 80, 56], ["Slack", 15, 37, 60],
+  ["Superhuman", 92, 12, 40], ["Zoom", 9, 72, 36], ["Google Meet", 94, 75, 30], ["Calendly", 31, 9, 32], ["PostHog", 6, 12, 28],
+  ["HubSpot", 51, 94, 26], ["Figma", 77, 6, 24]];
+const THREE = ["Linear", "Superhuman", "Notion"];
+// per seat a month, business plans billed annually (meta-ads docs/claims.md: the $84 row)
+const PRICE = { Linear: "$16", Superhuman: "$33", Notion: "$20", Macro: "$40" };
+function orb(name, x, y, size, o = {}) {
+  return `<div class="orb${name === "Macro" ? " macro" : ""}" style="left:${x}px;top:${y}px;width:${size}px;height:${size}px${o.dim ? `;opacity:${o.dim}` : ""}">`
+    + `<span style="opacity:${size < 36 ? 0.6 : 1}">${ORB_LOGOS[name]}</span></div>`
+    + (o.label ? `<div class="lab" style="left:${x}px;top:${y + size / 2 + 10}px">${o.label}</div>` : "")
+    + (o.tag ? `<div class="tag${name === "Macro" ? " hl" : ""}" style="left:${x + size * 0.38}px;top:${y - size * 0.38}px">${o.tag}</div>` : "");
+}
+// all: the site's constellation, with the three named tools brought forward and the rest stepped back.
+// three / price: just those three on the ring, 120° apart, Linear on top; price tags each orb with its seat price.
+function orbScene(kind) {
+  const rings = Array.from({ length: 54 }, (_, i) => `<circle r="${56 + i * 8}" opacity="${(0.1 * (1 - i / 54) ** 2.6).toFixed(4)}"/>`).join("");
+  let h = `<svg class="halo" viewBox="-480 -480 960 960" style="left:-480px;top:-480px;width:960px;height:960px">${rings}</svg>`
+    + `<div class="ring" style="width:288px;height:288px"></div><div class="ring in" style="width:176px;height:176px"></div>`;
+  if (kind === "all") {
+    const grow = { Linear: 64, Superhuman: 54, Notion: 64 };
+    for (const [n, px, py, sz] of SITE) {
+      const on = THREE.includes(n);
+      h += orb(n, px / 100 * 448 - 224, py / 100 * 288 - 144, on ? grow[n] : sz, on ? { label: n } : { dim: 0.4 });
+    }
+  } else {
+    THREE.forEach((n, i) => {
+      const a = (-90 - i * 120) * Math.PI / 180;
+      h += orb(n, Math.cos(a) * 128, Math.sin(a) * 128, 68, { label: n, tag: kind === "price" ? PRICE[n] : "" });
+    });
+  }
+  h += orb("Macro", 0, 0, 96, { tag: kind === "price" ? PRICE.Macro : "" });
+  return `<div class="orbs">${h}</div>`;
+}
+const GH = ORB_LOGOS.GitHub, MARK = ORB_LOGOS.Macro;
+// the engineer posters' code cards; every command is from apps/docs/AI/mcp/overview.mdx or the repo README
+const MCP = `<div class="term"><div class="bar">${MARK}Macro MCP server<span class="r">EVERY PLAN</span></div><pre>`
+  + `<span class="cm"># Claude Code</span>\n<span class="pr">$</span> claude mcp add --transport http macro \\\n    https://mcp-server.macro.com/mcp\n\n`
+  + `<span class="cm"># Codex</span>\n<span class="pr">$</span> codex mcp add macro \\\n    --url https://mcp-server.macro.com/mcp</pre>`
+  + `<div class="ft"><span class="k">TOOLS INCLUDE</span>${["ContentSearch", "SendEmail", "CreateCalendarEvent", "SendChannelMessage", "ReadCallRecord", "SetEntityProperty"].map((t) => `<span class="chip">${t}</span>`).join("")}</div></div>`;
+const OSS = `<div class="term"><div class="bar">${GH}macro-inc/macro<span class="r">AGPL-3.0</span></div><pre>`
+  + `<span class="pr">$</span> git clone https://github.com/macro-inc/macro\n\nmacro/\n`
+  + [["apps/web/", "SolidJS client"], ["services/", "services and workers"], ["crates/", "Rust libraries"], ["packages/", "shared TypeScript"], ["infra/", "Pulumi definitions"]]
+    .map(([d, c], i, a) => `${i === a.length - 1 ? "└──" : "├──"} ${d.padEnd(11)} <span class="cm">${c}</span>`).join("\n") + `</pre></div>`;
+const PRICE_FOOT = `<div class="foot">Business plans, billed annually. List prices checked September 2026.</div>`;
 
 // [headline html, sub line, hero html, extra html under the hero]
 const POSTERS = {
@@ -87,6 +184,24 @@ const POSTERS = {
   call: ["<span class=\"hl\">One call</span> updates your CRM, tasks and calendar.",
     "Then an agent drafts the follow-up.",
     img("call", "call-dark"), ""],
+  orbs3: ["Replace <span class=\"hl\">Linear, Superhuman and Notion</span> with one tool.",
+    "Tasks, email and docs in one workspace, with chat, calls and agents built in.",
+    orbScene("three"), ""],
+  orbs12: ["Replace <span class=\"hl\">Linear, Superhuman and Notion</span> with one tool.",
+    "Tasks, email, docs, chat and calls in one workspace, for $40 a seat.",
+    orbScene("all"), ""],
+  "orbs-price": ["Linear, Superhuman and Notion cost <span class=\"hl\">$69 a seat.</span> Macro is $40.",
+    "Tasks, email and docs in one workspace, with every module included.",
+    orbScene("price"), PRICE_FOOT],
+  "eng-pr": ["Your PRs, <span class=\"hl\">right in chat.</span>",
+    "Paste a GitHub link to see its status, changes and reviews, and merge it without leaving the chat.",
+    `<img class="flat" src="img/posters/pr-split-${FMT}.webp" alt="">`, ""],
+  "eng-mcp": ["Give your agents <span class=\"hl\">your whole workspace.</span>",
+    "Claude Code, Codex and Cursor connect to Macro over MCP, on every plan including Free.",
+    MCP, ""],
+  "eng-oss": ["<span class=\"hl\">Open source.</span> Built in Rust.",
+    "A Rust backend and a SolidJS app, open source under AGPLv3. Read every line or self-host it.",
+    OSS, ""],
 };
 // the news cards: Macro's own announcement, with the module grid on the app's dark page
 const NEWS = { raise: "Macro raises $30M led&nbsp;by&nbsp;a16z", "raise-dotcom": "macro.com raises $30M led&nbsp;by&nbsp;a16z" };
@@ -145,6 +260,25 @@ window.ready = Promise.all([document.fonts.ready, ...[...document.images].map((i
   // the price total lines up with the cards, whatever size the hero lands at
   const im = document.querySelector(".hero img"), total = document.querySelector(".total");
   if (im && total) total.style.width = (0.93 * im.offsetWidth) + "px";
+  // the orb scene and the code cards are drawn at their own size, then scaled to fill the hero
+  const hero = document.querySelector("#stage > .hero"), W = hero && hero.offsetWidth, Hh = hero && hero.offsetHeight;
+  const sc = document.querySelector(".orbs");
+  if (sc) {
+    // everything but the faint circles, in layout px around the scene's center (the stage itself is scaled in 1x1)
+    const o = sc.getBoundingClientRect(); let x0 = 1e9, y0 = 1e9, x1 = -1e9, y1 = -1e9;
+    for (const el of sc.children) {
+      if (el.classList.contains("halo")) continue;
+      const r = el.getBoundingClientRect();
+      x0 = Math.min(x0, r.left); y0 = Math.min(y0, r.top); x1 = Math.max(x1, r.right); y1 = Math.max(y1, r.bottom);
+    }
+    [x0, x1] = [(x0 - o.left) / SCALE, (x1 - o.left) / SCALE]; [y0, y1] = [(y0 - o.top) / SCALE, (y1 - o.top) / SCALE];
+    // the Macro orb stays on the poster's center line, under the headline and above the CTA; vertically the content centers
+    const hw = Math.max(-x0, x1), k = Math.min(W * 0.47 / hw, Hh * 0.94 / (y1 - y0), 2.6), cx = 0, cy = (y0 + y1) / 2;
+    sc.style.setProperty("--s", k);
+    sc.style.transform = `translate(${-cx * k}px, ${-cy * k}px) scale(${k})`;
+  }
+  const term = document.querySelector(".term");
+  if (term) term.style.transform = `scale(${Math.min(W * 0.96 / term.offsetWidth, Hh * 0.96 / term.offsetHeight, 1.2)})`;
 });
 </script>
 </body>
