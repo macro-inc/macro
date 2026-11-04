@@ -16,9 +16,7 @@ use macro_uuid::Uuid;
 use model_owner::{CreationPrincipal, Owner};
 use tokio::sync::mpsc::Sender;
 
-use super::code_check::{
-    CodeCheck, CodeGuide, StarterRoutine, checked_task, named_steps, same_task,
-};
+use super::code_check::{StarterRoutine, checked_task, named_steps, same_task};
 use super::code_upgrade::{CodeUpgrade, NoCodeUpgrades};
 use super::event_runs::ConfigurationRevision;
 use super::event_trigger::ActionTrigger;
@@ -596,16 +594,8 @@ where
         self.repo.get_execution_records(&id).await
     }
 
-    async fn code_guide(&self, user: MacroUserIdStr<'static>, task: &str) -> Result<CodeGuide> {
-        super::code_check::guide(self.code.as_ref(), &user, task).await
-    }
-
     fn code_starters(&self) -> Vec<StarterRoutine> {
         super::code_check::starters(self.code.as_ref())
-    }
-
-    async fn check_code(&self, steps: &serde_json::Value) -> Result<CodeCheck> {
-        super::code_check::check(self.code.as_ref(), steps).await
     }
 
     async fn get_code_upgrades(

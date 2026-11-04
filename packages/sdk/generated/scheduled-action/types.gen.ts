@@ -150,90 +150,6 @@ export type AiAdmissionErrorBody = {
 };
 
 /**
- * A routine's steps, whose code steps are type-checked together.
- */
-export type CheckCodeRequest = {
-    /**
-     * The steps, in the shape a routine's task holds them.
-     */
-    steps: Array<{
-        [key: string]: unknown;
-    }>;
-};
-
-/**
- * What type-checking a routine's code steps found.
- */
-export type CodeCheck = {
-    /**
-     * The version the code was checked against.
-     */
-    sdk: string;
-    /**
-     * Each code step with problems; empty when every step checks.
-     */
-    steps: Array<CodeStepCheck>;
-};
-
-/**
- * How to write a code step for a described task.
- */
-export type CodeGuide = {
-    /**
-     * TypeScript declaring `StepContext`, what `main` receives.
-     */
-    contract: string;
-    /**
-     * Starter routines, as worked examples of code steps.
-     */
-    examples: Array<StarterRoutine>;
-    /**
-     * The SDK's entities relevant to the task, with method signatures.
-     */
-    reference: string;
-    /**
-     * The version code is checked against: the SDK and the step contract.
-     */
-    sdk: string;
-    /**
-     * How to write a code step, the same text the routine agent tools read.
-     */
-    steps: string;
-};
-
-/**
- * What code should do, to choose the SDK reference for.
- */
-export type CodeGuideRequest = {
-    /**
-     * The work, in words, e.g. "go through my notifications and keep the important ones".
-     */
-    task: string;
-};
-
-/**
- * A code step's problems, and what to fix them with.
- */
-export type CodeStepCheck = {
-    /**
-     * The SDK declarations the problems name.
-     */
-    declarations: string;
-    /**
-     * Which code step, counted in program order from zero.
-     */
-    index: number;
-    /**
-     * The first problems, as the type checker reported them.
-     */
-    problems: Array<string>;
-    /**
-     * Its title.
-     */
-    title: string;
-};
-
-/**
  * One time a routine's code was brought to a new SDK.
  */
 export type CodeUpgrade = {
@@ -278,6 +194,109 @@ export type ConditionResult = {
     status: 'not_met';
 } | {
     status: 'unavailable';
+};
+
+/**
+ * What AI drafted, or why it couldn't.
+ */
+export type Draft = (DraftedRoutine & {
+    outcome: 'routine';
+}) | (DraftedStep & {
+    outcome: 'step';
+}) | {
+    message: string;
+    outcome: 'failed';
+};
+
+/**
+ * What the drafter may write, and the person's workspace by name and id.
+ */
+export type DraftContext = {
+    /**
+     * The model Ask AI steps it writes run on.
+     */
+    agentModel: string;
+    /**
+     * Whether it may write code steps; otherwise it writes Ask AI steps.
+     * Changing a code step needs no permission.
+     */
+    code?: boolean;
+    /**
+     * Whether triggers may ask AI a yes/no question before a run. This host
+     * must also be able to answer it.
+     */
+    conditions?: boolean;
+    /**
+     * IANA time zone schedules are written in, e.g. `America/New_York`.
+     */
+    timezone: string;
+    workspace?: Workspace;
+};
+
+/**
+ * What to draft.
+ */
+export type DraftRequest = {
+    description: string;
+    type: 'routine';
+} | {
+    description: string;
+    kind?: null | StepKind;
+    routine: RoutineSoFar;
+    type: 'add_step';
+} | {
+    index: number;
+    instruction: string;
+    routine: RoutineSoFar;
+    type: 'change_step';
+};
+
+/**
+ * What to draft, and what the drafter may write and name.
+ */
+export type DraftRoutineRequest = {
+    context: DraftContext;
+    draft: DraftRequest;
+};
+
+/**
+ * A drafted routine.
+ */
+export type DraftedRoutine = {
+    name: string;
+    /**
+     * Steps whose code still fails the type checker.
+     */
+    problems: Array<StepProblem>;
+    /**
+     * What it does, in the shape a routine's task holds steps, each code
+     * step named as saving names it.
+     */
+    steps: Array<{
+        [key: string]: unknown;
+    }>;
+    trigger?: null | ActionTrigger;
+};
+
+/**
+ * A drafted step.
+ */
+export type DraftedStep = {
+    /**
+     * What the type checker still finds in its code.
+     */
+    problems: Array<string>;
+    /**
+     * Why AI made a step it chose code or Ask AI, in a few words; empty
+     * when it gave no short reason or didn't choose.
+     */
+    reason: string;
+    /**
+     * The step, in the shape a routine's task holds it.
+     */
+    step: {
+        [key: string]: unknown;
+    };
 };
 
 /**
@@ -390,6 +409,14 @@ export type InProgressExecution = {
 };
 
 /**
+ * An item and its name.
+ */
+export type NamedItem = {
+    id: string;
+    name: string;
+};
+
+/**
  * `path` walks objects by key; `*` steps into every element of an array and
  * a number into one. Give exactly one test. `notIn` also passes when the
  * path finds nothing.
@@ -443,6 +470,24 @@ export type PropertySelector = {
  * A nonblank model identifier. Runtime catalogs, not the scheduler, own availability.
  */
 export type RoutineModelId = string;
+
+/**
+ * The routine a step is added to or changed in.
+ */
+export type RoutineSoFar = {
+    /**
+     * Its steps, in the shape a routine's task holds them.
+     */
+    steps: Array<{
+        [key: string]: unknown;
+    }>;
+    /**
+     * Its trigger as it would be saved, for AI to read; absent while it has none.
+     */
+    trigger?: {
+        [key: string]: unknown;
+    } | null;
+};
 
 /**
  * A shared routine's snapshot, readable by signed-in users with sharing enabled.
@@ -679,6 +724,22 @@ export type StarterRoutine = {
 };
 
 /**
+ * Code written once, or Ask AI each run.
+ */
+export type StepKind = 'code' | 'agent';
+
+/**
+ * A drafted step whose code still fails the type checker.
+ */
+export type StepProblem = {
+    /**
+     * Its place among the steps, from zero.
+     */
+    index: number;
+    problems: Array<string>;
+};
+
+/**
  * A user-specific part of a shared routine.
  */
 export type TemplateVariable = {
@@ -710,6 +771,48 @@ export type UpgradeOutcome = 'running' | 'checked' | 'rewritten' | 'needs_update
  * How a variable is filled when someone activates the template.
  */
 export type VariableFill = 'activator' | 'shared' | 'choice';
+
+/**
+ * The items AI may name in a draft. They are data for the model; saving
+ * checks every id the draft uses.
+ */
+export type Workspace = {
+    /**
+     * Agents a step may hand the run to.
+     */
+    agents?: Array<WorkspaceAgent>;
+    channels?: Array<NamedItem>;
+    /**
+     * Projects.
+     */
+    folders?: Array<NamedItem>;
+    /**
+     * Email label names.
+     */
+    labels?: Array<string>;
+    people?: Array<NamedItem>;
+    /**
+     * Tag options, by the property definition they belong to.
+     */
+    tags?: Array<WorkspaceTag>;
+};
+
+/**
+ * An agent and its bot id.
+ */
+export type WorkspaceAgent = {
+    botId: string;
+    name: string;
+};
+
+/**
+ * A tag: one option of a property.
+ */
+export type WorkspaceTag = {
+    definitionId: string;
+    label: string;
+    optionId: string;
+};
 
 export type ScheduledActionHealthData = {
     body?: never;
@@ -775,62 +878,6 @@ export type CreateScheduledActionResponses = {
 
 export type CreateScheduledActionResponse = CreateScheduledActionResponses[keyof CreateScheduledActionResponses];
 
-export type CheckRoutineCodeData = {
-    body: CheckCodeRequest;
-    path?: never;
-    query?: never;
-    url: '/scheduled-actions/code/check';
-};
-
-export type CheckRoutineCodeErrors = {
-    400: string;
-    401: string;
-    500: string;
-    /**
-     * Code steps aren't available here
-     */
-    503: string;
-};
-
-export type CheckRoutineCodeError = CheckRoutineCodeErrors[keyof CheckRoutineCodeErrors];
-
-export type CheckRoutineCodeResponses = {
-    /**
-     * What the type checker found, as saving a routine would check it
-     */
-    200: CodeCheck;
-};
-
-export type CheckRoutineCodeResponse = CheckRoutineCodeResponses[keyof CheckRoutineCodeResponses];
-
-export type RoutineCodeGuideData = {
-    body: CodeGuideRequest;
-    path?: never;
-    query?: never;
-    url: '/scheduled-actions/code/guide';
-};
-
-export type RoutineCodeGuideErrors = {
-    400: string;
-    401: string;
-    500: string;
-    /**
-     * Code steps aren't available here
-     */
-    503: string;
-};
-
-export type RoutineCodeGuideError = RoutineCodeGuideErrors[keyof RoutineCodeGuideErrors];
-
-export type RoutineCodeGuideResponses = {
-    /**
-     * How to write a code step for the task, with the SDK reference it needs
-     */
-    200: CodeGuide;
-};
-
-export type RoutineCodeGuideResponse = RoutineCodeGuideResponses[keyof RoutineCodeGuideResponses];
-
 export type RoutineCodeStartersData = {
     body?: never;
     path?: never;
@@ -852,6 +899,38 @@ export type RoutineCodeStartersResponses = {
 };
 
 export type RoutineCodeStartersResponse = RoutineCodeStartersResponses[keyof RoutineCodeStartersResponses];
+
+export type DraftRoutineData = {
+    body: DraftRoutineRequest;
+    path?: never;
+    query?: never;
+    url: '/scheduled-actions/drafts';
+};
+
+export type DraftRoutineErrors = {
+    400: string;
+    401: string;
+    /**
+     * AI usage limit reached
+     */
+    402: AiAdmissionErrorBody;
+    500: string;
+    /**
+     * AI usage validation unavailable
+     */
+    503: AiAdmissionErrorBody;
+};
+
+export type DraftRoutineError = DraftRoutineErrors[keyof DraftRoutineErrors];
+
+export type DraftRoutineResponses = {
+    /**
+     * A routine or step to review before saving, with any code problems AI couldn't fix, or why AI couldn't draft it
+     */
+    200: Draft;
+};
+
+export type DraftRoutineResponse = DraftRoutineResponses[keyof DraftRoutineResponses];
 
 export type DeleteScheduledActionData = {
     body?: never;

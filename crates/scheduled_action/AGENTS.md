@@ -28,12 +28,17 @@ each run.
 - `src/domain/code_check.rs`: saving a routine gives its steps ids, type-checks
   all its code steps together and stamps the task's `sdk` (the version from
   `routine_program::code_version`); unchanged code already checked against the
-  current version isn't checked again. `POST /scheduled-actions/code/guide`
-  (the shared code-step text, `StepContext` and the SDK reference for a
-  task, with the starter routines as examples), `/code/check` (the same check
-  of a drafted `steps` list, without saving, with problems by code step) and
-  `GET /code/starters` (the starter routines, none where code can't be saved)
-  serve the web routine drafter and new-routine flow.
+  current version isn't checked again. `GET /scheduled-actions/code/starters`
+  (the starter routines, none where code can't be saved) serves the
+  new-routine flow.
+- `src/domain/drafts.rs` + `src/inbound/draft_router.rs`: `POST
+  /scheduled-actions/drafts`, AI drafting a routine, a step to add, or a
+  change to a code step from the person's words (Draft it and the step
+  boxes in the web editor). It admits the work as automation usage, writes
+  through the `DraftModel` port (the harness's `routine_drafts.rs`), checks
+  code steps together as saving does, and has the model fix failures up to
+  three times; what's left comes back on its step. The caller sends the
+  names and ids the model may use (`Workspace`); saving checks every id.
 - `src/domain/code_upgrade.rs`: before a run uses code checked against an
   older version (SDK or `StepContext`), it is checked again, and rewritten by
   a model only if that fails (once per routine and version,

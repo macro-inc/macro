@@ -20,6 +20,7 @@ mod routine_analytics;
 mod routine_run_notifications;
 use config::Config;
 use scheduled_action::domain::code_upgrade;
+use scheduled_action::domain::drafts::RoutineDrafts;
 use scheduled_action::domain::event_runs::{
     PageSize, admission::EventAdmissionService, condition::ConditionGate,
     dispatch::EventDispatchService,
@@ -31,6 +32,7 @@ use scheduled_action::domain::target_runner::TargetRunner;
 use scheduled_action::domain::target_validation::TargetValidation;
 use scheduled_action::domain::templates::RoutineTemplateServiceImpl;
 use scheduled_action::inbound::axum_router::{ScheduledActionRouterState, scheduled_action_router};
+use scheduled_action::inbound::draft_router::{RoutineDraftRouterState, routine_draft_router};
 use scheduled_action::inbound::event_run_worker::run_event_worker;
 use scheduled_action::inbound::kafka_consumer::run_scheduled_action_event_consumer;
 use scheduled_action::inbound::template_router::{
@@ -93,6 +95,7 @@ pub async fn build<Ingress: notification::domain::service::NotificationIngress>(
     db: sqlx::PgPool,
     harness_address: std::net::SocketAddr,
     code: Option<crate::routine_code::SdkRoutineCode>,
+    drafter: crate::routine_drafts::ModelDrafts,
     ready: tokio::sync::watch::Receiver<bool>,
     notifications: Arc<Ingress>,
 ) -> Result<SchedulingRuntime> {
@@ -199,7 +202,7 @@ pub async fn build<Ingress: notification::domain::service::NotificationIngress>(
         lifecycle.executions.clone(),
         lifecycle.stop_executions.clone(),
     )
-    .with_admission(ai_admission)
+    .with_admission(Arc::clone(&ai_admission))
     .with_observer(Arc::new((
         routine_analytics::RoutineAnalytics(
             agent_harness_service::product_analytics::ProductAnalytics::new(
@@ -295,6 +298,10 @@ pub async fn build<Ingress: notification::domain::service::NotificationIngress>(
         },
     );
 
+    // AI drafts routines as their owner would save them, checking code
+    // with the same checker.
+    let drafts = RoutineDrafts::new(Arc::clone(&code), Arc::new(drafter), ai_admission)
+        .with_conditions_enabled(conditions_enabled);
     let service = Arc::new(
         ScheduledActionServiceImpl::new(
             Arc::clone(&repo),
@@ -332,13 +339,18 @@ pub async fn build<Ingress: notification::domain::service::NotificationIngress>(
         access_service: Arc::clone(&access),
         authorization_state: authorization_state.clone(),
     };
+    let draft_state = RoutineDraftRouterState {
+        service: Arc::new(drafts),
+        authorization_state: authorization_state.clone(),
+    };
     let state = ScheduledActionRouterState {
         service,
         access_service: access,
         authorization_state,
     };
     let authed_routes = scheduled_action_router::<_, _, _, ()>(state)
-        .merge(routine_template_router::<_, _, _, ()>(template_state));
+        .merge(routine_template_router::<_, _, _, ()>(template_state))
+        .merge(routine_draft_router::<_, _, ()>(draft_state));
 
     let router = mount_router(authed_routes)
         .layer(macro_cors::cors_layer())

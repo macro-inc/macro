@@ -16,14 +16,9 @@ vi.mock('./queries/step-sources', () => ({
 vi.mock('../agents-view/queries/agent-roster-source', () => ({
   createAgentRosterSource: () => ({ roster: () => [] }),
 }));
-vi.mock('@core/auth', () => ({ useHasPaidAccess: () => () => true }));
-vi.mock('@core/component/AI/constant', () => ({
-  databaseModelForPlan: () => 'model',
-}));
 vi.mock('@core/context/channels', () => ({
   useChannelsContext: () => ({ channels: () => [] }),
 }));
-vi.mock('@core/context/user', () => ({ useUserId: () => () => 'user' }));
 vi.mock('@property/editors/selectors/entityUtils', () => ({
   useQuickAccessEntities: () => ({ items: () => [] }),
 }));

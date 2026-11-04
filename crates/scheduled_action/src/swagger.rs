@@ -13,6 +13,11 @@ use crate::inbound::axum_router::{
     unused_imports,
     reason = "utoipa path macros require these generated symbols in scope"
 )]
+use crate::inbound::draft_router::__path_draft_routine;
+#[expect(
+    unused_imports,
+    reason = "utoipa path macros require these generated symbols in scope"
+)]
 use crate::inbound::template_router::{
     __path_activate_template, __path_get_template, __path_share_template, __path_unshare_template,
 };
@@ -47,9 +52,8 @@ use model::response::EmptyResponse;
         crate::inbound::axum_router::execute_action,
         crate::inbound::axum_router::list_history,
         crate::inbound::axum_router::list_code_upgrades,
-        crate::inbound::axum_router::code_guide,
         crate::inbound::axum_router::code_starters,
-        crate::inbound::axum_router::check_code,
+        crate::inbound::draft_router::draft_routine,
         crate::inbound::template_router::share_template,
         crate::inbound::template_router::get_template,
         crate::inbound::template_router::unshare_template,
@@ -58,12 +62,20 @@ use model::response::EmptyResponse;
     components(
         schemas(
             AiAdmissionErrorBody,
-            crate::domain::code_check::CodeGuide,
             crate::domain::code_check::StarterRoutine,
-            crate::domain::code_check::CodeCheck,
-            crate::domain::code_check::CodeStepCheck,
-            crate::inbound::axum_router::CodeGuideRequest,
-            crate::inbound::axum_router::CheckCodeRequest,
+            crate::inbound::draft_router::DraftRoutineRequest,
+            crate::domain::drafts::DraftRequest,
+            crate::domain::drafts::RoutineSoFar,
+            crate::domain::drafts::StepKind,
+            crate::domain::drafts::DraftContext,
+            crate::domain::drafts::Workspace,
+            crate::domain::drafts::NamedItem,
+            crate::domain::drafts::WorkspaceTag,
+            crate::domain::drafts::WorkspaceAgent,
+            crate::domain::drafts::Draft,
+            crate::domain::drafts::DraftedRoutine,
+            crate::domain::drafts::DraftedStep,
+            crate::domain::drafts::StepProblem,
             crate::domain::code_upgrade::CodeUpgrade,
             crate::domain::code_upgrade::UpgradeOutcome,
             ScheduledAction,

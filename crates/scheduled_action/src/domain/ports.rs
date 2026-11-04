@@ -211,30 +211,58 @@ pub trait ScheduledActionService: Send + Sync + 'static {
         receipt: EntityAccessReceipt<ViewAccessLevel>,
     ) -> impl Future<Output = Result<Vec<ActionExecutionRecord>>> + Send;
 
-    /// How to write a code step for `task`: the shared guide, the type of
-    /// `main`'s argument, and the SDK reference relevant to the task.
-    fn code_guide(
-        &self,
-        user: MacroUserIdStr<'static>,
-        task: &str,
-    ) -> impl Future<Output = Result<super::code_check::CodeGuide>> + Send;
-
     /// Starter routines whose step is code, to offer when a routine is
     /// created; none on hosts where code can't be saved.
     fn code_starters(&self) -> Vec<super::code_check::StarterRoutine>;
-
-    /// Type-check a routine's code steps the way saving it does, without
-    /// saving it.
-    fn check_code(
-        &self,
-        steps: &serde_json::Value,
-    ) -> impl Future<Output = Result<super::code_check::CodeCheck>> + Send;
 
     /// How the routine's code steps were brought to new SDKs, newest first.
     fn get_code_upgrades(
         &self,
         receipt: EntityAccessReceipt<ViewAccessLevel>,
     ) -> impl Future<Output = Result<Vec<super::code_upgrade::CodeUpgrade>>> + Send;
+}
+
+/// AI that drafts routines and their steps from people's words.
+pub trait RoutineDraftService: Send + Sync + 'static {
+    /// Draft what `request` asks for, billed to `owner`, naming the items
+    /// `context` lists. A [`super::drafts::Draft::Failed`] says why AI
+    /// couldn't; an error means the request can't be drafted at all.
+    fn draft(
+        &self,
+        owner: MacroUserIdStr<'static>,
+        request: super::drafts::DraftRequest,
+        context: super::drafts::DraftContext,
+    ) -> impl Future<Output = Result<super::drafts::Draft>> + Send;
+}
+
+/// The model that drafts routines.
+pub trait DraftModel: Send + Sync + 'static {
+    /// One answer in `completion.schema`'s shape, billed to `owner`; `None`
+    /// when the model gave none, e.g. it failed, timed out or broke the
+    /// schema.
+    fn complete(
+        &self,
+        owner: &MacroUserIdStr<'static>,
+        completion: DraftCompletion<'_>,
+    ) -> impl Future<Output = Option<serde_json::Value>> + Send;
+}
+
+/// One request to the drafting model.
+#[derive(Debug, Clone, Copy)]
+pub struct DraftCompletion<'a> {
+    /// What the model is told before the request.
+    pub instructions: &'a str,
+    /// The person's words, or what to fix.
+    pub prompt: &'a str,
+    pub schema: &'a OutputSchema,
+}
+
+/// A JSON schema the model's answer must match.
+#[derive(Debug, Clone, PartialEq)]
+pub struct OutputSchema {
+    pub name: &'static str,
+    pub description: &'static str,
+    pub schema: serde_json::Value,
 }
 
 /// Templates shared from routines, keyed by their source routine's ID.

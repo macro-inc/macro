@@ -53,6 +53,8 @@ pub trait ToolFreeCompletion: Send + Sync + 'static {
 pub struct ToolFreeCompletionService {
     recorder: Arc<dyn UsageRecorder>,
     completions: Arc<Semaphore>,
+    /// What usage is recorded as.
+    feature: AiFeature,
 }
 
 impl ToolFreeCompletionService {
@@ -60,7 +62,14 @@ impl ToolFreeCompletionService {
         Self {
             recorder,
             completions: Arc::new(Semaphore::new(MAX_CONCURRENT_COMPLETIONS)),
+            feature: AiFeature::DynamicCompletionsApi,
         }
+    }
+
+    /// Record usage as `feature` rather than the completions API.
+    pub fn for_feature(mut self, feature: AiFeature) -> Self {
+        self.feature = feature;
+        self
     }
 
     async fn run(
@@ -98,6 +107,7 @@ impl ToolFreeCompletion for ToolFreeCompletionService {
         request: ToolFreeRequest,
     ) -> Result<Value, ToolFreeCompletionError> {
         let recorder = self.recorder.clone();
+        let feature = self.feature;
         self.run(async move {
             agent::structured_output::dynamic_structured_completion_thinking(
                 request.model,
@@ -106,7 +116,7 @@ impl ToolFreeCompletion for ToolFreeCompletionService {
                 request.schema,
                 request.thinking,
                 recorder.as_ref(),
-                UsageContext::new(AiFeature::DynamicCompletionsApi, owner),
+                UsageContext::new(feature, owner),
             )
             .await
         })

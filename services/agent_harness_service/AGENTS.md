@@ -50,8 +50,10 @@ Pulumi stacks; they do not host extra agent processes.
   domain/adapters live in `crates/scheduled_action`. Its run observers send
   `routine_run_finished` analytics and, for every run, an inbox-only
   `routine_run_finished` notification to the owner
-  (`src/scheduling/routine_run_notifications.rs`). Routine code steps run
-  through `src/routine_code.rs`,
+  (`src/scheduling/routine_run_notifications.rs`). AI drafts routines
+  (`POST /scheduled-actions/drafts`) through `src/routine_drafts.rs`: the
+  free tier's model, thinking briefly, billed as automation usage. Routine
+  code steps run through `src/routine_code.rs`,
   on routines' own Deno executor (own slots, CPU limit, lower priority) and
   type checker, with a token for the owner's access attributed to Macro
   acting for them, so a step's writes don't start routines.

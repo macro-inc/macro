@@ -157,142 +157,6 @@
         }
       }
     },
-    "/scheduled-actions/code/check": {
-      "post": {
-        "tags": ["scheduled actions"],
-        "operationId": "check_routine_code",
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/CheckCodeRequest"
-              }
-            }
-          },
-          "required": true
-        },
-        "responses": {
-          "200": {
-            "description": "What the type checker found, as saving a routine would check it",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/CodeCheck"
-                }
-              }
-            }
-          },
-          "400": {
-            "description": "",
-            "content": {
-              "text/plain": {
-                "schema": {
-                  "type": "string"
-                }
-              }
-            }
-          },
-          "401": {
-            "description": "",
-            "content": {
-              "text/plain": {
-                "schema": {
-                  "type": "string"
-                }
-              }
-            }
-          },
-          "500": {
-            "description": "",
-            "content": {
-              "text/plain": {
-                "schema": {
-                  "type": "string"
-                }
-              }
-            }
-          },
-          "503": {
-            "description": "Code steps aren't available here",
-            "content": {
-              "text/plain": {
-                "schema": {
-                  "type": "string"
-                }
-              }
-            }
-          }
-        }
-      }
-    },
-    "/scheduled-actions/code/guide": {
-      "post": {
-        "tags": ["scheduled actions"],
-        "operationId": "routine_code_guide",
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/CodeGuideRequest"
-              }
-            }
-          },
-          "required": true
-        },
-        "responses": {
-          "200": {
-            "description": "How to write a code step for the task, with the SDK reference it needs",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/CodeGuide"
-                }
-              }
-            }
-          },
-          "400": {
-            "description": "",
-            "content": {
-              "text/plain": {
-                "schema": {
-                  "type": "string"
-                }
-              }
-            }
-          },
-          "401": {
-            "description": "",
-            "content": {
-              "text/plain": {
-                "schema": {
-                  "type": "string"
-                }
-              }
-            }
-          },
-          "500": {
-            "description": "",
-            "content": {
-              "text/plain": {
-                "schema": {
-                  "type": "string"
-                }
-              }
-            }
-          },
-          "503": {
-            "description": "Code steps aren't available here",
-            "content": {
-              "text/plain": {
-                "schema": {
-                  "type": "string"
-                }
-              }
-            }
-          }
-        }
-      }
-    },
     "/scheduled-actions/code/starters": {
       "get": {
         "tags": ["scheduled actions"],
@@ -317,6 +181,84 @@
               "text/plain": {
                 "schema": {
                   "type": "string"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/scheduled-actions/drafts": {
+      "post": {
+        "tags": ["scheduled actions"],
+        "operationId": "draft_routine",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/DraftRoutineRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "A routine or step to review before saving, with any code problems AI couldn't fix, or why AI couldn't draft it",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Draft"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "402": {
+            "description": "AI usage limit reached",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AiAdmissionErrorBody"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "AI usage validation unavailable",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AiAdmissionErrorBody"
                 }
               }
             }
@@ -1361,108 +1303,6 @@
           }
         }
       },
-      "CheckCodeRequest": {
-        "type": "object",
-        "description": "A routine's steps, whose code steps are type-checked together.",
-        "required": ["steps"],
-        "properties": {
-          "steps": {
-            "type": "array",
-            "items": {
-              "type": "object"
-            },
-            "description": "The steps, in the shape a routine's task holds them."
-          }
-        },
-        "additionalProperties": false
-      },
-      "CodeCheck": {
-        "type": "object",
-        "description": "What type-checking a routine's code steps found.",
-        "required": ["sdk", "steps"],
-        "properties": {
-          "sdk": {
-            "type": "string",
-            "description": "The version the code was checked against."
-          },
-          "steps": {
-            "type": "array",
-            "items": {
-              "$ref": "#/components/schemas/CodeStepCheck"
-            },
-            "description": "Each code step with problems; empty when every step checks."
-          }
-        }
-      },
-      "CodeGuide": {
-        "type": "object",
-        "description": "How to write a code step for a described task.",
-        "required": ["sdk", "steps", "contract", "reference", "examples"],
-        "properties": {
-          "contract": {
-            "type": "string",
-            "description": "TypeScript declaring `StepContext`, what `main` receives."
-          },
-          "examples": {
-            "type": "array",
-            "items": {
-              "$ref": "#/components/schemas/StarterRoutine"
-            },
-            "description": "Starter routines, as worked examples of code steps."
-          },
-          "reference": {
-            "type": "string",
-            "description": "The SDK's entities relevant to the task, with method signatures."
-          },
-          "sdk": {
-            "type": "string",
-            "description": "The version code is checked against: the SDK and the step contract."
-          },
-          "steps": {
-            "type": "string",
-            "description": "How to write a code step, the same text the routine agent tools read."
-          }
-        }
-      },
-      "CodeGuideRequest": {
-        "type": "object",
-        "description": "What code should do, to choose the SDK reference for.",
-        "required": ["task"],
-        "properties": {
-          "task": {
-            "type": "string",
-            "description": "The work, in words, e.g. \"go through my notifications and keep the important ones\"."
-          }
-        },
-        "additionalProperties": false
-      },
-      "CodeStepCheck": {
-        "type": "object",
-        "description": "A code step's problems, and what to fix them with.",
-        "required": ["index", "title", "problems", "declarations"],
-        "properties": {
-          "declarations": {
-            "type": "string",
-            "description": "The SDK declarations the problems name."
-          },
-          "index": {
-            "type": "integer",
-            "description": "Which code step, counted in program order from zero.",
-            "minimum": 0
-          },
-          "problems": {
-            "type": "array",
-            "items": {
-              "type": "string"
-            },
-            "description": "The first problems, as the type checker reported them."
-          },
-          "title": {
-            "type": "string",
-            "description": "Its title."
-          }
-        }
-      },
       "CodeUpgrade": {
         "type": "object",
         "description": "One time a routine's code was brought to a new SDK.",
@@ -1543,6 +1383,228 @@
           }
         ],
         "description": "Why an event-triggered run was skipped before it started."
+      },
+      "Draft": {
+        "oneOf": [
+          {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/DraftedRoutine",
+                "description": "A routine to review before saving."
+              },
+              {
+                "type": "object",
+                "required": ["outcome"],
+                "properties": {
+                  "outcome": {
+                    "type": "string",
+                    "enum": ["routine"]
+                  }
+                }
+              }
+            ],
+            "description": "A routine to review before saving."
+          },
+          {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/DraftedStep",
+                "description": "A step to add, or to put in place of the one changed."
+              },
+              {
+                "type": "object",
+                "required": ["outcome"],
+                "properties": {
+                  "outcome": {
+                    "type": "string",
+                    "enum": ["step"]
+                  }
+                }
+              }
+            ],
+            "description": "A step to add, or to put in place of the one changed."
+          },
+          {
+            "type": "object",
+            "description": "Why there's no draft, for the person.",
+            "required": ["message", "outcome"],
+            "properties": {
+              "message": {
+                "type": "string"
+              },
+              "outcome": {
+                "type": "string",
+                "enum": ["failed"]
+              }
+            }
+          }
+        ],
+        "description": "What AI drafted, or why it couldn't."
+      },
+      "DraftContext": {
+        "type": "object",
+        "description": "What the drafter may write, and the person's workspace by name and id.",
+        "required": ["timezone", "agentModel"],
+        "properties": {
+          "agentModel": {
+            "type": "string",
+            "description": "The model Ask AI steps it writes run on."
+          },
+          "code": {
+            "type": "boolean",
+            "description": "Whether it may write code steps; otherwise it writes Ask AI steps.\nChanging a code step needs no permission."
+          },
+          "conditions": {
+            "type": "boolean",
+            "description": "Whether triggers may ask AI a yes/no question before a run. This host\nmust also be able to answer it."
+          },
+          "timezone": {
+            "type": "string",
+            "description": "IANA time zone schedules are written in, e.g. `America/New_York`."
+          },
+          "workspace": {
+            "$ref": "#/components/schemas/Workspace"
+          }
+        },
+        "additionalProperties": false
+      },
+      "DraftRequest": {
+        "oneOf": [
+          {
+            "type": "object",
+            "description": "A new routine, from what it should do and when.",
+            "required": ["description", "type"],
+            "properties": {
+              "description": {
+                "type": "string"
+              },
+              "type": {
+                "type": "string",
+                "enum": ["routine"]
+              }
+            }
+          },
+          {
+            "type": "object",
+            "description": "One step to add at the end of `routine`. `kind` makes it code or Ask\nAI; without it, AI makes it code whenever code can do the job.",
+            "required": ["description", "routine", "type"],
+            "properties": {
+              "description": {
+                "type": "string"
+              },
+              "kind": {
+                "oneOf": [
+                  {
+                    "type": "null"
+                  },
+                  {
+                    "$ref": "#/components/schemas/StepKind"
+                  }
+                ]
+              },
+              "routine": {
+                "$ref": "#/components/schemas/RoutineSoFar"
+              },
+              "type": {
+                "type": "string",
+                "enum": ["add_step"]
+              }
+            }
+          },
+          {
+            "type": "object",
+            "description": "The code step at `index` in `routine`'s steps, rewritten as\n`instruction` says. It keeps its place and output name.",
+            "required": ["instruction", "routine", "index", "type"],
+            "properties": {
+              "index": {
+                "type": "integer",
+                "minimum": 0
+              },
+              "instruction": {
+                "type": "string"
+              },
+              "routine": {
+                "$ref": "#/components/schemas/RoutineSoFar"
+              },
+              "type": {
+                "type": "string",
+                "enum": ["change_step"]
+              }
+            }
+          }
+        ],
+        "description": "What to draft."
+      },
+      "DraftRoutineRequest": {
+        "type": "object",
+        "description": "What to draft, and what the drafter may write and name.",
+        "required": ["draft", "context"],
+        "properties": {
+          "context": {
+            "$ref": "#/components/schemas/DraftContext"
+          },
+          "draft": {
+            "$ref": "#/components/schemas/DraftRequest"
+          }
+        },
+        "additionalProperties": false
+      },
+      "DraftedRoutine": {
+        "type": "object",
+        "description": "A drafted routine.",
+        "required": ["name", "steps", "problems"],
+        "properties": {
+          "name": {
+            "type": "string"
+          },
+          "problems": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/StepProblem"
+            },
+            "description": "Steps whose code still fails the type checker."
+          },
+          "steps": {
+            "type": "array",
+            "items": {
+              "type": "object"
+            },
+            "description": "What it does, in the shape a routine's task holds steps, each code\nstep named as saving names it."
+          },
+          "trigger": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/ActionTrigger",
+                "description": "When it runs; absent when AI found no trigger it could use."
+              }
+            ]
+          }
+        }
+      },
+      "DraftedStep": {
+        "type": "object",
+        "description": "A drafted step.",
+        "required": ["step", "reason", "problems"],
+        "properties": {
+          "problems": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "What the type checker still finds in its code."
+          },
+          "reason": {
+            "type": "string",
+            "description": "Why AI made a step it chose code or Ask AI, in a few words; empty\nwhen it gave no short reason or didn't choose."
+          },
+          "step": {
+            "type": "object",
+            "description": "The step, in the shape a routine's task holds it."
+          }
+        }
       },
       "EmptyResponse": {
         "type": "object",
@@ -1763,6 +1825,20 @@
           }
         }
       },
+      "NamedItem": {
+        "type": "object",
+        "description": "An item and its name.",
+        "required": ["name", "id"],
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          }
+        },
+        "additionalProperties": false
+      },
       "PayloadCondition": {
         "type": "object",
         "description": "`path` walks objects by key; `*` steps into every element of an array and\na number into one. Give exactly one test. `notIn` also passes when the\npath finds nothing.",
@@ -1852,6 +1928,25 @@
       "RoutineModelId": {
         "type": "string",
         "description": "A nonblank model identifier. Runtime catalogs, not the scheduler, own availability."
+      },
+      "RoutineSoFar": {
+        "type": "object",
+        "description": "The routine a step is added to or changed in.",
+        "required": ["steps"],
+        "properties": {
+          "steps": {
+            "type": "array",
+            "items": {
+              "type": "object"
+            },
+            "description": "Its steps, in the shape a routine's task holds them."
+          },
+          "trigger": {
+            "type": ["object", "null"],
+            "description": "Its trigger as it would be saved, for AI to read; absent while it has none."
+          }
+        },
+        "additionalProperties": false
       },
       "RoutineTemplate": {
         "type": "object",
@@ -2276,6 +2371,29 @@
           }
         }
       },
+      "StepKind": {
+        "type": "string",
+        "description": "Code written once, or Ask AI each run.",
+        "enum": ["code", "agent"]
+      },
+      "StepProblem": {
+        "type": "object",
+        "description": "A drafted step whose code still fails the type checker.",
+        "required": ["index", "problems"],
+        "properties": {
+          "index": {
+            "type": "integer",
+            "description": "Its place among the steps, from zero.",
+            "minimum": 0
+          },
+          "problems": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          }
+        }
+      },
       "TemplateVariable": {
         "oneOf": [
           {
@@ -2351,6 +2469,84 @@
         "type": "string",
         "description": "How a variable is filled when someone activates the template.",
         "enum": ["activator", "shared", "choice"]
+      },
+      "Workspace": {
+        "type": "object",
+        "description": "The items AI may name in a draft. They are data for the model; saving\nchecks every id the draft uses.",
+        "properties": {
+          "agents": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/WorkspaceAgent"
+            },
+            "description": "Agents a step may hand the run to."
+          },
+          "channels": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/NamedItem"
+            }
+          },
+          "folders": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/NamedItem"
+            },
+            "description": "Projects."
+          },
+          "labels": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "Email label names."
+          },
+          "people": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/NamedItem"
+            }
+          },
+          "tags": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/WorkspaceTag"
+            },
+            "description": "Tag options, by the property definition they belong to."
+          }
+        },
+        "additionalProperties": false
+      },
+      "WorkspaceAgent": {
+        "type": "object",
+        "description": "An agent and its bot id.",
+        "required": ["name", "botId"],
+        "properties": {
+          "botId": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          }
+        },
+        "additionalProperties": false
+      },
+      "WorkspaceTag": {
+        "type": "object",
+        "description": "A tag: one option of a property.",
+        "required": ["label", "definitionId", "optionId"],
+        "properties": {
+          "definitionId": {
+            "type": "string"
+          },
+          "label": {
+            "type": "string"
+          },
+          "optionId": {
+            "type": "string"
+          }
+        },
+        "additionalProperties": false
       }
     }
   },

@@ -1,9 +1,6 @@
 import { useFeatureFlag } from '@app/lib/analytics/posthog';
-import { useHasPaidAccess } from '@core/auth';
-import { databaseModelForPlan } from '@core/component/AI/constant';
 import { enableRoutineCodeSteps } from '@core/constant/featureFlags';
 import { useChannelsContext } from '@core/context/channels';
-import { useUserId } from '@core/context/user';
 import { getDefaultTimezone } from '@core/util/cron';
 import { useQuickAccessEntities } from '@property/editors/selectors/entityUtils';
 import { type Accessor, onCleanup } from 'solid-js';
@@ -24,7 +21,6 @@ export function useComposerContext(options: {
   defaultModel: Accessor<string>;
   decisionsEnabled: Accessor<boolean>;
 }): () => ComposerContext {
-  const userId = useUserId();
   const labels = useEmailLabelNames();
   const tags = useRoutineTags();
   const channels = useChannelsContext();
@@ -39,10 +35,8 @@ export function useComposerContext(options: {
       item.data.name ? [{ name: item.data.name, id: item.id }] : []
     );
   return () => ({
-    now: new Date(),
     timezone: getDefaultTimezone(),
     defaultModel: options.defaultModel(),
-    userId: userId(),
     labels: labels(),
     tags: tags().map(({ label, definitionId, optionId }) => ({
       label,
@@ -76,7 +70,6 @@ export function RoutineAiComposer(props: {
   decisionsEnabled: boolean;
   disabled?: boolean;
 }) {
-  const hasPaidAccess = useHasPaidAccess();
   const context = useComposerContext({
     defaultModel: () => props.defaultModel,
     decisionsEnabled: () => props.decisionsEnabled,
@@ -88,11 +81,7 @@ export function RoutineAiComposer(props: {
     disposed = true;
   });
   const describe = async (description: string) => {
-    const draft = await composeRoutine(
-      description,
-      context(),
-      databaseModelForPlan(hasPaidAccess())
-    );
+    const draft = await composeRoutine(description, context());
     if (disposed) return undefined;
     if (typeof draft === 'string') return draft;
     props.apply(

@@ -1,9 +1,6 @@
 import { useFeatureFlag } from '@app/lib/analytics/posthog';
 import { useHasPaidAccess } from '@core/auth/license';
-import {
-  databaseModelForPlan,
-  defaultModelForPlan,
-} from '@core/component/AI/constant';
+import { defaultModelForPlan } from '@core/component/AI/constant';
 import {
   enableRoutineCodeSteps,
   enableRoutineConditions,
@@ -16,7 +13,8 @@ import { useComposerContext } from './routine-ai-composer';
 
 /**
  * AI that adds and changes the steps of `routine`, with the same workspace
- * names and model the routine drafter uses.
+ * names the routine drafter uses; Ask AI steps it writes run on the plan's
+ * default model.
  */
 export function createRoutineStepAuthor(
   routine: Accessor<RoutineSoFar>
@@ -28,7 +26,6 @@ export function createRoutineStepAuthor(
     defaultModel: () => defaultModelForPlan(hasPaidAccess()),
     decisionsEnabled: () => decisions().enabled,
   });
-  const model = () => databaseModelForPlan(hasPaidAccess());
   return {
     code: () => codeSteps().enabled,
     add: (description, kind) =>
@@ -37,7 +34,6 @@ export function createRoutineStepAuthor(
         kind,
         routine: routine(),
         context: context(),
-        model: model(),
       }),
     revise: (step, instruction) =>
       reviseStep({
@@ -45,7 +41,6 @@ export function createRoutineStepAuthor(
         instruction,
         routine: routine(),
         context: context(),
-        model: model(),
       }),
   };
 }

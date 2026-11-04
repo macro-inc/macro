@@ -14,9 +14,9 @@ import type {
   ActionConfiguration,
   ActionConfigurationUpdate,
   ActionExecutionRecord,
-  CodeCheck,
-  CodeGuide,
   CodeUpgrade,
+  Draft,
+  DraftRoutineRequest,
   InProgressExecution,
   RoutineTemplate,
   ScheduledAction,
@@ -108,24 +108,22 @@ export const scheduledActionClient = {
       { method: 'GET' }
     ),
 
-  codeGuide: async (args: { task: string }) =>
-    scheduledActionFetch<CodeGuide>('/scheduled-actions/code/guide', {
-      method: 'POST',
-      body: JSON.stringify({ task: args.task }),
-    }),
-
   /** Starter routines whose step is code; empty where code can't be saved. */
   codeStarters: async () =>
     scheduledActionFetch<StarterRoutine[]>('/scheduled-actions/code/starters', {
       method: 'GET',
     }),
 
-  /** Check a drafted routine's code steps together, as saving would. */
-  checkCode: async (args: { steps: readonly unknown[] }) =>
-    scheduledActionFetch<CodeCheck>('/scheduled-actions/code/check', {
-      method: 'POST',
-      body: JSON.stringify({ steps: args.steps }),
-    }),
+  /** Have AI draft a routine or one of its steps, its code checked as saving would. */
+  draftRoutine: async (body: DraftRoutineRequest) =>
+    fetchWithToken<Draft, typeof AI_USAGE_LIMIT_ERROR>(
+      `${scheduledActionHost}/scheduled-actions/drafts`,
+      {
+        method: 'POST',
+        body: JSON.stringify(body),
+        errorResponseHandler: aiUsageErrorResponseHandler,
+      }
+    ),
 
   listCodeUpgrades: async (args: { scheduleId: string }) =>
     scheduledActionFetch<CodeUpgrade[]>(

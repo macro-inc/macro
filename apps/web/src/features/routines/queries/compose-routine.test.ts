@@ -1,111 +1,118 @@
 import { err, ok } from 'neverthrow';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { validateSteps } from '../core/routine-steps';
-import {
-  type CodeFailure,
-  codeFixPrompt,
-  composeRoutine,
-  compositionInstructions,
-  compositionOutputSchema,
-  draftFromComposition,
-} from './compose-routine';
+import { composeRoutine, draftFromRoutine } from './compose-routine';
 import { draftToCreateBody } from './routine-draft';
 
-const clients = vi.hoisted(() => ({
-  structuredCompletion: vi.fn(),
-  codeGuide: vi.fn(),
-  checkCode: vi.fn(),
-}));
-vi.mock('@service-cognition/client', () => ({
-  cognitionApiServiceClient: {
-    structuredCompletion: clients.structuredCompletion,
-  },
-}));
+const draftRoutine = vi.hoisted(() => vi.fn());
 vi.mock('@service-scheduled-action/client', () => ({
-  scheduledActionClient: {
-    codeGuide: clients.codeGuide,
-    checkCode: clients.checkCode,
-  },
+  scheduledActionClient: { draftRoutine },
+}));
+vi.mock('@app/features/paywall/ai-usage-limit-handling', () => ({
+  handleAiUsageLimitError: () => false,
 }));
 vi.mock('@core/constant/allBlocks', () => ({
   blockNameToDefaultFile: () => 'New routine',
 }));
 
-const context = { defaultModel: 'claude', decisions: true };
+const context = {
+  timezone: 'America/New_York',
+  defaultModel: 'claude',
+  labels: ['Finance'],
+  tags: [],
+  channels: [{ name: 'eng', id: 'channel-1' }],
+  folders: [],
+  people: [],
+  agents: [{ name: 'Researcher', botId: 'bot-1' }],
+  decisions: true,
+  codeSteps: true,
+};
 
 const labelStep = {
   type: 'code',
+  id: 'label_by_topic',
   title: 'Label by topic',
   summary: 'Asks AI which label fits and adds it.',
   source: 'export async function main() {}',
 };
 
-describe('routine composition', () => {
-  it('turns triage into an event routine with code', () => {
-    const draft = draftFromComposition(
-      {
-        name: 'Inbox triage',
-        triggers: [
-          {
-            type: 'event',
-            events: ['email.message_received'],
-            condition: null,
-          },
-        ],
-        steps: [labelStep],
+const routine = (overrides: object = {}) => ({
+  outcome: 'routine' as const,
+  name: 'Inbox triage',
+  trigger: {
+    type: 'events' as const,
+    filters: [{ events: ['email.message_received' as const] }],
+  },
+  steps: [labelStep],
+  problems: [],
+  ...overrides,
+});
+
+beforeEach(() => {
+  draftRoutine.mockReset();
+});
+
+describe('composeRoutine', () => {
+  it('asks the scheduler to draft it with what the drafter may write and name', async () => {
+    draftRoutine.mockResolvedValue(ok(routine()));
+
+    const draft = await composeRoutine('triage my inbox', context);
+
+    expect(draftRoutine).toHaveBeenCalledWith({
+      draft: { type: 'routine', description: 'triage my inbox' },
+      context: {
+        timezone: 'America/New_York',
+        agentModel: 'claude',
+        code: true,
+        conditions: true,
+        workspace: {
+          labels: ['Finance'],
+          tags: [],
+          channels: [{ name: 'eng', id: 'channel-1' }],
+          folders: [],
+          people: [],
+          agents: [{ name: 'Researcher', botId: 'bot-1' }],
+        },
       },
-      context
-    );
+    });
     if (typeof draft === 'string') throw new Error(draft);
     expect(draft.name).toBe('Inbox triage');
     expect(draft.triggers).toMatchObject([
       { kind: 'event', events: ['email.message_received'] },
     ]);
-    // Named as saving will name it.
     expect(draft.steps?.[0]).toMatchObject({
       kind: 'code',
       output: 'label_by_topic',
     });
   });
 
-  it('keeps the knobs and sentence a drafted code step declares', () => {
-    const knob = {
-      type: 'text',
-      name: 'label',
-      label: 'Label to add',
-      value: 'vc',
-    };
-    const draft = draftFromComposition(
-      {
-        name: 'Inbox triage',
-        triggers: [{ type: 'event', events: ['email.message_received'] }],
-        steps: [{ ...labelStep, knobs: [knob], sentence: 'Label it {label}.' }],
-      },
-      context
+  it('says why AI couldn’t draft it', async () => {
+    draftRoutine.mockResolvedValueOnce(
+      ok({ outcome: 'failed', message: 'Describe when it should run.' })
     );
-    if (typeof draft === 'string') throw new Error(draft);
-    expect(draft.steps?.[0]).toMatchObject({
-      kind: 'code',
-      knobs: [knob],
-      sentence: 'Label it {label}.',
-    });
+    expect(await composeRoutine('x', context)).toBe(
+      'Describe when it should run.'
+    );
+    draftRoutine.mockResolvedValueOnce(
+      err([{ code: 'HTTP_ERROR', message: 'boom' }])
+    );
+    expect(await composeRoutine('x', context)).toBe(
+      'Couldn’t draft that routine. Please try again.'
+    );
   });
+});
 
+describe('a drafted routine in the editor', () => {
   it('keeps a trigger limited to the items it names', () => {
     const channel = '0195f5d1-4c4b-7a3e-9b3f-2d6a1c8e9f01';
-    const draft = draftFromComposition(
-      {
-        name: 'Copy launches',
-        triggers: [
-          {
-            type: 'event',
-            events: ['channel.message_posted'],
-            ids: [channel],
-          },
-        ],
-        steps: [labelStep],
-      },
-      context
+    const draft = draftFromRoutine(
+      routine({
+        trigger: {
+          type: 'events',
+          filters: [{ events: ['channel.message_posted'], ids: [channel] }],
+        },
+      }),
+      'claude'
     );
     if (typeof draft === 'string') throw new Error(draft);
     // Saving it watches that one channel, not every channel.
@@ -113,17 +120,14 @@ describe('routine composition', () => {
   });
 
   it('keeps a single agent routine in the simple form', () => {
-    const draft = draftFromComposition(
-      {
-        name: 'Daily brief',
-        triggers: [
-          { type: 'cron', expression: '0 0 9 * * *', timezone: 'UTC' },
-        ],
+    const draft = draftFromRoutine(
+      routine({
+        trigger: { type: 'cron', schedule: '0 0 9 * * *', timezone: 'UTC' },
         steps: [
           { type: 'agent', model: 'claude', instructions: 'Summarize my day' },
         ],
-      },
-      context
+      }),
+      'claude'
     );
     if (typeof draft === 'string') throw new Error(draft);
     expect(draft.steps).toBeUndefined();
@@ -134,147 +138,20 @@ describe('routine composition', () => {
     });
   });
 
-  it('explains drafts it cannot use', () => {
-    expect(draftFromComposition({ name: 'x' }, context)).toMatch(/incomplete/);
-    expect(
-      draftFromComposition(
-        {
-          name: 'x',
-          triggers: [],
-          steps: [{ type: 'wait', seconds: 5 }],
-        },
-        context
-      )
-    ).toMatch(/can’t run/);
-  });
-
-  it('tells the model which names and ids it may use', () => {
-    const instructions = compositionInstructions({
-      now: new Date('2026-10-09T12:00:00Z'),
-      timezone: 'America/New_York',
-      defaultModel: 'claude',
-      userId: 'macro|me@example.com',
-      labels: ['Finance'],
-      tags: [{ label: 'Urgent', definitionId: 'd', optionId: 'o' }],
-      channels: [{ name: 'billing', id: 'c' }],
-      folders: [{ name: 'Receipts', id: 'f' }],
-      people: [{ name: 'Ada', id: 'macro|ada@example.com' }],
-      agents: [],
-      decisions: false,
-      codeSteps: true,
-    });
-    expect(instructions).toContain('"Finance"');
-    expect(instructions).toContain('"billing"');
-    expect(instructions).toContain('"Receipts"');
-    expect(instructions).toContain('macro|ada@example.com');
-    expect(instructions).toContain('Trigger conditions are unavailable');
-    expect(instructions).toContain('2026-10-09T12:00:00.000Z');
-  });
-
-  it('refuses a draft whose trigger needs AI decisions when they are off', () => {
-    const withCondition = {
-      name: 'Invoices',
-      triggers: [
-        {
-          type: 'event',
-          events: ['email.message_received'],
-          condition: 'Is it an invoice?',
-        },
-      ],
-      steps: [{ type: 'agent', instructions: 'File it', model: 'claude' }],
-    };
-    expect(
-      draftFromComposition(withCondition, { ...context, decisions: false })
-    ).toMatch(/needs AI to decide/);
-    expect(typeof draftFromComposition(withCondition, context)).not.toBe(
-      'string'
-    );
-  });
-});
-
-const guidance = {
-  steps: 'Code steps: a `code` step runs TypeScript against Macro’s SDK.',
-  contract: 'interface StepContext { macro: Macro }',
-  reference: 'NotificationNamespace: list(), markDone()',
-  examples: [
-    {
-      request: 'When a new email arrives, label it by topic.',
-      steps: [labelStep],
-    },
-  ],
-};
-
-function notifications(source: string) {
-  return {
-    name: 'Important notifications',
-    triggers: [{ type: 'cron', expression: '0 0 9 * * *', timezone: 'UTC' }],
-    steps: [
-      {
-        type: 'code',
-        id: 'important',
-        title: 'Surface important notifications',
-        summary: 'Goes through notifications and keeps the important ones.',
-        source,
-      },
-    ],
-  };
-}
-
-const composerContext = {
-  now: new Date('2026-11-01T09:00:00Z'),
-  timezone: 'UTC',
-  defaultModel: 'claude',
-  userId: 'macro|owner@example.com',
-  labels: [],
-  tags: [],
-  channels: [],
-  folders: [],
-  people: [],
-  agents: [],
-  decisions: true,
-  codeSteps: true,
-};
-
-const failing: CodeFailure = {
-  index: 0,
-  title: 'Surface important notifications',
-  source: 'macro.notifications.guess()',
-  problems: [
-    "TS2339 [ERROR]: Property 'guess' does not exist on type 'NotificationNamespace'.",
-  ],
-  declarations:
-    'export declare class NotificationNamespace { list(): Promise<Notification[]> }',
-};
-
-describe('drafting code steps', () => {
-  it('describes code steps only when the scheduler can check them', () => {
-    const withCode = compositionInstructions(composerContext, guidance);
-    expect(withCode).toContain('{"type":"code"');
-    expect(withCode).toContain(guidance.steps);
-    expect(withCode).toContain(guidance.contract);
-    expect(withCode).toContain(guidance.reference);
-    // The starters are its worked examples.
-    expect(withCode).toContain(guidance.examples[0]?.request);
-    expect(withCode).toContain('"title":"Label by topic"');
-    expect(compositionInstructions(composerContext)).not.toContain(
-      '"type":"code"'
-    );
-    const types = (code: boolean) =>
-      compositionOutputSchema(code).schema.properties.steps.items.properties
-        .type.enum;
-    expect(types(true)).toContain('code');
-    expect(types(false)).not.toContain('code');
+  it('starts without a trigger when AI found none it could use', () => {
+    const draft = draftFromRoutine(routine({ trigger: null }), 'claude');
+    if (typeof draft === 'string') throw new Error(draft);
+    expect(draft.triggers).toEqual([]);
   });
 
   it('keeps a code step that still fails, with its problems, and holds it back from saving', () => {
-    const draft = draftFromComposition(notifications(failing.source), context, [
-      failing,
-    ]);
+    const problems = ["TS2339 [ERROR]: Property 'guess' does not exist"];
+    const draft = draftFromRoutine(
+      routine({ problems: [{ index: 0, problems }] }),
+      'claude'
+    );
     if (typeof draft === 'string') throw new Error(draft);
-    expect(draft.steps?.[0]).toMatchObject({
-      kind: 'code',
-      problems: failing.problems,
-    });
+    expect(draft.steps?.[0]).toMatchObject({ kind: 'code', problems });
     expect(validateSteps(draft.steps ?? [])).toContain(
       'doesn’t type-check yet'
     );
@@ -282,179 +159,12 @@ describe('drafting code steps', () => {
     expect(JSON.stringify(draftToCreateBody(draft))).not.toContain('TS2339');
   });
 
-  it('asks for the routine again with each failing step’s problems and declarations', () => {
-    const prompt = codeFixPrompt(
-      'surface my important notifications',
-      notifications(failing.source),
-      [failing]
-    );
-    expect(prompt).toContain('surface my important notifications');
-    expect(prompt).toContain('"source":"macro.notifications.guess()"');
-    expect(prompt).toContain(failing.problems[0]);
-    expect(prompt).toContain(failing.declarations);
-  });
-});
-
-describe('composeRoutine', () => {
-  const completed = (result: unknown) =>
-    ok({ outcome: { status: 'completed', result } });
-  const checks = (problems: string[]) =>
-    ok({
-      sdk: '0.3.0+x',
-      steps: problems.length
-        ? [
-            {
-              index: 0,
-              title: 'Surface important notifications',
-              problems,
-              declarations: 'decls',
-            },
-          ]
-        : [],
-    });
-
-  beforeEach(() => {
-    clients.structuredCompletion.mockReset();
-    clients.codeGuide
-      .mockReset()
-      .mockResolvedValue(ok({ sdk: '0.3.0+x', ...guidance }));
-    clients.checkCode.mockReset();
-  });
-
-  it('fixes code the type checker rejects, then drafts it', async () => {
-    clients.structuredCompletion
-      .mockResolvedValueOnce(completed(notifications('bad')))
-      .mockResolvedValueOnce(completed(notifications('good')));
-    clients.checkCode
-      .mockResolvedValueOnce(checks(['TS2339 [ERROR]: no guess']))
-      .mockResolvedValueOnce(checks([]));
-    const draft = await composeRoutine(
-      'surface my important notifications',
-      composerContext,
-      'claude' as never
-    );
-    if (typeof draft === 'string') throw new Error(draft);
-    expect(draft.steps?.[0]).toMatchObject({ kind: 'code', source: 'good' });
-    expect(draft.steps?.[0]).not.toHaveProperty('problems');
-    expect(clients.codeGuide).toHaveBeenCalledWith({
-      task: 'surface my important notifications',
-    });
-    const [first, second] = clients.structuredCompletion.mock.calls.map(
-      ([request]) => request
-    );
-    expect(first.additional_instructions).toContain(guidance.reference);
-    expect(second.prompt).toContain('TS2339 [ERROR]: no guess');
-    expect(second.prompt).toContain('decls');
-    // The routine's steps are checked together, as the model wrote them.
-    expect(clients.checkCode).toHaveBeenCalledWith({
-      steps: notifications('bad').steps,
-    });
-  });
-
-  it('shows each problem on the code step the check names', async () => {
-    const twoSteps = {
-      ...notifications('first'),
-      steps: [
-        ...notifications('first').steps,
-        {
-          type: 'code',
-          title: 'Report',
-          summary: 'Reports the count.',
-          source: 'second',
-        },
-      ],
-    };
-    clients.structuredCompletion.mockResolvedValue(completed(twoSteps));
-    clients.checkCode.mockResolvedValue(
-      ok({
-        sdk: '0.3.0+x',
-        steps: [
-          {
-            index: 1,
-            title: 'Report',
-            problems: ["Property 'total' does not exist"],
-            declarations: '',
-          },
-        ],
-      })
-    );
-    const draft = await composeRoutine(
-      'count and report',
-      composerContext,
-      'claude' as never
-    );
-    if (typeof draft === 'string') throw new Error(draft);
-    expect(draft.steps?.[0]).not.toHaveProperty('problems');
-    expect(draft.steps?.[1]).toMatchObject({
-      kind: 'code',
-      source: 'second',
-      problems: ["Property 'total' does not exist"],
-    });
-  });
-
-  it('stops after a bounded number of fixes and shows what still fails', async () => {
-    clients.structuredCompletion.mockResolvedValue(
-      completed(notifications('bad'))
-    );
-    clients.checkCode.mockResolvedValue(checks(['TS2339 [ERROR]: no guess']));
-    const draft = await composeRoutine(
-      'surface my important notifications',
-      composerContext,
-      'claude' as never
-    );
-    if (typeof draft === 'string') throw new Error(draft);
-    // The draft, then three fixes, each asking the model to think briefly.
-    expect(clients.structuredCompletion).toHaveBeenCalledTimes(4);
-    for (const [request] of clients.structuredCompletion.mock.calls)
-      expect(request).toMatchObject({ thinking: 'low' });
-    expect(draft.steps?.[0]).toMatchObject({
-      kind: 'code',
-      problems: ['TS2339 [ERROR]: no guess'],
-    });
-  });
-
-  it('drafts without code steps when the scheduler can’t check code', async () => {
-    clients.codeGuide.mockResolvedValue(
-      err([{ code: 'HTTP_ERROR', message: '503' }])
-    );
-    clients.structuredCompletion.mockResolvedValue(
-      completed({
-        name: 'Summary',
-        triggers: [],
-        steps: [{ type: 'agent', model: 'claude', instructions: 'Summarize' }],
-      })
-    );
-    const draft = await composeRoutine(
-      'summarize',
-      composerContext,
-      'claude' as never
-    );
-    if (typeof draft === 'string') throw new Error(draft);
-    const [request] = clients.structuredCompletion.mock.calls[0] ?? [];
+  it('explains steps the editor can’t use', () => {
     expect(
-      request.output_schema.schema.properties.steps.items.properties.type.enum
-    ).not.toContain('code');
-    expect(clients.checkCode).not.toHaveBeenCalled();
-  });
-
-  it('drafts Ask AI steps only, without asking for code, when code steps are off', async () => {
-    clients.structuredCompletion.mockResolvedValue(
-      completed({
-        name: 'Summary',
-        triggers: [],
-        steps: [{ type: 'agent', model: 'claude', instructions: 'Summarize' }],
-      })
-    );
-    const draft = await composeRoutine(
-      'label my invoices',
-      { ...composerContext, codeSteps: false },
-      'claude' as never
-    );
-    if (typeof draft === 'string') throw new Error(draft);
-    expect(clients.codeGuide).not.toHaveBeenCalled();
-    const [request] = clients.structuredCompletion.mock.calls[0] ?? [];
-    expect(
-      request.output_schema.schema.properties.steps.items.properties.type.enum
-    ).not.toContain('code');
+      draftFromRoutine(
+        routine({ steps: [{ type: 'wait', seconds: 5 }] }),
+        'claude'
+      )
+    ).toMatch(/can’t run/);
   });
 });

@@ -265,6 +265,16 @@ pub struct AgentTask {
 pub struct InvalidTask(#[from] serde_json::Error);
 
 impl RoutineProgram {
+    /// A program of `steps`, without apps or a checked SDK.
+    pub fn new(steps: Vec<Step>) -> Self {
+        Self {
+            steps,
+            mcp_servers: Vec::new(),
+            single_agent_task: false,
+            sdk: None,
+        }
+    }
+
     /// Read a stored task: a program (`{"steps": [...]}`), or the single agent
     /// task written before routines had steps, which becomes one agent step.
     pub fn from_task(task: &Value) -> Result<Self, InvalidTask> {
