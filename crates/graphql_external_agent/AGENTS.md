@@ -35,4 +35,4 @@ an agent's runtime, authenticated with its bot token alone, uses the root
 
 ## Related
 
-- Docs: `docs/guides/add-graphql-field.md`, `docs/guides/external-agents.md`
+- Docs: `docs/guides/add-graphql-field.md`, `docs/architecture/external-agents.md`

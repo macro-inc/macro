@@ -40,8 +40,8 @@ names its event, which says where it goes and whose access writes it
 ## Recipes
 
 - Change the pushed event: `src/domain/models.rs` → its test in
-  `src/outbound/webhook_endpoints/test.rs` → the SDK's `externalAgents` types
-  → `docs/guides/external-agents.md`. It is a public contract: add, don't rename.
+  `src/outbound/webhook_endpoints/test.rs` → `docs/architecture/external-agents.md`.
+  It is a public contract: add fields, don't rename them.
 - Address agents in a new way: teach `agent_trigger` first, then `addressed`
   in `src/domain/inbox.rs`.
 
@@ -63,4 +63,4 @@ names its event, which says where it goes and whose access writes it
 ## Related
 
 - Rules: `.agents/rules/rust/architecture.md`, `.agents/rules/rust/security.md`
-  · Docs: `docs/guides/external-agents.md`
+  · Docs: `docs/architecture/external-agents.md`

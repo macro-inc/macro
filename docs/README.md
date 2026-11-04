@@ -15,4 +15,7 @@ External chats: [architecture](architecture/external-chats.md), its WhatsApp
 provider ([linked devices](architecture/whatsapp-linked-devices.md)) and the
 [External view walkthrough](agent-guide/external.md).
 
+External agents (assistants outside Macro that people DM and mention):
+[architecture and integration contract](architecture/external-agents.md).
+
 Document sync: [DSS sync router](architecture/sync-router.md).

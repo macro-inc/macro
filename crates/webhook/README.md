@@ -176,6 +176,12 @@ Kafka messages are traced and skipped so they do not block a partition.
 
 ## Queue contract, deduplication, and ordering
 
+`crates/external_agents` also enqueues here: an external agent's endpoint is a
+webhook whose filter names `external_agent.message`, an event no broker topic
+carries, and the external agent inbox queues each of its events directly. The
+worker delivers them like any other event. Its validation requests share the
+per-user budget through `validate_webhook_rate_limit_key`.
+
 The versioned SQS message contains a webhook ID and a normalized event. The
 event retains the broker event ID, schema version, event name, entity type and
 ID, entity ordering key, ingestion timestamp, and complete broker envelope.

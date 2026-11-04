@@ -574,6 +574,20 @@ and [browser return page](media/pipedream/browser-return.png). The fixture uses
 the real UI and iframe messaging with simulated provider consent and native IPC;
 it does not exercise a real provider account or the operating system's app launch.
 
+Below it, `External agents` lists agents whose runtime lives outside Macro;
+they are left out of the `Agents` list. `Connect agent` opens an inline form
+(Name, `@tag`, optional `Webhook endpoint`, `Share with my team` when the
+viewer has a team). `Connect agent` registers it and replaces the form with a
+one-time credentials panel: `Bot token`, `Signing secret` (only with an
+endpoint), `Agent API`, and a `curl` reply example; `Done` returns to the
+list. Each row says how its events travel (`Polls for events`, `Pushes to
+<url>`, or `Endpoint not verified · <url>` in alert ink) and has `Message`
+(opens its DM), `Verify` (endpoints only; toasts `Endpoint verified` or the
+endpoint's status), a key button that mints a new token into the same
+panel, and delete with a confirmation dialog. To exercise the whole flow,
+run a local endpoint (see `docs/architecture/external-agents.md`), connect it,
+press `Message`, send a DM, and watch the agent's reply arrive in the DM.
+
 To change an agent's picture, open `Edit <name>`, choose an image with `Upload`,
 wait for `Uploading…` to finish, then click `Save changes`. Images up to 16 MB
 are uploaded to image storage; Save stays disabled during the upload. A failed

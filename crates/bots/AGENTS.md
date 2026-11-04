@@ -42,6 +42,9 @@ for bot mutations that channel bots, agent triggers, and memory build on.
 
 ## Gotchas
 
+- Agents on the `external` harness are registered by `crates/external_agents`,
+  which owns their token hand-off, endpoint, and inbox; no agent update moves
+  an agent onto or off that harness.
 - Kafka events key on the bot's bare UUID (no `bot|` prefix); `bot.updated`
   metadata describes the requested PATCH, not a full snapshot — an omitted
   field serializes as `null` (see `README.md`).
