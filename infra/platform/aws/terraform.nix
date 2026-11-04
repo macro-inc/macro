@@ -217,7 +217,7 @@ in
       }) cfg.agentCount)
     );
 
-    # Nodes read store paths from the binary cache and nothing else.
+    # Nodes pull images from ECR and read nothing else.
     resource.aws_iam_role.nodes = {
       name = "${cfg.cluster}-nodes";
       assume_role_policy = builtins.toJSON {
@@ -232,26 +232,9 @@ in
       };
       tags = common;
     };
-    resource.aws_iam_role_policy.nodes_cache = {
-      name = "binary-cache-read";
-      role = "\${aws_iam_role.nodes.id}";
-      policy = builtins.toJSON {
-        Version = "2012-10-17";
-        Statement = [
-          {
-            Effect = "Allow";
-            Action = [
-              "s3:GetObject"
-              "s3:GetBucketLocation"
-              "s3:ListBucket"
-            ];
-            Resource = [
-              "\${aws_s3_bucket.nix_cache.arn}"
-              "\${aws_s3_bucket.nix_cache.arn}/*"
-            ];
-          }
-        ];
-      };
+    resource.aws_iam_role_policy_attachment.nodes_ecr = {
+      role = "\${aws_iam_role.nodes.name}";
+      policy_arn = "arn:aws:iam::aws:policy/AmazonEC2ContainerRegistryReadOnly";
     };
     resource.aws_iam_instance_profile.nodes = {
       name = "${cfg.cluster}-nodes";
@@ -259,10 +242,6 @@ in
     };
 
     resource.aws_s3_bucket = {
-      nix_cache = {
-        bucket = "${cfg.cluster}-nix-cache";
-        tags = common;
-      };
       backups = {
         bucket = "${cfg.cluster}-backups";
         tags = common;
@@ -273,13 +252,6 @@ in
       versioning_configuration.status = "Enabled";
     };
     resource.aws_s3_bucket_public_access_block = {
-      nix_cache = {
-        bucket = "\${aws_s3_bucket.nix_cache.id}";
-        block_public_acls = true;
-        block_public_policy = true;
-        ignore_public_acls = true;
-        restrict_public_buckets = true;
-      };
       backups = {
         bucket = "\${aws_s3_bucket.backups.id}";
         block_public_acls = true;
@@ -342,7 +314,6 @@ in
     output = {
       server_ips.value = lib.genList (i: "\${aws_instance.server_${toString i}.public_ip}") cfg.serverCount;
       agent_ips.value = lib.genList (i: "\${aws_instance.agent_${toString i}.public_ip}") cfg.agentCount;
-      nix_cache_bucket.value = "\${aws_s3_bucket.nix_cache.bucket}";
       k3s_token = {
         value = "\${random_password.k3s_token.result}";
         sensitive = true;

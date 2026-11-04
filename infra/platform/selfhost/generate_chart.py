@@ -42,11 +42,10 @@ def component_of(item):
 
 def scrub_metadata(metadata):
     metadata.pop("namespace", None)
+    # Argo CD sync waves mean nothing without Argo CD; the chart orders the
+    # data plane with Helm hooks and readiness instead.
     metadata.pop("annotations", None)
     labels = metadata.get("labels", {})
-    for key in list(labels):
-        if key.startswith("kubenix/"):
-            del labels[key]
     if labels.get("macro.com/instance") == INSTANCE:
         labels["macro.com/instance"] = "{{ .Release.Name }}"
 

@@ -28,6 +28,61 @@ let
     ];
   };
 
+  # Jobs must reach the forge at the address in its ROOT_URL, which on a dev
+  # cluster resolves to loopback. Job containers map the name to this Service
+  # instead; hosted clusters have real DNS and do not need it.
+  ingressClusterIP = "10.43.9.43";
+
+  runnerImage = platformLib.image {
+    name = "forge-runner";
+    contents = [ pkgs.gitea-actions-runner ];
+    env.HOME = "/data";
+    entrypoint = [
+      "/bin/sh"
+      "-c"
+      ''
+        set -e
+        cd /data
+        # Registers once; the token only matters until `.runner` exists.
+        [ -f .runner ] || act_runner register --no-interactive \
+          --instance http://gitea-http:3000 --token "$REGISTRATION_TOKEN" \
+          --name "$POD_NAME" --labels ${runnerLabel}
+        until [ -S /var/run/docker.sock ]; do sleep 1; done
+        exec act_runner daemon --config ${runnerConfig}
+      ''
+    ];
+  };
+
+  # Each job gets a clean Ubuntu container like a hosted runner. A runner runs
+  # one job at a time because the job's Nix daemon owns the shared /nix volume;
+  # scale with `replicas`, each with its own Docker data and Nix store.
+  runnerLabel = "linux-ci:docker://catthehacker/ubuntu:act-24.04";
+  runnerConfig = pkgs.writeText "act-runner.yaml" (
+    builtins.toJSON {
+      log.level = "info";
+      runner = {
+        file = "/data/.runner";
+        capacity = 1;
+        timeout = "6h";
+        envs = {
+          GIT_SSL_CAINFO = "/macro-ca/ca.pem";
+          NODE_EXTRA_CA_CERTS = "/macro-ca/ca.pem";
+          SSL_CERT_FILE = "/macro-ca/ca-bundle.pem";
+        };
+        labels = [ runnerLabel ];
+      };
+      cache.enabled = true;
+      container = {
+        options = "--add-host=${forgeHost}:${ingressClusterIP} -v /macro-ca:/macro-ca:ro -v nix:/nix";
+        valid_volumes = [
+          "nix"
+          "/macro-ca"
+        ];
+        force_pull = false;
+      };
+    }
+  );
+
   # An ingress to one Service on the shared HTTPS port. `secretName` holds a
   # certificate naming only this host (`platform cluster` issues it): the
   # ingress picks certificates by SNI.
@@ -126,6 +181,18 @@ let
           }
         ];
       };
+      services.traefik.spec = {
+        clusterIP = ingressClusterIP;
+        selector.app = "traefik";
+        ports = [
+          {
+            name = "websecure";
+            port = 9443;
+            targetPort = traefikPort;
+            protocol = "TCP";
+          }
+        ];
+      };
       deployments.traefik.spec = {
         # One pod owns the host port; a rolling update would deadlock on it.
         strategy.type = "Recreate";
@@ -151,12 +218,113 @@ let
       };
     };
   };
+
+  forgeRunners = {
+    namespace = "forge";
+    resources.statefulSets.forge-runner.spec = {
+      serviceName = "forge-runner";
+      replicas = 2;
+      selector.matchLabels.app = "forge-runner";
+      volumeClaimTemplates = [
+        {
+          metadata.name = "data";
+          spec = {
+            accessModes = [ "ReadWriteOnce" ];
+            resources.requests.storage = "100Gi";
+          };
+        }
+      ];
+      template = {
+        metadata.labels.app = "forge-runner";
+        spec = {
+          containers = {
+            runner = {
+              image = runnerImage.ref;
+              env = [
+                {
+                  name = "POD_NAME";
+                  valueFrom.fieldRef.fieldPath = "metadata.name";
+                }
+                {
+                  name = "REGISTRATION_TOKEN";
+                  valueFrom.secretKeyRef = {
+                    name = "forge-runner-token";
+                    key = "token";
+                  };
+                }
+                {
+                  name = "DOCKER_HOST";
+                  value = "unix:///var/run/docker.sock";
+                }
+              ];
+              volumeMounts = [
+                {
+                  name = "data";
+                  mountPath = "/data";
+                  subPath = "runner";
+                }
+                {
+                  name = "docker-socket";
+                  mountPath = "/var/run";
+                }
+              ];
+            };
+            # The runner starts each job as a container in this daemon. It is
+            # the one privileged workload, confined to this namespace's runners.
+            docker = {
+              image = "docker:29-dind";
+              args = [
+                "--host=unix:///var/run/docker.sock"
+                "--group=0"
+              ];
+              env = [
+                {
+                  name = "DOCKER_TLS_CERTDIR";
+                  value = "";
+                }
+              ];
+              securityContext.privileged = true;
+              volumeMounts = [
+                {
+                  name = "data";
+                  mountPath = "/var/lib/docker";
+                  subPath = "docker";
+                }
+                {
+                  name = "docker-socket";
+                  mountPath = "/var/run";
+                }
+                {
+                  name = "macro-ca";
+                  mountPath = "/macro-ca";
+                  readOnly = true;
+                }
+              ];
+            };
+          };
+          volumes = [
+            {
+              name = "docker-socket";
+              emptyDir = { };
+            }
+            {
+              name = "macro-ca";
+              secret.secretName = "forge-ca";
+            }
+          ];
+        };
+      };
+    };
+  };
 in
 {
   images = {
     traefik = traefikImage;
   };
-  push = platformLib.pushImages { traefik = traefikImage; };
+  push = platformLib.pushImages {
+    traefik = traefikImage;
+    forge-runner = runnerImage;
+  };
 
   manifests = render {
     env = "cluster";
@@ -167,6 +335,7 @@ in
         {
           applications = {
             inherit traefik;
+            forge-runners = forgeRunners;
 
             argocd = {
               namespace = "argocd";

@@ -21,7 +21,10 @@ const FORGE_NAMESPACE: &str = "forge";
 const ARGOCD_NAMESPACE: &str = "argocd";
 const FORGE_ADMIN_SECRET: &str = "forge-admin";
 const FORGE_ADMIN_USER: &str = "platform-admin";
+const RUNNER_TOKEN_SECRET: &str = "forge-runner-token";
 const FORGE_ORG: &str = "platform";
+/// Where this repo is mirrored for CI.
+const SOURCE_REPO: &str = "macro";
 const DEPLOY_REPO: &str = "deploy";
 /// The deploy repo as Argo CD reaches it, inside the cluster.
 const DEPLOY_REPO_IN_CLUSTER: &str =
@@ -278,6 +281,7 @@ pub fn ensure_forge_repo(stage: &Stage, org: &str, repo: &str, private: bool) ->
 fn ensure_deploy_repo(stage: &Stage) -> Result<()> {
     wait_for_forge(stage)?;
     ensure_forge_repo(stage, FORGE_ORG, DEPLOY_REPO, true)?;
+    ensure_runner_secrets(stage)?;
     apply_items(
         stage,
         "deploy repo credential",
@@ -298,6 +302,63 @@ fn ensure_deploy_repo(stage: &Stage) -> Result<()> {
                 json!("repository");
             credential
         }],
+    )
+}
+
+/// What the forge's runners need before Argo CD starts them: a registration
+/// token and the development CA, which jobs trust to reach the forge.
+fn ensure_runner_secrets(stage: &Stage) -> Result<()> {
+    if read_secret(FORGE_NAMESPACE, RUNNER_TOKEN_SECRET, "token").is_err() {
+        let out = kubectl()
+            .args([
+                "-n",
+                FORGE_NAMESPACE,
+                "exec",
+                "deploy/gitea",
+                "-c",
+                "gitea",
+                "--",
+                "gitea",
+                "actions",
+                "generate-runner-token",
+            ])
+            .output()?;
+        ensure!(
+            out.status.success(),
+            "generating a runner token: {}",
+            String::from_utf8_lossy(&out.stderr)
+        );
+        apply_items(
+            stage,
+            "runner token",
+            &[secret(
+                FORGE_NAMESPACE,
+                RUNNER_TOKEN_SECRET,
+                "Opaque",
+                &[(
+                    "token".to_owned(),
+                    String::from_utf8(out.stdout)?.trim().to_owned(),
+                )]
+                .into(),
+            )],
+        )?;
+    }
+    let ca = std::fs::read_to_string(ca_file())?;
+    // Tools that replace the system roots still need the public ones.
+    let bundle = format!("{}\n{ca}", std::fs::read_to_string("/etc/ssl/certs/ca-bundle.crt")?);
+    apply_items(
+        stage,
+        "forge CA",
+        &[secret(
+            FORGE_NAMESPACE,
+            "forge-ca",
+            "Opaque",
+            &[
+                ("ca.pem".to_owned(), ca),
+                ("ca-bundle.pem".to_owned(), bundle),
+            ]
+            .into(),
+        )],
     )
 }
 
@@ -444,6 +505,49 @@ pub fn retract(stage: &Stage, env: &str) -> Result<String> {
         Ok(())
     })?;
     Ok(revision)
+}
+
+/// Mirror main and the current branch to the forge and open a pull request for
+/// the branch, which is what runs CI there. GitHub remains the source of truth.
+pub fn mirror(stage: &Stage) -> Result<()> {
+    let root = repo_root();
+    let branch = git(&root, &["rev-parse", "--abbrev-ref", "HEAD"])?;
+    ensure!(branch != "HEAD", "check out a branch to mirror");
+    ensure_forge_repo(stage, FORGE_ORG, SOURCE_REPO, true)?;
+    let url = forge_url(&format!("{FORGE_ORG}/{SOURCE_REPO}.git"));
+    stage.run_step("Pushing to the forge", || {
+        git(&root, &["fetch", "-q", "origin", "main"])?;
+        git(
+            &root,
+            &[
+                "push",
+                "-q",
+                "--force",
+                "--no-verify",
+                &url,
+                "FETCH_HEAD:refs/heads/main",
+                &format!("HEAD:refs/heads/{branch}"),
+            ],
+        )?;
+        Ok(())
+    })?;
+    if branch != "main" {
+        let status = forge_api(
+            "POST",
+            &format!("repos/{FORGE_ORG}/{SOURCE_REPO}/pulls"),
+            &json!({ "base": "main", "head": branch, "title": branch }),
+        )?;
+        // 409: this branch already has an open pull request.
+        ensure!(
+            matches!(status, 201 | 409),
+            "opening a pull request: HTTP {status}"
+        );
+    }
+    stage.note(&format!(
+        "ci: {}",
+        forge_url(&format!("{FORGE_ORG}/{SOURCE_REPO}/actions"))
+    ));
+    Ok(())
 }
 
 /// Syncs `apps/`, so adding or removing a file there adds or removes an

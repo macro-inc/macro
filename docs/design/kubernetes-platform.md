@@ -46,59 +46,87 @@ machine on 2026-11-03.
 
 ### Cluster: k3s on NixOS, everywhere
 
-- **Local:** a NixOS module in the big-pickle flake enables `services.k3s`
-  with the `nix` snapshotter. It runs beside the existing Docker daemon, with
+- **Local:** a NixOS module in the big-pickle flake enables `services.k3s` and
+  a loopback OCI registry. It runs beside the existing Docker daemon, with
   non-overlapping pod and service CIDRs and no host ports in Docker's ranges.
 - **AWS:** NixOS EC2 instances running the same k3s module, three servers with
   embedded etcd plus an agent pool. They are provisioned by OpenTofu (from
   terranix) and configured with `nixos-anywhere` and `colmena`.
-- **Why not EKS:** the image strategy below needs Nix on every node. EKS
-  managed nodes don't have it, and a custom NixOS node joining EKS would break
-  the "same distribution everywhere" goal. We accept running our own control
-  plane in exchange for exact local/prod parity.
-- **Evidence:** upstream k3s v1.35.4 ships the nix snapshotter built in
-  (`--snapshotter nix`). Tested in an isolated container against the host
-  store: the node became Ready, and a pod ran from a `nix:0/nix/store/...`
-  image reference.
+- **EKS is possible again:** the original reason to avoid it was that store-path
+  images needed Nix on every node, and that no longer applies. Nothing in the
+  platform now depends on the node's distribution. We keep k3s for local/prod
+  parity, but this is worth revisiting before the AWS phase.
 
-### Images: Nix store paths, not registries (nix-snapshotter)
+### Images: OCI images built by Nix, in a registry
 
-This is the "shared Nix store across all pods" project:
-[nix-snapshotter](https://github.com/pdtpartners/nix-snapshotter). An image is
-a tiny manifest that names store paths, and the node bind-mounts those paths
-from its own `/nix/store`.
+No Dockerfiles. Each component is a Nix package plus one `image` call
+(`infra/platform/lib.nix`), and the result is an ordinary OCI image in a
+registry. Any conformant cluster can run it, which is what self-hosting needs.
 
-- **Tested:**
-  - pull 99 ms, image size 1,487 bytes;
-  - a new build plus rollout of a running Deployment to the new image: 1.1 s
-    `nix build` and 1.9 s to Ready.
-- **Remote nodes** fetch missing paths from a binary cache, not a registry.
-  The cache is Attic or a plain S3 binary cache, hosted on the cluster's own
-  object store.
-- **No Dockerfiles.** Each service is a Nix package plus a `buildImage` call.
-  Third-party images (Postgres, Kafka, and so on) come from nixpkgs as well,
-  so nodes pull nothing from Docker Hub.
-- **Risk:** k3s issue #14393 reports `CreateContainer` failures for `nix:0`
-  images in some k3s builds, and the snapshotter is community-supported in k3s.
-  We pin a k3s version that passes our boot test. The fallback that keeps
-  everything else intact is `nix2container`: OCI images pushed with skopeo to
-  an in-cluster registry.
+Both Nix frameworks were measured pushing a real service (a 388 MB binary, a
+1.1 GiB closure) to a local registry:
 
-### Manifests: Nix modules (kubenix), rendered and applied per namespace
+| | Cold build + push | Rebuild + push after one change |
+| --- | --- | --- |
+| Official `dockerTools.streamLayeredImage` | 10.1 s + 19.1 s | 3.8 s + 17.0 s |
+| Community `nix2container` | 27.3 s + 54.4 s | **3.0 s + 5.9 s** |
 
-- Each service is one Nix module that emits its Kubernetes resources. Resource
-  options are typed by [kubenix](https://github.com/hall/kubenix).
-- An **instance** is `instances.<name> = { size = "local"; host = ...; }`. It
-  renders into namespace `macro-<name>`.
-- **Local and dev** apply rendered manifests directly with
-  `kubectl apply --server-side --prune` (seconds, no GitOps loop in the inner
-  path).
-- **Prod** uses [nixidy](https://github.com/arnarg/nixidy): the same modules,
-  rendered by CI, committed, and synced by Argo CD. Prod changes are reviewed
-  as YAML diffs.
+- **We use nix2container.** The rebuild loop is what we run all day, and it wins
+  there because it skips layers the registry already holds instead of streaming
+  the whole image. The official builder is simpler, ships in nixpkgs, and wins a
+  cold push. Switching means replacing one function.
+- **Layers are store paths,** so images share what they have in common across
+  services, in the registry and in containerd.
+- **Tags are store hashes,** known at eval time, so a manifest names an exact
+  build and nothing floats.
+- **The registry is outside the cluster:** Distribution (Apache-2.0) on loopback
+  locally, ECR or similar on AWS. It survives the cluster being rebuilt, and no
+  image has to exist before the cluster can start.
+- **Upstream images are fine for tools we do not modify.** Argo CD, Gitea, and
+  the Docker daemon for CI use their published images through their charts.
+  Macro's components, including third-party ones we configure, are built by Nix.
+- **Replaces nix-snapshotter,** which pulled in 99 ms but needed Nix on every
+  node, could not serve self-hosters, and was community-supported in k3s.
+
+### Manifests and delivery: nixidy and Argo CD
+
+- Each component is declared in Nix. [nixidy](https://github.com/arnarg/nixidy)
+  types the resources and renders plain YAML, one directory per Argo CD
+  Application. It replaces kubenix, which was experimental; nixidy generates its
+  own resource options from the Kubernetes API.
+- An **instance** renders into namespace `macro-<name>` as one Application.
+- **Every environment deploys the same way.** `cargo x platform` commits the
+  rendered YAML to `platform/deploy` in the forge. Argo CD syncs it, with automated
+  prune and self-heal. An instance exists because its directory is in git, and
+  `platform down` removes the directory.
+- **Sync waves give the order:** data plane, then the provisioning Job, then the
+  services. This replaces the apply order `cargo x platform` used to run itself.
+- **Secrets never enter the repo.** `platform up` applies them directly. External
+  Secrets replaces that in the AWS phase.
 - **Parity check:** CI renders the `local` and `prod` instances and diffs
   them. The only allowed differences are replicas, resources, storage sizes,
-  hostnames, and secret references. Any other difference fails the build.
+  hostnames, registry, and secret references. Any other difference fails the
+  build.
+
+### Forge and CI: Gitea
+
+- **Gitea** (MIT) hosts the deploy repo, a mirror of this repo, and CI. Forgejo
+  has the same features and Actions model but is GPL, which the permissive
+  license rule excludes. GitLab was too heavy for the job.
+- **GitHub stays the source of truth for now.** `cargo x platform mirror` pushes
+  main and the current branch and opens a pull request, which is what runs CI.
+  Moving the source of truth is a separate decision.
+- **CI is derived, not rewritten.** `cargo x workflows` generates `.gitea/workflows`
+  from the same Rust definitions as `.github/workflows`, rewriting the runner
+  label and dropping Namespace cache steps. Gitea reads `.gitea/workflows` instead
+  of `.github/workflows`, so the allowlist in `xtask_workflows/src/workflows/forge.rs`
+  is everything that can run there, and a test keeps deploys out of it.
+- **Runners** are `act_runner` beside a Docker daemon, one job at a time per
+  replica, each with its own Docker data and Nix store. Each job gets a clean
+  Ubuntu container, like a hosted runner.
+- **Not ported yet:** deploys and releases (they target AWS and should move with
+  the AWS phase, not before), native builds that need macOS or Windows, and GitHub
+  bots tied to GitHub itself (labels, CLA).
 
 ### Infrastructure as code: terranix + OpenTofu, operators in-cluster
 
@@ -205,30 +233,27 @@ move. The platform work does not wait on it.
 
 ### Fast iteration
 
-The inner loop: `just dev <service>`:
+The inner loop, `just platform dev <service>`:
 
-1. Build with Cargo, incrementally, using the shared target dir and mold (same
-   toolchain as the Nix build).
-2. Wrap the binary in a store path. A tiny derivation takes the built binary
-   as a path input and copies it to `$out`. Nix's reference scanner records
-   its glibc and OpenSSL dependencies, so the closure is complete. This costs
-   about 1 second; no crane rebuild of the workspace.
-3. `buildImage` → `nix:0/...`, then patch the one Deployment. About 2 seconds
-   measured (above).
+1. Build with Cargo, incrementally, using the shared target dir.
+2. Wrap the binary in a store path. A tiny derivation pins its loader and library
+   path and strips debug info, which is most of a debug build's size.
+3. Build the image and push it. Only the changed layer uploads.
+4. Render, commit to the deploy repo, and ask Argo CD to refresh. The one
+   Deployment whose image changed rolls.
 
-The cluster pulls nothing over the network locally, because the node is the
-build machine and shares its store. CI and prod build the same packages
-reproducibly with crane. The artifact shape (a store-path image run by the
-same manifest) is identical. Only the compile profile differs, and `just dev
---release` closes that gap when needed.
+@@ITERATION_NUMBERS@@
+
+CI and prod build the same packages reproducibly with crane. The artifact shape
+is identical. Only the compile profile differs.
 
 JS services (lexical, websocket) and celld fleets follow the same pattern: a
 store path per build, plus `celld deploy`, whose nodes adopt new versions
 without a restart.
 
 Never on the inner path: rebuilding other services, restarting infra,
-re-running migrations (they run as a Job only when the migrations directory
-changes).
+re-running migrations (the provisioning Job re-runs only when its image or the
+environment changes).
 
 ### Multiple instances per cluster
 
@@ -237,10 +262,11 @@ changes).
   Valkey, FusionAuth, and the celld fleets. There are no cluster-scoped
   resources, and no names outside the namespace.
 - **Per cluster:**
-  - in `platform-*` namespaces: the operators (CNPG, Strimzi, OpenSearch,
-    KEDA, External Secrets, cert-manager), Traefik, Istio (ambient), Argo CD, and the
-    CI runner controller;
-  - the binary cache.
+  - Traefik, Argo CD, the forge and its runners, in their own namespaces, deployed
+    by `cargo x platform cluster` and then managed by Argo CD;
+  - planned, as they land: the operators (CNPG, Strimzi, OpenSearch, KEDA, External
+    Secrets, cert-manager) and Istio (ambient);
+  - the image registry, outside the cluster.
 - **Hostnames:** `<instance>.<cluster domain>`, with wildcard DNS and
   certificate.
 - **Guardrails:** each instance gets a ResourceQuota from its size profile. A
@@ -249,14 +275,12 @@ changes).
 
 ### Self-hosting
 
-Customers run any conformant Kubernetes, without Nix on their nodes. The same
-component modules therefore emit a second, portable output; nothing is
+Customers run any conformant Kubernetes, without Nix on their nodes, and without
+Argo CD or the forge. The same component modules emit a Helm chart; nothing is
 maintained twice:
 
-- **Images:** each component's store-path image is also built as a regular
-  OCI image with `nix2container`, from the same store paths (same closure,
-  same entrypoint). Release CI pushes them to a public registry, tagged by
-  release. Our own clusters keep using `nix:0` references.
+- **Images:** the same OCI images our own clusters run. Release CI pushes them to
+  a public registry, tagged by release.
 - **Helm chart:** a release step renders an instance with placeholder values
   and turns the result into a chart (`macro`). Templated values: host and
   TLS, size profile (replicas, resources, storage), image registry and tag,
@@ -272,10 +296,7 @@ maintained twice:
 
 ### Auxiliary services
 
-- **CI runners:** GitHub Actions Runner Controller (`gha-runner-scale-set`,
-  Apache-2.0). Runners use Nix store-path images and the cluster binary cache,
-  and run Kubernetes-mode jobs. Image builds no longer need Docker-in-Docker,
-  because images are Nix builds.
+- **CI runners:** see [Forge and CI](#forge-and-ci-gitea).
 - **Cloudflare bot and site workers** (anthropic-status-bot, goalert-bot,
   stripe-payment-bot, cla-worker, sdk-docs) become celld fleets in a `platform-bots`
   instance.
@@ -283,9 +304,8 @@ maintained twice:
 
 ## Phases and acceptance
 
-1. **Machine.** The big-pickle flake gains the k3s and nix-snapshotter
-   module. Done when the node is Ready, Docker still works, and the
-   store-path pod boot test passes.
+1. **Machine.** The big-pickle flake gains the k3s and registry module. Done when
+   the node is Ready, Docker still works, and a Nix-built image runs in a pod.
 2. **Platform skeleton.** Nix modules for the operators, Traefik, and
    cert-manager, plus an `instance` module with the per-namespace data plane.
    Done when two empty instances start side by side, isolated by
@@ -299,12 +319,12 @@ maintained twice:
    RustFS, and OpenBao; email and push behind their ports; Lambdas to KEDA
    workers; Workers to celld. Done when
    the local E2E suite (`just local-e2e`) passes against an instance.
-5. **Aux.** ARC runners and the bots on the cluster.
+5. **Aux.** Gitea, its runners, and the bots on the cluster.
 6. **AWS.** terranix/OpenTofu for nodes and networking; the dev instance on
    AWS; the parity check in CI.
-7. **Self-hosting.** OCI images via nix2container, plus the generated Helm
-   chart, published per release. Done when the chart installs on a stock
-   cluster (k3s without the nix snapshotter, kind) and passes the E2E suite.
+7. **Self-hosting.** The OCI images plus the generated Helm chart, published per
+   release. Done when the chart installs on a stock
+   cluster (kind) and passes the E2E suite.
 8. **gRPC and splits.** Proceed boundary by boundary (runs in parallel from
    phase 3).
 9. **Prod cutover.** A separate plan for data migration (RDS → CNPG, DynamoDB
@@ -314,8 +334,7 @@ maintained twice:
 
 Built and exercised on the local cluster (`infra/platform`, `cargo x platform`):
 
-- **Phase 1:** k3s with the nix snapshotter on the machine, through a NixOS
-  module.
+- **Phase 1:** k3s and the image registry on the machine, through a NixOS module.
 - **Phase 2:** the instance module, ingress, per-instance TLS, and
   NetworkPolicy isolation; two instances verified side by side.
 - **Phase 3, for the core app:** every Rust service in the inventory, lexical,

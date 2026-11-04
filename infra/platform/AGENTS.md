@@ -6,19 +6,25 @@ Status: migrating to the target in
 ## What it is
 
 Macro on Kubernetes, declared in Nix. It covers the per-instance data plane,
-services, edge, and ingress, and runs on k3s with the nix snapshotter, so
-images are `nix:0/nix/store/...` references. `cargo x platform` (in
-`xtask_local/src/local/platform.rs`) runs instances on the local cluster.
+services, and edge, plus what a cluster runs once: the ingress, Argo CD, and a
+Gitea forge with CI runners. Nix builds OCI images (nix2container) and renders
+manifests (nixidy); `cargo x platform` (in `xtask_local/src/local/platform.rs`
+and `platform/gitops.rs`) pushes the images and commits the manifests to the
+deploy repo, which Argo CD syncs.
 
 ## How it works
 
 - `default.nix`: `instance { name, host, binaries, frontend, node, ... }`
-  renders one namespace with kubenix; `cluster` renders the ingress.
+  renders one namespace as a nixidy environment; `push` builds a script that
+  pushes its images.
+- `cluster.nix`: the cluster-wide environment. `traefik` is declared here; Argo
+  CD and Gitea are upstream Helm charts with pinned hashes.
 - `components.nix`: every workload. Service names and ports match the hosts
   in the code-defined env (`xtask_local` `local_env.rs`), so services need no
   platform-specific config.
-- `lib.nix`: store-path images (`image`), the workload → Deployment/Service/
-  PVC translation, and `wrapBinary` for host-built Cargo binaries.
+- `lib.nix`: OCI images (`image`, `pushImages`), the workload → Deployment/
+  Service/PVC translation with sync waves, and `wrapBinary` for host-built Cargo
+  binaries.
 - `packages.nix`: components nixpkgs lacks (RustFS, celld, ExtendDB,
   local-kms, FusionAuth).
 - `instances.nix`: size profiles, the only thing allowed to differ between
@@ -28,7 +34,7 @@ images are `nix:0/nix/store/...` references. `cargo x platform` (in
 
 - `components.nix`, then `lib.nix` `workloadResources`.
 - `tooling/xtask/crates/xtask_local/src/local/platform.rs`: what `up` and
-  `dev` do around Nix (Secrets, host builds, apply order, provisioning).
+  `dev` do around Nix (Secrets, host builds, publishing).
 
 ## Recipes
 
@@ -36,9 +42,14 @@ images are `nix:0/nix/store/...` references. `cargo x platform` (in
   `https://<name>.localhost:9443/app/`. Login codes are at `/mailpit/`.
 - Change one service: `just platform dev <workload>` rebuilds only that
   binary and rolls only its pod.
+- Run CI on this branch: `cargo x platform mirror`, then open
+  `https://git.localhost:9443/platform/macro/actions`. Port a workflow by adding
+  it to `xtask_workflows/src/workflows/forge.rs`; never add one that deploys.
+- See what is deployed: `https://argocd.localhost:9443/` (user `admin`; password
+  in `argocd-initial-admin-secret`). The forge login is in `forge/forge-admin`.
 - Add a workload: add it to `components.nix`, using a Service name that matches
   what `local_env.rs` dials. Mark data-plane pieces `infra = true` so they
-  start before provisioning.
+  sync before provisioning (`wave` overrides the default).
 - Change routes: edit the inventory or `proxy.rs`, then run
   `cargo x platform caddyfile`. `generated/Caddyfile` is checked in and
   tested.
@@ -46,18 +57,17 @@ images are `nix:0/nix/store/...` references. `cargo x platform` (in
 ## Checks
 
 - `cargo test -p xtask_local --features local-stack platform`
-- Build every image:
-  `nix build --impure --expr '... f.platform.instance { ... }'` (see `nix_build`
-  in `platform.rs`). The flake reads only git-tracked files, so `git add` new
-  files first.
+- `cargo x workflows --check`, for `.gitea/workflows`.
+- Render an environment: `nix build --impure --expr '... f.platform.cluster.manifests'`
+  (see `nix_build` in `platform.rs`). The flake reads only git-tracked files, so
+  `git add` new files first.
 
 ## Gotchas
 
-- Images cannot ship `/etc/passwd`: containerd refuses the store-path
-  symlinks. `lib.nix` provides an account at runtime through `nss_wrapper`.
-- Store-path roots are read-only. Each pod gets an emptyDir at `/tmp`, and
-  anything that writes beside its install (FusionAuth, OpenSearch) is
-  redirected there.
+- Workloads that set `user` must use uid 1000, the only non-root account images
+  ship in `/etc/passwd`.
+- Each pod gets an emptyDir at `/tmp`. FusionAuth and OpenSearch write beside
+  their install in the store, so they are redirected there.
 - `/tmp` survives container restarts within a pod, so entrypoints must be
   idempotent.
 - `macro_queues` local defaults are bare names, which LocalStack accepts and
@@ -72,3 +82,12 @@ images are `nix:0/nix/store/...` references. `cargo x platform` (in
   instance, kept in `macro-env`; never commit one.
 - Certificates name only their instance's host: the shared ingress picks by
   SNI, and a wildcard entry would serve one instance's certificate for another.
+- Argo CD waits on health before each sync wave, so an Ingress needs an address:
+  Traefik publishes `127.0.0.1` for that. A resource stuck `Progressing` blocks
+  every later wave.
+- Editing a resource with `kubectl` does not stick: self-heal reverts it. Change
+  the Nix and republish.
+- The pool's free space counts as dataset size on ZFS, so kubelet percentage
+  thresholds misfire on a shared pool. big-pickle sets absolute ones.
+- CI jobs reach the forge through a fixed ClusterIP on the ingress Service, mapped
+  with `--add-host`, because `git.localhost` is loopback.

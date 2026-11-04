@@ -10,11 +10,10 @@ def deployment():
         "metadata": {
             "name": "email-service",
             "namespace": "macro-selfhost",
-            "annotations": {"kubenix/project-name": "kubenix"},
+            "annotations": {"argocd.argoproj.io/sync-wave": "-2"},
             "labels": {
                 "app.kubernetes.io/name": "email-service",
                 "macro.com/instance": "selfhost",
-                "kubenix/hash": "x",
             },
         },
         "spec": {
@@ -52,7 +51,7 @@ class Chart(unittest.TestCase):
             text,
         )
         self.assertIn('{{ .Release.Name }}', text)
-        self.assertNotIn("kubenix", text)
+        self.assertNotIn("argocd", text)
         self.assertNotIn("macro-selfhost", text)
         self.assertTrue(text.startswith('---\n{{- if not (has "email-service"'))
 

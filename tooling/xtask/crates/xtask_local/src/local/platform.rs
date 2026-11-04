@@ -59,6 +59,8 @@ pub enum PlatformCmd {
     Down(NameArg),
     /// Create or update what the cluster runs once: ingress, Argo CD, the forge.
     Cluster,
+    /// Push main and this branch to the forge and open a pull request (runs CI).
+    Mirror,
     /// Regenerate the checked-in edge Caddyfile from the service inventory.
     Caddyfile,
     /// Seed an instance and run the local E2E suites against it.
@@ -135,6 +137,7 @@ pub fn run(cmd: PlatformCmd) -> Result<()> {
         PlatformCmd::Dev(args) => dev(&args),
         PlatformCmd::Down(args) => down(&args),
         PlatformCmd::Cluster => cluster(&Stage::from_env_cli(false)),
+        PlatformCmd::Mirror => gitops::mirror(&Stage::from_env_cli(false)),
         PlatformCmd::Caddyfile => {
             let path = repo_root().join(CADDYFILE);
             std::fs::write(&path, caddyfile())?;
