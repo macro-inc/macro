@@ -237,6 +237,18 @@ fn a_change_holds_until_the_last_changed_event_is_over() {
 }
 
 #[test]
+fn a_change_subject_holds_until_the_last_saved_event_is_over() {
+    let mut later = invite(InvitationMethod::Request, 0);
+    later.end = zoned("2026-11-09T11:00:00-05:00");
+    assert_eq!(
+        CalendarPart::from_saved(&[invite(InvitationMethod::Request, 0), later], received()),
+        Some(CalendarPart::NewInvite {
+            until: Utc.with_ymd_and_hms(2026, 11, 9, 16, 0, 0).unwrap()
+        })
+    );
+}
+
+#[test]
 fn a_change_uses_the_events_end_else_its_start() {
     let mut no_end = invite(InvitationMethod::Cancel, 0);
     no_end.end = None;
