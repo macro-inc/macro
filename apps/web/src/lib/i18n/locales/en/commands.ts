@@ -6,7 +6,7 @@ export default {
   openCategory: 'Open category',
   openCategoryNamed: 'Open {{category}}',
   createNewSplit: 'Create new split',
-  toggleSettings: 'Toggle settings',
+  toggleSettings: 'Go to Settings',
   account: 'Account',
   logout: 'Logout',
   mcpSetup: 'MCP setup',
