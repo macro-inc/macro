@@ -77,6 +77,7 @@ struct SequenceRecord {
     name: String,
     link_id: Option<Uuid>,
     footer: String,
+    weekdays_only: bool,
     status: String,
     steps: Json<Vec<Step>>,
     version: i32,
@@ -92,6 +93,7 @@ impl TryFrom<SequenceRecord> for Sequence {
             name: record.name,
             link_id: record.link_id,
             footer: record.footer,
+            weekdays_only: record.weekdays_only,
             status: parse(&record.status, "sequence status")?,
             steps: record.steps.0,
             version: record.version,
@@ -119,6 +121,7 @@ struct EnrollmentRecord {
     attempts: i16,
     timezone: String,
     send_time: NaiveTime,
+    weekdays_only: bool,
     replies_after: Option<DateTime<Utc>>,
 }
 
@@ -144,6 +147,7 @@ impl TryFrom<EnrollmentRecord> for EnrollmentRow {
             clock: SendClock {
                 timezone: parse(&record.timezone, "time zone")?,
                 send_time: record.send_time,
+                weekdays_only: record.weekdays_only,
             },
             replies_after: record.replies_after,
         })
@@ -317,7 +321,7 @@ impl SequenceRepo for PgSequenceRepo {
     async fn sequence(&self, owner: &Owner, id: Uuid) -> Result<Option<Sequence>, PgSequenceError> {
         sqlx::query_as!(
             SequenceRecord,
-            r#"SELECT id, name, link_id, footer, status, steps AS "steps: Json<Vec<Step>>", version, created_at, updated_at
+            r#"SELECT id, name, link_id, footer, weekdays_only, status, steps AS "steps: Json<Vec<Step>>", version, created_at, updated_at
                FROM email_sequences WHERE id = $1 AND user_id = $2 AND team_id = $3"#,
             id,
             owner.user_id,
@@ -346,7 +350,7 @@ impl SequenceRepo for PgSequenceRepo {
             SequenceRecord,
             r#"INSERT INTO email_sequences (id, team_id, user_id, link_id, name, footer, steps)
                VALUES ($1, $2, $3, $4, $5, $6, $7)
-               RETURNING id, name, link_id, footer, status, steps AS "steps: Json<Vec<Step>>", version, created_at, updated_at"#,
+               RETURNING id, name, link_id, footer, weekdays_only, status, steps AS "steps: Json<Vec<Step>>", version, created_at, updated_at"#,
             macro_uuid::generate_uuid_v7(),
             owner.team_id,
             owner.user_id,
@@ -370,7 +374,7 @@ impl SequenceRepo for PgSequenceRepo {
         let record = if share {
             sqlx::query_as!(
                 SequenceRecord,
-                r#"SELECT id, name, link_id, footer, status, steps AS "steps: Json<Vec<Step>>", version, created_at, updated_at
+                r#"SELECT id, name, link_id, footer, weekdays_only, status, steps AS "steps: Json<Vec<Step>>", version, created_at, updated_at
                    FROM email_sequences WHERE id = $1 AND user_id = $2 AND team_id = $3 FOR SHARE"#,
                 id,
                 owner.user_id,
@@ -381,7 +385,7 @@ impl SequenceRepo for PgSequenceRepo {
         } else {
             sqlx::query_as!(
                 SequenceRecord,
-                r#"SELECT id, name, link_id, footer, status, steps AS "steps: Json<Vec<Step>>", version, created_at, updated_at
+                r#"SELECT id, name, link_id, footer, weekdays_only, status, steps AS "steps: Json<Vec<Step>>", version, created_at, updated_at
                    FROM email_sequences WHERE id = $1 AND user_id = $2 AND team_id = $3 FOR UPDATE"#,
                 id,
                 owner.user_id,
@@ -403,15 +407,16 @@ impl SequenceRepo for PgSequenceRepo {
             SequenceRecord,
             r#"UPDATE email_sequences
                SET name = $2, link_id = $3, footer = $4, status = $5, steps = $6,
-                   version = version + 1, updated_at = now()
+                   weekdays_only = $7, version = version + 1, updated_at = now()
                WHERE id = $1
-               RETURNING id, name, link_id, footer, status, steps AS "steps: Json<Vec<Step>>", version, created_at, updated_at"#,
+               RETURNING id, name, link_id, footer, weekdays_only, status, steps AS "steps: Json<Vec<Step>>", version, created_at, updated_at"#,
             sequence.id,
             sequence.name,
             sequence.link_id,
             sequence.footer,
             status,
             Json(&sequence.steps) as _,
+            sequence.weekdays_only,
         )
         .fetch_one(&mut **tx)
         .await?
@@ -435,7 +440,7 @@ impl SequenceRepo for PgSequenceRepo {
             r#"SELECT e.id, s.user_id AS owner_id, e.team_id, s.status AS sequence_status,
                       s.link_id AS sequence_link_id, e.link_id, e.email, e.crm_contact_id, e.contact_name,
                       '[]'::jsonb AS "steps!: Json<Vec<Step>>", e.status, e.reason, e.next_step, e.due_at,
-                      e.attempts, e.timezone, e.send_time, e.replies_after
+                      e.attempts, e.timezone, e.send_time, s.weekdays_only, e.replies_after
                FROM email_sequence_enrollments e JOIN email_sequences s ON s.id = e.sequence_id
                WHERE e.sequence_id = $1 AND e.status = ANY($2)
                ORDER BY e.id
@@ -568,7 +573,7 @@ impl SequenceRepo for PgSequenceRepo {
                 r#"SELECT e.id, s.user_id AS owner_id, e.team_id, s.status AS sequence_status,
                           s.link_id AS sequence_link_id, e.link_id, e.email, e.crm_contact_id, e.contact_name,
                           e.steps AS "steps: Json<Vec<Step>>", e.status, e.reason, e.next_step, e.due_at,
-                          e.attempts, e.timezone, e.send_time, e.replies_after
+                          e.attempts, e.timezone, e.send_time, s.weekdays_only, e.replies_after
                    FROM email_sequence_enrollments e JOIN email_sequences s ON s.id = e.sequence_id
                    WHERE e.id = $1
                    FOR UPDATE OF e SKIP LOCKED"#,
@@ -582,7 +587,7 @@ impl SequenceRepo for PgSequenceRepo {
                 r#"SELECT e.id, s.user_id AS owner_id, e.team_id, s.status AS sequence_status,
                           s.link_id AS sequence_link_id, e.link_id, e.email, e.crm_contact_id, e.contact_name,
                           e.steps AS "steps: Json<Vec<Step>>", e.status, e.reason, e.next_step, e.due_at,
-                          e.attempts, e.timezone, e.send_time, e.replies_after
+                          e.attempts, e.timezone, e.send_time, s.weekdays_only, e.replies_after
                    FROM email_sequence_enrollments e JOIN email_sequences s ON s.id = e.sequence_id
                    WHERE e.id = $1
                    FOR UPDATE OF e"#,
@@ -941,6 +946,24 @@ impl SequenceRepo for PgSequenceRepo {
         .execute(&self.pool)
         .await?
         .rows_affected())
+    }
+
+    async fn steps_since(
+        &self,
+        tx: &mut Self::Tx,
+        link_id: Uuid,
+        since: DateTime<Utc>,
+    ) -> Result<u32, PgSequenceError> {
+        let count = sqlx::query_scalar!(
+            r#"SELECT count(*) AS "count!" FROM email_sequence_steps h
+               JOIN email_sequence_enrollments e ON e.id = h.enrollment_id
+               WHERE e.link_id = $1 AND h.scheduled_at > $2"#,
+            link_id,
+            since,
+        )
+        .fetch_one(&mut **tx)
+        .await?;
+        Ok(u32::try_from(count).unwrap_or(u32::MAX))
     }
 
     async fn defer(

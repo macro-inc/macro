@@ -30,4 +30,7 @@ export interface Sequence {
   updatedAt: string;
   /** Incremented by every change; edits must name the version they saw. */
   version: number;
+  /** Steps never go out on a Saturday or Sunday in the time zone people
+were added in; they go the Monday after. */
+  weekdaysOnly: boolean;
 }

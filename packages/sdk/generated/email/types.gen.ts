@@ -1121,7 +1121,8 @@ export type EnrollRequest = {
      */
     crmContactIds: Array<string>;
     /**
-     * When the first step should go; also fixes the local send time.
+     * When the first step should go; also fixes the local send time. In a
+     * weekdays-only sequence, a weekend start goes the Monday after.
      */
     start: string;
     /**
@@ -2086,6 +2087,11 @@ export type Sequence = {
      * Incremented by every change; edits must name the version they saw.
      */
     version: number;
+    /**
+     * Steps never go out on a Saturday or Sunday in the time zone people
+     * were added in; they go the Monday after.
+     */
+    weekdaysOnly: boolean;
 };
 
 /**
@@ -2236,6 +2242,8 @@ export type Step = {
     body: string;
     /**
      * Calendar days after the previous step, at the enrollment's send time.
+     * In a weekdays-only sequence, a step that lands on a weekend goes the
+     * Monday after.
      */
     delayDays: number;
     /**
@@ -2399,6 +2407,10 @@ export type UpdateSequenceRequest = {
      * The version the caller last read.
      */
     version: number;
+    /**
+     * Whether steps skip weekends.
+     */
+    weekdaysOnly?: boolean | null;
 };
 
 /**

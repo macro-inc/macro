@@ -47,7 +47,7 @@ export function insertToken(
 /** What the editor changes: everything but status and version. */
 export type SequenceDraft = Pick<
   Sequence,
-  'name' | 'linkId' | 'footer' | 'steps'
+  'name' | 'linkId' | 'footer' | 'weekdaysOnly' | 'steps'
 >;
 
 /** A sequence changes only while it is not sending. */
@@ -75,6 +75,7 @@ export function toDraft(sequence: SequenceDraft): SequenceDraft {
     name: sequence.name,
     linkId: sequence.linkId ?? null,
     footer: sequence.footer,
+    weekdaysOnly: sequence.weekdaysOnly,
     steps: normalizeSteps(sequence.steps),
   };
 }
@@ -103,6 +104,9 @@ export function draftChanges(
     ...(draft.name !== base.name && { name: draft.name }),
     ...((draft.linkId ?? null) !== base.linkId && { linkId: draft.linkId }),
     ...(draft.footer !== base.footer && { footer: draft.footer }),
+    ...(draft.weekdaysOnly !== base.weekdaysOnly && {
+      weekdaysOnly: draft.weekdaysOnly,
+    }),
     ...(JSON.stringify(steps) !== JSON.stringify(base.steps) && { steps }),
   };
   return Object.keys(changes).length ? changes : undefined;

@@ -14,6 +14,7 @@ const SEQUENCE: Sequence = {
   name: 'Intro',
   linkId: 'link',
   footer: '',
+  weekdaysOnly: true,
   status: 'draft',
   steps: [{ delayDays: 0, subject: 'Hello', body: 'Hi', asReply: false }],
   version: 3,

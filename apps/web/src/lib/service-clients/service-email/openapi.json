@@ -6415,7 +6415,7 @@
           "start": {
             "type": "string",
             "format": "date-time",
-            "description": "When the first step should go; also fixes the local send time."
+            "description": "When the first step should go; also fixes the local send time. In a\nweekdays-only sequence, a weekend start goes the Monday after."
           },
           "timezone": {
             "type": "string",
@@ -8210,6 +8210,7 @@
           "id",
           "name",
           "footer",
+          "weekdaysOnly",
           "status",
           "steps",
           "version",
@@ -8260,6 +8261,10 @@
             "type": "integer",
             "format": "int32",
             "description": "Incremented by every change; edits must name the version they saw."
+          },
+          "weekdaysOnly": {
+            "type": "boolean",
+            "description": "Steps never go out on a Saturday or Sunday in the time zone people\nwere added in; they go the Monday after."
           }
         }
       },
@@ -8467,7 +8472,7 @@
           "delayDays": {
             "type": "integer",
             "format": "int32",
-            "description": "Calendar days after the previous step, at the enrollment's send time.",
+            "description": "Calendar days after the previous step, at the enrollment's send time.\nIn a weekdays-only sequence, a step that lands on a weekend goes the\nMonday after.",
             "minimum": 0
           },
           "subject": {
@@ -8850,6 +8855,10 @@
             "type": "integer",
             "format": "int32",
             "description": "The version the caller last read."
+          },
+          "weekdaysOnly": {
+            "type": ["boolean", "null"],
+            "description": "Whether steps skip weekends."
           }
         }
       },

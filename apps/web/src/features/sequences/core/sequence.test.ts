@@ -79,6 +79,7 @@ describe('draft changes', () => {
     name: 'Intro',
     linkId: 'link',
     footer: '',
+    weekdaysOnly: true,
     status: 'draft',
     steps: [
       { delayDays: 0, subject: 'Hello', body: 'Hi', asReply: false },
@@ -94,6 +95,9 @@ describe('draft changes', () => {
     expect(
       draftChanges(sequence, { ...toDraft(sequence), name: 'Welcome' })
     ).toEqual({ name: 'Welcome' });
+    expect(
+      draftChanges(sequence, { ...toDraft(sequence), weekdaysOnly: false })
+    ).toEqual({ weekdaysOnly: false });
   });
 
   it('never sends a reply as the first email', () => {

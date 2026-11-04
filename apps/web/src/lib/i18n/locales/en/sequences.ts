@@ -78,6 +78,7 @@ export default {
   addEmail: 'Add email',
   footer: 'Footer',
   footerPlaceholder: 'A line under every email, such as your company address',
+  weekdaysOnly: 'Only send on weekdays',
 
   // Enrollments
   noEnrollments: 'No one added yet',

@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "SELECT id, name, link_id, footer, status, steps AS \"steps: Json<Vec<Step>>\", version, created_at, updated_at\n               FROM email_sequences WHERE id = $1 AND user_id = $2 AND team_id = $3",
+  "query": "SELECT id, name, link_id, footer, weekdays_only, status, steps AS \"steps: Json<Vec<Step>>\", version, created_at, updated_at\n                   FROM email_sequences WHERE id = $1 AND user_id = $2 AND team_id = $3 FOR SHARE",
   "describe": {
     "columns": [
       {
@@ -25,26 +25,31 @@
       },
       {
         "ordinal": 4,
+        "name": "weekdays_only",
+        "type_info": "Bool"
+      },
+      {
+        "ordinal": 5,
         "name": "status",
         "type_info": "Text"
       },
       {
-        "ordinal": 5,
+        "ordinal": 6,
         "name": "steps: Json<Vec<Step>>",
         "type_info": "Jsonb"
       },
       {
-        "ordinal": 6,
+        "ordinal": 7,
         "name": "version",
         "type_info": "Int4"
       },
       {
-        "ordinal": 7,
+        "ordinal": 8,
         "name": "created_at",
         "type_info": "Timestamptz"
       },
       {
-        "ordinal": 8,
+        "ordinal": 9,
         "name": "updated_at",
         "type_info": "Timestamptz"
       }
@@ -65,8 +70,9 @@
       false,
       false,
       false,
+      false,
       false
     ]
   },
-  "hash": "bce3f4d5edc4a6f89867f55865fba87cade2e318ed5e9c412e6869c68188b327"
+  "hash": "c5d066af36ac80b4b9ff4b8fa5bafb235017c7620d627d76f62b273190c7defb"
 }
