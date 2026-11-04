@@ -89,7 +89,7 @@ pub fn is_dismissive_reply(text: &str) -> bool {
 
 /// Whether a message only ends the exchange, so nobody owes a reply to it:
 /// a brush-off, or a short acknowledgement with no question in it.
-pub fn is_closing_reply(text: &str) -> bool {
+pub(super) fn is_closing_reply(text: &str) -> bool {
     if is_dismissive_reply(text) {
         return true;
     }

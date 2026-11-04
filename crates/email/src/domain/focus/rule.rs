@@ -69,7 +69,7 @@ fn has_subject_prefix(subject: &str, prefixes: &[&str]) -> bool {
 }
 
 /// The calendar notice a subject reads as, e.g. "Accepted: Demo @ Fri" is an RSVP.
-pub fn calendar_notice_in_subject(subject: &str) -> Option<CalendarNotice> {
+pub(super) fn calendar_notice_in_subject(subject: &str) -> Option<CalendarNotice> {
     let subject = subject.to_lowercase();
     if has_subject_prefix(&subject, &RSVP_PREFIXES) {
         return Some(CalendarNotice::Rsvp);

@@ -20,7 +20,7 @@ mod rule;
 mod service;
 mod signals;
 
-pub use input::{is_closing_reply, is_dismissive_reply, new_text};
+pub use input::{is_dismissive_reply, new_text};
 pub use models::{
     CalendarNotice, CalendarPart, FocusAnswers, FocusCategory, FocusInbox, FocusMail, FocusMessage,
     FocusRecord, FocusSignals, FocusThread, FocusVerdict, SentNote, StaleThread,
@@ -28,5 +28,5 @@ pub use models::{
 };
 pub use ports::{FocusClassifier, FocusClassifierError, FocusStore, ProfileSource};
 pub use questions::{FOCUS_QUESTIONS, FocusQuestion};
-pub use rule::{FOCUS_RULE_VERSION, calendar_notice_in_subject, decide};
+pub use rule::{FOCUS_RULE_VERSION, decide};
 pub use service::{ClassifyOutcome, FocusQueries, FocusService, SweepReport};
