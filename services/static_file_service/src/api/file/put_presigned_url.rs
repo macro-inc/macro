@@ -18,6 +18,7 @@ use uuid::Uuid;
   request_body = PutFileRequest,
   responses(
     (status = 200, body=PutFileResponse),
+    (status = 400, body=String),
     (status = 401, body=String),
     (status = 500, body=String),
   ),
@@ -28,6 +29,14 @@ pub async fn put_presigned_url(
     user: MacroAuthorizationExtractor<AuthorizationService, UserOrInternal>,
     Json(request): Json<PutFileRequest>,
 ) -> Result<Response, Response> {
+    // Checked before any metadata is written, so a rejected request leaves no row.
+    if request
+        .content_length
+        .is_some_and(|length| i64::try_from(length).is_err())
+    {
+        return Err((StatusCode::BAD_REQUEST, "content length is out of range").into_response());
+    }
+
     let content_type = if let Some(content_type) = request.content_type {
         Ok(content_type)
     } else {
