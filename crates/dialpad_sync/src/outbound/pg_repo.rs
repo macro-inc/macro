@@ -73,7 +73,7 @@ impl SyncRepository for PgSyncRepository {
     async fn by_id(&self, id: Uuid) -> Result<Option<Connection>> {
         let row = sqlx::query!(
             r#"SELECT id, namespace, user_id, enabled, dialpad_user_id, webhook_id, subscription_id,
-                signing_secret, backfill_since, backfill_cursor, enrolled_at, last_synced_at, last_error
+                signing_secret, setup_started_at, backfill_since, backfill_cursor, enrolled_at, last_synced_at, last_error
             FROM dialpad_sync_connections WHERE id = $1"#,
             id
         )
@@ -87,6 +87,7 @@ impl SyncRepository for PgSyncRepository {
             namespace: row.namespace,
             user_id: MacroUserIdStr::parse_from_str(&row.user_id)?.into_owned(),
             enabled: row.enabled,
+            setup_lease: row.setup_started_at.map(SetupLease),
             dialpad_user_id: row.dialpad_user_id.map(DialpadId),
             registration: row
                 .webhook_id
@@ -156,22 +157,27 @@ impl SyncRepository for PgSyncRepository {
         self.ids(ids).await
     }
 
-    async fn begin_setup(&self, id: Uuid, secret: &SigningSecret) -> Result<Option<SetupLease>> {
-        let sealed = self.seal(id, secret)?;
+    async fn begin_setup(
+        &self,
+        connection: &Connection,
+        secret: &SigningSecret,
+    ) -> Result<Option<SetupLease>> {
+        let sealed = self.seal(connection.id, secret)?;
         let started = sqlx::query_scalar!(
             r#"UPDATE dialpad_sync_connections
             SET setup_started_at = now(), signing_secret = $2, last_error = NULL
-            WHERE id = $1 AND NOT enabled
+            WHERE id = $1 AND NOT enabled AND enrolled_at = $6
                 AND (setup_started_at IS NULL
                     OR setup_started_at < now() - make_interval(secs => $3))
                 AND (last_error IS NULL
                     OR (last_error = $4 AND setup_started_at < now() - make_interval(secs => $5)))
             RETURNING setup_started_at AS "setup_started_at!""#,
-            id,
+            connection.id,
             sealed,
             SETUP_LEASE_SECONDS,
             SyncIssue::SetupFailed.as_ref(),
-            SETUP_RETRY_SECONDS
+            SETUP_RETRY_SECONDS,
+            connection.enrolled_at
         )
         .fetch_optional(&self.pool)
         .await?;
@@ -202,57 +208,78 @@ impl SyncRepository for PgSyncRepository {
         Ok(changed == 1)
     }
 
-    async fn stop(&self, id: Uuid, issue: SyncIssue) -> Result<()> {
-        let mut tx = self.pool.begin().await?;
+    async fn failed_setup(&self, id: Uuid, lease: SetupLease) -> Result<()> {
         sqlx::query!(
-            "UPDATE dialpad_sync_connections SET enabled = false, last_error = $2 WHERE id = $1",
+            r#"WITH failed AS (
+                UPDATE dialpad_sync_connections SET last_error = $3
+                WHERE id = $1 AND NOT enabled AND setup_started_at = $2 AND last_error IS NULL
+                RETURNING id
+            )
+            DELETE FROM dialpad_sync_events
+            WHERE connection_id IN (SELECT id FROM failed) AND completed_at IS NULL"#,
             id,
-            issue.as_ref()
-        )
-        .execute(tx.as_mut())
-        .await?;
-        sqlx::query!(
-            "DELETE FROM dialpad_sync_events WHERE connection_id = $1 AND completed_at IS NULL",
-            id
-        )
-        .execute(tx.as_mut())
-        .await?;
-        tx.commit().await?;
-        Ok(())
-    }
-
-    async fn flag(&self, id: Uuid, issue: SyncIssue) -> Result<()> {
-        sqlx::query!(
-            "UPDATE dialpad_sync_connections SET last_error = $2 WHERE id = $1 AND enabled",
-            id,
-            issue.as_ref()
+            lease.0,
+            SyncIssue::SetupFailed.as_ref()
         )
         .execute(&self.pool)
         .await?;
         Ok(())
     }
 
-    async fn disconnect(&self, id: Uuid, unregistered: bool) -> Result<()> {
-        let mut tx = self.pool.begin().await?;
+    async fn stop(&self, connection: &Connection, issue: SyncIssue) -> Result<()> {
         sqlx::query!(
-            r#"UPDATE dialpad_sync_connections
-            SET enabled = false, last_error = $2, setup_started_at = NULL,
-                webhook_id = CASE WHEN $3 THEN NULL ELSE webhook_id END,
-                subscription_id = CASE WHEN $3 THEN NULL ELSE subscription_id END
-            WHERE id = $1"#,
-            id,
+            r#"WITH stopped AS (
+                UPDATE dialpad_sync_connections SET enabled = false, last_error = $2
+                WHERE id = $1 AND enrolled_at = $3 AND enabled = $4
+                    AND setup_started_at IS NOT DISTINCT FROM $5
+                    AND last_error IS NOT DISTINCT FROM $6
+                RETURNING id
+            )
+            DELETE FROM dialpad_sync_events
+            WHERE connection_id IN (SELECT id FROM stopped) AND completed_at IS NULL"#,
+            connection.id,
+            issue.as_ref(),
+            connection.enrolled_at,
+            connection.enabled,
+            connection.setup_lease.map(|lease| lease.0),
+            connection.last_error.map(|issue| issue.as_ref().to_owned())
+        )
+        .execute(&self.pool)
+        .await?;
+        Ok(())
+    }
+
+    async fn flag(&self, connection: &Connection, issue: SyncIssue) -> Result<()> {
+        sqlx::query!(
+            "UPDATE dialpad_sync_connections SET last_error = $2 WHERE id = $1 AND enabled AND enrolled_at = $3",
+            connection.id,
+            issue.as_ref(),
+            connection.enrolled_at
+        )
+        .execute(&self.pool)
+        .await?;
+        Ok(())
+    }
+
+    async fn disconnect(&self, connection: &Connection, unregistered: bool) -> Result<()> {
+        sqlx::query!(
+            r#"WITH disconnected AS (
+                UPDATE dialpad_sync_connections
+                SET enabled = false, last_error = $2, setup_started_at = NULL,
+                    webhook_id = CASE WHEN $3 THEN NULL ELSE webhook_id END,
+                    subscription_id = CASE WHEN $3 THEN NULL ELSE subscription_id END
+                WHERE id = $1 AND enrolled_at = $4
+                RETURNING id
+            )
+            DELETE FROM dialpad_sync_events
+            WHERE connection_id IN (SELECT id FROM disconnected) AND completed_at IS NULL"#,
+            connection.id,
             SyncIssue::Disconnected.as_ref(),
-            unregistered
+            unregistered,
+            connection.enrolled_at
         )
-        .execute(tx.as_mut())
+        .execute(&self.pool)
         .await?;
-        sqlx::query!(
-            "DELETE FROM dialpad_sync_events WHERE connection_id = $1 AND completed_at IS NULL",
-            id
-        )
-        .execute(tx.as_mut())
-        .await?;
-        tx.commit().await?;
         Ok(())
     }
 
@@ -270,11 +297,36 @@ impl SyncRepository for PgSyncRepository {
 
     async fn advance_backfill(
         &self,
-        id: Uuid,
+        connection: &Connection,
         calls: Vec<CallEvent>,
         cursor: Option<String>,
     ) -> Result<()> {
+        let BackfillState::Pending {
+            since,
+            cursor: previous_cursor,
+        } = &connection.backfill
+        else {
+            return Ok(());
+        };
         let mut tx = self.pool.begin().await?;
+        let changed = sqlx::query!(
+            r#"UPDATE dialpad_sync_connections
+            SET backfill_cursor = $2,
+                backfill_since = CASE WHEN $2::text IS NULL THEN NULL ELSE backfill_since END
+            WHERE id = $1 AND enabled AND enrolled_at = $3
+                AND backfill_since = $4 AND backfill_cursor IS NOT DISTINCT FROM $5"#,
+            connection.id,
+            cursor,
+            connection.enrolled_at,
+            since,
+            previous_cursor.as_deref()
+        )
+        .execute(tx.as_mut())
+        .await?
+        .rows_affected();
+        if changed == 0 {
+            return Ok(());
+        }
         for call in calls {
             let Some(occurred_at) = call.occurred_at() else {
                 continue;
@@ -283,7 +335,7 @@ impl SyncRepository for PgSyncRepository {
                 r#"INSERT INTO dialpad_sync_events (connection_id, call_id, state, occurred_at, payload)
                 VALUES ($1, $2, $3, $4, $5)
                 ON CONFLICT DO NOTHING"#,
-                id,
+                connection.id,
                 call.call_id.0,
                 call.state.as_ref(),
                 occurred_at,
@@ -292,16 +344,6 @@ impl SyncRepository for PgSyncRepository {
             .execute(tx.as_mut())
             .await?;
         }
-        sqlx::query!(
-            r#"UPDATE dialpad_sync_connections
-            SET backfill_cursor = $2,
-                backfill_since = CASE WHEN $2::text IS NULL THEN NULL ELSE backfill_since END
-            WHERE id = $1 AND enabled"#,
-            id,
-            cursor
-        )
-        .execute(tx.as_mut())
-        .await?;
         tx.commit().await?;
         Ok(())
     }
@@ -330,13 +372,38 @@ impl SyncRepository for PgSyncRepository {
 
     async fn claim(&self) -> Result<Option<Job>> {
         let lease = macro_uuid::generate_uuid_v7();
-        // The due delivery picks the call; every pending delivery of that call
-        // not leased elsewhere joins the claim, so one import covers them all.
+        let mut tx = self.pool.begin().await?;
+        // Lock the connection before reading leases in a fresh snapshot. Otherwise
+        // concurrent claims can split one call's events and import stale snapshots.
+        let connection_id = sqlx::query_scalar!(
+            r#"SELECT e.connection_id FROM dialpad_sync_events e
+            JOIN dialpad_sync_connections c ON c.id = e.connection_id
+            WHERE e.completed_at IS NULL AND e.available_at <= now() AND c.enabled
+                AND NOT EXISTS (
+                    SELECT 1 FROM dialpad_sync_events active
+                    WHERE active.connection_id = e.connection_id AND active.call_id = e.call_id
+                        AND active.completed_at IS NULL AND active.lease_id IS NOT NULL
+                        AND active.available_at > now()
+                )
+            ORDER BY e.available_at LIMIT 1 FOR UPDATE OF c SKIP LOCKED"#
+        )
+        .fetch_optional(tx.as_mut())
+        .await?;
+        let Some(connection_id) = connection_id else {
+            return Ok(None);
+        };
         let row = sqlx::query!(
             r#"WITH candidate AS (
                 SELECT e.connection_id, e.call_id FROM dialpad_sync_events e
                 JOIN dialpad_sync_connections c ON c.id = e.connection_id
-                WHERE e.completed_at IS NULL AND e.available_at <= now() AND c.enabled
+                WHERE e.connection_id = $2 AND e.completed_at IS NULL
+                    AND e.available_at <= now() AND c.enabled
+                    AND NOT EXISTS (
+                        SELECT 1 FROM dialpad_sync_events active
+                        WHERE active.connection_id = e.connection_id AND active.call_id = e.call_id
+                            AND active.completed_at IS NULL AND active.lease_id IS NOT NULL
+                            AND active.available_at > now()
+                    )
                 ORDER BY e.available_at LIMIT 1 FOR UPDATE OF e SKIP LOCKED
             ),
             pending AS (
@@ -358,10 +425,12 @@ impl SyncRepository for PgSyncRepository {
                 (array_agg(traceparent ORDER BY received_at)
                     FILTER (WHERE traceparent IS NOT NULL))[1] AS traceparent
             FROM leased GROUP BY connection_id, call_id"#,
-            lease
+            lease,
+            connection_id
         )
-        .fetch_optional(&self.pool)
+        .fetch_optional(tx.as_mut())
         .await?;
+        tx.commit().await?;
         let Some(row) = row else {
             return Ok(None);
         };

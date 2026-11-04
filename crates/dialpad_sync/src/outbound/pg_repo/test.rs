@@ -29,6 +29,7 @@ fn user() -> MacroUserIdStr<'static> {
 enum GrantState {
     Active,
     NotConnected,
+    NeedsReauth,
 }
 
 struct FakeGrants {
@@ -54,6 +55,7 @@ impl Grants for FakeGrants {
         Ok(match *self.state.lock().unwrap() {
             GrantState::Active => Grant::Active(AccessToken(Zeroizing::new("token".into()))),
             GrantState::NotConnected => Grant::NotConnected,
+            GrantState::NeedsReauth => Grant::NeedsReauth,
         })
     }
     async fn connect_url(&self, _: &MacroUserIdStr<'static>, redirect: &str) -> Result<String> {
@@ -71,8 +73,11 @@ struct FakeDialpad {
     deleted_webhooks: Mutex<Vec<DialpadId>>,
     unregistered: Mutex<Vec<Registration>>,
     fail_subscribe: Mutex<bool>,
+    fail_unregister: Mutex<bool>,
+    close_after_subscribe: Mutex<Option<PgPool>>,
     pages: Mutex<VecDeque<CallPage>>,
     listed_since: Mutex<Option<DateTime<Utc>>>,
+    transcript_pause: Mutex<Option<(Arc<tokio::sync::Notify>, Arc<tokio::sync::Notify>)>>,
 }
 
 impl FakeDialpad {
@@ -102,10 +107,17 @@ impl Dialpad for FakeDialpad {
         if *self.fail_subscribe.lock().unwrap() {
             return Err(rootcause::report!("Dialpad requires a company admin"));
         }
+        let pool = self.close_after_subscribe.lock().unwrap().take();
+        if let Some(pool) = pool {
+            pool.close().await;
+        }
         Ok(DialpadId(33))
     }
     async fn unregister(&self, _: &AccessToken, registration: Registration) -> Result<()> {
         self.unregistered.lock().unwrap().push(registration);
+        if *self.fail_unregister.lock().unwrap() {
+            return Err(rootcause::report!("Dialpad temporarily unavailable"));
+        }
         Ok(())
     }
     async fn delete_webhook(&self, _: &AccessToken, webhook: DialpadId) -> Result<()> {
@@ -117,6 +129,11 @@ impl Dialpad for FakeDialpad {
         _: &AccessToken,
         _: DialpadId,
     ) -> Result<Option<Vec<TranscriptLine>>> {
+        let pause = self.transcript_pause.lock().unwrap().clone();
+        if let Some((started, resume)) = pause {
+            started.notify_one();
+            resume.notified().await;
+        }
         Ok(Some(vec![serde_json::from_value(json!({
             "type": "transcript", "name": "Jane Doe",
             "time": "2025-05-05T18:16:50.000", "content": "Can you send a quote?"
@@ -496,11 +513,12 @@ async fn an_enrollment_never_finished_in_connect_is_dropped(pool: PgPool) {
 async fn setup_finishes_only_under_the_lease_that_stored_the_secret(pool: PgPool) {
     let service = service(pool, GrantState::Active, Arc::new(Calls::default()));
     service.connect(&user(), Backfill::None).await.unwrap();
-    let id = service.repo.by_user(&user()).await.unwrap().unwrap().id;
+    let connection = service.repo.by_user(&user()).await.unwrap().unwrap();
+    let id = connection.id;
     let secret = || SigningSecret("secret".into());
     let first = service
         .repo
-        .begin_setup(id, &secret())
+        .begin_setup(&connection, &secret())
         .await
         .unwrap()
         .unwrap();
@@ -514,7 +532,7 @@ async fn setup_finishes_only_under_the_lease_that_stored_the_secret(pool: PgPool
     .unwrap();
     let second = service
         .repo
-        .begin_setup(id, &secret())
+        .begin_setup(&connection, &secret())
         .await
         .unwrap()
         .unwrap();
@@ -529,11 +547,395 @@ async fn setup_finishes_only_under_the_lease_that_stored_the_secret(pool: PgPool
             .await
             .unwrap()
     );
+    let event = serde_json::from_value(call_event(9, "hangup", 2)).unwrap();
+    service.repo.enqueue(id, event, None).await.unwrap();
+    service.repo.failed_setup(id, first).await.unwrap();
+    assert!(
+        service
+            .repo
+            .by_id(id)
+            .await
+            .unwrap()
+            .unwrap()
+            .last_error
+            .is_none()
+    );
+    assert_eq!(
+        service.repo.events(id, DialpadId(9)).await.unwrap().len(),
+        1
+    );
     assert!(
         service
             .repo
             .activate(id, second, DialpadId(3), registration)
             .await
             .unwrap()
+    );
+    service.repo.failed_setup(id, first).await.unwrap();
+    assert!(service.repo.by_id(id).await.unwrap().unwrap().enabled);
+    assert_eq!(
+        service.repo.events(id, DialpadId(9)).await.unwrap().len(),
+        1
+    );
+}
+
+#[sqlx::test(
+    migrator = "MACRO_DB_MIGRATIONS",
+    fixtures(path = "../../../fixtures", scripts("users"))
+)]
+async fn setup_failure_after_disconnect_cannot_restart_the_sync(pool: PgPool) {
+    let service = service(pool, GrantState::Active, Arc::new(Calls::default()));
+    service.connect(&user(), Backfill::None).await.unwrap();
+    let connection = service.repo.by_user(&user()).await.unwrap().unwrap();
+    let id = connection.id;
+    let lease = service
+        .repo
+        .begin_setup(&connection, &SigningSecret("secret".into()))
+        .await
+        .unwrap()
+        .unwrap();
+    let connection = service.repo.by_id(id).await.unwrap().unwrap();
+    service.repo.disconnect(&connection, false).await.unwrap();
+    service.repo.failed_setup(id, lease).await.unwrap();
+    assert_eq!(
+        service.status(&user()).await.unwrap(),
+        SyncStatus::NotConnected
+    );
+    assert!(service.repo.awaiting_setup(1).await.unwrap().is_empty());
+}
+
+#[sqlx::test(
+    migrator = "MACRO_DB_MIGRATIONS",
+    fixtures(path = "../../../fixtures", scripts("users"))
+)]
+async fn stale_backfill_pages_cannot_queue_calls_or_replace_progress(pool: PgPool) {
+    let service = service(pool, GrantState::Active, Arc::new(Calls::default()));
+    service.connect(&user(), Backfill::Week).await.unwrap();
+    service.complete(&user()).await.unwrap();
+    let first = service.repo.by_user(&user()).await.unwrap().unwrap();
+    service
+        .repo
+        .advance_backfill(&first, vec![], Some("next".into()))
+        .await
+        .unwrap();
+    let next = service.repo.by_user(&user()).await.unwrap().unwrap();
+
+    let late = serde_json::from_value(call_event(9, "backfill", 2)).unwrap();
+    service
+        .repo
+        .advance_backfill(&first, vec![late], None)
+        .await
+        .unwrap();
+    assert_eq!(
+        service
+            .repo
+            .by_id(first.id)
+            .await
+            .unwrap()
+            .unwrap()
+            .backfill,
+        next.backfill
+    );
+    assert!(
+        service
+            .repo
+            .events(first.id, DialpadId(9))
+            .await
+            .unwrap()
+            .is_empty()
+    );
+
+    service.disconnect(&user()).await.unwrap();
+    let late = serde_json::from_value(call_event(10, "backfill", 2)).unwrap();
+    service
+        .repo
+        .advance_backfill(&next, vec![late], None)
+        .await
+        .unwrap();
+    assert!(
+        service
+            .repo
+            .events(first.id, DialpadId(10))
+            .await
+            .unwrap()
+            .is_empty()
+    );
+
+    service.connect(&user(), Backfill::Month).await.unwrap();
+    service.complete(&user()).await.unwrap();
+    let renewed = service.repo.by_user(&user()).await.unwrap().unwrap();
+    let late = serde_json::from_value(call_event(11, "backfill", 2)).unwrap();
+    service
+        .repo
+        .advance_backfill(&next, vec![late], None)
+        .await
+        .unwrap();
+    assert_eq!(
+        service
+            .repo
+            .by_id(first.id)
+            .await
+            .unwrap()
+            .unwrap()
+            .backfill,
+        renewed.backfill
+    );
+    assert!(
+        service
+            .repo
+            .events(first.id, DialpadId(11))
+            .await
+            .unwrap()
+            .is_empty()
+    );
+
+    let current = serde_json::from_value(call_event(12, "backfill", 2)).unwrap();
+    service
+        .repo
+        .advance_backfill(&renewed, vec![current], None)
+        .await
+        .unwrap();
+    assert_eq!(
+        service
+            .repo
+            .by_id(first.id)
+            .await
+            .unwrap()
+            .unwrap()
+            .backfill,
+        BackfillState::Done
+    );
+    assert_eq!(
+        service
+            .repo
+            .events(first.id, DialpadId(12))
+            .await
+            .unwrap()
+            .len(),
+        1
+    );
+}
+
+#[sqlx::test(
+    migrator = "MACRO_DB_MIGRATIONS",
+    fixtures(path = "../../../fixtures", scripts("users"))
+)]
+async fn backfill_reports_a_lost_grant_without_waiting_for_a_delivery(pool: PgPool) {
+    let service = service(pool, GrantState::Active, Arc::new(Calls::default()));
+    service.connect(&user(), Backfill::Week).await.unwrap();
+    service.complete(&user()).await.unwrap();
+    service.grants.set(GrantState::NeedsReauth);
+    service.reconcile().await.unwrap();
+    assert!(matches!(
+        service.status(&user()).await.unwrap(),
+        SyncStatus::Connected {
+            issue: Some(SyncIssue::NeedsReauth),
+            ..
+        }
+    ));
+    service.grants.set(GrantState::NotConnected);
+    service.reconcile().await.unwrap();
+    assert_eq!(
+        service.status(&user()).await.unwrap(),
+        SyncStatus::Failed {
+            issue: SyncIssue::Stopped
+        }
+    );
+    assert!(service.dialpad.listed_since.lock().unwrap().is_none());
+}
+
+#[sqlx::test(
+    migrator = "MACRO_DB_MIGRATIONS",
+    fixtures(path = "../../../fixtures", scripts("users"))
+)]
+async fn reconnect_retains_old_registration_until_cleanup_succeeds(pool: PgPool) {
+    let service = service(pool, GrantState::Active, Arc::new(Calls::default()));
+    service.connect(&user(), Backfill::None).await.unwrap();
+    service.complete(&user()).await.unwrap();
+    let old = service.repo.by_user(&user()).await.unwrap().unwrap();
+    *service.dialpad.fail_unregister.lock().unwrap() = true;
+    service.disconnect(&user()).await.unwrap();
+    service.connect(&user(), Backfill::None).await.unwrap();
+    assert!(service.complete(&user()).await.is_err());
+    let current = service.repo.by_user(&user()).await.unwrap().unwrap();
+    assert_eq!(current.registration, old.registration);
+    assert!(!current.enabled);
+    assert_eq!(service.dialpad.webhooks.lock().unwrap().len(), 1);
+}
+
+#[sqlx::test(
+    migrator = "MACRO_DB_MIGRATIONS",
+    fixtures(path = "../../../fixtures", scripts("users"))
+)]
+async fn late_events_wait_for_the_calls_active_import(pool: PgPool) {
+    let service = service(pool, GrantState::Active, Arc::new(Calls::default()));
+    service.connect(&user(), Backfill::None).await.unwrap();
+    service.complete(&user()).await.unwrap();
+    let id = service.repo.by_user(&user()).await.unwrap().unwrap().id;
+    let first = serde_json::from_value(call_event(9, "call_transcription", 3)).unwrap();
+    service.repo.enqueue(id, first, None).await.unwrap();
+    let job = service.repo.claim().await.unwrap().unwrap();
+    let late = serde_json::from_value(call_event(9, "recap_summary", 2)).unwrap();
+    service.repo.enqueue(id, late, None).await.unwrap();
+    assert!(service.repo.claim().await.unwrap().is_none());
+
+    let other = serde_json::from_value(call_event(10, "hangup", 4)).unwrap();
+    service.repo.enqueue(id, other, None).await.unwrap();
+    let other_job = service.repo.claim().await.unwrap().unwrap();
+    assert_eq!(other_job.call_id, DialpadId(10));
+    service.repo.finish(&other_job, true).await.unwrap();
+    service.repo.finish(&job, true).await.unwrap();
+    let late_job = service.repo.claim().await.unwrap().unwrap();
+    assert_eq!(late_job.call_id, DialpadId(9));
+    assert_eq!(
+        service.repo.events(id, DialpadId(9)).await.unwrap().len(),
+        2
+    );
+}
+
+#[sqlx::test(
+    migrator = "MACRO_DB_MIGRATIONS",
+    fixtures(path = "../../../fixtures", scripts("users"))
+)]
+async fn stale_grant_checks_cannot_stop_a_new_setup_or_enrollment(pool: PgPool) {
+    let service = service(pool, GrantState::Active, Arc::new(Calls::default()));
+    service.connect(&user(), Backfill::None).await.unwrap();
+    let abandoned = service.repo.by_user(&user()).await.unwrap().unwrap();
+    service.repo.disconnect(&abandoned, false).await.unwrap();
+    service
+        .repo
+        .stop(&abandoned, SyncIssue::NeedsReauth)
+        .await
+        .unwrap();
+    assert_eq!(
+        service.status(&user()).await.unwrap(),
+        SyncStatus::NotConnected
+    );
+    service.connect(&user(), Backfill::None).await.unwrap();
+    let waiting = service.repo.by_user(&user()).await.unwrap().unwrap();
+    let lease = service
+        .repo
+        .begin_setup(&waiting, &SigningSecret("secret".into()))
+        .await
+        .unwrap()
+        .unwrap();
+    service
+        .repo
+        .stop(&waiting, SyncIssue::NeedsReauth)
+        .await
+        .unwrap();
+    assert!(
+        service
+            .repo
+            .by_id(waiting.id)
+            .await
+            .unwrap()
+            .unwrap()
+            .last_error
+            .is_none()
+    );
+    service
+        .repo
+        .activate(
+            waiting.id,
+            lease,
+            DialpadId(22),
+            Registration {
+                webhook_id: DialpadId(11),
+                subscription_id: DialpadId(33),
+            },
+        )
+        .await
+        .unwrap();
+    service
+        .repo
+        .stop(&waiting, SyncIssue::Disconnected)
+        .await
+        .unwrap();
+    assert!(
+        service
+            .repo
+            .by_id(waiting.id)
+            .await
+            .unwrap()
+            .unwrap()
+            .enabled
+    );
+    let running = service.repo.by_id(waiting.id).await.unwrap().unwrap();
+    service.disconnect(&user()).await.unwrap();
+    service.connect(&user(), Backfill::None).await.unwrap();
+    assert!(
+        service
+            .repo
+            .begin_setup(&running, &SigningSecret("stale".into()))
+            .await
+            .unwrap()
+            .is_none()
+    );
+    service.complete(&user()).await.unwrap();
+    service
+        .repo
+        .stop(&running, SyncIssue::Stopped)
+        .await
+        .unwrap();
+    service
+        .repo
+        .flag(&running, SyncIssue::NeedsReauth)
+        .await
+        .unwrap();
+    service.repo.disconnect(&running, true).await.unwrap();
+    assert!(matches!(
+        service.status(&user()).await.unwrap(),
+        SyncStatus::Connected { issue: None, .. }
+    ));
+}
+
+#[sqlx::test(
+    migrator = "MACRO_DB_MIGRATIONS",
+    fixtures(path = "../../../fixtures", scripts("users"))
+)]
+async fn a_fetch_started_before_reconnect_cannot_import_after_it(pool: PgPool) {
+    let calls = Arc::new(Calls::default());
+    let service = Arc::new(service(pool, GrantState::Active, calls.clone()));
+    service.connect(&user(), Backfill::None).await.unwrap();
+    service.complete(&user()).await.unwrap();
+    let connection = service.repo.by_user(&user()).await.unwrap().unwrap();
+    let event = serde_json::from_value(call_event(9, "call_transcription", 3)).unwrap();
+    service
+        .repo
+        .enqueue(connection.id, event, None)
+        .await
+        .unwrap();
+    let started = Arc::new(tokio::sync::Notify::new());
+    let resume = Arc::new(tokio::sync::Notify::new());
+    *service.dialpad.transcript_pause.lock().unwrap() = Some((started.clone(), resume.clone()));
+    let worker_service = service.clone();
+    let worker = tokio::spawn(async move { worker_service.tick().await });
+    started.notified().await;
+    service.disconnect(&user()).await.unwrap();
+    service.connect(&user(), Backfill::None).await.unwrap();
+    service.complete(&user()).await.unwrap();
+    resume.notify_one();
+    worker.await.unwrap().unwrap();
+    assert!(calls.0.lock().unwrap().is_empty());
+}
+
+#[sqlx::test(
+    migrator = "MACRO_DB_MIGRATIONS",
+    fixtures(path = "../../../fixtures", scripts("users"))
+)]
+async fn an_activation_error_attempts_cleanup_and_preserves_the_cause(pool: PgPool) {
+    let service = service(pool.clone(), GrantState::Active, Arc::new(Calls::default()));
+    service.connect(&user(), Backfill::None).await.unwrap();
+    *service.dialpad.close_after_subscribe.lock().unwrap() = Some(pool);
+    *service.dialpad.fail_unregister.lock().unwrap() = true;
+    let error = service.complete(&user()).await.unwrap_err();
+    assert!(error.to_string().contains("closed pool"), "{error}");
+    assert_eq!(
+        service.dialpad.unregistered.lock().unwrap().as_slice(),
+        &[Registration {
+            webhook_id: DialpadId(11),
+            subscription_id: DialpadId(33),
+        }]
     );
 }

@@ -27,8 +27,12 @@ pub trait SyncRepository: Send + Sync {
     /// not leased by another instance.
     async fn awaiting_setup(&self, limit: i64) -> Result<Vec<Connection>>;
     /// Lease setup and store the new signing secret. None when another
-    /// instance holds the lease or the sync is no longer waiting.
-    async fn begin_setup(&self, id: Uuid, secret: &SigningSecret) -> Result<Option<SetupLease>>;
+    /// instance holds the lease or the observed enrollment is no longer waiting.
+    async fn begin_setup(
+        &self,
+        connection: &Connection,
+        secret: &SigningSecret,
+    ) -> Result<Option<SetupLease>>;
     /// Record the registration and start delivering. False when the sync was
     /// removed or restarted meanwhile, or `lease` expired and another
     /// instance replaced the secret; the caller must retire `registration`.
@@ -39,21 +43,24 @@ pub trait SyncRepository: Send + Sync {
         dialpad_user: DialpadId,
         registration: Registration,
     ) -> Result<bool>;
-    /// Stop delivering and record why; pending deliveries are dropped.
-    async fn stop(&self, id: Uuid, issue: SyncIssue) -> Result<()>;
-    /// Record an issue on a running sync without stopping it.
-    async fn flag(&self, id: Uuid, issue: SyncIssue) -> Result<()>;
+    /// Fail only the setup that still holds `lease`; drop its pending deliveries.
+    async fn failed_setup(&self, id: Uuid, lease: SetupLease) -> Result<()>;
+    /// Stop the observed connection state and drop pending deliveries only if
+    /// its enrollment, setup and enabled state still match.
+    async fn stop(&self, connection: &Connection, issue: SyncIssue) -> Result<()>;
+    /// Record an issue only on the observed running enrollment.
+    async fn flag(&self, connection: &Connection, issue: SyncIssue) -> Result<()>;
     /// Stop as [`SyncIssue::Disconnected`], keeping the row and its import
     /// namespace. `unregistered` forgets the Dialpad resources once they
     /// were removed; otherwise the next setup removes them.
-    async fn disconnect(&self, id: Uuid, unregistered: bool) -> Result<()>;
+    async fn disconnect(&self, connection: &Connection, unregistered: bool) -> Result<()>;
     /// Running syncs with past calls left to import.
     async fn backfilling(&self, limit: i64) -> Result<Vec<Connection>>;
-    /// Queue one page of past calls and save where the import resumes;
-    /// `None` finishes it.
+    /// Queue a page and advance only if enrollment and backfill progress still
+    /// match `connection`; `None` finishes it.
     async fn advance_backfill(
         &self,
-        id: Uuid,
+        connection: &Connection,
         calls: Vec<CallEvent>,
         cursor: Option<String>,
     ) -> Result<()>;

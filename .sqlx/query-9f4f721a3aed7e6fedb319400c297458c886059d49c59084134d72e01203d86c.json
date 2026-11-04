@@ -1,0 +1,18 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "UPDATE dialpad_sync_connections\n            SET backfill_cursor = $2,\n                backfill_since = CASE WHEN $2::text IS NULL THEN NULL ELSE backfill_since END\n            WHERE id = $1 AND enabled AND enrolled_at = $3\n                AND backfill_since = $4 AND backfill_cursor IS NOT DISTINCT FROM $5",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Text",
+        "Timestamptz",
+        "Timestamptz",
+        "Text"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "9f4f721a3aed7e6fedb319400c297458c886059d49c59084134d72e01203d86c"
+}

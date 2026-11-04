@@ -8,6 +8,7 @@ fn connection(enabled: bool, last_error: Option<SyncIssue>) -> Connection {
             MacroUserIdStr::parse_from_str("macro|dialpad-a@example.com").unwrap(),
         ),
         enabled,
+        setup_lease: None,
         dialpad_user_id: None,
         registration: None,
         secret: None,

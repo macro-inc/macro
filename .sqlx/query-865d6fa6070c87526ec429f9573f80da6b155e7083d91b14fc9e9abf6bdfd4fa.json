@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "SELECT id, namespace, user_id, enabled, dialpad_user_id, webhook_id, subscription_id,\n                signing_secret, backfill_since, backfill_cursor, enrolled_at, last_synced_at, last_error\n            FROM dialpad_sync_connections WHERE id = $1",
+  "query": "SELECT id, namespace, user_id, enabled, dialpad_user_id, webhook_id, subscription_id,\n                signing_secret, setup_started_at, backfill_since, backfill_cursor, enrolled_at, last_synced_at, last_error\n            FROM dialpad_sync_connections WHERE id = $1",
   "describe": {
     "columns": [
       {
@@ -45,26 +45,31 @@
       },
       {
         "ordinal": 8,
-        "name": "backfill_since",
+        "name": "setup_started_at",
         "type_info": "Timestamptz"
       },
       {
         "ordinal": 9,
+        "name": "backfill_since",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 10,
         "name": "backfill_cursor",
         "type_info": "Text"
       },
       {
-        "ordinal": 10,
+        "ordinal": 11,
         "name": "enrolled_at",
         "type_info": "Timestamptz"
       },
       {
-        "ordinal": 11,
+        "ordinal": 12,
         "name": "last_synced_at",
         "type_info": "Timestamptz"
       },
       {
-        "ordinal": 12,
+        "ordinal": 13,
         "name": "last_error",
         "type_info": "Text"
       }
@@ -85,10 +90,11 @@
       true,
       true,
       true,
+      true,
       false,
       true,
       true
     ]
   },
-  "hash": "45efd76f7a603510fc3af9b6757809e012a5f666300d47fc0022053142058a41"
+  "hash": "865d6fa6070c87526ec429f9573f80da6b155e7083d91b14fc9e9abf6bdfd4fa"
 }

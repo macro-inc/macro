@@ -48,6 +48,12 @@ A first-connect backfill pages `GET /call` one page per reconcile.
 
 - Imports replace the stored call wholesale, so a snapshot must always be
   built from every stored event of the call, never only the triggering one.
+- Setup success and failure must both match the lease that stored the secret.
+  If activation fails, retire the newly created registration before returning.
+- Backfill commits must match the enrollment and cursor read before fetching.
+- Grant checks may finish after a reconnect: stop/flag only the observed enrollment.
+- A call with an active delivery lease cannot be claimed again, including newly
+  arrived events; concurrent claims serialize briefly on the connection row.
 - Dialpad sends no event id: deliveries dedupe on (call, state, timestamp).
 - `GET /call/{id}` is limited to 10/min and `ai_recap` to 12/min; live calls
   use event payloads, and only backfill reads the recap endpoint.

@@ -11,6 +11,7 @@ fn connection() -> Connection {
             .unwrap()
             .into_owned(),
         enabled: true,
+        setup_lease: None,
         dialpad_user_id: Some(DialpadId(5908860123456789)),
         registration: None,
         secret: None,

@@ -1,0 +1,16 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "UPDATE dialpad_sync_connections SET last_error = $2 WHERE id = $1 AND enabled AND enrolled_at = $3",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Text",
+        "Timestamptz"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "d02d2d2843b70426d7ba0fee77f35bd5a6fdf3fa527a911357b1f55a0ab94692"
+}

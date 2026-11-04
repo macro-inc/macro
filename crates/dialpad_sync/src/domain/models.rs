@@ -92,6 +92,8 @@ pub struct Connection {
     pub user_id: MacroUserIdStr<'static>,
     /// Whether deliveries are imported.
     pub enabled: bool,
+    /// Setup observed with this snapshot, fencing asynchronous grant checks.
+    pub setup_lease: Option<SetupLease>,
     /// The connected Dialpad user, once setup has read it.
     pub dialpad_user_id: Option<DialpadId>,
     /// Dialpad resources registered for this sync, if any.

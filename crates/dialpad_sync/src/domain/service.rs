@@ -96,7 +96,7 @@ impl<R: SyncRepository, G: Grants, D: Dialpad, V: DeliveryVerifier> Service<R, G
             Grant::Active(token) => token,
             Grant::NotConnected => {
                 if connection.enrolled_at < chrono::Utc::now() - ENROLLMENT_TTL {
-                    self.repo.disconnect(connection.id, false).await?;
+                    self.repo.stop(&connection, SyncIssue::Disconnected).await?;
                     span.record("outcome", "abandoned");
                 } else {
                     span.record("outcome", "waiting");
@@ -104,23 +104,25 @@ impl<R: SyncRepository, G: Grants, D: Dialpad, V: DeliveryVerifier> Service<R, G
                 return Ok(());
             }
             Grant::NeedsReauth => {
-                self.repo
-                    .stop(connection.id, SyncIssue::NeedsReauth)
-                    .await?;
+                self.repo.stop(&connection, SyncIssue::NeedsReauth).await?;
                 span.record("outcome", "needs_reauth");
                 return Ok(());
             }
         };
         let secret = new_secret();
-        let Some(lease) = self.repo.begin_setup(connection.id, &secret).await? else {
+        let Some(lease) = self.repo.begin_setup(&connection, &secret).await? else {
             span.record("outcome", "leased");
             return Ok(());
         };
         let result = self.register(&connection, lease, &token, &secret).await;
         if result.is_err() {
-            self.repo
-                .stop(connection.id, SyncIssue::SetupFailed)
-                .await?;
+            let _ = self
+                .repo
+                .failed_setup(connection.id, lease)
+                .await
+                .inspect_err(
+                    |error| tracing::warn!(error = ?error, "could not record failed Dialpad setup"),
+                );
         }
         span.record("outcome", if result.is_ok() { "started" } else { "failed" });
         result
@@ -134,10 +136,8 @@ impl<R: SyncRepository, G: Grants, D: Dialpad, V: DeliveryVerifier> Service<R, G
         secret: &SigningSecret,
     ) -> Result<()> {
         // Left behind when a sync stopped without a usable token.
-        if let Some(old) = connection.registration
-            && let Err(error) = self.dialpad.unregister(token, old).await
-        {
-            tracing::warn!(error = ?error, "could not remove old Dialpad subscription");
+        if let Some(old) = connection.registration {
+            self.dialpad.unregister(token, old).await?;
         }
         let me = self.dialpad.me(token).await?;
         let url = format!(
@@ -159,16 +159,21 @@ impl<R: SyncRepository, G: Grants, D: Dialpad, V: DeliveryVerifier> Service<R, G
             webhook_id: webhook,
             subscription_id,
         };
-        // A disconnect, restart or newer setup raced this one: retire what
-        // was just created.
-        if !self
+        // Retire resources whenever activation did not record their ownership.
+        match self
             .repo
             .activate(connection.id, lease, me, registration)
-            .await?
+            .await
         {
-            self.dialpad.unregister(token, registration).await?;
+            Ok(true) => Ok(()),
+            Ok(false) => self.dialpad.unregister(token, registration).await,
+            Err(error) => {
+                let _ = self.dialpad.unregister(token, registration).await.inspect_err(
+                    |cleanup| tracing::warn!(error = ?cleanup, "could not remove unactivated Dialpad registration"),
+                );
+                Err(error)
+            }
         }
-        Ok(())
     }
 
     #[tracing::instrument(
@@ -184,9 +189,16 @@ impl<R: SyncRepository, G: Grants, D: Dialpad, V: DeliveryVerifier> Service<R, G
         let Some(dialpad_user) = connection.dialpad_user_id else {
             return Ok(());
         };
-        // Deliveries notice a lost grant and stop the sync.
-        let Grant::Active(token) = self.grants.grant(&connection.user_id).await? else {
-            return Ok(());
+        let token = match self.grants.grant(&connection.user_id).await? {
+            Grant::Active(token) => token,
+            Grant::NotConnected => {
+                self.repo.stop(&connection, SyncIssue::Stopped).await?;
+                return Ok(());
+            }
+            Grant::NeedsReauth => {
+                self.repo.flag(&connection, SyncIssue::NeedsReauth).await?;
+                return Ok(());
+            }
         };
         let page = self
             .dialpad
@@ -203,7 +215,7 @@ impl<R: SyncRepository, G: Grants, D: Dialpad, V: DeliveryVerifier> Service<R, G
             .collect();
         tracing::Span::current().record("calls", calls.len());
         self.repo
-            .advance_backfill(connection.id, calls, page.cursor)
+            .advance_backfill(&connection, calls, page.cursor)
             .await
     }
 
@@ -217,15 +229,13 @@ impl<R: SyncRepository, G: Grants, D: Dialpad, V: DeliveryVerifier> Service<R, G
         let token = match self.grants.grant(&job.connection.user_id).await? {
             Grant::Active(token) => token,
             Grant::NotConnected => {
-                self.repo
-                    .stop(job.connection.id, SyncIssue::Stopped)
-                    .await?;
+                self.repo.stop(&job.connection, SyncIssue::Stopped).await?;
                 span.record("outcome", "stopped");
                 return Ok(());
             }
             Grant::NeedsReauth => {
                 self.repo
-                    .flag(job.connection.id, SyncIssue::NeedsReauth)
+                    .flag(&job.connection, SyncIssue::NeedsReauth)
                     .await?;
                 return Err(rootcause::report!("Dialpad needs reauthorization"));
             }
@@ -252,7 +262,9 @@ impl<R: SyncRepository, G: Grants, D: Dialpad, V: DeliveryVerifier> Service<R, G
         };
         // A disconnect during the fetch must not import.
         let current = self.repo.by_id(job.connection.id).await?;
-        if !current.is_some_and(|connection| connection.enabled) {
+        if !current.is_some_and(|connection| {
+            connection.enabled && connection.enrolled_at == job.connection.enrolled_at
+        }) {
             span.record("outcome", "stopped");
             return Ok(());
         }
@@ -317,7 +329,7 @@ impl<R: SyncRepository, G: Grants, D: Dialpad, V: DeliveryVerifier> SyncService
         }
         self.grants.disconnect(user).await?;
         if let Some(connection) = connection {
-            self.repo.disconnect(connection.id, unregistered).await?;
+            self.repo.disconnect(&connection, unregistered).await?;
         }
         Ok(())
     }
