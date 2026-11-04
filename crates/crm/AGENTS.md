@@ -71,8 +71,8 @@ tools/HTTP/GraphQL surfaces over them.
   creates nothing. A guest matched by email teaches the contact the guest's
   number, so importers set a guest's phone only for that person's own line.
   Match contact emails within their team, independently of company domains;
-  phone storage and lookup must not require a company. Links are insert-if-absent: the first
-  set written for a call stays.
+  phone storage and lookup must not require a company. Links are
+  insert-if-absent: the first set written for a call stays.
 - Pipeline board-position reads require a pipeline View receipt, hold its live
   lifecycle guard, and scope the view to its backing table/database through
   `DatabaseStorage::storage_view_positions`.
