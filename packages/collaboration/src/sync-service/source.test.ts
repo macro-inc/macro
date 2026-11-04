@@ -5,7 +5,7 @@ import {
   WebsocketEvent,
   type WebsocketEventListener,
 } from '../websocket';
-import type { FromRemote, IFromPeer } from './generated/schema';
+import { FromPeer, type FromRemote, type IFromPeer } from './generated/schema';
 import type { SyncSocket } from './socket';
 import { SyncServiceSource, TIMEOUTS } from './source';
 
@@ -288,6 +288,20 @@ describe('SyncServiceSource', () => {
     const acked = src.pushUpdate([new Uint8Array([1])]);
     expect(ws.sent).toHaveLength(1); // the FromPeer update went out
     ws.deliver(remote.ack('id-1'));
+    expect(await acked).toBe(true);
+  });
+
+  it('requests mandatory comment validation and still waits for its acknowledgement', async () => {
+    const ws = new FakeSocket();
+    const src = new SyncServiceSource(ws, 'doc1', { newId: () => 'comment-1' });
+    ws.deliver(remote.initialSync(snap, aw));
+    await src.doInitialSync();
+    const update = new Uint8Array([1]);
+    const acked = src.pushUpdate([update], { commentOnly: true });
+    expect(ws.sent).toEqual([
+      FromPeer.fromPeerCommentUpdate({ updates: [update], id: 'comment-1' }),
+    ]);
+    ws.deliver(remote.ack('comment-1'));
     expect(await acked).toBe(true);
   });
 
