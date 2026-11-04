@@ -6511,11 +6511,15 @@
       "AgentSetupResponse": {
         "type": "object",
         "description": "What an agent needs to start using the SDK.",
-        "required": ["api_key"],
+        "required": ["api_key", "team_join_failed"],
         "properties": {
           "api_key": {
             "type": "string",
             "description": "The agent's API key. Shown only here; repeating setup revokes it."
+          },
+          "team_join_failed": {
+            "type": "boolean",
+            "description": "Whether joining the inviting team failed. The invite stays pending, and\nrepeating setup tries again."
           }
         }
       },

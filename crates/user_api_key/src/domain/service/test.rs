@@ -129,21 +129,20 @@ impl UserApiKeysRepo for FakeUserApiKeysRepo {
             .unwrap_or_default())
     }
 
-    async fn delete_keys_named_except(
+    async fn replace_keys_named(
         &self,
         user_id: &MacroUserIdStr<'_>,
+        id: UserApiKeyId,
         name: &str,
-        keep: UserApiKeyId,
-    ) -> Result<(), Self::Err> {
-        if let Some(set) = self
-            .keys
+        hash: &[u8; 32],
+    ) -> Result<UserApiKeyInfo, Self::Err> {
+        self.keys
             .lock()
             .expect("keys lock poisoned")
-            .get_mut(user_id.as_ref())
-        {
-            set.retain(|stored| stored.name != name || stored.id == keep);
-        }
-        Ok(())
+            .entry(user_id.as_ref().to_string())
+            .or_default()
+            .retain(|stored| stored.name != name);
+        self.insert_key(user_id, id, name, hash).await
     }
 
     async fn delete_key(

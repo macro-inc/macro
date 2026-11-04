@@ -10,10 +10,13 @@ use crate::api::context::{ApiContext, AuthorizationService};
 use crate::service::user::agent_signup::AGENT_SIGNUP_KEY_NAME;
 
 /// What an agent needs to start using the SDK.
-#[derive(serde::Serialize, serde::Deserialize, Debug, utoipa::ToSchema)]
+#[derive(serde::Serialize, serde::Deserialize, utoipa::ToSchema)]
 pub struct AgentSetupResponse {
     /// The agent's API key. Shown only here; repeating setup revokes it.
     pub api_key: String,
+    /// Whether joining the inviting team failed. The invite stays pending, and
+    /// repeating setup tries again.
+    pub team_join_failed: bool,
 }
 
 fn error(status: StatusCode, message: &str) -> (StatusCode, Json<ErrorResponse<'static>>) {
@@ -71,7 +74,7 @@ pub async fn handler(
         error(StatusCode::INTERNAL_SERVER_ERROR, "invalid user id")
     })?;
 
-    join_inviting_team(&ctx, &user_id).await;
+    let joined = join_inviting_team(&ctx, &user_id).await;
 
     let created = UserApiKeyServiceImpl::new(PgUserApiKeysRepo::new(ctx.db.clone()))
         .replace_key(&user_id, AGENT_SIGNUP_KEY_NAME)
@@ -83,17 +86,19 @@ pub async fn handler(
 
     Ok(Json(AgentSetupResponse {
         api_key: created.key,
+        team_join_failed: !joined,
     }))
 }
 
 /// Joins the oldest pending agent invite. A failure leaves the invite pending:
 /// the agent still gets its token, and the next attempt tries the join again.
-async fn join_inviting_team(ctx: &ApiContext, user_id: &MacroUserIdStr<'_>) {
+/// Returns `false` when a pending invite could not be joined.
+async fn join_inviting_team(ctx: &ApiContext, user_id: &MacroUserIdStr<'_>) -> bool {
     let invites = match ctx.teams_service.get_user_invites(user_id).await {
         Ok(invites) => invites,
         Err(e) => {
             tracing::error!(error=?e, "unable to read agent invites");
-            return;
+            return false;
         }
     };
 
@@ -102,15 +107,17 @@ async fn join_inviting_team(ctx: &ApiContext, user_id: &MacroUserIdStr<'_>) {
         .filter(|invite| invite.is_agent)
         .min_by_key(|invite| invite.created_at)
     else {
-        return;
+        return true;
     };
 
     match ctx.teams_service.join_team(&invite.id, user_id).await {
         Ok(member) => {
             tracing::Span::current().record("joined_team_id", member.team_id.to_string());
+            true
         }
         Err(e) => {
             tracing::error!(error=?e, team_id=%invite.team_id, "unable to join inviting team");
+            false
         }
     }
 }

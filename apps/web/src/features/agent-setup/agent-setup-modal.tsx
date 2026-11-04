@@ -88,6 +88,12 @@ function AgentSetupDialog() {
                     now: it is shown only once, and reloading this page replaces
                     it.
                   </p>
+                  <Show when={result().team_join_failed}>
+                    <p class="text-ink-muted">
+                      We couldn’t add you to the team that invited you. Reload
+                      this page to try again, which replaces this token.
+                    </p>
+                  </Show>
                   <CredentialField label="SDK token" value={result().api_key} />
                   <p class="break-all font-mono text-xs text-ink-muted">
                     {result().api_key}

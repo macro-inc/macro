@@ -68,12 +68,16 @@ where
         user_id: &MacroUserIdStr<'_>,
         name: &str,
     ) -> Result<CreatedUserApiKey, UserApiKeyError> {
-        let created = self.create_key(user_id, name).await?;
-        self.repo
-            .delete_keys_named_except(user_id, &created.name, created.id)
+        let name = normalize_key_name(name)?;
+        let id = UserApiKeyId::generate();
+        let key = UserApiKey::generate();
+        let hash = key.hash();
+        let info = self
+            .repo
+            .replace_keys_named(user_id, id, &name, &hash)
             .await
             .map_err(|e| rootcause::Report::new(e).into_dynamic())?;
-        Ok(created)
+        Ok(CreatedUserApiKey::new(info, &key))
     }
 
     #[tracing::instrument(err, skip_all)]

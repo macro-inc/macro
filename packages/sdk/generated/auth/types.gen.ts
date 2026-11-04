@@ -31,6 +31,11 @@ export type AgentSetupResponse = {
      * The agent's API key. Shown only here; repeating setup revokes it.
      */
     api_key: string;
+    /**
+     * Whether joining the inviting team failed. The invite stays pending, and
+     * repeating setup tries again.
+     */
+    team_join_failed: boolean;
 };
 
 /**

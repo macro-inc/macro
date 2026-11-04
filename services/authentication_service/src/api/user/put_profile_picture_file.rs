@@ -52,7 +52,7 @@ fn error(status: StatusCode, message: &str) -> (StatusCode, Json<ErrorResponse<'
 }
 
 /// Where to upload a new profile picture, and the file id to set afterwards.
-#[derive(serde::Serialize, serde::Deserialize, Debug, utoipa::ToSchema)]
+#[derive(serde::Serialize, serde::Deserialize, utoipa::ToSchema)]
 pub struct ProfilePictureUpload {
     /// Id to pass to `PUT /user/profile_picture/file` once uploaded.
     pub file_id: String,
