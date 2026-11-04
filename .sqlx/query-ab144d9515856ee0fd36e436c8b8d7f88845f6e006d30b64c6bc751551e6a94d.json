@@ -1,0 +1,14 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "UPDATE \"User\" SET \"isAgent\" = TRUE WHERE \"email\" = $1",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Text"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "ab144d9515856ee0fd36e436c8b8d7f88845f6e006d30b64c6bc751551e6a94d"
+}

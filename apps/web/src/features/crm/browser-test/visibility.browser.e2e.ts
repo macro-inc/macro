@@ -37,7 +37,7 @@ for (const device of [
           `/src/features/crm/browser-test/visibility.html?kind=${kind}&grouped=${grouped}`
         );
         const remove = page.getByRole('button', {
-          name: 'Remove from CRM',
+          name: 'Archive',
           exact: true,
         });
         await remove.click();
@@ -57,7 +57,7 @@ for (const device of [
           path: testInfo.outputPath(`${kind}-${device.name}.png`),
         });
         const confirm = dialog.getByRole('button', {
-          name: 'Remove from CRM',
+          name: 'Archive',
           exact: true,
         });
         await confirm.click();
@@ -71,13 +71,15 @@ for (const device of [
         await expect(page.getByLabel('Visibility writes')).toHaveText('2');
 
         await page
-          .getByRole('button', { name: 'Restore to CRM', exact: true })
+          .getByRole('button', { name: 'Restore', exact: true })
           .click();
-        await expect(dialog).toBeInViewport({ ratio: 1 });
-        await expect(dialog).not.toHaveAttribute('data-transitioning');
-        await dialog
-          .getByRole('button', { name: 'Restore to CRM', exact: true })
-          .click();
+        if (kind === 'company') {
+          await expect(dialog).toBeInViewport({ ratio: 1 });
+          await expect(dialog).not.toHaveAttribute('data-transitioning');
+          await dialog
+            .getByRole('button', { name: 'Restore', exact: true })
+            .click();
+        }
         await page.evaluate(() => window.finishVisibilitySave(true));
         await expect(dialog).not.toBeVisible();
         await expect(remove).toBeEnabled();
@@ -85,7 +87,7 @@ for (const device of [
         await page.getByRole('button', { name: 'Toggle admin role' }).click();
         await expect(remove).toBeDisabled();
         await expect(remove).toHaveAccessibleDescription(
-          'Ask a team admin or owner to remove or restore this record.'
+          'Ask a team admin or owner to archive or restore this record.'
         );
       });
     }
@@ -94,9 +96,7 @@ for (const device of [
       page,
     }) => {
       await page.goto('/src/features/crm/browser-test/visibility.html');
-      await page
-        .getByRole('button', { name: 'Remove from CRM', exact: true })
-        .click();
+      await page.getByRole('button', { name: 'Archive', exact: true }).click();
       await expect(page.getByRole('dialog')).toBeVisible();
       await page.evaluate(() => window.switchVisibilityRecord());
       await expect(page.getByRole('dialog')).not.toBeVisible();

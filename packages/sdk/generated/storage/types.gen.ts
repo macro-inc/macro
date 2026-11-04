@@ -457,6 +457,21 @@ export type AgentTyping = {
  */
 export type AgentTypingPhase = 'thinking' | 'writing' | 'working' | 'waiting';
 
+/**
+ * Public admission error payload. Handlers with additional fields can reuse the
+ * domain error's code and message and [`admission_status`].
+ */
+export type AiAdmissionErrorBody = {
+    /**
+     * Stable denial or unavailability code.
+     */
+    code: string;
+    /**
+     * Human-readable explanation, without internal billing diagnostics.
+     */
+    error: string;
+};
+
 export type Anchor = PdfAnchor;
 
 export type AnchorId = PdfAnchorId & {
@@ -2778,7 +2793,7 @@ export type ChannelLabel = {
      */
     teamId?: string | null;
     /**
-     * When the label was last renamed or reordered.
+     * When the label's name, rule, scope, or order last changed.
      */
     updatedAt: string;
 };
@@ -4502,6 +4517,12 @@ export type CreateProjectResponse = {
  */
 export type CreateSkillRequest = {
     /**
+     * When to use the skill, in one line starting "Use when", e.g. "Use when
+     * drafting release notes; not changelog entries". Agents choose skills
+     * for a request by it.
+     */
+    description: string;
+    /**
      * Markdown source text. Defaults to an empty skill document.
      */
     markdown?: string | null;
@@ -5437,6 +5458,75 @@ export type DirectAccess = {
      * Recipient.
      */
     userId: string;
+};
+
+/**
+ * The edit failed after it started, so it may have partly applied. Read the
+ * document before retrying.
+ */
+export type DocumentAiEditFailed = {
+    /**
+     * Always `edit_failed`.
+     */
+    error: DocumentAiEditFailedCode;
+    /**
+     * What to do next; the cause is logged, never returned.
+     */
+    message: string;
+};
+
+/**
+ * Error code of an edit that failed after it started.
+ */
+export type DocumentAiEditFailedCode = 'edit_failed';
+
+/**
+ * The editor could not do the edit; nothing changed.
+ */
+export type DocumentAiEditRefused = {
+    /**
+     * Always `edit_refused`.
+     */
+    error: DocumentAiEditRefusedCode;
+    /**
+     * Why, in the editor's words: what it needs to know or cannot do.
+     */
+    reason: string;
+};
+
+/**
+ * Error code of an edit the editor refused.
+ */
+export type DocumentAiEditRefusedCode = 'edit_refused';
+
+/**
+ * What to change, in words.
+ */
+export type DocumentAiEditRequest = {
+    /**
+     * Run the single-model fast pipeline, for one small, contained edit.
+     */
+    fast?: boolean;
+    /**
+     * Natural-language instructions. Name the section or quote the text to
+     * change, describe the outcome, and say what must stay as it is.
+     */
+    instructions: string;
+};
+
+/**
+ * A completed edit by instructions.
+ */
+export type DocumentAiEdited = {
+    /**
+     * What the editor needs to know to finish, when it applied part of the
+     * edit and stopped; the applied part stays.
+     */
+    clarification?: string | null;
+    /**
+     * The document's version after the edit, as sync-service encodes it.
+     */
+    revision: string;
 };
 
 /**
@@ -8129,6 +8219,13 @@ export type FormSection = {
      */
     questions: Array<QuestionLayout>;
     /**
+     * When to show it: the rules answers of earlier shown sections must
+     * pass, naming only their columns. A section whose rules fail is
+     * skipped: its questions are not required and their answers are
+     * not written. Absent, it is always shown.
+     */
+    showWhen?: FilterGroup;
+    /**
      * Its title; may be empty.
      */
     title: string;
@@ -8191,6 +8288,12 @@ export type FormSectionDetail = {
      * Its questions, in order.
      */
     questions: Array<FormQuestionDetail>;
+    /**
+     * When to show it, from earlier shown sections' answers; absent,
+     * it is always shown. Sent to every caller so a respondent's page
+     * can skip it.
+     */
+    showWhen?: FilterGroup;
     /**
      * Its title.
      */
@@ -9906,6 +10009,18 @@ export type LayoutProblem = {
     kind: 'gateNamesLaterColumn';
 } | {
     kind: 'gateRule';
+    /**
+     * Why.
+     */
+    reason: string;
+} | {
+    /**
+     * The column.
+     */
+    column: string;
+    kind: 'conditionNamesLaterColumn';
+} | {
+    kind: 'conditionRule';
     /**
      * Why.
      */
@@ -12136,7 +12251,7 @@ export type RemoveParticipantsRequest = {
 };
 
 /**
- * Request body for renaming a label.
+ * Request body for updating a label's name, smart rule, or sharing scope.
  */
 export type RenameChannelLabelRequest = {
     /**
@@ -12144,6 +12259,7 @@ export type RenameChannelLabelRequest = {
      */
     name: string;
     rule?: null | ChannelLabelRule;
+    targetScope?: null | ChannelLabelScopeSelection;
 };
 
 /**
@@ -12956,6 +13072,17 @@ export type SetPropertyValue = {
 };
 
 /**
+ * Request body for setting a skill's routing description.
+ */
+export type SetSkillDescriptionRequest = {
+    /**
+     * When to use the skill, in one line starting "Use when", at most 300
+     * characters.
+     */
+    description: string;
+};
+
+/**
  * SHA-256 encoded as exactly 64 lowercase hexadecimal characters.
  */
 export type Sha256Digest = string;
@@ -13052,6 +13179,17 @@ export type SimpleMention = {
      * Mentioned entity type.
      */
     entity_type: string;
+};
+
+/**
+ * A skill's routing description.
+ */
+export type SkillDescriptionBody = {
+    /**
+     * When to use the skill, in one line starting "Use when". Absent for a
+     * skill created before descriptions existed.
+     */
+    description?: string | null;
 };
 
 /**
@@ -14722,6 +14860,24 @@ export type SqlStatement = {
      * The type it became, as SQL spells it, e.g. `select[]`.
      */
     to: string;
+};
+
+/**
+ * Fields required when a deal enters a particular option of a stage column.
+ */
+export type StageRequirement = {
+    /**
+     * Fields that must be present. Empty removes the rule for this stage.
+     */
+    requiredColumnIds: Array<string>;
+    /**
+     * Single-select column identifying the stage, independent of its name.
+     */
+    stageColumnId: string;
+    /**
+     * Stable option identity; renaming the stage preserves the rule.
+     */
+    stageId: string;
 };
 
 /**
@@ -20056,6 +20212,36 @@ export type ShareCrmPipelineResponses = {
 
 export type ShareCrmPipelineResponse = ShareCrmPipelineResponses[keyof ShareCrmPipelineResponses];
 
+export type GetCrmPipelineStageRequirementsData = {
+    body?: never;
+    path: {
+        id: string;
+    };
+    query?: never;
+    url: '/crm/pipelines/{id}/stage-requirements';
+};
+
+export type GetCrmPipelineStageRequirementsResponses = {
+    200: Array<StageRequirement>;
+};
+
+export type GetCrmPipelineStageRequirementsResponse = GetCrmPipelineStageRequirementsResponses[keyof GetCrmPipelineStageRequirementsResponses];
+
+export type SetCrmPipelineStageRequirementData = {
+    body: StageRequirement;
+    path: {
+        id: string;
+    };
+    query?: never;
+    url: '/crm/pipelines/{id}/stage-requirements';
+};
+
+export type SetCrmPipelineStageRequirementResponses = {
+    204: void;
+};
+
+export type SetCrmPipelineStageRequirementResponse = SetCrmPipelineStageRequirementResponses[keyof SetCrmPipelineStageRequirementResponses];
+
 export type GetCrmPipelineTableData = {
     body?: never;
     path: {
@@ -21175,6 +21361,9 @@ export type CreateSkillHandlerData = {
 };
 
 export type CreateSkillHandlerErrors = {
+    /**
+     * The description is blank, longer than one line or 300 characters, or does not start "Use when"
+     */
     400: ErrorResponse;
     401: ErrorResponse;
     500: ErrorResponse;
@@ -21637,6 +21826,65 @@ export type SaveDocumentHandlerResponses = {
 
 export type SaveDocumentHandlerResponse = SaveDocumentHandlerResponses[keyof SaveDocumentHandlerResponses];
 
+export type EditDocumentWithAiData = {
+    body: DocumentAiEditRequest;
+    path: {
+        /**
+         * Document identity
+         */
+        document_id: string;
+    };
+    query?: never;
+    url: '/documents/{document_id}/ai-edit';
+};
+
+export type EditDocumentWithAiErrors = {
+    /**
+     * Not a markdown document, or empty instructions
+     */
+    400: ErrorResponse;
+    /**
+     * Authentication required
+     */
+    401: unknown;
+    /**
+     * AI allowance exhausted
+     */
+    402: AiAdmissionErrorBody;
+    /**
+     * Document edit access denied
+     */
+    403: unknown;
+    /**
+     * Document not found
+     */
+    404: unknown;
+    /**
+     * The editor could not do the edit; nothing changed
+     */
+    422: DocumentAiEditRefused;
+    /**
+     * The edit could not start
+     */
+    500: ErrorResponse;
+    /**
+     * The edit failed and may have partly applied
+     */
+    502: DocumentAiEditFailed;
+    /**
+     * AI usage validation unavailable; retry later
+     */
+    503: AiAdmissionErrorBody;
+};
+
+export type EditDocumentWithAiError = EditDocumentWithAiErrors[keyof EditDocumentWithAiErrors];
+
+export type EditDocumentWithAiResponses = {
+    200: DocumentAiEdited;
+};
+
+export type EditDocumentWithAiResponse = EditDocumentWithAiResponses[keyof EditDocumentWithAiResponses];
+
 export type GetDocumentBranchNameData = {
     body?: never;
     path: {
@@ -21984,6 +22232,62 @@ export type SimpleSaveResponses = {
 };
 
 export type SimpleSaveResponse = SimpleSaveResponses[keyof SimpleSaveResponses];
+
+export type GetSkillDescriptionData = {
+    body?: never;
+    path: {
+        /**
+         * Skill document ID
+         */
+        document_id: string;
+    };
+    query?: never;
+    url: '/documents/{document_id}/skill_description';
+};
+
+export type GetSkillDescriptionErrors = {
+    401: ErrorResponse;
+    404: ErrorResponse;
+    500: ErrorResponse;
+};
+
+export type GetSkillDescriptionError = GetSkillDescriptionErrors[keyof GetSkillDescriptionErrors];
+
+export type GetSkillDescriptionResponses = {
+    200: SkillDescriptionBody;
+};
+
+export type GetSkillDescriptionResponse = GetSkillDescriptionResponses[keyof GetSkillDescriptionResponses];
+
+export type SetSkillDescriptionData = {
+    body: SetSkillDescriptionRequest;
+    path: {
+        /**
+         * Skill document ID
+         */
+        document_id: string;
+    };
+    query?: never;
+    url: '/documents/{document_id}/skill_description';
+};
+
+export type SetSkillDescriptionErrors = {
+    /**
+     * The document is not a skill, or the description is invalid
+     */
+    400: ErrorResponse;
+    401: ErrorResponse;
+    404: ErrorResponse;
+    500: ErrorResponse;
+};
+
+export type SetSkillDescriptionError = SetSkillDescriptionErrors[keyof SetSkillDescriptionErrors];
+
+export type SetSkillDescriptionResponses = {
+    200: SkillDescriptionBody;
+};
+
+export type SetSkillDescriptionResponse = SetSkillDescriptionResponses[keyof SetSkillDescriptionResponses];
 
 export type GetDocumentTeamShareData = {
     body?: never;

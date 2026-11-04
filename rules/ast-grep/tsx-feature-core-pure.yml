@@ -16,6 +16,7 @@ note: |-
   Block-agent names its rendering layers `ui/` and `component/`.
 files:
   - apps/web/src/features/task-templates/core/**
+  - apps/web/src/features/notifications-inbox/core/**
   - apps/web/src/features/command/core/**
   - apps/web/src/features/document-composer/core/**
   - apps/web/src/features/task-composer/core/**

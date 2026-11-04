@@ -114,6 +114,10 @@ The import ledger accepts Jira Cloud sources with `jira_issue`, `jira_project`
 and `jira_epic` kinds. Jira has its own concurrent partial team-claim index; source
 and kind constraints expand without rewriting existing rows and validate separately.
 
+`crm_pipeline_stage_requirements` stores pipeline-owned rules keyed by stage
+column, option and required column IDs. Foreign-key cascades remove rules when
+any referenced stage, field or pipeline is explicitly deleted; renames preserve them.
+
 `mcp_oauth_*` tables hold the public MCP OAuth broker's state (registrations,
 refresh token bindings, pending authorizations, issued codes); their queries and
 expiry sweep belong to `mcp_auth_proxy`. Rows carry `expires_at` and have no

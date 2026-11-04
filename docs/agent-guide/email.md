@@ -65,7 +65,24 @@ view. `Shift+M` mutes the selected rows or the open thread, and `S` and
 `Shift+M` also work on a thread opened in its own split. In a thread, `O` opens
 or closes the selected message (the latest when none is selected), `Shift+O`
 opens every message including the collapsed middle run, and `N`/`P` step
-messages like the arrows. `Cmd+Up`/`Cmd+Down` jump to either end of a list.
+messages like the arrows. `B` in an open thread, or `Create event` in its
+title menu, opens the event composer with the subject as the title and every
+From, To and Cc address except the viewer's as guests (Bcc and drafts are left
+out); both are hidden while the calendar is off. With `enable-universal-input`
+on, the composer also sends the subject and latest message to
+`/universal_input/extract` (`intent: 'calendar'`, the Cmd+K event extractor)
+and, while a small spinner shows left of Cancel (left of Create event on phones),
+fills in
+the suggested title, time, location and repeat rule. Suggestions that arrive after
+any edit are dropped. The desktop reply and standalone composers have the same
+action as a calendar button between attach and the schedule clock (tooltip
+`Create event` and `B`; in the standalone composer `B` works while focus is
+outside the editor, as in a reply it works from the thread). It uses the draft instead: subject, To
+and Cc as guests, and the written text (with the replied-to message in a
+reply) for extraction. The button is accented while the written text, above
+any quoted thread, pairs a meeting word with a time (`proposesMeeting` in
+`email-compose/core/meeting-intent.ts`, a keyword heuristic until a classifier
+replaces it). `Cmd+Up`/`Cmd+Down` jump to either end of a list.
 In every composer `Cmd+Shift+.`, `Cmd+Shift+,` and `Cmd+Shift+D` discard the
 draft exactly like its trash button, `Cmd+Shift+U` opens the attach picker, and
 `Cmd+Shift+X`, `7`, `8` and `9` apply strikethrough, numbered list, bulleted
@@ -151,6 +168,14 @@ query: load more threads from the same address, then check that existing row
 names and their hover cards do not change. Repeat with a text query to exercise
 the search-service results.
 
+Hovering a sender's name in a Mail row or a collapsed thread message shows the
+sender's card. Clicking the name, or anywhere else on the row, opens that email
+or message; clicking inside the card (its actions, padding, or name) never
+opens the row underneath. On touch, tapping a collapsed message's sender
+picture opens the message. The backend-free desktop/phone regression is
+`bunx playwright test --config src/features/entity/browser-test/playwright.config.ts`
+from `apps/web`.
+
 `Favorites`, directly below Inbox on desktop, lists starred Macro emails across
 Signal, Noise, and archived mail. It respects the selected inboxes and filters; search
 within the tab is also restricted to favorites. Removing a star removes the row
@@ -182,22 +207,33 @@ their message, unless that message only closes the exchange ("Thanks!"). `Follow
 marks only threads whose
 latest message is the owner's, and `Reply needed` only threads whose latest message
 is someone else's. A thread holding only the owner's sent mail is not listed: it
-has no inbox state, so Mark Done could not remove it. Rows at least 32rem wide show the 0-100
-importance score with a five-bar meter just before the date, and from 56rem also
-`Reply needed` and `Follow up` tag pills ahead of it. Narrower rows drop both;
-without a touch screen the score moves before the subject, and touch screens
-show neither. The desktop header's sort dropdown (`Sort Focus`, among the view
-options) switches between **Most recent**, the default, and **Importance**, which
-is flat with no day headers; touch layouts have no dropdown and keep the saved
-order. A saved order that no longer exists restores as Most recent. The filter menu adds a Focus group (Reply
+has no inbox state, so Mark Done could not remove it. Each row says why it is
+there with one tag pill: `Reply needed`, else `Follow up`, else its category as
+`Calendar change`, `Customer`, `Teammate` or `Contact`; other categories show no
+pill. While the list is sorted by Importance, the 0-100 score and five bars
+colored by band join it, red through green; Most recent hides them. The meter's
+tooltip and label add `rising` or `falling` while a thread's importance is moving:
+Jev judges per thread whether it gets more pressing or matters less as it sits, and
+the read moves the score from the time of its classified message until newer mail
+arrives. Threads classified before those questions stay flat until their next
+message. Rows at least 40rem wide keep both just before the date. Narrower Focus
+rows stack, on touch too, with the subject on its own line and both ahead of the
+preview, so a narrow desktop window still shows the meter. The desktop
+header's sort dropdown (`Sort Focus`, among the view options) switches between
+**Most recent**, the default, and **Importance**, which
+is flat with no day headers. Touch layouts, phone or tablet, have no dropdown and
+keep the saved order: Most recent, which shows no meter, unless that browser had
+already saved Importance. A saved order
+that no longer exists restores as Most recent. The filter menu adds a Focus group (Reply
 needed, Follow up) on this tab only and has no Status or Done group there. The
 list is one `user.emailFocus` GraphQL read filtered on the client. New mail
 reaches an open Focus tab within seconds: when the worker stores a
 classification it pushes `refresh_email` (`focus_updated`) to the inbox's owner
 and delegates, and the tab reads the list again without a reload. A hidden tab
 reads once when it next shows, and any other tab reads when Focus opens. Time
-passing stores nothing and pushes nothing, so a follow-up coming due or a
-calendar change whose event ends shows at the tab's next read. Mark
+passing stores nothing and pushes nothing, so a follow-up coming due, a
+calendar change whose event ends or importance moving shows at the tab's next
+read. Mark
 Done hides the row at once and archives the thread; Undo brings it back. The
 worker classifies only inboxes on its `FOCUS_ENABLED_EMAIL_DOMAINS` allowlist, so
 other accounts see the empty state `You're caught up`, whose **See the rest of

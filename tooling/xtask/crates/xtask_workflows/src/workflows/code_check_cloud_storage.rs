@@ -105,10 +105,7 @@ fn check() -> Job {
         .add_step(steps::setup_nix())
         .add_step(steps::setup_dev_shell())
         .add_step(steps::configure_namespace_sccache(vars::CI_SCCACHE_NAME))
-        .add_step(
-            Step::new("Check embedded code execution assets")
-                .run("nix build --no-link .#checks.x86_64-linux.code-execution-assets"),
-        )
+        .add_step(steps::code_mode_assets())
         .add_step(cargo_fmt())
         .add_step(cargo_clippy())
         .add_step(steps::show_sccache_stats())
@@ -144,6 +141,7 @@ fn doppler_config() -> Job {
         .add_step(steps::setup_nix())
         .add_step(steps::setup_dev_shell())
         .add_step(steps::configure_namespace_sccache(vars::CI_SCCACHE_NAME))
+        .add_step(steps::code_mode_assets())
         .add_step(compute_doppler_bins())
         .add_step(validate_doppler_configs())
         .add_step(steps::show_sccache_stats())
@@ -195,6 +193,7 @@ fn test() -> Job {
         .add_step(steps::setup_dev_shell())
         .add_step(steps::configure_namespace_sccache(vars::CI_SCCACHE_NAME))
         .add_step(steps::start_sccache_server())
+        .add_step(steps::code_mode_assets())
         .add_step(configure_postgres())
         .add_step(prepare_tests())
         .add_step(run_tests())
@@ -275,8 +274,13 @@ fn paths_filter() -> Step<gh_workflow::Use> {
                   - 'tooling/xtask/**'
                   - 'static_assets/**'
                   - 'nix/**'
+                  - 'nix-support/node_modules*'
                   - 'flake.nix'
                   - 'flake.lock'
+                  - 'bun.lock'
+                  - 'packages/sdk/**'
+                  - 'packages/sdk-docs/**'
+                  - 'packages/code-mode-sdk/**'
                   - '.github/actions/setup-nix/**'
                   - '.github/actions/setup-nix-dev-shell/**'
                   - '.github/actions/teardown-nix/**'

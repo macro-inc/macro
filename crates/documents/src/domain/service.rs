@@ -80,6 +80,7 @@ use super::response::{
     CreateDocumentResponseData, DocumentMetadataWithContent, DocumentResponse,
     DocumentResponseMetadataWithContent, GetDocumentResponseData, LocationResponseV3,
 };
+use super::skill_description::SkillDescription;
 
 /// The concrete document service implementation.
 pub struct DocumentServiceImpl<
@@ -2362,6 +2363,52 @@ impl<
         let state = self.repo.get_team_share(document_id).await?;
 
         Ok(state.into())
+    }
+
+    #[tracing::instrument(err, skip(self, entity_access_receipt, description))]
+    async fn set_skill_description(
+        &self,
+        entity_access_receipt: EntityAccessReceipt<EditAccessLevel>,
+        description: SkillDescription,
+    ) -> Result<(), DocumentError> {
+        let document_id = &entity_access_receipt.entity().entity_id;
+        let metadata = self
+            .repo
+            .get_document_metadata(document_id)
+            .await
+            .map_err(|e| DocumentError::Internal(e.into()))?;
+        if metadata.sub_type != Some(DocumentSubType::Skill) {
+            return Err(DocumentError::BadRequest(
+                "only a skill has a description".to_string(),
+            ));
+        }
+        self.repo
+            .set_skill_description(document_id, &description)
+            .await
+            .map_err(|e| DocumentError::Internal(e.into()))
+    }
+
+    #[tracing::instrument(err, skip(self, description))]
+    async fn describe_new_skill(
+        &self,
+        document_id: &str,
+        description: SkillDescription,
+    ) -> Result<(), DocumentError> {
+        self.repo
+            .set_skill_description(document_id, &description)
+            .await
+            .map_err(|e| DocumentError::Internal(e.into()))
+    }
+
+    #[tracing::instrument(err, skip(self, document_ids), fields(skills = document_ids.len()))]
+    async fn skill_descriptions(
+        &self,
+        document_ids: &[String],
+    ) -> Result<std::collections::HashMap<String, SkillDescription>, DocumentError> {
+        self.repo
+            .get_skill_descriptions(document_ids)
+            .await
+            .map_err(|e| DocumentError::Internal(e.into()))
     }
 
     #[tracing::instrument(err, skip(self, entity_access_receipt))]

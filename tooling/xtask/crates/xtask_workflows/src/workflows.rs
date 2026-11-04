@@ -9,6 +9,7 @@
 //! files — [`runners`] (runner labels), [`vars`] (env / secrets / concurrency),
 //! and [`steps`] (reusable step + job helpers).
 
+mod android_play_publish;
 mod android_play_release;
 mod android_release_drift;
 mod android_release_watch;
@@ -344,6 +345,11 @@ const WORKFLOWS: &[WorkflowFile] = &[
         slug: "android_play_release",
         file_name: "android-play-release.yml",
         render_yaml: || render_gh_workflow(android_play_release::android_play_release)(),
+    },
+    WorkflowFile {
+        slug: "android_play_publish",
+        file_name: "android-play-publish.yml",
+        render_yaml: || render_gh_workflow(android_play_publish::android_play_publish)(),
     },
     WorkflowFile {
         slug: "android_release_watch",

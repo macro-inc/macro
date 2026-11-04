@@ -32,6 +32,8 @@ export { PropertyDefinition, PropertyOption };
  * Property definitions and tag sets. Entity-level reads and writes live on
  * the entity handles ({@link PropertiedEntity.properties}, `setProperty`,
  * `deleteProperty`).
+ *
+ * @routing Use when the request is about an item's custom properties themselves, such as defining a property or bulk-setting its options; not creating or updating a task, deal, event or row, whose own methods set their fields.
  */
 export class PropertiesNamespace {
   constructor(private readonly client: MacroClient) {}

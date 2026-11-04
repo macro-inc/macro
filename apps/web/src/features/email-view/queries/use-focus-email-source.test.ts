@@ -58,9 +58,11 @@ function email(
     isImportant: false,
     done: false,
     focus: {
+      category: 'OTHER',
       importance: 50,
       needsReply: false,
       needsFollowUp: false,
+      importanceTrend: 'FLAT',
       ...focus,
     },
     ...overrides,

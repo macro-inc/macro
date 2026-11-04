@@ -36,6 +36,12 @@ word docs, Illustrator/Photoshop files).
 - `src/inbound/axum_router.rs`: the HTTP surface; `axum_router/get_text.rs`
   serves `/text-content` through `src/domain/text.rs`. Native Markdown comes
   from live collaborative storage, not the legacy S3 export.
+- `src/domain/ai_edit.rs`: SDK editing of markdown documents and tasks by
+  instructions. `POST /{id}/ai-edit` runs EditDocument's `AiEditingService`
+  (admission, models, metering) with a token minted like EditDocument's: 422
+  `edit_refused` is the worker's clarification, 502 `edit_failed` may have
+  partly applied, and a client disconnect drops the worker call (never spawn
+  it).
 
 ## Scope
 

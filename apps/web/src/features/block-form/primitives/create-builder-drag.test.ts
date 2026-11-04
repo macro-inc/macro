@@ -80,6 +80,7 @@ const layout: FormLayout = {
       kind: 'questions',
       gateRules: null,
       gateMessage: '',
+      showWhen: null,
       bookingTarget: null,
       questions: [question('q1'), question('q2'), question('q3')],
     },
@@ -90,6 +91,7 @@ const layout: FormLayout = {
       kind: 'questions',
       gateRules: null,
       gateMessage: '',
+      showWhen: null,
       bookingTarget: null,
       questions: [],
     },
@@ -194,6 +196,7 @@ it('drags a question type from the palette, creating it at the marked slot only 
           ],
           gateRules: null,
           gateMessage: '',
+          showWhen: null,
           bookingTarget: null,
         },
       ],
@@ -388,6 +391,7 @@ it('drags a new section from the sidebar into the form and creates it only on a 
           questions: [],
           gateRules: null,
           gateMessage: '',
+          showWhen: null,
           bookingTarget: null,
         },
         {
@@ -398,6 +402,7 @@ it('drags a new section from the sidebar into the form and creates it only on a 
           questions: [],
           gateRules: null,
           gateMessage: '',
+          showWhen: null,
           bookingTarget: null,
         },
       ],
@@ -503,6 +508,7 @@ it('shows and announces a new section dropped below the booking step where it la
     questions: [],
     gateRules: null,
     gateMessage: '',
+    showWhen: null,
     bookingTarget: null,
   });
   const formLayout: FormLayout = {

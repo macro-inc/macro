@@ -25,8 +25,10 @@ use crate::domain::models::{
 };
 
 mod anonymous;
+mod authoring_branching;
 mod authoring_workflow;
 mod booking;
+mod branching;
 mod catalog;
 mod create;
 mod drafts;
@@ -193,6 +195,7 @@ fn rsvp_layout() -> FormLayout {
                         widget: Some(Widget::Date),
                     },
                 ],
+                show_when: None,
             },
             FormSection::Gate {
                 id: ELIGIBILITY,
@@ -230,6 +233,7 @@ fn rsvp_layout() -> FormLayout {
                         widget: None,
                     },
                 ],
+                show_when: None,
             },
         ],
     }

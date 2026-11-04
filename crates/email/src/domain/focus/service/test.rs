@@ -168,7 +168,7 @@ impl FocusClassifier for FakeClassifier {
 
 /// Focus yes, reply needed, everything else no.
 fn relevant() -> Vec<f32> {
-    vec![0.9, 0.0, 0.0, 0.0, 0.0, 0.0, 0.9, 0.0]
+    vec![0.9, 0.0, 0.0, 0.0, 0.0, 0.0, 0.9, 0.0, 0.0, 0.0]
 }
 
 fn thread(owner_email: &str) -> FocusThread {
@@ -245,7 +245,8 @@ fn noon() -> DateTime<Utc> {
 
 /// A classification of `thread`'s latest message: Focus low, reply needed.
 fn stored_at(thread: &FocusThread, rule_version: i16) -> StoredClassification {
-    let answers = FocusAnswers::from_probabilities(&[0.1, 0.0, 0.0, 0.0, 0.0, 0.0, 0.9, 0.0]);
+    let answers =
+        FocusAnswers::from_probabilities(&[0.1, 0.0, 0.0, 0.0, 0.0, 0.0, 0.9, 0.0, 0.0, 0.0]);
     StoredClassification {
         message_id: thread.messages.last().unwrap().id,
         rule_version,
@@ -803,7 +804,8 @@ async fn outside_the_signal_inbox_only_key_mail_reaches_the_classifier() {
 async fn a_thread_the_owner_answered_last_is_classified_outside_the_signal_inbox() {
     let store = FakeStore::default();
     // Reads as automated, so only the wait can bring it in.
-    let classifier = FakeClassifier::answering(Ok(vec![0.0, 0.0, 0.9, 0.0, 0.0, 0.0, 0.0, 0.0]));
+    let classifier =
+        FakeClassifier::answering(Ok(vec![0.0, 0.0, 0.9, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0]));
     let mut waiting = thread("owner@acme.example");
     waiting.is_signal = false;
     let mut reply = waiting.messages[0].clone();

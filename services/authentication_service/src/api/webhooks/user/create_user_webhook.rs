@@ -668,6 +668,17 @@ pub(in crate::api) async fn revert_unconfirmed_agent(ctx: &ApiContext, user_id: 
     }
 }
 
+/// A new account signed up with an identity provider from the agent signup
+/// page. FusionAuth creates the account before the sign-in returns, and its
+/// webhook cannot see the sign-in's state, so the flag is set here. A failure
+/// here must not block signing in.
+pub(in crate::api) async fn mark_sso_signup_as_agent(ctx: &ApiContext, user_id: &str, email: &str) {
+    match macro_db_client::user::mark_agent::mark_agent(&ctx.db, email).await {
+        Ok(()) => tracing::info!(user_id, "marked new SSO account as an agent"),
+        Err(e) => tracing::error!(error=?e, user_id, "unable to mark new SSO account as an agent"),
+    }
+}
+
 /// Seed the starter documents with retries.
 async fn initialize_starter_docs_with_retries(
     client: &document_storage_service_client::DocumentStorageServiceClient,

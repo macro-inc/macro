@@ -59,6 +59,7 @@ fn focus(importance: u8) -> ThreadFocus {
         needs_reply: true,
         needs_follow_up: false,
         classified_at: Utc.with_ymd_and_hms(2026, 10, 9, 12, 0, 0).unwrap(),
+        importance_trend: ImportanceTrend::Flat,
     }
 }
 
@@ -139,6 +140,50 @@ async fn focus_edge_maps_stored_classifications() {
             .iter()
             .any(|(who, _)| who == "macro|viewer@acme.example:30")
     );
+}
+
+#[tokio::test]
+async fn focus_edge_says_which_way_importance_is_moving() {
+    let threads = [Uuid::new_v4(), Uuid::new_v4(), Uuid::new_v4()];
+    let trends = [
+        ImportanceTrend::Up,
+        ImportanceTrend::Down,
+        ImportanceTrend::Flat,
+    ];
+    let reader = Arc::new(FakeReader {
+        stored: threads
+            .into_iter()
+            .zip(trends)
+            .map(|(thread, importance_trend)| {
+                (
+                    thread,
+                    ThreadFocus {
+                        importance_trend,
+                        ..focus(50)
+                    },
+                )
+            })
+            .collect(),
+        ordered: Vec::new(),
+        calls: Mutex::default(),
+        failing: false,
+    });
+    let schema = Schema::build(
+        Query {
+            threads: threads.to_vec(),
+        },
+        EmptyMutation,
+        EmptySubscription,
+    )
+    .data(email_thread_focus_loader(user(), reader))
+    .finish();
+
+    let response = schema.execute("{ focus { importanceTrend } }").await;
+    assert!(response.errors.is_empty(), "{:?}", response.errors);
+    let data = response.data.into_json().unwrap();
+    assert_eq!(data["focus"][0]["importanceTrend"], "UP");
+    assert_eq!(data["focus"][1]["importanceTrend"], "DOWN");
+    assert_eq!(data["focus"][2]["importanceTrend"], "FLAT");
 }
 
 #[tokio::test]

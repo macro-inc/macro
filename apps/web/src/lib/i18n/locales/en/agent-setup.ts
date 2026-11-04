@@ -1,4 +1,4 @@
-/** An agent account's setup dialog and the tag that marks agent accounts. */
+/** An agent account's setup page and the tag that marks agent accounts. */
 export default {
   tag: 'Agent',
   title: 'Your agent account is ready',
@@ -10,10 +10,13 @@ export default {
     'We couldn’t add you to the team that invited you. Reload this page to try again, which replaces this token, or join later from the link in your invite email.',
   tokenLabel: 'SDK token',
   useToken: '1. Use the token',
-  readDocs: 'Read the docs:',
+  docsHeading: 'Documentation',
+  productDocs: 'Macro documentation',
+  sdkDocs: 'SDK documentation and generated API reference',
   setProfile: '2. Set your name and profile picture',
   anotherToken: '3. Need another token later?',
   anotherTokenSettings: 'You can also create one in Settings → API Keys.',
-  confirm: 'I saved this token',
-  confirmFailed: 'Failed to save. Try again.',
+  openApp: 'Open the app',
+  openAppLink: 'I saved my token, open Macro',
+  confirmFailed: 'Couldn’t confirm that you saved your token.',
 };

@@ -10,6 +10,7 @@ import { calendarPath } from '@app/features/calendar-view/calendar-url';
 import { CALENDAR_VIEW_ID } from '@app/features/calendar-view/types';
 import { requestSearchFocus } from '@app/features/next-soup/soup-view/search-controllers';
 import { useRecentViewFlag } from '@app/features/next-soup/use-recent-view-flag';
+import { useUnifiedNotificationsFlag } from '@app/features/notifications-inbox/use-unified-notifications-flag';
 import {
   InviteModal,
   setInviteModalOpen,
@@ -71,19 +72,25 @@ export interface SidebarItem {
   standaloneHotkey?: boolean;
 }
 
-const SIDEBAR_LINKS = [
-  {
-    id: 'home',
-    get label() {
-      return isTouchDevice() ? t('nav.notifications') : t('nav.home');
-    },
-    href: LIST_VIEW_PATHS.home,
-    get icon() {
-      return isTouchDevice() ? BellIcon : HomeIcon;
-    },
-    hotkey: ['h', 'i'],
-    hotkeyToken: TOKENS.sidebar.goTo.home,
+/**
+ * Home answers `g i` too, unless the Notifications link is on the rail: two
+ * links on one key run only the first, so `i` belongs to Notifications then.
+ */
+const homeLink = (hotkey: ValidHotkey | ValidHotkey[]): SidebarItem => ({
+  id: 'home',
+  get label() {
+    return isTouchDevice() ? t('nav.notifications') : t('nav.home');
   },
+  href: LIST_VIEW_PATHS.home,
+  get icon() {
+    return isTouchDevice() ? BellIcon : HomeIcon;
+  },
+  hotkey,
+  hotkeyToken: TOKENS.sidebar.goTo.home,
+});
+
+const SIDEBAR_LINKS = [
+  homeLink(['h', 'i']),
   {
     id: 'search',
     get label() {
@@ -253,6 +260,7 @@ export const GoToHotkeys = () => {
   const activityFeedEnabled = useActivityFeedFlag();
   const recentViewEnabled = useRecentViewFlag();
   const reviews = useFeatureFlag(enableTasksReviews);
+  const notificationsEnabled = useUnifiedNotificationsFlag();
   const external = useFeatureFlag(enableWhatsappLinked);
   const crm = useFeatureFlag(enableCrm);
   const links = createMemo((): SidebarItem[] =>
@@ -261,6 +269,7 @@ export const GoToHotkeys = () => {
       activityFeedEnabled(),
       recentViewEnabled(),
       reviews().enabled,
+      notificationsEnabled(),
       external().enabled,
       crm().enabled
     )
@@ -419,6 +428,17 @@ const COMPANIES_LINK: SidebarItem = {
   hotkeyToken: TOKENS.sidebar.goTo.companies,
 };
 
+const NOTIFICATIONS_LINK: SidebarItem = {
+  id: 'notifications',
+  get label() {
+    return t('nav.notifications');
+  },
+  href: '/notifications',
+  icon: BellIcon,
+  hotkey: 'i',
+  hotkeyToken: TOKENS.sidebar.goTo.notifications,
+};
+
 const ACTIVITY_LINK: SidebarItem = {
   id: 'activity',
   get label() {
@@ -468,15 +488,17 @@ const EXTERNAL_LINK: SidebarItem = {
 
 /**
  * Assemble the ordered sidebar link list: the static links plus the
- * flag-gated Recent, Activity, Calendar, Calls, Reviews, CRM, and External
- * entries in their correct positions. Callers subscribe to the flags and pass
- * them in, so a flag that resolves after mount still rebuilds the list.
+ * flag-gated Notifications, Recent, Activity, Calendar, Calls, Reviews, CRM,
+ * and External entries in their correct positions. Callers subscribe to the
+ * flags and pass them in, so a flag that resolves after mount still rebuilds
+ * the list.
  */
-const buildSidebarLinks = (
+export const buildSidebarLinks = (
   showCalendar: boolean,
   showActivity: boolean,
   showRecent: boolean,
   showReviews: boolean,
+  showNotifications: boolean,
   showExternal: boolean,
   showCustomers: boolean
 ): SidebarItem[] => {
@@ -489,8 +511,13 @@ const buildSidebarLinks = (
     links = [...links.slice(0, idx + 1), link, ...links.slice(idx + 1)];
   };
 
-  // Home leads; Recent and Activity follow it in that order.
+  // Home leads; Notifications, Recent and Activity follow it in that order.
   let anchorId = 'home';
+  if (showNotifications) {
+    links = links.map((link) => (link.id === 'home' ? homeLink('h') : link));
+    insertAfter(anchorId, NOTIFICATIONS_LINK);
+    anchorId = 'notifications';
+  }
   if (showRecent) {
     insertAfter(anchorId, RECENT_LINK);
     anchorId = 'recent';

@@ -5,8 +5,8 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { PublicBookingShell } from './public-booking-shell';
 
 const platform = vi.hoisted(() => ({ native: true }));
-vi.mock('@core/mobile/isNativeMobilePlatform', () => ({
-  isNativeMobilePlatform: () => platform.native,
+vi.mock('@core/util/platform', () => ({
+  isTauri: () => platform.native,
 }));
 
 beforeEach(() => {

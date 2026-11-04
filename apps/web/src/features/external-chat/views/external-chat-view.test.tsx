@@ -21,7 +21,20 @@ const mocks = vi.hoisted(() => ({
   restore: vi.fn(),
   focus: vi.fn(),
   failure: vi.fn(),
+  popoverSplit: vi.fn(),
 }));
+vi.mock('@components/app/split-layout/layout', async (importOriginal) => {
+  const actual =
+    await importOriginal<
+      typeof import('@components/app/split-layout/layout')
+    >();
+  return {
+    useSplitLayout: () => ({
+      ...actual.useSplitLayout(),
+      popoverSplit: mocks.popoverSplit,
+    }),
+  };
+});
 vi.mock('@core/context/user', () => ({
   useUserId: () => () => 'macro|me@example.test',
 }));
@@ -188,6 +201,44 @@ it('lets a viewer without WhatsApp read and offers to connect', () => {
   expect(screen.queryByRole('button', { name: 'Reply' })).toBeNull();
   fireEvent.click(screen.getByRole('button', { name: 'Connect WhatsApp' }));
   expect(connect).toHaveBeenCalledOnce();
+});
+
+it('makes a task from a message for a viewer who cannot reply', () => {
+  const fake = createFakeChat({
+    chat: {
+      ...chat,
+      accessLevel: 'view',
+      canSend: false,
+      sendReason: 'no_account',
+    },
+  });
+  mount(fake);
+  const row = document.querySelector('[data-message-id="message-1"]');
+  if (!row) throw new Error('message row missing');
+  fireEvent.pointerEnter(row);
+  expect(screen.queryByRole('button', { name: 'Reply' })).toBeNull();
+  fireEvent.click(screen.getByRole('button', { name: 'Task' }));
+  expect(mocks.popoverSplit).toHaveBeenCalledWith({
+    type: 'component',
+    id: 'task-compose',
+    params: {
+      initialTitle: 'The *updated* designs are ready for review.',
+      initialContent:
+        '<m-document-mention>{"documentId":"019a061e-0000-7000-8000-000000000001","documentName":"Design Crit","blockName":"external_chat"}</m-document-mention>',
+      initialAssigneeIds: undefined,
+    },
+  });
+});
+
+it('offers no task on a deleted message', () => {
+  const fake = createFakeChat({
+    messages: [{ ...messages[0], deleted: true }],
+  });
+  mount(fake);
+  const row = document.querySelector('[data-message-id="message-1"]');
+  if (!row) throw new Error('message row missing');
+  fireEvent.pointerEnter(row);
+  expect(screen.queryByRole('button', { name: 'Task' })).toBeNull();
 });
 
 it('offers actions on rows that rendered before the viewer could send', () => {
