@@ -1,0 +1,16 @@
+export default {
+  title: 'People',
+  roleFrom: 'From',
+  roleTo: 'To',
+  roleCc: 'Cc',
+  openContact: 'Contact',
+  openCompanyLabel: 'Open company {{name}}',
+  openContactLabel: 'Open CRM contact',
+  website: 'Website',
+  websiteLabel: 'Open {{domain}}',
+  linkedIn: 'LinkedIn',
+  linkedInLabel: 'Search LinkedIn for {{name}}',
+  lastContacted: 'Last contacted {{date}}',
+  showMore: { other: 'Show {{count}} more' },
+  showLess: 'Show less',
+};

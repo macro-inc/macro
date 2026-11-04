@@ -739,6 +739,7 @@ function useSidePanel() {
     toggle: ctx.toggle,
     isOverlayMode: ctx.isOverlayMode,
     hasSections: ctx.hasSections,
+    sections: ctx.sections,
     setOpenSectionIds: ctx.setOpenSectionIds,
     openSectionIds: ctx.openSectionIds,
   };

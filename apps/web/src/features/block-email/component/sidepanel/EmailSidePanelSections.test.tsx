@@ -28,6 +28,9 @@ vi.mock('@app/features/property/side-panel/properties', () => ({
   EntityPropertiesSection: () => null,
   EntityTagsSection: () => null,
 }));
+vi.mock('./EmailPeopleSection', () => ({
+  EmailPeopleSection: () => null,
+}));
 vi.mock('@core/component/References', () => ({
   References: () => <div>Reference details</div>,
 }));

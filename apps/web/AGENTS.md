@@ -83,6 +83,10 @@ otherwise); its backend-free regression opens it, scrolls to the last group,
 searches, and picks by keyboard:
 `bunx playwright test --config src/lib/core/component/Emoji/browser-test/playwright.config.ts`.
 
+The email side panel's People section (CRM contact and company per participant,
+remembered collapse) has a backend-free desktop/phone regression:
+`bunx playwright test --config src/features/block-email/browser-test/playwright.config.ts`.
+
 Discussion link scrolling has a backend-free browser regression:
 `bunx playwright test --config src/lib/core/messages/browser-test/playwright.config.ts`.
 

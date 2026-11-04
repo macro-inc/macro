@@ -607,6 +607,18 @@ press: a held key auto-repeats, and those repeats are ignored. Mark as unread (i
 the header or title menu) returns to the originating list with its tab, inbox, and
 filters preserved. Mark as not done and Mark as read
 stay on the current thread.
+The details toggle (`]`) opens the thread's side panel, a floating card on
+desktop and a bottom drawer on touch. Its first section, **People**, lists the
+thread's senders and To/Cc recipients other than you, each with avatar, name,
+email, and From/To/Cc role. When the team's CRM tracks the address, the row adds
+the contact's last interaction, the company (opens the company), **Contact**
+(opens the CRM contact), and **Website** (the company's first domain); named
+people get a **LinkedIn** people search. Addresses the CRM doesn't know show
+only what the headers carry. Collapsing or expanding the section is remembered
+on the device for every thread. The backend-free desktop/phone regression is
+`bunx playwright test --config src/features/block-email/browser-test/playwright.config.ts`
+from `apps/web`.
+
 Opening a saved draft from **Drafts** shows the title menu beside Back, since
 the composer has no subject line above it, and keeps the applicable header
 controls. Verify these remain

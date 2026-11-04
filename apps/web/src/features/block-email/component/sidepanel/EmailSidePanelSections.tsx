@@ -10,6 +10,7 @@ import { References } from '@core/component/References';
 import { queryReadyGate } from '@queries/gate';
 import { useAttachmentReferencesQuery } from '@queries/storage/attachment-references';
 import { Show, Suspense } from 'solid-js';
+import { EmailPeopleSection } from './EmailPeopleSection';
 
 interface EmailSidePanelSectionsProps {
   threadId: string;
@@ -22,6 +23,7 @@ export function EmailSidePanelSections(props: EmailSidePanelSectionsProps) {
 
   return (
     <>
+      <EmailPeopleSection order={10} />
       <EntityTagsSection
         entityId={props.threadId}
         entityType="THREAD"
