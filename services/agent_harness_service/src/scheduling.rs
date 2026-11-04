@@ -265,7 +265,6 @@ pub async fn build<Ingress: notification::domain::service::NotificationIngress>(
     );
 
     let service = Arc::new(
-        
         ScheduledActionServiceImpl::new(
             Arc::clone(&repo),
             service_executor,

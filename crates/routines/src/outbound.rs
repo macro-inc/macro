@@ -43,30 +43,30 @@ pub struct RoutineClient {
 impl RoutineClient {
     /// Build with a trusted service URL and internal key from application configuration.
     pub fn new(base: &str, key: &str) -> Result<Arc<Self>> {
-    let base = Url::parse(&format!("{}/", base.trim_end_matches('/')))?;
-    ensure!(
-        matches!(base.scheme(), "http" | "https")
-            && base.host_str().is_some()
-            && base.username().is_empty()
-            && base.password().is_none()
-            && base.query().is_none()
-            && base.fragment().is_none(),
-        "Invalid routine service URL"
-    );
-    ensure!(
-        !key.trim().is_empty(),
-        "Routine service credentials are required"
-    );
-    let mut key = HeaderValue::from_str(key)?;
-    key.set_sensitive(true);
-    let client = Client::builder()
-        .connect_timeout(Duration::from_secs(5))
-        .timeout(Duration::from_secs(30))
-        .redirect(reqwest::redirect::Policy::none())
-        .retry(reqwest::retry::never())
-        .build()?;
-    Ok(Arc::new(Self { client, base, key }))
-}
+        let base = Url::parse(&format!("{}/", base.trim_end_matches('/')))?;
+        ensure!(
+            matches!(base.scheme(), "http" | "https")
+                && base.host_str().is_some()
+                && base.username().is_empty()
+                && base.password().is_none()
+                && base.query().is_none()
+                && base.fragment().is_none(),
+            "Invalid routine service URL"
+        );
+        ensure!(
+            !key.trim().is_empty(),
+            "Routine service credentials are required"
+        );
+        let mut key = HeaderValue::from_str(key)?;
+        key.set_sensitive(true);
+        let client = Client::builder()
+            .connect_timeout(Duration::from_secs(5))
+            .timeout(Duration::from_secs(30))
+            .redirect(reqwest::redirect::Policy::none())
+            .retry(reqwest::retry::never())
+            .build()?;
+        Ok(Arc::new(Self { client, base, key }))
+    }
     async fn request<T: serde::de::DeserializeOwned>(
         &self,
         user: &MacroUserIdStr<'static>,
