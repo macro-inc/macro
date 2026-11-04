@@ -512,7 +512,7 @@ pub fn retract(stage: &Stage, env: &str) -> Result<String> {
     Ok(revision)
 }
 
-/// Mirror main and the current branch to the forge and open a pull request for
+/// Mirror the local view of main and the current branch to the forge and open a pull request for
 /// the branch, which is what runs CI there. GitHub remains the source of truth.
 pub fn mirror(stage: &Stage) -> Result<()> {
     let root = repo_root();
@@ -521,7 +521,6 @@ pub fn mirror(stage: &Stage) -> Result<()> {
     ensure_forge_repo(stage, FORGE_ORG, SOURCE_REPO, true)?;
     let url = forge_url(&format!("{FORGE_ORG}/{SOURCE_REPO}.git"));
     stage.run_step("Pushing to the forge", || {
-        git(&root, &["fetch", "-q", "origin", "main"])?;
         git(
             &root,
             &[
@@ -530,29 +529,40 @@ pub fn mirror(stage: &Stage) -> Result<()> {
                 "--force",
                 "--no-verify",
                 &url,
-                "FETCH_HEAD:refs/heads/main",
+                "refs/remotes/origin/main:refs/heads/main",
                 &format!("HEAD:refs/heads/{branch}"),
             ],
         )?;
         Ok(())
     })?;
     if branch != "main" {
-        let status = forge_api(
-            "POST",
-            &format!("repos/{FORGE_ORG}/{SOURCE_REPO}/pulls"),
-            &json!({ "base": "main", "head": branch, "title": branch }),
-        )?;
-        // 409: this branch already has an open pull request.
-        ensure!(
-            matches!(status, 201 | 409),
-            "opening a pull request: HTTP {status}"
-        );
+        open_pull_request(&branch)?;
     }
     stage.note(&format!(
         "ci: {}",
         forge_url(&format!("{FORGE_ORG}/{SOURCE_REPO}/actions"))
     ));
     Ok(())
+}
+
+fn open_pull_request(branch: &str) -> Result<()> {
+    let body = json!({ "base": "main", "head": branch, "title": branch });
+    let path = format!("repos/{FORGE_ORG}/{SOURCE_REPO}/pulls");
+    let mut attempts = 0;
+    loop {
+        let status = forge_api("POST", &path, &body)?;
+        // 409: this branch already has an open pull request.
+        if matches!(status, 201 | 409) {
+            return Ok(());
+        }
+        // 404 until the forge has indexed the branches just pushed.
+        attempts += 1;
+        ensure!(
+            status == 404 && attempts < 30,
+            "opening a pull request: HTTP {status}"
+        );
+        std::thread::sleep(Duration::from_secs(2));
+    }
 }
 
 /// Syncs `apps/`, so adding or removing a file there adds or removes an
@@ -664,6 +674,11 @@ pub fn wait_synced(stage: &Stage, name: &str, revision: &str) -> Result<()> {
                 let phase = app["status"]["operationState"]["phase"].as_str();
                 let synced_this = app["status"]["operationState"]["operation"]["sync"]["revision"]
                     == revision;
+                // Argo CD finishes a running sync before starting another, and
+                // one stuck on an unhealthy wave never finishes.
+                if !synced_this && matches!(phase, Some("Running")) {
+                    terminate_operation(name)?;
+                }
                 if synced_this && matches!(phase, Some("Error")) {
                     bail!(
                         "sync failed: {}",
@@ -700,6 +715,25 @@ pub fn wait_synced(stage: &Stage, name: &str, revision: &str) -> Result<()> {
         }
     }
     result
+}
+
+/// Stop a sync of an older revision, so the published one can start.
+fn terminate_operation(name: &str) -> Result<()> {
+    let status = kubectl()
+        .args([
+            "-n",
+            ARGOCD_NAMESPACE,
+            "patch",
+            "application",
+            name,
+            "--type=merge",
+            "-p",
+            r#"{"status":{"operationState":{"phase":"Terminating"}}}"#,
+        ])
+        .stdout(Stdio::null())
+        .status()?;
+    ensure!(status.success(), "terminating the sync of {name} failed");
+    Ok(())
 }
 
 /// Wait for Argo CD to delete an Application and everything it manages.

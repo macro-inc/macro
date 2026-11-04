@@ -267,6 +267,11 @@ let
                   name = "docker-socket";
                   mountPath = "/var/run";
                 }
+                # The runner copies actions through temp files; images have no /tmp.
+                {
+                  name = "tmp";
+                  mountPath = "/tmp";
+                }
               ];
             };
             # The runner starts each job as a container in this daemon. It is
@@ -303,6 +308,10 @@ let
             };
           };
           volumes = [
+            {
+              name = "tmp";
+              emptyDir = { };
+            }
             {
               name = "docker-socket";
               emptyDir = { };
