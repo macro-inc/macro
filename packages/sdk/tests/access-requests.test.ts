@@ -144,7 +144,11 @@ describe('Harness access', () => {
       requests.push(request.clone());
       return Response.json(
         request.method === 'GET'
-          ? { ...state(null), accessLevel: null, supportedLevels: ['view', 'edit'] }
+          ? {
+              ...state(null),
+              accessLevel: null,
+              supportedLevels: ['view', 'edit'],
+            }
           : record('pending', 1),
       );
     }) as typeof fetch;
