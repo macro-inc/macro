@@ -120,7 +120,7 @@ describe('UserCardDrawer', () => {
     expect(screen.getByRole('button', { name: 'Assign task' })).toBeTruthy();
   });
 
-  it('opens a draft to a person without a DM and closes the sheet', async () => {
+  it('opens a DM that only the first message creates, and closes the sheet', async () => {
     const user = userEvent.setup({ skipHover: true });
     render(() => <UserCardDrawer />);
     openJane();
@@ -132,13 +132,8 @@ describe('UserCardDrawer', () => {
       'macro|jane.doe@example.com'
     );
     expect(mocks.openWithSplit).toHaveBeenCalledWith(
-      {
-        type: 'component',
-        id: 'channel-compose',
-        params: { initialRecipientIds: ['macro|jane.doe@example.com'] },
-        preserveParams: true,
-      },
-      { preferNewSplit: false, allowDuplicate: true }
+      { type: 'channel', id: expect.stringMatching(/^pending-dm-/) },
+      { preferNewSplit: false }
     );
     expect(screen.queryByRole('button', { name: 'DM' })).toBeNull();
   });

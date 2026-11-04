@@ -143,6 +143,9 @@ vi.mock('./components/ChannelDetailView', () => ({
     </div>
   ),
 }));
+vi.mock('./components/PendingDirectMessageDetail', () => ({
+  PendingDirectMessageDetail: () => null,
+}));
 vi.mock('./components/ChannelThreadsView', () => ({
   ChannelThreadsView: () => <div data-testid="channel-threads" />,
 }));

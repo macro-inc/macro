@@ -384,14 +384,9 @@ registerComponent('my-activity', () => (
 ));
 
 registerComponent('loading', () => <LoadingBlock />);
-registerComponent('channel-compose', (params) => {
+registerComponent('channel-compose', () => {
   usePageViewTracking('channel-compose');
-  const initialRecipientIds = Array.isArray(params.initialRecipientIds)
-    ? params.initialRecipientIds.filter(
-        (value): value is string => typeof value === 'string'
-      )
-    : undefined;
-  return <ChannelCompose initialRecipientIds={initialRecipientIds} />;
+  return <ChannelCompose />;
 });
 registerComponent('email-compose', (params) => {
   usePageViewTracking('email-compose');

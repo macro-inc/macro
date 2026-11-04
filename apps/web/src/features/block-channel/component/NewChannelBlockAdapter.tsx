@@ -53,9 +53,20 @@ import {
 import { ChannelInviteButton } from '@channel/channel-invite-button';
 import { useChannelPictureActions } from '@channel/channel-picture';
 import { ChannelParticipantsTab } from '@channel/Participants/ChannelParticipantsTab';
+import {
+  isPendingDirectMessageId,
+  pendingDirectMessageRecipient,
+} from '@channel/primitives/pending-direct-messages';
+import {
+  PendingDirectMessage,
+  PendingDirectMessageTitle,
+} from '@channel/views/pending-direct-message';
 import { HeaderIsland } from '@components/app/split-layout/components/HeaderIsland';
 import { BlockSplitFileMenu } from '@components/app/split-layout/components/SplitFileMenu';
-import { SplitHeaderRight } from '@components/app/split-layout/components/SplitHeader';
+import {
+  SplitHeaderLeft,
+  SplitHeaderRight,
+} from '@components/app/split-layout/components/SplitHeader';
 import { SplitTitleFileMenu } from '@components/app/split-layout/components/SplitLabel';
 import { SplitLayoutContext } from '@components/app/split-layout/context';
 import {
@@ -93,6 +104,7 @@ import {
   Match,
   on,
   onCleanup,
+  onMount,
   Show,
   Suspense,
   Switch,
@@ -306,7 +318,44 @@ function NewTop(props: { channelId: string }) {
   );
 }
 
+/** A DM its first message will create, opened as a block (touch layouts). */
+function PendingDirectMessageBlock(props: { pendingId: string }) {
+  const panel = useSplitPanelOrThrow();
+  const recipientId = pendingDirectMessageRecipient(props.pendingId);
+  // A temporary id this tab didn't open (a reload, a restored layout) has no
+  // conversation behind it.
+  if (!recipientId) {
+    onMount(() => panel.handle.close());
+    return null;
+  }
+
+  return (
+    <>
+      <SplitHeaderLeft>
+        <HeaderIsland class="shrink">
+          <PendingDirectMessageTitle
+            pendingId={props.pendingId}
+            recipientId={recipientId}
+          />
+        </HeaderIsland>
+      </SplitHeaderLeft>
+      <PendingDirectMessage
+        pendingId={props.pendingId}
+        recipientId={recipientId}
+      />
+    </>
+  );
+}
+
 export function NewChannelBlockAdapter(props: BlockChannelProps) {
+  const blockId = useBlockId();
+  if (isPendingDirectMessageId(blockId)) {
+    return <PendingDirectMessageBlock pendingId={blockId} />;
+  }
+  return <ChannelBlockAdapter {...props} />;
+}
+
+function ChannelBlockAdapter(props: BlockChannelProps) {
   // Every other block gets its hotkey scope from `BlockContainer`, which the
   // channel block does not render — so set `blockHotkeyScopeSignal` here or
   // `useBlockEntityCommands` would register nothing at all. Commands go on

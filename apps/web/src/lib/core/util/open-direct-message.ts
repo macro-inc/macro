@@ -1,3 +1,4 @@
+import { pendingDirectMessageId } from '@channel/primitives/pending-direct-messages';
 import { useSplitLayout } from '@components/app/split-layout/layout';
 import type { OpenWithSplitOptions } from '@components/app/split-layout/layoutManager';
 import { useUserId } from '@core/context/user';
@@ -11,8 +12,9 @@ type OpenDirectMessageOptions = Pick<
 
 /**
  * Opens the conversation with a person without creating it: their existing
- * DM, or a draft addressed to them whose first message creates the DM. Opening
- * someone's profile never leaves an empty DM in the conversation list.
+ * DM, or a DM that doesn't exist yet, shown like an empty one, whose first
+ * message creates it. Opening someone's profile never leaves an empty DM in
+ * either person's list.
  */
 export function useOpenDirectMessage() {
   const { openWithSplit } = useSplitLayout();
@@ -32,7 +34,7 @@ export function useOpenDirectMessage() {
         async (lookup) => {
           const existing = await existingDirectMessage(viewerId, recipientId);
           // A channel list that fails to load only costs the history view:
-          // sending from the draft still reaches an existing DM.
+          // the first message still reaches an existing DM.
           if (existing.isErr()) {
             lookup.error(existing.error);
             return undefined;
@@ -55,17 +57,10 @@ export function useOpenDirectMessage() {
         return;
       }
 
-      span.setAttr('channels.open_direct_message.outcome', 'draft');
+      span.setAttr('channels.open_direct_message.outcome', 'pending');
       openWithSplit(
-        {
-          type: 'component',
-          id: 'channel-compose',
-          params: { initialRecipientIds: [recipientId] },
-          preserveParams: true,
-        },
-        // Each person gets a fresh draft instead of reusing one already open
-        // for someone else.
-        { ...options, allowDuplicate: true }
+        { type: 'channel', id: pendingDirectMessageId(recipientId) },
+        options
       );
     });
 }
