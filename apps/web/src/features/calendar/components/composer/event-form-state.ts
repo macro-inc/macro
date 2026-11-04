@@ -6,6 +6,7 @@ import { createEffect, createSignal, createUniqueId } from 'solid-js';
 import type { CalendarEventFormController } from './create-calendar-event-form-controller';
 import type { EventGuestPolicyRowProps } from './EventGuestPolicyRow';
 import type { EventComposerGuestsPillProps } from './EventPropertyPills';
+import { registerEventFormHotkeys } from './event-form-hotkeys';
 import type {
   EventEditorDisabledFields,
   EventEditorSubmitValues,
@@ -34,6 +35,8 @@ export interface EventFormProps {
    */
   detailsReadOnlyReason?: string;
   showRecurringEditNotice?: boolean;
+  /** The host's hotkey scope, where the form registers its field and save shortcuts. */
+  hotkeyScope?: string;
   /** Disable interaction without presenting the form as an in-flight save. */
   disabled?: boolean;
   pending: boolean;
@@ -206,7 +209,7 @@ export function createEventForm(props: EventFormProps) {
     );
   };
 
-  return {
+  const form = {
     props,
     ids,
     controller,
@@ -233,6 +236,8 @@ export function createEventForm(props: EventFormProps) {
     guestPolicy,
     submit,
   };
+  if (props.hotkeyScope) registerEventFormHotkeys(props.hotkeyScope, form);
+  return form;
 }
 
 export type EventFormState = ReturnType<typeof createEventForm>;

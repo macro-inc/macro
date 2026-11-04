@@ -624,6 +624,11 @@ function Submit() {
       variant="primary"
       disabled={!form.controller.canSave() || form.formIsDisabled()}
       aria-label={label()}
+      tooltip={
+        form.props.hotkeyScope
+          ? { content: label(), shortcut: 'cmd+enter' }
+          : undefined
+      }
     >
       <Show when={form.props.pending} fallback={label()}>
         <SpinnerIcon class="size-4 animate-spin" />

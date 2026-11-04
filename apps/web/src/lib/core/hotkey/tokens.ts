@@ -96,6 +96,14 @@ export const TOKENS = {
       today: 'calendar.period.today',
     },
     search: 'calendar.search',
+    composer: {
+      save: 'calendar.composer.save',
+      editStart: 'calendar.composer.editStart',
+      editEnd: 'calendar.composer.editEnd',
+      editGuests: 'calendar.composer.editGuests',
+      editLocation: 'calendar.composer.editLocation',
+      editConference: 'calendar.composer.editConference',
+    },
   },
 
   // global
@@ -172,6 +180,7 @@ export const TOKENS = {
     toggleReadingPane: 'email.toggleReadingPane',
     star: 'email.star',
     mute: 'email.mute',
+    createEvent: 'email.createEvent',
     compose: {
       edit: {
         recipients: 'email.compose.edit.recipients',
