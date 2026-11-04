@@ -70,6 +70,12 @@ pub struct Config {
     #[macro_config_default(false)]
     pub use_apollo_crm_enrichment: bool,
 
+    /// Look up the public profiles (LinkedIn link, headline, company) of the
+    /// people in email threads with Apollo.io, which sends their addresses
+    /// to Apollo. When `false`, only profiles already stored are served.
+    #[macro_config_default(false)]
+    pub use_apollo_person_enrichment: bool,
+
     /// Apollo.io API key for CRM enrichment. Locally this is the key
     /// itself; in deployed envs it's the name of the Secrets Manager
     /// secret holding it (resolved at startup). Empty disables enrichment.

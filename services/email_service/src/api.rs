@@ -1,5 +1,6 @@
 mod calendar_event_forward;
 mod calendar_invitations;
+pub(crate) mod person_profiles;
 pub(crate) mod read_receipts;
 use anyhow::Context;
 use axum::Router;
@@ -85,6 +86,10 @@ fn api_router(state: ApiContext) -> Router<ApiContext> {
         .route(
             "/email/threads/{thread_id}/read-receipts",
             axum::routing::get(read_receipts::thread),
+        )
+        .route(
+            "/email/threads/{thread_id}/person-profiles",
+            axum::routing::get(person_profiles::thread),
         )
         // Fetched by recipients' mail clients, so it takes no credentials.
         .route("/opens/{token}", axum::routing::get(read_receipts::pixel))

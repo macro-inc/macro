@@ -66,6 +66,7 @@ use utoipa::OpenApi;
         crate::api::calendar_invitations::handler,
         crate::api::calendar_invitations::copy_handler,
         crate::api::calendar_event_forward::handler,
+        crate::api::person_profiles::thread,
         crate::api::read_receipts::pixel,
         crate::api::read_receipts::thread,
         health::health_handler,

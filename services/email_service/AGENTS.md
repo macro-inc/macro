@@ -158,6 +158,11 @@ the gateway `/email` prefix.
   visibility while processing. Don't raise its receive batch: messages queued
   behind a long mailbox purge would be redelivered and purged twice.
   `PurgePacing` (`email_db_client::links::delete`) sets the purge's write rate.
+- `GET /email/threads/{thread_id}/person-profiles` sends participants'
+  addresses to Apollo.io only with `USE_APOLLO_PERSON_ENRICHMENT=true` (default
+  off, separate from `USE_APOLLO_CRM_ENRICHMENT`) and a non-empty
+  `APOLLO_API_KEY`; otherwise it serves stored profiles only. Set the switch
+  per environment in the `email-service` Doppler project.
 - `GET /opens/{token}` is public and must return the same uncacheable GIF for
   every token. Gmail sends add the pixel only to the provider copy in
   `outbound/scheduled_delivery.rs`; Outlook adds it through the materializer

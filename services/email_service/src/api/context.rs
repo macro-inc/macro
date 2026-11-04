@@ -150,6 +150,7 @@ pub(crate) struct ApiContext {
     >,
     pub mailbox_initializer: Arc<MailboxInitializer>,
     pub read_receipts: crate::composition::ReadReceipts,
+    pub person_profiles: crate::composition::PersonProfiles,
     pub invitation_snapshots: email::outbound::invitation_pg::InvitationPgRepository,
     pub invitation_resolver: Arc<
         calendar_events::domain::invitations::CalendarInvitationResolver<

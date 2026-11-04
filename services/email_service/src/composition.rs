@@ -77,6 +77,33 @@ pub type ReadReceipts = email::domain::read_receipts::ReadReceiptService<
     email::outbound::read_receipts_pg::ReadReceiptPgRepository,
 >;
 
+pub type PersonProfiles = email::domain::person_profiles::PersonProfileService<
+    email::outbound::person_profiles_pg::PersonProfilePgRepository,
+    email::outbound::apollo_person_resolver::ApolloPersonProfileResolver,
+>;
+
+/// Looks people up with Apollo only when enabled and a key is configured;
+/// otherwise serves stored profiles.
+pub fn person_profiles(
+    db: sqlx::PgPool,
+    enabled: bool,
+    apollo_api_key: &str,
+) -> anyhow::Result<PersonProfiles> {
+    let resolver = if enabled && !apollo_api_key.is_empty() {
+        Some(
+            email::outbound::apollo_person_resolver::ApolloPersonProfileResolver::new(
+                apollo_api_key.to_string(),
+            )?,
+        )
+    } else {
+        None
+    };
+    Ok(email::domain::person_profiles::PersonProfileService::new(
+        email::outbound::person_profiles_pg::PersonProfilePgRepository(db),
+        resolver,
+    ))
+}
+
 /// Pixels point at this service's public URL, which serves `/opens/{token}`.
 pub fn read_receipts(
     db: sqlx::PgPool,
