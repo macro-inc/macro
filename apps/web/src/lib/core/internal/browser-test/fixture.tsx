@@ -17,6 +17,7 @@ import {
   NotesListFilterFixture,
 } from './list-filter-fixture';
 import { changeViewer, fetchContactDirectoryPage } from './network';
+import { OnboardingContactsFixture } from './onboarding-contacts-fixture';
 import { RecipientDirectoryFixture } from './recipient-directory-fixture';
 import { RecipientRankingFixture } from './recipient-ranking-fixture';
 import { SoupFilterFixture } from './soup-filter-fixture';
@@ -144,6 +145,11 @@ render(
   () => (
     <QueryClientProvider client={client}>
       <Switch fallback={<App />}>
+        <Match
+          when={new URLSearchParams(location.search).has('onboarding-contacts')}
+        >
+          <OnboardingContactsFixture />
+        </Match>
         <Match
           when={new URLSearchParams(location.search).has('task-list-labels')}
         >

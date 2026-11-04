@@ -28,6 +28,11 @@ export const isCurrentQueryAccount = (owner: QueryAccount | undefined) =>
   !!owner &&
   owner.userId === account().userId &&
   owner.session === account().session;
+export function assertQueryAccount(
+  owner: QueryAccount | undefined
+): asserts owner is QueryAccount {
+  if (!isCurrentQueryAccount(owner)) throw new Error('Query account changed');
+}
 export function useTasksView() {
   return {
     state: taskState,

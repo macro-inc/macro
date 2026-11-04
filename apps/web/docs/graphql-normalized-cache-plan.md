@@ -1297,7 +1297,9 @@ Universal Input recipient/search/guest references now use complete per-label evi
 and independent picker/mention windows. Tasks filters use lazy windows too; their
 planner extracts references without a personal catalog and resolves complete evidence
 before applying any constraints. Inline checklist labels resolve only task-referenced
-IDs in bounded batches, not a directory map. Calendar create/edit, event-detail guest actions and AI-draft
+IDs in bounded batches, not a directory map. Onboarding searches only its approved
+domain and retains at most six non-self emails, with zero-history scoped queries.
+Calendar create/edit, event-detail guest actions and AI-draft
 composers now use bounded property windows with event-owned guest extras. Chosen
 names stay in selection metadata rather than a directory map, and person pages
 are not truncated again by the property UI. Shared scoped exclusions bind the

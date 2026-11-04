@@ -45,6 +45,13 @@ offline/retry and late replies after filter edits, navigation or replacement log
 Mobile retains its existing manual-only UI. Saved-view action chrome and task loading
 are stand-ins; this fixture does not claim saved-view dialog or live model coverage.
 
+`/?onboarding-contacts` mounts the real onboarding team step and bounded teammate
+query source over synthetic membership pages. It follows five empty continuations,
+stops after six eligible emails, excludes self/domain aliases, and keeps manual form
+edits when the domain source refreshes. A declined domain issues no contact query.
+Both desktop and phone are covered; auth scope and team writes are fixture adapters,
+not a live authorization or invitation-delivery test.
+
 `/?task-list-labels` mounts the real inline checklist bar and scoped label source
 with supplied document/task data and persistence. It resolves 501 referenced IDs
 in 500/1 batches, keeps malformed IDs local, filters by a late resolved name, and
@@ -87,7 +94,7 @@ checks twenty replacements, close/reopen reset and query-history collection.
 New message/channel, call, routine-template and sharing pickers use this source;
 main email fields also use it, with composition coverage in
 `features/email-compose/browser-test/recipient-directory.app.e2e.ts`. Remaining
-onboarding/import and database SQL people still require their separate migration.
+import and database SQL people still require their separate migration.
 
 This is UI/adapter coverage, not a WASM memory measurement or live-backend trace.
 Real Turso/OPFS hydration/search coverage lives in `crates/client/cache-turso`.

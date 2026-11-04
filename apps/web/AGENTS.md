@@ -124,6 +124,10 @@ any constraints. Preserve semantic Me separately from fixed self and resolve sav
 summary labels from their own IDs. Inline checklist labels resolve only referenced
 task assignees, in lookup-sized batches whose owners disappear with those references;
 never populate a personal-directory map or the global display-name store for them.
+Onboarding team prefill searches only the server-approved domain, follows bounded
+continuations until six distinct non-self emails or exhaustion, and retains only
+that seed. No approved domain means no contact reads. Scope the source by account,
+session and cache generation; preserve the form's first settled seed through refreshes.
 `CacheHost.people.resolveReferences` exposes the core's bounded full-directory
 ambiguity evidence. It needs a bound viewer and ready context only for inbox
 exclusions; callers must also check directory completeness. Missing reference

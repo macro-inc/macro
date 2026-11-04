@@ -16,6 +16,14 @@ export default defineConfig({
       enforce: 'pre',
       resolveId(source, importer) {
         if (
+          importer?.endsWith('/onboarding/queries/team-contacts.ts') &&
+          [
+            '@queries/auth/account-scope',
+            '@queries/auth/use-query-account',
+          ].includes(source)
+        )
+          return `${directory}/task-filter-adapters.tsx`;
+        if (
           importer?.endsWith('/task-list/TaskListControls.tsx') &&
           [
             '@queries/soup/items',
