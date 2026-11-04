@@ -397,16 +397,24 @@ impl<R: MessageRepository, E: MessageEventPublisher> MessageService<R, E> {
                 parent: parent.clone(),
                 actor: actor.clone(),
                 guest_name: None,
-                triggered_by: access
-                    .acting_user_id()
-                    .filter(|_| actor.as_bot().is_some() && input.attribution.has_acting_user())
-                    .map(ToString::to_string),
+                triggered_by: match &input.attribution {
+                    MessageAttribution::AccountManager { manager_user_id } => {
+                        Some(manager_user_id.clone())
+                    }
+                    MessageAttribution::ActingUser
+                    | MessageAttribution::ActingUserVia { .. }
+                    | MessageAttribution::Unprompted => access
+                        .acting_user_id()
+                        .filter(|_| actor.as_bot().is_some() && input.attribution.has_acting_user())
+                        .map(ToString::to_string),
+                },
                 triggered_via: match &input.attribution {
                     MessageAttribution::ActingUserVia { client } if actor.as_bot().is_some() => {
                         Some(client.clone())
                     }
                     MessageAttribution::ActingUserVia { .. }
                     | MessageAttribution::ActingUser
+                    | MessageAttribution::AccountManager { .. }
                     | MessageAttribution::Unprompted => None,
                 },
                 input,

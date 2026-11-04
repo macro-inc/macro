@@ -536,6 +536,12 @@ pub enum MessageAttribution {
         /// The client's self-reported name, for display only.
         client: String,
     },
+    /// An account manager posted with its credential for the sender's account;
+    /// the post records the manager's account.
+    AccountManager {
+        /// The agent account holding the credential.
+        manager_user_id: String,
+    },
     /// Autonomous webhook delivery has no invoking user.
     Unprompted,
 }
@@ -545,7 +551,7 @@ impl MessageAttribution {
     pub fn has_acting_user(&self) -> bool {
         match self {
             Self::ActingUser | Self::ActingUserVia { .. } => true,
-            Self::Unprompted => false,
+            Self::AccountManager { .. } | Self::Unprompted => false,
         }
     }
 }
