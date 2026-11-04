@@ -19,6 +19,7 @@ import { fireAndForget } from '@core/util/fireAndForget';
 import { throwOnErr } from '@core/util/result';
 import { deleteAgentSession } from '@queries/agent-session/entity-mutations';
 import { callKeys } from '@queries/call/keys';
+import { channelKeys } from '@queries/channel/keys';
 import { queryClient } from '@queries/client';
 import {
   getSoupEntityById,
@@ -42,6 +43,7 @@ import { permanentlyDeleteEntity } from '@queries/storage/entity-mutations';
 import { databasesKeys, formsKeys } from '@queries/storage/keys';
 import { callServiceClient } from '@service-call/client';
 import { scheduledActionClient } from '@service-scheduled-action/client';
+import { storageServiceClient } from '@service-storage/client';
 import type { ListedDatabase } from '@service-storage/generated/schemas/listedDatabase';
 import type { ListedForm } from '@service-storage/generated/schemas/listedForm';
 import { getEntityGraphqlClient } from '@service-storage/graphql-soup';
@@ -51,6 +53,9 @@ import { type EntityData, getEntityProjectId } from '../types/entity';
 import { BulkDeleteFailure } from './bulk-delete-result';
 
 function invalidateDeletedDssItems(entities: EntityData[]): void {
+  if (entities.some((e) => e.type === 'channel')) {
+    queryClient.invalidateQueries({ queryKey: channelKeys._def });
+  }
   if (entities.some((e) => e.type === 'call')) {
     queryClient.invalidateQueries({ queryKey: callKeys._def });
   }
@@ -135,6 +140,7 @@ export function createBulkDeleteDssItemsMutation() {
     const type = entity.type;
     return (
       type === 'agent_session' ||
+      type === 'channel' ||
       type === 'chat' ||
       type === 'document' ||
       type === 'project' ||
@@ -160,6 +166,16 @@ export function createBulkDeleteDssItemsMutation() {
       const deletions = deletable.map(async (e) => {
         if (e.type === 'agent_session') {
           await deleteAgentSession(e.id);
+          return true;
+        }
+        if (e.type === 'channel') {
+          if (graphqlSoupEnabled) {
+            await permanentlyDeleteEntity({ type: 'CHANNEL', id: e.id });
+          } else {
+            await throwOnErr(() =>
+              storageServiceClient.deleteChannel({ channel_id: e.id })
+            );
+          }
           return true;
         }
         if (e.type === 'call') {

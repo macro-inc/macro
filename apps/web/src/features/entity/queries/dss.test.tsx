@@ -13,6 +13,7 @@ const mocks = vi.hoisted(() => ({
   graphqlEnabled: vi.fn(() => true),
   deleteItem: vi.fn(),
   deleteCall: vi.fn(),
+  deleteChannel: vi.fn(),
   deleteCallGraphql: vi.fn(),
   deleteReminder: vi.fn(),
   deleteSchedule: vi.fn(),
@@ -75,7 +76,10 @@ vi.mock('@service-scheduled-action/client', () => ({
   scheduledActionClient: { deleteSchedule: mocks.deleteSchedule },
 }));
 vi.mock('@service-storage/client', () => ({
-  storageServiceClient: { reminders: { deleteReminder: mocks.deleteReminder } },
+  storageServiceClient: {
+    deleteChannel: mocks.deleteChannel,
+    reminders: { deleteReminder: mocks.deleteReminder },
+  },
 }));
 vi.mock('@service-storage/graphql-soup', () => ({
   getEntityGraphqlClient: () => mocks.graphqlClient,
@@ -83,6 +87,7 @@ vi.mock('@service-storage/graphql-soup', () => ({
 
 import { scheduledActionKeys } from '@app/features/routines/queries/keys';
 import { callKeys } from '@queries/call/keys';
+import { channelKeys } from '@queries/channel/keys';
 import {
   GRAPHQL_SOUP_DELETE_MUTATION_KEY,
   GRAPHQL_SOUP_DELETE_RETENTION_MS,
@@ -143,6 +148,7 @@ beforeEach(() => {
   mocks.removeSearch.mockReturnValue({ rollback: mocks.rollbackSearch });
   mocks.refresh.mockResolvedValue(undefined);
   mocks.deleteItem.mockResolvedValue(true);
+  mocks.deleteChannel.mockReturnValue(okAsync(undefined));
   mocks.trashDatabase.mockReturnValue(okAsync(undefined));
   mocks.moveToFolder.mockResolvedValue(true);
   mocks.copyItem.mockResolvedValue('copied-task');
@@ -470,7 +476,7 @@ describe('bulk delete GraphQL optimism', () => {
     const result = mutation.mutateAsync([
       entity('task-1'),
       entity('task-2'),
-      entity('channel', 'channel'),
+      entity('message', 'channel_message'),
     ]);
     await vi.waitFor(() =>
       expect([...pendingKeys()]).toEqual([
@@ -777,4 +783,33 @@ describe('moving databases and forms between folders', () => {
       [{ itemType: 'form', id: 'survey', folderId: null }],
     ]);
   });
+});
+
+describe('channel deletion', () => {
+  it.each([true, false])(
+    'deletes channels and refreshes channel caches (GraphQL: %s)',
+    async (graphql) => {
+      mocks.graphqlEnabled.mockReturnValue(graphql);
+      const invalidate = vi.spyOn(client, 'invalidateQueries');
+      const { mutation } = mount();
+
+      await expect(
+        mutation.mutateAsync([entity('channel-id', 'channel')])
+      ).resolves.toEqual([true]);
+
+      if (graphql) {
+        expect(mocks.deleteCallGraphql).toHaveBeenCalledWith({
+          type: 'CHANNEL',
+          id: 'channel-id',
+        });
+        expect(mocks.deleteChannel).not.toHaveBeenCalled();
+      } else {
+        expect(mocks.deleteChannel).toHaveBeenCalledWith({
+          channel_id: 'channel-id',
+        });
+        expect(mocks.deleteCallGraphql).not.toHaveBeenCalled();
+      }
+      expect(invalidate).toHaveBeenCalledWith({ queryKey: channelKeys._def });
+    }
+  );
 });
