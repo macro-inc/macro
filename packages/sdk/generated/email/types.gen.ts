@@ -1982,6 +1982,10 @@ export type RefreshEmailEvent = {
     link_id: string;
     status: BackfillStatus;
     total_threads: number;
+} | {
+    event: 'focus_updated';
+    link_id: string;
+    traceparent?: string | null;
 };
 
 /**

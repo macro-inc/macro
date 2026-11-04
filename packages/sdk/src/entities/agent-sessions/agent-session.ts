@@ -157,6 +157,16 @@ export class AgentSession extends MacroEntity<AgentSessionResponse> {
     );
   }
 
+  /** The session's URL in the Macro web app; hand it to users as the link. */
+  webUrl(): string {
+    return `${this.client.webAppUrl}/app/agent/${this.id}`;
+  }
+
+  /** Identity, loaded detail and {@link webUrl}, so serialized handles carry their link. */
+  override toJSON() {
+    return { ...super.toJSON(), url: this.webUrl() };
+  }
+
   /** A handle to an agent session by id. Details load on first access. */
   static byId(client: MacroClient, id: string): AgentSession {
     return new AgentSession(client, id);

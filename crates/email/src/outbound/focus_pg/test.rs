@@ -6,8 +6,8 @@ use sqlx::{Pool, Postgres};
 use super::*;
 use crate::domain::{
     focus::{
-        ClassifyOutcome, FocusAnswers, FocusClassifier, FocusClassifierError, FocusQueries,
-        FocusQuestion, FocusService, FocusThread, FocusVerdict, ProfileSource,
+        ClassifyOutcome, FocusAnswers, FocusClassifier, FocusClassifierError, FocusNotifier,
+        FocusQueries, FocusQuestion, FocusService, FocusThread, FocusVerdict, ProfileSource,
     },
     models::calendar_invitation::{CalendarInvitation, InvitationDateTime, InvitationMethod},
 };
@@ -71,14 +71,21 @@ impl FocusClassifier for FixedClassifier {
     }
 }
 
+struct NoReaders;
+
+impl FocusNotifier for NoReaders {
+    fn focus_changed(&self, _owner: &MacroUserIdStr<'static>, _link_id: Uuid) {}
+}
+
 fn worker(
     repo: &FocusPgRepository,
     answers: Result<Vec<f32>, FocusClassifierError>,
-) -> FocusService<FocusPgRepository, NoProfile, FixedClassifier> {
+) -> FocusService<FocusPgRepository, NoProfile, FixedClassifier, NoReaders> {
     FocusService::new(
         repo.clone(),
         NoProfile,
         FixedClassifier { answers },
+        NoReaders,
         vec!["acme.example".to_owned()],
     )
 }
