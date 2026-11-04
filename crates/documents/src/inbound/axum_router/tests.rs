@@ -1015,6 +1015,16 @@ fn test_router_with(
         task_dedup_service,
         lexical_client,
         creator,
+        #[cfg(feature = "ai_tools")]
+        ai_editing: Arc::new(crate::domain::ai_editing::AiEditingService::new(
+            Arc::new(
+                crate::outbound::editing_worker_client::ReqwestEditingWorkerClient::from_url(
+                    "http://localhost/unused-editing-worker".to_string(),
+                ),
+            ),
+            Arc::new(ai_billing::domain::admission::DisabledAiAdmissionService),
+            Arc::new(ai_usage::NoOpUsageRecorder),
+        )),
         document_permission_jwt_secret: "unused-jwt-secret".to_string(),
         non_user_owners,
     };

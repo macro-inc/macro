@@ -111,6 +111,27 @@ export const signupRoute = defineRoute({
   externalSearch: '*',
 });
 
+/** Signup for an AI agent: Google or email only, then its SDK token. */
+export const agentSignupRoute = defineRoute({
+  id: 'agent-signup',
+  path: 'signup/agent',
+  externalSearch: '*',
+});
+
+/** A new agent's SDK token and first steps, as a markdown page. */
+export const agentSetupRoute = defineRoute({
+  id: 'agent-setup',
+  path: 'agent-setup',
+  externalSearch: '*',
+});
+
+/** Confirms an agent saved its token, then opens the app. */
+export const agentSetupDoneRoute = defineRoute({
+  id: 'agent-setup-done',
+  path: 'agent-setup/done',
+  externalSearch: '*',
+});
+
 export const emailSignupCallbackRoute = defineRoute({
   id: 'email-signup-callback',
   path: EMAIL_SIGNUP_CALLBACK_PATH,

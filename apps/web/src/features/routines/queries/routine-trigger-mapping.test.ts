@@ -82,14 +82,17 @@ describe('routine trigger mapping', () => {
     expect(serializeTriggers(triggers)).toEqual(config);
   });
   it('restores a one-off instant as an editable local date', () => {
-    const config = {
-      type: 'cron' as const,
-      schedule: '30 15 9 12 11 * 2040',
-      timezone: 'UTC',
-    };
+    const config = { type: 'once' as const, at: '2040-11-12T09:15:30.000Z' };
     const triggers = parseRoutineTriggers(config)!;
     expect(triggers[0]).toMatchObject({ frequency: 'once' });
     expect(serializeTriggers(triggers)).toEqual(config);
+    // One-offs saved before the once trigger existed keep their instant.
+    const legacy = parseRoutineTriggers({
+      type: 'cron',
+      schedule: '30 15 9 12 11 * 2040',
+      timezone: 'UTC',
+    })!;
+    expect(serializeTriggers(legacy)).toEqual(config);
   });
 
   it('preserves the full backend event-filter capacity and empty selectors', () => {

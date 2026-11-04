@@ -1,6 +1,5 @@
 import { ViewSwitcherContext } from '@app/components/view-shell';
 import { ROUTER_BASE_CONCAT } from '@app/constants/routerBase';
-import { AgentSetupModal } from '@app/features/agent-setup/agent-setup-modal';
 import Banner from '@app/features/auth/banner/Banner';
 import { CalendarPermissionPrompt } from '@app/features/auth/CalendarPermissionPrompt';
 import { GithubReauthenticationPrompt } from '@app/features/auth/GithubReauthenticationPrompt';
@@ -223,7 +222,8 @@ export function PageContent(props: ParentProps) {
 }
 
 /**
- * Sends first-time desktop users into the onboarding flow at /onboarding.
+ * Sends first-time desktop users into the onboarding flow at /onboarding, and
+ * new agents on any platform to their setup page.
  * App chrome runs it, so it fires on any app destination (marketing SSO lands
  * on /app, not /login) and never on the onboarding pages themselves.
  */
@@ -232,14 +232,17 @@ function useNewOnboardingRedirect() {
   const navigate = useNavigate();
   const location = useLocation();
   createEffect(() => {
-    if (isMobile() || isNativeMobilePlatform()) return;
     // A pending read would suspend the chrome; wait for the user instead.
     const data = userInfoQuery.isSuccess ? userInfoQuery.data : undefined;
     if (data?.authenticated !== true || data.tutorialComplete !== false) {
       return;
     }
-    // Agents skip onboarding: AgentSetupModal shows their SDK token.
-    if (data.isAgent) return;
+    // Agents skip onboarding: their setup page shows their SDK token.
+    if (data.isAgent) {
+      navigate('/agent-setup', { replace: true });
+      return;
+    }
+    if (isMobile() || isNativeMobilePlatform()) return;
     // Preserve the deep link the user arrived on (a shared doc, an invite)
     // as ?next, and a lifecycle-email ?step, so finish() and the flow can
     // resume. Base-relative so navigate() can resolve it against the router.
@@ -378,7 +381,6 @@ export function AppChrome(props: ParentProps) {
         </FloatRegion>
       </Show>
       <InitialInteractiveOnboardingModal />
-      <AgentSetupModal />
       <Suspense>
         <Show when={isAuthenticated()}>
           <Launcher open={createMenuOpen()} onOpenChange={setCreateMenuOpen} />

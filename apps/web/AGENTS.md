@@ -203,6 +203,9 @@ Channel composer draft persistence has a backend-free browser regression:
 It checks draft blank lines across remounts, that a sent message renders its
 lines with the spacing the draft showed, and pending sends on desktop and phone: clear immediately, restore failed sends, and preserve a new draft typed during delivery.
 It also pastes a Macro link and Markdown into a code block, which must keep both as literal text.
+Its phone formatting regression opens the ribbon from the add drawer in the
+production message editor, removes selected strikethrough, and saves; keep
+the ribbon horizontally scrollable and preserve editor focus on its controls.
 
 Shared GraphQL query metadata has a backend-free desktop and iPhone WebKit regression:
 `bunx playwright test --config src/lib/urql-solid/browser-test/playwright.config.ts`.
@@ -475,6 +478,12 @@ resolved session ID; keep the existing `AgentSessionProvider` subscription to
 - Leave the login hint (`syncLoginStorage(true)`) before a full-page hosted
   SSO redirect; the callback sets only HttpOnly cookies, and a load without the
   hint never checks identity, so the returning user sees sign-in again.
+- Hold automatic reloads (`holdAutomaticReload`) across anything a reload would
+  lose. `createNativeAuthSession` holds them for the sheet: its result reaches
+  only the JavaScript that opened it, and leaving the app for a sign-in code
+  hides the page, the moment OTA bundles apply. Holds also reach the native
+  updater, whose foreground handler never asks the page. See
+  [reload diagnostics](tauri/src-tauri/README.md#diagnosing-unexpected-webview-reloads).
 - Disable GraphQL cache sessions and clear login hints on confirmed auth 401s,
   even with retained user data; preserve session state on transient failures.
 - Treat a repeated worker-ready frame as a coordinator restart: retire the old
