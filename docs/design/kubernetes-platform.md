@@ -326,25 +326,35 @@ Built and exercised on the local cluster (`infra/platform`, `cargo x platform`):
 
 Not built yet:
 
-- ai-editing-worker and analytics-proxy (celld lacks their Browser Rendering
-  and rate-limit bindings), convert-service, and the remaining Lambda handlers
-  (only the upload finalizer runs, as its local worker).
+- convert-service, and the Lambda handlers with S3 or SNS triggers.
 - Queues on Kafka (services still use the SQS API, on ElasticMQ), OpenBao for
   KMS, the email and push ports, and KEDA.
 - Phases 5 to 9: CI runners and bots, AWS, self-hosting, gRPC and service
   splits, and the prod cutover.
 - The parity check, and release images from crane. Every image today wraps a
   host-built debug binary.
-- The E2E suite has not been run against an instance.
+- The Playwright suite has not been run against an instance. The Rust suite
+  runs (`cargo x platform e2e`) and fails one assertion in
+  `scoped_bot_resolves_document_access_through_dss`; the same assertion fails on
+  a plain compose stack, so it is not caused by the platform.
+
+In progress, written but not yet running on an instance:
+
+- ai-editing-worker and analytics-proxy as celld fleets, with a headless
+  Chromium pod.
+- Eleven Lambda handlers, unmodified, behind `lambda-runner`, which serves them
+  the Lambda Runtime API and feeds them schedules and queues. This replaces the
+  plan to rewrite handlers as workers.
+- Provisioning as in-cluster Jobs.
+- The Helm chart generator and the terranix AWS module (nothing applied).
 
 Deviations from the decisions above, to revisit in the AWS phase:
 
 - Postgres, Kafka, and OpenSearch run as plain single-replica Deployments, not
   under CloudNativePG, Strimzi, or an OpenSearch operator. There is no failover
   or backup yet, so this is not prod-ready.
-- Provisioning (migrations, topics, buckets, queues, indices) and the celld
-  deploy run from the operator's machine through port-forwards, not as
-  in-cluster Jobs.
+- The running instance still provisions from the operator's machine through
+  port-forwards, until the in-cluster Jobs above land.
 - The env Secret comes from `cargo x platform`, not External Secrets.
 
 ## Resolved questions
@@ -366,5 +376,4 @@ Deviations from the decisions above, to revisit in the AWS phase:
   Services, and its Services must publish not-ready addresses. PVCs must be
   seeded like Docker volumes. On ZFS, kind needs overlayfs and
   `localStorageCapacityIsolation: false`; k3s on NixOS avoids kind entirely.
-- **The test EKS cluster** (`infra/stacks/environments-cluster`, deployed to
-  dev) is unused by this design. It should be destroyed to stop its cost.
+- **The test EKS cluster** has been destroyed, and its stack removed.

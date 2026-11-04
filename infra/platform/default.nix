@@ -1,32 +1,53 @@
 # Entry point for infra/platform. `instance` renders one Macro instance (one
-# namespace); `cluster` renders what each cluster runs once (ingress). Both
-# return kubenix-generated `List` manifests plus the images they reference.
+# namespace, one Argo CD Application); `cluster` renders what each cluster runs
+# once (ingress, Argo CD, the forge). Both are nixidy environments: rendered
+# YAML that `cargo x platform` commits to the deploy repo for Argo CD to sync.
 {
   pkgs,
-  kubenix,
-  nix-snapshotter,
+  nixidy,
+  nix2container,
 }:
 let
   inherit (pkgs) lib;
-  platformLib = import ./lib.nix { inherit pkgs nix-snapshotter; };
+  # What differs between clusters besides instance sizes: where images live.
+  registry = "localhost:5000";
+  # The rendered-manifests repo, in this cluster's forge. Secrets never go here.
+  deployRepository = "http://gitea-http.forge.svc.cluster.local:3000/platform/deploy.git";
+
+  platformLib = import ./lib.nix { inherit pkgs nix2container registry; };
   platformPkgs = import ./packages.nix { inherit pkgs; };
   instances = import ./instances.nix;
 
   render =
-    module:
-    (kubenix.evalModules.${pkgs.stdenv.hostPlatform.system} {
-      module =
-        { kubenix, ... }:
+    {
+      env,
+      rootPath,
+      modules,
+    }:
+    (nixidy.lib.mkEnvs {
+      inherit pkgs;
+      envs.${env}.modules = [
         {
-          imports = [
-            kubenix.modules.k8s
-            module
-          ];
-        };
-    }).config.kubernetes.generated;
-
-  # Ingress host and the cluster-wide pieces it needs.
-  traefikPort = 8443;
+          nixidy = {
+            target = {
+              repository = deployRepository;
+              branch = "main";
+              inherit rootPath;
+            };
+            # `platform down` deletes an Application; its resources go with it.
+            defaults = {
+              finalizer = "foreground";
+              syncPolicy.autoSync = {
+                enable = true;
+                prune = true;
+                selfHeal = true;
+              };
+            };
+          };
+        }
+      ]
+      ++ modules;
+    }).${env}.environmentPackage;
 in
 {
   inherit platformPkgs instances;
@@ -79,63 +100,76 @@ in
         "macro.com/instance" = name;
       };
       manifests = render {
-        kubernetes.namespace = namespace;
-        kubernetes.resources = lib.foldl' lib.recursiveUpdate {
-          namespaces.${namespace}.metadata = {
-            inherit labels;
-            name = namespace;
-          };
-          # Instances never reach each other: only their own pods and the
-          # cluster ingress may connect.
-          networkPolicies.isolate = {
-            metadata = { inherit labels; };
-            spec = {
-              podSelector = { };
-              policyTypes = [ "Ingress" ];
-              ingress = [
-                {
-                  from = [
-                    { podSelector = { }; }
-                    { namespaceSelector.matchLabels."kubernetes.io/metadata.name" = "platform-ingress"; }
-                  ];
-                }
-              ];
+        env = name;
+        rootPath = "./instances/${name}";
+        modules = [
+          {
+            applications.${namespace} = {
+              inherit namespace;
+              resources = lib.foldl' lib.recursiveUpdate {
+                namespaces.${namespace}.metadata = {
+                  inherit labels;
+                  annotations."argocd.argoproj.io/sync-wave" = "-3";
+                };
+                  # Instances never reach each other: only their own pods and the
+                  # cluster ingress may connect.
+                  networkPolicies.isolate = {
+                    metadata = { inherit labels; };
+                    spec = {
+                      podSelector = { };
+                      policyTypes = [ "Ingress" ];
+                      ingress = [
+                        {
+                          from = [
+                            { podSelector = { }; }
+                            { namespaceSelector.matchLabels."kubernetes.io/metadata.name" = "platform-ingress"; }
+                          ];
+                        }
+                      ];
+                    };
+                  };
+                  ingresses.edge = {
+                    metadata = { inherit labels; };
+                    spec = {
+                      ingressClassName = "traefik";
+                      tls = [
+                        {
+                          hosts = [ host ];
+                          secretName = "macro-tls";
+                        }
+                      ];
+                      rules = [
+                        {
+                          inherit host;
+                          http.paths = [
+                            {
+                              path = "/";
+                              pathType = "Prefix";
+                              backend.service = {
+                                name = "edge";
+                                port.number = 8080;
+                              };
+                            }
+                          ];
+                        }
+                      ];
+                    };
+                  };
+                } workloads;
             };
-          };
-          ingresses.edge = {
-            metadata = { inherit labels; };
-            spec = {
-              ingressClassName = "traefik";
-              tls = [
-                {
-                  hosts = [ host ];
-                  secretName = "macro-tls";
-                }
-              ];
-              rules = [
-                {
-                  inherit host;
-                  http.paths = [
-                    {
-                      path = "/";
-                      pathType = "Prefix";
-                      backend.service = {
-                        name = "edge";
-                        port.number = 8080;
-                      };
-                    }
-                  ];
-                }
-              ];
-            };
-          };
-        } workloads;
+          }
+        ];
       };
     in
     {
       inherit manifests namespace components;
-      infraWorkloads = lib.attrNames (lib.filterAttrs (_: w: w.infra or false) components);
       images = lib.mapAttrs (_: w: w.image) components;
+      # Pushes the named workloads' images, or every image.
+      push =
+        names:
+        platformLib.pushImages (
+          lib.mapAttrs (_: w: w.image) (if names == null then components else lib.getAttrs names components)
+        );
     };
 
   # Host-built binaries as store paths (the fast loop): cargo's output dir ->
@@ -153,106 +187,12 @@ in
       }
     );
 
-  cluster = render {
-    kubernetes.resources = {
-      namespaces.platform-ingress.metadata.name = "platform-ingress";
-      ingressClasses.traefik.spec.controller = "traefik.io/ingress-controller";
-      serviceAccounts.traefik.metadata.namespace = "platform-ingress";
-      clusterRoles.traefik.rules = [
-        {
-          apiGroups = [ "" ];
-          resources = [
-            "services"
-            "secrets"
-            "nodes"
-          ];
-          verbs = [
-            "get"
-            "list"
-            "watch"
-          ];
-        }
-        {
-          apiGroups = [ "discovery.k8s.io" ];
-          resources = [ "endpointslices" ];
-          verbs = [
-            "get"
-            "list"
-            "watch"
-          ];
-        }
-        {
-          apiGroups = [ "networking.k8s.io" ];
-          resources = [
-            "ingresses"
-            "ingressclasses"
-          ];
-          verbs = [
-            "get"
-            "list"
-            "watch"
-          ];
-        }
-        {
-          apiGroups = [ "networking.k8s.io" ];
-          resources = [ "ingresses/status" ];
-          verbs = [ "update" ];
-        }
-      ];
-      clusterRoleBindings.traefik = {
-        roleRef = {
-          apiGroup = "rbac.authorization.k8s.io";
-          kind = "ClusterRole";
-          name = "traefik";
-        };
-        subjects = [
-          {
-            kind = "ServiceAccount";
-            name = "traefik";
-            namespace = "platform-ingress";
-          }
-        ];
-      };
-      deployments.traefik = {
-        metadata.namespace = "platform-ingress";
-        spec = {
-          # One pod owns the host port; a rolling update would deadlock on it.
-          strategy.type = "Recreate";
-          selector.matchLabels.app = "traefik";
-          template = {
-            metadata.labels.app = "traefik";
-            spec = {
-              serviceAccountName = "traefik";
-              containers.traefik = {
-                image =
-                  (platformLib.image {
-                    name = "traefik";
-                    contents = [ pkgs.traefik ];
-                    entrypoint = [
-                      "traefik"
-                      "--entrypoints.websecure.address=:${toString traefikPort}"
-                      "--entrypoints.websecure.http.tls=true"
-                      # Uploads and long requests: no entrypoint read deadline.
-                      "--entrypoints.websecure.transport.respondingTimeouts.readTimeout=0"
-                      "--providers.kubernetesingress=true"
-                      "--providers.kubernetesingress.ingressclass=traefik"
-                      "--log.level=WARN"
-                    ];
-                  }).ref;
-                ports = [
-                  {
-                    containerPort = traefikPort;
-                    # Loopback only on the host; the public NIC never sees it.
-                    hostPort = 9443;
-                    hostIP = "127.0.0.1";
-                    protocol = "TCP";
-                  }
-                ];
-              };
-            };
-          };
-        };
-      };
-    };
+  cluster = import ./cluster.nix {
+    inherit
+      pkgs
+      lib
+      platformLib
+      render
+      ;
   };
 }

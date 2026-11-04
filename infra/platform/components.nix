@@ -841,6 +841,7 @@ in
     ]
     // {
       infra = true;
+      wave = -1;
     };
   fleet-migrate = provisioner [
     "platform"

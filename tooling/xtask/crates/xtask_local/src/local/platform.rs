@@ -7,11 +7,12 @@
 //! host-side artifacts the fast loop feeds Nix (Cargo binaries, the frontend
 //! bundle), asks Nix for the instance's manifests, and applies them.
 //!
-//! Images are store paths (`nix:0/nix/store/...`), resolved by the node's nix
-//! snapshotter from this machine's own store, so nothing is pushed: changing a
-//! service is a Cargo build, one Nix build, and one Deployment rollout.
+//! Images are OCI images built by Nix and pushed to the cluster's registry;
+//! manifests are rendered by nixidy and committed to the deploy repo in the
+//! cluster's forge, which Argo CD syncs (see `gitops`). Changing a service is a
+//! Cargo build, one Nix build, one layer push, and one Deployment rollout.
 
-use std::collections::{BTreeMap, BTreeSet};
+use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
 use std::process::{Child, Command, Stdio};
 
@@ -29,6 +30,7 @@ use super::{
     repo_root,
 };
 
+mod gitops;
 #[cfg(test)]
 mod test;
 
@@ -55,6 +57,8 @@ pub enum PlatformCmd {
     Dev(DevArgs),
     /// Delete an instance and all of its data.
     Down(NameArg),
+    /// Create or update what the cluster runs once: ingress, Argo CD, the forge.
+    Cluster,
     /// Regenerate the checked-in edge Caddyfile from the service inventory.
     Caddyfile,
     /// Seed an instance and run the local E2E suites against it.
@@ -130,6 +134,7 @@ pub fn run(cmd: PlatformCmd) -> Result<()> {
         PlatformCmd::Up(args) => up(&args),
         PlatformCmd::Dev(args) => dev(&args),
         PlatformCmd::Down(args) => down(&args),
+        PlatformCmd::Cluster => cluster(&Stage::from_env_cli(false)),
         PlatformCmd::Caddyfile => {
             let path = repo_root().join(CADDYFILE);
             std::fs::write(&path, caddyfile())?;
@@ -344,12 +349,18 @@ fn up(args: &UpArgs) -> Result<()> {
     state.env_revision = digest(&serde_json::to_string(&shared_env)?);
     write_state(&instance, &state)?;
 
-    let manifests = build_manifests(&stage, &name, &state)?;
-    let cluster = build_cluster_manifests(&stage)?;
-    apply_list(&stage, "cluster ingress", &cluster)?;
+    cluster(&stage)?;
 
     let namespace = name.namespace();
-    apply_items(&stage, "namespace", &[namespace_of(&manifests)?])?;
+    apply_items(
+        &stage,
+        "namespace",
+        &[json!({
+            "apiVersion": "v1",
+            "kind": "Namespace",
+            "metadata": { "name": namespace },
+        })],
+    )?;
     apply_items(
         &stage,
         "secrets",
@@ -379,17 +390,13 @@ fn up(args: &UpArgs) -> Result<()> {
         ],
     )?;
 
-    // Infra first, so services never boot against an unmigrated database;
-    // then the same provisioning `run_local` runs; then everything.
-    let infra = items_with_tier(&manifests, "infra");
-    apply_items(&stage, "infra", &infra)?;
-    wait_ready(&stage, &namespace, Some("infra"))?;
-    wait_job(&stage, &namespace, "provision")?;
-    let all = items(&manifests);
-    apply_items(&stage, "services", &all)?;
-    prune(&stage, &name, &all)?;
-    wait_job(&stage, &namespace, "fleet-migrate")?;
-    wait_ready(&stage, &namespace, None)?;
+    // Argo CD applies these in sync waves: the data plane, then provisioning,
+    // then everything that depends on them.
+    push_images(&stage, &name, &state, None)?;
+    let rendered = build_manifests(&stage, &name, &state)?;
+    let revision = gitops::publish(&stage, &instance_env(&name), Path::new(&rendered))?;
+    gitops::refresh("apps")?;
+    gitops::wait_synced(&stage, &namespace, &revision)?;
 
     stage.section(&format!("instance {} is up", name.as_str()));
     stage.note(&format!("app:      {}/app/", name.origin()));
@@ -398,6 +405,8 @@ fn up(args: &UpArgs) -> Result<()> {
         name.origin()
     ));
     stage.note(&format!("kubectl:  kubectl -n {namespace} get pods"));
+    stage.note("argo cd:  https://argocd.localhost:9443/");
+    stage.note("forge:    https://git.localhost:9443/");
     stage.note(&format!(
         "tls:      trust {} once",
         repo_root().join("infra/local/certs/ca.pem").display()
@@ -430,30 +439,11 @@ fn dev(args: &DevArgs) -> Result<()> {
     cargo_build(&stage, &bins)?;
     state.binaries.extend(wrap_binaries(&stage, &bins)?);
     write_state(&instance, &state)?;
-    let manifests = build_manifests(&stage, &name, &state)?;
-    let changed: Vec<Value> = items(&manifests)
-        .into_iter()
-        .filter(|item| {
-            item["kind"] == "Deployment"
-                && item["metadata"]["name"]
-                    .as_str()
-                    .is_some_and(|n| args.workloads.iter().any(|w| w == n))
-        })
-        .collect();
-    apply_items(&stage, "changed deployments", &changed)?;
-    for w in &args.workloads {
-        let mut cmd = kubectl();
-        cmd.args([
-            "-n",
-            &name.namespace(),
-            "rollout",
-            "status",
-            &format!("deploy/{w}"),
-            "--timeout=5m",
-        ]);
-        stage.run(&format!("Rolling {w}"), &mut cmd)?;
-    }
-    Ok(())
+    push_images(&stage, &name, &state, Some(&args.workloads))?;
+    let rendered = build_manifests(&stage, &name, &state)?;
+    let revision = gitops::publish(&stage, &instance_env(&name), Path::new(&rendered))?;
+    gitops::refresh(&name.namespace())?;
+    gitops::wait_synced(&stage, &name.namespace(), &revision)
 }
 
 /// Where `up` leaves the instance's resolved env for host-side tooling.
@@ -523,6 +513,10 @@ fn e2e(args: &E2eArgs) -> Result<()> {
 fn down(args: &NameArg) -> Result<()> {
     let stage = Stage::from_env_cli(false);
     let name = InstanceName::parse(&args.name)?;
+    gitops::retract(&stage, &instance_env(&name))?;
+    gitops::refresh("apps")?;
+    gitops::wait_deleted(&stage, &name.namespace())?;
+    // Secrets and volumes `platform up` created outside the deploy repo.
     let mut cmd = kubectl();
     cmd.args([
         "delete",
@@ -537,12 +531,62 @@ fn down(args: &NameArg) -> Result<()> {
     )
 }
 
+/// Where an instance's manifests live in the deploy repo.
+fn instance_env(name: &InstanceName) -> String {
+    format!("instances/{}", name.as_str())
+}
+
+/// Bring up the shared services, then hand them to Argo CD.
+fn cluster(stage: &Stage) -> Result<()> {
+    let push = nix_build(stage, "Building cluster images", "p.cluster.push")?;
+    run_push(stage, "cluster", push.first().context("no push script")?)?;
+    let rendered = nix_build(stage, "Rendering the cluster", "p.cluster.manifests")?;
+    gitops::ensure_cluster(
+        stage,
+        Path::new(rendered.first().context("nix build printed no path")?),
+    )
+}
+
+/// Build and push images: the named workloads', or all of them.
+fn push_images(
+    stage: &Stage,
+    name: &InstanceName,
+    state: &State,
+    workloads: Option<&[String]>,
+) -> Result<()> {
+    let names = match workloads {
+        Some(w) => format!(
+            "[ {} ]",
+            w.iter()
+                .map(|n| format!("\"{n}\""))
+                .collect::<Vec<_>>()
+                .join(" ")
+        ),
+        None => "null".to_owned(),
+    };
+    let expr = format!("(({}).push {names})", instance_expr(name, state)?);
+    let paths = nix_build(stage, "Building images (nix)", &expr)?;
+    run_push(
+        stage,
+        name.as_str(),
+        paths.first().context("nix build printed no path")?,
+    )
+}
+
+fn run_push(stage: &Stage, label: &str, script: &str) -> Result<()> {
+    let mut cmd = Command::new(format!("{script}/bin/push-images"));
+    stage.run(&format!("Pushing {label} images"), &mut cmd)
+}
+
 /// A leaf for `host`, signed by the development CA (`infra/local/certs`).
 fn issue_host_certificate(instance: &Instance, host: &str) -> Result<PathBuf> {
-    let dir = instance.ensure_artifact_dir()?.join("ingress-certs");
+    issue_certificate(&instance.ensure_artifact_dir()?.join("ingress-certs"), host)
+}
+
+fn issue_certificate(dir: &Path, host: &str) -> Result<PathBuf> {
     let out = Command::new("bash")
         .arg(repo_root().join("infra/local/certs/issue-host.sh"))
-        .arg(&dir)
+        .arg(dir)
         .arg(host)
         .arg("exact")
         .output()
@@ -552,7 +596,7 @@ fn issue_host_certificate(instance: &Instance, host: &str) -> Result<PathBuf> {
         "issuing the instance certificate: {}",
         String::from_utf8_lossy(&out.stderr)
     );
-    Ok(dir)
+    Ok(dir.to_path_buf())
 }
 
 fn kubectl() -> Command {
@@ -734,7 +778,8 @@ fn build_node_services(stage: &Stage, instance: &Instance) -> Result<BTreeMap<St
 }
 
 /// Build the instance's images and manifests (one derivation) and read them.
-fn build_manifests(stage: &Stage, name: &InstanceName, state: &State) -> Result<Value> {
+/// The Nix expression for one instance at its recorded build.
+fn instance_expr(name: &InstanceName, state: &State) -> Result<String> {
     let binaries = state
         .binaries
         .iter()
@@ -752,56 +797,24 @@ fn build_manifests(stage: &Stage, name: &InstanceName, state: &State) -> Result<
         .collect::<Vec<_>>()
         .join(" ");
     let kafka_port = name.local_instance()?.port(Port::Kafka);
-    let expr = format!(
-        "let i = p.instance {{ name = \"{}\"; host = \"{}\"; envRevision = \"{}\"; \
+    Ok(format!(
+        "p.instance {{ name = \"{}\"; host = \"{}\"; envRevision = \"{}\"; \
          kafkaHostPort = {kafka_port}; \
          binaries = {{ {binaries} }}; node = {{ {node} }}; \
-         frontend = builtins.storePath \"{frontend}\"; }}; \
-         in (import f.inputs.nixpkgs {{ system = \"x86_64-linux\"; }}).writeText \
-         \"{}-manifests.json\" (builtins.toJSON i.manifests)",
+         frontend = builtins.storePath \"{frontend}\"; }}",
         name.as_str(),
         name.host(),
         state.env_revision,
-        name.namespace()
-    );
-    let paths = nix_build(stage, "Building images and manifests (nix)", &expr)?;
-    let path = paths.first().context("nix build printed no path")?;
-    serde_json::from_str(&std::fs::read_to_string(path)?).context("parsing manifests")
+    ))
 }
 
-fn build_cluster_manifests(stage: &Stage) -> Result<Value> {
-    let expr = "(import f.inputs.nixpkgs { system = \"x86_64-linux\"; }).writeText \
-                \"cluster-manifests.json\" (builtins.toJSON p.cluster)";
-    let paths = nix_build(stage, "Building cluster manifests (nix)", expr)?;
-    let path = paths.first().context("nix build printed no path")?;
-    serde_json::from_str(&std::fs::read_to_string(path)?).context("parsing manifests")
-}
-
-pub fn items(list: &Value) -> Vec<Value> {
-    list["items"].as_array().cloned().unwrap_or_default()
-}
-
-pub fn items_with_tier(list: &Value, tier: &str) -> Vec<Value> {
-    items(list)
+/// Render the instance's manifests; returns nixidy's output directory.
+fn build_manifests(stage: &Stage, name: &InstanceName, state: &State) -> Result<String> {
+    let expr = format!("({}).manifests", instance_expr(name, state)?);
+    nix_build(stage, "Rendering manifests (nix)", &expr)?
         .into_iter()
-        .filter(|i| {
-            let kind = i["kind"].as_str().unwrap_or("");
-            // Namespace-level policy and storage come with the infra.
-            matches!(kind, "NetworkPolicy" | "PersistentVolumeClaim")
-                || i["metadata"]["labels"]["macro.com/tier"] == tier
-        })
-        .collect()
-}
-
-fn namespace_of(list: &Value) -> Result<Value> {
-    items(list)
-        .into_iter()
-        .find(|i| i["kind"] == "Namespace")
-        .context("instance manifests have no Namespace")
-}
-
-fn apply_list(stage: &Stage, label: &str, list: &Value) -> Result<()> {
-    apply_items(stage, label, &items(list))
+        .next()
+        .context("nix build printed no path")
 }
 
 fn apply_items(stage: &Stage, label: &str, items: &[Value]) -> Result<()> {
@@ -835,123 +848,6 @@ fn apply_items(stage: &Stage, label: &str, items: &[Value]) -> Result<()> {
         );
         Ok(())
     })
-}
-
-/// Kinds an instance owns, for pruning what its manifests no longer list.
-const PRUNABLE: &[&str] = &[
-    "deployments.apps",
-    "jobs.batch",
-    "services",
-    "configmaps",
-    "ingresses.networking.k8s.io",
-    "networkpolicies.networking.k8s.io",
-];
-
-fn prune(stage: &Stage, name: &InstanceName, desired: &[Value]) -> Result<()> {
-    let keep: BTreeSet<(String, String)> = desired
-        .iter()
-        .filter_map(|i| {
-            Some((
-                i["kind"].as_str()?.to_owned(),
-                i["metadata"]["name"].as_str()?.to_owned(),
-            ))
-        })
-        .collect();
-    let out = kubectl()
-        .args([
-            "-n",
-            &name.namespace(),
-            "get",
-            &PRUNABLE.join(","),
-            "-l",
-            &format!("macro.com/instance={}", name.as_str()),
-            "-o",
-            "json",
-        ])
-        .output()?;
-    ensure!(out.status.success(), "kubectl get failed");
-    let current: Value = serde_json::from_slice(&out.stdout)?;
-    for item in items(&current) {
-        let kind = item["kind"].as_str().unwrap_or_default().to_owned();
-        let n = item["metadata"]["name"]
-            .as_str()
-            .unwrap_or_default()
-            .to_owned();
-        if !keep.contains(&(kind.clone(), n.clone())) {
-            let mut cmd = kubectl();
-            cmd.args(["-n", &name.namespace(), "delete", &kind.to_lowercase(), &n]);
-            stage.run(&format!("Pruning {kind} {n}"), &mut cmd)?;
-        }
-    }
-    Ok(())
-}
-
-/// Wait for this revision's provisioning Job to finish.
-fn wait_job(stage: &Stage, namespace: &str, job: &str) -> Result<()> {
-    let mut cmd = kubectl();
-    cmd.args([
-        "-n",
-        namespace,
-        "wait",
-        "job",
-        "-l",
-        &format!("macro.com/job={job}"),
-        "--for=condition=Complete",
-        "--timeout=20m",
-    ]);
-    let result = stage.run(&format!("Waiting for the {job} job"), &mut cmd);
-    if result.is_err() {
-        let _ = kubectl()
-            .args([
-                "-n",
-                namespace,
-                "logs",
-                "-l",
-                &format!("macro.com/job={job}"),
-                "--tail=20",
-            ])
-            .status();
-    }
-    result
-}
-
-/// Wait for each Deployment's rollout. `wait --for=condition=Available` is not
-/// enough: during a rolling update the old pods keep a Deployment available.
-fn wait_ready(stage: &Stage, namespace: &str, tier: Option<&str>) -> Result<()> {
-    let mut list = kubectl();
-    list.args(["-n", namespace, "get", "deployments", "-o", "name"]);
-    if let Some(t) = tier {
-        list.args(["-l", &format!("macro.com/tier={t}")]);
-    }
-    let out = list.output().context("listing deployments")?;
-    ensure!(out.status.success(), "kubectl get deployments failed");
-    let label = match tier {
-        Some(t) => format!("Waiting for {t} workloads"),
-        None => "Waiting for every workload".to_owned(),
-    };
-    let names = String::from_utf8(out.stdout)?;
-    let result = stage.run_step(&label, || {
-        for deployment in names.lines() {
-            let status = kubectl()
-                .args([
-                    "-n",
-                    namespace,
-                    "rollout",
-                    "status",
-                    deployment,
-                    "--timeout=20m",
-                ])
-                .stdout(Stdio::null())
-                .status()
-                .context("running kubectl rollout status")?;
-            ensure!(status.success(), "{deployment} did not roll out");
-        }
-        Ok(())
-    });
-    if result.is_err() {
-        let _ = kubectl().args(["-n", namespace, "get", "pods"]).status();
-    }
-    result
 }
 
 fn secret(namespace: &str, name: &str, kind: &str, data: &BTreeMap<String, String>) -> Value {

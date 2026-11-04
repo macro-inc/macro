@@ -61,17 +61,33 @@ fn origin_rewrites_cover_auth_and_proxy() {
 }
 
 #[test]
-fn infra_tier_selects_infra_and_its_storage() {
-    let list = json!({ "items": [
-        { "kind": "Deployment", "metadata": { "name": "postgres", "labels": { "macro.com/tier": "infra" } } },
-        { "kind": "Deployment", "metadata": { "name": "email-service", "labels": { "macro.com/tier": "app" } } },
-        { "kind": "PersistentVolumeClaim", "metadata": { "name": "postgres-data" } },
-    ]});
-    let names: Vec<_> = items_with_tier(&list, "infra")
-        .into_iter()
-        .map(|i| i["metadata"]["name"].as_str().unwrap().to_owned())
-        .collect();
-    assert_eq!(names, ["postgres", "postgres-data"]);
+fn an_application_converges_only_on_the_published_revision_when_healthy() {
+    let app = |revision: &str, sync: &str, health: &str| {
+        json!({ "status": {
+            "sync": { "revision": revision, "status": sync },
+            "health": { "status": health },
+        }})
+    };
+    assert!(gitops::is_converged(&app("abc", "Synced", "Healthy"), "abc"));
+    assert!(!gitops::is_converged(&app("old", "Synced", "Healthy"), "abc"));
+    assert!(!gitops::is_converged(&app("abc", "OutOfSync", "Healthy"), "abc"));
+    assert!(!gitops::is_converged(&app("abc", "Synced", "Progressing"), "abc"));
+}
+
+#[test]
+fn unhealthy_resources_names_what_an_application_waits_on() {
+    let app = json!({ "status": { "resources": [
+        { "kind": "Deployment", "name": "postgres", "status": "Synced", "health": { "status": "Healthy" } },
+        { "kind": "Deployment", "name": "email-service", "status": "Synced", "health": { "status": "Progressing" } },
+        { "kind": "Service", "name": "edge", "status": "OutOfSync" },
+    ]}});
+    assert_eq!(
+        gitops::unhealthy_resources(&app),
+        [
+            "Deployment/email-service: Synced Progressing",
+            "Service/edge: OutOfSync -",
+        ]
+    );
 }
 
 #[test]

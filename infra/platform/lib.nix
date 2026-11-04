@@ -1,35 +1,35 @@
-# Building blocks for infra/platform: store-path container images and the
+# Building blocks for infra/platform: OCI images built from store paths and the
 # translation from a workload description to Kubernetes resources.
-{ pkgs, nix-snapshotter }:
+{
+  pkgs,
+  nix2container,
+  registry,
+}:
 let
   inherit (pkgs) lib;
-  inherit ((pkgs.extend nix-snapshotter.overlays.default).nix-snapshotter) buildImage;
+  n2c = nix2container.packages.${pkgs.stdenv.hostPlatform.system}.nix2container;
 
-  # Postgres and the JVMs refuse to run as a uid without a passwd entry, but an
-  # image cannot ship /etc/passwd: the root is store-path symlinks, and
-  # containerd refuses to follow them when it resolves the user ("path escapes
-  # from parent"). nss_wrapper supplies the entry at runtime instead, for
-  # whatever uid the pod runs as.
-  withAccount =
-    name: entrypoint:
-    [
-      "${pkgs.writeShellScript "${name}-entrypoint" ''
-        printf 'app:x:%s:%s::/tmp:/bin/sh\n' "$(id -u)" "$(id -g)" > /tmp/passwd
-        printf 'app:x:%s:\n' "$(id -g)" > /tmp/group
-        export NSS_WRAPPER_PASSWD=/tmp/passwd NSS_WRAPPER_GROUP=/tmp/group
-        export LD_PRELOAD=${pkgs.nss_wrapper}/lib/libnss_wrapper.so
-        # PID 1 ignores signals it has no handler for; without an init the
-        # kubelet waits out the whole grace period on every rollout.
-        exec ${pkgs.dumb-init}/bin/dumb-init -- "$@"
-      ''}"
-    ]
-    ++ entrypoint;
+  # Postgres and the JVMs refuse to run as a uid without a passwd entry. Every
+  # workload that sets a user runs as 1000 (`workloadResources`).
+  accounts = pkgs.runCommand "image-accounts" { } ''
+    mkdir -p $out/etc
+    cat > $out/etc/passwd <<EOF
+    root:x:0:0::/root:/bin/sh
+    app:x:1000:1000::/tmp:/bin/sh
+    nobody:x:65534:65534::/nonexistent:/bin/sh
+    EOF
+    cat > $out/etc/group <<EOF
+    root:x:0:
+    app:x:1000:
+    nogroup:x:65534:
+    EOF
+  '';
 in
 rec {
-  # A container image whose layers are store paths. The node's nix
-  # snapshotter bind-mounts them from its own /nix/store (fetching from the
-  # binary cache when absent), so an image is a few hundred bytes and needs no
-  # registry. `ref` is what a pod spec names.
+  # An OCI image in the platform registry. Each store path in its closure is
+  # its own layer, up to `maxLayers`, so images share the layers they have in
+  # common and a rebuilt service pushes only what changed. `ref` is what a pod
+  # spec names: its tag is the image's store hash, known at eval time.
   image =
     {
       name,
@@ -39,19 +39,33 @@ rec {
       contents ? [ ],
     }:
     let
-      drv = buildImage {
-        inherit name;
-        resolvedByNix = true;
-        copyToRoot = pkgs.buildEnv {
-          name = "${name}-root";
-          paths = [
-            pkgs.busybox
-            pkgs.cacert
-          ] ++ contents;
-          pathsToLink = [ "/bin" "/etc" "/share" ];
-        };
+      drv = n2c.buildImage {
+        name = "${registry}/macro/${name}";
+        maxLayers = 40;
+        copyToRoot = [
+          accounts
+          (pkgs.buildEnv {
+            name = "${name}-root";
+            paths = [
+              pkgs.busybox
+              pkgs.cacert
+            ]
+            ++ contents;
+            pathsToLink = [
+              "/bin"
+              "/etc/ssl"
+              "/share"
+            ];
+          })
+        ];
         config = {
-          entrypoint = withAccount name entrypoint;
+          # PID 1 ignores signals it has no handler for; without an init the
+          # kubelet waits out the whole grace period on every rollout.
+          entrypoint = [
+            "${pkgs.dumb-init}/bin/dumb-init"
+            "--"
+          ]
+          ++ entrypoint;
           Env = lib.mapAttrsToList (k: v: "${k}=${v}") (
             {
               PATH = "/bin";
@@ -59,10 +73,32 @@ rec {
             }
             // env
           );
-        } // lib.optionalAttrs (workingDir != null) { WorkingDir = workingDir; };
+        }
+        // lib.optionalAttrs (workingDir != null) { WorkingDir = workingDir; };
       };
     in
-    drv // { ref = "nix:0${drv}"; };
+    drv // { ref = drv.imageRefUnsafe; };
+
+  # Pushes `images` (name -> image) to the registry, skipping any it already
+  # holds. Skopeo itself skips layers the registry has, so a rebuilt service
+  # costs one layer upload.
+  pushImages =
+    images:
+    let
+      skopeoArgs = "--dest-tls-verify=false --retry-times=3";
+      lines = lib.concatMapStringsSep "\n" (
+        i: "${i.imageName} ${i.imageTag} ${i.copyTo}/bin/copy-to"
+      ) (lib.attrValues images);
+    in
+    pkgs.writeShellScriptBin "push-images" ''
+      printf '${lines}\n' | sort -u | ${pkgs.findutils}/bin/xargs -P 8 -L 1 sh -c '
+        repo="''${0#*/}"
+        manifest="http://''${0%%/*}/v2/$repo/manifests/$1"
+        accept="application/vnd.oci.image.manifest.v1+json"
+        ${pkgs.curl}/bin/curl -fsS -o /dev/null -I -H "Accept: $accept" "$manifest" 2>/dev/null \
+          || exec "$2" "docker://$0:$1" ${skopeoArgs}
+      '
+    '';
 
   # Turn a binary built outside Nix (Cargo in the dev shell, for the fast
   # loop) into a store path with a complete closure. Cargo's output finds
@@ -76,13 +112,15 @@ rec {
     }:
     pkgs.runCommand name { nativeBuildInputs = [ pkgs.patchelf ]; } ''
       install -Dm755 ${binary} $out/bin/${name}
+      # Debug info is most of a debug build's size. Panics and traces keep
+      # their symbol names; only line numbers go.
+      strip --strip-debug $out/bin/${name}
       patchelf --set-interpreter ${pkgs.glibc}/lib/ld-linux-x86-64.so.2 \
         --set-rpath ${lib.makeLibraryPath [ pkgs.openssl pkgs.stdenv.cc.cc.lib ]} \
         $out/bin/${name}
     '';
 
-  # Workload description -> Kubernetes resources (kubenix `kubernetes.resources`
-  # shape). Mirrors what compose expressed: one Deployment (Recreate, one
+  # Workload description -> Kubernetes resources (nixidy `resources` shape). Mirrors what compose expressed: one Deployment (Recreate, one
   # replica unless the size says otherwise), a Service named after the
   # workload plus one per alias, readiness from a command or HTTP path, PVCs
   # for volumes, and files mounted from ConfigMaps or Secrets.
@@ -133,6 +171,13 @@ rec {
           { };
       resources = instance.size.resources.${name} or instance.size.resources.default;
       serviceNames = [ name ] ++ (w.aliases or [ ]);
+      # Argo CD applies a wave and waits for it to be healthy before the next:
+      # data plane, then provisioning, then everything that depends on them.
+      wave = toString (w.wave or (if w.infra or false then -2 else 0));
+      metadata = {
+        inherit labels;
+        annotations."argocd.argoproj.io/sync-wave" = wave;
+      };
       isJob = w.job or false;
       # Job specs are immutable and must re-run for a new build or env.
       jobName = "${name}-${
@@ -186,7 +231,7 @@ rec {
           protocol = "TCP";
         }) ports;
         inherit resources;
-        # A store-path root is read-only and has no /tmp.
+        # Scratch space that survives container restarts within a pod.
         volumeMounts = [
           {
             name = "tmp";
@@ -228,8 +273,10 @@ rec {
     in
     lib.optionalAttrs isJob {
       jobs.${jobName} = {
-        metadata.labels = labels // {
-          "macro.com/job" = name;
+        metadata = metadata // {
+          labels = labels // {
+            "macro.com/job" = name;
+          };
         };
         spec = {
           backoffLimit = 10;
@@ -246,7 +293,7 @@ rec {
     }
     // lib.optionalAttrs (!isJob) {
       deployments.${name} = {
-        metadata = { inherit labels; };
+        inherit metadata;
         spec = {
           replicas = instance.size.replicas.${name} or 1;
           # Single-writer volumes must never see two pods; everything else
@@ -280,7 +327,7 @@ rec {
       persistentVolumeClaims = lib.mapAttrs' (v: _: {
         name = "${name}-${v}";
         value = {
-          metadata = { inherit labels; };
+          inherit metadata;
           spec = {
             accessModes = [ "ReadWriteOnce" ];
             resources.requests.storage = instance.size.storage.${name} or instance.size.storage.default;
@@ -289,7 +336,7 @@ rec {
       }) volumes;
       services = lib.optionalAttrs (ports != [ ]) (
         lib.genAttrs serviceNames (_: {
-          metadata = { inherit labels; };
+          inherit metadata;
           spec = {
             inherit selector;
             # Compose DNS resolves a container before it is healthy; Kafka's

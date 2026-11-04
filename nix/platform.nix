@@ -8,6 +8,6 @@ in
 {
   flake.platform = import ../infra/platform {
     inherit pkgs;
-    inherit (inputs) kubenix nix-snapshotter;
+    inherit (inputs) nixidy nix2container;
   };
 }
