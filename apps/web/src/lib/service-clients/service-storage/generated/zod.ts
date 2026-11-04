@@ -9687,6 +9687,67 @@ export const shareCrmPipelineBody = zod
   .describe('Sharing input.');
 
 /**
+ * @summary Read requirements by stable stage and field identities.
+ */
+export const getCrmPipelineStageRequirementsParams = zod.object({
+  id: zod.uuid(),
+});
+
+export const getCrmPipelineStageRequirementsResponseItem = zod
+  .object({
+    requiredColumnIds: zod
+      .array(zod.uuid())
+      .describe(
+        'Fields that must be present. Empty removes the rule for this stage.'
+      ),
+    stageColumnId: zod
+      .uuid()
+      .describe(
+        'Single-select column identifying the stage, independent of its name.'
+      ),
+    stageId: zod
+      .uuid()
+      .describe(
+        'Stable option identity; renaming the stage preserves the rule.'
+      ),
+  })
+  .describe(
+    'Fields required when a deal enters a particular option of a stage column.'
+  );
+export const getCrmPipelineStageRequirementsResponse = zod.array(
+  getCrmPipelineStageRequirementsResponseItem
+);
+
+/**
+ * @summary Replace the required fields for one stage. An empty list removes its rule.
+ */
+export const setCrmPipelineStageRequirementParams = zod.object({
+  id: zod.uuid(),
+});
+
+export const setCrmPipelineStageRequirementBody = zod
+  .object({
+    requiredColumnIds: zod
+      .array(zod.uuid())
+      .describe(
+        'Fields that must be present. Empty removes the rule for this stage.'
+      ),
+    stageColumnId: zod
+      .uuid()
+      .describe(
+        'Single-select column identifying the stage, independent of its name.'
+      ),
+    stageId: zod
+      .uuid()
+      .describe(
+        'Stable option identity; renaming the stage preserves the rule.'
+      ),
+  })
+  .describe(
+    'Fields required when a deal enters a particular option of a stage column.'
+  );
+
+/**
  * @summary Read the host-owned table schema.
  */
 export const getCrmPipelineTableParams = zod.object({

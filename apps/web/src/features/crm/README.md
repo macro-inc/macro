@@ -226,3 +226,15 @@ When changing behavior, test the responsible primitive or pure function. When
 moving behavior, retain query keys, persistence keys, mutation ordering, loading
 boundaries, routes, and markup. Run CRM tests plus affected shared collection and
 user-card tests, TypeScript checking, `just check`, and the real CRM browser flows.
+
+Pipeline stage requirements are CRM policy over the shared database editor.
+Remove a required field's rules before deleting its options, since option
+deletion clears values even on rows outside the submitted operation batch.
+`queries/stage-requirements.ts` adapts the pipeline-authorized rules; the toolbar
+opens the shared-control dialog, and Add deal derives its required fields from
+stable option/column IDs. Keep drafts on a refused save. The server is authoritative
+for table, board, timeline, agent and import writes. Board and timeline creation
+use the host composer so stage and date-range defaults reach Add deal. CSV writes split refused batches,
+commit valid entries, and show record-specific failures; option labels enter the
+local cache only after their batch commits. The backend-free regression is
+`bunx playwright test --config src/features/crm/browser-test/playwright.config.ts stage-requirements.browser.e2e.ts`.

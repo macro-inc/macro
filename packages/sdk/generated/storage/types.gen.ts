@@ -14914,6 +14914,24 @@ export type SqlStatement = {
 };
 
 /**
+ * Fields required when a deal enters a particular option of a stage column.
+ */
+export type StageRequirement = {
+    /**
+     * Fields that must be present. Empty removes the rule for this stage.
+     */
+    requiredColumnIds: Array<string>;
+    /**
+     * Single-select column identifying the stage, independent of its name.
+     */
+    stageColumnId: string;
+    /**
+     * Stable option identity; renaming the stage preserves the rule.
+     */
+    stageId: string;
+};
+
+/**
  * Starter result. A missing database means the user already started or removed it.
  */
 export type StarterDatabase = {
@@ -20301,6 +20319,36 @@ export type ShareCrmPipelineResponses = {
 };
 
 export type ShareCrmPipelineResponse = ShareCrmPipelineResponses[keyof ShareCrmPipelineResponses];
+
+export type GetCrmPipelineStageRequirementsData = {
+    body?: never;
+    path: {
+        id: string;
+    };
+    query?: never;
+    url: '/crm/pipelines/{id}/stage-requirements';
+};
+
+export type GetCrmPipelineStageRequirementsResponses = {
+    200: Array<StageRequirement>;
+};
+
+export type GetCrmPipelineStageRequirementsResponse = GetCrmPipelineStageRequirementsResponses[keyof GetCrmPipelineStageRequirementsResponses];
+
+export type SetCrmPipelineStageRequirementData = {
+    body: StageRequirement;
+    path: {
+        id: string;
+    };
+    query?: never;
+    url: '/crm/pipelines/{id}/stage-requirements';
+};
+
+export type SetCrmPipelineStageRequirementResponses = {
+    204: void;
+};
+
+export type SetCrmPipelineStageRequirementResponse = SetCrmPipelineStageRequirementResponses[keyof SetCrmPipelineStageRequirementResponses];
 
 export type GetCrmPipelineTableData = {
     body?: never;

@@ -568,6 +568,8 @@ use utoipa::OpenApi;
         crm::inbound::pipelines::rows,
         crm::inbound::pipelines::query_rows,
         crm::inbound::pipelines::apply_ops,
+        crm::inbound::pipelines::stage_requirements,
+        crm::inbound::pipelines::set_stage_requirement,
         crm::inbound::pipelines::rename,
         crm::inbound::pipelines::share,
         crm::inbound::pipelines::permissions,
