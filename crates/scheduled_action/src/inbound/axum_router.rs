@@ -6,8 +6,9 @@ use crate::domain::code_check::{
 use crate::domain::code_upgrade::CodeUpgrade;
 use crate::domain::event_trigger::ActionTrigger;
 use crate::domain::models::{
-    ActionExecutionRecord, ActionPolicyError, AlreadyRunningError, CreateScheduledAction,
-    InProgressExecution, OwnerNotUserError, Schedule, ScheduledAction, UpdateScheduledAction,
+    ActionConfiguration, ActionConfigurationUpdate, ActionExecutionRecord, ActionPolicyError,
+    AlreadyRunningError, InProgressExecution, ListedAction, OwnerNotUserError, Schedule,
+    ScheduledAction,
 };
 use crate::domain::ports::ScheduledActionService;
 use crate::domain::target_validation::TargetValidationError;
@@ -54,8 +55,8 @@ pub struct ScheduledActionResponse {
     #[serde(skip_serializing_if = "Option::is_none")]
     #[schema(value_type = Option<String>)]
     pub timezone: Option<Tz>,
-    /// The routine's latest run. Listing includes it for routines the caller
-    /// owns; other responses omit it.
+    /// The latest finished run, with what each step did. Present only in
+    /// lists, and only once the routine has finished a run.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub last_run: Option<ActionExecutionRecord>,
 }
@@ -72,6 +73,15 @@ impl From<ScheduledAction> for ScheduledActionResponse {
             schedule,
             timezone,
             last_run: None,
+        }
+    }
+}
+
+impl From<ListedAction> for ScheduledActionResponse {
+    fn from(listed: ListedAction) -> Self {
+        Self {
+            last_run: listed.last_run,
+            ..Self::from(listed.action)
         }
     }
 }
@@ -249,7 +259,7 @@ pub async fn health() -> impl IntoResponse {
     path = "/scheduled-actions",
     tag = "scheduled actions",
     operation_id = "create_scheduled_action",
-    request_body = CreateScheduledAction,
+    request_body = ActionConfiguration,
     responses(
         (status = 201, body = ScheduledActionResponse),
         (status = 400, body = String),
@@ -261,7 +271,7 @@ pub async fn health() -> impl IntoResponse {
 pub async fn create_action<S, Svc, Auth>(
     State(state): State<ScheduledActionRouterState<S, Svc, Auth>>,
     CreationPrincipalExtractor { principal, .. }: CreationPrincipalExtractor<Auth>,
-    body: Result<Json<CreateScheduledAction>, JsonRejection>,
+    body: Result<Json<ActionConfiguration>, JsonRejection>,
 ) -> Result<impl IntoResponse, ScheduledActionApiError>
 where
     S: ScheduledActionService + Send + Sync + 'static,
@@ -300,7 +310,7 @@ where
 {
     let actions = state
         .service
-        .get_actions_with_last_run(
+        .get_actions(
             user.authorization.user.macro_user_id.clone(),
             query.include_events.unwrap_or(false),
         )
@@ -308,11 +318,7 @@ where
     Ok(Json(
         actions
             .into_iter()
-            .map(|(action, last_run)| {
-                let mut response = ScheduledActionResponse::from(action);
-                response.last_run = last_run;
-                response
-            })
+            .map(ScheduledActionResponse::from)
             .collect::<Vec<_>>(),
     ))
 }
@@ -350,7 +356,7 @@ where
     tag = "scheduled actions",
     operation_id = "update_scheduled_action",
     params(("id" = String, Path, description = "ID of the scheduled action")),
-    request_body = UpdateScheduledAction,
+    request_body = ActionConfigurationUpdate,
     responses(
         (status = 200, body = ScheduledActionResponse),
         (status = 400, body = String),
@@ -366,7 +372,7 @@ pub async fn update_action<S, Svc, Auth>(
         entity_access_receipt,
         ..
     }: ScheduledActionAccessExtractor<EditAccessLevel, Svc, Auth>,
-    body: Result<Json<UpdateScheduledAction>, JsonRejection>,
+    body: Result<Json<ActionConfigurationUpdate>, JsonRejection>,
 ) -> Result<impl IntoResponse, ScheduledActionApiError>
 where
     S: ScheduledActionService + Send + Sync + 'static,
@@ -667,7 +673,8 @@ impl IntoResponse for ScheduledActionApiError {
                 } else {
                     StatusCode::BAD_REQUEST
                 };
-                return (status, "invalid scheduled action request").into_response();
+                // The caller's own input, naming the field it rejected.
+                return (status, rejection.body_text()).into_response();
             }
             Self::Service(error) => error,
         };
@@ -706,7 +713,7 @@ impl IntoResponse for ScheduledActionApiError {
             let status = match validation {
                 TargetValidationError::InvalidTask
                 | TargetValidationError::InvalidProgram(_)
-                | TargetValidationError::AgentsDisabled => StatusCode::BAD_REQUEST,
+                | TargetValidationError::SessionsUnavailable => StatusCode::BAD_REQUEST,
                 TargetValidationError::ExplicitAgentRequired
                 | TargetValidationError::ExplicitAppsRequired
                 | TargetValidationError::ExplicitStepsRequired => StatusCode::CONFLICT,

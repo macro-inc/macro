@@ -1,4 +1,5 @@
 use super::*;
+use crate::domain::models::sort::DynamicSortValue;
 use crate::outbound::pg_soup_repo::expanded::dynamic::{
     ExpandedDynamicCursorArgs, GroupedDynamicCursorArgs, expanded_dynamic_cursor_soup,
     expanded_dynamic_cursor_soup_grouped,
@@ -16,7 +17,7 @@ use item_filters::ast::{
 use macro_db_migrator::MACRO_DB_MIGRATIONS;
 use macro_user_id::user_id::MacroUserIdStr;
 use models_grouping::{GroupByField, GroupingConfig};
-use models_pagination::{Identify, Query, SimpleSortMethod};
+use models_pagination::{Cursor, CursorVal, Identify, Query, SimpleSortMethod};
 use models_properties::service::property_value::PropertyValue;
 use models_soup::database_row::SoupDatabaseRow;
 use std::sync::Arc;
@@ -337,6 +338,78 @@ async fn a_row_carries_every_cell_as_a_property(pool: PgPool) {
 }
 
 #[sqlx::test(fixtures("test/database_rows.sql"), migrator = "MACRO_DB_MIGRATIONS")]
+async fn detail_joins_accept_mixed_soup_ids(pool: PgPool) {
+    for detail in [
+        include_str!("../expanded/dynamic/database_row_detail.sql"),
+        include_str!("../expanded/dynamic/database_row_grouped_detail.sql"),
+    ] {
+        // Exercise the production fragments; SQLx cannot expand include_str! inside SQL.
+        let query = format!(
+            "WITH TopItems(item_type, id, sort_ts, sort_key, group_key, group_order, group_total_count, row_in_group) AS (
+                VALUES
+                    ('chat', 'legacy-chat-id', now(), 0::double precision, 'group', NULL::text, 3::bigint, 1::bigint),
+                    ('project', '70000000-0000-0000-0000-000000000001', now(), 0, 'group', NULL, 3, 2),
+                    ('database_row', '70000000-0000-0000-0000-000000000003', now(), 0, 'group', NULL, 3, 3)
+            ), GroupedItems AS (SELECT * FROM TopItems), details AS ({detail})
+            SELECT id FROM details"
+        );
+        let ids: Vec<String> = sqlx::query_scalar(&query).fetch_all(&pool).await.unwrap();
+        assert_eq!(ids, vec!["70000000-0000-0000-0000-000000000003"]);
+    }
+}
+
+#[sqlx::test(fixtures("test/database_rows.sql"), migrator = "MACRO_DB_MIGRATIONS")]
+async fn created_cursor_pages_equal_timestamps_without_skipping_rows(pool: PgPool) {
+    sqlx::query!(
+        "UPDATE database_rows SET created_at = '2026-01-03T00:00:00Z' WHERE table_id = $1",
+        DEALS
+    )
+    .execute(&pool)
+    .await
+    .unwrap();
+    let filter = rows_of(Some(Expr::val(DatabaseRowLiteral::TableId(DEALS))));
+    let first = expanded_dynamic_cursor_soup(
+        &pool,
+        ExpandedDynamicCursorArgs {
+            user_id: viewer(),
+            limit: 2,
+            cursor: Query::Sort(SimpleSortMethod::CreatedAt.into(), filter.clone()),
+            exclude_frecency: false,
+        },
+    )
+    .await
+    .unwrap();
+    assert_eq!(
+        first.iter().map(Identify::id).collect::<Vec<_>>(),
+        vec![DEAL_3, DEAL_2]
+    );
+
+    let second = expanded_dynamic_cursor_soup(
+        &pool,
+        ExpandedDynamicCursorArgs {
+            user_id: viewer(),
+            limit: 2,
+            cursor: Query::Cursor(Cursor {
+                id: DEAL_2,
+                limit: 2,
+                val: CursorVal {
+                    sort_type: SimpleSortMethod::CreatedAt.into(),
+                    last_val: DynamicSortValue::Timestamp("2026-01-03T00:00:00Z".parse().unwrap()),
+                },
+                filter,
+            }),
+            exclude_frecency: false,
+        },
+    )
+    .await
+    .unwrap();
+    assert_eq!(
+        second.iter().map(Identify::id).collect::<Vec<_>>(),
+        vec![DEAL_1]
+    );
+}
+
+#[sqlx::test(fixtures("test/database_rows.sql"), migrator = "MACRO_DB_MIGRATIONS")]
 async fn core_rows_stay_out_of_soup_even_with_a_stray_database_grant(pool: PgPool) {
     let database = Uuid::now_v7();
     let table = Uuid::now_v7();
@@ -383,18 +456,24 @@ async fn core_rows_stay_out_of_soup_even_with_a_stray_database_grant(pool: PgPoo
 }
 
 /// A form over the CRM's Deals table, granting the stranger `level`.
-async fn grant_the_stranger_a_crm_form(pool: &PgPool, level: &str, trashed: bool) {
+async fn grant_the_stranger_a_crm_form(
+    pool: &PgPool,
+    level: &str,
+    trashed: bool,
+    responses_visible: bool,
+) {
     let form_id = Uuid::now_v7();
     let stranger = stranger();
     sqlx::query!(
         r#"
-        INSERT INTO forms (id, name, owner_id, database_id, table_id, trashed_at)
-        VALUES ($1, 'Deal intake', 'macro|owner@databases.test', $2, $3, CASE WHEN $4 THEN now() END)
+        INSERT INTO forms (id, name, owner_id, database_id, table_id, trashed_at, responses_visible)
+        VALUES ($1, 'Deal intake', 'macro|owner@databases.test', $2, $3, CASE WHEN $4 THEN now() END, $5)
         "#,
         form_id,
         CRM,
         DEALS,
         trashed,
+        responses_visible,
     )
     .execute(pool)
     .await
@@ -442,7 +521,7 @@ async fn stranger_reads(pool: &PgPool) -> (Vec<Uuid>, Vec<Uuid>) {
 
 #[sqlx::test(fixtures("test/database_rows.sql"), migrator = "MACRO_DB_MIGRATIONS")]
 async fn a_form_editor_reads_the_rows_of_the_forms_database(pool: PgPool) {
-    grant_the_stranger_a_crm_form(&pool, "edit", false).await;
+    grant_the_stranger_a_crm_form(&pool, "edit", false, false).await;
 
     assert_eq!(
         stranger_reads(&pool).await,
@@ -452,14 +531,24 @@ async fn a_form_editor_reads_the_rows_of_the_forms_database(pool: PgPool) {
 
 #[sqlx::test(fixtures("test/database_rows.sql"), migrator = "MACRO_DB_MIGRATIONS")]
 async fn a_form_respondent_reads_no_rows(pool: PgPool) {
-    grant_the_stranger_a_crm_form(&pool, "view", false).await;
+    grant_the_stranger_a_crm_form(&pool, "view", false, false).await;
 
     assert_eq!(stranger_reads(&pool).await, (Vec::new(), Vec::new()));
 }
 
 #[sqlx::test(fixtures("test/database_rows.sql"), migrator = "MACRO_DB_MIGRATIONS")]
+async fn a_respondent_of_a_form_that_shares_responses_reads_its_rows(pool: PgPool) {
+    grant_the_stranger_a_crm_form(&pool, "view", false, true).await;
+
+    assert_eq!(
+        stranger_reads(&pool).await,
+        (vec![DEAL_3, DEAL_2, DEAL_1], vec![DEAL_2, DEAL_1])
+    );
+}
+
+#[sqlx::test(fixtures("test/database_rows.sql"), migrator = "MACRO_DB_MIGRATIONS")]
 async fn a_trashed_form_owner_reads_no_rows(pool: PgPool) {
-    grant_the_stranger_a_crm_form(&pool, "owner", true).await;
+    grant_the_stranger_a_crm_form(&pool, "owner", true, false).await;
 
     assert_eq!(stranger_reads(&pool).await, (Vec::new(), Vec::new()));
 }

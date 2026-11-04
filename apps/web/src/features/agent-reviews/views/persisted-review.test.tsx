@@ -1,13 +1,16 @@
 /** @vitest-environment jsdom */
 import { cleanup, fireEvent, render, screen } from '@solidjs/testing-library';
-import { afterEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, describe, expect, it, type Mock, vi } from 'vitest';
 import type { Review, ReviewActions } from '../core/review';
 import { PersistedReview } from './persisted-review';
 
-const reviews = vi.hoisted(() => ({
-  record: undefined as Review | undefined,
-  decide: vi.fn(),
-}));
+const reviews = vi.hoisted(() => {
+  const state: {
+    record: Review | undefined;
+    decide: Mock<ReviewActions['decide']>;
+  } = { record: undefined, decide: vi.fn() };
+  return state;
+});
 vi.mock('../queries/reviews', () => ({
   useReview: () => ({
     isError: false,
@@ -59,18 +62,48 @@ vi.mock('./review-stack', () => ({
     Card(props),
 }));
 
-function review(kind: Review['kind']): Review {
-  return {
-    id: 'review',
-    sessionId: 'session',
-    kind,
-    title: 'Review',
-    revision: 1,
-    updatedAt: 1,
-    presentedAt: 1,
-    items: [{ id: 'item', draft: {}, status: 'pending' }],
-  };
-}
+const importReview: Review = {
+  id: 'review',
+  sessionId: 'session',
+  actingUser: 'macro|owner@macro.local',
+  executionId: null,
+  kind: 'import',
+  title: 'Review',
+  revision: 1,
+  updatedAt: 1,
+  presentedAt: 1,
+  decision: null,
+  items: [
+    {
+      id: 'item',
+      draft: { source: 'notion' },
+      status: 'pending',
+      error: null,
+      result: null,
+    },
+  ],
+};
+const emailReview: Review = {
+  id: 'review',
+  sessionId: 'session',
+  actingUser: 'macro|owner@macro.local',
+  executionId: null,
+  kind: 'email',
+  title: 'Review',
+  revision: 1,
+  updatedAt: 1,
+  presentedAt: 1,
+  decision: null,
+  items: [
+    {
+      id: 'item',
+      draft: { subject: 'Hello', body: '', to: [{ email: 'a@example.com' }] },
+      status: 'pending',
+      error: null,
+      result: null,
+    },
+  ],
+};
 
 afterEach(() => {
   cleanup();
@@ -79,15 +112,14 @@ afterEach(() => {
 
 describe('PersistedReview', () => {
   it('expects no answer until an approved import settles', () => {
-    reviews.record = review('import');
-    reviews.decide.mockResolvedValue(review('import'));
+    reviews.record = importReview;
+    reviews.decide.mockResolvedValue(importReview);
     const onDecision = vi.fn();
     render(() => (
       <PersistedReview
         sessionId="session"
         reviewId="review"
         canAct
-        ownerId="macro|owner@macro.local"
         onDecision={onDecision}
       />
     ));
@@ -101,15 +133,14 @@ describe('PersistedReview', () => {
   });
 
   it('expects the agent to answer an approved email stack at once', () => {
-    reviews.record = review('email');
-    reviews.decide.mockResolvedValue(review('email'));
+    reviews.record = emailReview;
+    reviews.decide.mockResolvedValue(emailReview);
     const onDecision = vi.fn();
     render(() => (
       <PersistedReview
         sessionId="session"
         reviewId="review"
         canAct
-        ownerId="macro|owner@macro.local"
         onDecision={onDecision}
       />
     ));

@@ -31,6 +31,7 @@ const databases: DatabaseDetail[] = ['first', 'second'].map((id) => ({
     owner_id: 'owner',
     created_at: '',
     trashed_at: null,
+    project_id: null,
   },
   grant: 'view',
   tables: [

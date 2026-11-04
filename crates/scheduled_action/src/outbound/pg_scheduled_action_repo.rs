@@ -12,6 +12,7 @@ use model_entity::EntityType;
 use model_owner::Owner;
 use serde_json::Value;
 use sqlx::PgPool;
+use std::collections::HashMap;
 use std::str::FromStr;
 
 use crate::domain::event_runs::{ClaimToken, ConfigurationRevision};
@@ -530,10 +531,7 @@ impl<B: BotFacts + 'static> ScheduledActionRepo for PgScheduledActionRepo<B> {
         })
     }
 
-    async fn get_latest_execution_records(
-        &self,
-        action_ids: &[Uuid],
-    ) -> Result<Vec<ActionExecutionRecord>> {
+    async fn last_runs(&self, action_ids: &[Uuid]) -> Result<HashMap<Uuid, ActionExecutionRecord>> {
         // One index probe per action on (action_id, start_time DESC).
         let rows = sqlx::query!(
             r#"
@@ -558,15 +556,18 @@ impl<B: BotFacts + 'static> ScheduledActionRepo for PgScheduledActionRepo<B> {
 
         Ok(rows
             .into_iter()
-            .map(|row| ActionExecutionRecord {
-                id: Some(row.id),
-                action_id: row.action_id,
-                resource_id: row.resource_id,
-                start_time: row.start_time,
-                end_time: row.end_time,
-                is_success: row.is_success,
-                result: row.result,
-                created_at: row.created_at,
+            .map(|row| {
+                let record = ActionExecutionRecord {
+                    id: Some(row.id),
+                    action_id: row.action_id,
+                    resource_id: row.resource_id,
+                    start_time: row.start_time,
+                    end_time: row.end_time,
+                    is_success: row.is_success,
+                    result: row.result,
+                    created_at: row.created_at,
+                };
+                (row.action_id, record)
             })
             .collect())
     }

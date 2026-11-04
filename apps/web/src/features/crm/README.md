@@ -18,7 +18,7 @@ crm/
   crm-create.tsx / crm-link.tsx
   crm-actions.ts / crm-hide-action.ts / crm-action-items.ts / crm-user-action.tsx
   crm-search.ts / crm-tool-renderers.tsx
-  crm-route.ts  Route params, record trail, and legacy pipeline link decoding
+  crm-route.ts  Route params, record and item trails, and legacy pipeline link decoding
   route-views.tsx  Authenticated route and shared-view decoding
   crm-hosted-content.ts  Split content that opens Customers on a pipeline or record
   *-adapter.*   Production sources, navigation, persistence, download, collection wiring
@@ -32,14 +32,38 @@ The root adapters construct production dependencies. `context` defines the
 capabilities; it does not import their implementations. Views consume these
 capabilities, primitives receive narrow inputs, and components render props.
 Core modules remain independent of Solid, service clients, and app state.
+`features/notifications/mark-row-seen.ts` integrates with shared list activation so
+opening a company or contact clears its row's unread notifications immediately.
+It uses the row's attached notifications before falling back to an entity read;
+the shared notification source owns optimistic state and failure rollback.
+The REST fallback waits for the notification feed before reading its snapshot.
+The discussion's message reader remains visibility-gated and reads a separate
+global feed, so it cannot guarantee that opening a record clears its row's dot.
 UI rollout gates read `useFeatureFlag` directly where used; do not pass rollout
 booleans through component props or the CRM source contract.
 
 Shared entity representations, transport clients, property editors, and
 collection mechanics remain shared. CRM owns its record queries and cache updates.
+Successful domain block and unblock mutations evict indexed company rows and
+contact suggestions from the GraphQL cache before refreshing CRM and Soup
+queries. Refresh mounted GraphQL lists that can contain CRM records too: the
+REST mutation returns no changed rows, and hidden records are absent from the
+search index. Failed mutations leave those cached records intact.
+Company selection snapshots and deduplicates the company's domains, waits for
+every domain request, and retains failed domains for retry after the company
+disappears from suggestions. Keep successful blocks when another domain fails.
 CRM supplies row/header/empty state slots, filter choices, grouping policy, and
 its own collection state to the shared collection renderer. Shared collection code must not acquire CRM hooks or
 CRM-specific state again.
+
+Company and contact Overview pages expose `RecordVisibilityAction` for removal
+and restoration through the existing hidden mutations. Keep admin/owner checks,
+confirmation of the company-wide contact cascade, and the restore action on the
+open record. The information panel's visibility checkbox uses the same state.
+Both hidden mutations emit `crm.visibility_change` through request and cache
+refresh completion, with the opaque record ID, record type, requested hidden
+state, and outcome. `crm.visibility_change.refresh` times cache invalidation and
+the dependent query refreshes before the mutation stops being pending.
 
 `task-composer.ts` owns the CRM task preset: Companies/Contacts are visible,
 Status remains a task default but is not initially shown. CRM registers live
@@ -115,6 +139,25 @@ a record independently of the row; additional values use the shared overflow men
 Email still matches visible company domains and contact addresses for feed
 membership, but the row displays only stored properties, not inferred matches.
 No separate CRM association metadata lookup or row footer runs during paging.
+Linked Tasks, Email, Notes, Calls and Databases open through nested Customers
+routes from workspace activity and record sections. Tasks, Emails, Calls and
+Databases record sections append only `<item-id>` because their section determines
+the renderer; Tasks also omit the redundant `md/task` suffix. These sections reject
+redundant typed item URLs rather than retaining fallback routes. Workspace activity
+retains `<item-type>/<item-id>` and document metadata; record Files and overview
+notes use document-metadata routes restricted to those sections. The route stores
+the item name and record trail in entry state. Route params retain the record and
+section; pane search retains the workspace tab. `route-adapter.ts` owns item
+navigation and close/history restoration. Keep workspace/pipeline item variants
+in its shared route-family table and identify history entries through merged route
+params instead of enumerating item route IDs.
+`views/item-detail.tsx` renders authorized details in the existing CRM shell
+with source, record trail and item breadcrumbs, omitting section labels such as
+Tasks and Files. The current record breadcrumb returns to the captured section
+and entry state. Preview headers append their own live title and menu after the
+source trail without an extra separator; do not duplicate the selected title in
+the prefix. Modified clicks keep their existing split behavior.
+Standalone record previews retain their normal navigation outside the workspace.
 Record-detail lists and activity membership remain unchanged.
 Sidebar Tasks reuse the production Tasks filters, sort, grouping, and list/board/Gantt
 layouts (subject to the normal feature flags and touch fallback). They use a separate

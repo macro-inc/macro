@@ -1506,6 +1506,20 @@ export type PipedreamCompleteRequest = {
 };
 
 /**
+ * Request body for recording a finished Macro Connect flow.
+ */
+export type PipedreamConnectCompleteRequest = {
+    /**
+     * The app that was connected, by Pipedream slug.
+     */
+    app_slug: string;
+    /**
+     * Optional display name for the connector, as for completion.
+     */
+    server_name?: string | null;
+};
+
+/**
  * A connected MCP app as returned by the API.
  */
 export type PipedreamConnectionResponse = {
@@ -1517,6 +1531,10 @@ export type PipedreamConnectionResponse = {
      * Whether the connector is enabled for tool use.
      */
     enabled: boolean;
+    /**
+     * The backend holding the grant.
+     */
+    provider: PipedreamProviderResponse;
     /**
      * Human-readable display name.
      */
@@ -1539,6 +1557,11 @@ export type PipedreamOverlayResponse = {
 };
 
 /**
+ * Which backend a connection or connect flow uses.
+ */
+export type PipedreamProviderResponse = 'pipedream' | 'connect';
+
+/**
  * Request body for recovering a connect flow whose result the Connect UI
  * never reported.
  */
@@ -1554,21 +1577,44 @@ export type PipedreamRecoverRequest = {
 };
 
 /**
- * Response from creating a Pipedream Connect token.
+ * Request body for starting a connect flow.
+ */
+export type PipedreamTokenRequest = {
+    /**
+     * The app to connect, by Pipedream slug. With it, an app Macro Connect
+     * serves can answer with a Connect URL instead of a Pipedream token.
+     */
+    app_slug?: string | null;
+};
+
+/**
+ * Response from starting a connect flow: a Pipedream Connect token, or for
+ * `provider = connect` a Macro Connect URL.
  */
 export type PipedreamTokenResponse = {
     /**
      * Shareable link that opens the same connect flow in a browser tab.
+     * Pipedream only.
      */
-    connect_link_url: string;
+    connect_link_url?: string | null;
     /**
-     * RFC 3339 expiry of the token.
+     * URL to open in a popup or browser tab for Macro Connect's consent
+     * flow; once it finishes, call `/pipedream/mcp/connect/complete`.
+     * Connect only.
      */
-    expires_at: string;
+    connect_url?: string | null;
     /**
-     * Short-lived token to open the Pipedream Connect UI with.
+     * RFC 3339 expiry of the token. Pipedream only.
      */
-    token: string;
+    expires_at?: string | null;
+    /**
+     * The backend this flow connects through.
+     */
+    provider: PipedreamProviderResponse;
+    /**
+     * Short-lived token to open the Pipedream Connect UI with. Pipedream only.
+     */
+    token?: string | null;
 };
 
 /**
@@ -3276,7 +3322,7 @@ export type GetMemoryHandlerData = {
 
 export type GetMemoryHandlerErrors = {
     /**
-     * No memory exists for this user yet (generation triggered)
+     * No composed memory exists for this user yet
      */
     404: unknown;
     /**
@@ -3454,6 +3500,28 @@ export type CompletePipedreamMcpConnectionResponses = {
 
 export type CompletePipedreamMcpConnectionResponse = CompletePipedreamMcpConnectionResponses[keyof CompletePipedreamMcpConnectionResponses];
 
+export type CompletePipedreamMcpConnectData = {
+    body: PipedreamConnectCompleteRequest;
+    path?: never;
+    query?: never;
+    url: '/pipedream/mcp/connect/complete';
+};
+
+export type CompletePipedreamMcpConnectErrors = {
+    401: string;
+    404: ErrorResponse;
+    500: ErrorResponse;
+    501: ErrorResponse;
+};
+
+export type CompletePipedreamMcpConnectError = CompletePipedreamMcpConnectErrors[keyof CompletePipedreamMcpConnectErrors];
+
+export type CompletePipedreamMcpConnectResponses = {
+    200: PipedreamConnectionResponse;
+};
+
+export type CompletePipedreamMcpConnectResponse = CompletePipedreamMcpConnectResponses[keyof CompletePipedreamMcpConnectResponses];
+
 export type DeletePipedreamMcpConnectionData = {
     body?: never;
     path?: never;
@@ -3564,7 +3632,7 @@ export type RecoverPipedreamMcpConnectionResponses = {
 export type RecoverPipedreamMcpConnectionResponse = RecoverPipedreamMcpConnectionResponses[keyof RecoverPipedreamMcpConnectionResponses];
 
 export type CreatePipedreamMcpTokenData = {
-    body?: never;
+    body?: null | PipedreamTokenRequest;
     path?: never;
     query?: never;
     url: '/pipedream/mcp/token';

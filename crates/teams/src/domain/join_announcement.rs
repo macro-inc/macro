@@ -1,4 +1,5 @@
-//! "x joined Macro" emails to colleagues who share a team's auto-join domain.
+//! One-time notices to colleagues who share a team's auto-join domain that a team
+//! now exists for their organization.
 //!
 //! Each address is claimed once per team, forever, before its email is enqueued. The claim
 //! decides eligibility. This module only shapes and sends the emails it accepted.
@@ -16,6 +17,10 @@ use rootcause::Report;
 use uuid::Uuid;
 
 const MAX_UNSENT_CLAIMS_PER_CRASH: usize = 50;
+
+/// The most addresses ever emailed about one team. A small cap keeps the notice from looking
+/// like bulk mail to the domain's mail filters.
+pub const MAX_RECIPIENTS_PER_TEAM: u32 = 25;
 
 const NOTIFICATION_ID_NAMESPACE: Uuid = Uuid::from_u128(0x7465_616d_2d6a_6f69_6e65_642d_6d61_6372);
 
@@ -62,14 +67,15 @@ pub struct ClaimedJoinEmail {
 
 /// Storage for the once-per-address claims.
 pub trait JoinAnnouncementRepository: Send + Sync + 'static {
-    /// Claims every candidate who matches the team's auto-join domain, is neither a member nor
-    /// invited, and was never claimed for this team. It is one statement, so concurrent claims
-    /// of an address have exactly one winner. Returns nothing when the team has no auto-join
-    /// domain.
+    /// Claims every candidate who matches the team's auto-join domain, is neither a member, an
+    /// invitee, nor a Macro user, and was never claimed for this team, until the team has
+    /// `team_limit` claims. It is one statement, so concurrent claims of an address have
+    /// exactly one winner. Returns nothing when the team has no auto-join domain.
     fn claim(
         &self,
         team_id: Uuid,
         candidates: &[MacroUserIdStr<'static>],
+        team_limit: u32,
     ) -> impl Future<Output = Result<Vec<ClaimedJoinEmail>, Report<JoinAnnouncementError>>> + Send;
 
     /// Undoes one claim whose email was not enqueued, so a later announcement can retry it.
@@ -80,7 +86,7 @@ pub trait JoinAnnouncementRepository: Send + Sync + 'static {
     ) -> impl Future<Output = Result<(), Report<JoinAnnouncementError>>> + Send;
 }
 
-/// Tells colleagues that someone joined Macro.
+/// Tells colleagues that a team was set up for their organization.
 pub trait JoinAnnouncementService: Send + Sync + 'static {
     /// Emails each candidate other than `joined` whom
     /// [`JoinAnnouncementRepository::claim`] accepts. Every address is claimed before its
@@ -140,7 +146,10 @@ where
             for ClaimedJoinEmail {
                 recipient,
                 team_name,
-            } in self.repository.claim(team_id, chunk).await?
+            } in self
+                .repository
+                .claim(team_id, chunk, MAX_RECIPIENTS_PER_TEAM)
+                .await?
             {
                 report.claimed += 1;
                 let request = SendNotificationRequestBuilder {

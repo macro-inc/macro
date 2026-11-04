@@ -42,7 +42,7 @@ impl SessionActions for CodingAgentsClient {
                     SessionAction::Archive { archived } => (
                         Method::PUT,
                         format!("{root}/archived"),
-                        json!({"isArchived":archived}),
+                        json!({"archived":archived}),
                         if archived {
                             "Session archived."
                         } else {

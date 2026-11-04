@@ -11,6 +11,11 @@ There are no built-in company views or Board/List layout. Companies and People
 are plain soup lists with the shared pagination. Existing personal/team saved
 views stay in the toolbar's Views menu.
 
+Opening a company or contact row in Companies or People clears its blue unread
+dot, including desktop preview activation, keyboard opening, and phone navigation.
+The read is saved in the background; a failed request restores the dot so opening
+it again can retry. Marking read does not mark the notification done.
+
 **Rollout:** Tasks, Email, Notes, Calls and Databases require PostHog `enable-crm-activity`
 (off by default; local override: `VITE_ENABLE_CRM_ACTIVITY=true`). CRM also uses
 this flag to decide whether to supply its task-composer preset; the shared
@@ -116,18 +121,29 @@ Search. New has the same options as the sidebar.
 
 People lists contacts across every CRM-enabled team the viewer belongs to, from
 the same Soup query with only CRM contacts opted in (`crmf`). The server collapses
-duplicate full email addresses (case-insensitive) to one contact. Hidden contacts
+duplicate full email addresses (case-insensitive) to one contact; contacts
+without an email never collapse. Hidden contacts
 and contacts under hidden companies are excluded. Columns are Person (name and
 email), Company and Last contacted (sortable). `Search people` matches name or
 email on the server after a short typing pause, so results include contacts not
 yet scrolled into view. The desktop header has the title, shared **New** menu,
 and expandable Search; choose **Contact** from New. On touch, **New contact**
-is unchanged. The contact dialog asks for a company through a **Choose a company** pill (searchable by name
-or domain, from the up to 500 most relevant companies with a domain) and fixes
-the email to that company's primary domain; **Add contact** on a company's Team
-tab skips the company pill. The company, contact and pipeline dialogs share the
+is unchanged. The contact dialog offers an optional **Choose a company** pill (searchable by name
+or domain, from the up to 500 most relevant companies, including name-only
+companies); without one the person is added with no company. The email is
+optional: personal addresses and different domains are accepted, and leaving it
+empty adds the person by name alone. Contacts without a company show no company
+pill. **Add contact** on a company's Team tab skips the company pill.
+Contact names allow up to 200 characters. A longer name keeps the form open
+with an error; shortening it allows submission without re-entering other fields.
+**New company** requires a name; its domain is optional. If supplied, it must be
+a company domain, not a personal email provider. The company, contact and pipeline dialogs share the
 task/project composer layout: name on the first row beside **Close**, details
 below, and a **Create …** button that also submits on Command-Enter.
+
+Verify company domain validation by creating a company with an allowed business
+domain, then adding a contact whose email matches it. Personal email provider
+domains must still be rejected as company domains.
 
 Desktop `Search companies` and `Search people` start as outlined icon buttons
 and expand into the shared Email/Tasks search bar. Command-F expands and focuses
@@ -178,8 +194,8 @@ Customers too: `/app/company/<uuid>` and `/app/contact/<uuid>` links (which
 **Copy link** still copies), `@` mentions, search and Command-K results,
 favorites, and CRM discussion notifications. A contact opens under People, so its
 breadcrumb returns to People. A split already showing that record is brought
-forward instead. Touch devices keep the standalone pages, and a
-Customers record URL opened on touch redirects to its standalone page.
+forward instead. Touch devices keep the standalone record pages; a Customers
+record URL redirects there unless it opens a linked item inside Customers.
 Each record opened from the details appends a breadcrumb and a history entry: a
 contact from a company's Team tab gives `Companies > <company> > <contact>`, and
 a person's Company link gives `People > <contact> > <company>`. Opening a record
@@ -203,6 +219,31 @@ title with the unavailable-state message when the flag is off, without database
 queries or creation actions. Copy-link islands are 40px square on touch with
 a 24px icon. Verify both record types, section changes, dismissal, copy feedback,
 and header fit at phone and tablet widths.
+
+To remove a company or person manually, open its **Overview**, choose **Remove
+from CRM** below its details, and confirm. On phones the confirmation is a bottom
+sheet. Only team admins and owners can remove or restore records; other members
+see a disabled action and an explanation. Removal hides the record from the
+team's CRM lists without permanently deleting it. The page stays open and offers
+**Restore to CRM**; admins can also reopen the record's direct link to restore it.
+Hiding a company hides all its contacts and turns off team email sync. Restoring
+the company restores every contact, including individually hidden ones, but leaves
+email sync off; re-enable **Sync Emails** under the information panel's **Sharing**
+section if needed. Admins can still inspect hidden contacts in a company's Team
+tab. The existing **Sharing → Visible in CRM** checkbox and company row **Hide /
+Unhide** actions control the same state.
+Restoring a person under a hidden company does not make them appear in People
+until that company is restored too. People without a company can be restored
+directly; a person without a name or email is labeled **Contact** in the confirmation.
+
+The backend-free browser check is
+`bunx playwright test --config src/features/crm/browser-test/playwright.config.ts visibility.browser.e2e.ts`
+from `apps/web`. It exercises cancellation, pending/error handling, restoration,
+permissions, and changing records with an open confirmation on desktop, phone,
+and tablet.
+Fixture screenshots: [company confirmation on desktop](media/crm-removal/company-desktop.png)
+and [person confirmation on phone](media/crm-removal/contact-phone.png).
+
 Their information panel starts closed and opens as a floating bubble at every
 width, without shrinking the record content. Click outside the bubble or use
 the toggle to dismiss it; the open state is not restored on a later visit.
@@ -216,8 +257,9 @@ fills the row beside the filter button, or the whole row without filters.
 Email importance and inbox choices open in the shared filter drawer.
 Section creation actions appear at the bottom right above the navigation dock,
 replacing the default app-wide action: Add contact, New email, New note, New task,
-New call, or New database. Existing contact-domain requirements, email-sync and
-database gates, recipients, and task associations still apply. With company email
+New call, or New database. Add contact is available once the company is loaded,
+including companies without a domain; contact emails may use any valid domain.
+Email-sync and database gates, recipients, and task associations still apply. With company email
 sync off, New email stays visible but disabled; New company must not replace it.
 Keyboard focus and
 higher-priority composers suppress the floating action; leaving the section
@@ -284,10 +326,24 @@ Files also includes attachments of emails with its address. Tasks created from a
 contact also reference its company. The side panel keeps Sharing (admins only)
 and adds References.
 
-In a company or contact's Tasks tab, clicking a task (or pressing Enter on its
-focused row) opens the task detail view at `/app/tasks/<task-id>`, including on
-mobile. Shift-click opens it in a separate split. Verify that the task's status
-and properties appear, rather than the regular Drive markdown editor.
+In workspace activity and a company or contact's embedded sections, clicking a
+Task, Email, Note, Call, or Database opens its authorized detail inside Customers.
+The CRM sidebar stays in place and the breadcrumb shows the source view, record
+trail (when present), and selected item, without section labels such as Tasks or
+Files or an extra separator before preview titles. The current record breadcrumb
+returns to the captured section and entry state. The item URL is nested under
+`/app/companies` or `/app/companies/pipeline/<uuid>`. Typed record sections use
+`/<record-type>/<record-id>/<tasks-emails-calls-or-databases>/<item-id>`, without
+repeating the item type or a task's `md/task` suffix. Redundant typed URLs for
+these sections do not resolve. Workspace activity retains
+`/<item-type>/<item-id>` and document metadata. Record Files and overview notes
+retain document metadata on routes restricted to those sections.
+Back and Forward restore the item and source; selecting the source breadcrumb or
+closing the item returns to the source list or record with its entry state.
+Reload keeps the selected item's URL. Shift-click uses the existing separate
+split behavior; modified row clicks keep the existing split behavior. On touch,
+the existing header and breadcrumb conventions apply without a new navigation UI.
+Verify that tasks display their status and properties, not the Drive editor.
 
 Verify the real CRM routes separately with accessible and inaccessible databases,
 multiple matching rows per database, empty matches, and a second page of results.
@@ -379,7 +435,12 @@ the table's own cell editors (unset ones read **Empty**). The body scrolls while
 the footer stays pinned with **Cancel** (Esc) and **Add deal**. Select
 fields can create a new option. Choosing **Add company “…”** creates the company
 with the row: a searched domain fills the domain and the name. **Add contact “…”**
-works the same way, and a new contact's email must use a company's domain.
+works the same way. A new company may omit its domain. A new contact accepts a
+full email address and an explicit company choice, including a name-only company.
+An email-domain match offers **Use suggested company**; accept it or select a
+different company before submitting. Editing the email keeps that explicit choice.
+Focusing the suggestion reveals its full name; Enter accepts it without submitting
+the form, and closes the tooltip without a browser error.
 **Add deal** stays disabled until a record is chosen, and Command-Enter submits.
 The form makes one row with every value set. A board lane's **New record** opens
 the same dialog with the lane's stage filled in. The table's blank row at the
@@ -404,6 +465,11 @@ the pipeline already had is not added again, so retrying an interrupted import
 adds only what is missing; several rows for one new record add separate entries
 (deals), as an export of such a pipeline lists them. Relation and non-person entity columns are skipped,
 and a value that does not fit its column is left empty.
+
+Agent CSV imports report ambiguous contact emails as unresolved records with an
+actionable reason and continue the valid rows. They never create another contact
+for an ambiguous email; select the intended contact by ID when adding it to the
+pipeline. Storage and authorization failures during lookup still fail the import.
 
 CRM lists are currently disabled by `enableCrmLists` (default `false`). The sidebar
 Lists section, list editor, and company membership controls only mount when enabled.
@@ -449,6 +515,35 @@ another sidebar destination, or browser Back, also leaves settings. On touch
 the back arrow is the only control in the header. It is the same page as
 Settings > CRM, with the same member and admin permissions; check both roles.
 
+Its **Email sync** section (shown while CRM is on) has **Keep personal emails
+out** (on by default) and **Blocked domains**. With the toggle off, mail you
+send to someone on a personal provider (gmail.com, outlook.com, …) adds them as
+a contact without a company; mail they send you only updates a contact that
+already exists. Vendor, brand and bulk-sender domains stay out. Turning the
+toggle back on only stops future sync; contacts it already added stay.
+Blocking a domain (typed, or selected from a company's current domains)
+stops email sync for it and hides the company that owns it, that company's
+people, and contacts without a company at that domain; unblocking shows them
+again once none of the company's domains remain blocked. Contacts without a
+company reappear when their own domain is unblocked. A contact attached to a
+company follows that company's domains, so
+blocking `gmail.com` does not hide a Gmail address filed under another company.
+A new contact added by hand without a company at an already blocked domain
+stays visible; a later block operation for that domain hides it.
+Selecting a company attempts each of its current domains separately. Controls
+stay disabled until all requests settle. Successful domains remain blocked;
+failed domains stay listed with **Retry failed domains**, even if the company
+disappears from the picker. Verify an early request failure followed by a later
+success, then retry only the failed domains without undoing successful blocks.
+After blocking or unblocking, verify that already-cached company lists and
+contact suggestions refresh to the new visibility without reloading the app,
+including a previously hidden company returning after unblocking.
+Only admins and owners change either; members see them read-only.
+Contacts without a company never grant team access to email threads, but
+hiding one (by hand or by blocking its domain) suppresses that team's
+CRM-derived thread access for members. Independent ownership, delegation,
+sharing, and other eligible team grants still apply.
+
 `Export` opens options for companies. Choose Current view
 (respects filters/search) or All records across views (each visible record once), then
 select CSV columns. Company exports include Stage, Owner, Revenue and optional custom
@@ -458,3 +553,10 @@ columns. Changing scope requires preparing again. Cancel stops preparation. CSV 
 quoted fields, original date timestamps and spreadsheet formula escaping.
 
 The existing CRM New menus use icons and muted descriptions for Company, Contact, and Pipeline. Pipeline availability and permissions are unchanged.
+
+For loading diagnostics (span names in the
+[observability guide](observability.md#navigation-and-view-phases)), switch
+sections and reopen a record: each restarts the `crm.company` / `crm.contact`
+flow, and disabled sources must not leave it waiting once metadata is ready.
+Traces hold opaque record ids and section categories, never names or addresses.
+Metadata errors may cancel the detail flow when the outer error panel replaces it.

@@ -15,10 +15,6 @@ const mapGraphqlGroupedSoupPageMock = vi.hoisted(() =>
   vi.fn((data: { page: unknown }) => data.page)
 );
 
-vi.mock('@macro-inc/observability', () => ({
-  Telemetry: { error: vi.fn() },
-}));
-
 vi.mock('@queries/soup/grouped/api', () => ({
   makeGroupComparator: () => (left: { key: string }, right: { key: string }) =>
     left.key.localeCompare(right.key),
@@ -62,7 +58,7 @@ import type { GroupByField, GroupMeta } from '@queries/soup/grouped/types';
 import type { GroupSoupQueryVariables } from '@service-storage/graphql/generated/graphql';
 import { createGraphqlGroupedSoupQueries } from './create-graphql-grouped-soup-queries';
 
-type TestItem = { id: string; name: string };
+type TestItem = { id: string; name: string; type: 'document' };
 type TestPage = {
   items: Record<string, TestItem>;
   groups: Array<
@@ -137,7 +133,7 @@ function makeFakeClient(): {
   };
 }
 
-const item = (id: string): TestItem => ({ id, name: id });
+const item = (id: string): TestItem => ({ id, name: id, type: 'document' });
 const group = (
   key: string,
   itemIds: string[],
@@ -243,7 +239,10 @@ describe('createGraphqlGroupedSoupQueries', () => {
       .build(queryClient, {
         mutationKey: GRAPHQL_SOUP_DELETE_MUTATION_KEY,
         onMutate: () => ({
-          graphqlDeletion: createGraphqlSoupDeletion(['a-1', 'a-2']),
+          graphqlDeletion: createGraphqlSoupDeletion([
+            'GraphqlSoupDocument:a-1',
+            'GraphqlSoupDocument:a-2',
+          ]),
         }),
         onSettled: (_data, _error, _vars, context) =>
           context?.graphqlDeletion.release(),

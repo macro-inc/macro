@@ -13,6 +13,26 @@ use serde_json::Value;
 use std::{sync::Arc, time::Duration};
 use uuid::Uuid;
 
+/// The scheduler's rejection text, which names a safe cause such as a deleted
+/// agent. Bounded so a proxy's error page cannot flood the tool result.
+async fn rejection_reason(mut response: reqwest::Response) -> String {
+    const MAX_REASON_BYTES: usize = 300;
+    let mut body = Vec::new();
+    while body.len() < MAX_REASON_BYTES {
+        match response.chunk().await {
+            Ok(Some(chunk)) => body.extend_from_slice(&chunk),
+            _ => break,
+        }
+    }
+    let reason = String::from_utf8_lossy(&body[..body.len().min(MAX_REASON_BYTES)]);
+    let reason = reason.trim();
+    if reason.is_empty() {
+        "no reason given".to_owned()
+    } else {
+        reason.to_owned()
+    }
+}
+
 /// Reusable client; internal credentials never come from model arguments.
 pub struct RoutineClient {
     client: Client,
@@ -63,9 +83,12 @@ impl RoutineClient {
         path: &str,
         body: Option<Value>,
     ) -> Result<Vec<u8>> {
+        let mut trace_headers = reqwest::header::HeaderMap::new();
+        macro_tower_layers::inject_trace_headers(&mut trace_headers);
         let mut request = self
             .client
             .request(method, self.base.join(path)?)
+            .headers(trace_headers)
             .header(INTERNAL_API_KEY_HEADER, self.key.clone())
             .header(INTERNAL_MACRO_USER_ID_HEADER, user.as_ref());
         if let Some(body) = body {
@@ -92,19 +115,18 @@ impl RoutineClient {
                 }
                 Ok(body)
             }
-            400 | 422 => {
-                // The scheduler's own validation message names the broken rule.
-                let reason = bounded_text(response).await;
-                if status == 422 {
-                    bail!(
-                        "Invalid routine: {reason}. A required app is not connected or unusable by the selected agent: ask the user to connect each app in requiredApps (DiscoverConnectors gives a link) or remove it."
-                    )
-                }
-                bail!(
-                    "Invalid routine: {reason}. Check the triggers and steps; select agents from ListAgents using their bot.botId."
-                )
-            }
-            401 | 403 | 404 => bail!("Routine or target is unavailable to this user."),
+            400 => bail!(
+                "Invalid routine ({}). Check the triggers and steps; select agents from ListAgents using their bot.botId.",
+                rejection_reason(response).await
+            ),
+            422 => bail!(
+                "Invalid routine configuration, or a required app is not connected or unusable by the selected agent ({}). Ask the user to connect each app in requiredApps (DiscoverConnectors gives a link) or remove it.",
+                rejection_reason(response).await
+            ),
+            401 | 403 | 404 => bail!(
+                "Routine or target is unavailable to this user ({}).",
+                rejection_reason(response).await
+            ),
             402 => bail!("The user's AI allowance is exhausted, so the routine cannot run now."),
             409 => bail!("Routine is running or changed. Read it again before editing."),
             _ => bail!(
@@ -265,16 +287,5 @@ fn configuration_body(
     }))
 }
 
-/// A short, single-line excerpt of an error body.
-async fn bounded_text(response: reqwest::Response) -> String {
-    const MAX_CHARS: usize = 300;
-    let text = response.text().await.unwrap_or_default();
-    let text = text.split_whitespace().collect::<Vec<_>>().join(" ");
-    match text.char_indices().nth(MAX_CHARS) {
-        Some((end, _)) => format!("{}…", &text[..end]),
-        None if text.is_empty() => "the configuration was rejected".to_owned(),
-        None => text,
-    }
-}
 #[cfg(test)]
 mod test;

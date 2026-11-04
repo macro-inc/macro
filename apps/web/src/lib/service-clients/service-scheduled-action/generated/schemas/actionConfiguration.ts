@@ -12,7 +12,8 @@ import type { ActionTrigger } from './actionTrigger';
 import type { RunVisibility } from './runVisibility';
 
 /**
- * Canonical client configuration. Ownership and execution state are server-owned.
+ * Client configuration, the create body. Ownership and execution state are
+server-owned.
  */
 export interface ActionConfiguration {
   /** What the routine is for, in the owner's words; empty when unset. */

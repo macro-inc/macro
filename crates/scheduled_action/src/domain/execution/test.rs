@@ -291,7 +291,10 @@ impl ScheduledActionRepo for Repo {
     async fn get_execution_records(&self, _: &Uuid) -> Result<Vec<ActionExecutionRecord>> {
         unimplemented!()
     }
-    async fn get_latest_execution_records(&self, _: &[Uuid]) -> Result<Vec<ActionExecutionRecord>> {
+    async fn last_runs(
+        &self,
+        _: &[Uuid],
+    ) -> Result<std::collections::HashMap<Uuid, ActionExecutionRecord>> {
         unimplemented!()
     }
 }

@@ -1,4 +1,16 @@
 {
+  "agent-harness.getAgentAutoArchivePreferences": {
+    "label": "Get Agent Auto Archive Preferences",
+    "method": "GET",
+    "path": "/agent-auto-archive-preferences",
+    "write": false
+  },
+  "agent-harness.putAgentAutoArchivePreferences": {
+    "label": "Put Agent Auto Archive Preferences",
+    "method": "PUT",
+    "path": "/agent-auto-archive-preferences",
+    "write": true
+  },
   "agent-harness.discoverAgentCapabilitiesHandler": {
     "label": "Discover Agent Capabilities",
     "method": "POST",
@@ -123,6 +135,18 @@
     "label": "Set Agent Session Archived",
     "method": "PUT",
     "path": "/agent-sessions/{session_id}/archived",
+    "write": true
+  },
+  "agent-harness.getAgentSessionAutoArchive": {
+    "label": "Get Agent Session Auto Archive",
+    "method": "GET",
+    "path": "/agent-sessions/{session_id}/auto-archive",
+    "write": false
+  },
+  "agent-harness.putAgentSessionAutoArchive": {
+    "label": "Put Agent Session Auto Archive",
+    "method": "PUT",
+    "path": "/agent-sessions/{session_id}/auto-archive",
     "write": true
   },
   "agent-harness.getAgentSessionChanges": {
@@ -263,6 +287,12 @@
     "path": "/agent-sessions/{session_id}/tool-approvals/{approval_id}",
     "write": true
   },
+  "agent-harness.presentSessionView": {
+    "label": "Present Session View",
+    "method": "POST",
+    "path": "/agent-sessions/{session_id}/views",
+    "write": true
+  },
   "agent-harness.classify": {
     "label": "Classify",
     "method": "POST",
@@ -303,6 +333,12 @@
     "label": "Create Ai Credit Checkout",
     "method": "POST",
     "path": "/ai-billing/credits/checkout",
+    "write": true
+  },
+  "auth.purchaseAiCredits": {
+    "label": "Purchase Ai Credits",
+    "method": "POST",
+    "path": "/ai-billing/credits/purchase",
     "write": true
   },
   "auth.updateAiBillingOverage": {
@@ -653,6 +689,24 @@
     "path": "/session/login/{session_code}",
     "write": false
   },
+  "auth.getSystemStatus": {
+    "label": "Get System Status",
+    "method": "GET",
+    "path": "/system-status",
+    "write": false
+  },
+  "auth.setSystemStatus": {
+    "label": "Set System Status",
+    "method": "POST",
+    "path": "/system-status",
+    "write": true
+  },
+  "auth.listSystemStatusHistory": {
+    "label": "List System Status History",
+    "method": "GET",
+    "path": "/system-status/history",
+    "write": false
+  },
   "auth.deleteTeam": {
     "label": "Delete Team",
     "method": "DELETE",
@@ -687,6 +741,12 @@
     "label": "Patch Team Crm Settings",
     "method": "PATCH",
     "path": "/team/crm",
+    "write": true
+  },
+  "auth.sendTeamDomainNotice": {
+    "label": "Send Team Domain Notice",
+    "method": "POST",
+    "path": "/team/domain-notice",
     "write": true
   },
   "auth.inviteToTeam": {
@@ -959,24 +1019,6 @@
     "path": "/events/{event_id}/guests",
     "write": true
   },
-  "calendar.eventNotes": {
-    "label": "Event Notes",
-    "method": "GET",
-    "path": "/events/{event_id}/notes",
-    "write": false
-  },
-  "calendar.unlinkEventNote": {
-    "label": "Unlink Event Note",
-    "method": "DELETE",
-    "path": "/events/{event_id}/notes/{document_id}",
-    "write": true
-  },
-  "calendar.linkEventNote": {
-    "label": "Link Event Note",
-    "method": "PUT",
-    "path": "/events/{event_id}/notes/{document_id}",
-    "write": true
-  },
   "calendar.calendarEventProviderUrl": {
     "label": "Calendar Event Provider Url",
     "method": "GET",
@@ -1006,18 +1048,6 @@
     "method": "PUT",
     "path": "/join-requests/{request_id}",
     "write": true
-  },
-  "calendar.noteDocuments": {
-    "label": "Note Documents",
-    "method": "GET",
-    "path": "/meeting-notes/documents",
-    "write": false
-  },
-  "calendar.documentNoteLinks": {
-    "label": "Document Note Links",
-    "method": "GET",
-    "path": "/meeting-notes/documents/{document_id}/links",
-    "write": false
   },
   "calendar.discardCalendarReplacement": {
     "label": "Discard Calendar Replacement",
@@ -1311,6 +1341,12 @@
     "label": "Complete Pipedream Mcp Connection",
     "method": "POST",
     "path": "/pipedream/mcp/complete",
+    "write": true
+  },
+  "cognition.completePipedreamMcpConnect": {
+    "label": "Complete Pipedream Mcp Connect",
+    "method": "POST",
+    "path": "/pipedream/mcp/connect/complete",
     "write": true
   },
   "cognition.deletePipedreamMcpConnection": {
@@ -1773,6 +1809,18 @@
     "label": "Unsubscribe Item",
     "method": "POST",
     "path": "/unsubscribe/item/{item_type}/{item_id}",
+    "write": true
+  },
+  "notification.removeUnsubscribeItems": {
+    "label": "Remove Unsubscribe Items",
+    "method": "DELETE",
+    "path": "/unsubscribe/items",
+    "write": true
+  },
+  "notification.unsubscribeItems": {
+    "label": "Unsubscribe Items",
+    "method": "POST",
+    "path": "/unsubscribe/items",
     "write": true
   },
   "notification.removeUnsubscribeAll": {
@@ -2627,6 +2675,24 @@
     "path": "/comms/channels",
     "write": false
   },
+  "storage.listCrmBlockedDomains": {
+    "label": "List Crm Blocked Domains",
+    "method": "GET",
+    "path": "/crm/blocked-domains",
+    "write": false
+  },
+  "storage.unblockCrmDomain": {
+    "label": "Unblock Crm Domain",
+    "method": "DELETE",
+    "path": "/crm/blocked-domains/{domain}",
+    "write": true
+  },
+  "storage.blockCrmDomain": {
+    "label": "Block Crm Domain",
+    "method": "PUT",
+    "path": "/crm/blocked-domains/{domain}",
+    "write": true
+  },
   "storage.createCrmCompany": {
     "label": "Create Crm Company",
     "method": "POST",
@@ -2674,6 +2740,12 @@
     "method": "GET",
     "path": "/crm/contacts",
     "write": false
+  },
+  "storage.createCrmTeamContact": {
+    "label": "Create Crm Team Contact",
+    "method": "POST",
+    "path": "/crm/contacts",
+    "write": true
   },
   "storage.getContactByEmail": {
     "label": "Get Contact By Email",
@@ -2853,6 +2925,12 @@
     "label": "Undo Database Change",
     "method": "POST",
     "path": "/databases/{id}/changes/{change}/undo",
+    "write": true
+  },
+  "storage.duplicateDatabase": {
+    "label": "Duplicate Database",
+    "method": "POST",
+    "path": "/databases/{id}/duplicate",
     "write": true
   },
   "storage.importDatabaseTable": {

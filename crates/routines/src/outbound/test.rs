@@ -339,3 +339,47 @@ fn required_apps_need_an_agent_step_to_use_them() {
         .to_string();
     assert!(error.contains("add an agent step"), "{error}");
 }
+
+/// The scheduler's rejection names the cause, so the agent can tell a deleted
+/// agent from one the user may not run or a configuration it must fix.
+#[tokio::test]
+async fn create_rejections_carry_the_scheduler_reason() {
+    let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+    let url = format!("http://{}/scheduled-action", listener.local_addr().unwrap());
+    let rejections = [
+        ("404 Not Found", "selected agent is unavailable"),
+        ("403 Forbidden", "routine owner is not authorized"),
+        (
+            "400 Bad Request",
+            "invalid routine task; select a model or agent and provide instructions",
+        ),
+        (
+            "422 Unprocessable Entity",
+            "connect every app this routine requires",
+        ),
+    ];
+    let server = serve_responses(
+        listener,
+        rejections
+            .iter()
+            .map(|(status, reason)| (*status, (*reason).to_owned()))
+            .collect(),
+    );
+    let client = RoutineClient::new(&url, "test-internal-key").unwrap();
+    let user = MacroUserIdStr::parse_from_str("macro|routine@example.com").unwrap();
+    let config = RoutineConfiguration {
+        name: "Stuck tickets".into(),
+        triggers: vec![RoutineTrigger::Cron {
+            expression: "0 0 9,17 * * *".into(),
+            timezone: "UTC".into(),
+        }],
+        steps: agent(Uuid::from_u128(1)),
+        required_apps: None,
+    };
+
+    for (_, reason) in rejections {
+        let error = client.create(&user, &config).await.unwrap_err();
+        assert!(error.to_string().contains(reason), "{error}");
+    }
+    server.await.unwrap();
+}

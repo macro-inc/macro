@@ -76,7 +76,10 @@ impl ScheduledActionRepo for FakeRepo {
     async fn get_execution_records(&self, _: &Uuid) -> Result<Vec<ActionExecutionRecord>> {
         unreachable!()
     }
-    async fn get_latest_execution_records(&self, _: &[Uuid]) -> Result<Vec<ActionExecutionRecord>> {
+    async fn last_runs(
+        &self,
+        _: &[Uuid],
+    ) -> Result<std::collections::HashMap<Uuid, ActionExecutionRecord>> {
         unreachable!()
     }
     async fn update_next_run_at(&self, _: &Uuid) -> Result<()> {

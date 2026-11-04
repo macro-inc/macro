@@ -15,7 +15,7 @@ Triggers: `once` (future RFC3339 time), `cron` (six-field expression and IANA ti
 
 Steps run in order and a failed step stops the run:
 - `code`: TypeScript against Macro's SDK, for anything that acts or decides: labeling or archiving email, setting properties, creating tasks, posting messages, or judging items with `macro.ai.decide`. See Code steps at the end.
-- `agent` ("Ask AI"): hand off to a model (`model`) or an agent from ListAgents (`agent.bot_id`, optional `model` override) with `instructions`, for open-ended work such as drafting, research or summarizing many items. It sees the triggering event and what earlier steps returned. A routine has at most one agent step. To schedule yourself, use your own persona id as `agent.bot_id`. Apps the agent needs beyond its own go in `requiredApps`.
+- `agent` ("Ask AI"): hand off to a model (`model`) or an agent from ListAgents (`agent.bot_id`, optional `model` override): a built-in agent, or one the user owns or can use, including one on a self-hosted runtime, which need not be online to save the routine (a run it cannot serve fails and shows in ReadRoutine history). Give it `instructions`, for open-ended work such as drafting, research or summarizing many items. It sees the triggering event and what earlier steps returned. A routine has at most one agent step. To schedule yourself, use your own persona id as `agent.bot_id`. Apps the agent needs beyond its own go in `requiredApps`.
 
 Prefer code: it is exact and cheap, and it can read many items, loop and decide. Use an agent step only for open-ended work, and put it last.
 

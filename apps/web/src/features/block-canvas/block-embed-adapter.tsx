@@ -1,7 +1,7 @@
 import {
   createPriorityCollapseController,
   PriorityCollapseOverflowSensor,
-} from '@components/app/split-layout/components/PriorityCollapseOverflowSensor';
+} from '@app/components/priority-collapse/PriorityCollapseOverflowSensor';
 import {
   type SplitFileMenuActionGroups,
   SplitPanelContext,
@@ -90,6 +90,7 @@ function CanvasBlockEmbedContent(props: CanvasEmbedViewProps) {
     meta: () => undefined,
     updateMeta: undefined,
     referredFrom: () => null,
+    lastNavigationSource: () => null,
     lastNavigationCause: () => 'fresh',
     registerEntryStateCaptor: () => () => {},
     captureEntryState: () => {},

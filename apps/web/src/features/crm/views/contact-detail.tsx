@@ -1,7 +1,9 @@
+import { TraceFlow, usePending } from '@app/observability/flow';
 import { SidePanel } from '@components/app/side-panel';
 import { createMemo, Match, onCleanup, Show, Suspense, Switch } from 'solid-js';
 import { CrmListSkeleton } from '../components/list-state';
 import { RecordOverview } from '../components/record-overview';
+import { RecordVisibilityAction } from '../components/record-visibility-action';
 import { useCrmContext } from '../context/crm-context';
 import {
   type ContactSection,
@@ -18,7 +20,11 @@ import {
   RecordFilesSection,
   RecordReferencesSection,
 } from './record-associations';
-import { useContactQuery, useIsTeamAdmin } from './use-crm';
+import {
+  useContactQuery,
+  useIsTeamAdmin,
+  useSetContactHiddenMutation,
+} from './use-crm';
 
 /**
  * Root of the contact detail view, laid out like a project: the host's top
@@ -26,16 +32,34 @@ import { useContactQuery, useIsTeamAdmin } from './use-crm';
  * the other sections list its emails, files, tasks and calls. Sharing and
  * references stay in the floating information panel.
  */
-export function Contact(props: {
+type ContactProps = {
   contactId: string;
   section?: ContactSection;
   headerToggle?: boolean;
   onOpenCompany?: (companyId: string) => boolean;
   onOpenPipeline?: (pipelineId: string) => void;
-}) {
+};
+
+export function Contact(props: ContactProps) {
+  return (
+    <TraceFlow
+      name="crm.contact"
+      key={() => `${props.contactId}:${props.section ?? 'overview'}`}
+      attributes={{
+        'contact.id': props.contactId,
+        'crm.section': props.section ?? 'overview',
+      }}
+    >
+      <ContactContent {...props} />
+    </TraceFlow>
+  );
+}
+
+function ContactContent(props: ContactProps) {
   const context = useCrmContext();
   const pipelinesEnabled = context.pipelinesEnabled();
   const contactQuery = useContactQuery(() => props.contactId);
+  usePending('crm.record', () => contactQuery.isLoading);
   const contact = () => contactQuery.data;
   onCleanup(
     context.registerTaskComposerRecord(() => ({
@@ -45,6 +69,7 @@ export function Contact(props: {
     }))
   );
   const isTeamAdmin = useIsTeamAdmin();
+  const hiddenMutation = useSetContactHiddenMutation();
   const section = () => props.section ?? 'overview';
   const scope = createMemo(
     (): CrmRecordScope | undefined => {
@@ -76,6 +101,37 @@ export function Contact(props: {
                   contact={contact()}
                   onOpenCompany={props.onOpenCompany}
                 />
+                <Show when={contact()}>
+                  {(current) => (
+                    <RecordVisibilityAction
+                      recordId={current().id}
+                      kind="contact"
+                      name={current().name ?? current().email ?? 'Contact'}
+                      hidden={current().hidden}
+                      canManage={isTeamAdmin()}
+                      pending={hiddenMutation.isPending}
+                      onChange={(hidden, onSuccess) =>
+                        hiddenMutation.mutate(
+                          { contactId: current().id, hidden },
+                          {
+                            onSuccess: () => {
+                              onSuccess();
+                              context.feedback.success(
+                                hidden
+                                  ? 'Person removed from CRM'
+                                  : 'Person restored to CRM'
+                              );
+                            },
+                            onError: () =>
+                              context.feedback.failure(
+                                'Could not update contact visibility'
+                              ),
+                          }
+                        )
+                      }
+                    />
+                  )}
+                </Show>
                 <Show when={pipelinesEnabled()}>
                   <context.PipelineEntries
                     record={{ type: 'contact', id: props.contactId }}

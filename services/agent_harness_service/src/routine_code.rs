@@ -67,9 +67,7 @@ pub trait RoutineCredentials: Send + Sync + 'static {
 impl RoutineCredentials for MacroApiTokenSigner {
     async fn mint(&self, owner: &MacroUserIdStr<'static>) -> anyhow::Result<String> {
         // Writes are the owner's own, not an agent's.
-        Ok(self
-            .mint_for_agent(owner, TOKEN_LIFETIME_SECONDS, None)
-            .await?)
+        Ok(self.mint_for(owner, TOKEN_LIFETIME_SECONDS).await?)
     }
 }
 

@@ -84,6 +84,27 @@ it('plays the chosen sound once for a burst of notifications', () => {
   dispose();
 });
 
+it('does not play during quiet hours', () => {
+  vi.setSystemTime(new Date('2026-11-03T23:30:00Z'));
+  localStorage.setItem(
+    SETTINGS_KEY,
+    JSON.stringify({
+      enabled: true,
+      quietHours: {
+        enabled: true,
+        startMinutes: 22 * 60,
+        endMinutes: 8 * 60,
+        days: ['mon', 'tue', 'wed', 'thu', 'fri', 'sat', 'sun'],
+        timeZone: 'UTC',
+      },
+    })
+  );
+  const { deliver, dispose } = mountSounds();
+  deliver(notification('channel_mention'));
+  expect(playNotificationSound).not.toHaveBeenCalled();
+  dispose();
+});
+
 it('skips read notifications, muted categories, and tabs not in use', () => {
   localStorage.setItem(SETTINGS_KEY, JSON.stringify({ enabled: true }));
   const { deliver, dispose } = mountSounds();

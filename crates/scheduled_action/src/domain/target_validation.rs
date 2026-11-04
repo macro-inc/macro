@@ -18,8 +18,9 @@ pub enum TargetValidationError {
     /// The steps break a structural rule; the message says which.
     #[error("{0}")]
     InvalidProgram(#[from] ProgramError),
-    #[error("agent routines are not enabled")]
-    AgentsDisabled,
+    /// The scheduler has no session domain to authorize agents or apps with.
+    #[error("this scheduler cannot check agents or required apps")]
+    SessionsUnavailable,
     #[error("this routine selects an agent; reload or upgrade your client before updating")]
     ExplicitAgentRequired,
     #[error("this routine requires apps; reload or upgrade your client before updating")]
@@ -28,38 +29,42 @@ pub enum TargetValidationError {
     ExplicitStepsRequired,
 }
 
-/// Default acceptance policy for composition roots that have not enabled agents.
+/// Default acceptance policy for composition roots without a session domain.
 pub struct ModelOnlyTargets;
 
 impl TaskTargetValidator for ModelOnlyTargets {
     async fn validate_task(&self, task: &Value, _owner: &MacroUserIdStr<'static>) -> Result<()> {
-        // Required apps need the session domain to check the owner's connections.
-        if !parse_program(task, false)?.mcp_servers.is_empty() {
-            return Err(TargetValidationError::AgentsDisabled.into());
+        let program = parse_program(task)?;
+        // Agents and required apps need the session domain to authorize them.
+        let agent = program.agent_steps().into_iter().any(|step| {
+            matches!(
+                ResolvedTaskTarget::of(step),
+                Ok(ResolvedTaskTarget::Agent { .. })
+            )
+        });
+        if agent || !program.mcp_servers.is_empty() {
+            return Err(TargetValidationError::SessionsUnavailable.into());
         }
         Ok(())
     }
 }
 
 /// Authorizes every agent step's selection without opening a session or
-/// checking runtime connectivity.
+/// checking runtime connectivity, so a self-hosted agent can be saved while
+/// its runtime is offline.
 pub struct TargetValidation<Sessions> {
     sessions: Arc<Sessions>,
-    agents_enabled: bool,
 }
 
 impl<Sessions> TargetValidation<Sessions> {
-    pub fn new(sessions: Arc<Sessions>, agents_enabled: bool) -> Self {
-        Self {
-            sessions,
-            agents_enabled,
-        }
+    pub fn new(sessions: Arc<Sessions>) -> Self {
+        Self { sessions }
     }
 }
 
 impl<Sessions: RoutineSessions> TaskTargetValidator for TargetValidation<Sessions> {
     async fn validate_task(&self, task: &Value, owner: &MacroUserIdStr<'static>) -> Result<()> {
-        let program = parse_program(task, self.agents_enabled)?;
+        let program = parse_program(task)?;
         for step in program.agent_steps() {
             let (bot_id, model) = ResolvedTaskTarget::of(step)?.session_target();
             self.sessions
@@ -75,20 +80,13 @@ impl<Sessions: RoutineSessions> TaskTargetValidator for TargetValidation<Session
     }
 }
 
-/// A stored task's program, checked structurally and against the agent gate.
-pub(super) fn parse_program(
-    task: &Value,
-    agents_enabled: bool,
-) -> Result<RoutineProgram, TargetValidationError> {
+/// A stored task's program, checked structurally, each agent step with a target.
+pub(super) fn parse_program(task: &Value) -> Result<RoutineProgram, TargetValidationError> {
     let program =
         RoutineProgram::from_task(task).map_err(|_| TargetValidationError::InvalidTask)?;
     program.validate()?;
     for step in program.agent_steps() {
-        let target =
-            ResolvedTaskTarget::of(step).map_err(|_| TargetValidationError::InvalidTask)?;
-        if matches!(target, ResolvedTaskTarget::Agent { .. }) && !agents_enabled {
-            return Err(TargetValidationError::AgentsDisabled);
-        }
+        ResolvedTaskTarget::of(step).map_err(|_| TargetValidationError::InvalidTask)?;
     }
     Ok(program)
 }

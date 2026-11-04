@@ -4,10 +4,10 @@ import { queryClient } from '@queries/client';
 import { type MutationCallbacks, withCallbacks } from '@queries/utils';
 import { scheduledActionClient } from '@service-scheduled-action/client';
 import type {
-  CreateScheduledAction,
+  ActionConfiguration,
+  ActionConfigurationUpdate,
   InProgressExecution,
   ScheduledAction,
-  UpdateScheduledAction,
 } from '@service-scheduled-action/generated/schemas';
 import {
   keepPreviousData,
@@ -159,12 +159,12 @@ function _invalidateScheduleHistory(scheduleId: string) {
 }
 
 export function useCreateScheduleMutation(
-  callbacks?: MutationCallbacks<ScheduledAction, Error, CreateScheduledAction>,
+  callbacks?: MutationCallbacks<ScheduledAction, Error, ActionConfiguration>,
   /** Whether the user created the routine or duplicated one, for analytics. */
   source: 'new' | 'duplicate' = 'new'
 ) {
   return useMutation(() => ({
-    mutationFn: async (request: CreateScheduledAction) =>
+    mutationFn: async (request: ActionConfiguration) =>
       throwOnErr(
         async () => await scheduledActionClient.createSchedule(request)
       ),
@@ -191,13 +191,13 @@ export function useUpdateScheduleMutation(
   callbacks?: MutationCallbacks<
     ScheduledAction,
     Error,
-    { scheduleId: string; body: UpdateScheduledAction }
+    { scheduleId: string; body: ActionConfigurationUpdate }
   >
 ) {
   return useMutation(() => ({
     mutationFn: async (args: {
       scheduleId: string;
-      body: UpdateScheduledAction;
+      body: ActionConfigurationUpdate;
     }) =>
       throwOnErr(async () => await scheduledActionClient.updateSchedule(args)),
     ...withCallbacks(

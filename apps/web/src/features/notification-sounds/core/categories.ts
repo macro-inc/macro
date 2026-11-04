@@ -105,6 +105,7 @@ const CATEGORY_BY_EVENT: Record<
   ai_response: 'agents',
   agent_session_settled: 'agents',
   agent_session_waiting_for_input: 'agents',
+  routine_run_finished: null,
   commented_on_document: 'other',
   channel_message_reaction: 'other',
   channel_invite: 'other',

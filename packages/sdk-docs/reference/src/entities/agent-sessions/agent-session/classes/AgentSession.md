@@ -11,13 +11,14 @@ A managed or externally hosted coding-agent session.
 | Property | Modifier | Type | Description | Inherited from |
 | ------ | ------ | ------ | ------ | ------ |
 | <a id="property-access"></a> `access` | `readonly` | [`EntityAccess`](../../../sharing/access/classes/EntityAccess.md) | Access requests and direct user grants. | - |
+| <a id="property-archivedat"></a> `archivedAt` | `readonly` | () => `Promise`\<`string` \| `undefined`\> | When the session was archived (RFC 3339), or `undefined` while it is not. | - |
+| <a id="property-archivedby"></a> `archivedBy` | `readonly` | () => `Promise`\<`NonNullable`\<ArchiveCause \| null \| undefined\> \| `undefined`\> | Who archived the session, making it read-only: `'user'`, `'pull_request_merged'` or `'runtime_closed'`. `undefined` while it is not archived. | - |
 | <a id="property-codeexecutions"></a> `codeExecutions` | `readonly` | \{ `byId`: (`id`) => [`CodeExecution`](../../code-execution/classes/CodeExecution.md); \} | Saved code executions scoped to this session. Handle construction makes no request. | - |
 | `codeExecutions.byId` | `public` | (`id`) => [`CodeExecution`](../../code-execution/classes/CodeExecution.md) | - | - |
 | <a id="property-createdat"></a> `createdAt` | `readonly` | () => `Promise`\<`string`\> | When the session was created. | - |
 | <a id="property-harness"></a> `harness` | `readonly` | () => `Promise`\<`string`\> | The agent harness implementation serving the session. | - |
 | <a id="property-id"></a> `id` | `public readonly` | `string` | - | [`MacroEntity`](../../../entity/classes/MacroEntity.md).[`id`](../../../entity/classes/MacroEntity.md#property-id) |
 | <a id="property-instructions"></a> `instructions` | `readonly` | () => `Promise`\<`string` \| `undefined`\> | Instructions the session's runtime works under, when any were stated at creation. Fixed for the session's life. | - |
-| <a id="property-isarchived"></a> `isArchived` | `readonly` | () => `Promise`\<`boolean`\> | Whether the session is archived and read-only. | - |
 | <a id="property-model"></a> `model` | `readonly` | () => `Promise`\<`string`\> | The model currently configured for the session. | - |
 | <a id="property-modifiedat"></a> `modifiedAt` | `readonly` | () => `Promise`\<`string`\> | When the session was last modified. | - |
 | <a id="property-name"></a> `name` | `readonly` | () => `Promise`\<`string`\> | The session's user-facing display name. | - |
@@ -27,6 +28,8 @@ A managed or externally hosted coding-agent session.
 | `reviews.create` | `public` | (`input`) => `Promise`\<[`SessionReview`](../../review/classes/SessionReview.md)\> | - | - |
 | <a id="property-sandboxsize"></a> `sandboxSize` | `readonly` | () => `Promise`\<[`SandboxSize`](../../../../../generated/agent-harness/types.gen/type-aliases/SandboxSize.md)\> | Compute tier of the managed sandbox. | - |
 | <a id="property-status"></a> `status` | `readonly` | () => `Promise`\<[`SessionStatusDto`](../../../../../generated/agent-harness/types.gen/type-aliases/SessionStatusDto.md)\> | The session's latest runtime status. | - |
+| <a id="property-views"></a> `views` | `readonly` | \{ `present`: (`view`) => `Promise`\<`void`\>; \} | Views shown in this session at once, with nothing saved. | - |
+| `views.present` | `public` | (`view`) => `Promise`\<`void`\> | - | - |
 | <a id="property-workspace"></a> `workspace` | `readonly` | () => `Promise`\<`string`\> | The directory in which the agent harness runs. | - |
 
 ## Methods
@@ -40,6 +43,18 @@ Archive this session, making it read-only until unarchived.
 #### Returns
 
 `Promise`\<`void`\>
+
+***
+
+### autoArchive()
+
+> **autoArchive**(): `Promise`\<[`SessionAutoArchive`](../type-aliases/SessionAutoArchive.md)\>
+
+This session's auto-archive settings, and when a trigger archived it.
+
+#### Returns
+
+`Promise`\<[`SessionAutoArchive`](../type-aliases/SessionAutoArchive.md)\>
 
 ***
 
@@ -229,6 +244,25 @@ Rename this session.
 
 ***
 
+### setAutoArchive()
+
+> **setAutoArchive**(`overrides`): `Promise`\<`void`\>
+
+Replace this session's auto-archive choices. Owner only; a trigger left
+`undefined` follows the owner's default.
+
+#### Parameters
+
+| Parameter | Type |
+| ------ | ------ |
+| `overrides` | [`AutoArchiveOverrides`](../type-aliases/AutoArchiveOverrides.md) |
+
+#### Returns
+
+`Promise`\<`void`\>
+
+***
+
 ### setSandboxSize()
 
 > **setSandboxSize**(`size`): `Promise`\<[`SandboxSize`](../../../../../generated/agent-harness/types.gen/type-aliases/SandboxSize.md)\>
@@ -345,6 +379,24 @@ Replace sharing grants.
 
 ***
 
+### autoArchivePreferences()
+
+> `static` **autoArchivePreferences**(`client`): `Promise`\<[`AutoArchivePreferencesBody`](../../../../../generated/agent-harness/types.gen/type-aliases/AutoArchivePreferencesBody.md)\>
+
+Which triggers archive the caller's sessions by default; each is off unless chosen.
+
+#### Parameters
+
+| Parameter | Type |
+| ------ | ------ |
+| `client` | `MacroClient` |
+
+#### Returns
+
+`Promise`\<[`AutoArchivePreferencesBody`](../../../../../generated/agent-harness/types.gen/type-aliases/AutoArchivePreferencesBody.md)\>
+
+***
+
 ### byId()
 
 > `static` **byId**(`client`, `id`): `AgentSession`
@@ -408,7 +460,12 @@ What the caller's new coding sessions are told to do beyond their assignment.
 
 > `static` **createManaged**(`client`, `opts?`): `Promise`\<`AgentSession`\>
 
-Create a managed session, optionally delivering its first prompt.
+Create a managed session as `agent` when one is named, otherwise the
+deployment's default coding persona. List personas with
+AgentNamespace.list and construct one with [Agent.byId](../../../agents/agent/classes/Agent.md#byid).
+Unknown or inaccessible personas fail. `model` and `instructions`
+outrank the persona's. `repoUrl` is honored for Cursor; omit `agent`
+and it starts as Cursor.
 
 #### Parameters
 
@@ -501,6 +558,25 @@ lists.
 #### Returns
 
 `Promise`\<`string`[]\>
+
+***
+
+### setAutoArchivePreferences()
+
+> `static` **setAutoArchivePreferences**(`client`, `preferences`): `Promise`\<[`AutoArchivePreferencesBody`](../../../../../generated/agent-harness/types.gen/type-aliases/AutoArchivePreferencesBody.md)\>
+
+Replace which triggers archive the caller's sessions by default.
+
+#### Parameters
+
+| Parameter | Type |
+| ------ | ------ |
+| `client` | `MacroClient` |
+| `preferences` | [`AutoArchivePreferencesBody`](../../../../../generated/agent-harness/types.gen/type-aliases/AutoArchivePreferencesBody.md) |
+
+#### Returns
+
+`Promise`\<[`AutoArchivePreferencesBody`](../../../../../generated/agent-harness/types.gen/type-aliases/AutoArchivePreferencesBody.md)\>
 
 ***
 

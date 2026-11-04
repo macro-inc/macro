@@ -21,12 +21,18 @@ Pulumi stacks; they do not host extra agent processes.
   `macrod.rs`, `in_memory.rs`.
 - `src/containers.rs`: Daytona sandbox lifecycle; local Docker opt-in.
 - `src/trigger.rs`: turns channel/webhook triggers into sessions.
+- `src/pull_request_archive.rs`: consumes `macro.github_pull_requests` (group
+  `agent-harness-pull-request-archive`) and auto-archives sessions whose
+  linked pull requests finished (`agent_session::domain::auto_archive`).
 - `src/internal_mcp.rs`: the internal MCP server exposed to running sessions.
 - `src/public_mcp.rs` + `src/public_mcp/`: public workspace MCP and OAuth;
   reuses the harness tool context and retains bearer authentication. Users with
   `ai-code-mode` get only `ExecuteCode`/`DescribeCodeTools`/`ReadCodeDocs` on
   `tools/list` (`tool_service.rs`); hidden native tools stay callable. The flag
   is cached per user (`tool_mode_cache.rs`).
+  Code execution's destination list in `src/code_mode.rs` also includes the
+  configured editing worker, whose comment-mark endpoint requires a scoped
+  document token; this does not grant permission to edit document content.
   `src/public_mcp/analytics.rs` sends PostHog `$mcp_initialize` /
   `$mcp_tool_call` events (PostHog MCP analytics schema) in the background,
   with the user's team as the `team` group. At most 64 sends run at once
@@ -41,7 +47,10 @@ Pulumi stacks; they do not host extra agent processes.
   composes staged search type/field extraction and Clairic content extraction
   with Nemotron temporal extraction and the shared admission/usage services.
 - `src/scheduling.rs`: routine HTTP routes and background scheduling;
-  domain/adapters live in `crates/scheduled_action`. Routine code steps run
+  domain/adapters live in `crates/scheduled_action`. Its run observers send
+  `routine_run_finished` analytics and, for every run, an inbox-only
+  `routine_run_finished` notification to the owner
+  (`src/scheduling/routine_run_notifications.rs`). Routine code steps run
   through `src/routine_code.rs`,
   on routines' own Deno executor (own slots, CPU limit, lower priority) and
   type checker, with the owner's token limited to each step's `writes`.
@@ -158,10 +167,13 @@ listener failure shuts down the process so ECS can replace the task.
 - Public MCP tool calls run for the `ToolCaller` the bearer middleware
   (`mcp_auth_proxy`) attached, and a call without one is refused: `Agent` (a
   Macro API token's signed `agent_id`, which egress mints from the session's
-  `agent_session.bot_id`) writes as that agent; `McpClient` (OAuth) writes as
-  the Macro bot labelled "via <client name>"; `ApiKey` writes as the Macro bot.
-  Public `ExecuteCode` builds its context per call from the caller and signs an
-  agent caller into its SDK token. Never read a bot id from the request itself.
+  `agent_session.bot_id`) writes as that agent, under the bot's own name (read
+  per call, so its document edits label their live cursors with it);
+  `McpClient` (OAuth) writes as the Macro bot labelled with the client's name
+  (shown as the author); `ApiKey` writes as the Macro bot. Public `ExecuteCode`
+  builds its context per call from the caller and signs the same attribution
+  into its SDK token: the agent, or the Macro bot plus the client name as
+  `agent_via`. Never read a bot id or client name from the request itself.
 - The public MCP server is stateless, so tool calls carry no `clientInfo`; the
   client is identified per call by its `User-Agent` / `x-anthropic-client`
   headers and per session by `$mcp_initialize`.

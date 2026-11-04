@@ -1,4 +1,4 @@
-use anyhow::Result;
+use anyhow::{Result, bail};
 use bot_id::BotId;
 use chrono::{DateTime, Duration, Utc};
 use chrono_tz::Tz;
@@ -29,7 +29,17 @@ impl Schedule {
     /// Parse a cron expression in the 6-/7-field format required by the `cron`
     /// crate (`sec min hour dom mon dow [year]`).
     pub fn from_cron(cron: String) -> Result<Self> {
-        CronSchedule::from_str(&cron).map_err(anyhow::Error::from)?;
+        let fields = cron.split_whitespace().count();
+        if !(6..=7).contains(&fields) {
+            bail!(
+                "cron schedule `{cron}` has {fields} fields; use 6 or 7 \
+                 (second minute hour day-of-month month day-of-week [year]), \
+                 e.g. `0 */10 * * * *` for every ten minutes"
+            );
+        }
+        if let Err(error) = CronSchedule::from_str(&cron) {
+            bail!("invalid cron schedule `{cron}`: {error}");
+        }
         Ok(Self(cron))
     }
 
@@ -152,7 +162,8 @@ pub enum TaskTargetError {
 /// Longest description a routine or template can carry.
 pub const MAX_DESCRIPTION_CHARS: usize = 1_000;
 
-/// Canonical client configuration. Ownership and execution state are server-owned.
+/// Client configuration, the create body. Ownership and execution state are
+/// server-owned.
 #[derive(Serialize, Deserialize, Debug, Clone, ToSchema)]
 #[serde(deny_unknown_fields)]
 pub struct ActionConfiguration {
@@ -170,46 +181,7 @@ pub struct ActionConfiguration {
     pub description: String,
 }
 
-/// Deprecated cron-only input, accepted during the compatibility rollout.
-#[derive(Serialize, Deserialize, Debug, Clone, ToSchema)]
-#[serde(deny_unknown_fields)]
-pub struct LegacyActionConfiguration {
-    pub name: String,
-    pub schedule: Schedule,
-    pub kind: ActionKind,
-    #[schema(value_type = String)]
-    pub timezone: Tz,
-    #[schema(value_type = Object)]
-    pub task: Value,
-    pub enabled: bool,
-}
-
-impl From<LegacyActionConfiguration> for ActionConfiguration {
-    fn from(input: LegacyActionConfiguration) -> Self {
-        Self {
-            name: input.name,
-            trigger: ActionTrigger::Cron {
-                schedule: input.schedule,
-                timezone: input.timezone,
-            },
-            kind: input.kind,
-            task: input.task,
-            enabled: input.enabled,
-            run_visibility: RunVisibility::default(),
-            description: String::new(),
-        }
-    }
-}
-
-/// Exactly one representation is accepted, even if mixed fields agree or are null.
-#[derive(Serialize, Deserialize, Debug, Clone, ToSchema)]
-#[serde(untagged)]
-pub enum CreateScheduledAction {
-    Canonical(ActionConfiguration),
-    Legacy(LegacyActionConfiguration),
-}
-
-/// Canonical configuration replacement. Activation has its own endpoint, so
+/// Configuration replacement, the update body. Activation has its own endpoint, so
 /// omitting `enabled` keeps the stored value; omitting `run_visibility` or
 /// `description` keeps them too, so clients that predate them do not reset them.
 #[derive(Serialize, Deserialize, Debug, Clone, ToSchema)]
@@ -231,44 +203,20 @@ pub struct ActionConfigurationUpdate {
     pub description: Option<String>,
 }
 
-/// Full replacement of client configuration, not of server-owned action state.
-#[derive(Serialize, Deserialize, Debug, Clone, ToSchema)]
-#[serde(untagged)]
-pub enum UpdateScheduledAction {
-    Canonical(ActionConfigurationUpdate),
-    Legacy(LegacyActionConfiguration),
-}
-
-impl UpdateScheduledAction {
+impl ActionConfigurationUpdate {
     /// The replacement configuration, keeping the stored values of fields
     /// the input omits.
     pub fn into_configuration(self, stored: &ScheduledAction) -> ActionConfiguration {
-        match self {
-            Self::Canonical(input) => ActionConfiguration {
-                name: input.name,
-                trigger: input.trigger,
-                kind: input.kind,
-                task: input.task,
-                enabled: input.enabled.unwrap_or(stored.enabled),
-                run_visibility: input.run_visibility.unwrap_or(stored.run_visibility),
-                description: input
-                    .description
-                    .unwrap_or_else(|| stored.description.clone()),
-            },
-            Self::Legacy(input) => ActionConfiguration {
-                run_visibility: stored.run_visibility,
-                description: stored.description.clone(),
-                ..input.into()
-            },
-        }
-    }
-}
-
-impl From<CreateScheduledAction> for ActionConfiguration {
-    fn from(input: CreateScheduledAction) -> Self {
-        match input {
-            CreateScheduledAction::Canonical(input) => input,
-            CreateScheduledAction::Legacy(input) => input.into(),
+        ActionConfiguration {
+            name: self.name,
+            trigger: self.trigger,
+            kind: self.kind,
+            task: self.task,
+            enabled: self.enabled.unwrap_or(stored.enabled),
+            run_visibility: self.run_visibility.unwrap_or(stored.run_visibility),
+            description: self
+                .description
+                .unwrap_or_else(|| stored.description.clone()),
         }
     }
 }
@@ -530,6 +478,15 @@ pub struct InProgressExecution {
     /// Absent only in responses from legacy workers.
     #[serde(default)]
     pub resource: Option<ExecutionResource>,
+}
+
+/// A routine as its list shows it.
+#[derive(Debug, Clone)]
+pub struct ListedAction {
+    pub action: ScheduledAction,
+    /// Its latest finished run, so lists can flag failures and say what it
+    /// did; None until it has finished one.
+    pub last_run: Option<ActionExecutionRecord>,
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone, ToSchema)]

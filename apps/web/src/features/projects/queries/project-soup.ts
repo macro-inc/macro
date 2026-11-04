@@ -10,10 +10,10 @@ import { buildGraphqlEntitySoupInput } from '@queries/soup/graphql/entity-input'
 import {
   type GraphqlFilterPropertiesExpr,
   type GraphqlInitiativeExpr,
-  SoupDocument,
+  ProjectSoupDocument,
+  type ProjectSoupQuery,
+  type ProjectSoupQueryVariables,
   type SoupInput,
-  type SoupQuery,
-  type SoupQueryVariables,
 } from '@service-storage/graphql/generated/graphql';
 import { mapGraphqlProperties } from '@service-storage/graphql-soup';
 import type { Client } from '@urql/core';
@@ -91,7 +91,7 @@ const accessLevels = {
 
 /** Project presentation over the shared Soup entity contract; folders stay distinct. */
 export function projectSoupRows(
-  items: SoupQuery['user']['soup']['items']
+  items: ProjectSoupQuery['user']['soup']['items']
 ): ProjectRow[] {
   return items.flatMap((item) => {
     if (item.__typename !== 'GraphqlSoupInitiative') return [];
@@ -103,6 +103,8 @@ export function projectSoupRows(
           name: item.displayName ?? 'Untitled project',
           updatedAt: item.metadata.updatedAt ?? '',
           createdAt: item.metadata.createdAt ?? undefined,
+          taskCount: item.taskCount,
+          completedTaskCount: item.completedTaskCount,
           access:
             permission?.__typename === 'GraphqlAccessLevelPermission'
               ? accessLevels[permission.accessLevel]
@@ -122,13 +124,13 @@ export function createProjectSoupSource(
   const input = createMemo(() => projectSoupInput(filters()));
   const client = createMemo(soupClient);
   const query = createUrqlInfiniteQuery<
-    SoupQuery,
-    SoupQueryVariables,
+    ProjectSoupQuery,
+    ProjectSoupQueryVariables,
     string | null
   >(() => {
     const initial = input();
     return {
-      query: SoupDocument,
+      query: ProjectSoupDocument,
       client: client(),
       enabled: enabled(),
       initialPageParam: null,
@@ -159,7 +161,7 @@ export function createProjectSoupSource(
     registerGraphqlSoupRevalidations(() => {
       if (!enabled() || !query.isSuccess) return [];
       return (query.data?.pageParams ?? [null]).map((cursor) => ({
-        document: SoupDocument,
+        document: ProjectSoupDocument,
         variables: {
           input: cursor
             ? {

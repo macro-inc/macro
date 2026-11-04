@@ -62,6 +62,13 @@ impl BillingService for FakeBilling {
     ) -> BillingResult<UsageSnapshot> {
         panic!("admission must not change settings")
     }
+    async fn purchase_credits(
+        &self,
+        _: &MacroUserIdStr<'_>,
+        _: i64,
+    ) -> BillingResult<crate::domain::CreditPurchase> {
+        panic!("admission must not purchase credits")
+    }
     async fn create_credit_checkout(
         &self,
         _: &MacroUserIdStr<'_>,
@@ -91,7 +98,12 @@ impl BillingService for FakeBilling {
     async fn mark_overage_invoice(&self, _: &str, _: bool) -> BillingResult<()> {
         panic!("admission must not handle invoices")
     }
-    async fn mark_credit_reload_invoice(&self, _: &str, _: bool) -> BillingResult<()> {
+    async fn mark_credit_reload_invoice(
+        &self,
+        _: &str,
+        _: Option<macro_uuid::Uuid>,
+        _: bool,
+    ) -> BillingResult<()> {
         panic!("admission must not handle invoices")
     }
 }

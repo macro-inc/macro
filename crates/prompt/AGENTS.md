@@ -33,6 +33,9 @@ AI system prompts: one module per prompt section, each exporting a
 - Add a prompt section: new `src/<topic>.rs` (+ `src/<topic>.md` if the text
   is long) exporting a `pub static PROMPT: StaticPrompt` → `pub mod` it in
   `src/lib.rs` → compose it where the caller builds its prompt.
+- Guidance for one tool goes in that tool's description, and guidance for an
+  SDK entity in its TSDoc (fed to `DescribeCodeTools`/`ReadCodeDocs`), not
+  here. `code_mode.rs` is only the general code-mode section.
 
 ## Tool contracts
 
@@ -44,6 +47,11 @@ The agent-session prompt distinguishes typed `<m-notifications>` system facts
 from user requests and defines the notification-only `<noop/>` contract.
 In-app replies use `m-document-mention` with `blockName: "routine"` for routines;
 external MCP replies use `/app/routines/<id>` URLs.
+A form for a channel is a poll (one required select question, tally visible),
+posted once as `<m-document-card>` with `blockName: "form"`; the card's message
+reference grants the channel View, so no second message or link is needed.
+
+- `src/privacy.rs` supplies generation/judge privacy policy; `compose` joins runtime memory sections without static lifetimes.
 
 ## Checks
 

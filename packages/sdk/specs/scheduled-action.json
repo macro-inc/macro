@@ -97,7 +97,7 @@
           "content": {
             "application/json": {
               "schema": {
-                "$ref": "#/components/schemas/CreateScheduledAction"
+                "$ref": "#/components/schemas/ActionConfiguration"
               }
             }
           },
@@ -400,7 +400,7 @@
           "content": {
             "application/json": {
               "schema": {
-                "$ref": "#/components/schemas/UpdateScheduledAction"
+                "$ref": "#/components/schemas/ActionConfigurationUpdate"
               }
             }
           },
@@ -1037,7 +1037,7 @@
           "content": {
             "application/json": {
               "schema": {
-                "$ref": "#/components/schemas/CreateScheduledAction"
+                "$ref": "#/components/schemas/ActionConfiguration"
               }
             }
           },
@@ -1112,7 +1112,7 @@
     "schemas": {
       "ActionConfiguration": {
         "type": "object",
-        "description": "Canonical client configuration. Ownership and execution state are server-owned.",
+        "description": "Client configuration, the create body. Ownership and execution state are\nserver-owned.",
         "required": ["name", "trigger", "kind", "task", "enabled"],
         "properties": {
           "description": {
@@ -1143,7 +1143,7 @@
       },
       "ActionConfigurationUpdate": {
         "type": "object",
-        "description": "Canonical configuration replacement. Activation has its own endpoint, so\nomitting `enabled` keeps the stored value; omitting `run_visibility` or\n`description` keeps them too, so clients that predate them do not reset them.",
+        "description": "Configuration replacement, the update body. Activation has its own endpoint, so\nomitting `enabled` keeps the stored value; omitting `run_visibility` or\n`description` keeps them too, so clients that predate them do not reset them.",
         "required": ["name", "trigger", "kind", "task"],
         "properties": {
           "description": {
@@ -1544,17 +1544,6 @@
         ],
         "description": "Why an event-triggered run was skipped before it started."
       },
-      "CreateScheduledAction": {
-        "oneOf": [
-          {
-            "$ref": "#/components/schemas/ActionConfiguration"
-          },
-          {
-            "$ref": "#/components/schemas/LegacyActionConfiguration"
-          }
-        ],
-        "description": "Exactly one representation is accepted, even if mixed fields agree or are null."
-      },
       "EmptyResponse": {
         "type": "object",
         "description": "Empty response is required due to custom fetch forcing `response.json()`"
@@ -1762,32 +1751,6 @@
             ]
           }
         }
-      },
-      "LegacyActionConfiguration": {
-        "type": "object",
-        "description": "Deprecated cron-only input, accepted during the compatibility rollout.",
-        "required": ["name", "schedule", "kind", "timezone", "task", "enabled"],
-        "properties": {
-          "enabled": {
-            "type": "boolean"
-          },
-          "kind": {
-            "$ref": "#/components/schemas/ActionKind"
-          },
-          "name": {
-            "type": "string"
-          },
-          "schedule": {
-            "$ref": "#/components/schemas/Schedule"
-          },
-          "task": {
-            "type": "object"
-          },
-          "timezone": {
-            "type": "string"
-          }
-        },
-        "additionalProperties": false
       },
       "PayloadCondition": {
         "type": "object",
@@ -2147,7 +2110,7 @@
                   },
                   {
                     "$ref": "#/components/schemas/ActionExecutionRecord",
-                    "description": "The routine's latest run. Listing includes it for routines the caller\nowns; other responses omit it."
+                    "description": "The latest finished run, with what each step did. Present only in\nlists, and only once the routine has finished a run."
                   }
                 ]
               },
@@ -2348,17 +2311,6 @@
           }
         ],
         "description": "A user-specific part of a shared routine."
-      },
-      "UpdateScheduledAction": {
-        "oneOf": [
-          {
-            "$ref": "#/components/schemas/ActionConfigurationUpdate"
-          },
-          {
-            "$ref": "#/components/schemas/LegacyActionConfiguration"
-          }
-        ],
-        "description": "Full replacement of client configuration, not of server-owned action state."
       },
       "UpgradeOutcome": {
         "type": "string",

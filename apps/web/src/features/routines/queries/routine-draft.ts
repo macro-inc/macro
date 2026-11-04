@@ -22,9 +22,9 @@ import { DEFAULT_MODEL } from '@core/component/AI/constant';
 import { deepEqual } from '@core/util/compareUtils';
 import { getDefaultTimezone } from '@core/util/cron';
 import type {
-  CreateScheduledAction,
+  ActionConfiguration,
+  ActionConfigurationUpdate,
   ScheduledAction,
-  UpdateScheduledAction,
 } from '@service-scheduled-action/generated/schemas';
 import { z } from 'zod';
 import { DEFAULT_RUN_VISIBILITY, type ScheduleDraft } from '../core/draft';
@@ -213,7 +213,7 @@ function programTaskFor(
   };
 }
 
-export function draftToCreateBody(draft: ScheduleDraft): CreateScheduledAction {
+export function draftToCreateBody(draft: ScheduleDraft): ActionConfiguration {
   return {
     name: draft.name.trim() || deriveRoutineName(draft),
     trigger: triggerFromDraft(draft),
@@ -268,7 +268,7 @@ function serializedTrigger(
 function programUpdateBody(
   draft: ScheduleDraft,
   previous: ScheduledAction
-): UpdateScheduledAction | undefined {
+): ActionConfigurationUpdate | undefined {
   const { triggers } = draft;
   if (!triggers) return undefined;
   return {
@@ -290,7 +290,7 @@ function programUpdateBody(
  * the old one, so a save that changes nothing is skipped.
  */
 export function isUnchangedUpdate(
-  body: UpdateScheduledAction,
+  body: ActionConfigurationUpdate,
   stored: ScheduledAction
 ): boolean {
   if (!('trigger' in body)) return false;
@@ -309,7 +309,7 @@ export function isUnchangedUpdate(
 export function draftToUpdateBody(
   draft: ScheduleDraft,
   previous: ScheduledAction
-): UpdateScheduledAction | undefined {
+): ActionConfigurationUpdate | undefined {
   if (draft.steps) return programUpdateBody(draft, previous);
   const trigger = getCronTrigger(previous);
   const previousTask = getAgentTask(previous);
@@ -379,7 +379,7 @@ export function draftToUpdateBody(
 
 export function scheduleToDuplicateBody(
   schedule: ScheduledAction
-): CreateScheduledAction | undefined {
+): ActionConfiguration | undefined {
   const trigger = schedule.trigger ?? getCronTrigger(schedule);
   if (!trigger) return undefined;
   return {

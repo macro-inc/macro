@@ -54,6 +54,7 @@ import type { CallRecordPreview } from './generated/schemas/callRecordPreview';
 import type { ChannelJoinCodeResponse } from './generated/schemas/channelJoinCodeResponse';
 import type { ChannelLabel } from './generated/schemas/channelLabel';
 import type { ChannelLabelRule } from './generated/schemas/channelLabelRule';
+import type { ChannelLabelScopeSelection } from './generated/schemas/channelLabelScopeSelection';
 import type { ChannelLabelsList } from './generated/schemas/channelLabelsList';
 import { ChannelType } from './generated/schemas/channelType';
 import {
@@ -70,6 +71,7 @@ import type { CreateChannelScopedBotRequest } from './generated/schemas/createCh
 import type { CreateChannelScopedBotResponse } from './generated/schemas/createChannelScopedBotResponse';
 import type { CreateCrmCompanyRequest } from './generated/schemas/createCrmCompanyRequest';
 import type { CreateCrmContactRequest } from './generated/schemas/createCrmContactRequest';
+import type { CreateCrmTeamContactRequest } from './generated/schemas/createCrmTeamContactRequest';
 import type { CreateDocument200 as CreateDocumentResponse } from './generated/schemas/createDocument200';
 import type { CreateDocumentRequest } from './generated/schemas/createDocumentRequest';
 import type { CreatedUserApiKey } from './generated/schemas/createdUserApiKey';
@@ -85,6 +87,7 @@ import type { CreateSnippetRequest } from './generated/schemas/createSnippetRequ
 import type { CreateTaskHandler200 } from './generated/schemas/createTaskHandler200';
 import type { CreateTaskRequest } from './generated/schemas/createTaskRequest';
 import type { CreateUnthreadedAnchorResponse } from './generated/schemas/createUnthreadedAnchorResponse';
+import type { CrmBlockedDomainResponse } from './generated/schemas/crmBlockedDomainResponse';
 import type { CrmCompanyResponse } from './generated/schemas/crmCompanyResponse';
 import type { CrmContactResponse } from './generated/schemas/crmContactResponse';
 import type { CrmStagesResponse } from './generated/schemas/crmStagesResponse';
@@ -2623,37 +2626,54 @@ export const storageServiceClient = {
   },
 
   channelLabels: {
-    async preview(rule: ChannelLabelRule, signal?: AbortSignal) {
-      return await dssFetch<SmartTagPreview>('/channel-labels/preview', {
-        method: 'POST',
-        body: JSON.stringify(rule),
-        signal,
-      });
+    async preview(
+      rule: ChannelLabelRule,
+      signal?: AbortSignal,
+      scope?: ChannelLabelScopeSelection
+    ) {
+      return await dssFetch<SmartTagPreview>(
+        `/channel-labels/preview${scope ? `?scope=${scope}` : ''}`,
+        { method: 'POST', body: JSON.stringify(rule), signal }
+      );
     },
-    /** Every label of the caller's team; `channelIds` is limited to channels the caller is in. */
-    async list() {
-      return await dssFetch<ChannelLabelsList>('/channel-labels');
+    /** Omitted scope selects the caller's team when available, otherwise personal labels. */
+    async list(scope?: ChannelLabelScopeSelection) {
+      return await dssFetch<ChannelLabelsList>(
+        `/channel-labels${scope ? `?scope=${scope}` : ''}`
+      );
     },
-    async create(params: CreateChannelLabelRequest) {
-      return await dssFetch<ChannelLabel>('/channel-labels', {
-        method: 'POST',
-        body: JSON.stringify(params),
-      });
-    },
-    async rename(labelId: string, params: RenameChannelLabelRequest) {
+    async create(
+      params: CreateChannelLabelRequest,
+      scope?: ChannelLabelScopeSelection
+    ) {
       return await dssFetch<ChannelLabel>(
-        `/channel-labels/${encodeURIComponent(labelId)}`,
+        `/channel-labels${scope ? `?scope=${scope}` : ''}`,
+        { method: 'POST', body: JSON.stringify(params) }
+      );
+    },
+    async rename(
+      labelId: string,
+      params: RenameChannelLabelRequest,
+      scope?: ChannelLabelScopeSelection
+    ) {
+      return await dssFetch<ChannelLabel>(
+        `/channel-labels/${encodeURIComponent(labelId)}${scope ? `?scope=${scope}` : ''}`,
         { method: 'PATCH', body: JSON.stringify(params) }
       );
     },
-    async remove(labelId: string) {
-      return await dssFetch(`/channel-labels/${encodeURIComponent(labelId)}`, {
-        method: 'DELETE',
-      });
-    },
-    async setChannelLabel(channelId: string, params: SetChannelLabelRequest) {
+    async remove(labelId: string, scope?: ChannelLabelScopeSelection) {
       return await dssFetch(
-        `/channel-labels/channels/${encodeURIComponent(channelId)}`,
+        `/channel-labels/${encodeURIComponent(labelId)}${scope ? `?scope=${scope}` : ''}`,
+        { method: 'DELETE' }
+      );
+    },
+    async setChannelLabel(
+      channelId: string,
+      params: SetChannelLabelRequest,
+      scope?: ChannelLabelScopeSelection
+    ) {
+      return await dssFetch(
+        `/channel-labels/channels/${encodeURIComponent(channelId)}${scope ? `?scope=${scope}` : ''}`,
         { method: 'PUT', body: JSON.stringify(params) }
       );
     },
@@ -2760,6 +2780,29 @@ export const storageServiceClient = {
         method: 'POST',
         body: JSON.stringify(body),
       }
+    );
+  },
+  async createTeamContact(body: CreateCrmTeamContactRequest) {
+    return await dssFetch<CrmContactResponse>('/crm/contacts', {
+      method: 'POST',
+      body: JSON.stringify(body),
+    });
+  },
+  async listCrmBlockedDomains() {
+    return await dssFetch<CrmBlockedDomainResponse[]>('/crm/blocked-domains', {
+      method: 'GET',
+    });
+  },
+  async blockCrmDomain({ domain }: { domain: string }) {
+    return await dssFetch(
+      `/crm/blocked-domains/${encodeURIComponent(domain)}`,
+      { method: 'PUT' }
+    );
+  },
+  async unblockCrmDomain({ domain }: { domain: string }) {
+    return await dssFetch(
+      `/crm/blocked-domains/${encodeURIComponent(domain)}`,
+      { method: 'DELETE' }
     );
   },
   async getContact({ contactId }: { contactId: string }) {

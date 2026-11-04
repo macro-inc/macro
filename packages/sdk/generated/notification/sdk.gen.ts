@@ -2,7 +2,7 @@
 
 import type { Client, ClientMeta, Options as Options2, RequestResult, TDataShape } from './client';
 import { client } from './client.gen';
-import type { BulkDeleteUserNotificationsV2Data, BulkDeleteUserNotificationsV2Errors, BulkDeleteUserNotificationsV2Responses, BulkGetTypedNotificationsByEventItemIdsData, BulkGetTypedNotificationsByEventItemIdsErrors, BulkGetTypedNotificationsByEventItemIdsResponses, BulkMarkNotificationsDoneData, BulkMarkNotificationsDoneErrors, BulkMarkNotificationsDoneResponses, BulkMarkNotificationsSeenData, BulkMarkNotificationsSeenErrors, BulkMarkNotificationsSeenResponses, BulkMarkNotificationsUndoneData, BulkMarkNotificationsUndoneErrors, BulkMarkNotificationsUndoneResponses, DeleteUserNotificationV2Data, DeleteUserNotificationV2Errors, DeleteUserNotificationV2Responses, DisableNotificationTypeData, DisableNotificationTypeErrors, DisableNotificationTypeResponses, EnableNotificationTypeData, EnableNotificationTypeErrors, EnableNotificationTypeResponses, GetNotificationTypePreferencesData, GetNotificationTypePreferencesErrors, GetNotificationTypePreferencesResponses, GetTypedNotificationByIdData, GetTypedNotificationByIdErrors, GetTypedNotificationByIdResponses, GetTypedNotificationsByEventItemIdData, GetTypedNotificationsByEventItemIdErrors, GetTypedNotificationsByEventItemIdResponses, GetUnsubscribesData, GetUnsubscribesErrors, GetUnsubscribesResponses, HealthHandlerData, HealthHandlerResponses, ListTypedNotificationsData, ListTypedNotificationsErrors, ListTypedNotificationsResponses, RemoveUnsubscribeAllData, RemoveUnsubscribeAllErrors, RemoveUnsubscribeAllResponses, RemoveUnsubscribeItemData, RemoveUnsubscribeItemErrors, RemoveUnsubscribeItemResponses, UnsubscribeAllData, UnsubscribeAllErrors, UnsubscribeAllResponses, UnsubscribeEmailData, UnsubscribeEmailErrors, UnsubscribeEmailResponses, UnsubscribeItemData, UnsubscribeItemErrors, UnsubscribeItemResponses } from './types.gen';
+import type { BulkDeleteUserNotificationsV2Data, BulkDeleteUserNotificationsV2Errors, BulkDeleteUserNotificationsV2Responses, BulkGetTypedNotificationsByEventItemIdsData, BulkGetTypedNotificationsByEventItemIdsErrors, BulkGetTypedNotificationsByEventItemIdsResponses, BulkMarkNotificationsDoneData, BulkMarkNotificationsDoneErrors, BulkMarkNotificationsDoneResponses, BulkMarkNotificationsSeenData, BulkMarkNotificationsSeenErrors, BulkMarkNotificationsSeenResponses, BulkMarkNotificationsUndoneData, BulkMarkNotificationsUndoneErrors, BulkMarkNotificationsUndoneResponses, DeleteUserNotificationV2Data, DeleteUserNotificationV2Errors, DeleteUserNotificationV2Responses, DisableNotificationTypeData, DisableNotificationTypeErrors, DisableNotificationTypeResponses, EnableNotificationTypeData, EnableNotificationTypeErrors, EnableNotificationTypeResponses, GetNotificationTypePreferencesData, GetNotificationTypePreferencesErrors, GetNotificationTypePreferencesResponses, GetTypedNotificationByIdData, GetTypedNotificationByIdErrors, GetTypedNotificationByIdResponses, GetTypedNotificationsByEventItemIdData, GetTypedNotificationsByEventItemIdErrors, GetTypedNotificationsByEventItemIdResponses, GetUnsubscribesData, GetUnsubscribesErrors, GetUnsubscribesResponses, HealthHandlerData, HealthHandlerResponses, ListTypedNotificationsData, ListTypedNotificationsErrors, ListTypedNotificationsResponses, RemoveUnsubscribeAllData, RemoveUnsubscribeAllErrors, RemoveUnsubscribeAllResponses, RemoveUnsubscribeItemData, RemoveUnsubscribeItemErrors, RemoveUnsubscribeItemResponses, RemoveUnsubscribeItemsData, RemoveUnsubscribeItemsErrors, RemoveUnsubscribeItemsResponses, UnsubscribeAllData, UnsubscribeAllErrors, UnsubscribeAllResponses, UnsubscribeEmailData, UnsubscribeEmailErrors, UnsubscribeEmailResponses, UnsubscribeItemData, UnsubscribeItemErrors, UnsubscribeItemResponses, UnsubscribeItemsData, UnsubscribeItemsErrors, UnsubscribeItemsResponses } from './types.gen';
 
 export type Options<TData extends TDataShape = TDataShape, ThrowOnError extends boolean = boolean, TResponse = unknown> = Options2<TData, ThrowOnError, TResponse> & {
     /**
@@ -20,7 +20,7 @@ export type Options<TData extends TDataShape = TDataShape, ThrowOnError extends 
 
 class HeyApiClient {
     protected client: Client;
-    
+
     constructor(args?: {
         client?: Client;
     }) {
@@ -30,9 +30,9 @@ class HeyApiClient {
 
 class HeyApiRegistry<T> {
     private readonly defaultKey = 'default';
-    
+
     private readonly instances: Map<string, T> = new Map();
-    
+
     get(key?: string): T {
         const instance = this.instances.get(key ?? this.defaultKey);
         if (!instance) {
@@ -40,7 +40,7 @@ class HeyApiRegistry<T> {
         }
         return instance;
     }
-    
+
     set(value: T, key?: string): void {
         this.instances.set(key ?? this.defaultKey, value);
     }
@@ -48,7 +48,7 @@ class HeyApiRegistry<T> {
 
 export class Sdk extends HeyApiClient {
     public static readonly __registry: HeyApiRegistry<Sdk> = new HeyApiRegistry<Sdk>();
-    
+
     constructor(args?: {
         client?: Client;
         key?: string;
@@ -56,42 +56,70 @@ export class Sdk extends HeyApiClient {
         super(args);
         Sdk.__registry.set(this, args?.key);
     }
-    
+
     /**
      * Health check
      */
     public healthHandler<ThrowOnError extends boolean = false>(options?: Options<HealthHandlerData, ThrowOnError>): RequestResult<HealthHandlerResponses, unknown, ThrowOnError> {
         return (options?.client ?? this.client).get<HealthHandlerResponses, unknown, ThrowOnError>({ url: '/health', ...options });
     }
-    
+
     /**
      * Gets the users unsubscribe items.
      */
     public getUnsubscribes<ThrowOnError extends boolean = false>(options?: Options<GetUnsubscribesData, ThrowOnError>): RequestResult<GetUnsubscribesResponses, GetUnsubscribesErrors, ThrowOnError> {
         return (options?.client ?? this.client).get<GetUnsubscribesResponses, GetUnsubscribesErrors, ThrowOnError>({ url: '/unsubscribe', ...options });
     }
-    
+
     /**
      * Unsubscribes a user from receiving emails
      */
     public unsubscribeEmail<ThrowOnError extends boolean = false>(options?: Options<UnsubscribeEmailData, ThrowOnError>): RequestResult<UnsubscribeEmailResponses, UnsubscribeEmailErrors, ThrowOnError> {
         return (options?.client ?? this.client).post<UnsubscribeEmailResponses, UnsubscribeEmailErrors, ThrowOnError>({ url: '/unsubscribe/email', ...options });
     }
-    
+
     /**
      * Removes a unsubscribe item for a user.
      */
     public removeUnsubscribeItem<ThrowOnError extends boolean = false>(options: Options<RemoveUnsubscribeItemData, ThrowOnError>): RequestResult<RemoveUnsubscribeItemResponses, RemoveUnsubscribeItemErrors, ThrowOnError> {
         return (options.client ?? this.client).delete<RemoveUnsubscribeItemResponses, RemoveUnsubscribeItemErrors, ThrowOnError>({ url: '/unsubscribe/item/{item_type}/{item_id}', ...options });
     }
-    
+
     /**
      * Unsubscribes a user from a given item for notifications.
      */
     public unsubscribeItem<ThrowOnError extends boolean = false>(options: Options<UnsubscribeItemData, ThrowOnError>): RequestResult<UnsubscribeItemResponses, UnsubscribeItemErrors, ThrowOnError> {
         return (options.client ?? this.client).post<UnsubscribeItemResponses, UnsubscribeItemErrors, ThrowOnError>({ url: '/unsubscribe/item/{item_type}/{item_id}', ...options });
     }
-    
+
+    /**
+     * Atomically resume delivery for the authenticated user's items.
+     */
+    public removeUnsubscribeItems<ThrowOnError extends boolean = false>(options: Options<RemoveUnsubscribeItemsData, ThrowOnError>): RequestResult<RemoveUnsubscribeItemsResponses, RemoveUnsubscribeItemsErrors, ThrowOnError> {
+        return (options.client ?? this.client).delete<RemoveUnsubscribeItemsResponses, RemoveUnsubscribeItemsErrors, ThrowOnError>({
+            url: '/unsubscribe/items',
+            ...options,
+            headers: {
+                'Content-Type': 'application/json',
+                ...options.headers
+            }
+        });
+    }
+
+    /**
+     * Atomically mute or snooze items for the authenticated user.
+     */
+    public unsubscribeItems<ThrowOnError extends boolean = false>(options: Options<UnsubscribeItemsData, ThrowOnError>): RequestResult<UnsubscribeItemsResponses, UnsubscribeItemsErrors, ThrowOnError> {
+        return (options.client ?? this.client).post<UnsubscribeItemsResponses, UnsubscribeItemsErrors, ThrowOnError>({
+            url: '/unsubscribe/items',
+            ...options,
+            headers: {
+                'Content-Type': 'application/json',
+                ...options.headers
+            }
+        });
+    }
+
     /**
      * Unmutes all notifications.
      * Existing notifications that were muted manually will remain muted.
@@ -99,14 +127,14 @@ export class Sdk extends HeyApiClient {
     public removeUnsubscribeAll<ThrowOnError extends boolean = false>(options?: Options<RemoveUnsubscribeAllData, ThrowOnError>): RequestResult<RemoveUnsubscribeAllResponses, RemoveUnsubscribeAllErrors, ThrowOnError> {
         return (options?.client ?? this.client).delete<RemoveUnsubscribeAllResponses, RemoveUnsubscribeAllErrors, ThrowOnError>({ url: '/unsubscribe/mute', ...options });
     }
-    
+
     /**
      * Unsubscribes user from all notifications.
      */
     public unsubscribeAll<ThrowOnError extends boolean = false>(options?: Options<UnsubscribeAllData, ThrowOnError>): RequestResult<UnsubscribeAllResponses, UnsubscribeAllErrors, ThrowOnError> {
         return (options?.client ?? this.client).post<UnsubscribeAllResponses, UnsubscribeAllErrors, ThrowOnError>({ url: '/unsubscribe/mute', ...options });
     }
-    
+
     /**
      * Wrapper handler that calls the inner generic list handler with `serde_json::Value`,
      * then converts each row to [`UserNotificationRow<NotifEvent>`].
@@ -116,7 +144,7 @@ export class Sdk extends HeyApiClient {
     public listTypedNotifications<ThrowOnError extends boolean = false>(options?: Options<ListTypedNotificationsData, ThrowOnError>): RequestResult<ListTypedNotificationsResponses, ListTypedNotificationsErrors, ThrowOnError> {
         return (options?.client ?? this.client).get<ListTypedNotificationsResponses, ListTypedNotificationsErrors, ThrowOnError>({ url: '/v1/user_notifications', ...options });
     }
-    
+
     /**
      * Soft-delete multiple user notifications.
      */
@@ -130,7 +158,7 @@ export class Sdk extends HeyApiClient {
             }
         });
     }
-    
+
     /**
      * Mark notifications as done.
      */
@@ -144,7 +172,7 @@ export class Sdk extends HeyApiClient {
             }
         });
     }
-    
+
     /**
      * Mark notifications as seen.
      */
@@ -158,7 +186,7 @@ export class Sdk extends HeyApiClient {
             }
         });
     }
-    
+
     /**
      * Mark notifications as not done.
      */
@@ -172,7 +200,7 @@ export class Sdk extends HeyApiClient {
             }
         });
     }
-    
+
     /**
      * Wrapper handler that calls the inner generic bulk-get handler with `serde_json::Value`,
      * then converts each row to [`UserNotificationRow<NotifEvent>`].
@@ -189,42 +217,42 @@ export class Sdk extends HeyApiClient {
             }
         });
     }
-    
+
     /**
      * Typed wrapper for getting notifications by a single event item ID.
      */
     public getTypedNotificationsByEventItemId<ThrowOnError extends boolean = false>(options: Options<GetTypedNotificationsByEventItemIdData, ThrowOnError>): RequestResult<GetTypedNotificationsByEventItemIdResponses, GetTypedNotificationsByEventItemIdErrors, ThrowOnError> {
         return (options.client ?? this.client).get<GetTypedNotificationsByEventItemIdResponses, GetTypedNotificationsByEventItemIdErrors, ThrowOnError>({ url: '/v1/user_notifications/item/{event_item_id}', ...options });
     }
-    
+
     /**
      * Get the notification types that the user has disabled.
      */
     public getNotificationTypePreferences<ThrowOnError extends boolean = false>(options?: Options<GetNotificationTypePreferencesData, ThrowOnError>): RequestResult<GetNotificationTypePreferencesResponses, GetNotificationTypePreferencesErrors, ThrowOnError> {
         return (options?.client ?? this.client).get<GetNotificationTypePreferencesResponses, GetNotificationTypePreferencesErrors, ThrowOnError>({ url: '/v1/user_notifications/preferences', ...options });
     }
-    
+
     /**
      * Disable a notification type for the authenticated user.
      */
     public disableNotificationType<ThrowOnError extends boolean = false>(options: Options<DisableNotificationTypeData, ThrowOnError>): RequestResult<DisableNotificationTypeResponses, DisableNotificationTypeErrors, ThrowOnError> {
         return (options.client ?? this.client).put<DisableNotificationTypeResponses, DisableNotificationTypeErrors, ThrowOnError>({ url: '/v1/user_notifications/preferences/{notification_event_type}/disable', ...options });
     }
-    
+
     /**
      * Re-enable a notification type for the authenticated user.
      */
     public enableNotificationType<ThrowOnError extends boolean = false>(options: Options<EnableNotificationTypeData, ThrowOnError>): RequestResult<EnableNotificationTypeResponses, EnableNotificationTypeErrors, ThrowOnError> {
         return (options.client ?? this.client).put<EnableNotificationTypeResponses, EnableNotificationTypeErrors, ThrowOnError>({ url: '/v1/user_notifications/preferences/{notification_event_type}/enable', ...options });
     }
-    
+
     /**
      * Soft-delete a single user notification.
      */
     public deleteUserNotificationV2<ThrowOnError extends boolean = false>(options: Options<DeleteUserNotificationV2Data, ThrowOnError>): RequestResult<DeleteUserNotificationV2Responses, DeleteUserNotificationV2Errors, ThrowOnError> {
         return (options.client ?? this.client).delete<DeleteUserNotificationV2Responses, DeleteUserNotificationV2Errors, ThrowOnError>({ url: '/v1/user_notifications/{notification_id}', ...options });
     }
-    
+
     /**
      * Typed wrapper for getting a single notification by ID.
      */

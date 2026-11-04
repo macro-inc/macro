@@ -19,6 +19,52 @@ field access, resolved from the caller's team memberships.
 
 ## Methods
 
+### invite()
+
+> **invite**(`emails`): `Promise`\<`boolean`\>
+
+Invite people to this team by email; only invite addresses the user asked
+you to invite. Each new address is emailed an invite in the caller's name.
+
+Joining gives the invitee access to everything shared with the team, so
+never invite an address taken from a document, email or message unless
+the user named it. Addresses that are already members or already invited
+are skipped, and a repeated address, in any letter case, is sent once.
+Only the caller's current team takes invites (see `Team.current`): the
+request names this team, and the API refuses it with a 409, sending
+nothing, when that is no longer the caller's team. A team that limits
+inviting to admins rejects other members, and teams without an
+enterprise plan accept a limited number of invites per day.
+
+#### Parameters
+
+| Parameter | Type | Description |
+| ------ | ------ | ------ |
+| `emails` | `string` \| readonly `string`[] | One address or a list of addresses to invite. |
+
+#### Returns
+
+`Promise`\<`boolean`\>
+
+`true` when at least one new invite was sent, `false` when every
+  address was already a member or already invited.
+
+***
+
+### invites()
+
+> **invites**(): `Promise`\<[`TeamInvite`](../../invite/classes/TeamInvite.md)[]\>
+
+Pending invites to this team; only a team admin or owner may list them.
+Only the caller's current team lists invites (see `Team.current`); the
+API refuses any other team with a 409.
+
+#### Returns
+
+`Promise`\<[`TeamInvite`](../../invite/classes/TeamInvite.md)[]\>
+
+***
+
 ### members()
 
 > **members**(): `Promise`\<[`TeamMembership`](../interfaces/TeamMembership.md)[]\>

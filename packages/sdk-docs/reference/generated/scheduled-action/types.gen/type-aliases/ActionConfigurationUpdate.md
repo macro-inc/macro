@@ -2,7 +2,7 @@
 
 > **ActionConfigurationUpdate** = \{ `description?`: `string` \| `null`; `enabled?`: `boolean` \| `null`; `kind`: [`ActionKind`](ActionKind.md); `name`: `string`; `run_visibility?`: `null` \| [`RunVisibility`](RunVisibility.md); `task`: \{\[`key`: `string`\]: `unknown`; \}; `trigger`: [`ActionTrigger`](ActionTrigger.md); \}
 
-Canonical configuration replacement. Activation has its own endpoint, so
+Configuration replacement, the update body. Activation has its own endpoint, so
 omitting `enabled` keeps the stored value; omitting `run_visibility` or
 `description` keeps them too, so clients that predate them do not reset them.
 

@@ -43,6 +43,7 @@ import {
 import { CrmStageIcon } from '../components/stage-icon';
 import { useCrmContext } from '../context/crm-context';
 import { createStageEditor } from '../primitives/stage-editor';
+import { EmailSyncSection } from './email-sync-settings';
 import {
   useCrmPermissions,
   useCurrentTeamQuery,
@@ -734,11 +735,12 @@ function CrmContent() {
     <Show when={teamQuery.data} fallback={<NoTeamState />}>
       <SettingsPage
         title="CRM"
-        description="Turn your team's CRM on or off and choose its stages."
+        description="Turn your team's CRM on or off, choose its stages, and decide what email sync brings in."
       >
         <CrmEnablementSection />
         <Show when={teamQuery.data?.team.crm_enabled}>
           <StagesSection />
+          <EmailSyncSection />
         </Show>
       </SettingsPage>
     </Show>

@@ -17,6 +17,7 @@ use macro_authorization::{
 use macro_service_urls::{ConnectionGatewayUrl, LexicalServiceUrl};
 pub mod config;
 mod routine_analytics;
+mod routine_run_notifications;
 use config::Config;
 use scheduled_action::domain::code_upgrade;
 use scheduled_action::domain::event_runs::{
@@ -87,12 +88,13 @@ impl SchedulingRuntime {
 }
 
 /// Compose routine scheduling and event workers alongside the harness API.
-pub async fn build(
+pub async fn build<Ingress: notification::domain::service::NotificationIngress>(
     config: Config,
     db: sqlx::PgPool,
     harness_address: std::net::SocketAddr,
     code: Option<crate::routine_code::SdkRoutineCode>,
     ready: tokio::sync::watch::Receiver<bool>,
+    notifications: Arc<Ingress>,
 ) -> Result<SchedulingRuntime> {
     let environment = config.environment;
     let lifecycle = ServiceLifecycle::default();
@@ -198,12 +200,18 @@ pub async fn build(
         lifecycle.stop_executions.clone(),
     )
     .with_admission(ai_admission)
-    .with_observer(Arc::new(routine_analytics::RoutineAnalytics(
-        agent_harness_service::product_analytics::ProductAnalytics::new(
-            config.posthog_api_key.value(),
-            config.posthog_host.value(),
-            environment,
-            &db,
+    .with_observer(Arc::new((
+        routine_analytics::RoutineAnalytics(
+            agent_harness_service::product_analytics::ProductAnalytics::new(
+                config.posthog_api_key.value(),
+                config.posthog_host.value(),
+                environment,
+                &db,
+            ),
+        ),
+        routine_run_notifications::RoutineRunNotifications::new(
+            notifications,
+            lifecycle.executions.clone(),
         ),
     )));
     let service_executor = Arc::new(dispatcher_executor.clone());
@@ -296,10 +304,7 @@ pub async fn build(
         )
         .with_event_management_enabled(config.event_routines_enabled)
         .with_conditions_enabled(conditions_enabled)
-        .with_target_validation(TargetValidation::new(
-            sessions,
-            config.routine_agents_enabled,
-        ))
+        .with_target_validation(TargetValidation::new(sessions))
         .with_github_links(PgGithubInstallationClaims::new(db.clone()))
         .with_code(code, upgrades),
     );

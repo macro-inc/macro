@@ -24,7 +24,7 @@ pub mod targets;
 
 use targets::{ImportTargets, TargetFacts, TargetKind, TargetPlan};
 
-impl<R, S, L, T, H, A, J> ImportWorker for ConversationImporter<R, S, L, T, H, A, J>
+impl<R, S, L, T, H, A> ImportWorker for ConversationImporter<R, S, L, T, H, A>
 where
     R: ExecutionRepo,
     S: ImportStorage,
@@ -32,7 +32,6 @@ where
     T: ImportTargets,
     H: HistoricalSink,
     A: ImportAuthorizer,
-    J: JoinAnnouncer,
 {
     async fn claim(&self, event: &ImportEvent, owner: WorkerId) -> PortResult<ClaimOutcome> {
         self.claim(event, owner).await
@@ -57,23 +56,18 @@ pub struct ImporterConfig {
 }
 
 /// Domain workflow over persistence, storage, ledger, target and authorization ports.
-pub struct ConversationImporter<R, S, L, T, H, A, J> {
+pub struct ConversationImporter<R, S, L, T, H, A> {
     repo: R,
     storage: S,
     ledger: L,
     targets: T,
     sink: H,
     authorizer: A,
-    announcer: J,
     limits: ImportLimits,
 }
 
-impl<R, S, L, T, H, A, J> ConversationImporter<R, S, L, T, H, A, J> {
+impl<R, S, L, T, H, A> ConversationImporter<R, S, L, T, H, A> {
     /// Construct with validated bounds; no environment access in the domain.
-    #[expect(
-        clippy::too_many_arguments,
-        reason = "each persistence port stays a separate generic at the composition root"
-    )]
     pub fn new(
         repo: R,
         storage: S,
@@ -81,7 +75,6 @@ impl<R, S, L, T, H, A, J> ConversationImporter<R, S, L, T, H, A, J> {
         targets: T,
         sink: H,
         authorizer: A,
-        announcer: J,
         config: ImporterConfig,
     ) -> Result<Self, ImportError> {
         let ImporterConfig { limits } = config;
@@ -103,13 +96,12 @@ impl<R, S, L, T, H, A, J> ConversationImporter<R, S, L, T, H, A, J> {
             targets,
             sink,
             authorizer,
-            announcer,
             limits,
         })
     }
 }
 
-impl<R, S, L, T, H, A, J> ConversationImporter<R, S, L, T, H, A, J>
+impl<R, S, L, T, H, A> ConversationImporter<R, S, L, T, H, A>
 where
     R: ExecutionRepo,
     S: ImportStorage,
@@ -117,7 +109,6 @@ where
     T: ImportTargets,
     H: HistoricalSink,
     A: ImportAuthorizer,
-    J: JoinAnnouncer,
 {
     /// Revalidate the durable requester BEFORE claiming/reclaiming. An unauthorized
     /// request cannot acquire a lease; the driver reconciles exhausted deliveries.
@@ -345,32 +336,7 @@ where
         }
         self.ledger.complete(&reservation, metadata.kind).await?;
         self.targets.bind(&context.lease, &plan, &warnings).await?;
-        self.announce_join(context.lease.event.job_id, &plan, users)
-            .await;
         Ok(Some(plan))
-    }
-
-    async fn announce_join(&self, job: JobId, plan: &TargetPlan, users: &UserDirectory) {
-        let mut members: Vec<_> = plan.members.iter().cloned().collect();
-        members.sort_by(|left, right| left.as_ref().cmp(right.as_ref()));
-        let candidate_count = members.len();
-        let announcement = JoinAnnouncement {
-            team_id: plan.team_id,
-            joined: plan.requested_by.clone(),
-            joined_name: users.name_of(&plan.requested_by).map(str::to_owned),
-            members,
-        };
-        if let Err(e) = self.announcer.announce(announcement).await {
-            tracing::warn!(
-                team_id = %plan.team_id,
-                job_id = %job,
-                conversation_id = %plan.metadata.slack_channel_id,
-                channel_id = %plan.channel_id,
-                candidate_count,
-                error = ?e,
-                "colleague join announcement failed"
-            );
-        }
     }
 
     async fn authorize(

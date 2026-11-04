@@ -62,6 +62,17 @@ globalThis.console = {
   log: consoleMethod("info"), info: consoleMethod("info"),
   debug: consoleMethod("debug"), warn: consoleMethod("warn"), error: consoleMethod("error"),
 };
+// Sleeping to wait for something burns the execution deadline and blocks the
+// turn. A worker would bring fresh timers; imports of node timer modules are
+// remapped to timers.mjs.
+// A function, not an arrow, so `new Worker(...)` reaches the throw.
+const sleepBanned = (name) => function () {
+  throw new Error(`${name} is unavailable in ExecuteCode: do not sleep or poll in a program. Finish this execution, and to check back later create a routine with macro.routines.create.`);
+};
+for (const name of ["setTimeout", "setInterval", "setImmediate", "Worker"]) globalThis[name] = sleepBanned(name);
+AbortSignal.timeout = sleepBanned("AbortSignal.timeout");
+Atomics.wait = sleepBanned("Atomics.wait");
+Atomics.waitAsync = sleepBanned("Atomics.waitAsync");
 try {
   const {maxResultBytes, operations, unattended, ...context} = await new Response(Deno.stdin.readable).json();
   // An unattended program's writes follow its policy: a dry run answers each

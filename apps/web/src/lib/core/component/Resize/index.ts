@@ -1,1 +1,1 @@
-export { Resize } from './Resize';
+export { Gutter, Resize } from './Resize';

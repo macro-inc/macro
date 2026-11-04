@@ -169,6 +169,11 @@ sqs_client = { path = "../../crates/sqs_client", default-features = false, featu
   "search",
 ] }
 strum = { workspace = true }
+system_status = { path = "../../crates/system_status", features = [
+  "connection_gateway",
+  "inbound",
+  "postgres",
+] }
 teams = { path = "../../crates/teams" }
 thiserror = { workspace = true }
 time = { workspace = true }

@@ -94,6 +94,9 @@ The supervisor clears inherited environment variables and gives each process a
 private scratch directory. Deno permits reads only there and network connections
 only to the configured API host/port destinations. Remote and npm imports,
 writes, environment access, subprocesses, FFI, and system information are denied.
+Timers, workers and other sleep primitives throw an error that points programs
+at `macro.routines.create` for checking back later; this steers agents and is not
+a security boundary.
 The trusted bootstrap dynamically imports generated `main.mjs` so its module
 reads are subject to the scratch read permission. Both static and dynamic imports
 outside scratch are covered by real-runtime tests.

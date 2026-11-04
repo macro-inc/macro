@@ -5,7 +5,8 @@ export type ClientOptions = {
 };
 
 /**
- * Canonical client configuration. Ownership and execution state are server-owned.
+ * Client configuration, the create body. Ownership and execution state are
+ * server-owned.
  */
 export type ActionConfiguration = {
     /**
@@ -26,7 +27,7 @@ export type ActionConfiguration = {
 };
 
 /**
- * Canonical configuration replacement. Activation has its own endpoint, so
+ * Configuration replacement, the update body. Activation has its own endpoint, so
  * omitting `enabled` keeps the stored value; omitting `run_visibility` or
  * `description` keeps them too, so clients that predate them do not reset them.
  */
@@ -280,11 +281,6 @@ export type ConditionResult = {
 };
 
 /**
- * Exactly one representation is accepted, even if mixed fields agree or are null.
- */
-export type CreateScheduledAction = ActionConfiguration | LegacyActionConfiguration;
-
-/**
  * Empty response is required due to custom fetch forcing `response.json()`
  */
 export type EmptyResponse = {
@@ -390,20 +386,6 @@ export type InProgressExecution = {
     action_id: string;
     chat_id?: string | null;
     resource?: null | ExecutionResource;
-};
-
-/**
- * Deprecated cron-only input, accepted during the compatibility rollout.
- */
-export type LegacyActionConfiguration = {
-    enabled: boolean;
-    kind: ActionKind;
-    name: string;
-    schedule: Schedule;
-    task: {
-        [key: string]: unknown;
-    };
-    timezone: string;
 };
 
 /**
@@ -703,11 +685,6 @@ export type TemplateVariable = {
 };
 
 /**
- * Full replacement of client configuration, not of server-owned action state.
- */
-export type UpdateScheduledAction = ActionConfigurationUpdate | LegacyActionConfiguration;
-
-/**
  * How an upgrade went.
  */
 export type UpgradeOutcome = 'running' | 'checked' | 'rewritten' | 'needs_update';
@@ -760,7 +737,7 @@ export type ListScheduledActionsResponses = {
 export type ListScheduledActionsResponse = ListScheduledActionsResponses[keyof ListScheduledActionsResponses];
 
 export type CreateScheduledActionData = {
-    body: CreateScheduledAction;
+    body: ActionConfiguration;
     path?: never;
     query?: never;
     url: '/scheduled-actions';
@@ -912,7 +889,7 @@ export type GetScheduledActionResponses = {
 export type GetScheduledActionResponse = GetScheduledActionResponses[keyof GetScheduledActionResponses];
 
 export type UpdateScheduledActionData = {
-    body: UpdateScheduledAction;
+    body: ActionConfigurationUpdate;
     path: {
         /**
          * ID of the scheduled action
@@ -1150,7 +1127,7 @@ export type ShareScheduledActionTemplateResponses = {
 export type ShareScheduledActionTemplateResponse = ShareScheduledActionTemplateResponses[keyof ShareScheduledActionTemplateResponses];
 
 export type ActivateScheduledActionTemplateData = {
-    body: CreateScheduledAction;
+    body: ActionConfiguration;
     path: {
         /**
          * ID of the shared routine
