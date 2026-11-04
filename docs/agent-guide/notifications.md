@@ -22,6 +22,9 @@ the row's actor: a Macro user by first name, an agent by its bot name, or
 **Macro**; a row from outside Macro names its email sender, and GitHub rows
 keep the GitHub login. A row type, author kind, or button this build doesn't
 know yet shows as a plain row with a bell glyph, no author, and no button.
+Date dividers split the list into Home's sections (**Last hour**, **This
+morning**, **Yesterday**, and so on), by each row's newest notification; `j`/`k`
+skip them.
 
 Click a row or press Enter to preview it beside the list, opened at the
 notification's message, thread, or comment, under a **Notifications >**

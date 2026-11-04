@@ -44,6 +44,19 @@ export default {
   noneSelectedDescription: 'Pick a notification to see it here.',
   settings: 'Notification settings',
 
+  // Date dividers, in Home's sections
+  dateLastFewMinutes: 'Last few minutes',
+  dateLastHour: 'Last hour',
+  dateThisEvening: 'This evening',
+  dateThisAfternoon: 'This afternoon',
+  dateThisMorning: 'This morning',
+  dateEarlierToday: 'Earlier today',
+  dateYesterday: 'Yesterday',
+  dateLast7Days: 'Last 7 days',
+  dateEarlierThisMonth: 'Earlier this month',
+  dateLastMonth: 'Last month',
+  dateOlder: 'Older',
+
   // Filters
   filter: 'Filter notifications',
   filters: 'Notification filters',
