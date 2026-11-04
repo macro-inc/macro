@@ -73,6 +73,7 @@ fn detail(error: EmailApiError) -> DetailedError {
         | EmailApiError::NotFound
         | EmailApiError::Conflict
         | EmailApiError::Transient { .. }
+        | EmailApiError::CredentialsUnavailable { .. }
         | EmailApiError::SendRejected { .. }
         | EmailApiError::Permanent { .. } => FailureReason::GmailApiFailed,
     };

@@ -1,6 +1,6 @@
 import type { EntityData } from '../types/entity';
 
-/** Per-item outcomes of a GraphQL-enabled bulk delete, including retry targets. */
+/** Per-item outcomes of a bulk delete, including retry targets. */
 export class BulkDeleteFailure extends Error {
   readonly deletedEntities: EntityData[];
   readonly failedEntities: EntityData[];

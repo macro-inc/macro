@@ -5,6 +5,9 @@ from __future__ import annotations
 import tempfile
 import subprocess
 import unittest
+import io
+import json
+from contextlib import redirect_stderr
 from pathlib import Path
 from unittest.mock import patch
 
@@ -222,6 +225,106 @@ class GitDiffTest(unittest.TestCase):
                 scan.staged_diff()
             with self.assertRaises(subprocess.CalledProcessError):
                 scan.changed_diff()
+
+
+class GitleaksMergeTest(unittest.TestCase):
+    def setUp(self):
+        self.directory = tempfile.TemporaryDirectory()
+        self.addCleanup(self.directory.cleanup)
+        self.root = Path(self.directory.name)
+        self.git("init", "-q", "-b", "local")
+        self.git("config", "user.name", "Test")
+        self.git("config", "user.email", "test@example.com")
+        (self.root / "base.txt").write_text("base\n")
+        self.git("add", ".")
+        self.git("commit", "-qm", "initial")
+        self.git("checkout", "-qb", "incoming")
+        (self.root / "imported.txt").write_text("existing token fixture\n")
+        self.git("add", ".")
+        self.git("commit", "-qm", "incoming fixture")
+        self.parent = self.git("rev-parse", "HEAD").strip()
+        self.git("checkout", "-q", "local")
+        (self.root / "local.txt").write_text("local\n")
+        self.git("add", ".")
+        self.git("commit", "-qm", "local change")
+        self.git("merge", "--no-commit", "incoming")
+        self.enterContext(patch.object(scan, "ROOT", self.root))
+
+    def git(self, *args):
+        return subprocess.check_output(
+            ["git", "-C", str(self.root), *args], text=True, stderr=subprocess.DEVNULL,
+        )
+
+    def run_tool(self, report, code=42, missing=False, malformed=False):
+        original = subprocess.run
+        self.output = io.StringIO()
+
+        def run(command, **kwargs):
+            if command[0] != "/fake/gitleaks":
+                return original(command, **kwargs)
+            if "--report-path" in command and not missing:
+                path = Path(command[command.index("--report-path") + 1])
+                path.write_text("invalid JSON" if malformed else json.dumps(report))
+            return subprocess.CompletedProcess(command, code)
+
+        with patch.object(scan.shutil, "which", return_value="/fake/gitleaks"), \
+                patch.object(scan.subprocess, "run", side_effect=run), \
+                redirect_stderr(self.output):
+            return scan.run_gitleaks()
+
+    def finding(self, path):
+        return {"File": path, "RuleID": "jwt", "StartLine": 1, "Secret": "do not print this value"}
+
+    def test_unchanged_import_uses_index_and_multiple_verified_parents(self):
+        head = self.git("rev-parse", "HEAD").strip()
+        (self.root / ".git/MERGE_HEAD").write_text(f"{head}\n{self.parent}\n")
+        (self.root / "imported.txt").write_text("unstaged changes\n")
+        self.assertEqual(self.run_tool([self.finding("imported.txt")]), 0)
+        self.assertIn("unchanged files", self.output.getvalue())
+        self.assertNotIn("do not print this value", self.output.getvalue())
+
+    def test_modified_import_new_file_and_copy_stay_blocked(self):
+        (self.root / "imported.txt").write_text("existing token fixture\nchanged\n")
+        (self.root / "copy.txt").write_text("existing token fixture\n")
+        (self.root / "new.txt").write_text("new token fixture\n")
+        self.git("add", ".")
+        # The working copy cannot disguise changes already staged.
+        (self.root / "imported.txt").write_text("existing token fixture\n")
+        for path in ("imported.txt", "copy.txt", "new.txt"):
+            with self.subTest(path=path):
+                self.assertEqual(self.run_tool([self.finding(path)]), 1)
+                self.assertIn(f"{path}:1: jwt [redacted]", self.output.getvalue())
+                self.assertNotIn("do not print this value", self.output.getvalue())
+
+    def test_non_merge_retains_tool_result(self):
+        (self.root / ".git/MERGE_HEAD").unlink()
+        self.assertEqual(self.run_tool([], code=7), 7)
+
+    def test_invalid_parent_and_empty_merge_state_fail_closed(self):
+        for value in ("not-a-commit\n", "imported.txt\n", ""):
+            with self.subTest(value=value):
+                (self.root / ".git/MERGE_HEAD").write_text(value)
+                self.assertEqual(self.run_tool([self.finding("imported.txt")]), 2)
+
+    def test_tool_and_report_errors_fail_closed(self):
+        for kwargs in (
+            {"code": 2}, {"missing": True}, {"malformed": True}, {"code": 0},
+        ):
+            with self.subTest(kwargs=kwargs):
+                self.assertNotEqual(self.run_tool([self.finding("imported.txt")], **kwargs), 0)
+        for report in ({}, [None], [{"File": "imported.txt"}], []):
+            with self.subTest(report=report):
+                self.assertEqual(self.run_tool(report), 2)
+        self.assertEqual(self.run_tool([], code=0), 0)
+
+    def test_invalid_finding_path_and_missing_index_blob_fail_closed(self):
+        for path in ("", "../imported.txt", "/imported.txt", "missing.txt"):
+            with self.subTest(path=path):
+                self.assertEqual(self.run_tool([self.finding(path)]), 2)
+
+    def test_git_failure_fails_closed(self):
+        with patch.object(scan, "git", side_effect=subprocess.CalledProcessError(1, ["git"])):
+            self.assertEqual(self.run_tool([self.finding("imported.txt")]), 2)
 
 
 if __name__ == "__main__":

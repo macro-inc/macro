@@ -1,6 +1,8 @@
 import { MobileDrawer } from '@components/app/mobile/MobileDrawer';
+import { isAgentAccount, tryMacroId } from '@core/user';
 import { createSignal, For, Show } from 'solid-js';
 import { Dynamic } from 'solid-js/web';
+import { AgentTag } from './AgentTag';
 import { UserIcon } from './UserIcon';
 import {
   type UserCardAction,
@@ -91,8 +93,13 @@ function UserCardBody(props: {
           class="pointer-events-none"
         />
         <div class="min-w-0 flex-1">
-          <div class="truncate text-base font-semibold text-ink">
-            {props.user.displayName}
+          <div class="flex items-center gap-1.5 min-w-0">
+            <div class="truncate text-base font-semibold text-ink">
+              {props.user.displayName}
+            </div>
+            <Show when={isAgentAccount(tryMacroId(props.user.id ?? ''))}>
+              <AgentTag />
+            </Show>
           </div>
           <Show
             when={

@@ -19,8 +19,8 @@ use tokio::sync::mpsc::Sender;
 use super::event_runs::ConfigurationRevision;
 use super::event_trigger::ActionTrigger;
 use super::models::{
-    ActionConfiguration, ActionExecutionRecord, ActionPolicyError, CreateScheduledAction,
-    DispatchEvent, InProgressExecution, OwnerNotUserError, ScheduledAction, UpdateScheduledAction,
+    ActionConfiguration, ActionConfigurationUpdate, ActionExecutionRecord, ActionPolicyError,
+    DispatchEvent, InProgressExecution, ListedAction, OwnerNotUserError, ScheduledAction,
 };
 use super::ports::{
     ScheduledActionExecutor, ScheduledActionRepo, ScheduledActionService, TaskTargetValidator,
@@ -171,7 +171,7 @@ impl<Rpo: ScheduledActionRepo, Exe, Grants, Targets, Github>
     async fn create(
         &self,
         principal: &CreationPrincipal,
-        input: CreateScheduledAction,
+        input: ActionConfiguration,
         template_id: Option<Uuid>,
     ) -> Result<ScheduledAction>
     where
@@ -182,7 +182,6 @@ impl<Rpo: ScheduledActionRepo, Exe, Grants, Targets, Github>
         let owner_user = owner.as_user().ok_or(OwnerNotUserError {
             owner_type: owner.owner_type(),
         })?;
-        let input = ActionConfiguration::from(input);
         self.check_event_management(&input.trigger)?;
         self.check_conditions(&input.trigger)?;
         self.targets.validate_task(&input.task, owner_user).await?;
@@ -190,7 +189,7 @@ impl<Rpo: ScheduledActionRepo, Exe, Grants, Targets, Github>
             self.check_github(&input.trigger, owner_user).await?;
         }
         let now = Utc::now();
-        let next_run_at = next_run(&input.trigger)?;
+        let next_run_at = next_run(&input.trigger, now, |_| false)?;
         let event_activated_at = input.trigger.event_filters().is_some().then_some(now);
         let created = self
             .repo
@@ -271,7 +270,8 @@ impl<Rpo: ScheduledActionRepo, Exe, Grants, Targets, Github>
                     .await?;
             }
             if trigger_changed || (!action.enabled && input.enabled) {
-                action.next_run_at = next_run(&input.trigger)?;
+                action.next_run_at =
+                    next_run(&input.trigger, now, |at| once_already_fired(&action, at))?;
             }
         }
         action.event_activated_at = if input.trigger.event_filters().is_some() {
@@ -324,8 +324,12 @@ pub(crate) async fn granted_action<R: ScheduledActionRepo, T: RequiredPermission
     }
 }
 
-fn next_run(trigger: &ActionTrigger) -> Result<Option<DateTime<Utc>>> {
-    let next = trigger.next_run_after(Utc::now());
+fn next_run(
+    trigger: &ActionTrigger,
+    now: DateTime<Utc>,
+    fired: impl Fn(DateTime<Utc>) -> bool,
+) -> Result<Option<DateTime<Utc>>> {
+    let next = trigger.first_run_at(now, fired);
     if trigger.has_schedule() && next.is_none() && trigger.event_filters().is_none() {
         return Err(ActionPolicyError::NoFutureFirings.into());
     }
@@ -356,6 +360,13 @@ where
             .then(left.id.cmp(&right.id))
     });
     Ok(actions)
+}
+
+/// Whether the stored routine already ran its once trigger at `at`. Pending
+/// firings never come after `next_run_at`, so a stored once time before it (or
+/// with nothing left to run) has been consumed.
+fn once_already_fired(stored: &ScheduledAction, at: DateTime<Utc>) -> bool {
+    stored.trigger.once_times().contains(&at) && stored.next_run_at.is_none_or(|next| next > at)
 }
 
 fn claim_blocks_replacement(action: &ScheduledAction, now: DateTime<Utc>) -> bool {
@@ -422,7 +433,7 @@ where
     async fn create_action(
         &self,
         principal: &CreationPrincipal,
-        input: CreateScheduledAction,
+        input: ActionConfiguration,
     ) -> Result<ScheduledAction> {
         self.create(principal, input, None).await
     }
@@ -430,7 +441,7 @@ where
     async fn create_action_from_template(
         &self,
         principal: &CreationPrincipal,
-        input: CreateScheduledAction,
+        input: ActionConfiguration,
         template_id: Uuid,
     ) -> Result<ScheduledAction> {
         self.create(principal, input, Some(template_id)).await
@@ -440,22 +451,32 @@ where
         &self,
         user_id: MacroUserIdStr<'static>,
         include_events: bool,
-    ) -> Result<Vec<ScheduledAction>> {
-        Ok(
+    ) -> Result<Vec<ListedAction>> {
+        let actions: Vec<ScheduledAction> =
             list_accessible_actions(self.repo.as_ref(), self.grants.as_ref(), &user_id)
                 .await?
                 .into_iter()
                 .filter(|action| {
                     include_events || matches!(action.trigger, ActionTrigger::Cron { .. })
                 })
-                .collect(),
-        )
+                .collect();
+
+        let ids: Vec<Uuid> = actions.iter().filter_map(|action| action.id).collect();
+        let mut last_runs = self.repo.last_runs(&ids).await?;
+
+        Ok(actions
+            .into_iter()
+            .map(|action| ListedAction {
+                last_run: action.id.and_then(|id| last_runs.remove(&id)),
+                action,
+            })
+            .collect())
     }
 
     async fn update_action(
         &self,
         receipt: EntityAccessReceipt<EditAccessLevel>,
-        input: UpdateScheduledAction,
+        input: ActionConfigurationUpdate,
     ) -> Result<ScheduledAction> {
         let action = self.load_granted(&receipt).await?;
         let input = input.into_configuration(&action);

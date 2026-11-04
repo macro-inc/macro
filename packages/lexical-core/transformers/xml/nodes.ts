@@ -1,3 +1,4 @@
+import type { DatabaseQueryData } from '../../nodes/databaseQueryData';
 export type Id = { $?: { id: string } };
 
 type EleBase = Id & {
@@ -159,7 +160,15 @@ export type DocumentCardNode = Id & {
   version: number;
   documentId: string;
   documentName: string;
+  blockName?: string;
+  blockParams?: Record<string, string>;
 };
+
+export type DatabaseQueryNode = Id &
+  DatabaseQueryData & {
+    type: 'database-query';
+    version: number;
+  };
 
 export type UserMentionNode = Id & {
   type: 'user-mention';
@@ -263,6 +272,7 @@ export type KnownNode =
   | VideoNode
   | HtmlRenderNode
   | DocumentCardNode
+  | DatabaseQueryNode
   | UserMentionNode
   | DocumentMentionNode
   | ContactMentionNode

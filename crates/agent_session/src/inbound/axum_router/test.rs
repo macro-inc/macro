@@ -107,6 +107,7 @@ impl JwtValidator for FakeJwtValidator {
             origin: macro_authorization::CredentialOrigin::Session,
             identity: ValidatedIdentity {
                 agent_id: None,
+                agent_via: None,
                 user_id: jwt.to_string(),
                 fusion_user_id: "fusion-user".to_string(),
                 organization_id: None,
@@ -137,6 +138,7 @@ impl BotAuthorizer for SelfBotAuthorizer {
                 Some(MacroUserAuthentication {
                     origin: macro_authorization::CredentialOrigin::Bot,
                     agent_id: None,
+                    agent_via: None,
                     macro_user_id,
                     user_context: model_user::UserContext {
                         user_id,
@@ -185,6 +187,7 @@ impl HarnessAuthorizer for SelfHarnessAuthorizer {
             acting_user: MacroUserAuthentication {
                 origin: macro_authorization::CredentialOrigin::Harness,
                 agent_id: None,
+                agent_via: None,
                 macro_user_id,
                 user_context: model_user::UserContext {
                     user_id,
@@ -224,7 +227,7 @@ impl SessionOpener for RecordingOpener {
             task_id: None,
             id: AgentSessionId::TEST_A,
             name: crate::domain::model::DEFAULT_AGENT_SESSION_NAME.to_owned(),
-            is_archived: false,
+            archived: None,
             owner_id: request.owner.clone(),
             thread_id: request.thread.as_ref().map(|thread| thread.thread_id),
             thread_parent: request.thread.as_ref().map(|thread| thread.parent.clone()),
@@ -264,7 +267,7 @@ impl SessionOpener for RecordingOpener {
             task_id: None,
             id: AgentSessionId::TEST_A,
             name: crate::domain::model::DEFAULT_AGENT_SESSION_NAME.to_owned(),
-            is_archived: false,
+            archived: None,
             owner_id: request.owner.clone(),
             thread_id: None,
             thread_parent: None,
@@ -483,7 +486,7 @@ impl ExternalSessionRequester for RecordingRequester {
             task_id: None,
             id: request.session_id,
             name: crate::domain::model::DEFAULT_AGENT_SESSION_NAME.to_owned(),
-            is_archived: false,
+            archived: None,
             owner_id: Owner::User(request.owner.clone()),
             thread_id: None,
             thread_parent: None,
@@ -1314,6 +1317,23 @@ async fn a_stranger_cannot_start_someone_elses_macrod_agent() {
 
     assert_eq!(response.status(), StatusCode::FORBIDDEN);
     assert!(requests.requested.lock().unwrap().is_empty());
+}
+
+#[tokio::test]
+async fn an_unknown_managed_persona_is_a_404() {
+    let opener = Arc::new(RecordingOpener::default());
+    let request = as_user(
+        OWNER,
+        serde_json::json!({ "botId": BotId::TEST_B.as_uuid(), "prompt": "fix it" }).to_string(),
+    );
+
+    let response = router_for(opener.clone(), OneBotDirectory::managed_agent())
+        .oneshot(request)
+        .await
+        .unwrap();
+
+    assert_eq!(response.status(), StatusCode::NOT_FOUND);
+    assert!(opener.managed.lock().unwrap().is_empty());
 }
 
 #[tokio::test]

@@ -85,8 +85,9 @@ fn macos_job() -> Job {
         )
 }
 
-/// Windows has no hot handoff: this checks the launcher layout and the
-/// installer, with builds from the runner's MSVC toolchain.
+/// Windows has no hot handoff: this checks the launcher layout, the
+/// installer, and Claude Code installed from npm, with builds from the
+/// runner's MSVC toolchain.
 fn windows_job() -> Job {
     Job::default()
         .name("macrod update (windows)")
@@ -109,6 +110,17 @@ fn windows_job() -> Job {
             Step::new("Self-update end to end")
                 .run(format!(
                     "& ./{E2E}/windows_update_test.ps1 -Releases \"$env:RUNNER_TEMP/releases\" -V1 {V1} -V2 {V2}"
+                ))
+                .shell("pwsh"),
+        )        .add_step(
+            Step::new("Setup Node")
+                .uses("actions", "setup-node", "v4")
+                .add_with(("node-version", "24")),
+        )
+        .add_step(
+            Step::new("Claude Code from npm")
+                .run(format!(
+                    "& ./{E2E}/windows_claude_code_test.ps1 -Releases \"$env:RUNNER_TEMP/releases\" -Version {V2}"
                 ))
                 .shell("pwsh"),
         )

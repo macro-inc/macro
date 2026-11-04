@@ -48,6 +48,7 @@ use macro_authorization::{
 use macro_event_broker::{KafkaEventPublisher, MacroEventBrokerService};
 use macro_service_urls::{
     AppServiceUrl, ConnectionGatewayUrl, DocumentStorageServiceUrl, EmailServiceUrl,
+    StaticFilePublicUrl, StaticFileServiceUrl,
 };
 use native_app_service::{
     domain::{models::PlatformData, service::NativeAppServiceImpl},
@@ -63,6 +64,7 @@ use roles_and_permissions::{
 };
 use secretsmanager_client::SecretManager;
 use sqlx::postgres::PgPoolOptions;
+use static_file_service_client::StaticFileServiceClient;
 use teams::{
     domain::team_service::TeamServiceImpl,
     outbound::{
@@ -74,10 +76,7 @@ use teams::{
 use gtm_invite::{
     domain::service::GtmInviteServiceImpl, outbound::pg_gtm_invite_repo::PgGtmInviteRepo,
 };
-use referral::{
-    domain::service::ReferralServiceImpl,
-    outbound::{pg_referral_repo::PgReferralRepo, stripe_discount_client::StripeDiscountClient},
-};
+use referral::{domain::service::ReferralServiceImpl, outbound::pg_referral_repo::PgReferralRepo};
 use system_status::{
     domain::service::SystemStatusServiceImpl,
     outbound::{
@@ -275,6 +274,12 @@ pub async fn run() -> anyhow::Result<()> {
         ) as Arc<dyn MicrosoftAuth>
     });
 
+    let static_file_service_client = Arc::new(StaticFileServiceClient::with_timeout(
+        config.service_internal_auth_key.to_string(),
+        StaticFileServiceUrl::new()?.to_string(),
+        std::time::Duration::from_secs(10),
+    ));
+    let static_file_public_url = StaticFilePublicUrl::new()?.to_string();
     let document_storage_service_client = DocumentStorageServiceClient::new(
         config.service_internal_auth_key.to_string().clone(),
         DocumentStorageServiceUrl::new()?.to_string(),
@@ -532,12 +537,21 @@ pub async fn run() -> anyhow::Result<()> {
         db.clone(),
     )));
 
+    // Invites that turn into teammates and referrals that sign up earn the
+    // inviter AI credit (or more free allowance).
+    let invite_rewards = crate::outbound::invite_rewards::BillingInviteRewards::new(
+        ai_billing::domain::InviteRewardService::new(
+            ai_billing::outbound::RolesTeamsEntitlementSource::new(
+                user_roles_and_permissions_service.clone(),
+                teams_repo_impl.clone(),
+            ),
+            ai_billing::outbound::PgCreditGrantRepo::new(db.clone()),
+            ai_billing::outbound::PgCreditGrantRepo::new(db.clone()),
+        ),
+    );
     let referral_service = ReferralServiceImpl {
         repo: PgReferralRepo::new(db.clone()),
-        discount_client: StripeDiscountClient::new(
-            stripe_client.clone(),
-            10000, /*100$ credit, in cents*/
-        ),
+        rewarder: invite_rewards.clone(),
         notification_ingress: notification_ingress_service.clone(),
     };
     let gtm_invite_service = GtmInviteServiceImpl {
@@ -669,7 +683,8 @@ pub async fn run() -> anyhow::Result<()> {
     .with_contacts_enqueuer(contacts_enqueuer)
     .with_event_broker(macro_event_broker.clone())
     .with_open_seat_release((*ai_billing_service).clone())
-    .with_owned_entity_cleanup(team_owned_entity_cleanup);
+    .with_owned_entity_cleanup(team_owned_entity_cleanup)
+    .with_invite_rewarder(Arc::new(invite_rewards));
     let teams_service = Arc::new(teams_service_impl);
     let domain_notice_service =
         Arc::new(teams::domain::domain_notice::DomainNoticeServiceImpl::new(
@@ -766,6 +781,8 @@ pub async fn run() -> anyhow::Result<()> {
             subscription_plan,
             subscription_status,
             document_storage_service_client,
+            static_file_service_client,
+            static_file_public_url,
             user_deletion,
             email_service_client: Arc::new(email_service_client),
             ses_client: Arc::new(ses_client),

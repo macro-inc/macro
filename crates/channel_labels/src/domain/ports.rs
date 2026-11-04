@@ -59,6 +59,19 @@ pub trait ChannelLabelsRepo: Send + Sync + 'static {
         rule: Option<&ChannelLabelRule>,
     ) -> impl Future<Output = Result<LabelWriteOutcome, Self::Err>> + Send;
 
+    /// Atomically rename and transfer a label to another authorized namespace.
+    /// Validate every source assignment, or every current personal smart match,
+    /// against the target before moving any assignment or changing the label.
+    fn transfer_label(
+        &self,
+        source: &ChannelLabelsScope,
+        target: &ChannelLabelsScope,
+        label_id: Uuid,
+        name: &str,
+        viewer: &MacroUserIdStr<'_>,
+        rule: Option<&ChannelLabelRule>,
+    ) -> impl Future<Output = Result<LabelWriteOutcome, Self::Err>> + Send;
+
     /// Delete a label of the scope; its channels become unlabelled.
     ///
     /// Returns `true` when a row was removed.
@@ -116,6 +129,16 @@ pub trait ChannelLabelsService: Send + Sync + 'static {
     fn rename_label(
         &self,
         receipt: &ChannelLabelsReceipt,
+        label_id: Uuid,
+        name: String,
+        rule: Option<ChannelLabelRule>,
+    ) -> impl Future<Output = Result<ChannelLabel, ChannelLabelsError>> + Send;
+
+    /// Update a label and optionally transfer it to another authorized namespace.
+    fn update_label(
+        &self,
+        source: &ChannelLabelsReceipt,
+        target: Option<&ChannelLabelsReceipt>,
         label_id: Uuid,
         name: String,
         rule: Option<ChannelLabelRule>,

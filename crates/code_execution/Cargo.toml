@@ -7,6 +7,7 @@ publish = false
 [dependencies]
 url = { workspace = true }
 async-trait = { workspace = true }
+code_mode_assets = { path = "../code_mode_assets" }
 futures = { workspace = true }
 rootcause = { workspace = true }
 serde = { workspace = true }

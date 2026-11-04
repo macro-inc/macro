@@ -44,7 +44,8 @@ The classification is exhaustive and server-selected, not request-controlled.
 
 Unlimited (enterprise) entitlements are never blocked by this quota policy.
 Free-plan users are hard-capped at `AI_USAGE_FREE_INCLUDED_ALLOWANCE_CENTS` of
-counted usage per UTC calendar month: past it, admission answers
+counted usage per UTC calendar month, plus any bonus earned from team invites and
+referrals (`ai_free_allowance_bonus`, +$10 each, at most +$50): past it, admission answers
 `ai_free_allowance_exhausted` and nothing is settled, since Free has no credits
 or overage. Model-access and resource permissions remain independent. Counting
 eligibility is not a claim that a particular user owes money; it does not
@@ -253,7 +254,7 @@ errors are not permission grants and must not disclose another user's quota.
 | Result | HTTP status | Stable `code` | Retry semantics |
 | --- | --- | --- | --- |
 | Allowance exhausted | 402 | `ai_allowance_exhausted` | Policy/allowance must change; no automatic tight retry |
-| Free monthly cap reached | 402 | `ai_free_allowance_exhausted` | Only an upgrade (or the next calendar month) lifts it |
+| Free monthly cap reached | 402 | `ai_free_allowance_exhausted` | An upgrade, the next calendar month, or an earned invite/referral bonus lifts it |
 | Spending cap reached | 402 | `ai_overage_limit_reached` | Policy/allowance must change |
 | Overage payment failed | 402 | `ai_overage_payment_failed` | Billing problem must be resolved |
 | Could not validate billing | 503 | `ai_billing_unavailable` | Retry later with bounded backoff; never execute on uncertainty |
@@ -276,7 +277,7 @@ inspect the content type and code rather than assuming every 503 is billing.
 
 ### Tools, protocols, queues, and background work
 
-- Subagent, native Anthropic tools, and AI editing return a failed tool result with
+- Native Anthropic tools and AI editing return a failed tool result with
   the stable code and public explanation. These are tool/protocol failures, not
   necessarily HTTP 402/503 at the outer MCP transport. Do not treat an HTTP-success
   tool envelope as successful execution. No alternate provider is tried on refusal.
@@ -324,7 +325,7 @@ inspect the content type and code rather than assuming every 503 is billing.
 Authenticated handlers/tool `RequestContext.user_id`, verified document edit
 receipts, persisted scheduled-action owners, and persisted session owners are the
 sources of attribution. Session collaborators are actors, not replacement payers.
-Subagents/native tools replace the shared context's placeholder user with the
+Native tools replace the shared context's placeholder user with the
 trusted caller and inherit the server's feature/entity. Never accept billing
 identity, feature exemption, or `count_usage` from a client; never substitute
 `SYSTEM_USER_ID` for a missing real caller. Non-user session owners remain rejected.
@@ -348,7 +349,7 @@ requests settlement). Admission itself never records usage or calls settlement.
 | Cognition chat / Chat | [chat handler](../../services/agent_harness_service/src/cognition/api/stream/chat_message.rs) | [DCS main](../../services/agent_harness_service/src/cognition/main.rs): configured `UsageServiceImpl` inside `SettlingUsageRecorder`, wrapped with `with_tracking` | [pre-creation refusal and permission precedence](../../services/agent_harness_service/src/cognition/api/stream/chat_message/test.rs) |
 | Structured completion / DynamicCompletionsApi | [completion handler](../../services/agent_harness_service/src/cognition/api/structured_completion.rs) | DCS main, same recorder across both phases | [both phases and OpenAPI](../../services/agent_harness_service/src/cognition/api/structured_completion/test.rs) |
 | Chat naming / ChatRename | [chat renamer](../../services/agent_harness_service/src/cognition/service/chat_renamer.rs) | DCS main, same recorder | [safe naming skip](../../services/agent_harness_service/src/cognition/service/chat_renamer/test.rs) |
-| Direct subagent / inherited feature | [operations service](../../crates/ai_tools/src/ai_operations.rs), [subagent](../../crates/ai_tools/src/subagent.rs) | Host common context: T, DCS main, or [MCP context](../../services/agent_harness_service/src/public_mcp/context.rs) using `pg_settling_recorder` | [zero provider calls](../../crates/ai_tools/src/ai_operations/test.rs), [concurrent caller isolation](../../crates/ai_tools/src/subagent/test.rs) |
+| Direct AI operation / inherited feature | [operations service](../../crates/ai_tools/src/ai_operations.rs) | Host common context: T, DCS main, or [MCP context](../../services/agent_harness_service/src/public_mcp/context.rs) using `pg_settling_recorder` | [zero provider calls](../../crates/ai_tools/src/ai_operations/test.rs) |
 | Native Anthropic WebSearch/WebFetch/code tools / inherited feature | [invoke_server_tool](../../crates/anthropic/src/toolset.rs) before both provider branches | Same common contexts via `FromRef`; observation only, **no legacy aggregate producer** | [tool attribution/refusal](../../crates/anthropic/src/toolset/test.rs) |
 | AI document editing / AiEditing | [document orchestration](../../crates/documents/src/domain/ai_editing.rs) after verified edit receipt | Common context's recorder, existing per-model worker usage | [domain](../../crates/documents/src/domain/ai_editing/test.rs), [direct tool and permission precedence](../../crates/documents/src/inbound/toolset/edit_document/test.rs) |
 | Notion page imports / Import | [import admission](../../crates/import/src/domain/service/admission.rs), [execution/rechecks](../../crates/import/src/domain/service.rs) | DCS main, wrapped recorder | [delayed/deterministic cases](../../crates/import/src/domain/service/test/admission.rs), [HTTP](../../crates/import/src/inbound/axum_router/test.rs) |
@@ -361,7 +362,7 @@ requests settlement). Admission itself never records usage or calls settlement.
 | Repository chooser / AgentRepositoryChoice | [repository choice service](../../crates/agent_harness/src/domain/repository_choice.rs) | Harness main → `CursorContainerManager`, the same settling recorder | [deterministic bypass / typed model refusal](../../crates/agent_harness/src/domain/repository_choice/test.rs) |
 | Scheduled manual/cron/event model work / Automation | [shared executor](../../crates/scheduled_action/src/domain/execution.rs) | [scheduled service](../../services/agent_harness_service/src/scheduling.rs): `pg_settling_recorder` for the condition classifier; agent targets are funded and metered by the harness | [claims, schedules, terminal events](../../crates/scheduled_action/src/domain/execution/test.rs), [manual HTTP](../../crates/scheduled_action/src/inbound/axum_router/test.rs) |
 | Scheduled agent targets / session funding policy | [target runner](../../crates/scheduled_action/src/domain/target_runner.rs) → session/harness admission | Target runtime's recorder, not duplicate scheduler metering | [delegation and typed errors](../../crates/scheduled_action/src/domain/target_runner/test.rs), [routine error transport](../../crates/agent_session/src/inbound/routine_sessions/test.rs) |
-| Memory, projection, call summary, dictation, chat rename / exempt | [shared admission policy](../../crates/ai_billing/src/domain/admission.rs) skips quota; ordinary permissions still apply | DCS/DSS configured recorders; [memory context](../../crates/memory/src/context.rs) uses T; DSS independent call-summary/dictation recorders use R | [all exempt features](../../crates/ai_usage/src/domain/counting/test.rs), [no billing I/O](../../crates/ai_billing/src/domain/admission/test.rs), [configured recording](../../crates/ai_billing/src/composition/test.rs) |
+| Memory, projection, call summary, dictation, chat rename / exempt | [shared admission policy](../../crates/ai_billing/src/domain/admission.rs) skips quota; ordinary permissions still apply | DCS/DSS configured recorders; [memory context](../../crates/ai_tools/src/bin/memory/context.rs) uses T; DSS independent call-summary/dictation recorders use R | [all exempt features](../../crates/ai_usage/src/domain/counting/test.rs), [no billing I/O](../../crates/ai_billing/src/domain/admission/test.rs), [configured recording](../../crates/ai_billing/src/composition/test.rs) |
 | Existing system task duplicate judge / Automation | [system attribution](../../crates/task_dedup/src/outbound/judge.rs), no user quota gate | DSS main, independent R; system events stay uncounted | [system counting](../../crates/ai_usage/src/domain/counting/test.rs), [system recorder behavior](../../crates/ai_billing/src/outbound/settling_recorder/test.rs) |
 | Billing summary (not execution) | [billing service policy](../../crates/ai_billing/src/domain/service.rs) | [authentication main](../../services/authentication_service/src/main.rs) configures the same flag plus `ENABLE_AI_USAGE_BILLING`, no usage producer | [settlement policy/free/unlimited/settlement](../../crates/ai_billing/src/domain/service/test.rs), [authentication configuration](../../services/authentication_service/src/config/test.rs) |
 

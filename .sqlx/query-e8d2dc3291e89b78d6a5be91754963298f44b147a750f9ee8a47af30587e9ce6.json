@@ -1,0 +1,46 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            SELECT\n                session.auto_archive_on_pull_request_merged,\n                session.auto_archive_on_runtime_closed,\n                COALESCE(defaults.auto_archive_on_pull_request_merged, false)\n                    AS \"default_on_pull_request_merged!\",\n                COALESCE(defaults.auto_archive_on_runtime_closed, false)\n                    AS \"default_on_runtime_closed!\",\n                session.auto_archived_at\n            FROM agent_session session\n            LEFT JOIN user_agent_coding_preferences defaults\n                ON defaults.user_id = session.owner_id\n            WHERE session.id = $1\n            ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "auto_archive_on_pull_request_merged",
+        "type_info": "Bool"
+      },
+      {
+        "ordinal": 1,
+        "name": "auto_archive_on_runtime_closed",
+        "type_info": "Bool"
+      },
+      {
+        "ordinal": 2,
+        "name": "default_on_pull_request_merged!",
+        "type_info": "Bool"
+      },
+      {
+        "ordinal": 3,
+        "name": "default_on_runtime_closed!",
+        "type_info": "Bool"
+      },
+      {
+        "ordinal": 4,
+        "name": "auto_archived_at",
+        "type_info": "Timestamptz"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      true,
+      true,
+      null,
+      null,
+      true
+    ]
+  },
+  "hash": "e8d2dc3291e89b78d6a5be91754963298f44b147a750f9ee8a47af30587e9ce6"
+}

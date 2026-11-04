@@ -1,14 +1,33 @@
+import { t } from '@app/lib/i18n';
+import { formatDate } from '@core/util/date';
+import type { ArchiveCause } from '@service-agent-harness/client';
+import type { AgentSessionResponse } from '@service-agent-harness/generated/schemas';
 import { Button } from '@ui';
-import { createSignal } from 'solid-js';
+import { createSignal, Show } from 'solid-js';
+import { match } from 'ts-pattern';
 import { changeSessionArchiveState } from '../queries/change-session-archive-state';
 
-export function ArchivedSessionFooter(props: { sessionId: string }) {
+const archivedTitle = (cause: ArchiveCause | null | undefined) =>
+  match(cause)
+    .with('pull_request_merged', () =>
+      t('agentAutoArchive.archivedWhenPullRequestsMerged')
+    )
+    .with('runtime_closed', () =>
+      t('agentAutoArchive.archivedWhenSessionClosed')
+    )
+    .with('user', null, undefined, () => t('agentAutoArchive.archived'))
+    .exhaustive();
+
+/** Rendered only while the session is archived. */
+export function ArchivedSessionFooter(props: {
+  session: Pick<AgentSessionResponse, 'id' | 'archivedBy' | 'archivedAt'>;
+}) {
   const [pending, setPending] = createSignal(false);
 
   const unarchive = async () => {
     setPending(true);
     try {
-      await changeSessionArchiveState(props.sessionId, false);
+      await changeSessionArchiveState(props.session.id, false);
     } finally {
       setPending(false);
     }
@@ -17,9 +36,21 @@ export function ArchivedSessionFooter(props: { sessionId: string }) {
   return (
     <div class="flex items-center justify-between gap-4 rounded-xl border border-edge-muted bg-panel px-4 py-3">
       <div class="min-w-0">
-        <p class="text-sm font-medium text-ink">This session is archived</p>
+        <p class="text-sm font-medium text-ink">
+          {archivedTitle(props.session.archivedBy)}
+          <Show when={props.session.archivedAt}>
+            {(archivedAt) => (
+              <span class="font-normal text-ink-muted">
+                {' · '}
+                <time datetime={archivedAt()}>
+                  {formatDate(archivedAt(), { showTime: true })}
+                </time>
+              </span>
+            )}
+          </Show>
+        </p>
         <p class="text-xs text-ink-muted">
-          Unarchive it to rename the session or send messages.
+          {t('agentAutoArchive.unarchiveToContinue')}
         </p>
       </div>
       <Button
@@ -28,7 +59,9 @@ export function ArchivedSessionFooter(props: { sessionId: string }) {
         disabled={pending()}
         onClick={unarchive}
       >
-        {pending() ? 'Unarchiving…' : 'Unarchive'}
+        {pending()
+          ? t('agentAutoArchive.unarchiving')
+          : t('entityActions.unarchive')}
       </Button>
     </div>
   );

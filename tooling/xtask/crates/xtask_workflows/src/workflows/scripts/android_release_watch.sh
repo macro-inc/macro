@@ -3,16 +3,18 @@ set -euo pipefail
 # Google Play whether the version code committed at the PR head is live on
 # production, built from the Android native code of the PR's merge result
 # (`merge` is GitHub's test merge commit; the gate hashes the same). When it
-# is, and the PR's latest `Android Native Check` job (of the web app PR checks
-# run) failed — it fails until the release is live — re-run that job so the
-# gate, and the `Web App Status Check` that depends on it, go green without
-# anyone clicking "Re-run". GH_TOKEN needs actions:write + pull-requests:write;
-# GOOGLE_PLAY_ACCESS_TOKEN the androidpublisher scope.
+# is, mark the PR head `android-play/live` (the gate cannot ask Play, so it
+# reads that status), and if the PR's latest `Android Native Check` job (of
+# the web app PR checks run) failed — it fails until the release is live —
+# re-run that job so the gate, and the `Web App Status Check` that depends on
+# it, go green without anyone clicking "Re-run". GH_TOKEN needs actions:write,
+# pull-requests:write and statuses:write; GOOGLE_PLAY_ACCESS_TOKEN the
+# androidpublisher scope.
 cd apps/web
 conf_path="apps/web/tauri/src-tauri/tauri.android.conf.json"
 
 check_pr() {
-  local pr=$1 number sha merge native_hash version_code run run_id status run_url job conclusion job_id reruns
+  local pr=$1 number sha merge native_hash version_code live run run_id status run_url job conclusion job_id reruns
   number=$(jq -r '.number' <<<"$pr")
   sha=$(jq -r '.sha' <<<"$pr")
   merge=$(jq -r '.merge // empty' <<<"$pr")
@@ -32,6 +34,13 @@ check_pr() {
     return 0
   fi
   echo "  live on Google Play production"
+  live=$(android_live_description "$version_code" "$native_hash" "$number")
+  if [[ "$(commit_status "$sha" android-play/live)" == "success ${live}" ]]; then
+    echo "  ${sha:0:10} already marked android-play/live"
+  else
+    set_commit_status "$sha" android-play/live success "$live"
+    echo "  marked ${sha:0:10} android-play/live"
+  fi
 
   run=$(gh run list --workflow web-app-check-main.yml --commit "$sha" \
     --json databaseId,status,url --limit 1 --jq '.[0] // empty')

@@ -49,7 +49,14 @@ impl CacheEngine {
             let commit: CalendarCommit = serde_wasm_bindgen::from_value(commit).map_err(err_js)?;
             let result = state.engine_mut()?.calendar_commit(&commit).await;
             let result = state.engine_result(result)?;
-            to_js(&js_write_result(result, &ops.borrow()))
+            let unchanged_views = state
+                .engine_mut()?
+                .unchanged_observed_windows()
+                .await
+                .unwrap_or_default();
+            let mut result = js_write_result(result, &ops.borrow());
+            result.unchanged_views = Some(unchanged_views);
+            to_js(&result)
         })
     }
 }

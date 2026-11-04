@@ -50,8 +50,9 @@ use utoipa::ToSchema;
 use crate::domain::coding_preferences::CodingPreferences;
 use crate::domain::error::AgentSessionError;
 use crate::domain::model::{
-    AgentSession, AgentSessionId, AgentSessionPreview, ExternalSession, Message, SandboxSize,
-    SessionBot, SessionSource, SessionStatus, SessionVisibility, StoredAgentSessionLog,
+    AgentSession, AgentSessionId, AgentSessionPreview, ArchiveCause, ExternalSession, Message,
+    SandboxSize, SessionBot, SessionSource, SessionStatus, SessionVisibility,
+    StoredAgentSessionLog,
 };
 use crate::domain::ports::{
     AgentSessionNotificationRecipient, BotDirectory, BotFacts, ControlDisposition, ControlEvent,
@@ -69,6 +70,9 @@ pub mod sharing;
 
 /// Routes associating pull requests with sessions.
 pub mod pull_requests;
+
+/// Auto-archive defaults and per-session choices.
+pub mod auto_archive;
 
 mod owned_purge;
 
@@ -488,8 +492,8 @@ pub struct RenameAgentSessionRequest {
 #[derive(Debug, Serialize, Deserialize, ToSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct SetAgentSessionArchivedRequest {
-    /// The requested archive state.
-    pub is_archived: bool,
+    /// Archive the session, or restore it.
+    pub archived: bool,
 }
 
 /// Request body for a control operation on a live session.
@@ -596,8 +600,11 @@ pub struct AgentSessionResponse {
     pub id: Uuid,
     /// User-facing session name.
     pub name: String,
-    /// Whether the session is archived and read-only.
-    pub is_archived: bool,
+    /// Who or what archived the session, or `None` while it is active. An archived session is
+    /// read-only.
+    pub archived_by: Option<ArchiveCause>,
+    /// When the session was archived, or `None` while it is active.
+    pub archived_at: Option<DateTime<Utc>>,
     /// The user who created and owns the session.
     pub owner_id: String,
     /// Whether the caller may drive the session - prompt it, answer its
@@ -690,7 +697,8 @@ impl AgentSessionResponse {
         Self {
             id: session.id.as_uuid(),
             name: session.name,
-            is_archived: session.is_archived,
+            archived_by: session.archived.map(|archive| archive.by),
+            archived_at: session.archived.map(|archive| archive.at),
             owner_id: session.owner_id.to_string(),
             can_edit,
             thread_id: session.thread_id,
@@ -753,7 +761,7 @@ pub async fn get_agent_session_handler<
         .service
         .get_session(AgentSessionId::new_from_uuid(session_id))
         .await?;
-    let can_edit = !session.is_archived
+    let can_edit = !session.is_archived()
         && access
             .entity_access_receipt
             .entity_permission()
@@ -970,7 +978,7 @@ pub async fn set_agent_session_archived_handler<
 ) -> Result<StatusCode, AgentSessionApiError> {
     state
         .service
-        .set_archived(&access.entity_access_receipt, request.is_archived)
+        .set_archived(&access.entity_access_receipt, request.archived)
         .await?;
     Ok(StatusCode::NO_CONTENT)
 }
@@ -1823,9 +1831,10 @@ where
 /// say which bot and which directory, and must own that bot. Omitting it asks
 /// for a managed session, whose runtime this deployment provisions. A managed
 /// request may select an authorized persisted persona with `botId`; omitting
-/// it uses the deployment's default coding persona. Fields describing someone
-/// else's runtime must still be omitted rather than quietly ignored. Mixing
-/// the two shapes is refused rather than guessed at.
+/// it uses the deployment's default coding persona, or Cursor when `repoUrl`
+/// is set. Fields describing someone else's runtime must still be omitted
+/// rather than quietly ignored. Mixing the two shapes is refused rather
+/// than guessed at.
 ///
 /// Clients serialize this, so both derives are used.
 #[derive(Debug, Clone, Default, Serialize, Deserialize, ToSchema)]
@@ -1843,9 +1852,9 @@ pub struct CreateAgentSessionRequest {
     /// Bot the session runs for. On a managed request this optionally selects
     /// a persisted persona the user owns, may use through team membership, or
     /// can `@` mention in a shared channel; omitting it uses the deployment's
-    /// default coding persona. On an external request, bot callers may omit it
-    /// (their own identity is used) and must not name another bot; user callers
-    /// must supply a bot they own.
+    /// default coding persona, or Cursor when `repoUrl` is set. On an
+    /// external request, bot callers may omit it (their own identity is used)
+    /// and must not name another bot; user callers must supply a bot they own.
     pub bot_id: Option<Uuid>,
     /// Absolute directory the bot's harness runs in on its runtime. Present
     /// for an external session, absent for a managed one, which runs in the
@@ -1866,7 +1875,9 @@ pub struct CreateAgentSessionRequest {
     pub prompt_attachments: Vec<PromptAttachment>,
     /// Explicit GitHub repository for a managed Cursor session, as one of the
     /// urls `GET /agent-repositories` lists for the caller. Access is checked
-    /// for the session owner. For external sessions this is informational:
+    /// for the session owner. On a managed request that names no `botId`,
+    /// this starts the session as Cursor — the only managed persona that
+    /// honors a repository. For external sessions this is informational:
     /// cloning it is the runtime operator's job.
     pub repo_url: Option<String>,
     /// Starting branch for a managed coding session's selected repository.

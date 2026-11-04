@@ -1,5 +1,9 @@
 import { DatePicker } from '@core/component/DatePicker';
-import { formatRelativeDay, formatTooltipDate } from '@core/util/dateParser';
+import {
+  formatRelativeDay,
+  formatTooltipDate,
+  parseMentionDate,
+} from '@core/util/dateParser';
 import ClockIcon from '@icon/system/regular/clock.svg';
 import type { DateMentionDecoratorProps } from '@macro-inc/lexical-core';
 import { $isDateMentionNode } from '@macro-inc/lexical-core';
@@ -27,7 +31,7 @@ export function DateMention(props: DateMentionDecoratorProps) {
   let mentionRef!: HTMLSpanElement;
 
   const displayFormat = createMemo(() => {
-    return formatRelativeDay(new Date(props.date));
+    return formatRelativeDay(parseMentionDate(props.date));
   });
 
   const isSelectedAsNode = () => {
@@ -72,7 +76,7 @@ export function DateMention(props: DateMentionDecoratorProps) {
     );
   }
 
-  const currentDate = () => new Date(props.date);
+  const currentDate = () => parseMentionDate(props.date);
 
   return (
     <>
@@ -105,7 +109,7 @@ export function DateMention(props: DateMentionDecoratorProps) {
             class="absolute select-none z-tool-tip bg-surface p-1.5 text-ink-muted text-xs wrap-break-word rounded-sm border border-edge-muted shadow-md shadow-[#000]/5"
             use:floatWithElement={{ element: () => mentionRef }}
           >
-            {formatTooltipDate(new Date(props.date))}
+            {formatTooltipDate(parseMentionDate(props.date))}
           </div>
         </Portal>
       </Show>

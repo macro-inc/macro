@@ -6,8 +6,10 @@ import {
   buildChannelSectionRows,
 } from './build-channel-rail-rows';
 import {
+  buildChannelSectionRows as buildSectionedChannelRows,
   buildChannelRailRows as buildSectionedRailRows,
   groupChannelRailSections,
+  orderChannelRailSections,
 } from './next/build-channel-rail-rows';
 
 function channel(
@@ -507,12 +509,172 @@ it('keeps overlapping section members and loading rows in their own scroll regio
     'channel:deals',
     'status:direct_messages',
   ]);
-  expect(
-    grouped
-      .get('team_channels')
-      ?.rows.every((row) => row.kind !== 'conversation')
-  ).toBe(true);
+  expect(grouped.get('team_channels')?.rows.map((row) => row.id)).toEqual([
+    'channel:acme',
+    'status:team_channels',
+  ]);
   expect(
     rows.filter((row) => row.kind === 'conversation').map((row) => row.id)
-  ).toEqual(['channel:deals', 'channel:acme:label:first']);
+  ).toEqual(['channel:deals', 'channel:acme', 'channel:acme:label:first']);
+});
+
+it.each([true, false])(
+  'keeps assigned team channels in the built-in section when custom sections are open=%s',
+  (open) => {
+    const labels: ChannelLabel[] = [
+      label('manual', 'Manual', ['acme']),
+      {
+        ...label('smart', 'Smart', ['zeta']),
+        rule: { attribute: 'name', contains: 'support' },
+      },
+    ];
+    const sections = buildSectionedChannelRows({
+      labels,
+      channels: [acme, zeta, deals],
+      channelsById: byId,
+      isLabelOpen: () => open,
+    });
+    const rows = buildSectionedRailRows(
+      'browse',
+      {
+        favorites: true,
+        direct_messages: true,
+        team_channels: true,
+        channels: true,
+      },
+      {
+        favorites: [],
+        direct_messages: [],
+        team_channels: [acme, zeta, deals],
+        channels: [],
+        recents: [],
+        threads: [],
+      },
+      sections
+    );
+    const grouped = groupChannelRailSections(rows);
+
+    expect(grouped.get('team_channels')?.rows.map((row) => row.id)).toEqual([
+      'channel:acme',
+      'channel:zeta',
+      'channel:deals',
+      'status:team_channels',
+    ]);
+    expect(grouped.get('label:manual')?.rows.map((row) => row.id)).toEqual(
+      open ? ['channel:acme:label:manual'] : []
+    );
+    expect(grouped.get('label:smart')?.rows.map((row) => row.id)).toEqual(
+      open ? ['channel:zeta:label:smart'] : []
+    );
+    expect(new Set(rows.map((row) => row.id)).size).toBe(rows.length);
+  }
+);
+
+it.each([true, false])(
+  'omits All channels while keeping custom public and private channel sections open=%s',
+  (open) => {
+    const publicChannel = channel('public', 'Public', 'public');
+    const privateChannel = channel('private', 'Private', 'private');
+    const channels = [publicChannel, privateChannel];
+    const channelsById = new Map(channels.map((item) => [item.id, item]));
+    const sections = buildSectionedChannelRows({
+      labels: [
+        { ...label('manual', 'Manual', ['public']), teamId: undefined },
+        {
+          ...label('smart', 'Smart', ['private']),
+          teamId: undefined,
+          rule: { attribute: 'name', contains: 'Private' },
+        },
+      ],
+      channels,
+      channelsById,
+      isLabelOpen: () => open,
+    });
+    const rows = buildSectionedRailRows(
+      'browse',
+      {
+        favorites: true,
+        direct_messages: true,
+        team_channels: true,
+        channels: true,
+      },
+      {
+        favorites: [],
+        direct_messages: [],
+        team_channels: [],
+        channels,
+        recents: [],
+        threads: [],
+      },
+      sections
+    );
+    const grouped = groupChannelRailSections(rows);
+
+    expect([...grouped.keys()]).toEqual([
+      'favorites',
+      'direct_messages',
+      'team_channels',
+      'label:manual',
+      'label:smart',
+    ]);
+    expect(grouped.get('team_channels')?.rows.map((row) => row.id)).toEqual([
+      'status:team_channels',
+    ]);
+    expect(grouped.get('label:manual')?.rows.map((row) => row.id)).toEqual(
+      open ? ['channel:public:label:manual'] : []
+    );
+    expect(grouped.get('label:smart')?.rows.map((row) => row.id)).toEqual(
+      open ? ['channel:private:label:smart'] : []
+    );
+    expect(new Set(rows.map((row) => row.id)).size).toBe(rows.length);
+  }
+);
+
+it('keeps section membership and navigation together after reordering with stale or duplicate keys', () => {
+  const rows = buildSectionedRailRows(
+    'browse',
+    {
+      favorites: true,
+      direct_messages: true,
+      team_channels: true,
+      channels: true,
+    },
+    {
+      favorites: [],
+      direct_messages: [],
+      team_channels: [deals],
+      channels: [channel('private', 'Private', 'private')],
+      recents: [],
+      threads: [],
+    },
+    [
+      { kind: 'label', label: label('first', 'First', ['acme']) },
+      { kind: 'conversation', channel: acme, labelId: 'first' },
+    ],
+    {
+      order: ['label:removed', 'label:first', 'team_channels', 'label:first'],
+      preferences: {},
+      channelById: (id) => byId.get(id),
+      unreadChannelIds: new Set(),
+      referenceStatuses: { 'label:first': 'loading' },
+    }
+  );
+  const grouped = groupChannelRailSections(rows);
+
+  expect([...grouped.keys()]).toEqual([
+    'label:first',
+    'team_channels',
+    'favorites',
+    'direct_messages',
+  ]);
+  expect(grouped.get('label:first')?.rows.map((row) => row.id)).toEqual([
+    'channel:acme:label:first',
+    'reference-status:label:first',
+  ]);
+  expect(new Set(rows.map((row) => row.id)).size).toBe(rows.length);
+  expect([
+    ...groupChannelRailSections(
+      orderChannelRailSections(rows, ['favorites', 'direct_messages'])
+    ).keys(),
+  ]).toEqual(['favorites', 'direct_messages', 'label:first', 'team_channels']);
 });

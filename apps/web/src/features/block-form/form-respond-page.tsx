@@ -6,6 +6,7 @@
  * redirect (`withFormRespondShell` in `routes/shells.tsx`). The form itself is the shared
  * `RespondView`.
  */
+import { TraceFlow, usePending } from '@app/observability/flow';
 import { useUserId } from '@core/context/user';
 import { fireAndForget } from '@core/util/fireAndForget';
 import Eye from '@icon/system/regular/eye.svg';
@@ -46,6 +47,7 @@ function FormRespondContent(props: { formId: string }) {
     openCalendarSettings: () => navigate('/scheduling'),
   });
   const source = context.createFormSource(() => props.formId);
+  usePending('form.detail', () => !source.detail() && !source.failure());
   return (
     <FormProvider value={context}>
       <Layer depth={1}>
@@ -148,5 +150,17 @@ function FormRespondContent(props: { formId: string }) {
  * respond.
  */
 export function FormRespondPage(props: { formId: string }) {
-  return <FormRespondContent formId={props.formId} />;
+  const [searchParams] = useSearchParams();
+  return (
+    <TraceFlow
+      name="view.form-respond"
+      key={() => `${props.formId}:${searchParams.preview === 'true'}`}
+      attributes={{
+        'form.id': props.formId,
+        'form.preview': searchParams.preview === 'true',
+      }}
+    >
+      <FormRespondContent formId={props.formId} />
+    </TraceFlow>
+  );
 }
