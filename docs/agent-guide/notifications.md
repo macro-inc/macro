@@ -32,8 +32,8 @@ who, what they share (the top-level message when a notification carries it, the
 channel, session, document or thread), and the newest line, with its sender when
 there are several people.
 Choosing a stack opens it and leaves it folded; only its caret unfolds it: the card
-rises and drops the newest line, its notifications spread into small cards indented
-below it, and every other card dims until you close it. Hovering or moving to a dimmed
+stays exactly as it was, its notifications spread into small cards below it, inset
+evenly where its paper edges sat, and every other card dims until you close it. Hovering or moving to a dimmed
 card brings it back. Each small card opens that notification:
 its message or reply, its comment, or an agent's turn. A channel invite and an
 email have no message of their own, so they open the channel or the thread.

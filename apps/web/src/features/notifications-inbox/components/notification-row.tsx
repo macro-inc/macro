@@ -41,7 +41,7 @@ export type NotificationRowProps = {
  * One notification inbox row, as a card as tall as it has something to say: who
  * did it, what it is about, and what was said. Choosing it opens it. Several
  * notifications show as a stack with paper edges, and its own button spreads them
- * into small cards below it, as it rises and stops repeating the newest line.
+ * into small cards below it, leaving this card as it was.
  * With a pointer, Mark done takes the time's
  * place on hover and nothing else moves; touch marks done by swiping the row. A
  * phone shows larger text, and a read card gives up its fill and fades, so unread
@@ -50,21 +50,6 @@ export type NotificationRowProps = {
 export function NotificationRow(props: NotificationRowProps) {
   const isStack = () => props.count > 1;
   const isOpen = () => isStack() && props.unfolded;
-  const surface = () => {
-    if (isOpen()) {
-      return 'border-edge-frame [--inbox-card-surface:var(--color-control-raised)]';
-    }
-    return cn(
-      props.highlighted
-        ? 'border-edge-frame [--inbox-card-surface:var(--color-control-raised)]'
-        : 'border-edge-button [--inbox-card-surface:var(--color-control)] not-touch:hover:[--inbox-card-surface:var(--color-surface-3)]',
-      // A tap leaves the card focused, which mustn't look like unread.
-      'mobile:border-edge-button',
-      props.unseen
-        ? 'mobile:[--inbox-card-surface:var(--color-control)]'
-        : 'mobile:[--inbox-card-surface:var(--color-panel)]'
-    );
-  };
   return (
     <div
       id={props.id}
@@ -88,15 +73,19 @@ export function NotificationRow(props: NotificationRowProps) {
           // The avatar's badge cuts itself out in this color.
           'relative z-1 border bg-(--inbox-card-surface)',
           'rounded-xl',
-          surface()
+          props.highlighted
+            ? 'border-edge-frame [--inbox-card-surface:var(--color-control-raised)]'
+            : 'border-edge-button [--inbox-card-surface:var(--color-control)] not-touch:hover:[--inbox-card-surface:var(--color-surface-3)]',
+          // A tap leaves the card focused, which mustn't look like unread.
+          'mobile:border-edge-button',
+          props.unseen
+            ? 'mobile:[--inbox-card-surface:var(--color-control)]'
+            : 'mobile:[--inbox-card-surface:var(--color-panel)]'
         )}
       >
         <div class="flex gap-3 px-3 py-3 touch:min-h-[44px]">
           <span
-            class={cn(
-              'shrink-0',
-              !props.unseen && !isOpen() && 'mobile:opacity-60'
-            )}
+            class={cn('shrink-0', !props.unseen && 'mobile:opacity-60')}
             data-card-avatar=""
           >
             {props.icon}
@@ -204,8 +193,7 @@ export function NotificationRow(props: NotificationRowProps) {
                 </div>
               )}
             </Show>
-            {/* The first card below is the newest line, so it isn't said twice. */}
-            <Show when={isOpen() ? undefined : props.body}>
+            <Show when={props.body}>
               {(body) => (
                 <div
                   data-card-body=""

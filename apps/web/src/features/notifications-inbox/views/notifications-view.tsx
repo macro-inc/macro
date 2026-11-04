@@ -621,6 +621,7 @@ export function NotificationsView(props: NotificationsViewProps) {
             ? entry.row().count - entry.row().content.notifications.length
             : 0
         }
+        unseen={entry.row().unseen}
         highlighted={
           list.focus.key() === entry.place.id ||
           selection.selectedNotification()?.id === entry.place.notificationId

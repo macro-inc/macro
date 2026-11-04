@@ -55,14 +55,13 @@ describe('NotificationRow', () => {
     expect(onClick).not.toHaveBeenCalled();
   });
 
-  it('leaves the newest line to the drawer while it is open', () => {
+  it('says the same thing whether its stack is open or not', () => {
     setup();
-    expect(screen.getByText('Can we move the date?')).toBeTruthy();
 
     fireEvent.click(toggle());
-    expect(screen.queryByText('Can we move the date?')).toBeNull();
 
-    fireEvent.click(toggle());
+    expect(screen.getByText('Sam and Ana commented')).toBeTruthy();
+    expect(screen.getByText('Launch plan')).toBeTruthy();
     expect(screen.getByText('Can we move the date?')).toBeTruthy();
   });
 
