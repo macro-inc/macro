@@ -599,6 +599,37 @@ async fn the_owner_writing_again_restarts_the_wait(pool: Pool<Postgres>) -> Resu
         scripts("email_focus", "email_focus_waiting")
     )
 )]
+async fn an_answer_ends_the_wait_however_long_ago_it_came(
+    pool: Pool<Postgres>,
+) -> Result<(), Report> {
+    project_threads(&pool).await?;
+    let repo = FocusPgRepository(pool.clone());
+    let worker = worker(&repo, Ok(LOW_ANSWERS.to_vec()));
+    let queries = FocusQueries::new(repo);
+    worker.classify_thread(REPLIED_LAST).await?;
+
+    // Answered past the wait. Outside the signal inbox the worker can leave this
+    // row as it is, so only who wrote last says the wait is over.
+    insert_message(&pool, REPLIED_LAST, false, Utc::now() - Duration::days(4)).await?;
+    assert!(
+        !queries
+            .focus_thread_ids(&owner(), 30)
+            .await?
+            .contains(&REPLIED_LAST)
+    );
+    let focus = queries.focus_for_threads(&owner(), &[REPLIED_LAST]).await?;
+    let answered = focus.get(&REPLIED_LAST).expect("stored");
+    assert!(!answered.is_focus && !answered.needs_follow_up);
+    Ok(())
+}
+
+#[sqlx::test(
+    migrator = "MACRO_DB_MIGRATIONS",
+    fixtures(
+        path = "../../../fixtures",
+        scripts("email_focus", "email_focus_waiting")
+    )
+)]
 async fn a_thread_of_only_sent_mail_stays_out(pool: Pool<Postgres>) -> Result<(), Report> {
     project_threads(&pool).await?;
     let repo = FocusPgRepository(pool);
