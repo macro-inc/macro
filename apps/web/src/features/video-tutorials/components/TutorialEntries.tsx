@@ -1,7 +1,7 @@
 import { t } from '@app/lib/i18n';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
-import LogoIcon from '@icon/macro-logo.svg';
-import PlayIcon from '@icon/system/regular/play.svg';
+import PlayIcon from '@icon/system/fill/play-fill.svg';
+import VideoIcon from '@icon/system/regular/video-camera.svg';
 import XIcon from '@icon/system/regular/x.svg';
 import { Button, cn } from '@ui';
 
@@ -35,7 +35,8 @@ function DismissButton(props: { onDismiss: () => void }) {
 
 /**
  * A pinned row at the top of a block's list, styled like the list's own rows
- * ("Macro · Learn how to use Macro Mail — snippet · ▷ 1:27").
+ * but marked as a video: a play button where the sender's avatar goes, then
+ * "Watch tutorial", the title and snippet, and the length.
  */
 export function TutorialRowView(props: EntryProps) {
   return (
@@ -46,11 +47,11 @@ export function TutorialRowView(props: EntryProps) {
         aria-haspopup="dialog"
         class="flex min-w-0 flex-1 items-center gap-3 self-stretch rounded-xl pl-3 text-left text-sm outline-none focus-visible:bg-list-hover"
       >
-        <span class="grid size-5 shrink-0 place-items-center rounded-md bg-ink text-surface">
-          <LogoIcon class="size-3" />
+        <span class="grid size-5 shrink-0 place-items-center rounded-full bg-ink text-surface">
+          <PlayIcon class="ml-px size-2.5" />
         </span>
         <span class="shrink-0 font-semibold text-ink">
-          {t('tutorials.from')}
+          {t('tutorials.watchTutorial')}
         </span>
         <span class="min-w-0 truncate">
           <span class="font-semibold text-ink">{props.title}</span>
@@ -60,7 +61,7 @@ export function TutorialRowView(props: EntryProps) {
           </span>
         </span>
         <span class="ml-auto flex shrink-0 items-center gap-1 pr-1 text-xs font-medium text-ink-extra-muted">
-          <PlayIcon class="size-3.5" />
+          <VideoIcon class="size-3.5" />
           {props.length}
         </span>
       </button>
@@ -71,7 +72,8 @@ export function TutorialRowView(props: EntryProps) {
 
 /**
  * A compact pill for places with no list to pin a row in: the middle of an
- * empty state, or the top of a sidebar ("▷ Learn how to use Macro Chat · 1:12").
+ * empty state, or the top of a sidebar ("▷ Watch tutorial · Learn how to use
+ * Macro Chat · 1:12").
  */
 export function TutorialPillView(props: EntryProps & { class?: string }) {
   return (
@@ -90,7 +92,10 @@ export function TutorialPillView(props: EntryProps & { class?: string }) {
         <span class="grid size-6 shrink-0 place-items-center rounded-full bg-ink text-surface">
           <PlayIcon class="ml-0.5 size-3" />
         </span>
-        <span class="min-w-0 truncate font-medium text-ink">{props.title}</span>
+        <span class="shrink-0 font-semibold text-ink">
+          {t('tutorials.watchTutorial')}
+        </span>
+        <span class="min-w-0 truncate text-ink-muted">{props.title}</span>
         <span class="shrink-0 text-xs font-medium text-ink-extra-muted">
           {props.length}
         </span>

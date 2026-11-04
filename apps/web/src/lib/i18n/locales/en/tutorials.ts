@@ -1,5 +1,5 @@
 export default {
-  from: 'Macro',
+  watchTutorial: 'Watch tutorial',
   dismiss: 'Dismiss',
   playVideo: 'Play video',
   closeVideo: 'Close video',
