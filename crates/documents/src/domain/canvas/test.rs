@@ -14,7 +14,7 @@ const SECRET: &str = "local-canvas-test-secret";
 #[tokio::test]
 async fn render_mints_view_access_and_does_not_admit_or_meter_a_model() {
     let mut worker = MockEditingWorkerService::new();
-    worker.expect_canvas().times(1).returning(|id, token, request| {
+    worker.expect_canvas().times(1).returning(|id, token, request, _| {
         assert_eq!(id, DOCUMENT);
         assert!(matches!(request, CanvasRequest::Render { .. }));
         let claims: serde_json::Value = macro_sync_service_jwt::decode(token.as_str(), SECRET).unwrap();
@@ -130,7 +130,7 @@ async fn read_mints_only_view_access_and_preserves_actor_without_admission_or_us
     worker
         .expect_canvas()
         .times(1)
-        .returning(|id, token, request| {
+        .returning(|id, token, request, _| {
             assert_eq!(id, DOCUMENT);
             assert!(matches!(request, CanvasRequest::Read { .. }));
             let claims: serde_json::Value =
@@ -216,7 +216,7 @@ async fn invalid_file_type_and_denied_admission_never_start_worker() {
 #[tokio::test]
 async fn admitted_edit_mints_edit_access_and_records_actual_worker_usage() {
     let mut worker = MockEditingWorkerService::new();
-    worker.expect_canvas().times(1).returning(|_,token,request| {
+    worker.expect_canvas().times(1).returning(|_, token, request, _| {
         assert!(matches!(request,CanvasRequest::Edit {instructions, ..} if instructions=="Make a flowchart"));
         let claims: serde_json::Value=macro_sync_service_jwt::decode(token.as_str(),SECRET).unwrap();
         assert_eq!(claims["access_level"],"edit");
@@ -278,7 +278,7 @@ fn view_only_permission_cannot_construct_an_edit_receipt() {
 #[tokio::test]
 async fn failed_later_step_still_records_completed_provider_usage() {
     let mut worker = MockEditingWorkerService::new();
-    worker.expect_canvas().times(1).returning(|_, _, _| {
+    worker.expect_canvas().times(1).returning(|_, _, _, _| {
         Box::pin(async {
             Ok(CanvasResult {
                 failure: Some(
@@ -335,7 +335,7 @@ async fn failed_later_step_still_records_completed_provider_usage() {
 #[tokio::test]
 async fn direct_batch_has_edit_capability_without_a_second_model_or_admission() {
     let mut worker = MockEditingWorkerService::new();
-    worker.expect_canvas().times(1).returning(|_, token, request| {
+    worker.expect_canvas().times(1).returning(|_, token, request, _| {
         let claims: serde_json::Value = macro_sync_service_jwt::decode(token.as_str(), SECRET).unwrap();
         assert_eq!(claims["access_level"], "edit");
         assert_eq!(claims["actor"], "macro|ai@macro.com");

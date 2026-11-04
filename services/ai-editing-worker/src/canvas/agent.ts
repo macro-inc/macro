@@ -13,9 +13,9 @@ import { z } from 'zod';
 import { TokenTracker } from '../ai-editing/token-tracker';
 import { runCanvasInSandbox } from '../sandbox';
 import type { CanvasPresentation } from './animation';
+import ARTIFACT_GUIDE from './artifact-prompt.md';
 import { dependencies } from './dependencies';
 import { canvasOverview } from './overview';
-import ARTIFACT_GUIDE from './artifact-prompt.md';
 import BASE_SYSTEM from './prompt.md';
 import {
   type CanvasMeasurer,
@@ -194,7 +194,11 @@ export async function editCanvas(
                 context = session.snapshot();
                 return format === 'overview'
                   ? JSON.stringify(canvasOverview(context.document, itemIds))
-                  : describeCanvas(context.document, itemIds);
+                  : describeCanvas(
+                      context.document,
+                      itemIds,
+                      context.artifactLibrary
+                    );
               },
             }),
             renderCanvas: tool({
@@ -306,7 +310,8 @@ export async function editCanvas(
                 options.createSource(),
                 editSignal,
                 async (writer) => run(writer.present),
-                `${editorName} · Writer ${index}`
+                `${editorName} · Writer ${index}`,
+                options.artifacts
               );
             },
             { signal: editSignal }
@@ -446,7 +451,8 @@ export async function editCanvas(
           await Promise.allSettled([...pendingOperations]);
         }
       },
-      editorName
+      editorName,
+      options.artifacts
     );
   } catch (error) {
     return {

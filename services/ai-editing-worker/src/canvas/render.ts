@@ -1,4 +1,3 @@
-import type { ArtifactLibrary } from '@macro-inc/graphics/loro';
 import type { BrowserWorker } from '@cloudflare/puppeteer';
 import {
   type Bounds,
@@ -7,6 +6,7 @@ import {
   type TextFitResult,
   worldBounds,
 } from '@macro-inc/graphics';
+import type { ArtifactLibrary } from '@macro-inc/graphics/loro';
 import { Telemetry } from '@macro-inc/observability';
 import PQueue from 'p-queue';
 import { z } from 'zod';

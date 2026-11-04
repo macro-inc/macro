@@ -65,8 +65,7 @@ const body = z
 const app = new Hono<{ Bindings: Bindings }>();
 app.use('*', bodyLimit({ maxSize: 1024 * 1024 }));
 app.post('/', zValidator('json', body), async (c) => {
-  const { documentId, documentToken, artifacts, request } =
-    c.req.valid('json');
+  const { documentId, documentToken, artifacts, request } = c.req.valid('json');
   // Comment tokens can connect and send some updates. Do not let them edit a scene.
   // A forged edit claim still fails signature verification on initial sync, before the model starts.
   if (

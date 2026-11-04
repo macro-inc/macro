@@ -27,7 +27,8 @@ function replaceOnce(html: string, find: string, replace: string) {
       'artifactEdit: the text to find appears more than once. Include more surrounding text.'
     );
 
-  const edited = html.slice(0, first) + replace + html.slice(first + find.length);
+  const edited =
+    html.slice(0, first) + replace + html.slice(first + find.length);
   if (edited.length > ARTIFACT_HTML_MAX_LENGTH)
     throw new Error(
       `artifactEdit: the HTML would exceed ${ARTIFACT_HTML_MAX_LENGTH} characters.`

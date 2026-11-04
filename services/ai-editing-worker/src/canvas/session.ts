@@ -29,13 +29,13 @@ import {
 } from '@macro-inc/lexical-core/canvas-text';
 import { Telemetry } from '@macro-inc/observability';
 import type { ResultAsync } from 'neverthrow';
-import ARTIFACT_GUIDE from './artifact-prompt.md';
 import { createRoot } from 'solid-js';
 import {
   type CanvasPresentation,
   canvasAnimation,
   runCanvasAnimation,
 } from './animation';
+import ARTIFACT_GUIDE from './artifact-prompt.md';
 import { CanvasScheduler, dependencies, dependencyState } from './dependencies';
 import { canvasUserMentions } from './mentions';
 import { artifactLibraryEdits, prepareCanvasEdit } from './operations';
@@ -240,7 +240,9 @@ export async function withCanvasSession<T>(
           document: structuredClone(backend.getDocument()),
           clock: { ...backend.getClock() },
           artifacts,
-          artifactLibrary: artifacts ? backend.artifactLibrary.read() : undefined,
+          artifactLibrary: artifacts
+            ? backend.artifactLibrary.read()
+            : undefined,
         };
       },
       async apply(ops, options = {}) {
@@ -440,7 +442,8 @@ export function describeCanvas(
         item.type === 'pencil' && item.geometry.points.length > 64,
       world: worldMatrix(document, item.id),
       bounds: worldBounds(document, item.id),
-      htmlLength: item.type === 'artifact' ? item.geometry.html.length : undefined,
+      htmlLength:
+        item.type === 'artifact' ? item.geometry.html.length : undefined,
     };
   });
   // Source is large, so it comes only from a read of specific items.
