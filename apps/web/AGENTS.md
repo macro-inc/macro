@@ -1066,6 +1066,7 @@ keep other eligible people behind **Find other people…**, with selected outsid
 still removable. List agents before people, including selected people; preserve
 Me/Unassigned filter options. Keep company owners strictly team-only and unrelated
 people/contact fields unchanged.
+Keep discovery and return controls content-width, not full-width rows.
 Keep the shared filter Assignee picker in `src/features/soup/assignee-picker.tsx`;
 import it directly from Tasks and legacy `next-soup` consumers.
 

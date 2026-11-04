@@ -4,7 +4,7 @@ import { MobileDrawer } from '@components/app/mobile/MobileDrawer';
 import { fireAndForget } from '@core/util/fireAndForget';
 import { Accordion } from '@kobalte/core/accordion';
 import { Key } from '@solid-primitives/keyed';
-import { Button, type DialogHandle, Input } from '@ui';
+import { Button, cn, type DialogHandle, Input } from '@ui';
 import {
   createMemo,
   createSignal,
@@ -218,7 +218,7 @@ export function TasksFilterDrawer() {
                           variant="ghost"
                           size="sm"
                           fullWidth
-                          class="justify-start"
+                          class={cn('justify-start', action().class)}
                           onPointerDown={(event) => event.preventDefault()}
                           onMouseDown={(event) => event.preventDefault()}
                           onClick={action().onSelect}

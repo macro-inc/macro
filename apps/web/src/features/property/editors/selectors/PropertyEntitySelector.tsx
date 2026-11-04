@@ -673,11 +673,7 @@ export function PropertyEntitySelector(props: EntityInputProps) {
           <Button
             variant="ghost"
             size="sm"
-            fullWidth
-            class={cn(
-              'justify-start',
-              selectedIndex() === resultCount() && 'bg-hover'
-            )}
+            class={cn(selectedIndex() === resultCount() && 'bg-hover')}
             onClick={runAction}
             onMouseEnter={() => {
               if (!keyboardMode()) setSelectedIndex(resultCount());

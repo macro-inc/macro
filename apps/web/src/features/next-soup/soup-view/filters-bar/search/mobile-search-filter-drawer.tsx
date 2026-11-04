@@ -176,7 +176,7 @@ function MultiFacetContent(props: {
             variant="ghost"
             size="sm"
             fullWidth
-            class="justify-start"
+            class={cn('justify-start', action().class)}
             onPointerDown={(event) => event.preventDefault()}
             onMouseDown={(event) => event.preventDefault()}
             onClick={action().onSelect}

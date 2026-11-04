@@ -89,6 +89,7 @@ export function useAssigneePicker(
         : t('viewMenus.findOtherPeople'),
       onSelect: () => setDiscovering((value) => !value),
       closeOnSelect: false,
+      class: 'w-fit',
     }),
     isLoading: team.isLoading,
     isError: team.isError,
@@ -105,8 +106,7 @@ export function AssigneeDiscoveryControls(props: {
       <Button
         variant="ghost"
         size="sm"
-        fullWidth
-        class="justify-start"
+        class="w-fit"
         onPointerDown={(event) => event.preventDefault()}
         onMouseDown={(event) => event.preventDefault()}
         onClick={() => props.discovery.action().onSelect()}

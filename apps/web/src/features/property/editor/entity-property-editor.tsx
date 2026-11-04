@@ -353,6 +353,7 @@ export function EntityPropertyEditor(props: {
         selectedIndex={props.selectedIndex()}
         scrollSelectedIntoView={listController.shouldScrollSelectedIntoView()}
         itemId={(_, index) => `entity-option-${index}`}
+        itemClass={(row) => (row.type === 'discovery' ? 'w-fit' : undefined)}
         beforeItem={(row) =>
           row.separatorBefore ? (
             <div class="mx-2 my-1 h-px bg-edge-muted/50" />
