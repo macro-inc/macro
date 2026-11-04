@@ -99,9 +99,9 @@ pub(crate) struct GraphqlScheduledActionAgentTask {
     model: Option<String>,
     /// Selected agent. Null for model-only tasks.
     agent: Option<GraphqlScheduledActionAgent>,
-    /// System prompt for the agent.
+    /// Always empty: the agent step's instructions are in `userPrompt`.
     prompt: String,
-    /// User prompt for the agent.
+    /// The agent step's instructions.
     user_prompt: String,
 }
 
