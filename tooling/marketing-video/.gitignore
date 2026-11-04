@@ -13,3 +13,5 @@ audio/blocks-*.json
 audio/__pycache__/
 /macro-ui-*.mp4
 audio/ui-*.json
+/macro-day-*.mp4
+audio/day-*

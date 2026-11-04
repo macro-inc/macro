@@ -1,0 +1,621 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>One day in Macro</title>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<style>
+/* UI loop ads for Meta, in the format of the team's X posts: one Macro surface on black that morphs from state to state
+   (size, radius, color) while its content swaps with a short blur. A cursor and keycaps drive every change, a Roboto
+   Slab caption says what's happening, and the camera fits each state to the frame. Everything lands on the 112 BPM
+   grid of the kit's stock track ("Gimme that Groove!", Mixkit 872): 7 bars, 28 beats, 15 s. The last frame is the
+   first frame, so it loops. The UI is drawn from the app's Macro Dark theme and its own icons (ui-icons.js).
+     day.html is the full-flow sibling of ui.html: "One day in Macro", a founder's day from the inbox to the end card in
+   seven acts, 45 s (84 beats) or ?cut=15 (28 beats), on macro.com's cream (default) or ?mode=dark.
+     ?cut=45|15   &mode=light|dark   &fmt=45|916|11   (&t=<seconds> to hold a moment in a browser) */
+@font-face { font-family: "Inter"; src: url("fonts/inter-variable.woff2") format("woff2"); font-weight: 100 900; font-display: block; }
+@font-face { font-family: "display"; src: url("fonts/roboto-slab-variable.woff2") format("woff2"); font-weight: 100 900; font-display: block; }
+@font-face { font-family: "mono"; src: url("fonts/GeistMono-Variable.woff2") format("woff2"); font-weight: 100 900; font-display: block; }
+:root {
+  /* Macro Dark (apps/web/src/features/theme/themes/macro-dark.ts) and its task-status tokens (themeColorTokens.ts) */
+  --s1: #121212; --s2: #171717; --s3: #1b1b1b; --s4: #222222; --edge: #1e1e1e;
+  --ink: #ffffff; --ink1: oklch(0.83 0 21); --ink2: oklch(0.75 0 21); --ink3: oklch(0.63 0 21); --ink4: oklch(0.55 0 21);
+  --accent: oklch(0.7 0.12 250); --green: oklch(0.75 0.2 149.579); --red: oklch(0.75 0.2 25.331);
+  --violet: oklch(0.75 0.2 292.717); --amber: oklch(0.75 0.2 70.08);
+  --st-ns: var(--ink1); --st-ip: color-mix(in srgb, var(--amber) 80%, #fff); --st-rv: var(--violet); --st-dn: var(--accent);
+}
+* { box-sizing: border-box; }
+html, body { margin: 0; background: #000; }
+body { display: flex; align-items: center; justify-content: center; min-height: 100vh; overflow: hidden; }
+html.render body { display: block; min-height: 0; }
+#stage { position: relative; overflow: hidden; flex: none; background: #000; color: var(--ink);
+  font-family: "Inter", system-ui, sans-serif; -webkit-font-smoothing: antialiased; text-rendering: geometricPrecision;
+  font-feature-settings: "cv11", "ss01"; }
+/* the canvas: black, with the faint rings of the X posts around the middle (static, so it never shimmers) */
+#bg { position: absolute; inset: 0;
+  background: radial-gradient(circle at 50% 52%, rgba(255,255,255,.035) 0%, rgba(255,255,255,0) 58%),
+    repeating-radial-gradient(circle at 50% 52%, rgba(255,255,255,.028) 0px, rgba(255,255,255,.028) 1.6px, rgba(255,255,255,0) 2.6px, rgba(255,255,255,0) 46px);
+  -webkit-mask-image: radial-gradient(circle at 50% 52%, #000 0%, #000 24%, transparent 66%); mask-image: radial-gradient(circle at 50% 52%, #000 0%, #000 24%, transparent 66%); }
+#wmask { position: absolute; inset: 0; }
+#world, #screen { position: absolute; left: 0; top: 0; width: 0; height: 0; transform-origin: 0 0; }
+.L { position: absolute; }
+.fx { display: flex; align-items: center; }
+.ic { display: block; flex: none; }
+.slot { position: relative; flex: none; }
+.slot > .L { left: 0; top: 0; white-space: nowrap; }
+/* the one shape */
+.shell { position: absolute; background: var(--s1); box-shadow: inset 0 0 0 1.5px rgba(255,255,255,.055), 0 40px 120px rgba(0,0,0,.55); }
+/* app pieces, at about 1.6x the app's size so they read on a phone */
+.hdr { position: absolute; left: 0; right: 0; top: 0; display: flex; align-items: center; gap: 16px; padding: 0 44px;
+  border-bottom: 1.5px solid var(--edge); font-size: 34px; font-weight: 600; letter-spacing: -0.012em; white-space: nowrap; }
+.av { display: block; border-radius: 50%; overflow: hidden; flex: none; background: #2a2a2a; }
+.av img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.avs { display: flex; } .avs .av + .av { margin-left: -14px; } .avs .av { box-shadow: 0 0 0 3px var(--s1); }
+.nm { font-size: 25px; color: var(--ink3); white-space: nowrap; }
+.mg { position: absolute; display: flex; flex-direction: column; gap: 10px; }
+.mg.me { align-items: flex-end; }
+.row { display: flex; align-items: center; gap: 20px; }
+.bub { background: var(--s3); border-radius: 36px; padding: 20px 30px; font-size: 31px; line-height: 1.3; color: #ececec;
+  box-shadow: inset 0 0 0 1.5px rgba(255,255,255,.03); white-space: nowrap; }
+.cmp { background: var(--s3); border-radius: 50px; box-shadow: inset 0 0 0 1.5px rgba(255,255,255,.05); display: flex; align-items: center;
+  gap: 22px; padding: 0 20px 0 34px; }
+.ph { color: var(--ink4); font-size: 31px; line-height: 44px; }
+.tx { font-size: 31px; line-height: 44px; color: #ececec; }
+.send { width: 60px; height: 60px; border-radius: 50%; background: #262626; color: #8a8a8a; display: flex; align-items: center; justify-content: center; flex: none; }
+.chip { display: inline-flex; align-items: center; gap: 10px; padding: 0 12px 0 8px; height: 46px; border-radius: 12px; background: rgba(255,255,255,.06); white-space: nowrap; vertical-align: middle; }
+.u { text-decoration: underline; text-decoration-color: rgba(255,255,255,.28); text-decoration-thickness: 1.5px; text-underline-offset: 7px; }
+.mono { font-family: "mono"; letter-spacing: -0.01em; }
+.pop { background: #1a191c; border-radius: 26px; box-shadow: inset 0 0 0 1.5px rgba(255,255,255,.075), 0 30px 80px rgba(0,0,0,.7); }
+.badge { display: inline-flex; align-items: center; gap: 8px; height: 42px; padding: 0 16px; border-radius: 21px; font-size: 24px; font-weight: 600; letter-spacing: .06em; white-space: nowrap; }
+.btn { display: inline-flex; align-items: center; gap: 10px; height: 52px; padding: 0 18px; border-radius: 14px; font-size: 25px; font-weight: 500; color: #e6e6e6; white-space: nowrap; }
+.pill { display: inline-flex; align-items: center; gap: 10px; height: 48px; padding: 0 16px; border-radius: 24px; background: rgba(255,255,255,.055); font-size: 25px; color: #e2e2e2; white-space: nowrap; }
+.caret { display: inline-block; width: 3px; height: 36px; margin-left: 3px; background: #e8e8e8; vertical-align: -8px; }
+mark.hl { background: rgba(104,160,228,calc(var(--hl, 1) * .3)); color: inherit; border-radius: 6px; padding: 0 3px; margin: 0 -3px; }
+.kbd { display: inline-flex; align-items: center; justify-content: center; min-width: 34px; height: 34px; padding: 0 8px; border-radius: 8px; font-size: 20px; color: var(--ink2); box-shadow: inset 0 0 0 1.5px rgba(255,255,255,.1); }
+.it { display: flex; align-items: center; gap: 18px; height: 72px; padding: 0 20px; margin: 0 10px; border-radius: 14px; font-size: 28px; color: #e8e8e8; white-space: nowrap; }
+.sec { font-size: 21px; font-weight: 500; color: var(--ink3); padding: 16px 30px 8px; white-space: nowrap; }
+.cmpt .bub { font-size: 27px; padding: 16px 24px; border-radius: 30px; } .cmpt .nm { font-size: 22px; } .cmpt .chip { height: 42px; }
+/* screen-space overlays: captions, keycaps, cursor, wordmark */
+.cap { position: absolute; left: 0; width: 100%; text-align: center; font-family: "display", "Inter"; font-weight: 330; letter-spacing: -0.02em;
+  line-height: 1; color: #f4f4f2; white-space: nowrap; }
+.kc { position: absolute; left: 0; top: 0; display: flex; align-items: center; justify-content: center; gap: .3em; height: 1.95em; padding: 0 .62em;
+  border-radius: .44em; background: #1c1c1c; color: #ededed; font-weight: 500; white-space: nowrap; letter-spacing: .01em;
+  box-shadow: inset 0 0 0 1.5px rgba(255,255,255,.1), inset 0 -3px 0 rgba(0,0,0,.35), 0 12px 32px rgba(0,0,0,.55); }
+.cur { position: absolute; left: 0; top: 0; transform-origin: 3px 3px; }
+.mark { position: absolute; left: 0; width: 100%; display: flex; justify-content: center; opacity: .92; }
+
+/* light: macro.com's cream page with the app's light surfaces (day.html's default) */
+html.light, html.light body, html.light #stage { background: #f5f1e8; }
+html.light { --s1: #fcfbf8; --s2: #f5f2ec; --s3: #eeeae2; --s4: #e6e1d7; --edge: #e8e3d9;
+  --ink: #1d1c1a; --ink1: #3a3936; --ink2: #54524f; --ink3: #72706c; --ink4: #8f8c86;
+  --accent: oklch(0.55 0.15 250); --green: oklch(0.58 0.16 149.579); --red: oklch(0.58 0.2 25.331); --violet: oklch(0.55 0.2 292.717); --amber: oklch(0.66 0.17 70.08); }
+html.light #stage { color: var(--ink); }
+html.light #bg { background: radial-gradient(circle at 50% 52%, rgba(29,28,26,.03) 0%, rgba(29,28,26,0) 58%),
+    repeating-radial-gradient(circle at 50% 52%, rgba(29,28,26,.035) 0px, rgba(29,28,26,.035) 1.6px, rgba(29,28,26,0) 2.6px, rgba(29,28,26,0) 46px); }
+html.light .shell { box-shadow: 0 0 0 1px rgba(29,28,26,.06), 0 2px 8px rgba(29,28,26,.04), 0 30px 90px rgba(29,28,26,.10); }
+html.light .bub, html.light .cmp { background: var(--s3); color: var(--ink); box-shadow: none; }
+html.light .tx, html.light .it, html.light .btn { color: var(--ink); }
+html.light .chip { background: rgba(29,28,26,.06); }
+html.light .u { text-decoration-color: rgba(29,28,26,.28); }
+html.light .pop { background: #fff; box-shadow: 0 0 0 1px rgba(29,28,26,.07), 0 18px 50px rgba(29,28,26,.14); }
+html.light .pill { background: rgba(29,28,26,.05); color: var(--ink1); }
+html.light .caret { background: var(--ink); }
+html.light .kbd { color: var(--ink2); box-shadow: inset 0 0 0 1.5px rgba(29,28,26,.14); }
+html.light .cap { color: #1d1c1a; }
+html.light .kc { background: #fff; color: #1d1c1a; box-shadow: inset 0 0 0 1.5px rgba(29,28,26,.1), inset 0 -3px 0 rgba(29,28,26,.08), 0 12px 32px rgba(29,28,26,.14); }
+.card { border-radius: 26px; background: var(--s2); box-shadow: inset 0 0 0 1.5px rgba(255,255,255,.04); }
+html.light .card { box-shadow: inset 0 0 0 1.5px rgba(29,28,26,.05); }
+.cap .clk { font-family: "mono"; font-weight: 500; font-size: .4em; letter-spacing: .06em; opacity: .55; margin-bottom: .5em; }
+</style>
+<script src="ui-icons.js"></script>
+</head>
+<body>
+<div id="stage"><div id="bg"></div><div id="wmask"><div id="world"></div></div><div id="screen"></div></div>
+<script>
+"use strict";
+// ---------- format, ad, beat grid ----------
+const Q = new URLSearchParams(location.search);
+const FMT = Q.get("fmt") || "45", AD = "day", CUT = Q.get("cut") === "15" ? 15 : 45, LIGHT = Q.get("mode") !== "dark";
+if (LIGHT) document.documentElement.classList.add("light");
+const [W, H] = { "916": [1080, 1920], "45": [1080, 1350], "11": [1440, 1440] }[FMT];
+// The kit's "Gimme that Groove!" is 112 BPM; the scene is cut from its downbeat, so beat 1 is t = 0 and every change
+// lands on a beat. 7 bars of 4 beats; beat 29 is the loop point (= beat 1).
+const BPM = 112, SPB = 60 / BPM, BEATS = CUT === 15 ? 28 : 84, T = BEATS * SPB;
+const B = (b) => (b - 1) * SPB;
+// Per format: the caption (center y, size), the box the camera fits the UI into, the wordmark, the cursor and keycap
+// sizes. 9:16 keeps the caption below the top 14% and everything above the bottom 35%, inside the middle ~900 px
+// (tall phones crop the sides of a story).
+// wk narrows the world's layouts (cards, splits) so the tall formats fill their width at a readable size; mask is the
+// screen y above which the UI fades out, so the caption always sits on clean black.
+const LAY = {
+  "11": { capY: 166, capS: 84, safe: [80, 292, 1280, 990], maxS: 1.32, markY: 1376, markH: 30, cur: 48, key: 44, wk: 1, mask: 226 },
+  "45": { capY: 118, capS: 64, safe: [48, 220, 984, 968], maxS: 1.12, markY: 1292, markH: 26, cur: 40, key: 38, wk: 0.86, mask: 166 },
+  "916": { capY: 440, capS: 62, safe: [60, 524, 960, 720], maxS: 1.06, markY: 300, markH: 26, cur: 42, key: 40, wk: 0.78, mask: 486 },
+}[FMT];
+const WK = LAY.wk;
+// the palette the scene draws with in JS (shell colors, hovers); CSS carries the rest
+const THEME = LIGHT
+  ? { s1: "#fcfbf8", s2: "#f5f2ec", graph: "#f8f6f1", ink: "#1d1c1a", hover: "29,28,26", accentRGB: "52,108,190" }
+  : { s1: "#121212", s2: "#171717", graph: "#101010", ink: "#f2f1ec", hover: "255,255,255", accentRGB: "104,160,228" };
+let MARK = null;
+const SAFE = { x: LAY.safe[0], y: LAY.safe[1], w: LAY.safe[2], h: LAY.safe[3] };
+SAFE.cx = SAFE.x + SAFE.w / 2; SAFE.cy = SAFE.y + SAFE.h / 2;
+const TALL = FMT === "916", NARROW = WK < 1;
+
+// ---------- motion: closed-form springs, summed per key (pure functions of t) ----------
+const clamp = (x, a = 0, b = 1) => (x < a ? a : x > b ? b : x);
+const lerp = (a, b, p) => a + (b - a) * p;
+const sm = (x) => { x = clamp(x); return x * x * (3 - 2 * x); };
+const TAU = Math.PI * 2;
+function spr(t, resp = 0.42, damp = 0.86) {
+  if (t <= 0) return 0;
+  const w = TAU / resp;
+  if (damp >= 1) { const e = Math.exp(-w * t); return 1 - e * (1 + w * t); }
+  const wd = w * Math.sqrt(1 - damp * damp), e = Math.exp(-damp * w * t);
+  return 1 - e * (Math.cos(wd * t) + (damp * w / wd) * Math.sin(wd * t));
+}
+const C97 = {};
+const c97 = (damp) => { if (!(damp in C97)) { let t = 0; while (spr(t, 1, damp) < 0.97) t += 0.0005; C97[damp] = t; } return C97[damp]; };
+// a spring step that starts at t0 and is 97% of the way at t1, then settles (damping 0.88: a 0.3% overshoot at most)
+const step = (t, t0, t1, damp = 0.88) => spr(t - t0, (t1 - t0) / c97(damp), damp);
+const bell = (x) => (x <= 0 || x >= 1 ? 0 : 16 * x * x * (1 - x) * (1 - x));
+// a value track: [[beat, value, beats to 97%, damping], ...]; the first key is the value at t = 0
+// A track that ends where it starts (every loop track) has its last sub-pixel of spring residue blended away over
+// the final 0.35 s, so the loop point is exactly frame 0.
+const SEAM = 0.35;
+function tr(keys) {
+  const K = keys.map(([b, v, d = 0.9, z = 0.88]) => ({ t0: B(b), t1: B(b) + d * SPB, v, z }));
+  const loops = K.length > 1 && Math.abs(K[K.length - 1].v - K[0].v) < 1e-9;
+  return (t) => {
+    let v = K[0].v; for (let i = 1; i < K.length; i++) v += (K[i].v - K[i - 1].v) * step(t, K[i].t0, K[i].t1, K[i].z);
+    return loops && t > T - SEAM ? K[0].v + (v - K[0].v) * (1 - sm((t - (T - SEAM)) / SEAM)) : v;
+  };
+}
+// visibility windows: [[in beat (null: from the start), out beat (null: to the end), in beats, out beats], ...]
+function visOf(t, wins) {
+  let o = 0, pin = 1;
+  for (const [a, b, fi = 0.42, fo = 0.3] of wins) {
+    const pi = a == null ? 1 : sm((t - B(a)) / (fi * SPB)), po = b == null ? 0 : sm((t - B(b)) / (fo * SPB)), v = pi * (1 - po);
+    if (v > o) { o = v; pin = a == null ? 1 : spr(t - B(a), 0.36, 0.86); }
+  }
+  return [o, pin];
+}
+const hexRGB = (h) => [1, 3, 5].map((i) => parseInt(h.slice(i, i + 2), 16));
+const rgbStr = (c) => `rgb(${c.map((v) => Math.round(clamp(v, 0, 255))).join(",")})`;
+const mixHex = (a, b, p) => rgbStr(hexRGB(a).map((v, i) => v + (hexRGB(b)[i] - v) * clamp(p)));
+const px = (v) => v.toFixed(2) + "px";
+
+// ---------- DOM ----------
+const $ = (id) => document.getElementById(id);
+const stage = $("stage"), world = $("world"), scr = $("screen");
+stage.style.width = W + "px"; stage.style.height = H + "px";
+$("wmask").style.webkitMaskImage = $("wmask").style.maskImage = `linear-gradient(to bottom, transparent ${LAY.mask}px, #000 ${LAY.mask + 44}px)`;
+const IC = (n, s, c = "currentColor", st = "") => `<span class="ic" style="width:${s}px;height:${s}px;color:${c};${st}">${window.UI_ICONS[n]}</span>`;
+const AVS = { julia: "img/julia.webp", jacob: "img/jacob.webp", teo: "img/teo.webp" };
+const AV = (who, s, st = "") => `<span class="av" style="width:${s}px;height:${s}px;${st}"><img src="${AVS[who]}" alt=""></span>`;
+// the task status icons (TaskStatusIcon.tsx), in their theme colors
+const STATUS = {
+  ns: ["task-created", "var(--st-ns)", "Not Started"], ip: ["task-in-progress", "var(--st-ip)", "In Progress"],
+  rv: ["task-in-review", "var(--st-rv)", "In Review"], dn: ["task-completed-fill", "var(--st-dn)", "Completed"],
+  cx: ["task-canceled-fill", "var(--ink1)", "Canceled"],
+};
+const ST = (k, s) => IC(STATUS[k][0], s, STATUS[k][1]);
+
+// A layer: a world-space element with visibility windows; it swaps in and out with a short blur. `clip` clips it to the
+// shell (so a state is revealed by the shape growing around it), `pop` scales it in from 95.5%, `dy` rises it in.
+const LAYERS = [];
+function L(id, box, html, o = {}) {
+  const el = document.createElement("div");
+  el.className = "L" + (o.cls ? " " + o.cls : "");
+  if (id) el.id = id;
+  const st = [];
+  if (box) { st.push(`left:${box[0]}px`, `top:${box[1]}px`); if (box[2] != null) st.push(`width:${box[2]}px`); if (box[3] != null) st.push(`height:${box[3]}px`); }
+  if (o.style) st.push(o.style);
+  el.setAttribute("style", st.join(";"));
+  el.innerHTML = html;
+  (o.parent ? (typeof o.parent === "string" ? $(o.parent) : o.parent) : world).appendChild(el);
+  const R = { el, box: box ? box.slice() : null, wins: o.wins || [[null, null]], clip: !!o.clip, pop: o.pop, dy: o.dy || 0, blur: o.blur ?? 9, at: o.at, origin: o.origin };
+  if (o.origin) el.style.transformOrigin = o.origin;
+  LAYERS.push(R);
+  return R;
+}
+// world position of an element (layout boxes, so the camera's transform doesn't matter)
+function wpos(el) {
+  if (typeof el === "string") el = $(el.replace(/^#/, ""));
+  let x = 0, y = 0, n = el;
+  while (n && n !== world) { x += n.offsetLeft; y += n.offsetTop; n = n.offsetParent; }
+  return [x, y, el.offsetWidth, el.offsetHeight];
+}
+// a target: [x, y], "#id" (its center), or ["#id", fx, fy, dx, dy]
+function tgt(v) {
+  if (Array.isArray(v) && typeof v[0] === "number") return v;
+  const [id, fx = 0.5, fy = 0.5, dx = 0, dy = 0] = Array.isArray(v) ? v : [v];
+  const [x, y, w, h] = wpos(id);
+  return [x + w * fx + dx, y + h * fy + dy];
+}
+
+// ---------- the shell, camera, cursor, keycaps, captions ----------
+let SHELL = null, CAM = null, CUR = null;
+const KEYS = [], CAPS = [], CUES = [];
+const cue = (b, type, gain = 1, extra = {}) => CUES.push({ t: Math.max(0, B(b)), type, gain, ...extra });
+// shell: named states {name: [x, y, w, h, radius, color]} and keys [[beat, name, beats to 97%, damping]]
+function shellOf(states, keys) {
+  const el = document.createElement("div"); el.className = "shell"; world.insertBefore(el, world.firstChild);
+  const comp = (i) => tr(keys.map(([b, n, d, z]) => [b, states[n][i], d, z]));
+  const ch = [0, 1, 2].map((c) => tr(keys.map(([b, n, d, z]) => [b, hexRGB(states[n][5])[c], d, z])));
+  SHELL = { el, x: comp(0), y: comp(1), w: comp(2), h: comp(3), r: comp(4), ch, cur: null };
+  keys.slice(1).forEach(([b]) => { cue(b, "swish", 0.22); if (MUSIC.edits) MUSIC.edits.push(+(b - 1).toFixed(2)); });
+}
+function shellFx(t) {
+  const S = SHELL, c = { x: S.x(t), y: S.y(t), w: S.w(t), h: S.h(t), r: S.r(t) };
+  S.cur = c;
+  Object.assign(S.el.style, { left: px(c.x), top: px(c.y), width: px(c.w), height: px(c.h), borderRadius: px(c.r), background: rgbStr(S.ch.map((f) => f(t))) });
+}
+function clipToShell(R) {
+  const s = SHELL.cur, [lx, ly, lw, lh] = R.box;
+  const tp = Math.max(0, s.y - ly), lf = Math.max(0, s.x - lx), rt = Math.max(0, lx + lw - (s.x + s.w)), bt = Math.max(0, ly + lh - (s.y + s.h));
+  R.el.style.clipPath = `inset(${px(tp)} ${px(rt)} ${px(bt)} ${px(lf)} round ${px(s.r)})`;
+}
+// camera: keys [[beat, focus box [x, y, w, h, max scale?], beats to 97%, damping]]; the box is fit into SAFE
+function cameraOf(keys) {
+  const sc = (bx) => Math.min(SAFE.w / bx[2], SAFE.h / bx[3], bx[4] || LAY.maxS);
+  CAM = {
+    cx: tr(keys.map(([b, bx, d = 1.1, z = 0.9]) => [b, bx[0] + bx[2] / 2, d, z])),
+    cy: tr(keys.map(([b, bx, d = 1.1, z = 0.9]) => [b, bx[1] + bx[3] / 2, d, z])),
+    ls: tr(keys.map(([b, bx, d = 1.1, z = 0.9]) => [b, Math.log(sc(bx)), d, z])),
+    cur: null,
+  };
+}
+function camFx(t) {
+  const s = Math.exp(CAM.ls(t)), cx = CAM.cx(t), cy = CAM.cy(t);
+  CAM.cur = { s, X: SAFE.cx - cx * s, Y: SAFE.cy - cy * s };
+  world.style.transform = `translate(${px(CAM.cur.X)},${px(CAM.cur.Y)}) scale(${s.toFixed(5)})`;
+}
+const toScr = (x, y) => [CAM.cur.X + x * CAM.cur.s, CAM.cur.Y + y * CAM.cur.s];
+// cursor: keys [[arrival beat, target, beats of travel]]; clicks [beat, ...]
+const CURSOR_SVG = `<svg viewBox="0 0 26 38" style="display:block;width:100%;height:100%;overflow:visible"><path d="M2.2 2.2 L2.2 29.6 L8.6 23.6 L12.9 33.9 L17.4 32 L13.2 22 L21.8 22 Z" fill="#0b0b0b" stroke="#fff" stroke-width="2.1" stroke-linejoin="round"/></svg>`;
+function cursorOf(keys, clicks) {
+  const el = document.createElement("div"); el.className = "cur"; el.innerHTML = CURSOR_SVG;
+  el.style.width = px(LAY.cur * 26 / 38); el.style.height = px(LAY.cur); scr.appendChild(el);
+  const P = keys.map(([b, v, d = 0.85]) => [b, tgt(v), d]);
+  const kx = P.map(([b, p, d], i) => [i ? b - d : b, p[0], d, 0.9]), ky = P.map(([b, p, d], i) => [i ? b - d : b, p[1], d, 0.9]);
+  CUR = { el, x: tr(kx), y: tr(ky), clicks };
+  clicks.forEach((b) => cue(b, "click", 0.55));
+}
+function cursorFx(t) {
+  const [sx, sy] = toScr(CUR.x(t), CUR.y(t));
+  let press = 0; for (const b of CUR.clicks) press = Math.max(press, bell((t - B(b) + 0.07) / 0.2));
+  CUR.el.style.transform = `translate(${px(sx)},${px(sy)}) scale(${(1 - 0.16 * press).toFixed(4)})`;
+}
+// keycaps: [beat, label, world anchor (the keycap's center), beats held]; the key goes down on the beat
+function keyOf(b, label, anchor, hold = 1.2, type = "key") {
+  const el = document.createElement("div"); el.className = "kc"; el.innerHTML = label; el.style.fontSize = px(LAY.key); scr.appendChild(el);
+  KEYS.push({ el, b, anchor, hold }); cue(b, type, type === "enter" ? 0.7 : 0.6);
+}
+function keysFx(t) {
+  for (const K of KEYS) {
+    const [o, pin] = visOf(t, [[K.b - 0.5, K.b + K.hold, 0.36, 0.34]]);
+    if (o <= 0.003) { K.el.style.display = "none"; continue; }
+    K.el.style.display = "";
+    if (!K.wh) K.wh = [K.el.offsetWidth, K.el.offsetHeight];
+    const [sx, sy] = toScr(...tgt(K.anchor)), press = bell((t - B(K.b) + 0.05) / 0.22);
+    const s = (0.9 + 0.1 * pin) * (1 - 0.07 * press);
+    K.el.style.opacity = o.toFixed(4);
+    K.el.style.filter = o < 0.995 ? `blur(${px((1 - o) * 8)})` : "";
+    K.el.style.transform = `translate(${px(sx - K.wh[0] / 2)},${px(sy - K.wh[1] / 2 + 3 * press)}) scale(${s.toFixed(4)})`;
+  }
+}
+// captions: [in beat, out beat, text]; caption 1 is up at t = 0 and comes back at the end, so the loop is seamless
+function capOf(wins, text, clock) {
+  const el = document.createElement("div"); el.className = "cap"; el.innerHTML = (clock ? `<div class="clk">${clock}</div>` : "") + text;
+  el.style.fontSize = px(LAY.capS); el.style.top = px(LAY.capY - LAY.capS * (clock ? 1.46 : 0.56)); el.style.width = W + "px"; scr.appendChild(el);
+  CAPS.push({ el, wins });
+  wins.forEach(([a]) => { if (a != null) cue(a, "swoosh", 0.16); });
+}
+function capsFx(t) {
+  for (const C of CAPS) {
+    const [o, pin] = visOf(t, C.wins.map(([a, b]) => [a, b, 0.5, 0.36]));
+    if (o <= 0.003) { C.el.style.display = "none"; continue; }
+    C.el.style.display = ""; C.el.style.opacity = o.toFixed(4);
+    C.el.style.filter = o < 0.995 ? `blur(${px((1 - o) * 12)})` : "";
+    C.el.style.transform = `translateY(${px((1 - pin) * 14)})`;
+  }
+}
+function layersFx(t) {
+  for (const R of LAYERS) {
+    const [o, pin] = visOf(t, R.wins);
+    if (o <= 0.003) { if (R.shown !== 0) { R.el.style.display = "none"; R.shown = 0; } continue; }
+    if (R.shown !== 1) { R.el.style.display = ""; R.shown = 1; }
+    R.el.style.opacity = o >= 0.999 ? "" : o.toFixed(4);
+    const bl = (1 - o) * R.blur;
+    R.el.style.filter = bl > 0.05 ? `blur(${px(bl)})` : "";
+    let tf = "";
+    if (R.pop && pin < 0.9995) tf += `scale(${(0.955 + 0.045 * pin).toFixed(5)}) `;
+    if (R.dy && pin < 0.9995) tf += `translateY(${px((1 - pin) * R.dy)})`;
+    R.el.style.transform = tf;
+    if (R.clip) clipToShell(R);
+  }
+}
+// typing: the first n characters of text, n growing from beat b0 to b1
+function typed(el, text, b0, b1, t) {
+  const n = Math.round(clamp((t - B(b0)) / (B(b1) - B(b0))) * text.length);
+  if (el._n !== n) { el.textContent = text.slice(0, n); el._n = n; }
+}
+// a caret that is solid while typing and blinks otherwise (from t, so it's pure)
+const caretOn = (t, busy) => busy || Math.floor(t / SPB + 1e-6) % 2 === 0;
+const win = (t, a, b, fi = 0.3, fo = 0.3) => visOf(t, [[a, b, fi, fo]])[0];
+// small helpers for the ads' own details
+const bgA = (el, a, rgb = "255,255,255") => { el.style.background = `rgba(${rgb},${clamp(a).toFixed(3)})`; };
+const pressEl = (el, t, b, k = 0.06) => { const p = bell((t - B(b) + 0.04) / 0.2); el.style.transform = p > 0 ? `scale(${(1 - k * p).toFixed(4)})` : ""; };
+function fadeEl(el, t, wins, dy = 0, blur = 8) {
+  const [o, p] = visOf(t, wins);
+  el.style.opacity = o.toFixed(3); el.style.visibility = o <= 0.003 ? "hidden" : "";
+  el.style.filter = o > 0.003 && o < 0.995 ? `blur(${px((1 - o) * blur)})` : "";
+  el.style.transform = dy && p < 0.9995 ? `translateY(${px((1 - p) * dy)})` : "";
+}
+// typed text in segments [[text, from beat, to beat], ...]; returns how many characters show
+function typedSegs(el, segs, t) {
+  let s = "";
+  for (const [txt, b0, b1] of segs) { const n = Math.round(clamp((t - B(b0)) / Math.max(1e-6, B(b1) - B(b0))) * txt.length); s += txt.slice(0, n); if (n < txt.length) break; }
+  if (el._s !== s) { el.textContent = s; el._s = s; }
+  return s.length;
+}
+function typeCues(txt, b0, b1, gain = 0.16) { [...txt].forEach((ch, i) => { if (ch !== " ") cue(b0 + (b1 - b0) * (i / Math.max(1, txt.length - 1)), "key", gain * (i % 2 ? 0.8 : 1)); }); }
+// *word* marks a search match
+const MK = (s) => s.replace(/\*([^*]+)\*/g, '<mark class="hl">$1</mark>');
+// the Macro wordmark (macro.com), white
+const LOGO_MARK = ["M0 47.151L16.199 40.81C22.551 47.236 34.299 57.491 39.832 63.809L39.88 99.564C39.876 105.615 40.12 114.034 39.774 119.931C34.433 121.982 29.103 124.064 23.786 126.177C19.631 122.268 1.946 106.135 0 102.379L0 47.151Z", "M47.632 0L48.504 0C50.116 1.598 52.174 3.051 53.824 4.712C73.817 24.845 95.62 43.76 115.445 63.991C115.552 66.818 115.592 69.696 115.513 72.523C115.075 88.301 115.701 104.194 115.444 119.951C111.602 121.871 103.313 124.848 99.214 126.339C94.102 120.866 86.899 114.298 81.323 109.052C71.856 100.234 62.526 91.27 53.337 82.163C50.385 79.209 45.332 75.304 43.124 72.361C43.132 68.995 43.082 65.629 42.976 62.264C40.676 59.71 35.402 55.12 32.496 52.172C32.501 37.889 32.044 20.249 32.654 6.207C36.92 4.311 43.939 2.079 47.632 0Z", "M123.569 0L124.699 0C128.214 3.816 134.12 9.106 138.047 12.948L177.874 51.237C181.701 54.971 188.687 60.396 191.23 64.633L191.308 120.003C187.261 121.904 179.556 124.694 175.227 126.234C171.746 123.787 160.568 112.286 156.725 108.629C144.592 97.087 130.339 84.409 118.9 72.353C118.953 69.16 118.982 65.966 118.986 62.772C117.614 60.894 110.311 54.369 108.016 51.991C107.405 39.273 107.793 19.202 108.018 6.291C111.901 4.493 120.969 1.705 123.569 0Z"];
+const LOGO_TYPE = ["M300.92 74.009C303.615 65.501 314.262 28.568 318.438 24.27C319.069 23.621 320.033 23.468 320.898 23.383C325.453 22.938 330.369 23.327 334.959 23.34C344.903 23.418 354.847 23.409 364.79 23.313C365.435 28.476 365.159 47.453 365.049 53.72C364.76 70.195 365.603 88.708 364.891 104.92C359.092 104.67 351.994 104.855 346.096 104.868C345.405 87.158 345.97 65.92 345.975 47.942L345.975 42.119C342.414 41.927 334.922 41.484 331.931 42.955C329.991 45.279 313.144 97.492 310.719 104.744C304.754 105.034 297.264 104.878 291.222 104.896C288.559 98.001 272.305 45.132 269.992 43.053C267.621 40.923 258.972 42.055 255.716 42.198C256.161 48.995 255.924 58.249 255.925 65.211L255.935 104.789C249.665 104.935 243.166 104.872 236.878 104.882C236.574 94.772 236.811 83.325 236.808 73.094L236.883 23.444C243.865 23.268 278.739 22.963 283.378 24.014C285.689 24.538 298.601 67.413 300.92 74.009Z", "M395.967 23.803C398.277 23.364 414.299 23.575 417.612 23.582C433.177 23.668 448.746 23.647 464.311 23.52C472.343 23.502 477.848 23.959 484.031 29.966C492.494 38.188 490.209 52.684 490.192 63.875L490.197 104.955L471.479 104.952C470.916 96.84 471.623 88.213 470.997 79.669C463.765 79.265 453.206 79.593 445.779 79.594L396.684 79.632C397.07 86.718 396.698 97.491 396.691 104.932L377.688 104.949C376.997 94.08 377.811 80.689 377.521 69.546C377.662 60.66 377.214 51.725 377.742 42.859C378.359 32.511 386.5 25.768 395.967 23.803ZM396.525 60.895C420.379 60.944 446.825 61.49 470.481 60.867C471.86 59.149 471.627 45.245 470.358 43.104C467.556 41.2 405.961 41.902 397.844 42.391C395.636 44.958 396.866 56.326 396.525 60.895Z", "M522.79 23.419C530.395 23.053 539.793 23.502 547.572 23.38C569.962 23.031 593.076 23.871 615.412 23.271C615.78 28.658 615.585 36.536 615.598 42.116C587.143 41.263 557.796 42.418 529.26 42.034C527.259 42.007 524.432 42.404 522.595 43.18C522.35 43.559 522.164 43.976 522.054 44.415C521.047 48.287 522.375 75.786 521.774 81.689C521.69 82.522 522.126 84.198 522.6 85.003C525.249 86.762 554.977 86.034 560.504 86.019L615.56 85.992C615.606 92.272 615.602 98.552 615.547 104.832L553.729 104.862C542.096 104.861 522.286 106.802 512.392 101.015C500.895 93.871 502.35 80.027 502.761 68.524C503.463 48.961 497.044 28.443 522.79 23.419Z", "M628.023 23.423L687.86 23.349C698.415 23.346 709.045 23.201 719.557 23.509C732.988 23.902 740.546 34.132 740.72 46.907C740.927 62.171 741.52 71.402 725.794 78.315C729.671 87.236 734.935 96.141 738.536 104.878L726.814 104.839L718.021 104.824C713.247 97.434 708.766 87.719 705.08 79.668C686.032 79.254 665.821 79.606 646.685 79.619L646.702 104.947C640.54 104.716 634.082 104.833 627.913 104.9C627.35 85.968 628.179 66.507 627.828 47.527C627.688 39.873 627.578 31.009 628.023 23.423ZM646.664 60.92L694.437 60.958C699.456 60.961 718.131 61.618 721.579 59.898C722.324 56.863 722.193 46.423 721.11 43.41C718.778 41.117 699.087 41.949 694.809 41.951L651.996 42.012C650.307 42.034 648.619 42.078 646.926 42.142C646.414 44.538 646.642 57.699 646.664 60.92Z", "M773.622 23.423C792.145 23.184 810.799 23.439 829.33 23.344C835.53 23.761 843.447 22.578 849.478 24.136C867.501 28.796 866.367 45.886 865.766 60.547C865.419 69.063 866.756 79.557 865.355 87.263C864.767 90.557 863.405 93.663 861.378 96.322C857.285 101.702 852.11 103.801 845.635 104.68C842.406 104.992 836.566 104.83 833.075 104.831L810.418 104.85L787.359 104.857C778.899 104.852 768.629 105.79 761.651 100.217C756.805 96.65 752.548 88.79 753.115 82.502C754.203 70.468 751.507 52.227 753.72 40.77C754.359 37.381 755.802 34.196 757.927 31.481C762.07 26.201 767.198 24.208 773.622 23.423ZM844.027 86.04C848.128 83.916 847.248 78.015 846.799 73.885C846.13 67.731 848.28 47.736 846.075 43.201C843.6 41.958 837.946 41.865 835.064 41.967C815.382 42.661 794.384 41.048 774.816 42.108C773.724 42.46 773 42.546 772.425 43.642C771.354 45.694 771.507 81.49 772.332 83.863C772.569 84.54 772.759 85.098 773.432 85.431C776.398 86.889 835.593 85.87 844.027 86.04Z"];
+const lockup = (h, c) => { const k = h / 126.4; return `<div class="fx" style="gap:${(44.7 * k).toFixed(2)}px"><svg width="${(191.3 * k).toFixed(2)}" height="${h}" viewBox="0 0 191.3 126.4" fill="${c}" style="display:block">${LOGO_MARK.map((d) => `<path d="${d}"/>`).join("")}</svg><svg width="${(630.7 * k).toFixed(2)}" height="${h}" viewBox="236 0 630.7 126.4" fill="${c}" style="display:block">${LOGO_TYPE.map((d) => `<path d="${d}"/>`).join("")}</svg></div>`; };
+
+// =====================================================================
+// the ad
+// =====================================================================
+const ADS = {};
+// ---------- One day in Macro: a founder's day as one flow, each act handing off to the next ----------
+// Acts are laid out on the beat grid by ACTS (start beat, length); every moment inside an act is a fraction of it, so
+// the 45 s cut and the 15 s cut share one script. The 15 s cut drops the doc and search acts.
+const ACTS = CUT === 15
+  ? { inbox: [1, 5], email: [6, 6], call: [12, 7], linked: [19, 5], end: [24, 5] }
+  : { inbox: [1, 8], email: [9, 14], call: [23, 16], doc: [39, 16], search: [55, 12], linked: [67, 10], end: [77, 8] };
+const at = (a, f) => ACTS[a][0] + f * ACTS[a][1];
+const HAS = (a) => !!ACTS[a];
+
+ADS.day = () => {
+  const P = THEME;
+  const C = (w) => Math.round(w * WK);
+  const IW = C(1040), IH = 540, EW = C(1060), EH = 560, CW = C(980), CH = 560, KW = C(1300), KH = NARROW ? 760 : 660;
+  const DW = C(1060), DH = 620, SW = C(1040), SH = 600, GW = C(1300), GH = NARROW ? 800 : 820, ZW = C(1100), ZH = 680;
+  const box = (w, h) => [-w / 2, -h / 2, w, h];
+  const SUBJ = "Pricing for 12 seats", TASK = "Send Northwind pricing", CALL = "Northwind pricing call", DOC = "Northwind proposal";
+  const DANA = (s) => `<span class="av" style="width:${s}px;height:${s}px;background:#b7835a;display:flex;align-items:center;justify-content:center;color:#fff;font-weight:600;font-size:${Math.round(s * 0.44)}px">D</span>`;
+  const sub = `font-size:24px;color:var(--ink3)`;
+  const chip = (icon, text, id = "") => `<span class="chip" ${id ? `id="${id}"` : ""}>${IC(icon, 28, "var(--ink2)")}<span class="u">${text}</span></span>`;
+
+  // 1 · 9:00 · the inbox: an email, a channel message and a task in one list (apps/docs/product/inbox.mdx)
+  const row = (id, lead, title, line, meta) => `<div class="fx" id="${id}" style="gap:22px;height:118px;padding:0 30px;margin:0 14px;border-radius:20px">${lead}
+    <div style="flex:1;min-width:0"><div style="font-size:29px;font-weight:600;white-space:nowrap">${title}</div><div style="margin-top:6px;font-size:25px;color:var(--ink2);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${line}</div></div>
+    <div style="${sub};white-space:nowrap">${meta}</div></div>`;
+  const [ix, iy] = box(IW, IH);
+  L("dy-inbox", box(IW, IH), `<div class="hdr" style="height:100px">${IC("envelope-simple-open", 32, "var(--ink3)")}<span>Inbox</span><span style="flex:1"></span><span class="pill">Today</span></div>`,
+    { clip: true, wins: [[null, at("inbox", 1) + 0.15, 0.4, 0.3]] });
+  const rows = [
+    ["dy-r1", DANA(56), "Dana Whitfield", "Could you send pricing for a team of 12?", "9:02"],
+    ["dy-r2", `<span style="width:56px;display:flex;justify-content:center">${IC("hash", 34, "var(--ink2)")}</span>`, "#sales", "Julia: Northwind call moved to 10:00", "8:47"],
+    ["dy-r3", `<span style="width:56px;display:flex;justify-content:center">${ST("ns", 34)}</span>`, "Prep the Q4 board deck", "Task · assigned to you", "Today"],
+  ];
+  rows.forEach(([id, ...r], i) => L("", [ix, iy + 124 + i * 128, IW], row(id, ...r), { pop: true, dy: 18, wins: [[at("inbox", 0.08 + i * 0.1), at("inbox", 1) + 0.1, 0.45, 0.3]] }));
+
+  // 2 · 9:20 · the email becomes a task, with the email linked in it (EmailTaskButton, EmailThreadHostView)
+  const ib = (icon, id = "") => `<span class="btn" id="${id}" style="padding:0 12px;height:52px">${IC(icon, 28, "var(--ink2)")}</span>`;
+  L("dy-email", box(EW, EH), `
+    <div class="hdr" style="height:100px;gap:14px;font-size:27px;font-weight:500">${IC("envelope-simple", 30, "var(--ink3)")}<span>${SUBJ}</span><span style="flex:1"></span>${ib("sparkle")}${ib("list-checks", "dy-ct")}${ib("check")}</div>
+    <div style="position:absolute;left:44px;right:44px;top:136px">
+      <div style="font-size:46px;font-weight:600;letter-spacing:-0.015em;white-space:nowrap">${SUBJ}</div>
+      <div class="card" style="margin-top:30px;padding:28px 30px">
+        <div class="fx" style="gap:16px">${DANA(52)}<span style="font-size:27px;font-weight:600">Dana Whitfield</span><span style="${sub}">Northwind</span><span style="flex:1"></span><span style="${sub}">9:02 AM</span></div>
+        <div style="margin-top:20px;font-size:29px;line-height:1.45">Hi Jacob, could you send pricing for a team of 12 before our call at 10?</div></div>
+    </div>`, { clip: true, wins: [[at("email", 0), at("email", 0.33), 0.6, 0.3]] });
+  const tip = L("dy-tip", [0, 0], `<div class="pop" style="padding:12px 20px;border-radius:14px;font-size:24px;white-space:nowrap">Create task</div>`, { pop: true, origin: "50% 0%", wins: [[at("email", 0.14), at("email", 0.33), 0.35, 0.2]] });
+  L("dy-comp", box(CW, CH), `
+    <div class="fx" style="height:76px;padding:0 30px;gap:12px;font-size:24px;color:var(--ink3);border-bottom:1.5px solid var(--edge)">${IC("list-checks", 26, "var(--ink3)")}<span>New task</span><span style="flex:1"></span>${IC("x", 26, "var(--ink3)")}</div>
+    <div style="position:absolute;left:44px;right:44px;top:112px">
+      <div style="height:56px;font-size:40px;font-weight:600;line-height:56px;letter-spacing:-0.012em;white-space:nowrap"><span id="dy-tt"></span><span class="caret" id="dy-tc" style="height:44px;vertical-align:-9px"></span></div>
+      <div style="margin-top:26px;font-size:28px">${chip("envelope-simple", SUBJ)}</div>
+      <div class="fx" style="gap:12px;margin-top:34px;flex-wrap:wrap"><span class="pill">${ST("ns", 26)}Not Started</span><span class="pill">${AV("jacob", 30)}Jacob</span><span class="pill">${IC("calendar-blank", 26, "var(--ink2)")}Today</span></div>
+    </div>
+    <div class="fx" style="position:absolute;left:0;right:0;bottom:0;height:96px;padding:0 28px;gap:18px;border-top:1.5px solid var(--edge)"><span style="font-size:23px;color:var(--ink3)">Share with team</span><span style="flex:1"></span><span class="btn" id="dy-create" style="background:var(--ink);color:var(--s1);font-weight:600;height:56px;padding:0 22px">Create Task</span></div>`,
+    { clip: true, wins: [[at("email", 0.34), at("email", 1) + 0.1, 0.7, 0.3]] });
+  L("dy-toast", [-190, CH / 2 + 28], `<div class="pop fx" style="gap:14px;padding:0 26px;height:74px;border-radius:18px;font-size:25px;white-space:nowrap">${ST("dn", 28)}<span>Task created</span></div>`,
+    { pop: true, origin: "50% 100%", dy: 16, wins: [[at("email", 0.82), at("email", 1) + 0.1, 0.4, 0.3]] });
+
+  // 3 · 10:00 · the call is recorded, transcribed and summarized, and it updates the CRM, the task and the calendar
+  const KL = Math.round(KW * 0.54);
+  const line = (who, txt) => `<div class="fx" style="gap:16px;align-items:flex-start;margin-bottom:26px">${who === "d" ? DANA(46) : AV("jacob", 46)}<div><div style="${sub};font-weight:500">${who === "d" ? "Dana" : "Jacob"}</div><div style="margin-top:4px;font-size:28px;line-height:1.35">${txt}</div></div></div>`;
+  const upd = (id, icon, title, slot) => `<div id="${id}" class="card fx" style="gap:16px;padding:18px 20px;margin-bottom:16px">${icon}<div style="flex:1;min-width:0"><div style="font-size:26px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${title}</div><div style="margin-top:6px;font-size:23px;color:var(--ink2);white-space:nowrap">${slot}</div></div></div>`;
+  L("dy-call", box(KW, KH), `
+    <div class="hdr" style="height:100px;gap:14px;font-size:28px;font-weight:500">${IC("phone", 30, "var(--ink3)")}<span>${CALL}</span><span style="flex:1"></span><span class="fx" style="gap:10px;font-size:23px;color:var(--red)"><span style="width:14px;height:14px;border-radius:50%;background:var(--red)"></span>Recording</span><span class="avs">${DANA(44)}${AV("jacob", 44)}</span></div>
+    <div style="position:absolute;left:40px;top:128px;width:${KL - 70}px">
+      <div style="${sub};font-weight:600;letter-spacing:.08em;margin-bottom:22px">TRANSCRIPT</div>
+      <div id="dy-l1">${line("d", "We'd start with twelve seats.")}</div>
+      <div id="dy-l2">${line("j", "Great. I'll send the pricing today.")}</div>
+      <div id="dy-sum" class="card" style="padding:20px 22px"><div class="fx" style="gap:10px;font-size:23px;font-weight:600;color:var(--ink2)">${IC("sparkle", 24, "var(--violet)")}Summary</div><div style="margin-top:10px;font-size:25px;line-height:1.4">12 seats to start. Pricing goes out today; follow-up Friday.</div></div>
+    </div>
+    <div style="position:absolute;left:${KL}px;top:100px;right:0;bottom:0;border-left:1.5px solid var(--edge);padding:28px 30px">
+      <div style="${sub};font-weight:600;letter-spacing:.08em;margin-bottom:22px">UPDATED</div>
+      ${upd("dy-u1", `<span class="av" style="width:46px;height:46px;border-radius:12px;background:#4a6b8a;display:flex;align-items:center;justify-content:center;color:#fff;font-weight:700;font-size:22px">N</span>`, "Northwind", `<span class="fx" style="gap:8px">Stage <span class="slot" id="dy-stg" style="width:150px;height:30px"></span></span>`)}
+      ${upd("dy-u2", `<span class="slot" id="dy-tst" style="width:40px;height:40px"></span>`, TASK, "Jacob · due today")}
+      ${upd("dy-u3", IC("calendar-blank", 40, "var(--accent)"), "Follow-up with Dana", "Fri 2:00 PM")}
+    </div>`, { clip: true, wins: [[at("call", 0), at("call", 1) + 0.1, 0.7, 0.3]] });
+  L("", [0, 0], `<span style="display:block;line-height:30px">Discovery</span>`, { parent: "dy-stg", wins: [[null, at("call", 0.66), 0.2, 0.2]] });
+  L("", [0, 0], `<span style="display:block;line-height:30px;color:var(--green);font-weight:600">Proposal</span>`, { parent: "dy-stg", pop: true, origin: "0 50%", wins: [[at("call", 0.66), null, 0.4]] });
+  L("", [0, 0], ST("ns", 40), { parent: "dy-tst", wins: [[null, at("call", 0.78), 0.2, 0.2]] });
+  L("", [0, 0], ST("ip", 40), { parent: "dy-tst", pop: true, wins: [[at("call", 0.78), null, 0.4]] });
+
+  // 4 · 13:00 · an agent drafts the plan in a doc, live, and links the call and the task (agents.mdx)
+  const DOC1 = "Twelve seats on the Business plan, billed annually.", DOC2 = "Rollout starts Monday with sales and support.";
+  if (HAS("doc")) L("dy-doc", box(DW, DH), `
+    <div class="hdr" style="height:100px;gap:14px;font-size:27px;font-weight:500">${IC("file-text", 30, "var(--ink3)")}<span>${DOC}</span><span style="flex:1"></span><span class="pill" id="dy-agent">${IC("sparkle", 24, "var(--violet)")}Agent is writing</span></div>
+    <div style="position:absolute;left:56px;right:56px;top:140px">
+      <div style="font-size:50px;font-weight:600;letter-spacing:-0.018em">${DOC}</div>
+      <div style="margin-top:30px;font-size:30px;line-height:1.5;min-height:46px"><span id="dy-d1"></span><span class="caret" id="dy-c1" style="background:var(--violet)"></span></div>
+      <div style="margin-top:12px;font-size:30px;line-height:1.5;min-height:46px"><span id="dy-d2"></span><span class="caret" id="dy-c2" style="background:var(--violet)"></span></div>
+      <div id="dy-m1" class="fx" style="margin-top:26px;gap:14px;font-size:28px;color:var(--ink2)">From the call ${chip("phone", CALL)}</div>
+      <div id="dy-m2" class="fx" style="margin-top:18px;gap:14px;font-size:28px;color:var(--ink2)">Next step ${chip("list-checks", TASK)}</div>
+    </div>`, { clip: true, wins: [[at("doc", 0), at("doc", 1) + 0.1, 0.7, 0.3]] });
+
+  // 5 · 15:00 · one search finds the email, the doc, the task and the line said on the call (search.mdx)
+  const res = (id, icon, title, ln, kind) => `<div class="fx" id="${id}" style="gap:20px;height:104px;padding:0 26px;margin:0 14px;border-radius:18px">${IC(icon, 34, "var(--ink2)")}
+    <div style="flex:1;min-width:0"><div style="font-size:28px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${MK(title)}</div><div style="margin-top:4px;font-size:24px;color:var(--ink2);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${MK(ln)}</div></div><span style="${sub}">${kind}</span></div>`;
+  const [sx, sy] = box(SW, SH);
+  if (HAS("search")) {
+    L("dy-search", box(SW, SH), `<div class="fx" style="height:108px;padding:0 36px;gap:18px;border-bottom:1.5px solid var(--edge)">${IC("magnifying-glass", 34, "var(--ink3)")}<span class="tx" style="font-size:34px"><span id="dy-q"></span><span class="caret" id="dy-qc"></span></span></div>`,
+      { clip: true, wins: [[at("search", 0), at("search", 1) + 0.1, 0.7, 0.3]] });
+    [["dy-s1", "envelope-simple", "*Pricing* for 12 seats", "Dana Whitfield · Could you send *pricing* for a team of 12?", "Email"],
+     ["dy-s2", "file-text", DOC, "Twelve seats on the Business plan…", "Doc"],
+     ["dy-s3", "phone", CALL, "Jacob: “Great. I'll send the *pricing* today.” · 10:14", "Call"],
+     ["dy-s4", "list-checks", "Send Northwind *pricing*", "Jacob · In Progress", "Task"]]
+      .forEach(([id, ...r], i) => L("", [sx, sy + 122 + i * 112, SW], res(id, ...r), { pop: true, dy: 14, wins: [[at("search", 0.34 + i * 0.07), at("search", 1) + 0.1, 0.4, 0.3]] }));
+  }
+
+  // 6 · 17:00 · the day, linked: email → task → call → doc → #sales
+  const [gx, gy] = box(GW, GH);
+  const NODES = [
+    ["n-mail", "envelope-simple", SUBJ, "Email", -1, -0.33],
+    ["n-task", "list-checks", TASK, "Task", 1, -0.165],
+    ["n-call", "phone", CALL, "Call", -1, 0],
+    ["n-doc", "file-text", DOC, "Doc", 1, 0.165],
+    ["n-chat", "hash", "#sales · Proposal sent", "Chat", -1, 0.33],
+  ];
+  // Nodes zig-zag between two columns that stay inside the card at every width.
+  const NW = Math.round(GW * 0.5), NH = 100, NX = GW / 2 - NW / 2 - C(44);
+  const npos = NODES.map(([, , , , side, fy]) => [side * NX, fy * GH]);
+  const paths = npos.slice(1).map((p, i) => { const a = npos[i]; const my = (a[1] + p[1]) / 2; return `M ${a[0] - gx} ${a[1] - gy} C ${a[0] - gx} ${my - gy}, ${p[0] - gx} ${my - gy}, ${p[0] - gx} ${p[1] - gy}`; });
+  L("dy-graph", box(GW, GH), `<svg width="${GW}" height="${GH}" style="position:absolute;left:0;top:0;overflow:visible" fill="none">${paths.map((d, i) => `<path id="dy-p${i}" d="${d}" pathLength="1" stroke="var(--accent)" stroke-width="4" stroke-linecap="round" stroke-dasharray="1" stroke-dashoffset="1"/>`).join("")}</svg>`,
+    { clip: true, wins: [[at("linked", 0), at("linked", 1) + 0.1, 0.7, 0.3]] });
+  NODES.forEach(([id, icon, title, kind], i) => L(id, [npos[i][0] - NW / 2, npos[i][1] - NH / 2, NW, NH], `<div class="card fx" style="height:${NH}px;gap:18px;padding:0 24px;background:var(--s1)">${id === "n-task" ? `<span class="slot" id="dy-ntst" style="width:34px;height:34px"></span>` : IC(icon, 34, "var(--ink2)")}<div style="flex:1;min-width:0;font-size:25px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${title}</div><span style="${sub}">${kind}</span></div>`,
+    { pop: true, wins: [[at("linked", 0.06 + i * 0.07), at("linked", 1) + 0.1, 0.4, 0.3]] }));
+  L("", [0, 0], ST("ip", 34), { parent: "dy-ntst", wins: [[null, at("linked", 0.72), 0.2, 0.2]] });
+  L("", [0, 0], ST("dn", 34), { parent: "dy-ntst", pop: true, wins: [[at("linked", 0.72), null, 0.4]] });
+
+  // 7 · the end card
+  L("dy-end", box(ZW, ZH), `<div style="position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:34px;text-align:center">
+      <div>${lockup(46, P.ink)}</div>
+      <div style="font-family:display;font-weight:330;font-size:${NARROW ? 72 : 80}px;letter-spacing:-0.02em;line-height:1.08">Your business,<br>in one place.</div>
+      <div style="font-size:30px;color:var(--ink2)">Email, chat, docs, tasks, calls and CRM. $40 a seat.</div>
+      <span class="btn" style="background:var(--ink);color:var(--s1);height:76px;padding:0 36px;border-radius:38px;font-size:30px;font-weight:600">Get started at macro.com</span></div>`,
+    { clip: true, wins: [[at("end", 0.05), null, 0.8]] });
+
+  return {
+    wire() {
+      const place = (R, id, fx, fy, dx, dy, ax = 0) => { const [x, y, w, h] = wpos(id); R.box[0] = x + w * fx + dx - (R.el.offsetWidth * ax); R.box[1] = y + h * fy + dy; R.el.style.left = R.box[0] + "px"; R.el.style.top = R.box[1] + "px"; };
+      place(tip, "dy-ct", 0.5, 1, 0, 16, 0.5);
+      const st = { inbox: [...box(IW, IH), 44, P.s1], email: [...box(EW, EH), 44, P.s1], comp: [...box(CW, CH), 40, P.s2], call: [...box(KW, KH), 44, P.s1],
+        doc: [...box(DW, DH), 44, P.s1], search: [...box(SW, SH), 40, P.s1], graph: [...box(GW, GH), 56, P.graph], end: [...box(ZW, ZH), 60, P.s1] };
+      const keys = [[1, "inbox"], [at("email", 0), "email", 1.0], [at("email", 0.33), "comp", 1.0], [at("call", 0), "call", 1.1]];
+      if (HAS("doc")) keys.push([at("doc", 0), "doc", 1.1]);
+      if (HAS("search")) keys.push([at("search", 0), "search", 1.0]);
+      keys.push([at("linked", 0), "graph", 1.2], [at("end", 0.02), "end", 1.3]);
+      shellOf(st, keys);
+      const pad = (b, p = 30) => [b[0] - p, b[1] - p, b[2] + 2 * p, b[3] + 2 * p];
+      const cam = [[1, pad(box(IW, IH))], [at("email", 0), pad(box(EW, EH)), 1.1], [at("email", 0.33), pad(box(CW, CH + 120)), 1.1], [at("call", 0), pad(box(KW, KH)), 1.2]];
+      if (HAS("doc")) cam.push([at("doc", 0), pad(box(DW, DH)), 1.2]);
+      if (HAS("search")) cam.push([at("search", 0), pad(box(SW, SH)), 1.1]);
+      cam.push([at("linked", 0), pad(box(GW, GH), 20), 1.3], [at("end", 0.02), pad(box(ZW, ZH)), 1.3]);
+      cameraOf(cam);
+      const ck = [[1, [ix + IW - 160, iy + IH - 80]], [at("inbox", 0.72), ["dy-r1", 0.45, 0.5], 1.2], [at("email", 0.18), ["dy-ct", 0.55, 0.6], 1.3], [at("email", 0.7), ["dy-create", 0.5, 0.5], 1.4],
+        [at("call", 0.62), ["dy-u1", 0.7, 0.6], 1.6]];
+      const clicks = [at("inbox", 0.85), at("email", 0.3), at("email", 0.75)];
+      if (HAS("search")) { ck.push([at("search", 0.72), ["dy-s3", 0.4, 0.5], 1.4]); clicks.push(at("search", 0.82)); }
+      ck.push([at("linked", 0.5), [GW / 2 - 140, GH / 2 - 100], 1.5], [at("end", 0.5), [ZW / 2 - 160, ZH / 2 - 90], 1.5]);
+      cursorOf(ck, clicks);
+      keyOf(at("email", 0.75), "⌘ ↵", [0, CH / 2 - 170], 0.9, "enter");
+      if (HAS("search")) keyOf(at("search", 0.05), "/", [0, sy + 54], 0.9);
+      capOf([[null, at("inbox", 1)]], "One inbox", "9:00");
+      capOf([[at("email", 0.05), at("email", 1)]], "Email becomes a task", "9:20");
+      capOf([[at("call", 0.05), at("call", 1)]], "The call updates everything", "10:00");
+      if (HAS("doc")) capOf([[at("doc", 0.05), at("doc", 1)]], "An agent drafts the plan", "13:00");
+      if (HAS("search")) capOf([[at("search", 0.05), at("search", 1)]], "Find anything", "15:00");
+      capOf([[at("linked", 0.05), at("end", 0)]], "Everything's linked", "17:00");
+      typeCues(TASK, at("email", 0.42), at("email", 0.64));
+      if (HAS("doc")) { typeCues(DOC1, at("doc", 0.1), at("doc", 0.36), 0.08); typeCues(DOC2, at("doc", 0.4), at("doc", 0.62), 0.08); cue(at("doc", 0.7), "pop", 0.24); cue(at("doc", 0.82), "pop", 0.24); }
+      if (HAS("search")) typeCues("pricing", at("search", 0.12), at("search", 0.28));
+      rows.forEach((r, i) => cue(at("inbox", 0.08 + i * 0.1), "pop", 0.2));
+      cue(at("email", 0.14), "pop", 0.22); cue(at("email", 0.82), "chime", 0.38);
+      [0.12, 0.3, 0.46].forEach((f) => cue(at("call", f), "pop", 0.2));
+      [0.66, 0.78, 0.88].forEach((f) => cue(at("call", f), "tink", 0.32));
+      NODES.forEach((n, i) => cue(at("linked", 0.06 + i * 0.07), "pop", 0.2));
+      cue(at("linked", 0.72), "tink", 0.34); cue(at("end", 0.05), "chime", 0.4);
+    },
+    fx(t) {
+      const hv = P.hover;
+      bgA($("dy-r1"), 0.07 * win(t, at("inbox", 0.62), at("inbox", 1), 0.3, 0.3), hv); pressEl($("dy-r1"), t, at("inbox", 0.85), 0.03);
+      bgA($("dy-ct"), 0.1 * win(t, at("email", 0.12), at("email", 0.34), 0.3, 0.3), hv); pressEl($("dy-ct"), t, at("email", 0.3), 0.08);
+      typedSegs($("dy-tt"), [[TASK, at("email", 0.42), at("email", 0.64)]], t);
+      $("dy-tc").style.opacity = caretOn(t, t > B(at("email", 0.42)) && t < B(at("email", 0.66))) ? "1" : "0";
+      pressEl($("dy-create"), t, at("email", 0.75), 0.06);
+      fadeEl($("dy-l1"), t, [[at("call", 0.12), null]], 14); fadeEl($("dy-l2"), t, [[at("call", 0.3), null]], 14); fadeEl($("dy-sum"), t, [[at("call", 0.46), null]], 14);
+      [["dy-u1", 0.58], ["dy-u2", 0.7], ["dy-u3", 0.84]].forEach(([id, f]) => fadeEl($(id), t, [[at("call", f), null]], 14));
+      bgA($("dy-u1"), 0.06 + 0.06 * win(t, at("call", 0.62), at("call", 0.8), 0.4, 0.4), P.accentRGB);
+      if (HAS("doc")) {
+        const n1 = typedSegs($("dy-d1"), [[DOC1, at("doc", 0.1), at("doc", 0.36)]], t), n2 = typedSegs($("dy-d2"), [[DOC2, at("doc", 0.4), at("doc", 0.62)]], t);
+        const on1 = t > B(at("doc", 0.08)) && t < B(at("doc", 0.38)), on2 = t > B(at("doc", 0.38)) && t < B(at("doc", 0.66));
+        $("dy-c1").style.opacity = on1 && caretOn(t, n1 < DOC1.length) ? "1" : "0"; $("dy-c2").style.opacity = on2 && caretOn(t, n2 < DOC2.length) ? "1" : "0";
+        fadeEl($("dy-m1"), t, [[at("doc", 0.7), null]], 12); fadeEl($("dy-m2"), t, [[at("doc", 0.82), null]], 12);
+        $("dy-agent").style.opacity = (1 - 0.5 * win(t, at("doc", 0.9), null, 0.5)).toFixed(3);
+      }
+      if (HAS("search")) {
+        typedSegs($("dy-q"), [["pricing", at("search", 0.12), at("search", 0.28)]], t);
+        $("dy-qc").style.opacity = caretOn(t, t > B(at("search", 0.12)) && t < B(at("search", 0.3))) ? "1" : "0";
+        document.querySelectorAll("#world mark.hl").forEach((m) => m.style.setProperty("--hl", win(t, at("search", 0.4), null, 0.6).toFixed(3)));
+        bgA($("dy-s3"), 0.08 * win(t, at("search", 0.66), null, 0.4), P.accentRGB); pressEl($("dy-s3"), t, at("search", 0.82), 0.03);
+      }
+      paths.forEach((_, i) => { const p = sm((t - B(at("linked", 0.16 + i * 0.1))) / (0.8 * SPB)); $("dy-p" + i).style.strokeDashoffset = (1 - p).toFixed(4); });
+      if (MARK) MARK.style.opacity = (0.92 * (1 - win(t, at("end", 0), null, 0.6))).toFixed(3);
+    },
+  };
+};
+
+// =====================================================================
+// boot
+// =====================================================================
+// The soundtrack: the kit's stock track by default; ?music=score swaps in the kit's composed score (audio/score.py),
+// funk at the same 112 BPM, which needs no download. Its acts are 0-based beats: the drop lands on beat 2 (the first
+// action), the groove runs to bar 7, and it settles as the UI returns to frame 0. The shell's morphs get swells.
+const MUSIC = Q.get("music") === "score"
+  ? { track: "score", bpm: BPM, beats: BEATS, vibe: "funk", seed: "macro-day-" + CUT, score: { turn: 1, groove: 1, release: BEATS - 4, end: BEATS }, edits: [] }
+  : { track: "gimme-groove", bpm: BPM, beats: BEATS, vibe: "funk" };
+let AdFx = null;
+function init() {
+  const ad = ADS[AD]();
+  ad.wire();
+  AdFx = ad.fx;
+  // the wordmark
+  const m = document.createElement("div"); m.className = "mark"; m.innerHTML = lockup(LAY.markH, THEME.ink); MARK = m; m.style.top = px(LAY.markY - LAY.markH / 2); m.style.width = W + "px"; scr.appendChild(m);
+  CUES.sort((a, b) => a.t - b.t);
+}
+// ?hero=1 draws only the UI, on a transparent page, for poster heroes (no cursor, keycaps, captions or wordmark)
+const HERO = Q.has("hero");
+if (HERO) { document.documentElement.style.background = "transparent"; document.body.style.background = "transparent"; stage.style.background = "transparent"; $("bg").style.display = "none"; $("wmask").style.webkitMaskImage = $("wmask").style.maskImage = "none"; scr.style.display = "none";
+  // the poster sets its own shadow for its page, so drop the shell's (drawn for black)
+  document.head.insertAdjacentHTML("beforeend", "<style>.shell { box-shadow: inset 0 0 0 1.5px rgba(255,255,255,.055) !important; }</style>"); }
+function seek(tIn) {
+  const t = clamp(tIn, 0, T);
+  shellFx(t); camFx(t); layersFx(t); AdFx(t); keysFx(t); capsFx(t); cursorFx(t);
+}
+window.seek = seek; window.DURATION = T; window.CUES = CUES; window.B = B; window.MUSIC = MUSIC; window.FMT = [W, H];
+const fontsReady = ['400 20px "Inter"', '500 20px "Inter"', '600 20px "Inter"', '330 40px "display"', '400 20px "mono"'].map((f) => document.fonts.load(f));
+window.ready = Promise.all(fontsReady).then(() => document.fonts.ready)
+  .then(() => Promise.all([...document.images].map((i) => i.decode().catch(() => {}))))
+  .then(() => { init(); return Promise.all([...document.images].map((i) => i.decode().catch(() => {}))); })
+  .then(() => { seek(0); return true; });
+if (Q.has("render")) document.documentElement.classList.add("render");
+else {
+  const fit = () => { const k = Math.min(innerWidth / W, innerHeight / H); Object.assign(stage.style, { position: "fixed", left: "50%", top: "50%", transformOrigin: "50% 50%", transform: `translate(-50%,-50%) scale(${k})` }); };
+  addEventListener("resize", fit); fit();
+  const at = Q.has("t") ? parseFloat(Q.get("t")) : null;
+  window.ready.then(() => { if (at != null) { seek(at); return; } const t0 = performance.now(); const loop = () => { seek(((performance.now() - t0) / 1000) % T); requestAnimationFrame(loop); }; requestAnimationFrame(loop); });
+}
+</script>
+</body>
+</html>
