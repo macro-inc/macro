@@ -1,7 +1,6 @@
 import { useUserId } from '@core/context/user';
 import { fireAndForget } from '@core/util/fireAndForget';
 import { createEffect, on, Show, Suspense } from 'solid-js';
-import { match } from 'ts-pattern';
 import { decisionWakesAgent, type Review } from '../core/review';
 import { useReview, useReviewActions } from '../queries/reviews';
 import { ImportReview } from './import-review';
@@ -63,25 +62,32 @@ export function PersistedReview(props: {
       <Show when={query.isSuccess ? query.data : undefined}>
         {(record) => {
           const canAct = () => props.canAct && userId() === record().actingUser;
-          // A review's kind is fixed when it is saved.
-          return match(record())
-            .with({ kind: 'import' }, (review) => (
-              <ImportReview
-                review={review}
-                canAct={canAct()}
-                actions={decisions('import')}
-              />
-            ))
-            .with({ kind: 'email' }, { kind: 'calendar' }, (review) => (
-              <ReviewStack
-                review={review}
-                canAct={canAct()}
-                actions={decisions(review.kind)}
-              />
-            ))
-            .exhaustive();
+          // A review's kind is fixed when it is saved; polls keep its status live.
+          return (
+            <Show
+              when={importReview(record())}
+              fallback={
+                <ReviewStack
+                  review={record()}
+                  canAct={canAct()}
+                  actions={decisions(record().kind)}
+                />
+              }
+            >
+              {(review) => (
+                <ImportReview
+                  review={review()}
+                  canAct={canAct()}
+                  actions={decisions('import')}
+                />
+              )}
+            </Show>
+          );
         }}
       </Show>
     </Suspense>
   );
+}
+function importReview(review: Review) {
+  return review.kind === 'import' ? review : undefined;
 }
