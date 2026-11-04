@@ -458,6 +458,9 @@ export function NotificationsView(props: NotificationsViewProps) {
       },
     },
     activation: {
+      // A focused button, such as a stack's caret, answers Enter itself.
+      shouldHandleKeyEvent: (event) =>
+        !(event?.target instanceof Element && event.target.closest('button')),
       createMetadata: (intent) => ({ newSplit: intent === 'alternate' }),
       alternateDescription: t('nav.openInNewSplit'),
     },
