@@ -110,8 +110,11 @@ pub async fn create_user_profile(
 
     let user_id = sqlx::query!(
         r#"
-        INSERT INTO "User" ("id", "email", "organizationId", "macro_user_id")
-        VALUES ($1, $2, $3, $4)
+        INSERT INTO "User" ("id", "email", "organizationId", "macro_user_id", "isAgent")
+        VALUES (
+            $1, $2, $3, $4,
+            COALESCE((SELECT BOOL_OR(u."isAgent") FROM "User" u WHERE u.macro_user_id = $4), FALSE)
+        )
         RETURNING id
         "#,
         &user_profile_id,

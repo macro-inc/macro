@@ -53,3 +53,42 @@ async fn a_real_stripe_customer_remains_available_for_billing(pool: sqlx::PgPool
         (user_id, Some(customer_id.to_owned()))
     );
 }
+
+#[sqlx::test]
+async fn a_second_profile_inherits_agent_status(pool: sqlx::PgPool) {
+    let macro_user_id = uuid::Uuid::new_v4().to_string();
+    let email = "agent@signup.test";
+    create_user(
+        &pool,
+        &macro_user_id,
+        email,
+        email,
+        true,
+        "cus_agent_profile",
+        None,
+        None,
+        HashSet::new(),
+        true,
+    )
+    .await
+    .unwrap();
+
+    let second_email = "agent2@signup.test";
+    create_user_profile(&pool, &macro_user_id, second_email, None, HashSet::new())
+        .await
+        .unwrap();
+
+    let is_agent = sqlx::query_scalar!(
+        r#"SELECT "isAgent" FROM "User" WHERE email = $1"#,
+        second_email
+    )
+    .fetch_one(&pool)
+    .await
+    .unwrap();
+    assert!(is_agent);
+
+    let name = crate::user::get_user_name::get_user_name(&pool, &macro_user_id)
+        .await
+        .unwrap();
+    assert!(name.is_agent);
+}

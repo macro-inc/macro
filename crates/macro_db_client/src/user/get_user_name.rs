@@ -15,10 +15,11 @@ pub async fn get_user_name(db: &sqlx::PgPool, macro_user_id: &str) -> anyhow::Re
                 u.macro_user_id,
                 mui.first_name as "first_name?",
                 mui.last_name as "last_name?",
-                u."isAgent" as is_agent
+                BOOL_OR(u."isAgent") as "is_agent!"
             FROM "User" u
             LEFT JOIN macro_user_info mui ON mui.macro_user_id = u.macro_user_id
             WHERE u.macro_user_id = $1
+            GROUP BY u.macro_user_id, mui.first_name, mui.last_name
         "#,
         &macro_user_id
     )
