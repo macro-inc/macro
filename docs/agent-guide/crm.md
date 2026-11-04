@@ -221,8 +221,8 @@ history; Cancel changes nothing. While saving, duplicate actions and dismissal a
 blocked. A rejected save retains the prior state and an actionable retry. Only team
 admins/owners can archive or restore; other members see a disabled action.
 
-An archived record has a single **Archived** chip and a quiet borderless **Restore**
-action beside its name on desktop, grouped beneath it on phones. Its toolbar keeps
+An archived record has a single **Archived** chip and a standard secondary **Restore**
+button beside its name on desktop, grouped beneath it on phones. Its toolbar keeps
 Copy link and Details. Hover or focus the chip for the explanation; tap on phones.
 Escape dismisses it. Restore is a separate focus target. Verify 320px and 390px phone
 widths, a usable Restore touch target and focus after confirmation or cancellation.

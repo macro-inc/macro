@@ -91,7 +91,7 @@ function VisibilityControl(props: RecordVisibilityActionProps) {
         component={props.grouped ? ButtonGroup.Button : Button}
         ref={button}
         data-crm-visibility-record={props.recordId}
-        variant={props.hidden ? 'link' : 'ghost'}
+        variant={props.hidden ? 'secondary' : 'ghost'}
         size={
           props.hidden
             ? 'sm'

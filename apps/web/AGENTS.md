@@ -434,7 +434,7 @@ resolved session ID; keep the existing `AgentSessionProvider` subscription to
   replaces the default floating dock action through FloatRegion. See
   `src/features/crm/README.md` and `docs/agent-guide/crm.md` at the repo root.
   Put Archive beside Copy link for visible CRM records; put the Archived chip and
-  separate borderless Restore action in the identity heading for archived records.
+  separate secondary Restore button in the identity heading for archived records.
   Keep explanations on the chip and retain company-only Email sharing controls.
   Use the explicit Visible/Archived filter for People, Companies and company Team;
   reset its admin-only choice on account/team/role/list changes and preserve search.

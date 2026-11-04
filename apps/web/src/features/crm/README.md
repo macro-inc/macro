@@ -63,7 +63,7 @@ its own collection state to the shared collection renderer. Shared collection co
 CRM-specific state again.
 
 Visible contact and company toolbars put the archive-system icon beside Copy link.
-Archived identities group one Archived chip with a borderless Restore action; on
+Archived identities group one Archived chip with a standard secondary Restore button; on
 phones the group wraps beneath the name and Restore retains a 44px touch target.
 The chip owns hover/focus/tap explanation; Restore does not trigger that explanation.
 `RecordVisibilityAction` handles confirmation, pending, cancellation and retry.
