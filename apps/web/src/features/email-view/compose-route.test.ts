@@ -108,14 +108,15 @@ describe('new email in the Email view', () => {
   it('keeps the recipients a `?to=` link names', () => {
     const result = run(newEmail, {
       path: '/mail/new',
-      externalSearch: 'to=a@example.com,b@example.com',
+      externalSearch: 'to=a@example.com,b@example.com&to=c@example.com',
     });
     if (result?.type !== 'redirect') throw new Error('Expected a redirect');
     const url = new URL(result.to, window.location.origin);
     expect(url.pathname).toBe('/mail/new');
-    expect(url.searchParams.get('s0.email-compose.to')).toBe(
-      'a@example.com,b@example.com'
-    );
+    expect(url.searchParams.getAll('s0.email-compose.to')).toEqual([
+      'a@example.com,b@example.com',
+      'c@example.com',
+    ]);
   });
 
   it('reads /mail/new as a new email, not a thread', () => {
