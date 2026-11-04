@@ -70,6 +70,13 @@ Parsed message responses expose the draft generation captured in the same SQL sn
   (`label_present_before`, passed on by older writes given up). Code that
   stages, confirms or abandons a Gmail label write takes
   `lock_thread_label_writes` for its threads first.
+- The mailbox purge (`links::delete`) is bound by storage latency: a
+  500-message batch reads about as many pages as its rows, TOAST and child
+  rows occupy, so its time tracks per-read latency. A covering
+  `(link_id, thread_id, id)` index for its walk only moves the SELECT's heap
+  reads into the DELETE; it was benchmarked and rejected. A restarted purge
+  rescans the dead index entries the earlier run left until vacuum can remove
+  them.
 - Quote and alias camelCase columns to Rust field names; check
   `crates/macro_db_client/migrations/` for real column spelling, don't guess.
 - A Macro draft (no provider id, or a live `email_mailbox_drafts` row) puts its
