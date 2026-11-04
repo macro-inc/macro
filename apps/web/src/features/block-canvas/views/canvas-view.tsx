@@ -1,5 +1,5 @@
 import { useSidePanel } from '@components/app/side-panel';
-import { createImageActions } from '@core/component/Lightbox/createImageActions';
+import { createImageActions } from '@core/component/ImageActions';
 import { fireAndForget } from '@core/util/fireAndForget';
 import Copy from '@icon/system/regular/copy.svg';
 import DownloadSimple from '@icon/system/regular/download-simple.svg';
