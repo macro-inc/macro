@@ -262,6 +262,10 @@ rows, initiatives, ...) and get back a single unified, paginated result.
   one row comes back. Detail joins compare the bare uuid
   (`i.id = (CASE ... END)::uuid`); `i.id::text = t.id` read the table once per
   page row.
+- The service does not cap the page size: inbound adapters do (500 for client
+  requests). An active email or CRM-contact leg caps the merged page at 500,
+  because those services clamp their own pages; the other legs take any size
+  (the sync stream's id lists ask for 65,535).
 
 ## Related
 

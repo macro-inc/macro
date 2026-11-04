@@ -757,9 +757,9 @@ impl SoupRequest<Option<EntityFilterAst>> {
             hidden: extract.hidden,
             sort,
             cursor,
-            // Match the soup paginator's bounds so the CRM layer doesn't
-            // overfetch on an oversized client limit.
-            limit: self.limit.clamp(20, 500) as i64,
+            // At least the paginator's smallest useful page; the inbound
+            // adapters already bound the page size.
+            limit: i64::from(self.limit.max(20)),
         })
     }
 

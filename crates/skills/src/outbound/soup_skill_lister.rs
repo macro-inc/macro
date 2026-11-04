@@ -24,6 +24,9 @@ use uuid::Uuid;
 use crate::domain::model::{SkillError, SkillSummary};
 use crate::domain::ports::SkillLister;
 
+/// Largest Soup page a skill listing asks for.
+const MAX_SOUP_PAGE: u16 = 500;
+
 /// [`SkillLister`] implementation backed by the soup service, which enforces
 /// per-user access control on results. Lists documents with the `skill` sub
 /// type, most recently updated first.
@@ -95,7 +98,7 @@ impl<S: SoupService> SkillLister for SoupSkillLister<S> {
                     // is the only soup type that supports AST item filters (the
                     // unexpanded repo path rejects them as not implemented).
                     soup_type: SoupType::Expanded,
-                    limit,
+                    limit: limit.clamp(1, MAX_SOUP_PAGE),
                     cursor: SoupQuery::new_sort_simple(
                         SimpleSortMethod::UpdatedAt,
                         skill_only_filter(),

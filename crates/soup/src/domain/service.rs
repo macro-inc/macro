@@ -116,6 +116,11 @@ impl SoupCandidate {
     }
 }
 
+/// Largest page the email and CRM-contact legs return (their services clamp
+/// to it). The repository legs, channels, channel threads, calls, CRM
+/// companies and foreign entities take any page size.
+const CAPPED_LEG_PAGE: u16 = 500;
+
 /// Upper bound on candidate pages one notified-at page may consume while
 /// refilling after hydration drops (see `handle_notified_request`).
 const MAX_NOTIFIED_FILL_ROUNDS: usize = 4;
@@ -1868,7 +1873,9 @@ where
         } else {
             None
         };
-        let limit = req.limit.clamp(1, 500);
+        // Inbound adapters bound the page size (500 for client requests); the
+        // sync stream's id lists fetch larger internal pages.
+        let limit = req.limit.max(1);
 
         // CRM-scoped visibility (team-wide email scope or hidden CRM
         // companies) requires a team receipt. Without this check the CRM
@@ -1913,6 +1920,13 @@ where
             });
         }
         let sort_direction = req.sort_direction;
+        // A merged page larger than a leg's own cap would skip that leg's rows
+        // past its cap, so an active capped leg bounds the page.
+        let limit = if email_request.is_some() || crm_contact_request.is_some() {
+            limit.min(CAPPED_LEG_PAGE)
+        } else {
+            limit
+        };
 
         let output: Result<SoupOutput<R, SoupCandidate>, SoupErr> = match req.cursor {
             SoupQuery::Property(cursor) => {
