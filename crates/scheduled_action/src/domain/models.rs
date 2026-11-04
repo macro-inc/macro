@@ -428,6 +428,21 @@ pub struct InProgressExecution {
     pub resource: Option<ExecutionResource>,
 }
 
+/// How a routine's most recent finished run went, so lists can flag failures.
+#[derive(Serialize, Deserialize, Debug, Clone, Copy, PartialEq, Eq, ToSchema)]
+pub struct LastRun {
+    pub end_time: DateTime<Utc>,
+    pub is_success: bool,
+}
+
+/// A routine as its list shows it.
+#[derive(Debug, Clone)]
+pub struct ListedAction {
+    pub action: ScheduledAction,
+    /// None until the routine has finished a run.
+    pub last_run: Option<LastRun>,
+}
+
 #[derive(Serialize, Deserialize, Debug, Clone, ToSchema)]
 pub struct ActionExecutionRecord {
     #[schema(value_type = Option<String>, format = Uuid)]

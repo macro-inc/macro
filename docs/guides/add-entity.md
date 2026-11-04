@@ -71,10 +71,9 @@ until the backend is complete.
   if yours does, widen the constraint in a migration.
 - Regenerate every client that embeds `EntityType` (storage, cognition,
   connection, notification, properties, search): `cd apps/web && bun run gen-api`,
-  then `cd packages/sdk && just update-generated`. Run
-  `cd apps/web && bun run gen-dynamic-ui-schema` too; it regenerates
-  `crates/ai_tools/src/display_results/schema.generated.json`, which embeds
-  `EntityType`.
+  then `cd packages/sdk && just update-generated`. If views should show the
+  kind, add it to `EntityType` in `crates/dynamic_ui/src/view.rs` and run
+  `cd apps/web && just gen-dynamic-ui-types`.
 
 ## 2. Schema and migrations
 

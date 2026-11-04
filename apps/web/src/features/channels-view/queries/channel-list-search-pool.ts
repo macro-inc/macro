@@ -17,6 +17,7 @@ export function useChannelListSearchPool() {
       type: 'channel',
       name: channel.agent_dm?.name ?? (channel.name || 'Unknown Channel'),
       channelType: channel.channel_type,
+      teamId: channel.team_id ?? undefined,
       ownerId: channel.owner_id,
       isParticipant: channel.is_participant,
       participantIds: channel.participants.map(

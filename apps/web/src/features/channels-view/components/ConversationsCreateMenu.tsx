@@ -24,6 +24,7 @@ export function ConversationsCreateMenu(props: {
 
   return (
     <Dropdown
+      sameWidth={props.presentation === 'sidebar'}
       placement={
         props.presentation === 'sidebar' ? 'bottom-start' : 'bottom-end'
       }

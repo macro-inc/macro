@@ -17,6 +17,7 @@ import { INITIAL_CACHE_REVISION } from '@graphql-cache/index';
 import type { HydrationSearchChanges } from '@graphql-cache/protocol';
 import type { CachedGraphqlChannel } from '@queries/channel/graphql';
 import type { HistoryItem } from '@queries/history/types';
+import type { ScheduledAction } from '@service-scheduled-action/generated/schemas';
 import type { ApiChannelWithLatest } from '@service-storage/channel-list-types';
 import type { ListedDatabase } from '@service-storage/generated/schemas/listedDatabase';
 import { render } from '@solidjs/testing-library';
@@ -71,6 +72,7 @@ const mocks = vi.hoisted(() => ({
   crmContacts: [] as CrmContactEntity[],
   initiatives: [] as InitiativeEntity[],
   databases: [] as ListedDatabase[],
+  schedules: [] as ScheduledAction[],
   crmEnabled: (): boolean => true,
   projectsEnabled: (): boolean => true,
   graphqlEnabled: (): boolean => true,
@@ -204,6 +206,9 @@ vi.mock('@queries/storage/databases', () => ({
 vi.mock('@queries/storage/forms', () => ({
   useFormsQuery: () => ({ data: [], isSuccess: true }),
 }));
+vi.mock('@app/features/routines/queries/schedules', () => ({
+  useSchedulesQuery: () => ({ data: mocks.schedules, isSuccess: true }),
+}));
 vi.mock('@service-storage/util/filename', () => ({
   formatDocumentName: (name: string) => name,
 }));
@@ -260,6 +265,7 @@ beforeEach(() => {
   mocks.crmContacts = [];
   mocks.initiatives = [];
   mocks.databases = [];
+  mocks.schedules = [];
   mocks.crmEnabled = () => true;
   mocks.projectsEnabled = () => true;
   mocks.graphqlEnabled = () => true;
@@ -1660,6 +1666,7 @@ describe('database command discovery', () => {
           owner_id: 'me',
           created_at: '2026-09-01T00:00:00Z',
           trashed_at: null,
+          project_id: null,
         },
         grant: 'owner',
         tables: [],
@@ -1677,6 +1684,32 @@ describe('database command discovery', () => {
       data: { type: 'database', name: 'Book Organizer' },
     });
     expect(mocks.history).toEqual([]);
+  });
+});
+
+describe('routine command discovery', () => {
+  it('finds a routine by name without any Soup history or cache hits', async () => {
+    mocks.schedules = [
+      {
+        id: 'weekly-digest',
+        name: 'Weekly digest',
+        owner: 'me',
+        enabled: true,
+        created_at: '2026-09-01T00:00:00Z',
+        updated_at: '2026-09-02T00:00:00Z',
+      } as ScheduledAction,
+    ];
+    const list = setup((source) =>
+      source.useList({
+        buckets: ['routine'],
+        searchTerm: () => 'digest',
+      })
+    );
+    await vi.waitFor(() => expect(list.items()).toHaveLength(1));
+    expect(list.items()[0]).toMatchObject({
+      bucket: 'routine',
+      data: { type: 'routine', name: 'Weekly digest' },
+    });
   });
 });
 

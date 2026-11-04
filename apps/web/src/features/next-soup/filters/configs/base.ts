@@ -45,6 +45,8 @@ const _isFolder = { exclude: { folderId: [NIL_UUID] } };
 
 export type FilterContext = {
   userId?: string;
+  /** Explicit, authorized removed-People scope; absent outside that view. */
+  crmRemovedPeopleTeamId?: string;
   notificationSource?: NotificationSource;
   assignees?: string[];
   /** Selected company Owner ids for the Customers view's owner filter. */

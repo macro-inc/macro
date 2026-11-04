@@ -91,6 +91,20 @@ entity's own detail, so there's nothing cached to invalidate.
 
 ***
 
+### isAgent()
+
+> **isAgent**(): `Promise`\<`boolean`\>
+
+Whether this user is an agent account rather than a person.
+
+#### Returns
+
+`Promise`\<`boolean`\>
+
+`true` for an agent account.
+
+***
+
 ### name()
 
 > **name**(): `Promise`\<`string` \| `undefined`\>

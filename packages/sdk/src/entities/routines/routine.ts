@@ -79,7 +79,11 @@ export interface RoutineOptions {
    * override for `agent`. Set `model`, `agent`, or both.
    */
   model?: RoutineModelId;
-  /** Agent to run the task. Set `model`, `agent`, or both. */
+  /**
+   * Agent to run the task: a built-in agent, or one the caller owns or can
+   * use, including one on a self-hosted runtime. Access is checked on save and
+   * again on every run. Set `model`, `agent`, or both.
+   */
   agent?: Agent;
   /** Whether triggers can start executions. Defaults to true on creation. */
   enabled?: boolean;

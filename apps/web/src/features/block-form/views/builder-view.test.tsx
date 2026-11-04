@@ -100,6 +100,8 @@ function rsvp(): FormDetail {
       status: 'open',
       closesAt: null,
       tallyVisible: false,
+      responsesVisible: false,
+      anonymous: false,
       confirmationMessage: '',
       branding: { logoFileId: null, coverFileId: null, accentColor: null },
       submittedColumnId: null,

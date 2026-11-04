@@ -21,11 +21,13 @@ import { GithubPullRequestNamespace } from './entities/github-pull-requests/name
 import { HarnessNamespace } from './entities/harnesses/namespace';
 import { ImagesNamespace } from './entities/images/namespace';
 import { InitiativeNamespace } from './entities/initiatives/namespace';
+import { MeNamespace } from './entities/me/namespace';
 import { MeetingNamespace } from './entities/meetings/namespace';
 import { NotificationNamespace } from './entities/notifications/namespace';
 import { PinsNamespace } from './entities/pins/namespace';
 import { ProjectNamespace } from './entities/projects/namespace';
 import { PropertiesNamespace } from './entities/properties/namespace';
+import { ReferralNamespace } from './entities/referrals/namespace';
 import { RoutineNamespace } from './entities/routines/namespace';
 import { TaskNamespace } from './entities/tasks/namespace';
 import { TeamNamespace } from './entities/teams/namespace';
@@ -73,6 +75,7 @@ export {
   type FormSectionPlacement,
   type FormSubmissionOutcome,
   type MyFormResponse,
+  type SavedFormResponse,
 } from './entities/forms/form';
 export { FormOption, FormQuestion } from './entities/forms/question';
 export { FormResponse } from './entities/forms/response';
@@ -155,6 +158,8 @@ export class Macro<T extends MacroOpts = MacroOpts> {
 
   /** Generate images with AI and attach them to messages. */
   readonly images: ImagesNamespace;
+  /** Your own profile: set your name and profile picture. */
+  readonly me: MeNamespace;
 
   readonly notifications: NotificationNamespace;
 
@@ -163,6 +168,9 @@ export class Macro<T extends MacroOpts = MacroOpts> {
   readonly projects: ProjectNamespace;
 
   readonly properties: PropertiesNamespace;
+
+  /** Share the caller's referral link and email invites to join Macro. */
+  readonly referrals: ReferralNamespace;
 
   readonly tasks: TaskNamespace;
 
@@ -194,6 +202,7 @@ export class Macro<T extends MacroOpts = MacroOpts> {
     this.agents = new AgentNamespace(client);
     this.initiatives = new InitiativeNamespace(client);
     this.apiKeys = new ApiKeyNamespace(client);
+    this.me = new MeNamespace(client);
     this.harnesses = new HarnessNamespace(client);
     this.meetings = new MeetingNamespace(client);
     this.githubPullRequests = new GithubPullRequestNamespace(client);
@@ -219,6 +228,7 @@ export class Macro<T extends MacroOpts = MacroOpts> {
     this.pins = new PinsNamespace(client);
     this.projects = new ProjectNamespace(client);
     this.properties = new PropertiesNamespace(client);
+    this.referrals = new ReferralNamespace(client);
     this.tasks = new TaskNamespace(client);
     this.teams = new TeamNamespace(client);
     this.users = new UserNamespace(client);
@@ -244,7 +254,12 @@ export class Macro<T extends MacroOpts = MacroOpts> {
   }
 }
 
-export type { FoldedAgentSessionLog } from './entities/agent-sessions/agent-session';
+export type {
+  ArchiveCause,
+  AutoArchiveOverrides,
+  FoldedAgentSessionLog,
+  SessionAutoArchive,
+} from './entities/agent-sessions/agent-session';
 export type { CodeResult } from './entities/agent-sessions/code-execution';
 export {
   AgentConversation,
@@ -253,10 +268,12 @@ export {
 export type {
   CreateReviewOptions,
   ReviewCalendarDraft,
+  ReviewDraft,
   ReviewEmailDraft,
 } from './entities/agent-sessions/review';
 export { ReviewItem, SessionReview } from './entities/agent-sessions/review';
 export { ToolApproval } from './entities/agent-sessions/tool-approval';
+export type { SessionView } from './entities/agent-sessions/view';
 export { Agent, type AgentOptions } from './entities/agents/agent';
 export { UserApiKey } from './entities/api-keys/api-key';
 export { ChannelActivity } from './entities/channels/activity';
@@ -267,6 +284,7 @@ export {
   PipelineColumn,
   PipelineRow,
   PipelineTable,
+  PipelineView,
 } from './entities/crm/pipeline';
 export type {
   DatabaseQueryOptions,
@@ -309,10 +327,16 @@ export {
   type InitiativeOptions,
 } from './entities/initiatives/initiative';
 export type { InitiativeSummary } from './entities/initiatives/namespace';
+export {
+  MeNamespace,
+  type UpdateMeOptions,
+  type UploadProfilePictureOptions,
+} from './entities/me/namespace';
 export { Meeting } from './entities/meetings/meeting';
 export type { TimelineOptions } from './entities/messages/thread';
 export { type MessageParent, MessageThread } from './entities/messages/thread';
 export type { EntityReference } from './entities/reference';
+export type { ReferralLink } from './entities/referrals/namespace';
 export type {
   RoutineEventFilter,
   RoutineTriggerOptions,
@@ -326,6 +350,7 @@ export {
 export { AccessRequest, EntityAccess } from './entities/sharing/access';
 export type { SharePermissionOptions } from './entities/sharing/permissions';
 export type { TaskSummary } from './entities/tasks/task';
+export { TeamInvite } from './entities/teams/invite';
 export { WhatsAppAccount } from './entities/whatsapp/account';
 export {
   WhatsAppChat,

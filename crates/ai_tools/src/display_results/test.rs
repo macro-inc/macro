@@ -1,9 +1,6 @@
 use super::DisplayResults;
 use crate::{AiHost, tools_for};
-use ai_toolset::{
-    ToolSet,
-    schema::{frontend_schemas_builder, generate_validated_input_schema},
-};
+use ai_toolset::{ToolSet, schema::generate_validated_input_schema};
 use serde_json::{Value, json};
 
 fn assert_local_refs_resolve(root: &Value, node: &Value) {
@@ -39,12 +36,8 @@ fn provider_schema_contains_the_recursive_view_contract_at_the_tool_root() {
     assert_eq!(schema["properties"]["view"]["required"], json!(["widgets"]));
     assert_local_refs_resolve(&schema, &schema);
 
-    let reference = schema["properties"]["view"]["properties"]["widgets"]["items"]["$ref"]
-        .as_str()
-        .expect("recursive widget reference");
-    let variants = schema
-        .pointer(reference.strip_prefix('#').unwrap())
-        .and_then(|widget| widget["anyOf"].as_array())
+    let variants = schema["properties"]["view"]["properties"]["widgets"]["items"]["anyOf"]
+        .as_array()
         .expect("widget variants");
     let names = variants
         .iter()
@@ -52,36 +45,44 @@ fn provider_schema_contains_the_recursive_view_contract_at_the_tool_root() {
         .collect::<Vec<_>>();
     assert_eq!(
         names,
-        ["md", "timeline", "list", "channelMessage", "container"]
+        [
+            "md",
+            "timeline",
+            "list",
+            "channelMessage",
+            "events",
+            "cards",
+            "tags",
+            "container"
+        ]
     );
-    let container = variants.last().unwrap();
-    assert_eq!(
-        container["properties"]["children"]["items"]["$ref"],
-        reference
+    let children = &variants[7]["properties"]["children"]["items"]["$ref"];
+    assert!(
+        children.is_string(),
+        "a container's children refer back to the widget"
     );
 }
 
 #[test]
-fn agent_sessions_advertise_the_same_complete_contract_as_chat() {
-    for host in [AiHost::Chat, AiHost::AgentSession] {
-        let toolset = tools_for(host);
-        let display = toolset
-            .toolset
-            .request_schemas()
-            .expect("request schemas")
-            .into_iter()
-            .find(|tool| tool.name == "DisplayResults")
-            .expect("DisplayResults available");
-        let schema = serde_json::to_value(display.schema).expect("serialize schema");
-        assert!(schema["properties"]["view"]["properties"]["widgets"].is_object());
-        assert!(schema["$defs"].is_object());
-        assert_local_refs_resolve(&schema, &schema);
-    }
+fn chat_advertises_the_complete_contract() {
+    let toolset = tools_for(AiHost::Chat);
+    let display = toolset
+        .toolset
+        .request_schemas()
+        .expect("request schemas")
+        .into_iter()
+        .find(|tool| tool.name == "DisplayResults")
+        .expect("DisplayResults available");
+    let schema = serde_json::to_value(display.schema).expect("serialize schema");
+    assert!(schema["properties"]["view"]["properties"]["widgets"].is_object());
+    assert!(schema["$defs"].is_object());
+    assert_local_refs_resolve(&schema, &schema);
 }
 
 #[test]
-fn display_results_is_omitted_on_hosts_without_a_view_renderer() {
-    for host in [AiHost::ChannelBot, AiHost::Mcp] {
+fn display_results_is_chat_only() {
+    // Agent sessions present views with the harness's execution.views.present instead.
+    for host in [AiHost::AgentSession, AiHost::ChannelBot, AiHost::Mcp] {
         let toolset = tools_for(host);
         assert!(
             !toolset.toolset.tools.contains_key("DisplayResults"),
@@ -95,17 +96,13 @@ fn display_results_is_omitted_on_hosts_without_a_view_renderer() {
 }
 
 #[test]
-fn frontend_wire_schema_leaves_view_validation_to_the_renderer() {
-    let schemas = frontend_schemas_builder()
-        .merge(&tools_for(AiHost::Chat))
-        .build()
-        .to_json_pretty()
-        .expect("serialize frontend schemas");
-    let schemas: Value = serde_json::from_str(&schemas).expect("frontend schemas JSON");
-    let json = &schemas["$defs"]["DisplayResults"];
-    assert_eq!(json["title"], "DisplayResults");
-    assert_eq!(json["required"], json!(["view"]));
-    assert!(json["properties"]["view"]["properties"].is_null());
-    assert!(json["properties"]["view"]["type"].is_null());
-    assert!(json.get("$defs").is_none());
+fn a_view_that_does_not_decode_fails_the_call_without_echoing_it() {
+    let error = serde_json::from_value::<DisplayResults>(json!({
+        "view": { "widgets": [{ "type": "md", "markdown": "private text" }, { "type": "chart" }] }
+    }))
+    .expect_err("an unknown widget type");
+    assert_eq!(
+        error.to_string(),
+        "view.widgets[1].type should be one of `md`, `timeline`, `list`, `channelMessage`, `events`, `cards`, `tags`, `container`"
+    );
 }

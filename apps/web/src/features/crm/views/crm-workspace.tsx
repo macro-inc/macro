@@ -21,6 +21,7 @@ import { SoupViewContextSort } from '@app/features/next-soup/soup-view/filters-b
 import { UnifiedFilterDropdown } from '@app/features/next-soup/soup-view/filters-bar/unified-filter-dropdown';
 import { useFilterRefinements } from '@app/features/next-soup/soup-view/filters-bar/use-filter-refinements';
 import { useFeatureFlag } from '@app/lib/analytics/posthog';
+import { t } from '@app/lib/i18n';
 import { usePreference } from '@app/preferences/use-preference';
 import { HeaderActionGroup } from '@components/app/HeaderActionGroup';
 import { SplitPanel } from '@components/app/split-panel';
@@ -57,6 +58,10 @@ import { CrmCreateMenu } from '../components/crm-create-menu';
 import { CrmMobileTabs } from '../components/crm-mobile-tabs';
 import { CrmSidebar } from '../components/crm-sidebar';
 import { CrmListError, CrmListSkeleton } from '../components/list-state';
+import {
+  PeopleDisplayMenu,
+  RemovedPeopleNotice,
+} from '../components/people-display-menu';
 import { PipelineDialog } from '../components/pipeline-dialog';
 import { PipelineSidebar } from '../components/pipeline-sidebar';
 import { useCrmContext } from '../context/crm-context';
@@ -409,6 +414,9 @@ export function CrmWorkspaceView(props: {
       : 'active';
   };
   const title = () =>
+    (view.peopleVisibility.showRemoved()
+      ? t('viewMenus.removedPeople')
+      : undefined) ??
     activeList()?.name ??
     [...CRM_RECORDS, ...CRM_ACTIVITY_TABS].find(
       (record) => record.id === activeRecord()
@@ -759,6 +767,7 @@ export function CrmWorkspaceView(props: {
                         value={peopleSearch()}
                         onValueChange={searchPeople}
                       />
+                      <PeopleDisplayMenu visibility={view.peopleVisibility} />
                       <Button
                         variant="secondary"
                         class="ml-auto shrink-0"
@@ -805,6 +814,9 @@ export function CrmWorkspaceView(props: {
                     </Show>
                   </HeaderActionGroup>
                 </Show>
+                <Show when={peopleActive()}>
+                  <PeopleDisplayMenu visibility={view.peopleVisibility} />
+                </Show>
                 {toolbarCreateMenu()}
                 <CrmHeaderSearch
                   label={peopleActive() ? 'Search people' : 'Search companies'}
@@ -821,6 +833,11 @@ export function CrmWorkspaceView(props: {
                   <CrmFilterChips onReset={() => navigate(active())} />
                 </Suspense>
               </Show>
+            </Show>
+            <Show when={view.peopleVisibility.showRemoved()}>
+              <RemovedPeopleNotice
+                onShowActive={() => view.peopleVisibility.setShowRemoved(false)}
+              />
             </Show>
             {/* The header above already clears the status bar on touch. */}
             <div class="flex min-h-0 min-w-0 flex-1 flex-col [--mobile-content-inset-top:0px]">
