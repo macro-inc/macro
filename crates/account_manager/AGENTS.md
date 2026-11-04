@@ -41,8 +41,10 @@ claims a credential once. The managed account revokes it from settings.
   `"UserApiKey"`, so it never appears in the API Keys tab or counts toward its
   limit. Only its hash is stored.
 - Every route here refuses a manager credential, and so does each route using
-  `AccountHolderOrInternal`. A new route that mints credentials, changes who can
-  sign in, or deletes the account must use that policy too.
+  `AccountHolderOrInternal`: API keys, API token exchange, bot tokens, harness
+  pairing approval, account links and merges, and account deletion. A new route
+  that mints a credential that outlives its request, changes who can sign in, or
+  deletes the account must use that policy too.
 - The card only carries the grant id, because anyone can type message markup. It
   reads everything it shows from the server, which answers only the two accounts.
 - Revocation stops the credential immediately. It doesn't undo what the manager

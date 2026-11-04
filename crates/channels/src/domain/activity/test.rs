@@ -1,7 +1,7 @@
-use bot_id::BotId;
 use ::activity::Action;
 use ::activity::Actor;
 use ::activity::EntityType;
+use bot_id::BotId;
 use chrono::Utc;
 use macro_user_id::user_id::MacroUserIdStr;
 use uuid::Uuid;
