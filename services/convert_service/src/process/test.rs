@@ -261,6 +261,29 @@ mod legacy_upgrade {
 
     #[test]
     #[ignore = "needs LibreOfficeKit; see module docs"]
+    fn conversions_leave_no_libreoffice_scratch_files_outside_the_job_folder() {
+        // The worker only removes the job folder, and a child killed at its
+        // timeout never runs LibreOffice's own scratch cleanup.
+        let scratch = || {
+            let mut names: Vec<_> = std::fs::read_dir(std::env::temp_dir())
+                .unwrap()
+                .filter_map(|entry| entry.ok())
+                .map(|entry| entry.file_name().to_string_lossy().into_owned())
+                .filter(|name| name.starts_with("lu") && name.ends_with(".tmp"))
+                .collect();
+            names.sort();
+            names
+        };
+        let before = scratch();
+
+        let docx = upgrade("memo.doc", FileType::Doc, FileType::Docx);
+        convert_bytes(&docx, FileType::Docx, FileType::Pdf);
+
+        assert_eq!(scratch(), before);
+    }
+
+    #[test]
+    #[ignore = "needs LibreOfficeKit; see module docs"]
     fn upgraded_docx_still_exports_to_pdf() {
         // The DOCX pipeline converts every Word upload to PDF, including upgrades.
         let docx = upgrade("memo.doc", FileType::Doc, FileType::Docx);

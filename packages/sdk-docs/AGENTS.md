@@ -24,9 +24,6 @@
 - Nothing generated is committed: `dist/docs/{markdown,html}` are build
   outputs. Edit the SDK source; retain links to generated API request/response
   types.
-- `reference/` is an unused, no longer maintained copy awaiting deletion in its
-  own pull request (its 5,500 files exceed GitHub's pull request limits); do
-  not regenerate or read it.
 - TypeDoc and its Markdown plugin must use the same TypeDoc runtime instance.
   The workspace also contains other versions; preserve the peer resolution in
   `src/render.ts` and test actual generation after dependency changes.

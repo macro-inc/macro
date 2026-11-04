@@ -170,6 +170,9 @@ boosts (Cmd+K's channel and DM boosts) order rows within those groups and never
 lift a row past a better name match. The one exception: Cmd+K then keeps Macro
 users and DMs ahead of CRM contacts across the people positions, whatever their
 match. Tune name relevance there for every menu.
+Soup's local search pool (`createSearchState`) stays lazy: it builds only when
+local search has text. Measure Quick Access ranking at scale with the
+[scale fixture](src/features/command/browser-test/README.md).
 Cmd+K and mobile name search widen the first group: a query equal to the first
 word of a DM or person name counts as exact, so a person's first name reaches
 their full-name DM. `commaSeparatedChannelMatch` (Cmd+K, mobile name search,
@@ -1145,3 +1148,10 @@ of posting, multi-paragraph anchors, saved ranges, and cancellation during posti
   static `data-input-surface` categories on editor/field owners, never caller
   labels.
 - Keep record names, addresses, answers and query text out of attributes.
+
+### Entity rows
+
+- Keep `ListEntity` layout fields independently reactive (getters, not a
+  dynamic object spread); a spread makes a selection change revisit every
+  unrelated layout input. Profile with the
+  [entity collection fixture](src/features/entity/browser-test/README.md).
