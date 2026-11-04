@@ -69,6 +69,22 @@ web app and uses it like any other key. It can set up its profile with
 `macro.me.update({ name, profilePicture: await macro.me.uploadProfilePicture(bytes, options) })`
 and mint more keys with `macro.apiKeys.create(name)`.
 
+#### Account managers
+
+An agent account can manage another account: either side asks in their DM, and the
+other side approves.
+
+```ts
+const grant = await macro.accountManagers.askToManage(user); // or askToBeManagedBy(agent)
+// Once the other side approves, the manager gets the token, once:
+const token = await grant.claimToken();
+```
+
+The token is an API key for the managed account, with full access except its
+managers, API keys and other credentials, sign-in, and deleting the account. It
+lasts until either side calls `grant.revoke()`, or the managed account revokes it
+in Settings → Account Managers.
+
 #### Bot token
 
 ```ts

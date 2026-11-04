@@ -2,6 +2,7 @@ import type { MacroOpts } from './config';
 import { AgentSessionNamespace } from './entities/agent-sessions/namespace';
 import { AgentNamespace } from './entities/agents/namespace';
 import { AiNamespace } from './entities/ai/namespace';
+import { AccountManagerNamespace } from './entities/account-managers/namespace';
 import { ApiKeyNamespace } from './entities/api-keys/namespace';
 import { BotsNamespace } from './entities/bots/namespace';
 import { CalendarNamespace } from './entities/calendar/namespace';
@@ -109,6 +110,9 @@ export class Macro<T extends MacroOpts = MacroOpts> {
   /** apiKeys resources and operations. */
   readonly apiKeys: ApiKeyNamespace;
 
+  /** accountManagers resources and operations. */
+  readonly accountManagers: AccountManagerNamespace;
+
   /** harnesses resources and operations. */
   readonly harnesses: HarnessNamespace;
 
@@ -202,6 +206,7 @@ export class Macro<T extends MacroOpts = MacroOpts> {
     this.agents = new AgentNamespace(client);
     this.initiatives = new InitiativeNamespace(client);
     this.apiKeys = new ApiKeyNamespace(client);
+    this.accountManagers = new AccountManagerNamespace(client);
     this.me = new MeNamespace(client);
     this.harnesses = new HarnessNamespace(client);
     this.meetings = new MeetingNamespace(client);
