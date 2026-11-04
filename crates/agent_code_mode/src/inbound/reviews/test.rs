@@ -2,6 +2,11 @@ use super::PresentReview;
 use ai_toolset::schema::generate_validated_input_schema;
 use serde_json::json;
 
+#[test]
+fn review_toolset_passes_schema_validation() {
+    let _ = super::toolset();
+}
+
 /// Anthropic rejects every request whose tools include a root `oneOf`,
 /// `allOf` or `anyOf`, and PresentReview ships to every harness.
 #[test]
