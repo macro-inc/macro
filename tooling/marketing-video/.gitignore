@@ -11,3 +11,5 @@ vo/cache/
 audio/blocks-*.json
 /macro-blocks*.mp4
 audio/__pycache__/
+/macro-ui-*.mp4
+audio/ui-*.json
