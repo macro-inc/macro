@@ -148,6 +148,8 @@ async fn drafts_an_event_routine_with_named_code_and_tells_the_model_the_workspa
     assert!(instructions.contains(&format!(r#"{{"name":"eng","id":"{LABEL}"}}"#)));
     assert!(instructions.contains("TaskNamespace methods for: label invoices"));
     assert!(instructions.contains("\"timezone\":\"America/New_York\""));
+    // In the scheduler's cron, weekday 1 is Sunday: "1-5" would skip Friday.
+    assert!(instructions.contains("weekdays named MON-SUN"));
     assert_eq!(
         schema["properties"]["steps"]["items"]["properties"]["type"]["enum"],
         json!(["code", "agent"])

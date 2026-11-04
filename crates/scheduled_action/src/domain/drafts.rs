@@ -760,7 +760,7 @@ impl<Code: RoutineCode, Model: DraftModel> Drafter<'_, Code, Model> {
 
 Triggers:
 - {{\"type\":\"event\",\"events\":[...],\"ids\"?: [ids of the specific channels, tasks or documents it watches, from the lists below; omit to watch all],\"condition\"?: \"yes/no question the triggering item must answer yes\"}}. Events: {events}.
-- {{\"type\":\"cron\",\"expression\":\"six-field cron: sec min hour day month weekday\",\"timezone\":\"{timezone}\"}} for repeating schedules.
+- {{\"type\":\"cron\",\"expression\":\"six-field cron: sec min hour day month weekday, weekdays named MON-SUN (numbers start at 1 = Sunday)\",\"timezone\":\"{timezone}\"}} for repeating schedules.
 - {{\"type\":\"once\",\"at\":\"RFC3339 timestamp\"}} for a single future run. Now is {now} ({timezone}).
 
 Steps run in order:
