@@ -414,13 +414,13 @@ mod code_mode {
     }
 
     #[derive(Deserialize, schemars::JsonSchema)]
-    #[schemars(title = "Subagent", description = "Delegate a task.")]
-    struct Subagent {}
-    impl ToolAnnotated for Subagent {
+    #[schemars(title = "StartAgentSession", description = "Delegate a task.")]
+    struct StartAgentSession {}
+    impl ToolAnnotated for StartAgentSession {
         const ANNOTATIONS: ToolAnnotations = ToolAnnotations::destructive("Delegate a task");
     }
     #[async_trait::async_trait]
-    impl ai_toolset::AsyncTool<()> for Subagent {
+    impl ai_toolset::AsyncTool<()> for StartAgentSession {
         type Output = serde_json::Value;
         async fn call(
             &self,
@@ -436,7 +436,7 @@ mod code_mode {
         "ListCalendarEvents",
         "NameSearch",
         "ReadContent",
-        "Subagent",
+        "StartAgentSession",
     ];
     const CHATGPT_TOOLS: [&str; 4] = [
         "EditDocument",
@@ -452,7 +452,7 @@ mod code_mode {
                 .add_tool::<ReadContent, ()>()
                 .add_tool::<EditDocument, ()>()
                 .add_tool::<ListCalendarEvents, ()>()
-                .add_tool::<Subagent, ()>(),
+                .add_tool::<StartAgentSession, ()>(),
         )
     }
 
@@ -590,7 +590,7 @@ mod code_mode {
             UNFLAGGED,
             mcp_client("ChatGPT"),
             "tools/call",
-            serde_json::json!({"name": "Subagent", "arguments": {}}),
+            serde_json::json!({"name": "StartAgentSession", "arguments": {}}),
         )
         .await;
         assert!(
@@ -605,7 +605,7 @@ mod code_mode {
             UNFLAGGED,
             mcp_client("Claude"),
             "tools/call",
-            serde_json::json!({"name": "Subagent", "arguments": {}}),
+            serde_json::json!({"name": "StartAgentSession", "arguments": {}}),
         )
         .await;
         assert!(other.get("error").is_none(), "{other}");

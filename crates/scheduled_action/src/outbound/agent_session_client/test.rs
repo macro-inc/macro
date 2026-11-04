@@ -145,6 +145,8 @@ async fn all_commands_use_internal_auth_and_domain_wire_contract_at_both_prefixe
             ..selection()
         };
         let prepare = PrepareRoutineSession {
+            repo_url: None,
+            repo_branch: None,
             selection: selection.clone(),
             session_id: identity.session_id,
             source: SessionSource::Routine,
@@ -252,6 +254,8 @@ async fn typed_sanitized_domain_errors_are_preserved() {
         let client = AgentSessionClient::new(&server.url, KEY).unwrap();
         let error = client
             .prepare(PrepareRoutineSession {
+                repo_url: None,
+                repo_branch: None,
                 selection: selection(),
                 session_id: identity().session_id,
                 source: SessionSource::User,

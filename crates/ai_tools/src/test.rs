@@ -35,8 +35,8 @@ fn connector_discovery_is_eager_only_in_agent_sessions() {
 }
 
 #[test]
-fn subagent_toolset_passes_schema_validation() {
-    let tools = subagent_toolset();
+fn base_toolset_passes_schema_validation() {
+    let tools = base_toolset();
     for name in [
         "ListDatabases",
         "DescribeDatabase",
@@ -112,8 +112,8 @@ fn no_tool_schema_has_a_ref_loop_of_required_fields() {
                 .map(|tool| (tool.name.clone(), tool.schema.clone())),
         );
     }
-    let subagent = subagent_toolset().request_schemas().unwrap_or_default();
-    schemas.extend(subagent.into_iter().map(|tool| (tool.name, tool.schema)));
+    let base = base_toolset().request_schemas().unwrap_or_default();
+    schemas.extend(base.into_iter().map(|tool| (tool.name, tool.schema)));
     assert!(schemas.iter().any(|(name, _)| name == "DisplayResults"));
     for (name, schema) in schemas {
         assert_eq!(
@@ -121,36 +121,6 @@ fn no_tool_schema_has_a_ref_loop_of_required_fields() {
             None,
             "{name}"
         );
-    }
-}
-
-#[test]
-fn coding_dispatch_is_available_to_every_host_but_not_internal_subagents() {
-    for host in [
-        AiHost::Chat,
-        AiHost::AgentSession,
-        AiHost::ChannelBot,
-        AiHost::Mcp,
-    ] {
-        let tools = tools_for(host);
-        for name in [
-            "ListCodingAgents",
-            "ListAgentUpdates",
-            "DispatchCodingAgent",
-        ] {
-            assert!(tools.toolset.tools.contains_key(name), "{host:?}: {name}");
-        }
-        for name in ["ListCodingAgents", "DispatchCodingAgent"] {
-            assert!(tools.prompt.to_string().contains(name), "{host:?}: {name}");
-        }
-    }
-    let subagent = subagent_toolset();
-    for name in [
-        "ListCodingAgents",
-        "ListAgentUpdates",
-        "DispatchCodingAgent",
-    ] {
-        assert!(!subagent.tools.contains_key(name));
     }
 }
 
@@ -284,16 +254,8 @@ fn design_file_readers_are_available_in_every_host_with_their_guidance() {
             );
         }
     }
-    assert!(
-        subagent_toolset()
-            .tools
-            .contains_key("ReadPhotoshopDocument")
-    );
-    assert!(
-        subagent_toolset()
-            .tools
-            .contains_key("ReadIllustratorDocument")
-    );
+    assert!(base_toolset().tools.contains_key("ReadPhotoshopDocument"));
+    assert!(base_toolset().tools.contains_key("ReadIllustratorDocument"));
 }
 
 /// Document answers get the one SQL tool, not a read-only twin: the access
@@ -624,7 +586,7 @@ fn forms_are_discoverable_and_execute_directly_on_every_host() {
         }
         assert!(!tools.toolset.user_tools.contains_key("SetFormAccess"));
     }
-    let delegated = subagent_toolset();
+    let delegated = base_toolset();
     for name in ["CreateForm", "ReadForm", "EditForm", "ListForms"] {
         assert!(delegated.tools.contains_key(name));
     }
@@ -704,7 +666,7 @@ fn code_mode_retains_direct_lifecycles_and_hides_sdk_methods_from_lazy_discovery
         "ApplyCanvasEdits",
         "EditCanvas",
         "EditPresentation",
-        "Subagent",
+        "StartAgentSession",
         "SearchTools",
         "LoadTools",
         "DiscoverConnectors",
@@ -775,7 +737,7 @@ fn session_reader_is_available_to_every_conversation_host_and_mcp() {
                 .any(|tool| tool.name == "ReadAgentSession")
         );
     }
-    assert!(subagent_toolset().tools.contains_key("ReadAgentSession"));
+    assert!(base_toolset().tools.contains_key("ReadAgentSession"));
     let code_mode = tools_for_agent_code_mode();
     assert!(code_mode.toolset.tools.contains_key("ReadAgentSession"));
     assert!(
@@ -801,7 +763,7 @@ fn conversation_tools_only_advertise_new_sessions() {
             "ReadAgentSession",
             "ReadAgentSessionSharing",
             "UpdateAgentSessionSharing",
-            "CreateAgentSession",
+            "StartAgentSession",
             "ManageAgentSession",
         ] {
             assert!(tools.toolset.tools.contains_key(name), "missing {name}");
@@ -844,7 +806,42 @@ fn conversation_tools_only_advertise_new_sessions() {
             }
         }
     }
-    assert!(!subagent_toolset().tools.contains_key("ReadChat"));
+    assert!(!base_toolset().tools.contains_key("ReadChat"));
+}
+
+#[test]
+fn every_host_exposes_only_one_session_launch_tool() {
+    for host in [
+        AiHost::Chat,
+        AiHost::AgentSession,
+        AiHost::ChannelBot,
+        AiHost::Mcp,
+    ] {
+        let tools = tools_for(host);
+        assert!(tools.toolset.tools.contains_key("StartAgentSession"));
+        assert!(tools.toolset.tools.contains_key("ListAgentUpdates"));
+        assert!(tools.prompt.to_string().contains("StartAgentSession"));
+        for retired in [
+            "Subagent",
+            "DispatchCodingAgent",
+            "ListCodingAgents",
+            "CreateAgentSession",
+        ] {
+            assert!(
+                !tools.toolset.tools.contains_key(retired),
+                "{host:?}: {retired}"
+            );
+        }
+    }
+    let schemas = all_tool_frontend_schemas().to_json_pretty().unwrap();
+    for historical in [
+        "Subagent",
+        "DispatchCodingAgent",
+        "ListCodingAgents",
+        "CreateAgentSession",
+    ] {
+        assert!(schemas.contains(historical));
+    }
 }
 
 #[test]
@@ -866,7 +863,7 @@ fn unrouted_prompts_inline_the_sdk_area_guidance_and_routed_ones_leave_it_to_the
             prompt.contains(inline_guides(GuideHost::Direct)),
             "{host:?}"
         );
-        assert!(prompt.contains("DispatchCodingAgent"), "{host:?}");
+        assert!(prompt.contains("StartAgentSession"), "{host:?}");
         assert_eq!(prompt, tools.routed_prompt.to_string(), "{host:?}");
     }
 }

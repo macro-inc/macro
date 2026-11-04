@@ -277,7 +277,7 @@ inspect the content type and code rather than assuming every 503 is billing.
 
 ### Tools, protocols, queues, and background work
 
-- Subagent, native Anthropic tools, and AI editing return a failed tool result with
+- Native Anthropic tools and AI editing return a failed tool result with
   the stable code and public explanation. These are tool/protocol failures, not
   necessarily HTTP 402/503 at the outer MCP transport. Do not treat an HTTP-success
   tool envelope as successful execution. No alternate provider is tried on refusal.
@@ -325,7 +325,7 @@ inspect the content type and code rather than assuming every 503 is billing.
 Authenticated handlers/tool `RequestContext.user_id`, verified document edit
 receipts, persisted scheduled-action owners, and persisted session owners are the
 sources of attribution. Session collaborators are actors, not replacement payers.
-Subagents/native tools replace the shared context's placeholder user with the
+Native tools replace the shared context's placeholder user with the
 trusted caller and inherit the server's feature/entity. Never accept billing
 identity, feature exemption, or `count_usage` from a client; never substitute
 `SYSTEM_USER_ID` for a missing real caller. Non-user session owners remain rejected.
@@ -349,7 +349,7 @@ requests settlement). Admission itself never records usage or calls settlement.
 | Cognition chat / Chat | [chat handler](../../services/agent_harness_service/src/cognition/api/stream/chat_message.rs) | [DCS main](../../services/agent_harness_service/src/cognition/main.rs): configured `UsageServiceImpl` inside `SettlingUsageRecorder`, wrapped with `with_tracking` | [pre-creation refusal and permission precedence](../../services/agent_harness_service/src/cognition/api/stream/chat_message/test.rs) |
 | Structured completion / DynamicCompletionsApi | [completion handler](../../services/agent_harness_service/src/cognition/api/structured_completion.rs) | DCS main, same recorder across both phases | [both phases and OpenAPI](../../services/agent_harness_service/src/cognition/api/structured_completion/test.rs) |
 | Chat naming / ChatRename | [chat renamer](../../services/agent_harness_service/src/cognition/service/chat_renamer.rs) | DCS main, same recorder | [safe naming skip](../../services/agent_harness_service/src/cognition/service/chat_renamer/test.rs) |
-| Direct subagent / inherited feature | [operations service](../../crates/ai_tools/src/ai_operations.rs), [subagent](../../crates/ai_tools/src/subagent.rs) | Host common context: T, DCS main, or [MCP context](../../services/agent_harness_service/src/public_mcp/context.rs) using `pg_settling_recorder` | [zero provider calls](../../crates/ai_tools/src/ai_operations/test.rs), [concurrent caller isolation](../../crates/ai_tools/src/subagent/test.rs) |
+| Direct AI operation / inherited feature | [operations service](../../crates/ai_tools/src/ai_operations.rs) | Host common context: T, DCS main, or [MCP context](../../services/agent_harness_service/src/public_mcp/context.rs) using `pg_settling_recorder` | [zero provider calls](../../crates/ai_tools/src/ai_operations/test.rs) |
 | Native Anthropic WebSearch/WebFetch/code tools / inherited feature | [invoke_server_tool](../../crates/anthropic/src/toolset.rs) before both provider branches | Same common contexts via `FromRef`; observation only, **no legacy aggregate producer** | [tool attribution/refusal](../../crates/anthropic/src/toolset/test.rs) |
 | AI document editing / AiEditing | [document orchestration](../../crates/documents/src/domain/ai_editing.rs) after verified edit receipt | Common context's recorder, existing per-model worker usage | [domain](../../crates/documents/src/domain/ai_editing/test.rs), [direct tool and permission precedence](../../crates/documents/src/inbound/toolset/edit_document/test.rs) |
 | Notion page imports / Import | [import admission](../../crates/import/src/domain/service/admission.rs), [execution/rechecks](../../crates/import/src/domain/service.rs) | DCS main, wrapped recorder | [delayed/deterministic cases](../../crates/import/src/domain/service/test/admission.rs), [HTTP](../../crates/import/src/inbound/axum_router/test.rs) |
