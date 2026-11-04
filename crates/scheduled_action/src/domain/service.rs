@@ -23,8 +23,10 @@ use super::models::{
     DispatchEvent, InProgressExecution, OwnerNotUserError, ScheduledAction, UpdateScheduledAction,
 };
 use super::ports::{
-    ScheduledActionExecutor, ScheduledActionRepo, ScheduledActionService, TaskTargetValidator,
+    ScheduledActionExecutor, ScheduledActionRepo, ScheduledActionService, StoredAction,
+    TaskTargetValidator,
 };
+use super::starter_email::{email_triage_configuration, email_triage_routine_id};
 use super::target_validation::{ModelOnlyTargets, require_explicit_selection};
 
 #[cfg(test)]
@@ -434,6 +436,62 @@ where
         template_id: Uuid,
     ) -> Result<ScheduledAction> {
         self.create(principal, input, Some(template_id)).await
+    }
+
+    async fn ensure_email_triage_routine(
+        &self,
+        user_id: &MacroUserIdStr<'static>,
+    ) -> Result<ScheduledAction> {
+        let id = email_triage_routine_id(user_id);
+        if let Some(existing) = self.repo.get_action(&id).await? {
+            if !existing.owner.is_user(user_id) {
+                bail!("email triage routine id is owned by another principal");
+            }
+            return Ok(existing);
+        }
+        let input = email_triage_configuration();
+        self.targets.validate_task(&input.task, user_id).await?;
+        let now = Utc::now();
+        let event_activated_at = input.trigger.event_filters().map(|_| now);
+        let next_run_at = next_run(&input.trigger)?;
+        let stored = self
+            .repo
+            .insert_action_once(
+                id,
+                ScheduledAction {
+                    id: None,
+                    owner: Owner::User(user_id.clone()),
+                    name: input.name,
+                    trigger: input.trigger,
+                    kind: input.kind,
+                    task: input.task,
+                    enabled: input.enabled,
+                    run_visibility: input.run_visibility,
+                    created_at: now,
+                    updated_at: now,
+                    configuration_revision: ConfigurationRevision::INITIAL,
+                    event_activated_at,
+                    next_run_at,
+                    claimed: None,
+                    template_id: None,
+                },
+            )
+            .await?;
+        match stored {
+            StoredAction::Created(created) => {
+                self.dispatcher_tx
+                    .send(DispatchEvent::Create(created.clone()))
+                    .await
+                    .map_err(|e| anyhow::anyhow!("failed to dispatch create event: {e}"))?;
+                Ok(created)
+            }
+            StoredAction::AlreadyStored(existing) => {
+                if !existing.owner.is_user(user_id) {
+                    bail!("email triage routine id is owned by another principal");
+                }
+                Ok(existing)
+            }
+        }
     }
 
     async fn get_actions(

@@ -50,6 +50,13 @@ impl ScheduledActionRepo for FakeRepo {
     async fn create_action(&self, _: ScheduledAction) -> Result<ScheduledAction> {
         unreachable!()
     }
+    async fn insert_action_once(
+        &self,
+        _: Uuid,
+        _: ScheduledAction,
+    ) -> Result<crate::domain::ports::StoredAction> {
+        unreachable!()
+    }
     async fn get_action(&self, _: &Uuid) -> Result<Option<ScheduledAction>> {
         unreachable!()
     }

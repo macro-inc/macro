@@ -200,6 +200,13 @@ impl ScheduledActionRepo for Repo {
     async fn create_action(&self, _: ScheduledAction) -> Result<ScheduledAction> {
         unimplemented!()
     }
+    async fn insert_action_once(
+        &self,
+        _: Uuid,
+        _: ScheduledAction,
+    ) -> Result<crate::domain::ports::StoredAction> {
+        unimplemented!()
+    }
     async fn get_owned_actions(&self, _: &MacroUserIdStr<'static>) -> Result<Vec<ScheduledAction>> {
         unimplemented!()
     }

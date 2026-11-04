@@ -511,13 +511,15 @@ async fn create_user_webhook(ctx: &ApiContext, req: FusionAuthUserWebhook) -> an
 
     // Seed the starter documents (the "Macro how to guide" and the starter
     // tasks it links to, with the guide pinned to the new user's sidebar
-    // favorites), then create a private support channel connecting the new
-    // user with the Macro support team and post the welcome script — which
-    // mentions the guide, so seeding runs first. Fire-and-forget: neither a
-    // failed seeding (retried, then skipped) nor a failed channel creation
-    // may block user creation.
+    // favorites) and the routine that tags each new email Reply, Followup,
+    // Action, or FYI. Then create a private support channel connecting the
+    // new user with the Macro support team and post the welcome script —
+    // which mentions the guide, so document seeding runs first.
+    // Fire-and-forget: a failed seed (retried, then skipped) or a failed
+    // channel creation must not block user creation.
     tokio::spawn({
         let document_storage_service_client = ctx.document_storage_service_client.clone();
+        let starter_routines = ctx.starter_routines.clone();
         let channel_service = ctx.channel_service.clone();
         let channel_messages = ctx.channel_messages.clone();
         let entity_access_service = ctx.entity_access_service.clone();
@@ -527,6 +529,7 @@ async fn create_user_webhook(ctx: &ApiContext, req: FusionAuthUserWebhook) -> an
         async move {
             initialize_starter_docs_with_retries(&document_storage_service_client, &user_id)
                 .await;
+            ensure_email_triage_routine_with_retries(&starter_routines, &user_id).await;
 
             let owner_id = match MacroUserIdStr::try_from(user_id) {
                 Ok(owner_id) => owner_id,
@@ -600,6 +603,39 @@ async fn create_user_webhook(ctx: &ApiContext, req: FusionAuthUserWebhook) -> an
         .inspect_err(|e| tracing::error!(error=?e, "unable to increment create user rate limit"));
 
     Ok(())
+}
+
+/// Seed the email-tagging routine with retries. A repeat keeps the stored
+/// routine, so a webhook that is delivered twice does not create a second one.
+async fn ensure_email_triage_routine_with_retries(
+    client: &crate::outbound::starter_routine::StarterRoutineClient,
+    user_id: &str,
+) {
+    const MAX_ATTEMPTS: u32 = 3;
+    const RETRY_DELAY_SECS: u64 = 2;
+    for attempt in 1..=MAX_ATTEMPTS {
+        match client.ensure(user_id).await {
+            Ok(()) => {
+                tracing::info!(attempt, "seeded email triage routine");
+                return;
+            }
+            Err(error) if attempt < MAX_ATTEMPTS => {
+                tracing::warn!(
+                    error = ?error,
+                    attempt,
+                    "failed to seed email triage routine, retrying"
+                );
+                tokio::time::sleep(std::time::Duration::from_secs(RETRY_DELAY_SECS)).await;
+            }
+            Err(error) => {
+                tracing::error!(
+                    error = ?error,
+                    attempt,
+                    "failed to seed email triage routine after {MAX_ATTEMPTS} attempts"
+                );
+            }
+        }
+    }
 }
 
 /// Seed the starter documents with retries.

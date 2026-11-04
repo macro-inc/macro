@@ -1030,7 +1030,9 @@ or spotlight.
 
 ## Routines
 
-Open **Agents → Routines** for your routines. Opening a routine updates the URL
+Open **Agents → Routines** for your routines. A new account already has **Tag new email**,
+which applies one personal tag (Reply, Followup, Action, or FYI) to each new email and
+keeps those runs hidden. Opening a routine updates the URL
 to `/app/routines/<uuid>` while keeping the Agents workspace. Reloading a detail
 URL restores that routine; browser Back and Forward restore the list or detail.
 Existing `/app/automation/<uuid>` links resolve to the canonical routine URL.

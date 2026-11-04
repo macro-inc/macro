@@ -15,11 +15,13 @@
    checks a minute per address; past that the step shows "Too many attempts. Wait a minute,
    then try again." and keeps the code. Requesting a new code does not lift that wait.
 5. First login auto-creates the user, seeds onboarding content (a "Macro Support x <name>"
-   channel, a "Macro how to guide" doc favorite, three sample tasks), and lands on
-   `/app/home`. The starter documents share a personal `docs` tag; the
-   guide's `#` example is an inline mention of that same tag. A tag attachment
-   failure does not block the remaining content; signup retries repair tags
-   without resetting task priorities. The guide waits until its tag IDs resolve.
+   channel, a "Macro how to guide" doc favorite, three sample tasks, and a **Tag new email**
+   routine), and lands on `/app/home`. The starter documents share a personal `docs` tag; the
+   guide's `#` example is an inline mention of that same tag. Signup also creates four personal
+   tags — Reply, Followup, Action, and FYI — and the routine applies exactly one of them to each
+   new email. Its runs stay hidden. A repeated signup keeps that routine, including a pause or
+   an edited prompt. A tag attachment failure does not block the remaining content; signup
+   retries repair tags without resetting task priorities. The guide waits until its tag IDs resolve.
 
 Production Google/SSO and inbox/calendar connections may return to either
 `https://macro.com` or `https://www.macro.com`. Verify connections from both hosts;

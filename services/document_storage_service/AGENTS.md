@@ -81,6 +81,9 @@ threads, pins, recents, notifications, folders, activity.
 
 ## Gotchas
 
+- Starter-document initialization also creates the personal Reply, Followup,
+  Action, and FYI tags. A missing tag fails the call so signup retries it;
+  an existing label is left as the user has it, including its color.
 - Several behaviors are Cargo-feature-gated (`connection_gateway`,
   `delete_document_worker`, `location_check`, all on by `default`) — a feature
   disabled locally can hide a bug that only shows in deployed builds.

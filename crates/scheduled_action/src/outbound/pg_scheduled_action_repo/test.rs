@@ -141,6 +141,33 @@ async fn scheduled_action_row_count(pool: &PgPool, id: Uuid) -> i64 {
 }
 
 #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn insert_action_once_keeps_the_stored_row(pool: PgPool) {
+    insert_user(&pool, USER_A).await;
+    let repo = test_repo(pool.clone());
+    let id = Uuid::from_u128(0x1111);
+    let first = repo
+        .insert_action_once(id, sample_action(user_owner(USER_A), "Tag new email"))
+        .await
+        .expect("insert");
+    let crate::domain::ports::StoredAction::Created(created) = first else {
+        panic!("first insert creates the row");
+    };
+    assert_eq!(created.id, Some(id));
+    assert_eq!(entity_row_count(&pool, id).await, 1);
+
+    let mut edited = sample_action(user_owner(USER_A), "Renamed");
+    edited.enabled = false;
+    let second = repo.insert_action_once(id, edited).await.expect("repeat");
+    let crate::domain::ports::StoredAction::AlreadyStored(stored) = second else {
+        panic!("repeat keeps the stored row");
+    };
+    assert_eq!(stored.name, "Tag new email");
+    assert!(stored.enabled);
+    assert_eq!(scheduled_action_row_count(&pool, id).await, 1);
+    assert_eq!(entity_row_count(&pool, id).await, 1);
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
 async fn create_action_returns_id_and_is_listable_by_owner(pool: PgPool) {
     insert_user(&pool, USER_A).await;
     let repo = test_repo(pool);

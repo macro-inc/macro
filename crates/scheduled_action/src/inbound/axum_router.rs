@@ -135,6 +135,10 @@ where
             delete(delete_user_actions::<S, Svc, Auth>),
         )
         .route(
+            "/scheduled-actions/user/{user_id}/email-triage",
+            post(ensure_email_triage_routine::<S, Svc, Auth>),
+        )
+        .route(
             "/scheduled-actions/internal/{id}",
             delete(purge_owned_action::<S, Svc, Auth>),
         )
@@ -174,6 +178,21 @@ where
 {
     state.service.delete_user_actions(user_id).await?;
     Ok(StatusCode::NO_CONTENT)
+}
+
+/// Signup seed. Internal callers only. Repeating the call returns the stored
+/// routine, including a pause or an edited prompt.
+async fn ensure_email_triage_routine<S, Svc, Auth>(
+    State(state): State<ScheduledActionRouterState<S, Svc, Auth>>,
+    _internal: MacroAuthorizationExtractor<Auth, InternalOnly>,
+    Path(user_id): Path<MacroUserIdStr<'static>>,
+) -> Result<Json<ScheduledActionResponse>, ScheduledActionApiError>
+where
+    S: ScheduledActionService,
+    Auth: MacroAuthorizationService,
+{
+    let action = state.service.ensure_email_triage_routine(&user_id).await?;
+    Ok(Json(ScheduledActionResponse::from(action)))
 }
 
 #[derive(Debug, Deserialize)]

@@ -63,6 +63,14 @@ impl ScheduledActionRepo for FakeRepository {
         Ok(action)
     }
 
+    async fn insert_action_once(
+        &self,
+        _id: Uuid,
+        action: ScheduledAction,
+    ) -> Result<crate::domain::ports::StoredAction> {
+        Ok(crate::domain::ports::StoredAction::Created(action))
+    }
+
     async fn get_owned_actions(
         &self,
         _owner: &MacroUserIdStr<'static>,

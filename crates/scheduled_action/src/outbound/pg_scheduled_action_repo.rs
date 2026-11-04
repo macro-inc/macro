@@ -20,7 +20,7 @@ use crate::domain::models::{
     ActionExecutionRecord, ActionKind, ActionPolicyError, AlreadyRunningError, MAX_ACTION_TIME,
     Schedule, ScheduledAction,
 };
-use crate::domain::ports::ScheduledActionRepo;
+use crate::domain::ports::{ScheduledActionRepo, StoredAction};
 
 #[cfg(test)]
 pub(crate) mod test;
@@ -226,6 +226,86 @@ impl<B: BotFacts + 'static> ScheduledActionRepo for PgScheduledActionRepo<B> {
         }
         tx.commit().await?;
         Ok(created)
+    }
+
+    async fn insert_action_once(&self, id: Uuid, action: ScheduledAction) -> Result<StoredAction> {
+        let owner = action.owner.principal_id();
+        let trigger = TriggerColumns::try_from(&action.trigger)?;
+        let kind = kind_to_str(&action.kind);
+
+        let mut tx = self.pool.begin().await?;
+        let row = sqlx::query_as!(
+            ActionRow,
+            r#"
+            INSERT INTO scheduled_action
+                (id, owner, name, schedule, kind, timezone, task, next_run_at, enabled,
+                 trigger_type, event_filters, configuration_revision, event_activated_at, trigger_config,
+                 run_visibility, template_id)
+            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16)
+            ON CONFLICT (id) DO NOTHING
+            RETURNING id, owner, name, schedule, kind, timezone, task, claimed, created_at,
+                      updated_at, next_run_at, enabled, trigger_type, event_filters,
+                      configuration_revision, event_activated_at, trigger_config, run_visibility, template_id
+            "#,
+            id,
+            owner,
+            action.name,
+            trigger.schedule,
+            kind,
+            trigger.timezone,
+            action.task,
+            action.next_run_at,
+            action.enabled,
+            trigger.trigger_type,
+            trigger.event_filters,
+            action.configuration_revision.get(),
+            action.event_activated_at,
+            trigger.trigger_config,
+            <&str>::from(action.run_visibility),
+            action.template_id,
+        )
+        .fetch_optional(&mut *tx)
+        .await?;
+
+        let Some(row) = row else {
+            let existing = sqlx::query_as!(
+                ActionRow,
+                r#"
+                SELECT id, owner, name, schedule, kind, timezone, task, claimed, created_at,
+                       updated_at, next_run_at, enabled, trigger_type, event_filters,
+                       configuration_revision, event_activated_at, trigger_config, run_visibility, template_id
+                FROM scheduled_action
+                WHERE id = $1
+                "#,
+                id,
+            )
+            .fetch_one(&mut *tx)
+            .await?;
+            tx.commit().await?;
+            return Ok(StoredAction::AlreadyStored(ScheduledAction::try_from(
+                existing,
+            )?));
+        };
+
+        let created = ScheduledAction::try_from(row)?;
+        match self
+            .registrar
+            .register_owned_entity(
+                &mut tx,
+                NewEntityRecord::new(
+                    id,
+                    RegisteredEntityType::ScheduledAction,
+                    created.owner.clone(),
+                ),
+            )
+            .await
+            .map_err(|error| {
+                anyhow::anyhow!("failed to register scheduled action owner: {error:#}")
+            })? {
+            InsertOutcome::Inserted | InsertOutcome::AlreadyRegistered => {}
+        }
+        tx.commit().await?;
+        Ok(StoredAction::Created(created))
     }
 
     async fn get_owned_actions(

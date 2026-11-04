@@ -658,6 +658,13 @@ pub async fn run() -> anyhow::Result<()> {
         ),
     );
     invite_reminders.close();
+    let starter_routines = Arc::new(
+        crate::outbound::starter_routine::StarterRoutineClient::new(
+            internal_key.clone(),
+            scheduled_action_url.clone(),
+        )
+        .map_err(|error| anyhow::anyhow!("{error:?}"))?,
+    );
     let user_deletion = Arc::new(
         crate::outbound::user_deletion::UserDeletionAdapter::new(
             db.clone(),
@@ -723,6 +730,7 @@ pub async fn run() -> anyhow::Result<()> {
             subscription_plan,
             subscription_status,
             document_storage_service_client,
+            starter_routines,
             user_deletion,
             email_service_client: Arc::new(email_service_client),
             ses_client: Arc::new(ses_client),

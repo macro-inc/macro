@@ -97,6 +97,10 @@ that listener is ready. Cancellation can stop the gate before startup finishes.
   it after the template is unshared or its source routine is deleted.
 - `run_visibility` is copied onto each run's agent session when the run is
   prepared, so changing it affects later runs only.
+- Signup seeds one email-tagging routine per user (`ensure_email_triage_routine`).
+  Its id is a UUIDv5 of the user id, so a repeated signup does not create a
+  second copy or overwrite a pause or an edited prompt. The seed does not
+  consult `EVENT_ROUTINES_ENABLED`; the routine runs when event intake is on.
 - `EventReference` rejects unknown keys, so a replica still on older code can't
   read a run row with a new key: write a new optional key only when it is set.
 

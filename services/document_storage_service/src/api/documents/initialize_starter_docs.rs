@@ -26,6 +26,8 @@ use models_properties::api::{AddPropertyOptionRequest, AddStringOptionRequest, S
 use models_properties::service::property_option::PropertyOptionValue;
 use properties::{PropertiesService as _, domain::model::TagScope};
 use reqwest::StatusCode;
+use scheduled_action::domain::starter_email::EMAIL_TRIAGE_TAGS;
+use std::collections::HashSet;
 use system_properties::{PriorityOption, StatusOption, SystemPropertyKey};
 
 /// Also the name `get_starter_docs` resolves the guide by, so the two stay in
@@ -151,6 +153,64 @@ async fn resolve_docs_tag(
         .map(|option| (definition_id, option.id))
 }
 
+/// Find-or-create the four personal tags the signup email routine applies.
+/// A tag that already has the label is kept, including a color the user changed.
+/// Returns false when a create failed and the caller should retry.
+async fn ensure_email_triage_tags(state: &ApiContext, user_id: &MacroUserIdStr<'_>) -> bool {
+    let tag_set = match state
+        .properties_service
+        .ensure_tag_set(user_id, None, TagScope::User)
+        .await
+    {
+        Ok(tag_set) => tag_set,
+        Err(error) => {
+            tracing::error!(error = ?error, "failed to provision personal tag set for email triage");
+            return false;
+        }
+    };
+    let Some(definition_id) = tag_set.definition.as_ref().map(|definition| definition.id) else {
+        tracing::error!("provisioned personal tag set has no definition");
+        return false;
+    };
+    let mut labels: HashSet<&str> = tag_set
+        .options
+        .iter()
+        .filter_map(|option| match &option.value {
+            PropertyOptionValue::String(label) => Some(label.as_str()),
+            _ => None,
+        })
+        .collect();
+    let mut next_order = tag_set.options.len() as i32;
+    let mut complete = true;
+    for tag in EMAIL_TRIAGE_TAGS {
+        if !labels.insert(tag.label) {
+            continue;
+        }
+        if let Err(error) = state
+            .properties_service
+            .get_or_create_property_option(
+                user_id,
+                None,
+                definition_id,
+                &AddPropertyOptionRequest::SelectString {
+                    option: AddStringOptionRequest {
+                        display_order: next_order,
+                        value: tag.label.to_string(),
+                        color: Some(tag.color.to_string()),
+                    },
+                },
+            )
+            .await
+        {
+            tracing::error!(error = ?error, label = tag.label, "failed to create email triage tag");
+            complete = false;
+            continue;
+        }
+        next_order += 1;
+    }
+    complete
+}
+
 fn internal_error(message: &str) -> Response {
     GenericResponse::builder()
         .message(message)
@@ -160,8 +220,10 @@ fn internal_error(message: &str) -> Response {
 
 /// Creates the user's starter content — the "Macro how to guide" markdown
 /// document plus the starter tasks it links to — records the mention
-/// backlinks between them, and pins the guide to the user's sidebar
-/// favorites. Called by the authentication service when a new user signs up.
+/// backlinks between them, pins the guide to the user's sidebar
+/// favorites, and creates the Reply, Followup, Action, and FYI tags the
+/// signup email routine applies. Called by the authentication service when
+/// a new user signs up.
 /// Safe to retry: deterministic per-user ids dedupe concurrent duplicate
 /// deliveries, and a create conflict means that document was already seeded.
 #[tracing::instrument(skip(state, user_context), fields(user_id=?user_context.authorization.user.macro_user_id))]
@@ -190,6 +252,7 @@ pub async fn handler(
     // the content that was successfully created, so the caller can retry.
     let docs_tag = resolve_docs_tag(&state, user_id).await;
     let mut incomplete = docs_tag.is_none();
+    incomplete |= !ensure_email_triage_tags(&state, user_id).await;
     let fill = |template: &str| {
         let mut filled = template.to_string();
         if let Some((tag_definition_id, tag_option_id)) = docs_tag {

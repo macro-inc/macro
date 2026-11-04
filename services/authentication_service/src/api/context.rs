@@ -205,6 +205,8 @@ pub(crate) struct ApiContext {
     >,
     pub document_storage_service_client:
         Arc<document_storage_service_client::DocumentStorageServiceClient>,
+    /// Seeds the email-tagging routine when an account is created.
+    pub starter_routines: Arc<crate::outbound::starter_routine::StarterRoutineClient>,
     pub user_deletion: Arc<
         crate::outbound::user_deletion::UserDeletionAdapter<
             TeamsServiceType,

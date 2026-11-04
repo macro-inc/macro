@@ -19,6 +19,14 @@ use rootcause::Report;
 use tokio::sync::mpsc::{Receiver, Sender};
 use trigger_context::RoutineEvent;
 
+/// A row inserted under a caller-chosen id, or the row that id already held.
+pub enum StoredAction {
+    /// This call inserted the row.
+    Created(ScheduledAction),
+    /// The id was already stored. This is that row, not the input.
+    AlreadyStored(ScheduledAction),
+}
+
 /// Validate configuration syntax and authorize its target before persistence.
 pub trait TaskTargetValidator: Send + Sync + 'static {
     fn validate_task(
@@ -33,6 +41,14 @@ pub trait ScheduledActionRepo: Send + Sync + 'static {
         &self,
         action: ScheduledAction,
     ) -> impl Future<Output = Result<ScheduledAction>> + Send;
+
+    /// Insert `action` at `id` when that id is free. A row already there is
+    /// returned unchanged. Never overwrites, so a repeated signup keeps edits.
+    fn insert_action_once(
+        &self,
+        id: Uuid,
+        action: ScheduledAction,
+    ) -> impl Future<Output = Result<StoredAction>> + Send;
 
     /// Account cleanup only: `WHERE owner = $1`. Never the HTTP list.
     fn get_owned_actions(
@@ -156,6 +172,14 @@ pub trait ScheduledActionService: Send + Sync + 'static {
         principal: &CreationPrincipal,
         input: CreateScheduledAction,
         template_id: Uuid,
+    ) -> impl Future<Output = Result<ScheduledAction>> + Send;
+
+    /// The signup email-tagging routine. Repeating this keeps the stored row,
+    /// including a pause or an edited prompt. Does not consult the event-trigger
+    /// management gate: the row is ready when intake is on.
+    fn ensure_email_triage_routine(
+        &self,
+        user_id: &MacroUserIdStr<'static>,
     ) -> impl Future<Output = Result<ScheduledAction>> + Send;
 
     /// Actions `user_id` can access. Legacy clients see cron actions only;

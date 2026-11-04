@@ -99,6 +99,10 @@ inputs cannot select an agent, and ordinary user credentials remain unattributed
 - FusionAuth reports a link owner that was deleted as `UserDoesNotExist`. That
   user has no links or grants left, so answer the route's "not linked" outcome
   (404 no grant, 200 for an idempotent removal), not a 500.
+- Account creation seeds starter documents and one email-tagging routine
+  (Reply, Followup, Action, FYI) before the support channel. Both are
+  retried and neither blocks signup. A repeated webhook keeps the stored
+  routine.
 - The signup allowlist has a temporary Develop-only bypass
   (`DEVELOPMENT_BYPASS_SIGNUP_ALLOWLIST`) that overrides the allowlist even
   when present; see `README.md` before changing signup behavior.

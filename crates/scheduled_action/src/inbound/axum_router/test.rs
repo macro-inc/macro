@@ -649,6 +649,50 @@ async fn authenticates_user_and_internal_requests_and_rejects_missing_credential
 }
 
 #[tokio::test]
+async fn internal_signup_seeds_one_email_triage_routine_while_event_management_is_off() {
+    let app = router(false);
+    let uri = "/scheduled-actions/user/macro%7Croutine-owner%40macro.com/email-triage";
+    let call = |app: Router| {
+        app.oneshot(
+            Request::builder()
+                .method("POST")
+                .uri(uri)
+                .header(
+                    macro_authorization::INTERNAL_API_KEY_HEADER,
+                    "test-internal-key",
+                )
+                .body(Body::empty())
+                .unwrap(),
+        )
+    };
+    let denied = Request::builder()
+        .method("POST")
+        .uri(uri)
+        .header(header::AUTHORIZATION, "Bearer owner")
+        .body(Body::empty())
+        .unwrap();
+    assert_eq!(
+        app.clone().oneshot(denied).await.unwrap().status(),
+        StatusCode::FORBIDDEN
+    );
+    let first = call(app.clone()).await.unwrap();
+    assert_eq!(first.status(), StatusCode::OK);
+    let first_body: Value =
+        serde_json::from_slice(&to_bytes(first.into_body(), usize::MAX).await.unwrap()).unwrap();
+    let second = call(app).await.unwrap();
+    assert_eq!(second.status(), StatusCode::OK);
+    let second_body: Value =
+        serde_json::from_slice(&to_bytes(second.into_body(), usize::MAX).await.unwrap()).unwrap();
+    assert_eq!(first_body["id"], second_body["id"]);
+    assert_eq!(first_body["name"], "Tag new email");
+    assert_eq!(first_body["owner"], USER);
+    assert_eq!(
+        first_body["trigger"]["filters"][0]["events"][0],
+        "email.message_received"
+    );
+}
+
+#[tokio::test]
 async fn maps_typed_errors_and_sanitizes_internal_failures() {
     for (error, expected) in [
         (

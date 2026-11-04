@@ -14,6 +14,14 @@ fn config_values() -> Value {
 }
 
 #[test]
+fn email_triage_starter_uses_the_free_chat_model() {
+    assert_eq!(
+        scheduled_action::domain::starter_email::EMAIL_TRIAGE_MODEL,
+        chat::domain::models::FREE_MODEL
+    );
+}
+
+#[test]
 fn ai_pricing_is_mandatory_and_validated() {
     use ai_billing::PlanTier;
 

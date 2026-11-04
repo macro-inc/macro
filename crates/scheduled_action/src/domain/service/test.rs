@@ -47,6 +47,22 @@ impl ScheduledActionRepo for FakeRepo {
         Ok(action)
     }
 
+    async fn insert_action_once(
+        &self,
+        id: Uuid,
+        mut action: ScheduledAction,
+    ) -> Result<crate::domain::ports::StoredAction> {
+        let mut actions = self.actions.lock().unwrap();
+        if let Some(existing) = actions.iter().find(|stored| stored.id == Some(id)) {
+            return Ok(crate::domain::ports::StoredAction::AlreadyStored(
+                existing.clone(),
+            ));
+        }
+        action.id = Some(id);
+        actions.push(action.clone());
+        Ok(crate::domain::ports::StoredAction::Created(action))
+    }
+
     async fn get_owned_actions(
         &self,
         _owner: &MacroUserIdStr<'static>,
@@ -1479,4 +1495,54 @@ async fn a_github_trigger_runs_only_once_github_is_linked() {
         )
         .await
         .unwrap();
+}
+
+#[tokio::test]
+async fn email_triage_routine_is_created_once_and_keeps_later_edits() {
+    let repo = Arc::new(FakeRepo::default());
+    let (tx, mut rx) = tokio::sync::mpsc::channel(4);
+    let service = TestService::new(
+        Arc::clone(&repo),
+        Arc::new(FakeExecutor::default()),
+        tx,
+        grants(&repo),
+    );
+    let owner = user();
+
+    let created = service
+        .ensure_email_triage_routine(&owner)
+        .await
+        .expect("seed");
+    let id = created.id.expect("id");
+    assert_eq!(
+        id,
+        crate::domain::starter_email::email_triage_routine_id(&owner)
+    );
+    assert_eq!(created.name, "Tag new email");
+    assert!(created.enabled);
+    assert_eq!(created.run_visibility, RunVisibility::Unlisted);
+    assert!(created.trigger.event_filters().is_some());
+    assert!(matches!(rx.try_recv(), Ok(DispatchEvent::Create(_))));
+
+    {
+        let mut actions = repo.actions.lock().unwrap();
+        let stored = actions
+            .iter_mut()
+            .find(|action| action.id == Some(id))
+            .unwrap();
+        stored.name = "My inbox tags".into();
+        stored.enabled = false;
+        stored.task["user_prompt"] = json!("Only tag invoices");
+    }
+
+    let again = service
+        .ensure_email_triage_routine(&owner)
+        .await
+        .expect("repeat");
+    assert_eq!(again.id, Some(id));
+    assert_eq!(again.name, "My inbox tags");
+    assert!(!again.enabled);
+    assert_eq!(again.task["user_prompt"], "Only tag invoices");
+    assert_eq!(repo.actions.lock().unwrap().len(), 1);
+    assert!(rx.try_recv().is_err());
 }
