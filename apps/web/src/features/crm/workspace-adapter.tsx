@@ -85,7 +85,7 @@ export function createCrmWorkspace(
   const peopleVisibility = createPeopleVisibility({
     userId: crm.userId,
     teamId: () =>
-      team.isSuccess && team.data?.team.crm_enabled
+      !team.isPending && team.data?.team.crm_enabled
         ? team.data.team.id
         : undefined,
     isAdmin,

@@ -71,6 +71,8 @@ eviction and TanStack invalidation alone cannot refresh their membership.
 People display options offer **Show removed people** only for current-team
 admins/owners. `people-visibility` owns a local explicit choice, resets it on
 account/team/role/list changes, and sanitizes shared or persisted filters.
+Retained team data preserves the choice through a background refetch error;
+current-user membership and admin/owner checks still apply.
 Removed mode queries `crmf` with hidden=true and the administered team ID, using
 the existing server search, deduplication and cursor pagination. The client
 predicate also checks that team scope so retained rows cannot cross the display
