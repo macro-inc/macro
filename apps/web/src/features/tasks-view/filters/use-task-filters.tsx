@@ -6,7 +6,7 @@ import { NO_ASSIGNEE } from '@app/features/next-soup/filters';
 import {
   AssigneeDiscoveryStatus,
   useAssigneePicker,
-} from '@app/features/next-soup/soup-view/filters-bar/assignee-picker';
+} from '@app/features/soup/assignee-picker';
 import { addUnique, removeValue } from '@app/lib/signals/store-array-updaters';
 import { UserIcon } from '@core/component/UserIcon';
 import { useUserId } from '@core/context/user';

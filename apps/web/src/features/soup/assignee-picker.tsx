@@ -1,4 +1,8 @@
 import { NO_ASSIGNEE } from '@app/features/next-soup/filters';
+import type {
+  SearchableOption,
+  SearchableSelectAction,
+} from '@app/features/next-soup/soup-view/filters-bar/searchable-multi-select';
 import { t } from '@app/lib/i18n';
 import { UserIcon } from '@core/component/UserIcon';
 import { useUserId } from '@core/context/user';
@@ -8,10 +12,6 @@ import { useTeamMembers } from '@property/queries/team-members';
 import { useContacts } from '@queries/contacts/contacts';
 import { Button } from '@ui';
 import { type Accessor, createMemo, createSignal, Show } from 'solid-js';
-import type {
-  SearchableOption,
-  SearchableSelectAction,
-} from './searchable-multi-select';
 
 export function buildContactLabel(
   contact: { id: string; name?: string | null },

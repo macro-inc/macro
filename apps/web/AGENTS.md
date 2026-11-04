@@ -1028,6 +1028,8 @@ Use the current team roster for Assignees in property editors and filters;
 keep other eligible people behind **Find other people…**, with selected outsiders
 still removable. Preserve agents and Me/Unassigned filter options. Keep company
 owners strictly team-only and unrelated people/contact fields unchanged.
+Keep the shared filter Assignee picker in `src/features/soup/assignee-picker.tsx`;
+import it directly from Tasks and legacy `next-soup` consumers.
 
 ### Sidebar tag dragging
 

@@ -5,6 +5,10 @@ import type {
   PropertyFilter,
   TagFilterMode,
 } from '@app/features/next-soup/filters/filter-store/types';
+import {
+  AssigneeDiscoveryStatus,
+  useAssigneePicker,
+} from '@app/features/soup/assignee-picker';
 import { usePosthog } from '@app/lib/analytics/posthog';
 import { EntityIcon } from '@core/component/EntityIcon';
 import { UserIcon } from '@core/component/UserIcon';
@@ -17,7 +21,6 @@ import {
   TASK_PRIORITY_OPTIONS,
   TASK_STATUS_OPTIONS,
 } from '../../../core/search-options';
-import { AssigneeDiscoveryStatus, useAssigneePicker } from '../assignee-picker';
 import { useInboxPicker } from '../inbox-picker';
 import type {
   SearchableOption,

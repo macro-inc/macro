@@ -20,6 +20,11 @@ import {
   type ReadFilter,
   useSoupView,
 } from '@app/features/next-soup/soup-view/soup-view-context';
+import {
+  AssigneeDiscoveryStatus,
+  buildContactLabel,
+  useAssigneePicker,
+} from '@app/features/soup/assignee-picker';
 import { t } from '@app/lib/i18n';
 import { useSplitPanelOrThrow } from '@components/app/split-layout/layoutUtils';
 import { EntityIcon } from '@core/component/EntityIcon';
@@ -52,11 +57,6 @@ import {
   Switch,
 } from 'solid-js';
 import {
-  AssigneeDiscoveryStatus,
-  buildContactLabel,
-  useAssigneePicker,
-} from './assignee-picker';
-import {
   type FilterCategory,
   filterInboxGithubPrOption,
 } from './filter-categories';
@@ -67,7 +67,7 @@ import {
 } from './filter-menu';
 import type { SearchableOption } from './searchable-multi-select';
 
-export { buildContactLabel } from './assignee-picker';
+export { buildContactLabel } from '@app/features/soup/assignee-picker';
 
 import { useTagFilter } from './tag-filter';
 

@@ -18,6 +18,10 @@ import {
   TASK_SORT_OPTIONS,
 } from '@app/features/next-soup/soup-view/sort-options';
 import { useSoupView } from '@app/features/next-soup/soup-view/soup-view-context';
+import {
+  AssigneeDiscoveryControls,
+  useAssigneePicker,
+} from '@app/features/soup/assignee-picker';
 import { useFeatureFlag } from '@app/lib/analytics/posthog';
 import { t } from '@app/lib/i18n';
 import { MobileDrawer } from '@components/app/mobile/MobileDrawer';
@@ -32,10 +36,6 @@ import PlusIcon from '@icon/system/regular/plus.svg';
 import { Accordion } from '@kobalte/core/accordion';
 import { useContacts } from '@queries/contacts/contacts';
 import { createMemo, createSignal, For, Show } from 'solid-js';
-import {
-  AssigneeDiscoveryControls,
-  useAssigneePicker,
-} from './assignee-picker';
 import { ConsolidatedFilterChip } from './consolidated-filter-chip';
 import { useInboxPicker } from './inbox-picker';
 import {

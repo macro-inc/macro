@@ -21,6 +21,10 @@ import {
   VIEW_TAB_PRESETS,
 } from '@app/features/next-soup/sidebar/soup-filter-presets';
 import { useSoupView } from '@app/features/next-soup/soup-view/soup-view-context';
+import {
+  AssigneeDiscoveryStatus,
+  useAssigneePicker,
+} from '@app/features/soup/assignee-picker';
 import { t } from '@app/lib/i18n';
 import { useSplitPanelOrThrow } from '@components/app/split-layout/layoutUtils';
 import { UserIcon } from '@core/component/UserIcon';
@@ -30,7 +34,6 @@ import CircleDashedIcon from '@icon/system/regular/circle-dashed.svg';
 import { SYSTEM_PROPERTY_IDS } from '@property/constants';
 import { useContacts } from '@queries/contacts/contacts';
 import { batch, createMemo, createSignal, type JSX } from 'solid-js';
-import { AssigneeDiscoveryStatus, useAssigneePicker } from './assignee-picker';
 import type {
   ConsolidatedFilter,
   FilterValue,
