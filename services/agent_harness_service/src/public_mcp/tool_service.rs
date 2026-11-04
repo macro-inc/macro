@@ -137,7 +137,7 @@ impl<Context> AuthenticatedToolService<Context> {
         user_id: &MacroUserIdStr<'static>,
         extensions: &rmcp::model::Extensions,
     ) -> ToolMode {
-        if caller(extensions).is_ok_and(|caller| is_chatgpt(&caller)) {
+        if caller(extensions).is_ok_and(|caller| may_be_chatgpt(&caller)) {
             return ToolMode::Standard;
         }
         match &self.code_mode {
@@ -174,15 +174,17 @@ fn caller(extensions: &rmcp::model::Extensions) -> Result<ToolCaller, rmcp::Erro
         })
 }
 
-/// Whether the caller is an OAuth client registered under ChatGPT's name. The
-/// name is self-reported, which is fine here: this picks how tools are
-/// presented and grants nothing, and a client naming itself ChatGPT only loses
-/// code mode.
-fn is_chatgpt(caller: &ToolCaller) -> bool {
-    matches!(
-        caller,
-        ToolCaller::McpClient { name: Some(name) } if name.eq_ignore_ascii_case("chatgpt")
-    )
+/// Whether an OAuth caller might be ChatGPT: registered under its name, or
+/// holding a token with no recorded client, which fails closed until the next
+/// refresh records one. The name is self-reported, which is fine here: this
+/// picks how tools are presented and grants nothing, and a client naming itself
+/// ChatGPT only loses code mode.
+fn may_be_chatgpt(caller: &ToolCaller) -> bool {
+    match caller {
+        ToolCaller::McpClient { name: None } => true,
+        ToolCaller::McpClient { name: Some(name) } => name.eq_ignore_ascii_case("chatgpt"),
+        ToolCaller::Agent(_) | ToolCaller::ApiKey => false,
+    }
 }
 
 #[cfg(test)]

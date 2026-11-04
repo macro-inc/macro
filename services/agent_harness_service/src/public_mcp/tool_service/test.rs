@@ -528,6 +528,16 @@ mod code_mode {
         .await;
         assert_eq!(tool_names(&listed), DIRECT_TOOLS);
 
+        let nameless = rpc_as(
+            app.clone(),
+            FLAGGED,
+            Some(ToolCaller::McpClient { name: None }),
+            "tools/list",
+            serde_json::json!({}),
+        )
+        .await;
+        assert_eq!(tool_names(&nameless), DIRECT_TOOLS);
+
         let other = rpc_as(
             app,
             FLAGGED,
@@ -547,10 +557,15 @@ mod code_mode {
             FLAGGED,
             mcp_client("ChatGPT"),
             "tools/call",
-            serde_json::json!({"name": "ExecuteCode", "arguments": {"code": "1"}}),
+            serde_json::json!({"name": "ExecuteCode", "arguments": {"source": "1"}}),
         )
         .await;
-        assert!(response["error"].is_object(), "{response}");
+        assert!(
+            response["error"]["message"]
+                .as_str()
+                .is_some_and(|message| message.contains("not found")),
+            "{response}"
+        );
         assert!(runs.0.lock().unwrap().is_empty());
     }
 
