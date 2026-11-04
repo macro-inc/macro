@@ -3,8 +3,10 @@ import { analytics } from '@app/lib/analytics';
 import { ThrownResultError, throwOnErr } from '@core/util/result';
 import type { CrmCompanyEntity } from '@entity';
 import { Telemetry } from '@macro-inc/observability';
+import { refreshActiveGraphqlSoupQueries } from '@queries/soup/graphql/active-queries';
 import { soupKeys } from '@queries/soup/keys';
 import { invalidateCachedCrmContacts } from '@service-storage/crm-contacts';
+import { prepareCrmVisibilityWrite } from '@service-storage/crm-visibility';
 import type { CrmCompanyResponse } from '@service-storage/generated/schemas/crmCompanyResponse';
 import type { CrmContactResponse } from '@service-storage/generated/schemas/crmContactResponse';
 import {
@@ -17,6 +19,12 @@ import { type Accessor, createMemo } from 'solid-js';
 import type { CompanyImporter } from '../context/crm-sources';
 import type { CrmRecordDependencies } from './dependencies';
 import { crmKeys } from './keys';
+import { listCanIncludeCrm } from './list-refresh';
+import {
+  updateVisibilityDetails,
+  visibilityDetailsFilter,
+  visibilityQueryFilter,
+} from './visibility-refresh';
 
 const COMPANY_STALE_TIME = 60 * 1000;
 
@@ -319,24 +327,63 @@ export function useSetCompanyHiddenMutation(deps: CrmRecordDependencies) {
           span.setAttr('crm.record_id', companyId);
           span.setAttr('crm.hidden', hidden);
           try {
-            const result = await throwOnErr(() =>
-              deps.storage.setCompanyHidden({ companyId, hidden })
+            const cacheWrite = prepareCrmVisibilityWrite();
+            const company = await throwOnErr(() =>
+              deps.storage.getCompany({ companyId })
             );
+            if (!cacheWrite.isCurrent()) throw new Error('Session changed');
+            const result = await span.run(() =>
+              throwOnErr(() =>
+                deps.storage.setCompanyHidden({ companyId, hidden })
+              )
+            );
+            if (!cacheWrite.isCurrent()) return result;
             await span.span(
               'crm.visibility_change.refresh',
               async (refresh) => {
                 try {
-                  await invalidateCachedCrmContacts();
+                  const change = {
+                    kind: 'company' as const,
+                    id: companyId,
+                    hidden,
+                  };
+                  await Promise.all([
+                    cacheWrite.commit({
+                      companyId,
+                      contactIds: company.contacts.map((contact) => contact.id),
+                      hidden,
+                    }),
+                    updateVisibilityDetails(
+                      deps.client,
+                      change,
+                      cacheWrite.isCurrent
+                    ),
+                  ]);
+                  if (!cacheWrite.isCurrent()) return;
                   wipeCompanyEmailCache(deps, companyId);
                   await Promise.all([
-                    deps.client.invalidateQueries({ queryKey: soupKeys._def }),
+                    refreshActiveGraphqlSoupQueries({
+                      where: listCanIncludeCrm,
+                      unmaintainedOnly: true,
+                    }),
                     deps.client.invalidateQueries({
-                      queryKey: crmKeys.company(companyId).queryKey,
+                      predicate: visibilityQueryFilter(change),
+                    }),
+                    deps.client.invalidateQueries({
+                      predicate: visibilityDetailsFilter(change),
+                      // Confirmed flags are already patched; refresh on the next visit.
+                      refetchType: 'none',
+                    }),
+                    deps.client.refetchQueries({
+                      type: 'active',
+                      predicate: (query) =>
+                        query.state.data === undefined &&
+                        visibilityDetailsFilter(change)(query),
                     }),
                   ]);
                 } catch (error) {
                   refresh.error('Company visibility refresh failed');
-                  throw error;
+                  Telemetry.error(error);
                 }
               }
             );

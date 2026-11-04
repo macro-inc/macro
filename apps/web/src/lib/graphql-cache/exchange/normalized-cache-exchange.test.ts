@@ -55,6 +55,7 @@ import {
   type WriteResult,
 } from '../protocol';
 import { entityFromArgument } from './entity-resolvers';
+import { recordExternalWrite } from './external-writes';
 import { liveQueryData } from './live-query';
 import { NOOP_MUTATION_QUEUE_TELEMETRY } from './mutation-queue-telemetry';
 import {
@@ -3057,6 +3058,57 @@ describe('normalizedCacheExchange', () => {
         expect(forwarded).toHaveLength(2);
       }
     );
+
+    it.each([false, true])(
+      'fences CRM responses dispatched before a confirmed REST write (hydration=%s)',
+      async (hydration) => {
+        const { ops, network, forwarded, results } =
+          controlledQueryHarness(host);
+        ops.next(hydration ? makeHydrationOp(1) : makeOp(1, 'network-only'));
+        await tick();
+        recordExternalWrite(host, ['GraphqlSoupCrmContact']);
+        network.next(
+          queryResult(forwarded[0], {
+            item: {
+              __typename: 'GraphqlSoupCrmContact',
+              id: 'contact-1',
+              hidden: false,
+            },
+          })
+        );
+        await tick();
+        expect(results).toEqual([]);
+        expect(host.writes).toEqual([]);
+        expect(forwarded).toHaveLength(2);
+        const fresh = {
+          item: {
+            __typename: 'GraphqlSoupCrmContact',
+            id: 'contact-1',
+            hidden: true,
+          },
+        };
+        network.next(queryResult(forwarded[1], fresh));
+        await tick();
+        expect(results.at(-1)?.data).toEqual(fresh);
+      }
+    );
+
+    it('keeps unrelated in-flight responses after a REST CRM write', async () => {
+      const { ops, network, forwarded, results } = controlledQueryHarness(host);
+      ops.next(makeOp(1, 'network-only'));
+      await tick();
+      recordExternalWrite(host, [
+        'GraphqlSoupCrmCompany',
+        'GraphqlSoupCrmContact',
+      ]);
+      const document = {
+        item: { __typename: 'GraphqlSoupDocument', id: 'document-1' },
+      };
+      network.next(queryResult(forwarded[0], document));
+      await tick();
+      expect(results.at(-1)?.data).toEqual(document);
+      expect(forwarded).toHaveLength(1);
+    });
 
     it('honors cache-only if a subscriber changes policy before an obsolete response arrives', async () => {
       const { ops, network, forwarded } = controlledQueryHarness(host);

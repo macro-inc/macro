@@ -1,3 +1,4 @@
+import { externalWriteVersion, predatesExternalWrite } from './external-writes';
 /**
  * urql exchange backed by the normalized wasm cache (via a `CacheHost`).
  *
@@ -813,6 +814,7 @@ export function normalizedCacheExchange(
         makeOperation('query', op, {
           ...op.context,
           [QUERY_MUTATION_VERSION_CONTEXT_KEY]: mutationVersion,
+          externalCacheWriteVersion: externalWriteVersion(host),
         });
 
       const enqueueHydrationForward = (op: Operation): void => {
@@ -1299,7 +1301,14 @@ export function normalizedCacheExchange(
           await invalidateOlderRetainedFallback(state, resultVersion);
           // A previous write turn may have delayed this response until after
           // mutation settlement, even though publication happened earlier.
-          if (predatesMutation(op)) {
+          if (
+            predatesMutation(op) ||
+            predatesExternalWrite(
+              host,
+              op.context.externalCacheWriteVersion,
+              result.data
+            )
+          ) {
             refreshObsoleteQuery(op);
             return undefined;
           }
@@ -1455,7 +1464,14 @@ export function normalizedCacheExchange(
             }
           }
         } else if (op.kind === 'query' && isHydrateOnly(op)) {
-          if (predatesMutation(op)) {
+          if (
+            predatesMutation(op) ||
+            predatesExternalWrite(
+              host,
+              op.context.externalCacheWriteVersion,
+              result.data
+            )
+          ) {
             if (!result.hasNext && hydrationRequests.has(op.key)) {
               enqueueHydrationForward(op);
             }
@@ -1497,7 +1513,14 @@ export function normalizedCacheExchange(
           }
         } else if (op.kind === 'query') {
           const state = queryState(op.key);
-          if (predatesMutation(op)) {
+          if (
+            predatesMutation(op) ||
+            predatesExternalWrite(
+              host,
+              op.context.externalCacheWriteVersion,
+              result.data
+            )
+          ) {
             if (result.hasNext !== true) {
               state.networkRequestsInFlight = Math.max(
                 0,
