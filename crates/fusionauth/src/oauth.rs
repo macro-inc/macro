@@ -3,8 +3,11 @@ use std::borrow::Cow;
 
 use crate::{
     FusionAuthClient, Result, UnauthedClient,
-    error::{FusionAuthClientError, GenericErrorResponse},
+    error::{FusionAuthClientError, GenericErrorResponse, OAuth2TokenError},
 };
+
+#[cfg(test)]
+mod test;
 
 #[derive(serde::Serialize, Debug)]
 #[serde(rename_all = "snake_case")]
@@ -98,6 +101,23 @@ async fn complete(
                 refresh_token: body.refresh_token.into(),
                 expires_in: body.expires_in,
             })
+        }
+        status @ (reqwest::StatusCode::BAD_REQUEST | reqwest::StatusCode::UNAUTHORIZED) => {
+            let headers = res.headers().clone();
+            let body = res.text().await.map_err(FusionAuthClientError::transport)?;
+            match serde_json::from_str::<OAuth2TokenError>(&body) {
+                Ok(refusal) => {
+                    tracing::warn!(
+                        %status,
+                        error = %refusal.error,
+                        error_reason = refusal.error_reason.as_deref(),
+                        error_description = refusal.error_description.as_deref(),
+                        "fusionauth refused the oauth2 token request"
+                    );
+                    Err(FusionAuthClientError::OAuth2TokenRefused(refusal))
+                }
+                Err(_) => Err(FusionAuthClientError::unexpected(status, &headers, body)),
+            }
         }
         _ => Err(FusionAuthClientError::unexpected_response(res).await),
     }

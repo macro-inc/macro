@@ -59,6 +59,47 @@ pub enum FusionAuthClientError {
     /// The grant is invalid - user may have revoked access.
     #[error("Invalid grant - user may have revoked access")]
     InvalidGrant,
+    /// FusionAuth's OAuth2 token endpoint refused the request with an
+    /// RFC 6749 section 5.2 error, such as `invalid_grant` for a refresh
+    /// token it no longer holds.
+    #[error("{SERVICE_NAME} refused the OAuth2 token request: {0}")]
+    OAuth2TokenRefused(OAuth2TokenError),
+}
+
+/// An RFC 6749 section 5.2 error from FusionAuth's `/oauth2/token`. Carries no
+/// credential, so it is safe to log.
+#[derive(Debug, Clone, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+pub struct OAuth2TokenError {
+    /// The RFC 6749 error code, e.g. `invalid_grant` or `invalid_client`.
+    pub error: String,
+    /// FusionAuth's finer-grained cause, e.g. `refresh_token_not_found`.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub error_reason: Option<String>,
+    /// FusionAuth's human-readable description.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub error_description: Option<String>,
+}
+
+impl OAuth2TokenError {
+    /// Whether the grant itself (code or refresh token) was refused as
+    /// invalid, expired, or revoked. Only the user signing in again fixes
+    /// that; every other code means the request or our client is wrong.
+    pub fn is_invalid_grant(&self) -> bool {
+        self.error == "invalid_grant"
+    }
+}
+
+impl std::fmt::Display for OAuth2TokenError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str(&self.error)?;
+        if let Some(reason) = &self.error_reason {
+            write!(f, " ({reason})")?;
+        }
+        if let Some(description) = &self.error_description {
+            write!(f, ": {description}")?;
+        }
+        Ok(())
+    }
 }
 
 impl FusionAuthClientError {
