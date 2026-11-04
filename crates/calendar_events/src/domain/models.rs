@@ -1191,6 +1191,22 @@ impl OccurrenceRange {
             && self.end_date <= materialized.end_date
     }
 
+    /// This viewport cut to the occurrence window materialized at `now`, or
+    /// `None` when nothing of it is materialized. Reads clamp instead of
+    /// rejecting, so a client whose "now" differs from the server's (or whose
+    /// window reaches past the horizon) gets the part that exists.
+    pub fn clamped_to_materialized(&self, now: DateTime<Utc>) -> Option<Self> {
+        let materialized = Self::historical_sync(now);
+        let clamped = Self {
+            starts_at: self.starts_at.max(materialized.starts_at),
+            ends_at: self.ends_at.min(materialized.ends_at),
+            start_date: self.start_date.max(materialized.start_date),
+            end_date: self.end_date.min(materialized.end_date),
+        };
+        (clamped.ends_at > clamped.starts_at && clamped.end_date > clamped.start_date)
+            .then_some(clamped)
+    }
+
     /// Validate the range and cap it to prevent accidental unbounded scans.
     pub fn is_valid(&self) -> bool {
         self.ends_at > self.starts_at

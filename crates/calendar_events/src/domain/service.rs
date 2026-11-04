@@ -109,7 +109,9 @@ where
         cursor: Option<CalendarOccurrenceCursor>,
         limit: u16,
     ) -> Result<Vec<super::models::OccurrenceListing>, Report> {
-        validate_query(&range, limit)?;
+        let Some(range) = clamp_query(range, limit)? else {
+            return Ok(Vec::new());
+        };
         let mut rows = self
             .repository
             .list_occurrences(requester_id, range, cursor, limit)
@@ -175,7 +177,9 @@ where
         range: OccurrenceRange,
         limit: u16,
     ) -> Result<Vec<super::models::TeamOutOfOffice>, Report> {
-        validate_query(&range, limit)?;
+        let Some(range) = clamp_query(range, limit)? else {
+            return Ok(Vec::new());
+        };
         if !self.team_sharing_enabled {
             return Ok(Vec::new());
         }
@@ -1379,8 +1383,11 @@ fn validate_upsert(upsert: &CalendarEventUpsert) -> Result<(), Report> {
     Ok(())
 }
 
-fn validate_query(range: &OccurrenceRange, limit: u16) -> Result<(), Report> {
-    if !range.is_valid() || !range.is_materialized_at(Utc::now()) {
+/// Validates a read and cuts its viewport to the materialized occurrence
+/// window. `None` when no part of the viewport is materialized: the read is
+/// empty rather than rejected.
+fn clamp_query(range: OccurrenceRange, limit: u16) -> Result<Option<OccurrenceRange>, Report> {
+    if !range.is_valid() {
         return Err(rootcause::report!(CalendarValidationError::InvalidRange).into());
     }
     // One extra row lets the HTTP adapter report truncation accurately while
@@ -1388,7 +1395,7 @@ fn validate_query(range: &OccurrenceRange, limit: u16) -> Result<(), Report> {
     if !(1..=2001).contains(&limit) {
         return Err(rootcause::report!(CalendarValidationError::InvalidLimit).into());
     }
-    Ok(())
+    Ok(range.clamped_to_materialized(Utc::now()))
 }
 
 #[cfg(test)]

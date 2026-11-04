@@ -72,6 +72,9 @@ reminder dispatch, team availability, and provider/Postgres persistence.
   occurrence projections, not separate events — don't model them as new entities.
 - Imported point (non-recurring) events must survive sync and cache round-trips
   unchanged (#7762) — a regression here silently drops user events.
+- Occurrence reads (`list_occurrences`, team out-of-office) clamp their window
+  to the materialized range (now − 365 to now + 730 days) instead of rejecting
+  it; a window wholly outside it reads empty.
 - Normalize imported Google all-day events with matching start/end dates to one
   day in the adapter, including recurring instances and overrides; preserve the
   raw provider payload and keep reversed dates invalid.
