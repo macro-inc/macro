@@ -30,4 +30,4 @@ pub use ports::{FocusClassifier, FocusClassifierError, FocusStore, ProfileSource
 pub use questions::{FOCUS_QUESTIONS, FocusQuestion};
 pub use rule::{FOCUS_RULE_VERSION, decide};
 pub use service::{ClassifyOutcome, FocusQueries, FocusService, SweepReport};
-pub(crate) use signals::RECENT_CONTACT_DAYS;
+pub use signals::RECENT_CONTACT_DAYS;

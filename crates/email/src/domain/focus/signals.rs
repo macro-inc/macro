@@ -12,7 +12,7 @@ use super::{
 
 /// How far back from a thread's latest message the owner's writing to someone
 /// still makes them a recent contact.
-pub(crate) const RECENT_CONTACT_DAYS: i64 = 90;
+pub const RECENT_CONTACT_DAYS: i64 = 90;
 
 /// Consumer mail providers; sharing one of these is not being teammates.
 const FREEMAIL_DOMAINS: [&str; 11] = [
