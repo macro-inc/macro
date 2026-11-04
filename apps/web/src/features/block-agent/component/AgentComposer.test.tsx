@@ -1,5 +1,5 @@
 import type { TurnState } from '@service-agent-fold/generated/types';
-import { cleanup, fireEvent, render, screen } from '@solidjs/testing-library';
+import { cleanup, render } from '@solidjs/testing-library';
 import { createSignal } from 'solid-js';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { AgentInputProps } from '../ui/AgentInput';
@@ -12,7 +12,6 @@ const mocks = vi.hoisted(() => ({
   turn: () => 'idle' as TurnState,
   issue: vi.fn(),
   selectModel: vi.fn(),
-  sendNext: vi.fn(),
   steer: vi.fn(),
   editQueued: vi.fn(),
   removeQueued: vi.fn(),
@@ -61,7 +60,6 @@ vi.mock('../context/AgentSessionContext', () => ({
       remove: mocks.removeQueued,
       steer: mocks.steerQueued,
     },
-    sendNext: mocks.sendNext,
     steer: mocks.steer,
     steerFailed: () => new Set(),
     turn: () => mocks.turn(),
@@ -116,7 +114,6 @@ describe('view-only session controls', () => {
 
     mocks.input?.onSend('A new prompt', []);
     mocks.input?.onStop?.();
-    mocks.input?.onSendNext?.();
     mocks.input?.onAttachFiles?.([new File(['text'], 'note.txt')]);
     mocks.model?.onSelect('new-model');
     mocks.queued?.onEdit('queued-1', 'Edited prompt');
@@ -124,7 +121,6 @@ describe('view-only session controls', () => {
 
     expect(mocks.issue).not.toHaveBeenCalled();
     expect(mocks.selectModel).not.toHaveBeenCalled();
-    expect(mocks.sendNext).not.toHaveBeenCalled();
     expect(mocks.upload).not.toHaveBeenCalled();
     expect(mocks.consumeNotes).not.toHaveBeenCalled();
     mocks.queued?.onSteer?.('queued-1');
@@ -179,23 +175,16 @@ describe('view-only session controls', () => {
   );
 });
 
-it('keeps force-sending the queue head while the turn transitions', () => {
+it('keeps steering queued messages while the turn transitions', () => {
   const [turn, setTurn] = createSignal<TurnState>('running');
   mocks.turn = turn;
   mocks.session = () => ({ canEdit: true });
   render(() => <AgentComposer />);
   expect(mocks.queued?.onSteer).toEqual(expect.any(Function));
-  const sendNext = screen.getByRole('button', {
-    name: 'Send next queued message now',
-  });
-  fireEvent.click(sendNext);
-  expect(mocks.sendNext).toHaveBeenCalledTimes(1);
   for (const next of ['stopping', 'starting'] as const) {
     setTurn(next);
     expect(mocks.queued?.onSteer).toEqual(expect.any(Function));
-    fireEvent.click(sendNext);
   }
-  expect(mocks.sendNext).toHaveBeenCalledTimes(3);
 });
 
 it('retains an unsent draft when speed configuration is rejected', async () => {

@@ -91,6 +91,39 @@ fn every_host_toolset_passes_schema_validation() {
     }
 }
 
+/// Gemini rejects a whole request when one tool schema has a `$ref` loop of
+/// required fields, so every turn advertising that tool fails.
+#[test]
+fn no_tool_schema_has_a_ref_loop_of_required_fields() {
+    let mut schemas = Vec::new();
+    for tools in [
+        tools_for(AiHost::Chat),
+        tools_for(AiHost::AgentSession),
+        tools_for(AiHost::ChannelBot),
+        tools_for(AiHost::Mcp),
+        tools_for_agent_code_mode(),
+    ] {
+        let advertised = tools.toolset.request_schemas().unwrap_or_default();
+        schemas.extend(advertised.into_iter().map(|tool| (tool.name, tool.schema)));
+        schemas.extend(
+            tools
+                .deferred
+                .iter()
+                .map(|tool| (tool.name.clone(), tool.schema.clone())),
+        );
+    }
+    let subagent = subagent_toolset().request_schemas().unwrap_or_default();
+    schemas.extend(subagent.into_iter().map(|tool| (tool.name, tool.schema)));
+    assert!(schemas.iter().any(|(name, _)| name == "DisplayResults"));
+    for (name, schema) in schemas {
+        assert_eq!(
+            ai_toolset::schema::required_ref_loop(schema.as_value()),
+            None,
+            "{name}"
+        );
+    }
+}
+
 #[test]
 fn coding_dispatch_is_available_to_every_host_but_not_internal_subagents() {
     for host in [
@@ -818,4 +851,28 @@ fn conversation_tools_only_advertise_new_sessions() {
         }
     }
     assert!(!subagent_toolset().tools.contains_key("ReadChat"));
+}
+
+#[test]
+fn unrouted_prompts_inline_the_sdk_area_guidance_and_routed_ones_leave_it_to_the_turn() {
+    use agent_code_mode::domain::{GuideHost, inline_guides};
+    let code = tools_for_agent_code_mode();
+    let unrouted = code.prompt.to_string();
+    let routed = code.routed_prompt.to_string();
+    assert!(unrouted.contains(inline_guides(GuideHost::Code)));
+    assert!(!routed.contains("How Macro databases work"));
+    assert_eq!(
+        unrouted.replacen(inline_guides(GuideHost::Code), "", 1),
+        routed
+    );
+    for host in [AiHost::AgentSession, AiHost::Chat, AiHost::ChannelBot] {
+        let tools = tools_for(host);
+        let prompt = tools.prompt.to_string();
+        assert!(
+            prompt.contains(inline_guides(GuideHost::Direct)),
+            "{host:?}"
+        );
+        assert!(prompt.contains("DispatchCodingAgent"), "{host:?}");
+        assert_eq!(prompt, tools.routed_prompt.to_string(), "{host:?}");
+    }
 }

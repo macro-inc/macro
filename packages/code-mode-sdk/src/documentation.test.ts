@@ -1,11 +1,13 @@
 import { readFile } from 'node:fs/promises';
 import { describe, expect, it } from 'vitest';
-import { packageEntityDocs, type SdkDocs } from '../scripts/typedoc';
+import {
+  type AgentNotes,
+  packageEntityDocs,
+  type SdkDocs,
+} from '../scripts/typedoc';
 
-const artifact = new URL(
-  '../../../crates/agent_code_mode/src/domain/documentation.json',
-  import.meta.url
-);
+// Written by `bun run generate`, which `bun run test` runs first.
+const artifact = new URL('../dist/documentation.json', import.meta.url);
 
 const NAMESPACE = `# Class: ExampleNamespace
 
@@ -92,8 +94,22 @@ function fixturePages() {
   ]);
 }
 
-function pack(pages = fixturePages()) {
-  return packageEntityDocs(pages, { example: 'An example.' });
+const NOTES: AgentNotes[] = [
+  {
+    module: 'src/entities/example/namespace',
+    name: 'ExampleNamespace',
+    routing: 'Use when working with examples; not with anything else.',
+    guide: 'Examples are shared with the whole team.',
+  },
+  {
+    module: 'src/entities/entity',
+    name: 'Base',
+    routing: 'Use when building on entity handles; not for one area.',
+  },
+];
+
+function pack(pages = fixturePages(), notes = NOTES) {
+  return packageEntityDocs(pages, ['example'], notes);
 }
 
 describe('TypeDoc documentation packaging', () => {
@@ -150,9 +166,74 @@ describe('TypeDoc documentation packaging', () => {
     const pages = fixturePages();
     pages.delete('generated/example/types.gen/type-aliases/Child.md');
     expect(() => pack(pages)).toThrow('Broken TypeDoc link');
-    expect(() =>
-      packageEntityDocs(new Map(), { example: 'An example.' })
-    ).toThrow('no pages');
+    expect(() => packageEntityDocs(new Map(), ['example'], NOTES)).toThrow(
+      'no pages'
+    );
+  });
+
+  it('describes each entity by its routing sentence and carries its agent guidance', () => {
+    const { entities, symbols } = pack();
+    const example = entities.find((entity) => entity.name === 'example');
+    expect(example?.description).toBe(
+      'Use when working with examples; not with anything else.'
+    );
+    expect(example?.guide).toBe('Examples are shared with the whole team.');
+    expect(example?.index).toContain(
+      'Use when working with examples; not with anything else.'
+    );
+    const core = entities.find((entity) => entity.name === 'core');
+    expect(core?.guide).toBeUndefined();
+    expect(symbols.ExampleNamespace).toContain(
+      '## Agent guidance\n\nExamples are shared with the whole team.'
+    );
+    expect(symbols.Example).not.toContain('Agent guidance');
+  });
+
+  it('fails generation on an entity without exactly one routing sentence, or a stray note', () => {
+    expect(() => pack(fixturePages(), NOTES.slice(0, 1))).toThrow(
+      'SDK entity core needs exactly one @routing sentence'
+    );
+    const doubled: AgentNotes[] = [
+      ...NOTES,
+      {
+        module: 'src/entities/example/example',
+        name: 'Example',
+        routing: 'Use when again; not twice.',
+      },
+    ];
+    expect(() => pack(fixturePages(), doubled)).toThrow(
+      'SDK entity example needs exactly one @routing sentence'
+    );
+    const stray: AgentNotes[] = [
+      ...NOTES,
+      { module: 'src/elsewhere', name: 'Lost', guide: 'Nobody reads this.' },
+    ];
+    expect(() => pack(fixturePages(), stray)).toThrow(
+      '@routing or @agent outside every SDK entity: src/elsewhere#Lost'
+    );
+  });
+
+  it('routes every real entity on a "Use when …; not …" sentence', async () => {
+    const docs = JSON.parse(await readFile(artifact, 'utf8')) as SdkDocs;
+    for (const doc of docs.entities) {
+      expect(doc.description, doc.name).toMatch(/^Use when .+; not .+/);
+      expect(doc.description.length, doc.name).toBeLessThanOrEqual(300);
+    }
+    const guide = (name: string) =>
+      docs.entities.find((doc) => doc.name === name)?.guide ?? '';
+    expect(guide('databases')).toContain("check every database's tables");
+    expect(guide('crm')).toContain('not a Macro database');
+    expect(guide('email')).toContain('Labels are per inbox');
+    expect(guide('calendar')).toContain(
+      'Booking links use conversational confirmation'
+    );
+    expect(guide('channels')).toContain('A form for a channel is a poll:');
+    expect(guide('tasks')).toContain('Never edit, merge or delete');
+    expect(guide('agentSessions')).toContain('macro.agentSessions.createManaged');
+    expect(guide('routines')).toContain('never sees this conversation');
+    expect(guide('documents')).toContain('<m-document-mention>');
+    expect(guide('core')).toContain('macro.documents.search');
+    expect(docs.symbols.DatabaseNamespace).toContain('## Agent guidance');
   });
 
   it('documents real public SDK handles in small indexes and references', async () => {

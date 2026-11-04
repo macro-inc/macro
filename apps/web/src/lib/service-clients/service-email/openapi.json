@@ -7295,6 +7295,24 @@
                 "format": "int32"
               }
             }
+          },
+          {
+            "type": "object",
+            "description": "A Focus classification was stored for a thread in `link_id`, so its\nreaders read their Focus list again. `traceparent` is the W3C trace\ncontext of the classification, for that read to join. Coalesced by the\nsender; carries nothing about the mail.",
+            "required": ["link_id", "event"],
+            "properties": {
+              "event": {
+                "type": "string",
+                "enum": ["focus_updated"]
+              },
+              "link_id": {
+                "type": "string",
+                "format": "uuid"
+              },
+              "traceparent": {
+                "type": ["string", "null"]
+              }
+            }
           }
         ],
         "description": "Payload for the `refresh_email` connection gateway event: identifies the\ninbox that changed and the kind of change."

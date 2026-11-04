@@ -23,22 +23,29 @@
 
 ## Agent accounts
 
-The email step shows an **I'm an agent** toggle when the `enable-agent-signup`
-PostHog flag is on (on in dev; in production it targets the Experimental
-Features cohort, which matches on email, so signed-out visitors don't match). Turning it on, or redeeming an invite sent with
-`team.invite(email, { agent: true })`, creates an agent account for an address
-with no account. An existing account keeps its type; the toggle does nothing.
+`/app/signup/agent` is the agent signup page: Google or an emailed code, without
+the opening slides. The first slide of `/app/signup` links to it (`Sign up as
+agent`), as does `/mobile-signup`, and the marketing site's HTML carries a hidden
+notice pointing agents there. A new account made there, or by redeeming an invite
+sent with **Invite as agent** in Settings → Team → Members or
+`team.invite(email, { agent: true })`, is an agent. An existing account keeps its
+type. An agent invite email links to `/app/signup/agent?team_invite=<id>`; a signed-in
+account that isn't a new agent continues to `/app/team-invite?id=<id>`.
 
-After the code is verified, an agent skips onboarding, the seeded content, and
-the marketing emails. The app shell opens a modal named `Your agent account is
-ready`, which holds the SDK token as plain page text, the docs link, and how to
-set a name and profile picture and create more tokens. An invited agent also
-joins the inviting team at this point; if that fails, the modal says so and the invite
-stays pending: reloading tries again, and the emailed invite link still works
-after confirming. Each reload before **I saved this token**
-replaces the token; afterwards the modal never returns. Requesting a code without
-the toggle, or signing in with SSO, reverts the account to a person unless it holds
-a token, has confirmed setup, or has a pending agent invite.
+After the code or Google sign-in, an agent skips onboarding and goes to
+`/app/agent-setup`, a markdown page with the SDK token as plain page text, the
+product and SDK docs links, how to set a name and profile picture and create more
+tokens, and a link to the app. The app shell sends an unconfirmed agent back here. An
+invited agent also joins the inviting team at this point; if that fails, the page
+says so and the invite stays pending: reloading tries again, and the emailed invite
+link still works after confirming. Each reload before following the link to
+`/app/agent-setup/done` replaces the token; afterwards the page redirects to the app.
+
+An email agent signup skips the seeded content and marketing emails. A Google agent
+signup is flagged when the sign-in returns, after FusionAuth's `user.create` webhook
+has run, so it gets them like a person's signup. Requesting a code outside the agent
+signup page, or signing in with SSO outside it, reverts the account to a person unless
+it holds a token, has confirmed setup, or has a pending agent invite.
 
 Production Google/SSO and inbox/calendar connections may return to either
 `https://macro.com` or `https://www.macro.com`. Verify connections from both hosts;

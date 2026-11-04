@@ -13,6 +13,8 @@ export interface ReferralLink {
 /**
  * Invite people to Macro with the caller's referral link. A new account that
  * signs up through the link earns the caller a referral reward.
+ *
+ * @routing Use when sharing the user's referral link or inviting people to join Macro; not team membership.
  */
 export class ReferralNamespace {
   constructor(private readonly client: MacroClient) {}

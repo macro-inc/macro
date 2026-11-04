@@ -50,8 +50,6 @@ jobs:
             - 'packages/sdk-docs/**'
             - 'services/ai-editing-worker/**'
             - 'packages/code-mode-sdk/**'
-            - 'crates/code_execution/src/outbound/deno/*.mjs'
-            - 'crates/agent_code_mode/src/domain/documentation.json'
             - 'crates/agent_code_mode/SKILL.md'
             - '.github/actions/setup-reqs-web/**'
           codegen_changed:
@@ -306,6 +304,10 @@ jobs:
         else
           echo "::warning::Namespace remote sccache setup failed; using local cache fallback"
         fi
+    - name: Build code-mode assets
+      run: |
+        assets="$(nix build --no-link --print-out-paths --print-build-logs .#code-mode-assets)"
+        echo "CODE_MODE_ASSETS_DIR=$assets" >> "$GITHUB_ENV"
     - name: Build schema binaries
       run: |
         set -euo pipefail

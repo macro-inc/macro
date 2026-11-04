@@ -229,7 +229,7 @@ show progress; the event summary and selected time stay visible. Choose another
 time preserves attendee input. Event booking pages do not show an All meetings
 link back to the profile chooser.
 The private confirmation shows the meeting, date, timezone, location, and guest.
-In the native iOS and Android apps, standalone booking and receipt pages keep a
+In the native desktop, iOS and Android apps, standalone booking and receipt pages keep a
 sticky **Back to Macro** button below the device's top safe-area inset. It returns to
 the app through the router without reloading, including while the page is loading
 or unavailable. Browser pages and embedded booking dialogs omit this button.

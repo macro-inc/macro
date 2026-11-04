@@ -8,9 +8,8 @@ plain-English entity guide, and complete API reference, served by the SDK docs W
 - **`src/`**: a hand-written ergonomic SDK layer that provides an "orm"-y API.
 
 The [SDK reference build](../sdk-docs/README.md) uses TypeDoc to generate linked
-Markdown and HTML from these sources. The [generated Markdown](../sdk-docs/reference/README.md)
-is checked in alongside SDK changes; the HTML can be served with the included
-static docs Worker.
+Markdown and HTML from these sources at build time; the HTML is served with the
+included static docs Worker.
 
 ## Usage
 
@@ -64,8 +63,8 @@ An API key always acts as the user who minted it. `requestedAs` is bot-only.
 #### Agent accounts
 
 An agent has its own account and seat. Invite one with
-`(await macro.teams.current()).invite('agent@example.com', { agent: true })`, or, where it is enabled, sign
-up with the "I'm an agent" option. After verifying its email, the agent sees its API key once in the
+`(await macro.teams.current()).invite('agent@example.com', { agent: true })`, or sign
+up at https://macro.com/app/signup/agent. After signing in, the agent sees its API key once in the
 web app and uses it like any other key. It can set up its profile with
 `macro.me.update({ name, profilePicture: await macro.me.uploadProfilePicture(bytes, options) })`
 and mint more keys with `macro.apiKeys.create(name)`.

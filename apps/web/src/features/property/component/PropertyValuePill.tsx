@@ -1,9 +1,11 @@
 import { cn } from '@ui';
 import { type ComponentProps, type JSX, Match, Show, Switch } from 'solid-js';
 import { Dynamic } from 'solid-js/web';
+import { SYSTEM_PROPERTY_IDS } from '../identifiers';
 import { Property } from '../property';
 import { getEntityValues, hasValue } from '../utils';
 import { ProjectLinkPill } from './ProjectLinkPill';
+import { SourceLinkPill } from './SourceLinkPill';
 
 type PropertyValuePillProps = Pick<
   ComponentProps<typeof Property.Root>,
@@ -48,7 +50,14 @@ export function PropertyValuePill(props: PropertyValuePillProps) {
             variant={props.variant ?? 'outline'}
             size={props.size}
           >
-            <Show when={props.showLabel && hasValue(property())}>
+            <Show
+              when={
+                props.showLabel &&
+                property().propertyDefinitionId !==
+                  SYSTEM_PROPERTY_IDS.SOURCE &&
+                hasValue(property())
+              }
+            >
               <span class="shrink-0 text-ink-muted">
                 {property().displayName}:
               </span>
@@ -99,14 +108,29 @@ export function PropertyValuePill(props: PropertyValuePillProps) {
               actions={props.hoverActions}
               trailingAction={props.hoverTrailingAction}
             >
-              <Show when={props.opensProject} fallback={pill()}>
-                <ProjectLinkPill
-                  property={property()}
-                  class={props.class}
-                  iconClass={props.iconClass}
-                  fallback={pill()}
-                />
-              </Show>
+              <Switch fallback={pill()}>
+                <Match
+                  when={
+                    property().propertyDefinitionId ===
+                    SYSTEM_PROPERTY_IDS.SOURCE
+                  }
+                >
+                  <SourceLinkPill
+                    property={property()}
+                    class={props.class}
+                    iconClass={props.iconClass}
+                    fallback={pill()}
+                  />
+                </Match>
+                <Match when={props.opensProject}>
+                  <ProjectLinkPill
+                    property={property()}
+                    class={props.class}
+                    iconClass={props.iconClass}
+                    fallback={pill()}
+                  />
+                </Match>
+              </Switch>
             </Property.Tooltip>
             <Dynamic
               component={props.editor ?? Property.PopoverEditor}

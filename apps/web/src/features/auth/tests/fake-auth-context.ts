@@ -129,9 +129,8 @@ export function createFakeAuth(
         return options.ssoRedirect(provider, intent, email);
       signIn(email);
     },
-    agentSignupEnabled: () => false,
-    sendEmailCode: async ({ email, password }) => {
-      call(`sendCode:${email}`);
+    sendEmailCode: async ({ email, password, isAgent }) => {
+      call(isAgent ? `sendAgentCode:${email}` : `sendCode:${email}`);
       const failure = world.failures.sendCode;
       if (failure !== undefined) return { t: 'failed', message: failure };
       const expected = world.passwordAccounts[email];
