@@ -220,17 +220,23 @@ queries or creation actions. Copy-link islands are 40px square on touch with
 a 24px icon. Verify both record types, section changes, dismissal, copy feedback,
 and header fit at phone and tablet widths.
 
-To remove a company or person manually, open its **Overview**, choose **Remove
-from CRM** below its details, and confirm. On phones the confirmation is a bottom
-sheet. Only team admins and owners can remove or restore records; other members
-see a disabled action and an explanation. Removal hides the record from the
+To remove a person manually, choose the eye-slash **Remove from CRM** button
+beside **Copy contact link** in the top toolbar and confirm. Hidden people show
+the regular eye **Restore to CRM** action in the same place. Both the Customers
+record header and standalone contact header offer it on every section; there is
+no second action in Overview. Company removal stays below the details on
+**Overview**. On phones the confirmation is a bottom sheet. Only team admins
+and owners can remove or restore records; other members see a disabled action. Removal hides the record from the
 team's CRM lists without permanently deleting it. The page stays open and offers
 **Restore to CRM**; admins can also reopen the record's direct link to restore it.
 Hiding a company hides all its contacts and turns off team email sync. Restoring
 the company restores every contact, including individually hidden ones, but leaves
 email sync off; re-enable **Sync Emails** under the information panel's **Sharing**
-section if needed. Admins can still inspect hidden contacts in a company's Team
-tab. The existing **Sharing → Visible in CRM** checkbox and company row **Hide /
+section if needed. A company's Team tab excludes hidden contacts for every role,
+including search results. Admins retain direct-link access to hidden contacts for
+restoration. Removing or restoring a person refreshes open company Team lists;
+returning to a previously visited company reloads its contacts. The existing
+**Sharing → Visible in CRM** checkbox and company row **Hide /
 Unhide** actions control the same state.
 Restoring a person under a hidden company does not make them appear in People
 until that company is restored too. People without a company can be restored

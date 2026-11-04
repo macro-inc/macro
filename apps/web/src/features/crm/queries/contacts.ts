@@ -144,12 +144,13 @@ export function useSetContactNameMutation(deps: CrmRecordDependencies) {
 
 /**
  * Toggles `crm_contacts.hidden` via `PUT /crm/contacts/{id}/hidden`.
- * Hidden contacts disappear from the parent company's contact list
- * (non-admin view) and from any soup surface that filters them.
+ * Hidden contacts disappear from normal company Team lists for every role
+ * and from any soup surface that filters them. Authorized detail reads still
+ * include hidden contacts for restoration.
  *
  * Awaits cache invalidation in the visibility trace so the mutation
- * stays pending until both the contact query and the soup queries
- * refetch — the toggle state and any dependent UI all flip in one beat.
+ * stays pending until active contact, company and soup queries refetch.
+ * Inactive company queries become stale and reload when revisited.
  */
 export function useSetContactHiddenMutation(deps: CrmRecordDependencies) {
   return useMutation(
@@ -178,6 +179,11 @@ export function useSetContactHiddenMutation(deps: CrmRecordDependencies) {
                     deps.client.invalidateQueries({ queryKey: soupKeys._def }),
                     deps.client.invalidateQueries({
                       queryKey: crmKeys.contact(contactId).queryKey,
+                    }),
+                    // Company responses embed contacts. Invalidate the family
+                    // even when no contact detail (or company ID) is cached.
+                    deps.client.invalidateQueries({
+                      queryKey: crmKeys.company._def,
                     }),
                   ]);
                 } catch (error) {
