@@ -33,16 +33,16 @@ function MessageImageTile(props: {
     );
 
   return (
-    <div
-      class="group/media relative flex rounded-2xl border border-edge"
-      style={{
-        width: dimensions() ? `${dimensions()!.width}px` : undefined,
-        'max-width': '100%',
-      }}
-    >
+    // The button keeps the tile's size and frame; this wrapper only positions
+    // the toolbar beside it, since a button can't contain buttons.
+    <div class="group/media relative flex max-w-full">
       <button
         type="button"
-        class="relative flex w-full min-w-0 rounded-2xl"
+        class="relative flex rounded-2xl border border-edge"
+        style={{
+          width: dimensions() ? `${dimensions()!.width}px` : undefined,
+          'max-width': '100%',
+        }}
         onClick={props.onOpen}
         aria-label="Open image viewer"
       >
