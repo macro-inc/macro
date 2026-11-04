@@ -1,4 +1,3 @@
-import { QueryClientProvider } from '@tanstack/solid-query';
 import { queryClient } from '@queries/client';
 import {
   cleanup,
@@ -7,6 +6,7 @@ import {
   screen,
   waitFor,
 } from '@solidjs/testing-library';
+import { QueryClientProvider } from '@tanstack/solid-query';
 import { err, ok } from 'neverthrow';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { AccountManagerCard } from './account-manager-card';
@@ -111,7 +111,9 @@ describe('AccountManagerCard', () => {
       ok({ grant: grant('active', 'manager'), token: 'mak_secret' })
     );
 
-    fireEvent.click(await screen.findByRole('button', { name: 'Reveal token' }));
+    fireEvent.click(
+      await screen.findByRole('button', { name: 'Reveal token' })
+    );
 
     await screen.findByDisplayValue('mak_secret');
     expect(mocks.claim).toHaveBeenCalledTimes(1);
