@@ -4,7 +4,19 @@ import { fetchTeamContactPage } from './onboarding-contact-network';
 
 export const [lookupIds, setLookupIds] = createSignal<readonly string[]>([]);
 export const [lookupSizes, setLookupSizes] = createSignal<number[]>([]);
-export { fetchContactReferencePage } from './task-filter-people';
+
+import {
+  fetchImportIds,
+  fetchImportReferences,
+} from './import-contact-network';
+import { fetchContactReferencePage as fetchTaskReferences } from './task-filter-people';
+export const fetchContactReferencePage: typeof fetchTaskReferences = (
+  input,
+  signal
+) =>
+  new URLSearchParams(location.search).has('linear-import')
+    ? fetchImportReferences(input, signal)
+    : fetchTaskReferences(input, signal);
 
 import type {
   ContactDirectoryByUserIdsQuery,
@@ -46,6 +58,8 @@ export async function fetchContactDirectoryByIds(
   userIds: string[],
   signal: AbortSignal
 ): Promise<ContactDirectoryByUserIdsQuery> {
+  if (new URLSearchParams(location.search).has('linear-import'))
+    return fetchImportIds(userIds, signal);
   signal.throwIfAborted();
   setLookupIds([...userIds]);
   setLookupSizes((sizes) => [...sizes, userIds.length]);

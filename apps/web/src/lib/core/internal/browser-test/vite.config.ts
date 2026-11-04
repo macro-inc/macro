@@ -15,6 +15,24 @@ export default defineConfig({
       name: 'soup-filter-test-adapters',
       enforce: 'pre',
       resolveId(source, importer) {
+        if (importer?.includes('/integrations/import-linear/')) {
+          if (
+            [
+              '@queries/auth/account-scope',
+              '@queries/auth/use-query-account',
+            ].includes(source)
+          )
+            return `${directory}/task-filter-adapters.tsx`;
+          if (
+            [
+              '@core/util/create',
+              '@queries/client',
+              '@queries/history/history',
+              '@core/component/Toast/Toast',
+            ].includes(source)
+          )
+            return `${directory}/linear-import-adapters.ts`;
+        }
         if (
           importer?.endsWith('/onboarding/queries/team-contacts.ts') &&
           [

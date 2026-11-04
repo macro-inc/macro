@@ -1,12 +1,12 @@
 ## Development Commands
 
 - Use `bun` as the package manager and script runner (`bun run build`, `bunx tsc`).
-- `bun run test`: run tests 
+- `bun run test`: run tests
 - `bun run check`: check typescript changes
 - Forward `CacheHost.people` through the app's retiring host, resolving the current host on each call even for captured methods; retired reads return unsupported and context writes reject rather than acknowledge discarded publication.
-- `CacheHost.people` contracts come from cache-core models: `bun run gen-cache-people-schema --rust` regenerates Rust JSON plus Zod/types; `--check --rust` verifies both. `bun run check` verifies JSON-to-frontend generation, while cache-core tests verify Rust-to-JSON drift. Missing native person commands mean unsupported, never permission to issue an unscoped write. 
-- `bun run lint`: lint with biome 
-- `bun run format`: format changes with biome 
+- `CacheHost.people` contracts come from cache-core models: `bun run gen-cache-people-schema --rust` regenerates Rust JSON plus Zod/types; `--check --rust` verifies both. `bun run check` verifies JSON-to-frontend generation, while cache-core tests verify Rust-to-JSON drift. Missing native person commands mean unsupported, never permission to issue an unscoped write.
+- `bun run lint`: lint with biome
+- `bun run format`: format changes with biome
 - `bun run knip`: to check for dead code
 - Run Linux native cache-plugin tests from the repository root with `nix develop .#tauri-linux --command cargo test --manifest-path apps/web/tauri/Cargo.toml -p graphql_cache_plugin`; the [Tauri platform shell](../../docs/development/running-locally.md) supplies the required desktop libraries.
 - Refresh `nix-support/node_modules-hashes.json` for Linux and Darwin when dependency manifests, the lockfile, or dependency patches change.
@@ -128,6 +128,12 @@ Onboarding team prefill searches only the server-approved domain, follows bounde
 continuations until six distinct non-self emails or exhaustion, and retains only
 that seed. No approved domain means no contact reads. Scope the source by account,
 session and cache generation; preserve the form's first settled seed through refreshes.
+Linear import resolves only current CSV assignees, serially in 500-label exact-reference
+batches, and uses the shared single-user property picker for manual mapping. Keep
+manual Unassigned distinct from no override; incomplete evidence requires retry or
+an explicit choice. Reset file-owned mappings on upload/account changes, snapshot
+assignments before creation, and use `createTaskForAccount` to fence dispatch and
+local publication. Imported-row state may scale with the file, never the directory.
 `CacheHost.people.resolveReferences` exposes the core's bounded full-directory
 ambiguity evidence. It needs a bound viewer and ready context only for inbox
 exclusions; callers must also check directory completeness. Missing reference

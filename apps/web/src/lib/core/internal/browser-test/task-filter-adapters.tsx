@@ -1,12 +1,18 @@
 import type { FacetSelection } from '@app/features/soup/filters/facets';
-import type { QueryAccount } from '@queries/auth/account-scope';
 
 export { referenceRequests } from './task-filter-people';
+export {
+  account,
+  assertQueryAccount,
+  isCurrentQueryAccount,
+  setAccount,
+  useQueryAccount,
+} from './test-account';
 
 import { ok } from 'neverthrow';
 import { createSignal } from 'solid-js';
 import { createStore, reconcile } from 'solid-js/store';
-import { SELECTED, VIEWER } from './list-filter-adapters';
+import { SELECTED } from './list-filter-adapters';
 
 const initialFacets: FacetSelection = {
   status: ['in-progress'],
@@ -19,20 +25,6 @@ export const [taskState, setTaskState] = createStore({
   groupBy: 'priority',
 });
 export const [navigation, setNavigation] = createSignal({ id: 'tasks' });
-export const [account, setAccount] = createSignal<QueryAccount>({
-  userId: VIEWER,
-  session: 0,
-});
-export const useQueryAccount = () => account;
-export const isCurrentQueryAccount = (owner: QueryAccount | undefined) =>
-  !!owner &&
-  owner.userId === account().userId &&
-  owner.session === account().session;
-export function assertQueryAccount(
-  owner: QueryAccount | undefined
-): asserts owner is QueryAccount {
-  if (!isCurrentQueryAccount(owner)) throw new Error('Query account changed');
-}
 export function useTasksView() {
   return {
     state: taskState,

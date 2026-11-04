@@ -1,3 +1,4 @@
+import { anyAbortSignal } from '@core/util/abort-signal';
 import { fireAndForget } from '@core/util/fireAndForget';
 import {
   assertContactReferenceInput,
@@ -63,7 +64,7 @@ export function createContactReferenceReader(
     request,
     callerSignal
   ) => {
-    const signal = AbortSignal.any([callerSignal, lifetime.signal]);
+    const signal = anyAbortSignal([callerSignal, lifetime.signal]);
     return new Promise<ContactReferenceResolution>((resolve, reject) => {
       signal.throwIfAborted();
       assertContactReferenceInput(request);

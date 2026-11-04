@@ -45,6 +45,15 @@ offline/retry and late replies after filter edits, navigation or replacement log
 Mobile retains its existing manual-only UI. Saved-view action chrome and task loading
 are stand-ins; this fixture does not claim saved-view dialog or live model coverage.
 
+`/?linear-import` mounts the real importer, CSV conversion, batched reference reader
+and single-user property picker. It reuses the virtual 100k property window fixture;
+contact transport, auth scope and task/history writes are stand-ins. Desktop/phone
+cases cover exact/ambiguous/comma-bearing names, address aliases, explicit Unassigned
+during late evidence and reconnect, file replacement, late file reads, paging/search,
+single selection and stopping after replacement login. Unit coverage separately
+checks 500-label serialization, storage-generation changes and the real task creation
+helper's guarded local publication. No live imports or backend task writes are claimed.
+
 `/?onboarding-contacts` mounts the real onboarding team step and bounded teammate
 query source over synthetic membership pages. It follows five empty continuations,
 stops after six eligible emails, excludes self/domain aliases, and keeps manual form
@@ -93,8 +102,8 @@ selection preservation and input focus. The source unit regression additionally
 checks twenty replacements, close/reopen reset and query-history collection.
 New message/channel, call, routine-template and sharing pickers use this source;
 main email fields also use it, with composition coverage in
-`features/email-compose/browser-test/recipient-directory.app.e2e.ts`. Remaining
-import and database SQL people still require their separate migration.
+`features/email-compose/browser-test/recipient-directory.app.e2e.ts`. The database
+SQL people source still requires its separate migration.
 
 This is UI/adapter coverage, not a WASM memory measurement or live-backend trace.
 Real Turso/OPFS hydration/search coverage lives in `crates/client/cache-turso`.

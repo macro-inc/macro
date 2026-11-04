@@ -1299,6 +1299,9 @@ planner extracts references without a personal catalog and resolves complete evi
 before applying any constraints. Inline checklist labels resolve only task-referenced
 IDs in bounded batches, not a directory map. Onboarding searches only its approved
 domain and retains at most six non-self emails, with zero-history scoped queries.
+Linear import resolves only uploaded assignee labels in serial bounded exact batches;
+manual mapping uses personal property windows and keeps explicit choices separate.
+Its retained names scale with the uploaded file, not the personal directory.
 Calendar create/edit, event-detail guest actions and AI-draft
 composers now use bounded property windows with event-owned guest extras. Chosen
 names stay in selection metadata rather than a directory map, and person pages

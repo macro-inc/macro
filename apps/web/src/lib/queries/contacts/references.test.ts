@@ -211,6 +211,40 @@ it('uses first-name fallback only after exact exhaustion and stops at two distin
   expect(result.matches[0].complete).toBe(true);
 });
 
+it('shares one fallback page budget and leaves unexhausted evidence incomplete', async () => {
+  const network = reads();
+  let samPages = 0;
+  network.page.mockImplementation(async (input) => {
+    if (input.search === 'sam') {
+      samPages++;
+      return samPages === 1
+        ? page([], 'sam-next')
+        : page([contact('sam', 'Sam')]);
+    }
+    const pageNumber = input.after ? Number(input.after.slice(1)) : 0;
+    if (pageNumber === 5) return page([contact('taylor', 'Taylor')], 't6');
+    return page([], `t${pageNumber + 1}`);
+  });
+
+  const result = await resolveContactReferences(
+    VIEWER,
+    undefined,
+    { ...REQUEST, labels: ['Sam', 'Taylor'] },
+    signal(),
+    network
+  );
+
+  expect(network.page).toHaveBeenCalledTimes(8);
+  expect(
+    network.page.mock.calls.filter(([input]) => input.search === 'taylor')
+  ).toHaveLength(6);
+  expect(result.matches[0].complete).toBe(true);
+  expect(result.matches[1]).toMatchObject({
+    complete: false,
+    people: [{ userId: 'macro|taylor@example.com' }],
+  });
+});
+
 it('resolves explicit identities separately and does not reinterpret an external address as a display-name alias', async () => {
   const network = reads();
   network.lookup.mockResolvedValue({

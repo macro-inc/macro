@@ -21,7 +21,7 @@ import { createSignal, Show } from 'solid-js';
 import { changeViewer } from './network';
 
 const VIEWER = 'macro|viewer@example.com';
-const [reads, setReads] = createSignal(0);
+export const [reads, setReads] = createSignal(0);
 const [lastRead, setLastRead] = createSignal('');
 let factoryCount = 0;
 const [lastExclusions, setLastExclusions] = createSignal<readonly string[]>([]);
@@ -134,7 +134,7 @@ function useList(
     },
   };
 }
-const ACCESS: QuickAccessContextValue = {
+export const ACCESS: QuickAccessContextValue = {
   useList,
   usesRecordSelection: () => false,
   usesSearchProjection: () => true,

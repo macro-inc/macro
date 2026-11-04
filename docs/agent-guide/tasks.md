@@ -305,6 +305,30 @@ directions with tied and undated tasks. Filter during local and service search,
 then edit or clear a due date: loaded rows move between buckets immediately,
 and refetches correct complete counts and previously absent tasks. Gantt's
 saved-date semantics do not change.
+
+## Import from Linear
+
+Use **Import from Linear** in the Tasks tour/actions menu, or open
+`/app/component/import-linear`, and choose a Linear CSV. The preview shows the
+first 20 rows plus rows with warnings.
+
+Each distinct assignee is matched by exact name or explicit email/identity using
+complete contact evidence, not a suggestion page. Ambiguous or unmatched values
+remain Unassigned with a warning. When lookup is unavailable, retry or explicitly
+choose an assignee/Unassigned before importing. Manual choices override later
+lookup results, including an explicit Unassigned choice.
+
+The mapping button opens the shared single-user property picker. Search or use
+Next options/PageDown; choosing a person replaces the previous choice and retains
+their name/email. Desktop uses inline controls; narrow screens stack them.
+
+Clear or a new upload resets mappings. A late file read cannot replace a newer
+file. Import snapshots assignments and locks editing while running. Account/session
+replacement or closing the importer stops subsequent tasks; an already-dispatched
+creation may still complete. Completed imports cannot be submitted again without
+a new upload. Already-created tasks are kept; failed rows are counted, not
+automatically retried.
+
 ## Saved views
 
 Saved views are available on main Tasks, not inside Project or CRM task lists.

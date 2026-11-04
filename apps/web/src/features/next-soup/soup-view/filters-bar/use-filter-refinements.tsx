@@ -35,9 +35,7 @@ import {
 import { deepEqual } from '@core/util/compareUtils';
 import { SYSTEM_PROPERTY_IDS } from '@property/constants';
 import { batch, createMemo, createSignal } from 'solid-js';
-import {
-  unassignedFilterOption,
-} from './assignee-filter-source';
+import { unassignedFilterOption } from './assignee-filter-source';
 import type {
   ConsolidatedFilter,
   FilterValue,

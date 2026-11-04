@@ -12,6 +12,7 @@ import { ContactDirectoryInspector } from '../ContactDirectoryInspector';
 import { CalendarFilterFixture } from './calendar-fixture';
 import { CalendarGuestsFixture } from './calendar-guests-fixture';
 import { ChannelRecipientFixture } from './channel-recipient-fixture';
+import { LinearImportFixture } from './linear-import-fixture';
 import {
   DriveListFilterFixture,
   NotesListFilterFixture,
@@ -145,6 +146,9 @@ render(
   () => (
     <QueryClientProvider client={client}>
       <Switch fallback={<App />}>
+        <Match when={new URLSearchParams(location.search).has('linear-import')}>
+          <LinearImportFixture />
+        </Match>
         <Match
           when={new URLSearchParams(location.search).has('onboarding-contacts')}
         >

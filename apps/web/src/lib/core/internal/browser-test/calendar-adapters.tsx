@@ -9,10 +9,7 @@ export {
   usePinnedContactUsers,
 } from '../../../queries/contacts/use-directory';
 export const getGraphqlSoupCacheHost = () => undefined;
-export const useQueryAccount = () => () => ({
-  userId: 'macro|viewer@example.com',
-  session: 0,
-});
+export { useQueryAccount } from './test-account';
 export const emailToId = (email: string) => `macro|${email}`;
 export const idToEmail = (id: string) => id.replace(/^macro\|/, '');
 export const useUserId = () => () => 'macro|viewer@example.com';

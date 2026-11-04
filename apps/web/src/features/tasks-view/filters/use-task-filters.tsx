@@ -16,7 +16,10 @@ import { useQueryAccount } from '@queries/auth/use-query-account';
 import { batch, createMemo, createSignal, on, onCleanup } from 'solid-js';
 import { match } from 'ts-pattern';
 import type { TaskDateRangeDraft } from '../components/task-due-date-range-dialog';
-import { isTaskDueDateBucket, TASK_DUE_DATE_BUCKETS } from '../core/task-due-date';
+import {
+  isTaskDueDateBucket,
+  TASK_DUE_DATE_BUCKETS,
+} from '../core/task-due-date';
 import { useAiTaskFilterPlan } from '../queries/ai-task-filter-plan';
 import { useTasksView } from '../tasks-view-context';
 import type { AiTaskFilterCatalog } from './ai-task-filter';
@@ -93,7 +96,9 @@ export function useTaskFilters() {
   }));
 
   const assigneeOptions = createMemo(() => [
-    ...(savedViews || state.facets.assignees?.includes(TASK_VIEWER) ? [taskViewerOption(currentUserId())] : []),
+    ...(savedViews || state.facets.assignees?.includes(TASK_VIEWER)
+      ? [taskViewerOption(currentUserId())]
+      : []),
     ...assigneePicker.options().filter((option) => option.id !== NO_ASSIGNEE),
   ]);
 
