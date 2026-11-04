@@ -60,8 +60,10 @@ live-backend release gates and documents staging retention and recovery.
 
 ### Email signatures
 
-Open **Settings → Email → Signatures**. Each owned inbox opens in **Preview**,
-using the same isolated HTML renderer as the email composer. **HTML** lets you
+Open **Settings → Email → Signatures**. Each inbox you can send from, shared
+inboxes included, opens in **Preview**, using the same isolated HTML renderer
+as the email composer. A shared inbox has one signature, so its row says it is
+shared and a save changes the signature for everyone who sends from it. **HTML** lets you
 paste or edit a custom signature without flattening its tables or spacing.
 **Rich text** offers text formatting, links, and image uploads; opening a custom
 HTML layout there asks before converting it. Switching views alone never changes

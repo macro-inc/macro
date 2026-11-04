@@ -121,10 +121,7 @@ export function EmailSettings() {
 function EmailSignatures() {
   const userId = useUserId();
   const { query } = useEmailLinks();
-  const links = () =>
-    query.isSuccess
-      ? query.data.links.filter((link) => link.macro_id === userId())
-      : [];
+  const links = () => (query.isSuccess ? query.data.links : []);
   return (
     <Show
       when={!query.isError}
@@ -165,7 +162,10 @@ function EmailSignatures() {
                 </p>
               }
             >
-              <SignatureSection link={link} />
+              <SignatureSection
+                link={link}
+                shared={link.macro_id !== userId()}
+              />
             </Suspense>
           )}
         </For>

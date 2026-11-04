@@ -7,6 +7,7 @@ import { SignatureWorkspace } from './signature-workspace';
 
 export function SignatureForm(props: {
   email: string;
+  shared: boolean;
   value: string;
   onInput: (html: string) => void;
   onReady: (api: { setContent: (html: string) => void }) => void;
@@ -31,7 +32,9 @@ export function SignatureForm(props: {
         <div class="min-w-0">
           <h3 class="text-base font-medium break-all">{props.email}</h3>
           <p class="mt-1 text-sm text-ink-muted">
-            Automatically added to new emails from this account.
+            {props.shared
+              ? 'Shared inbox. Automatically added to new emails anyone sends from this account.'
+              : 'Automatically added to new emails from this account.'}
           </p>
         </div>
         <Show when={!props.mobile && props.onImport}>
