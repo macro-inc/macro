@@ -329,6 +329,7 @@ const pipelineRecord: AccessiblePipeline = {
   databaseId: 'database-1',
   tableId: 'table-1',
   primaryColumnId: 'column-1',
+  commercialFields: { outcome: null, money: [] },
   recordType: 'company',
   sharing: 'team',
   grant: 'edit',

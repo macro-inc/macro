@@ -82,6 +82,32 @@ impl GraphqlCrmPipelineEntry {
                 column: GraphqlCrmPipelineColumn {
                     columns: self.0.columns.clone(),
                     index,
+                    currency_column: self
+                        .0
+                        .pipeline
+                        .pipeline
+                        .commercial_fields
+                        .money
+                        .iter()
+                        .find(|pair| pair.amount == self.0.columns[index].column.id)
+                        .map(|pair| pair.currency),
+                    system_default: if self.0.pipeline.pipeline.commercial_fields.outcome
+                        == Some(self.0.columns[index].column.id)
+                    {
+                        Some("Open")
+                    } else if self
+                        .0
+                        .pipeline
+                        .pipeline
+                        .commercial_fields
+                        .money
+                        .iter()
+                        .any(|pair| pair.currency == self.0.columns[index].column.id)
+                    {
+                        Some("USD")
+                    } else {
+                        None
+                    },
                 },
             })
             .collect()
@@ -149,6 +175,8 @@ impl GraphqlCrmPipelineCell {
 pub struct GraphqlCrmPipelineColumn {
     columns: Arc<[ColumnDetail]>,
     index: usize,
+    currency_column: Option<databases::domain::models::ColumnId>,
+    system_default: Option<&'static str>,
 }
 
 impl GraphqlCrmPipelineColumn {
@@ -163,6 +191,16 @@ impl GraphqlCrmPipelineColumn {
     /// The column's identifier.
     async fn id(&self) -> ID {
         ID(self.detail().column.id.into_uuid().to_string())
+    }
+
+    /// The row column that holds this amount's denomination, if monetary.
+    async fn currency_column_id(&self) -> Option<ID> {
+        self.currency_column.map(|id| ID(id.to_string()))
+    }
+
+    /// Default for a CRM system select; its options and name are fixed.
+    async fn system_default(&self) -> Option<&str> {
+        self.system_default
     }
 
     /// The property definition the column binds.

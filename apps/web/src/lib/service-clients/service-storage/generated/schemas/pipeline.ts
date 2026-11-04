@@ -4,6 +4,7 @@
  * document_storage_service
  * OpenAPI spec version: 0.1.0
  */
+import type { CommercialFields } from './commercialFields';
 import type { PipelineRecordType } from './pipelineRecordType';
 import type { PipelineSharing } from './pipelineSharing';
 import type { PipelineTrashedAt } from './pipelineTrashedAt';
@@ -12,6 +13,8 @@ import type { PipelineTrashedAt } from './pipelineTrashedAt';
  * Pipeline metadata; table schema and data are read through the database service.
  */
 export interface Pipeline {
+  /** Stable identities for Outcome and amount/currency fields. */
+  commercialFields: CommercialFields;
   /** Creation time. */
   createdAt: string;
   /** Dedicated backing database. */

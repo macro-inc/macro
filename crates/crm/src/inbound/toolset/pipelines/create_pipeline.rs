@@ -18,7 +18,7 @@ use crate::domain::{
 #[serde(rename_all = "camelCase")]
 #[schemars(
     title = "CreatePipeline",
-    description = "Create a CRM pipeline: a board of deals that move through stages, such as a sales, renewals, fundraising, hiring or partnership pipeline. Each entry tracks either a company or a contact. Every pipeline starts with the tracked record, Stage, Owner and Revenue fields; Stage starts with the team's default stages unless `stages` gives others. Only when the user asked for a new pipeline: check ListPipelines first so you do not create a duplicate. Returns the pipeline with its id and fields."
+    description = "Create a CRM pipeline: a board of deals that move through stages, such as a sales, renewals, fundraising, hiring or partnership pipeline. Each entry tracks either a company or a contact. Every pipeline starts with the tracked record, Stage, Outcome, Owner, Revenue and Revenue currency fields; Outcome defaults to Open and currency to USD. Stage starts with the team's default stages unless `stages` gives others. Only when the user asked for a new pipeline: check ListPipelines first so you do not create a duplicate. Returns the pipeline with its id and fields."
 )]
 pub struct CreatePipeline {
     /// Its name.
@@ -42,7 +42,9 @@ pub struct CreatePipeline {
     #[serde(default)]
     pub stages: Vec<String>,
     /// More fields.
-    #[schemars(description = "Fields to add after Company/Contact, Stage, Owner and Revenue.")]
+    #[schemars(
+        description = "Fields to add after the standard record, stage, outcome, owner and monetary fields."
+    )]
     #[serde(default)]
     pub fields: Vec<ToolNewField>,
 }

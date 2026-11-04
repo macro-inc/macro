@@ -1,6 +1,6 @@
 # Type Alias: Pipeline
 
-> **Pipeline** = \{ `createdAt`: `string`; `databaseId`: `string`; `id`: `string`; `name`: `string`; `primaryColumnId`: `string`; `recordType`: [`PipelineRecordType`](PipelineRecordType.md); `sharing`: [`PipelineSharing`](PipelineSharing.md); `tableId`: `string`; `teamId`: `string`; `trashedAt`: `string` \| `null`; `userId`: `string`; \}
+> **Pipeline** = \{ `commercialFields`: [`CommercialFields`](CommercialFields.md); `createdAt`: `string`; `databaseId`: `string`; `id`: `string`; `name`: `string`; `primaryColumnId`: `string`; `recordType`: [`PipelineRecordType`](PipelineRecordType.md); `sharing`: [`PipelineSharing`](PipelineSharing.md); `tableId`: `string`; `teamId`: `string`; `trashedAt`: `string` \| `null`; `userId`: `string`; \}
 
 Pipeline metadata; table schema and data are read through the database service.
 
@@ -8,6 +8,7 @@ Pipeline metadata; table schema and data are read through the database service.
 
 | Property | Type | Description |
 | ------ | ------ | ------ |
+| <a id="property-commercialfields"></a> `commercialFields` | [`CommercialFields`](CommercialFields.md) | Stable identities for Outcome and amount/currency fields. |
 | <a id="property-createdat"></a> `createdAt` | `string` | Creation time. |
 | <a id="property-databaseid"></a> `databaseId` | `string` | Dedicated backing database. |
 | <a id="property-id"></a> `id` | `string` | Entity identity, used with `CrmPipeline` access receipts. |

@@ -74,6 +74,12 @@ export function createCrmPipelineEntries(
           renderCell={(entry, cell, wrap) => (
             <GridCell
               column={cell().column}
+              rowCells={Object.fromEntries(
+                entry().cells.map((item) => [
+                  item.column.id,
+                  shownValue(entry(), item),
+                ])
+              )}
               value={shownValue(entry(), cell())}
               wrap={wrap()}
               canEdit={entry().pipeline.canEdit}

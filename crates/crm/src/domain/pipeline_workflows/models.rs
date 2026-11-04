@@ -1,5 +1,7 @@
 //! What the pipeline workflows take and return.
 
+use std::collections::BTreeMap;
+
 use databases::domain::models::{RowId, TableDetail, TableVersion};
 use entity_access::domain::models::AccessError;
 use models_databases::EntityKind;
@@ -78,6 +80,8 @@ pub struct PipelineEntryView {
     pub record: PipelineRecord,
     /// Its other fields that hold a value, in column order.
     pub fields: Vec<(String, FieldValue)>,
+    /// Denominations by monetary field name, resolved through stable column roles.
+    pub currencies: BTreeMap<String, String>,
 }
 
 /// Which entries to read, and how to order them.
@@ -106,6 +110,17 @@ pub struct OptionCounts {
     pub empty: usize,
 }
 
+/// A number total, grouped by denomination for monetary fields.
+#[derive(Debug, Clone, PartialEq)]
+pub struct FieldTotal {
+    /// The field being summarized.
+    pub field: String,
+    /// Currency code for money, absent for ordinary numeric fields.
+    pub currency: Option<String>,
+    /// Sum of matching values in this denomination.
+    pub sum: f64,
+}
+
 /// The entries a query matched.
 #[derive(Debug, Clone)]
 pub struct FoundEntries {
@@ -121,7 +136,7 @@ pub struct FoundEntries {
     /// Matched entries per option of each single-select field.
     pub counts: Vec<OptionCounts>,
     /// Sum of each number field over the matched entries.
-    pub totals: Vec<(String, f64)>,
+    pub totals: Vec<FieldTotal>,
 }
 
 /// A record's entries in one pipeline.
@@ -189,6 +204,10 @@ pub struct FieldChange {
     pub before: Option<FieldValue>,
     /// Its value after.
     pub after: Option<FieldValue>,
+    /// Denomination of the previous amount, when this is a monetary field.
+    pub before_currency: Option<String>,
+    /// Denomination of the saved amount, when this is a monetary field.
+    pub after_currency: Option<String>,
 }
 
 /// An updated entry.

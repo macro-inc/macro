@@ -52,3 +52,7 @@ pub mod pipeline_workflows;
 /// CRM pipelines and their lifecycle.
 #[cfg(feature = "ports")]
 pub mod pipelines;
+
+/// Pipeline outcome and per-amount currency fields.
+#[cfg(feature = "ports")]
+pub mod pipeline_commercial;

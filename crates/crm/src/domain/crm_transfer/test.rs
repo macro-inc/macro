@@ -5,6 +5,7 @@ use chrono::{TimeZone, Utc};
 use databases::domain::models::{ColumnId, DatabaseId, OptionId, RowId, TableId, TableVersion};
 use entity_access::domain::models::AccessLevel;
 use macro_user_id::{cowlike::CowLike, user_id::MacroUserIdStr};
+use models_databases::DateRange;
 
 use super::*;
 use crate::domain::{
@@ -40,6 +41,7 @@ fn overview(record_type: PipelineRecordType) -> PipelineOverview {
     PipelineOverview {
         pipeline: AccessiblePipeline {
             pipeline: Pipeline {
+                commercial_fields: Default::default(),
                 id: Uuid::now_v7(),
                 team_id: Uuid::now_v7(),
                 user_id: "macro|me@example.com".into(),
@@ -73,6 +75,7 @@ fn overview(record_type: PipelineRecordType) -> PipelineOverview {
 
 fn entry(id: Uuid) -> PipelineEntryView {
     PipelineEntryView {
+        currencies: Default::default(),
         entry_id: RowId::new(),
         record: PipelineRecord {
             id,
@@ -443,6 +446,161 @@ async fn a_pipeline_import_skips_present_records_keeps_new_deals_and_isolates_ba
 }
 
 #[tokio::test]
+async fn a_rejected_currency_row_does_not_add_its_stage_option() {
+    let mut workflows = Workflows::new(overview(PipelineRecordType::Company));
+    let currency = PipelineField {
+        options: vec![
+            (OptionId::new(), "USD".into()),
+            (OptionId::new(), "EUR".into()),
+        ],
+        ..field("Revenue currency", FieldKind::Select)
+    };
+    workflows
+        .overview
+        .pipeline
+        .pipeline
+        .commercial_fields
+        .money
+        .push(crate::domain::pipeline_commercial::MoneyColumn {
+            amount: workflows.overview.fields[3].id,
+            currency: currency.id,
+        });
+    workflows.overview.fields.push(currency);
+    workflows.refused = Some("XYZ");
+    let pipeline = workflows.overview.pipeline.pipeline.id;
+    let service = CrmTransferServiceImpl::new(
+        Arc::new(workflows),
+        Records {
+            domains: HashMap::from([
+                ("valid.example".into(), Uuid::now_v7()),
+                ("invalid.example".into(), Uuid::now_v7()),
+            ]),
+            ..Records::default()
+        },
+        Files::default(),
+    );
+
+    let outcome = service
+        .import_to_pipeline(
+            &viewer(),
+            pipeline,
+            CsvInput::Text(
+                "Company,Domain,Stage,Revenue currency\n\
+                 Valid,valid.example,Qualified,USD\n\
+                 Invalid,invalid.example,Do not add,XYZ\n"
+                    .into(),
+            ),
+        )
+        .await
+        .unwrap();
+
+    assert_eq!(outcome.added, 1);
+    assert_eq!(outcome.invalid.len(), 1);
+    assert_eq!(outcome.invalid[0].key, "invalid.example");
+    assert_eq!(
+        outcome.added_options,
+        [("Stage".into(), vec!["Qualified".into()])]
+    );
+    let edits = service.workflows.edits.lock().unwrap();
+    assert_eq!(edits.len(), 1);
+    assert_eq!(
+        edits[0].add_options,
+        [("Stage".into(), vec!["Qualified".into()])]
+    );
+}
+
+#[tokio::test]
+async fn blank_commercial_values_use_defaults_without_skipping_stage_options() {
+    let mut workflows = Workflows::new(overview(PipelineRecordType::Company));
+    let outcome = PipelineField {
+        options: vec![
+            (OptionId::new(), "Open".into()),
+            (OptionId::new(), "Won".into()),
+            (OptionId::new(), "Lost".into()),
+        ],
+        ..field("Outcome", FieldKind::Select)
+    };
+    workflows
+        .overview
+        .pipeline
+        .pipeline
+        .commercial_fields
+        .outcome = Some(outcome.id);
+    workflows.overview.fields.push(outcome);
+
+    let currency = PipelineField {
+        options: vec![
+            (OptionId::new(), "USD".into()),
+            (OptionId::new(), "EUR".into()),
+        ],
+        ..field("Revenue currency", FieldKind::Select)
+    };
+    workflows
+        .overview
+        .pipeline
+        .pipeline
+        .commercial_fields
+        .money
+        .push(crate::domain::pipeline_commercial::MoneyColumn {
+            amount: workflows.overview.fields[3].id,
+            currency: currency.id,
+        });
+    workflows.overview.fields.push(currency);
+
+    let pipeline = workflows.overview.pipeline.pipeline.id;
+    let service = CrmTransferServiceImpl::new(
+        Arc::new(workflows),
+        Records {
+            domains: HashMap::from([
+                ("no-outcome.example".into(), Uuid::now_v7()),
+                ("no-currency.example".into(), Uuid::now_v7()),
+            ]),
+            ..Records::default()
+        },
+        Files::default(),
+    );
+
+    let outcome = service
+        .import_to_pipeline(
+            &viewer(),
+            pipeline,
+            CsvInput::Text(
+                "Company,Domain,Stage,Outcome,Revenue,Revenue currency\n\
+                 No outcome,no-outcome.example,Prospect,,10,EUR\n\
+                 No currency,no-currency.example,New lead,Won,20,   \n"
+                    .into(),
+            ),
+        )
+        .await
+        .unwrap();
+
+    assert_eq!(outcome.added, 2);
+    assert!(outcome.invalid.is_empty());
+    assert_eq!(
+        outcome.added_options,
+        [("Stage".into(), vec!["Prospect".into(), "New lead".into()])]
+    );
+    let additions = service.workflows.added.lock().unwrap();
+    assert_eq!(additions.len(), 2);
+    assert!(!additions.iter().any(|addition| {
+        addition.set.iter().any(|(name, value)| {
+            matches!(name.as_str(), "Outcome" | "Revenue currency")
+                && *value == FieldInput::One(String::new())
+        })
+    }));
+    assert!(
+        additions[0]
+            .set
+            .contains(&("Revenue currency".into(), FieldInput::One("EUR".into())))
+    );
+    assert!(
+        additions[1]
+            .set
+            .contains(&("Outcome".into(), FieldInput::One("Won".into())))
+    );
+}
+
+#[tokio::test]
 async fn new_contacts_at_one_new_domain_share_one_new_company() {
     let mut contacts = overview(PipelineRecordType::Contact);
     contacts.fields[0].name = "Contact".into();
@@ -575,7 +733,30 @@ async fn contact_lookup_storage_failure_stops_import_before_creating_records() {
 #[tokio::test]
 async fn an_export_writes_people_as_emails_and_reimports() {
     let mut workflows = Workflows::new(overview(PipelineRecordType::Company));
+    let currency = PipelineField {
+        options: vec![
+            (OptionId::new(), "EUR".into()),
+            (OptionId::new(), "USD".into()),
+        ],
+        ..field("Revenue currency", FieldKind::Select)
+    };
+    workflows
+        .overview
+        .pipeline
+        .pipeline
+        .commercial_fields
+        .money
+        .push(crate::domain::pipeline_commercial::MoneyColumn {
+            amount: workflows.overview.fields[3].id,
+            currency: currency.id,
+        });
+    workflows.overview.fields.push(currency);
+    workflows
+        .overview
+        .fields
+        .push(field("Contract period", FieldKind::DateRange));
     workflows.exported = vec![PipelineEntryView {
+        currencies: Default::default(),
         entry_id: RowId::new(),
         record: PipelineRecord {
             id: Uuid::now_v7(),
@@ -588,7 +769,18 @@ async fn an_export_writes_people_as_emails_and_reimports() {
                 "Owner".into(),
                 FieldValue::References(vec!["macro|jane@macro.com".into()]),
             ),
-            ("Revenue".into(), FieldValue::Number(48000.0)),
+            ("Revenue".into(), FieldValue::Number(48000.1234)),
+            (
+                "Revenue currency".into(),
+                FieldValue::Labels(vec!["EUR".into()]),
+            ),
+            (
+                "Contract period".into(),
+                FieldValue::DateRange(DateRange {
+                    start: Utc.with_ymd_and_hms(2026, 11, 1, 0, 0, 0).unwrap(),
+                    end: Utc.with_ymd_and_hms(2026, 11, 30, 0, 0, 0).unwrap(),
+                }),
+            ),
         ],
     }];
     let pipeline = workflows.overview.pipeline.pipeline.id;
@@ -596,13 +788,32 @@ async fn an_export_writes_people_as_emails_and_reimports() {
         CrmTransferServiceImpl::new(Arc::new(workflows), Records::default(), Files::default());
     let export = service.export_pipeline(&viewer(), pipeline).await.unwrap();
     assert_eq!((export.rows, export.complete), (1, true));
-    let saved = service.files.saved.lock().unwrap();
+    let saved = service.files.saved.lock().unwrap().clone();
     assert_eq!(saved[0].0, "Deals");
     assert_eq!(
         saved[0].1,
-        "Company,Domain,Stage,Owner,Revenue,Proposal\n'=Acme,acme.com,Lead,jane@macro.com,48000,\n"
+        "Company,Domain,Stage,Owner,Revenue,Proposal,Revenue currency,Contract period\n'=Acme,acme.com,Lead,jane@macro.com,48000.1234,,EUR,2026-11-01T00:00:00Z/2026-11-30T00:00:00Z\n"
     );
     let table = parse_csv(&saved[0].1).unwrap();
     let rows = record_rows(&table, PipelineRecordType::Company).unwrap();
     assert_eq!(rows.rows[0].name, "=Acme");
+    service
+        .import_to_pipeline(&viewer(), pipeline, CsvInput::Text(saved[0].1.clone()))
+        .await
+        .unwrap();
+    let added = service.workflows.added.lock().unwrap();
+    assert!(
+        added[0]
+            .set
+            .contains(&("Revenue".into(), FieldInput::One("48000.1234".into())))
+    );
+    assert!(
+        added[0]
+            .set
+            .contains(&("Revenue currency".into(), FieldInput::One("EUR".into())))
+    );
+    assert!(added[0].set.contains(&(
+        "Contract period".into(),
+        FieldInput::One("2026-11-01T00:00:00Z/2026-11-30T00:00:00Z".into())
+    )));
 }

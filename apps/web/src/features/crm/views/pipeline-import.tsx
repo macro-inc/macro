@@ -73,6 +73,12 @@ export function PipelineImport(props: {
                       empty that don't fit their column.
                     </p>
                   </Show>
+                  <Show when={current().invalidSystemRows}>
+                    <p class="text-ink-muted">
+                      Skips {current().invalidSystemRows.toLocaleString()} rows
+                      with unsupported Outcome or currency values.
+                    </p>
+                  </Show>
                 </div>
               )}
             </Show>

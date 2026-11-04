@@ -346,6 +346,7 @@ export function DatabaseRecordsView(props: DatabaseRecordsViewProps) {
           <GridCell
             {...options}
             column={column()}
+            rowCells={row().cells}
             emptyLabel=""
             value={rowValue(row(), column().id)}
             canEdit={props.canEdit}
@@ -594,7 +595,10 @@ export function DatabaseRecordsView(props: DatabaseRecordsViewProps) {
                         .filter((id): id is string => id !== undefined);
                       const writable = columnIds.filter((id) =>
                         columns().some(
-                          (column) => column.id === id && canEditCell(column)
+                          (column) =>
+                            column.id === id &&
+                            canEditCell(column) &&
+                            column.nullable !== false
                         )
                       );
                       if (!savedRows.length || !writable.length) return true;

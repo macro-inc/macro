@@ -3,6 +3,33 @@ use ai_toolset::schema::generate_validated_input_schema;
 use super::*;
 
 #[test]
+fn currency_metadata_is_optional_for_historical_and_nonmonetary_entries() {
+    let schema = serde_json::to_value(schemars::schema_for!(ToolEntry)).unwrap();
+    assert!(
+        !schema["required"]
+            .as_array()
+            .unwrap()
+            .contains(&serde_json::json!("currencies"))
+    );
+    let entry = ToolEntry {
+        entry_id: Uuid::nil(),
+        record: ToolRecord {
+            id: Uuid::nil(),
+            name: None,
+            detail: None,
+        },
+        fields: BTreeMap::new(),
+        currencies: BTreeMap::new(),
+    };
+    assert!(
+        serde_json::to_value(entry)
+            .unwrap()
+            .get("currencies")
+            .is_none()
+    );
+}
+
+#[test]
 fn every_pipeline_tool_schema_is_valid_for_strict_tool_use() {
     for (name, validated) in [
         (

@@ -3,6 +3,9 @@
 #[cfg(test)]
 mod test;
 
+mod references;
+use references::primary_references;
+
 use super::{auth::CrmTeamReceipt, stages::StageDefinitionStore};
 use bot_id::BotId;
 use chrono::{DateTime, Utc};
@@ -110,6 +113,8 @@ pub struct Pipeline {
     /// Protected primary column.
     #[schema(value_type = Uuid)]
     pub primary_column_id: ColumnId,
+    /// Stable identities for Outcome and amount/currency fields.
+    pub commercial_fields: super::pipeline_commercial::CommercialFields,
     /// Whether the pipeline has a team grant.
     pub sharing: PipelineSharing,
     /// Creation time.
@@ -164,6 +169,8 @@ pub struct PipelineBlueprint {
     pub team_id: Uuid,
     /// Primary reference kind.
     pub record_type: PipelineRecordType,
+    /// Outcome and amount/currency fields provisioned with the table.
+    pub commercial_fields: super::pipeline_commercial::CommercialFields,
     /// Initial grants.
     pub sharing: PipelineSharing,
     /// Schema owned by the database domain.
@@ -493,7 +500,7 @@ pub(crate) fn pipeline_blueprint(
         nullable: false,
         protections: vec![ColumnProtection::Delete, ColumnProtection::ChangeType],
     };
-    let columns = vec![
+    let mut columns = vec![
         primary,
         ProvisionedColumn {
             id: ColumnId::new(),
@@ -531,7 +538,9 @@ pub(crate) fn pipeline_blueprint(
             options: vec![],
         },
     ];
+    let commercial_fields = super::pipeline_commercial::provision(&mut columns);
     PipelineBlueprint {
+        commercial_fields,
         id,
         team_id,
         record_type: input.record_type,
@@ -901,7 +910,7 @@ where
         &self,
         receipt: EntityAccessReceipt<EditAccessLevel>,
         acting_bot: Option<BotId>,
-        batch: OpBatch,
+        mut batch: OpBatch,
     ) -> Result<AppliedOps, PipelineError> {
         use models_databases::{DatabaseOp, TableChange};
         let pipeline = self.pipeline(&receipt).await?;
@@ -948,67 +957,17 @@ where
             .await
             .map_err(storage)?
             .ok_or(PipelineError::NotFound)?;
+        let table = self
+            .databases
+            .storage_tables(pipeline.database_id)
+            .await?
+            .into_iter()
+            .find(|table| table.table.id == pipeline.table_id)
+            .ok_or(PipelineError::NotFound)?;
+        pipeline.commercial_fields.prepare(&table, &mut batch)?;
         Ok(self
             .databases
             .apply_storage_ops(pipeline.database_id, viewer, batch)
             .await?)
     }
-}
-
-/// Distinct primary records explicitly written by this batch. Other cells and
-/// unchanged references do not require the editor to reselect the record.
-fn primary_references(
-    pipeline: &Pipeline,
-    batch: &OpBatch,
-) -> Result<std::collections::BTreeSet<Uuid>, PipelineError> {
-    use models_databases::{CellValue, CellWrite, DatabaseOp, RowChanges, RowsChange};
-    let mut references = std::collections::BTreeSet::new();
-    for op in &batch.ops {
-        let cells: Vec<&CellWrite> = match op {
-            DatabaseOp::Rows {
-                change: RowsChange::Insert { rows },
-                ..
-            } => rows.iter().flatten().collect(),
-            DatabaseOp::Rows {
-                change:
-                    RowsChange::Update {
-                        changes: RowChanges::Uniform { cells, .. },
-                    },
-                ..
-            } => cells.iter().collect(),
-            DatabaseOp::Rows {
-                change:
-                    RowsChange::Update {
-                        changes: RowChanges::PerRow { rows },
-                    },
-                ..
-            } => rows.iter().flat_map(|row| &row.cells).collect(),
-            _ => continue,
-        };
-        for cell in cells {
-            if cell.column != pipeline.primary_column_id {
-                continue;
-            }
-            if let CellValue::Entities(values) = &cell.value {
-                for value in values {
-                    let expected = match pipeline.record_type {
-                        PipelineRecordType::Company => models_databases::EntityKind::Company,
-                        PipelineRecordType::Contact => models_databases::EntityKind::Contact,
-                    };
-                    if value.entity_type != expected {
-                        return Err(PipelineError::Invalid(
-                            "Choose the required CRM record type",
-                        ));
-                    }
-                    references.insert(
-                        value
-                            .entity_id
-                            .parse()
-                            .map_err(|_| PipelineError::Invalid("Choose a valid CRM record"))?,
-                    );
-                }
-            }
-        }
-    }
-    Ok(references)
 }

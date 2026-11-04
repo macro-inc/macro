@@ -768,7 +768,7 @@ function BoardCard(props: {
                 <div
                   class="flex min-h-6 min-w-0 max-w-40 items-center gap-2 rounded pl-1.5 hover:bg-hover has-[[aria-invalid=true]]:ring-1 has-[[aria-invalid=true]]:ring-failure"
                   data-card-field
-                  title={`${column().name}: ${formatCellValue(column(), rowValue(props.row, column().id))}`}
+                  title={`${column().name}: ${formatCellValue(column(), rowValue(props.row, column().id), props.row.cells)}`}
                   data-kanban-no-drag={props.renderCell ? '' : undefined}
                 >
                   <PropertyIcon
@@ -798,7 +798,8 @@ function BoardCard(props: {
                             <span class="block truncate text-xs text-ink-muted">
                               {formatCellValue(
                                 column(),
-                                rowValue(props.row, column().id)
+                                rowValue(props.row, column().id),
+                                props.row.cells
                               )}
                             </span>
                           }

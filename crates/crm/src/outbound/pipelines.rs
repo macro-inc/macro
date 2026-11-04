@@ -1,8 +1,11 @@
 //! Pipeline metadata and grants, composed with the database domain's writer.
 
-use crate::domain::pipelines::{
-    Pipeline, PipelineBlueprint, PipelineRecordType, PipelineReference, PipelineRepo,
-    PipelineSharing,
+use crate::domain::{
+    pipeline_commercial::CommercialFields,
+    pipelines::{
+        Pipeline, PipelineBlueprint, PipelineRecordType, PipelineReference, PipelineRepo,
+        PipelineSharing,
+    },
 };
 use databases::domain::provisioning::DatabaseStorageProvisioner;
 use entity_access_db_utils::{AccessLevel, EntityAccessSourceType, EntityType};
@@ -51,9 +54,10 @@ where
             .await
             .map_err(|error| PipelineRepoError::Database(Box::new(error)))?;
         sqlx::query!(
-            "INSERT INTO crm_pipeline_entities (id, team_id, database_id, table_id, record_type, name, user_id, primary_column_id) VALUES ($1, $2, $3, $4, $5, $6, $7, $8)",
+            "INSERT INTO crm_pipeline_entities (id, team_id, database_id, table_id, record_type, name, user_id, primary_column_id, commercial_fields) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)",
             blueprint.id, blueprint.team_id, blueprint.database.id.into_uuid(),
             blueprint.database.table_id.into_uuid(), blueprint.record_type.as_str(), &blueprint.name, blueprint.creator.as_ref(), blueprint.primary_column_id.into_uuid(),
+            sqlx::types::Json(&blueprint.commercial_fields) as _,
         ).execute(&mut **transaction).await?;
         entity_access_db_utils::insert_entity_access_row(
             transaction,
@@ -98,6 +102,7 @@ where
         let rows = sqlx::query!(
             r#"SELECT p.id, p.team_id, p.record_type, p.database_id, p.table_id,
                       p.name, p.user_id, p.created_at, p.trashed_at, p.primary_column_id,
+                      p.commercial_fields AS "commercial_fields!: sqlx::types::Json<CommercialFields>",
                       EXISTS (SELECT 1 FROM entity_access ea WHERE ea.entity_id = p.id
                         AND ea.entity_type = 'crm_pipeline' AND ea.source_type = 'team'
                         AND ea.source_id = p.team_id::text) AS "team_shared!"
@@ -119,6 +124,7 @@ where
                     }
                 };
                 Ok(Pipeline {
+                    commercial_fields: row.commercial_fields.0,
                     id: row.id,
                     team_id: row.team_id,
                     name: row.name,

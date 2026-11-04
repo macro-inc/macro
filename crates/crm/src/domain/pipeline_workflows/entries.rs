@@ -12,6 +12,33 @@ use super::{
     FieldKind, FieldValue, OptionCounts, PipelineEntryView, PipelineField, PipelineOverview,
     PipelineRecord, fields,
 };
+use crate::domain::pipelines::Pipeline;
+
+/// Resolve denominations by stable field identities, including renamed amounts.
+pub(super) fn currencies(
+    pipeline: &Pipeline,
+    fields: &[PipelineField],
+    cells: &HashMap<ColumnId, PropertyValue>,
+) -> BTreeMap<String, String> {
+    pipeline
+        .commercial_fields
+        .money
+        .iter()
+        .filter_map(|pair| {
+            let amount = fields.iter().find(|field| field.id == pair.amount)?;
+            let currency = fields.iter().find(|field| field.id == pair.currency)?;
+            let code = match cells
+                .get(&currency.id)
+                .and_then(|value| fields::field_value(currency, value))
+            {
+                Some(FieldValue::Labels(labels)) => labels.into_iter().next(),
+                _ => None,
+            }
+            .unwrap_or_else(|| "USD".into());
+            Some((amount.name.clone(), code))
+        })
+        .collect()
+}
 
 /// The record a primary cell references.
 pub(super) fn record_id(cell: Option<&PropertyValue>) -> Option<Uuid> {
@@ -55,6 +82,7 @@ pub(super) fn entry_view(
         entry_id: row.row_id,
         record,
         fields: field_values(&overview.fields, &row.cells),
+        currencies: currencies(&overview.pipeline.pipeline, &overview.fields, &row.cells),
     }
 }
 
@@ -107,24 +135,53 @@ pub(super) fn option_counts(
         .collect()
 }
 
-/// The sum of every number field over `entries`.
+/// Sum monetary values only within the same currency.
 pub(super) fn totals(
     overview: &PipelineOverview,
     entries: &[PipelineEntryView],
-) -> Vec<(String, f64)> {
+) -> Vec<super::models::FieldTotal> {
     overview
         .fields
         .iter()
         .filter(|field| field.kind == FieldKind::Number)
-        .map(|field| {
-            let sum = entries
+        .flat_map(|field| {
+            let currency_field = overview
+                .pipeline
+                .pipeline
+                .commercial_fields
+                .money
                 .iter()
-                .filter_map(|entry| match value_of(entry, &field.name) {
-                    Some(FieldValue::Number(number)) => Some(*number),
-                    _ => None,
+                .find(|pair| pair.amount == field.id)
+                .and_then(|pair| {
+                    overview
+                        .fields
+                        .iter()
+                        .find(|candidate| candidate.id == pair.currency)
+                });
+            let mut sums = BTreeMap::<Option<String>, f64>::new();
+            if currency_field.is_none() {
+                sums.insert(None, 0.0);
+            }
+            for entry in entries {
+                let Some(FieldValue::Number(value)) = value_of(entry, &field.name) else {
+                    continue;
+                };
+                let currency =
+                    currency_field.map(|currency| match value_of(entry, &currency.name) {
+                        Some(FieldValue::Labels(labels)) => {
+                            labels.first().cloned().unwrap_or_else(|| "USD".into())
+                        }
+                        _ => "USD".into(),
+                    });
+                *sums.entry(currency).or_default() += value;
+            }
+            sums.into_iter()
+                .map(|(currency, sum)| super::models::FieldTotal {
+                    field: field.name.clone(),
+                    currency,
+                    sum,
                 })
-                .sum();
-            (field.name.clone(), sum)
+                .collect::<Vec<_>>()
         })
         .collect()
 }

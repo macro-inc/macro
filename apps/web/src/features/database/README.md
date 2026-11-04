@@ -61,6 +61,9 @@ without a position writer; it cannot offer card moves that pretend to persist.
 seeded with the lane's values; the form creates its row with the actions'
 `createRow`. A `GridCell` rendered inside a modal dialog takes `popupMount` so
 its menus stay inside the dialog, which blocks the page around it.
+Hosts can mark select columns with `fixedOptions` and `defaultValue` for system
+fields. Pair a numeric column with `currencyColumnId` to format its values and
+group monetary summaries by denomination; pass the row's cells to `GridCell`.
 View preferences in the example are local; hosts that save views pass their own
 view state and authorized persistence callback. Shared filter, sort, toolbar and
 view components are in `components/`.

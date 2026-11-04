@@ -3,7 +3,6 @@ import { ThrownResultError, throwOnErr } from '@core/util/result';
 import { soupKeys } from '@queries/soup/keys';
 import { v7 as uuidv7 } from 'uuid';
 import { missingOptionLabels } from '../../database/core/cell-ops';
-import { toViewColumn } from '../../database/queries/column-detail';
 import type { PipelineTransfer } from '../context/pipelines';
 import { importedDomain } from '../core/import-companies';
 import type { Pipeline } from '../core/pipeline';
@@ -12,7 +11,7 @@ import { runConcurrently } from '../core/run-concurrently';
 import type { CrmRecordDependencies } from './dependencies';
 import { fetchCrmExportCompanies } from './export';
 import { crmKeys } from './keys';
-import { pipelineCell } from './pipeline-data';
+import { pipelineCell, pipelineViewColumn } from './pipeline-data';
 
 const CONCURRENCY = 4;
 /** Rows per write; the service accepts up to 10,000. */
@@ -97,7 +96,12 @@ export function createPipelineTransfer(
         );
         after = page.next ?? undefined;
       } while (after);
-      return { columns: table.columns.map(toViewColumn), rows };
+      return {
+        columns: table.columns.map((column) =>
+          pipelineViewColumn(column, pipeline)
+        ),
+        rows,
+      };
     },
     async describeRecords(ids, signal) {
       const records = new Map<string, PipelineCsvRecord>();

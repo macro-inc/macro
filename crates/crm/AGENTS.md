@@ -9,6 +9,10 @@ tools/HTTP/GraphQL surfaces over them.
 ## Start here
 
 - `src/domain/service.rs`, `src/domain/pipelines.rs`: core use cases.
+- `src/domain/pipeline_commercial.rs`: protected Outcome and amount/currency
+  identities, insert defaults and write validation. Run this before stage-required
+  validation. See the [outcome/currency design](../../docs/design/crm-outcome-currency.md)
+  for migration assumptions.
 - `src/domain/pipeline_workflows/`: pipeline entry/field/record ops built on
   the shared `databases` engine (Sales pipelines are a `databases` consumer).
 - `src/domain/crm_csv.rs`, `src/domain/crm_transfer.rs`: CSV import/export for

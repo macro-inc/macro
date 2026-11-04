@@ -109,7 +109,14 @@ export function AddPipelineRecordDialog(
   // One intent per dialog, so submitting again never adds a second row.
   const intentId = `pipeline-record:${createUniqueId()}`;
   const [choice, setChoice] = createSignal<RecordChoice>();
-  const [values, setValues] = createSignal(props.initialValues);
+  const [values, setValues] = createSignal({
+    ...Object.fromEntries(
+      props.columns
+        .filter((column) => column.defaultValue !== undefined)
+        .map((column) => [column.id, column.defaultValue ?? null])
+    ),
+    ...props.initialValues,
+  });
   const [newOption, setNewOption] = createSignal<string>();
   const [pending, setPending] = createSignal(false);
   const [error, setError] = createSignal<string>();
@@ -367,6 +374,7 @@ export function AddPipelineRecordDialog(
   const cell = (column: () => DatabaseViewColumn) => (
     <GridCell
       column={column()}
+      rowCells={values()}
       value={values()[column().id] ?? null}
       emptyLabel="Empty"
       canEdit={!pending()}

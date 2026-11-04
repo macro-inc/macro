@@ -30,7 +30,7 @@ pub struct ToolNewEntry {
     pub email: Option<String>,
     /// Fields to fill in.
     #[schemars(
-        description = "Fields to fill in on the new entry, e.g. [{\"field\": \"Stage\", \"value\": \"Lead\"}, {\"field\": \"Owner\", \"value\": \"me\"}]."
+        description = "Fields to fill in on the new entry, e.g. [{\"field\": \"Stage\", \"value\": \"Lead\"}, {\"field\": \"Owner\", \"value\": \"me\"}]. Outcome is Open, Won or Lost independently of Stage. Monetary fields have a separate currency field (e.g. Revenue currency); set its three-letter option code with the amount. New entries default to Open and USD."
     )]
     #[serde(default)]
     pub set: Vec<ToolFieldValue>,

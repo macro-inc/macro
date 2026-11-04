@@ -25481,6 +25481,24 @@
           }
         }
       },
+      "CommercialFields": {
+        "type": "object",
+        "description": "CRM-owned roles for columns in the reusable table.",
+        "properties": {
+          "money": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/MoneyColumn"
+            },
+            "description": "Monetary fields, each with an independent per-row currency."
+          },
+          "outcome": {
+            "type": ["string", "null"],
+            "format": "uuid",
+            "description": "Outcome column, absent only for a pipeline from a pre-migration writer."
+          }
+        }
+      },
       "CommittedChange": {
         "type": "object",
         "description": "One change a committed batch journaled: a table, the version the batch\nproduced, and the journal's id for it.",
@@ -36705,6 +36723,23 @@
         ],
         "description": "Lifecycle events for the common message service, one per committed fact.\nReactions and typing never reach the topic."
       },
+      "MoneyColumn": {
+        "type": "object",
+        "description": "Stable association between a numeric amount and its per-row denomination.",
+        "required": ["amount", "currency"],
+        "properties": {
+          "amount": {
+            "type": "string",
+            "format": "uuid",
+            "description": "The numeric column; renaming it preserves this association."
+          },
+          "currency": {
+            "type": "string",
+            "format": "uuid",
+            "description": "The select column containing the currency code."
+          }
+        }
+      },
       "MyResponse": {
         "oneOf": [
           {
@@ -37904,11 +37939,16 @@
           "databaseId",
           "tableId",
           "primaryColumnId",
+          "commercialFields",
           "sharing",
           "createdAt",
           "trashedAt"
         ],
         "properties": {
+          "commercialFields": {
+            "$ref": "#/components/schemas/CommercialFields",
+            "description": "Stable identities for Outcome and amount/currency fields."
+          },
           "createdAt": {
             "type": "string",
             "format": "date-time",

@@ -77,6 +77,8 @@ unreferenced replicas. These additive tables do not change agent-session claims.
 
 ## Gotchas
 
+- CRM commercial-field migration triggers bridge older pipeline and row writers
+  with Open/USD defaults; keep explicit values and stable row/amount identities.
 - Migrations deploy before service code: never drop a column/table in the
   same PR that removes its last usage (see `docs/development/database.md`).
 - Never hand-edit `.sqlx/query-*.json` or invent a migration timestamp.

@@ -31,7 +31,7 @@ pub struct ToolEntryUpdate {
     pub record_id: Option<Uuid>,
     /// Fields to set.
     #[schemars(
-        description = "Fields to set, e.g. [{\"field\": \"Stage\", \"value\": \"Negotiation\"}, {\"field\": \"Revenue\", \"value\": \"48000\"}]. Leave value out to empty a field."
+        description = "Fields to set, e.g. [{\"field\": \"Stage\", \"value\": \"Negotiation\"}, {\"field\": \"Revenue\", \"value\": \"48000\"}]. Leave value out to empty an ordinary field; Outcome and currency cannot be empty. Outcome is Open, Won or Lost independently of Stage. Monetary fields have a separate currency field (e.g. Revenue currency); set its three-letter option code with the amount."
     )]
     pub set: Vec<ToolFieldValue>,
 }
@@ -68,6 +68,12 @@ pub struct ToolFieldChange {
     pub before: serde_json::Value,
     /// Its value now; null when it is empty.
     pub after: serde_json::Value,
+    /// Currency of the previous amount, for monetary fields.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub before_currency: Option<String>,
+    /// Currency of the saved amount, for monetary fields.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub after_currency: Option<String>,
 }
 
 /// An updated entry.
@@ -155,6 +161,8 @@ impl<Workflows: PipelineWorkflowService> AsyncTool<PipelineToolContext<Workflows
                     .changes
                     .iter()
                     .map(|change| ToolFieldChange {
+                        before_currency: change.before_currency.clone(),
+                        after_currency: change.after_currency.clone(),
                         field: change.field.clone(),
                         before: change.before.as_ref().map_or(serde_json::Value::Null, json),
                         after: change.after.as_ref().map_or(serde_json::Value::Null, json),
@@ -171,7 +179,12 @@ impl<Workflows: PipelineWorkflowService> AsyncTool<PipelineToolContext<Workflows
                         .changes
                         .iter()
                         .map(|change| {
-                            format!("{} {} → {}", change.field, change.before, change.after)
+                            format!(
+                                "{} {} → {}",
+                                change.field,
+                                displayed_value(&change.before, change.before_currency.as_deref()),
+                                displayed_value(&change.after, change.after_currency.as_deref())
+                            )
                         })
                         .collect();
                     format!("{} ({})", record_name(&entry.record), fields.join("; "))
@@ -184,5 +197,12 @@ impl<Workflows: PipelineWorkflowService> AsyncTool<PipelineToolContext<Workflows
             version: updated.version.map(|version| version.0),
             summary,
         })
+    }
+}
+
+fn displayed_value(value: &serde_json::Value, currency: Option<&str>) -> String {
+    match (value.is_number(), currency) {
+        (true, Some(currency)) => format!("{currency} {value}"),
+        _ => value.to_string(),
     }
 }

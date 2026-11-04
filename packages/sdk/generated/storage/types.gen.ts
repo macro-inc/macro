@@ -3624,6 +3624,20 @@ export type CommandRejectedMetadata = {
 };
 
 /**
+ * CRM-owned roles for columns in the reusable table.
+ */
+export type CommercialFields = {
+    /**
+     * Monetary fields, each with an independent per-row currency.
+     */
+    money?: Array<MoneyColumn>;
+    /**
+     * Outcome column, absent only for a pipeline from a pre-migration writer.
+     */
+    outcome?: string | null;
+};
+
+/**
  * One change a committed batch journaled: a table, the version the batch
  * produced, and the journal's id for it.
  */
@@ -10815,6 +10829,20 @@ export type MessageTopicEvent = {
 };
 
 /**
+ * Stable association between a numeric amount and its per-row denomination.
+ */
+export type MoneyColumn = {
+    /**
+     * The numeric column; renaming it preserves this association.
+     */
+    amount: string;
+    /**
+     * The select column containing the currency code.
+     */
+    currency: string;
+};
+
+/**
  * A signed-in respondent's own response.
  */
 export type MyResponse = {
@@ -11450,6 +11478,10 @@ export type PinnedItem = {
  * Pipeline metadata; table schema and data are read through the database service.
  */
 export type Pipeline = {
+    /**
+     * Stable identities for Outcome and amount/currency fields.
+     */
+    commercialFields: CommercialFields;
     /**
      * Creation time.
      */

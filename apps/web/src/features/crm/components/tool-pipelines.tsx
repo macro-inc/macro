@@ -14,18 +14,39 @@ type TrackedRecord = {
   name?: string | null;
   detail?: string | null;
 };
-type Entry = { record: TrackedRecord; fields: { [field: string]: unknown } };
+type Entry = {
+  record: TrackedRecord;
+  fields: { [field: string]: unknown };
+  currencies?: Record<string, string> | null;
+};
 type UpdatedEntry = {
   record: TrackedRecord;
-  changes: { field: string; before: unknown; after: unknown }[];
+  changes: {
+    field: string;
+    before: unknown;
+    after: unknown;
+    beforeCurrency?: string | null;
+    afterCurrency?: string | null;
+  }[];
 };
 
+const monetaryFormat = new Intl.NumberFormat(undefined, {
+  maximumFractionDigits: 6,
+});
+
 /** A field value as one line: people by email, lists joined. */
-export function formatFieldValue(value: unknown): string {
+export function formatFieldValue(
+  value: unknown,
+  currency?: string | null
+): string {
   if (value === null || value === undefined) return 'empty';
-  if (Array.isArray(value)) return value.map(formatFieldValue).join(', ');
+  if (Array.isArray(value))
+    return value.map((item) => formatFieldValue(item)).join(', ');
   if (typeof value === 'string') return value.replace(/^macro\|/, '');
-  if (typeof value === 'number') return value.toLocaleString();
+  if (typeof value === 'number')
+    return currency
+      ? `${currency} ${monetaryFormat.format(value)}`
+      : value.toLocaleString();
   return String(value);
 }
 
@@ -33,10 +54,16 @@ export function recordName(record: TrackedRecord) {
   return record.name ?? record.detail ?? record.id;
 }
 
-function entrySummary(entry: Entry) {
+export function entrySummary(entry: Entry) {
   return Object.entries(entry.fields)
     .slice(0, 3)
-    .map(([name, value]) => `${name}: ${formatFieldValue(value)}`)
+    .map(([name, value]) => {
+      const currency =
+        entry.currencies && Object.hasOwn(entry.currencies, name)
+          ? entry.currencies[name]
+          : undefined;
+      return `${name}: ${formatFieldValue(value, currency)}`;
+    })
     .join(' · ');
 }
 
@@ -137,7 +164,7 @@ export function UpdatedEntriesToolResponse(props: { updated: UpdatedEntry[] }) {
               subtitle={entry.changes
                 .map(
                   (change) =>
-                    `${change.field}: ${formatFieldValue(change.before)} → ${formatFieldValue(change.after)}`
+                    `${change.field}: ${formatFieldValue(change.before, change.beforeCurrency)} → ${formatFieldValue(change.after, change.afterCurrency)}`
                 )
                 .join(' · ')}
             />

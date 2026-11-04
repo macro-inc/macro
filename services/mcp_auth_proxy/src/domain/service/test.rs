@@ -577,9 +577,7 @@ async fn revoking_an_access_token_is_reported_as_unsupported() {
     let error = harness
         .service
         .revoke_token(RevocationRequest {
-            token: Some(RefreshToken::from(
-                "eyJhbGciOiJSUzI1NiJ9.eyJzdWIiOiJ1c2VyIn0.c2lnbmF0dXJl",
-            )),
+            token: Some(RefreshToken::from("header.payload.signature")),
             client_id: Some(client_id),
         })
         .await
