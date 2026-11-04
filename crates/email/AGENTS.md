@@ -58,11 +58,18 @@ tools — hexagonal, heavily feature-gated.
   `domain/focus/rule.rs` when either changes, or stored rows keep the old verdict
   until new mail arrives. The worker's sweep re-decides older rows from their
   stored `scores`, without calling Jev. `rule/experiment.csv` holds the expected
-  verdicts for 643 real threads; report how far a rule change moves them.
+  verdicts for 643 real threads; report how far a rule change moves them. A new
+  question's answer is `#[serde(default)]`, so stored `scores` still decode, and
+  needs no bump when it decides nothing at 0.
 - Nothing reclassifies a Focus thread as it ages, so `focus_pg` applies the wait
   and the calendar hold when it reads: `awaiting_reply` and `calendar_hold_until`
   are stored, `FOLLOW_UP_AFTER_DAYS` and the time are passed in. `focus_thread_ids`
   and `focus_for_threads` restate the same tests; change both.
+- `focus_for_threads` also moves importance when it reads, with
+  `domain/focus/importance.rs`: `importance_rate` is stored and the clock starts at
+  `classified_message_ts`. The stored `importance` is the base, and the floors in
+  `domain/focus/rule.rs` only set that base. Importance never decides membership,
+  so `focus_thread_ids` doesn't read it.
 - In Focus, Calendar only means a change whose event isn't over: the read sets it
   from `calendar_hold_until`, and the stored `category` is what the thread reads as
   afterwards. A stored Calendar is a new invite or RSVP left out, and
