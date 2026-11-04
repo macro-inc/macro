@@ -1,5 +1,6 @@
 import { linkGithubAccount } from '@core/auth/authorize-github';
 import { isFeatureEnabled, macroConnect } from '@core/constant/featureFlags';
+import { SERVER_HOSTS } from '@core/constant/servers';
 import {
   openPipedreamConnectUI,
   type PipedreamConnectEvent,
@@ -551,14 +552,32 @@ async function connectPipedreamAccount(
 type ConsentResult = Exclude<PipedreamConnectEvent, { type: 'error' }>;
 
 const MACRO_CONNECT_POLL_MS = 2000;
-// Matches Connect's session lifetime.
-const MACRO_CONNECT_TIMEOUT_MS = 10 * 60 * 1000;
+// Connect's session lasts 10 minutes, and consent begun at its end another 10.
+const MACRO_CONNECT_TIMEOUT_MS = 20 * 60 * 1000;
+// Polls left once the tab has closed, if the one that would see the app fails.
+const MACRO_CONNECT_CLOSED_RETRIES = 3;
+
+/**
+ * Take the consent tab off Connect's page. `close()` does nothing once a tab
+ * with a severed opener has navigated, so send it to the page that closes
+ * itself or tells the user to.
+ */
+function finishMacroConnectTab(
+  popup: Window | null,
+  status: 'connected' | 'error'
+) {
+  if (popup && !popup.closed) {
+    popup.location.href = `${SERVER_HOSTS['cognition-service']}/pipedream/mcp/connect/callback?status=${status}`;
+  }
+}
 
 /**
  * Run Macro Connect's consent page in `popup` (or the system browser), then
  * ask the backend to record the connection until Connect confirms it, the
  * tab is closed, or the session expires. Connect's redirect page cannot
- * message this tab, so completion is polled, as for overlaid apps.
+ * message this tab, so completion is polled, as for overlaid apps. Setup can
+ * take minutes and hundreds of polls, so a failed poll doesn't end it; only
+ * the last answer counts.
  */
 async function connectThroughMacroConnect(
   args: Parameters<typeof connectPipedreamApp>[0],
@@ -570,6 +589,8 @@ async function connectThroughMacroConnect(
   assignOauthUrl(popup, connectUrl);
   return span.span('macro_connect.consent', async () => {
     const deadline = Date.now() + MACRO_CONNECT_TIMEOUT_MS;
+    let closedRetries = MACRO_CONNECT_CLOSED_RETRIES;
+    let failure: ConstructorParameters<typeof ThrownResultError>[0] | undefined;
     while (Date.now() < deadline && currentUserId() === userId) {
       const closed = popup?.closed ?? false;
       const result = await cognitionApiServiceClient.completeMacroConnect({
@@ -578,17 +599,22 @@ async function connectThroughMacroConnect(
       });
       if (result.isOk()) {
         if (currentUserId() !== userId) return 'closed';
+        finishMacroConnectTab(popup, 'connected');
         upsertConnection(result.value);
         await invalidateConnections();
         return 'connected';
       }
-      if (!result.error.some((e) => e.code === 'NOT_FOUND')) {
-        throw new ThrownResultError(result.error);
-      }
-      if (closed) return 'closed';
+      failure = result.error.some((e) => e.code === 'NOT_FOUND')
+        ? undefined
+        : result.error;
+      if (closed && (!failure || closedRetries-- <= 0)) break;
       await new Promise((resolve) =>
         setTimeout(resolve, MACRO_CONNECT_POLL_MS)
       );
+    }
+    if (failure) {
+      finishMacroConnectTab(popup, 'error');
+      throw new ThrownResultError(failure);
     }
     return 'closed';
   });
