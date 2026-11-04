@@ -444,3 +444,107 @@ async fn numbers_are_remembered_for_contacts_matched_by_email(pool: PgPool) {
         .unwrap();
     assert_eq!(learned, 2, "a guest with no contact teaches nothing");
 }
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn companyless_contacts_match_by_email_learn_phones_and_match_phone_only_calls(pool: PgPool) {
+    let team_id = seed_team(&pool, true).await;
+    let contact_id = Uuid::now_v7();
+    sqlx::query!(
+        r#"INSERT INTO crm_contacts (id, team_id, email, first_interaction, last_interaction)
+           VALUES ($1, $2, 'guest@example.com', now(), now())"#,
+        contact_id,
+        team_id,
+    )
+    .execute(&pool)
+    .await
+    .unwrap();
+    let call_id = Uuid::now_v7();
+    linker(&pool)
+        .link_call_record(
+            call_id,
+            &imported(&[(Some("guest@example.com"), Some("+1555010"))]),
+        )
+        .await
+        .unwrap();
+    assert_eq!(
+        linked_ids(&pool, call_id, SystemPropertyKey::Contacts).await,
+        [contact_id.to_string()]
+    );
+    assert!(
+        linked_ids(&pool, call_id, SystemPropertyKey::Companies)
+            .await
+            .is_empty()
+    );
+    assert_eq!(
+        phones(&pool, contact_id).await,
+        [("+1555010".to_owned(), "call".to_owned())]
+    );
+
+    let phone_only = Uuid::now_v7();
+    linker(&pool)
+        .link_call_record(phone_only, &imported(&[(None, Some("+1555010"))]))
+        .await
+        .unwrap();
+    assert_eq!(
+        linked_ids(&pool, phone_only, SystemPropertyKey::Contacts).await,
+        [contact_id.to_string()]
+    );
+    assert!(
+        linked_ids(&pool, phone_only, SystemPropertyKey::Companies)
+            .await
+            .is_empty()
+    );
+
+    sqlx::query!(
+        "UPDATE crm_contacts SET hidden = TRUE WHERE id = $1",
+        contact_id
+    )
+    .execute(&pool)
+    .await
+    .unwrap();
+    let hidden = Uuid::now_v7();
+    linker(&pool)
+        .link_call_record(
+            hidden,
+            &imported(&[(Some("guest@example.com"), Some("+1555010"))]),
+        )
+        .await
+        .unwrap();
+    assert!(
+        linked_ids(&pool, hidden, SystemPropertyKey::Contacts)
+            .await
+            .is_empty()
+    );
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn a_contact_email_outside_the_company_domain_takes_precedence_over_phone(pool: PgPool) {
+    let team_id = seed_team(&pool, true).await;
+    let company = insert_company(&pool, team_id, "acme.example", false).await;
+    let contact = insert_contact(&pool, company, "guest@example.com").await;
+    let other_company = insert_company(&pool, team_id, "other.example", false).await;
+    let other_contact = insert_contact(&pool, other_company, "other@other.example").await;
+    insert_phone(&pool, other_contact, "+1555010").await;
+    let call_id = Uuid::now_v7();
+
+    linker(&pool)
+        .link_call_record(
+            call_id,
+            &imported(&[(Some("guest@example.com"), Some("+1555010"))]),
+        )
+        .await
+        .unwrap();
+
+    assert_eq!(
+        linked_ids(&pool, call_id, SystemPropertyKey::Contacts).await,
+        [contact.to_string()]
+    );
+    assert_eq!(
+        phones(&pool, contact).await,
+        [("+1555010".to_owned(), "call".to_owned())]
+    );
+    assert_eq!(
+        linked_ids(&pool, call_id, SystemPropertyKey::Companies).await,
+        [company.to_string()]
+    );
+}

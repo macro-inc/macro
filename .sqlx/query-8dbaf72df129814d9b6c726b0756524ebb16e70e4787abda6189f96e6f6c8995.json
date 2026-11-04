@@ -1,0 +1,17 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            INSERT INTO crm_contact_phones (contact_id, phone, source)\n            SELECT n.contact_id, n.phone, $4\n            FROM UNNEST($2::uuid[], $3::text[]) AS n(contact_id, phone)\n            JOIN crm_contacts ct ON ct.id = n.contact_id AND ct.team_id = $1\n            ON CONFLICT (contact_id, phone) DO NOTHING\n            ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "UuidArray",
+        "TextArray",
+        "Text"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "8dbaf72df129814d9b6c726b0756524ebb16e70e4787abda6189f96e6f6c8995"
+}

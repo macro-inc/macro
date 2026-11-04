@@ -99,26 +99,31 @@ impl<S: SystemPropertiesService> PgCallCrmLinker<S> {
                 )
             ),
             by_email AS (
-                SELECT o.team_id, o.ord, o.phone, co.id AS company_id, ct.id AS contact_id
+                SELECT o.team_id, o.ord, o.phone, ct.company_id, ct.id AS contact_id
+                FROM outsiders o
+                JOIN crm_contacts ct
+                    ON ct.team_id = o.team_id AND LOWER(ct.email) = o.email AND NOT ct.hidden
+                LEFT JOIN crm_companies co ON co.id = ct.company_id
+                WHERE co.hidden IS NOT TRUE
+                UNION ALL
+                SELECT o.team_id, o.ord, o.phone, co.id, NULL
                 FROM outsiders o
                 JOIN crm_domains d ON d.team_id = o.team_id AND LOWER(d.domain) = o.domain
                 JOIN crm_companies co ON co.id = d.company_id AND NOT co.hidden
-                LEFT JOIN crm_contacts ct
-                    ON ct.company_id = co.id AND LOWER(ct.email) = o.email AND NOT ct.hidden
             ),
             by_phone AS (
                 SELECT o.team_id, co.id AS company_id, ct.id AS contact_id
                 FROM outsiders o
                 JOIN crm_contact_phones p ON p.phone = o.phone
-                JOIN crm_contacts ct ON ct.id = p.contact_id AND NOT ct.hidden
-                JOIN crm_companies co
-                    ON co.id = ct.company_id AND co.team_id = o.team_id AND NOT co.hidden
-                WHERE NOT EXISTS (
+                JOIN crm_contacts ct
+                    ON ct.id = p.contact_id AND ct.team_id = o.team_id AND NOT ct.hidden
+                LEFT JOIN crm_companies co ON co.id = ct.company_id
+                WHERE co.hidden IS NOT TRUE AND NOT EXISTS (
                     SELECT 1 FROM by_email e
                     WHERE e.team_id = o.team_id AND e.ord = o.ord AND e.contact_id IS NOT NULL
                 )
             )
-            SELECT team_id AS "team_id!", company_id AS "company_id!",
+            SELECT team_id AS "team_id!", company_id AS "company_id?",
                    contact_id AS "contact_id?", phone AS "learned_phone?"
             FROM by_email
             UNION ALL
@@ -131,7 +136,7 @@ impl<S: SystemPropertiesService> PgCallCrmLinker<S> {
         .fetch_all(&self.pool)
         .await?;
 
-        let company_ids: BTreeSet<Uuid> = rows.iter().map(|row| row.company_id).collect();
+        let company_ids: BTreeSet<Uuid> = rows.iter().filter_map(|row| row.company_id).collect();
         let contact_ids: BTreeSet<Uuid> = rows.iter().filter_map(|row| row.contact_id).collect();
         let mut learned_phones: BTreeMap<Uuid, BTreeSet<(Uuid, PhoneNumber)>> = BTreeMap::new();
         for row in &rows {

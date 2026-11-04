@@ -70,7 +70,9 @@ tools/HTTP/GraphQL surfaces over them.
   by address) and by phone only when no contact matched. A number nobody has
   creates nothing. A guest matched by email teaches the contact the guest's
   number, so importers set a guest's phone only for that person's own line.
-  Links are insert-if-absent: the first set written for a call stays.
+  Match contact emails within their team, independently of company domains;
+  phone storage and lookup must not require a company. Links are insert-if-absent: the first
+  set written for a call stays.
 - Pipeline board-position reads require a pipeline View receipt, hold its live
   lifecycle guard, and scope the view to its backing table/database through
   `DatabaseStorage::storage_view_positions`.

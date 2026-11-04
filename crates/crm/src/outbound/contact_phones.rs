@@ -24,10 +24,10 @@ impl ContactPhonesRepository for CompaniesRepositoryImpl {
             r#"
             SELECT p.phone AS "phone?", p.source AS "source?"
             FROM crm_contacts ct
-            JOIN crm_companies co ON co.id = ct.company_id
+            LEFT JOIN crm_companies co ON co.id = ct.company_id
             LEFT JOIN crm_contact_phones p ON p.contact_id = ct.id
-            WHERE ct.id = $1 AND co.team_id = $2
-              AND ($3 OR (ct.hidden = FALSE AND co.hidden = FALSE))
+            WHERE ct.id = $1 AND ct.team_id = $2
+              AND ($3 OR (ct.hidden = FALSE AND co.hidden IS NOT TRUE))
             ORDER BY p.created_at, p.phone
             "#,
             contact_id,
@@ -67,9 +67,9 @@ impl ContactPhonesRepository for CompaniesRepositoryImpl {
         let visible = sqlx::query_scalar!(
             r#"
             SELECT ct.id FROM crm_contacts ct
-            JOIN crm_companies co ON co.id = ct.company_id
-            WHERE ct.id = $1 AND co.team_id = $2
-              AND ($3 OR (ct.hidden = FALSE AND co.hidden = FALSE))
+            LEFT JOIN crm_companies co ON co.id = ct.company_id
+            WHERE ct.id = $1 AND ct.team_id = $2
+              AND ($3 OR (ct.hidden = FALSE AND co.hidden IS NOT TRUE))
             FOR UPDATE OF ct
             "#,
             contact_id,
@@ -126,8 +126,7 @@ impl ContactPhonesRepository for CompaniesRepositoryImpl {
             INSERT INTO crm_contact_phones (contact_id, phone, source)
             SELECT n.contact_id, n.phone, $4
             FROM UNNEST($2::uuid[], $3::text[]) AS n(contact_id, phone)
-            JOIN crm_contacts ct ON ct.id = n.contact_id
-            JOIN crm_companies co ON co.id = ct.company_id AND co.team_id = $1
+            JOIN crm_contacts ct ON ct.id = n.contact_id AND ct.team_id = $1
             ON CONFLICT (contact_id, phone) DO NOTHING
             "#,
             team_id,

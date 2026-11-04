@@ -1,0 +1,30 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            SELECT p.phone AS \"phone?\", p.source AS \"source?\"\n            FROM crm_contacts ct\n            LEFT JOIN crm_companies co ON co.id = ct.company_id\n            LEFT JOIN crm_contact_phones p ON p.contact_id = ct.id\n            WHERE ct.id = $1 AND ct.team_id = $2\n              AND ($3 OR (ct.hidden = FALSE AND co.hidden IS NOT TRUE))\n            ORDER BY p.created_at, p.phone\n            ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "phone?",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 1,
+        "name": "source?",
+        "type_info": "Text"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid",
+        "Bool"
+      ]
+    },
+    "nullable": [
+      false,
+      false
+    ]
+  },
+  "hash": "39a6bc00413e3e0e5000eb27b323aa9a2e8e16eed7b6626b123756e3530a5d11"
+}
