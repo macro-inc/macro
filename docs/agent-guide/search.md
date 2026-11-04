@@ -21,8 +21,8 @@ independently of view tabs, mailbox selections, and saved facets. Commands and
 creation shortcuts are excluded. Empty queries show recent entities.
 Typed **All** and **People** name searches also find known teammates before their
 first DM, with or without CRM. Existing one-to-one DMs replace person rows while
-preserving name/email matches; selecting a person opens their DM, or a draft
-addressed to them that creates the DM when its first message is sent. Verify both
+preserving name/email matches; selecting a person opens their DM, which the
+first message creates when there isn't one yet. Verify both
 categories with a teammate who has no conversation or CRM record.
 On phones, name-result icons and avatars are scaled to 150% (16px artwork
 becomes 24px), preserving row height and text alignment.
@@ -110,7 +110,7 @@ Open a result from midway through the list and confirm it keeps its original
 position after Back, both when Search stays mounted and after deeper navigation
 evicts it. Refresh row metadata and append pages; existing rows must keep their order.
 Include a person without a DM: open them from midway through All/People results,
-send a message from the draft, then go Back and confirm that person's new DM is
+send them a message, then go Back and confirm that person's new DM is
 still in the same place and opens the existing conversation on a second selection. Repeat with the DM arriving after
 Search unmounts, and verify group DMs stay separate.
 Switch accounts with a scrolled Search entry still mounted, then remount that

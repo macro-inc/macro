@@ -1003,9 +1003,11 @@ opens the same card. Touch devices have no hover, so tapping the mention
 or the picture opens that same card as a bottom sheet; any action there runs and
 dismisses the sheet. Desktop keeps click-to-DM on the picture itself, which touch
 drops in favour of the card's DM action. DM, the picture click, channel and call
-participants, and people in Cmd+K open the existing DM, or else the Draft message
-composer addressed to that person; the first message creates the DM, so opening
-someone never adds an empty DM to the list.
+participants, and people in Cmd+K open the existing DM. Without one they open
+the DM anyway, as an empty DM under a temporary `pending-dm-` id that nothing on
+the server knows; the first message creates the DM and replaces it, so opening
+someone never adds an empty DM to either person's list. See
+[Empty direct messages](channels.md#empty-direct-messages).
 
 `Create` button (top-left) opens a menu of: Email E, Routine U, Agent A, Skill K,
 Document D, Task T, Project P, Snippet S, Message M, Channel G, Call C, Canvas N, Folder F, Code O.
