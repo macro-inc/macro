@@ -541,6 +541,25 @@ when mutations invalidate metadata. `update`, `cancel`, `invite(email)`,
 `availabilityCalendars`, `calendar.setContributesToAvailability`, `teamSharing` and
 `setTeamSharing` manage availability and sharing preferences.
 
+### Editing documents and tasks
+
+`document.edit(instructions, options)` edits a markdown document or a task's body
+by natural-language instructions. The AI editor merges its changes with anyone
+editing at the same time. Say where (name the section or quote the text) and
+describe the outcome:
+
+```ts
+const { revision, webUrl } = await document.edit(
+  'Rewrite the "Summary" section as three bullet points. Keep the heading.',
+  { fast: true },
+);
+```
+
+It returns the new revision, not a diff; read `content()` to see what changed.
+`options.signal` cancels the edit, keeping what was applied before the abort. A
+refused edit throws `DocumentEditRefusedError` with the editor's reason;
+`EditOutcomeUnknownError` means read the document before retrying.
+
 ### Document lifecycle and other resources
 
 `documents.createUpload(options)` reserves a binary document and returns upload
