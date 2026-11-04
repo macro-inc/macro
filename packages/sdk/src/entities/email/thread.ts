@@ -57,6 +57,27 @@ export interface EmailReadReceipt {
   lastOpenedAt?: string;
 }
 
+/** Public professional profile of someone in an email thread. */
+export interface EmailPersonProfile {
+  /** Lowercased email address. */
+  email: string;
+
+  /** LinkedIn profile URL. */
+  linkedinUrl?: string;
+
+  /** LinkedIn headline. */
+  headline?: string;
+
+  /** Current job title. */
+  title?: string;
+
+  /** Current employer. */
+  organizationName?: string;
+
+  /** Profile photo URL. */
+  photoUrl?: string;
+}
+
 /**
  * An email thread. A free-to-construct handle: the detail record (including
  * up to the first 100 messages) loads lazily on first field access.
@@ -139,6 +160,28 @@ export class EmailThread extends PropertiedEntity<ThreadDetail> {
       openCount: receipt.open_count,
       firstOpenedAt: receipt.first_opened_at ?? undefined,
       lastOpenedAt: receipt.last_opened_at ?? undefined,
+    }));
+  }
+
+  /**
+   * Public professional profiles of the thread's senders and recipients, in
+   * order of first appearance, excluding the caller's own inboxes and people
+   * with no known profile. Profiles come from a people-data provider and are
+   * cached per address, so they can be months old.
+   */
+  async personProfiles(): Promise<EmailPersonProfile[]> {
+    const { profiles } = unwrap(
+      await this.client.email.getThreadPersonProfiles({
+        path: { thread_id: this.id },
+      }),
+    );
+    return profiles.map((profile) => ({
+      email: profile.email_address,
+      linkedinUrl: profile.linkedin_url ?? undefined,
+      headline: profile.headline ?? undefined,
+      title: profile.title ?? undefined,
+      organizationName: profile.organization_name ?? undefined,
+      photoUrl: profile.photo_url ?? undefined,
     }));
   }
 

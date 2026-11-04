@@ -1708,6 +1708,37 @@ export type PatchSettingsResponse = {
 };
 
 /**
+ * One person's public profile, keyed by their lowercased email address.
+ * Every detail is `None` for an address the provider could not match.
+ */
+export type PersonProfile = {
+    /**
+     * Lowercased email address.
+     */
+    email_address: string;
+    /**
+     * LinkedIn headline.
+     */
+    headline?: string | null;
+    /**
+     * LinkedIn profile URL (`https://www.linkedin.com/in/…`).
+     */
+    linkedin_url?: string | null;
+    /**
+     * Current employer.
+     */
+    organization_name?: string | null;
+    /**
+     * Profile photo URL.
+     */
+    photo_url?: string | null;
+    /**
+     * Current job title.
+     */
+    title?: string | null;
+};
+
+/**
  * View type. Supported values include standard labels and a custom user label user:<label>
  */
 export type PreviewView = 'inbox' | 'sent' | 'drafts' | 'starred' | 'all' | 'important' | 'other' | string;
@@ -1853,6 +1884,13 @@ export type Thread = {
 export type ThreadList = {
     next_page_token?: string | null;
     threads: Array<ThreadSummary>;
+};
+
+/**
+ * Known profiles of the thread's senders and recipients, excluding the viewer.
+ */
+export type ThreadPersonProfiles = {
+    profiles: Array<PersonProfile>;
 };
 
 /**
@@ -3592,6 +3630,29 @@ export type CopyThreadCalendarInvitationResponses = {
 };
 
 export type CopyThreadCalendarInvitationResponse = CopyThreadCalendarInvitationResponses[keyof CopyThreadCalendarInvitationResponses];
+
+export type GetThreadPersonProfilesData = {
+    body?: never;
+    path: {
+        /**
+         * Authorized email thread
+         */
+        thread_id: string;
+    };
+    query?: never;
+    url: '/email/threads/{thread_id}/person-profiles';
+};
+
+export type GetThreadPersonProfilesErrors = {
+    401: unknown;
+    403: unknown;
+};
+
+export type GetThreadPersonProfilesResponses = {
+    200: ThreadPersonProfiles;
+};
+
+export type GetThreadPersonProfilesResponse = GetThreadPersonProfilesResponses[keyof GetThreadPersonProfilesResponses];
 
 export type UpdateThreadProjectData = {
     body: UpdateThreadProjectRequest;

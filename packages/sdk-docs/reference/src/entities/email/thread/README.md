@@ -6,5 +6,6 @@
 
 ## Interfaces
 
+- [EmailPersonProfile](interfaces/EmailPersonProfile.md)
 - [EmailReadReceipt](interfaces/EmailReadReceipt.md)
 - [ReplyEmailOptions](interfaces/ReplyEmailOptions.md)

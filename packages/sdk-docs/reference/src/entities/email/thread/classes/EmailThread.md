@@ -264,6 +264,21 @@ Read the caller's effective permission on this entity.
 
 ***
 
+### personProfiles()
+
+> **personProfiles**(): `Promise`\<[`EmailPersonProfile`](../interfaces/EmailPersonProfile.md)[]\>
+
+Public professional profiles of the thread's senders and recipients, in
+order of first appearance, excluding the caller's own inboxes and people
+with no known profile. Profiles come from a people-data provider and are
+cached per address, so they can be months old.
+
+#### Returns
+
+`Promise`\<[`EmailPersonProfile`](../interfaces/EmailPersonProfile.md)[]\>
+
+***
+
 ### properties()
 
 > **properties**(`opts?`): `Promise`\<[`EntityPropertyWithDefinition`](../../../../../generated/properties/types.gen/type-aliases/EntityPropertyWithDefinition.md)[]\>

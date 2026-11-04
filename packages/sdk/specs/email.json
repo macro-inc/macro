@@ -3801,6 +3801,42 @@
         }
       }
     },
+    "/email/threads/{thread_id}/person-profiles": {
+      "get": {
+        "tags": ["email"],
+        "operationId": "get_thread_person_profiles",
+        "parameters": [
+          {
+            "name": "thread_id",
+            "in": "path",
+            "description": "Authorized email thread",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ThreadPersonProfiles"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": ""
+          },
+          "403": {
+            "description": ""
+          }
+        }
+      }
+    },
     "/email/threads/{thread_id}/project": {
       "patch": {
         "tags": ["Threads"],
@@ -7132,6 +7168,37 @@
           }
         }
       },
+      "PersonProfile": {
+        "type": "object",
+        "description": "One person's public profile, keyed by their lowercased email address.\nEvery detail is `None` for an address the provider could not match.",
+        "required": ["email_address"],
+        "properties": {
+          "email_address": {
+            "type": "string",
+            "description": "Lowercased email address."
+          },
+          "headline": {
+            "type": ["string", "null"],
+            "description": "LinkedIn headline."
+          },
+          "linkedin_url": {
+            "type": ["string", "null"],
+            "description": "LinkedIn profile URL (`https://www.linkedin.com/in/…`)."
+          },
+          "organization_name": {
+            "type": ["string", "null"],
+            "description": "Current employer."
+          },
+          "photo_url": {
+            "type": ["string", "null"],
+            "description": "Profile photo URL."
+          },
+          "title": {
+            "type": ["string", "null"],
+            "description": "Current job title."
+          }
+        }
+      },
       "PreviewView": {
         "oneOf": [
           {
@@ -7470,6 +7537,19 @@
             "type": "array",
             "items": {
               "$ref": "#/components/schemas/ThreadSummary"
+            }
+          }
+        }
+      },
+      "ThreadPersonProfiles": {
+        "type": "object",
+        "description": "Known profiles of the thread's senders and recipients, excluding the viewer.",
+        "required": ["profiles"],
+        "properties": {
+          "profiles": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/PersonProfile"
             }
           }
         }
