@@ -3,10 +3,21 @@
 ## Surface
 
 `Go to Tasks` → `/app/component/tasks`. Task views: `My tasks`, `All tasks`, and `Created by me`.
-The single-row desktop header contains the title, `Filter`, a separate
-`Task layout` single-select icon group for `List`, `Board`, and enabled `Gantt`,
-`Sort`, `Group`, `New`, and an expandable Search icon
-(`Ctrl+F` opens it). The active-filter count sits beside the filter icon inside
+The single-row desktop header contains the title, `Filter`, `Display`, `New`, and an
+expandable Search icon (`Ctrl+F` opens it). `Display` contains Layout tabs for
+`List`, `Board`, and enabled `Gantt`, plus labeled `Group by` and `Sort` select
+triggers showing the current selection. Choices apply without closing the popover.
+`S` opens Display; `F` opens Filter. Search disables Sort and explains why.
+In List layout, the Properties section controls Priority, Tags, Due date, Project,
+Assignees, Updated, and Created by. Priority, Due date, Project, and Assignees offer
+Show, Hide when empty, and Hide; the other properties offer Show and Hide. The
+status icon and task title always remain visible. Selected choices use accent
+checkmarks. Hide when empty removes the empty placeholder, retaining desktop
+column alignment but omitting the detail entirely on phones. Hide removes the
+column and its header. Unsaved lists remember these choices per account on the
+device, including Project/CRM task lists; saved views use their own saved choices
+without changing the device preference. Existing definitions default to Show.
+The active-filter count sits beside the filter icon inside
 its button, without overlapping the icon or the group border;
 the filter uses the legacy compact option rows and searchable Assignee, Created by,
 and Tags submenus. They use the [shared multiselect dropdown pattern](ui-conventions.md#multiselect-dropdowns):
@@ -70,12 +81,28 @@ including a changed cursor and a failed later page. Retrying should replace the
 old pages; changing projects or filters must discard the old scope immediately.
 The sidebar has no Tags section: filter by tag from the `Tags` group of the `Filter` menu,
 and switching tabs clears it like any other filter. On mobile, the tabs
-are pills and the leading sliders button opens one drawer containing Sort, Group, and
-Filters (including Tags). The mobile bottom dock has **+ Task** and Search,
-with no floating Ask AI input.
-Mobile does not show the separate layout, sort, group, and filter toolbar.
-Use the compact sliders drawer for task-list controls; project task lists use the
-same drawer. Mobile supports List only. Opening a Board or Gantt link, or
+are pills, with separate leading Filters and Display controls. Filters contains only
+filter facets (including Tags); Display opens a sheet with Group by, Sort, and Properties choices.
+On desktop, Display is a popover sized to the full layout tab labels, with labeled
+Group by and Sort selects and the Properties section beneath them. Select triggers
+align right and fit their current value, capped at 12rem or the available row width;
+long values truncate and remain available in a tooltip. Layout tabs use
+standard-height, content-sized controls without a separate subheading.
+In Properties, compact icon pills use a wrapping row on desktop and touch.
+Shown properties have a filled pill, Hide when empty uses a dashed outline,
+and hidden properties have a muted, unframed pill. Tags, Updated, and Created by
+switch directly between Show and Hide when clicked or tapped. Priority, Due date,
+Project, and Assignees have a persistent chevron; activating the whole pill opens
+Show, Hide when empty, and Hide choices without changing its current value.
+A short pill tooltip shows only the property name and current mode. Desktop pill
+dropdowns open on click and stay open when the pointer leaves the pill. There are
+no hover-only buttons or gradient overlays. On touch, three-state pills open a
+small visibility sheet above Display; dismissing it returns focus to the pill.
+Mode choices keep Display open.
+The mobile bottom dock has **+ Task** and Search, with no floating Ask AI input.
+Project and CRM task lists use the same separate controls. Changes in either
+sheet remain part of the existing saved-view draft; its save actions stay in
+Filters. Mobile supports List only. Opening a Board or Gantt link, or
 restoring either layout, automatically selects List and replaces that host's
 layout URL parameter without adding history or clearing search, sorting,
 grouping, or filters. Desktop supports List and Board, plus Gantt when the
@@ -268,7 +295,7 @@ empty. Cancel leaves the previous filter unchanged. Status remains independent:
 select Completed or Canceled explicitly to include closed tasks in a date filter.
 The mobile controls use the same options and date-range dialog in the sliders drawer.
 
-**Group → Due date** puts No due date first, then uses non-overlapping viewer-local calendar buckets:
+**Display → Group by → Due date** puts No due date first, then uses non-overlapping viewer-local calendar buckets:
 Overdue is before today's midnight; Today and Tomorrow cover those entire days;
 Next 7 days covers D+2 through D+7; Later starts at D+8; No due date includes
 missing and cleared dates. Relative filters and groups refresh at local midnight,
@@ -298,18 +325,18 @@ saved-date semantics do not change.
 Saved views are available on main Tasks, not inside Project or CRM task lists.
 
 - Desktop: use the **Saved views** sidebar section. Its icon-only **+** remains available when the section is empty, populated, collapsed, loading, or in an error state. Enter on the focused **+** starts a draft instead of opening the selected task.
-- Mobile: the **Saved views** pill sits after **Filters** and before the built-in task tabs, using the same mobile pill component. It shows the selected view's name and active styling, and opens a drawer of saved-view rows with selection and management menus, without a duplicate section heading or a header create button. Create views from changed filters, layout, grouping, or sort in the filter drawer.
+- Mobile: the **Saved views** pill sits after **Filters** and **Display** and before the built-in task tabs, using the same mobile pill component. It shows the selected view's name and active styling, and opens a drawer of saved-view rows with selection and management menus, without a duplicate section heading or a header create button. Create views from changed filters, layout, grouping, sort, or property visibility in the filter drawer.
 - The empty sidebar and mobile picker show **Your go-to views**, the muted description **Save your setup for next time.**, and a secondary **Create view** button with a leading plus icon in a rounded container with a subtle border, 12px padding, the surrounding background, and no shadow or illustration. It starts the same unsaved draft as desktop **+**; on mobile, the picker closes first. Configure the draft in Filters, then choose **Save view**.
 - Desktop **+** starts an unsaved view without person restrictions and with explicit open-status filters. It expands the section and adds a selected, italic **New view** row labeled **Draft** in the sidebar and mobile picker. Configure filters, then choose **Save view**; the name defaults to **New view** and can be edited before saving. A confirmed save replaces the draft with the named view; **Cancel** in the desktop toolbar or mobile filter drawer, another selection, or leaving Tasks removes the unsaved row. Canceling only the name dialog keeps the draft for later.
 - Desktop **Save view** and draft **Cancel** are separate standalone buttons with a gap, not segments of a button group.
-- When filters, due date, layout, grouping, or sort differ from the built-in tab defaults, the filled **Save view** button appears immediately left of Filters on desktop and in an edge-to-edge mobile banner above the filter drawer footer. The borderless banner overlays content on a drawer-colored backing and has a leading bookmark icon on its button. Base settings and search alone do not show the banner. It captures current filters, relative due-date presets or custom calendar bounds, layout, grouping, and ordered sort directions, but excludes text search and scroll state. My Tasks adds **Me** to Assignee; Created by me adds it to Created by. Additional people in the same filter use OR matching.
+- When filters, due date, layout, grouping, sort, or property visibility differ from the built-in defaults, the filled **Save view** button appears immediately left of Filters on desktop and in an edge-to-edge mobile banner above the filter drawer footer. The borderless banner overlays content on a drawer-colored backing and has a leading bookmark icon on its button. Base settings and search alone do not show the banner. It captures current filters, relative due-date presets or custom calendar bounds, layout, grouping, ordered sort directions, and property-display modes, but excludes text search and scroll state. My Tasks adds **Me** to Assignee; Created by me adds it to Created by. Additional people in the same filter use OR matching.
 - Saved views use the normal Assignee and Created by filters, not a separate Scope control. **Me** stays relative; its tooltip says “Matches whoever opens this saved view.” A named person stays fixed. Removing Me removes that restriction.
-- Temporary filter, due-date, layout, grouping, or sort edits show a filled **Save changes** button and **Reset**. Opening or resetting a saved view restores all five, including due-date grouping and property sorts. Older definitions without a due-date filter remain unrestricted. Mobile still displays a list without replacing the stored desktop layout. Right-click a sidebar view or use its **…** button for **Edit**, **Duplicate**, **Copy link**, and confirmed **Delete view**. On desktop, the selected view's topbar shows a bookmark icon before its name and an unframed ghost overflow button immediately after it. On mobile, the picker shows the name and contains row menus; creation and draft cancellation appear in the filter drawer's overlay banner above the footer; Save changes and Reset sit on the footer's right, opposite Clear all, not below the tabs. Non-owners cannot rename, share, overwrite, or delete a shared view.
-- **Edit** opens the shared create/edit dialog with the saved name and team-sharing checkbox prefilled, without saving temporary filter, layout, grouping, or sort changes. Edit and delete dialog titles identify the saved view by name and wrap long names. Both create and edit modes use a 600px-wide dialog that stays within narrow viewports. **Duplicate** opens a private copy with a prefilled “(copy)” name; duplicating the selected view includes its temporary settings. If the original has unsupported or invalid settings, the dialog warns that the copy omits them and leaves the original unchanged. Sidebar actions on another view do not change the current selection unless a duplicate is saved.
+- Temporary filter, due-date, layout, grouping, sort, or property-display edits show a filled **Save changes** button and **Reset**. Opening or resetting a saved view restores all these settings, including due-date grouping and property sorts. Older definitions without a due-date filter remain unrestricted. Mobile still displays a list without replacing the stored desktop layout. Right-click a sidebar view or use its **…** button for **Edit**, **Duplicate**, **Copy link**, and confirmed **Delete view**. On desktop, the selected view's topbar shows a bookmark icon before its name and an unframed ghost overflow button immediately after it. On mobile, the picker shows the name and contains row menus; creation and draft cancellation appear in the filter drawer's overlay banner above the footer; Save changes and Reset sit on the footer's right, opposite Clear all, not below the tabs. Non-owners cannot rename, share, overwrite, or delete a shared view.
+- **Edit** opens the shared create/edit dialog with the saved name and team-sharing checkbox prefilled, without saving temporary filter, layout, grouping, sort, or property-display changes. Edit and delete dialog titles identify the saved view by name and wrap long names. Both create and edit modes use a 600px-wide dialog that stays within narrow viewports. **Duplicate** opens a private copy with a prefilled “(copy)” name; duplicating the selected view includes its temporary settings. If the original has unsupported or invalid settings, the dialog warns that the copy omits them and leaves the original unchanged. Sidebar actions on another view do not change the current selection unless a duplicate is saved.
 - The optional **Share with team** checkbox shares only the view definition. Its adjacent info icon shows the explanation on hover; click, tap, or keyboard activation opens it without changing the checkbox. Each teammate still sees only permitted items. Both the owner and viewer must currently belong to that team; leaving disables access and rejoining restores it.
-- Leaving the view or opening task detail discards temporary edits. The return breadcrumb retains the saved-view identity and reloads its saved filters, layout, grouping, and sort.
+- Leaving the view or opening task detail discards temporary edits. The return breadcrumb retains the saved-view identity and reloads its saved filters, layout, grouping, sort, and property-display modes.
 - An unavailable or deleted view shows an explicit unavailable state, not All Tasks under the old name. Unsupported or malformed filters are skipped while supported filters apply immediately. A danger-colored banner above the results names affected filters or view settings without an extra description. If no filters apply, the list shows all permitted tasks, including closed tasks. Loading never changes the saved definition. Unknown tag/person labels retain their filters until deliberately removed. Ordinary **Save changes** is disabled until the app understands every setting or the owner explicitly removes unsupported settings; Edit remains available.
-- Owners can choose **Remove & save** at the right edge of that banner. It removes only skipped settings from the stored definition, preserves supported filters, due date, layout, grouping, sort, and sharing, and leaves temporary edits unsaved. The banner disappears only after a confirmed save; failures retain it for retry, and revision conflicts offer **Reload saved view**.
+- Owners can choose **Remove & save** at the right edge of that banner. It removes only skipped settings from the stored definition, preserves supported filters, due date, layout, grouping, sort, property-display modes, and sharing, and leaves temporary edits unsaved. The banner disappears only after a confirmed save; failures retain it for retry, and revision conflicts offer **Reload saved view**.
 - A conflicting save retains the draft and offers **Reload saved view** or **Duplicate**. A network failure also retains the name and sharing inputs.
 - Copy links use the existing split search codec, for example `/app/component/tasks?s0.tasks.savedView=<uuid>`.
 
@@ -317,15 +344,16 @@ Saved views are available on main Tasks, not inside Project or CRM task lists.
 
 Verify creation without early persistence, explicit save/reset, copy versus owner-only editing, desktop/mobile metadata dialogs, and returning from task detail. Repeat with another teammate, a removed/rejoined owner, an unavailable tag, and a stale revision.
 
-Exercise these flows at desktop, phone, and tablet widths. Verify the mobile pill strip reserves its full height without overlapping task content, including after scrolling and returning from a drawer. Check that the mobile creation banner stays above the footer while filters scroll behind it and that the final filter controls can scroll clear of the banner. Verify it appears for changes to filters, layout, grouping, or sort and disappears when all four match the built-in tab defaults. Check keyboard navigation inside the mobile picker and focus after opening and closing Edit, Duplicate, or Delete. These focused dialogs use the shared imperative dialog host and must close when their owning account or view changes; the picker closes before a management dialog opens. Saving from the filter drawer closes it before opening the name dialog; Cancel or Escape reopens the unchanged filter draft, while a confirmed creation selects the new view without reopening the drawer. Delay a save while navigating or editing filters, and delay a deletion while selecting its target: stale saves must not change the new selection, later filter edits must survive, and confirmed deletion must clear its selected target.
+Exercise these flows at desktop, phone, and tablet widths. Verify the mobile pill strip reserves its full height without overlapping task content, including after scrolling and returning from a drawer. Check that the mobile creation banner stays above the footer while filters scroll behind it and that the final filter controls can scroll clear of the banner. Verify it appears for changes to filters, layout, grouping, sort, or property visibility and disappears when all match the built-in defaults. Check keyboard navigation inside the mobile picker and focus after opening and closing Edit, Duplicate, or Delete. These focused dialogs use the shared imperative dialog host and must close when their owning account or view changes; the picker closes before a management dialog opens. Saving from the filter drawer closes it before opening the name dialog; Cancel or Escape reopens the unchanged filter draft, while a confirmed creation selects the new view without reopening the drawer. Delay a save while navigating or editing filters, and delay a deletion while selecting its target: stale saves must not change the new selection, later filter edits must survive, and confirmed deletion must clear its selected target.
 Also return a malformed definition from create or from another row's update: the selected view must remain accessible. Advance the selected view's revision while a duplicate saves; completion must not navigate away. Ordinary creation retains current facets even if its confirmed definition differs.
 Verify mixed supported and invalid entries, unsupported fields, conflicting tag bindings, and an unknown version. Supported conditions must immediately filter results while the danger banner stays visible. If none apply, verify unfiltered tasks, including closed tasks. Confirm the saved definition is unchanged on load, reset, and navigation, and permission failures still show an unavailable state without querying tasks.
 Verify banner cleanup on desktop and mobile, including an entirely unsupported definition. Confirm that only owners see the action, temporary filter edits stay unsaved, sharing stays unchanged, and failed or conflicting writes retain the original definition and warning.
 Verify layout-only, grouping-only, and sort-only save/reset, duplicate and reload, sort direction, mobile list fallback without overwriting a saved board/Gantt layout, and delayed saves while presentation changes. Older views without grouping default to Priority. A future filter, layout, grouping, sort, or version must warn and block ordinary Save changes without altering the original; explicit cleanup remains available.
+Verify property-only Save changes, Reset, Duplicate, and reload. Switch from a saved view to an unsaved list and confirm the original device preferences return. Change an unsaved preference with a second task list open and confirm both update. Hide every optional property, then mix populated and empty rows under Hide when empty; desktop rows must stay aligned, while phone rows must reclaim the empty detail's space.
 
 ## Gantt layout
 
-Choose **Gantt** in the **Task layout** group to see task timelines.
+Choose **Display → Layout → Gantt** to see task timelines.
 The same option is available in a project's Tasks section. The timeline uses
 Created at as the start and Due date as the end; no separate Start date is
 created or saved. Bars without a due date fade to transparent at the right edge.
@@ -465,9 +493,8 @@ Gantt persists in `tasks.layout` or `projectTasks.layout`, just like List and Bo
 
 ## Board layout
 
-Choose **Board** in the **Task layout** group in the toolbar
-(or **List** to switch back). One icon is selected at a time; hover or focus shows
-its label. **Group by** offers Status, Priority, Assignee, Due date,
+Choose **Display → Layout → Board** in the toolbar (or **List** to switch back).
+The selected layout tab is highlighted. **Display → Group by** offers Status, Priority, Assignee, Due date,
 and (when Projects is enabled) Project.
 Both layouts share one grouping, which restores with the Tasks navigation entry.
 List-only None and Date groupings display Status columns in Board; switching
@@ -1088,7 +1115,7 @@ tasks whose Project property names the project.
 
 The project's Tasks tab starts with task search, controls, and the selected List or
 Board layout; the project title and property pills appear only on Overview.
-Use the same **Task layout** group to choose a layout. Both layouts
+Use the same **Display** menu to choose a layout. Both layouts
 show only tasks linked to the current project and use the same filters and editors.
 Layout, sort direction, and grouping use `projectTasks.layout`, `projectTasks.sort`,
 `projectTasks.sortReversed`, and `projectTasks.groupBy` URL parameters, independent

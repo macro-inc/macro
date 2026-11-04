@@ -1,29 +1,30 @@
 import {
   ListFilterDropdown,
-  ListGroupDropdown,
-  ListSortDropdown,
   useViewControlHotkeys,
 } from '@app/components/view-shell';
+import { t } from '@app/lib/i18n';
 import { HeaderActionGroup } from '@components/app/HeaderActionGroup';
 import { useSplitPanelOrThrow } from '@components/app/split-layout/layoutUtils';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
-import GanttIcon from '@icon/system/regular/chart-gantt.svg';
-import BoardIcon from '@icon/system/regular/kanban.svg';
-import ListIcon from '@icon/system/regular/list-bullets.svg';
-import { ButtonGroup } from '@ui';
 import { tourTarget } from '@ui/components/Tour';
 import { createSignal, Show } from 'solid-js';
-import { TASK_GROUP_OPTIONS, TASK_SORT_OPTIONS } from '../constants';
-import { TASK_BOARD_GROUP_OPTIONS } from '../core/task-board';
 import { useTaskFilters } from '../filters/use-task-filters';
-import { useTasksView } from '../tasks-view-context';
 import { TASKS_TOUR } from '../tour';
 import { TasksFilterDrawer } from './TasksFilterDrawer';
+import { TasksViewMenu } from './TasksViewMenu';
 import { TaskDueDateRangeDialog } from './task-due-date-range-dialog';
 
 export function TasksControls() {
   return (
-    <Show when={!isTouchDevice()} fallback={<TasksFilterDrawer />}>
+    <Show
+      when={!isTouchDevice()}
+      fallback={
+        <>
+          <TasksFilterDrawer />
+          <TasksViewMenu />
+        </>
+      }
+    >
       <DesktopTasksControls />
     </Show>
   );
@@ -31,15 +32,13 @@ export function TasksControls() {
 
 function DesktopTasksControls() {
   const panel = useSplitPanelOrThrow();
-  const { state, setPrimarySort, setState, projectsEnabled, ganttEnabled } =
-    useTasksView();
   const filters = useTaskFilters();
-  const [openMenu, setOpenMenu] = createSignal<'filters' | 'sort'>();
+  const [openMenu, setOpenMenu] = createSignal<'filters' | 'view'>();
   let filterTrigger: HTMLButtonElement | undefined;
-  let sortTrigger: HTMLButtonElement | undefined;
+  let viewTrigger: HTMLButtonElement | undefined;
 
   const handleMenuOpenChange =
-    (menu: 'filters' | 'sort') => (open: boolean) => {
+    (menu: 'filters' | 'view') => (open: boolean) => {
       setOpenMenu((current) => {
         if (open) return menu;
         return current === menu ? undefined : current;
@@ -53,38 +52,23 @@ function DesktopTasksControls() {
       description: 'Filter tasks',
       run: () => {
         if (!filterTrigger) return false;
-
         setOpenMenu('filters');
         return true;
       },
     },
     sort: {
-      description: 'Sort tasks',
+      description: 'Task view options',
       run: () => {
-        if (!sortTrigger || state.search.trim()) return false;
-
-        setOpenMenu('sort');
+        if (!viewTrigger) return false;
+        setOpenMenu('view');
         return true;
       },
     },
   });
 
-  const primarySort = () => state.sort[0]?.id ?? 'updated_at';
-  const isSearching = () => !!state.search.trim();
-
-  const groupOptions = () => {
-    if (state.layout !== 'board') {
-      return TASK_GROUP_OPTIONS;
-    }
-
-    return TASK_BOARD_GROUP_OPTIONS.filter((option) => {
-      return option.id !== 'project' || projectsEnabled();
-    });
-  };
-
   return (
     <>
-      <HeaderActionGroup label="Task filters" size="md">
+      <HeaderActionGroup label={t('viewMenus.filters')} size="md">
         <div class="shrink-0" ref={tourTarget(TASKS_TOUR.filter)}>
           <ListFilterDropdown
             grouped
@@ -106,71 +90,11 @@ function DesktopTasksControls() {
           />
         </div>
       </HeaderActionGroup>
-      <HeaderActionGroup label="Task layout" size="md">
-        <ButtonGroup.Button
-          aria-label="List"
-          tooltip="List"
-          variant="ghost"
-          size="icon-md"
-          aria-pressed={state.layout === 'list'}
-          onClick={() => setState('layout', 'list')}
-        >
-          <ListIcon class="size-4" />
-        </ButtonGroup.Button>
-        <ButtonGroup.Button
-          aria-label="Board"
-          tooltip="Board"
-          variant="ghost"
-          size="icon-md"
-          aria-pressed={state.layout === 'board'}
-          onClick={() => setState('layout', 'board')}
-        >
-          <BoardIcon class="size-4" />
-        </ButtonGroup.Button>
-        <Show when={ganttEnabled()}>
-          <ButtonGroup.Button
-            aria-label="Gantt"
-            tooltip="Gantt"
-            variant="ghost"
-            size="icon-md"
-            aria-pressed={state.layout === 'gantt'}
-            onClick={() => setState('layout', 'gantt')}
-          >
-            <GanttIcon class="size-4" />
-          </ButtonGroup.Button>
-        </Show>
-      </HeaderActionGroup>
-      <HeaderActionGroup label="Task view options" size="md">
-        <Show
-          when={!isSearching()}
-          fallback={
-            <span
-              class="text-xs text-ink-muted"
-              title="Search keeps its existing result ordering. Clear search to sort tasks."
-            >
-              Search order
-            </span>
-          }
-        >
-          <ListSortDropdown
-            grouped
-            size="icon-md"
-            label="Sort tasks"
-            value={primarySort()}
-            options={TASK_SORT_OPTIONS}
-            open={openMenu() === 'sort'}
-            onChange={setPrimarySort}
-            onOpenChange={handleMenuOpenChange('sort')}
-            triggerRef={(element) => (sortTrigger = element)}
-          />
-        </Show>
-        <ListGroupDropdown
-          grouped
-          size="icon-md"
-          label="Group by"
-          value={state.groupBy}
-          options={groupOptions()}
-          onChange={(groupBy) => setState('groupBy', groupBy)}
+      <HeaderActionGroup label={t('viewMenus.viewOptions')} size="md">
+        <TasksViewMenu
+          open={openMenu() === 'view'}
+          onOpenChange={handleMenuOpenChange('view')}
+          triggerRef={(element) => (viewTrigger = element)}
         />
       </HeaderActionGroup>
       <TaskDueDateRangeDialog

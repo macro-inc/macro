@@ -156,6 +156,11 @@ export { Panel } from './components/Panel';
 export type { PillButtonProps, PillButtonTone } from './components/PillButton';
 export { PillButton } from './components/PillButton';
 export type {
+  PopoverContentProps,
+  PopoverRootProps,
+} from './components/Popover';
+export { Popover } from './components/Popover';
+export type {
   ProgressPillProps,
   ProgressRingProps,
 } from './components/ProgressPill';

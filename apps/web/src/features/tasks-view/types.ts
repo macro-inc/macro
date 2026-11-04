@@ -1,6 +1,7 @@
 import type { FacetSelection, SortSelection } from '@app/features/soup';
 import type { TaskComposerContext } from '../task-composer/core/context';
 import type { TaskDueDateFilter } from './core/task-due-date';
+import type { TaskPropertyDisplay } from './core/task-property-display';
 
 export type TaskCreateOptions = {
   dueDate?: Date;
@@ -57,6 +58,7 @@ export type TasksViewState = {
   sort: SortSelection<TaskSortId>[];
   facets: FacetSelection;
   dueDate?: TaskDueDateFilter;
+  propertyDisplay: TaskPropertyDisplay;
   collapsedGroupIds: string[];
   collapsedSidebarSectionIds: string[];
   /** Transient marker: never persist saved-view filter drafts in entry history. */

@@ -21,6 +21,7 @@ export {
   ViewLayoutDropdown,
   type ViewLayoutDropdownProps,
 } from './ListDropdowns';
+export { ListViewMenu, type ListViewMenuProps } from './ListViewMenu';
 export { MobileFilterDrawer } from './MobileFilterDrawer';
 export { SearchBar, type SearchBarProps } from './SearchBar';
 export { VIEW_SHELL_TOUR } from './tour';

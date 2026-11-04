@@ -46,12 +46,14 @@ import {
   useContext,
 } from 'solid-js';
 import type { DateBucketBoundaries } from '../../core/task-due-date';
+import type { TaskPropertyDisplay } from '../../core/task-property-display';
 import { TaskGridLayout } from './TaskGridLayout';
 
 type TaskListEntityProps = Omit<BaseListEntityProps, 'entity'> & {
   entity: TaskEntityWithProperties;
   calendar: Accessor<DateBucketBoundaries>;
   rowId?: string;
+  propertyDisplay: TaskPropertyDisplay;
   showUnrollNotifications?: boolean;
   /** Show the Project column (Projects enabled). */
   showProject?: boolean;
@@ -134,6 +136,7 @@ export function TaskListEntity(props: TaskListEntityProps) {
     chars: chars(),
     onProjectClick: props.onProjectClick,
     showProject: props.showProject,
+    propertyDisplay: props.propertyDisplay,
     referencePropertyIds: props.referencePropertyIds,
     onFilterByTag: props.onFilterByTag,
   });

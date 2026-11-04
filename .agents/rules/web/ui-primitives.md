@@ -75,6 +75,7 @@ Applies to `apps/web/src/components/ui`, including ports from shadcn-solid.
 - Use `Checkbox` for independent values, `RadioGroup` for one choice among values,
   and `ToggleSwitch` for a setting that takes effect immediately. Retain their
   native inputs, accessible labels, controlled/uncontrolled state, and keyboard behavior.
+- Use theme-accent focus-visible rings for grouped and separate `Tabs` pills; preserve their selected fills.
 - Keep unchecked checkbox and radio faces transparent. Checked and indeterminate
   controls use the accent fill. Checkbox marks and radio indicators share the
   accent Button's `button-accent-ink` token.
