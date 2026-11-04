@@ -22,6 +22,7 @@ import { isMacroAgentId } from '@core/constant/macroAgent';
 import { isMacroNewId } from '@core/constant/macroNew';
 import { registerHotkey, useHotkeyDOMScope } from '@core/hotkey/hotkeys';
 import { createMessageComposer } from '@core/messages/create-message-composer';
+import { isMobile } from '@core/mobile/isMobile';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import type { IUser } from '@core/user/types';
 import { fireAndForget } from '@core/util/fireAndForget';
@@ -35,6 +36,7 @@ import type { EntityData } from '@entity';
 import AtIcon from '@icon/system/regular/at.svg';
 import PaperclipIcon from '@icon/system/regular/paperclip.svg';
 import PhoneIcon from '@icon/system/regular/phone.svg';
+import FormatIcon from '@icon/system/regular/text-aa.svg';
 import ChartBarIcon from '@phosphor/chart-bar-horizontal.svg';
 import GifIcon from '@phosphor/gif.svg';
 import type { MessageParent } from '@service-storage/messages';
@@ -161,7 +163,8 @@ export type ChannelInputProps = InputCallbacks & {
   onStartCall?: () => void;
   /** A call is live in the channel, so the add menu offers to join it. */
   callInProgress?: boolean;
-  children?: JSX.Element;
+  /** Custom action rows can place the composer's shared add menu. */
+  children?: JSX.Element | ((addMenu: JSX.Element) => JSX.Element);
   /** Whether to auto-focus the input on mount. Defaults to `!isTouchDevice()`. */
   autofocus?: boolean;
   /**
@@ -525,6 +528,21 @@ export function ChannelInput(props: ChannelInputProps) {
                 },
               ]
             : []),
+          ...(isMobile()
+            ? [
+                {
+                  id: 'format-text',
+                  label: 'Format text',
+                  icon: <FormatIcon class="size-5" />,
+                  onSelect: () => {
+                    collapsedInput.expand();
+                    focusEditor();
+                    commands.toggleFormatRibbon();
+                  },
+                  focusesEditor: true,
+                },
+              ]
+            : []),
           {
             id: 'attach',
             label: 'Attach files',
@@ -758,7 +776,7 @@ export function ChannelInput(props: ChannelInputProps) {
         >
           <Input.DropOverlay />
           <Input.Layout.Body>
-            <Input.FormatRibbon>
+            <Input.FormatRibbon class="overflow-x-auto">
               <FormatButtons
                 selectionState={() => markdownEditor.selection}
                 onInlineFormat={(format) =>
@@ -806,7 +824,11 @@ export function ChannelInput(props: ChannelInputProps) {
             <Input.Attachments kind="document" />
           </Input.Layout.Body>
           <Switch>
-            <Match when={props.children}>{props.children}</Match>
+            <Match when={props.children}>
+              {typeof props.children === 'function'
+                ? props.children(addMenu())
+                : props.children}
+            </Match>
             <Match when>
               <DefaultActions
                 input={inputState.view()}

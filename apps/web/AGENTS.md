@@ -194,6 +194,9 @@ Channel composer draft persistence has a backend-free browser regression:
 It checks draft blank lines across remounts, that a sent message renders its
 lines with the spacing the draft showed, and pending sends on desktop and phone: clear immediately, restore failed sends, and preserve a new draft typed during delivery.
 It also pastes a Macro link and Markdown into a code block, which must keep both as literal text.
+Its phone formatting regression opens the ribbon from the add drawer in the
+production message editor, removes selected strikethrough, and saves; keep
+the ribbon horizontally scrollable and preserve editor focus on its controls.
 
 Shared GraphQL query metadata has a backend-free desktop and iPhone WebKit regression:
 `bunx playwright test --config src/lib/urql-solid/browser-test/playwright.config.ts`.
