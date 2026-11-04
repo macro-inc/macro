@@ -70,8 +70,8 @@ itself. A second load therefore removes the frame, but the first request of that
 navigation has already been sent. Treat artifact source, and anything typed into an
 artifact, as readable by whoever wrote it. Artifacts mount only while on screen, so
 off-screen scripts stop and restart with fresh state. With the flag off, a node
-shows its title and no script runs. The headless render bundle has no flag reader
-and runs artifacts in the same sandbox.
+shows its title and no script runs. The headless render bundle has no flag reader,
+so its caller says whether to run artifacts, in the same sandbox.
 
 ## Controls
 

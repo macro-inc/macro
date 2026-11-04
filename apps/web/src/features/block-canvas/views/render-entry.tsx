@@ -21,6 +21,7 @@ import {
   RectangleView,
   TextView,
 } from '@macro-inc/graphics/solid';
+import { Show } from 'solid-js';
 import { render } from 'solid-js/web';
 import { ArtifactFrame } from './artifact-frame';
 import { CanvasTextContent, createCanvasTextMeasurer } from './text-content';
@@ -43,6 +44,8 @@ declare global {
       crop: Bounds;
       scale: number;
       revision: string;
+      /** Whether the requesting user has artifacts; off shows only titles. */
+      artifacts?: boolean;
     }) => Promise<void>;
     measureCanvasSnapshot: (snapshot: {
       document: GraphicsDocument;
@@ -155,14 +158,23 @@ window.renderCanvasSnapshot = async (snapshot) => {
                 <TextView {...props} contentView={CanvasTextContent} />
               ),
               artifact: (props) => (
-                <ArtifactFrame
-                  html={props.item.geometry.html}
-                  title={props.item.geometry.title}
-                  designWidth={props.item.geometry.designWidth}
-                  designHeight={props.item.geometry.designHeight}
-                  interactive={false}
-                  eager
-                />
+                <Show
+                  when={snapshot.artifacts}
+                  fallback={
+                    <div class="size-full border border-edge-muted p-2 text-xs">
+                      Artifact: {props.item.geometry.title}
+                    </div>
+                  }
+                >
+                  <ArtifactFrame
+                    html={props.item.geometry.html}
+                    title={props.item.geometry.title}
+                    designWidth={props.item.geometry.designWidth}
+                    designHeight={props.item.geometry.designHeight}
+                    interactive={false}
+                    eager
+                  />
+                </Show>
               ),
               image: (props) => (
                 <div class="size-full border border-edge-muted p-2 text-xs">
