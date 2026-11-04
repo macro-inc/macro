@@ -15,7 +15,7 @@ use super::{
     },
     ports::{WebhookError, WebhookRepo, WebhookService, WebhookValidationClient},
 };
-use chrono::Utc;
+use rand::RngCore as _;
 use macro_event_broker::MacroEventBroker;
 use macro_user_id::user_id::MacroUserIdStr;
 use std::net::IpAddr;
@@ -245,12 +245,15 @@ fn webhook_is_missing(webhook: &Webhook) -> bool {
     webhook.deleted_at.is_some()
 }
 
-fn generate_signing_secret(caller: &MacroUserIdStr<'_>) -> String {
-    format!(
-        "whsec_{}_{}",
-        caller.as_ref(),
-        Utc::now().timestamp_nanos_opt().unwrap_or_default()
-    )
+/// Bytes of randomness in a webhook signing secret.
+const SIGNING_SECRET_BYTES: usize = 32;
+
+/// A fresh `whsec_<hex>` signing secret. Nothing about the caller or the
+/// time goes into it: anyone who could guess it could forge deliveries.
+fn generate_signing_secret() -> String {
+    let mut secret = [0_u8; SIGNING_SECRET_BYTES];
+    rand::rng().fill_bytes(&mut secret);
+    format!("whsec_{}", hex::encode(secret))
 }
 
 fn validation_response(
@@ -378,7 +381,7 @@ where
         });
         header_names.sort();
 
-        let signing_secret = generate_signing_secret(&caller);
+        let signing_secret = generate_signing_secret();
         let headers = serde_json::to_value(request.headers.clone().unwrap_or_default())
             .map_err(|err| WebhookError::Repo(err.into()))?;
         let mut webhook = match self

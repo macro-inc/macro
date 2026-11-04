@@ -67,6 +67,8 @@ worker = ["dep:tokio", "ports"]
 [dependencies]
 messages = { path = "../messages", features = ["broker"] }
 anyhow = { workspace = true }
+hex = { workspace = true }
+rand = { workspace = true }
 axum = { workspace = true, optional = true }
 axum-extra = { workspace = true, optional = true }
 agent_session = { path = "../agent_session", default-features = false, optional = true }

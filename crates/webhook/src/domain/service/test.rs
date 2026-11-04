@@ -1425,3 +1425,18 @@ async fn delete_succeeds_when_event_scheduling_fails() {
         .await
         .expect("event scheduling must not fail webhook deletion");
 }
+
+/// A signing secret is what lets a receiver trust a delivery, so it carries
+/// no guessable part: not the creator, not the time.
+#[test]
+fn signing_secrets_are_random_and_name_nobody() {
+    let first = super::generate_signing_secret();
+    let second = super::generate_signing_secret();
+
+    assert_ne!(first, second);
+    let hex = first
+        .strip_prefix("whsec_")
+        .expect("secrets keep their prefix");
+    assert_eq!(hex.len(), 64);
+    assert!(hex.chars().all(|ch| ch.is_ascii_hexdigit()));
+}
