@@ -214,8 +214,8 @@ macro/
 ├── apps/
 │   ├── web/       SolidJS client — browser, Tauri desktop, mobile
 │   └── docs/      docs.macro.com
-├── services/      42 deployable services, workers, and Lambda handlers
-├── crates/        167 Rust libraries — domain logic, models, db clients
+├── services/      49 deployable services, workers, and Lambda handlers
+├── crates/        269 Rust libraries — domain logic, models, db clients
 ├── packages/      shared TypeScript — collaboration, lexical-core, loro-mirror
 ├── infra/         Pulumi definitions
 ├── docker/        local Compose stack
