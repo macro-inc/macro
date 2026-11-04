@@ -51,6 +51,10 @@ and the web's TypeScript through specta.
 - `view.rs` and `query.rs` are exempt from `missing_docs`: every doc comment
   there becomes a description in the schema ExecuteCode carries on every
   turn, so document only what guides the model.
+- The model's schema is a subset of what decodes: `not` negates a single
+  clause there, while decoding takes any expression. A recursive field must
+  stay optional or behind a list in the schema, or Gemini rejects every
+  request carrying `DisplayResults`; `ai_tools` tests fail when one does not.
 - Paths stop at an internally tagged widget: serde buffers a tagged variant's
   fields, so a problem inside one names the widget, not the field.
 - The browser never validates a view: every path decodes it on the server
