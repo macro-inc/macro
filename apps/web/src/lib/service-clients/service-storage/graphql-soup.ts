@@ -123,6 +123,7 @@ import {
   waitToRetryGraphqlSoupWebSocket,
 } from './graphql-soup-websocket';
 import { mailCacheProfile } from './mail-cache-profile';
+import { createPresenceRequestCoalescer } from './presence-request-coalescer';
 
 export { emailThreadSortTs } from './email-thread-sort';
 
@@ -292,7 +293,19 @@ async function isLegacyProjectionValidationError(
   }
 }
 
-export async function dssGraphqlFetch(
+const coalescePresenceRequest = createPresenceRequestCoalescer();
+
+export function dssGraphqlFetch(
+  input: RequestInfo | URL,
+  init?: RequestInit,
+  queueOwner?: CacheHost
+): Promise<Response> {
+  return coalescePresenceRequest(init, (coalescedInit) =>
+    sendDssGraphqlRequest(input, coalescedInit, queueOwner)
+  );
+}
+
+async function sendDssGraphqlRequest(
   input: RequestInfo | URL,
   init?: RequestInit,
   queueOwner?: CacheHost
