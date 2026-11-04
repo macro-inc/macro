@@ -113,6 +113,16 @@ that listener is ready. Cancellation can stop the gate before startup finishes.
   (both reject unknown fields, and older clients omit it), plus every query in
   `pg_scheduled_action_repo.rs` and the event-run claim in `pg_event_run_repo.rs`,
   which builds its own `ScheduledAction`.
+- A `once` trigger (stored as `trigger_type = 'once'`, or inside `multiple`)
+  runs a single time at `at`, kept to whole seconds. A past `at` is due as soon
+  as it is saved, unless the stored routine already consumed it (its
+  `next_run_at` moved past `at`), so edits and re-enabling never re-run it.
+  After the run `next_run_at` is NULL and the routine stays, shown as completed.
+- `PgPollingDispatcher` polls every 30 seconds but wakes earlier for the first
+  not-yet-due row a poll saw and for the `next_run_at` of enabled creates and
+  updates sent on its in-process `DispatchEvent` channel. Every harness instance
+  runs a dispatcher beside the API, so the instance that saved a near-term
+  routine runs it within about a second; the claim stays fenced to `next_run_at`.
 - Create and update bodies are `ActionConfiguration` and
   `ActionConfigurationUpdate`, with `trigger` required; the cron-only body with a
   top-level `schedule` is gone. Rejections return serde's message, which names

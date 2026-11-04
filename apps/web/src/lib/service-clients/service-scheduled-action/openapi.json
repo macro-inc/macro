@@ -1063,6 +1063,21 @@
           },
           {
             "type": "object",
+            "description": "Fires once at `at`, or as soon as it is saved when `at` has passed.",
+            "required": ["at", "type"],
+            "properties": {
+              "at": {
+                "type": "string",
+                "format": "date-time"
+              },
+              "type": {
+                "type": "string",
+                "enum": ["once"]
+              }
+            }
+          },
+          {
+            "type": "object",
             "required": ["triggers", "type"],
             "properties": {
               "triggers": {
@@ -1612,6 +1627,21 @@
               "type": {
                 "type": "string",
                 "enum": ["events"]
+              }
+            }
+          },
+          {
+            "type": "object",
+            "description": "Fires once at `at`, or as soon as it is saved when `at` has passed.",
+            "required": ["at", "type"],
+            "properties": {
+              "at": {
+                "type": "string",
+                "format": "date-time"
+              },
+              "type": {
+                "type": "string",
+                "enum": ["once"]
               }
             }
           }

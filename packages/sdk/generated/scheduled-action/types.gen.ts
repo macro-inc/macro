@@ -73,6 +73,9 @@ export type ActionTrigger = {
     filters: EventFilters;
     type: 'events';
 } | {
+    at: string;
+    type: 'once';
+} | {
     triggers: RoutineTriggers;
     type: 'multiple';
 };
@@ -367,6 +370,9 @@ export type RoutineTrigger = {
 } | {
     filters: EventFilters;
     type: 'events';
+} | {
+    at: string;
+    type: 'once';
 };
 
 /**

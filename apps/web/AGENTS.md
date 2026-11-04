@@ -1,4 +1,5 @@
 ## Development Commands
+
 - Use `bun` as the package manager and script runner (`bun run build`, `bunx tsc`).
 - `bun run test`: run tests 
 - `bun run check`: check typescript changes 
@@ -655,9 +656,9 @@ resolved session ID; keep the existing `AgentSessionProvider` subscription to
   for a notification (Home, Inbox) wait for it to choose a target.
 - Gate the Chat redesign with `enable-chat-sidebar-sections`; wait for its result, restore the tabbed rail when off, and keep mobile unchanged.
   Keep the original rail renderer and label dialogs in `components/rail/`; build the redesigned rail and section dialogs in `components/rail/next/`, with shared controller, context, and row primitives outside `next/`.
-  Default desktop Chat to Favorites, Direct messages, the team's channels, custom sections, then All channels; preserve personal section reordering and keep public/private channels in All channels regardless of custom-section assignments.
-  Keep resize and reorder grips keyboard-accessible; reveal bare reorder grips only on header hover or keyboard focus, keep them fixed in the left gutter without shifting section names, and include them within the drag highlight. Allow dragging from the whole heading while preserving normal collapse clicks and excluding action buttons. Preserve personal section heights/order, compensate resize drags for scrolling, disable stack scroll anchoring only during resizing, and route list navigation through the sectioned renderer's scroll handle. Scroll keyboard targets immediately without animation, keeping two rows of context on either side, clamped to the viewport.
-  Cap section heights at measured list content and available pane space; hide resize grips for two or fewer items and default Favorites and DMs to four rows. Let final All channels fill its content by default, but preserve saved heights and cap it normally when another section follows. Use TanStack Virtual for the redesigned section stack, channel rows, and search results; keep full-height channel rows virtualized against the outer viewport and retain stable keys, focused rows, and drag sources.
+  Default desktop Chat to Favorites, Direct messages, the team's channels, then custom sections; preserve personal section reordering and omit All channels. Keep joined public/private conversations outside these sections available through sidebar search.
+  Keep resize and reorder grips keyboard-accessible; reveal bare reorder grips only on header hover or keyboard focus, keep them fixed in the left gutter without shifting section names, and include them within the drag highlight. Allow dragging from the whole heading while preserving normal collapse clicks and excluding action buttons. Preserve personal section heights/order, edge-scroll the sidebar while resizing and compensate resize drags for scrolling, disable stack scroll anchoring only during resizing, and route list navigation through the sectioned renderer's scroll handle. Scroll keyboard targets immediately without animation, keeping two rows of context on either side, clamped to the viewport.
+  Cap section heights at measured list content and available pane space; keep each list independently scrollable, hide resize grips for two or fewer items, and default Favorites and DMs to four rows. Use TanStack Virtual for the redesigned section stack, channel rows, and search results; snapshot its index-reconciled rows before keying by identity, and retain focused rows and drag sources.
   Mobile retains the recent feed. Keep New channel and New direct message on their separate existing creation flows, independent of the sidebar flag; size the sidebar's New dropdown to its trigger width.
   Use `--sidebar-gutter` for the outer section, DM, and search containers; shared headings and rows provide their own item padding.
   Indent section rows by 8px; style empty states like saved views with a padded, bordered surface and secondary actions, without the extra row indentation. Keep unsectioned search results unindented.
@@ -668,7 +669,7 @@ resolved session ID; keep the existing `AgentSessionProvider` subscription to
   Keep every joined team channel in the team section regardless of custom-section assignments; use the same complete membership for bulk notification actions.
   Keep available channel rows visible during section hydration and refetches; key virtualized rows by stable IDs so data updates cannot interrupt a click. Pass server-returned member IDs to `queries/channel/by-ids`, whose single Soup owner selects cached rows and fetches missing records. Keep entity-ID hydration generic in Soup, with channel identities, batching, and unread refreshes in the channel query layer; append per-section skeletons only while unresolved members load.
   Show lock icons for private conversations and visible per-section options; keep empty sections usable as drop targets without an all-sections management menu.
-  Create all section types through New → New section in a wider dialog with Smart in the body and Shared in the footer; keep collapse on the header and style deletion as destructive.
+  Create all section types through New → New section in a wider dialog with Smart in the body and Shared in the footer; explain team visibility and team-only channels in hover/tap-accessible sharing help, show the warning-colored Team channels only hint only while sharing is on, keep collapse on the header and style deletion as destructive. Editing can change sharing only after complete membership eligibility checks; preserve section identity, confirm unsharing, and reconcile both scope caches after success.
   Offer Add channels on manual-section headers and empty states; keep the picker scoped to eligible joined channels, explain scope and assignment moves in concise helper text, and leave smart membership rule-driven.
   Place the smart rule Input below Name contains; show a match count with hover/focus channel preview, and keep preview queries reactive to the selected scope without briefly reporting pending matches as empty.
   Keep per-section sorting and unread filters personal, and filter after membership assignment so hidden rows never leak into another section.
@@ -737,6 +738,12 @@ resolved session ID; keep the existing `AgentSessionProvider` subscription to
 - Memory tool results use expandable rows on desktop and mobile; explicit preferences and activity reports remain inspectable after each tool call.
 
 ## Rules
+
+- Channel Delete actions use the channel owner or admin/owner of the channel's
+  exact team (`channelType === 'team'`); pass the channel's `teamId` to the team
+  admin predicate. Keep rail/title menus, mobile long-press, and hotkeys on the
+  shared delete action and bulk mutation. Preserve confirmed deletions when
+  another item in the bulk deletion fails.
 
 - Pass persistent touch row controls through `ListEntity.touchActions`; hover actions are hidden on touch, and the narrow inbox layout must retain the touch controls.
 
@@ -1089,6 +1096,20 @@ Keep existing tags and apply to the selected rows when the drop row is selected.
 Use the shared scoped drag helpers and overlayIcon for the tag chip.
 The backend-free browser regression is
 `bunx playwright test --config src/features/property/tags/browser-test/playwright.config.ts`.
+
+### Senders in email rows
+
+Sender names in Mail rows and collapsed thread messages keep their person card
+on hover; clicking the name or anywhere else on the row opens the email.
+`HoverCard` keeps the portal's placeholder inside its own `display: contents`
+wrapper: opening or closing the card otherwise changes the trigger's siblings,
+Solid can then detach and reinsert the trigger, and a press that closes the
+card loses its click. Cards opened from a row use `isolateClicks`, because
+Solid delivers portaled events through the component tree and a click on the
+card would also open the row. On touch, a collapsed message's picture lets the
+tap through to the row. The backend-free desktop/phone regression, over rows
+with two senders, is
+`bunx playwright test --config src/features/entity/browser-test/playwright.config.ts`.
 
 ### Enter on a property pill
 

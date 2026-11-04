@@ -9,6 +9,7 @@ import {
 } from '@tanstack/solid-virtual';
 import {
   createEffect,
+  createMemo,
   createSignal,
   type JSX,
   on,
@@ -120,6 +121,11 @@ function VirtualRows<K extends string>(
     },
   });
 
+  // TanStack reconciles its store by index; snapshot rows before keying by identity.
+  const virtualRows = createMemo(() =>
+    virtualizer.getVirtualItems().map((row) => ({ ...row }))
+  );
+
   const handle: ChannelRailVirtualizerHandle = {
     scrollToIndex: (index, options) => {
       const align = options?.align;
@@ -169,7 +175,7 @@ function VirtualRows<K extends string>(
       class="relative w-full"
       style={{ height: `${virtualizer.getTotalSize()}px` }}
     >
-      <Key each={virtualizer.getVirtualItems()} by="key">
+      <Key each={virtualRows()} by="key">
         {(row) => {
           const key = untrack(() => props.keys[row().index]);
           let element: HTMLDivElement | undefined;

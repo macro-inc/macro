@@ -229,7 +229,9 @@ describe('TypeDoc documentation packaging', () => {
     );
     expect(guide('channels')).toContain('A form for a channel is a poll:');
     expect(guide('tasks')).toContain('Never edit, merge or delete');
-    expect(guide('agentSessions')).toContain('macro.agentSessions.createManaged');
+    expect(guide('agentSessions')).toContain(
+      'macro.agentSessions.createManaged'
+    );
     expect(guide('routines')).toContain('never sees this conversation');
     expect(guide('documents')).toContain('<m-document-mention>');
     expect(guide('core')).toContain('macro.documents.search');

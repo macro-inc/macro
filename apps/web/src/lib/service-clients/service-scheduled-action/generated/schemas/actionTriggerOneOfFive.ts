@@ -5,11 +5,12 @@
  * API for managing scheduled actions
  * OpenAPI spec version: 0.1.0
  */
-
 import type { ActionTriggerOneOfFiveType } from './actionTriggerOneOfFiveType';
-import type { RoutineTriggers } from './routineTriggers';
 
+/**
+ * Fires once at `at`, or as soon as it is saved when `at` has passed.
+ */
 export type ActionTriggerOneOfFive = {
-  triggers: RoutineTriggers;
+  at: string;
   type: ActionTriggerOneOfFiveType;
 };
