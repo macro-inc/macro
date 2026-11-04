@@ -78,6 +78,7 @@ pub(crate) fn message(id: u128, thread: Option<Uuid>, body: &str) -> Message {
         deleted_at: None,
         attachments: vec![],
         reactions: vec![],
+        link_previews: vec![],
     }
 }
 pub(super) fn event(message: &Message) -> MessagePostedMetadata {

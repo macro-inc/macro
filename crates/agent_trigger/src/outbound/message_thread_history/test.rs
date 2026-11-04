@@ -59,6 +59,7 @@ fn message(id: Uuid, deleted: bool) -> Message {
         deleted_at: deleted.then_some(now),
         attachments: vec![],
         reactions: vec![],
+        link_previews: vec![],
     }
 }
 

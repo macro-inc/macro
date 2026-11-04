@@ -2,7 +2,8 @@
 
 ## What it is
 
-Shared infrastructure for link previews, used by email and CRM — a hex crate
+Shared infrastructure for link previews, used by channel messages, email, and
+CRM — a hex crate
 for URL unfurling: fetches a URL's meta tags (title, description, image,
 favicon) with SSRF protections.
 
@@ -23,7 +24,8 @@ favicon) with SSRF protections.
 ## Boundaries
 
 - Depends on: `scraper`, `reqwest` (feature `outbound`).
-- Used by: `services/unfurl_service`, `services/email_service`, `crates/crm`.
+- Used by: `services/unfurl_service`, `services/email_service`, `crates/crm`,
+  `crates/messages` (channel message link previews, run in DSS).
 
 ## Checks
 

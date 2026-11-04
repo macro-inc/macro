@@ -61,6 +61,7 @@ fn reply(parent: MessageParent, attachments: Vec<MessageAttachment>) -> Message 
         deleted_at: None,
         attachments,
         reactions: vec![],
+        link_previews: vec![],
     }
 }
 

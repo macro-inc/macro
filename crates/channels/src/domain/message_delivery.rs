@@ -438,6 +438,7 @@ where
             }
             MessageChange::Edited { .. }
             | MessageChange::MessageDeleted { .. }
+            | MessageChange::LinkPreviewsUpdated { .. }
             | MessageChange::Typing { .. }
             | MessageChange::CallRootPosted { .. }
             | MessageChange::ThreadUpdated { .. } => None,

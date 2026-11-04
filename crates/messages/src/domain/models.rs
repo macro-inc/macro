@@ -405,6 +405,23 @@ pub struct NewAttachment {
     pub height: Option<i32>,
 }
 
+/// A preview of a web page a message links to: what its card shows.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "schema", derive(utoipa::ToSchema))]
+#[cfg_attr(feature = "json-schema", derive(schemars::JsonSchema))]
+pub struct LinkPreview {
+    /// The linked URL, as the message text links it.
+    pub url: String,
+    /// The page title.
+    pub title: String,
+    /// The page description, if any.
+    pub description: Option<String>,
+    /// The page's preview image URL, if any.
+    pub image_url: Option<String>,
+    /// The page's favicon URL, if any.
+    pub favicon_url: Option<String>,
+}
+
 /// A mention tracked in a message body.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[cfg_attr(feature = "schema", derive(utoipa::ToSchema))]
@@ -493,6 +510,10 @@ pub struct Message {
     pub attachments: Vec<MessageAttachment>,
     /// Aggregated reactions.
     pub reactions: Vec<CountedReaction>,
+    /// Previews of the pages a channel message links to, in text order.
+    /// Filled in shortly after a post or edit; empty until then.
+    #[serde(default)]
+    pub link_previews: Vec<LinkPreview>,
 }
 
 impl Message {
