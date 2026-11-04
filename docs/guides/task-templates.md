@@ -2,6 +2,10 @@
 
 Task templates store a name and typed task configuration. Personal templates are private to the authenticated account. Team templates are visible to current team members, including after the creator leaves. Team admins and the creator, while still a member, can manage team templates. Ownership cannot change after creation.
 
+## Composer
+
+The secondary Templates trigger opens a searchable desktop dropdown or a touch picker sheet. Create template stays first above a divider, followed by saved personal and team templates. Empty collections and unmatched searches explain the next action. Creating captures the current draft; applying a saved template only fills blank fields and description text. Desktop places expansion immediately left of Close.
+
 ## REST contract
 
 All routes require account authentication. JSON field names use camelCase. `GET /task_templates?teamId=<uuid>` returns a JSON array of the caller's personal templates and templates from the requested team. Without `teamId`, it returns only personal templates. A nonmember requesting a team gets 403. `GET /task_templates/{id}` reads one currently accessible template and returns 404 for inaccessible records.

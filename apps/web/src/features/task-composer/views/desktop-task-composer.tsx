@@ -11,10 +11,10 @@ export function DesktopTaskComposer(props: {
     <TaskComposer.Root composer={props.composer}>
       <EntityComposer.Header>
         <div class="flex-1 flex items-center gap-1">
-          <TaskComposer.ContinueInSplit />
           <TaskTemplateControls composer={props.composer} />
         </div>
         <TaskComposer.ClearDraft />
+        <TaskComposer.ContinueInSplit />
         <TaskComposer.Close />
       </EntityComposer.Header>
       <TaskComposer.Recovery />

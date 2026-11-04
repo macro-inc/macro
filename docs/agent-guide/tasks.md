@@ -240,8 +240,8 @@ stays cleared after reopening. The empty Project placeholder can also be pinned 
 unpinned without creating an assignment; its pin follows the real assignment when
 one is saved. Builtin task properties cannot be deleted from the title or side panel.
 At creation, the first shared task snapshot pins the visible composer fields and default task pins,
-including custom fields with no value. Empty custom fields appear as editable placeholders
-below the created task title; assigning one resolves its pending pin to the saved property.
+including custom fields with no value. Empty selected fields persist as task-owned assignments,
+so every authorized task viewer sees and can edit them according to their task permissions.
 
 Property edits should update the visible task before the save finishes. To verify,
 delay the GraphQL mutation and change Status, an existing Priority, and an unset
@@ -815,6 +815,17 @@ keyboard stays up throughout. Desktop uses
 the centered composer dialog. Both layouts are views in
 `apps/web/src/features/task-composer/views` composing the shared
 `TaskComposer` parts.
+
+Desktop places the secondary `Templates` trigger at the left of the header and
+`Continue editing in split` immediately left of Close. Templates opens an anchored
+searchable dropdown, not another dialog. `Create template` is the first option,
+separated from saved personal and team templates by a divider; it starts from the
+current draft. No saved templates and no search matches show explanatory empty
+states, while Create template remains available. ArrowDown from search enters the
+menu; Escape dismisses it. On touch, Templates keeps the picker sheet with the same
+search, first creation option, and empty states. Selecting a template fills blank
+properties and description text without replacing existing draft or contextual values.
+Verify saving, selection, creator/admin edit/delete, and empty-list/search states.
 
 After creation, the `Task created` toast shows an `Open` action. Touch devices
 omit `Open (New Split)`; desktop keeps both actions. Either action immediately dismisses the toast before opening

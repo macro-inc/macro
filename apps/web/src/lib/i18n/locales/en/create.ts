@@ -338,11 +338,15 @@ export default {
   taskTemplateSearch: 'Search templates',
   taskTemplatePersonal: 'Personal',
   taskTemplateTeam: 'Team',
-  taskTemplateEmpty: 'No task templates yet.',
-  taskTemplateNoMatches: 'No templates match your search.',
+  taskTemplateEmpty: 'No templates yet',
+  taskTemplateEmptyDescription:
+    'Create a template to reuse your task properties and description next time.',
+  taskTemplateNoMatches: 'No templates found',
+  taskTemplateNoMatchesDescription:
+    'Try another search, or create a new template from this draft.',
   taskTemplateLoadError: 'Could not load task templates.',
   taskTemplateRetry: 'Try again',
-  taskTemplateSaveCurrent: 'Save as template',
+  taskTemplateCreate: 'Create template',
   taskTemplateSaveTitle: 'Save task template',
   taskTemplateEditTitle: 'Edit task template',
   taskTemplateName: 'Template name',

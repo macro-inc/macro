@@ -1,10 +1,19 @@
 import { t } from '@app/lib/i18n';
 import { LoadingSpinner } from '@core/component/LoadingSpinner';
+import CaretDownIcon from '@icon/system/regular/caret-down.svg';
 import CopyIcon from '@icon/system/regular/copy.svg';
 import PencilIcon from '@icon/system/regular/pencil-simple.svg';
+import PlusIcon from '@icon/system/regular/plus.svg';
 import TrashIcon from '@icon/system/regular/trash.svg';
-import { Button, Dialog, Input, type ManagedDialogProps } from '@ui';
-import { createSignal, For, Match, Show, Switch } from 'solid-js';
+import {
+  Button,
+  cn,
+  Dialog,
+  Dropdown,
+  Input,
+  type ManagedDialogProps,
+} from '@ui';
+import { createSignal, For, type JSX, Match, Show, Switch } from 'solid-js';
 
 /** A template row supplies actions without exposing transport or query state. */
 export type TemplatePickerItem = {
@@ -16,17 +25,61 @@ export type TemplatePickerItem = {
   remove?: () => void;
 };
 
-/** The shared Dialog becomes a drawer on phones. */
-export function TemplatePicker(
-  props: ManagedDialogProps & {
-    items: readonly TemplatePickerItem[];
-    loading: boolean;
-    error: boolean;
-    onRetry(): void;
-    onSave(): void;
-  }
+type TemplateChoicesProps = {
+  items: readonly TemplatePickerItem[];
+  loading: boolean;
+  error: boolean;
+  onRetry(): void;
+  onSave(): void;
+};
+
+function TemplateAction(props: {
+  menu: boolean;
+  label?: string;
+  iconOnly?: boolean;
+  danger?: boolean;
+  closeOnSelect?: boolean;
+  children: JSX.Element;
+  onSelect(): void;
+}) {
+  return (
+    <Show
+      when={props.menu}
+      fallback={
+        <Button
+          variant={props.danger ? 'danger-ghost' : 'ghost'}
+          size={props.iconOnly ? 'icon-xs' : 'sm'}
+          fullWidth={!props.iconOnly}
+          class={props.iconOnly ? 'shrink-0' : 'min-w-0 justify-start'}
+          aria-label={props.label}
+          onClick={props.onSelect}
+        >
+          {props.children}
+        </Button>
+      }
+    >
+      <Dropdown.Item
+        class={cn(
+          props.iconOnly ? 'w-7 shrink-0 justify-center' : 'min-w-0 flex-1',
+          props.danger && 'text-failure-ink'
+        )}
+        aria-label={props.label}
+        textValue={props.label}
+        onSelect={props.onSelect}
+        closeOnSelect={props.closeOnSelect}
+      >
+        {props.children}
+      </Dropdown.Item>
+    </Show>
+  );
+}
+
+function TemplateChoices(
+  props: TemplateChoicesProps & { menu: boolean; onClose(): void }
 ) {
   const [search, setSearch] = createSignal('');
+  let searchInput: HTMLInputElement | undefined;
+  let choices: HTMLDivElement | undefined;
   const filtered = () => {
     const query = search().trim().toLocaleLowerCase();
     return props.items.filter((item) =>
@@ -34,9 +87,183 @@ export function TemplatePicker(
     );
   };
   const run = (action: () => void) => {
-    props.onOpenChange(false);
+    props.onClose();
     action();
   };
+  return (
+    <div class="flex min-h-0 flex-col">
+      <div class="shrink-0 p-1.5">
+        <Input
+          ref={(element) => {
+            searchInput = element;
+            if (props.menu)
+              queueMicrotask(() => element.isConnected && element.focus());
+          }}
+          value={search()}
+          onInput={(event) => setSearch(event.currentTarget.value)}
+          placeholder={t('create.taskTemplateSearch')}
+          aria-label={t('create.taskTemplateSearch')}
+          onKeyDown={(event) => {
+            if (event.key === 'Escape' || event.key === 'Tab') return;
+            event.stopPropagation();
+            if (event.key === 'ArrowDown') {
+              event.preventDefault();
+              choices
+                ?.querySelector<HTMLElement>('[role="menuitem"], button')
+                ?.focus();
+            }
+          }}
+        />
+      </div>
+      <div
+        ref={choices}
+        class="flex max-h-80 min-h-0 flex-col overflow-y-auto overscroll-contain p-1.5 pt-0"
+        onKeyDown={(event) => {
+          if (props.menu && event.key === 'ArrowUp') {
+            const first = choices?.querySelector('[role="menuitem"]');
+            if (first === event.target) {
+              event.preventDefault();
+              event.stopPropagation();
+              searchInput?.focus();
+            }
+          }
+        }}
+      >
+        <TemplateAction menu={props.menu} onSelect={() => run(props.onSave)}>
+          <PlusIcon class="size-4 shrink-0" />
+          {t('create.taskTemplateCreate')}
+        </TemplateAction>
+        <hr class="my-1 border-edge-muted" />
+        <Switch>
+          <Match when={props.error}>
+            <div class="flex flex-col items-start gap-2 px-2 py-3 text-sm">
+              <p role="alert" class="text-failure-ink">
+                {t('create.taskTemplateLoadError')}
+              </p>
+              <TemplateAction
+                menu={props.menu}
+                closeOnSelect={false}
+                onSelect={props.onRetry}
+              >
+                {t('create.taskTemplateRetry')}
+              </TemplateAction>
+            </div>
+          </Match>
+          <Match when={props.loading && props.items.length === 0}>
+            <div
+              role="status"
+              class="flex items-center gap-2 px-2 py-4 text-sm text-ink-muted"
+            >
+              <LoadingSpinner class="size-5 p-0" />
+              {t('common.loading')}
+            </div>
+          </Match>
+          <Match when={filtered().length === 0}>
+            <div
+              role="status"
+              class="flex flex-col items-center gap-2 px-5 py-6 text-center"
+            >
+              <CopyIcon class="size-6 text-ink-muted" />
+              <p class="text-sm font-medium">
+                {props.items.length === 0
+                  ? t('create.taskTemplateEmpty')
+                  : t('create.taskTemplateNoMatches')}
+              </p>
+              <p class="text-xs text-ink-muted">
+                {props.items.length === 0
+                  ? t('create.taskTemplateEmptyDescription')
+                  : t('create.taskTemplateNoMatchesDescription')}
+              </p>
+            </div>
+          </Match>
+        </Switch>
+        <For each={filtered()}>
+          {(item) => (
+            <div class="flex min-w-0 items-center gap-1">
+              <TemplateAction
+                menu={props.menu}
+                label={item.label}
+                onSelect={() => run(item.select)}
+              >
+                <CopyIcon class="size-4 shrink-0" />
+                <span class="min-w-0 truncate">{item.label}</span>
+                <span class="ml-auto shrink-0 text-xs text-ink-muted">
+                  {item.shared
+                    ? t('create.taskTemplateTeam')
+                    : t('create.taskTemplatePersonal')}
+                </span>
+              </TemplateAction>
+              <Show when={item.edit}>
+                {(edit) => (
+                  <TemplateAction
+                    menu={props.menu}
+                    iconOnly
+                    label={t('create.taskTemplateEditNamed', {
+                      name: item.label,
+                    })}
+                    onSelect={() => run(edit())}
+                  >
+                    <PencilIcon class="size-4" />
+                  </TemplateAction>
+                )}
+              </Show>
+              <Show when={item.remove}>
+                {(remove) => (
+                  <TemplateAction
+                    menu={props.menu}
+                    iconOnly
+                    danger
+                    label={t('create.taskTemplateDeleteNamed', {
+                      name: item.label,
+                    })}
+                    onSelect={() => run(remove())}
+                  >
+                    <TrashIcon class="size-4" />
+                  </TemplateAction>
+                )}
+              </Show>
+            </div>
+          )}
+        </For>
+      </div>
+    </div>
+  );
+}
+
+/** Anchored desktop picker; the trigger keeps the shared Button styling. */
+export function TemplateDropdown(
+  props: ManagedDialogProps & TemplateChoicesProps & { disabled: boolean }
+) {
+  return (
+    <Dropdown
+      open={props.open}
+      onOpenChange={props.onOpenChange}
+      placement="bottom-start"
+    >
+      <Dropdown.Trigger variant="secondary" size="sm" disabled={props.disabled}>
+        <CopyIcon class="size-4 shrink-0" />
+        {t('create.taskTemplates')}
+        <CaretDownIcon class="size-3 shrink-0" />
+      </Dropdown.Trigger>
+      <Dropdown.Content
+        class="w-88 max-w-[calc(100vw-2rem)] p-0"
+        aria-label={t('create.taskTemplatePickerTitle')}
+        onOpenAutoFocus={(event) => event.preventDefault()}
+      >
+        <TemplateChoices
+          {...props}
+          menu
+          onClose={() => props.onOpenChange(false)}
+        />
+      </Dropdown.Content>
+    </Dropdown>
+  );
+}
+
+/** The shared Dialog supplies the touch picker sheet. */
+export function TemplatePicker(
+  props: ManagedDialogProps & TemplateChoicesProps
+) {
   return (
     <Dialog
       open={props.open}
@@ -44,8 +271,8 @@ export function TemplatePicker(
       position="center"
       class="w-120 max-w-[calc(100vw-2rem)]"
     >
-      <div class="flex flex-col gap-4 p-5">
-        <div class="flex flex-col gap-1">
+      <div class="flex min-h-0 flex-col gap-3 p-3">
+        <div class="flex flex-col gap-1 px-2 pt-2">
           <Dialog.Title class="text-base font-medium">
             {t('create.taskTemplatePickerTitle')}
           </Dialog.Title>
@@ -53,101 +280,11 @@ export function TemplatePicker(
             {t('create.taskTemplatePickerDescription')}
           </Dialog.Description>
         </div>
-        <Input
-          value={search()}
-          onInput={(event) => setSearch(event.currentTarget.value)}
-          placeholder={t('create.taskTemplateSearch')}
-          aria-label={t('create.taskTemplateSearch')}
+        <TemplateChoices
+          {...props}
+          menu={false}
+          onClose={() => props.onOpenChange(false)}
         />
-        <div class="flex max-h-80 flex-col gap-1 overflow-y-auto">
-          <Switch>
-            <Match when={props.error}>
-              <div class="flex flex-col items-start gap-2 py-3 text-sm">
-                <p role="alert" class="text-failure-ink">
-                  {t('create.taskTemplateLoadError')}
-                </p>
-                <Button variant="secondary" size="sm" onClick={props.onRetry}>
-                  {t('create.taskTemplateRetry')}
-                </Button>
-              </div>
-            </Match>
-            <Match when={props.loading && props.items.length === 0}>
-              <div
-                role="status"
-                class="flex items-center gap-2 py-4 text-sm text-ink-muted"
-              >
-                <LoadingSpinner class="size-5 p-0" />
-                {t('common.loading')}
-              </div>
-            </Match>
-            <Match when={filtered().length === 0}>
-              <p class="py-4 text-sm text-ink-muted">
-                {props.items.length === 0
-                  ? t('create.taskTemplateEmpty')
-                  : t('create.taskTemplateNoMatches')}
-              </p>
-            </Match>
-          </Switch>
-          <For each={filtered()}>
-            {(item) => (
-              <div class="flex min-w-0 items-center gap-1">
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  fullWidth
-                  class="min-w-0 justify-start"
-                  onClick={() => run(item.select)}
-                  tooltip={item.label}
-                >
-                  <CopyIcon class="size-4 shrink-0" />
-                  <span class="min-w-0 truncate">{item.label}</span>
-                  <span class="ml-auto shrink-0 text-xs text-ink-muted">
-                    {item.shared
-                      ? t('create.taskTemplateTeam')
-                      : t('create.taskTemplatePersonal')}
-                  </span>
-                </Button>
-                <Show when={item.edit}>
-                  {(edit) => (
-                    <Button
-                      variant="ghost"
-                      size="icon-xs"
-                      aria-label={t('create.taskTemplateEditNamed', {
-                        name: item.label,
-                      })}
-                      onClick={() => run(edit())}
-                    >
-                      <PencilIcon class="size-4" />
-                    </Button>
-                  )}
-                </Show>
-                <Show when={item.remove}>
-                  {(remove) => (
-                    <Button
-                      variant="danger-ghost"
-                      size="icon-xs"
-                      aria-label={t('create.taskTemplateDeleteNamed', {
-                        name: item.label,
-                      })}
-                      onClick={() => run(remove())}
-                    >
-                      <TrashIcon class="size-4" />
-                    </Button>
-                  )}
-                </Show>
-              </div>
-            )}
-          </For>
-        </div>
-        <div class="flex justify-end border-t border-edge-muted pt-3">
-          <Button
-            variant="secondary"
-            size="sm"
-            onClick={() => run(props.onSave)}
-          >
-            {t('create.taskTemplateSaveCurrent')}
-          </Button>
-        </div>
       </div>
     </Dialog>
   );

@@ -9,7 +9,7 @@ Task creation also preserves the composer's selected fields as per-task pins.
 ## Start here
 
 - `core/template.ts`: fill-blank application and reusable-default capture.
-- `components/template-picker.tsx`: template selection and management actions.
+- `components/template-picker.tsx`: searchable desktop dropdown and touch picker sheet.
 - `components/template-form.tsx`: template name, fields, description, and scope.
 
 ## Scope
@@ -31,6 +31,7 @@ Task creation also preserves the composer's selected fields as per-task pins.
 - Keep ownership immutable when editing a template.
 - Keep authorization and persistence in `crates/task_templates`; use generated API types.
 - Open focused dialogs with `openDialog`; the shared Dialog supplies phone drawers.
+- Put Create template first above a divider, use a secondary trigger, and explain empty and unmatched lists.
 
 ## Checks
 

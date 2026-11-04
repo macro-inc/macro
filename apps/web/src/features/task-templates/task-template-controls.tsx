@@ -34,7 +34,7 @@ import {
 import { unwrap } from 'solid-js/store';
 import type { TaskComposerController } from '../task-composer/primitives/task-composer';
 import { TemplateForm } from './components/template-form';
-import { TemplatePicker } from './components/template-picker';
+import { TemplateDropdown, TemplatePicker } from './components/template-picker';
 import {
   captureTaskTemplate,
   type TaskTemplateContents,
@@ -279,86 +279,113 @@ export function TaskTemplateControls(props: {
   const viewerId = useUserId();
   const owner = getOwner();
   const picker = useImperativeDialog(ScopedTemplatePicker);
+  const [dropdownOpen, setDropdownOpen] = createSignal(false);
+  const [pickerScope, setPickerScope] = createSignal<string>();
   const team = () => props.composer.team();
   const scopeKey = () => `${viewerId() ?? ''}:${team()?.id ?? ''}`;
   const query = useTaskTemplatesQuery({
     viewerId,
     teamId: () => team()?.id,
-    enabled: picker.isOpen,
+    enabled: () => dropdownOpen() || picker.isOpen(),
   });
   const canUse = () =>
     viewerId() === props.composer.draftOwner && !props.composer.isCreating();
+  const isCurrent = () => canUse() && pickerScope() === scopeKey();
+  createEffect(() => {
+    if (dropdownOpen() && !isCurrent()) setDropdownOpen(false);
+  });
+  const openEditor = (template?: TaskTemplate) => {
+    if (!isCurrent()) return;
+    const definitions = props.composer.availableProperties();
+    const initial = template
+      ? taskTemplateContents(template.configuration, definitions)
+      : captureTaskTemplate(
+          props.composer.templateContents(),
+          new Set(definitions.map((definition) => definition.id)),
+          new Set([SYSTEM_PROPERTY_IDS.SOURCE])
+        );
+    openDialog(
+      TemplateEditorDialog,
+      { initial, template, team: team(), viewerId, isCurrent },
+      { owner }
+    );
+  };
+  const pickerProps = () => ({
+    loading: query.isPending,
+    error: query.isError,
+    items: (query.isSuccess ? query.data : []).map((template) => ({
+      key: template.id,
+      label: template.name,
+      shared: Boolean(template.teamId),
+      select: () => {
+        if (!isCurrent()) return;
+        const definitions = props.composer.availableProperties();
+        const available = new Set(
+          definitions.map((definition) => definition.id)
+        );
+        props.composer.applyTemplate(
+          taskTemplateContents(template.configuration, definitions)
+        );
+        if (
+          template.configuration.propertyIds.some((id) => !available.has(id))
+        ) {
+          toast.alert(t('create.taskTemplateUnavailableProperties'));
+        }
+      },
+      edit: template.canManage ? () => openEditor(template) : undefined,
+      remove: template.canManage
+        ? () => {
+            if (!isCurrent()) return;
+            openDialog(
+              DeleteTemplateDialog,
+              { template, viewerId, isCurrent },
+              { owner }
+            );
+          }
+        : undefined,
+    })),
+    onRetry: () => fireAndForget(query.refetch(), 'task-templates'),
+    onSave: () => openEditor(),
+  });
   const openPicker = () => {
     if (!canUse()) return;
-    const scope = scopeKey();
-    const isCurrent = () => canUse() && scopeKey() === scope;
-    const openEditor = (template?: TaskTemplate) => {
-      if (!isCurrent()) return;
-      const definitions = props.composer.availableProperties();
-      const initial = template
-        ? taskTemplateContents(template.configuration, definitions)
-        : captureTaskTemplate(
-            props.composer.templateContents(),
-            new Set(definitions.map((definition) => definition.id)),
-            new Set([SYSTEM_PROPERTY_IDS.SOURCE])
-          );
-      openDialog(
-        TemplateEditorDialog,
-        { initial, template, team: team(), viewerId, isCurrent },
-        { owner }
-      );
-    };
-    picker.open(() => ({
-      viewerId,
-      isCurrent,
-      loading: query.isPending,
-      error: query.isError,
-      items: (query.isSuccess ? query.data : []).map((template) => ({
-        key: template.id,
-        label: template.name,
-        shared: Boolean(template.teamId),
-        select: () => {
-          if (!isCurrent()) return;
-          const definitions = props.composer.availableProperties();
-          const available = new Set(
-            definitions.map((definition) => definition.id)
-          );
-          props.composer.applyTemplate(
-            taskTemplateContents(template.configuration, definitions)
-          );
-          if (
-            template.configuration.propertyIds.some((id) => !available.has(id))
-          ) {
-            toast.alert(t('create.taskTemplateUnavailableProperties'));
-          }
-        },
-        edit: template.canManage ? () => openEditor(template) : undefined,
-        remove: template.canManage
-          ? () => {
-              if (!isCurrent()) return;
-              openDialog(
-                DeleteTemplateDialog,
-                { template, viewerId, isCurrent },
-                { owner }
-              );
-            }
-          : undefined,
-      })),
-      onRetry: () => fireAndForget(query.refetch(), 'task-templates'),
-      onSave: () => openEditor(),
-    }));
+    setPickerScope(scopeKey());
+    picker.open(() => ({ viewerId, isCurrent, ...pickerProps() }));
+  };
+  const changeDropdownOpen = (open: boolean) => {
+    if (open) {
+      if (!canUse()) return;
+      setPickerScope(scopeKey());
+    }
+    setDropdownOpen(open);
   };
   return (
-    <Button
-      variant="ghost"
-      size={props.compact ? 'icon-sm' : 'sm'}
-      aria-label={t('create.taskTemplates')}
-      tooltip={props.compact ? t('create.taskTemplates') : undefined}
-      disabled={!canUse() || props.composer.availableProperties().length === 0}
-      onClick={openPicker}
+    <Show
+      when={isTouchDevice()}
+      fallback={
+        <TemplateDropdown
+          {...pickerProps()}
+          open={dropdownOpen()}
+          onOpenChange={changeDropdownOpen}
+          disabled={
+            !canUse() || props.composer.availableProperties().length === 0
+          }
+        />
+      }
     >
-      <CopyIcon class="size-4 shrink-0" />
-      <Show when={!props.compact}>{t('create.taskTemplates')}</Show>
-    </Button>
+      <Button
+        variant="secondary"
+        size={props.compact ? 'icon-sm' : 'sm'}
+        aria-label={t('create.taskTemplates')}
+        tooltip={props.compact ? t('create.taskTemplates') : undefined}
+        disabled={
+          !canUse() || props.composer.availableProperties().length === 0
+        }
+        onClick={openPicker}
+      >
+        <CopyIcon class="size-4 shrink-0" />
+        <Show when={!props.compact}>{t('create.taskTemplates')}</Show>
+      </Button>
+    </Show>
   );
 }
