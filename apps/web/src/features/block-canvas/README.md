@@ -56,6 +56,23 @@ text, connectors, media, and document cards. Selection/camera/tools stay local.
 Incoming scene changes cancel active canvas gestures; intent rebasing is deferred. See [Graphics and Canvas parity](../../../../../docs/design/graphics-parity.md)
 for the remaining editor and collaboration work.
 
+## Artifacts
+
+Behind `enable-canvas-artifacts`, an `artifact` node runs a self-contained HTML
+document in `views/artifact-frame.tsx`. The frame's sandbox is `allow-scripts`
+only, so the document has an opaque origin with no access to Macro's cookies,
+storage or DOM. Never add `allow-same-origin`. `core/artifact-document.ts` writes
+a content security policy ahead of the artifact's own markup, which blocks network
+requests, nested frames and form posts. Images and fonts must be inline.
+
+A policy cannot follow a navigation, and a sandbox does not stop a frame navigating
+itself. A second load therefore removes the frame, but the first request of that
+navigation has already been sent. Treat artifact source, and anything typed into an
+artifact, as readable by whoever wrote it. Artifacts mount only while on screen, so
+off-screen scripts stop and restart with fresh state. With the flag off, a node
+shows its title and no script runs. The headless render bundle has no flag reader
+and runs artifacts in the same sandbox.
+
 ## Controls
 
 The floating top toolbar uses the shared `Toolbar` and Phosphor icons for drawing
