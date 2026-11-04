@@ -342,7 +342,7 @@ impl Harness {
         let provider = Arc::new(provider);
         let service = McpAuthProxyServiceImpl::new(McpAuthProxyServiceDeps {
             public_url: "https://mcp.macro.com".to_owned(),
-            redirect_uri_policy: RedirectUriPolicy::new(["claude.ai"]),
+            redirect_uri_policy: RedirectUriPolicy::new(["claude.ai", "chatgpt.com"]),
             inflight_auth: Arc::clone(&inflight),
             client_registrations: Arc::clone(&registry) as Arc<dyn ClientRegistrationStore>,
             refresh_token_bindings: Arc::clone(&registry) as Arc<dyn RefreshTokenBindingStore>,
