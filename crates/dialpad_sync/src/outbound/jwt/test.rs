@@ -32,3 +32,15 @@ fn only_our_secret_under_hs256_verifies() {
         );
     }
 }
+
+#[test]
+fn an_optional_expiration_is_enforced() {
+    let secret = SigningSecret("our-secret".into());
+    let body = jsonwebtoken::encode(
+        &Header::new(Algorithm::HS256),
+        &json!({"call_id": 42, "state": "hangup", "exp": 1}),
+        &EncodingKey::from_secret(secret.0.as_bytes()),
+    )
+    .unwrap();
+    assert!(JwtVerifier.verify(&secret, body.as_bytes()).is_none());
+}
