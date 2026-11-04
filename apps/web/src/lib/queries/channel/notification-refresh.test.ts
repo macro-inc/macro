@@ -197,6 +197,62 @@ describe('shared channel notification refresh', () => {
     expect(f.query).toHaveBeenCalledTimes(2);
   });
 
+  it('refreshes only the matching non-channel entity and all-entities readers', async () => {
+    const f = setup();
+    f.register('document', {
+      channelId: undefined,
+      entity: { entityType: 'DOCUMENT', entityId: 'same-id' },
+    });
+    f.register('other-document', {
+      channelId: undefined,
+      entity: { entityType: 'DOCUMENT', entityId: 'other-id' },
+    });
+    f.register('channel', {
+      channelId: undefined,
+      entity: { entityType: 'CHANNEL', entityId: 'same-id' },
+    });
+    f.register('home', { channelId: undefined, scope: 'all-entities' });
+    f.queue.onPatch(
+      {
+        ...patch('same-id'),
+        notification: {
+          id: 'notification',
+          entityType: 'DOCUMENT',
+          entityId: 'same-id',
+        },
+      } as GraphqlNotificationPatch,
+      false
+    );
+    await tick();
+    expect(f.query.mock.calls.map((call) => call[1])).toEqual([
+      { id: 'document' },
+      { id: 'home' },
+    ]);
+  });
+
+  it('refreshes matching channel entities without refreshing unrelated entities', async () => {
+    const f = setup();
+    f.register('matching', {
+      channelId: undefined,
+      entity: { entityType: 'CHANNEL', entityId: 'same-id' },
+    });
+    f.register('other-channel', {
+      channelId: undefined,
+      entity: { entityType: 'CHANNEL', entityId: 'other-id' },
+    });
+    f.register('document', {
+      channelId: undefined,
+      entity: { entityType: 'DOCUMENT', entityId: 'same-id' },
+    });
+    f.register('legacy', { channelId: undefined });
+    f.queue.onPatch(patch('same-id'), false);
+    await tick();
+    expect(f.query.mock.calls.map((call) => call[1])).toEqual([
+      { id: 'matching' },
+      { id: 'legacy' },
+    ]);
+  });
+
   it('refreshes a full edge when an updated notification is not in its membership', async () => {
     const f = setup();
     f.register();
