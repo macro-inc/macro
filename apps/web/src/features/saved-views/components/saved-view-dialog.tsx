@@ -74,8 +74,9 @@ export function SavedViewForm(
   const [name, setName] = createSignal(props.name);
   const [shared, setShared] = createSignal(Boolean(props.sharedTeamId));
   return (
+    // The body scrolls as one, the name included; the actions stay in reach.
     <form
-      class="flex flex-col gap-5 p-6"
+      class="flex max-h-[calc(100dvh-2rem)] flex-col mobile:max-h-none"
       onSubmit={(event) => {
         event.preventDefault();
         props.onSave(
@@ -84,50 +85,52 @@ export function SavedViewForm(
         );
       }}
     >
-      <Dialog.Title class="text-lg font-medium wrap-anywhere">
-        {props.title ?? 'Save view'}
-      </Dialog.Title>
-      <label class="flex flex-col gap-2 text-sm">
-        Name
-        <Input
-          value={name()}
-          onInput={(event) => setName(event.currentTarget.value)}
-          maxLength={120}
-          required
-          disabled={props.pending}
-          placeholder="e.g. Needs review"
-        />
-      </label>
-      {props.fields}
-      <Show when={props.summary}>
-        <div class="flex flex-col gap-2 text-xs text-ink-muted">
-          {props.summary}
-        </div>
-      </Show>
-      <Show when={props.team || props.sharedTeamId}>
-        <div class="flex items-center gap-1.5">
-          <Checkbox
-            checked={shared()}
-            onChange={setShared}
+      <div class="flex min-h-0 flex-col gap-5 overflow-y-auto p-6 pb-4 mobile:overflow-visible">
+        <Dialog.Title class="text-lg font-medium wrap-anywhere">
+          {props.title ?? 'Save view'}
+        </Dialog.Title>
+        <label class="flex flex-col gap-2 text-sm">
+          Name
+          <Input
+            value={name()}
+            onInput={(event) => setName(event.currentTarget.value)}
+            maxLength={120}
+            required
             disabled={props.pending}
-          >
-            <Checkbox.Control />
-            <Checkbox.Label>
-              Share with{' '}
-              {props.sharedTeamId && props.sharedTeamId !== props.team?.id
-                ? 'team'
-                : props.team?.name}
-            </Checkbox.Label>
-          </Checkbox>
-          <SharingInfo />
-        </div>
-      </Show>
-      <Show when={props.error}>
-        <p role="alert" class="text-sm text-failure-ink">
-          {props.error}
-        </p>
-      </Show>
-      <div class="flex justify-end gap-2">
+            placeholder="e.g. Needs review"
+          />
+        </label>
+        {props.fields}
+        <Show when={props.summary}>
+          <div class="flex flex-col gap-2 text-xs text-ink-muted">
+            {props.summary}
+          </div>
+        </Show>
+        <Show when={props.team || props.sharedTeamId}>
+          <div class="flex items-center gap-1.5">
+            <Checkbox
+              checked={shared()}
+              onChange={setShared}
+              disabled={props.pending}
+            >
+              <Checkbox.Control />
+              <Checkbox.Label>
+                Share with{' '}
+                {props.sharedTeamId && props.sharedTeamId !== props.team?.id
+                  ? 'team'
+                  : props.team?.name}
+              </Checkbox.Label>
+            </Checkbox>
+            <SharingInfo />
+          </div>
+        </Show>
+        <Show when={props.error}>
+          <p role="alert" class="text-sm text-failure-ink">
+            {props.error}
+          </p>
+        </Show>
+      </div>
+      <div class="flex shrink-0 justify-end gap-2 px-6 pt-2 pb-6">
         <Button
           variant="ghost"
           disabled={props.pending}
@@ -149,7 +152,12 @@ export function SavedViewForm(
 
 export function DeleteSavedViewConfirmation(
   props: ManagedDialogProps &
-    FormStatus & { name: string; onDelete: () => void }
+    FormStatus & {
+      name: string;
+      /** What deleting affects, in the consumer's terms. */
+      description?: string;
+      onDelete: () => void;
+    }
 ) {
   return (
     <ConfirmDialog
@@ -161,8 +169,8 @@ export function DeleteSavedViewConfirmation(
       body={
         <>
           <p>
-            This removes the view for you and anyone it is shared with. Items
-            are not deleted.
+            {props.description ??
+              'This removes the view for you and anyone it is shared with. Items are not deleted.'}
           </p>
           <Show when={props.error}>
             <p role="alert">{props.error}</p>

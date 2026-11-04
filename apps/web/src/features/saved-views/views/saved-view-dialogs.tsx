@@ -125,6 +125,8 @@ export function SavedViewDialog(
 export function DeleteSavedViewDialog(
   props: Scope & {
     record: SavedView;
+    /** What deleting affects, in the consumer's terms. */
+    description?: string;
     onDeleted: (record: SavedView, viewer: string) => void;
   }
 ) {
