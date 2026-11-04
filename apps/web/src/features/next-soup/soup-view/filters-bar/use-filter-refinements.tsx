@@ -605,9 +605,9 @@ export function useFilterRefinements() {
             values: getValues,
             searchableOptions: assigneePicker.options,
             searchAction: assigneePicker.action,
-            searchFooter: (
-              <AssigneeDiscoveryStatus discovery={assigneePicker} />
-            ),
+            get searchFooter() {
+              return <AssigneeDiscoveryStatus discovery={assigneePicker} />;
+            },
             activeSearchableIds: assigneeFilter,
             onSearchableChange: handleAssigneeChange,
             get searchPlaceholder() {

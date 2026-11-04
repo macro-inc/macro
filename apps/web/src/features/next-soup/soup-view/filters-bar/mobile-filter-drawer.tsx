@@ -65,10 +65,6 @@ export const MobileFilterDrawer = (props: {
   const userId = useUserId();
 
   const [assigneeSearch, setAssigneeSearch] = createSignal('');
-  const assigneePicker = useAssigneePicker(
-    assigneeFilter,
-    () => currentView() === 'tasks'
-  );
   const [createdBySearch, setCreatedBySearch] = createSignal('');
 
   const currentView = createMemo((): ListView | undefined => {
@@ -77,6 +73,10 @@ export const MobileFilterDrawer = (props: {
       return undefined;
     return content.id;
   });
+  const assigneePicker = useAssigneePicker(
+    assigneeFilter,
+    () => currentView() === 'tasks'
+  );
 
   const categories = createMemo(() => {
     const view = currentView();
