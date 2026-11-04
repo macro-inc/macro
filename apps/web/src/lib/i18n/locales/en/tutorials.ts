@@ -1,9 +1,9 @@
 export default {
   from: 'Macro',
-  macroMailLength: '0:43',
+  macroMailLength: '1:31',
   learnMacroMail: 'Learn how to use Macro Mail',
   learnMacroMailSnippet:
-    'Share email to channels, turn it into tasks and let routines tag it for you',
+    'Every account in one inbox, plus sharing to channels, tasks and routines',
   dismiss: 'Dismiss',
   playVideo: 'Play video',
   closeVideo: 'Close video',
