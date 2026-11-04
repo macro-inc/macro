@@ -3,6 +3,7 @@ import { createGlobalSearchOpener } from '@app/features/next-soup/open-search';
 import { getViewPreset } from '@app/features/next-soup/sidebar/soup-filter-presets';
 import { useFeatureFlag } from '@app/lib/analytics/posthog';
 import { t } from '@app/lib/i18n';
+import { globalSplitManager } from '@app/signal/splitLayout';
 import { useSplitLayout } from '@components/app/split-layout/layout';
 import type { ReferredFrom } from '@components/app/split-layout/layoutManager';
 import { toast } from '@core/component/Toast/Toast';
@@ -16,6 +17,7 @@ import { useOpenDirectMessage } from '@core/util/open-direct-message';
 import { openExternalUrl } from '@core/util/url';
 import { isGithubPrEntity } from '@entity';
 import { projectRouteId } from '../projects/core/route';
+import { routineContent } from '../routines/routine-navigation';
 import { getCategorySearchFilters } from './category-search-filters';
 import {
   type CommandMenuItem,
@@ -34,8 +36,13 @@ export function createCommandResultOpener(
   const projectsFlag = useFeatureFlag(enableProjects);
   const openDm = useOpenDirectMessage();
   // A person without a conversation yet: open one, as the user card does.
-  const openDirectMessage = (recipientId: string, openInNewSplit: boolean) =>
-    openDm(recipientId, { referredFrom, preferNewSplit: openInNewSplit });
+  const openDirectMessage = async (
+    recipientId: string,
+    openInNewSplit: boolean
+  ) => {
+    await openDm(recipientId, { referredFrom, preferNewSplit: openInNewSplit });
+    globalSplitManager()?.returnFocus();
+  };
 
   const openEntity = (
     item: Extract<CommandMenuItem, { kind: 'entity' }>,
@@ -105,8 +112,17 @@ export function createCommandResultOpener(
           type: 'component',
           id: projectRouteId({ id: item.id, section: 'overview' }),
         },
-        { preferNewSplit: openInNewSplit }
+        { referredFrom, preferNewSplit: openInNewSplit }
       );
+      return true;
+    }
+
+    if (isEntityItem(item) && item.bucket === 'routine') {
+      openWithSplit(routineContent(item.id), {
+        referredFrom,
+        preferNewSplit: openInNewSplit,
+        search: {},
+      });
       return true;
     }
 

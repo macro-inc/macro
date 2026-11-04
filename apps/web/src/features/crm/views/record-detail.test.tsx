@@ -92,6 +92,8 @@ vi.mock('./use-crm', () => ({
       : undefined,
   }),
   useIsTeamAdmin: () => () => false,
+  useSetCompanyHiddenMutation: () => ({ isPending: false, mutate: vi.fn() }),
+  useSetContactHiddenMutation: () => ({ isPending: false, mutate: vi.fn() }),
 }));
 vi.mock('@solidjs/router', () => ({ useSearchParams: () => [{}] }));
 vi.mock('./company-detail', async () => {
@@ -188,9 +190,6 @@ vi.mock('./contact-emails-section', () => ({
   ContactEmailsSection: () => null,
 }));
 vi.mock('./contact-header', () => ({ ContactHeader: () => null }));
-vi.mock('./contact-sharing-section', () => ({
-  ContactSharingSection: () => null,
-}));
 vi.mock('./record-associations', () => ({
   RecordCallsSection: () => null,
   RecordFilesSection: () => null,

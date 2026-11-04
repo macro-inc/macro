@@ -52,6 +52,9 @@ macro_env_var::maybe_env_vars!(
     pub struct PosthogApiKey;
     /// Regional PostHog ingestion origin; defaults to the US origin.
     pub struct PosthogHost;
+    /// Macro's customer key for the Macro Connect API. When unset, Connect
+    /// is off and every connection goes through Pipedream.
+    pub struct ConnectCustomerKey;
     /// Dedicated KMS key for encrypted per-owner Codex OAuth state.
     pub struct CodexOauthKmsKeyId;
     /// Rollout gate for sessions owned by a bot.
@@ -75,7 +78,8 @@ fn default_pipedream_environment() -> String {
 #[derive(macro_config::MacroConfig)]
 #[serde(rename_all = "SCREAMING_SNAKE_CASE")]
 pub struct Config {
-    /// Optional TypeSafe key for Command K classification.
+    /// Optional TypeSafe key for Command K classification and for routing
+    /// unmentioned thread replies to agents.
     pub typesafe_api_key: jev::outbound::TypesafeApiKey,
     /// Optional Workers AI account for Clairic extraction and Auto mode's Clef Flash.
     pub cloudflare_account_id: universal_input::outbound::clairic::CloudflareAccountId,
@@ -96,6 +100,8 @@ pub struct Config {
     pub google_client_id: GoogleClientId,
     /// Secret name of the Google OAuth client credential.
     pub google_client_secret_key: GoogleClientSecretKey,
+    /// Token served at `/.well-known/openai-apps-challenge`.
+    pub openai_domain_verification_token: OpenaiDomainVerificationToken,
     /// Browser-reachable FusionAuth origin, when different from the API.
     pub fusionauth_public_url: FusionauthPublicUrl,
     /// Additional trusted client callback hosts, overriding the built-in list.
@@ -109,6 +115,9 @@ pub struct Config {
     pub posthog_api_key: PosthogApiKey,
     /// Same regional origin as the frontend's PostHog project.
     pub posthog_host: PosthogHost,
+    /// Customer key for Macro Connect; sandboxes reach Connect-held grants
+    /// through its MCP gateway.
+    pub connect_customer_key: ConnectCustomerKey,
     /// Pinned Deno executable. Unset hosts do not advertise code execution.
     pub deno_binary: Option<String>,
     /// Default-off quota admission and prospective usage counting.
@@ -303,23 +312,42 @@ impl Config {
     /// while `ENABLE_AI_USAGE_BILLING` is true, which then requires
     /// `AUTHENTICATION_SERVICE_SECRET_KEY`; nowhere otherwise.
     pub fn settlement_route(&self) -> anyhow::Result<ai_billing::composition::SettlementRoute> {
-        let client = self
-            .authentication_service_secret_key
+        Ok(ai_billing::composition::SettlementRoute::from_policy(
+            self.enable_ai_usage_billing,
+            self.auth_service_client()?.map(std::sync::Arc::new),
+        )?)
+    }
+
+    /// The authentication service client, when
+    /// `AUTHENTICATION_SERVICE_SECRET_KEY` is set.
+    pub fn auth_service_client(
+        &self,
+    ) -> anyhow::Result<Option<authentication_service_client::AuthServiceClient>> {
+        self.authentication_service_secret_key
             .value()
             .filter(|key| !key.trim().is_empty())
             .map(|key| {
-                anyhow::Ok(std::sync::Arc::new(
-                    authentication_service_client::AuthServiceClient::new(
-                        key.to_owned(),
-                        macro_service_urls::AuthServiceUrl::new()?.to_string(),
-                    ),
+                anyhow::Ok(authentication_service_client::AuthServiceClient::new(
+                    key.to_owned(),
+                    macro_service_urls::AuthServiceUrl::new()?.to_string(),
                 ))
             })
-            .transpose()?;
-        Ok(ai_billing::composition::SettlementRoute::from_policy(
-            self.enable_ai_usage_billing,
-            client,
-        )?)
+            .transpose()
+    }
+
+    /// Reads GitHub account-link tokens, so GitHub's MCP server needs no
+    /// separate authorization. `None` without the authentication service.
+    pub fn linked_github_tokens(
+        &self,
+    ) -> anyhow::Result<Option<std::sync::Arc<dyn mcp_client::domain::ports::LinkedGithubTokens>>>
+    {
+        Ok(self.auth_service_client()?.map(|client| {
+            std::sync::Arc::new(
+                mcp_client::outbound::auth_service_github_tokens::AuthServiceGithubTokens::new(
+                    client,
+                ),
+            ) as std::sync::Arc<dyn mcp_client::domain::ports::LinkedGithubTokens>
+        }))
     }
 
     /// Load the configuration from the environment.
@@ -349,6 +377,9 @@ macro_env_var::env_vars! {
     pub struct GoogleClientId;
     /// Public MCP OAuth configuration.
     pub struct GoogleClientSecretKey;
+    /// OpenAI domain verification token for the ChatGPT Apps Directory,
+    /// served at `/.well-known/openai-apps-challenge`.
+    pub struct OpenaiDomainVerificationToken;
 }
 macro_env_var::maybe_env_vars! {
     /// Optional public MCP OAuth configuration.

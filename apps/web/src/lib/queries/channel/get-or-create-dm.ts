@@ -1,5 +1,6 @@
 import { fireAndForget } from '@core/util/fireAndForget';
 import { throwOnErr } from '@core/util/result';
+import { Telemetry, type TraceContext } from '@macro-inc/observability';
 import { type MutationCallbacks, withCallbacks } from '@queries/utils';
 import type { ApiChannelWithLatest } from '@service-storage/channel-list-types';
 import {
@@ -14,6 +15,7 @@ import { invalidateListChannels, loadChannelList } from './channels';
 type GetOrCreateDmResponse = GetOrCreateChannelResponse;
 
 type GetOrCreateDirectMessageParams = {
+  parentSpan?: TraceContext;
   recipient_id: string;
 };
 
@@ -32,9 +34,11 @@ export function useGetOrCreateDirectMessageMutation(
     gcTime: 0,
     mutationFn: async (vars: GetOrCreateDirectMessageParams) => {
       return await throwOnErr(async () =>
-        storageServiceClient.getOrCreateDirectMessage({
-          recipient_id: vars.recipient_id,
-        })
+        (vars.parentSpan ?? Telemetry.captureContext()).run(() =>
+          storageServiceClient.getOrCreateDirectMessage({
+            recipient_id: vars.recipient_id,
+          })
+        )
       );
     },
     ...withCallbacks<
@@ -50,7 +54,8 @@ export function useGetOrCreateDirectMessageMutation(
         onSettled: () =>
           fireAndForget(invalidateListChannels(), 'channel-list'),
       },
-      callbacks
+      callbacks,
+      (variables) => variables.parentSpan
     ),
   }));
 }

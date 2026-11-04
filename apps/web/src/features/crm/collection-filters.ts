@@ -141,3 +141,17 @@ export const crmContactActiveFilter = config({
     { skipTargets: ['crmf'] }
   ),
 });
+
+/** Effective hidden includes contacts whose company is hidden. */
+export const crmContactHiddenFilter = config({
+  id: 'crm-contact-hidden',
+  predicate: (entity, ctx) =>
+    entity.type === 'crm_contact' &&
+    entity.hidden &&
+    !!ctx.crmRemovedPeopleTeamId &&
+    entity.teamId === ctx.crmRemovedPeopleTeamId,
+  query: defineQueryFilters(
+    { include: { crmContactHidden: true } },
+    { skipTargets: ['crmf'] }
+  ),
+});

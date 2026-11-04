@@ -87,6 +87,7 @@ function AgentMessagePart(props: {
             }
             inFlight={props.inFlight}
             hideIncompleteXml={props.message.author.kind === 'agent'}
+            accentMentions={props.message.author.kind === 'agent'}
             observeRender={
               props.message.author.kind === 'agent'
                 ? (element) =>
@@ -121,8 +122,7 @@ function AgentMessagePart(props: {
             part={part()}
             context={{
               sessionId: props.message.agentSessionId,
-              // Turn and side identify a message within its session.
-              messageId: `${props.message.agentSessionId}:${props.message.turn}:${props.message.author.kind}`,
+              messageId: `${props.message.agentSessionId}:${props.message.key}`,
               partIndex: props.index,
               inFlight: props.inFlight,
               followedBy: toolUsedAfter(props.message.parts, props.index),

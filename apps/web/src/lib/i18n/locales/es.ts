@@ -838,7 +838,6 @@ export default {
     goForward: 'Adelante',
     createNewSplit: 'Crear panel nuevo',
     close: 'Cerrar',
-    returnToList: 'Volver a la lista',
     previousItem: 'Elemento anterior',
     nextItem: 'Elemento siguiente',
     itemNavigation: 'Navegación entre elementos',

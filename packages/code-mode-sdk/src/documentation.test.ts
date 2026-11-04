@@ -2,10 +2,8 @@ import { readFile } from 'node:fs/promises';
 import { describe, expect, it } from 'vitest';
 import { packageEntityDocs, type SdkDocs } from '../scripts/typedoc';
 
-const artifact = new URL(
-  '../../../crates/agent_code_mode/src/domain/documentation.json',
-  import.meta.url
-);
+// Written by `bun run generate`, which `bun run test` runs first.
+const artifact = new URL('../dist/documentation.json', import.meta.url);
 
 const NAMESPACE = `# Class: ExampleNamespace
 
@@ -164,7 +162,7 @@ describe('TypeDoc documentation packaging', () => {
     };
     expect(entity('agentSessions')).toContain('### SessionReview');
     expect(entity('agentSessions')).toContain('`SessionReview.submitAll`');
-    expect(docs.symbols.ReviewRecord).toContain('presentedAt');
+    expect(docs.symbols.ReviewRecord_Serialize).toContain('presentedAt');
     expect(docs.symbols.SessionReview).not.toContain('property-parent');
     expect(docs.symbols.SessionReview).not.toContain('property-client');
     expect(docs.symbols.SessionReview).not.toContain('private constructor');

@@ -785,7 +785,6 @@ export default {
     goForward: 'Maju',
     createNewSplit: 'Buat panel baru',
     close: 'Tutup',
-    returnToList: 'Kembali ke daftar',
     previousItem: 'Item sebelumnya',
     nextItem: 'Item berikutnya',
     itemNavigation: 'Navigasi item',

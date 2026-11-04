@@ -36,6 +36,7 @@ import {
   buildCallTeamSharePayload,
   fetchCallSharePermission,
   isCallSharedWithTeam,
+  refetchLeftCallRecord,
   setActiveCallEndedCache,
   setActiveCallStartedCache,
   setCallRecordTeamShareCache,
@@ -347,5 +348,55 @@ describe('call team sharing helpers', () => {
     expect(queryClient.getQueryData<CallRecord>(key)).toMatchObject({
       shareWithTeam: true,
     });
+  });
+});
+
+describe('refetchLeftCallRecord', () => {
+  beforeEach(() => {
+    queryClient.clear();
+    callClient.getCallRecord.mockReset();
+  });
+
+  it('refetches the left call record even with no mounted reader', async () => {
+    const participant = {
+      userId: 'macro|a@test.com',
+      joinedAt: '2026-08-21T09:00:00.000Z',
+    };
+    queryClient.setQueryData(
+      callKeys.active('channel-1').queryKey,
+      started({ callId: 'call-1', channelId: 'channel-1' })
+    );
+    const key = callKeys.record('call-1').queryKey;
+    const recordFetch = vi
+      .fn<() => CallRecord>()
+      .mockReturnValueOnce(
+        record({
+          isActive: true,
+          participants: [{ ...participant, leftAt: null }],
+        })
+      )
+      .mockReturnValueOnce(
+        record({
+          isActive: true,
+          participants: [
+            { ...participant, leftAt: '2026-08-21T09:05:00.000Z' },
+          ],
+        })
+      );
+    // Cached by a reader that has since unmounted.
+    await queryClient.fetchQuery({ queryKey: key, queryFn: recordFetch });
+
+    refetchLeftCallRecord('channel-1');
+
+    await vi.waitFor(() =>
+      expect(
+        queryClient.getQueryData<CallRecord>(key)?.participants[0]?.leftAt
+      ).toBe('2026-08-21T09:05:00.000Z')
+    );
+  });
+
+  it('does nothing when the channel has no cached call', () => {
+    refetchLeftCallRecord('channel-1');
+    expect(callClient.getCallRecord).not.toHaveBeenCalled();
   });
 });

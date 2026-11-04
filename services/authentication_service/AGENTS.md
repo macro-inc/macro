@@ -22,7 +22,8 @@ key issuance, and account merge/link flows.
 ## Scope
 
 - Owns: FusionAuth-backed login/session issuance, JWT minting, signup
-  allowlisting, OAuth/OAuth2 account linking, GTM invite links, shared-mailbox
+  allowlisting, OAuth/OAuth2 account linking, GTM invite links, the platform
+  status banner API (`crates/system_status`), shared-mailbox
   relocation signup, Cursor/Codex API key endpoints, introductory trial
   eligibility and subscription checkout.
 - Not here: authorization/permission decisions on other entities →
@@ -81,8 +82,32 @@ key issuance, and account merge/link flows.
 API-token exchange preserves verified incoming agent attribution; query/body
 inputs cannot select an agent, and ordinary user credentials remain unattributed.
 
+## Agent accounts
+
+- An agent can do everything a person can, including inviting other agents. Do
+  not gate actions on `isAgent`; it only changes signup and labeling.
+- `User."isAgent"` is set in the FusionAuth `user.create` webhook, from
+  `is_agent` on `/login/passwordless` (carried as FusionAuth user data) or a
+  pending agent `team_invite`. Those agents skip the seeded content, Loops, and
+  Meta. The webhook cannot see SSO state, so `is_agent` on `/login/sso` flags a
+  new account in `/oauth/redirect` (`mark_agent`), after that content has started.
+- The account exists before its email is verified, so an email signup's flag is
+  provisional: a code request or SSO sign-in without `is_agent` reverts it
+  (`revert_unconfirmed_agent`) until a key exists, setup is confirmed, or an
+  agent invite is pending.
+- `POST /user/agent_setup` joins the inviting team and replaces the
+  `Agent signup` API key. It is repeatable until `tutorialComplete` is true.
+- `POST /user/profile_picture/file` reserves an SFS upload for API-key callers,
+  since `static_file_service` cannot check keys. `PUT` on that path takes the SFS
+  id and accepts only the caller's PNG, JPEG, WebP, or GIF; it does not wait for
+  the asynchronous upload event.
+
 ## Gotchas
 
+- `/mobile-welcome-email` copies allowlisted ad parameters from the capture
+  request onto the desktop signup link and always sets
+  `signup_flow=mobile_email`. The web app keeps that set on the PostHog person
+  when the account is identified. Do not take `signup_flow` from the request.
 - Answer third-party failures as 502/503, not 500: match
   `GithubError::Upstream(error)` before a route's 500 catch-all, and answer a
   `FusionAuthClientError` whose `upstream()` is set with that error's
@@ -104,6 +129,15 @@ inputs cannot select an agent, and ordinary user credentials remain unattributed
   when present; see `README.md` before changing signup behavior.
 - Denial responses and policy errors must never disclose configured allowlist
   addresses; never paste operational addresses into code, logs, or docs.
+- New Outlook connections need the deployment switch
+  `OUTLOOK_CONNECTIONS_ENABLED` and the user's PostHog flag `enable-outlook`
+  (`src/domain/microsoft.rs`), read with `crates/feature_flags` for the Macro
+  user id the web app identifies with. `/link/email/providers` answers
+  `outlook: false` and `/link/outlook` answers 404 for a new connection when
+  either is off; reconnecting an inbox reads neither. A failed flag load
+  closes new connections and logs one warning. Without `POSTHOG_API_KEY`
+  (local, tests) the switch alone decides. Each decision is the
+  `outlook.flag` span field (`on`, `off`, `error`, `unconfigured`).
 - `/oauth2/{provider}/callback` verifies two signed `state` kinds
   (`src/account_link_state.rs`): account links, which expire, and Microsoft
   admin-consent returns, which do not. A consent screen that ends without a

@@ -2,13 +2,16 @@ import { pendingDirectMessageId } from '@channel/primitives/pending-direct-messa
 import { useSplitLayout } from '@components/app/split-layout/layout';
 import type { OpenWithSplitOptions } from '@components/app/split-layout/layoutManager';
 import { useUserId } from '@core/context/user';
-import { Telemetry } from '@macro-inc/observability';
+import { Telemetry, type TraceContext } from '@macro-inc/observability';
 import { existingDirectMessage } from '@queries/channel/get-or-create-dm';
 
 type OpenDirectMessageOptions = Pick<
   OpenWithSplitOptions,
   'activate' | 'preferNewSplit' | 'referredFrom'
->;
+> & {
+  /** The caller's span, kept across the lookup's await. */
+  parentSpan?: TraceContext;
+};
 
 /**
  * Opens the conversation with a person without creating it: their existing
@@ -20,8 +23,19 @@ export function useOpenDirectMessage() {
   const { openWithSplit } = useSplitLayout();
   const userId = useUserId();
 
-  return (recipientId: string, options: OpenDirectMessageOptions = {}) =>
-    Telemetry.span('channels.open_direct_message', async (span) => {
+  return (
+    recipientId: string,
+    { parentSpan, ...options }: OpenDirectMessageOptions = {}
+  ) =>
+    (parentSpan ?? Telemetry.captureContext()).run(() =>
+      openDirectMessage(recipientId, options)
+    );
+
+  function openDirectMessage(
+    recipientId: string,
+    options: Omit<OpenDirectMessageOptions, 'parentSpan'>
+  ) {
+    return Telemetry.span('channels.open_direct_message', async (span) => {
       const viewerId = userId();
       // There is no DM with yourself; the server refuses to make one.
       if (!viewerId || recipientId === viewerId) {
@@ -63,4 +77,5 @@ export function useOpenDirectMessage() {
         options
       );
     });
+  }
 }

@@ -19,6 +19,8 @@ use macro_user_id::user_id::MacroUserIdStr;
 use macro_uuid::Uuid;
 use messages::domain::events::MessageEventAttachment;
 use trigger_context::TriggerContext;
+mod current_time;
+pub use current_time::CurrentTime;
 mod session_origin;
 pub use session_origin::{MentionOrigin, SessionOrigin, TaskAssignmentOrigin};
 mod coding_preferences;
@@ -441,13 +443,14 @@ impl ReplyPlacement {
 /// takes. A thread carries one reply per mention, so the reply is one message
 /// that grows. A private conversation reads like talking to a teammate, so
 /// each passage the agent writes is its own message as soon as it is
-/// finished, with the steps it took after it attached.
+/// finished, with the steps it took to get there; while it works, its typing
+/// row says what it is doing.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum VoiceStyle {
     /// One message per turn, posted when the turn starts and updated in place.
     Turn,
     /// One message per passage, posted when the passage is finished; nothing
-    /// is posted until the agent has something to say or do.
+    /// is posted until the agent has something to say.
     Segments,
 }
 
@@ -629,6 +632,10 @@ pub enum HarnessCommand {
     SetSandboxSize(SandboxSize),
     /// Release a session's live resources and delete it.
     Delete,
+    /// Load an external session whose agent is still running on a runtime
+    /// that dialed in again, so its local activity reaches Macro without a
+    /// prompt. Internal: the runtime registry asks for these on each dial.
+    Reattach,
 }
 
 /// What executing a command did with it, beyond succeeding.

@@ -53,6 +53,16 @@ Exact `blockName`s, since any other value renders a broken or deleted chip:
 - An email thread is `email`, never `thread` or `email_thread`. A calendar event is `calendar`, never `calendar_event`, with the `eventId` as `documentId`; add a recurring event's `recurrenceId` as `occurrenceKey` to target one occurrence. Channel members without the event see a read-only preview. Private and confidential events are never shared.
 - When a tool returns a channel message id, mention that message, not just its channel.
 
+Mention the relevant items your tools found. Skip items a view you presented with `execution.views.present` already shows: the view already opens them.
+
+### Polls in channels
+
+A form for a channel is a poll: one required single- or multi-select question (`widget: "choice"`, or `"checkboxes"` for several answers), `status: "open"`, `tallyVisible: true` unless asked to hide results, and `channelGrants: []`. Post it as one message with its live card on its own line:
+
+`<m-document-card>{"documentId":"{form_id}","documentName":"{question}","blockName":"form","previewData":{"poll":{"optionCount":2}}}</m-document-card>`
+
+That message is the poll, and the card shares it with the channel. Never add a form chip, `/respond` link, `form:` link, or a second copy.
+
 Whenever you name a task — one you created, linked, searched, or were assigned — emit the task mention chip. Do not use a Markdown URL, MACRO- id, or bare title, and do not repeat the title beside the chip. Use the `mention` field a task tool returned when you have it.
 
 ### People, groups, dates, agent sessions, pull requests, and booking links
@@ -67,7 +77,7 @@ These use their own tags — never wrap them in `<m-document-mention>`:
 - GitHub pull request: `<m-pr-mention>{"url":"https://github.com/{owner}/{repo}/pull/{number}","label":""}</m-pr-mention>`, or `<m-pr-mention>{"id":"{id}","label":""}</m-pr-mention>` when a tool returned the PR's Macro id
 - Booking link: `<m-booking-link-mention>{"profileId":"{profile_id}","slug":"{slug}","url":"https://macro.com/app/book/{profile_id}/{slug}","label":""}</m-booking-link-mention>` (`slug` optional when linking the profile page)
 
-- Dates: prefer a date chip to a typed date. `date` is ISO 8601 and `displayFormat` is the label shown (e.g. "Mon, Dec 1, 2025", "Today", "3:00 PM"); no lookup needed.
+- Dates: prefer a date chip to a typed date. For a whole day, `date` is the bare local calendar date (`2025-12-01`), never midnight UTC, which reads as the previous day west of Greenwich; for a moment, it is a full ISO 8601 timestamp with the user's UTC offset. `displayFormat` is the label shown (e.g. "Mon, Dec 1, 2025", "Today", "3:00 PM"). Resolve "today" and other relative dates from the `<current_time>` your prompt carries when it has one, never from a guess.
 - Pull requests and booking links: always a chip, never a Markdown link or bare URL. Leave `label` empty and do not repeat the number, title, or URL beside it. A PR chip takes any github.com pull request URL; a booking chip takes the shareable URL plus the `profileId` and `slug` from its `/app/book/{profileId}/{slug}` path. A PR chip you receive carries the PR's URL in `url`. Issues, commits, and other GitHub pages stay Markdown links.
 - Agent sessions: only ids a tool returned. Add `"expanded":true` to insert the live card (Magic Chip) instead of the compact title.
 - Connecting apps: when a tool result hands you an `<m-connect-app>{"appSlug":"...","name":"..."}</m-connect-app>` tag, include it verbatim; it renders a connect button. Never invent one. In agent sessions the button resumes the conversation once connected, so just tell the user to connect; elsewhere, ask them to say when they have.
@@ -82,7 +92,8 @@ with the matching XML mention tag (m-document-mention with the right blockName/b
 m-user-mention, m-date-mention, m-agent-session-mention, m-pr-mention for GitHub pull \
 requests by URL, m-booking-link-mention for Macro booking links by URL, and the other \
 listed chip tags) across every Markdown surface (AI chat replies, agent session replies, channel messages, \
-email bodies, and Markdown documents) — never inside non-Markdown documents, and never for \
+email bodies, and Markdown documents); a poll for a channel is posted once, as its live \
+m-document-card — never inside non-Markdown documents, and never for \
 ids outside the listed types (a calendar id from ListCalendars is not mentionable; \
 only individual events are).";
 

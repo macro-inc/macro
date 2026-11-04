@@ -10,6 +10,7 @@ export type TagPillProps = TagPickerSourceProps & {
   dotClass?: string;
   triggerLabel?: string;
   onOpenChange?: (open: boolean) => void;
+  onActiveChange?: (active: boolean) => void;
   withClickBlock?: boolean;
 };
 
@@ -18,7 +19,10 @@ export function tagPillClasses(className?: string): string {
   return badgeTriggerClasses({
     variant: 'outline',
     size: 'xs',
-    class: cn('min-w-0 text-ink-muted transition-colors', className),
+    class: cn(
+      'min-w-0 text-ink-muted transition-colors touch:min-h-0',
+      className
+    ),
   });
 }
 
@@ -38,6 +42,7 @@ export function TagPill(props: TagPillProps) {
         props.triggerLabel ?? `Change or select tag ${props.tag.label}`
       }
       onOpenChange={props.onOpenChange}
+      onActiveChange={props.onActiveChange}
       withClickBlock={props.withClickBlock}
     >
       <TagDot color={props.tag.color} class={props.dotClass} />

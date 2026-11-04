@@ -51,6 +51,16 @@ export class Project extends PropertiedEntity<ProjectDetail> {
     return data.projectMetadata;
   }
 
+  /** The project's URL in the Macro web app; hand it to users as the link. */
+  webUrl(): string {
+    return `${this.client.webAppUrl}/app/project/${this.id}`;
+  }
+
+  /** Identity, loaded detail and {@link webUrl}, so serialized handles carry their link. */
+  override toJSON() {
+    return { ...super.toJSON(), url: this.webUrl() };
+  }
+
   /** A handle to a project by id. Details load on first access. */
   static byId(client: MacroClient, id: string): Project {
     return new Project(client, id);

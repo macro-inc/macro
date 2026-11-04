@@ -10,6 +10,7 @@ import { AddPropertyButton } from '@property/component/AddPropertyButton';
 import { Modals } from '@property/component/modal';
 import { ProjectLinkPill } from '@property/component/ProjectLinkPill';
 import { PropertyValueIcon } from '@property/component/propertyValue/PropertyValueIcon';
+import { SourceLinkPill } from '@property/component/SourceLinkPill';
 import {
   PropertiesProvider,
   type PropertySaveHandler,
@@ -29,6 +30,7 @@ import { getEntityValues, hasValue } from '@property/utils';
 import { useBulkSaveEntityPropertiesMutation } from '@queries/properties/entity';
 import { useTagsQuery } from '@queries/properties/tags';
 import type { EntityType } from '@service-properties/generated/schemas/entityType';
+import { Key } from '@solid-primitives/keyed';
 import { Badge, Button, Layer } from '@ui';
 import { cn } from '@ui/utils/classname';
 import {
@@ -328,37 +330,37 @@ export function EntityPropertiesSection(props: EntityPropertiesSectionProps) {
                 'mb-3'
             )}
           >
-            <For each={gridProperties()}>
+            <Key each={gridProperties()} by="propertyDefinitionId">
               {(property) => (
                 <SidePanelPropertyRow
                   entityId={props.entityId}
                   getEmptyLabel={props.getEmptyLabel}
-                  property={property}
+                  property={property()}
                   canRemoveFromEntity={
                     !defaultPinnedDefinitionIds().has(
-                      property.propertyDefinitionId
+                      property().propertyDefinitionId
                     ) &&
                     !(
-                      isPendingProperty(property) &&
+                      isPendingProperty(property()) &&
                       props
                         .defaultProperties?.()
                         .some(
                           (placeholder) =>
                             placeholder.propertyDefinitionId ===
-                            property.propertyDefinitionId
+                            property().propertyDefinitionId
                         )
                     )
                   }
                   canPinPendingProperty={props
                     .defaultTitlePropertyDefinitionIds?.()
-                    .includes(property.propertyDefinitionId)}
+                    .includes(property().propertyDefinitionId)}
                   onRemovePendingProperty={removePendingProperty}
                   onPropertyPinned={
                     props.onPropertyPinned ? pinProperty : undefined
                   }
                 />
               )}
-            </For>
+            </Key>
           </SidePanel.Grid>
         </Show>
 
@@ -625,10 +627,16 @@ function SidePanelPropertyRow(props: {
                   }
                 >
                   <Match when={isInputType()}>
-                    <InputValue />
+                    <InputValue
+                      property={property()}
+                      getEmptyLabel={props.getEmptyLabel}
+                    />
                   </Match>
                   <Match when={isMultiValueRow()}>
-                    <MultiValue property={property()}>
+                    <MultiValue
+                      property={property()}
+                      getEmptyLabel={props.getEmptyLabel}
+                    >
                       <PropertyRowActions.Root
                         canRemoveFromEntity={props.canRemoveFromEntity}
                         canPinPendingProperty={props.canPinPendingProperty}
@@ -669,6 +677,33 @@ function SidePanelPropertyRow(props: {
   );
 }
 
+function EmptyPropertyValue(props: {
+  property: Property;
+  getEmptyLabel?: (property: Property) => JSX.Element | undefined;
+}) {
+  const label = () =>
+    props.getEmptyLabel?.(props.property) ??
+    match(props.property.propertyDefinitionId)
+      .with(SYSTEM_PROPERTY_IDS.ASSIGNEES, () => 'Unassigned')
+      .with(SYSTEM_PROPERTY_IDS.STATUS, () => 'No status')
+      .with(SYSTEM_PROPERTY_IDS.PRIORITY, () => 'No priority')
+      .with(SYSTEM_PROPERTY_IDS.DUE_DATE, () => 'No due date')
+      .with(SYSTEM_PROPERTY_IDS.PROJECT, () => 'No project')
+      .otherwise(() => 'Not set');
+
+  return (
+    <PropertyNS.Empty
+      propertyDefinitionId={props.property.propertyDefinitionId}
+      label={label()}
+      iconClass={
+        props.property.propertyDefinitionId === SYSTEM_PROPERTY_IDS.PROJECT
+          ? 'touch:size-4'
+          : undefined
+      }
+    />
+  );
+}
+
 function SinglePill(props: {
   getEmptyLabel?: (property: Property) => JSX.Element | undefined;
   opensProject?: boolean;
@@ -695,7 +730,10 @@ function SinglePill(props: {
       <Show
         when={!empty()}
         fallback={
-          <SidePanel.EmptyPill label={props.getEmptyLabel?.(props.property)} />
+          <EmptyPropertyValue
+            property={props.property}
+            getEmptyLabel={props.getEmptyLabel}
+          />
         }
       >
         <Show
@@ -704,7 +742,14 @@ function SinglePill(props: {
             <>
               <PropertyNS.Icon
                 property={props.property}
-                class="size-3 shrink-0"
+                class={
+                  props.property.propertyDefinitionId ===
+                    SYSTEM_PROPERTY_IDS.STATUS ||
+                  props.property.propertyDefinitionId ===
+                    SYSTEM_PROPERTY_IDS.PRIORITY
+                    ? 'size-4 shrink-0'
+                    : 'size-3 shrink-0'
+                }
               />
               <PropertyNS.Text property={props.property} class="min-w-0" />
             </>
@@ -720,25 +765,52 @@ function SinglePill(props: {
 
   return (
     <PropertyNS.Tooltip property={props.property}>
-      <Show when={props.opensProject} fallback={pill()}>
-        <ProjectLinkPill
-          property={props.property}
-          variant="ghost"
-          fallback={pill()}
-        />
-      </Show>
+      <Switch fallback={pill()}>
+        <Match
+          when={
+            props.property.propertyDefinitionId === SYSTEM_PROPERTY_IDS.SOURCE
+          }
+        >
+          <SourceLinkPill
+            property={props.property}
+            showSourceIcon={false}
+            variant="ghost"
+            iconClass="touch:size-4"
+            fallback={pill()}
+          />
+        </Match>
+        <Match when={props.opensProject}>
+          <ProjectLinkPill
+            property={props.property}
+            variant="ghost"
+            iconClass="touch:size-4"
+            fallback={pill()}
+          />
+        </Match>
+      </Switch>
     </PropertyNS.Tooltip>
   );
 }
 
-function UserStackPill(props: { property: Property }) {
+function UserStackPill(props: {
+  property: Property;
+  getEmptyLabel?: (property: Property) => JSX.Element | undefined;
+}) {
   const empty = () => !hasValue(props.property);
 
   return (
     <PropertyNS.Tooltip property={props.property}>
       <Layer depth={2}>
         <PropertyNS.Pill class="w-fit">
-          <Show when={!empty()} fallback={<SidePanel.EmptyPill />}>
+          <Show
+            when={!empty()}
+            fallback={
+              <EmptyPropertyValue
+                property={props.property}
+                getEmptyLabel={props.getEmptyLabel}
+              />
+            }
+          >
             <PropertyNS.UserStack property={props.property} maxUsers={3} />
             <span class="min-w-0 truncate">
               <PropertyNS.Text property={props.property} />
@@ -751,7 +823,11 @@ function UserStackPill(props: { property: Property }) {
   );
 }
 
-function MultiValue(props: { property: Property; children: JSX.Element }) {
+function MultiValue(props: {
+  property: Property;
+  getEmptyLabel?: (property: Property) => JSX.Element | undefined;
+  children: JSX.Element;
+}) {
   const ctx = usePropertiesContext();
   const propertyCtx = useProperty();
   const isReadOnly = () => !ctx.canEdit || props.property.isMetadata;
@@ -762,7 +838,12 @@ function MultiValue(props: { property: Property; children: JSX.Element }) {
   return (
     <Show
       when={!isUserEntity()}
-      fallback={<UserStackPill property={props.property} />}
+      fallback={
+        <UserStackPill
+          property={props.property}
+          getEmptyLabel={props.getEmptyLabel}
+        />
+      }
     >
       <PropertyNS.Tooltip property={props.property}>
         <Show
@@ -774,6 +855,15 @@ function MultiValue(props: { property: Property; children: JSX.Element }) {
           }
         >
           <div class="flex flex-wrap items-center gap-1.5">
+            <Show when={!hasValue(props.property)}>
+              <PropertyNS.Pill class="w-fit overflow-hidden">
+                <EmptyPropertyValue
+                  property={props.property}
+                  getEmptyLabel={props.getEmptyLabel}
+                />
+                <PropertyNS.Caret />
+              </PropertyNS.Pill>
+            </Show>
             <PropertyNS.Chips
               property={props.property}
               renderChip={(chip) => (
@@ -781,7 +871,14 @@ function MultiValue(props: { property: Property; children: JSX.Element }) {
                   <Badge variant="ghost" size="sm" class="max-w-35">
                     <PropertyValueIcon
                       optionId={chip.key}
-                      class="size-3 shrink-0"
+                      class={
+                        props.property.propertyDefinitionId ===
+                          SYSTEM_PROPERTY_IDS.STATUS ||
+                        props.property.propertyDefinitionId ===
+                          SYSTEM_PROPERTY_IDS.PRIORITY
+                          ? 'size-4 shrink-0'
+                          : 'size-3 shrink-0'
+                      }
                     />
                     <span class="truncate">{chip.label}</span>
                   </Badge>
@@ -789,7 +886,7 @@ function MultiValue(props: { property: Property; children: JSX.Element }) {
               )}
             />
             <div class="flex shrink-0 items-center">
-              <Show when={!isReadOnly()}>
+              <Show when={!isReadOnly() && hasValue(props.property)}>
                 <Button
                   type="button"
                   variant="ghost"
@@ -883,10 +980,20 @@ function NonUserEntityValue(props: {
   );
 }
 
-function InputValue() {
+function InputValue(props: {
+  property: Property;
+  getEmptyLabel?: (property: Property) => JSX.Element | undefined;
+}) {
   return (
     <div class="min-w-0 max-w-full overflow-hidden">
-      <PropertyNS.Display />
+      <PropertyNS.InlineEditor
+        emptyValue={
+          <EmptyPropertyValue
+            property={props.property}
+            getEmptyLabel={props.getEmptyLabel}
+          />
+        }
+      />
     </div>
   );
 }

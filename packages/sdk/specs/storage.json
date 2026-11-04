@@ -3019,6 +3019,17 @@
         "tags": ["channel_labels"],
         "summary": "List the caller's shared or private labels.",
         "operationId": "list_channel_labels",
+        "parameters": [
+          {
+            "name": "scope",
+            "in": "query",
+            "description": "`personal` selects private labels; `team` requires team membership.",
+            "required": false,
+            "schema": {
+              "$ref": "#/components/schemas/ChannelLabelScopeSelection"
+            }
+          }
+        ],
         "responses": {
           "200": {
             "description": "",
@@ -3066,6 +3077,17 @@
         "tags": ["channel_labels"],
         "summary": "Create a label for the caller's authorized scope.",
         "operationId": "create_channel_label",
+        "parameters": [
+          {
+            "name": "scope",
+            "in": "query",
+            "description": "`personal` selects private labels; `team` requires team membership.",
+            "required": false,
+            "schema": {
+              "$ref": "#/components/schemas/ChannelLabelScopeSelection"
+            }
+          }
+        ],
         "requestBody": {
           "content": {
             "application/json": {
@@ -3165,6 +3187,15 @@
               "type": "string",
               "format": "uuid"
             }
+          },
+          {
+            "name": "scope",
+            "in": "query",
+            "description": "`personal` selects private labels; `team` requires team membership.",
+            "required": false,
+            "schema": {
+              "$ref": "#/components/schemas/ChannelLabelScopeSelection"
+            }
           }
         ],
         "requestBody": {
@@ -3239,6 +3270,17 @@
         "tags": ["channel_labels"],
         "summary": "Preview visible channels matched by a smart tag, without creating it.",
         "operationId": "preview_smart_tag",
+        "parameters": [
+          {
+            "name": "scope",
+            "in": "query",
+            "description": "`personal` selects private labels; `team` requires team membership.",
+            "required": false,
+            "schema": {
+              "$ref": "#/components/schemas/ChannelLabelScopeSelection"
+            }
+          }
+        ],
         "requestBody": {
           "content": {
             "application/json": {
@@ -3318,6 +3360,15 @@
               "type": "string",
               "format": "uuid"
             }
+          },
+          {
+            "name": "scope",
+            "in": "query",
+            "description": "`personal` selects private labels; `team` requires team membership.",
+            "required": false,
+            "schema": {
+              "$ref": "#/components/schemas/ChannelLabelScopeSelection"
+            }
           }
         ],
         "responses": {
@@ -3379,6 +3430,15 @@
             "schema": {
               "type": "string",
               "format": "uuid"
+            }
+          },
+          {
+            "name": "scope",
+            "in": "query",
+            "description": "`personal` selects private labels; `team` requires team membership.",
+            "required": false,
+            "schema": {
+              "$ref": "#/components/schemas/ChannelLabelScopeSelection"
             }
           }
         ],
@@ -5583,10 +5643,176 @@
         }
       }
     },
+    "/crm/blocked-domains": {
+      "get": {
+        "tags": ["crm::inbound::axum_router::blocked_domains"],
+        "summary": "List the domains the caller's team keeps out of email sync,\nalphabetically. Any team member may read.",
+        "operationId": "list_crm_blocked_domains",
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/CrmBlockedDomainResponse"
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/crm/blocked-domains/{domain}": {
+      "put": {
+        "tags": ["crm::inbound::axum_router::blocked_domains"],
+        "summary": "Block a domain: email sync stops creating or updating CRM records for\nit, and the company and contacts the CRM holds for it are hidden.\nIdempotent. Requires an admin/owner team role (403).",
+        "operationId": "block_crm_domain",
+        "parameters": [
+          {
+            "name": "domain",
+            "in": "path",
+            "description": "A bare domain like acme.com",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": ""
+          },
+          "400": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      },
+      "delete": {
+        "tags": ["crm::inbound::axum_router::blocked_domains"],
+        "summary": "Unblock a domain: email sync resumes for it, and what blocking hid is\nshown again. Idempotent. Requires an admin/owner team role (403).",
+        "operationId": "unblock_crm_domain",
+        "parameters": [
+          {
+            "name": "domain",
+            "in": "path",
+            "description": "A bare domain like acme.com",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": ""
+          },
+          "400": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/crm/companies": {
       "post": {
         "tags": ["crm::inbound::axum_router::create_company"],
-        "summary": "Manually create a CRM company for the caller's team. Any team member\nmay create one. The domain must not already be tracked by the team\n(409), and the team's CRM killswitch must be on (403). Returns the\ncreated company in the same shape as `GET /crm/companies/{id}` (its\ncontact list is empty until emails populate it).",
+        "summary": "Manually create a CRM company for the caller's team. Any team member\nmay create one. A domain, when given, must not already be tracked by the team\n(409), and the team's CRM killswitch must be on (403). Returns the\ncreated company in the same shape as `GET /crm/companies/{id}` (its\ncontact list is empty until emails populate it).",
         "operationId": "create_crm_company",
         "requestBody": {
           "content": {
@@ -5788,7 +6014,7 @@
       },
       "post": {
         "tags": ["crm::inbound::axum_router::create_contact"],
-        "summary": "Manually create a contact under a CRM company. Access is enforced by\n[`CrmCompanyAccessLevelExtractor`]: the caller must be on the team\nthat owns the company (hidden companies are reachable for\nadmin/owner only, and the new contact then inherits `hidden`). The\nemail's domain must be one of the company's domains (400), the\ncompany must not already track the email (409), and the team's CRM\nkillswitch must be on (403).",
+        "summary": "Manually create a contact under a CRM company. Access is enforced by\n[`CrmCompanyAccessLevelExtractor`]: the caller must be on the team\nthat owns the company (hidden companies are reachable for\nadmin/owner only, and the new contact then inherits `hidden`). The\ncompany must not already track the email (409), and the team's CRM\nkillswitch must be on (403).",
         "operationId": "create_crm_contact",
         "parameters": [
           {
@@ -6157,12 +6383,89 @@
             }
           }
         }
+      },
+      "post": {
+        "tags": ["crm::inbound::axum_router::create_team_contact"],
+        "summary": "Manually create a contact without a company for the caller's team.\nAny team member may create one. The team must not already have a\ncompany-less contact with the email (409), and the team's CRM\nkillswitch must be on (403).",
+        "operationId": "create_crm_team_contact",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateCrmTeamContactRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CrmContactResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
       }
     },
     "/crm/contacts/by-email": {
       "get": {
         "tags": ["crm::inbound::axum_router::get_contact_by_email"],
-        "summary": "Look up a CRM contact by email in the caller's team. Returns a null\n`contact` when no visible contact exists. Any team member may resolve a\nvisible contact; admin/owner callers may also resolve hidden contacts and\ncontacts under hidden companies.",
+        "summary": "Look up a CRM contact by email in the caller's team. Returns a null\n`contact` when no visible contact exists. Any team member may resolve a\nvisible contact; admin/owner callers may also resolve hidden contacts and\ncontacts under hidden companies. Returns 400 when several visible contacts\nmatch; callers must choose an explicit contact ID instead.",
         "operationId": "get_contact_by_email",
         "parameters": [
           {
@@ -6187,7 +6490,7 @@
             }
           },
           "400": {
-            "description": "",
+            "description": "Invalid email or multiple visible contacts match; choose a contact ID.",
             "content": {
               "application/json": {
                 "schema": {
@@ -6812,6 +7115,48 @@
         }
       }
     },
+    "/crm/pipelines/{id}/views/{view}/positions": {
+      "get": {
+        "tags": ["crm::inbound::pipelines"],
+        "summary": "Read saved board positions through pipeline access.",
+        "operationId": "get_crm_pipeline_view_positions",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "view",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/CardPosition"
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/crm/settings": {
       "get": {
         "tags": ["crm::inbound::axum_router::team_settings"],
@@ -6852,7 +7197,7 @@
       },
       "put": {
         "tags": ["crm::inbound::axum_router::team_settings"],
-        "summary": "Partially update the caller's team CRM configuration. Any team\nmember may update the views fields (`team_views`,\n`default_team_view_id`); the governance fields (permission\nthresholds, `closed_stage_ids`) require an admin/owner team role\n(403 otherwise). Omitted fields keep their current values;\n`team_views` is replaced whole. Returns the resulting settings.",
+        "summary": "Partially update the caller's team CRM configuration. Any team\nmember may update the views fields (`team_views`,\n`default_team_view_id`); the governance fields (permission\nthresholds, `closed_stage_ids`, `exclude_personal_emails`) require an admin/owner team role\n(403 otherwise). Omitted fields keep their current values;\n`team_views` is replaced whole. Returns the resulting settings.",
         "operationId": "put_crm_team_settings",
         "requestBody": {
           "content": {
@@ -7654,6 +7999,96 @@
           },
           "409": {
             "description": "The table kept moving under the undo",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/databases/{id}/duplicate": {
+      "post": {
+        "tags": ["databases"],
+        "summary": "Copy a database, with its tables, columns, views and rows, into a new one\nthe caller owns. Its sharing, forms, webhooks and history stay behind.",
+        "operationId": "duplicate_database",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/DuplicateDatabaseRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Database"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "",
             "content": {
               "application/json": {
                 "schema": {
@@ -15729,16 +16164,26 @@
           {
             "name": "sort_method",
             "in": "query",
-            "description": "Sort method. Options are viewed_at, created_at, updated_at,\nviewed_updated, frecency, touched_by_me, notified_at. Defaults to\nviewed_at.",
+            "description": "Sort method. Property ordering supports DATE, NUMBER, BOOLEAN, SELECT and TAG.\nMissing definitions, unsupported types, and mismatched values sort as missing.\nFlat property sorts omit calendar events, email, channels, calls, companies, and agent sessions.\nDefaults to viewed_at.",
             "required": false,
             "schema": {
               "$ref": "#/components/schemas/SoupApiSort"
             }
           },
           {
+            "name": "sort_property_definition_id",
+            "in": "query",
+            "description": "Property definition selected for numeric property sorting.",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
             "name": "sort_direction",
             "in": "query",
-            "description": "Sort direction. Options are asc, desc. Defaults to desc.\n\nRe-send this with every page: it is not carried in the cursor.\n\nApplies to the timestamp sort methods only. `asc` combined with\n`frecency` is rejected rather than ignored: frecency pages are ordered\nby relevance score and the cursor comparison assumes descending, so\nthere is no ascending frecency order to give.",
+            "description": "Sort direction. Options are asc, desc. Defaults to desc.\n\nTimestamp sorts require this parameter again on each page. Property\ncursors preserve their direction and always put missing values last.\nAscending frecency, touched-by-me, and notified-at sorts are unsupported.",
             "required": false,
             "schema": {
               "$ref": "#/components/schemas/SoupApiSortDirection"
@@ -19629,6 +20074,11 @@
   },
   "components": {
     "schemas": {
+      "AccentColor": {
+        "type": "string",
+        "description": "A color as `#rrggbb`, kept in lowercase.",
+        "pattern": "^#[0-9a-fA-F]{6}$"
+      },
       "AccessLevel": {
         "type": "string",
         "description": "Ordered from least to most access top -> bottom",
@@ -20102,6 +20552,11 @@
         "type": "string",
         "description": "Last synchronized state of a session's linked GitHub pull request.",
         "enum": ["open", "draft", "closed", "merged"]
+      },
+      "AgentSessionArchiveCause": {
+        "type": "string",
+        "description": "Who or what archived an agent session.",
+        "enum": ["user", "pull_request_merged", "runtime_closed"]
       },
       "AgentSessionFilters": {
         "type": "object",
@@ -21091,7 +21546,7 @@
               },
               {
                 "$ref": "#/components/schemas/CrmAssociation",
-                "description": "Restrict every entity type to items associated with this CRM record\n(wire key `crma`): its Companies or Contacts property names the\nrecord, or it references the record. A company also matches through\nits contacts. Unknown or inaccessible records answer 404; requests\nthat are not expanded or not timestamp-sorted answer 400."
+                "description": "Restrict every entity type to items associated with this CRM record\n(wire key `crma`): its Companies or Contacts property names the\nrecord, or it references the record. A company also matches through\nits contacts. Unknown or inaccessible records answer 404; requests\nrequire expanded queries sorted by a timestamp or selected numeric property."
               }
             ]
           },
@@ -21169,6 +21624,17 @@
                 "description": "Group by a property value (e.g., status, priority, or custom properties)",
                 "required": ["property_definition_id"],
                 "properties": {
+                  "bucketing": {
+                    "oneOf": [
+                      {
+                        "type": "null"
+                      },
+                      {
+                        "$ref": "#/components/schemas/PropertyBucketing",
+                        "description": "Caller-defined date partition; non-DATE values enter the missing bucket."
+                      }
+                    ]
+                  },
                   "entity_type": {
                     "oneOf": [
                       {
@@ -21244,6 +21710,10 @@
         "type": "string",
         "description": "Entity type for property lookups (API representation).",
         "enum": [
+          "CALL_RECORD",
+          "CALENDAR_EVENT",
+          "DATABASE_ROW",
+          "INITIATIVE",
           "CHANNEL",
           "CHAT",
           "COMPANY",
@@ -21464,8 +21934,12 @@
       "AwarenessRelay": {
         "type": "object",
         "description": "The [`AWARENESS_MESSAGE_TYPE`] payload: one viewer's awareness, stamped\nwhen the server relayed it so receivers can drop older relays.",
-        "required": ["databaseId", "userId", "state", "relayedAt"],
+        "required": ["databaseId", "userId", "canEdit", "state", "relayedAt"],
         "properties": {
+          "canEdit": {
+            "type": "boolean",
+            "description": "Whether the viewer's grant lets them edit; a viewer who cannot is\nshown as viewing."
+          },
           "databaseId": {
             "type": "string",
             "format": "uuid",
@@ -23644,10 +24118,15 @@
         ],
         "description": "An attribute rule that automatically groups matching channels."
       },
+      "ChannelLabelScopeSelection": {
+        "type": "string",
+        "description": "Requested label namespace. Omission retains the deployed automatic selection.",
+        "enum": ["personal", "team"]
+      },
       "ChannelLabelsList": {
         "type": "object",
         "description": "The authorized scope's labels in manual order.",
-        "required": ["labels"],
+        "required": ["scope", "labels"],
         "properties": {
           "labels": {
             "type": "array",
@@ -23655,6 +24134,10 @@
               "$ref": "#/components/schemas/ChannelLabel"
             },
             "description": "Every label of the scope, whether or not the caller sees channels in it."
+          },
+          "scope": {
+            "$ref": "#/components/schemas/ChannelLabelScopeSelection",
+            "description": "Resolved label namespace."
           },
           "teamId": {
             "type": ["string", "null"],
@@ -25714,11 +26197,11 @@
       "CreateCrmCompanyRequest": {
         "type": "object",
         "description": "Request body for `POST /crm/companies`.",
-        "required": ["name", "domain"],
+        "required": ["name"],
         "properties": {
           "domain": {
-            "type": "string",
-            "description": "The company's email domain, e.g. \"acme.com\". Must be a bare\ndomain (no scheme, path, or email) and not a generic email\nprovider domain."
+            "type": ["string", "null"],
+            "description": "Optional company domain, e.g. \"acme.com\". Omit for a name-only\ncompany. When supplied, must be a bare\ndomain (no scheme, path, or email) and not a generic email\nprovider domain."
           },
           "name": {
             "type": "string",
@@ -25729,11 +26212,26 @@
       "CreateCrmContactRequest": {
         "type": "object",
         "description": "Request body for `POST /crm/companies/{company_id}/contacts`.",
-        "required": ["name", "email"],
+        "required": ["name"],
         "properties": {
           "email": {
+            "type": ["string", "null"],
+            "description": "The contact's email address, including personal email providers.\nIt need not match a company domain. Optional: omit it to add the\ncontact by name only."
+          },
+          "name": {
             "type": "string",
-            "description": "The contact's email address, e.g. \"jane@acme.com\". Its domain\nmust be one of the company's domains (400 otherwise)."
+            "description": "Display name for the contact."
+          }
+        }
+      },
+      "CreateCrmTeamContactRequest": {
+        "type": "object",
+        "description": "Request body for `POST /crm/contacts`.",
+        "required": ["name"],
+        "properties": {
+          "email": {
+            "type": ["string", "null"],
+            "description": "The contact's email address, of any domain. Optional: omit it to\nadd the contact by name only."
           },
           "name": {
             "type": "string",
@@ -26614,6 +27112,22 @@
         ],
         "description": "The CRM record an association filter names."
       },
+      "CrmBlockedDomainResponse": {
+        "type": "object",
+        "description": "A domain the team keeps out of email sync.",
+        "required": ["domain", "created_at"],
+        "properties": {
+          "created_at": {
+            "type": "string",
+            "format": "date-time",
+            "description": "When it was added."
+          },
+          "domain": {
+            "type": "string",
+            "description": "The blocked domain, lowercase."
+          }
+        }
+      },
       "CrmCompanyFilters": {
         "type": "object",
         "description": "The crm company filters used to narrow which CRM companies appear in soup.",
@@ -26702,8 +27216,6 @@
         "description": "A CRM contact as returned by `GET /crm/companies/{company_id}/contacts`.",
         "required": [
           "id",
-          "companyId",
-          "email",
           "hidden",
           "firstInteraction",
           "lastInteraction",
@@ -26712,9 +27224,9 @@
         ],
         "properties": {
           "companyId": {
-            "type": "string",
+            "type": ["string", "null"],
             "format": "uuid",
-            "description": "The id of the company the contact belongs to."
+            "description": "The id of the company the contact belongs to; absent for a\ncontact without a company."
           },
           "createdAt": {
             "type": "string",
@@ -26722,8 +27234,8 @@
             "description": "When the contact record was created."
           },
           "email": {
-            "type": "string",
-            "description": "The contact's email address."
+            "type": ["string", "null"],
+            "description": "The contact's email address; absent for contacts added by name\nalone."
           },
           "firstInteraction": {
             "type": "string",
@@ -26845,7 +27357,8 @@
           "move_closed_deals_role",
           "delete_records_role",
           "legacy_stage_ids",
-          "team_views"
+          "team_views",
+          "exclude_personal_emails"
         ],
         "properties": {
           "closed_stage_ids": {
@@ -26867,6 +27380,10 @@
           "edit_stages_role": {
             "$ref": "#/components/schemas/CrmPermissionRole",
             "description": "Who can change the deal stage set in CRM settings."
+          },
+          "exclude_personal_emails": {
+            "type": "boolean",
+            "description": "Whether email sync keeps personal-provider addresses (gmail.com\netc.) out of the CRM."
           },
           "legacy_stage_ids": {
             "type": "object",
@@ -26923,7 +27440,14 @@
       "Database": {
         "type": "object",
         "description": "A database: a named collection of tables, owned and shared as one entity.",
-        "required": ["id", "name", "owner_id", "created_at", "trashed_at"],
+        "required": [
+          "id",
+          "name",
+          "owner_id",
+          "created_at",
+          "trashed_at",
+          "project_id"
+        ],
         "properties": {
           "created_at": {
             "type": "string",
@@ -26942,6 +27466,10 @@
           "owner_id": {
             "type": "string",
             "description": "Owning user."
+          },
+          "project_id": {
+            "type": ["string", "null"],
+            "description": "The folder it is filed in; `null` at the root."
           },
           "trashed_at": {
             "type": ["string", "null"],
@@ -28513,6 +29041,16 @@
           "share_permission_updated": {
             "type": "boolean",
             "description": "Whether share permissions were updated."
+          }
+        }
+      },
+      "DuplicateDatabaseRequest": {
+        "type": "object",
+        "description": "Request body for duplicating a database.",
+        "properties": {
+          "name": {
+            "type": ["string", "null"],
+            "description": "The copy's name; left out, \"<name> copy\"."
           }
         }
       },
@@ -31632,17 +32170,29 @@
           "respondentColumnId",
           "audience",
           "tallyVisible",
+          "responsesVisible",
+          "anonymous",
           "status",
           "closesAt",
           "confirmationMessage",
+          "branding",
           "createdAt",
           "updatedAt",
+          "projectId",
           "isHiddenInDrive"
         ],
         "properties": {
+          "anonymous": {
+            "type": "boolean",
+            "description": "Whether nobody, the owner included, can see who gave which response.\nWho responded is kept apart from the responses, only so nobody\nresponds twice. Fixed once anyone has responded."
+          },
           "audience": {
             "$ref": "#/components/schemas/Audience",
             "description": "Who may respond."
+          },
+          "branding": {
+            "$ref": "#/components/schemas/FormBranding",
+            "description": "Its logo, cover image and accent color."
           },
           "closesAt": {
             "type": ["string", "null"],
@@ -31684,10 +32234,18 @@
             "type": "string",
             "description": "Its owner."
           },
+          "projectId": {
+            "type": ["string", "null"],
+            "description": "The folder it is filed in; `null` at the root."
+          },
           "respondentColumnId": {
             "type": ["string", "null"],
             "format": "uuid",
-            "description": "The person column each signed-in submission names its respondent in;\n`null` once deleted."
+            "description": "The person column each signed-in submission names its respondent in;\n`null` once deleted, and on a form created anonymous. An anonymous\nform never writes it."
+          },
+          "responsesVisible": {
+            "type": "boolean",
+            "description": "Whether people with View may read individual response rows."
           },
           "status": {
             "$ref": "#/components/schemas/FormStatus",
@@ -31716,8 +32274,36 @@
       },
       "FormAccess": {
         "type": "string",
-        "description": "The caller's level on a form: view responds, edit changes questions and\nreads responses, owner also sets the audience, closes and trashes it.",
+        "description": "The caller's level on a form: view responds (and reads responses when\nthey are shared), edit changes questions and reads responses, owner\nalso sets the audience, closes and trashes it.",
         "enum": ["view", "edit", "owner"]
+      },
+      "FormBranding": {
+        "type": "object",
+        "description": "A form's logo, cover image and accent color, each unset by default.",
+        "required": ["logoFileId", "coverFileId", "accentColor"],
+        "properties": {
+          "accentColor": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/AccentColor",
+                "description": "The color of the page's buttons and selected answers."
+              }
+            ]
+          },
+          "coverFileId": {
+            "type": ["string", "null"],
+            "format": "uuid",
+            "description": "The static file shown as a banner across the top of the page."
+          },
+          "logoFileId": {
+            "type": ["string", "null"],
+            "format": "uuid",
+            "description": "The static file shown as the logo above the title."
+          }
+        }
       },
       "FormCollaboration": {
         "type": "object",
@@ -31773,6 +32359,7 @@
           "tableGone",
           "alreadyResponded",
           "noResponse",
+          "anonymousResponseFinal",
           "unknownQuestion",
           "repeatedAnswer",
           "missingAnswer",
@@ -31783,6 +32370,7 @@
           "invalidName",
           "invalidSharing",
           "tallyHidden",
+          "invalidBranding",
           "conflict",
           "internal"
         ]
@@ -32223,6 +32811,10 @@
             "description": "A new database named like the form, whose one table, \"Responses\",\nstarts with only the form's own columns.",
             "required": ["kind"],
             "properties": {
+              "anonymous": {
+                "type": "boolean",
+                "description": "Make the form anonymous from the start: its table gets no\nRespondent column."
+              },
               "isHiddenInDrive": {
                 "type": "boolean",
                 "description": "Keep the form, and the database made for it, out of Drive, as\nfor a channel poll."
@@ -33357,6 +33949,17 @@
             "description": "Limit the number of items returned per group. Defaults to 20. Max 500.",
             "minimum": 0
           },
+          "sort_direction": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/SoupApiSortDirection",
+                "description": "Direction of property values. Defaults to descending."
+              }
+            ]
+          },
           "sort_method": {
             "oneOf": [
               {
@@ -33367,6 +33970,11 @@
                 "description": "Sort method. Defaults to viewed_updated."
               }
             ]
+          },
+          "sort_property_definition_id": {
+            "type": ["string", "null"],
+            "format": "uuid",
+            "description": "Property definition selected for numeric property sorting."
           }
         }
       },
@@ -33389,6 +33997,17 @@
             "description": "Limit the number of items returned. Defaults to 20. Max 500.",
             "minimum": 0
           },
+          "sort_direction": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/SoupApiSortDirection",
+                "description": "Direction of property values. Defaults to descending."
+              }
+            ]
+          },
           "sort_method": {
             "oneOf": [
               {
@@ -33399,6 +34018,11 @@
                 "description": "Sort method. Defaults to viewed_updated."
               }
             ]
+          },
+          "sort_property_definition_id": {
+            "type": ["string", "null"],
+            "format": "uuid",
+            "description": "Property definition selected for numeric property sorting."
           }
         }
       },
@@ -33418,8 +34042,7 @@
               "$ref": "#/components/schemas/SoupApiItem"
             },
             "propertyNames": {
-              "type": "string",
-              "format": "uuid"
+              "type": "string"
             }
           }
         }
@@ -33443,8 +34066,7 @@
               "$ref": "#/components/schemas/SoupApiItem"
             },
             "propertyNames": {
-              "type": "string",
-              "format": "uuid"
+              "type": "string"
             }
           }
         }
@@ -33495,7 +34117,13 @@
       "GroupedSoupSort": {
         "type": "string",
         "description": "Sort method for grouped queries (frecency not supported).",
-        "enum": ["viewed_at", "created_at", "updated_at", "viewed_updated"]
+        "enum": [
+          "viewed_at",
+          "created_at",
+          "updated_at",
+          "viewed_updated",
+          "property"
+        ]
       },
       "GuestChatMessage": {
         "type": "object",
@@ -36120,26 +36748,46 @@
         "description": "Lifecycle events for the common message service, one per committed fact.\nReactions and typing never reach the topic."
       },
       "MyResponse": {
-        "type": "object",
-        "description": "A signed-in respondent's own response, with its answers as the row\nholds them now.",
-        "required": ["response", "answers"],
-        "properties": {
-          "answers": {
-            "type": "array",
-            "items": {
-              "$ref": "#/components/schemas/Answer"
-            },
-            "description": "The row's cells for the form's current questions, the empty ones\nleft out; none when the row is gone."
+        "oneOf": [
+          {
+            "type": "object",
+            "description": "Their ledger entry, with its answers as the row holds them now.",
+            "required": ["response", "answers", "kind"],
+            "properties": {
+              "answers": {
+                "type": "array",
+                "items": {
+                  "$ref": "#/components/schemas/Answer"
+                },
+                "description": "The row's cells for the form's current questions, the empty ones\nleft out; none when the row is gone."
+              },
+              "booking": {
+                "$ref": "#/components/schemas/UnlockedBooking",
+                "description": "The form's booking step, while the saved row still passes the\nform's current required questions and gates."
+              },
+              "kind": {
+                "type": "string",
+                "enum": ["saved"]
+              },
+              "response": {
+                "$ref": "#/components/schemas/FormResponse",
+                "description": "The ledger entry."
+              }
+            }
           },
-          "booking": {
-            "$ref": "#/components/schemas/UnlockedBooking",
-            "description": "The form's booking step, while the saved row still passes the form's\ncurrent required questions and gates."
-          },
-          "response": {
-            "$ref": "#/components/schemas/FormResponse",
-            "description": "The ledger entry."
+          {
+            "type": "object",
+            "description": "They responded to an anonymous form. Nothing links them to their\nresponse, so there is nothing more to show.",
+            "required": ["kind"],
+            "properties": {
+              "kind": {
+                "type": "string",
+                "enum": ["anonymous"]
+              }
+            }
           }
-        }
+        ],
+        "description": "A signed-in respondent's own response."
       },
       "NewAttachment": {
         "type": "object",
@@ -36737,7 +37385,7 @@
               },
               {
                 "$ref": "#/components/schemas/SoupApiSortDirection",
-                "description": "Sort direction. Options are asc, desc. Defaults to desc.\n\nRe-send this with every page: it is not carried in the cursor.\n\nApplies to the timestamp sort methods only. `asc` combined with\n`frecency` is rejected rather than ignored: frecency pages are ordered\nby relevance score and the cursor comparison assumes descending, so\nthere is no ascending frecency order to give."
+                "description": "Sort direction. Options are asc, desc. Defaults to desc.\n\nTimestamp sorts require this parameter again on each page. Property\ncursors preserve their direction and always put missing values last.\nAscending frecency, touched-by-me, and notified-at sorts are unsupported."
               }
             ]
           },
@@ -36748,9 +37396,14 @@
               },
               {
                 "$ref": "#/components/schemas/SoupApiSort",
-                "description": "Sort method. Options are viewed_at, created_at, updated_at,\nviewed_updated, frecency, touched_by_me, notified_at. Defaults to\nviewed_at."
+                "description": "Sort method. Property ordering supports DATE, NUMBER, BOOLEAN, SELECT and TAG.\nMissing definitions, unsupported types, and mismatched values sort as missing.\nFlat property sorts omit calendar events, email, channels, calls, companies, and agent sessions.\nDefaults to viewed_at."
               }
             ]
+          },
+          "sort_property_definition_id": {
+            "type": ["string", "null"],
+            "format": "uuid",
+            "description": "Property definition selected for numeric property sorting."
           }
         }
       },
@@ -37787,6 +38440,85 @@
           }
         }
       },
+      "PropertyBucketing": {
+        "oneOf": [
+          {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/PropertyDateRanges",
+                "description": "Caller-defined, ordered UTC date ranges and a separate missing-value key."
+              },
+              {
+                "type": "object",
+                "required": ["type"],
+                "properties": {
+                  "type": {
+                    "type": "string",
+                    "enum": ["date_ranges"]
+                  }
+                }
+              }
+            ],
+            "description": "Caller-defined, ordered UTC date ranges and a separate missing-value key."
+          }
+        ],
+        "description": "Optional transformation of a selected property's stored value into group keys."
+      },
+      "PropertyDateFilterRange": {
+        "type": "object",
+        "description": "UTC timestamp interval. Lower bounds are inclusive; upper bounds are exclusive.",
+        "properties": {
+          "end": {
+            "type": ["string", "null"],
+            "format": "date-time",
+            "description": "Exclusive UTC upper bound, omitted for an open end."
+          },
+          "start": {
+            "type": ["string", "null"],
+            "format": "date-time",
+            "description": "Inclusive UTC lower bound, omitted for an open start."
+          }
+        }
+      },
+      "PropertyDateRange": {
+        "type": "object",
+        "description": "A half-open UTC interval. An absent start or end extends to infinity.",
+        "required": ["key"],
+        "properties": {
+          "end": {
+            "type": ["string", "null"],
+            "format": "date-time",
+            "description": "Exclusive end, or positive infinity."
+          },
+          "key": {
+            "type": "string",
+            "description": "Unique caller-supplied group key."
+          },
+          "start": {
+            "type": ["string", "null"],
+            "format": "date-time",
+            "description": "Inclusive start, or negative infinity."
+          }
+        }
+      },
+      "PropertyDateRanges": {
+        "type": "object",
+        "description": "A complete partition of present dates plus one bucket for absent values.",
+        "required": ["ranges", "missing_value_bucket_key"],
+        "properties": {
+          "missing_value_bucket_key": {
+            "type": "string",
+            "description": "Caller-supplied group key for entities with no date value."
+          },
+          "ranges": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/PropertyDateRange"
+            },
+            "description": "Ordered, contiguous ranges covering every present date."
+          }
+        }
+      },
       "PropertyDefinition": {
         "type": "object",
         "description": "Property definition model (service representation).",
@@ -37868,6 +38600,17 @@
         "description": "A single property-based filter condition.\n\nEach filter targets a specific property definition on entities of a given type,\nmatching against select option UUIDs or entity reference IDs.\nMultiple values within a single filter are OR'd together.\nMultiple filters are AND'd together.",
         "required": ["property_definition_id"],
         "properties": {
+          "date_range": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/PropertyDateFilterRange",
+                "description": "UTC range for Soup/search: inclusive start, exclusive end; both open matches any date."
+              }
+            ]
+          },
           "entity_ids": {
             "type": "array",
             "items": {
@@ -37878,6 +38621,10 @@
           "entity_type": {
             "type": ["string", "null"],
             "description": "The entity type for the property lookup (e.g., \"TASK\", \"DOCUMENT\", \"PROJECT\").\nWhen None, matches across all entity types."
+          },
+          "has_date": {
+            "type": ["boolean", "null"],
+            "description": "Flat Soup/search presence filter: true expands to an open date range, false to its negation."
           },
           "option_ids": {
             "type": "array",
@@ -39967,7 +40714,6 @@
             "required": [
               "id",
               "name",
-              "isArchived",
               "ownerId",
               "botId",
               "harness",
@@ -39976,6 +40722,22 @@
               "updatedAt"
             ],
             "properties": {
+              "archivedAt": {
+                "type": ["string", "null"],
+                "format": "date-time",
+                "description": "When the session was archived, or `None` while it is active."
+              },
+              "archivedBy": {
+                "oneOf": [
+                  {
+                    "type": "null"
+                  },
+                  {
+                    "$ref": "#/components/schemas/AgentSessionArchiveCause",
+                    "description": "Who or what archived the session, or `None` while it is active. An archived session is\nread-only."
+                  }
+                ]
+              },
               "botId": {
                 "type": "string",
                 "format": "uuid",
@@ -39994,10 +40756,6 @@
                 "type": "string",
                 "format": "uuid",
                 "description": "The agent session uuid"
-              },
-              "isArchived": {
-                "type": "boolean",
-                "description": "Whether the session is archived and read-only."
               },
               "name": {
                 "type": "string",
@@ -40117,7 +40875,8 @@
           "viewed_updated",
           "frecency",
           "touched_by_me",
-          "notified_at"
+          "notified_at",
+          "property"
         ]
       },
       "SoupApiSortDirection": {
@@ -40810,9 +41569,6 @@
             "required": [
               "id",
               "teamId",
-              "companyId",
-              "companyName",
-              "email",
               "hidden",
               "firstInteraction",
               "lastInteraction",
@@ -40821,13 +41577,13 @@
             ],
             "properties": {
               "companyId": {
-                "type": "string",
+                "type": ["string", "null"],
                 "format": "uuid",
-                "description": "Parent company ID."
+                "description": "Parent company ID; `None` for a contact without a company."
               },
               "companyName": {
-                "type": "string",
-                "description": "Parent company's display name."
+                "type": ["string", "null"],
+                "description": "Parent company's display name; `None` without a company."
               },
               "createdAt": {
                 "type": "string",
@@ -40835,8 +41591,8 @@
                 "description": "Record creation time."
               },
               "email": {
-                "type": "string",
-                "description": "Full email address."
+                "type": ["string", "null"],
+                "description": "Full email address; `None` for a contact added by name alone."
               },
               "firstInteraction": {
                 "type": "string",
@@ -43179,6 +43935,13 @@
           "value": {
             "$ref": "#/components/schemas/TallyValue",
             "description": "The value."
+          },
+          "voters": {
+            "type": ["array", "null"],
+            "items": {
+              "type": "string"
+            },
+            "description": "Who chose it, as Macro user ids in submission order: present only\nfor the form's editors, or its viewers when it shares its responses,\nand never when it hides respondents. Rows no signed-in respondent\nsubmitted count without a voter."
           }
         }
       },
@@ -44318,6 +45081,10 @@
               }
             ]
           },
+          "exclude_personal_emails": {
+            "type": ["boolean", "null"],
+            "description": "Whether email sync keeps personal-provider addresses out of the\nCRM. Admin/owner only."
+          },
           "move_closed_deals_role": {
             "oneOf": [
               {
@@ -44336,8 +45103,17 @@
       },
       "UpdateForm": {
         "type": "object",
-        "description": "A change to a form's facts; what is left out stays. The description and\nconfirmation message take edit, the rest owner. A form is renamed\nthrough the entity mutation router.",
+        "description": "A change to a form's facts; what is left out stays. The description,\nconfirmation message and branding take edit, the rest owner. A form is renamed\nthrough the entity mutation router.",
         "properties": {
+          "accentColor": {
+            "type": ["string", "null"],
+            "description": "A new accent color, or `null` for the default.",
+            "pattern": "^#[0-9a-fA-F]{6}$"
+          },
+          "anonymous": {
+            "type": "boolean",
+            "description": "Whether nobody can see who gave which response; refused once anyone\nhas responded."
+          },
           "audience": {
             "$ref": "#/components/schemas/Audience",
             "description": "Who may respond from now on."
@@ -44351,9 +45127,23 @@
             "type": "string",
             "description": "Its new confirmation message."
           },
+          "coverFileId": {
+            "type": ["string", "null"],
+            "format": "uuid",
+            "description": "A new cover image, or `null` to remove it."
+          },
           "description": {
             "type": "string",
             "description": "Its new description."
+          },
+          "logoFileId": {
+            "type": ["string", "null"],
+            "format": "uuid",
+            "description": "A new logo, or `null` to remove it."
+          },
+          "responsesVisible": {
+            "type": "boolean",
+            "description": "Whether people with View may read individual response rows."
           },
           "status": {
             "$ref": "#/components/schemas/FormStatus",

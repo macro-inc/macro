@@ -71,10 +71,9 @@ until the backend is complete.
   if yours does, widen the constraint in a migration.
 - Regenerate every client that embeds `EntityType` (storage, cognition,
   connection, notification, properties, search): `cd apps/web && bun run gen-api`,
-  then `cd packages/sdk && just update-generated`. Run
-  `cd apps/web && bun run gen-dynamic-ui-schema` too; it regenerates
-  `crates/ai_tools/src/display_results/schema.generated.json`, which embeds
-  `EntityType`.
+  then `cd packages/sdk && just update-generated`. If views should show the
+  kind, add it to `EntityType` in `crates/dynamic_ui/src/view.rs` and run
+  `cd apps/web && just gen-dynamic-ui-types`.
 
 ## 2. Schema and migrations
 
@@ -392,8 +391,9 @@ the skill doesn't cover:
   `handler.tsx`, and wording in `apps/web/src/features/block-agent/state/tool-approval-wording.ts`.
 - Regenerate: `cd apps/web && bun run gen-tools` and
   `cd apps/docs && bun run generate:tools` (never hand-edit the MCP tool pages).
-- Gemini rejects recursive schemas and drops records (`additionalProperties`).
-  Use key/value pair lists, and keep recursive input types out of tool schemas.
+- Gemini drops records (`additionalProperties`): use key/value pair lists. It
+  rejects a `$ref` loop of required fields, and so does schema generation:
+  recurse through an optional field or a list that may be empty.
 
 ## 14. SDK
 

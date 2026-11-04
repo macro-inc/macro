@@ -99,6 +99,7 @@ fn tokens_not_issued_by_fusionauth_for_this_application_are_rejected() {
         private_key: tests::PRIVATE_KEY.into(),
         expiry_seconds: 60,
         agent_id: None,
+        agent_via: None,
     })
     .unwrap();
 

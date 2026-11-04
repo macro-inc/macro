@@ -33,7 +33,8 @@ composer's Auto mode.
 - Used by: `scheduled_action` (trigger conditions),
   `document_cognition_service` (the `/decisions` endpoint), `agent_harness`
   (Auto mode choice, Clef Flash), `agent_session` (whether to retitle a
-  session after a turn, TypeSafe).
+  session after a turn, TypeSafe), `agent_trigger` (routing unmentioned
+  thread replies to agent sessions).
 
 ## Checks
 

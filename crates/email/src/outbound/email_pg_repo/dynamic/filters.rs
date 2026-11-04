@@ -435,8 +435,13 @@ fn build_address_message_predicate(
     })
 }
 
-/// Exclude physical trash and confirmed absent messages across all providers.
-fn build_trash_check(_resolved: &ResolvedFilters) -> SqlFragment {
+/// Exclude absent messages, and trash outside its explicit folder.
+fn build_trash_check(resolved: &ResolvedFilters) -> SqlFragment {
+    if resolved.include_trash {
+        return SqlFragment::raw(
+            "EXISTS (SELECT 1 FROM email_message_mailbox_facts mf WHERE mf.id = m.id AND mf.is_present)",
+        );
+    }
     SqlFragment::raw(
         "EXISTS (SELECT 1 FROM email_message_mailbox_facts mf WHERE mf.id = m.id AND mf.is_present AND NOT mf.in_trash)",
     )
@@ -887,6 +892,7 @@ fn build_thread_property_predicate(lit: &PropertiesLiteral, thread_alias: &str) 
     ));
     f.extend(SqlFragment::bind_uuid(lit.property_definition_id));
     match &lit.value {
+        PropertyMatchValue::DateRange(_) => return SqlFragment::raw("FALSE"),
         PropertyMatchValue::SelectOption(option_id) => {
             f.push_raw(" AND ep_prop.values->'value' ? ");
             f.extend(SqlFragment::bind_string(option_id.to_string()));
@@ -923,6 +929,8 @@ pub(super) fn build_view_thread_filter(view: &PreviewView) -> SqlFragment {
         PreviewView::StandardLabel(PreviewViewStandardLabel::Drafts)
         | PreviewView::StandardLabel(PreviewViewStandardLabel::Starred)
         | PreviewView::StandardLabel(PreviewViewStandardLabel::All)
+        | PreviewView::StandardLabel(PreviewViewStandardLabel::Spam)
+        | PreviewView::StandardLabel(PreviewViewStandardLabel::Trash)
         | PreviewView::StandardLabel(PreviewViewStandardLabel::Important)
         | PreviewView::UserLabel(_) => SqlFragment::empty(),
         PreviewView::StandardLabel(PreviewViewStandardLabel::Other) => {
@@ -937,6 +945,12 @@ pub(super) fn build_view_message_filter(view: &PreviewView) -> SqlFragment {
         PreviewView::StandardLabel(PreviewViewStandardLabel::Inbox) => SqlFragment::empty(),
         PreviewView::StandardLabel(PreviewViewStandardLabel::All) => SqlFragment::raw(
             " AND EXISTS (SELECT 1 FROM email_message_mailbox_facts mf WHERE mf.id = m.id AND NOT mf.in_junk)",
+        ),
+        PreviewView::StandardLabel(PreviewViewStandardLabel::Spam) => SqlFragment::raw(
+            " AND EXISTS (SELECT 1 FROM email_message_mailbox_facts mf WHERE mf.id = m.id AND mf.in_junk)",
+        ),
+        PreviewView::StandardLabel(PreviewViewStandardLabel::Trash) => SqlFragment::raw(
+            " AND EXISTS (SELECT 1 FROM email_message_mailbox_facts mf WHERE mf.id = m.id AND mf.in_trash)",
         ),
         PreviewView::StandardLabel(PreviewViewStandardLabel::Sent) => {
             SqlFragment::raw(" AND m.is_sent = TRUE")
@@ -981,6 +995,9 @@ pub(super) fn build_view_message_filter(view: &PreviewView) -> SqlFragment {
 /// Returns the appropriate timestamp field to use for sorting based on the view
 pub(super) fn get_sort_timestamp_field(view: &PreviewView) -> &'static str {
     match view {
+        PreviewView::StandardLabel(
+            PreviewViewStandardLabel::Spam | PreviewViewStandardLabel::Trash,
+        ) => "folder.latest_folder_message_ts",
         PreviewView::StandardLabel(PreviewViewStandardLabel::Sent) => {
             "t.latest_outbound_message_ts"
         }

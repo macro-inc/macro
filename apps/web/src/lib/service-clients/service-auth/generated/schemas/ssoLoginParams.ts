@@ -30,4 +30,8 @@ export type SsoLoginParams = {
    * **OPTIONAL**. If the user opened a link with a referral code.
    */
   referral_code: string;
+  /**
+   * **OPTIONAL**. If the sign-in started on the agent signup page. A new account becomes an agent.
+   */
+  is_agent: boolean;
 };

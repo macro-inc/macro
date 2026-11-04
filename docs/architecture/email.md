@@ -59,7 +59,9 @@ may import a block package, `@core/block`, or block-related signal modules.
   supplied contexts. It imports no production entry point for a nested
   message or composer.
 - `email-compose/email-compose.tsx` supplies the production compose context and split-host
-  callbacks to `views/email-compose.tsx`. Inline replies use
+  callbacks to `views/email-compose.tsx`. Desktop mounts it in the Email view's
+  `mail-compose` route (`email-view/components/EmailComposeRouteView.tsx`);
+  touch keeps the `email-compose` component split. Inline replies use
   `views/reply-input.tsx` with explicit capabilities and a reply session.
   `email-thread/views/thread-reply-input.tsx` owns the keyed reply lifetime;
   `email-compose/primitives/reply-composer.ts` owns the compose workflow.
@@ -97,7 +99,7 @@ test exercises this ordering.
 | `EmailThreadContext` | Thread source, viewer and device state, recipients, and the command factory used by thread state and navigation |
 | `EmailThreadViewContext` | Thread and compose contexts, plus view callbacks and optional compose host behavior |
 | `EmailThreadHost` | Optional location target, focus, activation status, and keyboard registration |
-| `EmailRenderingContextValue` | Theme values, explicit image policy, link preparation, and image resolution with an abortable resource lifetime |
+| `EmailRenderingContextValue` | Theme values, explicit image policy, Macro read-receipt pixel prefixes (hidden unless the thread lets a copy count an open), link preparation, and image resolution with an abortable resource lifetime |
 | `EmailFormContextInputs` | Viewer address and available inbox identities for recipient selection |
 | `EmailReplySession` | Thread identity, recipient options, personal-reply classification, a targeted reply request, and host intents for leaving the composer or removing its draft |
 | `EmailDraftStorage` | Save/delete and restore an undone draft, and drop a moved draft's working copy; inputs use domain inbox IDs and completion intent |
