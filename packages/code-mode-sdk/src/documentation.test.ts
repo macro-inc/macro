@@ -2,10 +2,8 @@ import { readFile } from 'node:fs/promises';
 import { describe, expect, it } from 'vitest';
 import { packageEntityDocs, type SdkDocs } from '../scripts/typedoc';
 
-const artifact = new URL(
-  '../../../crates/agent_code_mode/src/domain/documentation.json',
-  import.meta.url
-);
+// Written by `bun run generate`, which `bun run test` runs first.
+const artifact = new URL('../dist/documentation.json', import.meta.url);
 
 const NAMESPACE = `# Class: ExampleNamespace
 

@@ -317,6 +317,7 @@ dependencies = [
  "calendar_events",
  "chrono",
  "code_execution",
+ "code_mode_assets",
  "cognition",
  "dynamic_ui",
  "email",
@@ -4524,6 +4525,7 @@ name = "code_execution"
 version = "0.1.0"
 dependencies = [
  "async-trait",
+ "code_mode_assets",
  "futures",
  "rootcause",
  "serde",
@@ -4535,6 +4537,13 @@ dependencies = [
  "tracing",
  "url",
  "uuid",
+ "workspace-hack",
+]
+
+[[package]]
+name = "code_mode_assets"
+version = "0.1.0"
+dependencies = [
  "workspace-hack",
 ]
 

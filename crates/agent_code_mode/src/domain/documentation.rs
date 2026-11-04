@@ -30,7 +30,7 @@ struct Generated {
 }
 
 static GENERATED: LazyLock<Generated> = LazyLock::new(|| {
-    serde_json::from_str(include_str!("documentation.json"))
+    serde_json::from_str(code_mode_assets::DOCUMENTATION)
         .expect("generated SDK documentation is valid")
 });
 

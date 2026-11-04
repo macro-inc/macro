@@ -8,9 +8,8 @@ plain-English entity guide, and complete API reference, served by the SDK docs W
 - **`src/`**: a hand-written ergonomic SDK layer that provides an "orm"-y API.
 
 The [SDK reference build](../sdk-docs/README.md) uses TypeDoc to generate linked
-Markdown and HTML from these sources. The [generated Markdown](../sdk-docs/reference/README.md)
-is checked in alongside SDK changes; the HTML can be served with the included
-static docs Worker.
+Markdown and HTML from these sources at build time; the HTML is served with the
+included static docs Worker.
 
 ## Usage
 
