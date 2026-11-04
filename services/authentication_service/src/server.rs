@@ -274,9 +274,10 @@ pub async fn run() -> anyhow::Result<()> {
         ) as Arc<dyn MicrosoftAuth>
     });
 
-    let static_file_service_client = Arc::new(StaticFileServiceClient::new(
+    let static_file_service_client = Arc::new(StaticFileServiceClient::with_timeout(
         config.service_internal_auth_key.to_string(),
         StaticFileServiceUrl::new()?.to_string(),
+        std::time::Duration::from_secs(10),
     ));
     let static_file_public_url = StaticFilePublicUrl::new()?.to_string();
     let document_storage_service_client = DocumentStorageServiceClient::new(

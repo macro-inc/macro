@@ -82,7 +82,8 @@ export class MeNamespace {
       const [firstName, ...rest] = name.split(/\s+/);
       unwrap(
         await this.client.auth.putUserName({
-          query: { first_name: firstName, last_name: rest.join(' ') || null },
+          // An empty last name clears the old one; null would keep it.
+          query: { first_name: firstName, last_name: rest.join(' ') },
         }),
       );
     }

@@ -327,6 +327,11 @@ export {
   type InitiativeOptions,
 } from './entities/initiatives/initiative';
 export type { InitiativeSummary } from './entities/initiatives/namespace';
+export {
+  MeNamespace,
+  type UpdateMeOptions,
+  type UploadProfilePictureOptions,
+} from './entities/me/namespace';
 export { Meeting } from './entities/meetings/meeting';
 export type { TimelineOptions } from './entities/messages/thread';
 export { type MessageParent, MessageThread } from './entities/messages/thread';
