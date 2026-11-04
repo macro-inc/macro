@@ -79,7 +79,7 @@ fn requested_types<'a>(req: &AttentionCandidateRequest<'a>) -> Vec<&'static str>
 /// The `crm_companies` row aliased `alias` is visible to the viewer: its
 /// team has CRM enabled, the viewer belongs to that team, and the company is
 /// not hidden (hidden records are listed only on explicit admin requests).
-fn visible_crm_company(alias: &str) -> String {
+fn visible_crm_record(alias: &str) -> String {
     format!(
         r#"NOT {alias}.hidden
             AND EXISTS (
@@ -101,23 +101,25 @@ fn crm_company_gate() -> String {
                 WHERE c.id = {ID_SQL}::uuid
                 AND {visible}
             )"#,
-            visible = visible_crm_company("c"),
+            visible = visible_crm_record("c"),
         ),
     )
 }
 
+/// A contact belongs to its team directly, and its company is optional; a
+/// hidden company still hides the contacts it has.
 fn crm_contact_gate() -> String {
     uuid_guarded(
         ID_SQL,
         format!(
             r#"EXISTS (
                 SELECT 1 FROM crm_contacts ct
-                JOIN crm_companies c ON c.id = ct.company_id
+                LEFT JOIN crm_companies c ON c.id = ct.company_id
                 WHERE ct.id = {ID_SQL}::uuid
-                AND NOT ct.hidden
+                AND NOT COALESCE(c.hidden, FALSE)
                 AND {visible}
             )"#,
-            visible = visible_crm_company("c"),
+            visible = visible_crm_record("ct"),
         ),
     )
 }
