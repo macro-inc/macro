@@ -338,6 +338,19 @@ button that copies the whole section; a call that failed is faded, shows the
 error as its subtitle, and adds an `Error` section. Rows for a call still running
 show whatever has arrived so far.
 
+## Inline image actions
+
+An image attached to a channel message renders inline. Hovering it, or focusing
+it with the keyboard, reveals a small toolbar at its top right with
+`Copy image` and `Download image`, the same two actions the lightbox offers;
+it fades out when the pointer leaves and stays up while an action runs. Copy writes the full-resolution image to the
+clipboard (`Copied to clipboard`, or `Copied image URL to clipboard` when the
+browser refuses an image write) and Download saves it as
+`image-<attachment id>.<ext>` (`Downloaded image`). Clicking the image itself
+still opens the lightbox. Touch layouts do not get this toolbar: tap the image
+and use the lightbox toolbar instead. Videos have their own toolbar; see
+[Downloading channel videos](#downloading-channel-videos).
+
 ## Reading channel attachments through MCP
 
 When an agent reads a channel through Macro MCP, `ReadChannelMessages`,
@@ -547,8 +560,8 @@ email at all. A bot or agent reply posted for a person shares, as that person, t
 (chips or attachments) that the replying bot created for them while answering: those with a
 `created` activity row by that bot on the person's behalf since the person's latest message in
 the thread before the reply, or, for a bot message that starts its own thread (a poll card
-posted top-level), their latest message in the channel. Forms an agent creates through code
-mode (its SDK token) are attributed to its bot like native tool creations. Activity arrives asynchronously, so missing rows are re-checked
+posted top-level), their latest message in the channel. Forms and databases an agent creates
+through code mode (its SDK token) are attributed to its bot like native tool creations. Activity arrives asynchronously, so missing rows are re-checked
 after 5 and 30 seconds. Existing items it links, plain URLs, and bot posts with no person
 behind them share nothing. The bot never asks whether to share; it calls `ShareWithChannel` when asked to
 share an existing item. Private and confidential calendar events stay unshared, and a

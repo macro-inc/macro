@@ -1,5 +1,6 @@
 export * from './affine';
 export { resolveAppearance } from './appearance';
+export * from './artifact-commands';
 export type { GraphicsBackend } from './backend';
 export {
   fitImageCamera,
@@ -73,6 +74,7 @@ export {
   selectionContainsPoint,
   selectionFrame,
 } from './selection-frame';
+export * from './shapes/artifact';
 export {
   type ConnectorAnchor,
   type ConnectorBinding,
