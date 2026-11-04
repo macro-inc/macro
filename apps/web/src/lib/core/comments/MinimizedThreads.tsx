@@ -84,6 +84,7 @@ export function MinimizedThread(props: {
         <Layer depth={2}>
           <div
             ref={setBadge}
+            data-comment-badge
             class={cn(
               'transition-transform flex items-center group text-ink-extra-muted pointer-events-auto',
               props.isActive && '-translate-x-4'

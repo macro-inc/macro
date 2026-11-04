@@ -42,6 +42,24 @@ function renderContent(collapse: boolean) {
   ));
 }
 
+function renderCommentCard() {
+  return render(() => (
+    <>
+      <button type="button">Page</button>
+      <div data-comment-thread>
+        <CollapseLongContentProvider value={true}>
+          <MessageProvider value={() => message}>
+            <Content />
+          </MessageProvider>
+        </CollapseLongContentProvider>
+      </div>
+      <div data-comment-badge>
+        <button type="button">Badge</button>
+      </div>
+    </>
+  ));
+}
+
 describe('long message content', () => {
   beforeEach(() => {
     vi.stubGlobal(
@@ -72,6 +90,33 @@ describe('long message content', () => {
     const less = screen.getByRole('button', { name: 'Show less' });
     expect(less.getAttribute('aria-expanded')).toBe('true');
     fireEvent.click(less);
+    expect(preview()).not.toBeNull();
+    expect(screen.getByRole('button', { name: 'Show more' })).toBeTruthy();
+  });
+
+  it('returns an expanded comment to its preview when a press lands outside the card', () => {
+    setBodyHeight(800);
+    const view = renderCommentCard();
+    const preview = () => view.container.querySelector('[data-collapsed]');
+
+    fireEvent.click(screen.getByRole('button', { name: 'Show more' }));
+    expect(preview()).toBeNull();
+
+    fireEvent.pointerDown(screen.getByText('A very long comment'));
+    fireEvent.pointerDown(screen.getByRole('button', { name: 'Badge' }));
+    expect(preview()).toBeNull();
+
+    const menu = document.createElement('button');
+    menu.textContent = 'Delete menu';
+    document.body.appendChild(menu);
+    try {
+      fireEvent.pointerDown(menu);
+      expect(preview()).toBeNull();
+    } finally {
+      menu.remove();
+    }
+
+    fireEvent.pointerDown(screen.getByRole('button', { name: 'Page' }));
     expect(preview()).not.toBeNull();
     expect(screen.getByRole('button', { name: 'Show more' })).toBeTruthy();
   });

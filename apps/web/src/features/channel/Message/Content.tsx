@@ -30,6 +30,36 @@ const COLLAPSE_THRESHOLD = COLLAPSED_MAX_HEIGHT + 64;
 const FADE_HEIGHT = 32;
 const FADE_MASK = `linear-gradient(to bottom, black calc(100% - ${FADE_HEIGHT}px), transparent 100%)`;
 
+/** The element under `<body>` that holds `el`: the app, or the portal it renders in. */
+function appRootOf(el: Element): Element {
+  let root = el;
+  while (root.parentElement && root.parentElement !== el.ownerDocument.body) {
+    root = root.parentElement;
+  }
+  return root;
+}
+
+function pressTarget(target: EventTarget | null): Element | null {
+  if (target instanceof Element) return target;
+  if (target instanceof Node) return target.parentElement;
+  return null;
+}
+
+/**
+ * A press on the card, the badge that opens a minimized card, or a menu the
+ * card portaled outside the app is still part of reading the comment.
+ */
+function pressKeepsExpandedComment(
+  card: Element,
+  target: EventTarget | null
+): boolean {
+  const element = pressTarget(target);
+  if (!element) return true;
+  if (card.contains(element)) return true;
+  if (element.closest('[data-comment-badge]')) return true;
+  return !appRootOf(card).contains(element);
+}
+
 type ContentProps = {
   class?: string;
 };
@@ -88,6 +118,13 @@ function CollapsibleBody(props: { children: JSX.Element }) {
   const [expanded, setExpanded] = createSignal(false);
   const [overflowing, setOverflowing] = createSignal(false);
   let measureRef!: HTMLDivElement;
+  let bodyRef!: HTMLDivElement;
+
+  const showLess = () => {
+    // The preview starts at the top, wherever the expanded body was scrolled.
+    bodyRef.scrollTop = 0;
+    setExpanded(false);
+  };
 
   onMount(() => {
     // The unclamped inner box keeps its full height, so it reports growth
@@ -97,17 +134,26 @@ function CollapsibleBody(props: { children: JSX.Element }) {
     measure();
     const observer = new ResizeObserver(measure);
     observer.observe(measureRef);
-    onCleanup(() => observer.disconnect());
+    // The margin card stays mounted when a press leaves it, so the body has
+    // to fold itself. The same press closes an expanded minimized card.
+    const onPointerDown = (event: PointerEvent) => {
+      if (!expanded()) return;
+      const card = bodyRef.closest('[data-comment-thread]');
+      if (!card || pressKeepsExpandedComment(card, event.target)) return;
+      showLess();
+    };
+    document.addEventListener('pointerdown', onPointerDown, true);
+    onCleanup(() => {
+      observer.disconnect();
+      document.removeEventListener('pointerdown', onPointerDown, true);
+    });
   });
-
-  let bodyRef!: HTMLDivElement;
 
   const collapsed = () => overflowing() && !expanded();
 
   const toggleExpanded = () => {
-    // The preview starts at the top, wherever the expanded body was scrolled.
-    if (expanded()) bodyRef.scrollTop = 0;
-    setExpanded((prev) => !prev);
+    if (expanded()) showLess();
+    else setExpanded(true);
   };
 
   return (
