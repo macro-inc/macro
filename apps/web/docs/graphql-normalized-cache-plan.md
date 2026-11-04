@@ -1294,8 +1294,10 @@ threads retain scoped addresses, not an address book. Channel invitations and
 participant pickers also use those sources, with existing roster IDs excluded and
 empty continuations retained when a roster exceeds the native exclusion budget.
 Universal Input recipient/search/guest references now use complete per-label evidence
-and independent picker/mention windows. The separate Tasks filter planner retains
-its legacy source. Calendar create/edit, event-detail guest actions and AI-draft
+and independent picker/mention windows. Tasks filters use lazy windows too; their
+planner extracts references without a personal catalog and resolves complete evidence
+before applying any constraints. Inline checklist labels resolve only task-referenced
+IDs in bounded batches, not a directory map. Calendar create/edit, event-detail guest actions and AI-draft
 composers now use bounded property windows with event-owned guest extras. Chosen
 names stay in selection metadata rather than a directory map, and person pages
 are not truncated again by the property UI. Shared scoped exclusions bind the

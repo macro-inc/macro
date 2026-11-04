@@ -16,6 +16,30 @@ export default defineConfig({
       enforce: 'pre',
       resolveId(source, importer) {
         if (
+          importer?.endsWith('/task-list/TaskListControls.tsx') &&
+          [
+            '@queries/soup/items',
+            '../../plugins/checklist-controls/checklistControlsPlugin',
+          ].includes(source)
+        )
+          return `${directory}/task-filter-adapters.tsx`;
+        if (importer?.includes('/tasks-view/')) {
+          if (
+            source === '../tasks-view-context' ||
+            source === '../views/task-saved-views'
+          )
+            return `${directory}/task-filter-adapters.tsx`;
+          if (
+            importer.endsWith('/queries/ai-task-filter-plan.ts') &&
+            [
+              '@queries/auth/account-scope',
+              '@queries/auth/use-query-account',
+              '@service-cognition/client',
+            ].includes(source)
+          )
+            return `${directory}/task-filter-adapters.tsx`;
+        }
+        if (
           importer?.endsWith(
             '/property/editors/selectors/PropertyEntitySelector.tsx'
           )

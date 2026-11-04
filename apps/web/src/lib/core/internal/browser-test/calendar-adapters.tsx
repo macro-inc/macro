@@ -4,6 +4,7 @@ import type { JSX } from 'solid-js';
 
 export { recipientEntityMapper } from '@core/user/combinedRecipient';
 export {
+  useContactDirectoryScope,
   useContactIdFilterSource,
   usePinnedContactUsers,
 } from '../../../queries/contacts/use-directory';

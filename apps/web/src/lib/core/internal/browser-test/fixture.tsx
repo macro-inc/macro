@@ -20,6 +20,8 @@ import { changeViewer, fetchContactDirectoryPage } from './network';
 import { RecipientDirectoryFixture } from './recipient-directory-fixture';
 import { RecipientRankingFixture } from './recipient-ranking-fixture';
 import { SoupFilterFixture } from './soup-filter-fixture';
+import { TaskFilterFixture } from './task-filter-fixture';
+import { TaskListLabelFixture } from './task-list-label-fixture';
 
 const client = new QueryClient();
 function App() {
@@ -142,6 +144,14 @@ render(
   () => (
     <QueryClientProvider client={client}>
       <Switch fallback={<App />}>
+        <Match
+          when={new URLSearchParams(location.search).has('task-list-labels')}
+        >
+          <TaskListLabelFixture />
+        </Match>
+        <Match when={new URLSearchParams(location.search).has('task-filters')}>
+          <TaskFilterFixture />
+        </Match>
         <Match
           when={new URLSearchParams(location.search).has('calendar-guests')}
         >

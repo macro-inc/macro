@@ -185,8 +185,8 @@ export function TasksFilterDrawer() {
             <Key each={filters.groups()} by="id">
               {(group) => {
                 const activeCount = createMemo(() => {
-                  if (group().id === 'assignees')
-                    return filters.selectedIds('assignees').length;
+                  if (group().id === 'assignees' || group().createSource)
+                    return filters.selectedIds(group().id).length;
                   return group().options.filter(
                     (option) =>
                       option.id !== group().defaultOptionId &&
@@ -242,20 +242,33 @@ export function TasksFilterDrawer() {
                     label={group().label}
                     activeCount={activeCount()}
                   >
-                    <Show when={group().id === 'assignees'}>
-                      <div class="flex items-center gap-2 px-3 pb-2">
-                        <Input
-                          class="min-w-0 flex-1"
-                          aria-label={group().searchPlaceholder}
+                    <Show when={group().createSource} fallback={
+                      <>
+                        <Show when={group().id === 'assignees'}>
+                          <div class="flex items-center gap-2 px-3 pb-2">
+                            <Input
+                              class="min-w-0 flex-1"
+                              aria-label={group().searchPlaceholder}
+                              placeholder={group().searchPlaceholder}
+                              value={assigneeSearch()}
+                              onInput={(event) => setAssigneeSearch(event.currentTarget.value)}
+                            />
+                          </div>
+                        </Show>
+                        {renderOptions(orderedOptions)}
+                      </>
+                    }>
+                      {(createSource) => (
+                        <MobileFilterDrawer.SourceOptions
+                          groupId={group().id}
+                          createSource={createSource()}
+                          activeIds={() => filters.selectedIds(group().id)}
+                          enabled={() => open() && expandedSections().includes(group().id)}
                           placeholder={group().searchPlaceholder}
-                          value={assigneeSearch()}
-                          onInput={(event) =>
-                            setAssigneeSearch(event.currentTarget.value)
-                          }
+                          onChange={(id, checked) => filters.setSelected(group().id, id, checked)}
                         />
-                      </div>
+                      )}
                     </Show>
-                    {renderOptions(orderedOptions)}
                   </MobileFilterDrawer.Section>
                 );
               }}

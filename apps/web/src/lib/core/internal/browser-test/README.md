@@ -33,7 +33,23 @@ Event-details permissions and invitation/forwarding remain covered separately in
 filter models and desktop/mobile controls over bounded contact stand-ins. They
 check lazy loading, Me, persisted unavailable IDs, broader-than-substring matches,
 page replacement and viewport reset, checkbox preservation, and Only without
-changing unrelated facets. They do not instantiate Tasks' full AI-filter catalog.
+changing unrelated facets.
+
+`/?task-filters` mounts the real Tasks filter adapter, desktop dropdown and mobile
+drawer with bounded suggestion sources and selected-label reads. It preserves
+semantic Me separately from fixed self, unknown IDs and other groups through
+paging/search/Only. The desktop AI input uses the real planner/reference reader
+with a synthetic completion and exact-name endpoint, including empty continuations.
+Cases cover late matches, structured name boundaries, ambiguity, address aliases,
+offline/retry and late replies after filter edits, navigation or replacement login.
+Mobile retains its existing manual-only UI. Saved-view action chrome and task loading
+are stand-ins; this fixture does not claim saved-view dialog or live model coverage.
+
+`/?task-list-labels` mounts the real inline checklist bar and scoped label source
+with supplied document/task data and persistence. It resolves 501 referenced IDs
+in 500/1 batches, keeps malformed IDs local, filters by a late resolved name, and
+releases old labels after reference replacement without clearing saved filter IDs.
+It does not exercise Lexical reconciliation or task loading, which are unchanged.
 
 `/?soup-filters=home` and `/?soup-filters=tasks` mount the real general Soup filter
 menus, mobile drawer, refinements hook and consolidated chips. Predicate/query
@@ -71,7 +87,7 @@ checks twenty replacements, close/reopen reset and query-history collection.
 New message/channel, call, routine-template and sharing pickers use this source;
 main email fields also use it, with composition coverage in
 `features/email-compose/browser-test/recipient-directory.app.e2e.ts`. Remaining
-onboarding/import and AI-planner pools still require their separate migration.
+onboarding/import and database SQL people still require their separate migration.
 
 This is UI/adapter coverage, not a WASM memory measurement or live-backend trace.
 Real Turso/OPFS hydration/search coverage lives in `crates/client/cache-turso`.

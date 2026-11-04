@@ -118,7 +118,12 @@ snapshots preserve selected labels without becoming inference evidence or revivi
 on a later return to the same text. Capture submission identities before async
 work and recheck the account before dependent writes. The `task-references` and
 `input-references` browser cases cover the real adapters/composers on desktop/phone.
-The separate Tasks filter planner still needs migration.
+Tasks filters also use lazy desktop/mobile sources; their planner extracts references
+without a people catalog, then resolves complete per-label evidence before applying
+any constraints. Preserve semantic Me separately from fixed self and resolve saved
+summary labels from their own IDs. Inline checklist labels resolve only referenced
+task assignees, in lookup-sized batches whose owners disappear with those references;
+never populate a personal-directory map or the global display-name store for them.
 `CacheHost.people.resolveReferences` exposes the core's bounded full-directory
 ambiguity evidence. It needs a bound viewer and ready context only for inbox
 exclusions; callers must also check directory completeness. Missing reference

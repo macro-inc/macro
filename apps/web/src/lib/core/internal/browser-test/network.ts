@@ -2,6 +2,8 @@ import { contactRecordKey } from '@queries/contacts/contact-key';
 import { createSignal } from 'solid-js';
 
 export const [lookupIds, setLookupIds] = createSignal<readonly string[]>([]);
+export const [lookupSizes, setLookupSizes] = createSignal<number[]>([]);
+export { fetchContactReferencePage } from './task-filter-people';
 
 import type {
   ContactDirectoryByUserIdsQuery,
@@ -43,6 +45,7 @@ export async function fetchContactDirectoryByIds(
 ): Promise<ContactDirectoryByUserIdsQuery> {
   signal.throwIfAborted();
   setLookupIds([...userIds]);
+  setLookupSizes((sizes) => [...sizes, userIds.length]);
   return {
     user: {
       id: viewer,
