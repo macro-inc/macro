@@ -487,6 +487,11 @@ export class Document
     return `${this.client.webAppUrl}/app/md/${this.id}`;
   }
 
+  /** Identity, loaded detail and {@link webUrl}, so serialized handles carry their link. */
+  override toJSON() {
+    return { ...super.toJSON(), url: this.webUrl() };
+  }
+
   /** Search documents by name and content, most relevant first, auto-paginated. */
   static search = entitySearch({
     filters: { document_filters: {} },
