@@ -144,6 +144,10 @@ threads, pins, recents, notifications, folders, activity.
 
 - Compose Soup without a separate property-definition reader; REST and GraphQL validate DATE range inputs before calling the service.
 
+- Debug builds run tokio workers with 8 MiB stacks (`src/main.rs`): unoptimized
+  futures give every awaited sub-future a full-size slot in its caller's poll
+  frame, and the Soup request chain overflows the 2 MiB default. Release builds
+  keep the default.
 - Several behaviors are Cargo-feature-gated (`connection_gateway`,
   `delete_document_worker`, `location_check`, all on by `default`) — a feature
   disabled locally can hide a bug that only shows in deployed builds.
