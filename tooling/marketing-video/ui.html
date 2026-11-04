@@ -902,6 +902,11 @@ function init() {
   const m = document.createElement("div"); m.className = "mark"; m.innerHTML = lockup(LAY.markH, "#f2f1ec"); m.style.top = px(LAY.markY - LAY.markH / 2); m.style.width = W + "px"; scr.appendChild(m);
   CUES.sort((a, b) => a.t - b.t);
 }
+// ?hero=1 draws only the UI, on a transparent page, for poster heroes (no cursor, keycaps, captions or wordmark)
+const HERO = Q.has("hero");
+if (HERO) { document.documentElement.style.background = "transparent"; document.body.style.background = "transparent"; stage.style.background = "transparent"; $("bg").style.display = "none"; $("wmask").style.webkitMaskImage = $("wmask").style.maskImage = "none"; scr.style.display = "none";
+  // the poster sets its own shadow for its page, so drop the shell's (drawn for black)
+  document.head.insertAdjacentHTML("beforeend", "<style>.shell { box-shadow: inset 0 0 0 1.5px rgba(255,255,255,.055) !important; }</style>"); }
 function seek(tIn) {
   const t = clamp(tIn, 0, T);
   shellFx(t); camFx(t); layersFx(t); AdFx(t); keysFx(t); capsFx(t); cursorFx(t);
