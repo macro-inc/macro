@@ -163,6 +163,37 @@ where
         Ok(())
     }
 
+    /// Give everyone no step has gone out to yet the sequence's current
+    /// emails and inbox.
+    async fn restage(&self, tx: &mut R::Tx, sequence: &Sequence) -> Result<(), SequenceError> {
+        let staged: Vec<(Uuid, Vec<Step>)> = self
+            .repo
+            .lock_unstarted_enrollments(tx, sequence.id)
+            .await
+            .map_err(internal)?
+            .into_iter()
+            .map(|row| {
+                let steps = render::render_steps(
+                    &sequence.steps,
+                    &sequence.footer,
+                    &Recipient {
+                        email: row.email,
+                        name: row.contact_name,
+                    },
+                    &self.unsubscribe_url(row.token.as_str()),
+                );
+                (row.id, steps)
+            })
+            .collect();
+        if staged.is_empty() {
+            return Ok(());
+        }
+        self.repo
+            .restage_enrollments(tx, sequence.link_id, &staged)
+            .await
+            .map_err(internal)
+    }
+
     /// The sender must be the owner's own connected Gmail inbox.
     async fn check_sender(
         &self,
@@ -560,7 +591,8 @@ where
         let enrollments = self.repo.enrollments(id).await.map_err(internal)?;
         Ok((sequence, enrollments))
     }
-    /// Edit a draft or paused sequence, or change its status.
+    /// Edit a draft or paused sequence, or change its status. Edits reach
+    /// everyone no email has gone out to yet.
     #[tracing::instrument(skip_all, fields(sequence_id = %id), err)]
     async fn update(
         &self,
@@ -579,10 +611,8 @@ where
         if sequence.version != patch.version {
             return Err(SequenceError::VersionConflict);
         }
-        let edits = patch.name.is_some()
-            || patch.link_id.is_some()
-            || patch.footer.is_some()
-            || patch.steps.is_some();
+        let rerender = patch.link_id.is_some() || patch.footer.is_some() || patch.steps.is_some();
+        let edits = rerender || patch.name.is_some();
         if edits && sequence.status == SequenceStatus::Active {
             return Err(SequenceError::InvalidTransition);
         }
@@ -616,6 +646,9 @@ where
             }
             _ => return Err(SequenceError::InvalidTransition),
         }
+        if rerender {
+            self.restage(&mut tx, &sequence).await?;
+        }
         let saved = self
             .repo
             .save_sequence(&mut tx, &sequence)
@@ -648,7 +681,8 @@ where
             .map_err(internal)?;
         self.repo.commit(tx).await.map_err(internal)
     }
-    /// Enroll CRM people into an active sequence.
+    /// Enroll CRM people. A draft or paused sequence holds them until it is
+    /// active.
     #[tracing::instrument(skip_all, fields(sequence_id = %id, contacts = request.crm_contact_ids.len()), err)]
     async fn enroll(
         &self,
@@ -681,11 +715,8 @@ where
             .await
             .map_err(internal)?
             .ok_or(SequenceError::NotFound)?;
-        if sequence.status != SequenceStatus::Active {
-            return Err(SequenceError::SequenceNotActive);
-        }
         // Its inbox was disconnected: nothing could send.
-        if sequence.link_id.is_none() {
+        if sequence.status == SequenceStatus::Active && sequence.link_id.is_none() {
             return Err(invalid(Problem::SenderUnavailable));
         }
 

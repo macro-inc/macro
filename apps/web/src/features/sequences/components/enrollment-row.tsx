@@ -23,10 +23,10 @@ function actionLabel(action: EnrollmentAction, retry: boolean) {
     .exhaustive();
 }
 
-/** One person in a sequence; its frozen steps open below it. */
+/** One person in a sequence; their emails open below it. */
 export function EnrollmentRow(props: {
   enrollment: EnrollmentSummary;
-  /** The status to show, which a paused sequence holds at paused. */
+  /** The status to show, which a draft or paused sequence holds at paused. */
   status: EnrollmentStatus;
   actions: readonly EnrollmentAction[];
   retry: boolean;

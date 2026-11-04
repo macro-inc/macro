@@ -195,6 +195,14 @@ function SequenceDetailContent(props: {
             >
               <Button
                 type="button"
+                variant="secondary"
+                disabled={busy()}
+                onClick={() => setEnrolling(true)}
+              >
+                {t('sequences.addPeople')}
+              </Button>
+              <Button
+                type="button"
                 variant="primary"
                 disabled={busy()}
                 onClick={() => fireAndForget(setStatus('active'), SURFACE)}
@@ -248,9 +256,7 @@ function SequenceDetailContent(props: {
               sequenceId={props.sequence.id}
               sequenceStatus={status()}
               enrollments={props.source.enrollments()}
-              onEnroll={
-                status() === 'active' ? () => setEnrolling(true) : undefined
-              }
+              onEnroll={() => setEnrolling(true)}
               onOpenContact={props.onOpenContact}
             />
           }
@@ -274,7 +280,11 @@ function SequenceDetailContent(props: {
       </div>
       <Show when={enrolling()}>
         <EnrollView
-          sequence={{ id: props.sequence.id, name: props.sequence.name }}
+          sequence={{
+            id: props.sequence.id,
+            name: props.sequence.name,
+            status: status(),
+          }}
           onClose={() => setEnrolling(false)}
         />
       </Show>

@@ -81,7 +81,6 @@ export default {
 
   // Enrollments
   noEnrollments: 'No one added yet',
-  activateToEnroll: 'Activate the sequence to add people.',
   enrollmentActive: 'Active',
   enrollmentPaused: 'Paused',
   enrollmentNeedsAttention: 'Needs attention',
@@ -145,7 +144,6 @@ export default {
   enrollInto: 'Into {{name}}',
   sequence: 'Sequence',
   chooseSequence: 'Choose a sequence',
-  noActiveSequences: 'Activate a sequence first to add people.',
   searchPeople: 'Search people',
   searchPeoplePlaceholder: 'Search people in Customers',
   loadingPeople: 'Loading people',
@@ -153,6 +151,7 @@ export default {
   noMatchingPeople: 'No matching people',
   noEmail: 'No email address',
   startSending: 'Start sending',
+  sendsOnceActive: 'Nothing sends until the sequence is active.',
   consent: 'These people agreed to receive email from me.',
   selectedCount: { other: '{{count}} of {{max}} selected' },
   enrollCount: { one: 'Add {{count}}', other: 'Add {{count}}' },
@@ -182,7 +181,6 @@ export default {
     'This sequence changed elsewhere. Reload to see the latest version.',
   errorInvalidTransition: 'The sequence can’t change to that status now.',
   errorInvalidSequence: 'The sequence isn’t ready to send yet.',
-  errorSequenceNotActive: 'Activate the sequence before adding people.',
   errorTooManyContacts: 'Add up to {{max}} people at a time.',
   errorInvalidStart: 'Choose a valid start time.',
   errorInvalidTimezone: 'Your time zone wasn’t recognized.',

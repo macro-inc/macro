@@ -17,7 +17,6 @@ export const SequenceErrorCode = {
   version_conflict: 'version_conflict',
   invalid_transition: 'invalid_transition',
   invalid_sequence: 'invalid_sequence',
-  sequence_not_active: 'sequence_not_active',
   too_many_contacts: 'too_many_contacts',
   invalid_start: 'invalid_start',
   invalid_timezone: 'invalid_timezone',

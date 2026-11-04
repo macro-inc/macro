@@ -26,7 +26,7 @@ export interface ContactEnrollment {
   sequenceId: string;
   /** Sequence name. */
   sequenceName: string;
-  /** Whether the whole sequence is paused. */
+  /** Whether the sequence isn't sending: a draft or paused. */
   sequencePaused: boolean;
   /** Enrollment status. */
   status: EnrollmentStatus;

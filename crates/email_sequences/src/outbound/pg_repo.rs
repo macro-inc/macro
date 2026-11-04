@@ -15,7 +15,7 @@ use crate::domain::{
     },
     ports::{
         DueEnrollment, NewEnrollment, NewSequence, RecipientState, ReplyCandidates, SentStep,
-        SequenceRepo,
+        SequenceRepo, UnstartedEnrollment,
     },
 };
 
@@ -448,6 +448,62 @@ impl SequenceRepo for PgSequenceRepo {
         collect(records)
     }
 
+    async fn lock_unstarted_enrollments(
+        &self,
+        tx: &mut Self::Tx,
+        sequence_id: Uuid,
+    ) -> Result<Vec<UnstartedEnrollment>, PgSequenceError> {
+        sqlx::query!(
+            r#"SELECT e.id, e.email, e.contact_name, r.token
+               FROM email_sequence_enrollments e
+               JOIN email_sequence_recipients r ON r.team_id = e.team_id AND r.email = e.email
+               WHERE e.sequence_id = $1 AND e.status = ANY($2) AND e.next_step = 0
+                 AND NOT EXISTS (SELECT 1 FROM email_sequence_steps h WHERE h.enrollment_id = e.id)
+               ORDER BY e.id
+               FOR UPDATE OF e"#,
+            sequence_id,
+            &live(),
+        )
+        .fetch_all(&mut **tx)
+        .await?
+        .into_iter()
+        .map(|row| {
+            Ok(UnstartedEnrollment {
+                id: row.id,
+                email: row.email,
+                contact_name: row.contact_name,
+                token: UnsubscribeToken::parse(&row.token)
+                    .ok_or(PgSequenceError::Decode("token"))?,
+            })
+        })
+        .collect()
+    }
+
+    async fn restage_enrollments(
+        &self,
+        tx: &mut Self::Tx,
+        link_id: Option<Uuid>,
+        steps: &[(Uuid, Vec<Step>)],
+    ) -> Result<(), PgSequenceError> {
+        let ids: Vec<Uuid> = steps.iter().map(|(id, _)| *id).collect();
+        let rendered: Vec<Json<&[Step]>> = steps
+            .iter()
+            .map(|(_, steps)| Json(steps.as_slice()))
+            .collect();
+        sqlx::query!(
+            r#"UPDATE email_sequence_enrollments e
+               SET steps = u.steps, link_id = $3, updated_at = now()
+               FROM UNNEST($1::uuid[], $2::jsonb[]) AS u(id, steps)
+               WHERE e.id = u.id"#,
+            &ids,
+            &rendered as _,
+            link_id,
+        )
+        .execute(&mut **tx)
+        .await?;
+        Ok(())
+    }
+
     async fn owned_enrollment(
         &self,
         owner: &Owner,
@@ -804,7 +860,7 @@ impl SequenceRepo for PgSequenceRepo {
                     sequence_paused: parse::<SequenceStatus>(
                         &row.sequence_status,
                         "sequence status",
-                    )? == SequenceStatus::Paused,
+                    )? != SequenceStatus::Active,
                     last_sent_at: row.last_sent_at,
                     next_send_at: row.next_send_at,
                 })

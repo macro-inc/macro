@@ -34,7 +34,7 @@ pub struct NewEnrollment<'a> {
     pub sequence_id: Uuid,
     /// The team.
     pub team_id: Uuid,
-    /// Sending inbox, frozen at enrollment.
+    /// Sending inbox, the sequence's at enrollment.
     pub link_id: Option<Uuid>,
     /// The CRM person.
     pub crm_contact_id: Uuid,
@@ -59,6 +59,19 @@ pub struct RecipientState {
     pub token: UnsubscribeToken,
     /// Whether it unsubscribed.
     pub unsubscribed: bool,
+}
+
+/// An enrollment no step has been created for yet.
+#[derive(Debug, Clone)]
+pub struct UnstartedEnrollment {
+    /// Enrollment id.
+    pub id: Uuid,
+    /// Enrolled address.
+    pub email: String,
+    /// Name at enrollment.
+    pub contact_name: Option<String>,
+    /// The address's unsubscribe token.
+    pub token: UnsubscribeToken,
 }
 
 /// An enrollment due for its next step.
@@ -175,6 +188,21 @@ pub trait SequenceRepo: Send + Sync + 'static {
         tx: &mut Self::Tx,
         sequence_id: Uuid,
     ) -> impl Future<Output = Result<Vec<EnrollmentRow>, Self::Err>> + Send;
+
+    /// Lock a sequence's live enrollments that no step has been created for,
+    /// in id order.
+    fn lock_unstarted_enrollments(
+        &self,
+        tx: &mut Self::Tx,
+        sequence_id: Uuid,
+    ) -> impl Future<Output = Result<Vec<UnstartedEnrollment>, Self::Err>> + Send;
+    /// Replace enrollments' rendered steps and give them the inbox.
+    fn restage_enrollments(
+        &self,
+        tx: &mut Self::Tx,
+        link_id: Option<Uuid>,
+        steps: &[(Uuid, Vec<Step>)],
+    ) -> impl Future<Output = Result<(), Self::Err>> + Send;
 
     // Enrollments.
 

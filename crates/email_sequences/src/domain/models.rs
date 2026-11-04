@@ -284,7 +284,7 @@ pub struct ContactEnrollment {
     pub status: EnrollmentStatus,
     /// Why it stopped or needs attention.
     pub reason: Option<EnrollmentReason>,
-    /// Whether the whole sequence is paused.
+    /// Whether the sequence isn't sending: a draft or paused.
     pub sequence_paused: bool,
     /// When the last step was sent.
     pub last_sent_at: Option<DateTime<Utc>>,
@@ -495,9 +495,6 @@ pub enum SequenceError {
     /// The sequence is invalid.
     #[error(transparent)]
     Invalid(#[from] super::render::InvalidSequence),
-    /// Contacts can only join an active sequence.
-    #[error("the sequence isn't active")]
-    SequenceNotActive,
     /// Too many contacts in one request.
     #[error("too many contacts")]
     TooManyContacts,

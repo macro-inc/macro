@@ -972,3 +972,99 @@ async fn unsubscribe_link_is_idempotent_and_stops_every_owner(pool: PgPool) {
     assert_eq!(result[0].skipped, Some(EnrollSkip::Unsubscribed));
     assert!(result[1].enrollment_id.is_some());
 }
+
+#[sqlx::test(
+    migrator = "MACRO_DB_MIGRATIONS",
+    fixtures(path = "../../../fixtures", scripts("sequences"))
+)]
+async fn edits_reach_people_until_their_first_email_goes_out(pool: PgPool) {
+    let (svc, _) = service(&pool);
+    let emails = |subject: &str| {
+        vec![
+            step(subject, "Welcome", false),
+            Step {
+                delay_days: 2,
+                ..step("", "Following up", true)
+            },
+        ]
+    };
+    let first_subject = async |enrollment: Uuid| {
+        sqlx::query_scalar!(
+            "SELECT steps->0->>'subject' FROM email_sequence_enrollments WHERE id = $1",
+            enrollment
+        )
+        .fetch_one(&pool)
+        .await
+        .unwrap()
+    };
+
+    // A draft with no inbox yet takes people and sends nothing.
+    let draft = svc
+        .create(
+            OWNER,
+            NewSequence {
+                name: "Intro".to_owned(),
+                link_id: None,
+                footer: String::new(),
+                steps: vec![step("", "", false)],
+            },
+        )
+        .await
+        .unwrap();
+    let edit = async |version: i32, patch: SequencePatch| {
+        svc.update(OWNER, draft.id, SequencePatch { version, ..patch })
+            .await
+            .unwrap()
+            .version
+    };
+    let ada = enroll(&svc, OWNER, draft.id, ADA).await;
+    make_due(&pool, ada).await;
+    svc.sweep(Utc::now()).await;
+    assert_eq!(in_flight(&pool, ada).await, None);
+
+    // Activating sends the latest emails from the inbox chosen since.
+    let version = edit(
+        draft.version,
+        SequencePatch {
+            link_id: Some(OWNER_LINK),
+            steps: Some(emails("Hi {{firstName}}")),
+            ..SequencePatch::default()
+        },
+    )
+    .await;
+    let version = edit(
+        version,
+        SequencePatch {
+            status: Some(SequenceStatus::Active),
+            ..SequencePatch::default()
+        },
+    )
+    .await;
+    let sent = first_step_sent(&svc, &pool, ada).await;
+    let subject = sqlx::query_scalar!("SELECT subject FROM email_messages WHERE id = $1", sent)
+        .fetch_one(&pool)
+        .await
+        .unwrap();
+    assert_eq!(subject.as_deref(), Some("Hi Ada"));
+
+    // Once paused, edits reach people added since, not Ada, who was sent one.
+    let version = edit(
+        version,
+        SequencePatch {
+            status: Some(SequenceStatus::Paused),
+            ..SequencePatch::default()
+        },
+    )
+    .await;
+    let bob = enroll(&svc, OWNER, draft.id, BOB).await;
+    edit(
+        version,
+        SequencePatch {
+            steps: Some(emails("Hello {{firstName}}")),
+            ..SequencePatch::default()
+        },
+    )
+    .await;
+    assert_eq!(first_subject(ada).await.as_deref(), Some("Hi Ada"));
+    assert_eq!(first_subject(bob).await.as_deref(), Some("Hello Bob"));
+}

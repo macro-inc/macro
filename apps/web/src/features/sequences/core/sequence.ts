@@ -134,12 +134,15 @@ function isLive(status: EnrollmentStatus) {
   return LIVE_STATUSES.includes(status);
 }
 
-/** What an enrollment shows: a paused sequence holds its active enrollments. */
+/**
+ * What an enrollment shows: a sequence that isn't sending (a draft or paused)
+ * holds its active enrollments.
+ */
 export function shownStatus(
   enrollment: Pick<EnrollmentSummary, 'status'>,
-  sequencePaused: boolean
+  sequenceHeld: boolean
 ): EnrollmentStatus {
-  return sequencePaused && enrollment.status === 'active'
+  return sequenceHeld && enrollment.status === 'active'
     ? 'paused'
     : enrollment.status;
 }

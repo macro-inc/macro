@@ -15,7 +15,6 @@ function codeMessage(code: SequenceErrorCode) {
       .with('version_conflict', () => t('sequences.errorVersionConflict'))
       .with('invalid_transition', () => t('sequences.errorInvalidTransition'))
       .with('invalid_sequence', () => t('sequences.errorInvalidSequence'))
-      .with('sequence_not_active', () => t('sequences.errorSequenceNotActive'))
       .with('too_many_contacts', () =>
         t('sequences.errorTooManyContacts', { max: SEQUENCE_LIMITS.contacts })
       )

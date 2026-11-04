@@ -46,7 +46,7 @@ export function EnrollmentsView(props: {
   sequenceId: string;
   sequenceStatus: SequenceStatus;
   enrollments: readonly EnrollmentSummary[];
-  onEnroll?: () => void;
+  onEnroll: () => void;
   onOpenContact: (contactId: string) => void;
 }) {
   const context = useSequences();
@@ -75,7 +75,6 @@ export function EnrollmentsView(props: {
   }
   return (
     <div class="mx-auto w-full max-w-3xl space-y-4">
-      <h3 class="text-base font-medium">{t('sequences.people')}</h3>
       <Show
         when={props.enrollments.length}
         fallback={
@@ -83,17 +82,10 @@ export function EnrollmentsView(props: {
             centered
             class="h-auto py-10"
             title={t('sequences.noEnrollments')}
-            description={
-              props.onEnroll ? undefined : t('sequences.activateToEnroll')
-            }
-            primaryAction={
-              props.onEnroll
-                ? {
-                    label: t('sequences.addPeople'),
-                    onClick: props.onEnroll,
-                  }
-                : undefined
-            }
+            primaryAction={{
+              label: t('sequences.addPeople'),
+              onClick: props.onEnroll,
+            }}
           />
         }
       >
@@ -103,7 +95,7 @@ export function EnrollmentsView(props: {
               enrollment={enrollment}
               status={shownStatus(
                 enrollment,
-                props.sequenceStatus === 'paused'
+                props.sequenceStatus !== 'active'
               )}
               actions={enrollmentActions(enrollment, props.sequenceStatus)}
               retry={isRetry(enrollment)}

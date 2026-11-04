@@ -3503,7 +3503,7 @@ export const updateSequence = async (
 };
 
 /**
- * @summary Enroll CRM people into an active sequence.
+ * @summary Enroll CRM people. A draft or paused sequence holds them until it is active.
  */
 export type enrollContactsResponse200 = {
   data: EnrollResponse;

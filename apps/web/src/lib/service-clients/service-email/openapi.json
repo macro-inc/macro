@@ -3159,7 +3159,7 @@
     "/email/sequences/{id}/enrollments": {
       "post": {
         "tags": ["sequences"],
-        "summary": "Enroll CRM people into an active sequence.",
+        "summary": "Enroll CRM people. A draft or paused sequence holds them until it is active.",
         "operationId": "enroll_contacts",
         "parameters": [
           {
@@ -6261,7 +6261,7 @@
           },
           "sequencePaused": {
             "type": "boolean",
-            "description": "Whether the whole sequence is paused."
+            "description": "Whether the sequence isn't sending: a draft or paused."
           },
           "status": {
             "$ref": "#/components/schemas/EnrollmentStatus",
@@ -8271,7 +8271,6 @@
           "version_conflict",
           "invalid_transition",
           "invalid_sequence",
-          "sequence_not_active",
           "too_many_contacts",
           "invalid_start",
           "invalid_timezone",

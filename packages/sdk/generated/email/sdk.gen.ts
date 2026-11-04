@@ -556,7 +556,7 @@ export class Sdk extends HeyApiClient {
     }
 
     /**
-     * Enroll CRM people into an active sequence.
+     * Enroll CRM people. A draft or paused sequence holds them until it is active.
      */
     public enrollContacts<ThrowOnError extends boolean = false>(options: Options<EnrollContactsData, ThrowOnError>): RequestResult<EnrollContactsResponses, EnrollContactsErrors, ThrowOnError> {
         return (options.client ?? this.client).post<EnrollContactsResponses, EnrollContactsErrors, ThrowOnError>({

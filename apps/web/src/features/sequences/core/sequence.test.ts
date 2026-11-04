@@ -64,7 +64,7 @@ describe('enrollment actions', () => {
     expect(isRetry(enrollment('stopped', 'replied'))).toBe(false);
   });
 
-  it('shows active enrollments of a paused sequence as paused', () => {
+  it('shows active enrollments of a held sequence as paused', () => {
     expect(shownStatus(enrollment('active'), true)).toBe('paused');
     expect(shownStatus(enrollment('needs_attention'), true)).toBe(
       'needs_attention'

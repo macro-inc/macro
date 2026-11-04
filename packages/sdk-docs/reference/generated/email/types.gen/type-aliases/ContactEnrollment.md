@@ -15,5 +15,5 @@ A contact's enrollment as any teammate sees it: never step content.
 | <a id="property-reason"></a> `reason?` | `null` \| [`EnrollmentReason`](EnrollmentReason.md) | - |
 | <a id="property-sequenceid"></a> `sequenceId` | `string` | Sequence id. |
 | <a id="property-sequencename"></a> `sequenceName` | `string` | Sequence name. |
-| <a id="property-sequencepaused"></a> `sequencePaused` | `boolean` | Whether the whole sequence is paused. |
+| <a id="property-sequencepaused"></a> `sequencePaused` | `boolean` | Whether the sequence isn't sending: a draft or paused. |
 | <a id="property-status"></a> `status` | [`EnrollmentStatus`](EnrollmentStatus.md) | Enrollment status. |

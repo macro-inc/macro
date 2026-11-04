@@ -106,8 +106,6 @@ pub enum SequenceErrorCode {
     InvalidTransition,
     /// The sequence is invalid; see `problem`.
     InvalidSequence,
-    /// Contacts can only join an active sequence.
-    SequenceNotActive,
     /// Too many contacts in one request.
     TooManyContacts,
     /// The start time isn't usable.
@@ -156,9 +154,6 @@ impl IntoResponse for SequenceError {
             }
             SequenceError::Invalid(_) => {
                 (StatusCode::BAD_REQUEST, SequenceErrorCode::InvalidSequence)
-            }
-            SequenceError::SequenceNotActive => {
-                (StatusCode::CONFLICT, SequenceErrorCode::SequenceNotActive)
             }
             SequenceError::TooManyContacts => {
                 (StatusCode::BAD_REQUEST, SequenceErrorCode::TooManyContacts)
@@ -325,7 +320,7 @@ pub async fn delete_sequence<Api: SequencesApi, Auth: MacroAuthorizationService>
     Ok(StatusCode::NO_CONTENT)
 }
 
-/// Enroll CRM people into an active sequence.
+/// Enroll CRM people. A draft or paused sequence holds them until it is active.
 #[utoipa::path(post, tag = "sequences", operation_id = "enroll_contacts", path = "/email/sequences/{id}/enrollments",
     params(("id" = Uuid, Path)), request_body = EnrollRequest,
     responses((status = 200, body = EnrollResponse), (status = 400, body = SequenceErrorResponse),

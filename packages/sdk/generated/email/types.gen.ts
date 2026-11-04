@@ -1018,7 +1018,7 @@ export type ContactEnrollment = {
      */
     sequenceName: string;
     /**
-     * Whether the whole sequence is paused.
+     * Whether the sequence isn't sending: a draft or paused.
      */
     sequencePaused: boolean;
     /**
@@ -2101,7 +2101,7 @@ export type SequenceDetailResponse = {
 /**
  * What went wrong, for the client to show.
  */
-export type SequenceErrorCode = 'not_found' | 'version_conflict' | 'invalid_transition' | 'invalid_sequence' | 'sequence_not_active' | 'too_many_contacts' | 'invalid_start' | 'invalid_timezone' | 'action_unavailable' | 'step_in_delivery' | 'step_taken_over' | 'no_team' | 'crm_disabled' | 'internal';
+export type SequenceErrorCode = 'not_found' | 'version_conflict' | 'invalid_transition' | 'invalid_sequence' | 'too_many_contacts' | 'invalid_start' | 'invalid_timezone' | 'action_unavailable' | 'step_in_delivery' | 'step_taken_over' | 'no_team' | 'crm_disabled' | 'internal';
 
 /**
  * An error response.

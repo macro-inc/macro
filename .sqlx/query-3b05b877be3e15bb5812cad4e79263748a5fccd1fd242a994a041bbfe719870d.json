@@ -1,0 +1,16 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "UPDATE email_sequence_enrollments e\n               SET steps = u.steps, link_id = $3, updated_at = now()\n               FROM UNNEST($1::uuid[], $2::jsonb[]) AS u(id, steps)\n               WHERE e.id = u.id",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "UuidArray",
+        "JsonbArray",
+        "Uuid"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "3b05b877be3e15bb5812cad4e79263748a5fccd1fd242a994a041bbfe719870d"
+}

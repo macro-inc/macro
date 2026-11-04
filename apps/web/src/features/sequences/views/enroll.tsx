@@ -2,6 +2,10 @@ import { t } from '@app/lib/i18n';
 import { getDefaultTimezone } from '@core/util/cron';
 import { debouncedDependent } from '@core/util/debounce';
 import { fireAndForget } from '@core/util/fireAndForget';
+import type {
+  SequenceStatus,
+  SequenceSummary,
+} from '@service-email/generated/schemas';
 import { addMinutes, format, isValid, roundToNearestMinutes } from 'date-fns';
 import { createMemo, createSignal, Match, Switch } from 'solid-js';
 import { EnrollDialog, type EnrollOutcome } from '../components/enroll-dialog';
@@ -30,14 +34,12 @@ function uniqueById(people: readonly Person[]) {
   return people.filter((person) => !seen.has(person.id) && seen.add(person.id));
 }
 
-/** Choose a sequence among the owner's sending ones. */
+/** Choose one of the owner's sequences. */
 function SequencePicker(props: {
   value: string | undefined;
-  onChange: (sequenceId: string) => void;
+  onChange: (sequence: SequenceSummary) => void;
 }) {
   const list = useSequences().createSequenceList();
-  const active = () =>
-    list.sequences().filter((sequence) => sequence.status === 'active');
   return (
     <Switch>
       <Match when={list.failure()}>
@@ -49,19 +51,22 @@ function SequencePicker(props: {
           />
         )}
       </Match>
-      <Match when={!list.pending() && !active().length}>
-        <p class="text-xs text-ink-muted">{t('sequences.noActiveSequences')}</p>
+      <Match when={!list.pending() && !list.sequences().length}>
+        <p class="text-xs text-ink-muted">{t('sequences.noSequences')}</p>
       </Match>
       <Match when={true}>
         <OptionSelect
           label={t('sequences.sequence')}
           placeholder={t('sequences.chooseSequence')}
           value={props.value}
-          options={active().map((sequence) => ({
+          options={list.sequences().map((sequence) => ({
             value: sequence.id,
             label: sequence.name || t('sequences.untitled'),
           }))}
-          onChange={props.onChange}
+          onChange={(id) => {
+            const sequence = list.sequences().find((item) => item.id === id);
+            if (sequence) props.onChange(sequence);
+          }}
         />
       </Match>
     </Switch>
@@ -73,7 +78,7 @@ function SequencePicker(props: {
  * "Add to sequence" on a selection does; a selected company brings its people.
  */
 export function EnrollView(props: {
-  sequence?: { id: string; name: string };
+  sequence?: { id: string; name: string; status: SequenceStatus };
   initial?: readonly Person[];
   companyIds?: readonly string[];
   onClose: () => void;
@@ -85,8 +90,9 @@ export function EnrollView(props: {
     () => props.companyIds ?? []
   );
   const enroller = context.createEnroller();
-  const [picked, setPicked] = createSignal<string>();
-  const sequenceId = () => props.sequence?.id ?? picked();
+  const [picked, setPicked] = createSignal<SequenceSummary>();
+  const target = () => props.sequence ?? picked();
+  const sequenceId = () => target()?.id;
   const [chosen, setChosen] = createSignal<readonly Person[]>(
     props.initial ?? []
   );
@@ -170,10 +176,10 @@ export function EnrollView(props: {
           </p>
         ) : (
           <SequencePicker
-            value={picked()}
-            onChange={(id) => {
+            value={picked()?.id}
+            onChange={(sequence) => {
               setError(undefined);
-              setPicked(id);
+              setPicked(sequence);
             }}
           />
         )
@@ -185,9 +191,17 @@ export function EnrollView(props: {
       peopleFailed={people.failed() || companyPeople.failed()}
       selected={selected()}
       notice={
-        candidates().length > SEQUENCE_LIMITS.contacts
-          ? t('sequences.firstPeopleOnly', { count: SEQUENCE_LIMITS.contacts })
-          : undefined
+        [
+          candidates().length > SEQUENCE_LIMITS.contacts &&
+            t('sequences.firstPeopleOnly', {
+              count: SEQUENCE_LIMITS.contacts,
+            }),
+          target() &&
+            target()?.status !== 'active' &&
+            t('sequences.sendsOnceActive'),
+        ]
+          .filter(Boolean)
+          .join(' ') || undefined
       }
       onSelect={select}
       start={start()}
