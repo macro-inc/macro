@@ -19,8 +19,13 @@ test('runs an artifact, passes input only while interacting', async ({
   await expect(frame).toHaveCSS('pointer-events', 'auto');
 
   const target = frame.contentFrame().locator('#target');
-  await target.click();
-  await expect(target).toHaveText('clicked');
+  // The frame draws at half its design size. Playwright's element coordinates
+  // ignore that scale, so click where the button appears on screen. Input can
+  // reach the canvas until the frame's new hit-test region has been painted.
+  await expect(async () => {
+    await page.mouse.click(110, 108);
+    await expect(target).toHaveText('clicked', { timeout: 500 });
+  }).toPass();
 
   await node.getByRole('button', { name: 'Done' }).click();
   await expect(frame).toHaveCSS('pointer-events', 'none');

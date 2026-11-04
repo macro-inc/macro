@@ -67,7 +67,9 @@ requests, nested frames and form posts. Images and fonts must be inline.
 
 A policy cannot follow a navigation, and a sandbox does not stop a frame navigating
 itself. A second load therefore removes the frame, but the first request of that
-navigation has already been sent. Treat artifact source, and anything typed into an
+navigation has already been sent. Browsers also do not apply the policy to WebRTC.
+So an artifact cannot reach Macro's data, but it can send out what it already holds:
+treat artifact source, and anything typed into an
 artifact, as readable by whoever wrote it. Artifacts mount only while on screen, so
 off-screen scripts stop and restart with fresh state. With the flag off, a node
 shows its title and no script runs. The headless render bundle has no flag reader,

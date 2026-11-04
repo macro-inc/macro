@@ -13,7 +13,6 @@ export const ARTIFACT_CSP = [
   "base-uri 'none'",
   "form-action 'none'",
   "frame-src 'none'",
-  "webrtc 'block'",
 ].join('; ');
 
 export const ARTIFACT_SANDBOX = 'allow-scripts';
