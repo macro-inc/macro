@@ -124,8 +124,8 @@ flag loads or is off, those controls stay hidden and meeting routes do not mount
 call setup. Existing channel calls and the upcoming-events list remain available.
 For local verification, set `VITE_ENABLE_QUICK_CALLS=true` or `false` explicitly.
 
-During a quick or scheduled call, signed-in participants can open **Call chat**
-from its separate button at the far right of the bottom toolbar. Messages persist
+During a quick or scheduled call, signed-in participants can open the call chat
+with **Open chat** in the island at the right of the top row. Messages persist
 with that call session and are visible in its recording page after it ends.
 Guests can open the same call discussion and read and send text while connected;
 their messages show their name with **(Guest)**. The signed-in composer’s `@` menu includes Macro and available agents;
