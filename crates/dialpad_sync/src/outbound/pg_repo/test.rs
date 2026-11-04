@@ -748,7 +748,7 @@ async fn backfill_reports_a_lost_grant_without_waiting_for_a_delivery(pool: PgPo
     migrator = "MACRO_DB_MIGRATIONS",
     fixtures(path = "../../../fixtures", scripts("users"))
 )]
-async fn reconnect_retains_old_registration_until_cleanup_succeeds(pool: PgPool) {
+async fn a_refused_old_cleanup_does_not_block_reconnect(pool: PgPool) {
     let service = service(pool, GrantState::Active, Arc::new(Calls::default()));
     service.connect(&user(), Backfill::None).await.unwrap();
     service.complete(&user()).await.unwrap();
@@ -756,11 +756,17 @@ async fn reconnect_retains_old_registration_until_cleanup_succeeds(pool: PgPool)
     *service.dialpad.fail_unregister.lock().unwrap() = true;
     service.disconnect(&user()).await.unwrap();
     service.connect(&user(), Backfill::None).await.unwrap();
-    assert!(service.complete(&user()).await.is_err());
+    service.complete(&user()).await.unwrap();
     let current = service.repo.by_user(&user()).await.unwrap().unwrap();
-    assert_eq!(current.registration, old.registration);
-    assert!(!current.enabled);
-    assert_eq!(service.dialpad.webhooks.lock().unwrap().len(), 1);
+    assert!(current.enabled);
+    assert!(
+        service
+            .dialpad
+            .unregistered
+            .lock()
+            .unwrap()
+            .contains(&old.registration.unwrap())
+    );
 }
 
 #[sqlx::test(
