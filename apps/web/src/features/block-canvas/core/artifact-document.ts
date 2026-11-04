@@ -1,3 +1,5 @@
+import type { ArtifactLibrary } from '@macro-inc/graphics/loro';
+
 /**
  * The iframe's `sandbox` gives the document an opaque origin, so it cannot reach
  * Macro's cookies, storage or DOM. This policy keeps it off the network: scripts
@@ -33,13 +35,59 @@ export function artifactThemeTokens(element: Element): Record<string, string> {
   );
 }
 
+/** Bounds cycles and fan-out between components that use each other. */
+const MAX_COMPONENT_EXPANSIONS = 500;
+
+const entry = (
+  entries: Readonly<Record<string, string>>,
+  name: string | null
+) =>
+  name !== null && Object.hasOwn(entries, name) ? entries[name] : undefined;
+
+/**
+ * `<macro-component name="card">` becomes that component, with its children in
+ * place of the component's `<slot>`. `<macro-style name="brand">` becomes a style
+ * element. An unknown component keeps its children, and an unknown style is dropped.
+ */
+function expandLibrary(parsed: Document, library: ArtifactLibrary) {
+  let expansions = 0;
+  for (;;) {
+    const use = parsed.querySelector('macro-component');
+    if (!use) break;
+
+    expansions += 1;
+    const source =
+      expansions <= MAX_COMPONENT_EXPANSIONS
+        ? entry(library.components, use.getAttribute('name'))
+        : undefined;
+    const template = parsed.createElement('template');
+    template.innerHTML = source ?? '<slot></slot>';
+    template.content.querySelector('slot')?.replaceWith(...use.childNodes);
+    use.replaceWith(template.content);
+  }
+
+  for (const use of parsed.querySelectorAll('macro-style')) {
+    const source = entry(library.styles, use.getAttribute('name'));
+    if (source === undefined) {
+      use.remove();
+      continue;
+    }
+
+    const style = parsed.createElement('style');
+    style.textContent = source;
+    use.replaceWith(style);
+  }
+}
+
 /** Build the srcdoc. The parser never runs scripts, and the policy is parsed
  * first so that nothing in the artifact can run or load before it applies. */
 export function composeArtifactDocument(
   html: string,
-  tokens: Record<string, string>
+  tokens: Record<string, string>,
+  library: ArtifactLibrary
 ): string {
   const parsed = new DOMParser().parseFromString(html, 'text/html');
+  expandLibrary(parsed, library);
 
   for (const refresh of parsed.querySelectorAll('meta[http-equiv="refresh" i]'))
     refresh.remove();

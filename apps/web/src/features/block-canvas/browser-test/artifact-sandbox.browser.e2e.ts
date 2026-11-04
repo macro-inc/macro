@@ -1,4 +1,5 @@
 import { createScene, translation } from '@macro-inc/graphics';
+import type { ArtifactLibrary } from '@macro-inc/graphics/loro';
 import { expect, type Frame, type Page, test } from '@playwright/test';
 
 // A fresh page loads the render bundle unbundled from the dev server.
@@ -24,21 +25,26 @@ const artifactScene = (html: string) =>
     },
   ]);
 
-async function renderArtifact(page: Page, html: string): Promise<Frame> {
+async function renderArtifact(
+  page: Page,
+  html: string,
+  artifactLibrary?: ArtifactLibrary
+): Promise<Frame> {
   await page.goto('/canvas-render.html');
   await page.waitForFunction(() => window.canvasRenderIdle === true, null, {
     timeout: 150_000,
   });
   await page.evaluate(
-    (document) =>
+    ({ document, artifactLibrary }) =>
       window.renderCanvasSnapshot({
         document,
+        artifactLibrary,
         crop: { x: 0, y: 0, width: 640, height: 360 },
         scale: 1,
         revision: 'test',
         artifacts: true,
       }),
-    artifactScene(html)
+    { document: artifactScene(html), artifactLibrary }
   );
 
   const element = await page.waitForSelector(
@@ -126,4 +132,19 @@ test('removes a frame that navigates away', async ({ page }) => {
     0
   );
   await expect(page.getByText('tried to leave its page')).toBeVisible();
+});
+
+test('expands shared styles and components', async ({ page }) => {
+  const frame = await renderArtifact(
+    page,
+    '<macro-style name="brand"></macro-style><macro-component name="card">Hello</macro-component>',
+    {
+      styles: { brand: '#card { color: rgb(255, 0, 0); }' },
+      components: { card: '<p id="card"><slot></slot></p>' },
+    }
+  );
+
+  const card = frame.locator('#card');
+  await expect(card).toHaveText('Hello');
+  await expect(card).toHaveCSS('color', 'rgb(255, 0, 0)');
 });

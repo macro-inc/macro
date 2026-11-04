@@ -3,6 +3,12 @@ import { LoroDoc, type PeerID, UndoManager } from 'loro-crdt';
 import type { GraphicsBackend } from '../core/backend';
 import type { GraphicsDocument } from '../core/model';
 import { freezeDocument } from '../core/scene';
+import {
+  type ArtifactLibraryEdit,
+  applyArtifactLibraryEdits,
+  readArtifactLibrary,
+  subscribeArtifactLibrary,
+} from './artifact-library';
 import { readScene, writeScene } from './scene-mapping';
 import { canvasSchema } from './schema';
 
@@ -132,17 +138,29 @@ function graphicsBackend(
       canUndo: !disposed && canEdit() && history.canUndo(),
       canRedo: !disposed && canEdit() && history.canRedo(),
     }),
-    commit(next: GraphicsDocument) {
+    /** Library edits land in the same update as the scene change. */
+    commit(
+      next: GraphicsDocument,
+      libraryEdits: readonly ArtifactLibraryEdit[] = []
+    ) {
       const validated = freezeDocument(next);
-      local('local', () =>
+      local('local', () => {
         mirror.setState({
           scene: writeScene(
             mirror.getState().scene,
             projection.document,
             validated
           ),
-        })
-      );
+        });
+        applyArtifactLibraryEdits(doc, libraryEdits);
+      });
+    },
+    artifactLibrary: {
+      read: () => readArtifactLibrary(doc),
+      subscribe: (listener: () => void) =>
+        subscribeArtifactLibrary(doc, listener),
+      edit: (edit: ArtifactLibraryEdit) =>
+        local('local', () => applyArtifactLibraryEdits(doc, [edit])),
     },
     undo() {
       if (!disposed && history.canUndo())

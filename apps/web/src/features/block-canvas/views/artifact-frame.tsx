@@ -7,6 +7,7 @@ import {
   onMount,
   Show,
 } from 'solid-js';
+import { useArtifactLibrary } from '../context/artifact-library';
 import {
   ARTIFACT_SANDBOX,
   artifactThemeTokens,
@@ -28,6 +29,7 @@ export function ArtifactFrame(props: {
   eager?: boolean;
 }) {
   let host!: HTMLDivElement;
+  const artifacts = useArtifactLibrary();
   const [size, setSize] = createSignal({ width: 0, height: 0 });
   const [visible, setVisible] = createSignal(!!props.eager);
   const [navigatedAway, setNavigatedAway] = createSignal(false);
@@ -40,7 +42,8 @@ export function ArtifactFrame(props: {
   const srcdoc = createMemo(() =>
     composeArtifactDocument(
       props.html,
-      artifactThemeTokens(document.documentElement)
+      artifactThemeTokens(document.documentElement),
+      artifacts.library()
     )
   );
   createEffect(on(srcdoc, () => setNavigatedAway(false)));
