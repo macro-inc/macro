@@ -325,6 +325,7 @@
       "crates/channel_sender",
       "crates/channels",
       "crates/code_execution",
+      "crates/code_mode_assets",
       "crates/cognition",
       "crates/connect_client",
       "crates/connection",
@@ -762,6 +763,7 @@
       "crates/channels",
       "crates/chat",
       "crates/code_execution",
+      "crates/code_mode_assets",
       "crates/codex_cloud_agents",
       "crates/codex_connection",
       "crates/cognition",
@@ -967,6 +969,7 @@
       "crates/channels",
       "crates/chat",
       "crates/code_execution",
+      "crates/code_mode_assets",
       "crates/cognition",
       "crates/collab_surface",
       "crates/comms_db_client",
@@ -1861,6 +1864,7 @@
       "crates/channels",
       "crates/chat",
       "crates/code_execution",
+      "crates/code_mode_assets",
       "crates/cognition",
       "crates/collab_surface",
       "crates/comms_db_client",
@@ -2043,6 +2047,7 @@
       "crates/channels",
       "crates/chat",
       "crates/code_execution",
+      "crates/code_mode_assets",
       "crates/cognition",
       "crates/collab_surface",
       "crates/comms_db_client",
@@ -3183,6 +3188,7 @@
       "crates/channels",
       "crates/chat",
       "crates/code_execution",
+      "crates/code_mode_assets",
       "crates/cognition",
       "crates/collab_surface",
       "crates/comms_db_client",
@@ -3517,6 +3523,11 @@
     ],
     "code_execution": [
       "crates/code_execution",
+      "crates/code_mode_assets",
+      "crates/workspace-hack"
+    ],
+    "code_mode_assets": [
+      "crates/code_mode_assets",
       "crates/workspace-hack"
     ],
     "codex_cloud_agents": [
@@ -5405,6 +5416,7 @@
       "crates/channels",
       "crates/chat",
       "crates/code_execution",
+      "crates/code_mode_assets",
       "crates/cognition",
       "crates/collab_surface",
       "crates/comms_db_client",

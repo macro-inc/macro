@@ -303,3 +303,62 @@ fn the_cap_refuses_the_overflowing_entry() {
         Err(QueueError::Full)
     );
 }
+
+/// Only a person's prompt typed into the session itself follows it. A thread
+/// mention names its origin, a runtime-forwarded trigger names its context,
+/// and system turns, bot turns and compaction act for nobody in particular.
+#[test]
+fn only_a_human_prompt_from_the_session_itself_has_a_direct_prompter() {
+    let person = MacroUserIdStr::try_from_email("prompter@example.com").unwrap();
+    let direct = QueuedEntry {
+        actor: Some(person.clone()),
+        ..prompt_entry("from the session view")
+    };
+    assert_eq!(direct.direct_prompter(), Some(&person));
+
+    let thread_mention = QueuedEntry {
+        announce: Some(AnnounceOrigin {
+            reply_placement: Default::default(),
+            reuse_origin_message: false,
+            parent: messages::domain::models::MessageParent::Call(Uuid::from_u128(0xf0)),
+            thread_id: Uuid::from_u128(0xf1),
+            message_id: Uuid::from_u128(0xf2),
+        }),
+        ..direct.clone()
+    };
+    let forwarded_trigger = QueuedEntry {
+        context: Some(TriggerContext::Requested(
+            trigger_context::RequestedContext {
+                requested_by: trigger_context::ContextPerson {
+                    id: person.to_string(),
+                    name: "Prompter".to_owned(),
+                    email: None,
+                },
+                requested_at: Utc::now(),
+                repo_url: None,
+            },
+        )),
+        ..direct.clone()
+    };
+    let system_turn = QueuedEntry {
+        action: AgentAction::notification(Vec::new()),
+        ..direct.clone()
+    };
+    let bot_turn = QueuedEntry {
+        actor: None,
+        ..direct.clone()
+    };
+    let compaction = QueuedEntry {
+        action: AgentAction::Compact,
+        ..direct.clone()
+    };
+    for (name, entry) in [
+        ("thread mention", thread_mention),
+        ("forwarded trigger", forwarded_trigger),
+        ("system turn", system_turn),
+        ("bot turn", bot_turn),
+        ("compaction", compaction),
+    ] {
+        assert_eq!(entry.direct_prompter(), None, "{name}");
+    }
+}

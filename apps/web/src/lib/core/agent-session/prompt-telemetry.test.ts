@@ -91,6 +91,7 @@ function withText(text = 'Hello'): PromptTrace {
       kind: 'new',
       message: {
         agentSessionId: SESSION,
+        key: '1:user',
         turn: 1,
         author: { kind: 'user', userId: null },
         requestId: ACTION,
@@ -106,6 +107,7 @@ function withText(text = 'Hello'): PromptTrace {
       kind: 'new',
       message: {
         agentSessionId: SESSION,
+        key: '1:agent',
         turn: 1,
         author: { kind: 'agent' },
         requestId: null,
@@ -362,6 +364,7 @@ describe('PromptTrace', () => {
         kind: 'new',
         message: {
           agentSessionId: SESSION,
+          key: '1:user',
           turn: 1,
           author: { kind: 'user', userId: 'macro|wolf@macro.com' },
           requestId: ACTION,
@@ -380,6 +383,7 @@ describe('PromptTrace', () => {
         kind: 'update',
         message: {
           agentSessionId: SESSION,
+          key: '1:user',
           turn: 1,
           author: { kind: 'user', userId: 'macro|wolf@macro.com' },
           requestId: ACTION,
@@ -398,6 +402,7 @@ describe('PromptTrace', () => {
         kind: 'new',
         message: {
           agentSessionId: SESSION,
+          key: '1:agent',
           turn: 1,
           author: { kind: 'agent' },
           requestId: null,
@@ -469,6 +474,7 @@ describe('PromptTrace', () => {
         kind: 'new',
         message: {
           agentSessionId: SESSION,
+          key: '0:user',
           turn: 0,
           author: { kind: 'user', userId: null },
           requestId: ACTION,
@@ -484,6 +490,7 @@ describe('PromptTrace', () => {
         kind: 'new',
         message: {
           agentSessionId: SESSION,
+          key: '0:agent',
           turn: 0,
           author: { kind: 'agent' },
           requestId: null,
@@ -525,6 +532,7 @@ describe('PromptTrace', () => {
           kind: 'new',
           message: {
             agentSessionId: SESSION,
+            key: '0:user',
             turn: 0,
             author: { kind: 'user', userId: null },
             requestId: ACTION,
@@ -540,6 +548,7 @@ describe('PromptTrace', () => {
           kind: 'new',
           message: {
             agentSessionId: SESSION,
+            key: '0:agent',
             turn: 0,
             author: { kind: 'agent' },
             requestId: null,
@@ -580,6 +589,7 @@ describe('PromptTrace', () => {
         messages: [
           {
             agentSessionId: SESSION,
+            key: '0:agent',
             turn: 0,
             author: { kind: 'agent' },
             requestId: null,
@@ -592,6 +602,7 @@ describe('PromptTrace', () => {
           },
           {
             agentSessionId: SESSION,
+            key: '1:user',
             turn: 1,
             author: { kind: 'user', userId: 'macro|wolf@macro.com' },
             requestId: ACTION,

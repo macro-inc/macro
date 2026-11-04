@@ -451,7 +451,7 @@ impl<B: BotFacts + 'static> AgentSessionRepo for PgAgentSessionRepo<B> {
             conversation,
             thread_id.is_some() || originating_message_id.is_some(),
         )?;
-        let visibility = purpose.visibility(bot_id, thread_id, self.list_policy.hide_agent_dms);
+        let visibility = purpose.visibility(thread_id, self.list_policy.hide_agent_dms);
         let warm = purpose == crate::domain::model::SessionPurpose::Warm;
         let row = sqlx::query_as!(
             AgentSessionRow,
@@ -920,6 +920,22 @@ impl<B: BotFacts + 'static> AgentSessionRepo for PgAgentSessionRepo<B> {
         .execute(&self.pool)
         .await
         .context("failed to record the turn prompter")?;
+        Ok(())
+    }
+
+    async fn add_follower(&self, id: AgentSessionId, user: &MacroUserIdStr<'static>) -> Result<()> {
+        sqlx::query!(
+            r#"
+            INSERT INTO agent_session_follower (agent_session_id, user_id)
+            VALUES ($1, $2)
+            ON CONFLICT DO NOTHING
+            "#,
+            id.as_uuid(),
+            user.as_ref(),
+        )
+        .execute(&self.pool)
+        .await
+        .context("failed to record the session's follower")?;
         Ok(())
     }
 

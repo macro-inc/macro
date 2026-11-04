@@ -2,7 +2,7 @@ import { readdir, readFile } from 'node:fs/promises';
 import { expect, test } from 'vitest';
 
 const output = new URL('../dist/docs/', import.meta.url);
-const reference = new URL('../reference/', import.meta.url);
+const pages = new URL('markdown/', output);
 
 test('the homepage explains entities and links to their reference without test modules', async () => {
   const html = await readFile(new URL('html/index.html', output), 'utf8');
@@ -20,7 +20,7 @@ test('the homepage explains entities and links to their reference without test m
       '<html'
     );
   }
-  const files = await readdir(reference, { recursive: true });
+  const files = await readdir(pages, { recursive: true });
   expect(files.filter((file) => /\.(test|spec)(\/|\.)/.test(file))).toEqual([]);
 });
 
@@ -28,7 +28,7 @@ test('public SDK pages preserve signatures and linked wire contracts in both for
   const markdown = await readFile(
     new URL(
       'src/entities/workspace/namespace/classes/WorkspaceNamespace.md',
-      reference
+      pages
     ),
     'utf8'
   );
@@ -41,7 +41,7 @@ test('public SDK pages preserve signatures and linked wire contracts in both for
   const wire = await readFile(
     new URL(
       'generated/storage/types.gen/type-aliases/ApiEntityFilterAst.md',
-      reference
+      pages
     ),
     'utf8'
   );
@@ -59,13 +59,13 @@ test('public SDK pages preserve signatures and linked wire contracts in both for
 
 test('document content and AI contracts come from the SDK source', async () => {
   const document = await readFile(
-    new URL('src/entities/documents/document/classes/Document.md', reference),
+    new URL('src/entities/documents/document/classes/Document.md', pages),
     'utf8'
   );
   expect(document).toContain('content()');
   expect(document).not.toContain('property-client');
   const ai = await readFile(
-    new URL('src/entities/ai/namespace/classes/AiNamespace.md', reference),
+    new URL('src/entities/ai/namespace/classes/AiNamespace.md', pages),
     'utf8'
   );
   expect(ai).toContain('structuredCompletion');
@@ -76,7 +76,7 @@ test('object aliases expose concrete fields while retaining linked types and des
   const patch = await readFile(
     new URL(
       'generated/agent-harness/types.gen/type-aliases/AgentSessionChangesPatchResponse.md',
-      reference
+      pages
     ),
     'utf8'
   );
@@ -88,7 +88,7 @@ test('object aliases expose concrete fields while retaining linked types and des
   const request = await readFile(
     new URL(
       'generated/cognition/types.gen/type-aliases/StructuredCompletionRequest.md',
-      reference
+      pages
     ),
     'utf8'
   );

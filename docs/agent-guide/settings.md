@@ -720,6 +720,11 @@ mention picker; select text to open the formatting menu. Saved instructions
 retain mention identities using the shared editor's Markdown format and reopen
 with their formatting intact. Enter adds a new paragraph; use `Create agent` or
 `Save changes` to submit. The form also includes runtime selectors.
+Under `In Macro`, an Anthropic or OpenAI model shows an optional
+`<Provider> API key · Optional` row with `Add key`; the agent runs on Macro
+usage without one. `Add key` reveals the write-only field (`Cancel` hides it
+again); a saved key starts expanded with `Remove`. On plans without agent keys
+the row only explains that keys are part of Premium and Max.
 `Advanced` starts collapsed on desktop and mobile, showing only its heading,
 summary, and `Show` action, without an empty card beneath it. `Show` reveals the
 settings; `Hide` collapses them again and preserves the selected options.
