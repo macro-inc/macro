@@ -1401,9 +1401,10 @@ live mail with the viewer's access. See `docs/design/saved-views.md`.
   The URL carries `mail.savedView=<id>`; a view the viewer can't open shows
   the unavailable state, never all mail. Email views are private, so their
   menus have no Copy link.
-- **Order and unread.** Rows drag to reorder (a 4px move starts the drag, so a
-  click still opens the view) or use Move up/Move down in the row menu; the
-  order is personal and follows the account. A dot marks a view whose first
+- **Order and unread.** Desktop rows drag to reorder (a 4px move starts the
+  drag, so a click still opens the view); their menus have no Move items. In
+  the mobile picker, which has no drag, each row's menu has Move up/Move down.
+  The order is personal and follows the account. A dot marks a view whose first
   unread page has unread mail.
 - **Mobile.** A saved-view pill follows Filters; its drawer lists and manages
   views. The filter drawer shows "Save these filters as a view" above its footer

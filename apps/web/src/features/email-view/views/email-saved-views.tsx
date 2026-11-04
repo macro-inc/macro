@@ -470,7 +470,7 @@ function createEmailSavedViewOrder() {
 function EmailSavedViewRows(props: {
   onAction?: (action: () => void) => void;
   dialogOwner?: Owner | null;
-  /** Desktop rows drag to reorder; every list also moves through menus. */
+  /** Desktop rows drag to reorder; the phone picker moves through menus. */
   draggable?: boolean;
 }) {
   const { savedViewsList } = useEmailView();
@@ -499,8 +499,8 @@ function EmailSavedViewRows(props: {
             run={run}
             owner={owner}
             reorder={reorderItem}
-            onMoveUp={order.step(record.id, -1)}
-            onMoveDown={order.step(record.id, 1)}
+            onMoveUp={draggable ? undefined : order.step(record.id, -1)}
+            onMoveDown={draggable ? undefined : order.step(record.id, 1)}
           />
         );
         if (!draggable) return row();
