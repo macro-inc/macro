@@ -174,11 +174,22 @@ fn caller(extensions: &rmcp::model::Extensions) -> Result<ToolCaller, rmcp::Erro
         })
 }
 
+/// Tools ChatGPT is never offered. Each one runs code or hands an open-ended
+/// task to an agent, and the plugin directory refuses generic executors.
+const HIDDEN_FROM_CHATGPT: [&str; 6] = [
+    "BashCodeExecution",
+    "CreateAgentSession",
+    "DispatchCodingAgent",
+    "ManageAgentSession",
+    "Subagent",
+    "TextEditorCodeExecution",
+];
+
 /// Whether an OAuth caller might be ChatGPT: registered under its name, or
 /// holding a token with no recorded client, which fails closed until the next
 /// refresh records one. The name is self-reported, which is fine here: this
 /// picks how tools are presented and grants nothing, and a client naming itself
-/// ChatGPT only loses code mode.
+/// ChatGPT only loses code mode and the tools above.
 fn may_be_chatgpt(caller: &ToolCaller) -> bool {
     match caller {
         ToolCaller::McpClient { name: None } => true,
@@ -266,9 +277,13 @@ where
     ) -> Result<ListToolsResult, rmcp::ErrorData> {
         let user_id = Self::authenticated_user_id(&context.extensions)?;
         let mode = self.tool_mode(&user_id, &context.extensions).await;
+        let mut tools = self.tool_definitions_for(mode);
+        if caller(&context.extensions).is_ok_and(|caller| may_be_chatgpt(&caller)) {
+            tools.retain(|tool| !HIDDEN_FROM_CHATGPT.contains(&tool.name.as_ref()));
+        }
 
         Ok(ListToolsResult {
-            tools: self.tool_definitions_for(mode),
+            tools,
             ..Default::default()
         })
     }
@@ -317,6 +332,16 @@ where
             Ok(caller) => caller,
             Err(error) => return (ToolCallOutcome::InvalidRequest, Err(error)),
         };
+
+        if may_be_chatgpt(&caller) && HIDDEN_FROM_CHATGPT.contains(&request.name.as_ref()) {
+            return (
+                ToolCallOutcome::InvalidRequest,
+                Err(rmcp::ErrorData::resource_not_found(
+                    format!("tool {} not found", request.name),
+                    None,
+                )),
+            );
+        }
 
         let Some(arguments) = request.arguments.map(serde_json::Value::Object) else {
             return (
