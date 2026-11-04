@@ -57,6 +57,9 @@ unreadable item is skipped and logged by call id and field path.
 - Grant checks may finish after a reconnect: stop/flag only the observed enrollment.
 - A call with an active delivery lease cannot be claimed again, including newly
   arrived events; concurrent claims serialize briefly on the connection row.
+- Before ingesting, an import checks that sync is on and its lease still holds
+  the call's deliveries: stopping or disconnecting drops them, so that import
+  is skipped, while a reconnect of a running sync keeps them.
 - Dialpad sends no event id: deliveries dedupe on (call, state, timestamp).
 - The signature is checked before the event is read. A bad one is a 401; a
   signed event that does not decode, or has no timestamp, is acknowledged and

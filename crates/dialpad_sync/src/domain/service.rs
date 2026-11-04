@@ -321,11 +321,9 @@ impl<R: SyncRepository, G: Grants, D: Dialpad, V: DeliveryVerifier> Service<R, G
         let Some(call) = mapping::imported_call(&job.connection, &events, transcript, recap) else {
             return Ok(());
         };
-        // A disconnect during the fetch must not import.
-        let current = self.repo.by_id(job.connection.id).await?;
-        if !current.is_some_and(|connection| {
-            connection.enabled && connection.enrolled_at == job.connection.enrolled_at
-        }) {
+        // A stop or disconnect during the fetch drops the job's deliveries,
+        // so it must not import. A reconnect while running keeps them.
+        if !self.repo.holds(job).await? {
             span.record("outcome", "stopped");
             return Ok(());
         }

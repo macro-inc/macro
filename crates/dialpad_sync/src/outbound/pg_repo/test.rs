@@ -1279,3 +1279,33 @@ async fn signed_events_are_read_leniently_and_unreadable_ones_acknowledged(pool:
     .unwrap();
     assert_eq!(stored, 0);
 }
+
+#[sqlx::test(
+    migrator = "MACRO_DB_MIGRATIONS",
+    fixtures(path = "../../../fixtures", scripts("users"))
+)]
+async fn a_reconnect_during_an_import_still_imports_the_call(pool: PgPool) {
+    let calls = Arc::new(Calls::default());
+    let service = Arc::new(service(pool, GrantState::Active, calls.clone()));
+    service.connect(&user(), Backfill::None).await.unwrap();
+    service.complete(&user()).await.unwrap();
+    let connection = service.repo.by_user(&user()).await.unwrap().unwrap();
+    let event = serde_json::from_value(call_event(9, "call_transcription", 3)).unwrap();
+    service
+        .repo
+        .enqueue(connection.id, event, None)
+        .await
+        .unwrap();
+    let started = Arc::new(tokio::sync::Notify::new());
+    let resume = Arc::new(tokio::sync::Notify::new());
+    *service.dialpad.transcript_pause.lock().unwrap() = Some((started.clone(), resume.clone()));
+    let worker_service = service.clone();
+    let worker = tokio::spawn(async move { worker_service.tick().await });
+    started.notified().await;
+    // Reconnecting a running sync (say, to refresh the grant) keeps it on.
+    service.connect(&user(), Backfill::None).await.unwrap();
+    service.complete(&user()).await.unwrap();
+    resume.notify_one();
+    worker.await.unwrap().unwrap();
+    assert_eq!(calls.0.lock().unwrap().len(), 1);
+}

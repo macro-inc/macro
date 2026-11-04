@@ -509,6 +509,22 @@ impl SyncRepository for PgSyncRepository {
         }))
     }
 
+    async fn holds(&self, job: &Job) -> Result<bool> {
+        Ok(sqlx::query_scalar!(
+            r#"SELECT EXISTS (
+                SELECT 1 FROM dialpad_sync_events e
+                JOIN dialpad_sync_connections c ON c.id = e.connection_id
+                WHERE e.connection_id = $1 AND e.call_id = $2 AND e.lease_id = $3
+                    AND e.completed_at IS NULL AND c.enabled
+            ) AS "holds!""#,
+            job.connection.id,
+            job.call_id.0,
+            job.lease_id
+        )
+        .fetch_one(&self.pool)
+        .await?)
+    }
+
     async fn events(&self, id: Uuid, call: DialpadId) -> Result<Vec<CallEvent>> {
         let payloads = sqlx::query_scalar!(
             r#"SELECT payload FROM dialpad_sync_events

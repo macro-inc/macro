@@ -75,6 +75,9 @@ pub trait SyncRepository: Send + Sync {
     /// Lease the pending deliveries of the next due call, if any. Deliveries
     /// leased elsewhere are left to that claim.
     async fn claim(&self) -> Result<Option<Job>>;
+    /// Whether the sync is on and `job` still holds its deliveries; stopping
+    /// or disconnecting drops them.
+    async fn holds(&self, job: &Job) -> Result<bool>;
     /// Every stored event for one call, oldest first.
     async fn events(&self, id: Uuid, call: DialpadId) -> Result<Vec<CallEvent>>;
     /// Complete the job's leased deliveries, schedule their retry with
