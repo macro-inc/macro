@@ -251,7 +251,7 @@ await lexical.commit();
   their `$create…`/`$is…` helpers, the `@lexical/*` nodes and helpers our
   documents use (lists, headings, quotes, links, tables, code, marks),
   `$getId`, and the markdown transformers, so
-  `$convertFromMarkdownString(md, TRANSFORMERS)` builds blocks from markdown.
+  `$convertFromMarkdownString(md, ALL_TRANSFORMERS)` builds blocks from markdown.
   The same specifier works in code mode and for npm users.
 - Lexical's `$` functions work only against the module instance that owns the
   editor, so the program and the SDK share one copy of `lexical` (bundle plan
