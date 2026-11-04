@@ -102,21 +102,29 @@ describe('long message content', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Show more' }));
     expect(preview()).toBeNull();
 
-    fireEvent.pointerDown(screen.getByText('A very long comment'));
-    fireEvent.pointerDown(screen.getByRole('button', { name: 'Badge' }));
+    const press = (target: Element) => {
+      fireEvent.pointerDown(target);
+      fireEvent.pointerUp(target);
+    };
+
+    press(screen.getByText('A very long comment'));
+    press(screen.getByRole('button', { name: 'Badge' }));
     expect(preview()).toBeNull();
 
     const menu = document.createElement('button');
     menu.textContent = 'Delete menu';
     document.body.appendChild(menu);
     try {
-      fireEvent.pointerDown(menu);
+      press(menu);
       expect(preview()).toBeNull();
     } finally {
       menu.remove();
     }
 
-    fireEvent.pointerDown(screen.getByRole('button', { name: 'Page' }));
+    const page = screen.getByRole('button', { name: 'Page' });
+    fireEvent.pointerDown(page);
+    expect(preview()).toBeNull();
+    fireEvent.pointerUp(page);
     expect(preview()).not.toBeNull();
     expect(screen.getByRole('button', { name: 'Show more' })).toBeTruthy();
   });

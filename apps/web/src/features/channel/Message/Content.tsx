@@ -141,17 +141,33 @@ function CollapsibleBody(props: { children: JSX.Element }) {
     const observer = new ResizeObserver(measure);
     observer.observe(measureRef);
     // The margin card stays mounted when a press leaves it, so the body has
-    // to fold itself. The same press closes an expanded minimized card.
+    // to fold itself. Folding on pointerdown would shrink this card and slide
+    // the cards below it out from under the press before pointerup.
+    let finishPress: (() => void) | undefined;
+    const clearFinish = () => {
+      if (!finishPress) return;
+      document.removeEventListener('pointerup', finishPress, true);
+      document.removeEventListener('pointercancel', finishPress, true);
+      finishPress = undefined;
+    };
     const onPointerDown = (event: PointerEvent) => {
       if (!expanded()) return;
       const card = bodyRef.closest('[data-comment-thread]');
       if (!card || pressKeepsExpandedComment(card, event.target)) return;
-      showLess();
+      clearFinish();
+      finishPress = () => {
+        clearFinish();
+        if (!expanded()) return;
+        showLess();
+      };
+      document.addEventListener('pointerup', finishPress, true);
+      document.addEventListener('pointercancel', finishPress, true);
     };
     document.addEventListener('pointerdown', onPointerDown, true);
     onCleanup(() => {
       observer.disconnect();
       document.removeEventListener('pointerdown', onPointerDown, true);
+      clearFinish();
     });
   });
 
