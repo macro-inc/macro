@@ -10850,6 +10850,116 @@
         }
       }
     },
+    "/documents/{document_id}/ai-edit": {
+      "post": {
+        "tags": ["document"],
+        "summary": "Edit a markdown document or task by instructions with the caller's edit\naccess. Runs EditDocument's pipeline as a live collaborator, with its AI\nadmission and billing.",
+        "description": "A client that disconnects aborts the edit: axum drops this handler's\nfuture, which drops the in-flight request to the editing worker, and the\nworker aborts on its request signal. Steps already acknowledged stay.",
+        "operationId": "edit_document_with_ai",
+        "parameters": [
+          {
+            "name": "document_id",
+            "in": "path",
+            "description": "Document identity",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/DocumentAiEditRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DocumentAiEdited"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Not a markdown document, or empty instructions",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Authentication required"
+          },
+          "402": {
+            "description": "AI allowance exhausted",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AiAdmissionErrorBody"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Document edit access denied"
+          },
+          "404": {
+            "description": "Document not found"
+          },
+          "422": {
+            "description": "The editor could not do the edit; nothing changed",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DocumentAiEditRefused"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "The edit could not start",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "502": {
+            "description": "The edit failed and may have partly applied",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DocumentAiEditFailed"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "AI usage validation unavailable; retry later",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AiAdmissionErrorBody"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/documents/{document_id}/branch_name": {
       "get": {
         "tags": ["document"],
@@ -20921,6 +21031,21 @@
         "description": "What a typing agent is doing.",
         "enum": ["thinking", "writing", "working", "waiting"]
       },
+      "AiAdmissionErrorBody": {
+        "type": "object",
+        "description": "Public admission error payload. Handlers with additional fields can reuse the\ndomain error's code and message and [`admission_status`].",
+        "required": ["error", "code"],
+        "properties": {
+          "code": {
+            "type": "string",
+            "description": "Stable denial or unavailability code."
+          },
+          "error": {
+            "type": "string",
+            "description": "Human-readable explanation, without internal billing diagnostics."
+          }
+        }
+      },
       "Anchor": {
         "oneOf": [
           {
@@ -28057,6 +28182,77 @@
           "userId": {
             "type": "string",
             "description": "Recipient."
+          }
+        }
+      },
+      "DocumentAiEditFailed": {
+        "type": "object",
+        "description": "The edit failed after it started, so it may have partly applied. Read the\ndocument before retrying.",
+        "required": ["error", "message"],
+        "properties": {
+          "error": {
+            "$ref": "#/components/schemas/DocumentAiEditFailedCode",
+            "description": "Always `edit_failed`."
+          },
+          "message": {
+            "type": "string",
+            "description": "What to do next; the cause is logged, never returned."
+          }
+        }
+      },
+      "DocumentAiEditFailedCode": {
+        "type": "string",
+        "description": "Error code of an edit that failed after it started.",
+        "enum": ["edit_failed"]
+      },
+      "DocumentAiEditRefused": {
+        "type": "object",
+        "description": "The editor could not do the edit; nothing changed.",
+        "required": ["error", "reason"],
+        "properties": {
+          "error": {
+            "$ref": "#/components/schemas/DocumentAiEditRefusedCode",
+            "description": "Always `edit_refused`."
+          },
+          "reason": {
+            "type": "string",
+            "description": "Why, in the editor's words: what it needs to know or cannot do."
+          }
+        }
+      },
+      "DocumentAiEditRefusedCode": {
+        "type": "string",
+        "description": "Error code of an edit the editor refused.",
+        "enum": ["edit_refused"]
+      },
+      "DocumentAiEditRequest": {
+        "type": "object",
+        "description": "What to change, in words.",
+        "required": ["instructions"],
+        "properties": {
+          "fast": {
+            "type": "boolean",
+            "description": "Run the single-model fast pipeline, for one small, contained edit."
+          },
+          "instructions": {
+            "type": "string",
+            "description": "Natural-language instructions. Name the section or quote the text to\nchange, describe the outcome, and say what must stay as it is.",
+            "minLength": 1
+          }
+        }
+      },
+      "DocumentAiEdited": {
+        "type": "object",
+        "description": "A completed edit by instructions.",
+        "required": ["revision"],
+        "properties": {
+          "clarification": {
+            "type": ["string", "null"],
+            "description": "What the editor needs to know to finish, when it applied part of the\nedit and stopped; the applied part stays."
+          },
+          "revision": {
+            "type": "string",
+            "description": "The document's version after the edit, as sync-service encodes it."
           }
         }
       },

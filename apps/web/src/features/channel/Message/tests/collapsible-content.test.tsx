@@ -76,6 +76,22 @@ describe('long message content', () => {
     expect(screen.getByRole('button', { name: 'Show more' })).toBeTruthy();
   });
 
+  it('starts the preview at the top again after reading down the expanded body', () => {
+    setBodyHeight(800);
+    const view = renderContent(true);
+    const body = view.container.querySelector<HTMLElement>(
+      '[data-message-content] > div'
+    )!;
+
+    fireEvent.click(screen.getByRole('button', { name: 'Show more' }));
+    body.scrollTop = 500;
+    expect(body.scrollTop).toBe(500);
+
+    fireEvent.click(screen.getByRole('button', { name: 'Show less' }));
+    expect(body.hasAttribute('data-collapsed')).toBe(true);
+    expect(body.scrollTop).toBe(0);
+  });
+
   it('reveals a hidden link when focus moves into it', () => {
     setBodyHeight(800);
     const view = renderContent(true);

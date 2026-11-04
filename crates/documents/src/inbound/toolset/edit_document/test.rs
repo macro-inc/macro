@@ -671,6 +671,7 @@ impl EditingWorkerService for FakeEditingWorker {
             edits_applied: 1,
             usage: Vec::new(),
             clarification: None,
+            revision: None,
         })
     }
 

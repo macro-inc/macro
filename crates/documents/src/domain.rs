@@ -2,6 +2,9 @@
 
 /// Event-to-activity mappings for this domain.
 pub mod activity;
+/// Edits of markdown documents by instructions, for HTTP callers.
+#[cfg(feature = "ai_tools")]
+pub mod ai_edit;
 #[cfg(feature = "ai_tools")]
 pub mod ai_editing;
 pub mod branch_name;
