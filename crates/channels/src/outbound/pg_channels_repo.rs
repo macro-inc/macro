@@ -2896,30 +2896,43 @@ impl ChannelRepo for PgChannelsRepo {
         Ok(())
     }
 
-    async fn delete_channel(&self, channel_id: Uuid, user_id: String) -> Result<(), Self::Err> {
+    #[tracing::instrument(err, skip(self, user_id))]
+    async fn user_is_team_admin(
+        &self,
+        user_id: &MacroUserIdStr<'_>,
+        team_id: Uuid,
+    ) -> Result<bool, Self::Err> {
+        sqlx::query_scalar!(
+            r#"
+            SELECT EXISTS (
+                SELECT 1 FROM team_user
+                WHERE user_id = $1 AND team_id = $2
+                  AND team_role IN ('admin'::team_role, 'owner'::team_role)
+            ) AS "is_admin!"
+            "#,
+            user_id.as_ref(),
+            team_id,
+        )
+        .fetch_one(&self.pool)
+        .await
+        .context("failed to check team administration")
+    }
+
+    #[tracing::instrument(err, skip(self))]
+    async fn delete_channel(&self, channel_id: Uuid) -> Result<(), Self::Err> {
         let result = sqlx::query!(
             r#"
             DELETE FROM comms_channels
             WHERE id = $1
-              AND EXISTS (
-                  SELECT 1
-                  FROM comms_channel_participants
-                  WHERE channel_id = $1
-                    AND user_id = $2
-                    AND role = 'owner'::comms_participant_role
-              )
             "#,
             channel_id,
-            user_id,
         )
         .execute(&self.pool)
         .await
         .context("failed to delete channel")?;
 
         if result.rows_affected() == 0 {
-            anyhow::bail!(
-                "channel not deleted, either it didn't exist or the user_id provided was not the owner"
-            );
+            anyhow::bail!("channel not deleted because it does not exist");
         }
         Ok(())
     }

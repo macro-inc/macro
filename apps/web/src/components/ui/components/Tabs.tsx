@@ -17,8 +17,8 @@ export type TabOption<T extends string> = {
   /** Accessible name, and the tooltip when the group is icon-only. */
   label: string;
   icon?: Component<{ class?: string }>;
-  /** Shown after the label in muted figures. */
-  count?: number;
+  /** Shown after the label in muted figures; strings retain caller formatting. */
+  count?: number | string;
   disabled?: boolean;
 };
 

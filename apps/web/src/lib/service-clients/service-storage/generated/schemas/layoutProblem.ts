@@ -8,7 +8,9 @@ import type { LayoutProblemOneOf } from './layoutProblemOneOf';
 import type { LayoutProblemOneOfFive } from './layoutProblemOneOfFive';
 import type { LayoutProblemOneOfNine } from './layoutProblemOneOfNine';
 import type { LayoutProblemOneOfOnefive } from './layoutProblemOneOfOnefive';
+import type { LayoutProblemOneOfOnenine } from './layoutProblemOneOfOnenine';
 import type { LayoutProblemOneOfOneone } from './layoutProblemOneOfOneone';
+import type { LayoutProblemOneOfOneseven } from './layoutProblemOneOfOneseven';
 import type { LayoutProblemOneOfOnethree } from './layoutProblemOneOfOnethree';
 import type { LayoutProblemOneOfSeven } from './layoutProblemOneOfSeven';
 import type { LayoutProblemOneOfThree } from './layoutProblemOneOfThree';
@@ -24,4 +26,6 @@ export type LayoutProblem =
   | LayoutProblemOneOfNine
   | LayoutProblemOneOfOneone
   | LayoutProblemOneOfOnethree
-  | LayoutProblemOneOfOnefive;
+  | LayoutProblemOneOfOnefive
+  | LayoutProblemOneOfOneseven
+  | LayoutProblemOneOfOnenine;

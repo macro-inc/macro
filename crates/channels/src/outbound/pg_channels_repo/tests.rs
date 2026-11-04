@@ -62,6 +62,44 @@ fn macro_user_id(user_id: &str) -> MacroUserIdStr<'static> {
     MacroUserIdStr::try_from(user_id.to_owned()).expect("valid macro user id")
 }
 
+#[sqlx::test(
+    fixtures(path = "../../../fixtures", scripts("channels_repo")),
+    migrator = "MACRO_DB_MIGRATIONS"
+)]
+async fn team_admin_authority_is_scoped_to_exact_membership(pool: Pool<Postgres>) {
+    let repo = repo(pool.clone());
+    let team_b = Uuid::from_u128(0x22222222_2222_2222_2222_222222222222);
+    let actor = macro_user_id(LEFT_USER);
+    assert!(!repo.user_is_team_admin(&actor, TEAM_A).await.unwrap());
+
+    sqlx::query!(
+        "UPDATE team_user SET team_role = 'admin'::team_role WHERE user_id = $1",
+        LEFT_USER
+    )
+    .execute(&pool)
+    .await
+    .unwrap();
+
+    assert!(repo.user_is_team_admin(&actor, TEAM_A).await.unwrap());
+    assert!(!repo.user_is_team_admin(&actor, team_b).await.unwrap());
+
+    sqlx::query!(
+        "UPDATE team_user SET team_role = 'owner'::team_role WHERE user_id = $1",
+        LEFT_USER
+    )
+    .execute(&pool)
+    .await
+    .unwrap();
+
+    assert!(repo.user_is_team_admin(&actor, TEAM_A).await.unwrap());
+    assert!(
+        !repo
+            .user_is_team_admin(&macro_user_id(NON_MEMBER), TEAM_A)
+            .await
+            .unwrap()
+    );
+}
+
 fn thread_rows_request(
     user_id: &str,
     filter: LiteralTree<ChannelThreadLiteral>,
@@ -2843,7 +2881,7 @@ async fn delete_channel_cascades_contacts_backfill_outbox_rows(pool: Pool<Postgr
     .await
     .unwrap();
 
-    repo.delete_channel(created.id, USER_A.to_string())
+    repo.delete_channel(created.id)
         .await
         .expect("channel delete must succeed when contacts_backfill_outbox references the channel");
 
