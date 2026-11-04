@@ -39,7 +39,7 @@ async fn concurrent_requests_share_limits_and_reconnect_does_not_reset_them() {
     assert!(matches!(
         gate.acquire(reconnected).await,
         Err(EmailApiError::RateLimited {
-            origin: RateLimitOrigin::Local,
+            origin: RateLimitOrigin::Gate(GateLimit::Concurrency),
             ..
         })
     ));
@@ -53,10 +53,20 @@ async fn concurrent_requests_share_limits_and_reconnect_does_not_reset_them() {
     match gate.acquire(mailbox).await {
         Err(EmailApiError::RateLimited {
             retry_after: Some(delay),
-            ..
+            origin: RateLimitOrigin::Gate(GateLimit::Cooldown),
         }) => assert!(delay > Duration::from_secs(80)),
         _ => panic!("a shorter cooldown must not erase an existing provider Retry-After"),
     }
+    // Four requests were admitted, all under sync generation 1.
+    assert_eq!(gate.admitted(mailbox).await, Some(4));
+    assert_eq!(
+        gate.admitted(MailboxAccess {
+            sync_generation: 2,
+            ..mailbox
+        })
+        .await,
+        None
+    );
     cleanup(&gate, mailbox).await;
 }
 
@@ -79,7 +89,7 @@ async fn request_window_survives_permit_release_and_reconnect() {
         .unwrap();
     assert!(
         matches!(gate.acquire(MailboxAccess { grant_generation: 2,..mailbox }).await,
-        Err(EmailApiError::RateLimited { retry_after: Some(delay),.. }) if delay > Duration::from_secs(590))
+        Err(EmailApiError::RateLimited { retry_after: Some(delay), origin: RateLimitOrigin::Gate(GateLimit::Window) }) if delay > Duration::from_secs(590))
     );
     cleanup(&gate, mailbox).await;
 }

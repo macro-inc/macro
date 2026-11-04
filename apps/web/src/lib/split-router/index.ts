@@ -13,6 +13,12 @@ export type {
   HistoryAdapter,
   InterceptHandler,
 } from './history/types';
+export type {
+  PaneLayout,
+  SplitAxis,
+  SplitPath,
+  SplitSide,
+} from './panes/layout-tree';
 export { createMemoryPaneStore } from './panes/memory-store';
 export type {
   OpenIntent,
@@ -26,6 +32,7 @@ export type {
   LayoutPane,
   LayoutSnapshot,
   RestoreLayoutOptions,
+  ShowLayoutOptions,
 } from './router/layout';
 export { PANE_LEVEL } from './router/leave-guards';
 export type {

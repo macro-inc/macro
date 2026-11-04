@@ -16,6 +16,8 @@ export interface InviteToTeamMetadata {
   invitedBy: string;
   /** What the invitee gets by joining, as the team stood when the invite was sent. */
   inviteePlan?: InviteePlan;
+  /** Whether the invite creates an agent account. */
+  isAgent?: boolean;
   /** Whether this email reminds the invitee of an invite they have not answered. */
   reminder?: boolean;
   /** Role/permission level in the team */

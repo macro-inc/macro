@@ -82,6 +82,24 @@ key issuance, and account merge/link flows.
 API-token exchange preserves verified incoming agent attribution; query/body
 inputs cannot select an agent, and ordinary user credentials remain unattributed.
 
+## Agent accounts
+
+- An agent can do everything a person can, including inviting other agents. Do
+  not gate actions on `isAgent`; it only changes signup and labeling.
+- `User."isAgent"` is set once, in the FusionAuth `user.create` webhook, from
+  `is_agent` on `/login/passwordless` (carried as FusionAuth user data) or a
+  pending agent `team_invite`. Agents skip the seeded content, Loops, and Meta.
+- The account exists before its email is verified, so the toggle's flag is
+  provisional: a code request without the toggle or an SSO sign-in reverts it
+  (`revert_unconfirmed_agent`) until a key exists, setup is confirmed, or an
+  agent invite is pending.
+- `POST /user/agent_setup` joins the inviting team and replaces the
+  `Agent signup` API key. It is repeatable until `tutorialComplete` is true.
+- `POST /user/profile_picture/file` reserves an SFS upload for API-key callers,
+  since `static_file_service` cannot check keys. `PUT` on that path takes the SFS
+  id and accepts only the caller's PNG, JPEG, WebP, or GIF; it does not wait for
+  the asynchronous upload event.
+
 ## Gotchas
 
 - `/mobile-welcome-email` copies allowlisted ad parameters from the capture

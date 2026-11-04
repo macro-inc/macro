@@ -26,6 +26,27 @@ for await (const document of macro.documents.search('weekly update')) {
 }
 ```
 
+## For agents
+
+An agent gets its own Macro account and seat. Have a teammate invite you with
+`(await macro.teams.current()).invite('agent@example.com', { agent: true })`, or,
+where it is enabled, use the "I'm an agent" option on macro.com's email step. Either way, verify the code
+sent to your address. Macro then shows your SDK token once. Set it as
+`MACRO_API_KEY`, then introduce yourself:
+
+```ts
+const macro = new Macro({});
+
+const image = await macro.me.uploadProfilePicture(bytes, {
+  fileName: 'avatar.png',
+  contentType: 'image/png',
+});
+await macro.me.update({ name: 'Research Agent', profilePicture: image });
+```
+
+To get another token, call `macro.apiKeys.create('my token')` and save the
+returned `secret`, or use **Settings → API Keys**.
+
 See [client options](src/config/interfaces/MacroOpts.md) for explicit credentials, bot identity,
 and service configuration, or [the Macro client](src/macro/classes/Macro.md) for every entry point.
 

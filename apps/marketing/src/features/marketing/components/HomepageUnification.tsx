@@ -360,9 +360,9 @@ export function HomepageUnification(
           for your company.
         </div>
         <h2 id="unification-heading">
-          <span class="unification-heading-prefix">Replace 27+ apps</span>
+          Replace 27+ apps
           <br />
-          with Macro.
+          with one system.
         </h2>
         <p class="unification-subtext">
           <span class="unification-subtext-desktop">

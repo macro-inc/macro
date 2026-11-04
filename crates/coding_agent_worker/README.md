@@ -22,6 +22,23 @@ agent resumes its native session on the next prompt. Socket errors do not create
 replacement agents. Changing the configured provider does not convert existing
 sessions into sessions for the other provider.
 
+After macrod restarts or its runtime connection reconnects, the harness service
+initializes the new connection and calls ACP `session/list`. herdr-acp lists
+the sessions whose Herdr agent still runs, and the service loads each one. That
+replays local history Macro missed and resumes forwarding without a Macro
+prompt. Agents closed in Herdr are not reopened.
+
+Closing a session's agent in Herdr (its tab or pane, by you or the agent) is
+reported to Macro once with the ACP extension notification `_session/closed`.
+Only Herdr's explicit `agent_not_found` answer counts, checked every few
+seconds while no Macro prompt runs; socket errors, timeouts, and unreadable
+answers are never reported, and neither is macrod or its connection stopping.
+Only an agent this macrod run launched or saw running counts, so sessions
+restored after Herdr itself restarted, whose agents are all gone, stay visible.
+Macro archives the session if its owner turned on archiving when the runtime
+closes and the session is idle. The next prompt still relaunches the agent,
+and a close of that new agent is reported again.
+
 A background reader forwards local TUI turns even without a Macro prompt.
 Complete JSONL records are read in bounded batches. Partial lines wait for the
 next append; truncation or replacement requires a reload. Turn boundaries are

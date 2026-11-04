@@ -14,6 +14,8 @@ import {
   SplitHeaderRight,
 } from '@components/app/split-layout/components/SplitHeader';
 import { BlockItemSplitLabel } from '@components/app/split-layout/components/SplitLabel';
+import { useSplitLayout } from '@components/app/split-layout/layout';
+import { useItemOperations } from '@core/component/FileList/useItemOperations';
 import { BlockLiveIndicators } from '@core/component/LiveIndicators';
 import { toast } from '@core/component/Toast/Toast';
 import { ShareTrigger } from '@core/component/TopBar/ShareButton';
@@ -28,7 +30,7 @@ import type { TableDetail } from '@service-storage/generated/schemas/tableDetail
 import { getEntityGraphqlClient } from '@service-storage/graphql-soup';
 import { ButtonGroup } from '@ui';
 import type { ResultAsync } from 'neverthrow';
-import { lazy, Show, Suspense } from 'solid-js';
+import { createSignal, lazy, Show, Suspense } from 'solid-js';
 import { DatabaseTitle } from '../../database/components/database-title';
 import {
   type DatabaseEntityFailure,
@@ -89,6 +91,26 @@ export function TopBar(props: {
   const favoriteAction = makeFavoriteAction();
   const copyLinkAction = makeCopyLinkAction();
   const copyEntityIdAction = makeCopyEntityIdAction();
+  const itemOperations = useItemOperations();
+  const { replaceOrInsertSplit } = useSplitLayout();
+  // One copy at a time: the menu can reopen while a copy is being written.
+  const [duplicating, setDuplicating] = createSignal(false);
+  const duplicate = async (detail: DatabaseDetail) => {
+    if (duplicating()) return;
+    setDuplicating(true);
+    const copy = await itemOperations
+      .copyItem({
+        itemType: 'database',
+        id: databaseId,
+        name: detail.database.name,
+      })
+      .finally(() => setDuplicating(false));
+    if (copy)
+      replaceOrInsertSplit(
+        { id: copy, type: 'database' },
+        'entity-actions-menu'
+      );
+  };
   const entity = (detail: DatabaseDetail): DatabaseEntity => ({
     type: 'database',
     id: databaseId,
@@ -114,6 +136,8 @@ export function TopBar(props: {
         copyEntityIdAction.executeById(databaseId),
         'database-actions'
       ),
+    duplicating: duplicating(),
+    onDuplicate: () => fireAndForget(duplicate(detail), 'database-actions'),
     onMoveToFolder:
       detail.grant === 'owner'
         ? () =>

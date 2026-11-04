@@ -438,14 +438,6 @@ pub async fn test_api_context(pool: sqlx::Pool<sqlx::Postgres>) -> std::sync::Ar
         (*entity_access_service).clone(),
     );
 
-    let project_tool_context = ai_tools::build_project_tool_context(
-        pool.clone(),
-        macro_event_broker.clone(),
-        entity_access_service.clone(),
-        document_tool_context.service.clone(),
-        user_email_service.clone(),
-    );
-
     let initiative_tool_context = ai_tools::build_initiative_tool_context(
         pool.clone(),
         &document_tool_context,
@@ -459,6 +451,14 @@ pub async fn test_api_context(pool: sqlx::Pool<sqlx::Postgres>) -> std::sync::Ar
         entity_access_service.clone(),
         ai_tools::ToolTableEventPublisher::NoOp(Default::default()),
         ai_tools::MaybeToolEventBroker::Real(macro_event_broker.clone()),
+    );
+    let project_tool_context = ai_tools::build_project_tool_context(
+        pool.clone(),
+        macro_event_broker.clone(),
+        entity_access_service.clone(),
+        document_tool_context.service.clone(),
+        user_email_service.clone(),
+        databases_tool_context.service.clone(),
     );
     let databases_sql_tool_context = ai_tools::build_databases_sql_tool_context(
         &databases_tool_context,
