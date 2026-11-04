@@ -28,6 +28,7 @@ function list(ids: string[]) {
     },
   });
   scroller.getBoundingClientRect = () => ({ top: 0 }) as DOMRect;
+  let pinnedHeader: HTMLElement | undefined;
   const layout = (next: string[]) => {
     scroller.replaceChildren(
       ...next.map((id, index) => {
@@ -38,7 +39,8 @@ function list(ids: string[]) {
         row.getBoundingClientRect = () =>
           ({ top: index * 44 - scrollTop }) as DOMRect;
         return row;
-      })
+      }),
+      ...(pinnedHeader ? [pinnedHeader] : [])
     );
   };
   layout(ids);
@@ -48,6 +50,14 @@ function list(ids: string[]) {
     layout,
     scrollTo: (value: number) => {
       scrollTop = value;
+    },
+    /** A header row stuck to the top of the viewport, whatever scrolls under it. */
+    pinHeader: () => {
+      pinnedHeader = document.createElement('div');
+      pinnedHeader.id = 'pinned-header';
+      pinnedHeader.setAttribute('role', 'row');
+      pinnedHeader.getBoundingClientRect = () => ({ top: 0 }) as DOMRect;
+      scroller.append(pinnedHeader);
     },
   };
 }
@@ -105,22 +115,14 @@ it('keeps the anchor through the removal of the row it was on', () => {
 it('anchors on threads, not a date header pinned at the top', () => {
   const ids = Array.from({ length: 20 }, (_, index) => `row-${index}`);
   const { dom, anchor, update } = setup(ids);
-  dom.scrollTo(440);
-  const pinnedHeader = () => {
-    const header = document.createElement('div');
-    header.id = 'pinned-header';
-    header.setAttribute('role', 'row');
-    header.getBoundingClientRect = () => ({ top: 0 }) as DOMRect;
-    dom.scroller.append(header);
-  };
-  pinnedHeader();
+  // row-10 has scrolled partly off, so the header is the topmost row on screen.
+  dom.scrollTo(450);
+  dom.pinHeader();
   anchor.capture();
 
-  dom.layout(['new-mail', ...ids]);
-  pinnedHeader();
   update(['new-mail', ...ids]);
 
-  expect(dom.scroller.scrollTop).toBe(440 + 44);
+  expect(dom.scroller.scrollTop).toBe(450 + 44);
 });
 
 it('leaves the list at the top so new mail shows there', () => {
