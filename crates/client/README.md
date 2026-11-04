@@ -112,6 +112,26 @@ ordinary engine handoff preserves the marker and continues the saved scan.
 Reset notifications restart active backfills promptly, but checkpoint validity
 does not depend on observing a notification.
 
+## Streamed sync
+
+`cache_core::sync` fills the cache from one streamed NDJSON response
+(contract: [streamed cache sync](../../docs/architecture/streamed-cache-sync.md)
+and `apps/web/src/lib/graphql-cache/sync-protocol.ts`). Hosts own the network:
+they build the request with `SyncRun::request_body`, feed response bytes to
+`SyncRun::push_bytes`, and apply each decoded frame with
+`Engine::sync_apply_next`, one engine write per frame, so foreground reads can
+go first. The engine stays I/O-free: a host `SyncHooks` supplies the same Soup
+projection composition it uses for hydration and server deletions, and the
+clocks. Hydrate lanes record delivered keys as lane members; a completed
+membership listing deletes unlisted members like a server deletion; calendar
+lanes commit their coverage with the lowest per-link watermark. Lane state and
+members live in `sync_lanes` / `sync_members` (storage schema 12), and `clear`,
+`reset_with_records` and format migration wipe them with the records. The
+browser engine worker drives runs (`worker/sync-driver.ts`); the native plugin
+drives them in Rust (`graphql_cache_plugin/src/sync.rs`) through an HTTP opener
+the app installs at setup. Both hosts compose page and deletion projections
+with `soup_filter_cache_adapter::host_projections`.
+
 ## Soup page retention
 
 Backfill hydration persists normalized descendants (including email message

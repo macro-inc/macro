@@ -1856,6 +1856,7 @@ impl Storage for TursoStorage {
                 driver::execute(&connection, "DELETE FROM index_documents", Vec::new())?;
                 driver::execute(&connection, "DELETE FROM records", Vec::new())?;
                 calendar::clear(&connection)?;
+                sync::clear(&connection)?;
                 self.fault_after(TestFaultSite::Clear, 2)?;
                 let mut statement = driver::prepare(&connection, RECORD_UPSERT)?;
                 for (index, entry) in entries.iter().enumerate() {
@@ -3538,6 +3539,7 @@ fn migrate_previous_format(
         driver::execute(connection, "DELETE FROM index_documents", Vec::new())?;
         driver::execute(connection, "DELETE FROM records", Vec::new())?;
         calendar::clear(connection)?;
+        sync::clear(connection)?;
         driver::execute(
             connection,
             "UPDATE meta SET value = ?1 WHERE key = 'namespace'",
@@ -3554,7 +3556,11 @@ fn initialize(connection: &Db, scope: &str, fresh: bool) -> Result<bool, TursoSt
     enable_foreign_keys(connection).map_err(TursoStorageError::initialization)?;
     if fresh {
         driver::write_transaction(connection, || {
-            for sql in CREATE_SCHEMA.into_iter().chain(calendar::CREATE_SCHEMA) {
+            for sql in CREATE_SCHEMA
+                .into_iter()
+                .chain(calendar::CREATE_SCHEMA)
+                .chain(sync::CREATE_SCHEMA)
+            {
                 driver::execute(connection, sql, Vec::new())?;
             }
             driver::execute(
@@ -3737,6 +3743,7 @@ fn validate_statements(connection: &Db) -> Result<(), TursoStorageError> {
     for sql in INDEX_FACTS_DELETE
         .into_iter()
         .chain(calendar::VALIDATED_SQL)
+        .chain(sync::VALIDATED_SQL)
     {
         driver::validate(connection, sql).map_err(TursoStorageError::initialization)?;
     }
@@ -4316,7 +4323,8 @@ fn validate_frozen_schema(connection: &Db) -> Result<(), TursoStorageError> {
         "optimistic_uncertain_attributes",
         "optimistic_index_documents",
     )?;
-    calendar::validate_schema(connection)
+    calendar::validate_schema(connection)?;
+    sync::validate_schema(connection)
 }
 
 const SQLITE_SEQUENCE_TABLE: &str = "sqlite_sequence";
@@ -4366,6 +4374,7 @@ fn validate_allowed_schema_objects(connection: &Db) -> Result<(), TursoStorageEr
     let expected = expected
         .into_iter()
         .chain(calendar::TABLES)
+        .chain(sync::TABLES)
         .collect::<Vec<_>>();
     let named_indexes = named_indexes
         .into_iter()
@@ -5824,6 +5833,7 @@ mod page_retention;
 mod people_sql;
 mod record_batch;
 mod search;
+mod sync;
 
 #[cfg(all(test, target_arch = "wasm32"))]
 mod browser_test;

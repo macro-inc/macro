@@ -25,6 +25,7 @@ use crate::search::{
     SearchCursor, SearchDocument, SearchDocumentRef, SearchProfile, SearchQuery,
     project_search_documents,
 };
+use crate::sync::SyncLaneRow;
 use crate::value::{EntityKey, Record};
 use maybe_send::MaybeSend;
 use predicate_index::{
@@ -37,6 +38,7 @@ use std::sync::Arc;
 use std::sync::atomic::{AtomicUsize, Ordering};
 
 mod calendar;
+mod sync;
 
 /// Whether a storage implementation can provide queue diagnostics.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
@@ -439,6 +441,47 @@ pub trait Storage: MaybeSend {
     ) -> impl Future<Output = Result<(), Self::Error>> + MaybeSend;
 }
 
+/// Durable streamed-sync state: per-lane progress rows and lane membership
+/// (lane id to record keys). It describes cached records, so `clear`,
+/// `reset_with_records`, and storage replacement wipe it with them.
+pub trait SyncStorage: Storage {
+    /// Every saved lane row, ordered by lane id.
+    fn load_sync_lanes(
+        &self,
+    ) -> impl Future<Output = Result<Vec<SyncLaneRow>, Self::Error>> + MaybeSend;
+
+    /// Upserts a lane row and adds `members` to that lane, atomically.
+    fn save_sync_lane(
+        &mut self,
+        row: SyncLaneRow,
+        members: Vec<EntityKey<'static>>,
+    ) -> impl Future<Output = Result<(), Self::Error>> + MaybeSend;
+
+    /// One streamed sync page in one transaction: upserts `records` and
+    /// applies `projections` as [`Storage::put_batch_with_projections`] does,
+    /// then saves `lane` and adds `members` as [`Self::save_sync_lane`] does.
+    fn write_sync_page(
+        &mut self,
+        records: Vec<(EntityKey<'static>, Record)>,
+        projections: Vec<ProjectionMutation>,
+        lane: SyncLaneRow,
+        members: Vec<EntityKey<'static>>,
+    ) -> impl Future<Output = Result<(), Self::Error>> + MaybeSend;
+
+    /// Keys recorded as members of any of `lanes`, each once, in key order.
+    fn load_sync_members(
+        &self,
+        lanes: &[String],
+    ) -> impl Future<Output = Result<Vec<EntityKey<'static>>, Self::Error>> + MaybeSend;
+
+    /// Removes `keys` from the members of every lane in `lanes`.
+    fn remove_sync_members(
+        &mut self,
+        lanes: &[String],
+        keys: &[EntityKey<'static>],
+    ) -> impl Future<Output = Result<(), Self::Error>> + MaybeSend;
+}
+
 /// Hash-map storage for tests and as the Phase 1 default.
 #[derive(Clone, Debug, Default)]
 pub struct InMemoryStorage {
@@ -455,6 +498,8 @@ pub struct InMemoryStorage {
     calendar_ranges: HashMap<EntityKey<'static>, CalendarRangeRow>,
     calendar_coverage: Vec<CalendarSpan>,
     calendar_sync: CalendarSyncState,
+    sync_lanes: BTreeMap<String, String>,
+    sync_members: std::collections::BTreeSet<(String, EntityKey<'static>)>,
 }
 
 #[derive(Clone, Debug)]
@@ -1115,6 +1160,8 @@ impl Storage for InMemoryStorage {
         self.calendar_ranges.clear();
         self.calendar_coverage.clear();
         self.calendar_sync = CalendarSyncState::default();
+        self.sync_lanes.clear();
+        self.sync_members.clear();
         Ok(())
     }
 

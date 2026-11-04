@@ -16,6 +16,7 @@ pub use staged_hydrate::StagedHydrate;
 mod test;
 
 pub mod live_query;
+pub mod sync;
 pub mod watch_query;
 mod window_observation;
 

@@ -41,6 +41,9 @@ GraphQL response shape for callers. A concrete `Storage` impl (e.g.
 - `src/engine/people/sync.rs`: capture the single-owner engine's contact write fence, optionally scan at most 500 raw contact records by key, and reconcile complete exact-ID evidence. Never delete from scan omissions; reject stale fences, foreign/duplicate evidence and omitted self. Removal clears durable/hot records and invalidates dependent reads; context-only stubs are not membership. Engine replacement, clear and contact invalidation/deletion invalidate admission.
 - `src/page_retention.rs`: shared Soup/database/contact snapshot budget; hydration drops viewer page/lookup wrappers, not normalized descendants. Public profiles do not prove contact membership; only `GraphqlContact` projects into `person`.
 - `src/queue.rs`: the optimistic mutation queue.
+- `src/sync.rs` + `src/engine/sync.rs`: streamed sync plans, the NDJSON frame
+  decoder, and `Engine::sync_apply_next` (host-neutral; hosts open the stream
+  and supply `SyncHooks`).
 - `tests/`: the primary spec for engine behavior — one file per concern
   (optimistic updates, calendar range, search, subscriptions, fuzz).
 
@@ -88,6 +91,12 @@ eviction and reset make it miss. A miss requires full registration and never reu
 
 - Email send persistence and cancellation belong to the frontend email journal, not the normalized cache or its mutation queue.
 
+- Sync pages write through `Engine::sync_write_page` (`src/engine/sync.rs`),
+  not `hydrate_query`: records, projections and lane state in one
+  `SyncStorage::write_sync_page` transaction, without field changes, viewer
+  fields, dependency fan-out or new hot-tier entries. It falls back to the
+  general write for identity changes and pending optimistic layers; keep its
+  merge semantics in step with `write_network` / `persist_updates`.
 - Opaque JSON scalars must preserve floating-point values on reparse — `serde_json`
   is pulled in with the `float_roundtrip` feature; don't drop it.
 - `StoredMutation.created_at_ms` is the first-enqueue time hosts report as

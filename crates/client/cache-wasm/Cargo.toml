@@ -2,7 +2,7 @@
 edition = "2024"
 name = "cache-wasm"
 publish = false
-# Rebuild with shared permission admission and protected snapshot retirement.
+# Rebuild with the streamed cache sync.
 version = "0.6.55"
 
 [features]

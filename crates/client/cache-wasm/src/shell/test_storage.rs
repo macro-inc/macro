@@ -13,7 +13,7 @@ use cache_core::queue::{
 use cache_core::search::{
     SearchCursor, SearchDocument, SearchDocumentRef, SearchProfile, SearchQuery,
 };
-use cache_core::store::{QueueDiagnostics, Storage};
+use cache_core::store::{QueueDiagnostics, Storage, SyncStorage};
 use cache_core::value::{EntityKey, Record};
 use cache_turso::{PhysicalResetReason, TursoStorage, TursoStorageError};
 use predicate_index::{EffectiveOptimisticProjection, RecordKey, ValidatedIndexQuery};
@@ -370,5 +370,46 @@ impl CalendarRangeStorage for BrowserStorage {
         commit: &CalendarCommit,
     ) -> Result<CalendarCommitOutcome, Self::Error> {
         self.inner.calendar_commit(commit).await
+    }
+}
+
+impl SyncStorage for BrowserStorage {
+    async fn load_sync_lanes(&self) -> Result<Vec<cache_core::sync::SyncLaneRow>, Self::Error> {
+        self.inner.load_sync_lanes().await
+    }
+
+    async fn save_sync_lane(
+        &mut self,
+        row: cache_core::sync::SyncLaneRow,
+        members: Vec<EntityKey<'static>>,
+    ) -> Result<(), Self::Error> {
+        self.inner.save_sync_lane(row, members).await
+    }
+
+    async fn write_sync_page(
+        &mut self,
+        records: Vec<(EntityKey<'static>, Record)>,
+        projections: Vec<ProjectionMutation>,
+        lane: cache_core::sync::SyncLaneRow,
+        members: Vec<EntityKey<'static>>,
+    ) -> Result<(), Self::Error> {
+        self.inner
+            .write_sync_page(records, projections, lane, members)
+            .await
+    }
+
+    async fn load_sync_members(
+        &self,
+        lanes: &[String],
+    ) -> Result<Vec<EntityKey<'static>>, Self::Error> {
+        self.inner.load_sync_members(lanes).await
+    }
+
+    async fn remove_sync_members(
+        &mut self,
+        lanes: &[String],
+        keys: &[EntityKey<'static>],
+    ) -> Result<(), Self::Error> {
+        self.inner.remove_sync_members(lanes, keys).await
     }
 }

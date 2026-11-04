@@ -16,6 +16,9 @@ understand. Runs both natively (Tauri) and compiled to wasm (web).
 - `src/live_query.rs`: reactive query registration/re-evaluation.
 - `src/permissions.rs`: CRM snapshot retirement shared by native and browser owners. Retire on proven denial or loss/change of the prior team scope; first allowed/team-less proofs and same-team regrants preserve snapshots, while account changes use the engine reset. Trace retirement phases and scanned/retired counts. Derive property-owner sidecars from already-normalized responses through `response_property_owners` and commit them in the response transaction; skip traversal when no properties are selected. Track property ownership from each field's own arguments; keep independently owned properties and received notification history. Retire copied optimism and persist rebased link updates without deleting authored commands, fresh query revalidations, identity bindings, unrelated projection shadows, or legacy draft attachment recovery. Classify optimism before removing retired CRM owner sidecars, and retain independent owner associations. The ignored full-retirement measurement covers large normalized/projection/property sets with pending commands.
 - Return a resumed retirement's transition to the host so every client can discard the old generation, including when recovery was triggered by an ordinary cache read.
+- `src/host_projections.rs`: the projections a streamed sync page and a
+  membership lane's deletions write, in both cache hosts: the hosts' own
+  authoritative composition (`write_passes`) and server-deletion projections.
 - `src/direct_patch.rs`, `src/notifications.rs`: optimistic local mutation
   and notification projection updates applied without a server round-trip.
 - `src/channels.rs`, `src/database_rows.rs`, `src/mail.rs`, `src/properties.rs`:

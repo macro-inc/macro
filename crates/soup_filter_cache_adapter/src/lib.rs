@@ -27,6 +27,7 @@ use std::collections::HashSet;
 mod channels;
 mod database_rows;
 mod direct_patch;
+pub mod host_projections;
 pub mod live_query;
 pub mod mail;
 mod notifications;
@@ -163,6 +164,17 @@ pub fn authoritative_projection_mutations(
     let operation = document
         .operation(operation_name)
         .map_err(|error| SoupFilterCacheAdapterError(error.to_string()))?;
+    authoritative_projection_mutations_for(schema, operation, operation_name, data)
+}
+
+/// [`authoritative_projection_mutations`] for an operation the caller already
+/// parsed (a streamed sync lane parses its query once per run).
+pub fn authoritative_projection_mutations_for(
+    schema: &cache_core::meta::Schema,
+    operation: &cache_core::document::Operation,
+    operation_name: Option<&str>,
+    data: &serde_json::Value,
+) -> Result<Vec<ProjectionMutation>, SoupFilterCacheAdapterError> {
     let root_type = match operation.kind {
         OperationKind::Query => schema.query_root(),
         OperationKind::Mutation => schema.mutation_root().ok_or_else(|| {

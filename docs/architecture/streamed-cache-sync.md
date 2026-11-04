@@ -110,3 +110,54 @@ Request body:
   `maxPages`, `deadline` (the stream ran for its longest time; lanes resume
   from their last page's `nextVariables`), or `error` (a frame could not be
   encoded). A stream that closes without `end` was interrupted.
+
+## Cache behaviour
+
+A run is started with a plan (`SyncStartArgs`, types in
+`apps/web/src/lib/graphql-cache/sync-protocol.ts`, mirrored in
+`cache_core::sync` with serde camelCase). The host sends the request built from
+the plan, then feeds the response bytes to cache-core, which decodes lines and
+applies frames in order. While the cache writes, the host keeps reading the
+body into a bounded read-ahead buffer (16 MiB of received but unapplied bytes,
+plus one chunk), so the server computes later pages during writes; when the
+buffer is full the host stops reading and the server waits. Every exit (end,
+error, stop, park, suspend) closes the connection; saved state only reflects
+applied pages.
+
+Lane kinds:
+
+- `hydrate`: each page is written with `Engine::sync_write_page`: normalized
+  records merged with what is cached, the hosts' Soup projections, and the lane
+  state in one storage transaction. It skips what only foreground writes need
+  (response projection, field changes, dependency fan-out, new hot-tier
+  entries); an identity change or pending optimistic layers fall back to the
+  general hydration write. Every item's record key is recorded as a member of
+  the lane. Lane state saves `nextVariables`, page and item counts and
+  `passStartedAt` with each page. On `laneDone` the lane is marked complete:
+  `completedAt = now`, `watermark = passStartedAt`, `coverage = plan.coverage`,
+  `nextVariables = null`.
+- `membership { scopes }`: pages are not written; their item keys are
+  collected in memory. On `laneDone` with reason `complete`, every key recorded
+  as a member of a lane in `scopes` but absent from the collected set is
+  deleted as a server cache deletion and removed from those lanes' members.
+  Membership lanes always start fresh, never save a resume point, and take no
+  `maxItems`.
+- `calendar { coverage }`: pages are written like `hydrate` (no members); the
+  lowest watermark per `linkId` across pages is kept. On `laneDone` the window
+  is committed with the existing calendar commit.
+
+Rules:
+
+- Each page is one engine write at background priority (the browser worker's
+  hydration priority), so reads for open views go first.
+- Lane state and members live in the cache database (`sync_lanes`,
+  `sync_members`, storage schema 12) and are wiped with it.
+- One run at a time per database; a second start returns `busy`.
+- A run stops on `syncStop`, when the browser engine parks or is disposed, or
+  when the native app is suspended. Progress up to the last written page is
+  kept; the next run resumes from `nextVariables`.
+- A failed lane fails alone: a page the cache cannot write writes nothing and
+  fails its lane, which keeps the saved state of its last written page while
+  the other lanes carry on. The run result reports it as the lane summary's
+  `error`. A frame for the lane after that, a second `laneError`, or
+  `end: error` breaks the stream and fails the run.

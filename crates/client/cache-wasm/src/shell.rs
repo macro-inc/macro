@@ -43,6 +43,7 @@ use wasm_bindgen_futures::{JsFuture, future_to_promise};
 
 mod authority;
 mod calendar;
+mod sync;
 mod people;
 #[cfg(test)]
 mod test;
@@ -559,6 +560,8 @@ struct CacheState {
     scope: String,
     hot_capacity: Option<u32>,
     reset_required: bool,
+    /// The streamed sync run in progress, if any (one per database).
+    sync_run: Option<cache_core::sync::SyncRun>,
     /// A hydrate whose projections were computed and whose write is still to
     /// run (`prepareHydrate`, then `commitHydrate`).
     prepared_hydrate: Option<PreparedHydrate>,
@@ -1212,6 +1215,7 @@ async fn open_cache_inner(
                 scope,
                 hot_capacity,
                 reset_required: false,
+                sync_run: None,
                 prepared_hydrate: None,
                 #[cfg(test)]
                 projection_reads: 0,
@@ -2966,6 +2970,8 @@ impl CacheEngine {
                     closed_js_error()
                 }
             })?;
+            // A run's saved state goes with the database it described.
+            state.sync_run = None;
             let scope = state.scope.clone();
             let hot_capacity = state.hot_capacity;
             let owner = match close_storage(engine.into_storage(), true).await {
@@ -3004,6 +3010,7 @@ impl CacheEngine {
                     closed_js_error()
                 }
             })?;
+            state.sync_run = None;
             let owner = match close_storage(engine.into_storage(), state.reset_required).await {
                 Ok(owner) => owner,
                 Err(error) => {
