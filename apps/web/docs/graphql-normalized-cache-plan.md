@@ -591,7 +591,7 @@ apps/web/src/lib/graphql-cache/ # JS glue
   Locks / BroadcastChannel machinery. DB at
   `{app_data_dir}/graphql-cache/cache.turso`.
   JS side: `createTauriCacheHost` (`host/tauri-host.ts`) — invoke-based
-  RPC with the same 10s timeout + Error-normalized rejections, event
+  RPC with the same read-only 10s timeout + Error-normalized rejections, event
   subscription filtered by clientId prefix; `isTauri()` selects it in
   `graphql-soup.ts`.
 
@@ -1196,12 +1196,12 @@ unrelated queued hydration just like other authoritative writes.
 
 `graphql.subscription.cache_queue` times preceding effects from the same
 subscription operation. `graphql.subscription.cache_apply` starts afterward
-and includes host readiness, IPC, engine admission and persistence. Native IPC
-has a 10-second request deadline, so a 10-second apply duration alone does not
-prove successful engine work. Apply/write/delete spans carry `cache.failure`
-from the bounded cache error classifier; use it with `cache.effects_applied`
-to distinguish timeouts from successful slow applies. Native engine admission
-has a `graphql_cache.native.lock` phase, emitted once by `EngineAccess`
+and includes host readiness, IPC, engine admission and persistence. Native
+writes and deletes have no IPC deadline (see Native IPC transport), so a long
+apply is a slow engine queue, not a timeout. Apply/write/delete spans carry
+`cache.failure` from the bounded cache error classifier; use it with
+`cache.effects_applied` to separate engine failures from slow applies. Native
+engine admission has a `graphql_cache.native.lock` phase, emitted once by `EngineAccess`
 for each foreground or hydrate acquisition. Its `graphql_cache.lock.wait_ms`
 includes waiting until admission or supersession, not time holding the lock. Native scheduling changes require a
 rebuilt native binary; older installed binaries retain their scheduling.
@@ -1216,6 +1216,23 @@ invalidations coalesce until the next task. Before delivering field patches,
 cache changes (including resets), hydration or mutation settlements, the host
 flushes earlier invalidations so other observers cannot overtake them. Disposal
 drops pending callbacks.
+
+Tauri cannot cancel a command, and the engine runs commands one at a time, so a
+caller that stops waiting only loses the outcome of work that still happens.
+As in worker-host, only reads and initialization have the ten-second deadline:
+a read falls back to the network, and every request waits behind init. Writes,
+hydration, queue claims and settlements, deletes, invalidations, teardown and
+clear wait for the engine's answer. A timeout would report a failure for a
+commit that still lands, and callers act on it: the mutation queue runner holds
+later edits for its five-minute lease after an unconfirmed commit, and a failed
+logout clear rotates the cache scope, which the running native engine refuses
+with `graphql cache scope mismatch`.
+
+The deadline counts only time the page runs on time. When the page itself
+stalls (an occluded or napping macOS window, a long task), the overdue timer
+would otherwise run before an answer the engine already sent and fail every
+request in flight at once, so a timer that fires more than a second late starts
+a new window.
 
 Native live views advertise a specification-bound registration token. The host
 retains at most 32 descriptors and resumes an unchanged specification from its

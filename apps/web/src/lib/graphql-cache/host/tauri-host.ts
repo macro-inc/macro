@@ -90,9 +90,10 @@ export interface TauriHostOptions {
   scope: string;
   hotCapacity?: number;
   /**
-   * Request timeout in ms (default 10s, matching worker-host). Applies to all
-   * commands except optimistic enqueue, which remains pending because retrying
-   * an uncertain durable operation could duplicate user intent.
+   * Read and initialization timeout in ms (default 10s, matching worker-host).
+   * Other commands keep running natively after a caller stops waiting, so they
+   * wait for the engine's outcome instead of reporting a failure that may
+   * already have committed.
    */
   requestTimeoutMs?: number;
   /** Reports an asynchronous durable-storage initialization failure. */
@@ -110,6 +111,30 @@ const CALENDAR_COMMIT_COMMAND = 'graphql_cache_calendar_commit';
 const INSPECT_MUTATIONS_COMMAND = 'graphql_cache_inspect_mutations';
 
 const INIT_COMMAND = 'graphql_cache_init_with_schema';
+
+// The only commands a caller stops waiting for: a read falls back to the
+// network, and a hung init would block every request. Tauri cannot cancel a
+// command, so any other command still commits after its caller gives up.
+const TIMED_COMMANDS: ReadonlySet<string> = new Set([
+  INIT_COMMAND,
+  INSPECT_MUTATIONS_COMMAND,
+  'graphql_cache_current_revision',
+  'graphql_cache_current_storage_generation',
+  'graphql_cache_read',
+  WATCH_COMMAND,
+  'graphql_cache_read_records_by_keys',
+  'graphql_cache_search',
+  ENTITY_FILTER_COMMAND,
+  ENTITY_FILTER_RESUME_COMMAND,
+  CALENDAR_RANGE_COMMAND,
+  'graphql_cache_inspect_query_variants',
+  'graphql_cache_inspect_query',
+]);
+
+// A deadline timer running this late measured a stall of the page itself (an
+// occluded or napping window, a long task): the engine's answer may already be
+// queued behind it. Time out only after a window the page ran through on time.
+const PAGE_STALL_MS = 1_000;
 
 const DRAFTS_NEED_UPDATE =
   'Update Macro to sync drafts saved on this device. Your queued drafts are preserved until the app is updated.';
@@ -187,8 +212,7 @@ export function createTauriCacheHost(options: TauriHostOptions): CacheHost {
 
   async function request<T>(
     command: string,
-    args: Record<string, unknown>,
-    timeout = true
+    args: Record<string, unknown>
   ): Promise<T> {
     if (command !== 'graphql_cache_read') pendingReads.clear();
     const span = Telemetry.span('graphql_cache.ipc.request', {
@@ -201,12 +225,20 @@ export function createTauriCacheHost(options: TauriHostOptions): CacheHost {
     let timedOut = false;
     try {
       const operation = span.run(() => invoke<T>(command, wireArgs));
-      const deadline = timeout
+      const deadline = TIMED_COMMANDS.has(command)
         ? new Promise<never>((_, reject) => {
-            timer = setTimeout(() => {
-              timedOut = true;
-              reject(new Error(`graphql cache ipc timeout: ${command}`));
-            }, requestTimeoutMs);
+            const arm = () => {
+              const due = performance.now() + requestTimeoutMs;
+              timer = setTimeout(() => {
+                if (performance.now() - due > PAGE_STALL_MS) {
+                  arm();
+                  return;
+                }
+                timedOut = true;
+                reject(new Error(`graphql cache ipc timeout: ${command}`));
+              }, requestTimeoutMs);
+            };
+            arm();
           })
         : undefined;
       const value = await (deadline
@@ -637,8 +669,7 @@ export function createTauriCacheHost(options: TauriHostOptions): CacheHost {
           owner: claim.owner,
           nowMs: claim.nowMs,
           leaseExpiresAtMs: claim.leaseExpiresAtMs,
-        },
-        false
+        }
       );
     },
 
