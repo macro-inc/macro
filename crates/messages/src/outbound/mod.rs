@@ -16,3 +16,6 @@ pub mod pg_discussion_context;
 /// Postgres persistence for the shared message store.
 #[cfg(feature = "outbound")]
 pub mod pg_message_repo;
+/// Link previews read through the SSRF-safe unfurl crate.
+#[cfg(feature = "link_previews")]
+pub mod unfurl_link_previews;

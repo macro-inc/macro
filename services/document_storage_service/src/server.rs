@@ -1315,6 +1315,17 @@ pub async fn run() -> anyhow::Result<()> {
         .with_mention_extractor(lexical_mention_extractor::LexicalMentionExtractor::new(
             lexical_client.clone(),
         ))
+        // Channel messages keep previews of the pages they link to, read with
+        // the SSRF-safe unfurl fetcher by the link preview consumer below.
+        .with_link_previews(
+            lexical_mention_extractor::LexicalLinkExtractor::new(lexical_client.clone()),
+            messages::outbound::unfurl_link_previews::UnfurlLinkPreviews::new(Arc::new(
+                unfurl::domain::service::UnfurlServiceImpl::new(
+                    unfurl::outbound::ReqwestUnfurlFetcher::new()
+                        .context("failed to build ReqwestUnfurlFetcher")?,
+                ),
+            )),
+        )
         .with_references(
             messages::outbound::entity_access_audience::EntityAccessMessageReferences(
                 (*entity_access_service).clone(),
@@ -1363,6 +1374,44 @@ pub async fn run() -> anyhow::Result<()> {
                             error = ?error,
                             "teammate DM consumer exited unexpectedly"
                         );
+                    }
+                }
+
+                tokio::select! {
+                    biased;
+                    _ = cancellation_token.cancelled() => break,
+                    _ = tokio::time::sleep(Duration::from_secs(5)) => {}
+                }
+            }
+        }
+    });
+
+    let link_preview_brokers = config.kafka_brokers.as_ref().to_string();
+    consumer_tracker.spawn({
+        let cancellation_token = consumer_cancellation_token.clone();
+        let message_service = message_service.clone();
+        async move {
+            loop {
+                if cancellation_token.is_cancelled() {
+                    break;
+                }
+
+                tracing::info!("starting link preview consumer");
+                let result = messages::inbound::link_preview_consumer::run_link_preview_consumer(
+                    &link_preview_brokers,
+                    message_service.clone(),
+                    cancellation_token.cancelled(),
+                )
+                .await;
+
+                if cancellation_token.is_cancelled() {
+                    break;
+                }
+
+                match result {
+                    Ok(()) => tracing::error!("link preview consumer exited unexpectedly"),
+                    Err(error) => {
+                        tracing::error!(error = ?error, "link preview consumer exited unexpectedly");
                     }
                 }
 

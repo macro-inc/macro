@@ -7,6 +7,7 @@ use entity_access::domain::models::{
 };
 use uuid::Uuid;
 
+mod link_previews;
 #[cfg(test)]
 mod test;
 mod timeline;
@@ -44,6 +45,7 @@ pub struct MessageService<R, E> {
     references: std::sync::Arc<dyn MessageReferenceAccess>,
     mentions: std::sync::Arc<dyn MessageMentionExtractor>,
     groups: std::sync::Arc<dyn MessageGroupRecipients>,
+    link_previews: Option<link_previews::LinkPreviewSources>,
 }
 
 impl<R: MessageRepository, E: MessageEventPublisher> MessageService<R, E> {
@@ -56,6 +58,7 @@ impl<R: MessageRepository, E: MessageEventPublisher> MessageService<R, E> {
             references: std::sync::Arc::new(DenyMessageReferences),
             mentions: std::sync::Arc::new(NoMessageMentionExtractor),
             groups: std::sync::Arc::new(NoMessageGroups),
+            link_previews: None,
         }
     }
 

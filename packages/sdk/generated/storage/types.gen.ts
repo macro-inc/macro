@@ -9903,6 +9903,32 @@ export type LeaveCallResponse = {
 };
 
 /**
+ * A preview of a web page a message links to: what its card shows.
+ */
+export type LinkPreview = {
+    /**
+     * The page description, if any.
+     */
+    description?: string | null;
+    /**
+     * The page's favicon URL, if any.
+     */
+    favicon_url?: string | null;
+    /**
+     * The page's preview image URL, if any.
+     */
+    image_url?: string | null;
+    /**
+     * The page title.
+     */
+    title: string;
+    /**
+     * The linked URL, as the message text links it.
+     */
+    url: string;
+};
+
+/**
  * Defines who can access an item through its share link.
  */
 export type LinkShare = 'PUBLIC' | 'TEAM';
@@ -10163,6 +10189,11 @@ export type Message = {
     id: string;
     imported_author?: null | ImportedAuthor;
     /**
+     * Previews of the pages a channel message links to, in text order.
+     * Filled in shortly after a post or edit; empty until then.
+     */
+    link_previews?: Array<LinkPreview>;
+    /**
      * Tracked mentions, retained when a caller changes attachments only.
      */
     mentions: Array<SimpleMention>;
@@ -10342,6 +10373,12 @@ export type MessageChange = {
      */
     message: Message;
     type: 'reaction_changed';
+} | {
+    /**
+     * Persisted message with its current previews.
+     */
+    message: Message;
+    type: 'link_previews_updated';
 } | {
     /**
      * Persisted thread state.

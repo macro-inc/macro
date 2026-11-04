@@ -1,6 +1,6 @@
 # Type Alias: MessageChange
 
-> **MessageChange** = \{ `mentions`: [`SimpleMention`](SimpleMention.md)[]; `message`: [`Message`](Message.md); `notification_policy`: [`PostMessageNotificationPolicy`](PostMessageNotificationPolicy.md); `type`: `"posted"`; \} \| \{ `mentions`: [`SimpleMention`](SimpleMention.md)[]; `message`: [`Message`](Message.md); `notification_policy`: [`PatchMessageNotificationPolicy`](PatchMessageNotificationPolicy.md); `previous_attachments`: [`MessageAttachment`](MessageAttachment.md)[]; `type`: `"edited"`; \} \| \{ `message`: [`Message`](Message.md); `type`: `"message_deleted"`; \} \| \{ `added`: `boolean`; `emoji`: `string`; `message`: [`Message`](Message.md); `type`: `"reaction_changed"`; \} \| \{ `state`: [`ThreadState`](ThreadState.md); `type`: `"thread_updated"`; \} \| \{ `active`: `boolean`; `agent?`: `null` \| [`AgentTyping`](AgentTyping.md); `thread_id?`: `string` \| `null`; `type`: `"typing"`; \}
+> **MessageChange** = \{ `mentions`: [`SimpleMention`](SimpleMention.md)[]; `message`: [`Message`](Message.md); `notification_policy`: [`PostMessageNotificationPolicy`](PostMessageNotificationPolicy.md); `type`: `"posted"`; \} \| \{ `mentions`: [`SimpleMention`](SimpleMention.md)[]; `message`: [`Message`](Message.md); `notification_policy`: [`PatchMessageNotificationPolicy`](PatchMessageNotificationPolicy.md); `previous_attachments`: [`MessageAttachment`](MessageAttachment.md)[]; `type`: `"edited"`; \} \| \{ `message`: [`Message`](Message.md); `type`: `"message_deleted"`; \} \| \{ `added`: `boolean`; `emoji`: `string`; `message`: [`Message`](Message.md); `type`: `"reaction_changed"`; \} \| \{ `message`: [`Message`](Message.md); `type`: `"link_previews_updated"`; \} \| \{ `state`: [`ThreadState`](ThreadState.md); `type`: `"thread_updated"`; \} \| \{ `active`: `boolean`; `agent?`: `null` \| [`AgentTyping`](AgentTyping.md); `thread_id?`: `string` \| `null`; `type`: `"typing"`; \}
 
 Kind of message change; notification policy only runs for posted messages.
 
@@ -54,6 +54,17 @@ Kind of message change; notification policy only runs for posted messages.
 | `emoji` | `string` | Emoji whose membership changed. |
 | `message` | [`Message`](Message.md) | Persisted message. |
 | `type` | `"reaction_changed"` | - |
+
+***
+
+### Type Literal
+
+\{ `message`: [`Message`](Message.md); `type`: `"link_previews_updated"`; \}
+
+| Name | Type | Description |
+| ------ | ------ | ------ |
+| `message` | [`Message`](Message.md) | Persisted message with its current previews. |
+| `type` | `"link_previews_updated"` | - |
 
 ***
 

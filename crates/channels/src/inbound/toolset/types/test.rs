@@ -22,6 +22,7 @@ fn reply(seconds: i64) -> Message {
         edited_at: None,
         deleted_at: None,
         reactions: vec![],
+        link_previews: vec![],
         attachments: vec![],
     }
 }

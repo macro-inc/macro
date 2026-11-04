@@ -35330,6 +35330,33 @@
           }
         }
       },
+      "LinkPreview": {
+        "type": "object",
+        "description": "A preview of a web page a message links to: what its card shows.",
+        "required": ["url", "title"],
+        "properties": {
+          "description": {
+            "type": ["string", "null"],
+            "description": "The page description, if any."
+          },
+          "favicon_url": {
+            "type": ["string", "null"],
+            "description": "The page's favicon URL, if any."
+          },
+          "image_url": {
+            "type": ["string", "null"],
+            "description": "The page's preview image URL, if any."
+          },
+          "title": {
+            "type": "string",
+            "description": "The page title."
+          },
+          "url": {
+            "type": "string",
+            "description": "The linked URL, as the message text links it."
+          }
+        }
+      },
       "LinkShare": {
         "type": "string",
         "description": "Defines who can access an item through its share link.",
@@ -35704,6 +35731,13 @@
               }
             ]
           },
+          "link_previews": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/LinkPreview"
+            },
+            "description": "Previews of the pages a channel message links to, in text order.\nFilled in shortly after a post or edit; empty until then."
+          },
           "mentions": {
             "type": "array",
             "items": {
@@ -35957,6 +35991,21 @@
               "type": {
                 "type": "string",
                 "enum": ["reaction_changed"]
+              }
+            }
+          },
+          {
+            "type": "object",
+            "description": "The previews of the pages a message links to changed after a post or\nedit. Viewers apply it like an edit; it produces no notifications,\nbroker facts, activity, or sharing.",
+            "required": ["message", "type"],
+            "properties": {
+              "message": {
+                "$ref": "#/components/schemas/Message",
+                "description": "Persisted message with its current previews."
+              },
+              "type": {
+                "type": "string",
+                "enum": ["link_previews_updated"]
               }
             }
           },

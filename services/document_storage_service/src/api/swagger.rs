@@ -866,6 +866,7 @@ use utoipa::OpenApi;
             messages::domain::models::ImportedAuthor,
             messages::domain::models::CountedReaction,
             messages::domain::models::MessageAttachment,
+            messages::domain::models::LinkPreview,
             messages::domain::models::NewAttachment,
             messages::domain::ports::MessageCursor,
             messages::domain::ports::MessageDirection,

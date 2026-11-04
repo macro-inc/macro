@@ -194,6 +194,7 @@ fn message() -> Message {
         edited_at: None,
         deleted_at: None,
         reactions: vec![],
+        link_previews: vec![],
         attachments: vec![MessageAttachment {
             id: Uuid::from_u128(4),
             entity_type: "document".into(),

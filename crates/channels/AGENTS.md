@@ -38,8 +38,10 @@ DMs, and the shared message store other domains discuss things on.
 
 ## Recipes
 
-- Add a message field or mutation: `src/domain/models.rs` → `src/domain/service.rs`
-  → `src/outbound/pg_channels_repo.rs` → `src/inbound/axum_router.rs`.
+- Add a channel message field or mutation: the `messages` crate owns channel
+  messages (see `crates/messages/AGENTS.md`); this crate's
+  `src/domain/message_delivery.rs` decides channel-specific side effects of
+  each `MessageChange`.
 - Change realtime delivery: `src/domain/message_delivery.rs` →
   `src/outbound/connection_gateway_realtime.rs`.
 - Add a channel-message AI tool: `src/inbound/toolset.rs` (feature `ai_tools`).

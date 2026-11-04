@@ -282,6 +282,13 @@ pub enum MessageChange {
         /// Whether the reaction was added (`true`) or removed (`false`).
         added: bool,
     },
+    /// The previews of the pages a message links to changed after a post or
+    /// edit. Viewers apply it like an edit; it produces no notifications,
+    /// broker facts, activity, or sharing.
+    LinkPreviewsUpdated {
+        /// Persisted message with its current previews.
+        message: Message,
+    },
     /// Thread resolution, placement, or deletion changed.
     ThreadUpdated {
         /// Persisted thread state.
@@ -464,6 +471,16 @@ pub trait MessageRepository: Send + Sync + 'static {
         id: i64,
         is_thread: bool,
     ) -> impl Future<Output = Result<Option<Uuid>, MessageError>> + Send;
+    /// Replace a live message's link previews while its content is still
+    /// `content`, returning the updated message. `None` when the message was
+    /// edited or deleted since: the newer change computes its own previews.
+    fn replace_link_previews(
+        &self,
+        parent: &MessageParent,
+        id: Uuid,
+        content: &str,
+        previews: &[LinkPreview],
+    ) -> impl Future<Output = Result<Option<Message>, MessageError>> + Send;
     /// The parent a live message belongs to; `None` once it is deleted. Grants
     /// nothing: it only tells an id-addressed adapter which parent receipt to mint.
     fn parent_of(
@@ -542,6 +559,28 @@ pub trait MessageMentionExtractor: Send + Sync + 'static {
         content: &'a str,
     ) -> std::pin::Pin<Box<dyn Future<Output = Result<Vec<SimpleMention>, MessageError>> + Send + 'a>>;
 }
+/// Finds the links in message Markdown that get a preview card: web links in
+/// the order the text links them, without repeats, capped, and excluding
+/// links into the Macro app, the same rule the web client renders by.
+pub trait MessageLinkExtractor: Send + Sync + 'static {
+    /// The previewable link URLs in a message body.
+    fn extract<'a>(
+        &'a self,
+        content: &'a str,
+    ) -> std::pin::Pin<Box<dyn Future<Output = Result<Vec<String>, MessageError>> + Send + 'a>>;
+}
+
+/// Fetches what a link's preview card shows.
+pub trait LinkPreviewFetcher: Send + Sync + 'static {
+    /// The page's preview, or `None` for a page that can't be read or says
+    /// nothing beyond its address. A page failing is not an error: the
+    /// message keeps the previews of its other links.
+    fn fetch<'a>(
+        &'a self,
+        url: &'a str,
+    ) -> std::pin::Pin<Box<dyn Future<Output = Option<LinkPreview>> + Send + 'a>>;
+}
+
 /// Message compositions that do not create raw bot Markdown.
 pub struct NoMessageMentionExtractor;
 impl MessageMentionExtractor for NoMessageMentionExtractor {

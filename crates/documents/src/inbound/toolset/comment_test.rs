@@ -130,6 +130,7 @@ impl MessageCommands for FakeMessages {
             deleted_at: None,
             attachments: vec![],
             reactions: vec![],
+            link_previews: vec![],
         };
         self.posts.lock().unwrap().push((access, input));
         Ok(message)

@@ -1446,6 +1446,7 @@
 - [LeaveOrEndCallErrors](type-aliases/LeaveOrEndCallErrors.md)
 - [LeaveOrEndCallResponse](type-aliases/LeaveOrEndCallResponse.md)
 - [LeaveOrEndCallResponses](type-aliases/LeaveOrEndCallResponses.md)
+- [LinkPreview](type-aliases/LinkPreview.md)
 - [LinkShare](type-aliases/LinkShare.md)
 - [ListAccessibleFormsData](type-aliases/ListAccessibleFormsData.md)
 - [ListAccessibleFormsError](type-aliases/ListAccessibleFormsError.md)

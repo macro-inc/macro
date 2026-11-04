@@ -17,7 +17,8 @@ comment/markdown rendering. Production runs on ECS behind the gateway at
   `notion-snapshot.ts`, `html.ts`, `xml.ts`, `comment-mark.ts`,
   `comment-only-change.ts`,
   `image-markdown.ts`, `agent-context.ts`, `agent-announcement.ts`,
-  `extract-reply.ts`, `mentions.ts`).
+  `extract-reply.ts`, `mentions.ts`, `link-previews.ts`: the links a channel
+  message shows preview cards for, read by DSS's link preview consumer).
 - `src/lib/`: conversion logic the endpoints call into (`editor.ts`,
   `markdown.ts`, `html.ts`, `comment-only-change.ts`, `comment-mark.ts`,
   `sync-service.ts` client, `schemas.ts`).
