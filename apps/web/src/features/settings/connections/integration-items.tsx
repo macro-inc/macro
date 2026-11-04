@@ -410,7 +410,7 @@ export function useGranolaItem(): IntegrationItem {
  */
 export function useDialpadItem(): IntegrationItem {
   const flag = useFeatureFlag(enableDialpad);
-  const dialpad = createDialpadConnection();
+  const dialpad = createDialpadConnection(() => flag().enabled);
 
   function ConnectMenu(props: { label: string }) {
     return (

@@ -8,8 +8,9 @@ import {
   useDialpadConnectionQuery,
   useDisconnectDialpadMutation,
 } from '@queries/dialpad';
+import { queryReadyGate } from '@queries/gate';
 import type { DialpadBackfill } from '@service-cognition/generated/schemas/dialpadBackfill';
-import { createEffect, onCleanup } from 'solid-js';
+import { type Accessor, createEffect, onCleanup } from 'solid-js';
 
 /** How often to finish setup while the user approves Dialpad elsewhere. */
 const COMPLETE_EVERY_MS = 4000;
@@ -20,16 +21,16 @@ const COMPLETE_EVERY_MS = 4000;
  * interval, so the row flips to connected without waiting for the backend's
  * next pass. `connection` is undefined until loaded.
  */
-export function createDialpadConnection() {
-  const query = useDialpadConnectionQuery();
+export function createDialpadConnection(enabled: Accessor<boolean>) {
+  const query = useDialpadConnectionQuery(enabled);
   const connectMutation = useConnectDialpadMutation();
   const completeMutation = useCompleteDialpadMutation();
   const disconnectMutation = useDisconnectDialpadMutation();
 
-  const connection = () => (query.isSuccess ? query.data : undefined);
+  const connection = () => (queryReadyGate(query) ? query.data : undefined);
 
   createEffect(() => {
-    if (connection()?.state !== 'connecting') return;
+    if (!enabled() || connection()?.state !== 'connecting') return;
     const timer = setInterval(() => {
       if (!completeMutation.isPending) completeMutation.mutate();
     }, COMPLETE_EVERY_MS);

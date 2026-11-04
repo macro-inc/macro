@@ -628,12 +628,14 @@ dot sits beside the name.
   opening the provider page and **Import** beside it. Slack's Import opens the
   Slack export importer for team admins with archive import enabled, otherwise
   the connector import dialog.
-- **Dialpad** (only where Macro Connect is configured): **Connect** opens a
+- **Dialpad** (only with `enable-dialpad` on and Macro Connect configured): **Connect** opens a
   menu of how far back to import (new calls only, or the last 7, 30 or 90
   days), then opens Macro Connect in a new tab. The row reads **Connecting**
   until setup finishes; it polls, so it flips to connected without a reload.
   **Disconnect** stops syncing; imported calls stay and the grant at Dialpad is
   not revoked. A lost grant shows **Reconnect needed** with **Reconnect**.
+  With the flag off, the row and its search result are hidden and no Dialpad
+  requests run.
 - **Granola**, **Claude Code, Codex, and ChatGPT** (Macro MCP setup), and
   **Coding agents on your computer** (Claude Code, Codex, OpenCode, OpenClaw,
   Hermes; opens Runtimes within Integrations and follows the Runtimes

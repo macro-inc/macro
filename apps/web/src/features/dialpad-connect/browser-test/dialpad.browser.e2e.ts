@@ -93,3 +93,27 @@ test('a deployment without Macro Connect hides the row', async ({ page }) => {
     timeout: 60_000,
   });
 });
+
+for (const cachedConnecting of [false, true]) {
+  test(`flag off sends no requests with cached connecting=${cachedConnecting}`, async ({
+    page,
+  }) => {
+    const requests: string[] = [];
+    page.on('request', (request) => {
+      if (request.url().includes('/integrations/dialpad/')) {
+        requests.push(request.method());
+      }
+    });
+    await serveDialpad(page, { current: { state: 'connecting' } });
+    await page.clock.install();
+    await page.goto(
+      `${PAGE}?flag=off${cachedConnecting ? '&connecting' : ''}`,
+      { waitUntil: 'domcontentloaded' }
+    );
+    await expect(page.getByText('Dialpad unavailable')).toBeVisible({
+      timeout: 60_000,
+    });
+    await page.clock.runFor(8_000);
+    expect(requests).toEqual([]);
+  });
+}

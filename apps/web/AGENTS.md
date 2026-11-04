@@ -85,7 +85,8 @@ searches, and picks by keyboard:
 
 Discussion link scrolling has a backend-free browser regression:
 `bunx playwright test --config src/lib/core/messages/browser-test/playwright.config.ts`.
-The Dialpad row in Settings (connect, backfill choice, reconnect) has a
+The Dialpad row in Settings (connect, backfill choice, reconnect, and no requests
+while the feature flag is off) has a
 backend-free browser regression:
 `bunx playwright test --config src/features/dialpad-connect/browser-test/playwright.config.ts`.
 CRM contact phones (desktop and phone) and call source badges:

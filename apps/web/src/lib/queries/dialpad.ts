@@ -4,6 +4,7 @@ import { cognitionApiServiceClient } from '@service-cognition/client';
 import type { DialpadBackfill } from '@service-cognition/generated/schemas/dialpadBackfill';
 import type { DialpadConnectionResponse } from '@service-cognition/generated/schemas/dialpadConnectionResponse';
 import { useMutation, useQuery } from '@tanstack/solid-query';
+import type { Accessor } from 'solid-js';
 
 const KEYS = {
   connection: ['dialpad', 'connection'] as const,
@@ -24,8 +25,11 @@ function dialpadConnectionQueryOptions() {
 }
 
 /** The user's Dialpad call sync. */
-export function useDialpadConnectionQuery() {
-  return useQuery(dialpadConnectionQueryOptions);
+export function useDialpadConnectionQuery(enabled: Accessor<boolean>) {
+  return useQuery(() => ({
+    ...dialpadConnectionQueryOptions(),
+    enabled: enabled(),
+  }));
 }
 
 /**
