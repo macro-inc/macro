@@ -23,7 +23,7 @@ export function AgentConnections(props: ParentProps) {
     revision: () =>
       `${state.sessionId()}:${state
         .messages()
-        .map((message) => `${message.turn}:${message.author.kind}`)
+        .map((message) => message.key)
         .join(',')}`,
     connect: connectPipedreamApp,
     resume: async (app) => {

@@ -16,7 +16,7 @@ use super::{
         FocusAnswers, FocusMessage, FocusRecord, FocusThread, FocusVerdict, StaleThread,
         StoredClassification, ThreadFocus,
     },
-    ports::{FocusClassifier, FocusClassifierError, FocusStore, ProfileSource},
+    ports::{FocusClassifier, FocusClassifierError, FocusNotifier, FocusStore, ProfileSource},
     questions::FOCUS_QUESTIONS,
     rule::{FOCUS_RULE_VERSION, decide},
     signals::signals,
@@ -76,10 +76,11 @@ pub struct SweepReport {
 }
 
 /// Classifies threads for inboxes on the allowlist.
-pub struct FocusService<S, P, C> {
+pub struct FocusService<S, P, C, N> {
     store: S,
     profiles: P,
     classifier: C,
+    notifier: N,
     enabled_domains: Vec<String>,
     /// Threads a sweep checked at their latest mail without storing a result
     /// (rejected, nothing to classify, or a result already stored), so later
@@ -88,15 +89,22 @@ pub struct FocusService<S, P, C> {
     settled: Mutex<HashMap<Uuid, DateTime<Utc>>>,
 }
 
-impl<S, P, C> FocusService<S, P, C>
+impl<S, P, C, N> FocusService<S, P, C, N>
 where
     S: FocusStore,
     P: ProfileSource,
     C: FocusClassifier,
+    N: FocusNotifier,
 {
     /// Classify only inboxes whose address is at one of `enabled_domains`;
     /// with none, nothing is classified.
-    pub fn new(store: S, profiles: P, classifier: C, enabled_domains: Vec<String>) -> Self {
+    pub fn new(
+        store: S,
+        profiles: P,
+        classifier: C,
+        notifier: N,
+        enabled_domains: Vec<String>,
+    ) -> Self {
         let enabled_domains = enabled_domains
             .into_iter()
             .map(|domain| domain.trim().to_lowercase())
@@ -106,6 +114,7 @@ where
             store,
             profiles,
             classifier,
+            notifier,
             enabled_domains,
             settled: Mutex::default(),
         }
@@ -232,7 +241,8 @@ where
         answers: FocusAnswers,
         model: String,
     ) -> Result<bool, Report> {
-        self.store
+        let stored = self
+            .store
             .save(&FocusRecord {
                 thread_id: thread.thread_id,
                 link_id: thread.link_id,
@@ -243,7 +253,11 @@ where
                 model,
                 classified_at: Utc::now(),
             })
-            .await
+            .await?;
+        if stored {
+            self.notifier.focus_changed(&thread.owner, thread.link_id);
+        }
+        Ok(stored)
     }
 
     /// Check up to `limit` stale threads from the last `window`, newest first,

@@ -95,6 +95,14 @@ restore, so a session auto-archives at most once. A session archives for pull
 requests once every linked pull request is closed and at least one merged;
 links with no `github_pull_request` row count as open.
 
+Followers: a session started from a thread (`SessionPurpose::visibility`, any
+agent) is `hidden`. The harness calls `add_follower` beside `set_turn_prompter`
+for a prompt typed into the session itself (`QueuedEntry::direct_prompter`: a
+human prompt with no `announce` origin and no trigger `context`), recording an
+`agent_session_follower` row; Soup lists hidden sessions for their followers.
+Thread mentions, runtime-forwarded triggers, system and bot turns record
+nothing. Following never grants access.
+
 Session names: the first prompt names a session (`set_name_if_default`), and
 after each turn that ends with a reply, `domain/retitle.rs` hands the
 conversation digest to the namer. `name_generation::ClassifiedRetitle` asks Jev
@@ -109,7 +117,9 @@ through `set_name` clears it, so a name a person chose is never replaced.
 ## Gotchas
 
 - Where a session is shown is `agent_session.visibility` (`listed`,
-  `unlisted`, `hidden`); `hidden` replaces `list_hidden`. Never read or write
+  `unlisted`, `hidden`), set at creation and changed later only by warm
+  claims and the DM-context backfill (`list_visibility.rs`).
+  `hidden` replaces `list_hidden`. Never read or write
   `list_hidden`: until a later migration drops it, the
   `agent_session_hidden_sync` trigger keeps it in step for replicas on older
   code, and it must keep sorting before `agent_session_legacy_warm_write`

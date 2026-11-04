@@ -42,7 +42,7 @@ stacks. Process isolation belongs to
   and streams it as a completed `PresentView` call (`view_<id>`) through
   `ReviewActions::present_view`. There is no `PresentView` tool: ExecuteCode's
   description carries the view schema and when to present one.
-- `src/domain/documentation.rs`: the generated SDK catalog (an index per
+- `src/domain/documentation.rs`: the build-time SDK catalog (an index per
   entity, a reference per symbol). Jev selects entity indexes for the per-turn
   prompt (top four, 48 KiB) or a `DescribeCodeTools` `task` (every relevant
   entity, 32 KiB); `ReadCodeDocs` reads symbol references (32 KiB).
@@ -81,8 +81,9 @@ longer delivery state.
 - The review toolset test builds every review tool through shared provider schema
   validation.
 - Keep generated discovery topics within the classifier's 32-question limit.
-- Regenerate SDK documentation through `packages/code-mode-sdk`; never edit
-  `src/domain/documentation.json` by hand.
+- The SDK catalog and operation labels come from `crates/code_mode_assets`,
+  generated from the public SDK at build time; change the SDK or
+  `packages/code-mode-sdk`, never a generated file.
 
 Import reviews contain exactly one draft, with source `notion`, `linear`, or
 `jira`. Source selection stays on that draft through presentation and approval.

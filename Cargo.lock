@@ -317,6 +317,7 @@ dependencies = [
  "calendar_events",
  "chrono",
  "code_execution",
+ "code_mode_assets",
  "cognition",
  "dynamic_ui",
  "email",
@@ -446,9 +447,11 @@ dependencies = [
  "base64 0.22.1",
  "bot_id",
  "bots",
+ "calendar_events",
  "channel_sender",
  "channels",
  "chrono",
+ "chrono-tz",
  "codex_cloud_agents",
  "codex_connection",
  "cursor_api_key",
@@ -553,6 +556,7 @@ dependencies = [
  "axum-extra",
  "bot_id",
  "bots",
+ "calendar_events",
  "call",
  "channel_sender",
  "channels",
@@ -4524,6 +4528,7 @@ name = "code_execution"
 version = "0.1.0"
 dependencies = [
  "async-trait",
+ "code_mode_assets",
  "futures",
  "rootcause",
  "serde",
@@ -4535,6 +4540,13 @@ dependencies = [
  "tracing",
  "url",
  "uuid",
+ "workspace-hack",
+]
+
+[[package]]
+name = "code_mode_assets"
+version = "0.1.0"
+dependencies = [
  "workspace-hack",
 ]
 
@@ -7414,17 +7426,23 @@ version = "0.1.0"
 dependencies = [
  "ai_usage",
  "chrono",
+ "connection_gateway_client",
  "doppler-config",
  "email",
  "jev",
  "kafka_util",
+ "macro_auth",
  "macro_config",
+ "macro_db_migrator",
  "macro_entrypoint",
  "macro_env",
  "macro_env_var",
  "macro_event_broker",
+ "macro_service_urls",
  "macro_user_id",
  "memory",
+ "models_email",
+ "opentelemetry",
  "rdkafka",
  "rootcause",
  "serde",
@@ -7433,7 +7451,9 @@ dependencies = [
  "tokio",
  "tokio-util",
  "tracing",
+ "tracing-opentelemetry",
  "uuid",
+ "wiremock",
  "workspace-hack",
 ]
 
