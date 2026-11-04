@@ -920,6 +920,18 @@ pub async fn run() -> anyhow::Result<()> {
             redis: redis_client.clone(),
         },
     };
+    // External agents' endpoints are webhooks in their owners' workspaces,
+    // pushed through the same delivery queue.
+    let external_agent_endpoints =
+        external_agents::outbound::webhook_endpoints::WebhookAgentEndpoints::new(
+            webhook_service.clone(),
+            webhook_event_queue.clone(),
+            RateLimitServiceImpl {
+                repo: RedisRateLimitAdapter {
+                    redis: redis_client.clone(),
+                },
+            },
+        );
     let webhook_state = webhook::inbound::axum_router::WebhookRouterState::new(
         webhook_service,
         webhook_rate_limiter,
@@ -1322,6 +1334,55 @@ pub async fn run() -> anyhow::Result<()> {
         ),
     );
     let message_commands: Arc<dyn messages::domain::api::MessageCommands> = message_service.clone();
+    let external_agent_repo =
+        external_agents::outbound::pg_external_agent_repo::PgExternalAgentRepo::new(db.clone());
+    let external_agent_graphql_context = graphql_external_agent::ExternalAgentGraphqlContext::new(
+        Arc::new(
+            external_agents::domain::registry::ExternalAgentRegistryService::new(
+                external_agents::outbound::bot_personas::BotServicePersonas(bots_service.clone()),
+                external_agent_endpoints.clone(),
+                external_agent_repo.clone(),
+            ),
+        ),
+        Arc::new(external_agents::domain::api::ExternalAgentApiService::new(
+            external_agent_repo.clone(),
+            external_agents::outbound::entity_access_writes::EntityAccessAgentWrites(
+                entity_access_service.clone(),
+            ),
+            message_commands.clone(),
+        )),
+    );
+    let external_agent_inbox = external_agents::inbound::kafka_consumer::ExternalAgentInboxConsumer::new(
+        external_agents::domain::inbox::ExternalAgentInboxService::new(
+            external_agent_repo,
+            external_agent_endpoints,
+        ),
+    );
+    let external_agent_brokers = config.kafka_brokers.as_ref().to_string();
+    consumer_tracker.spawn({
+        let cancellation_token = consumer_cancellation_token.clone();
+        async move {
+            loop {
+                if cancellation_token.is_cancelled() {
+                    break;
+                }
+                let result = external_agent_inbox
+                    .run(&external_agent_brokers, cancellation_token.cancelled())
+                    .await;
+                if cancellation_token.is_cancelled() {
+                    break;
+                }
+                if let Err(error) = result {
+                    tracing::error!(error = ?error, "external agent inbox consumer stopped");
+                }
+                tokio::select! {
+                    biased;
+                    _ = cancellation_token.cancelled() => break,
+                    _ = tokio::time::sleep(Duration::from_secs(5)) => {}
+                }
+            }
+        }
+    });
     let guest_chat_service = Arc::new(
         messages::domain::service::guest_chat::GuestChatService::new(
             message_service.clone(),
@@ -2138,6 +2199,7 @@ pub async fn run() -> anyhow::Result<()> {
         sync_sessions,
         dictation_state,
         graphql_work_feed_context,
+        external_agent_graphql_context,
         contacts_ingress: contacts_ingress.clone(),
         soup_router_state: SoupRouterState::from_arc(
             soup_service.clone(),

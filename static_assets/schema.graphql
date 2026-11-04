@@ -442,6 +442,43 @@ type CompleteMutationRoot {
 	Delete the expected owned revision; repeating a completed deletion returns the ID.
 	"""
 	deleteSavedView(input: DeleteSavedViewInput!): ID!
+	"""
+	Register an agent whose runtime lives outside Macro and mint its bot
+	token. With an endpoint URL, Macro asks the endpoint to verify itself
+	and pushes it the agent's events once it has.
+	"""
+	registerExternalAgent(input: RegisterExternalAgentInput!): GraphqlRegisteredExternalAgent!
+	"""
+	Push an external agent's events to a new endpoint, which must verify
+	itself again, or stop pushing them.
+	"""
+	setExternalAgentEndpoint(input: SetExternalAgentEndpointInput!): GraphqlExternalAgentEndpointChange!
+	"""
+	Ask an external agent's endpoint to verify itself again.
+	"""
+	verifyExternalAgentEndpoint(agentId: ID!): GraphqlExternalAgentEndpointVerification!
+	"""
+	Mint another bot token for an external agent. Earlier tokens keep
+	working until revoked.
+	"""
+	issueExternalAgentToken(agentId: ID!): String!
+	"""
+	Delete an external agent, its endpoint, and its inbox. Answers with
+	the deleted agent's id.
+	"""
+	deleteExternalAgent(agentId: ID!): ID!
+	"""
+	As the authenticated agent, answer one of its events. A direct
+	message is answered in the conversation; a mention, in its thread.
+	Call it once per message to send several.
+	"""
+	replyToExternalAgentEvent(input: ReplyToExternalAgentEventInput!): GraphqlExternalAgentReply!
+	"""
+	As the authenticated agent, show or stop showing it typing where its
+	answer to the event will appear. Viewers stop seeing it after a few
+	seconds without a renewal.
+	"""
+	setExternalAgentTyping(input: SetExternalAgentTypingInput!): Boolean!
 }
 
 """
@@ -4671,6 +4708,192 @@ The mutually exclusive time shape of an event or occurrence.
 union GraphqlEventTime = GraphqlTimedEventTime | GraphqlAllDayEventTime
 
 """
+An agent persona whose runtime lives outside Macro. People DM and
+mention it like any agent; its runtime reads those messages from its
+inbox and answers them with its bot token.
+"""
+type GraphqlExternalAgent {
+	"""
+	The agent's bot id: the id it is DMed and mentioned by, and answers as.
+	"""
+	id: ID!
+	"""
+	Display name.
+	"""
+	name: String!
+	"""
+	`@` handle.
+	"""
+	handle: String!
+	"""
+	Optional description.
+	"""
+	description: String
+	"""
+	Optional avatar URL.
+	"""
+	avatarUrl: String
+	"""
+	Owning team; null for an agent private to the person who created it.
+	"""
+	teamId: ID
+	"""
+	Where its events are pushed; null while its runtime polls for them.
+	"""
+	endpoint: GraphqlExternalAgentEndpoint
+	"""
+	RFC 3339 creation time.
+	"""
+	createdAt: String!
+}
+
+"""
+The webhook endpoint an external agent's events are pushed to, signed
+with its secret.
+"""
+type GraphqlExternalAgentEndpoint {
+	"""
+	URL the events are posted to.
+	"""
+	url: String!
+	"""
+	Whether the endpoint answered Macro's signed validation request.
+	Nothing is pushed to it until it has.
+	"""
+	verified: Boolean!
+}
+
+"""
+An external agent after its endpoint changed.
+"""
+type GraphqlExternalAgentEndpointChange {
+	"""
+	The agent, with its new endpoint.
+	"""
+	agent: GraphqlExternalAgent!
+	"""
+	Signing secret of a newly created endpoint, shown once; null when the
+	endpoint kept its secret or was removed.
+	"""
+	signingSecret: String
+}
+
+"""
+The endpoint's answer to Macro's signed validation request.
+"""
+type GraphqlExternalAgentEndpointVerification {
+	"""
+	The agent, with the endpoint's new verification state.
+	"""
+	agent: GraphqlExternalAgent!
+	"""
+	HTTP status the endpoint answered with; null when it did not answer.
+	"""
+	responseStatus: Int
+	"""
+	Why verification failed, when it did.
+	"""
+	message: String
+}
+
+"""
+A message that addressed an external agent: one event in its inbox,
+the same event its endpoint is pushed. Answer it with
+`replyToExternalAgentEvent`.
+"""
+type GraphqlExternalAgentEvent {
+	"""
+	Event id, ordering the inbox; pass the last one read as `after`.
+	"""
+	id: ID!
+	"""
+	How the message addressed the agent.
+	"""
+	kind: GraphqlExternalAgentEventKind!
+	"""
+	Type of the conversation: `channel`, `document`, `call`, and so on.
+	"""
+	conversationType: String!
+	"""
+	Id of the conversation.
+	"""
+	conversationId: ID!
+	"""
+	The message.
+	"""
+	messageId: ID!
+	"""
+	The thread the message is in; null for a root message.
+	"""
+	threadId: ID
+	"""
+	Who posted the message.
+	"""
+	senderId: String!
+	"""
+	Macro Markdown body.
+	"""
+	text: String!
+	"""
+	RFC 3339 time the message was posted.
+	"""
+	sentAt: String!
+}
+
+"""
+How a message addressed an external agent.
+"""
+enum GraphqlExternalAgentEventKind {
+	"""
+	A turn in someone's direct conversation with the agent.
+	"""
+	DIRECT_MESSAGE
+	"""
+	A message that mentioned the agent.
+	"""
+	MENTION
+}
+
+"""
+Where an external agent's reply was posted.
+"""
+type GraphqlExternalAgentReply {
+	"""
+	The posted message.
+	"""
+	messageId: ID!
+	"""
+	Type of the conversation it was posted in.
+	"""
+	conversationType: String!
+	"""
+	Id of the conversation it was posted in.
+	"""
+	conversationId: ID!
+	"""
+	The thread it was posted in; null on a direct conversation's timeline.
+	"""
+	threadId: ID
+}
+
+"""
+The authenticated external agent and its inbox.
+"""
+type GraphqlExternalAgentViewer {
+	"""
+	The agent's bot id.
+	"""
+	id: ID!
+	"""
+	Messages that addressed the agent after the event `after`, oldest
+	first: its direct messages and mentions. Poll with the last event's id
+	as `after`; each event is also pushed to the agent's endpoint when it
+	has one.
+	"""
+	events(after: ID, limit: Int): [GraphqlExternalAgentEvent!]!
+}
+
+"""
 Metadata for a message in an independently shared external chat.
 """
 type GraphqlExternalChatMessageMetadata {
@@ -6615,6 +6838,24 @@ enum GraphqlPropertyTargetEntityType {
 A property value represented by a type-safe GraphQL union.
 """
 union GraphqlPropertyValue = GraphqlBooleanPropertyValue | GraphqlNumberPropertyValue | GraphqlStringPropertyValue | GraphqlDatePropertyValue | GraphqlDateRangePropertyValue | GraphqlSelectOptionPropertyValue | GraphqlEntityReferencePropertyValue | GraphqlLinkPropertyValue
+
+"""
+A newly registered external agent and its credentials, shown once.
+"""
+type GraphqlRegisteredExternalAgent {
+	"""
+	The agent.
+	"""
+	agent: GraphqlExternalAgent!
+	"""
+	Bot token its runtime authenticates with, in `x-macro-bot-token`.
+	"""
+	botToken: String!
+	"""
+	Secret its endpoint's pushes are signed with; null without an endpoint.
+	"""
+	signingSecret: String
+}
 
 """
 The two operands of a recursive reminder filter expression. Ignored.
@@ -9710,6 +9951,10 @@ type GraphqlUser {
 	"""
 	calendarChanges(input: CalendarChangesInput!): GraphqlCalendarChanges!
 	"""
+	The external agents the viewer may manage: their own, and their team's.
+	"""
+	externalAgents: [GraphqlExternalAgent!]!
+	"""
 	A page of the authenticated user's work feed, newest first: items
 	with outstanding attention (notifications, inbox Signal email,
 	reminders) and, in `WORK` mode, work the user recently did. Each
@@ -10198,6 +10443,37 @@ input RecordChannelActivityInput {
 }
 
 """
+Register an external agent.
+"""
+input RegisterExternalAgentInput {
+	"""
+	Display name.
+	"""
+	name: String!
+	"""
+	`@` handle: lowercase letters, digits, `-` or `_`.
+	"""
+	handle: String!
+	"""
+	Optional description.
+	"""
+	description: String
+	"""
+	Optional avatar URL.
+	"""
+	avatarUrl: String
+	"""
+	Team that owns the agent; omit for an agent private to you.
+	"""
+	teamId: ID
+	"""
+	HTTPS URL to push the agent's events to. Omit when its runtime polls
+	`externalAgent.events` instead.
+	"""
+	endpointUrl: String
+}
+
+"""
 One entity rename in a batch.
 """
 input RenameEntityInput {
@@ -10219,6 +10495,24 @@ input ReorderFavoritesInput {
 	Favorited entities in the desired order.
 	"""
 	favorites: [EntityRefInput!]!
+}
+
+"""
+Answer one of the authenticated agent's events.
+"""
+input ReplyToExternalAgentEventInput {
+	"""
+	The event being answered.
+	"""
+	eventId: ID!
+	"""
+	Macro Markdown body.
+	"""
+	text: String!
+	"""
+	UUIDv7 you mint for this reply, so retrying cannot post it twice.
+	"""
+	messageId: ID
 }
 
 """
@@ -10595,6 +10889,34 @@ input SetEntityPropertyInput {
 }
 
 """
+Change where an external agent's events are pushed.
+"""
+input SetExternalAgentEndpointInput {
+	"""
+	The agent.
+	"""
+	agentId: ID!
+	"""
+	New endpoint URL; null to stop pushing so its runtime polls instead.
+	"""
+	endpointUrl: String
+}
+
+"""
+Show or stop showing the authenticated agent typing.
+"""
+input SetExternalAgentTypingInput {
+	"""
+	The event the agent is answering.
+	"""
+	eventId: ID!
+	"""
+	Whether the agent is typing.
+	"""
+	active: Boolean!
+}
+
+"""
 GraphQL result of setting an entity's favorite state.
 """
 type SetFavoritePayload {
@@ -10729,6 +11051,11 @@ type SoupQueryRoot {
 	The authenticated user.
 	"""
 	user: GraphqlUser!
+	"""
+	The external agent a runtime authenticated as with its bot token.
+	Agents read their inbox here; no user-scoped field resolves for them.
+	"""
+	externalAgent: GraphqlExternalAgentViewer!
 }
 
 """

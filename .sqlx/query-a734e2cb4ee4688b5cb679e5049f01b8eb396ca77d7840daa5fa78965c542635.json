@@ -1,0 +1,15 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            INSERT INTO external_agents (bot_id, webhook_id)\n            VALUES ($1, $2)\n            ON CONFLICT (bot_id) DO NOTHING\n            ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Text"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "a734e2cb4ee4688b5cb679e5049f01b8eb396ca77d7840daa5fa78965c542635"
+}

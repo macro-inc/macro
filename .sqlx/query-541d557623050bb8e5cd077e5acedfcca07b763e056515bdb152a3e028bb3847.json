@@ -1,0 +1,89 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            SELECT\n                id, bot_id, kind, parent_type, parent_id, message_id,\n                message_thread_id, reply_thread_id, sender_id,\n                invoking_user_id, content, message_created_at\n            FROM external_agent_events\n            WHERE bot_id = $1 AND id = $2\n            ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 1,
+        "name": "bot_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 2,
+        "name": "kind",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 3,
+        "name": "parent_type",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 4,
+        "name": "parent_id",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 5,
+        "name": "message_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 6,
+        "name": "message_thread_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 7,
+        "name": "reply_thread_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 8,
+        "name": "sender_id",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 9,
+        "name": "invoking_user_id",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 10,
+        "name": "content",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 11,
+        "name": "message_created_at",
+        "type_info": "Timestamptz"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      true,
+      true,
+      false,
+      false,
+      false,
+      false
+    ]
+  },
+  "hash": "541d557623050bb8e5cd077e5acedfcca07b763e056515bdb152a3e028bb3847"
+}

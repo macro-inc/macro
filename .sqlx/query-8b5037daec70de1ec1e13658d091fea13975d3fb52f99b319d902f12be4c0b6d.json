@@ -1,0 +1,28 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            SELECT bot_id, webhook_id\n            FROM external_agents\n            WHERE bot_id = ANY($1)\n            ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "bot_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 1,
+        "name": "webhook_id",
+        "type_info": "Text"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "UuidArray"
+      ]
+    },
+    "nullable": [
+      false,
+      true
+    ]
+  },
+  "hash": "8b5037daec70de1ec1e13658d091fea13975d3fb52f99b319d902f12be4c0b6d"
+}

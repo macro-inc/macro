@@ -839,6 +839,25 @@ fn scheduled_actions_hang_off_the_authenticated_user() {
 }
 
 #[test]
+fn external_agents_serve_owners_on_the_user_and_agents_on_their_own_viewer() {
+    let sdl = crate::build_schema().sdl();
+    for expected in [
+        "externalAgents: [GraphqlExternalAgent!]!",
+        "externalAgent: GraphqlExternalAgentViewer!",
+        "events(after: ID, limit: Int): [GraphqlExternalAgentEvent!]!",
+        "registerExternalAgent(input: RegisterExternalAgentInput!): GraphqlRegisteredExternalAgent!",
+        "setExternalAgentEndpoint(input: SetExternalAgentEndpointInput!): GraphqlExternalAgentEndpointChange!",
+        "verifyExternalAgentEndpoint(agentId: ID!): GraphqlExternalAgentEndpointVerification!",
+        "issueExternalAgentToken(agentId: ID!): String!",
+        "deleteExternalAgent(agentId: ID!): ID!",
+        "replyToExternalAgentEvent(input: ReplyToExternalAgentEventInput!): GraphqlExternalAgentReply!",
+        "setExternalAgentTyping(input: SetExternalAgentTypingInput!): Boolean!",
+    ] {
+        assert_sdl_line(&sdl, expected);
+    }
+}
+
+#[test]
 fn calendar_reads_hang_off_the_authenticated_user() {
     use apollo_compiler::schema::ExtendedType;
 

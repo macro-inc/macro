@@ -8,8 +8,8 @@ use async_graphql_axum::{GraphQLRequest, GraphQLResponse};
 use axum::{
     Router,
     body::HttpBody,
-    extract::{OriginalUri, State},
-    http::{StatusCode, request::Parts},
+    extract::{FromRequestParts, OriginalUri, State},
+    http::{HeaderValue, StatusCode, request::Parts},
     response::{Html, IntoResponse, Response},
     routing::get,
 };
@@ -20,7 +20,8 @@ use entity_registry::OwnerGrantPolicy;
 use entity_registry_db_utils::OwnedEntityRegistrar;
 use graphql_soup::email_mutation_thread_loader;
 use macro_authorization::{
-    MacroUserAuthentication, OptionalMacroAuthorizationExtractor, UserOrInternalService,
+    BOT_SCOPE_HEADER, BOT_TOKEN_HEADER, BotOnly, MacroUserAuthentication,
+    OptionalMacroAuthorizationExtractor, UserOrInternalService,
     UserOrInternalServiceAuthorization,
 };
 use macro_user_id::user_id::MacroUserIdStr;
@@ -53,12 +54,20 @@ fn graphiql_source(endpoint: &str) -> String {
 
 async fn graphql_handler(
     State(state): State<ApiContext>,
-    Cached(auth): Cached<
-        OptionalMacroAuthorizationExtractor<AuthorizationService, UserOrInternalService>,
-    >,
-    request_parts: Parts,
+    mut request_parts: Parts,
     request: GraphQLRequest,
 ) -> Response {
+    if request_parts.headers.contains_key(BOT_TOKEN_HEADER) {
+        return agent_graphql(state, request_parts, request).await;
+    }
+    let Cached(auth) = match Cached::<
+        OptionalMacroAuthorizationExtractor<AuthorizationService, UserOrInternalService>,
+    >::from_request_parts(&mut request_parts, &state)
+    .await
+    {
+        Ok(auth) => auth,
+        Err(rejection) => return rejection.into_response(),
+    };
     let acting_user = auth
         .authorization
         .as_ref()
@@ -85,6 +94,36 @@ async fn graphql_handler(
     })
     .await;
     graphql_response(result)
+}
+
+/// An external agent's runtime, authenticated by its bot token alone. It
+/// resolves only the agent fields; no user is in its request data. The bot
+/// scope header the token check requires is implied: agents act as
+/// themselves here, never through a scope.
+async fn agent_graphql(
+    state: ApiContext,
+    mut request_parts: Parts,
+    request: GraphQLRequest,
+) -> Response {
+    request_parts
+        .headers
+        .entry(BOT_SCOPE_HEADER)
+        .or_insert(HeaderValue::from_static("user"));
+    let authorization = match OptionalMacroAuthorizationExtractor::<
+        AuthorizationService,
+        BotOnly,
+    >::from_request_parts(&mut request_parts, &state)
+    .await
+    {
+        Ok(extracted) => extracted.authorization,
+        Err(rejection) => return rejection.into_response(),
+    };
+    let Some(bot) = authorization else {
+        return StatusCode::UNAUTHORIZED.into_response();
+    };
+    let request = graphql_query_context_data(request.into_inner(), &state, None, None, None)
+        .data(graphql_external_agent::GraphqlAgentPrincipal(bot.bot_id));
+    graphql_response(state.graphql_soup_schema.execute(request).await)
 }
 
 #[tracing::instrument(skip_all, name = "graphql.serialize", fields(response_bytes = tracing::field::Empty))]
@@ -168,6 +207,7 @@ fn insert_graphql_context_data(
     let saved_views: std::sync::Arc<dyn saved_views::domain::SavedViewApi> =
         std::sync::Arc::new(crate::service::saved_views::service(state.db.clone()));
     data.insert(saved_views);
+    data.insert(state.external_agent_graphql_context.clone());
 
     let Some(macro_user_id) = macro_user_id else {
         return;

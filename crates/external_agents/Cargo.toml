@@ -1,0 +1,59 @@
+[package]
+edition = "2024"
+name = "external_agents"
+publish = false
+version = "0.1.0"
+
+[features]
+default = ["consumer", "outbound"]
+consumer = [
+  "dep:kafka_util",
+  "dep:rdkafka",
+  "inbound",
+  "macro_event_broker/outbound",
+]
+inbound = []
+outbound = [
+  "dep:rate_limit",
+  "dep:serde_json",
+  "dep:sqlx",
+  "dep:webhook",
+]
+
+[dependencies]
+agent_trigger = { path = "../agent_trigger" }
+async-trait = { workspace = true }
+bot_id = { path = "../bot_id" }
+bots = { path = "../bots", default-features = false, features = ["ports"] }
+chrono = { workspace = true }
+entity_access = { path = "../entity_access", default-features = false, features = ["ports"] }
+futures = { workspace = true }
+harness_id = { path = "../harness_id" }
+kafka_util = { path = "../kafka_util", optional = true }
+macro_event_broker = { path = "../macro_event_broker", default-features = false }
+macro_user_id = { path = "../macro_user_id" }
+macro_uuid = { path = "../macro_uuid" }
+messages = { path = "../messages", features = ["ports"] }
+rate_limit = { path = "../rate_limit", optional = true }
+rdkafka = { workspace = true, optional = true }
+rootcause = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true, optional = true }
+sqlx = { workspace = true, optional = true }
+strum = { workspace = true }
+thiserror = { workspace = true }
+tokio = { workspace = true, features = ["time"] }
+tracing = { workspace = true }
+uuid = { workspace = true }
+webhook = { path = "../webhook", optional = true, default-features = false, features = ["inbound", "ports"] }
+workspace-hack = { version = "0.1", path = "../workspace-hack" }
+
+[dev-dependencies]
+agent_session = { path = "../agent_session", default-features = false }
+bot_id = { path = "../bot_id", features = ["test-utils"] }
+channel_sender = { path = "../channel_sender" }
+channels = { path = "../channels", default-features = false }
+macro_db_migrator = { path = "../macro_db_migrator" }
+messages = { path = "../messages", features = ["ports", "test-utils"] }
+serde_json = { workspace = true }
+tokio = { workspace = true, features = ["macros", "rt-multi-thread"] }

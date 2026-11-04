@@ -1,0 +1,90 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            SELECT\n                id, bot_id, kind, parent_type, parent_id, message_id,\n                message_thread_id, reply_thread_id, sender_id,\n                invoking_user_id, content, message_created_at\n            FROM external_agent_events\n            WHERE bot_id = $1 AND ($2::uuid IS NULL OR id > $2)\n            ORDER BY id\n            LIMIT $3\n            ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 1,
+        "name": "bot_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 2,
+        "name": "kind",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 3,
+        "name": "parent_type",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 4,
+        "name": "parent_id",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 5,
+        "name": "message_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 6,
+        "name": "message_thread_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 7,
+        "name": "reply_thread_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 8,
+        "name": "sender_id",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 9,
+        "name": "invoking_user_id",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 10,
+        "name": "content",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 11,
+        "name": "message_created_at",
+        "type_info": "Timestamptz"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid",
+        "Int8"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      true,
+      true,
+      false,
+      false,
+      false,
+      false
+    ]
+  },
+  "hash": "faa66c00a2c980c5bed2a3efda87d7f657fc2144dbcefa058a24e5911bbf19d8"
+}

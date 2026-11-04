@@ -4790,6 +4790,7 @@ dependencies = [
  "graphql_crm",
  "graphql_email",
  "graphql_entity_mutation",
+ "graphql_external_agent",
  "graphql_favorite",
  "graphql_initiative",
  "graphql_notification",
@@ -6555,6 +6556,7 @@ dependencies = [
  "entity_mutation",
  "entity_registry",
  "entity_registry_db_utils",
+ "external_agents",
  "external_chat",
  "favorites",
  "flate2",
@@ -6567,6 +6569,7 @@ dependencies = [
  "gmail_client",
  "graphql_calendar",
  "graphql_crm",
+ "graphql_external_agent",
  "graphql_initiative",
  "graphql_scheduled_action",
  "graphql_soup",
@@ -7960,6 +7963,42 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "af9673d8203fcb076b19dfd17e38b3d4ae9f44959416ea532ce72415a6020365"
 
 [[package]]
+name = "external_agents"
+version = "0.1.0"
+dependencies = [
+ "agent_session",
+ "agent_trigger",
+ "async-trait",
+ "bot_id",
+ "bots",
+ "channel_sender",
+ "channels",
+ "chrono",
+ "entity_access",
+ "futures",
+ "harness_id",
+ "kafka_util",
+ "macro_db_migrator",
+ "macro_event_broker",
+ "macro_user_id",
+ "macro_uuid",
+ "messages",
+ "rate_limit",
+ "rdkafka",
+ "rootcause",
+ "serde",
+ "serde_json",
+ "sqlx",
+ "strum 0.27.2",
+ "thiserror 2.0.18",
+ "tokio",
+ "tracing",
+ "uuid",
+ "webhook",
+ "workspace-hack",
+]
+
+[[package]]
 name = "external_chat"
 version = "0.1.0"
 dependencies = [
@@ -9189,6 +9228,26 @@ dependencies = [
  "tokio",
  "tracing",
  "tracing-subscriber",
+ "uuid",
+ "workspace-hack",
+]
+
+[[package]]
+name = "graphql_external_agent"
+version = "0.1.0"
+dependencies = [
+ "async-graphql",
+ "async-trait",
+ "bot_id",
+ "bots",
+ "chrono",
+ "external_agents",
+ "graphql_common",
+ "macro_user_id",
+ "messages",
+ "serde_json",
+ "tokio",
+ "tracing",
  "uuid",
  "workspace-hack",
 ]

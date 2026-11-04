@@ -93,18 +93,32 @@ where
     MacroAuthorizationState<Auth>: FromRef<S>,
 {
     fn config() -> RateLimitConfig {
-        RateLimitConfig {
-            max_count: 10,
-            window: Duration::from_secs(3600),
-        }
+        validate_webhook_rate_limit()
     }
 
     fn key(&self) -> RateLimitKey {
-        RateLimitKey::builder(&"per-user-validate-webhook")
-            .append(&self.authorization.authorization.user.macro_user_id.as_ref())
-            .append(&self.webhook_id)
-            .finish()
+        validate_webhook_rate_limit_key(
+            self.authorization.authorization.user.macro_user_id.as_ref(),
+            &self.webhook_id,
+        )
     }
+}
+
+/// How often one user may ask one webhook's endpoint to validate itself.
+/// Every surface that sends validation requests shares this budget.
+pub fn validate_webhook_rate_limit() -> RateLimitConfig {
+    RateLimitConfig {
+        max_count: 10,
+        window: Duration::from_secs(3600),
+    }
+}
+
+/// The rate-limit key for `user_id` validating `webhook_id`.
+pub fn validate_webhook_rate_limit_key(user_id: &str, webhook_id: &str) -> RateLimitKey {
+    RateLimitKey::builder(&"per-user-validate-webhook")
+        .append(&user_id)
+        .append(&webhook_id)
+        .finish()
 }
 
 impl<S, Auth> FromRequestParts<S> for PerUserValidateWebhookRateLimit<Auth>

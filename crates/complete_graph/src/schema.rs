@@ -25,6 +25,9 @@ use graphql_activity::{
     resolve_form_activity,
 };
 use graphql_calendar::{CalendarMutationRoot, GraphqlCalendarQuery};
+use graphql_external_agent::{
+    ExternalAgentMutationRoot, GraphqlExternalAgentQuery, GraphqlExternalAgentViewer,
+};
 use graphql_channel::{
     ChannelActivityAuthorizer, ChannelActivityMutationService, ChannelMutationRoot,
     NoOpChannelActivityMutationService,
@@ -108,6 +111,7 @@ pub struct CompleteMutationRoot<
     CalendarMutationRoot,
     WorkFeedMutationRoot<E>,
     SavedViewMutationRoot,
+    ExternalAgentMutationRoot,
 );
 
 impl<
@@ -135,6 +139,7 @@ impl<
             CalendarMutationRoot,
             WorkFeedMutationRoot::<E>::default(),
             SavedViewMutationRoot,
+            ExternalAgentMutationRoot,
         )
     }
 }
@@ -608,6 +613,15 @@ where
             user_id,
         })
     }
+
+    /// The external agent a runtime authenticated as with its bot token.
+    /// Agents read their inbox here; no user-scoped field resolves for them.
+    async fn external_agent(
+        &self,
+        ctx: &Context<'_>,
+    ) -> async_graphql::Result<GraphqlExternalAgentViewer> {
+        GraphqlExternalAgentViewer::resolve(ctx)
+    }
 }
 
 /// Root entry point for realtime Soup subscriptions.
@@ -852,6 +866,13 @@ where
     #[graphql(flatten)]
     async fn calendar(&self) -> GraphqlCalendarQuery {
         GraphqlCalendarQuery::new(self.user_id.clone())
+    }
+
+    /// Authenticated user external agent fields supplied by
+    /// `graphql_external_agent`.
+    #[graphql(flatten)]
+    async fn external_agents(&self) -> GraphqlExternalAgentQuery {
+        GraphqlExternalAgentQuery::new(self.user_id.clone())
     }
 
     /// A page of the authenticated user's work feed, newest first: items

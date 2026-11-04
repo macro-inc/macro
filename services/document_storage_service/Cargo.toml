@@ -157,6 +157,7 @@ graphql_soup = { path = "../../crates/graphql_soup" }
 graphql_crm = { path = "../../crates/graphql_crm" }
 graphql_initiative = { path = "../../crates/graphql_initiative" }
 graphql_calendar = { path = "../../crates/graphql_calendar" }
+graphql_external_agent = { path = "../../crates/graphql_external_agent" }
 graphql_scheduled_action = { path = "../../crates/graphql_scheduled_action" }
 harnesses = { path = "../../crates/harnesses" }
 hex = { workspace = true }
@@ -245,6 +246,7 @@ secretsmanager_client = { path = "../../crates/secretsmanager_client" }
 serde = { workspace = true }
 serde_json = { workspace = true }
 whatsapp_linked = { path = "../../crates/whatsapp_linked", features = ["inbound", "outbound"] }
+external_agents = { path = "../../crates/external_agents" }
 external_chat = { path = "../../crates/external_chat", features = ["inbound", "outbound"] }
 slack_integration = { path = "../../crates/slack_integration", features = [
   "gateway",

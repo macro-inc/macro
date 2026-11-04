@@ -940,6 +940,8 @@ pub(crate) struct ApiContext {
     pub graphql_calendar_context: graphql_calendar::CalendarGraphqlContext,
     pub graphql_calendar_mutation_context: graphql_calendar::CalendarGraphqlMutationContext,
     pub graphql_work_feed_context: complete_graph::WorkFeedGraphqlContext,
+    /// External agents' owner registry and agent API for GraphQL.
+    pub external_agent_graphql_context: graphql_external_agent::ExternalAgentGraphqlContext,
     pub graphql_initiative_entity_loader: graphql_initiative::InitiativeEntityLoader,
     pub graphql_agent_session_entity_loader: graphql_soup::AgentSessionEntityLoader,
     /// Focus reads for the GraphQL `emailFocus` list and thread `focus` field.
