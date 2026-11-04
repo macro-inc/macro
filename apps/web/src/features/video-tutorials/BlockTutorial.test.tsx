@@ -6,7 +6,7 @@ import {
   waitFor,
 } from '@solidjs/testing-library';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { EmailTutorialRow } from './EmailTutorialRow';
+import { TutorialPill, TutorialRow } from './views/BlockTutorial';
 
 const track = vi.hoisted(() => vi.fn());
 vi.mock('@app/lib/analytics', () => ({ analytics: { track } }));
@@ -36,9 +36,9 @@ const row = () =>
   screen.queryByRole('button', { name: /Learn how to use Macro Mail/ });
 const video = () => document.querySelector('video');
 
-describe('email tutorial row', () => {
+describe('block tutorial row', () => {
   it('opens the video paused and plays it only from the play button', async () => {
-    render(() => <EmailTutorialRow />);
+    render(() => <TutorialRow tutorial="mail" />);
 
     fireEvent.click(row()!);
     await screen.findByRole('dialog');
@@ -53,7 +53,7 @@ describe('email tutorial row', () => {
   });
 
   it('counts a play once, when playback really starts', async () => {
-    render(() => <EmailTutorialRow />);
+    render(() => <TutorialRow tutorial="mail" />);
 
     fireEvent.click(row()!);
     await screen.findByRole('dialog');
@@ -68,7 +68,7 @@ describe('email tutorial row', () => {
   });
 
   it('closes on Escape once playing and pauses the video', async () => {
-    render(() => <EmailTutorialRow />);
+    render(() => <TutorialRow tutorial="mail" />);
 
     fireEvent.click(row()!);
     await screen.findByRole('dialog');
@@ -85,12 +85,32 @@ describe('email tutorial row', () => {
   });
 
   it('stays dismissed on this device', () => {
-    const first = render(() => <EmailTutorialRow />);
+    const first = render(() => <TutorialRow tutorial="mail" />);
     fireEvent.click(screen.getByRole('button', { name: 'Dismiss' }));
     expect(row()).toBeNull();
     first.unmount();
 
-    render(() => <EmailTutorialRow />);
+    render(() => <TutorialRow tutorial="mail" />);
     expect(row()).toBeNull();
+  });
+});
+
+describe('block tutorial pill', () => {
+  it('opens the same paused video and dismisses separately from other tutorials', async () => {
+    render(() => <TutorialPill tutorial="mail" />);
+    fireEvent.click(
+      screen.getByRole('button', { name: /Learn how to use Macro Mail/ })
+    );
+    await screen.findByRole('dialog');
+    expect(play).not.toHaveBeenCalled();
+    expect(track).toHaveBeenCalledWith('tutorial_video', {
+      tutorial: 'macro-mail',
+      action: 'opened',
+    });
+  });
+
+  it('renders nothing for a block whose video is not in the catalog yet', () => {
+    render(() => <TutorialPill tutorial="scheduling" />);
+    expect(screen.queryByRole('button')).toBeNull();
   });
 });

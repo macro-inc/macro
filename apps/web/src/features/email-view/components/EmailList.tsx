@@ -1,3 +1,4 @@
+import { TutorialRow } from '@app/features/video-tutorials';
 import { usePending } from '@app/observability/flow';
 import { useGlobalNotificationSource } from '@components/app/GlobalAppState';
 import { markRowNotificationsSeenOnOpen } from '@notifications/mark-row-seen';
@@ -96,7 +97,6 @@ import {
   emailFocusOf,
 } from './EmailFocusBadges';
 import { EmailRowActions, EmailStarAction } from './EmailRowActions';
-import { EmailTutorialRow } from './EmailTutorialRow';
 
 type EmailActionRow = {
   entity: WithNotification<EntityData>;
@@ -763,7 +763,7 @@ export function EmailList(props: EmailListProps) {
                     fallback={<EmailEmptyState />}
                   >
                     <div class="touch:pt-(--mobile-content-inset-top)">
-                      <EmailTutorialRow />
+                      <TutorialRow tutorial="mail" />
                     </div>
                     <div class="contents touch:[--mobile-content-inset-top:0px]">
                       <EmailEmptyState />
@@ -787,7 +787,7 @@ export function EmailList(props: EmailListProps) {
                       class="h-0 touch:h-(--mobile-content-inset-top)"
                     />
                     <Show when={state.tab === 'important'}>
-                      <EmailTutorialRow />
+                      <TutorialRow tutorial="mail" />
                     </Show>
                   </div>
                   {/* A row subtree that suspends (the project crumb's preview query, say)

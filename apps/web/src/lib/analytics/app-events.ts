@@ -264,7 +264,21 @@ export type AppEvents = {
 
   // In-product tutorial videos (the pinned row at the top of an inbox).
   tutorial_video: {
-    tutorial: 'macro-mail';
+    /** `macro-<id>` for each id in features/video-tutorials/core/tutorial-id.ts. */
+    tutorial:
+      | 'macro-mail'
+      | 'macro-home'
+      | 'macro-chat'
+      | 'macro-tasks'
+      | 'macro-docs'
+      | 'macro-drive'
+      | 'macro-crm'
+      | 'macro-calendar'
+      | 'macro-calls'
+      | 'macro-agents'
+      | 'macro-github'
+      | 'macro-scheduling'
+      | 'macro-whatsapp';
     action: 'opened' | 'played' | 'dismissed';
   };
 
