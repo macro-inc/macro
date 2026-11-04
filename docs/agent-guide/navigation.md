@@ -1020,7 +1020,13 @@ hides during search, when a page supplies its own reply or compose controls
 (including the full-screen new-email composer, whose send actions sit in its
 header), or when an editable field outside Ask AI is focused on a touch device. The AI draft
 is preserved when the row returns.
-The New button also hides while the software keyboard is open.
+The New button also hides while the software keyboard is open or a live call
+view is in the foreground. Leaving the call view restores the current page's
+action, even if the call continues in the background.
+Active phone calls hide the bottom dock but retain the channel header island.
+Their Back button returns to the app while the call continues; tablets keep app
+chrome. Phone media controls sit below the video and hide when idle without
+resizing it; the header islands remain visible.
 After closing mobile search with the keyboard open or leaving a focused editor,
 verify that the current view’s New action returns once the keyboard closes.
 Removing the focused editor must not leave the action hidden on subsequent views.
@@ -1126,7 +1132,11 @@ natural date search (**tomorrow 9am**, **in 2 hours**) and an inline calendar wi
 time controls. Click **Add trigger** to confirm. Click a saved chip to edit it;
 **Done** applies changes and **Cancel** leaves it unchanged. The panel floats over
 the composer without moving it. Recurring schedules retain their time zones;
-one-off times use the browser’s local time.
+one-off times use the browser’s local time. A one-off saves a `once` trigger
+(`{type: 'once', at}`, the same one agents create through the SDK to check back
+later), runs within about a second of its time, runs as soon as it is saved when
+the time has passed, and then shows **Completed**; its chip reads **Once at**
+the time.
 
 The event menu groups Macro activity triggers by surface:
 

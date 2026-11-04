@@ -63,20 +63,24 @@ export function PersistedReview(props: {
       <Show when={query.isSuccess ? query.data : undefined}>
         {(record) => {
           const canAct = () => props.canAct && userId() === record().actingUser;
-          // A review's kind is fixed when it is saved.
-          return match(record())
-            .with({ kind: 'import' }, (review) => (
-              <ImportReview
-                review={review}
-                canAct={canAct()}
-                actions={decisions('import')}
-              />
+          // A review's kind is fixed when it is saved; polls keep its status live.
+          return match(record().kind)
+            .with('import', () => (
+              <Show when={importReview(record())}>
+                {(review) => (
+                  <ImportReview
+                    review={review()}
+                    canAct={canAct()}
+                    actions={decisions('import')}
+                  />
+                )}
+              </Show>
             ))
-            .with({ kind: 'email' }, { kind: 'calendar' }, (review) => (
+            .with('email', 'calendar', (kind) => (
               <ReviewStack
-                review={review}
+                review={record()}
                 canAct={canAct()}
-                actions={decisions(review.kind)}
+                actions={decisions(kind)}
               />
             ))
             .exhaustive();
@@ -84,4 +88,7 @@ export function PersistedReview(props: {
       </Show>
     </Suspense>
   );
+}
+function importReview(review: Review) {
+  return review.kind === 'import' ? review : undefined;
 }

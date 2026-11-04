@@ -18,6 +18,7 @@ import {
   RecordFilesSection,
   RecordReferencesSection,
 } from './record-associations';
+import { RecordDetailsSection } from './record-details-section';
 import { useContactQuery } from './use-crm';
 
 /**
@@ -128,7 +129,11 @@ function ContactContent(props: ContactProps) {
         </div>
       </div>
 
-      <SidePanel.Section id="contact-references" title="References" order={30}>
+      <RecordDetailsSection
+        contact={contact()}
+        onOpenCompany={props.onOpenCompany}
+      />
+      <SidePanel.Section id="contact-references" title="References" order={20}>
         <RecordReferencesSection scope={scope()} />
       </SidePanel.Section>
     </SidePanel.Layout>

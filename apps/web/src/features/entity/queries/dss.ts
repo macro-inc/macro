@@ -19,6 +19,7 @@ import { fireAndForget } from '@core/util/fireAndForget';
 import { throwOnErr } from '@core/util/result';
 import { deleteAgentSession } from '@queries/agent-session/entity-mutations';
 import { callKeys } from '@queries/call/keys';
+import { channelKeys } from '@queries/channel/keys';
 import { queryClient } from '@queries/client';
 import {
   getSoupEntityById,
@@ -42,6 +43,7 @@ import { permanentlyDeleteEntity } from '@queries/storage/entity-mutations';
 import { databasesKeys, formsKeys } from '@queries/storage/keys';
 import { callServiceClient } from '@service-call/client';
 import { scheduledActionClient } from '@service-scheduled-action/client';
+import { storageServiceClient } from '@service-storage/client';
 import type { ListedDatabase } from '@service-storage/generated/schemas/listedDatabase';
 import type { ListedForm } from '@service-storage/generated/schemas/listedForm';
 import { getEntityGraphqlClient } from '@service-storage/graphql-soup';
@@ -51,6 +53,9 @@ import { type EntityData, getEntityProjectId } from '../types/entity';
 import { BulkDeleteFailure } from './bulk-delete-result';
 
 function invalidateDeletedDssItems(entities: EntityData[]): void {
+  if (entities.some((e) => e.type === 'channel')) {
+    queryClient.invalidateQueries({ queryKey: channelKeys._def });
+  }
   if (entities.some((e) => e.type === 'call')) {
     queryClient.invalidateQueries({ queryKey: callKeys._def });
   }
@@ -81,7 +86,7 @@ function invalidateDeletedDssItems(entities: EntityData[]): void {
   }
 }
 
-async function settleGraphqlDeletes(
+async function settleDssDeletes(
   entities: EntityData[],
   deletions: Promise<boolean>[]
 ): Promise<boolean[]> {
@@ -135,6 +140,7 @@ export function createBulkDeleteDssItemsMutation() {
     const type = entity.type;
     return (
       type === 'agent_session' ||
+      type === 'channel' ||
       type === 'chat' ||
       type === 'document' ||
       type === 'project' ||
@@ -160,6 +166,16 @@ export function createBulkDeleteDssItemsMutation() {
       const deletions = deletable.map(async (e) => {
         if (e.type === 'agent_session') {
           await deleteAgentSession(e.id);
+          return true;
+        }
+        if (e.type === 'channel') {
+          if (graphqlSoupEnabled) {
+            await permanentlyDeleteEntity({ type: 'CHANNEL', id: e.id });
+          } else {
+            await throwOnErr(() =>
+              storageServiceClient.deleteChannel({ channel_id: e.id })
+            );
+          }
           return true;
         }
         if (e.type === 'call') {
@@ -189,11 +205,7 @@ export function createBulkDeleteDssItemsMutation() {
         }
         return deleteItem({ id: e.id, itemType: e.type });
       });
-      const results = graphqlSoupEnabled
-        ? await settleGraphqlDeletes(deletable, deletions)
-        : await Promise.all(deletions);
-      if (!graphqlSoupEnabled) invalidateDeletedDssItems(deletable);
-      return results;
+      return settleDssDeletes(deletable, deletions);
     },
     onMutate: async (entities: EntityData[]) => {
       const deletable = entities.filter(isDeletable);
@@ -236,9 +248,7 @@ export function createBulkDeleteDssItemsMutation() {
         return;
       }
       const partialFailure =
-        graphqlSoupEnabled &&
-        error instanceof BulkDeleteFailure &&
-        error.deletedEntities.length > 0;
+        error instanceof BulkDeleteFailure && error.deletedEntities.length > 0;
       if (partialFailure) {
         // The legacy transactions hold whole snapshots. Restore failed rows,
         // then reapply confirmed removals in one reactive batch so successes
@@ -246,7 +256,7 @@ export function createBulkDeleteDssItemsMutation() {
         batch(() => {
           context?.soupSnapshot.rollback();
           context?.searchSnapshot.rollback();
-          removeDssEntityCaches(error.deletedEntities, true);
+          removeDssEntityCaches(error.deletedEntities, graphqlSoupEnabled);
         });
       } else {
         context?.soupSnapshot.rollback();

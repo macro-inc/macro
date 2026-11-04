@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "\n        SELECT id, title, description, kind, gate_rules, gate_message, booking_target\n        FROM form_sections WHERE form_id = $1\n        ORDER BY position, id\n        ",
+  "query": "\n        SELECT id, title, description, kind, gate_rules, gate_message, booking_target, show_when\n        FROM form_sections WHERE form_id = $1\n        ORDER BY position, id\n        ",
   "describe": {
     "columns": [
       {
@@ -37,6 +37,11 @@
         "ordinal": 6,
         "name": "booking_target",
         "type_info": "Jsonb"
+      },
+      {
+        "ordinal": 7,
+        "name": "show_when",
+        "type_info": "Jsonb"
       }
     ],
     "parameters": {
@@ -51,8 +56,9 @@
       false,
       true,
       false,
+      true,
       true
     ]
   },
-  "hash": "8decbb0d1133a6b0b2cdbd4aa8db612edd5f80b51f15f3a6394611c0c35c828d"
+  "hash": "126aa04e7a90d91ce9567ac64615d9072f4dbd23e7d31686892bb30ba7f6d76e"
 }
