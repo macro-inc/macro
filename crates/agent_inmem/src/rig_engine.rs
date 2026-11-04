@@ -387,15 +387,15 @@ impl TurnEngine for RigTurnEngine {
                 // The product toolset makes this future large. Keep its state
                 // on the heap when adding the panic boundary, including in
                 // unoptimized local builds with Tokio's default worker stack.
-                let skills = TurnSkills {
+                let skills = TurnRouting {
                     routes,
                     sessions: &session_skills,
+                    entities: entities_routed,
                 };
                 let turn = Box::pin(drive_turn(
                     &memory,
                     &native_tools,
                     skills,
-                    entities_routed,
                     tool_context,
                     gate,
                     request,
@@ -472,11 +472,12 @@ async fn routes_entities(policy: &dyn EntityRoutingPolicy, request: &TurnRequest
         && policy.routes(owner).await
 }
 
-/// Whether a turn loads the user's skills on its own, and what its session
-/// has loaded.
-struct TurnSkills<'a> {
+/// What a turn loads on its own: the user's skills (and what its session has
+/// loaded already), and the SDK areas its request needs.
+struct TurnRouting<'a> {
     routes: bool,
     sessions: &'a SessionSkills,
+    entities: bool,
 }
 
 /// Route the turn's request to the user's skills. Boxed: the skill service's
@@ -527,8 +528,7 @@ async fn select_tool_mode(
 async fn drive_turn(
     memory: &MemoryServiceImpl<PgMemoryRepo>,
     native_tools: &NativeTools,
-    skills: TurnSkills<'_>,
-    routes_entities: bool,
+    skills: TurnRouting<'_>,
     base_context: ToolServiceContext,
     gate: Arc<dyn NativeToolGate>,
     request: TurnRequest,
@@ -645,7 +645,7 @@ async fn drive_turn(
         let requested = user_messages.last().cloned().unwrap_or_default();
         // Routed turns leave area guidance out of the prompt; the entities the
         // request needs bring theirs, with their indexes, in the turn's part.
-        let routed = native_tools.code_mode && routes_entities;
+        let routed = native_tools.code_mode && skills.entities;
         let docs = async {
             if native_tools.code_mode {
                 agent_code_mode::domain::select_documentation(
