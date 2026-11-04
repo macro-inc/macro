@@ -132,8 +132,15 @@ pub async fn router(
     });
     // OAuth router has its own CORS and bearer middleware; mount outside the
     // browser API layers, with the same tracing layer as the harness API.
+    // Serves the ChatGPT Apps Directory domain verification token.
+    let openai_domain_verification_token =
+        config.openai_domain_verification_token.as_ref().to_string();
     Ok(
         mcp_auth_proxy::inbound::axum_router::mounted_mcp_router(auth_proxy, jwt_args, mcp_service)
+            .route(
+                "/.well-known/openai-apps-challenge",
+                axum::routing::get(move || async move { openai_domain_verification_token }),
+            )
             .layer(
                 macro_tower_layers::MacroRequestIdAndTracingLayer::new(
                     std::time::Duration::from_millis(200),

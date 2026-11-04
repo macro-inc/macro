@@ -50,17 +50,6 @@ fn crate_change_maps_to_rdeps_of_that_crate() {
     );
 }
 
-#[test]
-fn connect_change_maps_to_workspace_package() {
-    let graph = build_graph(false).expect("cargo metadata");
-    let selection = select_in_repo(&graph, &["connect/crates/connect_registry/src/lib.rs"]);
-    assert_ne!(selection, PackageSelection::All);
-    assert!(
-        selected_packages(&selection).contains("connect_registry"),
-        "changed Connect crate must be selected: {selection:?}"
-    );
-}
-
 /// Top-level files that belong to no package — a JSON at the repo root, a
 /// README, a deleted misc file — must not select the full suite.
 #[test]
@@ -118,6 +107,27 @@ fn embedded_assets_select_their_consumers() {
     assert!(mixed_set.contains("email_validator"));
     assert!(mixed_set.contains("documents"));
     assert!(mixed_set.contains("collab_surface"));
+}
+
+/// The code-mode assets are generated from the SDK by a build script, so an
+/// SDK-only change must still test everything that embeds them.
+#[test]
+fn sdk_sources_select_code_mode_asset_consumers() {
+    let graph = build_graph(false).expect("cargo metadata");
+
+    let selection = select_in_repo(&graph, &["packages/sdk/src/macro.ts"]);
+    let set = selected_packages(&selection);
+    for expected in [
+        "code_mode_assets",
+        "code_execution",
+        "agent_code_mode",
+        "agent_harness_service",
+    ] {
+        assert!(
+            set.contains(expected),
+            "SDK changes must select {expected}: {selection:?}"
+        );
+    }
 }
 
 /// Drift check: every workspace package whose Rust sources mention the shared

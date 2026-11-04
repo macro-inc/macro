@@ -102,12 +102,14 @@ export function ListEntity(props: ListEntityProps) {
   // Legacy Soup callers do not pass row behavior explicitly yet.
   const soupView = useMaybeSoupView();
   const rowActions = children(() => props.actions);
+  const touchActions = children(() => props.touchActions);
   const leadingAction = children(() => props.leadingAction);
   const titleLeading = children(() => props.titleLeading);
   const icon = children(() => props.icon);
   const titleTrailing = children(() => props.titleTrailing);
   const meta = children(() => props.meta);
   const metaEnd = children(() => props.metaEnd);
+  const previewLeading = children(() => props.previewLeading);
   const scheduleStatus = children(() => props.scheduleStatus);
 
   const unread = () => unreadFilterFn(props.entity);
@@ -165,12 +167,13 @@ export function ListEntity(props: ListEntityProps) {
   const layoutProps = (): LayoutProps => ({
     entity: props.entity,
     actions: !isTouchDevice() ? rowActions() : undefined,
-    leadingAction: !isTouchDevice() ? leadingAction() : undefined,
+    leadingAction: isTouchDevice() ? touchActions() : leadingAction(),
     titleLeading: titleLeading(),
     icon: icon(),
     titleTrailing: titleTrailing(),
     meta: meta(),
     metaEnd: metaEnd(),
+    previewLeading: previewLeading(),
     scheduleStatus: scheduleStatus(),
     referenceProperties: referenceProperties(),
     authorDisplayName: props.authorDisplayName,
@@ -267,6 +270,7 @@ export function ListEntity(props: ListEntityProps) {
         {
           'min-h-10': !isMobile() && !usesCondensedNarrowLayout(),
           'min-h-9': !isMobile() && usesCondensedNarrowLayout(),
+          'touch:min-h-[44px]': isEmailEntity(props.entity),
           'mx-(--soup-row-gutter)': !isMobile() && !isNarrowEmail(),
           'bg-list-selected [--avatar-group-separator:var(--color-list-selected)]':
             props.checked,

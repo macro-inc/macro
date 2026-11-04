@@ -42,6 +42,12 @@ infra/local/generated/
 .pi/outputs/
 .commandcode/
 **/.webhook.json
+# Code-mode assets are generated at build time (crates/code_mode_assets);
+# never commit them.
+/crates/code_execution/src/outbound/deno/sdk.mjs
+/crates/code_execution/src/outbound/deno/handlebars.mjs
+/crates/agent_code_mode/src/domain/documentation.json
+/crates/agent_code_mode/src/domain/operations.json
 /artifacts
 
 # Raw SSE captures from CURSOR_ACP_RECORD_DIR; sanitize into

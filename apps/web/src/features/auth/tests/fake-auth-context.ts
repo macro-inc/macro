@@ -63,6 +63,7 @@ const userFor = (
   id: `macro|${email}`,
   email,
   tutorialComplete: account?.tutorialComplete ?? false,
+  isAgent: false,
 });
 
 /**
@@ -128,6 +129,7 @@ export function createFakeAuth(
         return options.ssoRedirect(provider, intent, email);
       signIn(email);
     },
+    agentSignupEnabled: () => false,
     sendEmailCode: async ({ email, password }) => {
       call(`sendCode:${email}`);
       const failure = world.failures.sendCode;

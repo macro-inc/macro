@@ -539,6 +539,11 @@ export type AgentSessionResponse = {
      */
     acpSessionId?: string | null;
     /**
+     * When the session was archived, or `None` while it is active.
+     */
+    archivedAt?: string | null;
+    archivedBy?: null | ArchiveCause;
+    /**
      * The bot running the agent.
      */
     botId: string;
@@ -566,10 +571,6 @@ export type AgentSessionResponse = {
      * at creation. Absent otherwise, so existing payloads are unchanged.
      */
     instructions?: string | null;
-    /**
-     * Whether the session is archived and read-only.
-     */
-    isArchived: boolean;
     /**
      * Model slug.
      */
@@ -701,6 +702,40 @@ export type AppConnectedRequest = {
      * The Pipedream app slug the owner connected, e.g. `notion`.
      */
     appSlug: string;
+};
+
+/**
+ * Who or what archived a session.
+ */
+export type ArchiveCause = 'user' | 'pull_request_merged' | 'runtime_closed';
+
+/**
+ * One session's choices over its owner's defaults. `null` follows the owner.
+ */
+export type AutoArchiveOverridesBody = {
+    /**
+     * Archive once the session's pull requests merge, or `null` to follow the owner.
+     */
+    onPullRequestMerged?: boolean | null;
+    /**
+     * Archive once the session's runtime session is deliberately closed, or `null` to follow
+     * the owner.
+     */
+    onRuntimeClosed?: boolean | null;
+};
+
+/**
+ * Which triggers archive the caller's sessions when a session has no choice of its own.
+ */
+export type AutoArchivePreferencesBody = {
+    /**
+     * Archive a session once every pull request linked to it is closed and at least one merged.
+     */
+    onPullRequestMerged: boolean;
+    /**
+     * Archive a session once the runtime session backing it is deliberately closed.
+     */
+    onRuntimeClosed: boolean;
 };
 
 export type BotId = string;
@@ -1121,26 +1156,13 @@ export type CreateAgentSessionResponse = {
 };
 
 /**
- * Review creation. Drafts are validated by the action's owning adapter.
+ * Review creation. Decoding it validates every draft; creating a review only
+ * presents the drafts, and the account holder acts separately.
  */
 export type CreateReview = {
-    /**
-     * One to one hundred independent drafts. Email: {subject, body: Markdown,
-     * to: [{email, name?}], cc?: [{email, name?}], bcc?: [{email, name?}],
-     * replyingToId?, attachments?: [{documentId}]}. Calendar: {title,
-     * time: {kind: "timed", startsAt: ISO datetime, endsAt: ISO datetime,
-     * timeZone?: IANA zone} or {kind: "allDay", startDate: ISO date,
-     * endDate: exclusive ISO date}, description?, location?, attendees?:
-     * [{email, isOptional?}]}. Import: exactly one draft {source: "notion" | "linear" | "jira"},
-     * presenting the plan ImportFromNotion, ImportFromLinear or ImportFromJira staged.
-     * Creating any review only presents these drafts; the user acts separately.
-     */
-    drafts: Array<unknown>;
+    [key: string]: unknown;
+} & {
     executionId?: null | ExecutionId;
-    /**
-     * Existing UI and action to use.
-     */
-    kind: ReviewKind;
     /**
      * Stack label.
      */
@@ -2032,9 +2054,11 @@ export type RetryAgentConversationTurnRequest = {
 export type ReviewDecision = {
     action: 'edit';
     /**
-     * Replacement action arguments.
+     * Replacement action arguments, keyed by the review's kind.
      */
-    draft: unknown;
+    draft: {
+        [key: string]: unknown;
+    };
     /**
      * Pending item to update.
      */
@@ -2093,67 +2117,21 @@ export type ReviewDecisionContext = {
 export type ReviewId = string;
 
 /**
- * One editable item and its durable outcome.
- */
-export type ReviewItem = {
-    /**
-     * Validated arguments for the existing composer/action.
-     */
-    draft: unknown;
-    /**
-     * Whether the account holder edited this draft before deciding.
-     */
-    edited?: boolean;
-    /**
-     * Failure or uncertainty description.
-     */
-    error?: string | null;
-    /**
-     * Stable item identity across stack navigation and edits.
-     */
-    id: string;
-    /**
-     * Actual backend response, never a model assertion.
-     */
-    result?: unknown;
-    /**
-     * Current outcome.
-     */
-    status: ReviewItemStatus;
-};
-
-/**
- * Review item state, shared with notification consumers.
- */
-export type ReviewItemStatus = 'pending' | 'submitting' | 'completed' | 'dismissed' | 'unknown';
-
-/**
- * The component and action used to finish a review.
- */
-export type ReviewKind = 'email' | 'calendar' | 'import';
-
-/**
  * Full UI record, fetched outside the model context.
  */
 export type ReviewRecord = {
+    [key: string]: unknown;
+} & {
     /**
-     * Account whose email/calendar the drafts use; historical records use the session owner.
+     * Account whose email/calendar the drafts use.
      */
-    actingUser?: string | null;
+    actingUser: string;
     decision?: null | ReviewDecisionContext;
     executionId?: null | ExecutionId;
     /**
      * Review identity.
      */
     id: ReviewId;
-    /**
-     * Drafts and per-item outcomes.
-     */
-    items: Array<ReviewItem>;
-    /**
-     * Component kind.
-     */
-    kind: ReviewKind;
     /**
      * Durable presentation acknowledgment, separate from user decisions.
      */
@@ -2221,6 +2199,25 @@ export type SearchSuggestions = (QuerySearchSuggestions & {
  * Search indexes supported by the shared search editor.
  */
 export type SearchType = 'all' | 'channels' | 'document-or-file' | 'task' | 'email' | 'calls' | 'folders' | 'agent' | 'calendar';
+
+/**
+ * A session's auto-archive settings and history.
+ */
+export type SessionAutoArchiveResponse = {
+    /**
+     * When a trigger first archived the session. Kept when a person restores it: a session
+     * archives itself at most once.
+     */
+    autoArchivedAt?: string | null;
+    /**
+     * The owner's defaults, which apply where the session has no choice of its own.
+     */
+    defaults: AutoArchivePreferencesBody;
+    /**
+     * The session's own choices.
+     */
+    overrides: AutoArchiveOverridesBody;
+};
 
 /**
  * The agent behind a session, as much of it as rendering a message needs.
@@ -2301,9 +2298,9 @@ export type SessionStatusDto = {
  */
 export type SetAgentSessionArchivedRequest = {
     /**
-     * The requested archive state.
+     * Archive the session, or restore it.
      */
-    isArchived: boolean;
+    archived: boolean;
 };
 
 export type SharePermissionV2 = {
@@ -2455,6 +2452,46 @@ export type WithAgentSessionId = {
      */
     id: string;
 };
+
+export type GetAgentAutoArchivePreferencesData = {
+    body?: never;
+    path?: never;
+    query?: never;
+    url: '/agent-auto-archive-preferences';
+};
+
+export type GetAgentAutoArchivePreferencesErrors = {
+    401: string;
+    500: string;
+};
+
+export type GetAgentAutoArchivePreferencesError = GetAgentAutoArchivePreferencesErrors[keyof GetAgentAutoArchivePreferencesErrors];
+
+export type GetAgentAutoArchivePreferencesResponses = {
+    200: AutoArchivePreferencesBody;
+};
+
+export type GetAgentAutoArchivePreferencesResponse = GetAgentAutoArchivePreferencesResponses[keyof GetAgentAutoArchivePreferencesResponses];
+
+export type PutAgentAutoArchivePreferencesData = {
+    body: AutoArchivePreferencesBody;
+    path?: never;
+    query?: never;
+    url: '/agent-auto-archive-preferences';
+};
+
+export type PutAgentAutoArchivePreferencesErrors = {
+    401: string;
+    500: string;
+};
+
+export type PutAgentAutoArchivePreferencesError = PutAgentAutoArchivePreferencesErrors[keyof PutAgentAutoArchivePreferencesErrors];
+
+export type PutAgentAutoArchivePreferencesResponses = {
+    200: AutoArchivePreferencesBody;
+};
+
+export type PutAgentAutoArchivePreferencesResponse = PutAgentAutoArchivePreferencesResponses[keyof PutAgentAutoArchivePreferencesResponses];
 
 export type DiscoverAgentCapabilitiesHandlerData = {
     body: DiscoverAgentCapabilitiesRequest;
@@ -3065,6 +3102,58 @@ export type SetAgentSessionArchivedResponses = {
 };
 
 export type SetAgentSessionArchivedResponse = SetAgentSessionArchivedResponses[keyof SetAgentSessionArchivedResponses];
+
+export type GetAgentSessionAutoArchiveData = {
+    body?: never;
+    path: {
+        /**
+         * ID of the agent session
+         */
+        session_id: string;
+    };
+    query?: never;
+    url: '/agent-sessions/{session_id}/auto-archive';
+};
+
+export type GetAgentSessionAutoArchiveErrors = {
+    401: string;
+    403: string;
+    500: string;
+};
+
+export type GetAgentSessionAutoArchiveError = GetAgentSessionAutoArchiveErrors[keyof GetAgentSessionAutoArchiveErrors];
+
+export type GetAgentSessionAutoArchiveResponses = {
+    200: SessionAutoArchiveResponse;
+};
+
+export type GetAgentSessionAutoArchiveResponse = GetAgentSessionAutoArchiveResponses[keyof GetAgentSessionAutoArchiveResponses];
+
+export type PutAgentSessionAutoArchiveData = {
+    body: AutoArchiveOverridesBody;
+    path: {
+        /**
+         * ID of the agent session
+         */
+        session_id: string;
+    };
+    query?: never;
+    url: '/agent-sessions/{session_id}/auto-archive';
+};
+
+export type PutAgentSessionAutoArchiveErrors = {
+    401: string;
+    403: string;
+    500: string;
+};
+
+export type PutAgentSessionAutoArchiveError = PutAgentSessionAutoArchiveErrors[keyof PutAgentSessionAutoArchiveErrors];
+
+export type PutAgentSessionAutoArchiveResponses = {
+    200: AutoArchiveOverridesBody;
+};
+
+export type PutAgentSessionAutoArchiveResponse = PutAgentSessionAutoArchiveResponses[keyof PutAgentSessionAutoArchiveResponses];
 
 export type GetAgentSessionChangesData = {
     body?: never;

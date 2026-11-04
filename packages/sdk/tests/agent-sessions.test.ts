@@ -18,7 +18,8 @@ const session: AgentSessionResponse = {
   model: 'claude-sonnet',
   modifiedAt: '2026-08-24T12:00:00Z',
   name: 'Agent Session',
-  isArchived: false,
+  archivedBy: null,
+  archivedAt: null,
   ownerId: 'macro|owner@example.com',
   sandboxSize: 'default',
   status: { kind: 'no_messages' },
@@ -167,7 +168,7 @@ describe('AgentSession', () => {
           .status(),
     ]) {
       await expect(read()).rejects.toMatchObject({
-        name: 'MacroApiError',
+        name: 'MacroForbiddenError',
         status: 403,
         data: { message: 'Forbidden' },
       });
@@ -215,8 +216,8 @@ describe('AgentSession', () => {
       `https://agent.example.test/agent-sessions/${sessionId}/archived`,
       `https://agent.example.test/agent-sessions/${sessionId}/archived`,
     ]);
-    await expect(requests[0]?.json()).resolves.toEqual({ isArchived: true });
-    await expect(requests[1]?.json()).resolves.toEqual({ isArchived: false });
+    await expect(requests[0]?.json()).resolves.toEqual({ archived: true });
+    await expect(requests[1]?.json()).resolves.toEqual({ archived: false });
   });
 
   test('resizes a session sandbox through the agent-harness service', async () => {
@@ -468,6 +469,28 @@ describe('AgentSession', () => {
     });
   });
 
+  test('a created session serializes with its web app link', async () => {
+    globalThis.fetch = (async (_input) =>
+      Response.json({ session }, { status: 201 })) as typeof fetch;
+    const macro = new Macro({
+      token: 'user-token',
+      hosts: { 'agent-harness': 'https://agent.example.test' },
+      webAppUrl: 'https://app.example.test',
+    });
+
+    const created = await macro.agentSessions.createManaged({
+      prompt: 'Fix it',
+    });
+
+    expect(created.webUrl()).toBe(
+      'https://app.example.test/app/agent/0198a4cc-e138-7670-a308-a6b766602700',
+    );
+    expect(JSON.parse(JSON.stringify(created))).toMatchObject({
+      id: '0198a4cc-e138-7670-a308-a6b766602700',
+      url: 'https://app.example.test/app/agent/0198a4cc-e138-7670-a308-a6b766602700',
+    });
+  });
+
   test('prompt is sugar over control and reports queueing', async () => {
     let request: Request | undefined;
     globalThis.fetch = (async (input) => {
@@ -507,6 +530,7 @@ describe('AgentSession', () => {
     const messages: FoldedMessage[] = [
       {
         agentSessionId: sessionId,
+        key: '0:agent',
         turn: 0,
         author: { kind: 'agent' },
         requestId: null,

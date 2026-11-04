@@ -27,7 +27,9 @@ deliberately stable and widely depended on.
 
 ## Scope
 
-- Owns: the tool trait, schema generation, and collection mechanics.
+- Owns: the tool trait, schema generation, and collection mechanics, plus
+  the tool-search wire types (`tool_search.rs`: `SearchToolsResponse`,
+  `LoadToolsResponse`) the agent loop reads loads back from.
 - Not here: any actual tool implementation — those live in domain crates
   and are assembled in `ai_tools`.
 
@@ -52,6 +54,9 @@ deliberately stable and widely depended on.
 
 - Every tool must declare MCP annotations; a tool without them fails to
   compile/register (see `src/annotations.rs`).
+- Keep tool input roots free of `oneOf`, `anyOf`, and `allOf`; put tagged variants
+  under a named property so provider validation accepts them. Schema generation
+  rejects root composition when toolsets are built, including in their tests.
 
 ## Related
 

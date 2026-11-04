@@ -274,6 +274,27 @@ Delete one of the database's webhooks; its URL stops working.
 
 ***
 
+### duplicate()
+
+> **duplicate**(`options?`): `Promise`\<`Database`\>
+
+Copy the database into a new one the caller owns, with its tables,
+columns, views and rows. Its sharing, forms, webhooks and history stay
+with this one. Viewing it is enough.
+
+#### Parameters
+
+| Parameter | Type | Description |
+| ------ | ------ | ------ |
+| `options?` | \{ `name?`: `string`; \} | - |
+| `options.name?` | `string` | The copy's name; by default, "<name> copy". |
+
+#### Returns
+
+`Promise`\<`Database`\>
+
+***
+
 ### importTable()
 
 > **importTable**(`request`): `Promise`\<[`DatabaseTable`](../../table/classes/DatabaseTable.md)\>
@@ -475,18 +496,21 @@ The table with the given display name, or `undefined` if there is none.
 
 ### toJSON()
 
-> **toJSON**(): \{ `detail?`: [`DatabaseDetail`](../../../../../generated/storage/types.gen/type-aliases/DatabaseDetail.md); `id`: `string`; \}
+> **toJSON**(): \{ `detail?`: [`DatabaseDetail`](../../../../../generated/storage/types.gen/type-aliases/DatabaseDetail.md); `id`: `string`; `url`: `string`; \}
+
+Identity, loaded detail and [webUrl](#weburl), so serialized handles carry their link.
 
 #### Returns
 
-\{ `detail?`: [`DatabaseDetail`](../../../../../generated/storage/types.gen/type-aliases/DatabaseDetail.md); `id`: `string`; \}
+\{ `detail?`: [`DatabaseDetail`](../../../../../generated/storage/types.gen/type-aliases/DatabaseDetail.md); `id`: `string`; `url`: `string`; \}
 
 | Name | Type |
 | ------ | ------ |
 | `detail?` | [`DatabaseDetail`](../../../../../generated/storage/types.gen/type-aliases/DatabaseDetail.md) |
 | `id` | `string` |
+| `url` | `string` |
 
-#### Inherited from
+#### Overrides
 
 [`MacroEntity`](../../../entity/classes/MacroEntity.md).[`toJSON`](../../../entity/classes/MacroEntity.md#tojson)
 
@@ -537,6 +561,18 @@ The database's webhooks, oldest first. Takes edit access.
 #### Returns
 
 `Promise`\<[`DatabaseWebhook`](../../webhook/classes/DatabaseWebhook.md)[]\>
+
+***
+
+### webUrl()
+
+> **webUrl**(): `string`
+
+The database's URL in the Macro web app; hand it to users as the link.
+
+#### Returns
+
+`string`
 
 ***
 

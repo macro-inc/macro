@@ -101,6 +101,18 @@ Create a native Canvas with shared content ready for reading and editing.
 
 Create a skill: markdown instructions that AI reads and follows.
 
+A skill is a markdown document, so read one with `content()`, by the id of
+a skill mention or of a search result:
+
+```js
+const skill = macro.documents.byId(skillId);
+const instructions = await skill.content();
+```
+
+Read a skill the request names before doing the task, and follow it for
+that request only. `systemSkills()` lists the built-in skills, whose
+instructions have no document; read those with the ReadSkill tool.
+
 #### Parameters
 
 | Parameter | Type |
@@ -220,7 +232,8 @@ Search documents by name and content, most relevant first, auto-paginated.
 > **systemSkills**(): `Promise`\<[`SystemSkill`](../../system-skill/classes/SystemSkill.md)[]\>
 
 The built-in system skills: static AI instructions with no document
-behind them. Unlike user skills they cannot be opened or edited.
+behind them. Unlike user skills they cannot be opened or edited, and
+their instructions are read with the ReadSkill tool, not `content()`.
 
 #### Returns
 

@@ -6,6 +6,7 @@ mod chat_reply;
 mod coding_preferences;
 mod external_mcp;
 mod external_replies;
+mod followers;
 mod notifications;
 mod owned_purge;
 mod presentation;
@@ -304,6 +305,18 @@ impl crate::domain::ports::HarnessBindings for MirrorBindings {
     async fn harness_for(&self, bot: BotId) -> anyhow::Result<Option<harness_id::HarnessId>> {
         Ok(Some(harness_for_bot(bot)))
     }
+
+    /// Mirrored too: an ACP session id that is a session's own id names it.
+    async fn sessions_on_harness(
+        &self,
+        _harness: harness_id::HarnessId,
+        acp_sessions: &[agent_client_protocol::schema::v1::SessionId],
+    ) -> anyhow::Result<Vec<AgentSessionId>> {
+        Ok(acp_sessions
+            .iter()
+            .filter_map(|acp| acp.to_string().parse().ok())
+            .collect())
+    }
 }
 
 /// No agent has said anything about permissions: every bot runs under its
@@ -374,6 +387,10 @@ impl agent_session::domain::ports::SessionTurnObserver for SignallingTurnObserve
             id,
             reason,
         );
+    }
+
+    fn runtime_closed(&self, id: AgentSessionId) {
+        agent_session::domain::ports::SessionTurnObserver::runtime_closed(&self.harness, id);
     }
 }
 
@@ -4596,6 +4613,7 @@ async fn codex_channel_mention_provisions_egress_without_advertising_mcp() {
     assert!(request.mcp_servers.is_empty());
 }
 
+mod reattach;
 mod reopen;
 
 /// The owner's reachable repositories, as the GitHub App would list them.

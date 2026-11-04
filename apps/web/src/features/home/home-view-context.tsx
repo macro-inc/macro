@@ -47,7 +47,7 @@ import {
   homePreviewTargetNavigation,
 } from './home-preview-navigation';
 import { homeDetailParamsFromRoute, homePreviewTarget } from './home-route';
-import { isHomeDocumentType } from './home-route-schema';
+import { homeProjectSearch, isHomeDocumentType } from './home-route-schema';
 import { homeTabSearch, homeTabSearchCodec } from './home-tab-search';
 import { createHomeViewPersistence, normalizeHomeFacets } from './persistence';
 import type {
@@ -96,6 +96,7 @@ export const [HomeViewProvider, useHomeView] = createAssertedContextProvider<
     useParams<Parameters<typeof homeDetailParamsFromRoute>[0]>();
   const [channelSearch] = createSearchParams(channelsSearch);
   const [documentSearch] = createSearchParams(driveSearch);
+  const [projectSearch] = createSearchParams(homeProjectSearch);
   const [tabSearch] = createSearchParams(homeTabSearch);
   const selectPreview = createPreviewSelectionGuard();
   const initial = props.initialState ?? {};
@@ -138,6 +139,7 @@ export const [HomeViewProvider, useHomeView] = createAssertedContextProvider<
     return homePreviewTarget(params, {
       channel: channelSearch,
       document: documentSearch,
+      project: projectSearch,
     });
   });
   const withTab = (

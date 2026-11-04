@@ -442,18 +442,21 @@ A mixed message and activity timeline page.
 
 ### toJSON()
 
-> **toJSON**(): \{ `detail?`: [`ApiChannelDetail`](../../../../../generated/storage/types.gen/type-aliases/ApiChannelDetail.md); `id`: `string`; \}
+> **toJSON**(): \{ `detail?`: [`ApiChannelDetail`](../../../../../generated/storage/types.gen/type-aliases/ApiChannelDetail.md); `id`: `string`; `url`: `string`; \}
+
+Identity, loaded detail and [webUrl](#weburl), so serialized handles carry their link.
 
 #### Returns
 
-\{ `detail?`: [`ApiChannelDetail`](../../../../../generated/storage/types.gen/type-aliases/ApiChannelDetail.md); `id`: `string`; \}
+\{ `detail?`: [`ApiChannelDetail`](../../../../../generated/storage/types.gen/type-aliases/ApiChannelDetail.md); `id`: `string`; `url`: `string`; \}
 
 | Name | Type |
 | ------ | ------ |
 | `detail?` | [`ApiChannelDetail`](../../../../../generated/storage/types.gen/type-aliases/ApiChannelDetail.md) |
 | `id` | `string` |
+| `url` | `string` |
 
-#### Inherited from
+#### Overrides
 
 [`PropertiedEntity`](../../../entity/classes/PropertiedEntity.md).[`toJSON`](../../../entity/classes/PropertiedEntity.md#tojson)
 
@@ -469,7 +472,7 @@ Broadcast a typing indicator, optionally scoped to a thread.
 
 | Parameter | Type |
 | ------ | ------ |
-| `action` | `"stop"` \| `"start"` |
+| `action` | `"start"` \| `"stop"` |
 | `opts?` | \{ `thread?`: [`Thread`](../../thread/classes/Thread.md); \} |
 | `opts.thread?` | [`Thread`](../../thread/classes/Thread.md) |
 

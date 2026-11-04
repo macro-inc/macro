@@ -5,7 +5,7 @@ mod user_cleanup;
 use super::*;
 use crate::domain::event_runs::ClaimToken;
 use crate::domain::models::{
-    ActionConfigurationUpdate, ActionKind, ExecutionResource, ExecutionResourceType,
+    ActionConfigurationUpdate, ActionKind, ExecutionResource, ExecutionResourceType, ListedAction,
     MAX_ACTION_TIME, RunVisibility,
 };
 use crate::domain::{
@@ -93,6 +93,12 @@ impl ScheduledActionRepo for FakeRepo {
 
     async fn get_execution_records(&self, _id: &Uuid) -> Result<Vec<ActionExecutionRecord>> {
         Ok(vec![])
+    }
+    async fn last_runs(
+        &self,
+        _: &[Uuid],
+    ) -> Result<std::collections::HashMap<Uuid, crate::domain::models::LastRun>> {
+        Ok(std::collections::HashMap::new())
     }
 
     async fn get_next_unclaimed_actions(&self, _limit: i64) -> Result<Vec<ScheduledAction>> {
@@ -329,7 +335,7 @@ async fn validates_before_persistence_and_rejects_cross_owner_selection() {
         base.dispatcher_tx.clone(),
         grants(&base.repo),
     )
-    .with_target_validation(TargetValidation::new(sessions.clone(), true));
+    .with_target_validation(TargetValidation::new(sessions.clone()));
     let mut config = configuration(false);
     config.task = agent_task();
     let foreign = MacroUserIdStr::parse_from_str(FOREIGN_USER).unwrap();
@@ -373,7 +379,7 @@ async fn validates_before_persistence_and_rejects_cross_owner_selection() {
 }
 
 #[tokio::test]
-async fn gated_acceptance_allows_models_and_explicit_switch_but_rejects_old_clients() {
+async fn without_sessions_agents_are_refused_but_models_and_explicit_switches_are_kept() {
     let base = service(false);
     let svc = TestService::new(
         base.repo.clone(),
@@ -381,7 +387,7 @@ async fn gated_acceptance_allows_models_and_explicit_switch_but_rejects_old_clie
         base.dispatcher_tx.clone(),
         grants(&base.repo),
     )
-    .with_target_validation(TargetValidation::new(Arc::new(Sessions::default()), true));
+    .with_target_validation(TargetValidation::new(Arc::new(Sessions::default())));
     let mut config = configuration(false);
     config.task = agent_task();
     let error = base
@@ -390,7 +396,7 @@ async fn gated_acceptance_allows_models_and_explicit_switch_but_rejects_old_clie
         .unwrap_err();
     assert_eq!(
         error.downcast_ref(),
-        Some(&TargetValidationError::AgentsDisabled)
+        Some(&TargetValidationError::SessionsUnavailable)
     );
     let created = svc
         .create_action(&user_principal(), config.clone())
@@ -403,7 +409,7 @@ async fn gated_acceptance_allows_models_and_explicit_switch_but_rejects_old_clie
         .unwrap_err();
     assert_eq!(
         error.downcast_ref(),
-        Some(&TargetValidationError::AgentsDisabled)
+        Some(&TargetValidationError::SessionsUnavailable)
     );
 
     // An old client cannot erase the agent even when trying to pause it.
@@ -440,7 +446,7 @@ async fn unavailable_agents_can_be_paused_deleted_and_have_history_read_without_
             base.dispatcher_tx.clone(),
             grants(&base.repo),
         )
-        .with_target_validation(TargetValidation::new(sessions.clone(), true));
+        .with_target_validation(TargetValidation::new(sessions.clone()));
         let mut config = configuration(false);
         config.task = agent_task();
         let created = svc
@@ -496,7 +502,7 @@ async fn preparation_reauthorizes_previously_saved_selection_after_deletion_or_r
             base.dispatcher_tx.clone(),
             grants(&base.repo),
         )
-        .with_target_validation(TargetValidation::new(sessions.clone(), true));
+        .with_target_validation(TargetValidation::new(sessions.clone()));
         let mut config = configuration(false);
         config.task = agent_task();
         let created = svc.create_action(&user_principal(), config).await.unwrap();
@@ -633,7 +639,10 @@ async fn list_is_cron_only_by_default_but_id_operations_reach_events() {
         .create_action(&user_principal(), configuration(true))
         .await
         .unwrap();
-    assert_eq!(svc.get_actions(user(), false).await.unwrap()[0].id, cron.id);
+    assert_eq!(
+        svc.get_actions(user(), false).await.unwrap()[0].action.id,
+        cron.id
+    );
     assert_eq!(svc.get_actions(user(), false).await.unwrap().len(), 1);
     assert_eq!(svc.get_actions(user(), true).await.unwrap().len(), 2);
     svc.get_execution_records(view_receipt(event.id.unwrap()))
@@ -1075,12 +1084,18 @@ async fn read_service_keeps_both_triggers_for_the_owner_in_stable_order() {
         read.iter()
             .any(|action| matches!(action.trigger, ActionTrigger::Events { .. }))
     );
+    let listed = |listed: Vec<ListedAction>| {
+        listed
+            .into_iter()
+            .map(|listed| listed.action.name)
+            .collect::<Vec<_>>()
+    };
     assert_eq!(
-        names(&svc.get_actions(user(), true).await.unwrap()),
+        listed(svc.get_actions(user(), true).await.unwrap()),
         expected
     );
     assert_eq!(
-        names(&svc.get_actions(user(), false).await.unwrap()),
+        listed(svc.get_actions(user(), false).await.unwrap()),
         vec!["early-cron", "low-id", "first-equal", "second-equal"]
     );
 }
@@ -1146,7 +1161,7 @@ async fn resuming_revalidates_the_stored_agent_but_pausing_does_not() {
         base.dispatcher_tx.clone(),
         grants(&base.repo),
     )
-    .with_target_validation(TargetValidation::new(sessions.clone(), true));
+    .with_target_validation(TargetValidation::new(sessions.clone()));
     let mut config = configuration(false);
     config.task = agent_task();
     let created = svc.create_action(&user_principal(), config).await.unwrap();

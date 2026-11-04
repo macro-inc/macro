@@ -26,7 +26,7 @@ import {
   useIsDocumentOwner,
 } from '@core/signal/permissions';
 import { useBlockDocumentName } from '@core/util/currentBlockDocumentName';
-import { DocumentDebouncedNotificationReadMarker } from '@notifications';
+import { DocumentNotificationReadMarker } from '@notifications';
 import { Show, Suspense } from 'solid-js';
 import { createMarkdownDocumentState } from '../context/markdown-document-state';
 import type { MarkdownData } from '../definition';
@@ -160,7 +160,7 @@ export default function MarkdownBlockAdapter(props: BlockMarkdownProps) {
                   </div>
                 </Suspense>
               </div>
-              <DocumentDebouncedNotificationReadMarker
+              <DocumentNotificationReadMarker
                 notificationSource={notificationSource}
                 documentId={documentId}
               />

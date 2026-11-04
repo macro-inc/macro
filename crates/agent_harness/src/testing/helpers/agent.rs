@@ -309,6 +309,15 @@ impl FakeAgent {
                         );
                         progress.opening = Some(request.id.clone());
                     }
+                    // The connection lists sessions right after it initializes.
+                    ClientRequest::ListSessionsRequest(_) => {
+                        assert_ne!(
+                            progress.stage,
+                            Stage::Fresh,
+                            "harness sent {} before initialize completed",
+                            request.method
+                        );
+                    }
                     ClientRequest::PromptRequest(_) => {
                         assert_eq!(
                             progress.stage,

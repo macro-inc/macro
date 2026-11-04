@@ -100,7 +100,8 @@ use databases::inbound::axum_router::ops::{
 };
 use databases::inbound::axum_router::views::ViewPositionsResponse as DatabaseViewPositionsResponse;
 use databases::inbound::axum_router::{
-    CreateDatabaseRequest, saved_queries::SaveQueryRequest as DatabaseSaveQueryRequest,
+    CreateDatabaseRequest, duplicate::DuplicateDatabaseRequest,
+    saved_queries::SaveQueryRequest as DatabaseSaveQueryRequest,
 };
 use databases::outbound::gateway_event_publisher::{
     AwarenessRelay as DatabaseAwarenessRelay, TableChanged as DatabaseTableChanged,
@@ -509,6 +510,7 @@ use utoipa::OpenApi;
         databases::inbound::axum_router::history::undo_change_handler,
         databases::inbound::axum_router::history::table_changes_handler,
         databases::inbound::axum_router::transfer::import_table_handler,
+        databases::inbound::axum_router::duplicate::duplicate_database_handler,
         databases::inbound::axum_router::sharing::get_permissions_handler,
         databases::inbound::axum_router::sharing::update_permissions_handler,
         databases::inbound::axum_router::saved_queries::save_query_handler,
@@ -554,6 +556,7 @@ use utoipa::OpenApi;
         crm::inbound::pipelines::list,
         crm::inbound::pipelines::read,
         crm::inbound::pipelines::table,
+        crm::inbound::pipelines::view_positions,
         crm::inbound::pipelines::rows,
         crm::inbound::pipelines::query_rows,
         crm::inbound::pipelines::apply_ops,
@@ -574,6 +577,10 @@ use utoipa::OpenApi;
         crm::inbound::axum_router::get_company::handler,
         crm::inbound::axum_router::create_company::handler,
         crm::inbound::axum_router::create_contact::handler,
+        crm::inbound::axum_router::create_team_contact::handler,
+        crm::inbound::axum_router::blocked_domains::list_handler,
+        crm::inbound::axum_router::blocked_domains::block_handler,
+        crm::inbound::axum_router::blocked_domains::unblock_handler,
         crm::inbound::axum_router::team_settings::get_handler,
         crm::inbound::axum_router::team_settings::update_handler,
         crm::inbound::axum_router::stages::replace_handler,
@@ -733,6 +740,7 @@ use utoipa::OpenApi;
             DatabaseTableDetail,
             DatabaseColumnDetail,
             CreateDatabaseRequest,
+            DuplicateDatabaseRequest,
             DatabaseAwareness,
             DatabaseAwarenessRelay,
             DatabaseTableChanged,
@@ -1059,6 +1067,8 @@ use utoipa::OpenApi;
             crm::inbound::axum_router::stages::CrmStagesResponse,
             crm::inbound::axum_router::stages::CrmStageResponse,
             crm::inbound::axum_router::team_settings::CrmTeamSettingsResponse,
+            crm::inbound::axum_router::create_team_contact::CreateCrmTeamContactRequest,
+            crm::inbound::axum_router::blocked_domains::CrmBlockedDomainResponse,
             crm::inbound::axum_router::team_settings::UpdateCrmTeamSettingsRequest,
             crm::domain::model::CrmPermissionRole,
         ),

@@ -1,7 +1,8 @@
+import { createDistancePointerSensor } from '@app/components/drag-drop/create-distance-pointer-sensor';
 import { CollapsibleSection } from '@app/components/view-shell';
 import { t } from '@app/lib/i18n';
 import DotsSixVerticalIcon from '@icon/system/regular/dots-six-vertical.svg';
-import { createDraggable } from '@thisbeyond/solid-dnd';
+import { createDraggable, useDragDropContext } from '@thisbeyond/solid-dnd';
 import { Button, cn, Tooltip } from '@ui';
 import { type JSX, Show } from 'solid-js';
 import type { ChannelSectionKey } from '../../../types';
@@ -17,7 +18,6 @@ export function ChannelSectionHeading(props: {
   unreadCount: number;
   onToggle: () => void;
   badge?: JSX.Element;
-  dragHandle?: JSX.Element;
   children?: JSX.Element;
 }) {
   return (
@@ -28,7 +28,6 @@ export function ChannelSectionHeading(props: {
           props.focused && 'bg-hover text-ink'
         )}
       >
-        {props.dragHandle}
         <CollapsibleSection.Trigger
           id={props.id}
           role="treeitem"
@@ -48,19 +47,26 @@ export function ChannelSectionHeading(props: {
             <span class="text-xs text-accent">{props.unreadCount}</span>
           </Show>
         </CollapsibleSection.Trigger>
-        <div class="flex shrink-0 items-center">{props.children}</div>
+        <div
+          class="flex shrink-0 items-center"
+          onMouseDown={(event) => event.stopPropagation()}
+        >
+          {props.children}
+        </div>
       </CollapsibleSection.Header>
     </CollapsibleSection.Root>
   );
 }
 
-/** Keep disclosure clicks separate from section dragging and keyboard reordering. */
-export function ChannelSectionDragHandle(props: {
+/** Drag from the heading or its grip without toggling disclosure after a drop. */
+export function DraggableChannelSectionHeading(props: {
   section: ChannelSectionKey;
   label: string;
   reorder: ReturnType<typeof useSectionReorder>;
+  children: JSX.Element;
 }) {
-  const draggable = createDraggable(`${props.reorder.scope}:${props.section}`, {
+  const dragId = `${props.reorder.scope}:${props.section}`;
+  const draggable = createDraggable(dragId, {
     dragType: 'channel-section',
     dndScope: props.reorder.scope,
     section: props.section,
@@ -80,28 +86,61 @@ export function ChannelSectionDragHandle(props: {
     ),
   });
 
-  return (
-    <Button
-      ref={draggable.ref}
-      {...draggable.dragActivators}
-      variant="ghost"
-      size="icon-xs"
-      class="absolute -left-(--sidebar-gutter) top-1 z-10 cursor-grab opacity-0 group-hover/rail-section:opacity-100 focus-visible:opacity-100 active:cursor-grabbing"
-      aria-label={t('channelSections.reorderSection', { name: props.label })}
-      tooltip={t('channelSections.reorderSectionHint')}
-      onClick={(event: MouseEvent) => event.stopPropagation()}
-      onKeyDown={(event: KeyboardEvent) => {
-        if (event.key !== 'ArrowUp' && event.key !== 'ArrowDown') {
-          return;
-        }
+  const pointer = createDistancePointerSensor(8, props.reorder.cancel, {
+    id: `${dragId}:pointer`,
+    manual: true,
+  });
+  const [, actions] = useDragDropContext() ?? [];
+  let didDrag = false;
 
-        event.preventDefault();
-        event.stopPropagation();
-        event.stopImmediatePropagation();
-        props.reorder.move(props.section, event.key === 'ArrowUp' ? -1 : 1);
+  actions?.onDragStart(({ draggable: source }) => {
+    if (source.id === dragId) {
+      didDrag = true;
+    }
+  });
+
+  const preventToggleAfterDrag = (event: MouseEvent) => {
+    if (!didDrag || event.detail === 0) {
+      return;
+    }
+
+    event.preventDefault();
+    event.stopPropagation();
+  };
+
+  return (
+    <div
+      ref={draggable.ref}
+      class="group/section-heading relative cursor-grab active:cursor-grabbing"
+      onMouseDown={(event) => pointer.start(event, dragId)}
+      onPointerDown={() => {
+        didDrag = false;
       }}
+      on:click={{ capture: true, handleEvent: preventToggleAfterDrag }}
     >
-      <DotsSixVerticalIcon class="size-3 -translate-x-1" />
-    </Button>
+      <Button
+        variant="ghost"
+        appearance="bare"
+        size="icon-xs"
+        data-icon-motion="none"
+        class="absolute -left-(--sidebar-gutter) top-1 z-10 cursor-grab opacity-0 group-hover/section-heading:opacity-100 focus-visible:opacity-100 active:cursor-grabbing"
+        aria-label={t('channelSections.reorderSection', { name: props.label })}
+        tooltip={t('channelSections.reorderSectionHint')}
+        onClick={(event: MouseEvent) => event.stopPropagation()}
+        onKeyDown={(event: KeyboardEvent) => {
+          if (event.key !== 'ArrowUp' && event.key !== 'ArrowDown') {
+            return;
+          }
+
+          event.preventDefault();
+          event.stopPropagation();
+          event.stopImmediatePropagation();
+          props.reorder.move(props.section, event.key === 'ArrowUp' ? -1 : 1);
+        }}
+      >
+        <DotsSixVerticalIcon class="-ml-2 size-3" />
+      </Button>
+      {props.children}
+    </div>
   );
 }

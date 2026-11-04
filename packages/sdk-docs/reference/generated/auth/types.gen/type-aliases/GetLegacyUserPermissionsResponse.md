@@ -1,6 +1,6 @@
 # Type Alias: GetLegacyUserPermissionsResponse
 
-> **GetLegacyUserPermissionsResponse** = \{ `aiDataConsent`: `boolean`; `createdAt?`: `string` \| `null`; `email`: `string`; `group?`: `null` \| [`AbGroup`](AbGroup.md); `hasChromeExt`: `boolean`; `hasTrialed`: `boolean`; `licenseStatus`: `string`; `name?`: `string` \| `null`; `permissions`: `string`[]; `referralCode`: `string`; `tutorialComplete`: `boolean`; `userId`: `string`; \}
+> **GetLegacyUserPermissionsResponse** = \{ `aiDataConsent`: `boolean`; `createdAt?`: `string` \| `null`; `email`: `string`; `group?`: `null` \| [`AbGroup`](AbGroup.md); `hasChromeExt`: `boolean`; `hasTrialed`: `boolean`; `isAgent`: `boolean`; `licenseStatus`: `string`; `name?`: `string` \| `null`; `permissions`: `string`[]; `referralCode`: `string`; `tutorialComplete`: `boolean`; `userId`: `string`; \}
 
 ## Properties
 
@@ -12,6 +12,7 @@
 | <a id="property-group"></a> `group?` | `null` \| [`AbGroup`](AbGroup.md) | - |
 | <a id="property-haschromeext"></a> `hasChromeExt` | `boolean` | Whether the user has the chrome extension |
 | <a id="property-hastrialed"></a> `hasTrialed` | `boolean` | Whether the user has trialed through stripe |
+| <a id="property-isagent"></a> `isAgent` | `boolean` | Whether this is an agent account rather than a person |
 | <a id="property-licensestatus"></a> `licenseStatus` | `string` | The user's license status |
 | <a id="property-name"></a> `name?` | `string` \| `null` | The user's name |
 | <a id="property-permissions"></a> `permissions` | `string`[] | The permissions the user has |

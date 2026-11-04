@@ -2153,3 +2153,39 @@ fn mcp_servers_replaced_before_the_handshake_ride_on_session_new() {
     let opened = machine.handle(session_opened("acp-42"));
     assert!(!sent_methods(&opened).contains(&"session/resume".to_owned()));
 }
+
+#[test]
+fn only_the_runtimes_closed_notification_for_the_live_session_reports_a_deliberate_close() {
+    let closed = |session_id: &str| {
+        frame(
+            RawJsonRpcMessage::notification(
+                "_session/closed".to_owned(),
+                serde_json::json!({"sessionId": session_id}),
+            )
+            .expect("an object of params"),
+        )
+    };
+    let mut machine = live_machine_under(PermissionPolicy::AutoAccept);
+
+    let effects = machine.handle(closed("acp-42"));
+    assert!(matches!(
+        effects[..],
+        [Effect::Log { .. }, Effect::RuntimeClosed]
+    ));
+    assert!(
+        matches!(machine.status(), RuntimeStatus::Live { .. }),
+        "a later prompt may still relaunch the runtime"
+    );
+
+    let effects = machine.handle(closed("acp-other"));
+    assert!(matches!(effects[..], [Effect::Log { .. }]));
+
+    let effects = machine.handle(Input::Closed(CloseReason::TransportClosed));
+    assert!(
+        !effects
+            .iter()
+            .any(|effect| matches!(effect, Effect::RuntimeClosed)),
+        "a disconnect is not a deliberate close"
+    );
+    assert!(matches!(effects[..], [Effect::Stop { .. }]));
+}

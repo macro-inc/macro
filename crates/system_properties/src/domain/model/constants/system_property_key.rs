@@ -87,7 +87,7 @@ define_system_properties! {
     DependsOn,         DEPENDS_ON_UUID,         0x07, "Depends On";
     Effort,            EFFORT_UUID,             0x08, "Effort";
     StoryPoints,       STORY_POINTS_UUID,       0x09, "Story Points";
-    RelevantDocuments, RELEVANT_DOCUMENTS_UUID, 0x0a, "Relevant Documents";
+    RelevantDocuments, RELEVANT_DOCUMENTS_UUID, 0x0a, "Relevant Docs";
 
     // Emails Attachments
     Source,            SOURCE_UUID,             0x0b, "Source";

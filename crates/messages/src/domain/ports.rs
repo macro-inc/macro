@@ -640,8 +640,9 @@ pub fn timeline_parent(activity: &activity::Activity) -> Option<MessageParent> {
 pub struct CrmParentFacts {
     /// The team that owns the record.
     pub team_id: Uuid,
-    /// The company itself, or the contact's company.
-    pub company_id: Uuid,
+    /// The company itself, or the contact's company (`None` for a
+    /// contact without one).
+    pub company_id: Option<Uuid>,
     /// Display name: a company's custom or directory name (else its primary
     /// domain), a contact's name (else its email).
     pub name: String,

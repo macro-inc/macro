@@ -79,6 +79,10 @@ fn path_check() -> Job {
             "database_grid_changed",
             "${{ steps.filter.outputs.database_grid_changed }}",
         )
+        .add_output(
+            "calendar_details_changed",
+            "${{ steps.filter.outputs.calendar_details_changed }}",
+        )
         .add_step(checkout("Checkout Repo", false))
         .add_step(paths_filter())
 }
@@ -98,7 +102,6 @@ fn typescript() -> Job {
         .add_step(steps::mount_web_cache_volume(false))
         .add_step(steps::setup_nix())
         .add_step(steps::setup_reqs_web("Setup Prereqs", false))
-        .add_step(check_dynamic_ui_schema())
         .add_step(check_types())
         .add_step(check_floating_promises())
         .add_step(check_functional_test_types())
@@ -157,6 +160,7 @@ fn generated_code() -> Job {
         .add_step(steps::setup_nix())
         .add_step(steps::setup_reqs_web("Setup Prereqs", false))
         .add_step(steps::configure_namespace_sccache(vars::WEB_SCCACHE_NAME))
+        .add_step(steps::code_mode_assets())
         .add_step(build_schema_binaries())
         .add_step(generate_api_types())
         .add_step(regenerate_sdk())
@@ -202,6 +206,7 @@ fn test() -> Job {
         .add_step(run_signup_browser_tests())
         .add_step(run_i18n_browser_tests())
         .add_step(run_database_browser_tests())
+        .add_step(run_calendar_details_browser_tests())
         .add_step(steps::teardown_nix())
 }
 
@@ -289,7 +294,9 @@ fn paths_filter() -> Step<Use> {
     // generated workflows`. `i18n_changed` covers what the interface language
     // browser tests render: translations, the menu primitives, and settings
     // navigation. `database_grid_changed` covers the database grid's browser
-    // tests.
+    // tests. `calendar_details_changed` covers what the event details browser
+    // tests render and the query modules their fixture replaces, whose exports
+    // the fixture must keep matching.
     Step::new("Filter changed paths")
         .uses(
             "dorny",
@@ -300,7 +307,7 @@ fn paths_filter() -> Step<Use> {
         .add_with((
             "filters",
             format!(
-                "should_run:\n{artifact_paths}  - 'services/lexical-service/**'\n  - 'packages/sdk/**'\n  - 'packages/sdk-docs/**'\n  - 'services/ai-editing-worker/**'\n  - 'packages/code-mode-sdk/**'\n  - 'crates/code_execution/src/outbound/deno/*.mjs'\n  - 'crates/agent_code_mode/src/domain/documentation.json'\n  - 'crates/agent_code_mode/SKILL.md'\n  - 'crates/ai_tools/src/display_results/schema.generated.json'\n  - 'crates/dynamic_ui/src/present_view.schema.generated.json'\n  - '.github/actions/setup-reqs-web/**'\ncodegen_changed:\n  - 'crates/**/*.rs'\n  - 'services/**/*.rs'\n  - 'Cargo.toml'\n  - 'Cargo.lock'\n  - 'apps/web/scripts/generate-api-schema.ts'\n  - 'apps/web/scripts/services.ts'\n  - 'packages/sdk/**'\n  - 'apps/docs/**'\n  - '.github/actions/setup-reqs-web/**'\ni18n_changed:\n  - 'apps/web/src/lib/i18n/**'\n  - 'apps/web/src/lib/core/component/ContextMenu.tsx'\n  - 'apps/web/src/lib/core/constant/settingsTabsConfig.tsx'\n  - 'apps/web/src/components/ui/components/Dropdown.tsx'\n  - 'apps/web/src/features/settings/**'\ndatabase_grid_changed:\n  - 'apps/web/src/features/database/**'\n"
+                "should_run:\n{artifact_paths}  - 'services/lexical-service/**'\n  - 'packages/sdk/**'\n  - 'packages/sdk-docs/**'\n  - 'services/ai-editing-worker/**'\n  - 'packages/code-mode-sdk/**'\n  - 'crates/agent_code_mode/SKILL.md'\n  - '.github/actions/setup-reqs-web/**'\ncodegen_changed:\n  - 'crates/**/*.rs'\n  - 'services/**/*.rs'\n  - 'Cargo.toml'\n  - 'Cargo.lock'\n  - 'apps/web/scripts/generate-api-schema.ts'\n  - 'apps/web/scripts/services.ts'\n  - 'packages/sdk/**'\n  - 'apps/docs/**'\n  - '.github/actions/setup-reqs-web/**'\ni18n_changed:\n  - 'apps/web/src/lib/i18n/**'\n  - 'apps/web/src/lib/core/component/ContextMenu.tsx'\n  - 'apps/web/src/lib/core/constant/settingsTabsConfig.tsx'\n  - 'apps/web/src/components/ui/components/Dropdown.tsx'\n  - 'apps/web/src/features/settings/**'\ndatabase_grid_changed:\n  - 'apps/web/src/features/database/**'\ncalendar_details_changed:\n  - 'apps/web/src/features/calendar-view/**'\n  - 'apps/web/src/features/calendar/**'\n  - 'apps/web/src/lib/queries/calendar/**'\n"
             ),
         ))
 }
@@ -326,15 +333,17 @@ fn generate_api_types() -> Step<Run> {
 }
 
 /// `gen-api` covers the OpenAPI clients; the types specta writes from the
-/// wire types of the two browser wasm crates are regenerated here, so a Rust
-/// change cannot leave them behind.
+/// wire types of the two browser wasm crates, the dynamic-UI view and the agent
+/// review types are regenerated here, so a Rust change cannot leave them behind.
 fn check_specta_types() -> Step<Run> {
     Step::new("Check Specta Types")
         .run(indoc::indoc! {r#"
             just gen-agent-fold-types
             just gen-database-sql-types
-            if ! git diff --exit-code -- src/lib/service-clients/service-agent-fold/generated src/lib/core/database-sql/generated; then
-              echo "Generated wasm wire types are stale. Run 'just gen-agent-fold-types' and 'just gen-database-sql-types' in apps/web and commit the result."
+            just gen-dynamic-ui-types
+            just gen-agent-review-types
+            if ! git diff --exit-code -- src/lib/service-clients/service-agent-fold/generated src/lib/core/database-sql/generated src/features/dynamic-ui/generated ../../packages/lexical-core/generated src/lib/service-clients/service-agent-reviews/generated ../../packages/sdk/generated/agent-reviews; then
+              echo "Generated specta types are stale. Run 'just gen-agent-fold-types', 'just gen-database-sql-types', 'just gen-dynamic-ui-types' and 'just gen-agent-review-types' in apps/web and commit the result."
               exit 1
             fi
         "#})
@@ -390,12 +399,6 @@ fn check_floating_promises() -> Step<Run> {
 fn check_functional_test_types() -> Step<Run> {
     Step::new("Check Functional Test Types")
         .run("bun run --bun --silent tsc --project tests/functional/tsconfig.json")
-        .working_directory(xtask_paths::repo_dir!("apps/web"))
-}
-
-fn check_dynamic_ui_schema() -> Step<Run> {
-    Step::new("Check Dynamic UI Schema")
-        .run("bun run check-dynamic-ui-schema")
         .working_directory(xtask_paths::repo_dir!("apps/web"))
 }
 
@@ -491,6 +494,18 @@ fn run_database_browser_tests() -> Step<Run> {
         .run("bunx playwright install-deps chromium\njust test-database-browser")
         .if_condition(Expression::new(
             "needs.path-check.outputs.database_grid_changed == 'true'",
+        ))
+        .working_directory(xtask_paths::repo_dir!("apps/web"))
+}
+
+/// Event details placement and guest editors in desktop and phone Chromium,
+/// over preview adapters instead of a backend. Only when calendar details or
+/// the calendar queries the adapters stand in for change.
+fn run_calendar_details_browser_tests() -> Step<Run> {
+    Step::new("Calendar Event Details Browser Tests")
+        .run("bunx playwright install-deps chromium\njust test-calendar-details-browser")
+        .if_condition(Expression::new(
+            "needs.path-check.outputs.calendar_details_changed == 'true'",
         ))
         .working_directory(xtask_paths::repo_dir!("apps/web"))
 }

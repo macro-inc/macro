@@ -55,12 +55,16 @@ jobs:
             - '.sqlx/**'
             - 'crates/**'
             - 'services/**'
-            - 'connect/**'
             - 'tooling/xtask/**'
             - 'static_assets/**'
             - 'nix/**'
+            - 'nix-support/node_modules*'
             - 'flake.nix'
             - 'flake.lock'
+            - 'bun.lock'
+            - 'packages/sdk/**'
+            - 'packages/sdk-docs/**'
+            - 'packages/code-mode-sdk/**'
             - '.github/actions/setup-nix/**'
             - '.github/actions/setup-nix-dev-shell/**'
             - '.github/actions/teardown-nix/**'
@@ -288,8 +292,10 @@ jobs:
         else
           echo "::warning::Namespace remote sccache setup failed; using local cache fallback"
         fi
-    - name: Check embedded code execution assets
-      run: nix build --no-link .#checks.x86_64-linux.code-execution-assets
+    - name: Build code-mode assets
+      run: |
+        assets="$(nix build --no-link --print-out-paths --print-build-logs .#code-mode-assets)"
+        echo "CODE_MODE_ASSETS_DIR=$assets" >> "$GITHUB_ENV"
     - name: fmt
       run: cargo fmt --check
     - name: clippy
@@ -455,6 +461,10 @@ jobs:
         else
           echo "::warning::Namespace remote sccache setup failed; using local cache fallback"
         fi
+    - name: Build code-mode assets
+      run: |
+        assets="$(nix build --no-link --print-out-paths --print-build-logs .#code-mode-assets)"
+        echo "CODE_MODE_ASSETS_DIR=$assets" >> "$GITHUB_ENV"
     - id: doppler-bins
       name: compute affected Doppler config bins
       run: |
@@ -588,6 +598,10 @@ jobs:
         fi
     - name: Start sccache server
       run: sccache --start-server
+    - name: Build code-mode assets
+      run: |
+        assets="$(nix build --no-link --print-out-paths --print-build-logs .#code-mode-assets)"
+        echo "CODE_MODE_ASSETS_DIR=$assets" >> "$GITHUB_ENV"
     - name: configure postgres for concurrent tests
       run: |
         postgres_container="$(docker ps --format '{{.ID}} {{.Image}}' | awk '$2 == "pgvector/pgvector:pg14" { print $1; exit }')"

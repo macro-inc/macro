@@ -102,6 +102,7 @@ export function NarrowEmailLayout(
         chars={props.chars}
         showHitSnippet={props.showHitSnippet}
         setContainerRef={props.setSnippetContainerRef}
+        previewLeading={props.previewLeading}
       />
       <InboxDivider />
     </Entity.Layout>

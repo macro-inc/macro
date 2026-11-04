@@ -58,12 +58,20 @@ export const I_USER_MENTION: TextMatchTransformer = {
   replace: (node: TextNode, match: RegExpMatchArray) => {
     try {
       const data = JSON.parse(match[1]);
-      for (const field of ['userId', 'email']) {
-        if (!(field in data)) throw new Error(`Missing field ${field}`);
+      if (typeof data?.userId !== 'string' || !data.userId.trim()) {
+        throw new Error('Missing or invalid userId');
       }
+      let email = typeof data.email === 'string' ? data.email : '';
+      if (!email && data.userId.startsWith('macro|')) {
+        email = data.userId.slice('macro|'.length);
+      }
+
       const displayName =
         typeof data.displayName === 'string' ? data.displayName : undefined;
-      const userMentionNode = new UserMentionNode(data.userId, data.email, {
+      if (!email && !displayName?.trim()) {
+        throw new Error('Missing user mention label');
+      }
+      const userMentionNode = new UserMentionNode(data.userId, email, {
         displayName,
       });
       node.replace(userMentionNode);

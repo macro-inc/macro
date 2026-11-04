@@ -20,6 +20,8 @@ export default {
   changePriority: 'Change priority',
   cancel: 'Cancel',
   close: 'Close',
+  dismiss: 'Dismiss',
+  loading: 'Loading…',
   delete: 'Delete',
   rename: 'Rename',
   more: 'More',

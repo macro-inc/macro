@@ -77,6 +77,8 @@ describe('availability', () => {
     status: 'open',
     closesAt: '2026-10-03T17:00:00Z',
     tallyVisible: false,
+    responsesVisible: false,
+    anonymous: false,
     confirmationMessage: '',
     branding: { logoFileId: null, coverFileId: null, accentColor: null },
     submittedColumnId: null,

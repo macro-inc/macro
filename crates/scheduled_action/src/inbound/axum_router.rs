@@ -3,7 +3,8 @@ use std::sync::Arc;
 use crate::domain::event_trigger::ActionTrigger;
 use crate::domain::models::{
     ActionConfiguration, ActionConfigurationUpdate, ActionExecutionRecord, ActionPolicyError,
-    AlreadyRunningError, InProgressExecution, OwnerNotUserError, Schedule, ScheduledAction,
+    AlreadyRunningError, InProgressExecution, LastRun, ListedAction, OwnerNotUserError, Schedule,
+    ScheduledAction,
 };
 use crate::domain::ports::ScheduledActionService;
 use crate::domain::target_validation::TargetValidationError;
@@ -50,6 +51,10 @@ pub struct ScheduledActionResponse {
     #[serde(skip_serializing_if = "Option::is_none")]
     #[schema(value_type = Option<String>)]
     pub timezone: Option<Tz>,
+    /// The latest finished run. Present only in lists, and only once the
+    /// routine has finished a run.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub last_run: Option<LastRun>,
 }
 
 impl From<ScheduledAction> for ScheduledActionResponse {
@@ -63,6 +68,16 @@ impl From<ScheduledAction> for ScheduledActionResponse {
             action,
             schedule,
             timezone,
+            last_run: None,
+        }
+    }
+}
+
+impl From<ListedAction> for ScheduledActionResponse {
+    fn from(listed: ListedAction) -> Self {
+        Self {
+            last_run: listed.last_run,
+            ..Self::from(listed.action)
         }
     }
 }
@@ -530,7 +545,7 @@ impl IntoResponse for ScheduledActionApiError {
         }
         if let Some(validation) = error.downcast_ref::<TargetValidationError>() {
             let status = match validation {
-                TargetValidationError::InvalidTask | TargetValidationError::AgentsDisabled => {
+                TargetValidationError::InvalidTask | TargetValidationError::SessionsUnavailable => {
                     StatusCode::BAD_REQUEST
                 }
                 TargetValidationError::ExplicitAgentRequired

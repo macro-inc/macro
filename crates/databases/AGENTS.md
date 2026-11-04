@@ -18,7 +18,8 @@ service with Axum, agent-tool and Postgres adapters.
 ## Scope
 
 - Owns: database/table/column/row/view/saved-query persistence, the typed ops
-  batch API, sharing, provisioning, and the `database_entities` app-entity layer.
+  batch API, sharing, provisioning, duplication, and the `database_entities`
+  app-entity layer.
 - Not here: the SQL grammar agents and the console compile → `crates/database_sql`
   (pure parse/resolve/fold engine, also runs in wasm); the agent-facing SQL
   adapter that runs that engine over this crate's ops and Soup →
@@ -29,7 +30,8 @@ service with Axum, agent-tool and Postgres adapters.
 - Depends on: `entity_access` (permission scoping), `entity_access_db_utils` and
   `share_permission_db_utils` (channel grants and the team share), `properties` (cell values),
   `macro_event_broker`/`macro_event_topics` (change notifications),
-  `connection_gateway_client` (liveness), `entity_mutation` (rename/move/trash/restore).
+  `connection_gateway_client` (liveness), `entity_mutation`
+  (rename/move/duplicate/trash/restore).
 - Used by: `databases_sql` (agent SQL), `crm` and `forms` (own storage via
   `DatabaseStorage`, no `database_entities` row), `ai_tools`, `complete_graph`,
   `graphql_crm`. The document storage service mounts `src/inbound/axum_router.rs`.
@@ -51,6 +53,12 @@ service with Axum, agent-tool and Postgres adapters.
 
 ## Gotchas
 
+- Hosts authorize the database through their own entity before calling
+  `storage_view_positions`; the operation also checks database, table and view
+  membership.
+- A duplicate rewrites IDs while walking each column config, view and card
+  position as JSON. Cells are rewritten only in their option and row references,
+  never in text.
 - `databases` (core storage) and `database_entities` (app identity: name,
   owner, trash) are separate tables by design; a host can use one without the
   other (see README "Storage and app entities").

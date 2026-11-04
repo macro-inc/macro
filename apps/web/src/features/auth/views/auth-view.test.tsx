@@ -98,6 +98,7 @@ describe('email sign-in', () => {
           id: 'macro|member@acme.com',
           email: 'member@acme.com',
           tutorialComplete: false,
+          isAgent: false,
         },
       },
     });
@@ -115,6 +116,7 @@ describe('email sign-in', () => {
         id: 'macro|another@acme.com',
         email: 'another@acme.com',
         tutorialComplete: false,
+        isAgent: false,
       };
     });
     expect(screen.getByTestId('signed-in')).not.toBe(workspace);

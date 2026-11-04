@@ -79,7 +79,11 @@ export interface RoutineOptions {
    * override for `agent`. Set `model`, `agent`, or both.
    */
   model?: RoutineModelId;
-  /** Agent to run the task. Set `model`, `agent`, or both. */
+  /**
+   * Agent to run the task: a built-in agent, or one the caller owns or can
+   * use, including one on a self-hosted runtime. Access is checked on save and
+   * again on every run. Set `model`, `agent`, or both.
+   */
   agent?: Agent;
   /** Whether triggers can start executions. Defaults to true on creation. */
   enabled?: boolean;
@@ -92,6 +96,16 @@ export interface RoutineOptions {
 
 /** A scheduled or event-triggered agent task. */
 export class Routine extends MacroEntity<ScheduledActionResponse> {
+  /** The routine's URL in the Macro web app; hand it to users as the link. */
+  webUrl(): string {
+    return `${this.client.webAppUrl}/app/routines/${this.id}`;
+  }
+
+  /** Identity, loaded detail and {@link webUrl}, so serialized handles carry their link. */
+  override toJSON() {
+    return { ...super.toJSON(), url: this.webUrl() };
+  }
+
   /** Construct a lazy routine handle. */
   static byId(client: MacroClient, id: string): Routine {
     return new Routine(client, id);

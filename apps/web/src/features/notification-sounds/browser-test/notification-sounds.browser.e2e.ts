@@ -100,3 +100,65 @@ test('play buttons preview each type and a muted type stays quiet', async ({
   });
   await expect.poll(() => tonesPlayed(page)).toBe(3);
 });
+
+test('quiet hours persist and silence sounds without stopping a preview', async ({
+  page,
+}) => {
+  const quiet = page.getByRole('switch', { name: 'Quiet hours' });
+  await expect(quiet).not.toBeChecked();
+  await expect(page.getByRole('group', { name: 'Days' })).toHaveCount(0);
+
+  await toggle(page, 'Quiet hours');
+  await expect(page.getByRole('button', { name: 'Monday' })).toHaveAttribute(
+    'aria-pressed',
+    'true'
+  );
+  await page.getByRole('button', { name: 'Saturday' }).click();
+  await expect(page.getByRole('button', { name: 'Saturday' })).toHaveAttribute(
+    'aria-pressed',
+    'false'
+  );
+
+  await page.reload();
+  await expect(quiet).toBeChecked();
+  await expect(page.getByRole('button', { name: 'Saturday' })).toHaveAttribute(
+    'aria-pressed',
+    'false'
+  );
+  await expect(page.getByRole('button', { name: 'Monday' })).toHaveAttribute(
+    'aria-pressed',
+    'true'
+  );
+
+  await page.evaluate(() => {
+    const key = 'macro:notification-sounds:fixture-user';
+    const saved = JSON.parse(localStorage.getItem(key) ?? '{}') as {
+      enabled?: boolean;
+      quietHours?: {
+        enabled?: boolean;
+        startMinutes?: number;
+        endMinutes?: number;
+        days?: string[];
+        timeZone?: string;
+      };
+    };
+    const now = new Date();
+    const minutes = now.getUTCHours() * 60 + now.getUTCMinutes();
+    saved.enabled = true;
+    saved.quietHours = {
+      ...saved.quietHours,
+      enabled: true,
+      startMinutes: (minutes + 1440 - 30) % 1440,
+      endMinutes: (minutes + 30) % 1440,
+      days: ['mon', 'tue', 'wed', 'thu', 'fri', 'sat', 'sun'],
+      timeZone: 'UTC',
+    };
+    localStorage.setItem(key, JSON.stringify(saved));
+  });
+  await page.reload();
+  await page.getByRole('heading', { name: 'Notifications' }).click();
+  await page.evaluate(() => window.deliverNotification('channel_mention'));
+  expect(await tonesPlayed(page)).toBe(0);
+  await page.getByRole('button', { name: 'Play Mentions sound' }).click();
+  await expect.poll(() => tonesPlayed(page)).toBe(2);
+});

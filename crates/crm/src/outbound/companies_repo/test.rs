@@ -6,6 +6,7 @@
 
 pub(crate) mod helpers;
 
+mod blocked_domains;
 mod create_company;
 mod create_contact;
 mod domain_directory;
@@ -17,6 +18,7 @@ mod link_contact_pairs_with_sources;
 mod list_companies_for_soup;
 mod list_contacts_for_company;
 mod list_contacts_for_soup;
+mod personal_emails;
 mod populate_contact;
 mod resolve_association;
 mod search_contacts_for_team;
