@@ -105,6 +105,24 @@ holding them authorize once more. Rate limiting of `/register` belongs at the
 edge; the broker bounds each registration's size but not how many a caller may
 create.
 
+## Token endpoint errors
+
+`/token` answers errors in the RFC 6749 section 5.2 JSON shape
+(`{"error", "error_description"}`, `Cache-Control: no-store`). The status says
+who has to act:
+
+- `400 invalid_request` or `unsupported_grant_type`: the request is malformed.
+- `400 invalid_grant`: the code or refresh token is unusable, whether the
+  broker refused it (unbound, another client's, revoked grant) or FusionAuth
+  did (for example `refresh_token_not_found`). Retrying cannot help; the client
+  must authorize again.
+- `503 temporarily_unavailable`, with `Retry-After` when FusionAuth sent one:
+  FusionAuth is down or throttling.
+- `502 server_error`: FusionAuth answered with something else.
+
+FusionAuth's error and reason are logged with the client and grant ids,
+never the token itself, and are not returned to the client.
+
 ## Disconnecting a client
 
 `/revoke` implements RFC 7009 and is advertised as `revocation_endpoint` in

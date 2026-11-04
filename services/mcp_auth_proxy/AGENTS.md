@@ -71,6 +71,10 @@ and other library consumers. Both retain OAuth metadata, CORS, and bearer auth.
 - A binding carries the grant id of its token family; rotation must copy it
   and refresh must check the revoked-grant marker, or `/revoke` stops covering
   rotated tokens. Bindings stored as a bare client id are their own family.
+- Upstream grants fail with `UpstreamGrantError` (`domain/ports.rs`). Keep a
+  grant FusionAuth refused as `InvalidGrant` so `/token` answers
+  `400 invalid_grant`; a 5xx tells clients to retry a token that can never
+  work. See README "Token endpoint errors".
 - Redis is legacy. Write new state to Postgres only; the cutover module's
   Redis mirroring exists solely for replicas on the previous build. Remove it
   only after a deploy that started once no replica ran the Redis-only build

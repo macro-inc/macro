@@ -48,6 +48,14 @@ passwordless/password flows against the FusionAuth HTTP API.
   the body). They turn outages, throttling, timeouts, and undecodable bodies
   into `Upstream` (502/503 via `crates/upstream_error`); a hand-written
   `Generic` becomes a 500.
+- `#[tracing::instrument]` records every argument it does not skip as a span
+  field, and span fields reach the logs. Skip codes, tokens, and other
+  credentials by name.
+- The OAuth2 token endpoint (`src/oauth.rs`) turns an RFC 6749 error body on
+  400/401 into `OAuth2TokenRefused`; callers check `is_invalid_grant()` to tell
+  a dead code or refresh token from an outage.
+- `DELETE /api/jwt/refresh` takes its token as a JSON body; a form body is
+  refused with `[InvalidContentType]`.
 - Calls to Google or Microsoft name the provider:
   `FusionAuthClientError::provider_transport("Google", e)`.
 - Link lookup and unlink map HTTP 400 `userId` / `[invalid]userId` errors to

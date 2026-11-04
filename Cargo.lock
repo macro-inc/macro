@@ -12657,6 +12657,7 @@ dependencies = [
  "tower 0.5.3",
  "tower-http",
  "tracing",
+ "upstream_error",
  "url",
  "urlencoding",
  "uuid",

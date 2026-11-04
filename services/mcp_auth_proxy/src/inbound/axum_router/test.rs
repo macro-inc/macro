@@ -1,6 +1,8 @@
 //! Drives the reported attack and the legitimate flow over the real router, so
 //! the checks are exercised through the same HTTP surface an attacker uses.
 
+use std::time::Duration;
+
 use axum::{
     body::Body,
     http::{Request, StatusCode, header},
@@ -8,10 +10,11 @@ use axum::{
 use tower::ServiceExt;
 
 use super::{health, mcp_router, mount_at_root_and_prefix, oauth_router};
+use crate::domain::ports::UpstreamGrantError;
 use crate::test_support::{
-    ATTACKER_CODE_VERIFIER, ATTACKER_REDIRECT_URI, Harness, TRUSTED_REDIRECT_URI,
-    UPSTREAM_ACCESS_TOKEN, UPSTREAM_REFRESH_TOKEN, VICTIM_CODE_VERIFIER, code_challenge_for,
-    query_param,
+    ATTACKER_CODE_VERIFIER, ATTACKER_REDIRECT_URI, FakeOAuthProvider, Harness,
+    TRUSTED_REDIRECT_URI, UPSTREAM_ACCESS_TOKEN, UPSTREAM_REFRESH_TOKEN, VICTIM_CODE_VERIFIER,
+    code_challenge_for, query_param,
 };
 use axum::{Router, routing::get};
 use macro_auth::middleware::decode_jwt::JwtValidationArgs;
@@ -22,6 +25,8 @@ struct Response {
     status: StatusCode,
     location: Option<String>,
     referrer_policy: Option<String>,
+    cache_control: Option<String>,
+    retry_after: Option<String>,
     body: String,
 }
 
@@ -46,6 +51,14 @@ async fn send(harness: &Harness, request: Request<Body>) -> Response {
         .headers()
         .get(header::REFERRER_POLICY)
         .map(|value| value.to_str().expect("Referrer-Policy is text").to_owned());
+    let cache_control = response
+        .headers()
+        .get(header::CACHE_CONTROL)
+        .map(|value| value.to_str().expect("Cache-Control is text").to_owned());
+    let retry_after = response
+        .headers()
+        .get(header::RETRY_AFTER)
+        .map(|value| value.to_str().expect("Retry-After is text").to_owned());
     let bytes = axum::body::to_bytes(response.into_body(), BODY_LIMIT)
         .await
         .expect("body should be readable");
@@ -54,6 +67,8 @@ async fn send(harness: &Harness, request: Request<Body>) -> Response {
         status,
         location,
         referrer_policy,
+        cache_control,
+        retry_after,
         body: String::from_utf8(bytes.to_vec()).expect("body should be UTF-8"),
     }
 }
@@ -317,7 +332,11 @@ async fn token_endpoint_refuses_a_code_presented_by_another_client() {
     )
     .await;
     assert_eq!(stolen.status, StatusCode::BAD_REQUEST);
-    assert_eq!(stolen.body, "grant was not issued to this client");
+    assert_eq!(stolen.json()["error"], "invalid_grant");
+    assert_eq!(
+        stolen.json()["error_description"],
+        "grant was not issued to this client"
+    );
 
     let retried = send(
         &harness,
@@ -328,7 +347,11 @@ async fn token_endpoint_refuses_a_code_presented_by_another_client() {
     )
     .await;
     assert_eq!(retried.status, StatusCode::BAD_REQUEST);
-    assert_eq!(retried.body, "invalid or expired code");
+    assert_eq!(retried.json()["error"], "invalid_grant");
+    assert_eq!(
+        retried.json()["error_description"],
+        "invalid or expired code"
+    );
 }
 
 fn revoke_request(form: &str) -> Request<Body> {
@@ -403,7 +426,150 @@ async fn client_disconnects_by_revoking_its_refresh_token() {
     )
     .await;
     assert_eq!(refresh.status, StatusCode::BAD_REQUEST);
-    assert_eq!(refresh.body, "refresh token is not bound to a client");
+    assert_eq!(refresh.json()["error"], "invalid_grant");
+    assert_eq!(
+        refresh.json()["error_description"],
+        "refresh token is not bound to a client"
+    );
+}
+
+/// Takes a fresh client through the whole flow and presents its refresh token
+/// to `/token`, so the upstream refresh grant decides the answer.
+async fn refresh_over_http(harness: &Harness) -> Response {
+    let client_id = harness.register(&[TRUSTED_REDIRECT_URI]).await;
+    let code = harness
+        .complete_flow_to_code(&client_id, TRUSTED_REDIRECT_URI, VICTIM_CODE_VERIFIER)
+        .await;
+    let exchange = send(
+        harness,
+        token_request(&format!(
+            "grant_type=authorization_code&code={code}&code_verifier={VICTIM_CODE_VERIFIER}\
+             &redirect_uri={}&client_id={client_id}",
+            urlencoding::encode(TRUSTED_REDIRECT_URI)
+        )),
+    )
+    .await;
+    assert_eq!(exchange.status, StatusCode::OK);
+
+    send(
+        harness,
+        token_request(&format!(
+            "grant_type=refresh_token&refresh_token={UPSTREAM_REFRESH_TOKEN}&client_id={client_id}"
+        )),
+    )
+    .await
+}
+
+/// A refresh token the upstream no longer holds is the client's problem, not
+/// an outage: it gets `invalid_grant`, which tells it to authorize again
+/// instead of retrying.
+#[tokio::test]
+async fn token_endpoint_answers_an_upstream_refused_refresh_with_invalid_grant() {
+    let harness = Harness::with_provider(FakeOAuthProvider::new().failing_refresh(|| {
+        UpstreamGrantError::InvalidGrant {
+            detail: "invalid_grant (refresh_token_not_found)".to_owned(),
+        }
+    }));
+
+    let refresh = refresh_over_http(&harness).await;
+
+    assert_eq!(refresh.status, StatusCode::BAD_REQUEST);
+    assert_eq!(refresh.json()["error"], "invalid_grant");
+    assert_eq!(
+        refresh.json()["error_description"],
+        "refresh token is no longer valid; authorize again"
+    );
+    assert_eq!(refresh.cache_control.as_deref(), Some("no-store"));
+    assert!(
+        !refresh.body.contains("refresh_token_not_found"),
+        "upstream detail is logged, not returned"
+    );
+}
+
+#[tokio::test]
+async fn token_endpoint_answers_an_upstream_outage_with_temporarily_unavailable() {
+    let harness = Harness::with_provider(FakeOAuthProvider::new().failing_refresh(|| {
+        UpstreamGrantError::Unavailable {
+            retry_after: Some(Duration::from_secs(30)),
+        }
+    }));
+
+    let refresh = refresh_over_http(&harness).await;
+
+    assert_eq!(refresh.status, StatusCode::SERVICE_UNAVAILABLE);
+    assert_eq!(refresh.json()["error"], "temporarily_unavailable");
+    assert_eq!(refresh.retry_after.as_deref(), Some("30"));
+}
+
+#[tokio::test]
+async fn token_endpoint_answers_an_unknown_upstream_failure_with_server_error() {
+    let harness = Harness::with_provider(
+        FakeOAuthProvider::new()
+            .failing_refresh(|| UpstreamGrantError::Failed(anyhow::anyhow!("unexpected 500"))),
+    );
+
+    let refresh = refresh_over_http(&harness).await;
+
+    assert_eq!(refresh.status, StatusCode::BAD_GATEWAY);
+    assert_eq!(refresh.json()["error"], "server_error");
+    assert_eq!(refresh.retry_after, None);
+    assert!(
+        !refresh.body.contains("unexpected 500"),
+        "upstream detail is logged, not returned"
+    );
+}
+
+#[tokio::test]
+async fn token_endpoint_names_missing_parameters_as_invalid_request() {
+    let harness = Harness::new();
+
+    let missing_code = send(
+        &harness,
+        token_request("grant_type=authorization_code&client_id=some-client"),
+    )
+    .await;
+    assert_eq!(missing_code.status, StatusCode::BAD_REQUEST);
+    assert_eq!(missing_code.json()["error"], "invalid_request");
+
+    let unsupported = send(&harness, token_request("grant_type=password")).await;
+    assert_eq!(unsupported.status, StatusCode::BAD_REQUEST);
+    assert_eq!(unsupported.json()["error"], "unsupported_grant_type");
+}
+
+async fn callback_with_failing_code_exchange(failure: fn() -> UpstreamGrantError) -> Response {
+    let harness = Harness::with_provider(FakeOAuthProvider::new().failing_code_exchange(failure));
+    let client_id = harness.register(&[TRUSTED_REDIRECT_URI]).await;
+    let authorize = send(
+        &harness,
+        authorize_request(&client_id, TRUSTED_REDIRECT_URI, VICTIM_CODE_VERIFIER),
+    )
+    .await;
+    assert_eq!(authorize.status, StatusCode::TEMPORARY_REDIRECT);
+
+    let session_id = harness.inflight.only_pending_session_id();
+    send(&harness, callback_request(&session_id)).await
+}
+
+#[tokio::test]
+async fn callback_separates_a_refused_code_from_an_upstream_fault() {
+    let refused = callback_with_failing_code_exchange(|| UpstreamGrantError::InvalidGrant {
+        detail: "invalid_grant (auth_code_not_found)".to_owned(),
+    })
+    .await;
+    assert_eq!(refused.status, StatusCode::BAD_REQUEST);
+    assert_eq!(refused.location, None);
+
+    let unavailable = callback_with_failing_code_exchange(|| UpstreamGrantError::Unavailable {
+        retry_after: None,
+    })
+    .await;
+    assert_eq!(unavailable.status, StatusCode::SERVICE_UNAVAILABLE);
+
+    let failed = callback_with_failing_code_exchange(|| {
+        UpstreamGrantError::Failed(anyhow::anyhow!("unexpected 500"))
+    })
+    .await;
+    assert_eq!(failed.status, StatusCode::BAD_GATEWAY);
 }
 
 async fn ok() -> &'static str {

@@ -18,7 +18,7 @@ use super::{
         IssuedAuthorizationCode, PendingAuthorization, RefreshToken, RefreshTokenBinding,
         RegisteredClient, RevocationRequest, TokenRequest, TokenResponse,
     },
-    ports::{ClientRegistrationStore, OAuthProvider, RefreshTokenBindingStore},
+    ports::{ClientRegistrationStore, OAuthProvider, RefreshTokenBindingStore, UpstreamGrantError},
     redirect_uri::RedirectUriPolicy,
 };
 
@@ -266,7 +266,24 @@ where
             .oauth_provider
             .refresh_access_token(&refresh_token)
             .await
-            .map_err(TokenExchangeError::RefreshFailed)?;
+            .map_err(|error| {
+                if let UpstreamGrantError::InvalidGrant { .. } = error {
+                    tracing::warn!(
+                        %client_id,
+                        grant_id = %binding.grant_id,
+                        %error,
+                        "upstream refused the refresh token; the client must authorize again"
+                    );
+                } else {
+                    tracing::error!(
+                        %client_id,
+                        grant_id = %binding.grant_id,
+                        %error,
+                        "upstream refresh token exchange failed"
+                    );
+                }
+                TokenExchangeError::RefreshFailed(error)
+            })?;
 
         let rotated_digest = refresh_token_digest(&tokens.refresh_token);
         // The upstream token is already issued at this point. A binding write
@@ -573,9 +590,8 @@ where
         let access_token_expires_at = SystemTime::now()
             .checked_add(Duration::from_secs(tokens.expires_in))
             .ok_or_else(|| {
-                CompleteCallbackError::AuthorizationCodeExchangeFailed(anyhow::anyhow!(
-                    "upstream expires_in {} is out of range",
-                    tokens.expires_in
+                CompleteCallbackError::AuthorizationCodeExchangeFailed(UpstreamGrantError::Failed(
+                    anyhow::anyhow!("upstream expires_in {} is out of range", tokens.expires_in),
                 ))
             })?;
 
@@ -770,8 +786,8 @@ pub enum CompleteCallbackError {
     #[error("failed to access inflight auth state")]
     InflightStore(anyhow::Error),
     /// Upstream code exchange failed.
-    #[error("authorization code exchange failed")]
-    AuthorizationCodeExchangeFailed(anyhow::Error),
+    #[error("authorization code exchange failed: {0}")]
+    AuthorizationCodeExchangeFailed(UpstreamGrantError),
 }
 
 /// Errors returned when exchanging a broker-issued code for a bearer token.
@@ -820,9 +836,11 @@ pub enum TokenExchangeError {
     /// Refresh token bindings could not be read or written.
     #[error("failed to access refresh token bindings")]
     RefreshTokenBindingStore(anyhow::Error),
-    /// Upstream refresh failed.
-    #[error("refresh token exchange failed")]
-    RefreshFailed(anyhow::Error),
+    /// Upstream refresh failed. An [`UpstreamGrantError::InvalidGrant`] is
+    /// the client's to fix by authorizing again; the rest are upstream or
+    /// broker faults.
+    #[error("refresh token exchange failed: {0}")]
+    RefreshFailed(UpstreamGrantError),
 }
 
 /// Errors returned when revoking a token.
