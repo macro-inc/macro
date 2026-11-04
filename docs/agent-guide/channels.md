@@ -303,7 +303,9 @@ remain visible when the entire timeline fits without scrolling.
 
 ## Agent session entities
 
-The Agents list includes owned and shared sessions. Rows show the shared agent
+The Agents list includes owned and shared sessions, except sessions started
+from a thread, which list only for people who prompted them from the session
+itself (see [Home](home.md)). Rows show the shared agent
 icon and session title; opening one navigates to `/app/agent/<id>`. The session title
 menu uses the shared entity actions: Favorite/Unfavorite and Copy link, plus
 Rename and Delete for the owner. Rename uses the shared rename dialog, not a

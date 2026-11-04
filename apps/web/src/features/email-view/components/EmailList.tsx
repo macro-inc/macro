@@ -91,10 +91,10 @@ import { useEmailListHotkeys } from '../use-email-list-hotkeys';
 import { EmailDateGroupHeader } from './EmailDateGroupHeader';
 import { EmailEmptyState } from './EmailEmptyState';
 import {
-  EmailFocusFlags,
-  EmailFocusNarrowScore,
+  EMAIL_FOCUS_WIDE_BREAKPOINT,
+  EmailFocusPreviewLeading,
+  EmailFocusReason,
   EmailFocusScore,
-  emailFocusOf,
 } from './EmailFocusBadges';
 import { EmailRowActions, EmailStarAction } from './EmailRowActions';
 
@@ -691,7 +691,13 @@ export function EmailList(props: EmailListProps) {
           onRefresh={pullRefresh}
         />
 
-        <ListLayoutProvider ref={grid} narrowLayout="inbox">
+        <ListLayoutProvider
+          ref={grid}
+          narrowLayout="inbox"
+          wideBreakpoint={
+            state.tab === 'focus' ? EMAIL_FOCUS_WIDE_BREAKPOINT : undefined
+          }
+        >
           <SwipableRowProvider
             container={viewport}
             setCollapseEntity={setCollapseEntity}
@@ -849,40 +855,22 @@ export function EmailList(props: EmailListProps) {
                                     <ListEntity
                                       entity={entityRow().entity}
                                       onFilterByTag={filterByTag}
-                                      titleLeading={
-                                        <Show
-                                          when={emailFocusOf(
-                                            entityRow().entity
-                                          )}
-                                        >
-                                          {(focus) => (
-                                            <EmailFocusNarrowScore
-                                              focus={focus()}
-                                            />
-                                          )}
-                                        </Show>
-                                      }
                                       meta={
-                                        <Show
-                                          when={emailFocusOf(
-                                            entityRow().entity
-                                          )}
-                                        >
-                                          {(focus) => (
-                                            <EmailFocusFlags focus={focus()} />
-                                          )}
-                                        </Show>
+                                        <EmailFocusReason
+                                          entity={entityRow().entity}
+                                        />
                                       }
                                       metaEnd={
-                                        <Show
-                                          when={emailFocusOf(
-                                            entityRow().entity
-                                          )}
-                                        >
-                                          {(focus) => (
-                                            <EmailFocusScore focus={focus()} />
-                                          )}
-                                        </Show>
+                                        <EmailFocusScore
+                                          entity={entityRow().entity}
+                                          sort={state.focusSort}
+                                        />
+                                      }
+                                      previewLeading={
+                                        <EmailFocusPreviewLeading
+                                          entity={entityRow().entity}
+                                          sort={state.focusSort}
+                                        />
                                       }
                                       scheduleStatus={
                                         <Show
