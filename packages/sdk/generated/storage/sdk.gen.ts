@@ -662,7 +662,7 @@ export class Sdk extends HeyApiClient {
     }
 
     /**
-     * Rename a label of the caller's authorized scope.
+     * Update a label, optionally moving it to another authorized scope.
      */
     public renameChannelLabel<ThrowOnError extends boolean = false>(options: Options<RenameChannelLabelData, ThrowOnError>): RequestResult<RenameChannelLabelResponses, RenameChannelLabelErrors, ThrowOnError> {
         return (options.client ?? this.client).patch<RenameChannelLabelResponses, RenameChannelLabelErrors, ThrowOnError>({
@@ -974,7 +974,7 @@ export class Sdk extends HeyApiClient {
     public listCrmBlockedDomains<ThrowOnError extends boolean = false>(options?: Options<ListCrmBlockedDomainsData, ThrowOnError>): RequestResult<ListCrmBlockedDomainsResponses, ListCrmBlockedDomainsErrors, ThrowOnError> {
         return (options?.client ?? this.client).get<ListCrmBlockedDomainsResponses, ListCrmBlockedDomainsErrors, ThrowOnError>({ url: '/crm/blocked-domains', ...options });
     }
-    
+
     /**
      * Unblock a domain: email sync resumes for it, and what blocking hid is
      * shown again. Idempotent. Requires an admin/owner team role (403).
@@ -982,7 +982,7 @@ export class Sdk extends HeyApiClient {
     public unblockCrmDomain<ThrowOnError extends boolean = false>(options: Options<UnblockCrmDomainData, ThrowOnError>): RequestResult<UnblockCrmDomainResponses, UnblockCrmDomainErrors, ThrowOnError> {
         return (options.client ?? this.client).delete<UnblockCrmDomainResponses, UnblockCrmDomainErrors, ThrowOnError>({ url: '/crm/blocked-domains/{domain}', ...options });
     }
-    
+
     /**
      * Block a domain: email sync stops creating or updating CRM records for
      * it, and the company and contacts the CRM holds for it are hidden.
@@ -991,7 +991,7 @@ export class Sdk extends HeyApiClient {
     public blockCrmDomain<ThrowOnError extends boolean = false>(options: Options<BlockCrmDomainData, ThrowOnError>): RequestResult<BlockCrmDomainResponses, BlockCrmDomainErrors, ThrowOnError> {
         return (options.client ?? this.client).put<BlockCrmDomainResponses, BlockCrmDomainErrors, ThrowOnError>({ url: '/crm/blocked-domains/{domain}', ...options });
     }
-    
+
     /**
      * Manually create a CRM company for the caller's team. Any team member
      * may create one. A domain, when given, must not already be tracked by the team
@@ -1130,7 +1130,7 @@ export class Sdk extends HeyApiClient {
             }
         });
     }
-    
+
     /**
      * Look up a CRM contact by email in the caller's team. Returns a null
      * `contact` when no visible contact exists. Any team member may resolve a
