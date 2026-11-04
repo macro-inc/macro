@@ -8,7 +8,7 @@ import {
 } from '@core/component/LexicalMarkdown/collaboration/LexicalAwareness';
 import { $reconcileLexicalState } from '@core/component/LexicalMarkdown/collaboration/reconcile';
 import { useRemoteCursors } from '@core/component/LexicalMarkdown/collaboration/remote-cursor';
-import type { MarkdownEditorErrors } from '@core/component/LexicalMarkdown/constants';
+import { MarkdownEditorErrors } from '@core/component/LexicalMarkdown/constants';
 import type { PluginManager } from '@core/component/LexicalMarkdown/plugins';
 import {
   initializeEditorEmpty,
@@ -17,6 +17,7 @@ import {
   loroSyncState,
 } from '@core/component/LexicalMarkdown/utils';
 import { useUserId } from '@core/context/user';
+import { fireAndForget } from '@core/util/fireAndForget';
 import {
   $isCodeHighlightNode,
   $isCodeNode,
@@ -69,6 +70,7 @@ import {
   onCleanup,
   type Setter,
 } from 'solid-js';
+import { FLUSH_COLLABORATION_COMMAND } from './flush';
 
 type MutatedNodes = UpdateListenerPayload['mutatedNodes'];
 
@@ -154,6 +156,32 @@ export function CollabProvider(props: CollabProviderProps) {
       syncSource()!.documentId
     ),
   });
+
+  onCleanup(
+    props.editor.registerCommand(
+      FLUSH_COLLABORATION_COMMAND,
+      (complete) => {
+        const state = loroSyncState(props.editor.getEditorState());
+        const flush = async () => {
+          try {
+            if (!syncEngine.isRunning()) {
+              complete(false);
+              return;
+            }
+            await syncEngine.syncStateToLoro({ ...state });
+            await walSyncer.flush();
+            complete((await walSyncer.summary()).dirty === 0);
+          } catch (error) {
+            Telemetry.error(error, { surface: 'comment-flush' });
+            complete(false);
+          }
+        };
+        fireAndForget(flush(), 'comment-flush');
+        return true;
+      },
+      COMMAND_PRIORITY_NORMAL
+    )
+  );
 
   const { refreshRemoteCursors, RemoteCursorsOverlay } = useRemoteCursors({
     loroManager: loroManager,
@@ -490,16 +518,16 @@ export function CollabProvider(props: CollabProviderProps) {
             message: 'CollabProvider: manager initialized, initializing editor',
           });
 
-          //TODO: some more descriptive user facing error should be displayed here
           if (!state) {
             logSyncService({
               documentId: syncSource()!.documentId,
               level: 'error',
               context: {},
               message:
-                'editor init: no state from loroManager — editor will NOT become ready (skeleton stays)',
+                'editor init: no state from loroManager — showing the empty-source error',
             });
             props.span?.error('Editor initial state is missing');
+            props.setEditorError(MarkdownEditorErrors.EMPTY_SOURCE);
             return;
           }
 

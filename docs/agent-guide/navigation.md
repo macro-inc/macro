@@ -31,6 +31,11 @@ a background tab; adding Shift also switches to it. Tabs are not draggable.
 Tabs persist per user and restore on launch. In the browser and on other
 platforms the strip does not render.
 
+An inline preview in a background tab stays open there, so selecting its entity
+from another tab switches to that tab with the entity showing. A tab that opens
+onto an entity another tab already holds shows its list instead, without moving
+you or showing a toast.
+
 Reference captures (browser fixture with the desktop gates forced):
 [a three-split tab beside a second tab](media/desktop-tabs/three-split-tab.png)
 and [tabs restored after a reload](media/desktop-tabs/restored-tabs.png).
@@ -239,6 +244,7 @@ successfully rather than hashing the empty JavaScript placeholder.
 
 Each `~`-separated part of an app URL is a split (`/app/home/~/drive`). The
 pages outside the app (`/app/login`, `/app/welcome`, `/app/signup`,
+`/app/signup/agent`, `/app/agent-setup`,
 `/app/onboarding`, `/app/setup`, the invite pages, `/app/meet/...` and
 `/app/task-slug/...`) render without the split layout and take one part only.
 `/app/login/~/home` and URLs nothing matches, such as `/app/garbage`, are
@@ -1126,13 +1132,13 @@ The event menu groups Macro activity triggers by surface:
 
 - **Channels:** **Channel created**, **Message sent in channel**, and **@ mentioned in channel**.
 - **Documents:** **Document created** and **Document deleted**. Tasks are separate.
-- **Tasks:** **Task created**, **Status changed**, **Priority changed**, and **Any property changed**.
+- **Tasks:** **Task created**, **Status changed**, **Priority changed**, **Assignees changed**, **Due date changed**, **Project changed**, **Effort changed**, and **Any property changed**. Under **Changes to**, choose the values that start the routine, such as **Completed**, or leave **Any status**. A value counts only when the change adds it. Tags aren't properties and have no trigger.
 - **Email:** **New email received** in the routine owner's inbox, excluding spam, trash, drafts, and historical imports.
 - **Calls:** **Call started**, for calls the routine owner starts (receives the call and who has joined so far); and **Call ended**, for channel calls and meetings the owner joined (receives participants and transcript, cut short for long calls).
 - **GitHub:** presets for **Workflow failed**, **Workflow finished**, **Pull request opened**, **Pull request merged**, **Review requested**, **Review submitted**, **Issue opened**, **Comment added**, **Code pushed**, **Release published**, and **Any GitHub event**, from repositories Macro's GitHub app reaches for the routine owner. Until the owner connects GitHub, the group shows **Connect GitHub** instead.
 
-For messages, mentions, deletion, and task changes, choose specific accessible
-channels/documents/tasks or any accessible item in the same panel. Creation
+For messages, mentions, deletion, and task changes, use **Applies to** in the
+same panel to choose any accessible item or specific channels/documents/tasks. Creation
 triggers cover newly created accessible items; email covers the owner's inbox;
 **Call started** shows **Calls you start** and **Call ended** shows **Calls you
 join** — neither has an item picker. Calls the owner did not start never trigger

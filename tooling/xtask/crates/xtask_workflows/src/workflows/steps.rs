@@ -418,6 +418,17 @@ pub fn setup_reqs_web(name: &str, playwright: bool) -> Step<Use> {
     .when(playwright, |step| step.add_with(("playwright", "true")))
 }
 
+/// Build the code-mode assets (`crates/code_mode_assets`) in Nix and point
+/// later cargo steps at them, so Rust jobs need no bun install. Any job that
+/// compiles that crate or a dependent (DSS, the agent harness) needs this.
+pub fn code_mode_assets() -> Step<Run> {
+    // A separate assignment, so a failed build fails the step under `bash -e`.
+    Step::new("Build code-mode assets").run(indoc::indoc! {r#"
+        assets="$(nix build --no-link --print-out-paths --print-build-logs .#code-mode-assets)"
+        echo "CODE_MODE_ASSETS_DIR=$assets" >> "$GITHUB_ENV"
+    "#})
+}
+
 /// Start the server before parallel compiler invocations can race to launch it.
 /// Keep this in a separate step after remote configuration so `GITHUB_ENV`
 /// has supplied the selected backend's credentials to the process.

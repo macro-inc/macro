@@ -78,6 +78,17 @@ backend-free phone and tablet regression:
 Keep the zoomed image laid out at its zoomed size, translating only: WebKit
 rasterizes an `<img>` at its layout size, so a `scale()` transform blurs it.
 
+The emoji reaction picker renders only the rows in view (about 1,900 emojis
+otherwise); its backend-free regression opens it, scrolls to the last group,
+searches, and picks by keyboard:
+`bunx playwright test --config src/lib/core/component/Emoji/browser-test/playwright.config.ts`.
+
+Focus rows have a backend-free browser regression over the real row and mapping
+at wide, one-line, stacked, phone, and tablet widths: one reason per row, no
+extra height or lost subject, touch rows of at least 44px, and the importance
+meter only under its sort:
+`bunx playwright test --config src/features/email-view/browser-test/playwright.config.ts`.
+
 Discussion link scrolling has a backend-free browser regression:
 `bunx playwright test --config src/lib/core/messages/browser-test/playwright.config.ts`.
 
@@ -159,6 +170,9 @@ boosts (Cmd+K's channel and DM boosts) order rows within those groups and never
 lift a row past a better name match. The one exception: Cmd+K then keeps Macro
 users and DMs ahead of CRM contacts across the people positions, whatever their
 match. Tune name relevance there for every menu.
+Soup's local search pool (`createSearchState`) stays lazy: it builds only when
+local search has text. Measure Quick Access ranking at scale with the
+[scale fixture](src/features/command/browser-test/README.md).
 Cmd+K and mobile name search widen the first group: a query equal to the first
 word of a DM or person name counts as exact, so a person's first name reaches
 their full-name DM. `commaSeparatedChannelMatch` (Cmd+K, mobile name search,
@@ -189,6 +203,9 @@ Channel composer draft persistence has a backend-free browser regression:
 It checks draft blank lines across remounts, that a sent message renders its
 lines with the spacing the draft showed, and pending sends on desktop and phone: clear immediately, restore failed sends, and preserve a new draft typed during delivery.
 It also pastes a Macro link and Markdown into a code block, which must keep both as literal text.
+Its phone formatting regression opens the ribbon from the add drawer in the
+production message editor, removes selected strikethrough, and saves; keep
+the ribbon horizontally scrollable and preserve editor focus on its controls.
 
 Shared GraphQL query metadata has a backend-free desktop and iPhone WebKit regression:
 `bunx playwright test --config src/lib/urql-solid/browser-test/playwright.config.ts`.
@@ -341,6 +358,9 @@ margins, which the compact single-row layout measures.
 
 - Reuse `src/components/WorkspaceTexture.tsx` for the onboarding and Create
   detail panel grain; pass the surface accent and a unique SVG filter ID.
+- Keep shared database card rendering in `features/database`; CRM supplies
+  pipeline-authorized positions. Exercise both editor and board fixtures with
+  `bunx playwright test --config src/features/crm/browser-test/playwright.config.ts`.
 
 ### Pipedream native authorization
 
@@ -365,8 +385,9 @@ not to account-wide paired runtime count; a user can pair several computers.
 
 ### General
 
-- Keep CRM removal and restoration visible on company/contact Overview pages;
-  use the existing hidden mutations and confirm company contact/email-sync effects.
+- Keep contact removal and restoration beside Copy contact link in both record
+  headers; keep company actions on Overview. Reuse the hidden mutations and
+  confirm company contact/email-sync effects.
 
 - Keep selection controls on shared `Checkbox`, `ToggleSwitch`, and `RadioGroup`;
   preserve their native input semantics and use root sizing instead of internal
@@ -388,6 +409,7 @@ resolved session ID; keep the existing `AgentSessionProvider` subscription to
 `agent_session` rather than enabling legacy block tracking of placeholder IDs.
 
 - Share URL recognition with `packages/lexical-core/utils/auto-link.ts`; preserve explicit unlink markers when saving and rendering messages. See `packages/lexical-core/README.md` at the repository root.
+- Keep ordinary hyperlinks on the theme's link colors (blue by default), including Markdown renderers/editors and calendar descriptions; preserve mention decorators' separate styling.
 - CRM creation accepts name-only companies and full contact email addresses.
   Company selection is explicit; a matching domain only suggests a company.
   Keep the standalone and pipeline forms consistent (see
@@ -408,6 +430,17 @@ resolved session ID; keep the existing `AgentSessionProvider` subscription to
   Record search fills the row beside filters with header spacing; section creation
   replaces the default floating dock action through FloatRegion. See
   `src/features/crm/README.md` and `docs/agent-guide/crm.md` at the repo root.
+  Keep record Remove/Restore actions out of the information panel: contact Sharing
+  is absent, and company Sharing contains only permission-gated Sync Emails.
+  Company Team lists exclude hidden contacts for every role; keep authorized
+  detail/restore access and invalidate embedded company contacts on hide/restore.
+  People display options expose removed records only after an explicit admin/owner
+  choice scoped to the current team; query hidden state on the server before
+  pagination, reset the choice on session/team/role/list changes, and refresh
+  mounted GraphQL contact readers after visibility mutations. Exercise discovery
+  with `bunx playwright test --config src/features/crm/browser-test/people/playwright.config.ts`.
+  The backend-free desktop/phone regression uses real CRM query adapters:
+  `bunx playwright test --config src/features/crm/browser-test/team/playwright.config.ts`.
 - Main Tasks mounts reusable GraphQL saved views; keep embedded Project/CRM task lists unchanged. Read `src/features/tasks-view/AGENTS.md` for filter, draft, navigation, and browser checks.
 - Enable persisted email/calendar review controls only for the review’s saved acting account; historical reviews fall back to the session owner. Require session edit access on desktop and mobile.
 - Email draft reads compare server generations before choosing cached delivery state over a restored working copy; only a definitive first-submission rejection permits local send recovery without server cancellation.
@@ -477,6 +510,8 @@ resolved session ID; keep the existing `AgentSessionProvider` subscription to
 - Retry still-current query reads once when engine replacement invalidates their
   snapshot; do not strand urql's in-flight key or revive torn-down or superseded reads.
   Keep network forwarding deduplicated and cache-only reads off the network.
+  Fence affected cache rereads against newer published results too; reconcile
+  pending edits against the persisted server snapshot instead of replaying an older one.
 - Mobile dock customization shares the navigation island’s measured capacity; persist ordering per user with `mobile-dock-order.ts`, preserve gated destinations, and keep Search and More fixed. Reorder handles drag without a hold delay; the rest of each row scrolls.
 - Share sidebar and mobile dock unread presence through `components/app/use-navigation-unread.ts`; keep badges reactive to read/done changes, guard all query data with `queryReadyGate` so pending preferences or paused queries cannot suspend the shell, and avoid fetching extra pages for counts.
 - Name Home thread rows from their latest scoped notification, including document mentions and reactions; use the thread author only when no notification exists. Document rows whose newest outstanding notification is a comment, and calendar event rows whose newest is a join request, say who did it (`row-notification.ts`).
@@ -549,10 +584,15 @@ resolved session ID; keep the existing `AgentSessionProvider` subscription to
 - Add Google Meet account hints only to join actions using the displayed calendar's
   connected email; keep stored and copied conference links unchanged. See the
   [calendar walkthrough](../../docs/agent-guide/calendar.md).
-- Mark loaded calendar, agent-session, and CRM company/contact row notifications
-  through the notification source (`markRowNotificationsSeenOnOpen`) so read dots update
-  immediately and failed writes roll back; calendar grid selections and links
-  to an event also mark the canonical event read, excluding team projections.
+- Share row-open reads through `features/notifications/mark-row-seen.ts` for
+  documents/tasks, legacy chats, email, calendar, agents, CRM, PRs, calls, and
+  projects; use it for previews, keyboard following, action advance, and split
+  opens. Keep email mailbox writes in `queries/email/read-state.ts` with the
+  owning inbox, and keep channel/external-message visibility policies separate.
+  Ready document/chat/PR/email details mark read on mount for direct links.
+  Calendar grid selections and links mark the canonical event, excluding team projections.
+- Target modern projects as `initiative` / `INITIATIVE` for entity-wide
+  notification writes; reserve `project` / `PROJECT` for legacy Drive folders.
 - Route explicit meeting-page exits using the server's `callEnded` result: ended
   calls open their record; ongoing channel and scheduled calls return to the
   channel and Calendar. Leaving from a channel's Call tab stays in the channel. Preserve the session ID and send the server leave before media
@@ -584,6 +624,9 @@ resolved session ID; keep the existing `AgentSessionProvider` subscription to
   the create response confirms success; never clear newer composer input from a
   late callback or automatically retry an uncertain create. Keep recovery copies
   through restarts and remove them on explicit logout. See the Tasks walkthrough.
+- Prefill task Source through the originating action's composer preset under
+  `enable-task-source-property`; keep the shared composer flag-agnostic and retain
+  exact message IDs through property edits. See the Tasks walkthrough.
 - Shared server-state queries and mutations live in `src/lib/queries`; keep
   feature-specific query orchestration with its owning feature.
 - Keep CRM contacts explicitly included in the auxiliary GraphQL backfill;
@@ -933,10 +976,12 @@ persisted `turnState` is `failed`; open the session to inspect its error.
 
 ### Agent transcript projection
 
-Keep folded messages ordered by turn and author in the transcript store: append
-at the new index, reconcile matching rows in place, binary-search earlier
-updates, and splice only for real insertion/removal. Never `produce` the whole
-array per append; it makes initial projection quadratic. Check with the
+Key transcript rows by the fold's `FoldedMessage.key` (`<turn>:<author kind>`);
+never rebuild it from `turn` and `author`. Apply a load or rebase as one keyed
+`reconcile(messages, { key: 'key' })`, without `merge`. A streamed message
+reconciles the tail row in place or writes the next index; only an out-of-order
+one takes the keyed path. Never `produce` the whole array per append; it makes
+initial projection quadratic. Check with the
 [session-open runner](src/features/block-agent/browser-test/README.md).
 
 ### Agent system events
@@ -994,10 +1039,12 @@ while preparing a share, retain the bytes and let the same action's next tap
 open the system sheet synchronously. Browser success means handoff, not confirmed
 disk completion. See the native bridge's `tauri/file_export_plugin/AGENTS.md`.
 Keep download confirmations title-only and lightbox Download controls icon-only.
+Keep the expanded video first in the dialog's tab order so initial Space presses
+control native playback; restore focus to its opener on close.
 
 The backend-free browser regression downloads real fixture bytes from channel
 cards, the expanded viewer, and the shared Drive/standalone header on desktop,
-phone, and tablet:
+phone, and tablet, and checks Space playback on opening and reopening the viewer:
 `bunx playwright test --config src/lib/core/component/FileDownload/browser-test/playwright.config.ts`.
 See the [download walkthrough](../../docs/agent-guide/files.md#downloading-files).
 
@@ -1053,6 +1100,28 @@ and bot personas share one renderer; keep surface sizing in the caller.
 - Advertise Mail v5 capsules only for the current browser engine or a verified supported installed native build; OTA bundle version alone cannot establish native capability.
 - Bound native Mail capability discovery to 1.5 seconds and cache the legacy profile on failure or timeout so stalled IPC cannot block GraphQL transport; record the selected profile and bounded outcome in HTTP and WebSocket setup spans without error text.
 
+### Inline comment drafts
+
+Use `MessageLoadError` for compact discussion/thread failures; missing resources
+show an unavailable state without a retry action or composer.
+
+Keep collaborative drafts as cursor-based overlays outside the shared editor tree.
+Flush pending text, catch up missing server history before publication, then
+publish the mark from an isolated peer with `PeerCommentUpdate`,
+and post the message only after acknowledgement. Refused operations never enter
+the editor's WAL. Preserve input on failure. Cancelled publications retry mark
+cleanup from the user/document-scoped IndexedDB queue; preserve marks when a
+message request's outcome is uncertain. Keep failed cleanup entries queued without
+blocking later entries. Overlapping comments must retain each
+saved range through cancel, save, and collaboration updates.
+Comment controls preserve editor focus on both pointerdown and mousedown.
+The backend-free browser regression is
+`bunx playwright test --config src/features/block-md/comments/browser-test/playwright.config.ts`.
+It exercises selection, press, cancel, retry, and repeated posting in editor and
+commenter modes. The collaboration fixture includes concurrent remote edits and
+rejected updates; provider tests cover message metadata arriving on either side
+of posting, multi-paragraph anchors, saved ranges, and cancellation during posting.
+
 ## Performance
 
 ### Tracing
@@ -1082,3 +1151,10 @@ and bot personas share one renderer; keep surface sizing in the caller.
   static `data-input-surface` categories on editor/field owners, never caller
   labels.
 - Keep record names, addresses, answers and query text out of attributes.
+
+### Entity rows
+
+- Keep `ListEntity` layout fields independently reactive (getters, not a
+  dynamic object spread); a spread makes a selection change revisit every
+  unrelated layout input. Profile with the
+  [entity collection fixture](src/features/entity/browser-test/README.md).

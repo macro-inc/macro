@@ -13,6 +13,9 @@ localStorage for that user and removed from the URL after it is applied, so a
 reload keeps later progress. The app shell and the inbox connection callback
 keep `step` when they send a first-run user into onboarding.
 
+Agent accounts never see this flow, including through a direct link; see
+[login](login.md#agent-accounts).
+
 ## Onboarding bypass — `/app/onboarding`
 
 All `@macro.com` accounts see a **Bypass** button on every onboarding step. It

@@ -61,7 +61,8 @@ impl ConnectionStore for PgConnectionRepo {
             SELECT user_id, app_slug, server_name, account_id, enabled, provider
             FROM pipedream_mcp_connections
             WHERE user_id = $1 AND app_slug = $2
-                AND NOT EXISTS (SELECT 1 FROM mcp_overlays o WHERE o.app_slug = $2)
+                AND (provider = 'connect'
+                    OR NOT EXISTS (SELECT 1 FROM mcp_overlays o WHERE o.app_slug = $2))
             "#,
             user_id.as_ref(),
             app_slug,
@@ -108,7 +109,8 @@ impl ConnectionStore for PgConnectionRepo {
             SELECT user_id, app_slug, server_name, account_id, enabled, provider
             FROM pipedream_mcp_connections c
             WHERE user_id = $1
-                AND NOT EXISTS (SELECT 1 FROM mcp_overlays o WHERE o.app_slug = c.app_slug)
+                AND (c.provider = 'connect'
+                    OR NOT EXISTS (SELECT 1 FROM mcp_overlays o WHERE o.app_slug = c.app_slug))
             ORDER BY server_name
             "#,
             user_id.as_ref(),
@@ -142,7 +144,8 @@ impl AppConnections for PgConnectionRepo {
             SELECT user_id, app_slug, server_name, account_id, enabled, provider
             FROM pipedream_mcp_connections
             WHERE app_slug = $1 AND enabled
-                AND NOT EXISTS (SELECT 1 FROM mcp_overlays o WHERE o.app_slug = $1)
+                AND (provider = 'connect'
+                    OR NOT EXISTS (SELECT 1 FROM mcp_overlays o WHERE o.app_slug = $1))
             "#,
             app_slug,
         )

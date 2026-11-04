@@ -76,9 +76,10 @@ export function CompanyContactsSection(props: {
     const query = search().trim().toLowerCase();
     return (props.contacts ?? []).filter(
       (contact) =>
-        !query ||
-        contact.name?.toLowerCase().includes(query) ||
-        contact.email?.toLowerCase().includes(query)
+        !contact.hidden &&
+        (!query ||
+          contact.name?.toLowerCase().includes(query) ||
+          contact.email?.toLowerCase().includes(query))
     );
   });
   const createContact = () => {

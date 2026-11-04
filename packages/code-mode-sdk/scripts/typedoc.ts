@@ -15,8 +15,28 @@ export async function readMarkdownPages(directory: string) {
   return pages;
 }
 
-/** One SDK entity: what it is for, and the compact index of what it declares. */
-export type EntityDocs = { name: string; description: string; index: string };
+/**
+ * One SDK entity: when to use it, the compact index of what it declares, and
+ * the `@agent` guidance its declarations carry about how that area of Macro
+ * works, when they carry any.
+ */
+export type EntityDocs = {
+  name: string;
+  description: string;
+  guide?: string;
+  index: string;
+};
+
+/** `@routing` and `@agent` text, as `renderSdkDocs` collects it. */
+export type AgentNotes = {
+  module: string;
+  name: string;
+  routing?: string;
+  guide?: string;
+};
+
+/** The heading a namespace's reference gives its `@agent` guidance. */
+const GUIDE_HEADING = '## Agent guidance';
 
 /**
  * The agent reads the SDK in two steps: an entity's index lists its classes,
@@ -32,9 +52,17 @@ export type SdkDocs = {
 
 const LINK = /\[([^\]]*)\]\(([^)]+\.md)(?:#([^)]*))?\)/g;
 
+/**
+ * Package the TypeDoc pages as entities. `directories` are the entity
+ * directories under `src/entities/`; each entity's description is the one
+ * `@routing` sentence among its declarations, and its guide every `@agent`
+ * block among them. A missing or doubled routing sentence, or a note outside
+ * every entity, fails the build.
+ */
 export function packageEntityDocs(
   sourcePages: ReadonlyMap<string, string>,
-  descriptions: Readonly<Record<string, string>>
+  directories: readonly string[],
+  notes: readonly AgentNotes[]
 ): SdkDocs {
   // The public SDK retains deployed legacy APIs. Native discovery tools cover
   // current sessions; omit the legacy chat and workspace namespaces here.
@@ -73,15 +101,14 @@ export function packageEntityDocs(
     'src/utils/',
     'src/events/',
   ];
-  const sections = [
-    ...Object.entries(descriptions).map(([directory, description]) => ({
+  const groups = [
+    ...directories.map((directory) => ({
       name:
         directory === 'foreign'
           ? 'foreignEntities'
           : directory.replace(/-([a-z])/g, (_, letter: string) =>
               letter.toUpperCase()
             ),
-      description,
       // Agent and host setup share one discovery topic, as do AI calls and
       // image generation, keeping the classifier request within its
       // 32-question contract as the public API grows.
@@ -91,16 +118,50 @@ export function packageEntityDocs(
           ? ['channels', 'external-chat', 'whatsapp']
           : directory === 'ai'
             ? ['ai', 'images']
-            : [directory]
+            : directory === 'users'
+              ? ['users', 'me']
+              : [directory]
       ).map((value) => `src/entities/${value}/`),
     })),
-    {
-      name: 'core',
-      description:
-        'SDK construction, entity handles, lazy fields, search options, events and shared types.',
-      prefixes: core,
-    },
+    { name: 'core', prefixes: core },
   ];
+  // Each note belongs to the entity whose directories hold its module.
+  const unclaimed = new Set(notes);
+  const notesOf = (prefixes: readonly string[]) =>
+    notes.filter((note) => {
+      const owned = prefixes.some((prefix) =>
+        `${note.module}/`.startsWith(prefix)
+      );
+      if (owned) unclaimed.delete(note);
+      return owned;
+    });
+  const sections = groups.map(({ name, prefixes }) => {
+    const own = notesOf(prefixes);
+    const routing = own.flatMap((note) => (note.routing ? [note.routing] : []));
+    if (routing.length !== 1)
+      throw new Error(
+        `SDK entity ${name} needs exactly one @routing sentence ("Use when …; not …"), found ${routing.length}`
+      );
+    const guides = own.flatMap((note) => (note.guide ? [note.guide] : []));
+    return {
+      name,
+      prefixes,
+      description: routing[0] ?? '',
+      ...(guides.length ? { guide: guides.join('\n\n') } : {}),
+    };
+  });
+  if (unclaimed.size)
+    throw new Error(
+      `@routing or @agent outside every SDK entity: ${[...unclaimed]
+        .map((note) => `${note.module}#${note.name}`)
+        .join(', ')}`
+    );
+  // A namespace's own reference carries its guidance too, for ReadCodeDocs.
+  const guideByPage = new Map(
+    notes.flatMap((note) =>
+      note.guide ? [[`${note.module}/classes/${note.name}.md`, note.guide]] : []
+    )
+  );
   const resolve = (from: string, target: string) =>
     posix.normalize(
       posix.join(posix.dirname(from), decodeURIComponent(target))
@@ -173,7 +234,8 @@ export function packageEntityDocs(
       continue;
     }
     const { header, methods } = splitClass(markdown);
-    symbols[symbol] = header;
+    const guide = guideByPage.get(path);
+    symbols[symbol] = guide ? `${header}\n\n${GUIDE_HEADING}\n\n${guide}` : header;
     for (const method of methods)
       symbols[`${symbol}.${method.name}`] = method.markdown;
   }
@@ -189,9 +251,10 @@ export function packageEntityDocs(
     accessors.set(match[2] ?? '', `macro.${match[1]}`);
 
   return {
-    entities: sections.map(({ name, description }, index) => ({
+    entities: sections.map(({ name, description, guide }, index) => ({
       name,
       description,
+      ...(guide ? { guide } : {}),
       index: entityIndex(
         name,
         description,

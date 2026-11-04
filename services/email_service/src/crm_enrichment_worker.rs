@@ -6,7 +6,7 @@ use crate::pubsub::context::CrmServiceType;
 use std::time::Duration;
 use tokio_util::sync::CancellationToken;
 
-/// One enrichment pass per interval keeps the resolver (Apollo) call rate at
+/// One enrichment pass per interval keeps the resolver call rate at
 /// the service's batch size per minute per worker.
 const ENRICHMENT_INTERVAL: Duration = Duration::from_secs(60);
 

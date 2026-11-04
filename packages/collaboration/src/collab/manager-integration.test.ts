@@ -1,10 +1,12 @@
 import { Mirror, schema } from '@loro-mirror/core';
+import { Telemetry } from '@macro-inc/observability';
 import { LoroDoc, type VersionVector } from 'loro-crdt';
 import { createRoot } from 'solid-js';
 import { describe, expect, it, vi } from 'vitest';
 import { noopChatter } from './chatter';
 import { createSyncEngine } from './engine';
 import { createLoroManager, type LoroManager } from './manager';
+import { logTelemetry } from './telemetry';
 import { TestServer } from './test-utils/test-server';
 import { InMemoryWALStore, WALSyncer } from './wal';
 
@@ -17,6 +19,24 @@ const TEST_SCHEMA = schema({
     }),
     (paragraph: { id: string }) => paragraph.id
   ),
+});
+
+it('keeps the live telemetry session when a staging peer is disposed', () => {
+  const info = vi.spyOn(Telemetry, 'info').mockImplementation(() => {});
+  const live = createLoroManager(TEST_SCHEMA, {
+    documentId: 'telemetry-owner',
+  });
+  logTelemetry('telemetry-owner', 'info', 'before');
+  const attributes = info.mock.calls[0][1];
+  const staged = createLoroManager(TEST_SCHEMA, {
+    documentId: 'telemetry-owner',
+    ownsTelemetry: false,
+  });
+  staged.dispose();
+  logTelemetry('telemetry-owner', 'info', 'after');
+  expect(info.mock.calls[1][1]).toEqual(attributes);
+  live.dispose();
+  info.mockRestore();
 });
 
 function paragraphTexts(manager: LoroManager<typeof TEST_SCHEMA>): string[] {

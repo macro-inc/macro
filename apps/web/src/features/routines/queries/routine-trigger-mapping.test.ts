@@ -1,10 +1,16 @@
+import {
+  PROPERTY_OPTION_IDS,
+  SYSTEM_PROPERTY_IDS,
+} from '@property/identifiers';
 import { describe, expect, it } from 'vitest';
 import {
   eventTriggerLabel,
   newScheduleTrigger,
   routineEvents,
   routineTriggerSchema,
+  taskTriggerProperty,
   validateTriggers,
+  withPropertyValues,
 } from '../core/routine-triggers';
 import {
   parseRoutineTriggers,
@@ -345,5 +351,79 @@ describe('GitHub triggers', () => {
         },
       ])
     ).toMatch(/dots/);
+  });
+});
+
+describe('task property selectors', () => {
+  const STATUS = SYSTEM_PROPERTY_IDS.STATUS;
+  const COMPLETED = PROPERTY_OPTION_IDS.STATUS.COMPLETED;
+
+  it('round trips a value test and keeps its event’s label', () => {
+    const config = {
+      type: 'events' as const,
+      filters: [
+        {
+          events: ['task.status_changed' as const],
+          property: { definitionId: STATUS, values: [COMPLETED] },
+        },
+      ],
+    };
+    const [trigger] = parseRoutineTriggers(config)!;
+    expect(routineTriggerSchema.safeParse(trigger).success).toBe(true);
+    expect(serializeTriggers([trigger])).toEqual(config);
+    expect(trigger.kind === 'event' && eventTriggerLabel(trigger)).toBe(
+      'Status changed'
+    );
+  });
+
+  it('names a preset property apart from any property', () => {
+    const preset = routineEvents.find(
+      (item) => item.label === 'Assignees changed'
+    )!;
+    const base = {
+      id: 'trigger',
+      kind: 'event' as const,
+      events: [preset.value],
+    };
+    expect(eventTriggerLabel({ ...base, ...preset.preset })).toBe(
+      'Assignees changed'
+    );
+    expect(eventTriggerLabel(base)).toBe('Any property changed');
+    expect(
+      eventTriggerLabel({
+        ...base,
+        property: {
+          definitionId: '00000002-0000-7000-8000-000000000001',
+          values: [],
+        },
+      })
+    ).toBe('Property changed');
+  });
+
+  it('keeps a status event’s wire shape until a value is chosen', () => {
+    const trigger = {
+      id: 'trigger',
+      kind: 'event' as const,
+      events: ['task.status_changed' as const],
+    };
+    const chosen = withPropertyValues(trigger, STATUS, [COMPLETED]);
+    expect(chosen.property).toEqual({
+      definitionId: STATUS,
+      values: [COMPLETED],
+    });
+    expect(withPropertyValues(chosen, STATUS, []).property).toBeUndefined();
+    expect(taskTriggerProperty(chosen)?.kind).toBe('options');
+  });
+
+  it('keeps a preset property when its values are cleared', () => {
+    const trigger = {
+      id: 'trigger',
+      kind: 'event' as const,
+      events: ['task.property_changed' as const],
+    };
+    expect(
+      withPropertyValues(trigger, SYSTEM_PROPERTY_IDS.ASSIGNEES, []).property
+    ).toEqual({ definitionId: SYSTEM_PROPERTY_IDS.ASSIGNEES, values: [] });
+    expect(taskTriggerProperty(trigger)).toBeUndefined();
   });
 });
