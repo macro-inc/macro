@@ -1,7 +1,7 @@
 import type { PaneId, PaneLayout, SplitPath } from '@app/lib/split-router';
 import { Gutter } from '@core/component/Resize';
 import { moveHandleShares } from '@core/component/Resize/solver';
-import { createElementSize } from '@solid-primitives/resize-observer';
+import { createElementSize } from '@core/util/createElementSize';
 import {
   type Accessor,
   createEffect,
