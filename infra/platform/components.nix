@@ -155,9 +155,6 @@ let
       };
     };
 
-  # The bucket holding the sync fleet's state (created by `platform up`).
-  syncFleetBucket = "cells-sync";
-
   # Transitional: RustFS delivers bucket events to webhooks, not SQS ARNs.
   # This forwards each S3-format event, unchanged, into the queue the upload
   # finalizer reads. Removed when the finalizer consumes Kafka.
@@ -185,6 +182,141 @@ let
 
     http.server.ThreadingHTTPServer(("0.0.0.0", 8080), Handler).serve_forever()
   '';
+
+  celldFleet =
+    { bucket, port }:
+    {
+      image = image {
+        name = "celld";
+        contents = [ platformPkgs.celld ];
+        entrypoint = sh ''
+          exec celld --bucket s3://${bucket} --endpoint http://rustfs:9000 \
+            --region us-east-1 --listen 0.0.0.0:${toString port} --internal-listen 0.0.0.0:8081 \
+            --advertise "$POD_IP:8081"
+        '';
+        env = {
+          AWS_REGION = "us-east-1";
+          HOME = "/tmp";
+          CELLD_WATCH = "/var/lib/celld/state";
+        };
+      };
+      env = {
+        POD_IP.fieldRef = "status.podIP";
+        AWS_ACCESS_KEY_ID = awsKey;
+        AWS_SECRET_ACCESS_KEY = awsSecret;
+      };
+      user = 1000;
+      ports = [
+        port
+        8081
+      ];
+      volumes.state = "/var/lib/celld";
+      readiness.tcp = port;
+    };
+
+  # An unmodified Lambda binary behind lambda-runner (see its header).
+  lambdaHandler =
+    {
+      bin,
+      trigger,
+      env ? { },
+    }:
+    {
+      image = image {
+        name = bin;
+        contents = [
+          macro.binaries.${bin}
+          pkgs.python3
+        ];
+        entrypoint = [
+          "python3"
+          "${./lambda-runner/runner.py}"
+          "/bin/${bin}"
+        ];
+      };
+      sharedEnv = true;
+      env = {
+        LAMBDA_TRIGGER = trigger;
+        RUST_MIN_STACK = "16777216";
+      }
+      // env;
+    };
+
+  # Handlers with their production triggers (seconds from the stacks' rates).
+  lambdaHandlers = lib.filterAttrs (_: h: macro.binaries ? ${h.bin}) {
+    deleted-item-poller = {
+      bin = "deleted_item_poller";
+      trigger = "schedule:14400";
+    };
+    user-link-cleanup = {
+      bin = "user_link_cleanup_handler";
+      trigger = "schedule:86400";
+    };
+    email-refresh = {
+      bin = "email_refresh_handler";
+      trigger = "schedule:3600";
+    };
+    email-scheduled = {
+      bin = "email_scheduled_handler";
+      trigger = "schedule:60";
+    };
+    notification-retention = {
+      bin = "notification_retention_handler";
+      trigger = "schedule:3600";
+    };
+    organization-retention-trigger = {
+      bin = "organization_retention_trigger";
+      trigger = "schedule:86400";
+    };
+    organization-retention = {
+      bin = "organization_retention_handler";
+      trigger = "sqs:organization-retention-handler-queue";
+    };
+    email-sfs-delete = {
+      bin = "email_sfs_delete_handler";
+      trigger = "schedule:86400";
+    };
+    delete-chat = {
+      bin = "delete_chat_handler";
+      trigger = "sqs:delete-chat-handler-queue";
+    };
+    document-text-extractor = {
+      bin = "document_text_extractor";
+      trigger = "sqs:document-text-extractor-lambda-queue";
+    };
+    upload-extractor = {
+      bin = "upload_extractor_lambda_handler";
+      trigger = "sqs:bulk-upload-queue";
+    };
+  };
+
+  # Provisioning runs in the cluster, the same on every environment. Bundles
+  # hold no secrets; the Jobs read those from the shared env.
+  provisioner = args: {
+    job = true;
+    image = image {
+      name = "provisioner";
+      contents = [
+        macro.binaries.xtask_local
+        pkgs.sqlx-cli
+        pkgs.bun
+        pkgs.esbuild
+        platformPkgs.celld
+      ];
+      entrypoint = [ "/bin/xtask_local" ];
+      env = {
+        HOME = "/tmp";
+        PLATFORM_MIGRATIONS_DIR = "${../../crates/macro_db_client/migrations}";
+        PLATFORM_OPENSEARCH_HELPERS = "${macro.node.opensearch-helpers}";
+        PLATFORM_BUNDLE_SYNC = "${macro.node.sync-bundle}";
+        PLATFORM_BUNDLE_ANALYTICS = "${macro.node.analytics-bundle}";
+        PLATFORM_BUNDLE_AI_EDITING = "${macro.node.ai-editing-bundle}";
+      };
+    };
+    inherit args;
+    sharedEnv = true;
+    user = 1000;
+  };
 
   inNetwork = {
     gateway = "http://connection-gateway:8080";
@@ -613,36 +745,47 @@ in
   };
 }
 // {
-  # Document sync: a celld fleet (Workers + Durable Objects) whose state lives
-  # in this instance's RustFS. `platform up` deploys the worker bundle into
-  # the fleet bucket; nodes adopt new versions without a restart.
-  sync-service = {
+  # Workers runtimes: celld fleets whose state lives in this instance's RustFS.
+  # `platform up` deploys each worker bundle into its fleet bucket; nodes adopt
+  # new versions without a restart. Bucket names match `fleets` in platform.rs.
+  sync-service = celldFleet {
+    bucket = "cells-sync";
+    port = 8787;
+  };
+  analytics-proxy = celldFleet {
+    bucket = "cells-analytics";
+    port = 8098;
+  };
+  ai-editing-worker = celldFleet {
+    bucket = "cells-ai-editing";
+    port = 8933;
+  };
+
+  # Canvas rendering for ai-editing-worker (CANVAS_BROWSER_URL), standing in
+  # for Cloudflare Browser Rendering. Chromium rejects DevTools requests whose
+  # Host is not an address or localhost, hence the rewriting proxy.
+  headless-chrome = {
     image = image {
-      name = "celld";
-      contents = [ platformPkgs.celld ];
-      entrypoint = sh ''
-        exec celld --bucket s3://${syncFleetBucket} --endpoint http://rustfs:9000 \
-          --region us-east-1 --listen 0.0.0.0:8787 --internal-listen 0.0.0.0:8081 \
-          --advertise "$POD_IP:8081"
-      '';
+      name = "headless-chrome";
+      contents = [
+        pkgs.chromium
+        pkgs.caddy
+      ];
       env = {
-        AWS_REGION = "us-east-1";
         HOME = "/tmp";
-        CELLD_WATCH = "/var/lib/celld/state";
+        XDG_DATA_HOME = "/tmp";
+        XDG_CONFIG_HOME = "/tmp";
       };
-    };
-    env = {
-      POD_IP.fieldRef = "status.podIP";
-      AWS_ACCESS_KEY_ID = awsKey;
-      AWS_SECRET_ACCESS_KEY = awsSecret;
+      entrypoint = sh ''
+        chromium --headless=new --no-sandbox --disable-gpu --disable-dev-shm-usage \
+          --remote-debugging-address=127.0.0.1 --remote-debugging-port=9223 \
+          --remote-allow-origins=* --user-data-dir=/tmp/chromium about:blank &
+        exec caddy reverse-proxy --from :9222 --to 127.0.0.1:9223 --change-host-header
+      '';
     };
     user = 1000;
-    ports = [
-      8787
-      8081
-    ];
-    volumes.state = "/var/lib/celld";
-    readiness.tcp = 8787;
+    ports = [ 9222 ];
+    readiness.tcp = 9222;
   };
 }
 // lib.optionalAttrs (macro.node ? websocket) {
@@ -687,4 +830,21 @@ in
     ports = [ 8080 ];
     readiness.tcp = 8080;
   };
+}
+// lib.mapAttrs (_: lambdaHandler) lambdaHandlers
+// lib.optionalAttrs (macro.node ? sync-bundle && macro.binaries ? xtask_local) {
+  provision =
+    provisioner [
+      "platform"
+      "job"
+      "provision"
+    ]
+    // {
+      infra = true;
+    };
+  fleet-migrate = provisioner [
+    "platform"
+    "job"
+    "fleet-migrate"
+  ];
 }

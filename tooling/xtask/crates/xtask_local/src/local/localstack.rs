@@ -54,11 +54,16 @@ pub fn provision_with(
     key: &AwsKey,
 ) -> Result<()> {
     let url = format!("http://localhost:{}/", instance.port(Port::LocalStack));
+    provision_at(&url, target, key)
+}
+
+/// [`provision_with`] against an explicit endpoint (an in-cluster Job).
+pub fn provision_at(url: &str, target: &UploadNotificationTarget, key: &AwsKey) -> Result<()> {
     let rt = tokio::runtime::Builder::new_multi_thread()
         .enable_all()
         .build()
         .context("building tokio runtime")?;
-    rt.block_on(provision_async(&url, target, key))
+    rt.block_on(provision_async(url, target, key))
 }
 
 async fn provision_async(url: &str, target: &UploadNotificationTarget, key: &AwsKey) -> Result<()> {

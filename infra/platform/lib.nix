@@ -133,8 +133,118 @@ rec {
           { };
       resources = instance.size.resources.${name} or instance.size.resources.default;
       serviceNames = [ name ] ++ (w.aliases or [ ]);
+      isJob = w.job or false;
+      # Job specs are immutable and must re-run for a new build or env.
+      jobName = "${name}-${
+        builtins.substring 0 10 (
+          builtins.hashString "sha256" "${builtins.unsafeDiscardStringContext w.image.ref}${instance.envRevision}"
+        )
+      }";
+      podSpec = {
+        enableServiceLinks = false;
+        terminationGracePeriodSeconds = w.terminationGracePeriod or 30;
+        securityContext = lib.optionalAttrs (w ? user) {
+          runAsUser = w.user;
+          runAsGroup = w.user;
+          fsGroup = w.user;
+          # Otherwise every mount recursively re-permissions the volume,
+          # and Postgres refuses a group-writable data directory.
+          fsGroupChangePolicy = "OnRootMismatch";
+        };
+        containers.${name} = container;
+        volumes = podVolumes;
+      };
+      container = {
+        image = w.image.ref;
+        args = w.args or [ ];
+        # A value is a string, `{ fieldRef = "status.podIP"; }`, or
+        # `{ secret = "KEY"; }` (a key of the instance's macro-env).
+        env = lib.mapAttrsToList (
+          k: v:
+          if builtins.isAttrs v && v ? secret then
+            {
+              name = k;
+              valueFrom.secretKeyRef = {
+                name = "macro-env";
+                key = v.secret;
+              };
+            }
+          else if builtins.isAttrs v then
+            {
+              name = k;
+              valueFrom.fieldRef.fieldPath = v.fieldRef;
+            }
+          else
+            {
+              name = k;
+              value = toString v;
+            }
+        ) (w.env or { });
+        envFrom = lib.optional (w.sharedEnv or false) { secretRef.name = "macro-env"; };
+        ports = map (p: {
+          containerPort = p;
+          protocol = "TCP";
+        }) ports;
+        inherit resources;
+        # A store-path root is read-only and has no /tmp.
+        volumeMounts = [
+          {
+            name = "tmp";
+            mountPath = "/tmp";
+          }
+        ]
+        ++ lib.mapAttrsToList (v: mountPath: {
+          name = "vol-${v}";
+          inherit mountPath;
+        }) volumes
+        ++ lib.mapAttrsToList (
+          f: spec:
+          {
+            name = "file-${f}";
+            mountPath = spec.mountPath;
+            readOnly = true;
+          }
+          // lib.optionalAttrs (spec ? subPath) { inherit (spec) subPath; }
+        ) files;
+      }
+      // probe;
+      podVolumes = [
+        {
+          name = "tmp";
+          emptyDir = { };
+        }
+      ]
+      ++ lib.mapAttrsToList (v: _: {
+        name = "vol-${v}";
+        persistentVolumeClaim.claimName = "${name}-${v}";
+      }) volumes
+      ++ lib.mapAttrsToList (
+        f: spec:
+        {
+          name = "file-${f}";
+        }
+        // (if spec ? secret then { secret.secretName = spec.secret; } else { configMap.name = spec.configMap; })
+      ) files;
     in
-    {
+    lib.optionalAttrs isJob {
+      jobs.${jobName} = {
+        metadata.labels = labels // {
+          "macro.com/job" = name;
+        };
+        spec = {
+          backoffLimit = 10;
+          template = {
+            metadata.labels = labels // {
+              "macro.com/job" = name;
+            };
+            spec = podSpec // {
+              restartPolicy = "OnFailure";
+            };
+          };
+        };
+      };
+    }
+    // lib.optionalAttrs (!isJob) {
       deployments.${name} = {
         metadata = { inherit labels; };
         spec = {
@@ -163,89 +273,7 @@ rec {
                 "macro.com/env-revision" = instance.envRevision;
               };
             };
-            spec = {
-              enableServiceLinks = false;
-              securityContext = lib.optionalAttrs (w ? user) {
-                runAsUser = w.user;
-                runAsGroup = w.user;
-                fsGroup = w.user;
-                # Otherwise every mount recursively re-permissions the volume,
-                # and Postgres refuses a group-writable data directory.
-                fsGroupChangePolicy = "OnRootMismatch";
-              };
-              terminationGracePeriodSeconds = w.terminationGracePeriod or 30;
-              containers.${name} = {
-                image = w.image.ref;
-                args = w.args or [ ];
-                # A value is a string, `{ fieldRef = "status.podIP"; }`, or
-                # `{ secret = "KEY"; }` (a key of the instance's macro-env).
-                env = lib.mapAttrsToList (
-                  k: v:
-                  if builtins.isAttrs v && v ? secret then
-                    {
-                      name = k;
-                      valueFrom.secretKeyRef = {
-                        name = "macro-env";
-                        key = v.secret;
-                      };
-                    }
-                  else if builtins.isAttrs v then
-                    {
-                      name = k;
-                      valueFrom.fieldRef.fieldPath = v.fieldRef;
-                    }
-                  else
-                    {
-                      name = k;
-                      value = toString v;
-                    }
-                ) (w.env or { });
-                envFrom = lib.optional (w.sharedEnv or false) { secretRef.name = "macro-env"; };
-                ports = map (p: {
-                  containerPort = p;
-                  protocol = "TCP";
-                }) ports;
-                inherit resources;
-                # A store-path root is read-only and has no /tmp.
-                volumeMounts = [
-                  {
-                    name = "tmp";
-                    mountPath = "/tmp";
-                  }
-                ]
-                ++ lib.mapAttrsToList (v: mountPath: {
-                    name = "vol-${v}";
-                    inherit mountPath;
-                  }) volumes
-                  ++ lib.mapAttrsToList (f: spec: {
-                    name = "file-${f}";
-                    mountPath = spec.mountPath;
-                    readOnly = true;
-                  } // lib.optionalAttrs (spec ? subPath) { inherit (spec) subPath; }) files;
-              } // probe;
-              volumes = [
-                {
-                  name = "tmp";
-                  emptyDir = { };
-                }
-              ]
-              ++ lib.mapAttrsToList (v: _: {
-                  name = "vol-${v}";
-                  persistentVolumeClaim.claimName = "${name}-${v}";
-                }) volumes
-                ++ lib.mapAttrsToList (
-                  f: spec:
-                  {
-                    name = "file-${f}";
-                  }
-                  // (
-                    if spec ? secret then
-                      { secret.secretName = spec.secret; }
-                    else
-                      { configMap.name = spec.configMap; }
-                  )
-                ) files;
-            };
+            spec = podSpec;
           };
         };
       };

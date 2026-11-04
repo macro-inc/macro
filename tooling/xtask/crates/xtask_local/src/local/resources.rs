@@ -33,6 +33,9 @@ pub const CONNECTION_GATEWAY_TABLE: &str = "connection-gateway-table";
 /// The static-file metadata table.
 pub const STATIC_FILE_TABLE: &str = "static-file-metadata";
 
+/// The bucket the proxy's `/static-file/*` route reads from.
+pub const STATIC_FILE_BUCKET: &str = "static-file-storage";
+
 /// Alias for the KMS key that encrypts users' Cursor API keys.
 ///
 /// An alias rather than a key id: `CreateKey` mints a random id on every run,
@@ -298,7 +301,7 @@ pub const BUCKETS: &[Bucket] = &[
         env_key: "DOCX_DOCUMENT_UPLOAD_BUCKET",
     },
     Bucket {
-        name: "static-file-storage",
+        name: STATIC_FILE_BUCKET,
         env_key: "STATIC_STORAGE_BUCKET",
     },
     Bucket {

@@ -47,14 +47,14 @@ pub struct LocalE2eArgs {
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]
-struct Endpoints {
-    proxy_url: String,
-    frontend_url: String,
-    postgres_url: String,
-    fusionauth_url: String,
-    localstack_url: String,
-    connection_gateway_ws_url: String,
-    generated_env: PathBuf,
+pub(super) struct Endpoints {
+    pub(super) proxy_url: String,
+    pub(super) frontend_url: String,
+    pub(super) postgres_url: String,
+    pub(super) fusionauth_url: String,
+    pub(super) localstack_url: String,
+    pub(super) connection_gateway_ws_url: String,
+    pub(super) generated_env: PathBuf,
 }
 
 impl Endpoints {
@@ -73,7 +73,7 @@ impl Endpoints {
         }
     }
 
-    fn test_env(&self) -> BTreeMap<String, String> {
+    pub(super) fn test_env(&self) -> BTreeMap<String, String> {
         let mut env = BTreeMap::new();
         env.insert("LOCAL_E2E".into(), "true".into());
         env.insert(
@@ -157,7 +157,7 @@ fn validate_args(args: &LocalE2eArgs) -> Result<()> {
     Ok(())
 }
 
-fn run_seed(endpoints: &Endpoints) -> Result<()> {
+pub(super) fn run_seed(endpoints: &Endpoints) -> Result<()> {
     println!("\nSeeding local E2E fixtures...");
     let mut env = load_generated_env(&endpoints.generated_env)?;
     env.insert("LOCAL_E2E_SEED".into(), "true".into());
@@ -183,12 +183,12 @@ fn run_seed(endpoints: &Endpoints) -> Result<()> {
     require_success(&mut command, "local E2E seed")
 }
 
-fn run_rust(env: &BTreeMap<String, String>, test_args: &[String]) -> Result<()> {
+pub(super) fn run_rust(env: &BTreeMap<String, String>, test_args: &[String]) -> Result<()> {
     println!("\nRunning Rust local E2E tests...");
     let mut command = cargo_command();
     command
         .current_dir(repo_root())
-        .args(["test", "--manifest-path"])
+        .args(["test", "--no-fail-fast", "--manifest-path"])
         .arg(repo_root().join("Cargo.toml"))
         .args([
             "-p",
@@ -203,7 +203,11 @@ fn run_rust(env: &BTreeMap<String, String>, test_args: &[String]) -> Result<()> 
     require_success(&mut command, "Rust local E2E tests")
 }
 
-fn run_web(env: &BTreeMap<String, String>, ui: bool, test_args: &[String]) -> Result<()> {
+pub(super) fn run_web(
+    env: &BTreeMap<String, String>,
+    ui: bool,
+    test_args: &[String],
+) -> Result<()> {
     println!("\nRunning Playwright local E2E tests...");
     let mut command = Command::new("bunx");
     command

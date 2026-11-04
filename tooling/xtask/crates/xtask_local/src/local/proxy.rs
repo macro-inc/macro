@@ -124,6 +124,15 @@ pub fn caddyfile_for(mode: Mode, static_frontend: bool, flavor: Flavor) -> Strin
     } else {
         STATIC_FILE_DEV
     };
+    // The platform's S3 server verifies presigned signatures, which cover the
+    // host the service signed for, not the instance's public one.
+    let static_block = match flavor {
+        Flavor::Compose => static_block.to_owned(),
+        Flavor::Kubernetes => static_block.replace(
+            "reverse_proxy localstack:4566\n",
+            "reverse_proxy localstack:4566 {\n            header_up Host localstack:4566\n        }\n",
+        ),
+    };
     let mailpit_block = if static_frontend && mode.spec().runs_local_infra {
         MAILPIT_ROUTE
     } else {

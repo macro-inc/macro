@@ -25,8 +25,8 @@ use super::local_env::Tunnels;
 use super::proxy::{self, Flavor};
 use super::stage::Stage;
 use super::{
-    Mode, db, env_layer, frontend, fusionauth, gen_compose, inventory, kafka, kickstart,
-    localstack, opensearch, repo_root,
+    Mode, env_layer, frontend, fusionauth, gen_compose, inventory, kafka, kickstart, localstack,
+    repo_root,
 };
 
 #[cfg(test)]
@@ -41,6 +41,8 @@ pub const CADDYFILE: &str = "infra/platform/generated/Caddyfile";
 /// RustFS's webhook target for doc-storage uploads (the `s3-events` bridge,
 /// see infra/platform/components.nix).
 const UPLOAD_NOTIFICATION_TARGET: &str = "arn:rustfs:sqs:us-east-1:finalizer:webhook";
+/// The binary the provisioning Jobs run (this one).
+const PROVISIONER_BIN: &str = "xtask_local";
 /// Features the platform builds of Rust services enable (same as `run_local`).
 const AUTH_FEATURES: &str =
     "authentication_service/return_passwordless_code,authentication_service/no_rate_limit";
@@ -55,6 +57,11 @@ pub enum PlatformCmd {
     Down(NameArg),
     /// Regenerate the checked-in edge Caddyfile from the service inventory.
     Caddyfile,
+    /// Seed an instance and run the local E2E suites against it.
+    E2e(E2eArgs),
+    /// Inside a cluster Job: provision the instance this pod belongs to.
+    #[command(subcommand)]
+    Job(JobCmd),
 }
 
 #[derive(Args, Clone)]
@@ -89,8 +96,37 @@ pub struct DevArgs {
     pub verbose: bool,
 }
 
+#[derive(Subcommand, Clone, Copy)]
+pub enum JobCmd {
+    /// Migrations, topics, AWS resources, search indices, worker bundles.
+    Provision,
+    /// D1 migrations, which run inside the celld fleets once their nodes are up.
+    FleetMigrate,
+}
+
+#[derive(Args, Clone)]
+pub struct E2eArgs {
+    #[command(flatten)]
+    pub name: NameArg,
+    #[arg(long, value_enum, default_value_t = E2eSuite::All)]
+    pub suite: E2eSuite,
+    /// Passed to the test runner.
+    #[arg(last = true)]
+    pub test_args: Vec<String>,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq, clap::ValueEnum)]
+pub enum E2eSuite {
+    Rust,
+    Web,
+    All,
+}
+
 pub fn run(cmd: PlatformCmd) -> Result<()> {
     match cmd {
+        PlatformCmd::E2e(args) => e2e(&args),
+        PlatformCmd::Job(JobCmd::Provision) => job_provision(),
+        PlatformCmd::Job(JobCmd::FleetMigrate) => job_fleet_migrate(),
         PlatformCmd::Up(args) => up(&args),
         PlatformCmd::Dev(args) => dev(&args),
         PlatformCmd::Down(args) => down(&args),
@@ -185,7 +221,27 @@ fn write_state(instance: &Instance, state: &State) -> Result<()> {
     Ok(())
 }
 
-/// The cargo bin each Rust workload runs (the inventory, k8s names).
+/// Lambda handlers the instance runs behind lambda-runner: workload -> bin
+/// (`lambdaHandlers` in infra/platform/components.nix).
+const LAMBDA_HANDLERS: &[(&str, &str)] = &[
+    ("deleted-item-poller", "deleted_item_poller"),
+    ("user-link-cleanup", "user_link_cleanup_handler"),
+    ("email-refresh", "email_refresh_handler"),
+    ("email-scheduled", "email_scheduled_handler"),
+    ("notification-retention", "notification_retention_handler"),
+    (
+        "organization-retention-trigger",
+        "organization_retention_trigger",
+    ),
+    ("organization-retention", "organization_retention_handler"),
+    ("email-sfs-delete", "email_sfs_delete_handler"),
+    ("delete-chat", "delete_chat_handler"),
+    ("document-text-extractor", "document_text_extractor"),
+    ("upload-extractor", "upload_extractor_lambda_handler"),
+];
+
+/// The cargo bin each Rust workload runs (the inventory, k8s names, and the
+/// Lambda handlers).
 pub fn rust_workloads() -> BTreeMap<String, &'static str> {
     inventory::RUST_SERVICES
         .iter()
@@ -196,6 +252,7 @@ pub fn rust_workloads() -> BTreeMap<String, &'static str> {
                 s.cargo_bin,
             )
         })
+        .chain(LAMBDA_HANDLERS.iter().map(|(w, b)| ((*w).to_owned(), *b)))
         .collect()
 }
 
@@ -264,7 +321,10 @@ fn up(args: &UpArgs) -> Result<()> {
         aws_key.secret_access_key.clone(),
     );
     if !args.no_build || state.binaries.is_empty() {
-        let bins: Vec<&str> = rust_workloads().into_values().collect();
+        let bins: Vec<&str> = rust_workloads()
+            .into_values()
+            .chain([PROVISIONER_BIN])
+            .collect();
         cargo_build(&stage, &bins)?;
         frontend::build_static(&stage, &instance, Mode::Local)?;
         state.binaries = wrap_binaries(&stage, &bins)?;
@@ -274,7 +334,13 @@ fn up(args: &UpArgs) -> Result<()> {
             &frontend::static_dir(&instance),
         )?);
         state.node = build_node_services(&stage, &instance)?;
+        state.node.extend(build_worker_bundles(&stage, &instance)?);
+        state.node.insert(
+            "opensearch-helpers".to_owned(),
+            build_opensearch_helpers(&stage)?,
+        );
     }
+    env_layer::write_dotenv(&env_file(&instance), &shared_env)?;
     state.env_revision = digest(&serde_json::to_string(&shared_env)?);
     write_state(&instance, &state)?;
 
@@ -318,10 +384,11 @@ fn up(args: &UpArgs) -> Result<()> {
     let infra = items_with_tier(&manifests, "infra");
     apply_items(&stage, "infra", &infra)?;
     wait_ready(&stage, &namespace, Some("infra"))?;
-    provision(&stage, &name, &instance, &env.merged, &manifests, &aws_key)?;
+    wait_job(&stage, &namespace, "provision")?;
     let all = items(&manifests);
     apply_items(&stage, "services", &all)?;
     prune(&stage, &name, &all)?;
+    wait_job(&stage, &namespace, "fleet-migrate")?;
     wait_ready(&stage, &namespace, None)?;
 
     stage.section(&format!("instance {} is up", name.as_str()));
@@ -389,6 +456,70 @@ fn dev(args: &DevArgs) -> Result<()> {
     Ok(())
 }
 
+/// Where `up` leaves the instance's resolved env for host-side tooling.
+fn env_file(instance: &Instance) -> PathBuf {
+    instance.artifact_dir().join("platform.generated.env")
+}
+
+fn e2e(args: &E2eArgs) -> Result<()> {
+    let name = InstanceName::parse(&args.name.name)?;
+    let instance = name.local_instance()?;
+    let generated_env = env_file(&instance);
+    ensure!(
+        generated_env.is_file(),
+        "instance {} has no recorded env; run `just platform up {}` first",
+        name.as_str(),
+        name.as_str()
+    );
+    let mut forwards = PortForwards::default();
+    for (svc, port, remote) in [
+        ("postgres", Port::Postgres, 5432),
+        ("aws-gateway", Port::LocalStack, 4566),
+        ("fusionauth", Port::FusionAuth, 9011),
+    ] {
+        forwards.open(&name, svc, instance.port(port), remote)?;
+        wait_port(instance.port(port))?;
+    }
+    let endpoints = super::e2e::Endpoints {
+        proxy_url: name.origin(),
+        frontend_url: frontend::url(&instance),
+        postgres_url: format!(
+            "postgres://user:password@localhost:{}/macrodb",
+            instance.port(Port::Postgres)
+        ),
+        fusionauth_url: format!("http://localhost:{}", instance.port(Port::FusionAuth)),
+        localstack_url: format!("http://localhost:{}", instance.port(Port::LocalStack)),
+        connection_gateway_ws_url: format!(
+            "wss://{}:{INGRESS_PORT}/connection-gateway",
+            name.host()
+        ),
+        generated_env,
+    };
+    super::e2e::run_seed(&endpoints)?;
+    let mut test_env = endpoints.test_env();
+    test_env.insert(
+        "NODE_EXTRA_CA_CERTS".into(),
+        repo_root()
+            .join("infra/local/certs/ca.pem")
+            .display()
+            .to_string(),
+    );
+    test_env.insert(
+        "SSL_CERT_FILE".into(),
+        repo_root()
+            .join("infra/local/certs/ca.pem")
+            .display()
+            .to_string(),
+    );
+    if matches!(args.suite, E2eSuite::Rust | E2eSuite::All) {
+        super::e2e::run_rust(&test_env, &args.test_args)?;
+    }
+    if matches!(args.suite, E2eSuite::Web | E2eSuite::All) {
+        super::e2e::run_web(&test_env, false, &args.test_args)?;
+    }
+    Ok(())
+}
+
 fn down(args: &NameArg) -> Result<()> {
     let stage = Stage::from_env_cli(false);
     let name = InstanceName::parse(&args.name)?;
@@ -444,7 +575,10 @@ fn cargo_build(stage: &Stage, bins: &[&str]) -> Result<()> {
         for b in &unified {
             cmd.args(["--bin", b]);
         }
-        cmd.args(["--features", AUTH_FEATURES]);
+        cmd.args([
+            "--features",
+            &format!("{AUTH_FEATURES},xtask_local/local-stack"),
+        ]);
         stage.run("Building service binaries (cargo)", &mut cmd)?;
     }
     for bin in isolated {
@@ -706,6 +840,7 @@ fn apply_items(stage: &Stage, label: &str, items: &[Value]) -> Result<()> {
 /// Kinds an instance owns, for pruning what its manifests no longer list.
 const PRUNABLE: &[&str] = &[
     "deployments.apps",
+    "jobs.batch",
     "services",
     "configmaps",
     "ingresses.networking.k8s.io",
@@ -749,6 +884,35 @@ fn prune(stage: &Stage, name: &InstanceName, desired: &[Value]) -> Result<()> {
         }
     }
     Ok(())
+}
+
+/// Wait for this revision's provisioning Job to finish.
+fn wait_job(stage: &Stage, namespace: &str, job: &str) -> Result<()> {
+    let mut cmd = kubectl();
+    cmd.args([
+        "-n",
+        namespace,
+        "wait",
+        "job",
+        "-l",
+        &format!("macro.com/job={job}"),
+        "--for=condition=Complete",
+        "--timeout=20m",
+    ]);
+    let result = stage.run(&format!("Waiting for the {job} job"), &mut cmd);
+    if result.is_err() {
+        let _ = kubectl()
+            .args([
+                "-n",
+                namespace,
+                "logs",
+                "-l",
+                &format!("macro.com/job={job}"),
+                "--tail=20",
+            ])
+            .status();
+    }
+    result
 }
 
 /// Wait for each Deployment's rollout. `wait --for=condition=Available` is not
@@ -804,140 +968,121 @@ fn secret(namespace: &str, name: &str, kind: &str, data: &BTreeMap<String, Strin
     })
 }
 
-/// Port-forward the infra Services to the local instance's host ports and run
-/// the provisioning `run_local` runs against its containers.
-fn provision(
-    stage: &Stage,
-    name: &InstanceName,
-    instance: &Instance,
-    env: &BTreeMap<String, String>,
-    manifests: &Value,
-    aws_key: &localstack::AwsKey,
-) -> Result<()> {
-    let forwards = [
-        ("postgres", Port::Postgres, 5432),
-        ("aws-gateway", Port::LocalStack, 4566),
-        ("kafka", Port::Kafka, 9092),
-        ("fusionauth", Port::FusionAuth, 9011),
-        ("search", Port::OpenSearch, 9200),
-    ];
-    let mut children = PortForwards::default();
-    for (svc, port, remote) in forwards {
-        children.0.push(
-            kubectl()
-                .args([
-                    "-n",
-                    &name.namespace(),
-                    "port-forward",
-                    &format!("svc/{svc}"),
-                    &format!("{}:{remote}", instance.port(port)),
-                ])
-                .stdout(Stdio::null())
-                .stderr(Stdio::null())
-                .spawn()
-                .with_context(|| format!("port-forwarding {svc}"))?,
-        );
-    }
-    for (_, port, _) in forwards {
-        wait_port(instance.port(port))?;
-    }
-    stage.run_step("Provisioning buckets, queues, tables, keys", || {
-        localstack::provision_with(
-            instance,
-            &localstack::UploadNotificationTarget::Target(UPLOAD_NOTIFICATION_TARGET.into()),
-            aws_key,
-        )
-    })?;
-    db::migrate(stage, instance)?;
-    stage.run_step("Creating Kafka topics", || kafka::provision(instance))?;
-    fusionauth::wait_ready(stage, instance)?;
-    opensearch::provision_indices(stage, instance, env)?;
-    deploy_sync(stage, name, instance, env, manifests, aws_key)?;
-    Ok(())
-}
-
-/// The sync fleet's bucket (`syncFleetBucket` in infra/platform/components.nix).
-const SYNC_FLEET_BUCKET: &str = "cells-sync";
 /// Buckets the sync worker's R2 binding uses.
 const SYNC_R2_BUCKET: &str = "document-snapshot-bucket-dev";
 
-/// Deploy the sync worker into its celld fleet: the workers-rs build from
-/// `services/sync-service/build`, a `wrangler.jsonc` carrying the compose
-/// stack's bindings and this instance's keys, then its D1 migrations.
-fn deploy_sync(
-    stage: &Stage,
-    name: &InstanceName,
-    instance: &Instance,
-    env: &BTreeMap<String, String>,
-    manifests: &Value,
-    aws_key: &localstack::AwsKey,
-) -> Result<()> {
-    let service = repo_root().join("services/sync-service");
-    let shim = service.join("build/worker/shim.mjs");
-    if !shim.is_file() {
-        stage.note(
-            "sync-service: no workers-rs build (run `worker-build --profile \
-             sync-service-release` in services/sync-service); skipping deploy",
-        );
-        return Ok(());
-    }
-    let dir = instance.ensure_artifact_dir()?.join("sync-service");
-    if dir.exists() {
-        std::fs::remove_dir_all(&dir)?;
-    }
-    std::fs::create_dir_all(&dir)?;
-    for sub in ["build", "database"] {
+/// One Workers app on its own celld fleet (`celldFleet` in components.nix).
+struct Fleet {
+    workload: &'static str,
+    bucket: &'static str,
+    /// D1 database to migrate once a node runs.
+    d1: Option<&'static str>,
+    extra_buckets: &'static [&'static str],
+}
+
+/// The instance's fleets. Bundles come from `build_worker_bundles`.
+const FLEETS: &[Fleet] = &[
+    Fleet {
+        workload: "sync-service",
+        bucket: "cells-sync",
+        d1: Some("user-peer-mapping"),
+        extra_buckets: &[SYNC_R2_BUCKET],
+    },
+    Fleet {
+        workload: "analytics-proxy",
+        bucket: "cells-analytics",
+        d1: None,
+        extra_buckets: &[],
+    },
+    Fleet {
+        workload: "ai-editing-worker",
+        bucket: "cells-ai-editing",
+        d1: Some("ai-editing-traces"),
+        extra_buckets: &[],
+    },
+];
+
+const NODE_BUILTINS: &[&str] = &[
+    "assert",
+    "async_hooks",
+    "buffer",
+    "crypto",
+    "events",
+    "fs",
+    "http",
+    "https",
+    "net",
+    "os",
+    "path",
+    "process",
+    "stream",
+    "string_decoder",
+    "tty",
+    "url",
+    "util",
+    "zlib",
+];
+
+/// Build each Workers bundle on the host and add it to the store, without its
+/// `wrangler.jsonc`: that holds the instance's keys, so the Job writes it.
+fn build_worker_bundles(stage: &Stage, instance: &Instance) -> Result<BTreeMap<String, String>> {
+    let root = repo_root();
+    let base = instance.ensure_artifact_dir()?;
+    let recreate = |name: &str| -> Result<PathBuf> {
+        let dir = base.join(name);
+        if dir.exists() {
+            std::fs::remove_dir_all(&dir)?;
+        }
+        std::fs::create_dir_all(&dir)?;
+        Ok(dir)
+    };
+    let copy = |label: &str, source: &Path, dir: &Path| -> Result<()> {
         let mut cp = Command::new("cp");
-        cp.arg("-r").arg(service.join(sub)).arg(&dir);
-        stage.run(&format!("Staging sync-service {sub}"), &mut cp)?;
-    }
-    let get = |k: &str| env.get(k).cloned().unwrap_or_default();
-    let config = sync_wrangler_config(
-        &get("INTERNAL_API_SECRET_KEY"),
-        &get("DOCUMENT_PERMISSION_JWT"),
-        &get("DOCUMENT_STORAGE_SERVICE_AUTH_KEY"),
+        cp.arg("-rL").arg(source).arg(dir);
+        stage.run(label, &mut cp)
+    };
+
+    let sync = root.join("services/sync-service");
+    ensure!(
+        sync.join("build/worker/shim.mjs").is_file(),
+        "sync-service has no workers-rs build: run `worker-build --profile \
+         sync-service-release` in services/sync-service"
     );
-    std::fs::write(
-        dir.join("wrangler.jsonc"),
-        serde_json::to_string_pretty(&config)?,
+    let sync_dir = recreate("sync-service")?;
+    copy("Staging sync-service build", &sync.join("build"), &sync_dir)?;
+    copy(
+        "Staging sync-service database",
+        &sync.join("database"),
+        &sync_dir,
     )?;
 
-    let endpoint = format!("http://localhost:{}", instance.port(Port::LocalStack));
-    stage.run_step("Creating sync fleet buckets", || {
-        let rt = tokio::runtime::Builder::new_current_thread()
-            .enable_all()
-            .build()?;
-        rt.block_on(async {
-            let cfg = macro_aws_config::local_aws_config_with_credentials(
-                &endpoint,
-                &aws_key.access_key_id,
-                &aws_key.secret_access_key,
-            )
-            .await;
-            let s3 = aws_sdk_s3::Client::from_conf(
-                aws_sdk_s3::config::Builder::from(&cfg)
-                    .force_path_style(true)
-                    .build(),
-            );
-            for bucket in [SYNC_FLEET_BUCKET, SYNC_R2_BUCKET] {
-                let created = s3.create_bucket().bucket(bucket).send().await;
-                if let Err(e) = created {
-                    let text = format!("{e:?}");
-                    ensure!(
-                        text.contains("BucketAlready"),
-                        "creating bucket {bucket}: {text}"
-                    );
-                }
-            }
-            Ok(())
-        })
-    })?;
+    let analytics = root.join("services/analytics-proxy");
+    let mut install = Command::new("bun");
+    install
+        .current_dir(&analytics)
+        .args(["install", "--frozen-lockfile"]);
+    stage.run("Installing analytics-proxy", &mut install)?;
+    let analytics_dir = recreate("analytics-proxy")?;
+    copy(
+        "Staging analytics-proxy source",
+        &analytics.join("src"),
+        &analytics_dir,
+    )?;
+    copy(
+        "Staging analytics-proxy modules",
+        &analytics.join("node_modules"),
+        &analytics_dir,
+    )?;
 
-    let celld = nix_build(stage, "Building celld", "p.platformPkgs.celld")?
-        .into_iter()
-        .next()
-        .context("nix build printed no path")?;
-    let celld = format!("{celld}/bin/celld");
+    // Its `alias` config is Wrangler-only, so this bundles it with the same
+    // aliases and rules and hands celld the result.
+    let ai = root.join("services/ai-editing-worker");
+    let mut sandbox = Command::new("bun");
+    sandbox
+        .current_dir(&ai)
+        .args(["scripts/generate-sandbox.ts"]);
+    stage.run("Generating the ai-editing sandbox", &mut sandbox)?;
+    let ai_dir = recreate("ai-editing-worker")?;
     let esbuild = nix_build(
         stage,
         "Building esbuild",
@@ -946,81 +1091,351 @@ fn deploy_sync(
     .into_iter()
     .next()
     .context("nix build printed no path")?;
-    let bucket = format!("s3://{SYNC_FLEET_BUCKET}");
-    let creds = [
-        ("AWS_ACCESS_KEY_ID", aws_key.access_key_id.as_str()),
-        ("AWS_SECRET_ACCESS_KEY", aws_key.secret_access_key.as_str()),
-        ("AWS_REGION", "us-east-1"),
-    ];
-    let mut deploy = Command::new(&celld);
-    deploy
-        .current_dir(&dir)
+    let mut bundle = Command::new(format!("{esbuild}/bin/esbuild"));
+    bundle
+        .current_dir(&ai)
         .args([
-            "deploy",
-            ".",
-            "--bucket",
-            &bucket,
-            "--endpoint",
-            &endpoint,
-            "--region",
-            "us-east-1",
+            "src/index.ts",
+            "--bundle",
+            "--format=esm",
+            "--platform=browser",
+            "--conditions=workerd,worker,browser",
+            "--main-fields=module,main",
+            "--alias:loro-crdt=loro-crdt/bundler",
+            "--alias:@observability/logger=./src/logger-shim.ts",
+            "--alias:@macro-inc/lexical-core=../../packages/lexical-core",
+            // Wrangler reads wasm past a package's `exports` map; this is the
+            // exported name for the same file.
+            "--alias:@jitl/quickjs-wasmfile-release-sync/dist/emscripten-module.wasm=@jitl/quickjs-wasmfile-release-sync/wasm",
+            "--loader:.md=text",
+            "--loader:.wasm=copy",
+            "--external:node:*",
+            "--external:cloudflare:*",
         ])
-        .env("CELLD_ESBUILD", format!("{esbuild}/bin/esbuild"))
-        .envs(creds);
-    stage.run("Deploying sync-service to its celld fleet", &mut deploy)?;
+        // `nodejs_compat`: bare Node built-ins resolve to their node: modules.
+        .args(NODE_BUILTINS.iter().map(|m| format!("--alias:{m}=node:{m}")))
+        .arg(format!(
+            "--outfile={}",
+            ai_dir.join("dist/worker.mjs").display()
+        ));
+    stage.run("Bundling ai-editing-worker", &mut bundle)?;
+    copy(
+        "Staging ai-editing migrations",
+        &ai.join("migrations"),
+        &ai_dir,
+    )?;
 
-    // D1 runs inside the fleet, so a node must be up before migrations; it
-    // could not start before its bucket existed.
-    let node: Vec<Value> = items(manifests)
-        .into_iter()
-        .filter(|i| i["kind"] == "Deployment" && i["metadata"]["name"] == "sync-service")
-        .collect();
-    apply_items(stage, "sync-service node", &node)?;
-    let mut wait = kubectl();
-    wait.args([
-        "-n",
-        &name.namespace(),
-        "rollout",
-        "status",
-        "deploy/sync-service",
-        "--timeout=5m",
-    ]);
-    stage.run("Waiting for the sync node", &mut wait)?;
+    Ok(BTreeMap::from([
+        (
+            "sync-bundle".to_owned(),
+            store_dir(stage, "sync-bundle", &sync_dir)?,
+        ),
+        (
+            "analytics-bundle".to_owned(),
+            store_dir(stage, "analytics-bundle", &analytics_dir)?,
+        ),
+        (
+            "ai-editing-bundle".to_owned(),
+            store_dir(stage, "ai-editing-bundle", &ai_dir)?,
+        ),
+    ]))
+}
 
-    // A node listens before it has written its lease to the bucket; retry
-    // until the fleet is visible.
-    stage.run_step("Applying sync-service D1 migrations", || {
-        let mut last = String::new();
-        for _ in 0..60 {
-            let out = Command::new(&celld)
-                .current_dir(&dir)
-                .args([
-                    "d1",
-                    "migrations",
-                    "apply",
-                    "user-peer-mapping",
-                    "--bucket",
-                    &bucket,
-                    "--endpoint",
-                    &endpoint,
-                    "--region",
-                    "us-east-1",
-                ])
-                .envs(creds)
-                .output()
-                .context("running celld d1 migrations")?;
-            if out.status.success() {
+/// The OpenSearch index script with its dependencies, for the Job.
+fn build_opensearch_helpers(stage: &Stage) -> Result<String> {
+    let helpers = repo_root().join("infra/stacks/opensearch/helpers");
+    let mut install = Command::new("bun");
+    install.current_dir(&helpers).arg("install");
+    stage.run("Installing OpenSearch helper deps", &mut install)?;
+    store_dir(stage, "opensearch-helpers", &helpers)
+}
+
+/// The analytics proxy's config: `wrangler.jsonc`'s local env, minus the keys
+/// celld rejects. Rate limits move to the ingress.
+pub fn analytics_wrangler_config() -> Value {
+    json!({
+        "name": "analytics-proxy",
+        "main": "src/index.ts",
+        "compatibility_date": "2025-07-22",
+        "vars": {
+            "POSTHOG_HOST": "https://us.i.posthog.com",
+            "OTLP_TRACES_INTAKE_URL": "http://otel-collector:4318",
+            "OTLP_LOGS_INTAKE_URL": "http://otel-collector:4318",
+        },
+    })
+}
+
+/// The AI editing worker's config: `wrangler.toml`'s local env, with the
+/// instance's Chromium in place of the Browser Rendering binding.
+pub fn ai_editing_wrangler_config(openai: &str, anthropic: &str, cerebras: &str) -> Value {
+    json!({
+        "name": "ai-editing-worker",
+        "main": "dist/worker.mjs",
+        "no_bundle": true,
+        "compatibility_date": "2025-07-22",
+        "compatibility_flags": ["nodejs_compat", "enable_request_signal"],
+        "d1_databases": [{
+            "binding": "TRACES_DB",
+            "database_name": "ai-editing-traces",
+            "database_id": "16d34e99-3bc6-44e4-a287-1ea65183bd28",
+            "migrations_dir": "./migrations/",
+        }],
+        "vars": {
+            "CANVAS_RENDER_URL": "http://edge:8080/app/canvas-render.html",
+            "CANVAS_BROWSER_URL": "http://headless-chrome:9222",
+            "ENVIRONMENT": "local",
+            "SYNC_WS_BASE": "ws://sync-service:8787",
+            "DSS_BASE": "http://document-storage-service:8080",
+            "SEARCH_SERVICE_BASE": "http://search-processing-service:8080",
+            "CONTACTS_SERVICE_BASE": "http://contacts-service:8080",
+            "AUTH_SERVICE_BASE": "http://connection-gateway:8080",
+            "OPENAI_API_KEY": openai,
+            "ANTHROPIC_API_KEY": anthropic,
+            "CEREBRAS_API_KEY": cerebras,
+        },
+    })
+}
+
+/// In-cluster endpoints, by Service name (see components.nix).
+const CLUSTER_AWS_URL: &str = "http://aws-gateway:4566/";
+const CLUSTER_S3_URL: &str = "http://aws-gateway:4566";
+const CLUSTER_KAFKA: &str = "kafka:29092";
+const CLUSTER_OPENSEARCH_URL: &str = "http://search:9200";
+
+fn job_env(name: &'static str) -> Result<String> {
+    macro_env_var::maybe_read_env(name).with_context(|| format!("{name} is not set"))
+}
+
+fn job_aws_key() -> Result<localstack::AwsKey> {
+    Ok(localstack::AwsKey {
+        access_key_id: job_env("AWS_ACCESS_KEY_ID")?,
+        secret_access_key: job_env("AWS_SECRET_ACCESS_KEY")?,
+    })
+}
+
+async fn job_s3(key: &localstack::AwsKey) -> aws_sdk_s3::Client {
+    let cfg = macro_aws_config::local_aws_config_with_credentials(
+        CLUSTER_S3_URL,
+        &key.access_key_id,
+        &key.secret_access_key,
+    )
+    .await;
+    aws_sdk_s3::Client::from_conf(
+        aws_sdk_s3::config::Builder::from(&cfg)
+            .force_path_style(true)
+            .build(),
+    )
+}
+
+/// Retry `step` while the instance's data plane comes up; the Job starts
+/// alongside it on a fresh install.
+fn retrying(label: &str, mut step: impl FnMut() -> Result<()>) -> Result<()> {
+    let mut last = None;
+    for _ in 0..120 {
+        match step() {
+            Ok(()) => {
+                println!("{label}: done");
                 return Ok(());
             }
-            last = String::from_utf8_lossy(&out.stderr).into_owned();
-            // A lease can name a node that just stopped until it expires.
-            if !last.contains("no node leases") && !last.contains("reach the database") {
-                break;
+            Err(e) => {
+                println!("{label}: retrying: {e:#}");
+                last = Some(e);
+                std::thread::sleep(std::time::Duration::from_secs(5));
             }
-            std::thread::sleep(std::time::Duration::from_secs(2));
         }
-        bail!("celld d1 migrations failed: {last}")
-    })
+    }
+    Err(last
+        .context("retries exhausted without an attempt")?
+        .context(label.to_owned()))
+}
+
+fn run_checked(cmd: &mut Command) -> Result<()> {
+    let out = cmd.output().with_context(|| format!("running {cmd:?}"))?;
+    ensure!(
+        out.status.success(),
+        "{cmd:?} failed: {}{}",
+        String::from_utf8_lossy(&out.stdout),
+        String::from_utf8_lossy(&out.stderr)
+    );
+    Ok(())
+}
+
+/// Everything an instance needs before its services start. Each step is
+/// idempotent, so re-running on an upgrade is safe.
+fn job_provision() -> Result<()> {
+    let key = job_aws_key()?;
+    let rt = tokio::runtime::Builder::new_multi_thread()
+        .enable_all()
+        .build()?;
+    retrying("buckets, queues, tables, keys", || {
+        localstack::provision_at(
+            CLUSTER_AWS_URL,
+            &localstack::UploadNotificationTarget::Target(UPLOAD_NOTIFICATION_TARGET.into()),
+            &key,
+        )
+    })?;
+    // The edge serves `/static-file/*` straight from this bucket, as CloudFront
+    // does in deployed environments. LocalStack skips the check; RustFS needs
+    // the policy.
+    retrying("static file read policy", || {
+        rt.block_on(async {
+            let policy = json!({
+                "Version": "2012-10-17",
+                "Statement": [{
+                    "Effect": "Allow",
+                    "Principal": { "AWS": ["*"] },
+                    "Action": ["s3:GetObject"],
+                    "Resource": [format!("arn:aws:s3:::{}/*", super::resources::STATIC_FILE_BUCKET)],
+                }],
+            })
+            .to_string();
+            job_s3(&key)
+                .await
+                .put_bucket_policy()
+                .bucket(super::resources::STATIC_FILE_BUCKET)
+                .policy(policy)
+                .send()
+                .await
+                .context("setting the static file bucket policy")?;
+            Ok(())
+        })
+    })?;
+    let database_url = job_env("DATABASE_URL")?;
+    let migrations = job_env("PLATFORM_MIGRATIONS_DIR")?;
+    retrying("database migrations", || {
+        run_checked(
+            Command::new("sqlx")
+                .args(["database", "create"])
+                .env("DATABASE_URL", &database_url),
+        )?;
+        run_checked(
+            Command::new("sqlx")
+                .args(["migrate", "run", "--source", &migrations])
+                .env("DATABASE_URL", &database_url),
+        )
+    })?;
+    retrying("kafka topics", || kafka::provision_at(CLUSTER_KAFKA))?;
+    let helpers = job_env("PLATFORM_OPENSEARCH_HELPERS")?;
+    retrying("search indices", || {
+        run_checked(
+            Command::new("bun")
+                .current_dir(&helpers)
+                .args(["run", "scripts/create_indices.ts"])
+                .env("ENVIRONMENT", "local")
+                .env("DRY_RUN", "false")
+                .env("OPENSEARCH_URL", CLUSTER_OPENSEARCH_URL)
+                .env(
+                    "OPENSEARCH_USERNAME",
+                    macro_env_var::maybe_read_env("OPENSEARCH_USERNAME")
+                        .unwrap_or_else(|| "macrouser".to_owned()),
+                )
+                .env(
+                    "OPENSEARCH_PASSWORD",
+                    macro_env_var::maybe_read_env("OPENSEARCH_PASSWORD")
+                        .unwrap_or_else(|| "local".to_owned()),
+                ),
+        )
+    })?;
+    for fleet in FLEETS {
+        retrying(&format!("{} buckets", fleet.workload), || {
+            rt.block_on(async {
+                let s3 = job_s3(&key).await;
+                for bucket in std::iter::once(&fleet.bucket).chain(fleet.extra_buckets) {
+                    if let Err(e) = s3.create_bucket().bucket(*bucket).send().await {
+                        let text = format!("{e:?}");
+                        ensure!(
+                            text.contains("BucketAlready"),
+                            "creating bucket {bucket}: {text}"
+                        );
+                    }
+                }
+                Ok(())
+            })
+        })?;
+        let dir = stage_fleet_bundle(fleet)?;
+        retrying(&format!("{} deploy", fleet.workload), || {
+            run_checked(
+                celld_command(&key)
+                    .current_dir(&dir)
+                    .args(["deploy", "."])
+                    .args(fleet_store_args(fleet)),
+            )
+        })?;
+    }
+    Ok(())
+}
+
+/// D1 runs inside the fleets, so this waits for their nodes.
+fn job_fleet_migrate() -> Result<()> {
+    let key = job_aws_key()?;
+    for fleet in FLEETS {
+        let Some(database) = fleet.d1 else { continue };
+        let dir = stage_fleet_bundle(fleet)?;
+        retrying(&format!("{} D1 migrations", fleet.workload), || {
+            run_checked(
+                celld_command(&key)
+                    .current_dir(&dir)
+                    .args(["d1", "migrations", "apply", database])
+                    .args(fleet_store_args(fleet)),
+            )
+        })?;
+    }
+    Ok(())
+}
+
+fn celld_command(key: &localstack::AwsKey) -> Command {
+    let mut cmd = Command::new("celld");
+    cmd.env("AWS_ACCESS_KEY_ID", &key.access_key_id)
+        .env("AWS_SECRET_ACCESS_KEY", &key.secret_access_key)
+        .env("AWS_REGION", "us-east-1");
+    cmd
+}
+
+fn fleet_store_args(fleet: &Fleet) -> Vec<String> {
+    vec![
+        "--bucket".into(),
+        format!("s3://{}", fleet.bucket),
+        "--endpoint".into(),
+        CLUSTER_S3_URL.into(),
+        "--region".into(),
+        "us-east-1".into(),
+    ]
+}
+
+/// A writable copy of the fleet's bundle with its `wrangler.jsonc`, which
+/// carries this instance's keys and so never enters the store.
+fn stage_fleet_bundle(fleet: &Fleet) -> Result<PathBuf> {
+    let var = match fleet.workload {
+        "sync-service" => "PLATFORM_BUNDLE_SYNC",
+        "analytics-proxy" => "PLATFORM_BUNDLE_ANALYTICS",
+        "ai-editing-worker" => "PLATFORM_BUNDLE_AI_EDITING",
+        other => bail!("no bundle known for {other}"),
+    };
+    let dir = std::env::temp_dir().join(fleet.workload);
+    if dir.exists() {
+        std::fs::remove_dir_all(&dir)?;
+    }
+    run_checked(Command::new("cp").arg("-rL").arg(job_env(var)?).arg(&dir))?;
+    run_checked(Command::new("chmod").args(["-R", "u+w"]).arg(&dir))?;
+    let get = |k: &'static str| macro_env_var::maybe_read_env(k).unwrap_or_default();
+    let config = match fleet.workload {
+        "sync-service" => sync_wrangler_config(
+            &get("INTERNAL_API_SECRET_KEY"),
+            &get("DOCUMENT_PERMISSION_JWT"),
+            &get("DOCUMENT_STORAGE_SERVICE_AUTH_KEY"),
+        ),
+        "analytics-proxy" => analytics_wrangler_config(),
+        _ => ai_editing_wrangler_config(
+            &get("OPENAI_API_KEY"),
+            &get("ANTHROPIC_API_KEY"),
+            &get("CEREBRAS_API_KEY"),
+        ),
+    };
+    std::fs::write(
+        dir.join("wrangler.jsonc"),
+        serde_json::to_string_pretty(&config)?,
+    )?;
+    Ok(dir)
 }
 
 /// The sync worker's Wrangler config for celld: compose's
@@ -1067,6 +1482,26 @@ pub fn sync_wrangler_config(internal_key: &str, permissions_jwt: &str, dss_key: 
 
 #[derive(Default)]
 struct PortForwards(Vec<Child>);
+
+impl PortForwards {
+    fn open(&mut self, name: &InstanceName, svc: &str, local: u16, remote: u16) -> Result<()> {
+        self.0.push(
+            kubectl()
+                .args([
+                    "-n",
+                    &name.namespace(),
+                    "port-forward",
+                    &format!("svc/{svc}"),
+                    &format!("{local}:{remote}"),
+                ])
+                .stdout(Stdio::null())
+                .stderr(Stdio::null())
+                .spawn()
+                .with_context(|| format!("port-forwarding {svc}"))?,
+        );
+        Ok(())
+    }
+}
 
 impl Drop for PortForwards {
     fn drop(&mut self) {

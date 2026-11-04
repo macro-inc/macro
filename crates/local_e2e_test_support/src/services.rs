@@ -185,7 +185,8 @@ fn validate_local_service_url(
         "refusing to run local E2E tests against {service_name} URL {raw_url}; expected scheme in {allowed_schemes:?}"
     );
     ensure!(
-        matches!(host, "localhost" | "127.0.0.1" | "::1"),
+        // `*.localhost` is loopback (RFC 6761): platform instances are served there.
+        matches!(host, "localhost" | "127.0.0.1" | "::1") || host.ends_with(".localhost"),
         "refusing to run local E2E tests against non-local {service_name} URL {raw_url}"
     );
 
