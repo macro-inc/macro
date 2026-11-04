@@ -77,6 +77,16 @@ export class CallRecord extends FavoritableEntity<CallRecordDetail> {
     );
   }
 
+  /** The call's URL in the Macro web app; hand it to users as the link. */
+  webUrl(): string {
+    return `${this.client.webAppUrl}/app/call/${this.id}`;
+  }
+
+  /** Identity, loaded detail and {@link webUrl}, so serialized handles carry their link. */
+  override toJSON() {
+    return { ...super.toJSON(), url: this.webUrl() };
+  }
+
   /** A handle to a call record by id. Details load on first access. */
   static byId(client: MacroClient, id: string): CallRecord {
     return new CallRecord(client, id);

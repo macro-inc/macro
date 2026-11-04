@@ -28,6 +28,8 @@ import { AiUsageLimitDialog } from '@app/features/paywall/AiUsageLimitDialog';
 import { observeAiUsageLimitMutations } from '@app/features/paywall/ai-usage-limit-handling';
 import { MobileSettingsProvider } from '@app/features/settings/context/mobile-settings';
 import { NativeShareSheet } from '@app/features/sharing/native-share-sheet/NativeShareSheet';
+import { StatusBanner } from '@app/features/system-status/components/StatusBanner';
+import { useBannerStatus } from '@app/features/system-status/primitives/use-banner-status';
 import { ShowFeatureFlag } from '@app/lib/analytics/posthog';
 import { mountGlobalFocusListener } from '@app/signal/focus';
 import { CreateChannelModal } from '@channel/CreateChannelModal';
@@ -220,7 +222,8 @@ export function PageContent(props: ParentProps) {
 }
 
 /**
- * Sends first-time desktop users into the onboarding flow at /onboarding.
+ * Sends first-time desktop users into the onboarding flow at /onboarding, and
+ * new agents on any platform to their setup page.
  * App chrome runs it, so it fires on any app destination (marketing SSO lands
  * on /app, not /login) and never on the onboarding pages themselves.
  */
@@ -229,12 +232,17 @@ function useNewOnboardingRedirect() {
   const navigate = useNavigate();
   const location = useLocation();
   createEffect(() => {
-    if (isMobile() || isNativeMobilePlatform()) return;
     // A pending read would suspend the chrome; wait for the user instead.
     const data = userInfoQuery.isSuccess ? userInfoQuery.data : undefined;
     if (data?.authenticated !== true || data.tutorialComplete !== false) {
       return;
     }
+    // Agents skip onboarding: their setup page shows their SDK token.
+    if (data.isAgent) {
+      navigate('/agent-setup', { replace: true });
+      return;
+    }
+    if (isMobile() || isNativeMobilePlatform()) return;
     // Preserve the deep link the user arrived on (a shared doc, an invite)
     // as ?next, and a lifecycle-email ?step, so finish() and the flow can
     // resume. Base-relative so navigate() can resolve it against the router.
@@ -261,6 +269,7 @@ export function AppChrome(props: ParentProps) {
   // Route mailto: links (via openExternalUrl) to the in-app email composer.
   registerMailtoComposerHandler();
   useNewOnboardingRedirect();
+  const systemStatus = useBannerStatus();
 
   const companyDialogUsed = hasOpened(companyCreation.open);
   const contactDialogUsed = hasOpened(
@@ -324,7 +333,14 @@ export function AppChrome(props: ParentProps) {
           </Show>
         </Show>
       </Suspense>
-      <div class="min-h-0 flex-1 flex">
+      <Show when={systemStatus()}>
+        {(status) => <StatusBanner {...status()} />}
+      </Show>
+      {/* The banner already sits below the status bar on touch devices. */}
+      <div
+        class="min-h-0 flex-1 flex"
+        classList={{ 'touch:[--safe-top:0px]': systemStatus() !== undefined }}
+      >
         <ItemDndProvider>
           {/* The rail and each view's switcher share the rail preferences. */}
           <SidebarPrefsProvider>

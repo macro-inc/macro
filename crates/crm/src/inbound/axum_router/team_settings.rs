@@ -40,6 +40,9 @@ pub struct CrmTeamSettingsResponse {
     pub team_views: Value,
     /// Team view applied by default when a member opens the CRM view.
     pub default_team_view_id: Option<String>,
+    /// Whether email sync keeps personal-provider addresses (gmail.com
+    /// etc.) out of the CRM.
+    pub exclude_personal_emails: bool,
 }
 
 impl From<CrmTeamSettings> for CrmTeamSettingsResponse {
@@ -52,6 +55,7 @@ impl From<CrmTeamSettings> for CrmTeamSettingsResponse {
             legacy_stage_ids: settings.legacy_stage_ids,
             team_views: settings.team_views,
             default_team_view_id: settings.default_team_view_id,
+            exclude_personal_emails: settings.exclude_personal_emails,
         }
     }
 }
@@ -86,6 +90,9 @@ pub struct UpdateCrmTeamSettingsRequest {
     /// `null` to clear it.
     #[serde(default, deserialize_with = "double_option")]
     pub default_team_view_id: Option<Option<String>>,
+    /// Whether email sync keeps personal-provider addresses out of the
+    /// CRM. Admin/owner only.
+    pub exclude_personal_emails: Option<bool>,
 }
 
 impl From<UpdateCrmTeamSettingsRequest> for CrmTeamSettingsPatch {
@@ -98,6 +105,7 @@ impl From<UpdateCrmTeamSettingsRequest> for CrmTeamSettingsPatch {
             legacy_stage_ids: None,
             team_views: req.team_views,
             default_team_view_id: req.default_team_view_id,
+            exclude_personal_emails: req.exclude_personal_emails,
         }
     }
 }
@@ -132,7 +140,7 @@ pub async fn get_handler<
 /// Partially update the caller's team CRM configuration. Any team
 /// member may update the views fields (`team_views`,
 /// `default_team_view_id`); the governance fields (permission
-/// thresholds, `closed_stage_ids`) require an admin/owner team role
+/// thresholds, `closed_stage_ids`, `exclude_personal_emails`) require an admin/owner team role
 /// (403 otherwise). Omitted fields keep their current values;
 /// `team_views` is replaced whole. Returns the resulting settings.
 #[utoipa::path(

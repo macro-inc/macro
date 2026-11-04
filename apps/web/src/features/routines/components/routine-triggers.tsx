@@ -25,6 +25,7 @@ import {
   Switch,
 } from 'solid-js';
 import {
+  describeTrigger,
   type EventTriggerDraft,
   eventScopeKind,
   eventTriggerDescription,
@@ -71,12 +72,7 @@ type EventSlots = {
 
 function scheduleSummary(trigger: ScheduleTriggerDraft) {
   const label = scheduleTriggerLabel(trigger);
-  if (trigger.frequency === 'once') {
-    const date = new Date(trigger.onceAt);
-    return Number.isFinite(date.getTime())
-      ? format(date, 'MMM d, h:mm a')
-      : 'Run once';
-  }
+  if (trigger.frequency === 'once') return describeTrigger(trigger);
   if (trigger.frequency === 'hour' || trigger.frequency === 'custom')
     return label;
   const date = new Date(`2000-01-01T${trigger.time}`);

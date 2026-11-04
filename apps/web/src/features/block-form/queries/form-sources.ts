@@ -89,6 +89,7 @@ function refusalOf(code: FormErrorCode): FormRefusal {
     .with('tableAlreadyHasForm', () => 'table-already-has-form')
     .with('alreadyResponded', () => 'already-responded')
     .with('noResponse', () => 'no-response')
+    .with('anonymousResponseFinal', () => 'anonymous-response-final')
     .with('unknownQuestion', () => 'unknown-question')
     .with('repeatedAnswer', () => 'repeated-answer')
     .with('missingAnswer', () => 'missing-answer')
@@ -99,6 +100,7 @@ function refusalOf(code: FormErrorCode): FormRefusal {
     .with('invalidName', () => 'invalid-name')
     .with('invalidSharing', () => 'invalid-sharing')
     .with('tallyHidden', () => 'tally-hidden')
+    .with('invalidBranding', () => 'invalid-branding')
     .with('conflict', () => 'conflict')
     .with('internal', () => 'internal')
     .exhaustive(() => 'internal');
@@ -281,7 +283,12 @@ export function createTallySource(
               match(bucket.value)
                 .returnType<QuestionTally['buckets']>()
                 .with({ kind: 'option' }, ({ option }) => [
-                  { kind: 'option', optionId: option, count: bucket.count },
+                  {
+                    kind: 'option',
+                    optionId: option,
+                    count: bucket.count,
+                    voters: bucket.voters ?? undefined,
+                  },
                 ])
                 .with({ kind: 'checkbox' }, ({ checked }) => [
                   { kind: 'checkbox', checked, count: bucket.count },

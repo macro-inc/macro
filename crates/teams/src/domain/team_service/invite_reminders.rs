@@ -167,6 +167,7 @@ where
                 sender_profile_picture_url: None,
                 invitee_plan: invitee_plan(reminder),
                 reminder: true,
+                is_agent: reminder.is_agent,
             },
             recipient_ids: HashSet::from([recipient]),
         }

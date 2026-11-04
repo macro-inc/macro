@@ -15,7 +15,9 @@
 //! `ai_projection_queue` by default, or inline when the request sets
 //! `await: true`. Completed (or failed) materializations are pushed to the
 //! target's connected clients through the connection gateway as
-//! `ai_projection_updated` messages, so the frontend never polls.
+//! `ai_projection_updated` messages, so the frontend never polls. Reads recover
+//! loading instances with a missing or expired processing claim
+//! as cold, allowing generation to restart without discarding retained data.
 //!
 //! The definition's `prompt_hash` versions the whole generation recipe
 //! (prompt, optional `model` override, optional `output_schema`): re-upserting

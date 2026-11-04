@@ -1,5 +1,5 @@
 import type {
-  CreateScheduledAction,
+  ActionConfiguration,
   ScheduledAction,
 } from '@service-scheduled-action/generated/schemas';
 import {
@@ -16,11 +16,10 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { buildAgentRoster } from '../agents-view/core/roster';
 import { getDefaultTimezone } from './core/routine-draft';
 import { loadRoutineComposerDraft } from './draft-storage';
-import { onceFromCron } from './queries/routine-trigger-mapping';
 import { RoutineCreator } from './routine-creator';
 
 const host = vi.hoisted(() => ({
-  create: vi.fn<(body: CreateScheduledAction) => Promise<ScheduledAction>>(),
+  create: vi.fn<(body: ActionConfiguration) => Promise<ScheduledAction>>(),
   openWithSplit: vi.fn(),
   created: vi.fn(),
   success: vi.fn(),
@@ -269,7 +268,7 @@ async function addDocumentEvent() {
   await waitFor(() => expect(add.getAttribute('aria-expanded')).toBe('false'));
 }
 
-function created(body: CreateScheduledAction): ScheduledAction {
+function created(body: ActionConfiguration): ScheduledAction {
   if (!('trigger' in body)) throw new Error('Expected a tagged trigger');
   return {
     ...body,
@@ -513,6 +512,10 @@ describe('routine composer execution selection', () => {
       'Task created',
       'Status changed',
       'Priority changed',
+      'Assignees changed',
+      'Due date changed',
+      'Project changed',
+      'Effort changed',
       'Any property changed',
       'New email received',
     ]) {
@@ -727,11 +730,8 @@ describe('routine composer execution selection', () => {
     const body = host.create.mock.calls[0][0];
     if (!('trigger' in body)) throw new Error('Expected a tagged trigger');
     const trigger = body.trigger;
-    expect(trigger.type).toBe('cron');
-    if (trigger.type !== 'cron') throw new Error('Expected one-off cron');
-    const at = onceFromCron(trigger.schedule, trigger.timezone)?.onceAt;
-    expect(at).toBeDefined();
-    const scheduled = new Date(at!).getTime();
+    if (trigger.type !== 'once') throw new Error('Expected a once trigger');
+    const scheduled = new Date(trigger.at).getTime();
     expect(scheduled).toBeGreaterThanOrEqual(
       before + 2 * 60 * 60 * 1000 - 1000
     );

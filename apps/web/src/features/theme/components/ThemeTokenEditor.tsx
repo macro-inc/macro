@@ -90,7 +90,17 @@ const tokenSections = [
   },
   {
     label: 'Status',
-    tokens: ['success', 'warning', 'failure'] as const,
+    tokens: ['success', 'warning', 'failure', 'priority-urgent'] as const,
+  },
+  {
+    label: 'Task statuses',
+    tokens: [
+      'task-status-not-started',
+      'task-status-in-progress',
+      'task-status-in-review',
+      'task-status-completed',
+      'task-status-canceled',
+    ] as const,
   },
 ] as const;
 

@@ -71,6 +71,9 @@ contacts = { path = "../../crates/contacts", default-features = false, features 
 cookie = { workspace = true }
 decode_jwt = { path = "../../crates/decode_jwt" }
 document_storage_service_client = { path = "../../crates/document_storage_service_client" }
+models_sfs = { path = "../../crates/models_sfs" }
+static_file_service_client = { path = "../../crates/static_file_service_client" }
+user_api_key = { path = "../../crates/user_api_key", features = ["postgres"] }
 email = { path = "../../crates/email", features = ["http_client", "outbound"] }
 doppleganger = { workspace = true }
 email_db_client = { path = "../../crates/email_db_client" }
@@ -169,6 +172,11 @@ sqs_client = { path = "../../crates/sqs_client", default-features = false, featu
   "search",
 ] }
 strum = { workspace = true }
+system_status = { path = "../../crates/system_status", features = [
+  "connection_gateway",
+  "inbound",
+  "postgres",
+] }
 teams = { path = "../../crates/teams" }
 thiserror = { workspace = true }
 time = { workspace = true }

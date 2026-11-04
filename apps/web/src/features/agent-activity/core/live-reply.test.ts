@@ -20,6 +20,7 @@ function reply(
 ): FoldedMessage {
   return {
     agentSessionId: 'session',
+    key: `${turn}:agent`,
     turn,
     author: { kind: 'agent' },
     requestId: null,

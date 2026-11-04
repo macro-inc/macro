@@ -19,6 +19,7 @@ pub mod local;
 pub(crate) mod managed_containers;
 pub mod namespace;
 pub mod notifications;
+pub mod primary_calendar_time_zones;
 pub mod prompt_mentions;
 pub(crate) mod provision;
 pub mod routing;

@@ -52,6 +52,16 @@ For automated Linux desktop offline tests, use `nix develop .#tauri-e2e` and the
 [native E2E guide](../../apps/web/tests/native/README.md). It runs the real Tauri
 webview/native cache with deterministic API fixtures, without the local stack.
 
+Run native app probes in their own memory-capped user scope, including inspector
+and WebDriver reproductions. Renderer regressions can allocate enough memory to
+terminate unrelated agents before a stalled probe times out:
+
+```bash
+systemd-run --user --scope -p MemoryMax=6G -p MemorySwapMax=0 \
+  nix develop .#tauri-e2e --command <native-probe-command>
+```
+
+
 ## Run the frontend against hosted services
 
 The web app talks to hosted `*-dev` services when you run `bun run dev` from the web app.
@@ -184,6 +194,13 @@ survive. Keep its generated env/Compose files and existing named volumes; start
 stopped containers with `docker start`, or recreate only the affected services
 with the same Compose project/files and `up -d --no-deps --no-build <service>`.
 Never use `down -v`, `reset_local`, or `destroy_local` for this recovery.
+
+If a local debug service aborts with `tokio-rt-worker` stack overflow, give only
+that service `RUST_MIN_STACK=16777216` in an additional local Compose override,
+then recreate it with the same project, generated environment, and volumes.
+Keep this runtime override outside feature commits. Verify the request that
+triggered the crash, not just the health endpoint: document storage can start
+successfully and then exhaust the default worker stack on a Soup request.
 
 On SELinux hosts, FusionAuth can become healthy while silently skipping an
 unreadable kickstart. The generated per-instance kickstart directory uses
@@ -450,7 +467,7 @@ If you started without the flag and suspect a stale image, press `q`. Then start
 
 ## Headless Mode
 
-`just stack` runs the same stack without an attached terminal. There is no hotkey loop and no dev server. The frontend is built once and served statically by the proxy. The whole product lives behind one origin. A finished `up` leaves only Docker containers running.
+`just stack` runs the same stack without an attached terminal. There is no hotkey loop and no dev server. The frontend is built once and served statically by the proxy. The bundle counts as local, as `run_local`'s dev server does: flags, routes and tools gated on `LOCAL_ONLY` are on. The whole product lives behind one origin. A finished `up` leaves only Docker containers running.
 
 Both headless and attached startup prepare the browser WebAssembly packages
 through `bun run dev:prepare`. A fresh worktree builds them before serving the app;

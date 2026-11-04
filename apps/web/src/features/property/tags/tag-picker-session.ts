@@ -120,10 +120,23 @@ export function createTagPickerSession(props: {
     };
   });
 
+  // Retain draft intent if an optimistic option deletion later rolls back.
+  const locallyAddedIds = new Set<string>();
+  const locallyRemovedIds = new Set<string>();
   createEffect(() => {
     const appliedTags = initialAppliedTags();
+    const validIds = initialTagState().optionScopes;
     if (untrack(saved)) return;
-    setSelectedIds(new Set(appliedTags.map((tag) => tag.optionId)));
+
+    const next = new Set(
+      appliedTags
+        .map((tag) => tag.optionId)
+        .filter((id) => validIds.has(id) && !locallyRemovedIds.has(id))
+    );
+    for (const id of locallyAddedIds) {
+      if (validIds.has(id)) next.add(id);
+    }
+    setSelectedIds(next);
   });
 
   const isSelected = (optionId: string) => selectedIds().has(optionId);
@@ -131,8 +144,15 @@ export function createTagPickerSession(props: {
   const toggleSelected = (optionId: string) => {
     setSelectedIds((prev) => {
       const next = new Set(prev);
-      if (next.has(optionId)) next.delete(optionId);
-      else next.add(optionId);
+      if (next.has(optionId)) {
+        next.delete(optionId);
+        locallyAddedIds.delete(optionId);
+        if (initialAppliedIds().has(optionId)) locallyRemovedIds.add(optionId);
+      } else {
+        next.add(optionId);
+        locallyRemovedIds.delete(optionId);
+        if (!initialAppliedIds().has(optionId)) locallyAddedIds.add(optionId);
+      }
       return next;
     });
   };
@@ -170,6 +190,10 @@ export function createTagPickerSession(props: {
   };
 
   const clearAll = () => {
+    for (const id of selectedIds()) {
+      if (initialAppliedIds().has(id)) locallyRemovedIds.add(id);
+    }
+    locallyAddedIds.clear();
     setSelectedIds(new Set<string>());
     if (!props.confirmsWithDone) fireAndForget(saveAndClose(), 'tag-picker');
   };

@@ -41,6 +41,27 @@ impl ItemNotificationPreferenceRepository for RecordingRepository {
             .push((user.to_string(), entity.entity_id.to_string()));
         Ok(())
     }
+    async fn set_bulk(
+        &self,
+        user: MacroUserIdStr<'_>,
+        entities: &[Entity<'_>],
+        until: Option<DateTime<Utc>>,
+    ) -> Result<(), Report> {
+        for entity in entities {
+            self.set(user.clone(), entity.clone(), until).await?;
+        }
+        Ok(())
+    }
+    async fn remove_bulk(
+        &self,
+        user: MacroUserIdStr<'_>,
+        entities: &[Entity<'_>],
+    ) -> Result<(), Report> {
+        for entity in entities {
+            self.remove(user.clone(), entity.clone()).await?;
+        }
+        Ok(())
+    }
 }
 
 fn context() -> (

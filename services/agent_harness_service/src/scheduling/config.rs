@@ -56,10 +56,6 @@ pub struct Config {
     #[macro_config_default(Environment::new_or_prod())]
     pub environment: Environment,
     pub kafka_brokers: KafkaBrokers,
-    /// Accept agent-target configuration only after all scheduler workers are upgraded.
-    /// Register ROUTINE_AGENTS_ENABLED as a raw boolean in Doppler before rollout.
-    #[macro_config_default(false)]
-    pub routine_agents_enabled: bool,
     /// The internal api key
     pub internal_api_key: InternalApiKey,
     /// TypeSafe credential for the Jev classifier behind trigger conditions.

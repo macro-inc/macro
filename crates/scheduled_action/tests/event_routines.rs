@@ -432,8 +432,8 @@ async fn request(app: &Router, method: &str, uri: &str, body: Value) -> (StatusC
         serde_json::from_slice(&bytes).unwrap_or(Value::Null),
     )
 }
-fn legacy() -> Value {
-    json!({"name":"legacy", "kind":"Agent", "schedule":"0 0 9 * * *", "timezone":"UTC", "task":{"model":"model", "prompt":"instructions", "user_prompt":"task"}, "enabled":true})
+fn cron_action() -> Value {
+    json!({"name":"cron", "kind":"Agent", "trigger":{"type":"cron", "schedule":"0 0 9 * * *", "timezone":"UTC"}, "task":{"model":"model", "prompt":"instructions", "user_prompt":"task"}, "enabled":true})
 }
 fn event_action() -> Value {
     json!({"name":"events", "kind":"Agent", "trigger":{"type":"events", "filters":[{"events":["document.updated", "channel.message_posted"]}]}, "task":{"model":"model", "prompt":"instructions", "user_prompt":"task"}, "enabled":true})
@@ -480,9 +480,9 @@ fn incoming(name: &str, actor: &str) -> IncomingEvent {
 }
 
 #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
-async fn legacy_cron_and_canonical_events_share_crud_and_manual_execution(pool: PgPool) {
+async fn cron_and_event_routines_share_crud_and_manual_execution(pool: PgPool) {
     let h = Harness::new(pool, FakeRunner::default()).await;
-    let cron = h.create(legacy()).await;
+    let cron = h.create(cron_action()).await;
     let events = h.create(event_action()).await;
     assert_eq!(cron["schedule"], cron["trigger"]["schedule"]);
     assert!(events.get("schedule").is_none());
@@ -500,7 +500,7 @@ async fn legacy_cron_and_canonical_events_share_crud_and_manual_execution(pool: 
     .await;
     assert_eq!(all.as_array().unwrap().len(), 2);
 
-    for (created, mut input) in [(cron, legacy()), (events, event_action())] {
+    for (created, mut input) in [(cron, cron_action()), (events, event_action())] {
         let id = action_id(&created);
         let url = format!("/scheduled-actions/{id}");
         input["name"] = json!("updated");

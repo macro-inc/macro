@@ -1,4 +1,4 @@
-import { formatRelativeDay } from '@core/util/dateParser';
+import { formatRelativeDay, parseMentionDate } from '@core/util/dateParser';
 import {
   type CellMention,
   cellMentionLabel,
@@ -8,7 +8,7 @@ import {
 /** Match the grid, where date chips relabel themselves as days pass. */
 function pillLabel(mention: CellMention) {
   return mention.type === 'date'
-    ? formatRelativeDay(new Date(mention.date))
+    ? formatRelativeDay(parseMentionDate(mention.date))
     : cellMentionLabel(mention);
 }
 

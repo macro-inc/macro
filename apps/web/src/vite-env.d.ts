@@ -8,6 +8,8 @@ interface ImportMetaEnv {
   readonly VITE_SEGMENT_WRITE_KEY: string;
   readonly VITE_POSTHOG_API_KEY: string;
 
+  /** `true` in bundles `just stack` builds, which count as local (`LOCAL_ONLY`). */
+  readonly VITE_LOCAL_ONLY?: string;
   readonly VITE_OTEL_EXPORTER_URL?: string;
   readonly VITE_OTEL_ENV?: string;
   readonly VITE_ENABLE_BROWSER_OTEL?: string;
@@ -16,7 +18,7 @@ interface ImportMetaEnv {
   readonly VITE_ENABLE_REMINDERS?: string;
   readonly VITE_ENABLE_ROUTINE_SHARING?: string;
   readonly VITE_ENABLE_EVENT_ROUTINES?: string;
-  readonly VITE_ENABLE_CALENDAR_MEETING_NOTES?: string;
+  readonly VITE_ENABLE_CHAT_SIDEBAR_SECTIONS?: string;
   readonly VITE_DISABLE_BROWSER_TURSO_CACHE?: string;
   readonly VITE_ENABLE_WHATSAPP_LINKED?: string;
 }

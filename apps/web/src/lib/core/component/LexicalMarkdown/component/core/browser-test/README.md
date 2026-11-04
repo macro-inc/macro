@@ -33,6 +33,19 @@ the local fixture are intercepted. Run just this case by adding
 Screenshots: [desktop](proof/autolinks-desktop.png) and
 [phone](proof/autolinks-mobile.png).
 
+## User mentions
+
+`user-mentions.browser.e2e.ts` checks ID-only user mentions in the production
+renderer and composer, including name lookup success/failure and save/reopen,
+on desktop, tablet, and phone.
+
+## Ordered list start
+
+`lists.browser.e2e.ts` types `6.` then Enter in the production channel
+composer. The list must start at 6 in the draft and after save.
+
+Screenshot: [desktop](proof/ordered-list-start.png).
+
 ## Message quotes
 
 `quotes.browser.e2e.ts` selects three paragraphs backward and applies Quote
@@ -48,3 +61,23 @@ unquoted paragraphs retain normal paste behavior.
 
 Screenshots: [desktop](proof/quotes-desktop.png), [phone](proof/quotes-mobile.png),
 and [multi-paragraph paste](proof/quote-paste.png).
+
+## Date chips
+
+`date-chips.browser.e2e.ts` renders a whole-day chip (`"date":"2026-09-24"`)
+and a timed chip in `America/Los_Angeles` at 1:03 PM that day, and checks both
+read Today. A bare date read as UTC midnight shows Yesterday west of
+Greenwich. Run just this case by adding `date-chips.browser.e2e.ts` to the
+command above.
+
+## Images in lists
+
+`list-images.browser.e2e.ts` mounts the production Markdown editor with media
+and file drop over a numbered list. It inserts an image from an item, from the
+empty item Enter leaves (the image joins the item above, and a second Enter
+leaves the list), presses Enter after an item with an image, and drops a file on
+an item. It checks that the list stays one list with continuous numbering, that
+images align with their item's text, and that the saved Markdown indents each
+image under its item and renders back as one list, on desktop, tablet touch, and
+phone touch. Run just this case by adding `list-images.browser.e2e.ts` to the
+command above.

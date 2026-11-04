@@ -2,6 +2,7 @@ import { NIL_UUID } from '@app/features/next-soup/filters/filter-store';
 import { analytics } from '@app/lib/analytics';
 import { ThrownResultError, throwOnErr } from '@core/util/result';
 import type { CrmCompanyEntity } from '@entity';
+import { Telemetry } from '@macro-inc/observability';
 import { soupKeys } from '@queries/soup/keys';
 import { invalidateCachedCrmContacts } from '@service-storage/crm-contacts';
 import type { CrmCompanyResponse } from '@service-storage/generated/schemas/crmCompanyResponse';
@@ -141,7 +142,7 @@ function wipeCompanyEmailCache(
 
 /**
  * Manually creates a CRM company via `POST /crm/companies` (a team-scoped
- * display name + one domain). Seeds the company detail cache from the
+ * display name + optional domain). Seeds the company detail cache from the
  * response and invalidates soup so the new company appears in the
  * Customers listings. Server-side failures worth surfacing: 409 when the
  * team already tracks the domain, 403 when CRM is disabled for the team,
@@ -150,8 +151,15 @@ function wipeCompanyEmailCache(
 export function useCreateCompanyMutation(deps: CrmRecordDependencies) {
   return useMutation(
     () => ({
-      mutationFn: ({ name, domain }: { name: string; domain: string }) =>
-        throwOnErr(() => deps.storage.createCompany({ name, domain })),
+      mutationFn: ({ name, domain }: { name: string; domain?: string }) =>
+        Telemetry.span('crm.company.create', async (span) => {
+          span.setAttr('crm.company.has_domain', !!domain);
+          const company = await throwOnErr(() =>
+            deps.storage.createCompany({ name, domain })
+          );
+          span.setAttr('crm.company.id', company.id);
+          return company;
+        }),
       onSuccess: (data) => {
         analytics.track('crm_company_created', { companyId: data.id });
         deps.client.setQueryData(crmKeys.company(data.id).queryKey, data);
@@ -189,12 +197,13 @@ export function createCompanyImporter(
 }
 
 /**
- * Manually creates a contact under a company via
- * `POST /crm/companies/{id}/contacts` (a display name + email). Invalidates
- * the company detail query (contacts arrive embedded there) and soup so
- * contact listings refresh. Server-side failures worth surfacing: 409 when
- * the company already tracks the email, 404 when the company isn't
- * visible to the caller, 403 when CRM is disabled for the team.
+ * Manually creates a contact via `POST /crm/companies/{id}/contacts`, or
+ * `POST /crm/contacts` for a contact without a company (a display name +
+ * optional email). Invalidates the company detail query (contacts arrive
+ * embedded there) and soup so contact listings refresh. Server-side
+ * failures worth surfacing: 409 when the email is already tracked, 404 when
+ * the company isn't visible to the caller, 403 when CRM is disabled for the
+ * team.
  */
 export function useCreateContactMutation(deps: CrmRecordDependencies) {
   return useMutation(
@@ -204,22 +213,30 @@ export function useCreateContactMutation(deps: CrmRecordDependencies) {
         name,
         email,
       }: {
-        companyId: string;
+        companyId?: string;
         name: string;
-        email: string;
+        email?: string;
       }) =>
-        throwOnErr(() =>
-          deps.storage.createContact({ companyId, name, email })
-        ),
+        Telemetry.span('crm.contact.create', async (span) => {
+          if (companyId) span.setAttr('crm.company.id', companyId);
+          const contact = await throwOnErr(() =>
+            companyId
+              ? deps.storage.createContact({ companyId, name, email })
+              : deps.storage.createTeamContact({ name, email })
+          );
+          span.setAttr('crm.contact.id', contact.id);
+          return contact;
+        }),
       onSuccess: (contact, { companyId }) => {
         analytics.track('crm_contact_created', {
           companyId,
           contactId: contact.id,
         });
         return Promise.all([
-          deps.client.invalidateQueries({
-            queryKey: crmKeys.company(companyId).queryKey,
-          }),
+          companyId &&
+            deps.client.invalidateQueries({
+              queryKey: crmKeys.company(companyId).queryKey,
+            }),
           deps.client.invalidateQueries({ queryKey: soupKeys._def }),
         ]);
       },
@@ -297,17 +314,40 @@ export function useSetCompanyHiddenMutation(deps: CrmRecordDependencies) {
         companyId: string;
         hidden: boolean;
       }) =>
-        throwOnErr(() => deps.storage.setCompanyHidden({ companyId, hidden })),
-      onSuccess: async (_data, { companyId }) => {
-        await invalidateCachedCrmContacts();
-        wipeCompanyEmailCache(deps, companyId);
-        return Promise.all([
-          deps.client.invalidateQueries({ queryKey: soupKeys._def }),
-          deps.client.invalidateQueries({
-            queryKey: crmKeys.company(companyId).queryKey,
-          }),
-        ]);
-      },
+        Telemetry.span('crm.visibility_change', async (span) => {
+          span.setAttr('crm.record_type', 'company');
+          span.setAttr('crm.record_id', companyId);
+          span.setAttr('crm.hidden', hidden);
+          try {
+            const result = await throwOnErr(() =>
+              deps.storage.setCompanyHidden({ companyId, hidden })
+            );
+            await span.span(
+              'crm.visibility_change.refresh',
+              async (refresh) => {
+                try {
+                  await invalidateCachedCrmContacts();
+                  wipeCompanyEmailCache(deps, companyId);
+                  await Promise.all([
+                    deps.client.invalidateQueries({ queryKey: soupKeys._def }),
+                    deps.client.invalidateQueries({
+                      queryKey: crmKeys.company(companyId).queryKey,
+                    }),
+                  ]);
+                } catch (error) {
+                  refresh.error('Company visibility refresh failed');
+                  throw error;
+                }
+              }
+            );
+            span.setAttr('crm.visibility.outcome', 'success');
+            return result;
+          } catch (error) {
+            span.setAttr('crm.visibility.outcome', 'error');
+            span.error('Company visibility update failed');
+            throw error;
+          }
+        }),
     }),
     () => deps.client
   );

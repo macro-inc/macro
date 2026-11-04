@@ -23,7 +23,15 @@ import { EventForwardInvitationAction } from '@app/features/calendar-view/compon
 import { useQuickCallsFlag } from '@app/features/meetings/use-quick-calls-flag';
 import { useSplitPanelOrThrow } from '@components/app/split-layout/layoutUtils';
 import { useHotkeyDOMScope } from '@core/hotkey/hotkeys';
-import { type Accessor, createMemo, onMount, Show } from 'solid-js';
+import { fireAndForget } from '@core/util/fireAndForget';
+import {
+  type Accessor,
+  createMemo,
+  createSignal,
+  onCleanup,
+  onMount,
+  Show,
+} from 'solid-js';
 
 /**
  * Forward invitation beside a guest list the viewer cannot add to, as the
@@ -62,6 +70,8 @@ function PanelEventForm(props: EventFormProps) {
 type EventComposerSplitProps = {
   event?: CalendarEvent;
   initialValues?: EventEditorInitialValues;
+  /** Values that arrive after the composer opens, applied only to an untouched form. */
+  suggestedValues?: Promise<Partial<EventEditorInitialValues>>;
   onCalendarChange?: (calendarId: string, color: string) => void;
   onDirtyChange?: (dirty: boolean) => void;
   onSaveSuccess?: () => void;
@@ -136,8 +146,36 @@ function EventComposerContent(
     panel.handle.setDisplayName(isEdit() ? 'Edit event' : 'New event')
   );
 
+  const [suggesting, setSuggesting] = createSignal(false);
+  let disposed = false;
+  onCleanup(() => {
+    disposed = true;
+  });
+  // Once the user has changed anything, a late suggestion could overwrite
+  // their edit or a repeat rule the form state does not hold, so it is dropped.
+  const applySuggestions = async (
+    pending: Promise<Partial<EventEditorInitialValues>>
+  ) => {
+    setSuggesting(true);
+    try {
+      const suggested = await pending;
+      if (disposed || controller.isDirty()) return;
+      controller.replaceFromExternal({ ...controller.state(), ...suggested });
+    } finally {
+      if (!disposed) setSuggesting(false);
+    }
+  };
+  if (props.suggestedValues && !isEdit()) {
+    fireAndForget(applySuggestions(props.suggestedValues), 'event-composer');
+  }
+
   return (
     <div ref={attachHotkeys} class="flex h-full min-h-0 flex-col p-4 text-ink">
+      <Show when={suggesting()}>
+        <p role="status" class="pb-2 text-xs text-ink-muted">
+          Reading the email for a time and place…
+        </p>
+      </Show>
       <PanelEventForm
         controller={controller}
         macroCallsEnabled={macroCallsEnabled()}

@@ -27,6 +27,7 @@ async fn a_booking_step_reads_back_with_its_target_in_its_own_column(pool: PgPoo
                     required: true,
                     widget: None,
                 }],
+                show_when: None,
             },
             FormSection::Gate {
                 id: FormSectionId::new(),

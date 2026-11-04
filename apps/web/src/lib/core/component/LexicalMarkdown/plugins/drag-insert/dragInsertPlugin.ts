@@ -1,5 +1,11 @@
+import {
+  $isListItemNode,
+  $isListNode,
+  type ListItemNode,
+  type ListNode,
+} from '@lexical/list';
 import { DRAG_DROP_PASTE } from '@lexical/rich-text';
-import { mergeRegister } from '@lexical/utils';
+import { $dfs, mergeRegister } from '@lexical/utils';
 import {
   $getNodeByKey,
   $getRoot,
@@ -82,18 +88,57 @@ function elementKeyToDomRect(editor: LexicalEditor, key: NodeKey) {
   }
 }
 
+type InsertPoint = {
+  key: NodeKey | null;
+  position: InsertionMarker | null;
+  domRect: DOMRect | null;
+};
+
 /**
- * Get an insertion point from a drag event.DOMRect
+ * The end of the list item a drop at `clientY` belongs under: the item over
+ * the pointer's lower half, else the item above. Media inserted there joins
+ * that item instead of splitting the list.
+ */
+function $listItemInsertPoint(
+  editor: LexicalEditor,
+  list: ListNode,
+  clientY: number
+): InsertPoint | null {
+  const items = $dfs(list)
+    .map(({ node }) => node)
+    .filter(
+      (node): node is ListItemNode =>
+        $isListItemNode(node) && !$isListNode(node.getFirstChild())
+    );
+  const index = items.findIndex(
+    (item) =>
+      clientY <=
+      (elementKeyToDomRect(editor, item.getKey())?.bottom ?? -Infinity)
+  );
+  if (index === -1) return null;
+  const rect = elementKeyToDomRect(editor, items[index].getKey());
+  const target =
+    rect && clientY >= rect.top + rect.height * 0.5
+      ? items[index]
+      : items[index - 1];
+  if (!target) return null;
+  return {
+    key: target.getKey(),
+    position: 'after',
+    domRect: elementKeyToDomRect(editor, target.getKey()) ?? null,
+  };
+}
+
+/**
+ * Get an insertion point from a drag event. Top-level blocks only, unless
+ * `intoListItems` lets a drop over a list target one of its items.
  */
 export function calculateInsertPoint(
   editor: LexicalEditor,
   event: DragEvent | { clientX: number; clientY: number },
-  collisionPadding = 0
-): {
-  key: NodeKey | null;
-  position: InsertionMarker | null;
-  domRect: DOMRect | null;
-} {
+  collisionPadding = 0,
+  intoListItems = false
+): InsertPoint {
   return editor.read(() => {
     const editorRect = editor.getRootElement()?.getBoundingClientRect();
     if (
@@ -141,6 +186,11 @@ export function calculateInsertPoint(
       const rect = elem.getBoundingClientRect();
 
       if (containsY(rect, event.clientY, collisionPadding)) {
+        const listItemPoint =
+          intoListItems && $isListNode(childNode)
+            ? $listItemInsertPoint(editor, childNode, event.clientY)
+            : null;
+        if (listItemPoint) return listItemPoint;
         if (event.clientY < rect.top + rect.height * 0.5) {
           const priorSibling = childNode.getPreviousSibling();
           if (priorSibling) {
@@ -164,6 +214,11 @@ export function calculateInsertPoint(
   });
 }
 
+// Files dropped into a list (images, attachments) join the item under the pointer.
+function carriesFiles(event: DragEvent) {
+  return event.dataTransfer?.types.includes('Files') ?? false;
+}
+
 function registerDragInsert(
   editor: LexicalEditor,
   props: DragInsertPluginProps
@@ -175,7 +230,8 @@ function registerDragInsert(
     const { key, position } = calculateInsertPoint(
       editor,
       event,
-      collisionPadding
+      collisionPadding,
+      carriesFiles(event)
     );
 
     if (!key || !position) {
@@ -210,7 +266,8 @@ function registerDragInsert(
     const { key, position } = calculateInsertPoint(
       editor,
       event,
-      collisionPadding
+      collisionPadding,
+      carriesFiles(event)
     );
     if (!key || !position) {
       return;

@@ -41,17 +41,6 @@ vi.mock('../../../service-clients/service-storage/graphql-soup', () => ({
   getGraphqlSoupCacheHost: mocks.host,
   getGraphqlSoupClient: mocks.client,
 }));
-vi.mock('@macro-inc/observability', () => ({
-  Telemetry: {
-    span: () => ({
-      setAttr: vi.fn(),
-      error: vi.fn(),
-      end: vi.fn(),
-      run: (operation: () => unknown) => operation(),
-    }),
-    error: vi.fn(),
-  },
-}));
 
 const cleanups: Array<() => void> = [];
 afterEach(() => {

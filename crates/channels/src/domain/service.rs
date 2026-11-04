@@ -485,15 +485,45 @@ where
         Ok(())
     }
 
-    #[tracing::instrument(err, skip(self))]
+    #[tracing::instrument(err, skip(self, actor))]
     async fn delete_channel(
         &self,
         actor: Sender,
         channel_id: Uuid,
     ) -> Result<(), ChannelMutationErr> {
         let actor = require_user_actor(&actor)?;
+        let participants = self
+            .repo
+            .get_participants(channel_id)
+            .await
+            .map_err(|e| ChannelMutationErr::Repo(e.into()))?;
+        let is_owner = participants.iter().any(|participant| {
+            participant.user_id == actor.as_ref() && participant.role == ParticipantRole::Owner
+        });
+        if !is_owner {
+            let info = self
+                .repo
+                .get_channel_info(channel_id)
+                .await
+                .map_err(|e| ChannelMutationErr::Repo(e.into()))?;
+            let is_team_admin =
+                if let (ChannelType::Team, Some(team_id)) = (info.channel_type, info.team_id) {
+                    self.repo
+                        .user_is_team_admin(&actor, team_id)
+                        .await
+                        .map_err(|e| ChannelMutationErr::Repo(e.into()))?
+                } else {
+                    false
+                };
+            if !is_team_admin {
+                return Err(ChannelMutationErr::Forbidden(
+                    "only the channel owner or an admin of the channel's team can delete it"
+                        .to_string(),
+                ));
+            }
+        }
         self.repo
-            .delete_channel(channel_id, actor.as_ref().to_string())
+            .delete_channel(channel_id)
             .await
             .map_err(|e| ChannelMutationErr::Repo(e.into()))?;
         self.events.dispatch(ChannelEvent::ChannelDeleted {

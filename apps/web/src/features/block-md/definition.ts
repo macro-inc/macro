@@ -1,16 +1,11 @@
 import { defineBlock, type ExtractLoadType, LoadErrors } from '@core/block';
 import { ENABLE_MARKDOWN_LIVE_COLLABORATION } from '@core/constant/featureFlags';
+import { NOOP_SPAN } from '@macro-inc/observability';
 import { fetchSyncDocumentOpenContext } from '@queries/storage/documentLoad/sync-document-context';
 import { makeFileFromBlob } from '@service-storage/util/makeFileFromBlob';
 import { createSyncServiceSource } from '@service-sync/source';
 import { err, ok } from 'neverthrow';
 import { lazy } from 'solid-js';
-import {
-  endDocumentSpan,
-  registerDocumentSpan,
-  resumeDocumentSpan,
-  startDocumentSpan,
-} from './observability';
 
 export const definition = defineBlock({
   name: 'md',
@@ -25,7 +20,7 @@ export const definition = defineBlock({
   accepted: {
     md: 'text/markdown',
   },
-  async load(source, intent) {
+  async load(source, intent, parentSpan = NOOP_SPAN) {
     if (source.type === 'sync-service') {
       const documentId = source.id;
       if (intent === 'preload') {
@@ -35,21 +30,12 @@ export const definition = defineBlock({
         });
       }
 
-      let rootSpan = resumeDocumentSpan(documentId);
-      if (!rootSpan) {
-        rootSpan = startDocumentSpan('doc.open');
-        rootSpan.setAttr('doc.type', 'md');
-        rootSpan.setAttr('document.id', documentId);
-        registerDocumentSpan(documentId, rootSpan);
-      }
-      return rootSpan.span('doc.load', async (loadSpan) => {
+      return parentSpan.span('doc.load', async (loadSpan) => {
         const context = await loadSpan.span('doc.load.context', () =>
           fetchSyncDocumentOpenContext(documentId)
         );
         if (context.isErr()) {
           loadSpan.error('load context failed');
-          rootSpan.error('load context failed');
-          endDocumentSpan(documentId);
           return err(context.error);
         }
         const { token, authorization, documentMetadata, userAccessLevel } =
@@ -59,7 +45,8 @@ export const definition = defineBlock({
         const { source: syncSource, doInitialSync } = createSyncServiceSource(
           source.id,
           token,
-          authorization
+          authorization,
+          parentSpan
         );
 
         // HACK: unfortunately, most blocks still rely on a dssFile for things like

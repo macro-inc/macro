@@ -36,15 +36,15 @@ import {
 } from 'solid-js';
 import { Portal } from 'solid-js/web';
 import { match, P } from 'ts-pattern';
+import {
+  type PriorityCollapseController,
+  PriorityCollapseOverflowSensor,
+} from '../../../priority-collapse/PriorityCollapseOverflowSensor';
 import { runSplitBack } from '../back-interceptor';
 import { SplitLayoutContext, SplitPanelContext } from '../context';
 import type { SplitContent } from '../layoutManager';
 import { canSpotlight } from '../utils/canSpotlight';
 import { HeaderIsland } from './HeaderIsland';
-import {
-  type PriorityCollapseController,
-  PriorityCollapseOverflowSensor,
-} from './PriorityCollapseOverflowSensor';
 import { SplitHeaderContextMenu } from './SplitHeaderContextMenu';
 
 function getEntitySplitContent(data: EntityDragEvent['draggable']['data']):

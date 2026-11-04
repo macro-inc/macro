@@ -9,6 +9,7 @@ import {
   useBlockEntityCommands,
 } from '@app/features/next-soup/actions';
 import { createSearchParams } from '@app/lib/split-router';
+import { TraceFlow } from '@app/observability/flow';
 import { URL_PARAMS } from '@block-channel/constants';
 import { ChannelAttachmentsTab } from '@channel/Attachments/ChannelAttachmentsTab';
 import { useChannelBotManagement } from '@channel/Bots/use-channel-bot-management';
@@ -150,6 +151,7 @@ function NewTop(props: { channelId: string }) {
       name: ch.name ?? 'New Channel',
       blockName: 'channel',
       channelType: ch.channel_type,
+      teamId: ch.team_id ?? undefined,
       ownerId: ch.owner_id,
       isParticipant: participantsQuery.isSuccess
         ? (participantsQuery.data ?? []).some(
@@ -318,11 +320,24 @@ export function NewChannelBlockAdapter(props: BlockChannelProps) {
   // The layout context exists during construction; its global signal is set later.
   const splitLayout = useContext(SplitLayoutContext);
   blockHotkeyScopeSignal.set(splitPanel.splitHotkeyScope);
-  useBlockEntityCommands();
   const canAutofocusSplitContent = useCanAutofocusSplitContent();
   const { navigatedFromJK } = useNavigatedFromJK();
   const channelId = useBlockId();
   const conversationChannel = useChannel(channelId);
+  useBlockEntityCommands({
+    resolveEntity: () => {
+      const channel = conversationChannel();
+      if (!channel) return undefined;
+      return buildEntityData({
+        id: channelId,
+        name: channel.name ?? 'New Channel',
+        blockName: 'channel',
+        ownerId: channel.owner_id,
+        channelType: channel.channel_type,
+        teamId: channel.team_id ?? undefined,
+      });
+    },
+  });
   const canCall = useChannelCanCall(channelId);
   const blockHandle = blockHandleSignal.get;
   const [searchParams, setSearchParams] = useSearchParams();
@@ -564,31 +579,41 @@ export function NewChannelBlockAdapter(props: BlockChannelProps) {
             <Switch>
               <Match when={activeTab() === 'messages'}>
                 <Suspense fallback={<ChannelLoading />}>
-                  <ChannelMessages
-                    autofocus={canAutofocusSplitContent && !navigatedFromJK()}
-                  />
+                  <TraceFlow name="channel.messages.view">
+                    <ChannelMessages
+                      autofocus={canAutofocusSplitContent && !navigatedFromJK()}
+                    />
+                  </TraceFlow>
                 </Suspense>
               </Match>
               <Match when={activeTab() === 'attachments'}>
-                <ChannelAttachmentsTab channelId={channelId} />
+                <TraceFlow name="channel.attachments.view">
+                  <ChannelAttachmentsTab channelId={channelId} />
+                </TraceFlow>
               </Match>
               <Match when={activeTab() === 'calls' && ENABLE_CALLS}>
-                <ChannelCallsTab channelId={channelId} />
+                <TraceFlow name="channel.calls.view">
+                  <ChannelCallsTab channelId={channelId} />
+                </TraceFlow>
               </Match>
               <Match when={activeTab() === 'participants'}>
-                <ChannelParticipantsTab
-                  channelId={channelId}
-                  botManagementEnabled={botManagement.enabled()}
-                  onCreateBot={botManagement.openCreateBot}
-                  inviteBotFocusRequest={botManagement.inviteFocusRequest()}
-                  onOpenBot={botManagement.openBot}
-                />
+                <TraceFlow name="channel.participants.view">
+                  <ChannelParticipantsTab
+                    channelId={channelId}
+                    botManagementEnabled={botManagement.enabled()}
+                    onCreateBot={botManagement.openCreateBot}
+                    inviteBotFocusRequest={botManagement.inviteFocusRequest()}
+                    onOpenBot={botManagement.openBot}
+                  />
+                </TraceFlow>
               </Match>
               <Match when={activeTab() === 'call' && canUseInlineCallTab()}>
-                <ChannelCallTab
-                  channelId={channelId}
-                  pendingJoin={pendingJoinCall}
-                />
+                <TraceFlow name="channel.call.view">
+                  <ChannelCallTab
+                    channelId={channelId}
+                    pendingJoin={pendingJoinCall}
+                  />
+                </TraceFlow>
               </Match>
             </Switch>
           </div>
