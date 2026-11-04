@@ -9,7 +9,6 @@ import { Sdk as NotificationSdk } from '../../generated/notification/sdk.gen';
 import { Sdk as PropertiesSdk } from '../../generated/properties/sdk.gen';
 import { Sdk as ScheduledActionSdk } from '../../generated/scheduled-action/sdk.gen';
 import { Sdk as SearchSdk } from '../../generated/search/sdk.gen';
-import { Sdk as StaticFilesSdk } from '../../generated/static-files/sdk.gen';
 import { createClient } from '../../generated/storage/client';
 import { Sdk as StorageSdk } from '../../generated/storage/sdk.gen';
 import type { Bot } from '../../generated/storage/types.gen';
@@ -103,7 +102,6 @@ export class MacroClient {
   readonly scheduledAction: ScheduledActionSdk;
 
   readonly unfurl: UnfurlSdk;
-  readonly staticFiles: StaticFilesSdk;
 
   readonly agentHarness: AgentHarnessSdk;
 
@@ -179,11 +177,6 @@ export class MacroClient {
     this.unfurl = observeSdk(
       new UnfurlSdk({ client: this.makeClient(hosts.unfurl) }),
       'unfurl',
-      opts.onRequest,
-    );
-    this.staticFiles = observeSdk(
-      new StaticFilesSdk({ client: this.makeClient(hosts['static-files']) }),
-      'static-files',
       opts.onRequest,
     );
     this.agentHarness = observeSdk(

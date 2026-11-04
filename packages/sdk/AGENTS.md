@@ -26,7 +26,8 @@ enforced by the ordinary backend APIs.
 - `src/entities/whatsapp/`: the owner's WhatsApp account and chat list; `WhatsAppChat.add()`
   returns an `ExternalChat`.
 - `src/entities/me/`: `macro.me.update()` sets the caller's name and profile
-  picture from a `macro.images.upload()` image. `team.invite(emails, { agent: true })`
+  picture; `macro.me.uploadProfilePicture()` stores the image through the auth
+  service, because static file storage does not accept API keys. `team.invite(emails, { agent: true })`
   invites agents; their token only ever appears in the web app's setup modal.
 - `src/entities/images/`: `macro.images.generate()` (cognition
   `POST /images/generate`, admitted against the user's AI allowance) returns a

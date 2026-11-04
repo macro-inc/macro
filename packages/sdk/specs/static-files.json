@@ -12,9 +12,7 @@
   "paths": {
     "/api/file": {
       "put": {
-        "tags": [
-          "file::put_presigned_url"
-        ],
+        "tags": ["file::put_presigned_url"],
         "operationId": "put_presigned_url",
         "requestBody": {
           "content": {
@@ -62,9 +60,7 @@
     },
     "/api/file/bulk-delete": {
       "post": {
-        "tags": [
-          "file::bulk_delete_file"
-        ],
+        "tags": ["file::bulk_delete_file"],
         "summary": "Bulk delete files.",
         "operationId": "handle_bulk_delete_file",
         "requestBody": {
@@ -133,9 +129,7 @@
     },
     "/api/file/metadata/{file_id}": {
       "get": {
-        "tags": [
-          "file::metadata"
-        ],
+        "tags": ["file::metadata"],
         "operationId": "handle_get_metadata",
         "parameters": [
           {
@@ -194,9 +188,7 @@
     },
     "/api/file/{file_id}": {
       "delete": {
-        "tags": [
-          "file::delete_file"
-        ],
+        "tags": ["file::delete_file"],
         "operationId": "handle_delete_file",
         "parameters": [
           {
@@ -255,9 +247,7 @@
     },
     "/file/{file_id}": {
       "get": {
-        "tags": [
-          "s3::file"
-        ],
+        "tags": ["s3::file"],
         "operationId": "get_file_documentation",
         "parameters": [
           {
@@ -297,9 +287,7 @@
     "schemas": {
       "BulkDeleteRequest": {
         "type": "object",
-        "required": [
-          "file_ids"
-        ],
+        "required": ["file_ids"],
         "properties": {
           "file_ids": {
             "type": "array",
@@ -312,12 +300,7 @@
       },
       "BulkDeleteResponse": {
         "type": "object",
-        "required": [
-          "total",
-          "succeeded",
-          "failed",
-          "results"
-        ],
+        "required": ["total", "succeeded", "failed", "results"],
         "properties": {
           "failed": {
             "type": "integer",
@@ -345,16 +328,10 @@
       },
       "DeleteResult": {
         "type": "object",
-        "required": [
-          "file_id",
-          "success"
-        ],
+        "required": ["file_id", "success"],
         "properties": {
           "error": {
-            "type": [
-              "string",
-              "null"
-            ],
+            "type": ["string", "null"],
             "description": "Error message if deletion failed"
           },
           "file_id": {
@@ -370,9 +347,7 @@
       "ErrorResponse": {
         "type": "object",
         "description": "A plain old json error response for use with axum.\nyup, thats it.",
-        "required": [
-          "message"
-        ],
+        "required": ["message"],
         "properties": {
           "message": {
             "type": "string",
@@ -423,15 +398,10 @@
       },
       "PutFileRequest": {
         "type": "object",
-        "required": [
-          "file_name"
-        ],
+        "required": ["file_name"],
         "properties": {
           "content_type": {
-            "type": [
-              "string",
-              "null"
-            ],
+            "type": ["string", "null"],
             "description": "optional mime type if type cannot be infered from file_name"
           },
           "extension_data": {
@@ -445,11 +415,7 @@
       },
       "PutFileResponse": {
         "type": "object",
-        "required": [
-          "upload_url",
-          "file_location",
-          "id"
-        ],
+        "required": ["upload_url", "file_location", "id"],
         "properties": {
           "file_location": {
             "type": "string",

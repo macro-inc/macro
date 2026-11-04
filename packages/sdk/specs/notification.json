@@ -12,9 +12,7 @@
   "paths": {
     "/health": {
       "get": {
-        "tags": [
-          "health"
-        ],
+        "tags": ["health"],
         "summary": "Health check",
         "operationId": "health_handler",
         "responses": {
@@ -33,9 +31,7 @@
     },
     "/unsubscribe": {
       "get": {
-        "tags": [
-          "unsubscribe::get_unsubscribes"
-        ],
+        "tags": ["unsubscribe::get_unsubscribes"],
         "summary": "Gets the users unsubscribe items.",
         "operationId": "get_unsubscribes",
         "responses": {
@@ -77,9 +73,7 @@
     },
     "/unsubscribe/email": {
       "post": {
-        "tags": [
-          "unsubscribe::unsubscribe_email"
-        ],
+        "tags": ["unsubscribe::unsubscribe_email"],
         "summary": "Unsubscribes a user from receiving emails",
         "operationId": "unsubscribe_email",
         "responses": {
@@ -118,9 +112,7 @@
     },
     "/unsubscribe/item/{item_type}/{item_id}": {
       "post": {
-        "tags": [
-          "unsubscribe::unsubscribe_item"
-        ],
+        "tags": ["unsubscribe::unsubscribe_item"],
         "summary": "Unsubscribes a user from a given item for notifications.",
         "operationId": "unsubscribe_item",
         "parameters": [
@@ -146,10 +138,7 @@
             "description": "A future resume time. Omit to mute indefinitely.",
             "required": false,
             "schema": {
-              "type": [
-                "string",
-                "null"
-              ],
+              "type": ["string", "null"],
               "format": "date-time"
             }
           }
@@ -198,9 +187,7 @@
         }
       },
       "delete": {
-        "tags": [
-          "unsubscribe::remove_unsubscribe_item"
-        ],
+        "tags": ["unsubscribe::remove_unsubscribe_item"],
         "summary": "Removes a unsubscribe item for a user.",
         "operationId": "remove_unsubscribe_item",
         "parameters": [
@@ -257,9 +244,7 @@
     },
     "/unsubscribe/items": {
       "post": {
-        "tags": [
-          "unsubscribe::items"
-        ],
+        "tags": ["unsubscribe::items"],
         "summary": "Atomically mute or snooze items for the authenticated user.",
         "operationId": "unsubscribe_items",
         "requestBody": {
@@ -316,9 +301,7 @@
         }
       },
       "delete": {
-        "tags": [
-          "unsubscribe::items"
-        ],
+        "tags": ["unsubscribe::items"],
         "summary": "Atomically resume delivery for the authenticated user's items.",
         "operationId": "remove_unsubscribe_items",
         "requestBody": {
@@ -377,9 +360,7 @@
     },
     "/unsubscribe/mute": {
       "post": {
-        "tags": [
-          "unsubscribe::unsubscribe_all"
-        ],
+        "tags": ["unsubscribe::unsubscribe_all"],
         "summary": "Unsubscribes user from all notifications.",
         "operationId": "unsubscribe_all",
         "responses": {
@@ -416,9 +397,7 @@
         }
       },
       "delete": {
-        "tags": [
-          "unsubscribe::remove_unsubscribe_all"
-        ],
+        "tags": ["unsubscribe::remove_unsubscribe_all"],
         "summary": "Unmutes all notifications.\nExisting notifications that were muted manually will remain muted.",
         "operationId": "remove_unsubscribe_all",
         "responses": {
@@ -457,9 +436,7 @@
     },
     "/v1/user_notifications": {
       "get": {
-        "tags": [
-          "user_notification"
-        ],
+        "tags": ["user_notification"],
         "summary": "Wrapper handler that calls the inner generic list handler with `serde_json::Value`,\nthen converts each row to [`UserNotificationRow<NotifEvent>`].",
         "description": "Rows that fail to deserialize are dropped with a warning log.",
         "operationId": "list_typed_notifications",
@@ -540,9 +517,7 @@
     },
     "/v1/user_notifications/item/bulk": {
       "post": {
-        "tags": [
-          "user_notification"
-        ],
+        "tags": ["user_notification"],
         "summary": "Wrapper handler that calls the inner generic bulk-get handler with `serde_json::Value`,\nthen converts each row to [`UserNotificationRow<NotifEvent>`].",
         "description": "Rows that fail to deserialize are dropped with a warning log.",
         "operationId": "bulk_get_typed_notifications_by_event_item_ids",
@@ -633,9 +608,7 @@
     },
     "/v1/user_notifications/item/{event_item_id}": {
       "get": {
-        "tags": [
-          "user_notification"
-        ],
+        "tags": ["user_notification"],
         "summary": "Typed wrapper for getting notifications by a single event item ID.",
         "operationId": "get_typed_notifications_by_event_item_id",
         "parameters": [
@@ -725,9 +698,7 @@
     },
     "/v1/user_notifications/preferences": {
       "get": {
-        "tags": [
-          "notification_crate::inbound::http::preferences"
-        ],
+        "tags": ["notification_crate::inbound::http::preferences"],
         "summary": "Get the notification types that the user has disabled.",
         "operationId": "get_notification_type_preferences",
         "responses": {
@@ -766,9 +737,7 @@
     },
     "/v1/user_notifications/preferences/{notification_event_type}/disable": {
       "put": {
-        "tags": [
-          "notification_crate::inbound::http::preferences"
-        ],
+        "tags": ["notification_crate::inbound::http::preferences"],
         "summary": "Disable a notification type for the authenticated user.",
         "operationId": "disable_notification_type",
         "parameters": [
@@ -821,9 +790,7 @@
     },
     "/v1/user_notifications/preferences/{notification_event_type}/enable": {
       "put": {
-        "tags": [
-          "notification_crate::inbound::http::preferences"
-        ],
+        "tags": ["notification_crate::inbound::http::preferences"],
         "summary": "Re-enable a notification type for the authenticated user.",
         "operationId": "enable_notification_type",
         "parameters": [
@@ -866,9 +833,7 @@
     },
     "/v1/user_notifications/{notification_id}": {
       "get": {
-        "tags": [
-          "user_notification"
-        ],
+        "tags": ["user_notification"],
         "summary": "Typed wrapper for getting a single notification by ID.",
         "operationId": "get_typed_notification_by_id",
         "parameters": [
@@ -939,9 +904,7 @@
     },
     "/v2/user_notifications/bulk": {
       "delete": {
-        "tags": [
-          "notification_crate::inbound::http"
-        ],
+        "tags": ["notification_crate::inbound::http"],
         "summary": "Soft-delete multiple user notifications.",
         "operationId": "bulk_delete_user_notifications_v2",
         "requestBody": {
@@ -993,9 +956,7 @@
     },
     "/v2/user_notifications/bulk/done": {
       "patch": {
-        "tags": [
-          "notification_crate::inbound::http"
-        ],
+        "tags": ["notification_crate::inbound::http"],
         "summary": "Mark notifications as done.",
         "operationId": "bulk_mark_notifications_done",
         "requestBody": {
@@ -1047,9 +1008,7 @@
     },
     "/v2/user_notifications/bulk/seen": {
       "patch": {
-        "tags": [
-          "notification_crate::inbound::http"
-        ],
+        "tags": ["notification_crate::inbound::http"],
         "summary": "Mark notifications as seen.",
         "operationId": "bulk_mark_notifications_seen",
         "requestBody": {
@@ -1101,9 +1060,7 @@
     },
     "/v2/user_notifications/bulk/undone": {
       "patch": {
-        "tags": [
-          "notification_crate::inbound::http"
-        ],
+        "tags": ["notification_crate::inbound::http"],
         "summary": "Mark notifications as not done.",
         "operationId": "bulk_mark_notifications_undone",
         "requestBody": {
@@ -1155,9 +1112,7 @@
     },
     "/v2/user_notifications/{notification_id}": {
       "delete": {
-        "tags": [
-          "notification_crate::inbound::http"
-        ],
+        "tags": ["notification_crate::inbound::http"],
         "summary": "Soft-delete a single user notification.",
         "operationId": "delete_user_notification_v2",
         "parameters": [
@@ -1219,9 +1174,7 @@
           },
           {
             "type": "object",
-            "required": [
-              "actionId"
-            ],
+            "required": ["actionId"],
             "properties": {
               "actionId": {
                 "type": "string",
@@ -1229,10 +1182,7 @@
                 "description": "The action carrying the prompt."
               },
               "mentionedBy": {
-                "type": [
-                  "string",
-                  "null"
-                ],
+                "type": ["string", "null"],
                 "description": "Who wrote the prompt, absent when a bot acted on nobody's behalf."
               }
             }
@@ -1243,18 +1193,10 @@
       "AgentSessionNotificationRef": {
         "type": "object",
         "description": "Flattened into each agent-session kind so the wire keeps these keys at the\ntop level of the metadata, the way [`CommonChannelMetadata`] does.",
-        "required": [
-          "sessionId",
-          "sessionName",
-          "botId",
-          "botName"
-        ],
+        "required": ["sessionId", "sessionName", "botId", "botName"],
         "properties": {
           "announcementMessageId": {
-            "type": [
-              "string",
-              "null"
-            ],
+            "type": ["string", "null"],
             "format": "uuid",
             "description": "The magic-chip message for the turn in question, when one was posted."
           },
@@ -1267,10 +1209,7 @@
             "description": "The bot's display name; agent notifications have no user sender, so\nthis is who they read as being from."
           },
           "channelId": {
-            "type": [
-              "string",
-              "null"
-            ],
+            "type": ["string", "null"],
             "format": "uuid",
             "description": "The channel the session was opened from, when it was opened from a\nchannel thread."
           },
@@ -1295,10 +1234,7 @@
             "description": "The session's name at the time of the event."
           },
           "threadId": {
-            "type": [
-              "string",
-              "null"
-            ],
+            "type": ["string", "null"],
             "format": "uuid",
             "description": "The thread the session was opened from, when it was."
           }
@@ -1307,10 +1243,7 @@
       "AgentSessionOriginParent": {
         "type": "object",
         "description": "The session an agent-session notification is about, and where its magic\nchip lives when it was opened from a thread.\n\nThe conversation an agent session was opened from: a channel, document,\nor initiative. Spelled like the message API's parent for client routing.",
-        "required": [
-          "type",
-          "id"
-        ],
+        "required": ["type", "id"],
         "properties": {
           "id": {
             "type": "string",
@@ -1329,23 +1262,14 @@
           },
           {
             "type": "object",
-            "required": [
-              "turn",
-              "stopReason"
-            ],
+            "required": ["turn", "stopReason"],
             "properties": {
               "actor": {
-                "type": [
-                  "string",
-                  "null"
-                ],
+                "type": ["string", "null"],
                 "description": "Who prompted the turn, absent when a bot acted on nobody's behalf."
               },
               "excerpt": {
-                "type": [
-                  "string",
-                  "null"
-                ],
+                "type": ["string", "null"],
                 "description": "The agent's last prose in the turn, whole; `None` when it wrote none."
               },
               "stopReason": {
@@ -1370,10 +1294,7 @@
           },
           {
             "type": "object",
-            "required": [
-              "turn",
-              "question"
-            ],
+            "required": ["turn", "question"],
             "properties": {
               "question": {
                 "type": "string",
@@ -1392,10 +1313,7 @@
       },
       "AiResponseMetadata": {
         "type": "object",
-        "required": [
-          "summary",
-          "messageId"
-        ],
+        "required": ["summary", "messageId"],
         "properties": {
           "messageId": {
             "type": "string"
@@ -1430,10 +1348,7 @@
                 "description": "When the notification was created."
               },
               "deleted_at": {
-                "type": [
-                  "string",
-                  "null"
-                ],
+                "type": ["string", "null"],
                 "format": "date-time",
                 "description": "When the notification was deleted."
               },
@@ -1455,10 +1370,7 @@
                 "description": "The user who owns this notification."
               },
               "sender_id": {
-                "type": [
-                  "string",
-                  "null"
-                ],
+                "type": ["string", "null"],
                 "description": "The user who triggered the notification."
               },
               "sent": {
@@ -1475,10 +1387,7 @@
                 "description": "When the notification was last updated."
               },
               "viewed_at": {
-                "type": [
-                  "string",
-                  "null"
-                ],
+                "type": ["string", "null"],
                 "format": "date-time",
                 "description": "When the notification was viewed/seen."
               }
@@ -1489,9 +1398,7 @@
       "BulkGetByEventItemIdsRequest": {
         "type": "object",
         "description": "Request body for bulk-fetching notifications by event item IDs.",
-        "required": [
-          "eventItemIds"
-        ],
+        "required": ["eventItemIds"],
         "properties": {
           "eventItemIds": {
             "type": "array",
@@ -1505,10 +1412,7 @@
       },
       "BulkItem": {
         "type": "object",
-        "required": [
-          "item_type",
-          "item_id"
-        ],
+        "required": ["item_type", "item_id"],
         "properties": {
           "item_id": {
             "type": "string"
@@ -1520,9 +1424,7 @@
       },
       "BulkRemoveItemsRequest": {
         "type": "object",
-        "required": [
-          "items"
-        ],
+        "required": ["items"],
         "properties": {
           "items": {
             "type": "array",
@@ -1534,9 +1436,7 @@
       },
       "BulkSetItemsRequest": {
         "type": "object",
-        "required": [
-          "items"
-        ],
+        "required": ["items"],
         "properties": {
           "items": {
             "type": "array",
@@ -1545,10 +1445,7 @@
             }
           },
           "snoozed_until": {
-            "type": [
-              "string",
-              "null"
-            ],
+            "type": ["string", "null"],
             "format": "date-time",
             "description": "A future resume time. Omit to mute indefinitely."
           }
@@ -1557,11 +1454,7 @@
       "CalendarEventJoinRequestMetadata": {
         "type": "object",
         "description": "A channel member who sees a calendar event only through a channel share\nasked the person who shared it to add them as a guest. Sent to the sharer,\nwith the requester as sender.",
-        "required": [
-          "requestId",
-          "eventId",
-          "title"
-        ],
+        "required": ["requestId", "eventId", "title"],
         "properties": {
           "eventId": {
             "type": "string",
@@ -1582,18 +1475,10 @@
       "CalendarEventReminderMetadata": {
         "type": "object",
         "description": "A calendar event alarm came due. Like [`ReminderMetadata`], these are\nself-notifications: `sender_id` must stay `None` or the only recipient is\nfiltered out. Everything the alert renders rides in here so the\ndispatcher never has to resolve the event again at display time.",
-        "required": [
-          "eventId",
-          "occurrenceKey",
-          "title",
-          "minutesBefore"
-        ],
+        "required": ["eventId", "occurrenceKey", "title", "minutesBefore"],
         "properties": {
           "endsAt": {
-            "type": [
-              "string",
-              "null"
-            ],
+            "type": ["string", "null"],
             "format": "date-time",
             "description": "Instance end, for timed events."
           },
@@ -1612,26 +1497,17 @@
             "description": "Stable occurrence key of the instance that is starting."
           },
           "startDate": {
-            "type": [
-              "string",
-              "null"
-            ],
+            "type": ["string", "null"],
             "format": "date",
             "description": "Instance start date, for all-day events."
           },
           "startsAt": {
-            "type": [
-              "string",
-              "null"
-            ],
+            "type": ["string", "null"],
             "format": "date-time",
             "description": "Instance start, for timed events."
           },
           "timeZone": {
-            "type": [
-              "string",
-              "null"
-            ],
+            "type": ["string", "null"],
             "description": "IANA zone for rendering local clock times, when known."
           },
           "title": {
@@ -1645,17 +1521,11 @@
         "description": "Metadata for a notification that a call has started in a channel.\n\nMirrors the producer-side `CallStartedNotification` in the `call` crate:\nboth serialize the same wire shape (snake_case fields) under the same\n`call_started` [`Notification::TYPE_NAME`]. This type is the read-side\nmodel used by [`crate::NotifEvent`]; the producer keeps its own type\nbecause it additionally builds the incoming-call APNS/VoIP push.\n\nRows persisted before the type name was normalized used the kebab-case\n`call-started`; the [`crate::NotifEvent::CallStarted`] variant carries a\n`#[serde(alias = \"call-started\")]` so those rows still deserialize.",
         "properties": {
           "channel_name": {
-            "type": [
-              "string",
-              "null"
-            ],
+            "type": ["string", "null"],
             "description": "The name of the channel the call started in, when available."
           },
           "sender_profile_picture_url": {
-            "type": [
-              "string",
-              "null"
-            ],
+            "type": ["string", "null"],
             "description": "Profile picture URL of the user who started the call, when available."
           }
         }
@@ -1663,9 +1533,7 @@
       "ChannelInviteMetadata": {
         "type": "object",
         "description": "Metadata for when a user is invited to a channel.",
-        "required": [
-          "invitedBy"
-        ],
+        "required": ["invitedBy"],
         "properties": {
           "channelName": {
             "type": "string",
@@ -1680,17 +1548,11 @@
             "description": "Whether this is a direct message rather than a channel invitation.\nOlder notification payloads retain channel-invitation wording."
           },
           "messageContent": {
-            "type": [
-              "string",
-              "null"
-            ],
+            "type": ["string", "null"],
             "description": "Message content to show in the invite email, when the invite was triggered by a message."
           },
           "senderProfilePictureUrl": {
-            "type": [
-              "string",
-              "null"
-            ],
+            "type": ["string", "null"],
             "description": "The sender's profile picture URL, if available."
           }
         }
@@ -1702,10 +1564,7 @@
           },
           {
             "type": "object",
-            "required": [
-              "messageId",
-              "messageContent"
-            ],
+            "required": ["messageId", "messageContent"],
             "properties": {
               "messageContent": {
                 "type": "string",
@@ -1716,23 +1575,14 @@
                 "description": "The message you were mentioned in"
               },
               "senderDisplayName": {
-                "type": [
-                  "string",
-                  "null"
-                ],
+                "type": ["string", "null"],
                 "description": "Display name for non-user senders such as bots"
               },
               "senderProfilePictureUrl": {
-                "type": [
-                  "string",
-                  "null"
-                ]
+                "type": ["string", "null"]
               },
               "threadId": {
-                "type": [
-                  "string",
-                  "null"
-                ],
+                "type": ["string", "null"],
                 "description": "the id of the thread"
               }
             }
@@ -1746,11 +1596,7 @@
           },
           {
             "type": "object",
-            "required": [
-              "messageId",
-              "messageContent",
-              "emoji"
-            ],
+            "required": ["messageId", "messageContent", "emoji"],
             "properties": {
               "emoji": {
                 "type": "string",
@@ -1765,17 +1611,11 @@
                 "description": "The reacted-to message id."
               },
               "senderProfilePictureUrl": {
-                "type": [
-                  "string",
-                  "null"
-                ],
+                "type": ["string", "null"],
                 "description": "Optional reactor profile picture URL."
               },
               "threadId": {
-                "type": [
-                  "string",
-                  "null"
-                ],
+                "type": ["string", "null"],
                 "description": "The thread root id when the reacted-to message is a reply."
               }
             }
@@ -1790,9 +1630,7 @@
           },
           {
             "type": "object",
-            "required": [
-              "messageId"
-            ],
+            "required": ["messageId"],
             "properties": {
               "messageContent": {
                 "type": "string",
@@ -1803,24 +1641,15 @@
                 "description": "The message id"
               },
               "sender": {
-                "type": [
-                  "string",
-                  "null"
-                ],
+                "type": ["string", "null"],
                 "description": "The user who sent the message, when sent by a user"
               },
               "senderDisplayName": {
-                "type": [
-                  "string",
-                  "null"
-                ],
+                "type": ["string", "null"],
                 "description": "Display name for non-user senders such as bots"
               },
               "senderProfilePictureUrl": {
-                "type": [
-                  "string",
-                  "null"
-                ]
+                "type": ["string", "null"]
               }
             }
           }
@@ -1833,11 +1662,7 @@
           },
           {
             "type": "object",
-            "required": [
-              "threadId",
-              "messageId",
-              "messageContent"
-            ],
+            "required": ["threadId", "messageId", "messageContent"],
             "properties": {
               "messageContent": {
                 "type": "string",
@@ -1848,34 +1673,22 @@
                 "description": "The id of the new message"
               },
               "senderDisplayName": {
-                "type": [
-                  "string",
-                  "null"
-                ],
+                "type": ["string", "null"],
                 "description": "Display name for non-user senders such as bots"
               },
               "senderProfilePictureUrl": {
-                "type": [
-                  "string",
-                  "null"
-                ]
+                "type": ["string", "null"]
               },
               "threadId": {
                 "type": "string",
                 "description": "The id of the thread that has the reply"
               },
               "threadParentSenderId": {
-                "type": [
-                  "string",
-                  "null"
-                ],
+                "type": ["string", "null"],
                 "description": "The user who sent the root message of the thread"
               },
               "userId": {
-                "type": [
-                  "string",
-                  "null"
-                ],
+                "type": ["string", "null"],
                 "description": "The sender id of the reply, when sent by a user"
               }
             }
@@ -1884,12 +1697,7 @@
       },
       "ChannelType": {
         "type": "string",
-        "enum": [
-          "public",
-          "private",
-          "directMessage",
-          "team"
-        ]
+        "enum": ["public", "private", "directMessage", "team"]
       },
       "CommentRef": {
         "oneOf": [
@@ -1909,13 +1717,7 @@
       "CommentedOnDocumentMetadata": {
         "type": "object",
         "description": "Notification sent when someone comments on a document the user owns.",
-        "required": [
-          "documentName",
-          "owner",
-          "commentId",
-          "threadId",
-          "text"
-        ],
+        "required": ["documentName", "owner", "commentId", "threadId", "text"],
         "properties": {
           "commentId": {
             "$ref": "#/components/schemas/CommentRef",
@@ -1926,10 +1728,7 @@
             "description": "The name of the document."
           },
           "fileType": {
-            "type": [
-              "string",
-              "null"
-            ],
+            "type": ["string", "null"],
             "description": "The file type of the document."
           },
           "owner": {
@@ -1937,17 +1736,11 @@
             "description": "The owner of the document."
           },
           "senderDisplayName": {
-            "type": [
-              "string",
-              "null"
-            ],
+            "type": ["string", "null"],
             "description": "Public bot name when the author is an agent rather than a Macro user."
           },
           "senderProfilePictureUrl": {
-            "type": [
-              "string",
-              "null"
-            ]
+            "type": ["string", "null"]
           },
           "subType": {
             "oneOf": [
@@ -1973,9 +1766,7 @@
       "CommonChannelMetadata": {
         "type": "object",
         "description": "Common metadata for notifications on channels",
-        "required": [
-          "channelType"
-        ],
+        "required": ["channelType"],
         "properties": {
           "channelName": {
             "type": "string"
@@ -1997,10 +1788,7 @@
           },
           {
             "type": "object",
-            "required": [
-              "notification_event_type",
-              "service_sender"
-            ],
+            "required": ["notification_event_type", "service_sender"],
             "properties": {
               "metadata": {
                 "description": "Custom metadata that may be needed for the notification"
@@ -2020,13 +1808,7 @@
       "CrmDiscussionMetadata": {
         "type": "object",
         "description": "CRM discussion metadata. The notification entity identifies the company or\ncontact; message and thread UUIDs select the discussion inside it.",
-        "required": [
-          "recordName",
-          "reason",
-          "messageId",
-          "threadId",
-          "text"
-        ],
+        "required": ["recordName", "reason", "messageId", "threadId", "text"],
         "properties": {
           "messageId": {
             "type": "string",
@@ -2042,17 +1824,11 @@
             "description": "Company or contact display name."
           },
           "senderDisplayName": {
-            "type": [
-              "string",
-              "null"
-            ],
+            "type": ["string", "null"],
             "description": "Public display name for a bot author."
           },
           "senderProfilePictureUrl": {
-            "type": [
-              "string",
-              "null"
-            ],
+            "type": ["string", "null"],
             "description": "Optional avatar for push notification attachments."
           },
           "text": {
@@ -2069,19 +1845,12 @@
       "CrmDiscussionReason": {
         "type": "string",
         "description": "Why a CRM discussion notification was delivered.",
-        "enum": [
-          "mention",
-          "reply",
-          "owner"
-        ]
+        "enum": ["mention", "reply", "owner"]
       },
       "DeviceRequest": {
         "type": "object",
         "description": "Request to register or unregister a device for push notifications.",
-        "required": [
-          "deviceType",
-          "token"
-        ],
+        "required": ["deviceType", "token"],
         "properties": {
           "deviceType": {
             "$ref": "#/components/schemas/DeviceType",
@@ -2099,11 +1868,7 @@
       },
       "DeviceType": {
         "type": "string",
-        "enum": [
-          "ios",
-          "android",
-          "iosvoip"
-        ]
+        "enum": ["ios", "android", "iosvoip"]
       },
       "DocumentMentionMetadata": {
         "allOf": [
@@ -2112,20 +1877,14 @@
           },
           {
             "type": "object",
-            "required": [
-              "documentName",
-              "owner"
-            ],
+            "required": ["documentName", "owner"],
             "properties": {
               "documentName": {
                 "type": "string",
                 "description": "The name of the document"
               },
               "fileType": {
-                "type": [
-                  "string",
-                  "null"
-                ],
+                "type": ["string", "null"],
                 "description": "The file type of the document"
               },
               "owner": {
@@ -2155,10 +1914,7 @@
       "Entity": {
         "type": "object",
         "description": "The Entity describes the minimum amount of information required to describe a unique thing in Macro\nThis contains the type of the entity [EntityType] and the string id of that entity",
-        "required": [
-          "entity_type",
-          "entity_id"
-        ],
+        "required": ["entity_type", "entity_id"],
         "properties": {
           "entity_id": {
             "type": "string",
@@ -2173,12 +1929,7 @@
       "EntityAccessGrantedMetadata": {
         "type": "object",
         "description": "A person granted you access to a shared entity.",
-        "required": [
-          "requestId",
-          "revision",
-          "entityName",
-          "accessLevel"
-        ],
+        "required": ["requestId", "revision", "entityName", "accessLevel"],
         "properties": {
           "accessLevel": {
             "$ref": "#/components/schemas/RequestedAccessLevel",
@@ -2189,10 +1940,7 @@
             "description": "Shared item's name."
           },
           "fileType": {
-            "type": [
-              "string",
-              "null"
-            ],
+            "type": ["string", "null"],
             "description": "Document file type for routing."
           },
           "requestId": {
@@ -2210,12 +1958,7 @@
       "EntityAccessRequestedMetadata": {
         "type": "object",
         "description": "A person requested access to a shared entity.",
-        "required": [
-          "requestId",
-          "revision",
-          "entityName",
-          "accessLevel"
-        ],
+        "required": ["requestId", "revision", "entityName", "accessLevel"],
         "properties": {
           "accessLevel": {
             "$ref": "#/components/schemas/RequestedAccessLevel",
@@ -2226,10 +1969,7 @@
             "description": "Shared item's name."
           },
           "fileType": {
-            "type": [
-              "string",
-              "null"
-            ],
+            "type": ["string", "null"],
             "description": "Document file type for routing."
           },
           "requestId": {
@@ -2277,9 +2017,7 @@
       "ErrorResponse": {
         "type": "object",
         "description": "A plain old json error response for use with axum.\nyup, thats it.",
-        "required": [
-          "message"
-        ],
+        "required": ["message"],
         "properties": {
           "message": {
             "type": "string",
@@ -2290,11 +2028,7 @@
       "ExternalChatMessageMetadata": {
         "type": "object",
         "description": "A live message in an independently shared external chat.",
-        "required": [
-          "provider",
-          "chatName",
-          "messageId"
-        ],
+        "required": ["provider", "chatName", "messageId"],
         "properties": {
           "chatName": {
             "type": "string",
@@ -2314,16 +2048,12 @@
       "ExternalChatProvider": {
         "type": "string",
         "description": "The messaging service an external chat lives in.",
-        "enum": [
-          "whatsapp"
-        ]
+        "enum": ["whatsapp"]
       },
       "GetAllUserNotificationsResponse": {
         "type": "object",
         "description": "The strongly typed response for listing user notifications.",
-        "required": [
-          "items"
-        ],
+        "required": ["items"],
         "properties": {
           "items": {
             "type": "array",
@@ -2333,10 +2063,7 @@
             "description": "The list of items returned."
           },
           "next_cursor": {
-            "type": [
-              "string",
-              "null"
-            ],
+            "type": ["string", "null"],
             "description": "The next page cursor if it exists."
           }
         }
@@ -2344,9 +2071,7 @@
       "GetNotificationTypePreferencesResponse": {
         "type": "object",
         "description": "Response for listing disabled notification types.",
-        "required": [
-          "disabled_types"
-        ],
+        "required": ["disabled_types"],
         "properties": {
           "disabled_types": {
             "type": "array",
@@ -2414,10 +2139,7 @@
       "GithubPrCheckRunState": {
         "type": "string",
         "description": "The normalized result state for a GitHub pull request check-run notification.",
-        "enum": [
-          "completed",
-          "failed"
-        ]
+        "enum": ["completed", "failed"]
       },
       "GithubPrComment": {
         "allOf": [
@@ -2427,16 +2149,10 @@
           },
           {
             "type": "object",
-            "required": [
-              "commentKind",
-              "commentSnippet"
-            ],
+            "required": ["commentKind", "commentSnippet"],
             "properties": {
               "commentGithubId": {
-                "type": [
-                  "integer",
-                  "null"
-                ],
+                "type": ["integer", "null"],
                 "format": "int64",
                 "description": "The GitHub numeric id of the comment, when available.",
                 "minimum": 0
@@ -2450,10 +2166,7 @@
                 "description": "A truncated excerpt of the comment body."
               },
               "commentUrl": {
-                "type": [
-                  "string",
-                  "null"
-                ],
+                "type": ["string", "null"],
                 "description": "The public GitHub URL for the comment, when available."
               }
             }
@@ -2464,28 +2177,17 @@
       "GithubPrCommentKind": {
         "type": "string",
         "description": "The kind of GitHub comment that triggered a [`GithubPrComment`] notification.",
-        "enum": [
-          "issue",
-          "review_comment"
-        ]
+        "enum": ["issue", "review_comment"]
       },
       "GithubPrEventAction": {
         "type": "string",
         "description": "The GitHub pull request webhook action that triggered the notification.",
-        "enum": [
-          "opened",
-          "reopened",
-          "closed"
-        ]
+        "enum": ["opened", "reopened", "closed"]
       },
       "GithubPrEventStatus": {
         "type": "string",
         "description": "The normalized lifecycle status for a GitHub pull request notification.",
-        "enum": [
-          "open",
-          "closed",
-          "merged"
-        ]
+        "enum": ["open", "closed", "merged"]
       },
       "GithubPrMention": {
         "allOf": [
@@ -2495,25 +2197,16 @@
           },
           {
             "type": "object",
-            "required": [
-              "location",
-              "textSnippet"
-            ],
+            "required": ["location", "textSnippet"],
             "properties": {
               "commentGithubId": {
-                "type": [
-                  "integer",
-                  "null"
-                ],
+                "type": ["integer", "null"],
                 "format": "int64",
                 "description": "The GitHub numeric id of the comment or review containing the mention, when available.",
                 "minimum": 0
               },
               "commentUrl": {
-                "type": [
-                  "string",
-                  "null"
-                ],
+                "type": ["string", "null"],
                 "description": "The public GitHub URL for the text containing the mention, when available."
               },
               "location": {
@@ -2532,12 +2225,7 @@
       "GithubPrMentionLocation": {
         "type": "string",
         "description": "Where in a GitHub pull request the user was mentioned.",
-        "enum": [
-          "pr_body",
-          "comment",
-          "review",
-          "review_comment"
-        ]
+        "enum": ["pr_body", "comment", "review", "review_comment"]
       },
       "GithubPrNotificationCommon": {
         "type": "object",
@@ -2581,24 +2269,15 @@
             "description": "The GitHub repository name."
           },
           "senderGithubAvatarUrl": {
-            "type": [
-              "string",
-              "null"
-            ],
+            "type": ["string", "null"],
             "description": "The GitHub avatar URL for the sender, when available."
           },
           "senderGithubLogin": {
-            "type": [
-              "string",
-              "null"
-            ],
+            "type": ["string", "null"],
             "description": "The GitHub login for the sender, when available."
           },
           "senderGithubUserId": {
-            "type": [
-              "string",
-              "null"
-            ],
+            "type": ["string", "null"],
             "description": "The stable GitHub numeric user id for the sender, serialized as a string."
           },
           "title": {
@@ -2619,31 +2298,20 @@
           },
           {
             "type": "object",
-            "required": [
-              "state"
-            ],
+            "required": ["state"],
             "properties": {
               "reviewGithubId": {
-                "type": [
-                  "integer",
-                  "null"
-                ],
+                "type": ["integer", "null"],
                 "format": "int64",
                 "description": "The GitHub numeric id of the review, when available.",
                 "minimum": 0
               },
               "reviewSnippet": {
-                "type": [
-                  "string",
-                  "null"
-                ],
+                "type": ["string", "null"],
                 "description": "A truncated excerpt of the review body, when any was written."
               },
               "reviewUrl": {
-                "type": [
-                  "string",
-                  "null"
-                ],
+                "type": ["string", "null"],
                 "description": "The public GitHub URL for the review, when available."
               },
               "state": {
@@ -2658,11 +2326,7 @@
       "GithubPrReviewState": {
         "type": "string",
         "description": "The state of a submitted GitHub pull request review.",
-        "enum": [
-          "approved",
-          "changes_requested",
-          "commented"
-        ]
+        "enum": ["approved", "changes_requested", "commented"]
       },
       "GithubPrStatusChanged": {
         "allOf": [
@@ -2672,34 +2336,22 @@
           },
           {
             "type": "object",
-            "required": [
-              "status",
-              "action"
-            ],
+            "required": ["status", "action"],
             "properties": {
               "action": {
                 "$ref": "#/components/schemas/GithubPrEventAction",
                 "description": "The webhook action that triggered this notification."
               },
               "baseBranch": {
-                "type": [
-                  "string",
-                  "null"
-                ],
+                "type": ["string", "null"],
                 "description": "The pull request base branch, when available."
               },
               "headBranch": {
-                "type": [
-                  "string",
-                  "null"
-                ],
+                "type": ["string", "null"],
                 "description": "The pull request head branch, when available."
               },
               "mergedAt": {
-                "type": [
-                  "string",
-                  "null"
-                ],
+                "type": ["string", "null"],
                 "format": "date-time",
                 "description": "When the pull request was merged, when available."
               },
@@ -2733,17 +2385,11 @@
             "type": "object",
             "properties": {
               "requestedReviewerGithubLogin": {
-                "type": [
-                  "string",
-                  "null"
-                ],
+                "type": ["string", "null"],
                 "description": "The GitHub login of the requested reviewer, when available."
               },
               "requestedReviewerGithubUserId": {
-                "type": [
-                  "string",
-                  "null"
-                ],
+                "type": ["string", "null"],
                 "description": "The stable GitHub numeric user id of the requested reviewer, serialized as a string."
               }
             }
@@ -2754,9 +2400,7 @@
       "InboxReauthRequiredMetadata": {
         "type": "object",
         "description": "Metadata for a notification that a linked inbox's grant has died and the\ninbox must be reconnected. Fanned out to the inbox owner and every delegate,\nsince any of them holding the Google grant can restore sync.",
-        "required": [
-          "emailAddress"
-        ],
+        "required": ["emailAddress"],
         "properties": {
           "emailAddress": {
             "type": "string",
@@ -2794,17 +2438,11 @@
             "description": "Semantic reason selected by the message delivery domain."
           },
           "senderDisplayName": {
-            "type": [
-              "string",
-              "null"
-            ],
+            "type": ["string", "null"],
             "description": "Public display name for a bot author."
           },
           "senderProfilePictureUrl": {
-            "type": [
-              "string",
-              "null"
-            ],
+            "type": ["string", "null"],
             "description": "Optional avatar for push notification attachments."
           },
           "text": {
@@ -2821,22 +2459,12 @@
       "InitiativeDiscussionReason": {
         "type": "string",
         "description": "Why a project discussion notification was delivered.",
-        "enum": [
-          "mention",
-          "reply",
-          "assignee",
-          "owner"
-        ]
+        "enum": ["mention", "reply", "assignee", "owner"]
       },
       "InviteToTeamMetadata": {
         "type": "object",
         "description": "Metadata for when a user is invited to a team.",
-        "required": [
-          "teamName",
-          "teamId",
-          "teamInviteId",
-          "invitedBy"
-        ],
+        "required": ["teamName", "teamId", "teamInviteId", "invitedBy"],
         "properties": {
           "invitedBy": {
             "type": "string",
@@ -2855,17 +2483,11 @@
             "description": "Whether this email reminds the invitee of an invite they have not answered."
           },
           "role": {
-            "type": [
-              "string",
-              "null"
-            ],
+            "type": ["string", "null"],
             "description": "Role/permission level in the team"
           },
           "senderProfilePictureUrl": {
-            "type": [
-              "string",
-              "null"
-            ],
+            "type": ["string", "null"],
             "description": "The sender's profile picture URL, if available."
           },
           "teamId": {
@@ -2887,30 +2509,19 @@
       "InviteePlan": {
         "type": "string",
         "description": "What a team invitee gets by joining.",
-        "enum": [
-          "free",
-          "premium"
-        ]
+        "enum": ["free", "premium"]
       },
       "ItemSharedMetadata": {
         "type": "object",
         "description": "Metadata for when a item is shared with a user",
-        "required": [
-          "userIds",
-          "itemType",
-          "itemId",
-          "sharedBy"
-        ],
+        "required": ["userIds", "itemType", "itemId", "sharedBy"],
         "properties": {
           "itemId": {
             "type": "string",
             "description": "The name/title of the shared item (optional)"
           },
           "itemName": {
-            "type": [
-              "string",
-              "null"
-            ],
+            "type": ["string", "null"],
             "description": "The name/title of the shared item"
           },
           "itemType": {
@@ -2918,10 +2529,7 @@
             "description": "The type of item being shared"
           },
           "permissionLevel": {
-            "type": [
-              "string",
-              "null"
-            ],
+            "type": ["string", "null"],
             "description": "Permission level granted (read, write, admin, etc.)"
           },
           "sharedBy": {
@@ -2960,10 +2568,7 @@
             "description": "The name of the document."
           },
           "fileType": {
-            "type": [
-              "string",
-              "null"
-            ],
+            "type": ["string", "null"],
             "description": "The file type of the document."
           },
           "mentionId": {
@@ -2975,17 +2580,11 @@
             "description": "The owner of the document."
           },
           "senderDisplayName": {
-            "type": [
-              "string",
-              "null"
-            ],
+            "type": ["string", "null"],
             "description": "Public bot name when the author is an agent rather than a Macro user."
           },
           "senderProfilePictureUrl": {
-            "type": [
-              "string",
-              "null"
-            ]
+            "type": ["string", "null"]
           },
           "subType": {
             "oneOf": [
@@ -3010,18 +2609,10 @@
       },
       "NewEmailMetadata": {
         "type": "object",
-        "required": [
-          "toEmail",
-          "threadId",
-          "subject",
-          "snippet"
-        ],
+        "required": ["toEmail", "threadId", "subject", "snippet"],
         "properties": {
           "sender": {
-            "type": [
-              "string",
-              "null"
-            ]
+            "type": ["string", "null"]
           },
           "snippet": {
             "type": "string"
@@ -3042,10 +2633,7 @@
           {
             "type": "object",
             "description": "Someone mentioned you in a channel.",
-            "required": [
-              "content",
-              "tag"
-            ],
+            "required": ["content", "tag"],
             "properties": {
               "content": {
                 "$ref": "#/components/schemas/ChannelMentionMetadata",
@@ -3053,19 +2641,14 @@
               },
               "tag": {
                 "type": "string",
-                "enum": [
-                  "channel_mention"
-                ]
+                "enum": ["channel_mention"]
               }
             }
           },
           {
             "type": "object",
             "description": "Someone mentioned a document in a channel.",
-            "required": [
-              "content",
-              "tag"
-            ],
+            "required": ["content", "tag"],
             "properties": {
               "content": {
                 "$ref": "#/components/schemas/DocumentMentionMetadata",
@@ -3073,19 +2656,14 @@
               },
               "tag": {
                 "type": "string",
-                "enum": [
-                  "document_mention"
-                ]
+                "enum": ["document_mention"]
               }
             }
           },
           {
             "type": "object",
             "description": "User was mentioned in a comment in a document",
-            "required": [
-              "content",
-              "tag"
-            ],
+            "required": ["content", "tag"],
             "properties": {
               "content": {
                 "$ref": "#/components/schemas/MentionedInDocumentCommentMetadata",
@@ -3093,19 +2671,14 @@
               },
               "tag": {
                 "type": "string",
-                "enum": [
-                  "mentioned_in_document_comment"
-                ]
+                "enum": ["mentioned_in_document_comment"]
               }
             }
           },
           {
             "type": "object",
             "description": "Someone replied to a document comment thread the user participated in.",
-            "required": [
-              "content",
-              "tag"
-            ],
+            "required": ["content", "tag"],
             "properties": {
               "content": {
                 "$ref": "#/components/schemas/RepliedToDocumentCommentThreadMetadata",
@@ -3113,19 +2686,14 @@
               },
               "tag": {
                 "type": "string",
-                "enum": [
-                  "replied_to_document_comment_thread"
-                ]
+                "enum": ["replied_to_document_comment_thread"]
               }
             }
           },
           {
             "type": "object",
             "description": "Someone commented on a document the user owns.",
-            "required": [
-              "content",
-              "tag"
-            ],
+            "required": ["content", "tag"],
             "properties": {
               "content": {
                 "$ref": "#/components/schemas/CommentedOnDocumentMetadata",
@@ -3133,19 +2701,14 @@
               },
               "tag": {
                 "type": "string",
-                "enum": [
-                  "commented_on_document"
-                ]
+                "enum": ["commented_on_document"]
               }
             }
           },
           {
             "type": "object",
             "description": "Someone requested more access to a shared entity.",
-            "required": [
-              "content",
-              "tag"
-            ],
+            "required": ["content", "tag"],
             "properties": {
               "content": {
                 "$ref": "#/components/schemas/EntityAccessRequestedMetadata",
@@ -3153,19 +2716,14 @@
               },
               "tag": {
                 "type": "string",
-                "enum": [
-                  "entity_access_requested"
-                ]
+                "enum": ["entity_access_requested"]
               }
             }
           },
           {
             "type": "object",
             "description": "An owner granted requested access.",
-            "required": [
-              "content",
-              "tag"
-            ],
+            "required": ["content", "tag"],
             "properties": {
               "content": {
                 "$ref": "#/components/schemas/EntityAccessGrantedMetadata",
@@ -3173,19 +2731,14 @@
               },
               "tag": {
                 "type": "string",
-                "enum": [
-                  "entity_access_granted"
-                ]
+                "enum": ["entity_access_granted"]
               }
             }
           },
           {
             "type": "object",
             "description": "Someone commented, replied, or mentioned the recipient on a project.",
-            "required": [
-              "content",
-              "tag"
-            ],
+            "required": ["content", "tag"],
             "properties": {
               "content": {
                 "$ref": "#/components/schemas/InitiativeDiscussionMetadata",
@@ -3193,19 +2746,14 @@
               },
               "tag": {
                 "type": "string",
-                "enum": [
-                  "initiative_discussion"
-                ]
+                "enum": ["initiative_discussion"]
               }
             }
           },
           {
             "type": "object",
             "description": "Someone commented, replied, or mentioned the recipient on a CRM company or contact.",
-            "required": [
-              "content",
-              "tag"
-            ],
+            "required": ["content", "tag"],
             "properties": {
               "content": {
                 "$ref": "#/components/schemas/CrmDiscussionMetadata",
@@ -3213,19 +2761,14 @@
               },
               "tag": {
                 "type": "string",
-                "enum": [
-                  "crm_discussion"
-                ]
+                "enum": ["crm_discussion"]
               }
             }
           },
           {
             "type": "object",
             "description": "The user was invited to a channel.",
-            "required": [
-              "content",
-              "tag"
-            ],
+            "required": ["content", "tag"],
             "properties": {
               "content": {
                 "$ref": "#/components/schemas/ChannelInviteMetadata",
@@ -3233,19 +2776,14 @@
               },
               "tag": {
                 "type": "string",
-                "enum": [
-                  "channel_invite"
-                ]
+                "enum": ["channel_invite"]
               }
             }
           },
           {
             "type": "object",
             "description": "A user sent a message in a channel.",
-            "required": [
-              "content",
-              "tag"
-            ],
+            "required": ["content", "tag"],
             "properties": {
               "content": {
                 "$ref": "#/components/schemas/ChannelMessageSendMetadata",
@@ -3253,19 +2791,14 @@
               },
               "tag": {
                 "type": "string",
-                "enum": [
-                  "channel_message_send"
-                ]
+                "enum": ["channel_message_send"]
               }
             }
           },
           {
             "type": "object",
             "description": "Someone replied to a thread in a channel that the user is part of.",
-            "required": [
-              "content",
-              "tag"
-            ],
+            "required": ["content", "tag"],
             "properties": {
               "content": {
                 "$ref": "#/components/schemas/ChannelReplyMetadata",
@@ -3273,19 +2806,14 @@
               },
               "tag": {
                 "type": "string",
-                "enum": [
-                  "channel_message_reply"
-                ]
+                "enum": ["channel_message_reply"]
               }
             }
           },
           {
             "type": "object",
             "description": "A call has started in a channel the user is a member of.\n\nThe `call-started` alias keeps rows persisted before the type name\nwas normalized to snake_case (`call_started`) deserializable.",
-            "required": [
-              "content",
-              "tag"
-            ],
+            "required": ["content", "tag"],
             "properties": {
               "content": {
                 "$ref": "#/components/schemas/CallStartedMetadata",
@@ -3293,19 +2821,14 @@
               },
               "tag": {
                 "type": "string",
-                "enum": [
-                  "call_started"
-                ]
+                "enum": ["call_started"]
               }
             }
           },
           {
             "type": "object",
             "description": "A new email has been sent to the user.",
-            "required": [
-              "content",
-              "tag"
-            ],
+            "required": ["content", "tag"],
             "properties": {
               "content": {
                 "$ref": "#/components/schemas/NewEmailMetadata",
@@ -3313,19 +2836,14 @@
               },
               "tag": {
                 "type": "string",
-                "enum": [
-                  "new_email"
-                ]
+                "enum": ["new_email"]
               }
             }
           },
           {
             "type": "object",
             "description": "A linked inbox's grant died and must be reconnected.",
-            "required": [
-              "content",
-              "tag"
-            ],
+            "required": ["content", "tag"],
             "properties": {
               "content": {
                 "$ref": "#/components/schemas/InboxReauthRequiredMetadata",
@@ -3333,19 +2851,14 @@
               },
               "tag": {
                 "type": "string",
-                "enum": [
-                  "inbox_reauth_required"
-                ]
+                "enum": ["inbox_reauth_required"]
               }
             }
           },
           {
             "type": "object",
             "description": "A user was invited to a team.",
-            "required": [
-              "content",
-              "tag"
-            ],
+            "required": ["content", "tag"],
             "properties": {
               "content": {
                 "$ref": "#/components/schemas/InviteToTeamMetadata",
@@ -3353,19 +2866,14 @@
               },
               "tag": {
                 "type": "string",
-                "enum": [
-                  "invite_to_team"
-                ]
+                "enum": ["invite_to_team"]
               }
             }
           },
           {
             "type": "object",
             "description": "A user was assigned to a task.",
-            "required": [
-              "content",
-              "tag"
-            ],
+            "required": ["content", "tag"],
             "properties": {
               "content": {
                 "$ref": "#/components/schemas/TaskAssignedMetadata",
@@ -3373,19 +2881,14 @@
               },
               "tag": {
                 "type": "string",
-                "enum": [
-                  "task_assigned"
-                ]
+                "enum": ["task_assigned"]
               }
             }
           },
           {
             "type": "object",
             "description": "A reminder the user set for themselves came due.",
-            "required": [
-              "content",
-              "tag"
-            ],
+            "required": ["content", "tag"],
             "properties": {
               "content": {
                 "$ref": "#/components/schemas/ReminderMetadata",
@@ -3393,19 +2896,14 @@
               },
               "tag": {
                 "type": "string",
-                "enum": [
-                  "reminder"
-                ]
+                "enum": ["reminder"]
               }
             }
           },
           {
             "type": "object",
             "description": "A live message in a shared external chat.",
-            "required": [
-              "content",
-              "tag"
-            ],
+            "required": ["content", "tag"],
             "properties": {
               "content": {
                 "$ref": "#/components/schemas/ExternalChatMessageMetadata",
@@ -3413,19 +2911,14 @@
               },
               "tag": {
                 "type": "string",
-                "enum": [
-                  "external_chat_message"
-                ]
+                "enum": ["external_chat_message"]
               }
             }
           },
           {
             "type": "object",
             "description": "A calendar event alarm came due.",
-            "required": [
-              "content",
-              "tag"
-            ],
+            "required": ["content", "tag"],
             "properties": {
               "content": {
                 "$ref": "#/components/schemas/CalendarEventReminderMetadata",
@@ -3433,19 +2926,14 @@
               },
               "tag": {
                 "type": "string",
-                "enum": [
-                  "calendar_event_reminder"
-                ]
+                "enum": ["calendar_event_reminder"]
               }
             }
           },
           {
             "type": "object",
             "description": "An AI assistant responded to a chat.",
-            "required": [
-              "content",
-              "tag"
-            ],
+            "required": ["content", "tag"],
             "properties": {
               "content": {
                 "$ref": "#/components/schemas/AiResponseMetadata",
@@ -3453,19 +2941,14 @@
               },
               "tag": {
                 "type": "string",
-                "enum": [
-                  "ai_response"
-                ]
+                "enum": ["ai_response"]
               }
             }
           },
           {
             "type": "object",
             "description": "A GitHub pull request changed lifecycle state.\n\nThe `github_pr_event` alias keeps rows and queue messages persisted\nbefore the rename deserializable.",
-            "required": [
-              "content",
-              "tag"
-            ],
+            "required": ["content", "tag"],
             "properties": {
               "content": {
                 "$ref": "#/components/schemas/GithubPrStatusChanged",
@@ -3473,19 +2956,14 @@
               },
               "tag": {
                 "type": "string",
-                "enum": [
-                  "github_pr_status_changed"
-                ]
+                "enum": ["github_pr_status_changed"]
               }
             }
           },
           {
             "type": "object",
             "description": "A GitHub pull request check run completed.",
-            "required": [
-              "content",
-              "tag"
-            ],
+            "required": ["content", "tag"],
             "properties": {
               "content": {
                 "$ref": "#/components/schemas/GithubPrCheckRun",
@@ -3493,19 +2971,14 @@
               },
               "tag": {
                 "type": "string",
-                "enum": [
-                  "github_pr_check_run"
-                ]
+                "enum": ["github_pr_check_run"]
               }
             }
           },
           {
             "type": "object",
             "description": "The user's review was requested on a GitHub pull request.",
-            "required": [
-              "content",
-              "tag"
-            ],
+            "required": ["content", "tag"],
             "properties": {
               "content": {
                 "$ref": "#/components/schemas/GithubReviewRequested",
@@ -3513,19 +2986,14 @@
               },
               "tag": {
                 "type": "string",
-                "enum": [
-                  "github_review_requested"
-                ]
+                "enum": ["github_review_requested"]
               }
             }
           },
           {
             "type": "object",
             "description": "A GitHub pull request was commented on.",
-            "required": [
-              "content",
-              "tag"
-            ],
+            "required": ["content", "tag"],
             "properties": {
               "content": {
                 "$ref": "#/components/schemas/GithubPrComment",
@@ -3533,19 +3001,14 @@
               },
               "tag": {
                 "type": "string",
-                "enum": [
-                  "github_pr_comment"
-                ]
+                "enum": ["github_pr_comment"]
               }
             }
           },
           {
             "type": "object",
             "description": "The user was mentioned on a GitHub pull request.",
-            "required": [
-              "content",
-              "tag"
-            ],
+            "required": ["content", "tag"],
             "properties": {
               "content": {
                 "$ref": "#/components/schemas/GithubPrMention",
@@ -3553,19 +3016,14 @@
               },
               "tag": {
                 "type": "string",
-                "enum": [
-                  "github_pr_mention"
-                ]
+                "enum": ["github_pr_mention"]
               }
             }
           },
           {
             "type": "object",
             "description": "A review was submitted on the user's GitHub pull request.",
-            "required": [
-              "content",
-              "tag"
-            ],
+            "required": ["content", "tag"],
             "properties": {
               "content": {
                 "$ref": "#/components/schemas/GithubPrReview",
@@ -3573,19 +3031,14 @@
               },
               "tag": {
                 "type": "string",
-                "enum": [
-                  "github_pr_review"
-                ]
+                "enum": ["github_pr_review"]
               }
             }
           },
           {
             "type": "object",
             "description": "An agent finished a turn with nothing queued behind it.",
-            "required": [
-              "content",
-              "tag"
-            ],
+            "required": ["content", "tag"],
             "properties": {
               "content": {
                 "$ref": "#/components/schemas/AgentSessionSettledMetadata",
@@ -3593,19 +3046,14 @@
               },
               "tag": {
                 "type": "string",
-                "enum": [
-                  "agent_session_settled"
-                ]
+                "enum": ["agent_session_settled"]
               }
             }
           },
           {
             "type": "object",
             "description": "An agent is blocked on a question for the session's owner.",
-            "required": [
-              "content",
-              "tag"
-            ],
+            "required": ["content", "tag"],
             "properties": {
               "content": {
                 "$ref": "#/components/schemas/AgentSessionWaitingForInputMetadata",
@@ -3613,19 +3061,14 @@
               },
               "tag": {
                 "type": "string",
-                "enum": [
-                  "agent_session_waiting_for_input"
-                ]
+                "enum": ["agent_session_waiting_for_input"]
               }
             }
           },
           {
             "type": "object",
             "description": "The user was named in a prompt to an agent session.",
-            "required": [
-              "content",
-              "tag"
-            ],
+            "required": ["content", "tag"],
             "properties": {
               "content": {
                 "$ref": "#/components/schemas/AgentSessionMentionedMetadata",
@@ -3633,19 +3076,14 @@
               },
               "tag": {
                 "type": "string",
-                "enum": [
-                  "agent_session_mentioned"
-                ]
+                "enum": ["agent_session_mentioned"]
               }
             }
           },
           {
             "type": "object",
             "description": "Someone reacted to one of the user's channel messages.",
-            "required": [
-              "content",
-              "tag"
-            ],
+            "required": ["content", "tag"],
             "properties": {
               "content": {
                 "$ref": "#/components/schemas/ChannelMessageReactionMetadata",
@@ -3653,19 +3091,14 @@
               },
               "tag": {
                 "type": "string",
-                "enum": [
-                  "channel_message_reaction"
-                ]
+                "enum": ["channel_message_reaction"]
               }
             }
           },
           {
             "type": "object",
             "description": "A channel member asked to be added as a guest of an event the\nuser shared with the channel.",
-            "required": [
-              "content",
-              "tag"
-            ],
+            "required": ["content", "tag"],
             "properties": {
               "content": {
                 "$ref": "#/components/schemas/CalendarEventJoinRequestMetadata",
@@ -3673,19 +3106,14 @@
               },
               "tag": {
                 "type": "string",
-                "enum": [
-                  "calendar_event_join_request"
-                ]
+                "enum": ["calendar_event_join_request"]
               }
             }
           },
           {
             "type": "object",
             "description": "One of the user's routines finished a run, successfully or not.",
-            "required": [
-              "content",
-              "tag"
-            ],
+            "required": ["content", "tag"],
             "properties": {
               "content": {
                 "$ref": "#/components/schemas/RoutineRunFinishedMetadata",
@@ -3693,9 +3121,7 @@
               },
               "tag": {
                 "type": "string",
-                "enum": [
-                  "routine_run_finished"
-                ]
+                "enum": ["routine_run_finished"]
               }
             }
           }
@@ -3705,9 +3131,7 @@
       "NotificationBulkRequest": {
         "type": "object",
         "description": "the notification ids that we are bulk updating",
-        "required": [
-          "notificationIds"
-        ],
+        "required": ["notificationIds"],
         "properties": {
           "notificationIds": {
             "type": "array",
@@ -3723,57 +3147,41 @@
         "oneOf": [
           {
             "type": "object",
-            "required": [
-              "type"
-            ],
+            "required": ["type"],
             "properties": {
               "type": {
                 "type": "string",
-                "enum": [
-                  "task"
-                ]
+                "enum": ["task"]
               }
             }
           },
           {
             "type": "object",
-            "required": [
-              "type"
-            ],
+            "required": ["type"],
             "properties": {
               "type": {
                 "type": "string",
-                "enum": [
-                  "snippet"
-                ]
+                "enum": ["snippet"]
               }
             }
           },
           {
             "type": "object",
-            "required": [
-              "type"
-            ],
+            "required": ["type"],
             "properties": {
               "type": {
                 "type": "string",
-                "enum": [
-                  "skill"
-                ]
+                "enum": ["skill"]
               }
             }
           },
           {
             "type": "object",
-            "required": [
-              "type"
-            ],
+            "required": ["type"],
             "properties": {
               "type": {
                 "type": "string",
-                "enum": [
-                  "initiative_description"
-                ]
+                "enum": ["initiative_description"]
               }
             }
           }
@@ -3782,18 +3190,12 @@
       },
       "NotificationServiceApiVersion": {
         "type": "string",
-        "enum": [
-          "v1"
-        ]
+        "enum": ["v1"]
       },
       "NotificationState": {
         "type": "string",
         "description": "The mutually exclusive lifecycle states of a user's notification.",
-        "enum": [
-          "unseen",
-          "seen",
-          "done"
-        ]
+        "enum": ["unseen", "seen", "done"]
       },
       "NotificationTypeName": {
         "type": "string",
@@ -3802,9 +3204,7 @@
       "PushNotificationData": {
         "type": "object",
         "description": "the value we send as the payload in the ios notification\nThis data is accessible to the client",
-        "required": [
-          "notificationId"
-        ],
+        "required": ["notificationId"],
         "properties": {
           "navigation": {
             "oneOf": [
@@ -3823,17 +3223,11 @@
             "description": "The id of the notification record (UserNotification.id)"
           },
           "recipientId": {
-            "type": [
-              "string",
-              "null"
-            ],
+            "type": ["string", "null"],
             "description": "Account that owns the receiving device, set during per-recipient delivery."
           },
           "senderProfilePictureUrl": {
-            "type": [
-              "string",
-              "null"
-            ],
+            "type": ["string", "null"],
             "description": "The sender's profile picture URL, used by the Notification Service Extension\nto download and attach as a rich notification image."
           }
         }
@@ -3843,12 +3237,7 @@
           {
             "type": "object",
             "description": "Open a channel at a specific message.",
-            "required": [
-              "channelId",
-              "messageId",
-              "threadId",
-              "type"
-            ],
+            "required": ["channelId", "messageId", "threadId", "type"],
             "properties": {
               "channelId": {
                 "type": "string",
@@ -3861,18 +3250,13 @@
                 "description": "Message to highlight."
               },
               "threadId": {
-                "type": [
-                  "string",
-                  "null"
-                ],
+                "type": ["string", "null"],
                 "format": "uuid",
                 "description": "Root of the message's thread; null identifies a top-level message."
               },
               "type": {
                 "type": "string",
-                "enum": [
-                  "channel"
-                ]
+                "enum": ["channel"]
               }
             }
           }
@@ -3903,10 +3287,7 @@
                 "description": "When the notification was created."
               },
               "deleted_at": {
-                "type": [
-                  "string",
-                  "null"
-                ],
+                "type": ["string", "null"],
                 "format": "date-time",
                 "description": "When the notification was deleted."
               },
@@ -3922,10 +3303,7 @@
               "notification_metadata": {
                 "type": "object",
                 "description": "A notification metadata value tagged with the notification event type.",
-                "required": [
-                  "tag",
-                  "content"
-                ],
+                "required": ["tag", "content"],
                 "properties": {
                   "content": {},
                   "tag": {
@@ -3958,10 +3336,7 @@
                 "description": "When the notification was last updated."
               },
               "viewed_at": {
-                "type": [
-                  "string",
-                  "null"
-                ],
+                "type": ["string", "null"],
                 "format": "date-time",
                 "description": "When the notification was viewed/seen."
               }
@@ -3973,10 +3348,7 @@
       "ReminderMetadata": {
         "type": "object",
         "description": "Metadata for a reminder the user set for themselves coming due.\n\nThere is no sender: a reminder is self-set, so the dispatcher sends it with\n`sender_id: None` (a recipient who is also the sender is filtered out of\ntheir own notification). Every formatter here must therefore work without\none.\n\nThe associated entity, when there is one, lives on the notification row\nrather than in here, and clients resolve its name from that — so the\ndispatcher does not have to look up a name across five entity types.",
-        "required": [
-          "reminderId",
-          "description"
-        ],
+        "required": ["reminderId", "description"],
         "properties": {
           "description": {
             "type": "string",
@@ -3988,10 +3360,7 @@
             "description": "The reminder that fired."
           },
           "scheduledFor": {
-            "type": [
-              "string",
-              "null"
-            ],
+            "type": ["string", "null"],
             "format": "date-time",
             "description": "Which firing this is — the occurrence the reminder came due for.\n\nWhat distinguishes two firings of the same recurring reminder, which are\notherwise identical: same id, same description. The collapse key is\nbuilt from it, so without it Tuesday's alert would replace Monday's\nunread one on the lock screen.\n\nOptional because notifications written before recurring dispatch existed\nhave no such field, and they still have to read back."
           }
@@ -4000,13 +3369,7 @@
       "RepliedToDocumentCommentThreadMetadata": {
         "type": "object",
         "description": "Notification sent when someone replies to a document comment thread.",
-        "required": [
-          "documentName",
-          "owner",
-          "commentId",
-          "threadId",
-          "text"
-        ],
+        "required": ["documentName", "owner", "commentId", "threadId", "text"],
         "properties": {
           "commentId": {
             "$ref": "#/components/schemas/CommentRef",
@@ -4017,10 +3380,7 @@
             "description": "The name of the document."
           },
           "fileType": {
-            "type": [
-              "string",
-              "null"
-            ],
+            "type": ["string", "null"],
             "description": "The file type of the document."
           },
           "owner": {
@@ -4028,17 +3388,11 @@
             "description": "The owner of the document."
           },
           "senderDisplayName": {
-            "type": [
-              "string",
-              "null"
-            ],
+            "type": ["string", "null"],
             "description": "Public bot name when the author is an agent rather than a Macro user."
           },
           "senderProfilePictureUrl": {
-            "type": [
-              "string",
-              "null"
-            ]
+            "type": ["string", "null"]
           },
           "subType": {
             "oneOf": [
@@ -4064,20 +3418,12 @@
       "RequestedAccessLevel": {
         "type": "string",
         "description": "Permission level used by an access request, excluding ownership.",
-        "enum": [
-          "view",
-          "comment",
-          "edit"
-        ]
+        "enum": ["view", "comment", "edit"]
       },
       "RoutineRunFinishedMetadata": {
         "type": "object",
         "description": "One of the recipient's routines finished a run. Every run notifies,\nwhether it succeeded or failed.",
-        "required": [
-          "routineId",
-          "routineName",
-          "outcome"
-        ],
+        "required": ["routineId", "routineName", "outcome"],
         "properties": {
           "outcome": {
             "$ref": "#/components/schemas/RoutineRunOutcome",
@@ -4097,28 +3443,19 @@
       "RoutineRunOutcome": {
         "type": "string",
         "description": "How a routine run ended, as its notification reports it.",
-        "enum": [
-          "succeeded",
-          "failed"
-        ]
+        "enum": ["succeeded", "failed"]
       },
       "TaskAssignedMetadata": {
         "type": "object",
         "description": "Metadata for when a user is assigned to a task",
-        "required": [
-          "taskId",
-          "assignedBy"
-        ],
+        "required": ["taskId", "assignedBy"],
         "properties": {
           "assignedBy": {
             "type": "string",
             "description": "The user who assigned the task"
           },
           "senderProfilePictureUrl": {
-            "type": [
-              "string",
-              "null"
-            ]
+            "type": ["string", "null"]
           },
           "subType": {
             "oneOf": [
@@ -4136,20 +3473,14 @@
             "description": "The unique identifier of the task"
           },
           "taskName": {
-            "type": [
-              "string",
-              "null"
-            ],
+            "type": ["string", "null"],
             "description": "The name of the task (optional)"
           }
         }
       },
       "UnsubscribeItemPathParams": {
         "type": "object",
-        "required": [
-          "item_type",
-          "item_id"
-        ],
+        "required": ["item_type", "item_id"],
         "properties": {
           "item_id": {
             "type": "string"
@@ -4161,10 +3492,7 @@
       },
       "UserUnsubscribe": {
         "type": "object",
-        "required": [
-          "item_id",
-          "item_type"
-        ],
+        "required": ["item_id", "item_type"],
         "properties": {
           "item_id": {
             "type": "string",
@@ -4175,10 +3503,7 @@
             "description": "The item type"
           },
           "snoozed_until": {
-            "type": [
-              "string",
-              "null"
-            ],
+            "type": ["string", "null"],
             "format": "date-time",
             "description": "None for permanent mutes; notifications resume automatically at this deadline."
           }

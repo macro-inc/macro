@@ -340,6 +340,17 @@ export type CreatePortalSessionRequest = {
     returnUrl: string;
 };
 
+export type CreateProfilePictureUploadRequest = {
+    /**
+     * Mime type of the image.
+     */
+    content_type: string;
+    /**
+     * File name, such as `avatar.png`.
+     */
+    file_name: string;
+};
+
 /**
  * The request body to create a new team
  */
@@ -1537,6 +1548,20 @@ export type PostGetNamesRequestBody = {
 
 export type ProfilePictureQueryParams = {
     url: string;
+};
+
+/**
+ * Where to upload a new profile picture, and the file id to set afterwards.
+ */
+export type ProfilePictureUpload = {
+    /**
+     * Id to pass to `PUT /user/profile_picture/file` once uploaded.
+     */
+    file_id: string;
+    /**
+     * Expiring URL to `PUT` the image bytes to.
+     */
+    upload_url: string;
 };
 
 export type ProfilePictures = {
@@ -4734,6 +4759,30 @@ export type PutProfilePictureResponses = {
 
 export type PutProfilePictureResponse = PutProfilePictureResponses[keyof PutProfilePictureResponses];
 
+export type CreateProfilePictureUploadData = {
+    body: CreateProfilePictureUploadRequest;
+    path?: never;
+    query?: never;
+    url: '/user/profile_picture/file';
+};
+
+export type CreateProfilePictureUploadErrors = {
+    /**
+     * Not a supported image type
+     */
+    400: ErrorResponse;
+    401: string;
+    500: ErrorResponse;
+};
+
+export type CreateProfilePictureUploadError = CreateProfilePictureUploadErrors[keyof CreateProfilePictureUploadErrors];
+
+export type CreateProfilePictureUploadResponses = {
+    200: ProfilePictureUpload;
+};
+
+export type CreateProfilePictureUploadResponse = CreateProfilePictureUploadResponses[keyof CreateProfilePictureUploadResponses];
+
 export type PutProfilePictureFileData = {
     body: PutProfilePictureFileRequest;
     path?: never;
@@ -4743,7 +4792,7 @@ export type PutProfilePictureFileData = {
 
 export type PutProfilePictureFileErrors = {
     /**
-     * The file is not an uploaded image
+     * The file is not a supported image
      */
     400: ErrorResponse;
     401: string;

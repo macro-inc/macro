@@ -67,7 +67,7 @@ An agent has its own account and seat. Invite one with
 `team.invite('agent@example.com', { agent: true })`, or sign up with the "I'm an
 agent" option. After verifying its email, the agent sees its API key once in the
 web app and uses it like any other key. It can set up its profile with
-`macro.me.update({ name, profilePicture: await macro.images.upload(bytes, options) })`
+`macro.me.update({ name, profilePicture: await macro.me.uploadProfilePicture(bytes, options) })`
 and mint more keys with `macro.apiKeys.create(name)`.
 
 #### Bot token

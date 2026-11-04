@@ -296,6 +296,7 @@ export const staticFilesExcluded = [
   'handleBulkDeleteFile',
   'handleDeleteFile',
   'handleGetMetadata',
+  'putPresignedUrl',
 ] as const satisfies readonly (keyof StaticFilesSdk)[];
 
 export const staticFilesBacklog =

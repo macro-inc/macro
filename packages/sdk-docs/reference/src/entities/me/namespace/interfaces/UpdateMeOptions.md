@@ -7,4 +7,4 @@ What to change on the authenticated user's profile.
 | Property | Type | Description |
 | ------ | ------ | ------ |
 | <a id="property-name"></a> `name?` | `string` | Display name. The first word becomes the first name. |
-| <a id="property-profilepicture"></a> `profilePicture?` | [`StaticImage`](../../../images/image/classes/StaticImage.md) | An image from `macro.images.upload()`, to use as the profile picture. |
+| <a id="property-profilepicture"></a> `profilePicture?` | [`StaticImage`](../../../images/image/classes/StaticImage.md) | An image from [MeNamespace.uploadProfilePicture](../classes/MeNamespace.md#uploadprofilepicture). |

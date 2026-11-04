@@ -28,7 +28,6 @@ const ACCESSORS: Partial<Record<(typeof services)[number], string>> = {
   notification: 'notification',
   properties: 'properties',
   search: 'search',
-  'static-files': 'staticFiles',
   storage: 'storage',
 };
 

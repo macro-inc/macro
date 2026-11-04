@@ -39,7 +39,8 @@ fn router_with_auth() -> Router<ApiContext> {
         .route("/profile_picture", put(put_profile_picture::handler))
         .route(
             "/profile_picture/file",
-            put(put_profile_picture_file::handler),
+            post(put_profile_picture_file::create_upload_handler)
+                .put(put_profile_picture_file::handler),
         )
         .route("/agent_setup", post(agent_setup::handler))
         .route("/name", put(put_name::handler))

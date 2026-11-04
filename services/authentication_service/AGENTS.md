@@ -93,8 +93,10 @@ inputs cannot select an agent, and ordinary user credentials remain unattributed
   agent invite is pending.
 - `POST /user/agent_setup` joins the inviting team and replaces the
   `Agent signup` API key. It is repeatable until `tutorialComplete` is true.
-- `PUT /user/profile_picture/file` takes an SFS id; it accepts only the caller's
-  uploaded PNG, JPEG, WebP, or GIF.
+- `POST /user/profile_picture/file` reserves an SFS upload for API-key callers,
+  since `static_file_service` cannot check keys. `PUT` on that path takes the SFS
+  id and accepts only the caller's PNG, JPEG, WebP, or GIF; it does not wait for
+  the asynchronous upload event.
 
 ## Gotchas
 

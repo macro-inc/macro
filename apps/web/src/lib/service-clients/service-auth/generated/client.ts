@@ -23,6 +23,7 @@ import type {
   CreateGtmInviteLinkRequest,
   CreateInProgressLinkResponse,
   CreatePortalSessionRequest,
+  CreateProfilePictureUploadRequest,
   CreateTeamRequest,
   CreditCheckoutRequestBody,
   CreditCheckoutResponse,
@@ -81,6 +82,7 @@ import type {
   PlanCatalogResponse,
   PostGetNamesRequestBody,
   ProfilePictures,
+  ProfilePictureUpload,
   PublicGtmInviteLink,
   PutAgentApiKeyRequest,
   PutCursorApiKeyRequest,
@@ -6964,6 +6966,73 @@ export const putProfilePictureFile = async (
     status: res.status,
     headers: res.headers,
   } as putProfilePictureFileResponse;
+};
+
+/**
+ * @summary Reserves storage for a new profile picture. Static file storage has no
+MacroDB, so it cannot check API keys; this route lets key holders upload.
+ */
+export type createProfilePictureUploadResponse200 = {
+  data: ProfilePictureUpload;
+  status: 200;
+};
+
+export type createProfilePictureUploadResponse400 = {
+  data: ErrorResponse;
+  status: 400;
+};
+
+export type createProfilePictureUploadResponse401 = {
+  data: string;
+  status: 401;
+};
+
+export type createProfilePictureUploadResponse500 = {
+  data: ErrorResponse;
+  status: 500;
+};
+
+export type createProfilePictureUploadResponseSuccess =
+  createProfilePictureUploadResponse200 & {
+    headers: Headers;
+  };
+export type createProfilePictureUploadResponseError = (
+  | createProfilePictureUploadResponse400
+  | createProfilePictureUploadResponse401
+  | createProfilePictureUploadResponse500
+) & {
+  headers: Headers;
+};
+
+export type createProfilePictureUploadResponse =
+  | createProfilePictureUploadResponseSuccess
+  | createProfilePictureUploadResponseError;
+
+export const getCreateProfilePictureUploadUrl = () => {
+  return `/user/profile_picture/file`;
+};
+
+export const createProfilePictureUpload = async (
+  createProfilePictureUploadRequest: CreateProfilePictureUploadRequest,
+  options?: RequestInit
+): Promise<createProfilePictureUploadResponse> => {
+  const res = await fetch(getCreateProfilePictureUploadUrl(), {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(createProfilePictureUploadRequest),
+  });
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+
+  const data: createProfilePictureUploadResponse['data'] = body
+    ? JSON.parse(body)
+    : {};
+  return {
+    data,
+    status: res.status,
+    headers: res.headers,
+  } as createProfilePictureUploadResponse;
 };
 
 /**

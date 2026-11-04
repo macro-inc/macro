@@ -5922,7 +5922,7 @@
             }
           },
           "400": {
-            "description": "The file is not an uploaded image",
+            "description": "The file is not a supported image",
             "content": {
               "application/json": {
                 "schema": {
@@ -5947,6 +5947,63 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "tags": ["user::put_profile_picture_file"],
+        "summary": "Reserves storage for a new profile picture. Static file storage has no\nMacroDB, so it cannot check API keys; this route lets key holders upload.",
+        "operationId": "create_profile_picture_upload",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateProfilePictureUploadRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProfilePictureUpload"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Not a supported image type",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
                 }
               }
             }
@@ -6840,6 +6897,20 @@
           "returnUrl": {
             "type": "string",
             "description": "The URL to redirect to after leaving the portal"
+          }
+        }
+      },
+      "CreateProfilePictureUploadRequest": {
+        "type": "object",
+        "required": ["file_name", "content_type"],
+        "properties": {
+          "content_type": {
+            "type": "string",
+            "description": "Mime type of the image."
+          },
+          "file_name": {
+            "type": "string",
+            "description": "File name, such as `avatar.png`."
           }
         }
       },
@@ -8414,6 +8485,21 @@
         "properties": {
           "url": {
             "type": "string"
+          }
+        }
+      },
+      "ProfilePictureUpload": {
+        "type": "object",
+        "description": "Where to upload a new profile picture, and the file id to set afterwards.",
+        "required": ["file_id", "upload_url"],
+        "properties": {
+          "file_id": {
+            "type": "string",
+            "description": "Id to pass to `PUT /user/profile_picture/file` once uploaded."
+          },
+          "upload_url": {
+            "type": "string",
+            "description": "Expiring URL to `PUT` the image bytes to."
           }
         }
       },

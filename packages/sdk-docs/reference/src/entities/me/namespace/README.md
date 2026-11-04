@@ -7,3 +7,4 @@
 ## Interfaces
 
 - [UpdateMeOptions](interfaces/UpdateMeOptions.md)
+- [UploadProfilePictureOptions](interfaces/UploadProfilePictureOptions.md)

@@ -12,9 +12,7 @@
   "paths": {
     "/agent-auto-archive-preferences": {
       "get": {
-        "tags": [
-          "agent-sessions"
-        ],
+        "tags": ["agent-sessions"],
         "summary": "Read which triggers archive the caller's sessions by default.",
         "operationId": "get_agent_auto_archive_preferences",
         "responses": {
@@ -51,9 +49,7 @@
         }
       },
       "put": {
-        "tags": [
-          "agent-sessions"
-        ],
+        "tags": ["agent-sessions"],
         "summary": "Replace which triggers archive the caller's sessions by default.",
         "operationId": "put_agent_auto_archive_preferences",
         "requestBody": {
@@ -102,9 +98,7 @@
     },
     "/agent-capabilities/discover": {
       "post": {
-        "tags": [
-          "agent-capabilities"
-        ],
+        "tags": ["agent-capabilities"],
         "summary": "Probe one provider's ACP session configuration without persisting a session.",
         "operationId": "discover_agent_capabilities_handler",
         "requestBody": {
@@ -156,9 +150,7 @@
     },
     "/agent-coding-preferences": {
       "get": {
-        "tags": [
-          "agent-sessions"
-        ],
+        "tags": ["agent-sessions"],
         "summary": "Read what the caller's new coding sessions are told to do beyond their assignment.",
         "operationId": "get_agent_coding_preferences",
         "responses": {
@@ -195,9 +187,7 @@
         }
       },
       "put": {
-        "tags": [
-          "agent-sessions"
-        ],
+        "tags": ["agent-sessions"],
         "summary": "Replace the caller's coding preferences.",
         "operationId": "put_agent_coding_preferences",
         "requestBody": {
@@ -246,9 +236,7 @@
     },
     "/agent-conversations/{channel_id}": {
       "get": {
-        "tags": [
-          "agent-conversations"
-        ],
+        "tags": ["agent-conversations"],
         "summary": "The agent conversations in a channel the caller may see. Ordinary channels\nand other people's conversations list none.",
         "operationId": "list_agent_conversations",
         "parameters": [
@@ -287,9 +275,7 @@
     },
     "/agent-conversations/{channel_id}/{bot_id}/start-fresh": {
       "post": {
-        "tags": [
-          "agent-conversations"
-        ],
+        "tags": ["agent-conversations"],
         "summary": "Start a fresh agent context, retaining the channel transcript.",
         "operationId": "start_fresh_agent_conversation",
         "parameters": [
@@ -346,9 +332,7 @@
     },
     "/agent-conversations/{channel_id}/{bot_id}/turns/{source}/retry": {
       "post": {
-        "tags": [
-          "agent-conversations"
-        ],
+        "tags": ["agent-conversations"],
         "summary": "Explicitly retry a failed message in the conversation's current session.",
         "operationId": "retry_agent_conversation_turn",
         "parameters": [
@@ -414,9 +398,7 @@
     },
     "/agent-mode-choice": {
       "post": {
-        "tags": [
-          "agent-mode-choice"
-        ],
+        "tags": ["agent-mode-choice"],
         "summary": "Choose whether a composer prompt goes to a chat or a coding agent.",
         "operationId": "choose_agent_mode",
         "requestBody": {
@@ -465,9 +447,7 @@
     },
     "/agent-models/load": {
       "post": {
-        "tags": [
-          "agent-models"
-        ],
+        "tags": ["agent-models"],
         "summary": "Probe one provider's model catalog without creating an agent session.",
         "operationId": "load_agent_models_handler",
         "requestBody": {
@@ -519,9 +499,7 @@
     },
     "/agent-repositories": {
       "get": {
-        "tags": [
-          "agent-repositories"
-        ],
+        "tags": ["agent-repositories"],
         "summary": "List the GitHub repositories the caller can select for a coding session.",
         "operationId": "list_agent_repositories",
         "responses": {
@@ -551,9 +529,7 @@
     },
     "/agent-repositories/branches": {
       "get": {
-        "tags": [
-          "agent-repositories"
-        ],
+        "tags": ["agent-repositories"],
         "summary": "List the branches on one repository the caller can start a session from.",
         "operationId": "list_agent_repository_branches",
         "parameters": [
@@ -600,9 +576,7 @@
     },
     "/agent-sandbox-size": {
       "get": {
-        "tags": [
-          "agent-sessions"
-        ],
+        "tags": ["agent-sessions"],
         "summary": "Read the caller's default sandbox size for new `@coder` sessions.",
         "operationId": "get_agent_sandbox_size",
         "responses": {
@@ -639,9 +613,7 @@
         }
       },
       "put": {
-        "tags": [
-          "agent-sessions"
-        ],
+        "tags": ["agent-sessions"],
         "summary": "Set the caller's default sandbox size for the next `@coder` mention.",
         "operationId": "put_agent_sandbox_size",
         "requestBody": {
@@ -690,9 +662,7 @@
     },
     "/agent-sessions": {
       "post": {
-        "tags": [
-          "agent-sessions"
-        ],
+        "tags": ["agent-sessions"],
         "summary": "Open an agent session served by an external runtime.",
         "description": "Nothing here tells the runtime where to dial: one connection per bot\ncarries every session it runs, so a runtime that has already dialed serves\nthis session too, and one that has not dials the gateway its own\nconfiguration names. The triggering mention reaches the session as its\nfirst prompt through the control endpoint.",
         "operationId": "create_agent_session",
@@ -792,9 +762,7 @@
     },
     "/agent-sessions/by-pull-request": {
       "post": {
-        "tags": [
-          "agent-sessions"
-        ],
+        "tags": ["agent-sessions"],
         "summary": "List the sessions associated with a pull request that the caller can view.",
         "operationId": "agent_sessions_for_pull_request",
         "requestBody": {
@@ -853,9 +821,7 @@
     },
     "/agent-sessions/by-pull-requests": {
       "post": {
-        "tags": [
-          "agent-sessions"
-        ],
+        "tags": ["agent-sessions"],
         "summary": "List the sessions associated with each of up to 100 pull requests that the caller can view,\nwith the thread each session was started from.",
         "operationId": "agent_sessions_for_pull_requests",
         "requestBody": {
@@ -914,9 +880,7 @@
     },
     "/agent-sessions/preview": {
       "post": {
-        "tags": [
-          "agent-sessions"
-        ],
+        "tags": ["agent-sessions"],
         "summary": "Preview a batch of agent sessions for rendering chips.",
         "description": "No per-id access extractor: a chip has to render for a session the caller\ncannot open, so access is answered per id in the body rather than\nenforced on the request. The caller learns the fields a chip shows for\nsessions they may view, and only existence for the rest.",
         "operationId": "preview_agent_sessions",
@@ -976,9 +940,7 @@
     },
     "/agent-sessions/warm": {
       "post": {
-        "tags": [
-          "agent-sessions"
-        ],
+        "tags": ["agent-sessions"],
         "summary": "Prepare MCP connections without sending a prompt or creating a visible list row.",
         "operationId": "warm_agent_session_handler",
         "requestBody": {
@@ -1007,9 +969,7 @@
     },
     "/agent-sessions/{session_id}": {
       "get": {
-        "tags": [
-          "agent-sessions"
-        ],
+        "tags": ["agent-sessions"],
         "summary": "Get an agent session by id.",
         "description": "A caller holding no grant is answered 401; an id with no session behind it\nat all is answered 404. They used to be the same answer, which left a\nclient that read a session before its create had landed unable to tell a\nrace it should retry from a refusal it should not.",
         "operationId": "get_agent_session",
@@ -1079,9 +1039,7 @@
         }
       },
       "delete": {
-        "tags": [
-          "agent-sessions"
-        ],
+        "tags": ["agent-sessions"],
         "summary": "Delete an agent session and its live resources.",
         "operationId": "delete_agent_session",
         "parameters": [
@@ -1135,9 +1093,7 @@
     },
     "/agent-sessions/{session_id}/app-connections": {
       "post": {
-        "tags": [
-          "agent-sessions"
-        ],
+        "tags": ["agent-sessions"],
         "summary": "Continue the session now that its owner connected an app it asked for.",
         "description": "The harness produces an `app.connected` system event, which the transcript\nshows as no prompt; it starts a turn once the session is idle.",
         "operationId": "report_agent_session_app_connected",
@@ -1222,9 +1178,7 @@
     },
     "/agent-sessions/{session_id}/archived": {
       "put": {
-        "tags": [
-          "agent-sessions"
-        ],
+        "tags": ["agent-sessions"],
         "summary": "Archive or unarchive an agent session.",
         "operationId": "set_agent_session_archived",
         "parameters": [
@@ -1298,9 +1252,7 @@
     },
     "/agent-sessions/{session_id}/auto-archive": {
       "get": {
-        "tags": [
-          "agent-sessions"
-        ],
+        "tags": ["agent-sessions"],
         "summary": "Read a session's auto-archive settings and whether a trigger archived it.",
         "operationId": "get_agent_session_auto_archive",
         "parameters": [
@@ -1359,9 +1311,7 @@
         }
       },
       "put": {
-        "tags": [
-          "agent-sessions"
-        ],
+        "tags": ["agent-sessions"],
         "summary": "Replace a session's own auto-archive choices. Owner only.",
         "operationId": "put_agent_session_auto_archive",
         "parameters": [
@@ -1432,9 +1382,7 @@
     },
     "/agent-sessions/{session_id}/changes": {
       "get": {
-        "tags": [
-          "agent-sessions"
-        ],
+        "tags": ["agent-sessions"],
         "summary": "The latest captured changes of an agent session: the changed files with\nstatuses and line counts, and how the latest capture attempt went.",
         "operationId": "get_agent_session_changes",
         "parameters": [
@@ -1495,9 +1443,7 @@
     },
     "/agent-sessions/{session_id}/changes/patch": {
       "get": {
-        "tags": [
-          "agent-sessions"
-        ],
+        "tags": ["agent-sessions"],
         "summary": "The unified diff behind the session's latest changeset.",
         "operationId": "get_agent_session_changes_patch",
         "parameters": [
@@ -1568,9 +1514,7 @@
     },
     "/agent-sessions/{session_id}/changes/refresh": {
       "post": {
-        "tags": [
-          "agent-sessions"
-        ],
+        "tags": ["agent-sessions"],
         "summary": "Capture the session's changes again now. Answers at once with the state\nas it stands; the capture runs on and viewers are told when it lands.",
         "operationId": "refresh_agent_session_changes",
         "parameters": [
@@ -1631,9 +1575,7 @@
     },
     "/agent-sessions/{session_id}/code-executions/{execution_id}": {
       "get": {
-        "tags": [
-          "agent-sessions"
-        ],
+        "tags": ["agent-sessions"],
         "summary": "Fetch one execution only after the caller has obtained view access to its session.",
         "operationId": "get_code_execution",
         "parameters": [
@@ -1686,9 +1628,7 @@
     },
     "/agent-sessions/{session_id}/code-executions/{execution_id}/reviews": {
       "get": {
-        "tags": [
-          "agent-sessions"
-        ],
+        "tags": ["agent-sessions"],
         "summary": "List blocks created during an execution, including interrupted executions.",
         "operationId": "list_execution_reviews",
         "parameters": [
@@ -1733,9 +1673,7 @@
     },
     "/agent-sessions/{session_id}/control": {
       "post": {
-        "tags": [
-          "agent-sessions"
-        ],
+        "tags": ["agent-sessions"],
         "summary": "Perform a control operation on a live agent session.",
         "description": "Edit access suffices: whoever can prompt the bot through its thread can\nprompt it here.\n\nA caller may name the action with `actionId`; the response echoes it.\nRe-posting an id the session still holds queued or in flight reports that\naction's status rather than accepting a duplicate.",
         "operationId": "control_agent_session",
@@ -1842,9 +1780,7 @@
     },
     "/agent-sessions/{session_id}/log": {
       "get": {
-        "tags": [
-          "agent-sessions"
-        ],
+        "tags": ["agent-sessions"],
         "summary": "The raw protocol log of one agent session.",
         "description": "Served unfolded from the latest successful load initialization, or the\nbeginning when no load succeeded. Consumers stage load attempts so failed\nor interrupted replay does not become visible conversation content.\n\nAn unknown session is an error: the response has to name the session's\nagent, and a session that never existed has none to name.",
         "operationId": "get_agent_session_log",
@@ -1906,9 +1842,7 @@
     },
     "/agent-sessions/{session_id}/log/folded": {
       "get": {
-        "tags": [
-          "agent-sessions"
-        ],
+        "tags": ["agent-sessions"],
         "summary": "One agent session's history folded into renderable messages: the same\nfold the web client runs over [`get_agent_session_log_handler`]'s frames.",
         "description": "For readers that do not run the fold themselves, such as SDK programs and\nagents reading another session's history.",
         "operationId": "get_agent_session_folded_log",
@@ -1970,9 +1904,7 @@
     },
     "/agent-sessions/{session_id}/name": {
       "put": {
-        "tags": [
-          "agent-sessions"
-        ],
+        "tags": ["agent-sessions"],
         "summary": "Rename an agent session.",
         "operationId": "rename_agent_session",
         "parameters": [
@@ -2056,9 +1988,7 @@
     },
     "/agent-sessions/{session_id}/permissions": {
       "get": {
-        "tags": [
-          "agent-sessions"
-        ],
+        "tags": ["agent-sessions"],
         "summary": "Read sharing settings for a session the caller can view.",
         "operationId": "get_agent_session_permissions",
         "parameters": [
@@ -2107,9 +2037,7 @@
         }
       },
       "patch": {
-        "tags": [
-          "agent-sessions"
-        ],
+        "tags": ["agent-sessions"],
         "summary": "Update link, channel, or team sharing after owner authorization.",
         "operationId": "update_agent_session_permissions",
         "parameters": [
@@ -2190,9 +2118,7 @@
     },
     "/agent-sessions/{session_id}/pull-requests": {
       "get": {
-        "tags": [
-          "agent-sessions"
-        ],
+        "tags": ["agent-sessions"],
         "summary": "List the pull requests associated with a session the caller can view.",
         "operationId": "list_agent_session_pull_requests",
         "parameters": [
@@ -2251,9 +2177,7 @@
         }
       },
       "put": {
-        "tags": [
-          "agent-sessions"
-        ],
+        "tags": ["agent-sessions"],
         "summary": "Link a pull request to a session the caller can edit.",
         "operationId": "link_agent_session_pull_request",
         "parameters": [
@@ -2325,9 +2249,7 @@
         }
       },
       "delete": {
-        "tags": [
-          "agent-sessions"
-        ],
+        "tags": ["agent-sessions"],
         "summary": "Unlink a pull request a person linked to a session the caller can edit. The pull request\nthe session's agent opened stays linked.",
         "operationId": "unlink_agent_session_pull_request",
         "parameters": [
@@ -2400,9 +2322,7 @@
     },
     "/agent-sessions/{session_id}/queue": {
       "get": {
-        "tags": [
-          "agent-sessions"
-        ],
+        "tags": ["agent-sessions"],
         "summary": "The actions waiting to dispatch in this session, oldest first.",
         "operationId": "get_agent_session_queue",
         "parameters": [
@@ -2463,9 +2383,7 @@
     },
     "/agent-sessions/{session_id}/queue/{action_id}": {
       "put": {
-        "tags": [
-          "agent-sessions"
-        ],
+        "tags": ["agent-sessions"],
         "summary": "Replace a queued prompt's text before it dispatches.",
         "operationId": "edit_queued_action",
         "parameters": [
@@ -2557,9 +2475,7 @@
         }
       },
       "delete": {
-        "tags": [
-          "agent-sessions"
-        ],
+        "tags": ["agent-sessions"],
         "summary": "Remove a queued action before it dispatches. There is no un-sending: an\naction that already went out answers 404.",
         "operationId": "remove_queued_action",
         "parameters": [
@@ -2633,9 +2549,7 @@
     },
     "/agent-sessions/{session_id}/queue/{action_id}/steer": {
       "post": {
-        "tags": [
-          "agent-sessions"
-        ],
+        "tags": ["agent-sessions"],
         "summary": "Run a queued action next. Moves it ahead of the rest of the queue and\ncancels the turn in flight, so this entry dispatches when that turn ends.",
         "operationId": "steer_queued_action",
         "parameters": [
@@ -2709,9 +2623,7 @@
     },
     "/agent-sessions/{session_id}/reviews": {
       "post": {
-        "tags": [
-          "agent-sessions"
-        ],
+        "tags": ["agent-sessions"],
         "summary": "Persist a review without keeping the agent turn blocked.",
         "operationId": "create_session_review",
         "parameters": [
@@ -2757,9 +2669,7 @@
     },
     "/agent-sessions/{session_id}/reviews/{review_id}": {
       "get": {
-        "tags": [
-          "agent-sessions"
-        ],
+        "tags": ["agent-sessions"],
         "summary": "Read a persisted interactive block.",
         "operationId": "get_session_review",
         "parameters": [
@@ -2802,9 +2712,7 @@
         }
       },
       "post": {
-        "tags": [
-          "agent-sessions"
-        ],
+        "tags": ["agent-sessions"],
         "summary": "Save edits or atomically claim the exact draft revision the user submitted.",
         "operationId": "decide_session_review",
         "parameters": [
@@ -2859,9 +2767,7 @@
     },
     "/agent-sessions/{session_id}/sandbox-size": {
       "put": {
-        "tags": [
-          "agent-sessions"
-        ],
+        "tags": ["agent-sessions"],
         "summary": "Resize this session's sandbox and remember the size as the owner's default.",
         "operationId": "put_agent_session_sandbox_size",
         "parameters": [
@@ -2932,9 +2838,7 @@
     },
     "/agent-sessions/{session_id}/tool-approvals/{approval_id}": {
       "post": {
-        "tags": [
-          "agent-sessions"
-        ],
+        "tags": ["agent-sessions"],
         "summary": "Answer a tool call the agent made in a turn somebody other than the\nsession's owner prompted. Approve and deny are the owner's; cancel is\nanyone's with edit access.",
         "operationId": "answer_agent_session_tool_approval",
         "parameters": [
@@ -3045,9 +2949,7 @@
     },
     "/agent-sessions/{session_id}/views": {
       "post": {
-        "tags": [
-          "agent-sessions"
-        ],
+        "tags": ["agent-sessions"],
         "summary": "Present a view in the session: a review with nothing saved.",
         "operationId": "present_session_view",
         "parameters": [
@@ -3086,9 +2988,7 @@
     },
     "/universal_input/classify": {
       "post": {
-        "tags": [
-          "universal_input::inbound::axum_router"
-        ],
+        "tags": ["universal_input::inbound::axum_router"],
         "summary": "Classify a draft for the authenticated user.",
         "operationId": "classify",
         "requestBody": {
@@ -3129,9 +3029,7 @@
     },
     "/universal_input/extract": {
       "post": {
-        "tags": [
-          "universal_input::inbound::axum_router"
-        ],
+        "tags": ["universal_input::inbound::axum_router"],
         "summary": "Extract editable fields for the authenticated user.",
         "operationId": "extract",
         "requestBody": {
@@ -3176,12 +3074,7 @@
       "AccessLevel": {
         "type": "string",
         "description": "Ordered from least to most access top -> bottom",
-        "enum": [
-          "view",
-          "comment",
-          "edit",
-          "owner"
-        ]
+        "enum": ["view", "comment", "edit", "owner"]
       },
       "AgentAction": {
         "oneOf": [
@@ -3193,15 +3086,11 @@
               },
               {
                 "type": "object",
-                "required": [
-                  "type"
-                ],
+                "required": ["type"],
                 "properties": {
                   "type": {
                     "type": "string",
-                    "enum": [
-                      "prompt"
-                    ]
+                    "enum": ["prompt"]
                   }
                 }
               }
@@ -3216,15 +3105,11 @@
               },
               {
                 "type": "object",
-                "required": [
-                  "type"
-                ],
+                "required": ["type"],
                 "properties": {
                   "type": {
                     "type": "string",
-                    "enum": [
-                      "setModel"
-                    ]
+                    "enum": ["setModel"]
                   }
                 }
               }
@@ -3239,15 +3124,11 @@
               },
               {
                 "type": "object",
-                "required": [
-                  "type"
-                ],
+                "required": ["type"],
                 "properties": {
                   "type": {
                     "type": "string",
-                    "enum": [
-                      "setConfigOption"
-                    ]
+                    "enum": ["setConfigOption"]
                   }
                 }
               }
@@ -3257,30 +3138,22 @@
           {
             "type": "object",
             "description": "Compact the agent's current context.",
-            "required": [
-              "type"
-            ],
+            "required": ["type"],
             "properties": {
               "type": {
                 "type": "string",
-                "enum": [
-                  "compact"
-                ]
+                "enum": ["compact"]
               }
             }
           },
           {
             "type": "object",
             "description": "Interrupt whatever the agent is doing.",
-            "required": [
-              "type"
-            ],
+            "required": ["type"],
             "properties": {
               "type": {
                 "type": "string",
-                "enum": [
-                  "stop"
-                ]
+                "enum": ["stop"]
               }
             }
           },
@@ -3292,15 +3165,11 @@
               },
               {
                 "type": "object",
-                "required": [
-                  "type"
-                ],
+                "required": ["type"],
                 "properties": {
                   "type": {
                     "type": "string",
-                    "enum": [
-                      "respondElicitation"
-                    ]
+                    "enum": ["respondElicitation"]
                   }
                 }
               }
@@ -3315,15 +3184,11 @@
               },
               {
                 "type": "object",
-                "required": [
-                  "type"
-                ],
+                "required": ["type"],
                 "properties": {
                   "type": {
                     "type": "string",
-                    "enum": [
-                      "respondToPermission"
-                    ]
+                    "enum": ["respondToPermission"]
                   }
                 }
               }
@@ -3343,11 +3208,7 @@
           {
             "type": "object",
             "description": "A single-value selector.",
-            "required": [
-              "currentValue",
-              "options",
-              "type"
-            ],
+            "required": ["currentValue", "options", "type"],
             "properties": {
               "currentValue": {
                 "type": "string",
@@ -3362,19 +3223,14 @@
               },
               "type": {
                 "type": "string",
-                "enum": [
-                  "select"
-                ]
+                "enum": ["select"]
               }
             }
           },
           {
             "type": "object",
             "description": "An on/off setting.",
-            "required": [
-              "currentValue",
-              "type"
-            ],
+            "required": ["currentValue", "type"],
             "properties": {
               "currentValue": {
                 "type": "boolean",
@@ -3382,9 +3238,7 @@
               },
               "type": {
                 "type": "string",
-                "enum": [
-                  "boolean"
-                ]
+                "enum": ["boolean"]
               }
             }
           }
@@ -3399,23 +3253,14 @@
           },
           {
             "type": "object",
-            "required": [
-              "id",
-              "name"
-            ],
+            "required": ["id", "name"],
             "properties": {
               "category": {
-                "type": [
-                  "string",
-                  "null"
-                ],
+                "type": ["string", "null"],
                 "description": "ACP semantic category, such as `model` or `thought_level`."
               },
               "description": {
-                "type": [
-                  "string",
-                  "null"
-                ],
+                "type": ["string", "null"],
                 "description": "Optional explanatory copy."
               },
               "id": {
@@ -3434,23 +3279,14 @@
       "AgentConfigSelectOptionDto": {
         "type": "object",
         "description": "One value in an agent-advertised select.",
-        "required": [
-          "value",
-          "name"
-        ],
+        "required": ["value", "name"],
         "properties": {
           "description": {
-            "type": [
-              "string",
-              "null"
-            ],
+            "type": ["string", "null"],
             "description": "Optional provider description of this value."
           },
           "group": {
-            "type": [
-              "string",
-              "null"
-            ],
+            "type": ["string", "null"],
             "description": "Optional group heading supplied by the provider."
           },
           "name": {
@@ -3481,10 +3317,7 @@
             "description": "Whether the caller may currently send a new prompt."
           },
           "avatarUrl": {
-            "type": [
-              "string",
-              "null"
-            ],
+            "type": ["string", "null"],
             "description": "Optional persona avatar."
           },
           "botId": {
@@ -3524,11 +3357,7 @@
       "AgentConversationSessionDto": {
         "type": "object",
         "description": "One session a conversation has run on; every channel message stays visible.",
-        "required": [
-          "sessionId",
-          "createdAt",
-          "isCurrent"
-        ],
+        "required": ["sessionId", "createdAt", "isCurrent"],
         "properties": {
           "createdAt": {
             "type": "string",
@@ -3569,10 +3398,7 @@
             "description": "When the source message was first accepted."
           },
           "replyMessageId": {
-            "type": [
-              "string",
-              "null"
-            ],
+            "type": ["string", "null"],
             "format": "uuid",
             "description": "The associated agent reply, if it has been posted."
           },
@@ -3599,9 +3425,7 @@
       "AgentConversationsDto": {
         "type": "object",
         "description": "The agent conversations in a channel the caller may see.",
-        "required": [
-          "conversations"
-        ],
+        "required": ["conversations"],
         "properties": {
           "conversations": {
             "type": "array",
@@ -3615,17 +3439,12 @@
       "AgentMode": {
         "type": "string",
         "description": "Which kind of agent a prompt is sent to.",
-        "enum": [
-          "chat",
-          "code"
-        ]
+        "enum": ["chat", "code"]
       },
       "AgentModeChoiceRequest": {
         "type": "object",
         "description": "Request body for `POST /agent-mode-choice`.",
-        "required": [
-          "prompt"
-        ],
+        "required": ["prompt"],
         "properties": {
           "prompt": {
             "type": "string",
@@ -3636,9 +3455,7 @@
       "AgentModeChoiceResponse": {
         "type": "object",
         "description": "Response body for `POST /agent-mode-choice`.",
-        "required": [
-          "mode"
-        ],
+        "required": ["mode"],
         "properties": {
           "mode": {
             "$ref": "#/components/schemas/AgentMode",
@@ -3649,23 +3466,14 @@
       "AgentModelDto": {
         "type": "object",
         "description": "One model picker option.",
-        "required": [
-          "id",
-          "name"
-        ],
+        "required": ["id", "name"],
         "properties": {
           "description": {
-            "type": [
-              "string",
-              "null"
-            ],
+            "type": ["string", "null"],
             "description": "Optional provider description."
           },
           "group": {
-            "type": [
-              "string",
-              "null"
-            ],
+            "type": ["string", "null"],
             "description": "Optional group heading supplied by the provider."
           },
           "id": {
@@ -3677,10 +3485,7 @@
             "description": "Display name."
           },
           "supportsImages": {
-            "type": [
-              "boolean",
-              "null"
-            ],
+            "type": ["boolean", "null"],
             "description": "Image input support, absent when the runtime does not advertise it."
           }
         }
@@ -3688,18 +3493,12 @@
       "AgentModelsStatusDto": {
         "type": "string",
         "description": "Model-selection availability returned over HTTP.",
-        "enum": [
-          "available",
-          "unsupported"
-        ]
+        "enum": ["available", "unsupported"]
       },
       "AgentPermissionAction": {
         "type": "object",
         "description": "A user's answer to the agent's `session/request_permission`.\n\nUnlike every other action this is not a new request but the reply to one\nthe agent made, so it carries the agent's own request id rather than\nreceiving a server-minted one.",
-        "required": [
-          "requestId",
-          "answer"
-        ],
+        "required": ["requestId", "answer"],
         "properties": {
           "answer": {
             "$ref": "#/components/schemas/PermissionAnswer",
@@ -3713,9 +3512,7 @@
       "AgentPromptAction": {
         "type": "object",
         "description": "Ask the agent to work on something.",
-        "required": [
-          "prompt"
-        ],
+        "required": ["prompt"],
         "properties": {
           "attachments": {
             "type": "array",
@@ -3733,9 +3530,7 @@
       "AgentRepositoriesResponse": {
         "type": "object",
         "description": "Response body for `GET /agent-repositories`.",
-        "required": [
-          "repositories"
-        ],
+        "required": ["repositories"],
         "properties": {
           "repositories": {
             "type": "array",
@@ -3749,9 +3544,7 @@
       "AgentRepositoryBranchesResponse": {
         "type": "object",
         "description": "Response body for `GET /agent-repositories/branches`.",
-        "required": [
-          "branches"
-        ],
+        "required": ["branches"],
         "properties": {
           "branches": {
             "type": "array",
@@ -3765,15 +3558,10 @@
       "AgentRepositoryDto": {
         "type": "object",
         "description": "One repository the caller can select for a coding session.",
-        "required": [
-          "url"
-        ],
+        "required": ["url"],
         "properties": {
           "defaultBranch": {
-            "type": [
-              "string",
-              "null"
-            ],
+            "type": ["string", "null"],
             "description": "The branch a clone checks out, and where a session starts when its\nrequest selects this repository without a `repoBranch`. Absent for a\nrepository with no commits."
           },
           "url": {
@@ -3790,9 +3578,7 @@
           },
           {
             "type": "object",
-            "required": [
-              "requestId"
-            ],
+            "required": ["requestId"],
             "properties": {
               "requestId": {
                 "$ref": "#/components/schemas/ElicitationRequestId",
@@ -3806,9 +3592,7 @@
       "AgentSessionChangesPatchResponse": {
         "type": "object",
         "description": "Response body for `GET /agent-sessions/{session_id}/changes/patch`.\n\nClients deserialize this, so both derives are used.",
-        "required": [
-          "patch"
-        ],
+        "required": ["patch"],
         "properties": {
           "patch": {
             "type": "string",
@@ -3819,9 +3603,7 @@
       "AgentSessionChangesResponse": {
         "type": "object",
         "description": "Response body for `GET /agent-sessions/{session_id}/changes`.\n\nClients deserialize this, so both derives are used.",
-        "required": [
-          "capturing"
-        ],
+        "required": ["capturing"],
         "properties": {
           "attempt": {
             "oneOf": [
@@ -3854,10 +3636,7 @@
       "AgentSessionFoldedLogResponse": {
         "type": "object",
         "description": "Response body for one session's folded log.",
-        "required": [
-          "bot",
-          "messages"
-        ],
+        "required": ["bot", "messages"],
         "properties": {
           "bot": {
             "$ref": "#/components/schemas/SessionBot",
@@ -3880,10 +3659,7 @@
           },
           {
             "type": "object",
-            "required": [
-              "id",
-              "createdAt"
-            ],
+            "required": ["id", "createdAt"],
             "properties": {
               "createdAt": {
                 "type": "string",
@@ -3896,10 +3672,7 @@
                 "description": "Durable transport row identity; together with `createdAt`, its order cursor."
               },
               "userId": {
-                "type": [
-                  "string",
-                  "null"
-                ],
+                "type": ["string", "null"],
                 "description": "The user whose action produced the frame, absent when no user did.\n\nOnly prompts carry one, and only when the frame was attributed at the\ntime - a replayed or recorded session's are anonymous."
               }
             }
@@ -3910,10 +3683,7 @@
       "AgentSessionLogResponse": {
         "type": "object",
         "description": "Response body for one session's raw protocol log.\n\nA wrapper rather than a bare array so that anything which is about the\nresponse rather than about a frame has somewhere to go later without\nbreaking every client.",
-        "required": [
-          "bot",
-          "entries"
-        ],
+        "required": ["bot", "entries"],
         "properties": {
           "bot": {
             "$ref": "#/components/schemas/SessionBot",
@@ -3996,15 +3766,11 @@
               },
               {
                 "type": "object",
-                "required": [
-                  "type"
-                ],
+                "required": ["type"],
                 "properties": {
                   "type": {
                     "type": "string",
-                    "enum": [
-                      "access"
-                    ]
+                    "enum": ["access"]
                   }
                 }
               }
@@ -4019,15 +3785,11 @@
               },
               {
                 "type": "object",
-                "required": [
-                  "type"
-                ],
+                "required": ["type"],
                 "properties": {
                   "type": {
                     "type": "string",
-                    "enum": [
-                      "no_access"
-                    ]
+                    "enum": ["no_access"]
                   }
                 }
               }
@@ -4042,15 +3804,11 @@
               },
               {
                 "type": "object",
-                "required": [
-                  "type"
-                ],
+                "required": ["type"],
                 "properties": {
                   "type": {
                     "type": "string",
-                    "enum": [
-                      "does_not_exist"
-                    ]
+                    "enum": ["does_not_exist"]
                   }
                 }
               }
@@ -4063,9 +3821,7 @@
       "AgentSessionQueueResponse": {
         "type": "object",
         "description": "Response body for a session's queue: everything waiting, oldest first.\n\nA wrapper rather than a bare array so that anything which is about the\nresponse rather than about an entry has somewhere to go later without\nbreaking every client.",
-        "required": [
-          "entries"
-        ],
+        "required": ["entries"],
         "properties": {
           "entries": {
             "type": "array",
@@ -4095,17 +3851,11 @@
         ],
         "properties": {
           "acpSessionId": {
-            "type": [
-              "string",
-              "null"
-            ],
+            "type": ["string", "null"],
             "description": "The ACP session id, if one exists."
           },
           "archivedAt": {
-            "type": [
-              "string",
-              "null"
-            ],
+            "type": ["string", "null"],
             "format": "date-time",
             "description": "When the session was archived, or `None` while it is active."
           },
@@ -4155,10 +3905,7 @@
             "description": "The session id."
           },
           "instructions": {
-            "type": [
-              "string",
-              "null"
-            ],
+            "type": ["string", "null"],
             "description": "Instructions the session's runtime works under, when any were stated\nat creation. Absent otherwise, so existing payloads are unchanged."
           },
           "model": {
@@ -4175,10 +3922,7 @@
             "description": "User-facing session name."
           },
           "originatingMessageId": {
-            "type": [
-              "string",
-              "null"
-            ],
+            "type": ["string", "null"],
             "format": "uuid",
             "description": "The exact message that invoked the bot, if any."
           },
@@ -4187,17 +3931,11 @@
             "description": "The user who created and owns the session."
           },
           "pullRequestUrl": {
-            "type": [
-              "string",
-              "null"
-            ],
+            "type": ["string", "null"],
             "description": "The session's linked pull request."
           },
           "repoUrl": {
-            "type": [
-              "string",
-              "null"
-            ],
+            "type": ["string", "null"],
             "description": "The repository the session works with, when one was stated."
           },
           "sandboxSize": {
@@ -4209,25 +3947,16 @@
             "description": "The session's status."
           },
           "taskId": {
-            "type": [
-              "string",
-              "null"
-            ],
+            "type": ["string", "null"],
             "description": "The Macro task the session was linked to."
           },
           "threadChannelId": {
-            "type": [
-              "string",
-              "null"
-            ],
+            "type": ["string", "null"],
             "format": "uuid",
             "description": "The channel `thread_id` lives in, when the session was spawned from a\nchannel thread. Derived from `thread_parent`."
           },
           "threadId": {
-            "type": [
-              "string",
-              "null"
-            ],
+            "type": ["string", "null"],
             "format": "uuid",
             "description": "The root message of the thread the session was created from, if any."
           },
@@ -4251,10 +3980,7 @@
       "AgentSetConfigOptionAction": {
         "type": "object",
         "description": "Ask the agent to change one advertised select-style session setting.",
-        "required": [
-          "configId",
-          "value"
-        ],
+        "required": ["configId", "value"],
         "properties": {
           "configId": {
             "type": "string",
@@ -4269,9 +3995,7 @@
       "AgentSetModelAction": {
         "type": "object",
         "description": "Ask the agent to run on a different model from here on.",
-        "required": [
-          "model"
-        ],
+        "required": ["model"],
         "properties": {
           "model": {
             "type": "string",
@@ -4282,10 +4006,7 @@
       "AiAdmissionErrorBody": {
         "type": "object",
         "description": "Public admission error payload. Handlers with additional fields can reuse the\ndomain error's code and message and [`admission_status`].",
-        "required": [
-          "error",
-          "code"
-        ],
+        "required": ["error", "code"],
         "properties": {
           "code": {
             "type": "string",
@@ -4305,9 +4026,7 @@
       "AnswerToolApprovalRequest": {
         "type": "object",
         "description": "Request body for answering a held tool call.",
-        "required": [
-          "answer"
-        ],
+        "required": ["answer"],
         "properties": {
           "answer": {
             "$ref": "#/components/schemas/ToolApprovalAnswerDto",
@@ -4318,9 +4037,7 @@
       "AnswerToolApprovalResponse": {
         "type": "object",
         "description": "Response body for answering a held tool call.",
-        "required": [
-          "status"
-        ],
+        "required": ["status"],
         "properties": {
           "status": {
             "$ref": "#/components/schemas/ToolApprovalStatusDto",
@@ -4331,9 +4048,7 @@
       "AppConnectedRequest": {
         "type": "object",
         "description": "Request body for reporting a connected app.",
-        "required": [
-          "appSlug"
-        ],
+        "required": ["appSlug"],
         "properties": {
           "actionId": {
             "oneOf": [
@@ -4355,28 +4070,18 @@
       "ArchiveCause": {
         "type": "string",
         "description": "Who or what archived a session.",
-        "enum": [
-          "user",
-          "pull_request_merged",
-          "runtime_closed"
-        ]
+        "enum": ["user", "pull_request_merged", "runtime_closed"]
       },
       "AutoArchiveOverridesBody": {
         "type": "object",
         "description": "One session's choices over its owner's defaults. `null` follows the owner.",
         "properties": {
           "onPullRequestMerged": {
-            "type": [
-              "boolean",
-              "null"
-            ],
+            "type": ["boolean", "null"],
             "description": "Archive once the session's pull requests merge, or `null` to follow the owner."
           },
           "onRuntimeClosed": {
-            "type": [
-              "boolean",
-              "null"
-            ],
+            "type": ["boolean", "null"],
             "description": "Archive once the session's runtime session is deliberately closed, or `null` to follow\nthe owner."
           }
         }
@@ -4384,10 +4089,7 @@
       "AutoArchivePreferencesBody": {
         "type": "object",
         "description": "Which triggers archive the caller's sessions when a session has no choice of its own.",
-        "required": [
-          "onPullRequestMerged",
-          "onRuntimeClosed"
-        ],
+        "required": ["onPullRequestMerged", "onRuntimeClosed"],
         "properties": {
           "onPullRequestMerged": {
             "type": "boolean",
@@ -4407,17 +4109,11 @@
         "description": "Editable fields for calendar inference, before submission and identity resolution.",
         "properties": {
           "body": {
-            "type": [
-              "string",
-              "null"
-            ],
+            "type": ["string", "null"],
             "description": "Suggested Markdown content or outgoing message body."
           },
           "end": {
-            "type": [
-              "string",
-              "null"
-            ],
+            "type": ["string", "null"],
             "description": "Event end as a local wall-clock value in the request's timezone."
           },
           "guests": {
@@ -4428,10 +4124,7 @@
             "description": "Only populated when an invitation was explicitly requested."
           },
           "location": {
-            "type": [
-              "string",
-              "null"
-            ],
+            "type": ["string", "null"],
             "description": "Human-readable event venue or meeting URL."
           },
           "recurrence": {
@@ -4446,24 +4139,15 @@
             ]
           },
           "start": {
-            "type": [
-              "string",
-              "null"
-            ],
+            "type": ["string", "null"],
             "description": "Local wall-clock values, interpreted in the request's IANA timezone."
           },
           "start_assumption": {
-            "type": [
-              "string",
-              "null"
-            ],
+            "type": ["string", "null"],
             "description": "Verbatim clock phrase whose missing AM/PM required an editable assumption."
           },
           "title": {
-            "type": [
-              "string",
-              "null"
-            ],
+            "type": ["string", "null"],
             "description": "Suggested note, task, or event title."
           }
         },
@@ -4472,10 +4156,7 @@
       "CallSearchSuggestions": {
         "type": "object",
         "description": "Call search supports speakers, channels and attendance status.",
-        "required": [
-          "from",
-          "in"
-        ],
+        "required": ["from", "in"],
         "properties": {
           "from": {
             "type": "array",
@@ -4492,17 +4173,11 @@
             "description": "Channel names."
           },
           "query": {
-            "type": [
-              "string",
-              "null"
-            ],
+            "type": ["string", "null"],
             "description": "Remaining keyword phrase."
           },
           "status": {
-            "type": [
-              "string",
-              "null"
-            ],
+            "type": ["string", "null"],
             "description": "Attendance display value, resolved against supported options by the client."
           }
         },
@@ -4511,31 +4186,19 @@
       "CapabilityHarnessDto": {
         "type": "string",
         "description": "Harness names accepted by the capability-discovery endpoint.",
-        "enum": [
-          "in-memory",
-          "cursor",
-          "macrod"
-        ]
+        "enum": ["in-memory", "cursor", "macrod"]
       },
       "CaptureAttemptDto": {
         "type": "object",
         "description": "The latest capture attempt.\n\nClients deserialize this, so both derives are used.",
-        "required": [
-          "startedAt"
-        ],
+        "required": ["startedAt"],
         "properties": {
           "error": {
-            "type": [
-              "string",
-              "null"
-            ],
+            "type": ["string", "null"],
             "description": "Why it did not capture, in a sentence the user can read."
           },
           "finishedAt": {
-            "type": [
-              "string",
-              "null"
-            ],
+            "type": ["string", "null"],
             "format": "date-time",
             "description": "When it ended; absent while it runs."
           },
@@ -4560,11 +4223,7 @@
       "CaptureOutcomeDto": {
         "type": "string",
         "description": "How the latest capture attempt ended, on the wire.",
-        "enum": [
-          "captured",
-          "not_ready",
-          "failed"
-        ]
+        "enum": ["captured", "not_ready", "failed"]
       },
       "ChangedFileDto": {
         "type": "object",
@@ -4607,10 +4266,7 @@
             "description": "The file's path after the change, or before it for a deletion."
           },
           "previousPath": {
-            "type": [
-              "string",
-              "null"
-            ],
+            "type": ["string", "null"],
             "description": "Where a renamed file came from."
           }
         }
@@ -4675,10 +4331,7 @@
             "minimum": 0
           },
           "repository": {
-            "type": [
-              "string",
-              "null"
-            ],
+            "type": ["string", "null"],
             "description": "`https://github.com/owner/name`, when known."
           },
           "source": {
@@ -4694,17 +4347,12 @@
       "ChangesetSourceDto": {
         "type": "string",
         "description": "The source of a changeset's diff, on the wire.",
-        "enum": [
-          "github_pull_request"
-        ]
+        "enum": ["github_pull_request"]
       },
       "ChannelSearchSuggestions": {
         "type": "object",
         "description": "Message filters remain display names until resolved against the user's directory.",
-        "required": [
-          "from",
-          "in"
-        ],
+        "required": ["from", "in"],
         "properties": {
           "from": {
             "type": "array",
@@ -4721,10 +4369,7 @@
             "description": "Explicit channel names."
           },
           "query": {
-            "type": [
-              "string",
-              "null"
-            ],
+            "type": ["string", "null"],
             "description": "Remaining keyword phrase."
           }
         },
@@ -4733,10 +4378,7 @@
       "ChannelSharePermission": {
         "type": "object",
         "description": "The channel share permission",
-        "required": [
-          "channel_id",
-          "access_level"
-        ],
+        "required": ["channel_id", "access_level"],
         "properties": {
           "access_level": {
             "$ref": "#/components/schemas/AccessLevel",
@@ -4751,10 +4393,7 @@
       "ClassifyInputRequest": {
         "type": "object",
         "description": "A draft snapshot. Revisions are opaque to the server and echoed to the client.",
-        "required": [
-          "text",
-          "revision"
-        ],
+        "required": ["text", "revision"],
         "properties": {
           "revision": {
             "type": "integer",
@@ -4771,10 +4410,7 @@
       "ClassifyInputResponse": {
         "type": "object",
         "description": "Ranked-type evidence for a particular client draft revision.",
-        "required": [
-          "revision",
-          "scores"
-        ],
+        "required": ["revision", "scores"],
         "properties": {
           "revision": {
             "type": "integer",
@@ -4794,10 +4430,7 @@
       "CodingPreferencesBody": {
         "type": "object",
         "description": "Request or response body for the caller's coding preferences.",
-        "required": [
-          "createTasks",
-          "openPullRequests"
-        ],
+        "required": ["createTasks", "openPullRequests"],
         "properties": {
           "createTasks": {
             "type": "boolean",
@@ -4830,10 +4463,7 @@
                 ]
               },
               "context": {
-                "type": [
-                  "object",
-                  "null"
-                ],
+                "type": ["object", "null"],
                 "description": "Why the agent is being asked. Only a runtime forwarding a triggered\nprompt may send it; a user's request carrying it is refused."
               }
             }
@@ -4844,10 +4474,7 @@
       "ControlResponse": {
         "type": "object",
         "description": "Response body for a control operation.\n\nClients deserialize this, so both derives are used.",
-        "required": [
-          "actionId",
-          "status"
-        ],
+        "required": ["actionId", "status"],
         "properties": {
           "actionId": {
             "$ref": "#/components/schemas/AgentActionId",
@@ -4862,10 +4489,7 @@
       "ControlStatusDto": {
         "type": "string",
         "description": "What accepting a control operation did with it, on the wire.",
-        "enum": [
-          "sent",
-          "queued"
-        ]
+        "enum": ["sent", "queued"]
       },
       "ConversationTurnState": {
         "type": "string",
@@ -4884,47 +4508,29 @@
         "description": "Request body for `POST /agent-sessions`.\n\nCarries two shapes, told apart by `workspace`. Naming one asks for an\nexternal session: the runtime is the bot operator's, so the caller has to\nsay which bot and which directory, and must own that bot. Omitting it asks\nfor a managed session, whose runtime this deployment provisions. A managed\nrequest may select an authorized persisted persona with `botId`; omitting\nit uses the deployment's default coding persona, or Cursor when `repoUrl`\nis set. Fields describing someone else's runtime must still be omitted\nrather than quietly ignored. Mixing the two shapes is refused rather\nthan guessed at.\n\nClients serialize this, so both derives are used.",
         "properties": {
           "botId": {
-            "type": [
-              "string",
-              "null"
-            ],
+            "type": ["string", "null"],
             "format": "uuid",
             "description": "Bot the session runs for. On a managed request this optionally selects\na persisted persona the user owns, may use through team membership, or\ncan `@` mention in a shared channel; omitting it uses the deployment's\ndefault coding persona, or Cursor when `repoUrl` is set. On an\nexternal request, bot callers may omit it (their own identity is used)\nand must not name another bot; user callers must supply a bot they own."
           },
           "id": {
-            "type": [
-              "string",
-              "null"
-            ],
+            "type": ["string", "null"],
             "format": "uuid",
             "description": "Id to create the session under, minted by the caller. Lets a surface\nopen on the session's final id - URL, history row, references - the\nmoment the user acts, rather than after this request answers (which\nfor a managed sandbox can take a while). Omitted, the service mints\none. Answers 409 if a session already holds the id. On an external\nrequest it is how a runtime answering a composer request names the\nid it was handed, so the requester waiting on that id finds the session."
           },
           "instructions": {
-            "type": [
-              "string",
-              "null"
-            ],
+            "type": ["string", "null"],
             "description": "Instructions the session's runtime works under, for its whole life.\n\nRecorded on the session whichever runtime serves it. Only the\nin-process one acts on them today; `agent_harness`'s `AgentKind`\nrecords what each of the others will need to."
           },
           "model": {
-            "type": [
-              "string",
-              "null"
-            ],
+            "type": ["string", "null"],
             "description": "Model the managed session runs on, overriding the persona's. Managed\nsessions only: an external runtime picks its own.\n\nThe session's model from the moment it exists, which is what a caller\nchoosing one before the first prompt means. Selecting a model *during*\na session is a control action instead, and reads as one in its\ntranscript."
           },
           "owner": {
-            "type": [
-              "string",
-              "null"
-            ],
+            "type": ["string", "null"],
             "description": "The user who owns the session. Ignored for user callers, who always\nown their own sessions, for harness callers, whose verified acting\nuser owns the session, and for bots that already act for a verified\nuser. A bot without one may name a user here. That claim is trusted\nfor the bot's own sessions. With no claim, a team bot owns the session\nitself only while non-user owners are enabled. Every other bot still\nneeds an owner."
           },
           "prompt": {
-            "type": [
-              "string",
-              "null"
-            ],
+            "type": ["string", "null"],
             "description": "First prompt to deliver once the session is running. Managed sessions\nonly - an external runtime sends its own first prompt through the\ncontrol endpoint. Omitted, the session opens idle."
           },
           "promptActionId": {
@@ -4946,17 +4552,11 @@
             "description": "Files `prompt` refers to, in the order the user attached them.\nRequires `prompt`."
           },
           "repoBranch": {
-            "type": [
-              "string",
-              "null"
-            ],
+            "type": ["string", "null"],
             "description": "Starting branch for a managed coding session's selected repository.\nOmitted, the session starts on the repository's default branch."
           },
           "repoUrl": {
-            "type": [
-              "string",
-              "null"
-            ],
+            "type": ["string", "null"],
             "description": "Explicit GitHub repository for a managed Cursor session, as one of the\nurls `GET /agent-repositories` lists for the caller. Access is checked\nfor the session owner. On a managed request that names no `botId`,\nthis starts the session as Cursor — the only managed persona that\nhonors a repository. For external sessions this is informational:\ncloning it is the runtime operator's job."
           },
           "thread": {
@@ -4971,10 +4571,7 @@
             ]
           },
           "workspace": {
-            "type": [
-              "string",
-              "null"
-            ],
+            "type": ["string", "null"],
             "description": "Absolute directory the bot's harness runs in on its runtime. Present\nfor an external session, absent for a managed one, which runs in the\npath baked into its image."
           }
         }
@@ -4982,9 +4579,7 @@
       "CreateAgentSessionResponse": {
         "type": "object",
         "description": "Response body for `POST /agent-sessions`.\n\nClients deserialize this, so both derives are used.",
-        "required": [
-          "session"
-        ],
+        "required": ["session"],
         "properties": {
           "session": {
             "$ref": "#/components/schemas/AgentSessionResponse",
@@ -5000,9 +4595,7 @@
           },
           {
             "type": "object",
-            "required": [
-              "title"
-            ],
+            "required": ["title"],
             "properties": {
               "executionId": {
                 "oneOf": [
@@ -5027,15 +4620,10 @@
       "CreateSessionThread": {
         "type": "object",
         "description": "The triggering mention on a create request.\n\nClients serialize this, so both derives are used.",
-        "required": [
-          "messageId"
-        ],
+        "required": ["messageId"],
         "properties": {
           "channelId": {
-            "type": [
-              "string",
-              "null"
-            ],
+            "type": ["string", "null"],
             "format": "uuid",
             "description": "Channel the mentioning message was posted in. Runtimes built before\nmessage parents send this instead of `parent`."
           },
@@ -5064,10 +4652,7 @@
             "description": "Update the existing bot response reserved by a task assignment."
           },
           "threadId": {
-            "type": [
-              "string",
-              "null"
-            ],
+            "type": ["string", "null"],
             "format": "uuid",
             "description": "Thread the session belongs to; defaults to the message itself, which\nis how a top-level mention roots its own thread."
           }
@@ -5076,36 +4661,24 @@
       "DecisionVia": {
         "type": "string",
         "description": "Surface of a review decision.",
-        "enum": [
-          "card",
-          "chat",
-          "inbox"
-        ]
+        "enum": ["card", "chat", "inbox"]
       },
       "DiscoverAgentCapabilitiesRequest": {
         "type": "object",
         "description": "HTTP request selecting one provider to probe.",
-        "required": [
-          "harness"
-        ],
+        "required": ["harness"],
         "properties": {
           "harness": {
             "$ref": "#/components/schemas/CapabilityHarnessDto",
             "description": "Provider to probe."
           },
           "harnessId": {
-            "type": [
-              "string",
-              "null"
-            ],
+            "type": ["string", "null"],
             "format": "uuid",
             "description": "Required for macrod and forbidden for other targets."
           },
           "model": {
-            "type": [
-              "string",
-              "null"
-            ],
+            "type": ["string", "null"],
             "description": "Model whose session settings should be inspected."
           }
         }
@@ -5113,9 +4686,7 @@
       "DiscoverAgentCapabilitiesResponse": {
         "type": "object",
         "description": "Successful capability-discovery response.",
-        "required": [
-          "configOptions"
-        ],
+        "required": ["configOptions"],
         "properties": {
           "configOptions": {
             "type": "array",
@@ -5133,9 +4704,7 @@
       "EditQueuedActionRequest": {
         "type": "object",
         "description": "Request body for editing a queued prompt.",
-        "required": [
-          "prompt"
-        ],
+        "required": ["prompt"],
         "properties": {
           "prompt": {
             "type": "string",
@@ -5149,21 +4718,14 @@
           {
             "type": "object",
             "description": "The user submitted the form, or consented to open the URL.",
-            "required": [
-              "action"
-            ],
+            "required": ["action"],
             "properties": {
               "action": {
                 "type": "string",
-                "enum": [
-                  "accept"
-                ]
+                "enum": ["accept"]
               },
               "content": {
-                "type": [
-                  "object",
-                  "null"
-                ],
+                "type": ["object", "null"],
                 "description": "Form: the submitted values keyed by property. URL: omitted.",
                 "additionalProperties": {
                   "$ref": "#/components/schemas/ElicitationContentValue"
@@ -5177,30 +4739,22 @@
           {
             "type": "object",
             "description": "The user explicitly said no.",
-            "required": [
-              "action"
-            ],
+            "required": ["action"],
             "properties": {
               "action": {
                 "type": "string",
-                "enum": [
-                  "decline"
-                ]
+                "enum": ["decline"]
               }
             }
           },
           {
             "type": "object",
             "description": "The user dismissed the request without choosing.",
-            "required": [
-              "action"
-            ],
+            "required": ["action"],
             "properties": {
               "action": {
                 "type": "string",
-                "enum": [
-                  "cancel"
-                ]
+                "enum": ["cancel"]
               }
             }
           }
@@ -5254,15 +4808,10 @@
       "EmailSearchSuggestions": {
         "type": "object",
         "description": "Email search exposes importance and connected inbox addresses, not sender filters.",
-        "required": [
-          "inboxes"
-        ],
+        "required": ["inboxes"],
         "properties": {
           "importance": {
-            "type": [
-              "string",
-              "null"
-            ],
+            "type": ["string", "null"],
             "description": "Explicit importance wording, resolved by the client."
           },
           "inboxes": {
@@ -5273,10 +4822,7 @@
             "description": "Explicit connected inbox addresses, resolved by the client."
           },
           "query": {
-            "type": [
-              "string",
-              "null"
-            ],
+            "type": ["string", "null"],
             "description": "Remaining keyword phrase."
           }
         },
@@ -5294,10 +4840,7 @@
             "description": "Explicit blind-carbon-copy recipient names or supplied email addresses."
           },
           "body": {
-            "type": [
-              "string",
-              "null"
-            ],
+            "type": ["string", "null"],
             "description": "Suggested Markdown content or outgoing message body."
           },
           "cc": {
@@ -5315,10 +4858,7 @@
             "description": "Person or channel names for the client to resolve."
           },
           "subject": {
-            "type": [
-              "string",
-              "null"
-            ],
+            "type": ["string", "null"],
             "description": "Suggested outgoing email subject."
           }
         },
@@ -5327,11 +4867,7 @@
       "ExecutionActivity": {
         "type": "object",
         "description": "A bounded SDK operation observed during execution; not an authorization or write receipt.",
-        "required": [
-          "id",
-          "label",
-          "status"
-        ],
+        "required": ["id", "label", "status"],
         "properties": {
           "id": {
             "type": "integer",
@@ -5357,12 +4893,7 @@
       "ExecutionRecord": {
         "type": "object",
         "description": "Durable source and final outcome, with historical bridge calls when present.\nThe full journal is not included in the model's tool result.",
-        "required": [
-          "executionId",
-          "source",
-          "status",
-          "calls"
-        ],
+        "required": ["executionId", "source", "status", "calls"],
         "properties": {
           "actingAs": {
             "oneOf": [
@@ -5394,10 +4925,7 @@
             "description": "Historical bridge calls. Direct HTTP executions leave this empty."
           },
           "error": {
-            "type": [
-              "string",
-              "null"
-            ],
+            "type": ["string", "null"],
             "description": "Safe execution failure text."
           },
           "executionId": {
@@ -5416,10 +4944,7 @@
             "description": "Overall execution state."
           },
           "turnId": {
-            "type": [
-              "string",
-              "null"
-            ],
+            "type": ["string", "null"],
             "format": "uuid",
             "description": "Original turn, preventing another requester from replaying a saved result."
           }
@@ -5428,26 +4953,15 @@
       "ExecutionStatus": {
         "type": "string",
         "description": "The recorded outcome of a program.",
-        "enum": [
-          "running",
-          "succeeded",
-          "failed",
-          "cancelled",
-          "timed_out"
-        ]
+        "enum": ["running", "succeeded", "failed", "cancelled", "timed_out"]
       },
       "ExternalSessionResponse": {
         "type": "object",
         "description": "The provider-side identity of an externally-served session.",
-        "required": [
-          "provider"
-        ],
+        "required": ["provider"],
         "properties": {
           "name": {
-            "type": [
-              "string",
-              "null"
-            ],
+            "type": ["string", "null"],
             "description": "The provider's display name for the agent, when it reported one."
           },
           "provider": {
@@ -5455,10 +4969,7 @@
             "description": "Which provider serves the session, e.g. `cursor`."
           },
           "url": {
-            "type": [
-              "string",
-              "null"
-            ],
+            "type": ["string", "null"],
             "description": "The agent's page on the provider's site, for a client to link out to."
           }
         }
@@ -5525,9 +5036,7 @@
           },
           {
             "type": "object",
-            "required": [
-              "revision"
-            ],
+            "required": ["revision"],
             "properties": {
               "revision": {
                 "type": "integer",
@@ -5543,29 +5052,18 @@
       "FileChangeKindDto": {
         "type": "string",
         "description": "What happened to a file, on the wire.",
-        "enum": [
-          "added",
-          "modified",
-          "deleted",
-          "renamed"
-        ]
+        "enum": ["added", "modified", "deleted", "renamed"]
       },
       "GitRefDto": {
         "type": "object",
         "description": "One end of the compared range.",
         "properties": {
           "name": {
-            "type": [
-              "string",
-              "null"
-            ],
+            "type": ["string", "null"],
             "description": "The branch name, when known."
           },
           "sha": {
-            "type": [
-              "string",
-              "null"
-            ],
+            "type": ["string", "null"],
             "description": "The commit, when known."
           }
         }
@@ -5573,22 +5071,12 @@
       "InputIntent": {
         "type": "string",
         "description": "A destination the composer can prepare, but never execute through inference.",
-        "enum": [
-          "ai",
-          "search",
-          "email",
-          "note",
-          "task",
-          "calendar",
-          "message"
-        ]
+        "enum": ["ai", "search", "email", "note", "task", "calendar", "message"]
       },
       "InputPropertyDefinition": {
         "type": "object",
         "description": "A task property and the display values available for extraction.",
-        "required": [
-          "name"
-        ],
+        "required": ["name"],
         "properties": {
           "name": {
             "type": "string",
@@ -5606,10 +5094,7 @@
       "InputPropertySuggestion": {
         "type": "object",
         "description": "Suggested display values to resolve against a real task-property catalog.",
-        "required": [
-          "name",
-          "values"
-        ],
+        "required": ["name", "values"],
         "properties": {
           "name": {
             "type": "string",
@@ -5630,16 +5115,11 @@
           {
             "type": "object",
             "description": "Editable ai fields.",
-            "required": [
-              "suggestions",
-              "intent"
-            ],
+            "required": ["suggestions", "intent"],
             "properties": {
               "intent": {
                 "type": "string",
-                "enum": [
-                  "ai"
-                ]
+                "enum": ["ai"]
               },
               "suggestions": {
                 "$ref": "#/components/schemas/AiSuggestions",
@@ -5650,16 +5130,11 @@
           {
             "type": "object",
             "description": "Editable search fields.",
-            "required": [
-              "suggestions",
-              "intent"
-            ],
+            "required": ["suggestions", "intent"],
             "properties": {
               "intent": {
                 "type": "string",
-                "enum": [
-                  "search"
-                ]
+                "enum": ["search"]
               },
               "suggestions": {
                 "$ref": "#/components/schemas/SearchSuggestions",
@@ -5670,16 +5145,11 @@
           {
             "type": "object",
             "description": "Editable email fields.",
-            "required": [
-              "suggestions",
-              "intent"
-            ],
+            "required": ["suggestions", "intent"],
             "properties": {
               "intent": {
                 "type": "string",
-                "enum": [
-                  "email"
-                ]
+                "enum": ["email"]
               },
               "suggestions": {
                 "$ref": "#/components/schemas/EmailSuggestions",
@@ -5690,16 +5160,11 @@
           {
             "type": "object",
             "description": "Editable note fields.",
-            "required": [
-              "suggestions",
-              "intent"
-            ],
+            "required": ["suggestions", "intent"],
             "properties": {
               "intent": {
                 "type": "string",
-                "enum": [
-                  "note"
-                ]
+                "enum": ["note"]
               },
               "suggestions": {
                 "$ref": "#/components/schemas/NoteSuggestions",
@@ -5710,16 +5175,11 @@
           {
             "type": "object",
             "description": "Editable task fields.",
-            "required": [
-              "suggestions",
-              "intent"
-            ],
+            "required": ["suggestions", "intent"],
             "properties": {
               "intent": {
                 "type": "string",
-                "enum": [
-                  "task"
-                ]
+                "enum": ["task"]
               },
               "suggestions": {
                 "$ref": "#/components/schemas/TaskSuggestions",
@@ -5730,16 +5190,11 @@
           {
             "type": "object",
             "description": "Editable calendar fields.",
-            "required": [
-              "suggestions",
-              "intent"
-            ],
+            "required": ["suggestions", "intent"],
             "properties": {
               "intent": {
                 "type": "string",
-                "enum": [
-                  "calendar"
-                ]
+                "enum": ["calendar"]
               },
               "suggestions": {
                 "$ref": "#/components/schemas/CalendarSuggestions",
@@ -5750,16 +5205,11 @@
           {
             "type": "object",
             "description": "Editable message fields.",
-            "required": [
-              "suggestions",
-              "intent"
-            ],
+            "required": ["suggestions", "intent"],
             "properties": {
               "intent": {
                 "type": "string",
-                "enum": [
-                  "message"
-                ]
+                "enum": ["message"]
               },
               "suggestions": {
                 "$ref": "#/components/schemas/MessageSuggestions",
@@ -5773,10 +5223,7 @@
       "IntentScore": {
         "type": "object",
         "description": "Independent yes/no probabilities; these do not sum to one.",
-        "required": [
-          "intent",
-          "score"
-        ],
+        "required": ["intent", "score"],
         "properties": {
           "intent": {
             "$ref": "#/components/schemas/InputIntent",
@@ -5792,27 +5239,19 @@
       "LinkShare": {
         "type": "string",
         "description": "Defines who can access an item through its share link.",
-        "enum": [
-          "PUBLIC",
-          "TEAM"
-        ]
+        "enum": ["PUBLIC", "TEAM"]
       },
       "LoadAgentModelsRequest": {
         "type": "object",
         "description": "HTTP request selecting one provider to probe.",
-        "required": [
-          "harness"
-        ],
+        "required": ["harness"],
         "properties": {
           "harness": {
             "$ref": "#/components/schemas/ModelHarnessDto",
             "description": "Provider to probe."
           },
           "harnessId": {
-            "type": [
-              "string",
-              "null"
-            ],
+            "type": ["string", "null"],
             "format": "uuid",
             "description": "Required for macrod and forbidden for other targets."
           }
@@ -5821,16 +5260,10 @@
       "LoadAgentModelsResponse": {
         "type": "object",
         "description": "Successful model-discovery response.",
-        "required": [
-          "status",
-          "models"
-        ],
+        "required": ["status", "models"],
         "properties": {
           "currentModel": {
-            "type": [
-              "string",
-              "null"
-            ],
+            "type": ["string", "null"],
             "description": "Current provider model, if model selection is available."
           },
           "models": {
@@ -5849,19 +5282,12 @@
       "LogDirectionDto": {
         "type": "string",
         "description": "Which way a logged frame travelled, mirroring [`Message`]'s discriminant.",
-        "enum": [
-          "notification",
-          "to_server",
-          "to_runtime"
-        ]
+        "enum": ["notification", "to_server", "to_runtime"]
       },
       "LogFrameDto": {
         "type": "object",
         "description": "The two fields [`AgentSessionLogEntryDto`] flattens in.\n\nSchema only. Nothing constructs one: the entry serializes through\n[`Message`], and this exists so the generated clients see `direction` and\n`content` as named fields instead of an open map. A hand-built copy could\ndrift from the fold's wire format, and the point of the endpoint is that it\ncannot - so this describes that format without being able to produce it.",
-        "required": [
-          "direction",
-          "content"
-        ],
+        "required": ["direction", "content"],
         "properties": {
           "content": {
             "type": "object",
@@ -5878,10 +5304,7 @@
           {
             "type": "object",
             "description": "A channel, including direct messages.",
-            "required": [
-              "id",
-              "type"
-            ],
+            "required": ["id", "type"],
             "properties": {
               "id": {
                 "type": "string",
@@ -5890,19 +5313,14 @@
               },
               "type": {
                 "type": "string",
-                "enum": [
-                  "channel"
-                ]
+                "enum": ["channel"]
               }
             }
           },
           {
             "type": "object",
             "description": "A document, including tasks and PDFs.",
-            "required": [
-              "id",
-              "type"
-            ],
+            "required": ["id", "type"],
             "properties": {
               "id": {
                 "$ref": "#/components/schemas/DocumentId",
@@ -5910,19 +5328,14 @@
               },
               "type": {
                 "type": "string",
-                "enum": [
-                  "document"
-                ]
+                "enum": ["document"]
               }
             }
           },
           {
             "type": "object",
             "description": "An initiative, presented as a project in the application.",
-            "required": [
-              "id",
-              "type"
-            ],
+            "required": ["id", "type"],
             "properties": {
               "id": {
                 "type": "string",
@@ -5931,19 +5344,14 @@
               },
               "type": {
                 "type": "string",
-                "enum": [
-                  "initiative"
-                ]
+                "enum": ["initiative"]
               }
             }
           },
           {
             "type": "object",
             "description": "A CRM company.",
-            "required": [
-              "id",
-              "type"
-            ],
+            "required": ["id", "type"],
             "properties": {
               "id": {
                 "type": "string",
@@ -5952,19 +5360,14 @@
               },
               "type": {
                 "type": "string",
-                "enum": [
-                  "crm_company"
-                ]
+                "enum": ["crm_company"]
               }
             }
           },
           {
             "type": "object",
             "description": "A CRM contact.",
-            "required": [
-              "id",
-              "type"
-            ],
+            "required": ["id", "type"],
             "properties": {
               "id": {
                 "type": "string",
@@ -5973,19 +5376,14 @@
               },
               "type": {
                 "type": "string",
-                "enum": [
-                  "crm_contact"
-                ]
+                "enum": ["crm_contact"]
               }
             }
           },
           {
             "type": "object",
             "description": "A video call and its persistent chat thread.",
-            "required": [
-              "id",
-              "type"
-            ],
+            "required": ["id", "type"],
             "properties": {
               "id": {
                 "type": "string",
@@ -5994,9 +5392,7 @@
               },
               "type": {
                 "type": "string",
-                "enum": [
-                  "call"
-                ]
+                "enum": ["call"]
               }
             }
           }
@@ -6008,10 +5404,7 @@
         "description": "Editable fields for message inference, before submission and identity resolution.",
         "properties": {
           "body": {
-            "type": [
-              "string",
-              "null"
-            ],
+            "type": ["string", "null"],
             "description": "Suggested Markdown content or outgoing message body."
           },
           "recipients": {
@@ -6027,19 +5420,12 @@
       "ModelHarnessDto": {
         "type": "string",
         "description": "Harness names accepted by the model discovery endpoint.",
-        "enum": [
-          "in-memory",
-          "cursor",
-          "macrod"
-        ]
+        "enum": ["in-memory", "cursor", "macrod"]
       },
       "MonthlyWeekday": {
         "type": "object",
         "description": "Monthly ordinal weekday, such as the first Friday.",
-        "required": [
-          "ordinal",
-          "weekday"
-        ],
+        "required": ["ordinal", "weekday"],
         "properties": {
           "ordinal": {
             "type": "integer",
@@ -6058,17 +5444,11 @@
         "description": "Editable fields for note inference, before submission and identity resolution.",
         "properties": {
           "body": {
-            "type": [
-              "string",
-              "null"
-            ],
+            "type": ["string", "null"],
             "description": "Suggested Markdown content or outgoing message body."
           },
           "title": {
-            "type": [
-              "string",
-              "null"
-            ],
+            "type": ["string", "null"],
             "description": "Suggested note, task, or event title."
           }
         },
@@ -6079,16 +5459,11 @@
           {
             "type": "object",
             "description": "One of the options the agent offered was chosen.",
-            "required": [
-              "optionId",
-              "kind"
-            ],
+            "required": ["optionId", "kind"],
             "properties": {
               "kind": {
                 "type": "string",
-                "enum": [
-                  "selected"
-                ]
+                "enum": ["selected"]
               },
               "optionId": {
                 "type": "string",
@@ -6099,15 +5474,11 @@
           {
             "type": "object",
             "description": "The request was dismissed without choosing.",
-            "required": [
-              "kind"
-            ],
+            "required": ["kind"],
             "properties": {
               "kind": {
                 "type": "string",
-                "enum": [
-                  "cancelled"
-                ]
+                "enum": ["cancelled"]
               }
             }
           }
@@ -6117,9 +5488,7 @@
       "PresentView": {
         "type": "object",
         "description": "A view to present.",
-        "required": [
-          "view"
-        ],
+        "required": ["view"],
         "properties": {
           "executionId": {
             "oneOf": [
@@ -6142,9 +5511,7 @@
       "PreviewAgentSessionsRequest": {
         "type": "object",
         "description": "Request body for `POST /agent-sessions/preview`.\n\nClients serialize this, so both derives are used.",
-        "required": [
-          "sessionIds"
-        ],
+        "required": ["sessionIds"],
         "properties": {
           "sessionIds": {
             "type": "array",
@@ -6159,9 +5526,7 @@
       "PreviewAgentSessionsResponse": {
         "type": "object",
         "description": "Response body for `POST /agent-sessions/preview`: one entry per distinct\nrequested id, in no particular order.\n\nClients deserialize this, so both derives are used.",
-        "required": [
-          "previews"
-        ],
+        "required": ["previews"],
         "properties": {
           "previews": {
             "type": "array",
@@ -6175,16 +5540,10 @@
       "PromptAttachment": {
         "type": "object",
         "description": "A file the prompt refers to, by where the agent can fetch it.\n\nMirrors ACP's `resource_link` content block, which every agent must\naccept: bytes never ride the prompt, only a URI (a static file service URL\nin practice) with enough metadata for a client to render a chip and for\nthe agent to decide whether to fetch it. Keeping the wire shape ACP-native\nmeans the harness translates without resolving anything, and the fold\nreads the same fields back off the logged frame.",
-        "required": [
-          "uri",
-          "name"
-        ],
+        "required": ["uri", "name"],
         "properties": {
           "mimeType": {
-            "type": [
-              "string",
-              "null"
-            ],
+            "type": ["string", "null"],
             "description": "The file's media type, when known."
           },
           "name": {
@@ -6192,10 +5551,7 @@
             "description": "Display name, typically the original file name."
           },
           "size": {
-            "type": [
-              "integer",
-              "null"
-            ],
+            "type": ["integer", "null"],
             "format": "int64",
             "description": "Size in bytes, when known."
           },
@@ -6208,24 +5564,15 @@
       "PullRequestLinkSource": {
         "type": "string",
         "description": "Who associated a pull request with a session.",
-        "enum": [
-          "agent",
-          "user"
-        ]
+        "enum": ["agent", "user"]
       },
       "PullRequestLinkedSession": {
         "type": "object",
         "description": "A session linked to a pull request, as a viewer of that session sees it.",
-        "required": [
-          "sessionId",
-          "source"
-        ],
+        "required": ["sessionId", "source"],
         "properties": {
           "originMessageId": {
-            "type": [
-              "string",
-              "null"
-            ],
+            "type": ["string", "null"],
             "format": "uuid",
             "description": "The message that started the session, such as an @mention, when it was\nstarted from a thread. A mention inside a thread is that reply, not the root."
           },
@@ -6254,11 +5601,7 @@
       "PullRequestSessions": {
         "type": "object",
         "description": "The sessions linked to one pull request that the caller can view.",
-        "required": [
-          "url",
-          "githubKey",
-          "sessions"
-        ],
+        "required": ["url", "githubKey", "sessions"],
         "properties": {
           "githubKey": {
             "type": "string",
@@ -6280,9 +5623,7 @@
       "PullRequestSessionsResponse": {
         "type": "object",
         "description": "The sessions associated with a pull request.",
-        "required": [
-          "sessionIds"
-        ],
+        "required": ["sessionIds"],
         "properties": {
           "sessionIds": {
             "type": "array",
@@ -6297,9 +5638,7 @@
       "PullRequestUrl": {
         "type": "object",
         "description": "A GitHub pull request, by URL.",
-        "required": [
-          "url"
-        ],
+        "required": ["url"],
         "properties": {
           "url": {
             "type": "string",
@@ -6310,9 +5649,7 @@
       "PullRequestUrls": {
         "type": "object",
         "description": "GitHub pull requests, by URL.",
-        "required": [
-          "urls"
-        ],
+        "required": ["urls"],
         "properties": {
           "urls": {
             "type": "array",
@@ -6326,9 +5663,7 @@
       "PullRequestsSessionsResponse": {
         "type": "object",
         "description": "The sessions associated with each requested pull request.",
-        "required": [
-          "pullRequests"
-        ],
+        "required": ["pullRequests"],
         "properties": {
           "pullRequests": {
             "type": "array",
@@ -6344,10 +5679,7 @@
         "description": "A topic for search types without additional supported facets.",
         "properties": {
           "query": {
-            "type": [
-              "string",
-              "null"
-            ],
+            "type": ["string", "null"],
             "description": "Remaining keyword phrase after supported filters and instructions."
           }
         },
@@ -6356,21 +5688,14 @@
       "QueuedActionDto": {
         "type": "object",
         "description": "One action waiting in a session's queue.\n\nClients deserialize this, so both derives are used.",
-        "required": [
-          "actionId",
-          "kind",
-          "createdAt"
-        ],
+        "required": ["actionId", "kind", "createdAt"],
         "properties": {
           "actionId": {
             "$ref": "#/components/schemas/AgentActionId",
             "description": "The id the action was accepted under."
           },
           "actorUserId": {
-            "type": [
-              "string",
-              "null"
-            ],
+            "type": ["string", "null"],
             "description": "The user who queued it, absent when a bot acted on nobody's behalf."
           },
           "attachments": {
@@ -6390,10 +5715,7 @@
             "description": "What kind of action waits - `prompt` or `compact`; only\nturn-occupying actions are ever queued."
           },
           "prompt": {
-            "type": [
-              "string",
-              "null"
-            ],
+            "type": ["string", "null"],
             "description": "The prompt's raw text, present for prompts only. What an edit\nreplaces."
           }
         }
@@ -6401,29 +5723,15 @@
       "RecordedCallStatus": {
         "type": "string",
         "description": "A dispatch result; unfinished work is never reported as success.",
-        "enum": [
-          "running",
-          "completed",
-          "failed",
-          "unknown"
-        ]
+        "enum": ["running", "completed", "failed", "unknown"]
       },
       "RecordedToolCall": {
         "type": "object",
         "description": "A real inner call, recorded by trusted dispatch for the existing renderers.",
-        "required": [
-          "id",
-          "name",
-          "input",
-          "outputOmitted",
-          "status"
-        ],
+        "required": ["id", "name", "input", "outputOmitted", "status"],
         "properties": {
           "error": {
-            "type": [
-              "string",
-              "null"
-            ],
+            "type": ["string", "null"],
             "description": "Safe tool failure, if one was returned."
           },
           "id": {
@@ -6455,25 +5763,18 @@
           {
             "type": "object",
             "description": "No ending condition.",
-            "required": [
-              "kind"
-            ],
+            "required": ["kind"],
             "properties": {
               "kind": {
                 "type": "string",
-                "enum": [
-                  "never"
-                ]
+                "enum": ["never"]
               }
             }
           },
           {
             "type": "object",
             "description": "Explicit occurrence limit.",
-            "required": [
-              "count",
-              "kind"
-            ],
+            "required": ["count", "kind"],
             "properties": {
               "count": {
                 "type": "integer",
@@ -6483,19 +5784,14 @@
               },
               "kind": {
                 "type": "string",
-                "enum": [
-                  "after"
-                ]
+                "enum": ["after"]
               }
             }
           },
           {
             "type": "object",
             "description": "Inclusive local ISO date.",
-            "required": [
-              "date",
-              "kind"
-            ],
+            "required": ["date", "kind"],
             "properties": {
               "date": {
                 "type": "string",
@@ -6503,9 +5799,7 @@
               },
               "kind": {
                 "type": "string",
-                "enum": [
-                  "on"
-                ]
+                "enum": ["on"]
               }
             }
           }
@@ -6515,22 +5809,12 @@
       "RecurrenceFrequency": {
         "type": "string",
         "description": "Repetition units supported by the shared calendar editor.",
-        "enum": [
-          "DAILY",
-          "WEEKLY",
-          "MONTHLY",
-          "YEARLY"
-        ]
+        "enum": ["DAILY", "WEEKLY", "MONTHLY", "YEARLY"]
       },
       "RecurrenceSuggestion": {
         "type": "object",
         "description": "Resolved, editable repetition values; the existing calendar serializer builds RRULEs.",
-        "required": [
-          "frequency",
-          "interval",
-          "by_day",
-          "ends"
-        ],
+        "required": ["frequency", "interval", "by_day", "ends"],
         "properties": {
           "by_day": {
             "type": "array",
@@ -6569,9 +5853,7 @@
       "RenameAgentSessionRequest": {
         "type": "object",
         "description": "Request body for renaming an agent session.",
-        "required": [
-          "name"
-        ],
+        "required": ["name"],
         "properties": {
           "name": {
             "type": "string",
@@ -6582,9 +5864,7 @@
       "RetryAgentConversationTurnRequest": {
         "type": "object",
         "description": "The attempt the user saw and chose to retry; prevents double-click reruns.",
-        "required": [
-          "actionId"
-        ],
+        "required": ["actionId"],
         "properties": {
           "actionId": {
             "type": "string",
@@ -6598,18 +5878,11 @@
           {
             "type": "object",
             "description": "Save one edited draft.",
-            "required": [
-              "revision",
-              "item",
-              "draft",
-              "action"
-            ],
+            "required": ["revision", "item", "draft", "action"],
             "properties": {
               "action": {
                 "type": "string",
-                "enum": [
-                  "edit"
-                ]
+                "enum": ["edit"]
               },
               "draft": {
                 "type": "object",
@@ -6630,17 +5903,11 @@
           {
             "type": "object",
             "description": "Send/create selected items, or all pending items when empty.",
-            "required": [
-              "revision",
-              "items",
-              "action"
-            ],
+            "required": ["revision", "items", "action"],
             "properties": {
               "action": {
                 "type": "string",
-                "enum": [
-                  "submit"
-                ]
+                "enum": ["submit"]
               },
               "items": {
                 "type": "array",
@@ -6660,17 +5927,11 @@
           {
             "type": "object",
             "description": "Dismiss selected pending items, or all pending items when empty.",
-            "required": [
-              "revision",
-              "items",
-              "action"
-            ],
+            "required": ["revision", "items", "action"],
             "properties": {
               "action": {
                 "type": "string",
-                "enum": [
-                  "dismiss"
-                ]
+                "enum": ["dismiss"]
               },
               "items": {
                 "type": "array",
@@ -6693,12 +5954,7 @@
       "ReviewDecisionContext": {
         "type": "object",
         "description": "Facts about the most recent account-holder decision.",
-        "required": [
-          "by",
-          "via",
-          "revision",
-          "items"
-        ],
+        "required": ["by", "via", "revision", "items"],
         "properties": {
           "by": {
             "type": "string",
@@ -6776,10 +6032,7 @@
                 "description": "Review identity."
               },
               "presentedAt": {
-                "type": [
-                  "integer",
-                  "null"
-                ],
+                "type": ["integer", "null"],
                 "format": "int64",
                 "description": "Durable presentation acknowledgment, separate from user decisions."
               },
@@ -6810,18 +6063,12 @@
       "SandboxSize": {
         "type": "string",
         "description": "Named compute tier for a managed sandbox.\n\nThe API and database store the name. CPU, RAM, and disk live in\n`crates/agent_harness/sandbox_sizes.json`.",
-        "enum": [
-          "small",
-          "default",
-          "large"
-        ]
+        "enum": ["small", "default", "large"]
       },
       "SandboxSizeBody": {
         "type": "object",
         "description": "Request or response body for a named sandbox size.",
-        "required": [
-          "size"
-        ],
+        "required": ["size"],
         "properties": {
           "size": {
             "$ref": "#/components/schemas/SandboxSize",
@@ -6839,15 +6086,11 @@
               },
               {
                 "type": "object",
-                "required": [
-                  "type"
-                ],
+                "required": ["type"],
                 "properties": {
                   "type": {
                     "type": "string",
-                    "enum": [
-                      "all"
-                    ]
+                    "enum": ["all"]
                   }
                 }
               }
@@ -6862,15 +6105,11 @@
               },
               {
                 "type": "object",
-                "required": [
-                  "type"
-                ],
+                "required": ["type"],
                 "properties": {
                   "type": {
                     "type": "string",
-                    "enum": [
-                      "channels"
-                    ]
+                    "enum": ["channels"]
                   }
                 }
               }
@@ -6885,15 +6124,11 @@
               },
               {
                 "type": "object",
-                "required": [
-                  "type"
-                ],
+                "required": ["type"],
                 "properties": {
                   "type": {
                     "type": "string",
-                    "enum": [
-                      "document-or-file"
-                    ]
+                    "enum": ["document-or-file"]
                   }
                 }
               }
@@ -6908,15 +6143,11 @@
               },
               {
                 "type": "object",
-                "required": [
-                  "type"
-                ],
+                "required": ["type"],
                 "properties": {
                   "type": {
                     "type": "string",
-                    "enum": [
-                      "task"
-                    ]
+                    "enum": ["task"]
                   }
                 }
               }
@@ -6931,15 +6162,11 @@
               },
               {
                 "type": "object",
-                "required": [
-                  "type"
-                ],
+                "required": ["type"],
                 "properties": {
                   "type": {
                     "type": "string",
-                    "enum": [
-                      "email"
-                    ]
+                    "enum": ["email"]
                   }
                 }
               }
@@ -6954,15 +6181,11 @@
               },
               {
                 "type": "object",
-                "required": [
-                  "type"
-                ],
+                "required": ["type"],
                 "properties": {
                   "type": {
                     "type": "string",
-                    "enum": [
-                      "calls"
-                    ]
+                    "enum": ["calls"]
                   }
                 }
               }
@@ -6977,15 +6200,11 @@
               },
               {
                 "type": "object",
-                "required": [
-                  "type"
-                ],
+                "required": ["type"],
                 "properties": {
                   "type": {
                     "type": "string",
-                    "enum": [
-                      "folders"
-                    ]
+                    "enum": ["folders"]
                   }
                 }
               }
@@ -7000,15 +6219,11 @@
               },
               {
                 "type": "object",
-                "required": [
-                  "type"
-                ],
+                "required": ["type"],
                 "properties": {
                   "type": {
                     "type": "string",
-                    "enum": [
-                      "agent"
-                    ]
+                    "enum": ["agent"]
                   }
                 }
               }
@@ -7023,15 +6238,11 @@
               },
               {
                 "type": "object",
-                "required": [
-                  "type"
-                ],
+                "required": ["type"],
                 "properties": {
                   "type": {
                     "type": "string",
-                    "enum": [
-                      "calendar"
-                    ]
+                    "enum": ["calendar"]
                   }
                 }
               }
@@ -7059,16 +6270,10 @@
       "SessionAutoArchiveResponse": {
         "type": "object",
         "description": "A session's auto-archive settings and history.",
-        "required": [
-          "overrides",
-          "defaults"
-        ],
+        "required": ["overrides", "defaults"],
         "properties": {
           "autoArchivedAt": {
-            "type": [
-              "string",
-              "null"
-            ],
+            "type": ["string", "null"],
             "format": "date-time",
             "description": "When a trigger first archived the session. Kept when a person restores it: a session\narchives itself at most once."
           },
@@ -7085,17 +6290,10 @@
       "SessionBot": {
         "type": "object",
         "description": "The agent behind a session, as much of it as rendering a message needs.",
-        "required": [
-          "id",
-          "name",
-          "handle"
-        ],
+        "required": ["id", "name", "handle"],
         "properties": {
           "avatarUrl": {
-            "type": [
-              "string",
-              "null"
-            ],
+            "type": ["string", "null"],
             "description": "Avatar, when it has one."
           },
           "handle": {
@@ -7115,12 +6313,7 @@
       "SessionPullRequestLink": {
         "type": "object",
         "description": "A pull request associated with a session.",
-        "required": [
-          "githubKey",
-          "url",
-          "source",
-          "createdAt"
-        ],
+        "required": ["githubKey", "url", "source", "createdAt"],
         "properties": {
           "createdAt": {
             "type": "string",
@@ -7132,10 +6325,7 @@
             "description": "The pull request's `owner/repo/pull/number` key."
           },
           "linkedBy": {
-            "type": [
-              "string",
-              "null"
-            ],
+            "type": ["string", "null"],
             "description": "The Macro user who linked it, for links a person made."
           },
           "source": {
@@ -7151,9 +6341,7 @@
       "SessionPullRequestsResponse": {
         "type": "object",
         "description": "The pull requests associated with a session.",
-        "required": [
-          "pullRequests"
-        ],
+        "required": ["pullRequests"],
         "properties": {
           "pullRequests": {
             "type": "array",
@@ -7169,25 +6357,18 @@
           {
             "type": "object",
             "description": "No status updates received.",
-            "required": [
-              "kind"
-            ],
+            "required": ["kind"],
             "properties": {
               "kind": {
                 "type": "string",
-                "enum": [
-                  "no_messages"
-                ]
+                "enum": ["no_messages"]
               }
             }
           },
           {
             "type": "object",
             "description": "The last system event received from the runtime.",
-            "required": [
-              "event",
-              "kind"
-            ],
+            "required": ["event", "kind"],
             "properties": {
               "event": {
                 "type": "string",
@@ -7195,24 +6376,18 @@
               },
               "kind": {
                 "type": "string",
-                "enum": [
-                  "event"
-                ]
+                "enum": ["event"]
               }
             }
           },
           {
             "type": "object",
             "description": "The session disconnected without sending a closed event.",
-            "required": [
-              "kind"
-            ],
+            "required": ["kind"],
             "properties": {
               "kind": {
                 "type": "string",
-                "enum": [
-                  "disconnected"
-                ]
+                "enum": ["disconnected"]
               }
             }
           }
@@ -7222,9 +6397,7 @@
       "SetAgentSessionArchivedRequest": {
         "type": "object",
         "description": "Request body for archiving or unarchiving an agent session.",
-        "required": [
-          "archived"
-        ],
+        "required": ["archived"],
         "properties": {
           "archived": {
             "type": "boolean",
@@ -7234,16 +6407,10 @@
       },
       "SharePermissionV2": {
         "type": "object",
-        "required": [
-          "id",
-          "owner"
-        ],
+        "required": ["id", "owner"],
         "properties": {
           "channelSharePermissions": {
-            "type": [
-              "array",
-              "null"
-            ],
+            "type": ["array", "null"],
             "items": {
               "$ref": "#/components/schemas/ChannelSharePermission"
             },
@@ -7295,9 +6462,7 @@
       "StartFreshAgentConversationRequest": {
         "type": "object",
         "description": "The session the user is choosing to leave behind.",
-        "required": [
-          "sessionId"
-        ],
+        "required": ["sessionId"],
         "properties": {
           "sessionId": {
             "type": "string",
@@ -7309,12 +6474,7 @@
       "TaskSearchSuggestions": {
         "type": "object",
         "description": "Task facets match the shared search editor; assignee and creator are distinct.",
-        "required": [
-          "status",
-          "priority",
-          "assignees",
-          "created_by"
-        ],
+        "required": ["status", "priority", "assignees", "created_by"],
         "properties": {
           "assignees": {
             "type": "array",
@@ -7338,10 +6498,7 @@
             "description": "Priority display values for client-side option resolution."
           },
           "query": {
-            "type": [
-              "string",
-              "null"
-            ],
+            "type": ["string", "null"],
             "description": "Remaining keyword phrase."
           },
           "status": {
@@ -7359,17 +6516,11 @@
         "description": "Editable fields for task inference, before submission and identity resolution.",
         "properties": {
           "body": {
-            "type": [
-              "string",
-              "null"
-            ],
+            "type": ["string", "null"],
             "description": "Suggested Markdown content or outgoing message body."
           },
           "due_date": {
-            "type": [
-              "string",
-              "null"
-            ],
+            "type": ["string", "null"],
             "description": "Task deadline as a local ISO date."
           },
           "properties": {
@@ -7380,10 +6531,7 @@
             "description": "Display names/values that the client resolves against available task fields."
           },
           "title": {
-            "type": [
-              "string",
-              "null"
-            ],
+            "type": ["string", "null"],
             "description": "Suggested note, task, or event title."
           }
         },
@@ -7392,38 +6540,21 @@
       "ToolActor": {
         "type": "string",
         "description": "Which authenticated participant's access a tool call requests.",
-        "enum": [
-          "requester",
-          "owner"
-        ]
+        "enum": ["requester", "owner"]
       },
       "ToolApprovalAnswerDto": {
         "type": "string",
         "description": "How a person answers a held tool call.",
-        "enum": [
-          "approve",
-          "approve_and_remember",
-          "deny",
-          "cancel"
-        ]
+        "enum": ["approve", "approve_and_remember", "deny", "cancel"]
       },
       "ToolApprovalStatusDto": {
         "type": "string",
         "description": "Where a held tool call stands once answered.",
-        "enum": [
-          "pending",
-          "approved",
-          "denied",
-          "cancelled",
-          "expired"
-        ]
+        "enum": ["pending", "approved", "denied", "cancelled", "expired"]
       },
       "UpdateChannelSharePermission": {
         "type": "object",
-        "required": [
-          "operation",
-          "channelId"
-        ],
+        "required": ["operation", "channelId"],
         "properties": {
           "accessLevel": {
             "oneOf": [
@@ -7448,20 +6579,13 @@
       },
       "UpdateOperation": {
         "type": "string",
-        "enum": [
-          "add",
-          "remove",
-          "replace"
-        ]
+        "enum": ["add", "remove", "replace"]
       },
       "UpdateSharePermissionRequestV2": {
         "type": "object",
         "properties": {
           "channelSharePermissions": {
-            "type": [
-              "array",
-              "null"
-            ],
+            "type": ["array", "null"],
             "items": {
               "$ref": "#/components/schemas/UpdateChannelSharePermission"
             },
@@ -7505,9 +6629,7 @@
       "WarmAgentSessionRequest": {
         "type": "object",
         "description": "A client-minted id deduplicates warm calls without creating a conversation.",
-        "required": [
-          "id"
-        ],
+        "required": ["id"],
         "properties": {
           "id": {
             "type": "string",
@@ -7536,22 +6658,12 @@
       "WeekdayCode": {
         "type": "string",
         "description": "RFC weekday values used by the existing recurrence UI.",
-        "enum": [
-          "MO",
-          "TU",
-          "WE",
-          "TH",
-          "FR",
-          "SA",
-          "SU"
-        ]
+        "enum": ["MO", "TU", "WE", "TH", "FR", "SA", "SU"]
       },
       "WithAgentSessionId": {
         "type": "object",
         "description": "Just a session id, for the preview variants that carry nothing else.\n\nClients deserialize this, so both derives are used.",
-        "required": [
-          "id"
-        ],
+        "required": ["id"],
         "properties": {
           "id": {
             "type": "string",

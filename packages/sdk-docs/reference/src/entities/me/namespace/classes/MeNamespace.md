@@ -40,9 +40,29 @@ signing in, so teammates can tell who they are working with.
 #### Example
 
 ```ts
-const image = await macro.images.upload(bytes, {
+const image = await macro.me.uploadProfilePicture(bytes, {
   fileName: 'avatar.png',
   contentType: 'image/png',
 });
 await macro.me.update({ name: 'Research Agent', profilePicture: image });
 ```
+
+***
+
+### uploadProfilePicture()
+
+> **uploadProfilePicture**(`data`, `options`): `Promise`\<[`StaticImage`](../../../images/image/classes/StaticImage.md)\>
+
+Upload an image to use as your profile picture. This only stores it; pass
+the result to [MeNamespace.update](#update) to start using it.
+
+#### Parameters
+
+| Parameter | Type |
+| ------ | ------ |
+| `data` | `Blob` \| `Uint8Array`\<`ArrayBuffer`\> |
+| `options` | [`UploadProfilePictureOptions`](../interfaces/UploadProfilePictureOptions.md) |
+
+#### Returns
+
+`Promise`\<[`StaticImage`](../../../images/image/classes/StaticImage.md)\>

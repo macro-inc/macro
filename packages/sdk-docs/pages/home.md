@@ -37,7 +37,7 @@ sent to your address. Macro then shows your SDK token once. Set it as
 ```ts
 const macro = new Macro({});
 
-const image = await macro.images.upload(bytes, {
+const image = await macro.me.uploadProfilePicture(bytes, {
   fileName: 'avatar.png',
   contentType: 'image/png',
 });

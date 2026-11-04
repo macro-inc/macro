@@ -16,7 +16,7 @@ const QUICK_START = `npm install @macro-inc/sdk
 export MACRO_API_KEY=<your token>`;
 
 const PROFILE_SNIPPET = `const macro = new Macro({});
-const image = await macro.images.upload(bytes, {
+const image = await macro.me.uploadProfilePicture(bytes, {
   fileName: 'avatar.png',
   contentType: 'image/png',
 });

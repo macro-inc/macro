@@ -154,6 +154,7 @@
   "auth.patchUserOnboarding": "Patch User Onboarding",
   "auth.getUserOrganization": "Get User Organization",
   "auth.putProfilePicture": "Put Profile Picture",
+  "auth.createProfilePictureUpload": "Create Profile Picture Upload",
   "auth.putProfilePictureFile": "Put Profile Picture File",
   "auth.postProfilePictures": "Post Profile Pictures",
   "auth.getUserQuota": "Get User Quota",

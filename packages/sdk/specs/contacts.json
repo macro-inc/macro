@@ -12,9 +12,7 @@
   "paths": {
     "/contacts": {
       "get": {
-        "tags": [
-          "contacts"
-        ],
+        "tags": ["contacts"],
         "summary": "GET /contacts handler.",
         "operationId": "get_contacts",
         "responses": {
@@ -61,9 +59,7 @@
         }
       },
       "post": {
-        "tags": [
-          "contacts"
-        ],
+        "tags": ["contacts"],
         "summary": "POST /contacts handler.",
         "operationId": "add_contact",
         "requestBody": {
@@ -109,9 +105,7 @@
       "AddContactRequest": {
         "type": "object",
         "description": "Request body for POST /contacts.",
-        "required": [
-          "user_id"
-        ],
+        "required": ["user_id"],
         "properties": {
           "user_id": {
             "type": "string",
@@ -122,9 +116,7 @@
       "GetContactsResponse": {
         "type": "object",
         "description": "Response body for GET /contacts.",
-        "required": [
-          "contacts"
-        ],
+        "required": ["contacts"],
         "properties": {
           "contacts": {
             "type": "array",
