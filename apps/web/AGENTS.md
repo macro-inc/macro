@@ -437,6 +437,8 @@ resolved session ID; keep the existing `AgentSessionProvider` subscription to
   reset its admin-only choice on account/team/role/list changes and preserve search.
   Apply confirmed visibility changes to detail, list and normalized search caches;
   fence in-flight pre-write responses and refresh only affected CRM readers.
+  Declare CRM membership dependencies from each Soup query's initial filter scope
+  on every page so empty late responses are fenced without refreshing excluded types.
   Preserve company cascade semantics and require company restoration before a person.
   Run desktop/phone controls with `bunx playwright test --config src/features/crm/browser-test/archive/playwright.config.ts`;
   `browser-test/people` and `browser-test/team` additionally cover synthetic query adapters.

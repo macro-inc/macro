@@ -3093,9 +3093,61 @@ describe('normalizedCacheExchange', () => {
       }
     );
 
+    it.each([false, true])(
+      'fences empty and CRM-free pages with declared membership dependencies (hydration=%s)',
+      async (hydration) => {
+        const { ops, network, forwarded, results } =
+          controlledQueryHarness(host);
+        const operation = hydration
+          ? makeHydrationOp(1)
+          : makeOp(1, 'network-only');
+        ops.next(
+          makeOperation('query', operation, {
+            ...operation.context,
+            externalCacheWriteTypes: ['GraphqlSoupCrmContact'],
+          })
+        );
+        await tick();
+        recordExternalWrite(host, ['GraphqlSoupCrmContact']);
+        network.next(queryResult(forwarded[0], { items: [] }));
+        await tick();
+        expect(results).toEqual([]);
+        expect(host.writes).toEqual([]);
+        expect(forwarded).toHaveLength(2);
+        recordExternalWrite(host, ['GraphqlSoupCrmContact']);
+        network.next(
+          queryResult(forwarded[1], {
+            items: [{ __typename: 'GraphqlSoupDocument', id: 'document-1' }],
+          })
+        );
+        await tick();
+        expect(results).toEqual([]);
+        expect(host.writes).toEqual([]);
+        expect(forwarded).toHaveLength(3);
+        const restored = {
+          items: [
+            {
+              __typename: 'GraphqlSoupCrmContact',
+              id: 'contact-1',
+              hidden: false,
+            },
+          ],
+        };
+        network.next(queryResult(forwarded[2], restored));
+        await tick();
+        expect(results.at(-1)?.data).toEqual(restored);
+      }
+    );
+
     it('keeps unrelated in-flight responses after a REST CRM write', async () => {
       const { ops, network, forwarded, results } = controlledQueryHarness(host);
-      ops.next(makeOp(1, 'network-only'));
+      const operation = makeOp(1, 'network-only');
+      ops.next(
+        makeOperation('query', operation, {
+          ...operation.context,
+          externalCacheWriteTypes: [],
+        })
+      );
       await tick();
       recordExternalWrite(host, [
         'GraphqlSoupCrmCompany',

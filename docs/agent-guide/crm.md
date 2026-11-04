@@ -237,7 +237,8 @@ appear first in both information panels; company Properties, Lists and Email sha
 follow. Neither panel has a duplicate visibility control.
 
 Verify successful changes update open People, Companies, Team and ordinary Cmd-K;
-late responses must not reintroduce archived rows. Returning to a cached company
+late responses must not reintroduce archived rows or hide restored rows with an
+old empty page. Returning to a cached company
 must show confirmed embedded contacts. Failed reads after a successful save must not
 claim the save failed. Run the actual-control desktop/phone fixture with
 `bunx playwright test --config src/features/crm/browser-test/archive/playwright.config.ts`.

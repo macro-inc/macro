@@ -128,6 +128,8 @@ declare module '@urql/core' {
   interface OperationContext {
     /** Publish the network result without storing it in the cache. */
     persistResult?: false;
+    /** Types that can change this query's membership, even in an empty response. */
+    externalCacheWriteTypes?: readonly string[];
   }
 }
 
@@ -1306,7 +1308,8 @@ export function normalizedCacheExchange(
             predatesExternalWrite(
               host,
               op.context.externalCacheWriteVersion,
-              result.data
+              result.data,
+              op.context.externalCacheWriteTypes
             )
           ) {
             refreshObsoleteQuery(op);
@@ -1469,7 +1472,8 @@ export function normalizedCacheExchange(
             predatesExternalWrite(
               host,
               op.context.externalCacheWriteVersion,
-              result.data
+              result.data,
+              op.context.externalCacheWriteTypes
             )
           ) {
             if (!result.hasNext && hydrationRequests.has(op.key)) {
@@ -1518,7 +1522,8 @@ export function normalizedCacheExchange(
             predatesExternalWrite(
               host,
               op.context.externalCacheWriteVersion,
-              result.data
+              result.data,
+              op.context.externalCacheWriteTypes
             )
           ) {
             if (result.hasNext !== true) {

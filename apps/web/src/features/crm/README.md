@@ -86,7 +86,9 @@ path and patch paginated suggestions, company search pages, REST Soup and embedd
 detail snapshots. Confirmed detail snapshots become stale without an immediate
 refetch; active initial reads that were cancelled are restarted.
 Pre-write REST reads are cancelled; the normalized exchange fences older responses
-containing the affected CRM types before publication, hydration or persistence.
+containing or declaring the affected CRM types before publication, hydration or
+persistence. Flat and grouped Soup pages retain their initial filter dependencies
+on continuations, so old empty pages cannot briefly hide a restored record.
 Refreshes target CRM-capable readers, leaving unrelated lists alone. A refresh
 failure is logged separately and never misreports a committed save as rejected.
 Session identity is captured before dispatch so a late response cannot populate a

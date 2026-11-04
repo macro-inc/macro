@@ -18,15 +18,17 @@ export function recordExternalWrite(
   WRITES.set(host, versions);
 }
 
-/** Ignore only pre-write responses containing the types the REST write changed. */
+/** Fence declared dependencies too: an old empty list can omit a restored record. */
 export function predatesExternalWrite(
   host: CacheHost,
   version: unknown,
-  data: unknown
+  data: unknown,
+  types: readonly string[] = []
 ): boolean {
   if (typeof version !== 'number') return false;
   const versions = WRITES.get(host);
   if (!versions || externalWriteVersion(host) <= version) return false;
+  if (types.some((type) => (versions.get(type) ?? 0) > version)) return true;
   const visit = (value: unknown): boolean => {
     if (typeof value !== 'object' || value === null) return false;
     if (
