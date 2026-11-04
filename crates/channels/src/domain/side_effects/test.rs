@@ -962,6 +962,7 @@ async fn document_mentions_in_a_reply_notify_only_thread_participants() {
                 thread_id: Some(thread_id),
                 sender_id: Sender::new_from_user(sender.clone()),
                 triggered_by: None,
+                triggered_via: None,
                 content: "see this".to_string(),
                 created_at: now,
                 updated_at: now,

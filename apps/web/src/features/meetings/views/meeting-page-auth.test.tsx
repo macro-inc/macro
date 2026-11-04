@@ -8,6 +8,7 @@ import {
 } from '@solidjs/testing-library';
 import { createSignal } from 'solid-js';
 import { afterEach, expect, it, vi } from 'vitest';
+import { MeetingSessionProvider } from '../meeting-session-provider';
 import { createMeetingSessionLifecycle } from '../primitives/meeting-session-lifecycle';
 import { MeetingPage } from './meeting-page';
 
@@ -74,52 +75,54 @@ it.each([
     const onLeave = vi.fn();
     const onCallStateChange = vi.fn();
     render(() => (
-      <MeetingPage
-        source={() => ({
-          kind: 'ready',
-          title: 'Call',
-          channelId: test.channelId,
-          scheduledStart: test.scheduledStart,
-          scheduledEnd: null,
-        })}
-        authenticated={() => test.authenticated}
-        author={() => 'Member'}
-        onCopy={async () => {}}
-        onLeave={onLeave}
-        onCallStateChange={onCallStateChange}
-        mediaAccess={{
-          request: async () => {
-            throw new DOMException('Denied', 'NotAllowedError');
-          },
-        }}
-        session={{
-          lifecycle: createMeetingSessionLifecycle(),
-          shareToken: () => 'token',
-          isInCall: () => activeCallId() !== null,
-          activeCallId,
-          join: async () => ({
-            callId: 'call-1',
+      <MeetingSessionProvider>
+        <MeetingPage
+          source={() => ({
+            kind: 'ready',
+            title: 'Call',
             channelId: test.channelId,
-            roomName: 'room',
-            serverUrl: 'wss://example.com',
-            token: 'token',
-            participantId: 'member',
-            shareToken: 'share',
-          }),
-          release: () => released,
-          connect: async () => {
-            setActiveCallId('call-1');
-          },
-          disconnect: async () => {
-            setActiveCallId(null);
-          },
-        }}
-        renderCall={(leave) => (
-          <button type="button" onClick={leave}>
-            Hang up
-          </button>
-        )}
-      />
+            scheduledStart: test.scheduledStart,
+            scheduledEnd: null,
+          })}
+          authenticated={() => test.authenticated}
+          author={() => 'Member'}
+          onCopy={async () => {}}
+          onLeave={onLeave}
+          onCallStateChange={onCallStateChange}
+          mediaAccess={{
+            request: async () => {
+              throw new DOMException('Denied', 'NotAllowedError');
+            },
+          }}
+          session={{
+            lifecycle: createMeetingSessionLifecycle(),
+            shareToken: () => 'token',
+            isInCall: () => activeCallId() !== null,
+            activeCallId,
+            join: async () => ({
+              callId: 'call-1',
+              channelId: test.channelId,
+              roomName: 'room',
+              serverUrl: 'wss://example.com',
+              token: 'token',
+              participantId: 'member',
+              shareToken: 'share',
+            }),
+            release: () => released,
+            connect: async () => {
+              setActiveCallId('call-1');
+            },
+            disconnect: async () => {
+              setActiveCallId(null);
+            },
+          }}
+          renderCall={(leave) => (
+            <button type="button" onClick={leave}>
+              Hang up
+            </button>
+          )}
+        />
+      </MeetingSessionProvider>
     ));
     if (!test.authenticated)
       fireEvent.input(screen.getByRole('textbox', { name: 'Your name' }), {
@@ -155,31 +158,33 @@ it('waits for confirmed membership before rendering setup or requesting devices'
     throw new Error('Must not join automatically');
   });
   render(() => (
-    <MeetingPage
-      source={() => ({
-        kind: 'ready',
-        title: 'Channel call',
-        channelId: 'channel-1',
-        scheduledStart: null,
-        scheduledEnd: null,
-      })}
-      authenticated={authenticated}
-      author={() => 'Member'}
-      onCopy={async () => {}}
-      mediaAccess={{ request }}
-      session={{
-        lifecycle: createMeetingSessionLifecycle(),
-        warmup,
-        shareToken: () => 'token',
-        isInCall: () => false,
-        activeCallId: () => null,
-        join,
-        release: async () => {},
-        connect: async () => {},
-        disconnect: async () => {},
-      }}
-      renderCall={() => <div>Connected</div>}
-    />
+    <MeetingSessionProvider>
+      <MeetingPage
+        source={() => ({
+          kind: 'ready',
+          title: 'Channel call',
+          channelId: 'channel-1',
+          scheduledStart: null,
+          scheduledEnd: null,
+        })}
+        authenticated={authenticated}
+        author={() => 'Member'}
+        onCopy={async () => {}}
+        mediaAccess={{ request }}
+        session={{
+          lifecycle: createMeetingSessionLifecycle(),
+          warmup,
+          shareToken: () => 'token',
+          isInCall: () => false,
+          activeCallId: () => null,
+          join,
+          release: async () => {},
+          connect: async () => {},
+          disconnect: async () => {},
+        }}
+        renderCall={() => <div>Connected</div>}
+      />
+    </MeetingSessionProvider>
   ));
   expect(screen.queryByRole('textbox', { name: 'Your name' })).toBeNull();
   expect(request).not.toHaveBeenCalled();

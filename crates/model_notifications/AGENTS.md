@@ -27,7 +27,7 @@ types.
 
 - Depends on: `macro_user_id`, `mention_utils`, `model-entity`, `model_owner`,
   `models_pagination`, `notification`, `invite_email`.
-- Used by: `agent_harness`, `ai_tools`, `authentication_service`,
+- Used by: `agent_harness`, `ai_tools`, `attention_feed`, `authentication_service`,
   `calendar_events`, `channels`, `complete_graph`, `document_cognition_service`,
   `document_storage_service`, `email_formatting`, `email_service`, `github`,
   `graphql_notification`, `graphql_work_feed`, `messages`, `notification_db_client`,

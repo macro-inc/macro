@@ -444,7 +444,7 @@ tabs. Its header shows the name, edited in place by editors, a **Pipeline
 actions** menu (**Rename** and **Import CSV** for editors, **Export CSV** for
 anyone who can open it, **Trash pipeline** for the owner) and **Share**. The
 toolbar below has **All records**, the pipeline's stored views and **New view**
-(Table or Board), plus Group by (boards), Filter and Sort, then **Add deal**
+(Table, Board, or Timeline), plus Group by (boards), Filter and Sort, then **Add deal**
 (company pipelines) or **Add contact** (contact pipelines) for editors. It opens
 a dialog titled **Add deal** (or **Add contact**) with the pipeline's name in a
 chip beside it and Close. Below the header, each field has its label stacked
@@ -461,8 +461,29 @@ different company before submitting. Editing the email keeps that explicit choic
 Focusing the suggestion reveals its full name; Enter accepts it without submitting
 the form, and closes the tooltip without a browser error.
 **Add deal** stays disabled until a record is chosen, and Command-Enter submits.
+Use **Stage requirements** in the toolbar to choose a single-select stage field,
+a stage, and the fields required to enter it. Save one stage at a time; unchecking
+all fields removes that rule. Renaming a field or stage keeps the rule. Deleting
+one removes its corresponding requirements. Remove requirements before changing
+a referenced field's type or deleting options from a required field. Existing
+deals stay in place when a rule is added;
+entering that stage or editing its required fields validates the final values.
+
+The Add deal form marks the selected stage's required fields **Required** and
+names missing fields on submit. Empty text and empty selections are missing;
+zero and an unchecked checkbox are valid values. The record and field edits stay
+in the form after a refusal. An open form follows stage renames by identity; if
+its selected stage is deleted, it asks for another value while keeping other edits.
+Deleted fields leave the draft submission. Board moves, timeline group moves, table edits, agent tools and CSV imports
+use the same server rule; a rejected operation batch saves none of its edits.
+Verify by requiring Revenue for Negotiation, trying a move with no Revenue,
+filling Revenue, then retrying; also rename the field/stage and repeat. Check the
+form on desktop and mobile, including correction after a rejected submit.
+
 The form makes one row with every value set. A board lane's **New record** opens
-the same dialog with the lane's stage filled in. The table's blank row at the
+the same dialog with the lane's stage filled in. A timeline's **New record here**
+or range-drawing gesture also opens the form, preserving the chosen date range
+and the group stage when one was selected. The table's blank row at the
 bottom still adds a row inline. On mobile the dialog is a bottom drawer. To verify
 the person picker, choose an **Owner** in the dialog: its menu must accept the
 click.
@@ -493,7 +514,12 @@ pipeline columns of the same name, adding missing select options. A record
 the pipeline already had is not added again, so retrying an interrupted import
 adds only what is missing; several rows for one new record add separate entries
 (deals), as an export of such a pipeline lists them. Relation and non-person entity columns are skipped,
-and a value that does not fit its column is left empty.
+and a value that does not fit its column is left empty. Stage-validation refusals
+are isolated to individual entries: valid rows continue importing, and the result
+lists each refused entry by its import position, domain or email, and missing fields.
+Use **Add deal** or **Add contact** to correct and add a refused entry, including a
+second deal for a company whose valid entry was imported. Reimporting skips records
+already present in the pipeline.
 
 Agent CSV imports report ambiguous contact emails as unresolved records with an
 actionable reason and continue the valid rows. They never create another contact

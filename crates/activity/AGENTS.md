@@ -39,7 +39,7 @@ distribution.
   `EntityAccessService::get_users_by_entity`; change both together.
 - Used by: most domain crates with activity surfaces (`documents`, `forms`,
   `databases`, `initiative`, `messages`, `channels`, `soup`, `call`, `chat`,
-  `work_feed`, `projects`, `github`, `email`, `properties`) and `ai_tools`.
+  `attention_feed`, `projects`, `github`, `email`, `properties`) and `ai_tools`.
 
 ## Recipes
 

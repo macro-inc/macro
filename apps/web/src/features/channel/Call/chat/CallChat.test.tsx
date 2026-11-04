@@ -5,7 +5,7 @@ import { MessageReferenceNavigation } from '@core/messages/message-reference-nav
 import type { MessageActionHandler } from '@core/messages/types';
 import type { MessageListItem, MessageThread } from '@service-storage/messages';
 import { cleanup, fireEvent, render, screen } from '@solidjs/testing-library';
-import { type JSX, useContext } from 'solid-js';
+import { createSignal, type JSX, useContext } from 'solid-js';
 import { afterEach, expect, it, vi } from 'vitest';
 import CallChat from './CallChat';
 
@@ -16,6 +16,7 @@ const mocks = vi.hoisted(() => ({
   snapshot: vi.fn(),
   send: vi.fn().mockResolvedValue(undefined),
   refresh: vi.fn(),
+  focus: vi.fn(),
 }));
 vi.mock('./queries/use-call-chat', () => ({ useCallChat: () => mocks.source }));
 vi.mock('@core/context/user', () => ({ useUserId: () => () => 'user-id' }));
@@ -29,7 +30,7 @@ vi.mock('@channel/Input', () => ({
     const handle: InputHandle = {
       snapshot: mocks.snapshot,
       clear: vi.fn(),
-      focus: vi.fn(),
+      focus: mocks.focus,
       send: vi.fn(),
       attachFiles: vi.fn(),
       restoreSnapshot: mocks.restore,
@@ -38,8 +39,8 @@ vi.mock('@channel/Input', () => ({
     return <div data-testid="call-composer" />;
   },
 }));
-vi.mock('./components/CallChatPanel', () => ({
-  CallChatPanel: (props: { children: JSX.Element; composer: JSX.Element }) => (
+vi.mock('./components/CallChatBody', () => ({
+  CallChatBody: (props: { children: JSX.Element; composer: JSX.Element }) => (
     <>
       {props.children}
       {props.composer}
@@ -114,9 +115,7 @@ it.each(['user-id', 'another-user'])(
       failed: () => false,
       refresh: mocks.refresh,
     };
-    render(() => (
-      <CallChat callId="call-id" id="chat" open onClose={() => {}} />
-    ));
+    render(() => <CallChat callId="call-id" open onClose={() => {}} />);
     const draft: InputSnapshot = {
       value: 'Existing draft',
       mentions: [{ itemType: 'user', itemId: 'bot|owned-agent' }],
@@ -160,3 +159,30 @@ it.each(['user-id', 'another-user'])(
     );
   }
 );
+
+it('only autofocuses when the panel opens, not when a tab becomes visible', () => {
+  mocks.source = {
+    thread: () => undefined,
+    parent: () => ({ type: 'call', id: 'call-id' }),
+    empty: () => true,
+    loading: () => false,
+    failed: () => false,
+    refresh: mocks.refresh,
+  };
+  const [open, setOpen] = createSignal(false);
+  const [focusOnOpen, setFocusOnOpen] = createSignal(false);
+  render(() => (
+    <CallChat
+      callId="call-id"
+      open={open()}
+      focusOnOpen={focusOnOpen()}
+      onClose={() => {}}
+    />
+  ));
+  setOpen(true);
+  expect(mocks.focus).not.toHaveBeenCalled();
+  setOpen(false);
+  setFocusOnOpen(true);
+  setOpen(true);
+  expect(mocks.focus).toHaveBeenCalledOnce();
+});

@@ -62,6 +62,7 @@ function email(
       importance: 50,
       needsReply: false,
       needsFollowUp: false,
+      importanceTrend: 'FLAT',
       ...focus,
     },
     ...overrides,
