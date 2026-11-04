@@ -37,6 +37,7 @@ import {
 } from './ai-edit';
 import { DocumentAnchor } from './anchor';
 import { Comment } from './comment';
+import { DocumentLexical } from './document-lexical';
 import { DocumentVersion } from './version';
 
 type DocumentDetail = GetDocumentResponses[200]['data']['documentMetadata'];
@@ -412,6 +413,65 @@ export class Document
     options: DocumentEditOptions = {},
   ): Promise<DocumentEditResult> {
     return editWithInstructions(this.client, this, instructions, options);
+  }
+
+  /**
+   * Open a markdown document or task body as a headless Lexical editor for exact edits with no AI; change it in `update`, then `commit()`.
+   *
+   * The handle's `editor` holds the document with every Macro node
+   * registered. Edit it with the ordinary Lexical API: import `lexical` for
+   * `$getRoot` and the core nodes, and `@macro-inc/sdk/lexical` for Macro's
+   * nodes and the `@lexical/*` nodes documents use, each with its
+   * `$create…`/`$is…` helpers: headings and quotes (`$createHeadingNode`),
+   * lists and task lists (`$createListNode`, `$isTaskListNode`,
+   * `ListItemNode.setChecked`), links, tables (`$createTableNodeWithDimensions`),
+   * code, marks, mentions (`$createDocumentMentionNode`,
+   * `$createUserMentionNode`), dates, images, equations and saved database
+   * queries (`$createDatabaseQueryNode`). `$getId` reads a node's durable id;
+   * `$convertFromMarkdownString(markdown, ALL_TRANSFORMERS)` builds blocks from
+   * markdown inside `update`, and `$convertToMarkdownString(ALL_TRANSFORMERS)`
+   * reads markdown back. Nothing needs a DOM (`exportDOM` and HTML export
+   * don't work).
+   *
+   * `commit()` sends only the top-level blocks that changed and merges them
+   * with concurrent edits; see `DocumentLexical.commit` for the merge and
+   * conflict rules. Use `edit()` instead for changes better described in words.
+   *
+   * @example Rename a term in every paragraph and heading.
+   * ```js
+   * import { $getRoot, $isElementNode, $isTextNode } from 'lexical';
+   *
+   * const lexical = await document.lexical();
+   * lexical.update(() => {
+   *   const visit = (node) => {
+   *     if ($isTextNode(node)) node.setTextContent(node.getTextContent().replaceAll('Q3', 'Q4'));
+   *     else if ($isElementNode(node)) node.getChildren().forEach(visit);
+   *   };
+   *   visit($getRoot());
+   * });
+   * return { data: await lexical.commit() };
+   * ```
+   *
+   * @example Append a section built from markdown.
+   * ```js
+   * import { $getRoot } from 'lexical';
+   * import { $convertFromMarkdownString, ALL_TRANSFORMERS } from '@macro-inc/sdk/lexical';
+   *
+   * const lexical = await document.lexical();
+   * const existing = lexical.read(() => $getRoot().getChildren().map((block) => block.getKey()));
+   * lexical.update(() => {
+   *   // Converting replaces the root's children, so keep the old blocks first.
+   *   const root = $getRoot();
+   *   const kept = root.getChildren();
+   *   $convertFromMarkdownString('## Risks\n\n- Supplier delay\n- Hiring', ALL_TRANSFORMERS);
+   *   const added = root.getChildren();
+   *   root.clear().append(...kept, ...added);
+   * });
+   * await lexical.commit();
+   * ```
+   */
+  lexical(): Promise<DocumentLexical> {
+    return DocumentLexical.open(this.client, this);
   }
 
   /** Rename the document. */
