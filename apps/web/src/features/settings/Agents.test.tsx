@@ -361,6 +361,8 @@ const MACROD_HARNESS = {
   updated_at: '2026-08-27T12:00:00Z',
   connected: true,
   last_connected_at: '2026-08-27T12:34:00Z',
+  access: 'owner',
+  shared_team_ids: [],
 } satisfies Harness;
 
 describe('Agents', () => {

@@ -132,3 +132,33 @@ describe('MacroForbiddenError', () => {
     expect(error).not.toBeInstanceOf(MacroForbiddenError);
   });
 });
+
+describe('Harness access', () => {
+  const harnessId = '0198a4cc-e138-7670-a308-a6b766602732';
+
+  test('asks for the one level a runtime has', async () => {
+    const requests: Request[] = [];
+    globalThis.fetch = (async (input, init) => {
+      const request =
+        input instanceof Request ? input : new Request(input, init);
+      requests.push(request.clone());
+      return Response.json(
+        request.method === 'GET'
+          ? { ...state(null), accessLevel: null, supportedLevels: ['edit'] }
+          : record('pending', 1),
+      );
+    }) as typeof fetch;
+    const macro = new Macro({
+      token: 'user-token',
+      hosts: { storage: 'https://storage.example.test' },
+    });
+
+    await macro.harnesses.byId(harnessId).requestAccess();
+
+    const submitted = requests.at(-1);
+    expect(new URL(submitted?.url ?? '').pathname).toBe(
+      `/entities/harness/${harnessId}/access-requests/mine`,
+    );
+    expect(await submitted?.json()).toMatchObject({ requestedLevel: 'edit' });
+  });
+});

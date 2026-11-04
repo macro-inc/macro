@@ -328,10 +328,16 @@ type WithBotId = { bot_id: string };
 type WithAgentId = { agent_id: string };
 type WithChannelId = { channel_id: string };
 
-/** Who owns a registered harness: the registering user or their team. */
-export type HarnessOwner =
-  | { type: 'user'; user_id: string }
-  | { type: 'team'; team_id: string };
+/** Who owns a registered harness: always one person. */
+export type HarnessOwner = { type: 'user'; user_id: string };
+
+/** An agent living on a runtime. */
+export type HarnessResident = {
+  bot_id: string;
+  name: string;
+  owner_user_id?: string | null;
+  team_id?: string | null;
+};
 
 /** A macrod harness registered with the workspace. */
 export type Harness = {
@@ -340,6 +346,10 @@ export type Harness = {
   kind: 'macrod';
   name: string;
   owner: HarnessOwner;
+  /** What the viewer may do with it. */
+  access: 'owner' | 'use' | 'none';
+  /** Teams whose every member may use it. */
+  shared_team_ids: string[];
   created_by: string;
   created_at: string;
   updated_at: string;
@@ -836,6 +846,34 @@ export const storageServiceClient = {
         method: 'GET',
       })
     ).map((result) => result);
+  },
+
+  async getHarnessDirectory() {
+    return (
+      await dssFetch<Harness[]>(`/harnesses/directory`, {
+        method: 'GET',
+      })
+    ).map((result) => result);
+  },
+
+  async getHarnessResidents(args: { harness_id: string }) {
+    return (
+      await dssFetch<HarnessResident[]>(
+        `/harnesses/${args.harness_id}/residents`,
+        { method: 'GET' }
+      )
+    ).map((result) => result);
+  },
+
+  async setHarnessTeamAccess(args: {
+    harness_id: string;
+    team_id: string;
+    enabled: boolean;
+  }) {
+    return await dssFetch(`/harnesses/${args.harness_id}/team-access`, {
+      method: 'PUT',
+      body: JSON.stringify({ team_id: args.team_id, enabled: args.enabled }),
+    });
   },
 
   async getHarnessPairing(args: { code: string }) {

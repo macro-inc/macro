@@ -13181,6 +13181,7 @@
                   "crm_contact",
                   "crm_pipeline",
                   "reminder",
+                  "harness",
                   "skill",
                   "agent_session",
                   "scheduled_action",
@@ -13401,6 +13402,7 @@
                 "crm_contact",
                 "crm_pipeline",
                 "reminder",
+                "harness",
                 "skill",
                 "agent_session",
                 "scheduled_action",
@@ -15376,6 +15378,48 @@
         }
       }
     },
+    "/harnesses/directory": {
+      "get": {
+        "tags": ["harnesses"],
+        "summary": "Handler for `GET /harnesses/directory`.",
+        "operationId": "list_harness_directory",
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/Harness"
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/harnesses/me": {
       "get": {
         "tags": ["harnesses"],
@@ -15581,6 +15625,113 @@
             }
           },
           "404": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/harnesses/{harness_id}/residents": {
+      "get": {
+        "tags": ["harnesses"],
+        "summary": "Handler for `GET /harnesses/{harness_id}/residents`.",
+        "operationId": "list_harness_residents",
+        "parameters": [
+          {
+            "name": "harness_id",
+            "in": "path",
+            "description": "Harness ID",
+            "required": true,
+            "schema": {
+              "$ref": "#/components/schemas/HarnessId"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/HarnessResident"
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/harnesses/{harness_id}/team-access": {
+      "put": {
+        "tags": ["harnesses"],
+        "summary": "Handler for `PUT /harnesses/{harness_id}/team-access`.",
+        "description": "Requires the owner's own session: an agent can ask for access to a runtime\nbut never open one, since that grants code execution on the machine.",
+        "operationId": "set_harness_team_access",
+        "parameters": [
+          {
+            "name": "harness_id",
+            "in": "path",
+            "description": "Harness ID",
+            "required": true,
+            "schema": {
+              "$ref": "#/components/schemas/HarnessId"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SetHarnessTeamAccessRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "204": {
+            "description": ""
+          },
+          "401": {
             "description": "",
             "content": {
               "application/json": {
@@ -20228,6 +20379,11 @@
             "format": "uuid",
             "description": "Stable request identity across revisions."
           },
+          "requestedByAgent": {
+            "type": ["string", "null"],
+            "format": "uuid",
+            "description": "The agent that asked on the requester's behalf, when one did."
+          },
           "requestedLevel": {
             "$ref": "#/components/schemas/AccessLevel",
             "description": "Requested upgrade."
@@ -20468,6 +20624,7 @@
                   "crm_contact",
                   "crm_pipeline",
                   "reminder",
+                  "harness",
                   "skill",
                   "agent_session",
                   "scheduled_action",
@@ -21930,7 +22087,7 @@
           "team_id": {
             "type": ["string", "null"],
             "format": "uuid",
-            "description": "Owning team. Omit for a private, user-owned harness."
+            "description": "Team to open the harness to. Omit to keep it to the approving user."
           }
         }
       },
@@ -24897,6 +25054,7 @@
                   "crm_contact",
                   "crm_pipeline",
                   "reminder",
+                  "harness",
                   "skill",
                   "agent_session",
                   "scheduled_action",
@@ -29756,6 +29914,7 @@
                   "crm_contact",
                   "crm_pipeline",
                   "reminder",
+                  "harness",
                   "skill",
                   "agent_session",
                   "scheduled_action",
@@ -31400,6 +31559,7 @@
                   "crm_contact",
                   "crm_pipeline",
                   "reminder",
+                  "harness",
                   "skill",
                   "agent_session",
                   "scheduled_action",
@@ -31455,6 +31615,7 @@
                   "crm_contact",
                   "crm_pipeline",
                   "reminder",
+                  "harness",
                   "skill",
                   "agent_session",
                   "scheduled_action",
@@ -34434,6 +34595,10 @@
           "connected"
         ],
         "properties": {
+          "access": {
+            "$ref": "#/components/schemas/HarnessAccess",
+            "description": "What the caller may do with it. Reported as `none` where no caller is\nin question, such as to the daemon itself."
+          },
           "allow_permission_bypass": {
             "type": "boolean",
             "description": "Whether agents may bypass ACP permission requests on this harness."
@@ -34472,12 +34637,25 @@
             "$ref": "#/components/schemas/HarnessOwner",
             "description": "Owner."
           },
+          "shared_team_ids": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "description": "Teams whose every member may use it."
+          },
           "updated_at": {
             "type": "string",
             "format": "date-time",
             "description": "Update timestamp."
           }
         }
+      },
+      "HarnessAccess": {
+        "type": "string",
+        "description": "What one caller may do with a runtime.",
+        "enum": ["owner", "use", "none"]
       },
       "HarnessAgent": {
         "type": "object",
@@ -34505,7 +34683,7 @@
         "oneOf": [
           {
             "type": "object",
-            "description": "User-owned (private) harness.",
+            "description": "The person whose runtime this is.",
             "required": ["user_id", "type"],
             "properties": {
               "type": {
@@ -34517,25 +34695,33 @@
                 "description": "Owner user id."
               }
             }
-          },
-          {
-            "type": "object",
-            "description": "Team-owned harness, usable by every team member.",
-            "required": ["team_id", "type"],
-            "properties": {
-              "team_id": {
-                "type": "string",
-                "format": "uuid",
-                "description": "Owner team id."
-              },
-              "type": {
-                "type": "string",
-                "enum": ["team"]
-              }
-            }
           }
         ],
-        "description": "Harness owner.\n\nExactly one of a user or a team, mirroring the bots owner pattern. There\nare no system harnesses."
+        "description": "Harness owner.\n\nAlways one person: a runtime is someone's computer. A team runtime is a\nperson's runtime with a grant to the team, never one owned by the team."
+      },
+      "HarnessResident": {
+        "type": "object",
+        "description": "An agent that lives on a runtime, as opposed to a coding agent directed\nthere turn by turn. Anyone who can reach it can talk to it; it stays up only\nwhile its own owner can use the runtime.",
+        "required": ["bot_id", "name"],
+        "properties": {
+          "bot_id": {
+            "$ref": "#/components/schemas/BotId",
+            "description": "Bot id."
+          },
+          "name": {
+            "type": "string",
+            "description": "Display name."
+          },
+          "owner_user_id": {
+            "type": ["string", "null"],
+            "description": "The user owning the agent, when a person does."
+          },
+          "team_id": {
+            "type": ["string", "null"],
+            "format": "uuid",
+            "description": "The team owning the agent, when a team does."
+          }
+        }
       },
       "HarnessSession": {
         "type": "object",
@@ -40463,6 +40649,22 @@
           }
         }
       },
+      "SetHarnessTeamAccessRequest": {
+        "type": "object",
+        "description": "Request to open or close a runtime to one of the owner's teams.",
+        "required": ["team_id", "enabled"],
+        "properties": {
+          "enabled": {
+            "type": "boolean",
+            "description": "Whether every member of the team may use the runtime."
+          },
+          "team_id": {
+            "type": "string",
+            "format": "uuid",
+            "description": "The team, which the owner must belong to."
+          }
+        }
+      },
       "SetOperator": {
         "type": "string",
         "description": "How a cell's options or references relate to a set of them. The first\ntwo fit a column holding one value, the last three one holding several.",
@@ -40672,7 +40874,8 @@
           "call",
           "email_thread",
           "agent_session",
-          "external_chat"
+          "external_chat",
+          "harness"
         ]
       },
       "SharePermissionV2": {

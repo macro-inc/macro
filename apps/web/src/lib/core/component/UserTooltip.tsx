@@ -1,3 +1,6 @@
+import { AgentRuntime } from '@app/features/runtime-sharing/views/AgentRuntime';
+import { UserRuntimes } from '@app/features/runtime-sharing/views/UserRuntimes';
+import { isBotPrincipalId } from '@core/constant/macroAgent';
 import IconCheck from '@icon/system/regular/check.svg';
 import { debounce } from '@solid-primitives/scheduled';
 import { Surface } from '@ui';
@@ -53,6 +56,25 @@ export function UserTooltip(props: UserTooltipProps) {
             </Show>
           </div>
         </div>
+
+        <Show when={props.id}>
+          {(id) => (
+            <Show
+              when={isBotPrincipalId(id())}
+              fallback={
+                <UserRuntimes
+                  userId={id()}
+                  class="border-t border-edge p-2 empty:hidden"
+                />
+              }
+            >
+              <AgentRuntime
+                botId={id().replace(/^bot\|/, '')}
+                class="border-t border-edge px-2 py-1"
+              />
+            </Show>
+          )}
+        </Show>
 
         <Show when={actions().length > 0}>
           <div class="border-t border-edge"></div>

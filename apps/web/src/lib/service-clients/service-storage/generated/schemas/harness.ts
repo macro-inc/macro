@@ -4,6 +4,7 @@
  * document_storage_service
  * OpenAPI spec version: 0.1.0
  */
+import type { HarnessAccess } from './harnessAccess';
 import type { HarnessId } from './harnessId';
 import type { HarnessLastConnectedAt } from './harnessLastConnectedAt';
 import type { HarnessOwner } from './harnessOwner';
@@ -14,6 +15,9 @@ import type { HarnessOwner } from './harnessOwner';
 Clients deserialize this, so both derives are used.
  */
 export interface Harness {
+  /** What the caller may do with it. Reported as `none` where no caller is
+in question, such as to the daemon itself. */
+  access?: HarnessAccess;
   /** Whether agents may bypass ACP permission requests on this harness. */
   allow_permission_bypass?: boolean;
   /** Whether the daemon currently holds a runtime connection. */
@@ -32,6 +36,8 @@ export interface Harness {
   name: string;
   /** Owner. */
   owner: HarnessOwner;
+  /** Teams whose every member may use it. */
+  shared_team_ids?: string[];
   /** Update timestamp. */
   updated_at: string;
 }

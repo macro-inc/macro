@@ -28,6 +28,7 @@ import AutoIcon from '@icon/system/regular/sparkle.svg';
 import { useAgentCapabilitiesQuery } from '@queries/agents/capabilities';
 import { chooseAgentMode } from '@queries/agents/mode-choice';
 import { useAiBillingSummaryQuery } from '@queries/auth/ai-billing';
+import { requestHarnessAccess } from '@queries/harnesses/harnesses';
 import type { PromptAttachment } from '@service-agent-harness/generated/schemas';
 import { Tabs } from '@ui';
 import { tourTarget } from '@ui/components/Tour';
@@ -284,6 +285,13 @@ export function NewChatPage(props: {
   };
 
   const connect = (agent: RosterAgent) => {
+    if (agent.needsRuntimeAccess && agent.harnessId) {
+      fireAndForget(
+        requestHarnessAccess(agent.harnessId),
+        'runtime-sharing.request'
+      );
+      return;
+    }
     // Both land on Settings → Runtimes: Cursor to save an API key, macrod to
     // restart the local runtime (one click on desktop) or re-pair it.
     if (agent.harness === 'cursor' || agent.harness === 'macrod') {

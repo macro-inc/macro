@@ -137,6 +137,12 @@ vi.mock('@queries/harnesses/harnesses', () => ({
   invalidateHarnesses: vi.fn(),
 }));
 
+vi.mock('@app/features/access-requests/access-requests', () => ({
+  useShareRequests: () => ({
+    state: () => ({ pendingCount: 2 }),
+  }),
+}));
+
 vi.mock('@queries/team/teams', () => ({
   useCurrentTeamQuery: () => ({ data: { team: { id: 'team-1' } } }),
 }));
@@ -159,7 +165,9 @@ const REGISTERED_HARNESS = {
   id: '3f1c9d2e-8a4b-4c5d-9e6f-1a2b3c4d5e6f',
   kind: 'macrod',
   name: 'Dev box',
-  owner: { type: 'team', team_id: 'team-1' },
+  owner: { type: 'user', user_id: 'macro|teammate@example.com' },
+  access: 'use',
+  shared_team_ids: ['team-1'],
   created_by: 'macro|user@example.com',
   created_at: '2026-08-27T12:00:00Z',
   updated_at: '2026-08-27T12:00:00Z',
@@ -416,6 +424,7 @@ describe('Harness', () => {
       id: 'harness-offline',
       name: 'Old laptop',
       owner: { type: 'user' as const, user_id: 'macro|user@example.com' },
+      shared_team_ids: [],
       connected: false,
       last_connected_at: null,
     };

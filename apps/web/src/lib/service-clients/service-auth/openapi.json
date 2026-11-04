@@ -8043,6 +8043,14 @@
         "description": "The request body to invite a user to a team",
         "required": ["invites"],
         "properties": {
+          "harness_ids": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "description": "Runtimes the caller owns to share with each person who accepts. Others\nare ignored. Honored only from the caller's own session."
+          },
           "invites": {
             "type": "array",
             "items": {

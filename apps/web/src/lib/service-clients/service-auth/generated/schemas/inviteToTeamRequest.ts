@@ -11,6 +11,9 @@ import type { InviteToTeamRequestTeamId } from './inviteToTeamRequestTeamId';
  * The request body to invite a user to a team
  */
 export interface InviteToTeamRequest {
+  /** Runtimes the caller owns to share with each person who accepts. Others
+are ignored. Honored only from the caller's own session. */
+  harness_ids?: string[];
   /** The invites to send, each with an email and tier */
   invites: InviteEntry[];
   /** Invite these addresses as agents: an address with no account signs up

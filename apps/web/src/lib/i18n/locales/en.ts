@@ -12,6 +12,7 @@ import entityActions from './en/entity-actions';
 import localRuntime from './en/local-runtime';
 import mobile from './en/mobile';
 import nav from './en/nav';
+import runtimeSharing from './en/runtime-sharing';
 import settingsLanguage from './en/settings-language';
 import settingsMobileApp from './en/settings-mobile-app';
 import settingsNav from './en/settings-nav';
@@ -38,6 +39,7 @@ export default {
   localRuntime,
   mobile,
   nav,
+  runtimeSharing,
   settingsLanguage,
   settingsMobileApp,
   settingsNav,
