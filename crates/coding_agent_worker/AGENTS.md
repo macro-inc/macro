@@ -119,6 +119,10 @@ external chat replies depend on it. Direct session controls still mint IDs.
   window IDs before launch, and preserve existing workspace and tab names;
   `src/herdr/acp_agent/windows.rs` owns reuse, recovery after unconfirmed launches,
   and rollback. Readiness timeouts must leave the pending prompt unsubmitted.
+- `src/herdr/acp_agent/prompt.rs` owns native prompt delivery. Ordinary Codex
+  follow-ups steer an active turn, including after recovery; require the matching
+  transcript user message before accepting completion. Keep slash commands,
+  Claude turns, and blocked dialogs on the wait-for-idle path.
 - Only release builds update themselves: the tag workflow compiles the tag in
   as `MACROD_RELEASE_TAG`, and a build without a `vYYYY.MM.DD.N` tag never
   polls. `macrod service` (the desktop app's bundled copy) never updates; the

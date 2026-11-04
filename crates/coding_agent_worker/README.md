@@ -30,7 +30,8 @@ and daemon restarts reuse the saved window without renaming it. Existing shared
 tabs are reattached in place; only an explicitly closed window is replaced.
 An occupied pane or a connection error does not open a duplicate workspace.
 If launch confirmation fails after the native agent starts, the next prompt
-reattaches to that agent and waits for reported active turns or dialogs before submitting.
+reattaches to that agent and applies the same prompt handling as an already
+attached session, including steering an active Codex turn.
 ACP `session/load` replays the native transcript before
 acknowledging the load. A running Herdr agent is reattached; an explicitly missing
 agent resumes its native session on the next prompt. Socket errors do not create
@@ -69,13 +70,19 @@ turn) presses Escape until Herdr reports the agent stopped, at most three times
 never sends an input-clearing key. The turn reports `cancelled` only once the
 agent has stopped; if it keeps running, macrod follows it to its real end.
 
-A prompt from Macro while the native agent is working or showing a dialog
-waits, like input typed into the TUI mid-turn. The running turn keeps streaming
-and its permission dialogs still reach Macro; the prompt is typed once the turn
-ends. Stopping from Macro while it waits interrupts the native turn and drops
-the prompt. Claude Code's exit confirmation, left by a second Ctrl-C while
-background work runs, is dismissed with Escape ("Stay") before the prompt is
-typed.
+An ordinary prompt from Macro is submitted to a working Codex session as
+steering input, so the active turn can receive it before finishing. This also
+applies after reconnecting or recovering a launch. Codex's transcript must
+record that prompt before a turn completion can acknowledge it; a preceding
+turn finishing during submission cannot complete the new request. Receipt is
+logged with the session ID, without recording prompt contents.
+
+Slash commands, Claude Code prompts, and prompts sent while a native dialog is
+blocking still wait for the turn to finish. The running turn keeps streaming
+and its permission dialogs still reach Macro. Stopping from Macro while a
+prompt waits interrupts the native turn and drops the prompt. Claude Code's
+exit confirmation, left by a second Ctrl-C while background work runs, is
+dismissed with Escape ("Stay") before the prompt is typed.
 
 New and reloaded sessions advertise `/compact`, `/init`, and `/fast` in Macro;
 Codex also advertises `/ultrafast`. Speed controls are delivered unchanged to

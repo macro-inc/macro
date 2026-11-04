@@ -359,6 +359,7 @@ async fn an_unconfirmed_submission_never_sends_an_extra_enter_or_reports_success
             guard.as_mut().unwrap(),
             &CancellationToken::new(),
             false,
+            None,
         )
         .await
         .unwrap_err();
@@ -407,6 +408,7 @@ async fn a_cancelled_turn_presses_esc_until_the_native_agent_stops() {
             guard.as_mut().unwrap(),
             &cancel,
             false,
+            None,
         )
         .await
         .unwrap();

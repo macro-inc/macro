@@ -6,6 +6,18 @@ use super::{Adapter, Arc, TuiAgent, Value, json};
 impl Adapter {
     /// Advertise after the successful response: the shared runtime router needs
     /// that response to bind a new ACP session before it can route notifications.
+    #[tracing::instrument(
+        name = "macrod.herdr.request",
+        skip_all,
+        fields(
+            request_id = %id,
+            method = method,
+            session_id = params.get("sessionId").and_then(serde_json::Value::as_str),
+            upstream_traceparent = params
+                .pointer("/_meta/macro.dev~1trace-context/traceparent")
+                .and_then(serde_json::Value::as_str),
+        ),
+    )]
     pub(super) async fn respond_to_request(
         self: &Arc<Self>,
         id: Value,
