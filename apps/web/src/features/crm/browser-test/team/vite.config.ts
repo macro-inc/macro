@@ -26,6 +26,7 @@ export default defineConfig({
       ...[
         '@service-storage/client',
         '@service-storage/crm-contacts',
+        '@service-storage/crm-visibility',
         '@app/lib/analytics',
         '@app/features/next-soup/filters/filter-store',
         '../context/crm-context',

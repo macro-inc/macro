@@ -9,6 +9,7 @@ import { Avatar, Badge, badgeTriggerClasses, Tooltip } from '@ui';
 import { Show } from 'solid-js';
 import { useCrmContext } from '../context/crm-context';
 import type { CrmContact as CrmContactResponse } from '../core/contact';
+import { ContactVisibilityButton } from './contact-visibility-button';
 import { useCompanyQuery, useSetContactNameMutation } from './use-crm';
 
 // Renames overwrite `crm_contacts.name`, which is already team-scoped —
@@ -79,7 +80,7 @@ export function ContactHeader(props: {
 
   return (
     <div>
-      <div class="flex items-center gap-3">
+      <div class="flex flex-wrap items-center gap-x-3 gap-y-1">
         <Avatar size="lg" class="shrink-0">
           <Show
             when={initials()}
@@ -95,7 +96,7 @@ export function ContactHeader(props: {
             )}
           </Show>
         </Avatar>
-        <h1 class="min-w-0 flex-1 text-2xl font-semibold">
+        <h1 class="min-w-0 max-w-full mobile:flex-1 text-2xl font-semibold">
           <Show
             when={props.contact}
             fallback={<ListSkeleton.Bar class="h-6 w-48" />}
@@ -103,6 +104,15 @@ export function ContactHeader(props: {
             {(contact) => <TitleEditor contact={contact()} />}
           </Show>
         </h1>
+        <Show when={props.contact}>
+          {(contact) => (
+            <ContactVisibilityButton
+              identity
+              contactId={contact().id}
+              onOpenCompany={props.onOpenCompany}
+            />
+          )}
+        </Show>
       </div>
       <Show when={props.contact}>
         {(contact) => (

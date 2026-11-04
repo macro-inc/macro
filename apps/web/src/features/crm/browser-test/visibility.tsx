@@ -40,13 +40,16 @@ function Fixture() {
       hidden={hidden()}
       pending={pending()}
       canManage={canManage()}
-      onChange={(value, onSuccess) => {
+      onChange={(value, onSuccess, onError) => {
         setPending(true);
         setWrites((count) => count + 1);
         finish = (success) => {
           finish = undefined;
           setPending(false);
-          if (!success) return;
+          if (!success) {
+            onError();
+            return;
+          }
           setHidden(value);
           onSuccess();
         };
