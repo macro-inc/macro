@@ -8,9 +8,11 @@
 -- Thread f303: as f301, but marked Done: the incoming mail lost its INBOX label.
 -- Thread f304: as f301, but the owner's answer only says "Thanks!".
 -- Thread f305: only the owner's own message, sent 5 days ago.
+-- Threads f306 to f309 come from someone the owner never wrote to, so only what
+-- the thread itself is can bring them in:
 -- Thread f306: a reschedule (METHOD:REQUEST) filed under Updates.
 -- Thread f307: an RSVP (METHOD:REPLY) filed under Updates.
--- Thread f308: plain mail filed under Updates, from someone the owner never wrote to.
+-- Thread f308: plain mail filed under Updates.
 -- Thread f309: a calendar file nothing parsed, filed under Updates.
 -- Thread f30a: mail from Casey, whom the owner wrote to lately, filed under Updates.
 
@@ -56,10 +58,10 @@ VALUES ('00000000-0000-0000-0000-00000000f611', '00000000-0000-0000-0000-0000000
         'p-f651', 'g-f651', true, '00000000-0000-0000-0000-0000000cf002', NOW() - INTERVAL '5 days',
         'Hello', 'Are you free next week?', false, true, false, false, NOW(), NOW()),
        ('00000000-0000-0000-0000-00000000f661', '00000000-0000-0000-0000-00000000f306', '00000000-0000-0000-0000-000000000f01',
-        'p-f661', 'g-f661', false, '00000000-0000-0000-0000-0000000cf004', NOW() - INTERVAL '1 day',
+        'p-f661', 'g-f661', false, '00000000-0000-0000-0000-0000000cf006', NOW() - INTERVAL '1 day',
         'Moved: Demo', '', false, true, false, false, NOW(), NOW()),
        ('00000000-0000-0000-0000-00000000f671', '00000000-0000-0000-0000-00000000f307', '00000000-0000-0000-0000-000000000f01',
-        'p-f671', 'g-f671', false, '00000000-0000-0000-0000-0000000cf004', NOW() - INTERVAL '1 day',
+        'p-f671', 'g-f671', false, '00000000-0000-0000-0000-0000000cf006', NOW() - INTERVAL '1 day',
         'Aceptada: Demo', '', false, true, false, false, NOW(), NOW()),
        ('00000000-0000-0000-0000-00000000f681', '00000000-0000-0000-0000-00000000f308', '00000000-0000-0000-0000-000000000f01',
         'p-f681', 'g-f681', false, '00000000-0000-0000-0000-0000000cf006', NOW() - INTERVAL '1 day',
@@ -68,7 +70,7 @@ VALUES ('00000000-0000-0000-0000-00000000f611', '00000000-0000-0000-0000-0000000
         'p-f6a1', 'g-f6a1', false, '00000000-0000-0000-0000-0000000cf001', NOW() - INTERVAL '1 day',
         'Quarterly summary', 'For your records.', false, true, false, false, NOW(), NOW()),
        ('00000000-0000-0000-0000-00000000f691', '00000000-0000-0000-0000-00000000f309', '00000000-0000-0000-0000-000000000f01',
-        'p-f691', 'g-f691', false, '00000000-0000-0000-0000-0000000cf004', NOW() - INTERVAL '1 day',
+        'p-f691', 'g-f691', false, '00000000-0000-0000-0000-0000000cf006', NOW() - INTERVAL '1 day',
         'See you there', '', true, true, false, false, NOW(), NOW());
 
 INSERT INTO email_message_recipients (message_id, contact_id, recipient_type)

@@ -820,32 +820,80 @@ async fn rows_from_an_older_rule_read_right_and_are_decided_again_without_the_cl
 
 #[sqlx::test(
     migrator = "MACRO_DB_MIGRATIONS",
-    fixtures(path = "../../../fixtures", scripts("email_focus"))
+    fixtures(
+        path = "../../../fixtures",
+        scripts("email_focus", "email_focus_waiting")
+    )
 )]
 async fn a_row_from_an_older_rule_is_swept_even_outside_the_signal_inbox(
     pool: Pool<Postgres>,
 ) -> Result<(), Report> {
+    project_threads(&pool).await?;
     let repo = FocusPgRepository(pool.clone());
     let enabled = vec!["acme.example".to_owned()];
-    let thread = load_thread(&repo, BULK).await?.expect("thread");
+    let since = Utc::now() - Duration::days(30);
+    let thread = load_thread(&repo, NOISE).await?.expect("thread");
+    assert!(!thread.is_signal);
     let latest = thread.messages.last().expect("message");
-    repo.save(&record(BULK, latest.id, latest.at, 40)).await?;
+    repo.save(&record(NOISE, latest.id, latest.at, 40)).await?;
+
+    // Under the current rule there is nothing to do for it.
+    let stale = repo.stale_threads(since, &enabled, 100).await?;
+    assert!(!stale.iter().any(|stale| stale.thread_id == NOISE));
+
     sqlx::query!(
         "UPDATE email_thread_focus SET rule_version = 0 WHERE thread_id = $1",
-        BULK
+        NOISE
     )
     .execute(&pool)
     .await?;
-    sqlx::query!(
-        "UPDATE email_threads SET is_signal = false WHERE id = $1",
-        BULK
-    )
-    .execute(&pool)
-    .await?;
+    let stale = repo.stale_threads(since, &enabled, 100).await?;
+    assert!(stale.iter().any(|stale| stale.thread_id == NOISE));
+    Ok(())
+}
 
-    let stale = repo
-        .stale_threads(Utc::now() - Duration::days(30), &enabled, 10)
+#[sqlx::test(
+    migrator = "MACRO_DB_MIGRATIONS",
+    fixtures(
+        path = "../../../fixtures",
+        scripts("email_focus", "email_focus_waiting")
+    )
+)]
+async fn editing_a_draft_never_changes_who_wrote_last(pool: Pool<Postgres>) -> Result<(), Report> {
+    project_threads(&pool).await?;
+    let repo = FocusPgRepository(pool.clone());
+    let now = Utc::now();
+    // Jev flagged an open loop on the owner's own message, inside the wait.
+    let thread = load_thread(&repo, REPLIED_YESTERDAY)
+        .await?
+        .expect("thread");
+    let latest = thread.messages.last().expect("message");
+    let mut flagged = record(REPLIED_YESTERDAY, latest.id, latest.at, 60);
+    flagged.verdict.needs_reply = false;
+    flagged.verdict.needs_follow_up = true;
+    repo.save(&flagged).await?;
+
+    // Editing a draft moves the thread's inbound time, as recompute_thread_metadata does.
+    sqlx::query!(
+        "UPDATE email_threads SET latest_inbound_message_ts = $1 WHERE id = $2",
+        now,
+        REPLIED_YESTERDAY,
+    )
+    .execute(&pool)
+    .await?;
+    let waiting_before = now - Duration::days(3);
+    let focus = repo
+        .focus_for_threads(&owner(), &[REPLIED_YESTERDAY], waiting_before)
         .await?;
-    assert!(stale.iter().any(|stale| stale.thread_id == BULK));
+    let drafting = focus.get(&REPLIED_YESTERDAY).expect("stored");
+    assert!(drafting.needs_follow_up && !drafting.needs_reply);
+
+    // Mail from someone else does change it.
+    insert_message(&pool, REPLIED_YESTERDAY, false, now).await?;
+    let focus = repo
+        .focus_for_threads(&owner(), &[REPLIED_YESTERDAY], waiting_before)
+        .await?;
+    let answered = focus.get(&REPLIED_YESTERDAY).expect("stored");
+    assert!(answered.needs_reply && !answered.needs_follow_up);
     Ok(())
 }
