@@ -1,7 +1,7 @@
 use crate::api::context::{ApiContext, AuthorizationService, EmailSvc};
 use axum::Json;
 use axum::extract::{Path, Query, State};
-use axum::http::StatusCode;
+use axum::http::{HeaderMap, StatusCode};
 use axum::response::{IntoResponse, Response};
 use axum_extra::extract::Cached;
 use email::domain::{
@@ -10,6 +10,7 @@ use email::domain::{
 };
 use email::inbound::axum::api_types::DraftEditPrecondition;
 use email::inbound::axum::axum_impls::EmailLinkExtractor;
+use email::inbound::axum::send_router::{SendMessageError, refuse_program_send};
 use macro_authorization::{MacroAuthorizationExtractor, UserOrInternal};
 use model::response::ErrorResponse;
 use sqlx_core::types::chrono::{DateTime, Utc};
@@ -18,26 +19,36 @@ use utoipa::ToSchema;
 use uuid::Uuid;
 
 #[derive(Debug, Error)]
-#[error("{0}")]
-pub struct UpsertScheduledError(#[from] EmailErr);
+pub enum UpsertScheduledError {
+    #[error("{0}")]
+    Email(#[from] EmailErr),
+    /// A scheduled draft sends without anyone seeing it, so a program is
+    /// refused here as it is on an immediate send.
+    #[error("{0}")]
+    Program(#[from] SendMessageError),
+}
 
 impl IntoResponse for UpsertScheduledError {
     fn into_response(self) -> Response {
-        let status = match &self.0 {
+        let error = match self {
+            UpsertScheduledError::Email(error) => error,
+            UpsertScheduledError::Program(refusal) => return refusal.into_response(),
+        };
+        let status = match &error {
             EmailErr::MessageNotFound(_) => StatusCode::NOT_FOUND,
             EmailErr::Unauthorized => StatusCode::FORBIDDEN,
             EmailErr::MessageDeliveryConflict(_) | EmailErr::InvalidScheduleTime => {
                 StatusCode::BAD_REQUEST
             }
             _ => {
-                tracing::error!(error=?self.0, "schedule transition failed");
+                tracing::error!(error=?error, "schedule transition failed");
                 StatusCode::INTERNAL_SERVER_ERROR
             }
         };
         let message = if status == StatusCode::INTERNAL_SERVER_ERROR {
             "Failed to update scheduled message".to_owned()
         } else {
-            self.to_string()
+            error.to_string()
         };
         (
             status,
@@ -78,7 +89,7 @@ pub struct UpsertScheduledResponse {
         (status = 500, body = ErrorResponse),
     )
 )]
-#[tracing::instrument(skip(ctx, authorization, link), err)]
+#[tracing::instrument(skip(ctx, authorization, headers, link), err)]
 pub async fn handler(
     Query(precondition): Query<DraftEditPrecondition>,
     State(ctx): State<ApiContext>,
@@ -87,8 +98,13 @@ pub async fn handler(
     >,
     Cached(EmailLinkExtractor(link, _)): Cached<EmailLinkExtractor<EmailSvc, AuthorizationService>>,
     Path(draft_id): Path<Uuid>,
+    headers: HeaderMap,
     Json(request): Json<UpsertScheduledRequest>,
 ) -> Result<Json<UpsertScheduledResponse>, UpsertScheduledError> {
+    refuse_program_send(
+        authorization.authorization.user.agent_id.is_some(),
+        &headers,
+    )?;
     ctx.email_service
         .service()
         .change_schedule(

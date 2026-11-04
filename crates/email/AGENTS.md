@@ -54,6 +54,11 @@ tools — hexagonal, heavily feature-gated.
 
 ## Gotchas
 
+- The send and schedule routes refuse an agent's program
+  (`refuse_program_send`, 403): it sends through a session review or the
+  harness's confirmed send, which run `SendEmail`/`SendConfirmedEmail`. Keep
+  any new route that sends or schedules mail behind the same check.
+
 - Focus's `decide` and `signals` are versioned: bump `FOCUS_RULE_VERSION` in
   `domain/focus/rule.rs` when either changes, or stored rows keep the old verdict
   until new mail arrives. The worker's sweep re-decides older rows from their

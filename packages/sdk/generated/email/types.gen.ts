@@ -3063,6 +3063,10 @@ export type SendMessageData = {
 
 export type SendMessageErrors = {
     400: ErrorResponse;
+    /**
+     * An agent's program asked to send; it must go through a review or a confirmed send
+     */
+    403: ErrorResponse;
     404: ErrorResponse;
     500: ErrorResponse;
 };
