@@ -23,9 +23,11 @@ through the same service.
   worker, and the PostgreSQL LISTEN adapter that forwards delete events.
 - `src/outbound/`: one file per channel/concern — `fanout_realtime.rs` +
   `kafka_realtime.rs` (live WebSocket fan-out), `mobile.rs` + `sns_endpoint.rs`
-  (push), `email.rs` + `digest_batcher.rs` (digest emails), `repository.rs`
+  (push), `email.rs` + `digest_batcher.rs` (digest emails; `email.rs`'s
+  `SignedUnsubscribeLinks` signs `domain/models/signing.rs` unsubscribe
+  placeholders per recipient), `repository.rs`
   (owned Postgres queries), `withdrawal.rs` (durable suppression),
-  `item_preferences.rs` (snooze/mute).
+  `item_preferences.rs` (owner-scoped single and atomic bulk snooze/mute).
 - `outbound/notification_consumer/health.rs`: periodic per-instance Kafka
   backlog and telemetry-health logs; offsets stay uncommitted.
 - `domain/retention.rs` + `outbound/retention.rs`: bounded 30-day cleanup.

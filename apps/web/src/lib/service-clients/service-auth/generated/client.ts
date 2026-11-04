@@ -41,6 +41,7 @@ import type {
   GetLegacyUserPermissionsResponse,
   GetNamesWithEmailRequestBody,
   GetProfilePicturesRequestBody,
+  GetTeamInvitesParams,
   GetUserInfo,
   GetUserLinkExistsParams,
   GithubLinkStatusResponse,
@@ -87,6 +88,7 @@ import type {
   PutUserNameParams,
   RedeemGtmInviteLinkRequest,
   ResendFusionauthVerifyUserEmailRequest,
+  SendDomainNoticeResponse,
   SendInviteBody,
   SendMobileWelcomeEmailRequest,
   SendMobileWelcomeEmailResponse,
@@ -4870,6 +4872,73 @@ export const patchTeamCrmSettings = async (
 };
 
 /**
+ * @summary Emails the caller's contacts on the team's auto-join domain that the team
+exists, so they can sign up and join. Contacts already on Macro, on the
+team, invited, or emailed before are skipped, and a team emails at most 25
+people in total. Call it after sending the team's invites. Requires the
+caller to be an Admin or Owner of the team.
+ */
+export type sendTeamDomainNoticeResponse200 = {
+  data: SendDomainNoticeResponse;
+  status: 200;
+};
+
+export type sendTeamDomainNoticeResponse401 = {
+  data: ErrorResponse;
+  status: 401;
+};
+
+export type sendTeamDomainNoticeResponse403 = {
+  data: ErrorResponse;
+  status: 403;
+};
+
+export type sendTeamDomainNoticeResponse500 = {
+  data: ErrorResponse;
+  status: 500;
+};
+
+export type sendTeamDomainNoticeResponseSuccess =
+  sendTeamDomainNoticeResponse200 & {
+    headers: Headers;
+  };
+export type sendTeamDomainNoticeResponseError = (
+  | sendTeamDomainNoticeResponse401
+  | sendTeamDomainNoticeResponse403
+  | sendTeamDomainNoticeResponse500
+) & {
+  headers: Headers;
+};
+
+export type sendTeamDomainNoticeResponse =
+  | sendTeamDomainNoticeResponseSuccess
+  | sendTeamDomainNoticeResponseError;
+
+export const getSendTeamDomainNoticeUrl = () => {
+  return `/team/domain-notice`;
+};
+
+export const sendTeamDomainNotice = async (
+  options?: RequestInit
+): Promise<sendTeamDomainNoticeResponse> => {
+  const res = await fetch(getSendTeamDomainNoticeUrl(), {
+    ...options,
+    method: 'POST',
+  });
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+
+  const data: sendTeamDomainNoticeResponse['data'] = body
+    ? JSON.parse(body)
+    : {};
+  return {
+    data,
+    status: res.status,
+    headers: res.headers,
+  } as sendTeamDomainNoticeResponse;
+};
+
+/**
  * @summary Invites a user to a team.
  */
 export type inviteToTeamResponse201 = {
@@ -4897,6 +4966,11 @@ export type inviteToTeamResponse404 = {
   status: 404;
 };
 
+export type inviteToTeamResponse409 = {
+  data: ErrorResponse;
+  status: 409;
+};
+
 export type inviteToTeamResponse500 = {
   data: ErrorResponse;
   status: 500;
@@ -4910,6 +4984,7 @@ export type inviteToTeamResponseError = (
   | inviteToTeamResponse400
   | inviteToTeamResponse401
   | inviteToTeamResponse404
+  | inviteToTeamResponse409
   | inviteToTeamResponse500
 ) & {
   headers: Headers;
@@ -5359,6 +5434,11 @@ export type getTeamInvitesResponse401 = {
   status: 401;
 };
 
+export type getTeamInvitesResponse409 = {
+  data: ErrorResponse;
+  status: 409;
+};
+
 export type getTeamInvitesResponse500 = {
   data: ErrorResponse;
   status: 500;
@@ -5370,6 +5450,7 @@ export type getTeamInvitesResponseSuccess = getTeamInvitesResponse200 & {
 export type getTeamInvitesResponseError = (
   | getTeamInvitesResponse400
   | getTeamInvitesResponse401
+  | getTeamInvitesResponse409
   | getTeamInvitesResponse500
 ) & {
   headers: Headers;
@@ -5379,14 +5460,27 @@ export type getTeamInvitesResponse =
   | getTeamInvitesResponseSuccess
   | getTeamInvitesResponseError;
 
-export const getGetTeamInvitesUrl = () => {
-  return `/team/invites`;
+export const getGetTeamInvitesUrl = (params?: GetTeamInvitesParams) => {
+  const normalizedParams = new URLSearchParams();
+
+  Object.entries(params || {}).forEach(([key, value]) => {
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? 'null' : value.toString());
+    }
+  });
+
+  const stringifiedParams = normalizedParams.toString();
+
+  return stringifiedParams.length > 0
+    ? `/team/invites?${stringifiedParams}`
+    : `/team/invites`;
 };
 
 export const getTeamInvites = async (
+  params?: GetTeamInvitesParams,
   options?: RequestInit
 ): Promise<getTeamInvitesResponse> => {
-  const res = await fetch(getGetTeamInvitesUrl(), {
+  const res = await fetch(getGetTeamInvitesUrl(params), {
     ...options,
     method: 'GET',
   });

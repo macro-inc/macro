@@ -29,9 +29,8 @@ HTML worker belong to `packages/sdk-docs`.
 - `bun run type-check` and `bun run test`.
 
 Run from this directory after installing the root workspace and the standalone
-`packages/sdk` dependencies. Generated Rust documentation JSON and Deno bundles
+`packages/sdk` dependencies with `bun install --frozen-lockfile`, as CI does; a
+stale `packages/sdk/node_modules` changes the bundle's minified names. Generated Rust documentation JSON and Deno bundles
 must match the public SDK; edit source and regenerate them together.
 Use the repository's pinned Bun version (via `nix develop`); different Bun
 bundlers produce different checked-in output even from identical SDK source.
-Run SDK-docs and code-mode generated-output checks sequentially; both render into
-`packages/sdk-docs/dist/docs`.

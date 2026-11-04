@@ -1,6 +1,7 @@
 //! The fake cell store's write batch, applied straight to the world.
 
 use super::*;
+use crate::domain::derivation::Derivation;
 use crate::domain::journal::{Before, RowImage, cell_value, row_cells};
 use crate::domain::models::{ChangeId, CommittedChange};
 use models_databases::views::LaneKey;
@@ -17,6 +18,19 @@ pub(super) fn settle(world: &mut World, table_id: TableId, definitions: Vec<Prop
         }
     }
     world.settled.push((table_id, definitions));
+}
+
+/// Store a derivation's cells on rows, from their other cells.
+fn derive(world: &mut World, derivation: &Derivation, rows: &[RowId]) {
+    for row in rows {
+        let stored = world.cells.entry(*row).or_default();
+        for (definition, value) in derivation.cells(stored) {
+            match value {
+                Some(value) => stored.insert(definition, value),
+                None => stored.remove(&definition),
+            };
+        }
+    }
 }
 
 /// The fake cell store's batch, applied straight to the world; the caller
@@ -355,6 +369,7 @@ pub(super) fn apply_in_world(
                 table_id,
                 rows,
                 restored,
+                derivation,
             } => {
                 let mut ids = Vec::new();
                 for (row, cells) in rows.iter().enumerate() {
@@ -386,9 +401,16 @@ pub(super) fn apply_in_world(
                     let valued: Vec<_> = cells.iter().map(|(definition, _)| *definition).collect();
                     settle(world, *table_id, valued);
                 }
+                if let Some(derivation) = derivation {
+                    derive(world, derivation, &ids);
+                }
                 inserted.push(ids);
             }
-            Write::UpdateRows { table_id, rows } => {
+            Write::UpdateRows {
+                table_id,
+                rows,
+                derivation,
+            } => {
                 for (row, cells) in rows {
                     let owned = world
                         .rows
@@ -417,6 +439,10 @@ pub(super) fn apply_in_world(
                         .map(|(definition, _)| *definition)
                         .collect();
                     settle(world, *table_id, valued);
+                }
+                if let Some(derivation) = derivation {
+                    let named: Vec<RowId> = rows.iter().map(|(row, _)| *row).collect();
+                    derive(world, derivation, &named);
                 }
                 inserted.push(Vec::new());
             }
@@ -614,6 +640,16 @@ pub(super) fn apply_in_world(
             }
         }
     }
+    for derivation in &writes.derivations {
+        let rows: Vec<RowId> = world
+            .rows
+            .get(&derivation.table_id())
+            .into_iter()
+            .flatten()
+            .map(|row| row.id)
+            .collect();
+        derive(world, derivation, &rows);
+    }
     for (table_id, row) in &writes.related_rows {
         if !world
             .rows
@@ -637,6 +673,12 @@ pub(super) fn apply_in_world(
         .flat_map(|write| write.versioned_tables().iter().copied())
         .chain(created.iter().copied())
         .chain(related)
+        .chain(
+            writes
+                .derivations
+                .iter()
+                .map(|derivation| derivation.table_id()),
+        )
         .filter(|table| !deleted.contains(table))
         .collect();
     changed.sort();

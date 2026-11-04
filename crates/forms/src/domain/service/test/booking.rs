@@ -9,7 +9,7 @@ use serde_json::json;
 
 use super::*;
 use crate::domain::models::{
-    Answer, FormError, MyResponse, ResponseStatus, Submission, SubmissionOutcome,
+    Answer, FormError, FormResponse, MyResponse, ResponseStatus, Submission, SubmissionOutcome,
 };
 use crate::domain::ports::FormsService;
 
@@ -96,7 +96,7 @@ async fn edit_as(
         .await
 }
 
-async fn mine(forms: &Service, user: &'static str) -> MyResponse {
+async fn my_response(forms: &Service, user: &'static str) -> MyResponse {
     forms
         .my_response(form_receipt::<ViewAccessLevel>(
             RSVP_FORM,
@@ -105,6 +105,28 @@ async fn mine(forms: &Service, user: &'static str) -> MyResponse {
         ))
         .await
         .unwrap()
+}
+
+/// A saved response as `my_response` reads it.
+struct Saved {
+    response: Box<FormResponse>,
+    answers: Vec<Answer>,
+    booking: Option<UnlockedBooking>,
+}
+
+async fn mine(forms: &Service, user: &'static str) -> Saved {
+    match my_response(forms, user).await {
+        MyResponse::Saved {
+            response,
+            answers,
+            booking,
+        } => Saved {
+            response,
+            answers,
+            booking,
+        },
+        MyResponse::Anonymous => panic!("a saved response, not an anonymous one"),
+    }
 }
 
 /// Whether the booking destination appears anywhere in `text`.
@@ -404,10 +426,16 @@ async fn a_stopped_response_reads_back_no_booking_step() {
     submit_as(&forms, VIEWER, answers(CONTRACTOR))
         .await
         .unwrap();
-    let mine = mine(&forms, VIEWER).await;
-    assert_eq!(mine.response.status, ResponseStatus::Stopped);
-    assert_eq!(mine.booking, None);
-    assert!(!reveals_target(&serde_json::to_string(&mine).unwrap()));
+    let wire = my_response(&forms, VIEWER).await;
+    let MyResponse::Saved {
+        response, booking, ..
+    } = &wire
+    else {
+        panic!("a saved response");
+    };
+    assert_eq!(response.status, ResponseStatus::Stopped);
+    assert_eq!(*booking, None);
+    assert!(!reveals_target(&serde_json::to_string(&wire).unwrap()));
 }
 
 #[tokio::test]
@@ -494,10 +522,10 @@ async fn my_response_without_a_booking_step_serializes_no_booking_field() {
     submit_as(&forms, VIEWER, answers(CONTRACTOR))
         .await
         .unwrap();
-    let wire = serde_json::to_value(mine(&forms, VIEWER).await).unwrap();
+    let wire = serde_json::to_value(my_response(&forms, VIEWER).await).unwrap();
     assert!(wire.get("booking").is_none());
-    assert_eq!(
-        serde_json::from_value::<MyResponse>(wire).unwrap().booking,
-        None
-    );
+    assert!(matches!(
+        serde_json::from_value::<MyResponse>(wire).unwrap(),
+        MyResponse::Saved { booking: None, .. }
+    ));
 }

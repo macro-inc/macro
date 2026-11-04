@@ -36,6 +36,8 @@ impl<
                         status: Some(intent.draft.status),
                         closes_at: Some(intent.draft.closes_at),
                         tally_visible: Some(intent.draft.tally_visible),
+                        responses_visible: intent.draft.responses_visible,
+                        anonymous: intent.draft.anonymous,
                         ..Default::default()
                     },
                 )

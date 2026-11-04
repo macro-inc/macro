@@ -335,6 +335,11 @@ export type CreatePortalSessionRequest = {
  */
 export type CreateTeamRequest = {
     /**
+     * Whether colleagues who sign up with the owner's work email domain join
+     * the team automatically. Ignored for generic email providers.
+     */
+    allow_domain_join?: boolean;
+    /**
      * The name of the team
      */
     name: string;
@@ -1203,6 +1208,12 @@ export type InviteToTeamRequest = {
      * The invites to send, each with an email and tier
      */
     invites: Array<InviteEntry>;
+    /**
+     * The team the caller means to invite to. Invites always go to the
+     * caller's current team; when this names another team, nothing is sent
+     * and the request answers 409.
+     */
+    team_id?: string | null;
 };
 
 /**
@@ -1620,6 +1631,16 @@ export type ScheduledSeatPlan = {
  * plan in use.
  */
 export type SeatPlan = 'premium' | 'max';
+
+/**
+ * Response for the domain notice endpoint.
+ */
+export type SendDomainNoticeResponse = {
+    /**
+     * How many colleagues were emailed by this call.
+     */
+    sent: number;
+};
 
 /**
  * The body which is used to describe the recipient email
@@ -3957,6 +3978,27 @@ export type PatchTeamCrmSettingsResponses = {
 
 export type PatchTeamCrmSettingsResponse2 = PatchTeamCrmSettingsResponses[keyof PatchTeamCrmSettingsResponses];
 
+export type SendTeamDomainNoticeData = {
+    body?: never;
+    path?: never;
+    query?: never;
+    url: '/team/domain-notice';
+};
+
+export type SendTeamDomainNoticeErrors = {
+    401: ErrorResponse;
+    403: ErrorResponse;
+    500: ErrorResponse;
+};
+
+export type SendTeamDomainNoticeError = SendTeamDomainNoticeErrors[keyof SendTeamDomainNoticeErrors];
+
+export type SendTeamDomainNoticeResponses = {
+    200: SendDomainNoticeResponse;
+};
+
+export type SendTeamDomainNoticeResponse = SendTeamDomainNoticeResponses[keyof SendTeamDomainNoticeResponses];
+
 export type InviteToTeamData = {
     body: InviteToTeamRequest;
     path?: never;
@@ -3968,6 +4010,10 @@ export type InviteToTeamErrors = {
     400: ErrorResponse;
     401: ErrorResponse;
     404: ErrorResponse;
+    /**
+     * `team_id` names a team other than the caller's current team
+     */
+    409: ErrorResponse;
     500: ErrorResponse;
 };
 
@@ -4111,13 +4157,24 @@ export type DeleteTeamInviteHandlerResponses = {
 export type GetTeamInvitesData = {
     body?: never;
     path?: never;
-    query?: never;
+    query?: {
+        /**
+         * The team the caller means to list. Invites are always read from the
+         * caller's current team; when this names another team, the request
+         * answers 409.
+         */
+        team_id?: string;
+    };
     url: '/team/invites';
 };
 
 export type GetTeamInvitesErrors = {
     400: ErrorResponse;
     401: ErrorResponse;
+    /**
+     * `team_id` names a team other than the caller's current team
+     */
+    409: ErrorResponse;
     500: ErrorResponse;
 };
 

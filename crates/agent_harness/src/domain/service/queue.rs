@@ -423,7 +423,7 @@ where
             | HarnessCommand::RemoveQueued { actor, .. }
             | HarnessCommand::SteerQueued { actor, .. } => {
                 let session = self.sessions.get_session(session_id).await?;
-                if session.is_archived {
+                if session.is_archived() {
                     return Err(AgentSessionError::Archived(session_id).into());
                 }
                 if AgentKind::of(session.bot_id) == AgentKind::SandboxedCoder
@@ -439,9 +439,10 @@ where
             | HarnessCommand::ToolApproval(_)
             | HarnessCommand::PresentTool { .. }
             | HarnessCommand::SessionStopped { .. }
+            | HarnessCommand::Reattach
             | HarnessCommand::Delete => {}
             HarnessCommand::SetSandboxSize(_) => {
-                if self.sessions.get_session(session_id).await?.is_archived {
+                if self.sessions.get_session(session_id).await?.is_archived() {
                     return Err(AgentSessionError::Archived(session_id).into());
                 }
             }
@@ -887,6 +888,10 @@ where
             }
             HarnessCommand::SetSandboxSize(size) => {
                 self.apply_sandbox_size(session_id, size).await?;
+                Ok(CommandOutcome::Completed)
+            }
+            HarnessCommand::Reattach => {
+                self.reattach(session_id).await?;
                 Ok(CommandOutcome::Completed)
             }
             HarnessCommand::Delete => {
@@ -1385,7 +1390,7 @@ where
     #[tracing::instrument(name = "dispatch_next", err, skip(self), fields(%session_id))]
     async fn dispatch_unboxed(&self, session_id: AgentSessionId) -> Result<Dispatch> {
         let session = self.sessions.get_session(session_id).await?;
-        if session.is_archived {
+        if session.is_archived() {
             self.queues.drop_session(session_id);
             self.write_queue(session_id).await?;
             self.publish_queue(session_id).await;

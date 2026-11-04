@@ -5,6 +5,7 @@ import {
 } from '@app/components/view-shell';
 import { ViewTour } from '@app/features/tours/ViewTour';
 import { SplitRouter } from '@app/lib/split-router';
+import { TraceFlow } from '@app/observability/flow';
 import { usePreference } from '@app/preferences/use-preference';
 import { type PillTabItem, PillTabs } from '@components/app/mobile/PillTabs';
 import { SplitHeaderLeft } from '@components/app/split-layout/components/SplitHeader';
@@ -173,7 +174,12 @@ function EmailDesktopLayout(props: {
 const MOBILE_EMAIL_TABS: PillTabItem<EmailTab>[] = [
   ...EMAIL_TABS.filter((tab) => tab.id === 'focus'),
   ...EMAIL_TABS.filter((tab) => tab.id !== 'focus'),
-].map((tab) => ({ value: tab.id, label: tab.label }));
+].map((tab) => ({
+  value: tab.id,
+  get label() {
+    return tab.label;
+  },
+}));
 
 function EmailMobileLayout(props: ParentProps) {
   const isVisible = useVisibleEmailTab();
@@ -246,7 +252,9 @@ function EmailViewRoot() {
 
   const list = () => (
     <Suspense fallback={<EmailListFallback />}>
-      <EmailList ref={setListElement} pane={listPane()} />
+      <TraceFlow name="email.list" key={() => state.tab}>
+        <EmailList ref={setListElement} pane={listPane()} />
+      </TraceFlow>
     </Suspense>
   );
 

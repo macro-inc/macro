@@ -40,6 +40,7 @@ export function createRoutineRows(
               : routine.enabled
                 ? 'Active'
                 : 'Paused',
+          lastRunFailed: routine.lastRunFailed === true,
           enabled: routine.enabled,
           editable: routine.ownerId === userId(),
         };

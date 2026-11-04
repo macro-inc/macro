@@ -6,8 +6,6 @@ config:
   email-service:fusionauth_client_id: fusionauth-client-id-key-prod
   email-service:fusionauth_issuer: auth.macro.com
   email-service:db_password_secret_key: email-db-password-prod
-  # Retain for older worker startup/rollback; new workers do not load Apollo.
-  email-service:apollo_api_key_secret_name: apollo-io-api-key-master
   email-service:internal_auth_key: document-storage-service-auth-key-prod
   email-service:cf_private_key: email-attachments-private-key-prod
   email-service:notifications_enabled: true

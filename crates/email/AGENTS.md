@@ -61,6 +61,9 @@ tools — hexagonal, heavily feature-gated.
   Synced Macro drafts in junk/trash must not advance All Mail timestamps.
   Filtered and unfiltered All Mail share the dynamic builder and its per-inbox
   ordered, limited scans; do not add a separate whole-mailbox sort.
+- Spam and Trash seed candidates from indexed provider labels/folder state plus pending positive moves, then recheck canonical mailbox facts before pagination. Order by the latest matching message date; metadata touches and unrelated replies must not move folder rows. Only Trash relaxes the default trash exclusion.
+- Restore Outlook junk drafts to Drafts without Inbox membership; continue rejecting
+  attempts to mark clean drafts as junk.
 
 - Reconcile deferred message deletion before claiming scheduled work; unresolved sends retain their message, attachments, and delivery job.
 - Durable send admission supports Gmail and Outlook; Outlook delivery stays with its provider coordinator.
@@ -70,6 +73,7 @@ tools — hexagonal, heavily feature-gated.
   provider write per inbox holding only the messages whose labels changed
   (`stage_thread_labels` / `commit_thread_label_write` in
   `domain/service/thread_labels.rs`); route new label actions through them.
+- Recompute thread metadata inside staged Gmail SPAM/TRASH writes so restored All Mail previews, ordering, and signal state do not wait for the provider worker.
 - `.eml` downloads go through `domain/message_source.rs`, which authorizes like
   attachment reads and fetches the provider's original RFC 822 bytes (Gmail
   `format=raw`, Graph `$value`); drafts and unsynced messages have no source.
@@ -111,6 +115,29 @@ tools — hexagonal, heavily feature-gated.
   delivery on a tracking failure, and count opens only for sent messages.
   Tokens are stored per message, so a retried send or Outlook draft revision
   rebuilds the same URL; keep it that way or the draft fingerprints drift.
+- Outlook sync telemetry (`domain/mailbox/telemetry.rs`, `progress.rs`) is a
+  contract the Outlook sync monitors in `infra/stacks/monitoring` read: each
+  claimed unit of `MailboxSyncService` and `MailboxProjectionService` opens
+  one root `outlook.sync.*` span (idle polls open none) and records
+  `outlook.outcome`, `outlook.defer_reason` and `outlook.defer_seconds`
+  through `record_done`/`record_deferred`/`record_failed`. The mailbox loops
+  log their own deferrals with `link_id` (gate refusals at DEBUG), so the
+  worker must not log them again. Add a new defer reason in `defer_reason`.
+- Map database errors in `mailbox_pg` with `db_error` (or `wrapped_db_error`
+  for `email_db_client` calls) so the SQLSTATE reaches the log; keep
+  `MailboxError::Persistence` for stored data that cannot be decoded.
+  `MailboxError::Effect` (`defer_reason=effect`) is for a projection effect
+  that fails outside the database; email-service's `MailboxEffects` maps its
+  database steps with `database_failed` and everything else with `failed`.
+- "outlook import completed" fires from `settle_import` (`mailbox_pg.rs`)
+  under the link lock, once per import run: the folder-catalog stream's
+  `import_completed_at` is stamped when every folder is enumerated and no
+  import row is left. A resync must reset `import_started_at` and
+  `import_completed_at` and log "outlook import started", as
+  `outbound/mailbox_pg/lifecycle.rs` does.
+- Import counts for the health snapshot stay in memory (`ImportTally`) and are
+  flushed once a minute to `email_mailbox_import_minutes`; never write per
+  imported message for telemetry.
 - Outlook organization commands only run in their link's current
   `sync_generation`. Anything that bumps it must rebind unfinished commands as
   `pending`, since claims skip `confirming` ones while those still block later

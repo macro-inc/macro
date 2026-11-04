@@ -1,15 +1,19 @@
 import { analytics } from '@app/lib/analytics';
 
 /**
- * This constant reflects whether the app is running locally with hot reload enabled
+ * This constant reflects whether the app is running locally: under the Vite
+ * dev server with hot reload (`just run_local`, `bun run dev`), or as the
+ * bundle `just stack` builds, which sets `VITE_LOCAL_ONLY` so a headless
+ * stack gets the same local-only flags, routes and tools.
  *
- * @returns true in bun run dev, false otherwise
+ * @returns true in bun run dev and `just stack` bundles, false otherwise
  *
  * Distinct from `import.meta.env.DEV` (true under vite serve *and* local-backend
- * static bundles) and `DEV_MODE_ENV` (true whenever MODE=development, including
- * dev.macro.com).
+ * static bundles, including test builds) and `DEV_MODE_ENV` (true whenever
+ * MODE=development, including dev.macro.com).
  */
-export const LOCAL_ONLY = !!import.meta.hot;
+export const LOCAL_ONLY =
+  !!import.meta.hot || import.meta.env.VITE_LOCAL_ONLY === 'true';
 
 const parseBooleanOverride = (value: unknown): boolean | undefined =>
   value === 'true' ? true : value === 'false' ? false : undefined;
@@ -149,6 +153,17 @@ export const showDatabaseSql = defineFlag({
 export const PROD_MODE_ENV = import.meta.env.MODE === 'production';
 
 const onInDev = DEV_MODE_ENV || undefined;
+
+/**
+ * Connect apps Macro Connect serves through it instead of Pipedream. The
+ * backend reads the same PostHog key and decides per app; this side only
+ * reserves the consent popup inside the click. Off in dev too: dev has no
+ * Connect customer key until one is added to Doppler.
+ */
+export const macroConnect = defineFlag({
+  key: 'macro-connect',
+  env: 'ENABLE_MACRO_CONNECT',
+});
 
 /** Browser-style tabs in the macOS desktop title bar; each tab holds a split layout. */
 export const enableDesktopTabs = defineFlag({
@@ -664,15 +679,6 @@ export const enableCalendarUi = defineFlag({
   default: onInDev,
 });
 
-// Calendar meeting notes and document-side meeting-link management. On in dev;
-// production uses PostHog's internal-user rollout. This is a UI rollout, not
-// an authorization check: saved meeting grants remain enforced by the service.
-export const enableCalendarMeetingNotes = defineFlag({
-  key: 'enable-calendar-meeting-notes',
-  env: 'ENABLE_CALENDAR_MEETING_NOTES',
-  default: onInDev,
-});
-
 // Calendar event search UI: the Search view's Calendar type (and calendar
 // rows) plus the in-calendar keyword search. A sub-feature of the calendar UI
 // — opening a hit needs the calendar block — so it only takes effect where
@@ -828,6 +834,15 @@ export const enableEntityActivitySection = defineFlag({
 export const enableActivityFeed = defineFlag({
   key: 'enable-activity-feed',
   env: 'ENABLE_ACTIVITY_FEED',
+  default: onInDev,
+});
+
+// Agents home: pending updates from coding agents shown as a stack under the
+// new-chat composer, and the Open PRs section in the Agents sidebar.
+// Override with VITE_ENABLE_AGENT_UPDATES.
+export const enableAgentUpdates = defineFlag({
+  key: 'enable-agent-updates',
+  env: 'ENABLE_AGENT_UPDATES',
   default: onInDev,
 });
 
