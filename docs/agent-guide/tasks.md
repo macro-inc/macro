@@ -908,7 +908,8 @@ multiple sources are outside the experiment.
 
 Verify email and channel task buttons before entering any composer text: Source
 must already show the link glyph and originating item's icon and title, without
-a `Source:` prefix. Create the task and reopen it to confirm Source persists.
+a `Source:` prefix. Confirm both glyphs stay vertically centered with the title
+on desktop and touch. Create the task and reopen it to confirm Source persists.
 For a channel reply, follow Source and confirm the exact reply
 opens; open and dismiss the picker without changing the value, then repeat.
 Replace Source with a document, clear Source, and recover an unconfirmed draft to

@@ -56,6 +56,8 @@ and the side panel: its item opens through the shared mention-link navigation,
 including `specific_message_id`; its caret opens the host's existing picker.
 Inline Source pills use the link glyph instead of a `Source:` prefix, followed by
 the item's icon and title; side panels retain the separate property label.
+Let the linked item's renderer fill its icon slot with `iconSize: 'fill'`; a
+fixed-size child in a smaller wrapper shifts the icon below the label.
 Empty Source values use the same link glyph; unsupported references retain the
 ordinary property editor.
 

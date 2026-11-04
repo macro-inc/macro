@@ -25,6 +25,7 @@ export function SourceLinkPill(props: {
     () => reference()?.entity_id ?? '',
     () => reference()?.entity_type,
     {
+      iconSize: 'fill',
       specificMessageId: () => reference()?.specific_message_id,
       loadingName: () => ctx.pickedEntityName(reference()?.entity_id ?? ''),
     }
@@ -64,7 +65,7 @@ export function SourceLinkPill(props: {
           <span
             aria-hidden="true"
             class={cn(
-              'inline-flex size-3 shrink-0 [&_svg]:size-full',
+              'inline-flex size-3 shrink-0 items-center justify-center',
               props.iconClass
             )}
           >
