@@ -3,6 +3,7 @@ import { Badge, cn, TagDot, Tooltip } from '@ui';
 import { For, Show } from 'solid-js';
 import { match } from 'ts-pattern';
 import type { EmailFocusSort } from '../constants';
+import { emailFocusDue } from '../focus-due';
 import { emailFocusReason } from '../focus-reason';
 
 /**
@@ -90,25 +91,61 @@ export function EmailFocusScore(props: {
   );
 }
 
-/** Why a Focus row is on the list, drawn like a row's tag pills. */
+/** The day a Focus row's mail says it is due, the full date in its tooltip. */
+function EmailFocusDue(props: { entity: EntityData }) {
+  const due = () => {
+    const dueOn = emailFocusOf(props.entity)?.dueOn;
+    return dueOn ? emailFocusDue(dueOn, new Date()) : undefined;
+  };
+  return (
+    <Show when={due()}>
+      {(shown) => (
+        <Tooltip as="span" label={shown().title} class="inline-flex shrink-0">
+          <Badge
+            variant="outline"
+            size="xs"
+            class={cn(
+              'select-none bg-control',
+              shown().overdue ? 'border-warning/40' : 'border-edge-button'
+            )}
+          >
+            {/* Amber text is too faint on the light theme, so the dot carries it. */}
+            <Show when={shown().overdue}>
+              <TagDot size="sm" fill="var(--color-warning)" />
+            </Show>
+            {shown().label}
+          </Badge>
+        </Tooltip>
+      )}
+    </Show>
+  );
+}
+
+/**
+ * Why a Focus row is on the list and when it is due, drawn like a row's tag
+ * pills. Stacked rows show these through `EmailFocusPreviewLeading`.
+ */
 export function EmailFocusReason(props: { entity: EntityData }) {
   const reason = () => {
     const focus = emailFocusOf(props.entity);
     return focus && emailFocusReason(focus);
   };
   return (
-    <Show when={reason()}>
-      {(shown) => (
-        <Badge
-          variant="outline"
-          size="xs"
-          class="select-none border-edge-button bg-control"
-        >
-          <TagDot size="sm" fill={shown().fill} />
-          {shown().label}
-        </Badge>
-      )}
-    </Show>
+    <>
+      <Show when={reason()}>
+        {(shown) => (
+          <Badge
+            variant="outline"
+            size="xs"
+            class="select-none border-edge-button bg-control"
+          >
+            <TagDot size="sm" fill={shown().fill} />
+            {shown().label}
+          </Badge>
+        )}
+      </Show>
+      <EmailFocusDue entity={props.entity} />
+    </>
   );
 }
 

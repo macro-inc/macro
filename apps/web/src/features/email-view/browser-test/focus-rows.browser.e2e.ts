@@ -10,6 +10,11 @@ const REASONS: Record<string, string | undefined> = {
   contact: 'Contact',
   other: undefined,
   unknown: undefined,
+  'due-soon': 'Reply needed',
+  'due-today': 'Follow up',
+  'due-tomorrow': 'Contact',
+  overdue: 'Reply needed',
+  'due-no-reason': undefined,
 };
 const ALL_REASONS = [
   'Reply needed',
@@ -53,7 +58,7 @@ async function open(page: Page) {
     await route.fulfill({ response: await route.fetch() });
   });
   await page.goto('/src/features/email-view/browser-test/focus-rows.html');
-  await expect(page.getByTestId('row-unknown')).toBeVisible({
+  await expect(page.getByTestId('row-due-no-reason')).toBeVisible({
     timeout: 180_000,
   });
 }
@@ -103,6 +108,7 @@ for (const size of WIDTHS) {
 
       // A pill adds no height, whatever the row's layout.
       expect(await rowHeight('reply')).toBe(await rowHeight('other'));
+      expect(await rowHeight('due-soon')).toBe(await rowHeight('other'));
       if (size.touch)
         expect(await rowHeight('reply')).toBeGreaterThanOrEqual(44);
 
@@ -110,8 +116,8 @@ for (const size of WIDTHS) {
       if (size.stacked) {
         expect(await subjectWidth('reply')).toBe(await subjectWidth('other'));
       }
-      // One-line rows keep a readable subject beside the widest pill.
-      else expect(await subjectWidth('reply')).toBeGreaterThanOrEqual(200);
+      // One-line rows keep a readable subject beside the widest pills.
+      else expect(await subjectWidth('due-soon')).toBeGreaterThanOrEqual(200);
 
       const horizontalOverflow = await page.evaluate(
         () =>
@@ -119,6 +125,37 @@ for (const size of WIDTHS) {
           document.documentElement.clientWidth
       );
       expect(horizontalOverflow).toBe(false);
+    });
+
+    test('a due date shows beside the reason, on both sorts', async ({
+      page,
+    }) => {
+      await open(page);
+      const pill = (id: string, label: string | RegExp) =>
+        page.getByTestId(`row-${id}`).getByText(label);
+
+      for (const sort of ['Most recent', 'Importance']) {
+        await page.getByRole('button', { name: sort }).click();
+        await expect(
+          pill('due-soon', /^Due (Mon|Tue|Wed|Thu|Fri|Sat|Sun)$/)
+        ).toBeVisible();
+        await expect(pill('due-today', 'Due today')).toBeVisible();
+        await expect(pill('due-tomorrow', 'Due tomorrow')).toBeVisible();
+        await expect(pill('overdue', 'Overdue')).toBeVisible();
+        await expect(
+          pill('due-no-reason', /^Due [A-Z][a-z]{2} \d/)
+        ).toBeVisible();
+        await expect(
+          page.getByTestId('row-reply').getByText(/^(Due|Overdue)/)
+        ).toHaveCount(0);
+      }
+
+      // The warning tone sets an overdue row apart from one that is only due.
+      const border = (id: string, label: string | RegExp) =>
+        pill(id, label).evaluate((node) => getComputedStyle(node).borderColor);
+      expect(await border('overdue', 'Overdue')).not.toBe(
+        await border('due-today', 'Due today')
+      );
     });
 
     test('the meter shows only under the importance sort, in its band color', async ({
