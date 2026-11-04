@@ -1,5 +1,5 @@
 import { toast } from '@core/component/Toast/Toast';
-import { PipedreamConnectorIcon } from '@core/pipedream/ConnectorIcon';
+import { ConnectedAppIcon } from '@core/pipedream/ConnectedAppIcon';
 import { createPipedreamCatalogConnect } from '@core/pipedream/catalog';
 import { fireAndForget } from '@core/util/fireAndForget';
 import PlugIcon from '@icon/system/regular/plug.svg';
@@ -313,7 +313,7 @@ export function LeftoverRow(props: {
           icon={
             <Show when={props.overlaidAppSlug} fallback={<PlugIcon />}>
               {(appSlug) => (
-                <PipedreamConnectorIcon appSlug={appSlug()} class="size-5" />
+                <ConnectedAppIcon appSlug={appSlug()} class="size-5" />
               )}
             </Show>
           }
@@ -337,7 +337,7 @@ export function LeftoverRow(props: {
       .with({ kind: 'pipedream' }, (item) => (
         <IntegrationListRow
           icon={
-            <PipedreamConnectorIcon appSlug={item.appSlug} class="size-5" />
+            <ConnectedAppIcon appSlug={item.appSlug} class="size-5" />
           }
           name={item.title}
           kind="mcp"

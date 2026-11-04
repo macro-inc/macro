@@ -1,3 +1,4 @@
+import { ConnectedAppIcon } from '@core/pipedream/ConnectedAppIcon';
 import { PipedreamConnectorIcon } from '@core/pipedream/ConnectorIcon';
 import {
   createPipedreamCatalogConnect,
@@ -220,7 +221,7 @@ function SelectedAppRow(props: {
     <IntegrationRow
       class="px-3 py-2.5"
       icon={
-        <PipedreamConnectorIcon
+        <ConnectedAppIcon
           appSlug={props.server.app_slug}
           class="size-5"
         />
