@@ -52,6 +52,7 @@ import { fireAndForget } from '@core/util/fireAndForget';
 import type { EntityData } from '@entity';
 import { isEmailEntity, isGithubPrEntity, isTaskEntity } from '@entity';
 import { SYSTEM_PROPERTY_IDS } from '@property/constants';
+import { useIsTeamAdmin } from '@queries/team/teams';
 import type { Component, JSX } from 'solid-js';
 
 type SoupEntityActionItem = {
@@ -113,6 +114,7 @@ export function createSoupEntityActions(
   const analytics = useAnalytics();
   const projectsFlag = useFeatureFlag(enableProjects);
   const userId = useUserId();
+  const canManageWorkspace = useIsTeamAdmin();
   const notificationSource = useGlobalNotificationSource();
   const crmActions = createCrmEntityActionItems();
 
@@ -134,6 +136,7 @@ export function createSoupEntityActions(
 
   const deleteAction = makeDeleteAction({
     userId: () => userId(),
+    canManageWorkspace,
   });
 
   const renameAction = makeRenameAction({

@@ -72,7 +72,7 @@ The attachments posted in this channel, auto-paginated.
 
 > **delete**(): `Promise`\<`void`\>
 
-Delete the channel. This is not reversible.
+Delete the channel permanently; the owner can, and a workspace owner or admin can delete any channel except a direct message.
 
 #### Returns
 

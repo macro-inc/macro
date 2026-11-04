@@ -492,8 +492,41 @@ where
         channel_id: Uuid,
     ) -> Result<(), ChannelMutationErr> {
         let actor = require_user_actor(&actor)?;
+        let info = self
+            .repo
+            .get_channel_info(channel_id)
+            .await
+            .map_err(|e| ChannelMutationErr::Repo(e.into()))?;
+        let participants = self
+            .repo
+            .get_participants(channel_id)
+            .await
+            .map_err(|e| ChannelMutationErr::Repo(e.into()))?;
+        let is_owner = participants.iter().any(|participant| {
+            participant.user_id == actor.as_ref() && participant.role == ParticipantRole::Owner
+        });
+        if !is_owner {
+            let direct_agent = self
+                .repo
+                .is_direct_agent_conversation(channel_id)
+                .await
+                .map_err(|e| ChannelMutationErr::Repo(e.into()))?;
+            let workspace_manager = info.channel_type != ChannelType::DirectMessage
+                && !direct_agent
+                && self
+                    .repo
+                    .user_manages_channel_workspace(channel_id, actor.as_ref())
+                    .await
+                    .map_err(|e| ChannelMutationErr::Repo(e.into()))?;
+            if !workspace_manager {
+                return Err(ChannelMutationErr::Forbidden(
+                    "only the channel owner or a workspace owner or admin can delete this channel"
+                        .to_string(),
+                ));
+            }
+        }
         self.repo
-            .delete_channel(channel_id, actor.as_ref().to_string())
+            .delete_channel(channel_id)
             .await
             .map_err(|e| ChannelMutationErr::Repo(e.into()))?;
         self.events.dispatch(ChannelEvent::ChannelDeleted {

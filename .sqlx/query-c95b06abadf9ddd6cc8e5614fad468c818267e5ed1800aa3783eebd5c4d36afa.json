@@ -1,0 +1,23 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            SELECT EXISTS (\n                SELECT 1\n                FROM comms_channels c\n                JOIN team_user manager\n                  ON manager.user_id = $2\n                 AND manager.team_role IN ('owner'::team_role, 'admin'::team_role)\n                WHERE c.id = $1\n                  AND c.channel_type <> 'direct_message'::comms_channel_type\n                  AND NOT EXISTS (\n                      SELECT 1\n                      FROM comms_channel_agents agent\n                      WHERE agent.channel_id = c.id\n                        AND agent.kind = 'direct'\n                  )\n                  AND (\n                      c.team_id = manager.team_id\n                      OR EXISTS (\n                          SELECT 1\n                          FROM team_user owner_membership\n                          WHERE owner_membership.user_id = c.owner_id\n                            AND owner_membership.team_id = manager.team_id\n                      )\n                      OR EXISTS (\n                          SELECT 1\n                          FROM comms_channel_participants participant\n                          WHERE participant.channel_id = c.id\n                            AND participant.user_id = manager.user_id\n                            AND participant.left_at IS NULL\n                      )\n                  )\n            ) AS \"manages!\"\n            ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "manages!",
+        "type_info": "Bool"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Text"
+      ]
+    },
+    "nullable": [
+      null
+    ]
+  },
+  "hash": "c95b06abadf9ddd6cc8e5614fad468c818267e5ed1800aa3783eebd5c4d36afa"
+}

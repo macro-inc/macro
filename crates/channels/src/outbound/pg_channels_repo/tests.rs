@@ -2836,7 +2836,7 @@ async fn delete_channel_cascades_contacts_backfill_outbox_rows(pool: Pool<Postgr
     .await
     .unwrap();
 
-    repo.delete_channel(created.id, USER_A.to_string())
+    repo.delete_channel(created.id)
         .await
         .expect("channel delete must succeed when contacts_backfill_outbox references the channel");
 
@@ -2859,6 +2859,110 @@ async fn delete_channel_cascades_contacts_backfill_outbox_rows(pool: Pool<Postgr
     .unwrap()
     .unwrap();
     assert_eq!(outbox_count, 0);
+}
+
+#[sqlx::test(
+    fixtures(path = "../../../fixtures", scripts("channels_repo")),
+    migrator = "MACRO_DB_MIGRATIONS"
+)]
+async fn workspace_owner_manages_team_and_member_channels_but_not_direct_messages(
+    pool: Pool<Postgres>,
+) {
+    let repo = repo(pool.clone());
+    sqlx::query!(
+        r#"
+        INSERT INTO team_user (user_id, team_id, team_role)
+        VALUES ($1, $2, 'owner'::team_role)
+        "#,
+        TEAM_OWNER_A,
+        TEAM_A,
+    )
+    .execute(&pool)
+    .await
+    .unwrap();
+
+    assert!(
+        repo.user_manages_channel_workspace(TEAM_A_MANUAL, TEAM_OWNER_A)
+            .await
+            .unwrap(),
+        "a workspace owner manages their team's channels"
+    );
+    assert!(
+        !repo
+            .user_manages_channel_workspace(TEAM_A_MANUAL, LEFT_USER)
+            .await
+            .unwrap(),
+        "a workspace member does not manage channels they do not own"
+    );
+
+    let private_id = Uuid::from_u128(0x00000000_0000_0000_0000_000000000c91);
+    sqlx::query!(
+        r#"
+        INSERT INTO comms_channels (id, name, channel_type, owner_id)
+        VALUES ($1, 'owned-by-teammate', 'private'::comms_channel_type, $2)
+        "#,
+        private_id,
+        LEFT_USER,
+    )
+    .execute(&pool)
+    .await
+    .unwrap();
+    assert!(
+        repo.user_manages_channel_workspace(private_id, TEAM_OWNER_A)
+            .await
+            .unwrap(),
+        "a workspace owner manages a private channel created by a teammate"
+    );
+
+    let outside_id = Uuid::from_u128(0x00000000_0000_0000_0000_000000000c92);
+    sqlx::query!(
+        r#"
+        INSERT INTO comms_channels (id, name, channel_type, owner_id)
+        VALUES ($1, 'outside', 'private'::comms_channel_type, $2)
+        "#,
+        outside_id,
+        NON_MEMBER,
+    )
+    .execute(&pool)
+    .await
+    .unwrap();
+    sqlx::query!(
+        r#"
+        INSERT INTO comms_channel_participants (channel_id, role, user_id)
+        VALUES ($1, 'member'::comms_participant_role, $2)
+        "#,
+        outside_id,
+        TEAM_OWNER_A,
+    )
+    .execute(&pool)
+    .await
+    .unwrap();
+    assert!(
+        repo.user_manages_channel_workspace(outside_id, TEAM_OWNER_A)
+            .await
+            .unwrap(),
+        "a workspace owner manages a channel they still belong to"
+    );
+
+    let dm_id = Uuid::from_u128(0x00000000_0000_0000_0000_000000000c93);
+    sqlx::query!(
+        r#"
+        INSERT INTO comms_channels (id, channel_type, owner_id)
+        VALUES ($1, 'direct_message'::comms_channel_type, $2)
+        "#,
+        dm_id,
+        LEFT_USER,
+    )
+    .execute(&pool)
+    .await
+    .unwrap();
+    assert!(
+        !repo
+            .user_manages_channel_workspace(dm_id, TEAM_OWNER_A)
+            .await
+            .unwrap(),
+        "a workspace owner does not manage a direct message"
+    );
 }
 
 #[sqlx::test(

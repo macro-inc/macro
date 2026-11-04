@@ -75,6 +75,10 @@ DMs, and the shared message store other domains discuss things on.
   records, calls) are authorized in `ChannelServiceImpl::get_attachment_references`
   through the `CommentParentAccess` port; the repo returns every parent. A
   service built without `with_comment_parent_access` withholds them.
+- Channel deletion is for the channel owner, or a workspace owner or admin of
+  a team channel, a channel owned by someone on their team, or a channel they
+  still belong to. Direct messages and direct agent conversations stay with
+  the channel owner.
 - The channel list's unseen/seen filter matches a set built once from the
   user's notifications (`= ANY(ARRAY(...))`). A per-channel `EXISTS` or plain
   `IN` walks every candidate channel's notification history; that was ~24% of

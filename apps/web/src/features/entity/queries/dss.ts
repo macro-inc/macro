@@ -17,6 +17,7 @@ import {
 import { throwOnErr } from '@core/util/result';
 import { deleteAgentSession } from '@queries/agent-session/entity-mutations';
 import { callKeys } from '@queries/call/keys';
+import { channelKeys } from '@queries/channel/keys';
 import { queryClient } from '@queries/client';
 import {
   getSoupEntityById,
@@ -38,6 +39,7 @@ import { ownTouchStamp } from '@queries/soup/normalized-cache/own-touch';
 import { permanentlyDeleteEntity } from '@queries/storage/entity-mutations';
 import { callServiceClient } from '@service-call/client';
 import { scheduledActionClient } from '@service-scheduled-action/client';
+import { storageServiceClient } from '@service-storage/client';
 import { getEntityGraphqlClient } from '@service-storage/graphql-soup';
 import { useMutation } from '@tanstack/solid-query';
 import { batch } from 'solid-js';
@@ -104,6 +106,7 @@ export function createBulkDeleteDssItemsMutation() {
     const type = entity.type;
     return (
       type === 'agent_session' ||
+      type === 'channel' ||
       type === 'chat' ||
       type === 'document' ||
       type === 'project' ||
@@ -129,6 +132,19 @@ export function createBulkDeleteDssItemsMutation() {
       const deletions = deletable.map(async (e) => {
         if (e.type === 'agent_session') {
           await deleteAgentSession(e.id);
+          return true;
+        }
+        if (e.type === 'channel') {
+          if (isFeatureEnabled(enableGraphqlSoup)) {
+            await permanentlyDeleteEntity({ type: 'CHANNEL', id: e.id });
+          } else {
+            await throwOnErr(() =>
+              storageServiceClient.deleteChannel({ channel_id: e.id })
+            );
+          }
+          queryClient.invalidateQueries({
+            queryKey: channelKeys.listChannels.queryKey,
+          });
           return true;
         }
         if (e.type === 'call') {

@@ -465,7 +465,7 @@ describe('bulk delete GraphQL optimism', () => {
     const result = mutation.mutateAsync([
       entity('task-1'),
       entity('task-2'),
-      entity('channel', 'channel'),
+      entity('message', 'channel_message'),
     ]);
     await vi.waitFor(() =>
       expect([...pendingIds()]).toEqual(['task-1', 'task-2'])

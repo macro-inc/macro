@@ -29,6 +29,7 @@ vi.mock('@core/hotkey/hotkeys', () => ({
   createHotkeyGroup: () => ({ dispose: vi.fn(), addDisposer: vi.fn() }),
 }));
 vi.mock('@core/context/user', () => ({ useUserId: () => () => 'user' }));
+vi.mock('@queries/team/teams', () => ({ useIsTeamAdmin: () => () => false }));
 vi.mock('@components/app/GlobalAppState', () => ({
   useGlobalNotificationSource: () => ({}),
 }));

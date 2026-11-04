@@ -1,7 +1,7 @@
 //! Unified entity-mutation capability impls for channels.
 
 use entity_access::domain::models::{
-    EntityAccessReceipt, MemberParticipantRole, OwnerParticipantRole, RequiredPermission,
+    EntityAccessReceipt, MemberParticipantRole, RequiredPermission, ViewOnly,
 };
 use entity_mutation::{
     DeleteEntityPermanently, EntityMutationEffect, EntityMutationErrorCode, RenameEntity,
@@ -74,7 +74,9 @@ impl<R, E, P, F> DeleteEntityPermanently for ChannelServiceImpl<R, E, P, F>
 where
     Self: ChannelService,
 {
-    type Receipt = OwnerParticipantRole;
+    /// View access is enough to reach the domain check. The channel owner, or a
+    /// workspace owner or admin, is allowed to delete; other viewers are refused.
+    type Receipt = ViewOnly;
 
     async fn delete_entity_permanently(
         &self,

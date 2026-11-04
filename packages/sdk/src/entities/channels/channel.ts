@@ -237,7 +237,9 @@ export class Channel extends PropertiedEntity<ChannelDetail> {
     );
   }
 
-  /** Delete the channel. This is not reversible. */
+  /**
+   * Delete the channel permanently; the owner can, and a workspace owner or admin can delete any channel except a direct message.
+   */
   async delete(): Promise<void> {
     await this.mutate((c) =>
       c.storage.deleteChannel({ path: { channel_id: this.id } }),

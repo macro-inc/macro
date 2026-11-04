@@ -486,8 +486,33 @@ describe('makeDeleteAction.canExecute', () => {
     );
   });
 
-  it('refuses channels and channel rows outright', () => {
-    expect(canExecute(entity('channel'))).toBe(false);
+  it('lets the channel owner and a workspace manager delete a channel', () => {
+    expect(canExecute(entity('channel', { channelType: 'private' }))).toBe(
+      true
+    );
+    expect(
+      canExecute(
+        entity('channel', {
+          channelType: 'team',
+          ownerId: 'macro|other@example.com',
+        })
+      )
+    ).toBe(false);
+    const manager = makeDeleteAction({
+      userId: () => ME,
+      canManageWorkspace: () => true,
+    });
+    expect(
+      manager.canExecute(
+        entity('channel', {
+          channelType: 'private',
+          ownerId: 'macro|other@example.com',
+        })
+      )
+    ).toBe(true);
+    expect(
+      canExecute(entity('channel', { channelType: 'direct_message' }))
+    ).toBe(false);
     expect(canExecute(entity('channel_message'))).toBe(false);
     expect(canExecute(entity('channel_thread'))).toBe(false);
   });

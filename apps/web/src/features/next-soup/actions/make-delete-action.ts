@@ -68,6 +68,11 @@ function reportTrashedEmails(
 
 type MakeDeleteOptions = {
   userId: () => string | undefined;
+  /**
+   * True when the viewer is a workspace owner or admin. They can delete
+   * channels they did not create; direct messages stay with the channel owner.
+   */
+  canManageWorkspace?: () => boolean;
   onDeleted?: (entities: EntityData[]) => void;
 };
 
@@ -102,6 +107,11 @@ export const makeDeleteAction = (options: MakeDeleteOptions) => {
     if (entity.type === 'database') return entity.grant === 'owner';
     if (entity.type === 'email') {
       return true;
+    }
+    if (entity.type === 'channel') {
+      if (entity.channelType === 'direct_message') return false;
+      if (entity.ownerId === userId()) return true;
+      return options.canManageWorkspace?.() ?? false;
     }
     // The types the delete mutation supports; it skips any other.
     if (

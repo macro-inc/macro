@@ -1,5 +1,13 @@
 # Channels and Messaging
 
+## Deleting a channel
+
+The channel menu on a rail row, the channel title, and the mobile long-press
+menu offers Delete when the viewer owns the channel, and when a workspace
+owner or admin is looking at any channel except a direct message. Delete asks
+for confirmation, then removes the channel permanently. Direct messages have
+no Delete action.
+
 ## Channel list previews
 
 Message text in channel rows and Home cards is display-only, including quoted

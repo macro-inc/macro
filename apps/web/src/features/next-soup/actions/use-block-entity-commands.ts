@@ -21,6 +21,7 @@ import { type EntityData, isEmailEntity, isTaskEntity } from '@entity';
 import { Telemetry } from '@macro-inc/observability';
 import { SYSTEM_PROPERTY_IDS } from '@property/constants';
 import type { Property, PropertyDefinitionDomain } from '@property/types';
+import { useIsTeamAdmin } from '@queries/team/teams';
 import { createEffect, onCleanup } from 'solid-js';
 import type { EntityActionNavigationEvent } from './entity-action-context';
 import {
@@ -80,6 +81,7 @@ export const useBlockEntityCommands = (
 
   const quickAccess = useQuickAccess();
   const userId = useUserId();
+  const canManageWorkspace = useIsTeamAdmin();
   const notificationSource = useGlobalNotificationSource();
   const soup = useMaybeSoup();
   const splitPanel = useSplitPanel();
@@ -91,6 +93,7 @@ export const useBlockEntityCommands = (
 
   const deleteAction = makeDeleteAction({
     userId: () => userId(),
+    canManageWorkspace,
     onDeleted: options.onDeleted,
   });
   const renameAction = makeRenameAction({ userId: () => userId() });

@@ -43,6 +43,8 @@ struct FakeMutationRepoState {
     channel_type: ChannelType,
     channel_team_id: Option<Uuid>,
     direct_agent: bool,
+    manages_workspace: bool,
+    deleted_channels: Vec<Uuid>,
     user_team_id: Option<Uuid>,
     user_team_id_lookups: usize,
     join_code: Option<Uuid>,
@@ -68,6 +70,8 @@ impl FakeMutationRepo {
                 channel_type: ChannelType::Private,
                 channel_team_id: None,
                 direct_agent: false,
+                manages_workspace: false,
+                deleted_channels: vec![],
                 user_team_id: None,
                 user_team_id_lookups: 0,
                 join_code: None,
@@ -319,8 +323,17 @@ impl ChannelRepo for FakeMutationRepo {
         Ok(())
     }
 
-    async fn delete_channel(&self, _channel_id: Uuid, _user_id: String) -> Result<(), Self::Err> {
+    async fn delete_channel(&self, channel_id: Uuid) -> Result<(), Self::Err> {
+        self.state.lock().unwrap().deleted_channels.push(channel_id);
         Ok(())
+    }
+
+    async fn user_manages_channel_workspace(
+        &self,
+        _channel_id: Uuid,
+        _user_id: &str,
+    ) -> Result<bool, Self::Err> {
+        Ok(self.state.lock().unwrap().manages_workspace)
     }
 
     async fn add_participant(
@@ -2132,4 +2145,110 @@ async fn channel_picture_removal_does_not_require_static_file_availability() {
         );
     svc.set_channel_picture(access, None).await.unwrap();
     assert_eq!(*repo.picture_updates.lock().unwrap(), [(channel_id, None)]);
+}
+
+fn deletion_service(
+    channel_id: Uuid,
+    owner: &str,
+) -> (
+    FakeMutationRepo,
+    ChannelServiceImpl<FakeMutationRepo, FakeEvents, FakeReferenceSharing>,
+) {
+    let repo = FakeMutationRepo::new(channel_id, owner);
+    let svc = mutation_service(
+        repo.clone(),
+        FakeEvents::default(),
+        FakeReferenceSharing::default(),
+    );
+    (repo, svc)
+}
+
+#[tokio::test]
+async fn channel_owner_can_delete_the_channel() {
+    let channel_id = Uuid::new_v4();
+    let (repo, svc) = deletion_service(channel_id, "macro|owner@example.com");
+
+    svc.delete_channel(sender("macro|owner@example.com"), channel_id)
+        .await
+        .unwrap();
+
+    assert_eq!(
+        repo.state.lock().unwrap().deleted_channels,
+        vec![channel_id]
+    );
+}
+
+#[tokio::test]
+async fn channel_member_cannot_delete_the_channel() {
+    let channel_id = Uuid::new_v4();
+    let (repo, svc) = deletion_service(channel_id, "macro|owner@example.com");
+    repo.state.lock().unwrap().participants[1].user_id = "macro|member@example.com".to_string();
+
+    let error = svc
+        .delete_channel(sender("macro|member@example.com"), channel_id)
+        .await
+        .unwrap_err();
+
+    assert!(matches!(error, ChannelMutationErr::Forbidden(_)));
+    assert!(repo.state.lock().unwrap().deleted_channels.is_empty());
+}
+
+#[tokio::test]
+async fn workspace_manager_can_delete_a_channel_they_do_not_own() {
+    let channel_id = Uuid::new_v4();
+    let (repo, svc) = deletion_service(channel_id, "macro|owner@example.com");
+    {
+        let mut state = repo.state.lock().unwrap();
+        state.manages_workspace = true;
+        state.participants[1].user_id = "macro|member@example.com".to_string();
+    }
+
+    svc.delete_channel(sender("macro|member@example.com"), channel_id)
+        .await
+        .unwrap();
+
+    assert_eq!(
+        repo.state.lock().unwrap().deleted_channels,
+        vec![channel_id]
+    );
+}
+
+#[tokio::test]
+async fn workspace_manager_cannot_delete_a_direct_message() {
+    let channel_id = Uuid::new_v4();
+    let (repo, svc) = deletion_service(channel_id, "macro|owner@example.com");
+    {
+        let mut state = repo.state.lock().unwrap();
+        state.manages_workspace = true;
+        state.channel_type = ChannelType::DirectMessage;
+        state.participants[1].user_id = "macro|member@example.com".to_string();
+    }
+
+    let error = svc
+        .delete_channel(sender("macro|member@example.com"), channel_id)
+        .await
+        .unwrap_err();
+
+    assert!(matches!(error, ChannelMutationErr::Forbidden(_)));
+    assert!(repo.state.lock().unwrap().deleted_channels.is_empty());
+}
+
+#[tokio::test]
+async fn workspace_manager_cannot_delete_a_direct_agent_conversation() {
+    let channel_id = Uuid::new_v4();
+    let (repo, svc) = deletion_service(channel_id, "macro|owner@example.com");
+    {
+        let mut state = repo.state.lock().unwrap();
+        state.manages_workspace = true;
+        state.direct_agent = true;
+        state.participants[1].user_id = "macro|member@example.com".to_string();
+    }
+
+    let error = svc
+        .delete_channel(sender("macro|member@example.com"), channel_id)
+        .await
+        .unwrap_err();
+
+    assert!(matches!(error, ChannelMutationErr::Forbidden(_)));
+    assert!(repo.state.lock().unwrap().deleted_channels.is_empty());
 }

@@ -2790,32 +2790,70 @@ impl ChannelRepo for PgChannelsRepo {
         Ok(())
     }
 
-    async fn delete_channel(&self, channel_id: Uuid, user_id: String) -> Result<(), Self::Err> {
+    async fn delete_channel(&self, channel_id: Uuid) -> Result<(), Self::Err> {
         let result = sqlx::query!(
             r#"
             DELETE FROM comms_channels
             WHERE id = $1
-              AND EXISTS (
-                  SELECT 1
-                  FROM comms_channel_participants
-                  WHERE channel_id = $1
-                    AND user_id = $2
-                    AND role = 'owner'::comms_participant_role
-              )
             "#,
             channel_id,
-            user_id,
         )
         .execute(&self.pool)
         .await
         .context("failed to delete channel")?;
 
         if result.rows_affected() == 0 {
-            anyhow::bail!(
-                "channel not deleted, either it didn't exist or the user_id provided was not the owner"
-            );
+            anyhow::bail!("channel not deleted because it does not exist");
         }
         Ok(())
+    }
+
+    async fn user_manages_channel_workspace(
+        &self,
+        channel_id: Uuid,
+        user_id: &str,
+    ) -> Result<bool, Self::Err> {
+        let manages = sqlx::query_scalar!(
+            r#"
+            SELECT EXISTS (
+                SELECT 1
+                FROM comms_channels c
+                JOIN team_user manager
+                  ON manager.user_id = $2
+                 AND manager.team_role IN ('owner'::team_role, 'admin'::team_role)
+                WHERE c.id = $1
+                  AND c.channel_type <> 'direct_message'::comms_channel_type
+                  AND NOT EXISTS (
+                      SELECT 1
+                      FROM comms_channel_agents agent
+                      WHERE agent.channel_id = c.id
+                        AND agent.kind = 'direct'
+                  )
+                  AND (
+                      c.team_id = manager.team_id
+                      OR EXISTS (
+                          SELECT 1
+                          FROM team_user owner_membership
+                          WHERE owner_membership.user_id = c.owner_id
+                            AND owner_membership.team_id = manager.team_id
+                      )
+                      OR EXISTS (
+                          SELECT 1
+                          FROM comms_channel_participants participant
+                          WHERE participant.channel_id = c.id
+                            AND participant.user_id = manager.user_id
+                            AND participant.left_at IS NULL
+                      )
+                  )
+            ) AS "manages!"
+            "#,
+            channel_id,
+            user_id,
+        )
+        .fetch_one(&self.pool)
+        .await
+        .context("failed to check channel workspace management")?;
+        Ok(manages)
     }
 
     async fn add_participant(

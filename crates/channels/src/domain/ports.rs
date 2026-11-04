@@ -344,12 +344,22 @@ pub trait ChannelRepo: Send + Sync + 'static {
         req: PatchChannelRequest,
     ) -> impl Future<Output = Result<(), Self::Err>> + Send;
 
-    /// Delete a channel.
+    /// Delete a channel that the caller is already allowed to delete.
     fn delete_channel(
         &self,
         channel_id: Uuid,
-        user_id: String,
     ) -> impl Future<Output = Result<(), Self::Err>> + Send;
+
+    /// Whether `user_id` is an owner or admin of the workspace this channel belongs to.
+    ///
+    /// Direct messages and direct agent conversations are never included.
+    /// A workspace is the channel's team, the team of the channel owner, or
+    /// the team of an active participant.
+    fn user_manages_channel_workspace(
+        &self,
+        channel_id: Uuid,
+        user_id: &str,
+    ) -> impl Future<Output = Result<bool, Self::Err>> + Send;
 
     /// Atomically add or reactivate a participant, returning whether membership changed.
     fn add_participant<'a>(
