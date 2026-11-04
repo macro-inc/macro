@@ -7,7 +7,7 @@ import {
 import CheckIcon from '@icon/system/regular/check.svg';
 import { Button, cn } from '@ui';
 import { For, type JSX, Show } from 'solid-js';
-import type { InboxStackItem } from '../primitives/describe-row';
+import type { InboxStackItem } from '../core/inbox-row';
 
 export type NotificationRowProps = {
   /** The row's element id, for `aria-activedescendant`. */

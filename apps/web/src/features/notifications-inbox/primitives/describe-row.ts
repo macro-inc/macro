@@ -10,6 +10,7 @@ import type {
   NotificationInboxRow,
   NotificationsInboxContext,
 } from '../context/notifications-inbox-context';
+import type { InboxStackItem } from '../core/inbox-row';
 
 /**
  * What a row says: a muted "actor verb place" line and its subject. The line
@@ -19,17 +20,6 @@ import type {
 export type InboxRowDisplay = {
   action: string;
   subject: string;
-};
-
-/** One notification inside an unfolded stack. */
-export type InboxStackItem = {
-  id: string;
-  /** Who did what, without the place the card already names. */
-  by: string;
-  /** What was said, as Markdown. */
-  text: string;
-  /** When it arrived. */
-  at: Date;
 };
 
 /** What a card says: what it is about, then who, and its stack if it has one. */

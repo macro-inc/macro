@@ -286,9 +286,7 @@ fn place_channel(
                     message_id,
                     thread_id: None,
                 } if active.contains(message_id) => (thread(message_id), true, false),
-                ChannelKind::Reaction { .. } | ChannelKind::Invite => {
-                    (Slot::TopLevel, true, false)
-                }
+                ChannelKind::Reaction { .. } | ChannelKind::Invite => (Slot::TopLevel, true, false),
                 ChannelKind::Quiet => (Slot::TopLevel, false, false),
             };
             Placed {

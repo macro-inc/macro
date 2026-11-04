@@ -65,6 +65,17 @@ export type InboxRow<Content> = {
   content: Content;
 };
 
+/** One notification inside an unfolded stack. */
+export type InboxStackItem = {
+  id: string;
+  /** Who did what, without the place the card already names. */
+  by: string;
+  /** What was said, as Markdown. */
+  text: string;
+  /** When it arrived. */
+  at: Date;
+};
+
 export const isDecisionAction = (
   action: InboxRowAction
 ): action is InboxDecisionAction =>
