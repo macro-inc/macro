@@ -5,7 +5,9 @@ import { isEmojiOnly } from '@core/util/string';
 import CaretRight from '@icon/system/regular/caret-right.svg';
 import { isBotSenderId } from '@queries/messages/message-sender';
 import { Button, cn } from '@ui';
+import type { EditorState } from 'lexical';
 import {
+  type Accessor,
   createMemo,
   createSignal,
   type JSX,
@@ -20,6 +22,8 @@ import {
   useSearchHighlightTermsLookup,
 } from './context';
 import { createSearchHighlightOverlay } from './highlightOverlay';
+import { LinkPreviews } from './LinkPreviews';
+import { getLinkPreviewUrls } from './link-previews';
 import { MentionedImages } from './MentionedImages';
 import { MentionedRoutineTemplates } from './MentionedRoutineTemplates';
 
@@ -32,6 +36,8 @@ const FADE_MASK = `linear-gradient(to bottom, black calc(100% - ${FADE_HEIGHT}px
 
 type ContentProps = {
   class?: string;
+  /** Show cards previewing the web pages the message links to. */
+  linkPreviews?: boolean;
 };
 
 export function Content(props: ContentProps) {
@@ -48,6 +54,15 @@ export function Content(props: ContentProps) {
   const terms = createMemo(() => termsLookup?.(message().id));
 
   const [markdownRoot, setMarkdownRoot] = createSignal<HTMLDivElement>();
+  const [markdownState, setMarkdownState] =
+    createSignal<Accessor<EditorState | null>>();
+  // Read from the rendered parse, so a card follows exactly the links the
+  // text shows (not ones in code, or links the author removed).
+  const linkPreviewUrls = createMemo(() => {
+    if (!props.linkPreviews) return [];
+    const state = markdownState()?.();
+    return state ? getLinkPreviewUrls(state) : [];
+  });
 
   createSearchHighlightOverlay({ root: markdownRoot, content, terms });
 
@@ -58,9 +73,11 @@ export function Content(props: ContentProps) {
         theme={channelTheme}
         target="internal"
         rootRef={setMarkdownRoot}
+        setStateRef={(state) => setMarkdownState(() => state)}
       />
       <MentionedImages content={content()} />
       <MentionedRoutineTemplates content={content()} />
+      <LinkPreviews urls={linkPreviewUrls()} />
     </>
   );
 

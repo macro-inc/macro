@@ -76,7 +76,7 @@ function MessageContentSlot(props: {
         )}
       </Match>
       <Match when={message().content.trim() !== ''}>
-        <Message.Content class={props.class} />
+        <Message.Content class={props.class} linkPreviews />
       </Match>
     </Switch>
   );

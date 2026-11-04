@@ -1,10 +1,12 @@
+import { displayImageUrl, isImageProxyUrl } from '@core/util/imageProxy';
 import { openExternalUrl } from '@core/util/url';
 import LinkIcon from '@icon/system/regular/link.svg';
 import { proxyResource } from '@service-unfurl/client';
 import type { GetUnfurlResponse } from '@service-unfurl/generated/schemas/getUnfurlResponse';
+import type { GetUnfurlResponseFaviconUrl } from '@service-unfurl/generated/schemas/getUnfurlResponseFaviconUrl';
 import { UnfurlEmbedType } from '@service-unfurl/generated/schemas/unfurlEmbedType';
 import { cn } from '@ui';
-import { Show } from 'solid-js';
+import { createSignal, Show } from 'solid-js';
 import { createStore } from 'solid-js/store';
 
 function extractDomain(url: string) {
@@ -17,6 +19,38 @@ function extractDomain(url: string) {
 }
 
 const [badLinks, setBadLinks] = createStore<Record<string, true>>({});
+
+/** A page's favicon, or a link glyph when it has none or it fails to load. */
+function Favicon(props: {
+  url: GetUnfurlResponseFaviconUrl | undefined;
+  class: string;
+}) {
+  const iconUrl = () => {
+    const url = props.url;
+    if (!url || badLinks[url]) return;
+    return url;
+  };
+
+  return (
+    <Show
+      when={iconUrl()}
+      fallback={<LinkIcon class="size-4 shrink-0 text-ink-muted" />}
+    >
+      {(icon) => (
+        <img
+          src={proxyResource(icon())}
+          class={cn('shrink-0 object-cover', props.class)}
+          crossorigin="anonymous"
+          alt=""
+          on:error={() => {
+            setBadLinks(icon(), true);
+          }}
+        />
+      )}
+    </Show>
+  );
+}
+
 type UnfurlLinkProps = {
   unfurled: GetUnfurlResponse;
   size?: 'xs' | 'sm';
@@ -65,27 +99,10 @@ export function LinkHoverCard(props: LinkHoverCardProps) {
       fallback={
         <div class="menu-surface flex w-80 max-w-[calc(100vw-1rem)] items-start gap-1 p-2 text-left">
           <div class="flex size-6 shrink-0 items-center justify-center">
-            <Show
-              when={props.unfurled.favicon_url}
-              fallback={<LinkIcon class="size-4 text-ink-muted" />}
-            >
-              {(icon) => (
-                <Show
-                  when={!badLinks[icon()]}
-                  fallback={<LinkIcon class="size-4 text-ink-muted" />}
-                >
-                  <img
-                    src={proxyResource(icon())}
-                    class="size-5 rounded-md object-cover"
-                    crossorigin="anonymous"
-                    alt=""
-                    on:error={() => {
-                      setBadLinks(icon(), true);
-                    }}
-                  />
-                </Show>
-              )}
-            </Show>
+            <Favicon
+              url={props.unfurled.favicon_url}
+              class="size-5 rounded-md"
+            />
           </div>
           <div class="min-w-0 flex-1">
             <div class="truncate text-sm/6 font-medium text-ink">{title()}</div>
@@ -112,27 +129,7 @@ export function UnfurlLink(props: UnfurlLinkProps) {
     >
       <div class="flex flex-row items-center gap-1.5 size-full">
         <div class="shrink-0">
-          <Show
-            when={props.unfurled.favicon_url}
-            fallback={<LinkIcon class="size-4" />}
-          >
-            {(icon) => (
-              <Show
-                when={!badLinks[icon()]}
-                fallback={<LinkIcon class="size-4" />}
-              >
-                <img
-                  src={proxyResource(icon())}
-                  class="content-center rounded-sm size-4 object-cover"
-                  crossorigin="anonymous"
-                  alt="ico"
-                  on:error={() => {
-                    setBadLinks(icon(), true);
-                  }}
-                />
-              </Show>
-            )}
-          </Show>
+          <Favicon url={props.unfurled.favicon_url} class="size-4 rounded-sm" />
         </div>
         <div class="min-w-0">
           <h1 class="font-medium truncate text-ink">
@@ -149,5 +146,72 @@ export function UnfurlLink(props: UnfurlLinkProps) {
         </div>
       </div>
     </div>
+  );
+}
+
+/**
+ * A link's preview as a card beneath the text it appears in: the site, the
+ * page title and description, and its preview image as a thumbnail. Opens
+ * the link like the link itself does.
+ */
+export function LinkPreviewCard(props: { unfurled: GetUnfurlResponse }) {
+  const domain = () => extractDomain(props.unfurled.url);
+  const [failedImageSrc, setFailedImageSrc] = createSignal<string>();
+  const imageSrc = () => {
+    const url = props.unfurled.image_url;
+    if (!url) return;
+
+    const src = displayImageUrl(url);
+    if (src === failedImageSrc()) return;
+    return src;
+  };
+
+  return (
+    <a
+      href={props.unfurled.url}
+      target="_blank"
+      rel="noopener"
+      draggable={false}
+      class="flex w-full max-w-md items-start gap-3 overflow-hidden whitespace-normal rounded-xl border border-edge-muted p-3 text-left not-touch:hover:border-accent hover-transition-border focus-visible:outline-2 focus-visible:outline-accent"
+      onClick={(event) => {
+        // Modified/middle clicks keep native anchor behavior; plain clicks go
+        // through openExternalUrl so Macro links open in-app under Tauri.
+        if (event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) {
+          return;
+        }
+        event.preventDefault();
+        openExternalUrl(props.unfurled.url);
+      }}
+    >
+      <div class="min-w-0 flex-1">
+        <div class="flex items-center gap-1.5 text-xs text-ink-muted">
+          <Favicon url={props.unfurled.favicon_url} class="size-4 rounded-sm" />
+          <span class="truncate">{domain()}</span>
+        </div>
+        <div class="mt-1 line-clamp-2 text-sm font-medium text-ink">
+          {props.unfurled.title || domain()}
+        </div>
+        <Show when={props.unfurled.description}>
+          {(description) => (
+            <div class="mt-0.5 line-clamp-2 text-sm text-ink-muted">
+              {description()}
+            </div>
+          )}
+        </Show>
+      </div>
+      <Show when={imageSrc()}>
+        {(src) => (
+          <img
+            src={src()}
+            crossorigin={
+              isImageProxyUrl(src()) ? 'use-credentials' : 'anonymous'
+            }
+            alt=""
+            class="size-16 shrink-0 rounded-lg bg-edge-muted object-cover"
+            on:error={() => setFailedImageSrc(src())}
+          />
+        )}
+      </Show>
+    </a>
   );
 }

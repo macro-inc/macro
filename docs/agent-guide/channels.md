@@ -727,6 +727,15 @@ permission. Task badges can appear with the initial preview rather than waiting 
 separate properties/document-metadata requests; cached titles may appear first while
 those edges load. Ordinary document/task mentions do not wait for the built-in skills
 list. Built-in skill mentions retain their non-document behavior.
+A web link in a channel message also gets a preview card beneath the text, inside
+`[data-message-link-previews]`: the site's favicon and domain, the page title, up to
+two lines of description, and the page's preview image as a thumbnail. Clicking or
+tapping the card opens the link like the link itself. Only the first three linked
+pages can get cards, each once, in the order the text links them; email addresses, links the
+author removed, URLs inside code, and links into the Macro app never get one, and a
+page the unfurl service can't read, or that has no title, description, or image,
+shows no card. The card appears once the link's unfurl loads (the same request its
+hover card makes). Document comments and GitHub PR comments don't show cards.
 The Magic Chip that streams the agent's reply stays inside the message column: long
 thoughts, file paths, and unbreakable tokens wrap or truncate instead of expanding the
 thread past the chat's right edge.
