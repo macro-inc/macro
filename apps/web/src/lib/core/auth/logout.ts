@@ -44,6 +44,7 @@ const unauthenticatedUserInfo: UserInfoData = {
   name: null,
   licenseStatus: 'inactive',
   tutorialComplete: false,
+  isAgent: false,
   group: null,
   hasChromeExt: false,
   authenticated: false,

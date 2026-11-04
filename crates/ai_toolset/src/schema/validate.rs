@@ -8,6 +8,9 @@ mod extract;
 mod one_of;
 mod recursive;
 
+#[cfg(test)]
+mod test;
+
 use super::error::ValidationError;
 use extract::Extract;
 use schemars::Schema;
@@ -30,9 +33,9 @@ pub trait Validate {
 /// both OpenAI and Anthropic.
 ///
 /// Returns the tool's name and description extracted from the schema
-/// metadata. Checks what the transforms cannot fix: surviving `$ref`s
-/// (recursive types), non-`false` `additionalProperties` (map types),
-/// non-primitive enum members, residual `oneOf`, and a non-object root.
+/// metadata. Requires an object root without `oneOf`, `anyOf`, or `allOf`,
+/// and rejects residual `oneOf` throughout the schema. Nested `anyOf` is
+/// supported, so tagged variants belong under a named property.
 ///
 /// See:
 /// * <https://platform.claude.com/docs/en/agents-and-tools/tool-use/strict-tool-use>
@@ -45,6 +48,13 @@ pub fn validate_tool_schema(schema: &Schema) -> Result<(String, String), Validat
 
     if schema.get("type").and_then(serde_json::Value::as_str) != Some("object") {
         return Err(ValidationError::RootNotObject);
+    }
+
+    if ["oneOf", "anyOf", "allOf"]
+        .into_iter()
+        .any(|keyword| schema.get(keyword).is_some())
+    {
+        return Err(ValidationError::RootComposition);
     }
 
     RecursiveValidate(ValidateNoOneOf).validate(schema)?;

@@ -22,6 +22,7 @@ use std::sync::Arc;
 use ai_toolset::{AsyncToolCollection, ToolCallError};
 use chrono::NaiveDate;
 use chrono::{DateTime, Utc};
+use email_validator::EmailAddress;
 use rootcause::compat::boxed_error::IntoBoxedError;
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
@@ -167,7 +168,7 @@ where
 }
 
 /// The mutually exclusive time shape supplied to calendar tools.
-#[derive(Debug, Clone, PartialEq, Deserialize, JsonSchema)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, JsonSchema, specta::Type)]
 #[serde(rename_all = "camelCase", tag = "kind")]
 pub enum EventTimeInput {
     /// A clock-time event with absolute instants.
@@ -179,6 +180,7 @@ pub enum EventTimeInput {
         ends_at: DateTime<Utc>,
         /// IANA time zone the event was scheduled in (e.g.
         /// America/New_York). Recurring events expand in this zone.
+        #[serde(default)]
         time_zone: Option<String>,
     },
     /// An all-day event spanning whole local dates.
@@ -216,12 +218,12 @@ impl From<EventTimeInput> for EventTime {
 }
 
 /// An attendee supplied to a calendar tool.
-#[derive(Debug, Clone, PartialEq, Eq, Deserialize, JsonSchema)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema, specta::Type)]
 #[serde(rename_all = "camelCase")]
 pub struct AttendeeInput {
     /// Attendee email address.
     #[schemars(description = "The attendee's email address.")]
-    pub email: String,
+    pub email: EmailAddress,
     /// Whether attendance is optional.
     #[schemars(
         description = "Whether attendance is optional for this attendee. Defaults to required."
@@ -233,7 +235,7 @@ pub struct AttendeeInput {
 impl From<AttendeeInput> for CalendarAttendeeInput {
     fn from(input: AttendeeInput) -> Self {
         Self {
-            email: input.email,
+            email: input.email.into_inner(),
             is_optional: input.is_optional,
             response_status: None,
         }
@@ -241,7 +243,7 @@ impl From<AttendeeInput> for CalendarAttendeeInput {
 }
 
 /// One reminder override supplied to a calendar tool.
-#[derive(Debug, Clone, PartialEq, Eq, Deserialize, JsonSchema)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema, specta::Type)]
 #[serde(rename_all = "camelCase")]
 pub struct EventReminderOverrideInput {
     /// Provider reminder method. `popup` creates a Macro notification.
@@ -260,7 +262,7 @@ impl From<EventReminderOverrideInput> for EventReminderOverride {
 }
 
 /// Reminder configuration supplied when creating a calendar event.
-#[derive(Debug, Clone, PartialEq, Eq, Deserialize, JsonSchema)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema, specta::Type)]
 #[serde(rename_all = "camelCase")]
 pub struct EventRemindersInput {
     /// Whether the selected calendar's default reminders should apply.
@@ -280,7 +282,9 @@ impl From<EventRemindersInput> for EventReminders {
 }
 
 /// The kind of event a create tool call makes.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Deserialize, JsonSchema)]
+#[derive(
+    Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize, JsonSchema, specta::Type,
+)]
 #[serde(rename_all = "snake_case")]
 pub enum CalendarEventTypeInput {
     /// A regular calendar event.
@@ -293,7 +297,7 @@ pub enum CalendarEventTypeInput {
 }
 
 /// How an out-of-office event handles conflicting invitations.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize, JsonSchema)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, JsonSchema, specta::Type)]
 #[serde(rename_all = "snake_case")]
 pub enum AutoDeclineModeInput {
     /// Leave conflicting invitations alone.
@@ -315,7 +319,9 @@ impl From<AutoDeclineModeInput> for OutOfOfficeAutoDeclineMode {
 }
 
 /// Out-of-office decline behavior supplied to the calendar tools.
-#[derive(Debug, Clone, PartialEq, Eq, Default, Deserialize, JsonSchema)]
+#[derive(
+    Debug, Clone, PartialEq, Eq, Default, Serialize, Deserialize, JsonSchema, specta::Type,
+)]
 #[serde(rename_all = "camelCase")]
 pub struct OutOfOfficeInput {
     /// How conflicting invitations are handled. Defaults to declining nothing,
@@ -337,7 +343,7 @@ impl From<OutOfOfficeInput> for OutOfOfficeProperties {
 }
 
 /// An attendee of a calendar event, as returned by calendar tools.
-#[derive(Debug, Serialize, JsonSchema)]
+#[derive(Debug, Clone, Serialize, Deserialize, JsonSchema, specta::Type)]
 #[serde(rename_all = "camelCase")]
 pub struct ToolEventAttendee {
     /// Attendee email address.
@@ -351,7 +357,7 @@ pub struct ToolEventAttendee {
 }
 
 /// A calendar event as returned by the create and update tools.
-#[derive(Debug, Serialize, JsonSchema)]
+#[derive(Debug, Clone, Serialize, Deserialize, JsonSchema, specta::Type)]
 #[serde(rename_all = "camelCase")]
 pub struct ToolCalendarEvent {
     /// Macro calendar event id, used by UpdateCalendarEvent and
@@ -381,6 +387,7 @@ pub struct ToolCalendarEvent {
     /// Attendees, capped at 20; `attendee_count` has the full number.
     pub attendees: Vec<ToolEventAttendee>,
     /// Total number of attendees.
+    #[specta(type = u32)]
     pub attendee_count: usize,
     /// Organizer email address, when known.
     pub organizer_email: Option<String>,
@@ -406,7 +413,7 @@ pub struct ToolCalendarEvent {
 }
 
 /// What the user is on one copy of an event, through the inbox holding it.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, JsonSchema)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, JsonSchema, specta::Type)]
 #[serde(rename_all = "snake_case")]
 pub enum ToolEventRole {
     /// The inbox organizes the event, or the event has no guests and is the

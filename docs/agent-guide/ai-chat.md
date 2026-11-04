@@ -2511,3 +2511,7 @@ preferences are private and cannot be read by targeting another user.
 
 Activity is generated for completed UTC days in the background. Local environments
 require an intentional CLI refresh; ordinary memory reads do not invoke a model.
+
+Opening a row clears its unread state immediately; direct details mark read when
+ready. See [reading items](notifications.md#reading-items) for failure, keyboard,
+mobile, and email inbox checks.

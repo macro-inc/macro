@@ -52,6 +52,9 @@ deliberately stable and widely depended on.
 
 - Every tool must declare MCP annotations; a tool without them fails to
   compile/register (see `src/annotations.rs`).
+- Keep tool input roots free of `oneOf`, `anyOf`, and `allOf`; put tagged variants
+  under a named property so provider validation accepts them. Schema generation
+  rejects root composition when toolsets are built, including in their tests.
 
 ## Related
 

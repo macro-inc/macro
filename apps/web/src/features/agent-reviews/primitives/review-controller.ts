@@ -1,23 +1,25 @@
 import { fireAndForget } from '@core/util/fireAndForget';
+import { ThrownResultError, thrownResultErrorHasCode } from '@core/util/result';
+import { INVALID_REVIEW_DECISION } from '@service-agent-harness/reviews';
 import { debounce } from '@solid-primitives/scheduled';
 import { type Accessor, createEffect, createSignal, onCleanup } from 'solid-js';
-import type { Review, ReviewActions, ReviewItem } from '../core/review';
+import type { Review, ReviewActions, ReviewDraft } from '../core/review';
 
-/** Serial saves share an acknowledged revision; conflicts never retry a send. */
+/**
+ * Serial saves share an acknowledged revision; conflicts never retry a send.
+ * The server checks that each selected draft is complete before it claims a
+ * batch, and its refusal is shown as the validation message.
+ */
 export function createReviewController(
   source: Accessor<Review>,
-  actions: ReviewActions,
-  validateDraft?: (item: ReviewItem, kind: Review['kind']) => string | undefined
+  actions: ReviewActions
 ) {
   const [saved, setSaved] = createSignal(source());
   const [busy, setBusy] = createSignal(false);
   const [error, setError] = createSignal<string>();
   const [saving, setSaving] = createSignal(false);
-  const [validation, setValidation] = createSignal<{
-    item: string;
-    message: string;
-  }>();
-  const drafts = new Map<string, unknown>();
+  const [validation, setValidation] = createSignal<string>();
+  const drafts = new Map<string, ReviewDraft>();
   let tail: Promise<void> = Promise.resolve();
   const record = () =>
     source().revision > saved().revision ? source() : saved();
@@ -81,11 +83,11 @@ export function createReviewController(
   const saveLater = debounce(() => {
     fireAndForget(flush(), 'agent-reviews');
   }, 300);
-  function edit(item: string, draft: unknown) {
+  function edit(item: string, draft: ReviewDraft) {
     if (busy() || error()) return;
     setValidation(undefined);
     const existing = saved().items.find((entry) => entry.id === item);
-    if (JSON.stringify(existing?.draft) === JSON.stringify(draft)) return;
+    if (JSON.stringify(existing?.draft) === JSON.stringify(draft.draft)) return;
     drafts.set(item, draft);
     saveLater();
   }
@@ -98,26 +100,19 @@ export function createReviewController(
     saveLater.clear();
     try {
       if (!(await flush())) return false;
-      if (action === 'submit' && validateDraft) {
-        for (const item of record().items) {
-          if (
-            item.status !== 'pending' ||
-            (items.length > 0 && !items.includes(item.id))
-          )
-            continue;
-          const message = validateDraft(item, record().kind);
-          if (message) {
-            setValidation({ item: item.id, message });
-            return false;
-          }
-        }
-      }
       setValidation(undefined);
       setSaved(
         await actions.decide({ action, revision: saved().revision, items })
       );
       return true;
-    } catch {
+    } catch (failure) {
+      if (
+        failure instanceof ThrownResultError &&
+        thrownResultErrorHasCode(failure, INVALID_REVIEW_DECISION)
+      ) {
+        setValidation(failure.message);
+        return false;
+      }
       setError(
         'The review changed or the request could not be confirmed. Reload its saved status before taking another action.'
       );

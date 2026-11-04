@@ -15,6 +15,7 @@ vi.mock('@tauri-apps/plugin-http', () => ({ fetch: nativeFetch }));
 import {
   createPlatformFetch,
   initializePlatformFetch,
+  installPlatformFetch,
   platformFetch,
   webviewFetch,
 } from './platformFetch';
@@ -121,5 +122,18 @@ it('keeps configured local and same-origin APIs on the native cookie jar', async
   expect(nativeFetch).toHaveBeenCalledTimes(2);
   expect(browser).not.toHaveBeenCalled();
   await request(new URL('/auth-assets/icon.png', document.baseURI));
+  expect(browser).toHaveBeenCalledTimes(1);
+});
+
+it('routes the installed global fetch to the native transport without recursing', async () => {
+  const browser = vi
+    .fn<typeof fetch>()
+    .mockResolvedValue(new Response('browser'));
+  vi.stubGlobal('fetch', browser);
+  installPlatformFetch();
+  await fetch('https://gateway.example/auth/user/legacy_user_permissions');
+  await platformFetch('https://gateway.example/auth/jwt/macro_api_token');
+  await fetch('https://api.klipy.com/v2/search');
+  expect(nativeFetch).toHaveBeenCalledTimes(2);
   expect(browser).toHaveBeenCalledTimes(1);
 });

@@ -50,7 +50,6 @@ import { ResponsiveTaskListHeader } from '@app/features/next-soup/soup-view/view
 import { TaskGroupHeader } from '@app/features/next-soup/soup-view/views/tasks/task-group-header';
 import {
   markChannelNotificationsSeenOnOpen,
-  markRowNotificationsSeenOnOpen,
   openEntityInNewTab,
   openEntityInSplitFromUnifiedList,
   restoreSoupFocus,
@@ -103,6 +102,7 @@ import CheckIcon from '@icon/system/regular/check.svg';
 import InfoIcon from '@icon/system/regular/info.svg';
 import Spinner from '@icon/system/regular/spinner.svg';
 import { Telemetry } from '@macro-inc/observability';
+import { markRowNotificationsSeenOnOpen } from '@notifications/mark-row-seen';
 import { createElementSize } from '@solid-primitives/resize-observer';
 import { debounce } from '@solid-primitives/scheduled';
 import { Button, cn, Layer } from '@ui';

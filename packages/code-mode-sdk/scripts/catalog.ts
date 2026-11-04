@@ -35,6 +35,7 @@ export const descriptions: Record<string, string> = {
   tasks: 'Search, create, and update tasks.',
   teams:
     'Manage teams and membership: invite people to the team by email, list and revoke pending invites.',
-  users: 'Look up users and their profiles.',
+  users:
+    'Look up users and their profiles; set your own name and picture (`macro.me.update`).',
   webhooks: 'Manage API webhook subscriptions.',
 };

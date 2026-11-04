@@ -403,6 +403,12 @@ async fn request_gate_covers_nested_pages_and_receives_provider_retry_after() {
             self.finished.lock().unwrap().push(retry_after);
             Box::pin(async {})
         }
+        fn admitted(
+            &self,
+            _: MailboxAccess,
+        ) -> Pin<Box<dyn Future<Output = Option<u64>> + Send + '_>> {
+            Box::pin(async { None })
+        }
     }
     let (server, mut api, token) = setup().await;
     let mailbox = MailboxAccess {

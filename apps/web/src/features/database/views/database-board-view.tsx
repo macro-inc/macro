@@ -65,7 +65,10 @@ type BoardLayout = Extract<ViewLayout, { kind: 'board' }>;
 
 /** Where a board's card places come from, and how a move is written. */
 export type BoardPositions = {
+  /** Stable view identity; switching it retires pending visual moves and sort prompts. */
+  viewId?: string;
   state: Accessor<BoardPositionsState>;
+  /** Reading this capability binds it to the current view for a pending move. */
   setPositions?: (
     change: (positions: CardPosition[]) => CardPosition[]
   ) => void;
@@ -152,11 +155,15 @@ export function DatabaseBoardView(props: DatabaseBoardViewProps) {
         }
       >
         {(shown) => (
-          <GroupedBoard
-            {...props}
-            layout={shown().layout}
-            groupColumn={shown().group}
-          />
+          <Show when={props.positions.viewId ?? 'local'} keyed>
+            {(_viewId) => (
+              <GroupedBoard
+                {...props}
+                layout={shown().layout}
+                groupColumn={shown().group}
+              />
+            )}
+          </Show>
         )}
       </Show>
     </>
@@ -233,6 +240,8 @@ function GroupedBoard(
   function write(move: CardMove) {
     const persist = props.positions.move;
     if (!persist) return;
+    // Both capabilities belong to the view where the move started.
+    const setPositions = props.positions.setPositions;
     const ready = state();
     const shown = board();
     // A move the shown lane has no place for writes no early places; the server's answer settles them.
@@ -245,15 +254,11 @@ function GroupedBoard(
           )
         : undefined;
     if (placed?.isOk())
-      props.positions.setPositions?.((current) =>
-        withPositions(current, placed.value)
-      );
+      setPositions?.((current) => withPositions(current, placed.value));
     setMoves((current) => [...current, { move }]);
     void persist(move)
       .map(({ positions, tableVersion }) => {
-        props.positions.setPositions?.((current) =>
-          withPositions(current, positions)
-        );
+        setPositions?.((current) => withPositions(current, positions));
         taken(move, tableVersion);
       })
       .mapErr((failure) => {

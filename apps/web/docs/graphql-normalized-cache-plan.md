@@ -473,14 +473,21 @@ the engine directly from its multi-threaded runtime, and unbounded on wasm.
 
 ### 4.5 urql exchange semantics
 
-- On operation: RPC `readQuery` → full hit: emit (stale-flagged if
-  `cache-and-network`, then forward to network); partial/miss: forward.
-- On network result: RPC `writeQuery`; normalization captures every record the
+- On operation: read the cache and emit a full hit; partial/miss: forward.
+  `cache-and-network` starts the cache read and network request concurrently,
+  emitting a still-current cache hit as stale while the request is pending.
+- On network result: publish foreground data before the ordered RPC `writeQuery`;
+  normalization captures every record the
   response traverses and installs the active operation's dependencies in the
   same write. Complete responses register exact keys; uncertain responses are
   conservatively affected by every visible change until a later exact read or
-  write. No post-write denormalizing read is performed. The engine returns the
-  changed record keys and the exchange re-executes affected active operations.
+  write. Persistence acknowledges a revision without replaying the response.
+- Initial and affected cache reads share a version guard: a newer published
+  result, cache read, teardown, or generation change supersedes an older read.
+  A late affected read must not restore old message membership after a fresh
+  thread response. Hosts with watched queries reconcile pending local edits
+  against the new server snapshot after persistence, including hosts whose watch
+  endpoint falls back to a full read.
 - Hydration-only operations skip cache reads and active-operation registration.
   Client-only `@cacheOnly` fields are fetched and normalized but omitted from
   the result returned across the worker/Tauri boundary. The directive is
@@ -488,7 +495,7 @@ the engine directly from its multi-threaded runtime, and unbounded on wasm.
   from the validated response during the write, avoiding a denormalizing read.
 - On teardown: unregister operation (unpins dependencies).
 - Cross-context: engine broadcasts changed-keys; every context's exchange
-  re-executes its own affected active operations.
+  rereads its own affected active operations, preserving mounted live queries.
 
 ### 4.6 Coexistence with normy / tanstack
 

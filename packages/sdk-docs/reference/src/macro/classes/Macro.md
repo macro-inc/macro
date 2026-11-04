@@ -50,6 +50,7 @@
 | <a id="property-harnesses"></a> `harnesses` | `readonly` | [`HarnessNamespace`](../../entities/harnesses/namespace/classes/HarnessNamespace.md) | harnesses resources and operations. |
 | <a id="property-images"></a> `images` | `readonly` | [`ImagesNamespace`](../../entities/images/namespace/classes/ImagesNamespace.md) | Generate images with AI and attach them to messages. |
 | <a id="property-initiatives"></a> `initiatives` | `readonly` | [`InitiativeNamespace`](../../entities/initiatives/namespace/classes/InitiativeNamespace.md) | initiatives resources and operations. |
+| <a id="property-me"></a> `me` | `readonly` | [`MeNamespace`](../../entities/me/namespace/classes/MeNamespace.md) | Your own profile: set your name and profile picture. |
 | <a id="property-meetings"></a> `meetings` | `readonly` | [`MeetingNamespace`](../../entities/meetings/namespace/classes/MeetingNamespace.md) | meetings resources and operations. |
 | <a id="property-notifications"></a> `notifications` | `readonly` | [`NotificationNamespace`](../../entities/notifications/namespace/classes/NotificationNamespace.md) | - |
 | <a id="property-pins"></a> `pins` | `readonly` | [`PinsNamespace`](../../entities/pins/namespace/classes/PinsNamespace.md) | - |

@@ -91,7 +91,9 @@ export function packageEntityDocs(
           ? ['channels', 'external-chat', 'whatsapp']
           : directory === 'ai'
             ? ['ai', 'images', 'web']
-            : [directory]
+            : directory === 'users'
+              ? ['users', 'me']
+              : [directory]
       ).map((value) => `src/entities/${value}/`),
     })),
     {
