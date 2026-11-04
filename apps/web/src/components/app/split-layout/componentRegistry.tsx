@@ -463,6 +463,11 @@ registerComponent('calendar-event-compose', (params) => {
       initialValues={
         params?.initialValues as EventEditorInitialValues | undefined
       }
+      suggestedValues={
+        params?.suggestedValues as
+          | Promise<Partial<EventEditorInitialValues>>
+          | undefined
+      }
       onCalendarChange={
         params?.onCalendarChange as
           | ((calendarId: string, color: string) => void)

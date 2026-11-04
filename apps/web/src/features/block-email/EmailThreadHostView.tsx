@@ -15,6 +15,7 @@ import {
   type EmailThreadProps,
 } from '@app/features/email-thread/email-thread';
 import { useQuickCallsFlag } from '@app/features/meetings/use-quick-calls-flag';
+import { useUniversalInputEnabled } from '@app/features/universal-input/use-universal-input';
 import { HeaderActionGroup } from '@components/app/HeaderActionGroup';
 import { SidePanel } from '@components/app/side-panel';
 import { useSplitLayout } from '@components/app/split-layout/layout';
@@ -28,6 +29,7 @@ import { Show } from 'solid-js';
 import { QueuedSendStatus } from '../email-compose/queued-send-status';
 import { EmailTaskButton } from './component/EmailTaskButton';
 import { EmailSidePanelSections } from './component/sidepanel/EmailSidePanelSections';
+import { suggestThreadEvent } from './thread-event-suggestions';
 
 export type EmailThreadHostViewContext = {
   createTask: () => void;
@@ -71,6 +73,7 @@ export function EmailThreadHostView(props: EmailThreadHostViewProps) {
     });
 
   const calendarEnabled = useCalendarUiFlag();
+  const extractionEnabled = useUniversalInputEnabled();
   const quickCalls = useQuickCallsFlag();
   const openEventComposer = useOpenEventComposer();
   const viewerEmail = useInboxEmail(() => props.source.thread()?.link_id);
@@ -79,13 +82,17 @@ export function EmailThreadHostView(props: EmailThreadHostViewProps) {
   const createEvent = () => {
     const thread = props.source.thread();
     if (!thread || !calendarEnabled()) return false;
+    const title = isPlaceholderSubject(props.title) ? '' : props.title;
     openEventComposer({
+      suggestedValues: extractionEnabled()
+        ? suggestThreadEvent(thread, title)
+        : undefined,
       initialValues: {
         ...defaultEditorInitialValues(
           new Date(),
           quickCalls().enabled && !quickCalls().loading
         ),
-        title: isPlaceholderSubject(props.title) ? '' : props.title,
+        title,
         guests: selectThreadParticipants(
           thread,
           viewerEmail(),

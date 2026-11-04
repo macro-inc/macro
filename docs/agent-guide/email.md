@@ -69,7 +69,12 @@ opens every message including the collapsed middle run, and `N`/`P` step
 messages like the arrows. `B` in an open thread, or `Create event` in its
 title menu, opens the event composer with the subject as the title and every
 From, To and Cc address except the viewer's as guests (Bcc and drafts are left
-out); both are hidden while the calendar is off. `Cmd+Up`/`Cmd+Down` jump to either end of a list.
+out); both are hidden while the calendar is off. With `enable-universal-input`
+on, the composer also sends the subject and latest message to
+`/universal_input/extract` (`intent: 'calendar'`, the Cmd+K event extractor)
+and, while "Reading the email for a time and place…" shows, fills in the
+suggested title, time, location and repeat rule. Suggestions that arrive after
+any edit are dropped. `Cmd+Up`/`Cmd+Down` jump to either end of a list.
 In every composer `Cmd+Shift+.`, `Cmd+Shift+,` and `Cmd+Shift+D` discard the
 draft exactly like its trash button, `Cmd+Shift+U` opens the attach picker, and
 `Cmd+Shift+X`, `7`, `8` and `9` apply strikethrough, numbered list, bulleted
