@@ -80,9 +80,6 @@ pub enum ProgramError {
     /// A code step without code, or with too much.
     #[error("code steps need source of at most {MAX_SOURCE_BYTES} bytes")]
     CodeSource,
-    /// A write scope listed twice.
-    #[error("a code step lists `{0}` in writes twice")]
-    DuplicateWriteScope(String),
     /// Too many knobs on one step.
     #[error("a code step can have at most {MAX_KNOBS} knobs")]
     TooManyKnobs,
@@ -175,8 +172,8 @@ impl Check {
 }
 
 impl CodeStep {
-    /// The rules a code step follows on its own: its title, source and
-    /// writes, its knobs, and its sentence.
+    /// The rules a code step follows on its own: its title and source, its
+    /// knobs, and its sentence.
     pub fn validate(&self) -> Result<(), ProgramError> {
         code_step(self)
     }
@@ -192,12 +189,6 @@ fn code_step(code: &CodeStep) -> Result<(), ProgramError> {
     }
     if code.source.trim().is_empty() || code.source.len() > MAX_SOURCE_BYTES {
         return Err(ProgramError::CodeSource);
-    }
-    let mut scopes = HashSet::new();
-    for scope in &code.writes {
-        if !scopes.insert(scope) {
-            return Err(ProgramError::DuplicateWriteScope(scope.as_str().to_owned()));
-        }
     }
     knobs(code)?;
     sentence(code)

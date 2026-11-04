@@ -45,8 +45,8 @@ pub enum Step {
 }
 
 /// TypeScript written against Macro's SDK, usually by the AI that built the
-/// routine. It is type-checked before it is saved, and when it runs, writes
-/// outside [`CodeStep::writes`] are refused.
+/// routine. It is type-checked before it is saved and runs with its owner's
+/// access.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct CodeStep {
@@ -66,9 +66,6 @@ pub struct CodeStep {
     /// its item, or a person), `steps` the typed outputs of the steps before
     /// it. What `main` returns, as JSON of at most 64 KB, is the step's output.
     pub source: String,
-    /// Where the code may make changes. Reads are always allowed.
-    #[serde(default, skip_serializing_if = "Vec::is_empty")]
-    pub writes: Vec<WriteScope>,
     /// Values its owner can change without new code, which the code reads
     /// as `knobs.<name>`.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
@@ -88,66 +85,6 @@ impl CodeStep {
             .iter()
             .map(|knob| (knob.name().to_string(), knob.value()))
             .collect()
-    }
-}
-
-/// An area a code step may change.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord, Serialize, Deserialize)]
-#[serde(rename_all = "snake_case")]
-pub enum WriteScope {
-    /// Email: labels, archiving, drafts, sending, sender policies.
-    Email,
-    /// Calendar events.
-    Calendar,
-    /// Documents, tasks, channels, comments and folders.
-    Workspace,
-    /// Properties of tasks, documents, threads and other items.
-    Properties,
-    /// Contacts and companies.
-    Contacts,
-    /// Notifications: marking them seen or done, unsubscribing.
-    Notifications,
-    /// AI work that can act or costs more than a decision: structured
-    /// completions with tools, images.
-    Ai,
-}
-
-impl WriteScope {
-    /// Every scope.
-    pub const ALL: [Self; 7] = [
-        Self::Email,
-        Self::Calendar,
-        Self::Workspace,
-        Self::Properties,
-        Self::Contacts,
-        Self::Notifications,
-        Self::Ai,
-    ];
-
-    /// The name as written in `writes`.
-    pub const fn as_str(self) -> &'static str {
-        match self {
-            Self::Email => "email",
-            Self::Calendar => "calendar",
-            Self::Workspace => "workspace",
-            Self::Properties => "properties",
-            Self::Contacts => "contacts",
-            Self::Notifications => "notifications",
-            Self::Ai => "ai",
-        }
-    }
-
-    /// The SDK service whose writes this scope allows.
-    pub const fn service(self) -> &'static str {
-        match self {
-            Self::Email => "email",
-            Self::Calendar => "calendar",
-            Self::Workspace => "storage",
-            Self::Properties => "properties",
-            Self::Contacts => "contacts",
-            Self::Notifications => "notification",
-            Self::Ai => "cognition",
-        }
     }
 }
 

@@ -617,7 +617,7 @@ fn unattended(
     token: &str,
     hosts: &[(&str, String)],
     arguments: serde_json::Value,
-    writes: WritePolicy,
+    dry_run: bool,
 ) -> RunEnvironment {
     RunEnvironment {
         token: token.into(),
@@ -627,7 +627,7 @@ fn unattended(
             .collect(),
         unattended: Some(Unattended {
             arguments: arguments.as_object().unwrap().clone(),
-            writes,
+            dry_run,
         }),
         ..RunEnvironment::default()
     }
@@ -668,12 +668,7 @@ async fn an_unattended_result_is_kept_whole_or_fails_over_the_limit() {
     let (_, outcome) = run_unattended(
         &service,
         fits,
-        unattended(
-            "fixture-run-token",
-            &[],
-            serde_json::json!({}),
-            WritePolicy::DryRun,
-        ),
+        unattended("fixture-run-token", &[], serde_json::json!({}), true),
     )
     .await;
     let Outcome::Succeeded { value } = outcome else {
@@ -684,12 +679,7 @@ async fn an_unattended_result_is_kept_whole_or_fails_over_the_limit() {
     let (_, outcome) = run_unattended(
         &service,
         "export function main() { return 'x'.repeat(70 * 1024); }",
-        unattended(
-            "fixture-run-token",
-            &[],
-            serde_json::json!({}),
-            WritePolicy::DryRun,
-        ),
+        unattended("fixture-run-token", &[], serde_json::json!({}), true),
     )
     .await;
     let Outcome::Failed { error } = outcome else {
@@ -724,7 +714,7 @@ export async function main(context: Context): Promise<object> {
         "fixture-run-token",
         &[],
         serde_json::json!({"trigger": {"subject": "Invoice 7"}}),
-        WritePolicy::DryRun,
+        true,
     );
     let (_, outcome) = run_unattended(&service, source, environment).await;
     let Outcome::Succeeded { value } = outcome else {
@@ -780,7 +770,7 @@ export async function main({ macro, host }: { macro: any; host: string }) {
         "fixture-run-token",
         &[("cognition", host.clone()), ("email", host.clone())],
         serde_json::json!({ "host": host }),
-        WritePolicy::DryRun,
+        true,
     );
     let (progress, outcome) = run_unattended(&service, source, environment).await;
     let Outcome::Succeeded { value } = outcome else {
@@ -804,70 +794,37 @@ export async function main({ macro, host }: { macro: any; host: string }) {
 
 #[tokio::test]
 #[ignore = "requires pinned Deno runtime"]
-async fn writes_run_only_in_the_allowed_services() {
+async fn a_real_run_sends_its_writes() {
     let (_root, service) = setup(Limits::default()).await;
     let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
     let host = format!("http://{}", listener.local_addr().unwrap());
     let server = tokio::spawn(async move {
         let (mut stream, _) = listener.accept().await.unwrap();
         let request = read_request(&mut stream).await;
-        assert!(request.starts_with("POST /email/labels "), "{request}");
-        respond(&mut stream, r#"{"id":"label-1"}"#).await;
-        assert!(
-            tokio::time::timeout(Duration::from_millis(500), listener.accept())
-                .await
-                .is_err()
-        );
+        assert!(request.starts_with("DELETE "), "{request}");
+        respond(&mut stream, "{}").await;
     });
     let source = r#"
-export async function main({ macro, host }: { macro: any; host: string }) {
-  const label = await macro._client.email.createLabel({ body: { name: "Invoices" } });
-  let deleted = "deleted";
-  try {
-    await macro._client.storage.deleteDocument({ path: { document_id: "document-1" } });
-  } catch (error) {
-    deleted = String(error);
-  }
-  let raw = "sent";
-  try {
-    await fetch(`${host}/documents/document-1`, { method: "DELETE", headers: { authorization: "Bearer x" } });
-  } catch (error) {
-    raw = String(error);
-  }
-  return { label: label.data, deleted, raw };
+export async function main({ macro }: { macro: any }) {
+  await macro._client.storage.deleteDocument({ path: { document_id: "document-1" } });
+  return { deleted: true };
 }
 "#;
     let environment = unattended(
         "fixture-run-token",
-        &[("email", host.clone()), ("storage", host.clone())],
-        serde_json::json!({ "host": host }),
-        WritePolicy::Services {
-            services: ["email".to_owned()].into(),
-        },
+        &[("storage", host.clone())],
+        serde_json::json!({}),
+        false,
     );
     let (progress, outcome) = run_unattended(&service, source, environment).await;
     let Outcome::Succeeded { value } = outcome else {
         panic!("{outcome:?}");
     };
-    assert_eq!(value["label"]["id"], "label-1");
-    assert!(
-        value["deleted"]
-            .as_str()
-            .unwrap()
-            .contains("can't make changes in storage"),
-        "{value}"
-    );
-    assert!(
-        value["raw"]
-            .as_str()
-            .unwrap()
-            .contains("can't send that request"),
-        "{value}"
-    );
+    assert_eq!(value["deleted"], true);
     assert!(
         progress
             .iter()
-            .any(|event| event["operation"] == "deleteDocument" && event["status"] == "refused")
+            .any(|event| event["operation"] == "deleteDocument" && event["status"] == "completed")
     );
     server.await.unwrap();
     service.shutdown().await;

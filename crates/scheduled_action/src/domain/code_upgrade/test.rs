@@ -197,7 +197,7 @@ impl CodeUpgrades for Upgrades {
 
 fn routine(source: &str, sdk: Option<&str>) -> ScheduledAction {
     let mut task = json!({ "steps": [
-        { "type": "code", "title": "File invoices", "source": source, "writes": ["workspace"] },
+        { "type": "code", "title": "File invoices", "source": source },
         { "type": "agent", "model": "m", "instructions": "Summarize" },
     ] });
     if let Some(sdk) = sdk {
@@ -276,7 +276,6 @@ async fn failing_code_is_rewritten_checked_dry_run_and_saved_once() {
     };
     assert_eq!(task["sdk"], CURRENT);
     assert_eq!(task["steps"][0]["source"], "await macro.tasks.add(x)");
-    assert_eq!(task["steps"][0]["writes"], json!(["workspace"]));
     assert_eq!(task["steps"][1]["type"], "agent");
 }
 

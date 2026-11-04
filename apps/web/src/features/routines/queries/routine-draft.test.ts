@@ -525,7 +525,6 @@ describe('routines with steps', () => {
           id: 'archive_it',
           title: 'Archive it',
           source: 'export async function main() {}',
-          writes: ['email'],
         },
         { type: 'agent', model: 'claude', instructions: 'Draft a reply' },
       ],
@@ -553,7 +552,6 @@ describe('routines with steps', () => {
           id: 'archive_it',
           title: 'Archive it',
           source: 'export async function main() {}',
-          writes: ['email'],
         },
       ],
     });
@@ -566,9 +564,7 @@ describe('routines with steps', () => {
     const repicked = {
       ...parsed,
       steps: parsed.steps!.map((step) =>
-        step.kind === 'code'
-          ? { ...step, writes: [...step.writes] }
-          : { ...step }
+        step.kind === 'code' ? { ...step, knobs: [...step.knobs] } : { ...step }
       ),
     };
     for (const draft of [parsed, repicked]) {
@@ -626,7 +622,6 @@ describe('routines with steps', () => {
         title: 'Create a task',
         summary: '',
         source: 'export async function main() {}',
-        writes: ['workspace'],
         knobs: [],
       },
     ]);
@@ -662,7 +657,6 @@ describe('routines with steps', () => {
         title: 'Archive it',
         summary: '',
         source: 'export async function main() {}',
-        writes: ['email'],
         knobs: [],
       },
     ]);

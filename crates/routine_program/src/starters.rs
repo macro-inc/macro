@@ -6,7 +6,7 @@ use std::sync::LazyLock;
 
 use serde_json::json;
 
-use crate::model::{CodeStep, WriteScope};
+use crate::model::CodeStep;
 
 #[cfg(test)]
 mod test;
@@ -30,7 +30,6 @@ pub static STARTERS: LazyLock<Vec<Starter>> = LazyLock::new(|| {
             "When a new email arrives, label it with the one of my labels that fits it best.",
             "Label by topic",
             "Asks AI which of your labels fits each new email and adds it.",
-            &[WriteScope::Email],
             include_str!("starters/inbox.ts"),
             json!([]),
             "Label each new email with the one of your labels that fits it best.",
@@ -40,7 +39,6 @@ pub static STARTERS: LazyLock<Vec<Starter>> = LazyLock::new(|| {
             "When a task is created, set its priority from what it says.",
             "Set the priority",
             "Asks AI which priority fits each new task and sets it.",
-            &[WriteScope::Properties],
             include_str!("starters/triage.ts"),
             json!([]),
             "Set each new task's priority to the one that fits what it says.",
@@ -50,7 +48,6 @@ pub static STARTERS: LazyLock<Vec<Starter>> = LazyLock::new(|| {
             "When a task is marked completed, post \"Done: <task name>\" in the updates channel.",
             "Post the update",
             "Posts the completed task's name in the updates channel.",
-            &[WriteScope::Workspace],
             include_str!("starters/updates.ts"),
             json!([
                 { "type": "text", "name": "channel", "label": "Channel to post in", "value": "updates" },
@@ -63,7 +60,6 @@ pub static STARTERS: LazyLock<Vec<Starter>> = LazyLock::new(|| {
             "When an invoice arrives that's due within a week, make a High priority task to pay it.",
             "Task for invoices due soon",
             "Asks AI whether each new email is a bill due soon, and makes a task to pay it.",
-            &[WriteScope::Workspace, WriteScope::Properties],
             include_str!("starters/invoices.ts"),
             json!([
                 { "type": "question", "name": "isInvoice", "label": "it's an invoice or bill to pay", "value": "Is this email an invoice or a bill that needs paying?" },
@@ -81,7 +77,6 @@ fn starter(
     request: &'static str,
     title: &str,
     summary: &str,
-    writes: &[WriteScope],
     source: &str,
     knobs: serde_json::Value,
     sentence: &str,
@@ -94,7 +89,6 @@ fn starter(
             title: title.to_owned(),
             summary: summary.to_owned(),
             source: source.to_owned(),
-            writes: writes.to_vec(),
             knobs: serde_json::from_value(knobs).expect("a starter's knobs are well formed"),
             sentence: Some(sentence.to_owned()),
         },

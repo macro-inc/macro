@@ -9,29 +9,6 @@ import {
 } from './routine-target';
 import type { RoutineTriggerDraft } from './routine-triggers';
 
-/** Areas a code step may change; reads are always allowed. The scheduler owns this list. */
-export const writeScopes = [
-  'email',
-  'calendar',
-  'workspace',
-  'properties',
-  'contacts',
-  'notifications',
-  'ai',
-] as const;
-export type WriteScope = (typeof writeScopes)[number];
-
-/** What each write scope lets a code step change, for its owner. */
-export const WRITE_SCOPE_LABELS: Record<WriteScope, string> = {
-  email: 'Email',
-  calendar: 'Calendar',
-  workspace: 'Documents, tasks and channels',
-  properties: 'Properties',
-  contacts: 'Contacts',
-  notifications: 'Notifications',
-  ai: 'AI that can act',
-};
-
 /** TypeScript against Macro's SDK, written by the AI that built the routine. */
 export type CodeStepDraft = {
   id: string;
@@ -41,7 +18,6 @@ export type CodeStepDraft = {
   title: string;
   summary: string;
   source: string;
-  writes: WriteScope[];
   /** Values its owner changes without new code. */
   knobs: Knob[];
   /** What it does, with `{name}` / `{?name}` where its knobs show. */
@@ -89,7 +65,6 @@ export type WireStep =
       title: string;
       summary?: string | null;
       source: string;
-      writes?: WriteScope[];
       knobs?: Knob[];
       sentence?: string | null;
     }
@@ -107,7 +82,6 @@ const wireStepSchema = z.discriminatedUnion('type', [
     title: z.string(),
     summary: z.string().nullish(),
     source: z.string(),
-    writes: z.array(z.enum(writeScopes)).optional(),
     knobs: z.array(knobSchema).optional(),
     sentence: z.string().nullish(),
   }),
@@ -130,7 +104,6 @@ export const stepDraftSchema = z.discriminatedUnion('kind', [
     title: z.string(),
     summary: z.string(),
     source: z.string(),
-    writes: z.array(z.enum(writeScopes)),
     // Drafts saved before steps had knobs have none.
     knobs: z.array(knobSchema).default([]),
     sentence: z.string().optional(),
@@ -181,7 +154,6 @@ function fromWire(steps: WireStep[]): StepDraft[] | undefined {
         title: step.title,
         summary: step.summary ?? '',
         source: step.source,
-        writes: step.writes ?? [],
         knobs: step.knobs ?? [],
         ...(step.sentence ? { sentence: step.sentence } : {}),
       }))
@@ -224,7 +196,6 @@ export function stepsToWire(steps: StepDraft[]): WireStep[] {
         title: step.title.trim(),
         ...(step.summary.trim() ? { summary: step.summary.trim() } : {}),
         source: step.source,
-        ...(step.writes.length ? { writes: step.writes } : {}),
         ...(step.knobs.length ? { knobs: step.knobs.map(knobToWire) } : {}),
         ...(step.sentence?.trim() ? { sentence: step.sentence } : {}),
       }))

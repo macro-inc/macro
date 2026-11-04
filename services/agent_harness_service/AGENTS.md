@@ -53,7 +53,8 @@ Pulumi stacks; they do not host extra agent processes.
   (`src/scheduling/routine_run_notifications.rs`). Routine code steps run
   through `src/routine_code.rs`,
   on routines' own Deno executor (own slots, CPU limit, lower priority) and
-  type checker, with the owner's token limited to each step's `writes`.
+  type checker, with a token for the owner's access attributed to Macro
+  acting for them, so a step's writes don't start routines.
   A routine's code steps are checked together, one file each; the owner's
   time zone for `run.timezone` comes from their primary calendar
   (`CalendarTimeZones`).

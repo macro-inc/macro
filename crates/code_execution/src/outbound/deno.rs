@@ -26,9 +26,10 @@ const TIMERS: &str = include_str!("deno/timers.mjs");
 /// Node timer and worker modules resolve to timers.mjs, which refuses to
 /// sleep; see bootstrap.mjs.
 const IMPORTS: &str = r#"{"imports":{"@macro-inc/sdk":"./sdk.mjs","handlebars":"./handlebars.mjs","node:timers":"./timers.mjs","node:timers/promises":"./timers.mjs","node:worker_threads":"./timers.mjs","timers":"./timers.mjs","timers/promises":"./timers.mjs","worker_threads":"./timers.mjs"}}"#;
-/// An unattended program's requests must pass the bootstrap's write policy,
-/// so the Node modules that open their own connections or threads resolve
-/// to a module that doesn't exist. Timers refuse to sleep, as above.
+/// An unattended program's requests go through the bootstrap's `fetch`, where
+/// a dry run holds back writes, so the Node modules that open their own
+/// connections or threads resolve to a module that doesn't exist. Timers
+/// refuse to sleep, as above.
 const UNATTENDED_IMPORTS: &str = r#"{"imports":{"@macro-inc/sdk":"./sdk.mjs","node:timers":"./timers.mjs","node:timers/promises":"./timers.mjs","timers":"./timers.mjs","timers/promises":"./timers.mjs","node:net":"./unavailable.mjs","node:tls":"./unavailable.mjs","node:http":"./unavailable.mjs","node:https":"./unavailable.mjs","node:http2":"./unavailable.mjs","node:dgram":"./unavailable.mjs","node:worker_threads":"./unavailable.mjs","worker_threads":"./unavailable.mjs","node:child_process":"./unavailable.mjs","node:cluster":"./unavailable.mjs","node:inspector":"./unavailable.mjs"}}"#;
 /// Runtime version pinned by the container and checked at startup.
 pub const DENO_VERSION: &str = "2.9.6";
@@ -302,8 +303,8 @@ struct ChildContext<'a> {
     #[serde(flatten)]
     environment: &'a RunEnvironment,
     max_result_bytes: usize,
-    /// For an unattended program, the catalog its write policy is applied
-    /// with, both to SDK operations and to the requests they send.
+    /// For an unattended program, the catalog a dry run tells reads from
+    /// writes with, both for SDK operations and the requests they send.
     #[serde(skip_serializing_if = "Option::is_none")]
     operations: Option<&'static [CatalogEntry]>,
 }

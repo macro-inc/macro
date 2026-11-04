@@ -27,7 +27,6 @@ const codeStep = (title: string): StepDraft => ({
   title,
   summary: '',
   source: 'export async function main() {}',
-  writes: ['email'],
   knobs: [],
 });
 

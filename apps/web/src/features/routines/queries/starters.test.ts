@@ -20,7 +20,6 @@ describe('starter steps', () => {
               type: 'code',
               title: 'Label by topic',
               summary: 'Labels it.',
-              writes: ['email'],
               source: 'export async function main() {}',
             },
           ],
@@ -34,7 +33,7 @@ describe('starter steps', () => {
     );
     expect(Object.keys(steps)).toEqual(['inbox']);
     expect(steps.inbox).toMatchObject([
-      { kind: 'code', title: 'Label by topic', writes: ['email'] },
+      { kind: 'code', title: 'Label by topic' },
     ]);
   });
 });

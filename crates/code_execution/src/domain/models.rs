@@ -39,33 +39,18 @@ pub struct RunEnvironment {
     pub unattended: Option<Unattended>,
 }
 
-/// How an unattended program runs: its source is TypeScript, `main` receives
-/// `macro` and `arguments` but never the credential, and every SDK write
-/// passes through `writes` first.
+/// How an unattended program runs: its source is TypeScript, and `main`
+/// receives `macro` and `arguments` but never the credential.
 #[derive(Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct Unattended {
     /// Spread into `main`'s argument beside `macro`.
     pub arguments: serde_json::Map<String, Value>,
-    /// Which writes run.
-    pub writes: WritePolicy,
-}
-
-/// Which SDK write operations an unattended program may perform. Reads always
-/// run. Writes are every catalog operation that isn't a known read, so an
-/// operation missing from the catalog is a write.
-#[derive(Debug, Clone, Serialize)]
-#[serde(tag = "mode", rename_all = "snake_case")]
-pub enum WritePolicy {
-    /// Writes to these services (the catalog's `service` prefix) run; any
-    /// other write is refused and the program sees an error.
-    Services {
-        /// Service names, e.g. `email`.
-        services: std::collections::BTreeSet<String>,
-    },
     /// No write runs: each one returns an empty result to the program and is
-    /// reported as skipped, so a run shows what it would have done.
-    DryRun,
+    /// reported as skipped, so a run shows what it would have done. Writes
+    /// are every catalog operation that isn't a known read, so an operation
+    /// missing from the catalog is a write.
+    pub dry_run: bool,
 }
 
 /// Frame bytes kept beside a full-size result for its `{"type":"result",...}` envelope.

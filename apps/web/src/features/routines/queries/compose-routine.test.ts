@@ -37,7 +37,6 @@ const labelStep = {
   type: 'code',
   title: 'Label by topic',
   summary: 'Asks AI which label fits and adds it.',
-  writes: ['email'],
   source: 'export async function main() {}',
 };
 
@@ -214,7 +213,6 @@ function notifications(source: string) {
         id: 'important',
         title: 'Surface important notifications',
         summary: 'Goes through notifications and keeps the important ones.',
-        writes: ['workspace'],
         source,
       },
     ],
@@ -360,7 +358,6 @@ describe('composeRoutine', () => {
           type: 'code',
           title: 'Report',
           summary: 'Reports the count.',
-          writes: [],
           source: 'second',
         },
       ],

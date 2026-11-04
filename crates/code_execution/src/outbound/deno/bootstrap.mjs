@@ -75,23 +75,16 @@ Atomics.wait = sleepBanned("Atomics.wait");
 Atomics.waitAsync = sleepBanned("Atomics.waitAsync");
 try {
   const {maxResultBytes, operations, unattended, ...context} = await new Response(Deno.stdin.readable).json();
-  // An unattended program's writes follow its policy: a dry run answers each
-  // one with an empty result, otherwise only writes to its services run.
-  // Operations missing from the catalog count as writes.
+  // A dry run answers each write with an empty result, so it shows what the
+  // program would do. Operations missing from the catalog count as writes.
+  const dryRun = unattended?.dryRun === true;
   const catalog = new Map((operations ?? []).map(operation => [operation.key, operation]));
   const routes = (operations ?? []).map(operation => ({
     ...operation,
-    service: operation.key.slice(0, operation.key.indexOf(".")),
     pattern: new RegExp(`${operation.path.replace(/[.*+?^$()|[\]\\]/g, "\\$&").replace(/\{[^}]+\}/g, "[^/]+")}$`),
   }));
-  const writable = (service) =>
-    unattended.writes.mode === "services" && unattended.writes.services.includes(service);
-  if (unattended) gateRequests(({service, operation}) => {
-    if (catalog.get(`${service}.${operation}`)?.write === false) return undefined;
-    if (unattended.writes.mode === "dry_run") return {skip: {data: {}}};
-    if (writable(service)) return undefined;
-    return {refuse: `This routine step can't make changes in ${service}: it may only change ${unattended.writes.services.join(", ") || "nothing"}.`};
-  });
+  if (dryRun) gateRequests(({service, operation}) =>
+    catalog.get(`${service}.${operation}`)?.write === false ? undefined : {skip: {data: {}}});
   const originalFetch = globalThis.fetch.bind(globalThis);
   const origins = new Set(Object.values(context.hosts).map(host => new URL(host).origin));
   globalThis.fetch = (input, init) => {
@@ -103,17 +96,12 @@ try {
       // Marks the request as a program's, not a person's in the app, so an API
       // can ask it to confirm what a person would have chosen by opening it.
       request.headers.set("x-macro-code-execution", "1");
-      // Backstop for the write policy: an authenticated request that didn't
-      // come through the gate (code holding the SDK client's credential, or
-      // a route outside the catalog) is sent only if a read or an allowed
-      // write matches its route.
-      if (unattended && request.method !== "GET" && request.method !== "HEAD") {
+      // A dry run's backstop: an authenticated request that didn't come
+      // through the gate is sent only if a read matches its route.
+      if (dryRun && request.method !== "GET" && request.method !== "HEAD") {
         const path = new URL(request.url).pathname;
-        const allowed = routes.some(route => route.method === request.method && route.pattern.test(path)
-          && (!route.write || writable(route.service)));
-        if (!allowed) return Promise.reject(new Error(unattended.writes.mode === "dry_run"
-          ? "A dry run doesn't send changes."
-          : "This routine step can't send that request."));
+        const read = routes.some(route => route.method === request.method && route.pattern.test(path) && !route.write);
+        if (!read) return Promise.reject(new Error("A dry run doesn't send changes."));
       }
     }
     return originalFetch(request);
@@ -137,8 +125,8 @@ try {
   // at runtime and every local module read requires the scratch permission.
   const program = new URL(unattended ? "./main.ts" : "./main.mjs", import.meta.url).href;
   if (unattended) {
-    // The write policy lives in fetch; nothing else may reach the network
-    // (raw sockets) or start a realm with its own fetch (workers).
+    // A dry run's backstop lives in fetch; nothing else may reach the
+    // network (raw sockets) or start a realm with its own fetch (workers).
     for (const name of ["connect", "connectTls", "startTls"]) Object.defineProperty(Deno, name, {value: undefined});
     globalThis.Worker = undefined;
   }

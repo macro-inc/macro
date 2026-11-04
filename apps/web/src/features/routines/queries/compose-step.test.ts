@@ -62,7 +62,6 @@ const escalate: CodeStepDraft = {
   title: 'Escalate blocking tasks',
   summary: 'Sets blocking tasks to urgent.',
   source: 'export async function main() { /* v1 */ }',
-  writes: ['workspace'],
   knobs: [
     { type: 'number', name: 'days', label: 'Days ahead', value: 3, min: 1 },
   ],
@@ -73,7 +72,6 @@ const wire = (source: string) => ({
   type: 'code',
   title: 'Post a summary',
   summary: 'Posts what changed.',
-  writes: ['workspace'],
   source,
 });
 
@@ -221,7 +219,6 @@ describe('changing a step in words', () => {
           output: 'renamed',
           title: escalate.title,
           summary: escalate.summary,
-          writes: ['workspace'],
           source: 'export async function main() { /* v2 */ }',
           knobs: escalate.knobs,
           sentence: 'Check tasks due within {days} days and overdue tasks.',

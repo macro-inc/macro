@@ -62,7 +62,7 @@ fn a_legacy_system_prompt_is_kept_ahead_of_the_task() {
 fn programs_round_trip() {
     let task = json!({
         "steps": [
-            { "type": "code", "id": "read", "title": "Read", "source": "export async function main() {}", "writes": ["email"] },
+            { "type": "code", "id": "read", "title": "Read", "source": "export async function main() {}" },
             { "type": "agent", "model": "m", "instructions": "Triage it" }
         ]
     });
@@ -112,27 +112,15 @@ fn code_steps_and_the_sdk_fingerprint_round_trip() {
             "title": "Label invoices",
             "summary": "Asks whether the email is an invoice and labels it.",
             "source": "export async function main() {}",
-            "writes": ["email"],
         }],
         "sdk": "0.2.2+18cc1c19c35c",
     });
     let program = RoutineProgram::from_task(&task).unwrap();
     assert_eq!(program.code_steps().len(), 1);
-    assert_eq!(program.code_steps()[0].writes, vec![WriteScope::Email]);
     assert_eq!(
         program.sdk.as_ref().map(SdkFingerprint::as_str),
         Some("0.2.2+18cc1c19c35c")
     );
     assert_eq!(serde_json::to_value(&program).unwrap(), task);
     assert!(RoutineProgram::from_task(&json!({ "steps": [], "sdk": " " })).is_err());
-}
-
-#[test]
-fn write_scopes_name_their_services() {
-    assert_eq!(WriteScope::Workspace.service(), "storage");
-    assert_eq!(WriteScope::Ai.service(), "cognition");
-    assert_eq!(WriteScope::Notifications.service(), "notification");
-    for scope in WriteScope::ALL {
-        assert_eq!(serde_json::to_value(scope).unwrap(), json!(scope.as_str()));
-    }
 }

@@ -173,7 +173,6 @@ describe('templateShareBody', () => {
           title: 'Label it',
           summary: '',
           source: 'export async function main() {}',
-          writes: [],
           knobs: [],
         },
         {

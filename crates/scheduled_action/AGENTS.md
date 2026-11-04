@@ -16,7 +16,7 @@ each run.
   (Kafka or polled) turns into a dispatched run.
 - `src/domain/program_runner.rs`: runs a routine's steps (`crates/routine_program`)
   in order: code steps through the `RoutineCode` port (the harness's Deno
-  executor, limited to each step's `writes`) and at most one agent ("Ask
+  executor, with the owner's access) and at most one agent ("Ask
   AI") step through `target_runner.rs`. An old single-agent task runs as one
   agent step. Event trigger conditions are answered before a run starts
   (`event_runs/condition.rs`), not by the runner.

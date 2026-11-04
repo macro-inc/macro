@@ -48,19 +48,17 @@ A host can run a program with nobody watching (a routine step) by setting
   or trace context;
 - its result is kept whole; one larger than `Limits::max_result_bytes` as JSON
   fails with a message naming its size, instead of being summarized;
-- every SDK write passes the `WritePolicy`. `DryRun` answers each write with an
-  empty result and reports it as `skipped`; `Services` lets writes to the named
-  services through and refuses the rest (`refused`). Writes are the catalog's
-  non-read operations (`src/domain/operations.json`, generated with each
-  operation's method, path and `write`), and an operation missing from it counts
-  as one;
-- the same policy checks every authenticated non-GET request at `fetch`, so
-  code that lifts the credential off the SDK client can't send a write the gate
-  would refuse; raw sockets (`Deno.connect`, `connectTls`, `startTls`), workers
-  and Node's networking and process modules are unavailable.
+- it runs with the token's permissions, the owner's. A dry run (`dry_run`)
+  answers each SDK write with an empty result and reports it as `skipped`;
+  writes are the catalog's non-read operations (`src/domain/operations.json`,
+  generated with each operation's method, path and `write`), and an operation
+  missing from it counts as one. A dry run also refuses authenticated non-GET
+  requests at `fetch` unless a read matches; raw sockets (`Deno.connect`,
+  `connectTls`, `startTls`), workers and Node's networking and process modules
+  are unavailable.
 
-This is enforcement inside the process, not by the APIs: the token still
-carries the owner's permissions.
+A dry run is held back inside the process, not by the APIs: code written to
+get around it can still write with the owner's permissions.
 
 `DenoChecker` (`src/outbound/deno/check.rs`) type-checks a TypeScript program
 against the SDK's generated declarations (`src/outbound/deno/sdk-types.json`)

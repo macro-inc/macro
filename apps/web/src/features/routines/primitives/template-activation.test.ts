@@ -80,7 +80,6 @@ describe('createTemplateActivation', () => {
         type: 'code',
         title: 'Label invoices',
         source: 'export async function main() {}',
-        writes: ['email'],
       };
       const apps = [{ app_slug: 'linear', server_name: 'Linear' }];
       const activation = createTemplateActivation({

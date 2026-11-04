@@ -1154,8 +1154,8 @@ whose only step is **Ask AI** saves in the original single-agent form.
 **Steps.** A routine runs its steps in order and stops at the first failed
 step. There are two kinds. **Code** steps run TypeScript against Macro's SDK;
 AI writes them (**Draft it**, the starter templates, or a conversation about
-the routine), and they open read-only: summary, **Can change** scopes and the
-code. **Ask AI** hands the run to a model or agent with instructions; it sees
+the routine), and they run with the owner's access. Each shows the sentence
+of what it does, with its values to change; its code is in the step's ⋯ menu. **Ask AI** hands the run to a model or agent with instructions; it sees
 the triggering event and what earlier steps returned, a routine has one, and
 its required apps go to it. The tray under the last step card (like the tray
 under Home's composer) holds **Then… say what should happen next**, where AI
@@ -1392,7 +1392,7 @@ MCP and Macro agent tools expose **CreateRoutine**, **ListRoutines**,
 `timezone`, or `event` with `events`, optional item `ids` and an optional yes/no
 `condition`), `steps`, a JSON array encoded as a string, and `requiredApps`.
 Step types are `code` (TypeScript against Macro's SDK, type-checked when saved,
-with the areas it changes in `writes`) and `agent` (`model`, or `agent.bot_id`
+run with the owner's access) and `agent` (`model`, or `agent.bot_id`
 from **ListAgents**, plus `instructions`). Routine ownership comes from the authenticated caller, never a
 model-supplied user ID.
 

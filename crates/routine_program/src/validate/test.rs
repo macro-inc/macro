@@ -91,7 +91,7 @@ fn old_single_agent_tasks_keep_the_rules_they_were_saved_under() {
 
 #[test]
 fn code_steps_need_a_title_and_bounded_source() {
-    validate(json!([code(json!({ "writes": ["email", "workspace"] }))])).unwrap();
+    validate(json!([code(json!({}))])).unwrap();
     assert_eq!(
         validate(json!([code(json!({ "title": "  " }))])),
         Err(ProgramError::CodeTitle)
@@ -105,10 +105,6 @@ fn code_steps_need_a_title_and_bounded_source() {
             json!({ "source": "x".repeat(limits::MAX_SOURCE_BYTES + 1) })
         )])),
         Err(ProgramError::CodeSource)
-    );
-    assert_eq!(
-        validate(json!([code(json!({ "writes": ["email", "email"] }))])),
-        Err(ProgramError::DuplicateWriteScope("email".into()))
     );
 }
 
@@ -132,7 +128,8 @@ fn removed_step_types_do_not_parse() {
         json!({ "type": "tool", "tool": "CreateDocument", "arguments": {} }),
         json!({ "type": "if", "condition": "Urgent?", "then": [] }),
         json!({ "type": "choose", "options": [] }),
-        code(json!({ "writes": ["auth"] })),
+        // Write scopes were dropped: code steps run with the owner's access.
+        code(json!({ "writes": ["email"] })),
     ] {
         assert!(RoutineProgram::from_task(&json!({ "steps": [step] })).is_err());
     }

@@ -16,7 +16,7 @@ use agent::{Message, PredefinedModel};
 use agent_egress::outbound::macro_mcp::MacroApiTokenSigner;
 use code_execution::domain::{
     CheckError, ExecuteRequest, Outcome, ProgramChecker, ProgramExecutor, RunEnvironment,
-    SourceFile, Unattended, WritePolicy, operations, sdk_declarations,
+    SourceFile, Unattended, operations, sdk_declarations,
 };
 use macro_user_id::user_id::MacroUserIdStr;
 use routine_program::{
@@ -269,25 +269,16 @@ impl<Credentials: RoutineCredentials> RoutineCode for SdkRoutineCode<Credentials
         }
         arguments.insert("steps".into(), run.steps.clone());
         arguments.insert("knobs".into(), Value::Object(run.step.knob_values()));
-        let writes = if run.dry_run {
-            WritePolicy::DryRun
-        } else {
-            WritePolicy::Services {
-                services: run
-                    .step
-                    .writes
-                    .iter()
-                    .map(|scope| scope.service().to_owned())
-                    .collect(),
-            }
-        };
         let environment = RunEnvironment {
             token,
             trace_headers: crate::code_mode::trace_headers(),
             hosts: self.hosts.clone(),
             session_id: None,
             execution_id: None,
-            unattended: Some(Unattended { arguments, writes }),
+            unattended: Some(Unattended {
+                arguments,
+                dry_run: run.dry_run,
+            }),
         };
         let (progress, mut updates) = tokio::sync::mpsc::channel(512);
         let started = Instant::now();

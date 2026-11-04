@@ -227,7 +227,6 @@ async fn a_step_waits_for_a_free_slot_before_its_credential_and_gives_up_after_f
         title: "Label invoices".into(),
         summary: String::new(),
         source: "export async function main() {}".into(),
-        writes: Vec::new(),
         knobs: Vec::new(),
         sentence: None,
     };
@@ -289,14 +288,14 @@ impl OwnerTimeZones for NoTimeZones {
 
 mod real_deno {
     //! The adapter over the real checker and executor, against a fake API:
-    //! the step contract type-checks, code runs with its inputs, writes
-    //! follow the step's scopes, and every call lands in the journal.
+    //! the step contract type-checks, code runs with its inputs, a dry run
+    //! holds back writes, and every call lands in the journal.
 
     use std::path::PathBuf;
 
     use code_execution::domain::{ExecutionService, Limits};
     use code_execution::outbound::deno::{DenoRunner, check::DenoChecker};
-    use routine_program::{RoutineProgram, WriteScope};
+    use routine_program::RoutineProgram;
     use tokio::io::{AsyncReadExt, AsyncWriteExt};
     use tokio::net::{TcpListener, TcpStream};
 
@@ -394,9 +393,9 @@ export async function main({ macro, trigger, steps, run }: StepContext) {
 }
 "#;
 
-    fn step(writes: Vec<WriteScope>) -> routine_program::CodeStep {
+    fn step() -> routine_program::CodeStep {
         let program = RoutineProgram::from_task(&json!({ "steps": [{
-            "type": "code", "title": "Label invoices", "source": SOURCE, "writes": writes,
+            "type": "code", "title": "Label invoices", "source": SOURCE,
         }] }))
         .unwrap();
         program.code_steps()[0].clone()
@@ -516,12 +515,10 @@ export async function main({ macro, trigger, steps, run }: StepContext) {
             let (mut label, _) = listener.accept().await.unwrap();
             assert!(request(&mut label).await.starts_with("POST /email/labels "));
             respond(&mut label, r#"{"id":"label-1"}"#).await;
-            // The storage write is refused in the process; nothing else arrives.
-            assert!(
-                tokio::time::timeout(Duration::from_millis(500), listener.accept())
-                    .await
-                    .is_err()
-            );
+            // A step runs with its owner's access: every write is sent.
+            let (mut delete, _) = listener.accept().await.unwrap();
+            assert!(request(&mut delete).await.starts_with("DELETE "));
+            respond(&mut delete, "{}").await;
         });
         let (_root, code) = code(&host).await;
         let context = json!({
@@ -533,7 +530,7 @@ export async function main({ macro, trigger, steps, run }: StepContext) {
             .run(
                 &owner(),
                 CodeRun {
-                    step: &step(vec![WriteScope::Email]),
+                    step: &step(),
                     context: &context,
                     steps: &json!({ "first": { "count": 2 } }),
                     dry_run: false,
@@ -544,12 +541,7 @@ export async function main({ macro, trigger, steps, run }: StepContext) {
         assert_eq!(output["invoice"], true);
         assert_eq!(output["earlier"], json!({ "count": 2 }));
         assert_eq!(output["dryRun"], false);
-        assert!(
-            output["deleted"]
-                .as_str()
-                .unwrap()
-                .contains("can't make changes in storage")
-        );
+        assert_eq!(output["deleted"], "deleted");
         let calls: Vec<_> = outcome
             .calls
             .iter()
@@ -560,7 +552,7 @@ export async function main({ macro, trigger, steps, run }: StepContext) {
             [
                 ("cognition.decisions", false, CallStatus::Completed),
                 ("email.createLabel", true, CallStatus::Completed),
-                ("storage.deleteDocument", true, CallStatus::Refused),
+                ("storage.deleteDocument", true, CallStatus::Completed),
             ]
         );
         assert!(outcome.calls[0].duration_ms.is_some());
@@ -642,7 +634,7 @@ export async function main({ macro, trigger, steps, run }: StepContext) {
             .run(
                 &owner(),
                 CodeRun {
-                    step: &step(vec![WriteScope::Email]),
+                    step: &step(),
                     context: &context,
                     steps: &json!({}),
                     dry_run: true,

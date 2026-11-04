@@ -9,9 +9,8 @@ no I/O.
 
 ## Start here
 
-- `src/model.rs`: steps (code and agent, a flat list run in order),
-  `WriteScope` (the areas a code step may change), the program's recorded
-  `sdk`, `AgentTask`, and `RoutineProgram::from_task`.
+- `src/model.rs`: steps (code and agent, a flat list run in order), the
+  program's recorded `sdk`, `AgentTask`, and `RoutineProgram::from_task`.
 - `src/contract.rs`: what a code step receives and returns. `CODE_STEPS`
   (`src/code_steps.md`, how to write a code step: the one description
   CreateRoutine and the web drafter both read), `STEP_CONTEXT` (the type of

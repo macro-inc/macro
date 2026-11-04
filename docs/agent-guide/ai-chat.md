@@ -817,7 +817,7 @@ no resource. Runs of routines with steps that never reached an agent read **Ran
 steps**; a line under each such row lists what every step did. Live pending rows remain neutral; persisted unsuccessful runs keep
 the failure-colored timestamp even when their transcript is still available.
 A run's detail lists a code step's SDK calls in order, with how each ended
-(**Would do** in a dry run, **Not allowed** outside the step's write scopes)
+(**Would do** in a dry run)
 and how long it took; arguments and results are never shown. Under its title,
 a line says what started the run (the schedule and its time zone, the event,
 or **Run by** a person), when it was due if it started a minute or more

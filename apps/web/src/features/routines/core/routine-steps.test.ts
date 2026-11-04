@@ -20,7 +20,6 @@ const code: WireStep = {
   title: 'Label invoices',
   summary: 'Asks whether the email is an invoice and labels it.',
   source: 'export async function main({ macro }: StepContext) {}',
-  writes: ['email'],
 };
 
 const unnamed = (title: string): WireStep => ({
@@ -40,7 +39,6 @@ describe('routine steps', () => {
       kind: 'code',
       output: 'invoice',
       title: 'Label invoices',
-      writes: ['email'],
     });
     expect(stepsToWire(steps ?? [])).toEqual(wire);
     expect(firstAgent(steps ?? [])?.instructions).toBe('Escalate');

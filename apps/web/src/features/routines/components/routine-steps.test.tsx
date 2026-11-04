@@ -133,7 +133,6 @@ const codeStep = (title: string, output?: string): CodeStepDraft => ({
   title,
   summary: `${title}, as AI wrote it.`,
   source: 'export async function main() {}',
-  writes: ['email'],
   knobs: [],
 });
 
