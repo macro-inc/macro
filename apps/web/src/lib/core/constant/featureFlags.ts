@@ -1016,14 +1016,3 @@ export const enableWhatsappLinked = defineFlag({
   key: 'enable-whatsapp-linked',
   env: 'ENABLE_WHATSAPP_LINKED',
 });
-
-/**
- * Experimental: the "I'm an agent" toggle on the email sign-in step. Only the
- * toggle is gated; agent invites and the setup modal do not depend on it.
- * Follows PostHog in production; on in dev.
- */
-export const enableAgentSignup = defineFlag({
-  key: 'enable-agent-signup',
-  env: 'ENABLE_AGENT_SIGNUP',
-  default: DEV_MODE_ENV || undefined,
-});

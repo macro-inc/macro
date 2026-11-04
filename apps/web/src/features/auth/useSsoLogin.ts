@@ -50,7 +50,11 @@ async function startDesktopSso(
   }
 }
 
-export function useSsoLogin(opts?: { signupMode?: boolean }) {
+export function useSsoLogin(opts?: {
+  signupMode?: boolean;
+  /** Started on the agent signup page: a new account becomes an agent. */
+  isAgent?: boolean;
+}) {
   const analytics = useAnalytics();
   const location = useLocation<RedirectLocation>();
   const { initEmailLink } = useEmailLinks();
@@ -72,6 +76,7 @@ export function useSsoLogin(opts?: { signupMode?: boolean }) {
       );
 
     if (referral_code) authUrl.searchParams.set('referral_code', referral_code);
+    if (opts?.isAgent) authUrl.searchParams.set('is_agent', 'true');
 
     const desktop = isPlatform('desktop');
 
