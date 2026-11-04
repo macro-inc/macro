@@ -16,6 +16,7 @@ pub mod organization;
 pub mod patch;
 pub mod permissions;
 pub mod remove;
+pub mod revert_unconfirmed_agent;
 pub mod update;
 pub mod update_profile_picture;
 pub mod update_user_id;
