@@ -49,7 +49,12 @@ import { type HotkeyToken, TOKENS } from '@core/hotkey/tokens';
 import { isMobile } from '@core/mobile/isMobile';
 import { fireAndForget } from '@core/util/fireAndForget';
 import type { EntityData } from '@entity';
-import { isEmailEntity, isGithubPrEntity, isTaskEntity } from '@entity';
+import {
+  isChannelEntity,
+  isEmailEntity,
+  isGithubPrEntity,
+  isTaskEntity,
+} from '@entity';
 import { markRowNotificationsSeenOnOpen } from '@notifications/mark-row-seen';
 import { SYSTEM_PROPERTY_IDS } from '@property/constants';
 import type { Component, JSX } from 'solid-js';
@@ -598,7 +603,9 @@ export function createSoupEntityActions(
     if (canExecuteAll(deleteAction.canExecute)) {
       deleteItems.push({
         id: 'delete',
-        label: t('entityActions.delete'),
+        label: entities.every(isChannelEntity)
+          ? t('entityActions.deleteChannel')
+          : t('entityActions.delete'),
         hotkeyToken: entities.every(isEmailEntity)
           ? TOKENS.email.trash
           : TOKENS.entity.action.delete,

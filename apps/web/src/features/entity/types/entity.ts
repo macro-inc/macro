@@ -627,6 +627,25 @@ export const canEditChannelIdentity = (entity: EntityData): boolean => {
   );
 };
 
+/**
+ * Whether the viewer may delete a channel and its messages for everyone.
+ *
+ * The server allows only the channel's owner participant, who is the creator
+ * recorded as its owner. Direct messages are never offered for deletion.
+ */
+export const canDeleteChannel = (
+  entity: EntityData,
+  userId: string | undefined
+): boolean => {
+  return (
+    isChannelEntity(entity) &&
+    entity.channelType !== 'direct_message' &&
+    entity.isParticipant !== false &&
+    userId !== undefined &&
+    entity.ownerId === userId
+  );
+};
+
 export const isChannelMessageEntity = (
   entity: EntityData
 ): entity is ChannelMessageEntity => {

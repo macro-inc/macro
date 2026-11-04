@@ -19,6 +19,7 @@ import { fireAndForget } from '@core/util/fireAndForget';
 import { throwOnErr } from '@core/util/result';
 import { deleteAgentSession } from '@queries/agent-session/entity-mutations';
 import { callKeys } from '@queries/call/keys';
+import { deleteChannel } from '@queries/channel/channels';
 import { queryClient } from '@queries/client';
 import {
   getSoupEntityById,
@@ -140,7 +141,8 @@ export function createBulkDeleteDssItemsMutation() {
       type === 'project' ||
       type === 'call' ||
       type === 'routine' ||
-      type === 'database'
+      type === 'database' ||
+      type === 'channel'
     );
   };
   const isCurrentContext = (context: unknown) =>
@@ -170,6 +172,10 @@ export function createBulkDeleteDssItemsMutation() {
           return throwOnErr(() =>
             callServiceClient.deleteCallRecord(e.id)
           ).then(() => true);
+        }
+        if (e.type === 'channel') {
+          await deleteChannel(e.id);
+          return true;
         }
         if (e.type === 'routine') {
           return throwOnErr(() =>

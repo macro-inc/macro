@@ -1513,7 +1513,13 @@ right-clicking the conversation's rail row: `Open in new split` (when available)
 `Rename`, `Set channel picture`,
 `Remove channel picture` (only when the channel has one),
 `Favorite`/`Unfavorite`, `Snooze notifications…`, `Mute notifications`,
-`Remind me`, `Copy Link`, `Copy ID`. A channel can therefore be favorited or
+`Remind me`, `Copy Link`, `Copy ID`, and a destructive `Delete channel` for the
+channel's owner (its creator; the server refuses everyone else). Direct
+messages never offer it. Delete opens the shared delete confirmation, which names
+the channel and warns that it and its messages are deleted for everyone and
+cannot be undone. Confirming removes the row at once and drops the channel from
+open splits; a refused delete restores the row and shows a failure toast. The
+mobile long-press sheet offers the same item. A channel can therefore be favorited or
 given a picture without finding its row, from Chat and from every view that
 opens one inline. The menu appears once the conversation itself has loaded,
 reusing a cached conversation without another activation fetch. Opening the

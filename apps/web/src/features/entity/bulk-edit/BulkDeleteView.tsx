@@ -3,7 +3,7 @@ import { ActionDialogShell, Button } from '@ui';
 import { createSignal, Show } from 'solid-js';
 import { BulkDeleteFailure } from '../queries/bulk-delete-result';
 import { createBulkDeleteDssItemsMutation } from '../queries/dss';
-import type { EntityData } from '../types/entity';
+import { type EntityData, isChannelEntity } from '../types/entity';
 import { EntityActionSelection } from './components/EntityActionSelection';
 
 /** Confirmed progress without closing a partially failed deletion dialog. */
@@ -25,6 +25,13 @@ export const BulkDeleteView = (props: {
   const [partialMessage, setPartialMessage] = createSignal<string>();
   const entities = () => remainingEntities() ?? props.entities;
   const multi = () => entities().length > 1;
+  // A channel is deleted for every participant, so the dialog says so.
+  const channel = () => {
+    const [only, ...rest] = entities();
+    return rest.length === 0 && only && isChannelEntity(only)
+      ? only
+      : undefined;
+  };
   const handleDelete = async () => {
     // Keep the completion attached to the caller that submitted this attempt,
     // even if another modal replaces this one while the request is in flight.
@@ -61,14 +68,35 @@ export const BulkDeleteView = (props: {
     <>
       <ActionDialogShell.Body>
         <ActionDialogShell.Header>
-          <ActionDialogShell.Title>
-            {multi() ? `Delete ${entities().length} items?` : 'Delete item?'}
-          </ActionDialogShell.Title>
-          <ActionDialogShell.Description>
-            {multi()
-              ? 'These items will be permanently deleted. This cannot be undone.'
-              : 'This item will be permanently deleted. This cannot be undone.'}
-          </ActionDialogShell.Description>
+          <Show
+            when={channel()}
+            fallback={
+              <>
+                <ActionDialogShell.Title>
+                  {multi()
+                    ? `Delete ${entities().length} items?`
+                    : 'Delete item?'}
+                </ActionDialogShell.Title>
+                <ActionDialogShell.Description>
+                  {multi()
+                    ? 'These items will be permanently deleted. This cannot be undone.'
+                    : 'This item will be permanently deleted. This cannot be undone.'}
+                </ActionDialogShell.Description>
+              </>
+            }
+          >
+            {(current) => (
+              <>
+                <ActionDialogShell.Title>
+                  Delete channel?
+                </ActionDialogShell.Title>
+                <ActionDialogShell.Description>
+                  {current().name} and all of its messages will be permanently
+                  deleted for everyone. This cannot be undone.
+                </ActionDialogShell.Description>
+              </>
+            )}
+          </Show>
         </ActionDialogShell.Header>
         <EntityActionSelection entities={entities()} />
         <Show when={partialMessage()}>
@@ -83,12 +111,24 @@ export const BulkDeleteView = (props: {
         <Button variant="ghost" onClick={props.onCancel}>
           Cancel
         </Button>
-        <Button
-          variant="secondary"
-          onClick={() => fireAndForget(handleDelete(), 'bulk-delete')}
+        <Show
+          when={channel()}
+          fallback={
+            <Button
+              variant="secondary"
+              onClick={() => fireAndForget(handleDelete(), 'bulk-delete')}
+            >
+              {multi() ? `Delete ${entities().length} items` : 'Delete item'}
+            </Button>
+          }
         >
-          {multi() ? `Delete ${entities().length} items` : 'Delete item'}
-        </Button>
+          <Button
+            variant="danger"
+            onClick={() => fireAndForget(handleDelete(), 'bulk-delete')}
+          >
+            Delete channel
+          </Button>
+        </Show>
       </ActionDialogShell.Footer>
     </>
   );

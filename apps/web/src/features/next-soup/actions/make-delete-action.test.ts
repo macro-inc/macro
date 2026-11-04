@@ -486,8 +486,19 @@ describe('makeDeleteAction.canExecute', () => {
     );
   });
 
-  it('refuses channels and channel rows outright', () => {
-    expect(canExecute(entity('channel'))).toBe(false);
+  it('offers channel deletion only to the owner of a named channel', () => {
+    const channel = (overrides: Partial<EntityData>) =>
+      entity('channel', { channelType: 'private', ...overrides });
+    expect(canExecute(channel({}))).toBe(true);
+    expect(canExecute(channel({ channelType: 'team' }))).toBe(true);
+    expect(canExecute(channel({ ownerId: 'macro|other@example.com' }))).toBe(
+      false
+    );
+    expect(canExecute(channel({ channelType: 'direct_message' }))).toBe(false);
+    expect(canExecute(channel({ isParticipant: false }))).toBe(false);
+  });
+
+  it('refuses channel rows outright', () => {
     expect(canExecute(entity('channel_message'))).toBe(false);
     expect(canExecute(entity('channel_thread'))).toBe(false);
   });

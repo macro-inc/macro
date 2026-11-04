@@ -5,6 +5,7 @@ import { globalRemoveFromSplitHistory } from '@components/app/split-layout/layou
 import { toast } from '@core/component/Toast/Toast';
 import { fireAndForget } from '@core/util/fireAndForget';
 import { type EmailEntity, type EntityData, isEmailEntity } from '@entity';
+import { canDeleteChannel } from '@entity/types/entity';
 import ArrowCounterClockwise from '@icon/system/regular/arrow-counter-clockwise.svg?component-solid';
 import type { SoupRow } from '../create-soup-state';
 import { restoreSoupFocus, trashEmails } from '../utils';
@@ -100,6 +101,7 @@ export const makeDeleteAction = (options: MakeDeleteOptions) => {
 
   const canExecute = (entity: EntityData): boolean => {
     if (entity.type === 'database') return entity.grant === 'owner';
+    if (entity.type === 'channel') return canDeleteChannel(entity, userId());
     if (entity.type === 'email') {
       return true;
     }

@@ -14,6 +14,7 @@ const mocks = vi.hoisted(() => ({
   deleteItem: vi.fn(),
   deleteCall: vi.fn(),
   deleteCallGraphql: vi.fn(),
+  deleteChannel: vi.fn(),
   deleteReminder: vi.fn(),
   deleteSchedule: vi.fn(),
   trashDatabase: vi.fn(),
@@ -50,6 +51,9 @@ vi.mock('@queries/client', () => ({
 }));
 vi.mock('@queries/agent-session/entity-mutations', () => ({
   deleteAgentSession: vi.fn(),
+}));
+vi.mock('@queries/channel/channels', () => ({
+  deleteChannel: mocks.deleteChannel,
 }));
 vi.mock('@queries/soup/cache', () => ({
   removeSoupEntities: mocks.removeSoup,
@@ -389,6 +393,41 @@ describe('bulk delete GraphQL optimism', () => {
     );
   });
 
+  it('deletes channels through the channel endpoint instead of DSS delete', async () => {
+    const network = deferred<void>();
+    mocks.deleteChannel.mockReturnValue(network.promise);
+    const { mutation, pendingKeys } = mount();
+    const deletion = mutation.mutateAsync([entity('channel-1', 'channel')]);
+    await vi.waitFor(() =>
+      expect([...pendingKeys()]).toEqual(['GraphqlSoupChannel:channel-1'])
+    );
+    network.resolve();
+    await expect(deletion).resolves.toEqual([true]);
+    expect(mocks.deleteChannel).toHaveBeenCalledWith('channel-1');
+    expect(mocks.removeSoup).toHaveBeenCalledWith(
+      new Set(['channel-1']),
+      expect.any(Function)
+    );
+    expect(mocks.deleteItem).not.toHaveBeenCalled();
+  });
+
+  it('puts a channel back when the server refuses to delete it', async () => {
+    vi.spyOn(console, 'error').mockImplementation(() => {});
+    const soup = cacheRows(mocks.removeSoup, mocks.rollbackSoup, [
+      'channel-1',
+      'other',
+    ]);
+    mocks.deleteChannel.mockRejectedValue(new Error('forbidden'));
+    const { mutation, pendingKeys } = mount();
+    await expect(
+      mutation.mutateAsync([entity('channel-1', 'channel')])
+    ).rejects.toThrow('forbidden');
+    expect(soup()).toEqual(['channel-1', 'other']);
+    expect(mocks.rollbackSearch).toHaveBeenCalled();
+    expect([...pendingKeys()]).toEqual([]);
+    expect(mocks.failure).toHaveBeenCalledWith('Failed to delete items');
+  });
+
   it('trashes databases through the database API instead of DSS delete', async () => {
     const { mutation } = mount();
     await expect(
@@ -470,7 +509,7 @@ describe('bulk delete GraphQL optimism', () => {
     const result = mutation.mutateAsync([
       entity('task-1'),
       entity('task-2'),
-      entity('channel', 'channel'),
+      entity('event', 'calendar_event'),
     ]);
     await vi.waitFor(() =>
       expect([...pendingKeys()]).toEqual([

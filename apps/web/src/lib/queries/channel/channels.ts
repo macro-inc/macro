@@ -87,6 +87,25 @@ export function invalidateListChannels() {
 }
 
 /**
+ * Permanently delete a channel and its messages for every participant. Soup
+ * lists are kept current by the caller's optimistic removal; this drops the
+ * channel from the REST channel list once the server confirms.
+ */
+export async function deleteChannel(channelId: string) {
+  await throwOnErr(() =>
+    storageServiceClient.deleteChannel({ channel_id: channelId })
+  );
+  analytics.track('delete_entity', {
+    entityType: 'channel',
+    entityId: channelId,
+  });
+  queryClient.setQueryData<ApiChannelWithLatest[]>(
+    channelKeys.listChannels.queryKey,
+    (channels) => channels?.filter((channel) => channel.id !== channelId)
+  );
+}
+
+/**
  * Create a channel. Invalidates the channel list on settle.
  */
 export function useCreateChannelMutation(

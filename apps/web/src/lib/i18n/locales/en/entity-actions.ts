@@ -68,6 +68,7 @@ export default {
   senderToNoise: 'Sender → Noise',
   blockSender: 'Block Sender',
   delete: 'Delete',
+  deleteChannel: 'Delete channel',
   setStatus: 'Set status',
   setPriority: 'Set priority',
   setAssignee: 'Set assignee',
