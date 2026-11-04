@@ -28018,7 +28018,7 @@ export const approveHarnessPairingBody = zod
 export const approveHarnessPairingResponse = zod
   .object({
     access: zod
-      .enum(['owner', 'use', 'none'])
+      .enum(['owner', 'user', 'read', 'none'])
       .optional()
       .describe('What one caller may do with a runtime.'),
     allow_permission_bypass: zod
@@ -28051,7 +28051,9 @@ export const approveHarnessPairingResponse = zod
     shared_team_ids: zod
       .array(zod.uuid())
       .optional()
-      .describe('Teams whose every member may use it.'),
+      .describe(
+        'Teams it is a team machine for: their every member is a user of it.'
+      ),
     updated_at: zod.iso.datetime({}).describe('Update timestamp.'),
   })
   .describe(
@@ -28083,7 +28085,7 @@ export const claimHarnessPairingResponse = zod
     harness: zod
       .object({
         access: zod
-          .enum(['owner', 'use', 'none'])
+          .enum(['owner', 'user', 'read', 'none'])
           .optional()
           .describe('What one caller may do with a runtime.'),
         allow_permission_bypass: zod
@@ -28116,7 +28118,9 @@ export const claimHarnessPairingResponse = zod
         shared_team_ids: zod
           .array(zod.uuid())
           .optional()
-          .describe('Teams whose every member may use it.'),
+          .describe(
+            'Teams it is a team machine for: their every member is a user of it.'
+          ),
         updated_at: zod.iso.datetime({}).describe('Update timestamp.'),
       })
       .describe(
@@ -28136,7 +28140,7 @@ export const claimHarnessPairingResponse = zod
 export const listHarnessesResponseItem = zod
   .object({
     access: zod
-      .enum(['owner', 'use', 'none'])
+      .enum(['owner', 'user', 'read', 'none'])
       .optional()
       .describe('What one caller may do with a runtime.'),
     allow_permission_bypass: zod
@@ -28169,7 +28173,9 @@ export const listHarnessesResponseItem = zod
     shared_team_ids: zod
       .array(zod.uuid())
       .optional()
-      .describe('Teams whose every member may use it.'),
+      .describe(
+        'Teams it is a team machine for: their every member is a user of it.'
+      ),
     updated_at: zod.iso.datetime({}).describe('Update timestamp.'),
   })
   .describe(
@@ -28183,7 +28189,7 @@ export const listHarnessesResponse = zod.array(listHarnessesResponseItem);
 export const listHarnessDirectoryResponseItem = zod
   .object({
     access: zod
-      .enum(['owner', 'use', 'none'])
+      .enum(['owner', 'user', 'read', 'none'])
       .optional()
       .describe('What one caller may do with a runtime.'),
     allow_permission_bypass: zod
@@ -28216,7 +28222,9 @@ export const listHarnessDirectoryResponseItem = zod
     shared_team_ids: zod
       .array(zod.uuid())
       .optional()
-      .describe('Teams whose every member may use it.'),
+      .describe(
+        'Teams it is a team machine for: their every member is a user of it.'
+      ),
     updated_at: zod.iso.datetime({}).describe('Update timestamp.'),
   })
   .describe(
@@ -28232,7 +28240,7 @@ export const listHarnessDirectoryResponse = zod.array(
 export const getSelfHarnessResponse = zod
   .object({
     access: zod
-      .enum(['owner', 'use', 'none'])
+      .enum(['owner', 'user', 'read', 'none'])
       .optional()
       .describe('What one caller may do with a runtime.'),
     allow_permission_bypass: zod
@@ -28265,7 +28273,9 @@ export const getSelfHarnessResponse = zod
     shared_team_ids: zod
       .array(zod.uuid())
       .optional()
-      .describe('Teams whose every member may use it.'),
+      .describe(
+        'Teams it is a team machine for: their every member is a user of it.'
+      ),
     updated_at: zod.iso.datetime({}).describe('Update timestamp.'),
   })
   .describe(

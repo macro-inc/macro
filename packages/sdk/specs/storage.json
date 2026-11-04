@@ -34793,7 +34793,7 @@
               "type": "string",
               "format": "uuid"
             },
-            "description": "Teams whose every member may use it."
+            "description": "Teams it is a team machine for: their every member is a user of it."
           },
           "updated_at": {
             "type": "string",
@@ -34805,7 +34805,7 @@
       "HarnessAccess": {
         "type": "string",
         "description": "What one caller may do with a runtime.",
-        "enum": ["owner", "use", "none"]
+        "enum": ["owner", "user", "read", "none"]
       },
       "HarnessAgent": {
         "type": "object",

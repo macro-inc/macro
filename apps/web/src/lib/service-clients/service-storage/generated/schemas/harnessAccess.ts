@@ -13,6 +13,7 @@ export type HarnessAccess = (typeof HarnessAccess)[keyof typeof HarnessAccess];
 // eslint-disable-next-line @typescript-eslint/no-redeclare
 export const HarnessAccess = {
   owner: 'owner',
-  use: 'use',
+  user: 'user',
+  read: 'read',
   none: 'none',
 } as const;

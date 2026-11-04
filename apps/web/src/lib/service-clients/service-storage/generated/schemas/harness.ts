@@ -36,7 +36,7 @@ in question, such as to the daemon itself. */
   name: string;
   /** Owner. */
   owner: HarnessOwner;
-  /** Teams whose every member may use it. */
+  /** Teams it is a team machine for: their every member is a user of it. */
   shared_team_ids?: string[];
   /** Update timestamp. */
   updated_at: string;

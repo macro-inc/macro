@@ -9368,7 +9368,7 @@ export type Harness = {
      */
     owner: HarnessOwner;
     /**
-     * Teams whose every member may use it.
+     * Teams it is a team machine for: their every member is a user of it.
      */
     shared_team_ids?: Array<string>;
     /**
@@ -9380,7 +9380,7 @@ export type Harness = {
 /**
  * What one caller may do with a runtime.
  */
-export type HarnessAccess = 'owner' | 'use' | 'none';
+export type HarnessAccess = 'owner' | 'user' | 'read' | 'none';
 
 /**
  * An agent bound to a harness, as listed for the daemon.
