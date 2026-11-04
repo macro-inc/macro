@@ -10,7 +10,7 @@ use chrono::NaiveDate;
 use macro_user_id::user_id::MacroUserIdStr;
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
-use std::{cmp::Reverse, future::Future, sync::Arc};
+use std::{future::Future, sync::Arc};
 use tracing::field::Empty;
 use uuid::Uuid;
 
@@ -131,9 +131,9 @@ fn can_be_due(date: &DateExpression, due: NaiveDate, written_on: NaiveDate) -> b
 
 /// The deadline that still stands. A fact citing no real message or text fails
 /// the whole answer rather than leaving the rest to be trusted. A closure ends
-/// every deadline stated up to its own message, the latest message stating a
-/// deadline replaces earlier ones, and of several in one message the nearest
-/// counts.
+/// every deadline stated up to its own message. The latest message still stating
+/// a deadline replaces earlier ones even when its own date can't be trusted, so a
+/// replaced date never comes back, and of several in one message the nearest counts.
 fn resolve_due_date(
     facts: &ThreadFacts,
     messages: &[ThreadMessage],
@@ -148,19 +148,22 @@ fn resolve_due_date(
         }
         closed_through = closed_through.max(Some(closure.message));
     }
-    let mut standing = Vec::new();
+    let mut open = Vec::new();
     for fact in &facts.deadlines {
         let message = messages.get(fact.message).ok_or(InputError::Extraction)?;
         let due = resolve::date(&fact.date, &message.text, message.written_on)?;
-        let closed = closed_through.is_some_and(|closed| fact.message <= closed);
-        if !closed && can_be_due(&fact.date, due, message.written_on) {
-            standing.push((fact.message, due));
+        if !closed_through.is_some_and(|closed| fact.message <= closed) {
+            open.push((fact, message.written_on, due));
         }
     }
-    Ok(standing
-        .into_iter()
-        .max_by_key(|(message, due)| (*message, Reverse(*due)))
-        .map(|(_, due)| due))
+    let latest = open.iter().map(|(fact, _, _)| fact.message).max();
+    Ok(open
+        .iter()
+        .filter(|(fact, written_on, due)| {
+            Some(fact.message) == latest && can_be_due(&fact.date, *due, *written_on)
+        })
+        .map(|(_, _, due)| *due)
+        .min())
 }
 
 /// Reads due dates for the owner of a thread, as background Focus usage: the owner

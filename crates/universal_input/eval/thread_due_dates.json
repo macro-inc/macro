@@ -109,12 +109,16 @@
       "expected_due_on": null
     },
     {
-      "name": "availability question",
-      "subject": "Coffee",
+      "name": "a deadline four replies back is still open",
+      "subject": "Audit evidence",
       "messages": [
-        { "written_on": "2026-10-27", "from_owner": false, "text": "Are you free Thursday? I'd love to catch up." }
+        { "written_on": "2026-10-20", "from_owner": false, "text": "Please send the audit evidence by November 6." },
+        { "written_on": "2026-10-21", "from_owner": true, "text": "Sure, working on it." },
+        { "written_on": "2026-10-26", "from_owner": false, "text": "How is it going?" },
+        { "written_on": "2026-10-27", "from_owner": true, "text": "Almost there, a few files left to collect." },
+        { "written_on": "2026-10-28", "from_owner": false, "text": "Great, thanks for the update." }
       ],
-      "expected_due_on": null
+      "expected_due_on": "2026-11-06"
     },
     {
       "name": "a closed deadline",

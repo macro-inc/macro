@@ -185,6 +185,22 @@ fn a_later_message_replaces_an_earlier_deadline() {
 }
 
 #[test]
+fn a_rejected_replacement_never_brings_back_what_it_replaced() {
+    // 2026-10-29 is a Thursday and 2026-10-30 a Friday: "by Friday" written on a
+    // Friday is ambiguous, but it still replaced Monday.
+    let messages = [
+        message(day(2026, 10, 29), "We need the numbers by Monday."),
+        message(day(2026, 10, 30), "Actually, by Friday."),
+    ];
+    let facts = only(vec![
+        weekday(0, "Monday", Weekday::Monday, WeekRelation::Upcoming),
+        weekday(1, "Friday", Weekday::Friday, WeekRelation::Upcoming),
+    ]);
+
+    assert_eq!(resolve_due_date(&facts, &messages).unwrap(), None);
+}
+
+#[test]
 fn of_several_in_one_message_the_nearest_counts() {
     let messages = [message(
         day(2026, 10, 20),
