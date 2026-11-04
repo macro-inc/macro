@@ -3,7 +3,7 @@
 ## What it is
 
 The shared layer under Macro's attention feeds: Home's work feed
-(`crates/work_feed`) and the notifications inbox. It pages authorized, hydrated
+(`crates/work_feed`) and the notifications inbox (`crates/notification_inbox`). It pages authorized, hydrated
 candidates with their notifications, completes, reads and restores them, and
 batches realtime changes into recomputes. Each feed keeps its own model on top.
 
@@ -28,7 +28,8 @@ whose `DoneReceipt` is the undo token. Subscriptions run `FeedTriggers` through
 - Owns: candidate paging and refill, notification loading per keying, done,
   seen and undo, inbox email archive on done, live trigger batching, viewer
   team lookup.
-- Not here: items, stacks and primary reasons → `crates/work_feed`;
+- Not here: items, stacks and primary reasons → `crates/work_feed`; inbox
+  rows → `crates/notification_inbox`;
   candidate SQL, access gates and hydration → `crates/soup` (`attention.rs`);
   notification storage → `crates/notification`.
 
@@ -36,8 +37,8 @@ whose `DoneReceipt` is the undo token. Subscriptions run `FeedTriggers` through
 
 - Depends on: `notification`, `entity_access` (ports; `inbound` feature);
   `soup`, `email`, `activity`, `soup_realtime` (feature `outbound`).
-- Used by: `work_feed`, `graphql_work_feed`, `document_storage_service`
-  (composition), `complete_graph` (tests).
+- Used by: `work_feed`, `notification_inbox` and their GraphQL adapters,
+  `document_storage_service` (composition), `complete_graph` (tests).
 
 ## Recipes
 

@@ -7490,6 +7490,70 @@
         }
       }
     },
+    "/crm/pipelines/{id}/stage-requirements": {
+      "get": {
+        "tags": ["crm::inbound::pipelines"],
+        "summary": "Read requirements by stable stage and field identities.",
+        "operationId": "get_crm_pipeline_stage_requirements",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/StageRequirement"
+                  }
+                }
+              }
+            }
+          }
+        }
+      },
+      "put": {
+        "tags": ["crm::inbound::pipelines"],
+        "summary": "Replace the required fields for one stage. An empty list removes its rule.",
+        "operationId": "set_crm_pipeline_stage_requirement",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/StageRequirement"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "204": {
+            "description": ""
+          }
+        }
+      }
+    },
     "/crm/pipelines/{id}/table": {
       "get": {
         "tags": ["crm::inbound::pipelines"],
@@ -44145,6 +44209,32 @@
           }
         ],
         "description": "The statement that ran: a read, or the table (and for a type change, the\ncolumn) it wrote."
+      },
+      "StageRequirement": {
+        "type": "object",
+        "description": "Fields required when a deal enters a particular option of a stage column.",
+        "required": ["stageColumnId", "stageId", "requiredColumnIds"],
+        "properties": {
+          "requiredColumnIds": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "description": "Fields that must be present. Empty removes the rule for this stage."
+          },
+          "stageColumnId": {
+            "type": "string",
+            "format": "uuid",
+            "description": "Single-select column identifying the stage, independent of its name."
+          },
+          "stageId": {
+            "type": "string",
+            "format": "uuid",
+            "description": "Stable option identity; renaming the stage preserves the rule."
+          }
+        },
+        "additionalProperties": false
       },
       "StarterDatabase": {
         "type": "object",

@@ -844,6 +844,16 @@ export const enableActivityFeed = defineFlag({
   default: onInDev,
 });
 
+// The unified notifications view: the /notifications route (redirects to Home
+// when off), the rail bell, its go-to hotkey, and the mobile dock bell's
+// target. PostHog-gated with a dev-mode default; override with
+// VITE_ENABLE_UNIFIED_NOTIFICATIONS.
+export const enableUnifiedNotifications = defineFlag({
+  key: 'enable-unified-notifications',
+  env: 'ENABLE_UNIFIED_NOTIFICATIONS',
+  default: onInDev,
+});
+
 // Agents home: pending updates from coding agents shown as a stack under the
 // new-chat composer, and the Open PRs section in the Agents sidebar.
 // Override with VITE_ENABLE_AGENT_UPDATES.

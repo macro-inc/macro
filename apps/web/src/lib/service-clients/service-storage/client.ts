@@ -176,6 +176,7 @@ import type { SlackCreateRequest } from './generated/schemas/slackCreateRequest'
 import type { SlackRegisterRequest } from './generated/schemas/slackRegisterRequest';
 import type { SmartTagPreview } from './generated/schemas/smartTagPreview';
 import type { SoupPage } from './generated/schemas/soupPage';
+import type { StageRequirement } from './generated/schemas/stageRequirement';
 import type { StorageRows } from './generated/schemas/storageRows';
 import type { StorageRowsQuery } from './generated/schemas/storageRowsQuery';
 import type { StoredGithubPullRequest } from './generated/schemas/storedGithubPullRequest';
@@ -443,6 +444,15 @@ export const storageServiceClient = {
     dssFetch<PipelineResponse[]>('/crm/pipelines', { method: 'GET' }),
   getCrmPipeline: (id: string) =>
     dssFetch<PipelineResponse>(`/crm/pipelines/${id}`, { method: 'GET' }),
+  getCrmPipelineStageRequirements: (id: string) =>
+    dssFetch<StageRequirement[]>(`/crm/pipelines/${id}/stage-requirements`, {
+      method: 'GET',
+    }),
+  setCrmPipelineStageRequirement: (id: string, rule: StageRequirement) =>
+    dssFetch(`/crm/pipelines/${id}/stage-requirements`, {
+      method: 'PUT',
+      body: JSON.stringify(rule),
+    }),
   getCrmPipelineTable: (id: string) =>
     dssFetch<TableDetail>(`/crm/pipelines/${id}/table`, { method: 'GET' }),
   getCrmPipelineViewPositions: (id: string, viewId: string) =>

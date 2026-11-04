@@ -14,6 +14,7 @@ import {
 import { Dynamic } from 'solid-js/web';
 import { FromInboxSelector } from '../components/from-inbox-selector';
 import { useCompose } from '../context/compose-context';
+import { ComposeHotkeyScope } from '../context/compose-hotkey-scope';
 import {
   registerCcBccHotkeys,
   revealRecipientField,
@@ -308,7 +309,9 @@ export function ComposeLayout(props: {
           mobileScrollRef={() => mobileScrollRef}
           onAddFiles={ctx.onAddAttachments}
         />
-        {props.toolbar}
+        <ComposeHotkeyScope.Provider value={composeHotkeyScope}>
+          {props.toolbar}
+        </ComposeHotkeyScope.Provider>
       </div>
     </Dynamic>
   );

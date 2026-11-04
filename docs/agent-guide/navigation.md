@@ -223,6 +223,7 @@ successfully rather than hashing the empty JavaScript placeholder.
 | `/app/companies/pipeline/<uuid>` | Customers on a pipeline; `/<company-or-contact>/<uuid>` after it opens a record from the pipeline. `/app/pipeline/<uuid>` redirects here |
 | `/app/companies/<company-or-contact>/<uuid>/<tasks-emails-calls-or-databases>/<item-id>` | Customers with the selected item inline; the section determines its type, with no redundant typed URL fallback. The same suffix works under a pipeline; workspace activity and record Files/overview notes retain type metadata |
 | `/app/activity` | Activity heatmap + feed |
+| `/app/notifications` | Unified Notifications view (`enable-unified-notifications`); redirects to Home when the flag is off |
 | `/app/calendar/<month-or-week-or-day>` | Calendar; the focused event, its occurrence, and the locator range use `sN.calendar.*` |
 | `/app/calendar` | Redirects to `/app/calendar/<month-or-week-or-day>` at the remembered period (Day on phones and Week on desktop by default), keeping an `eventId` |
 | `/app/scheduling` | Scheduling workspace: booking links, availability, bookings, insights, and booking page |
@@ -509,6 +510,11 @@ Showing Scheduling removes its duplicate from More; the choice survives reload.
 Activity appears in Customize sidebar only when the `enable-activity-feed` flag
 is on and, like Scheduling, starts hidden in More (also for existing preferences)
 until enabled on the rail.
+Notifications (bell, `g i`) appears directly below Home only when the
+`enable-unified-notifications` flag is on, and is shown on the rail by default.
+`g i` reaches Home while it is off; with it on, Home answers only `g h`. Its
+unread dot follows Home's unread dot.
+
 External (plug icon, `g x`) appears on the rail only with the
 `enable-whatsapp-linked` flag; it starts shown and can be hidden like other apps.
 
@@ -518,8 +524,8 @@ External (plug icon, `g x`) appears on the rail only with the
   global search. Hold Shift while selecting `Search everything` to open it in a
   new split, including when Search is already active. This left-click menu shares
   its surface and item styling with the sidebar right-click menus.
-- Nav: `Home`, `Drive`, `Email`, `Chat`, `Tasks`, `Calendar`,
-  `Agents`, `Customers`. Calendar and Customers appear only when
+- Nav: `Home`, `Notifications`, `Drive`, `Email`, `Chat`, `Tasks`, `Calendar`,
+  `Agents`, `Customers`. Notifications, Calendar and Customers appear only when
   their features are enabled. Calendar shows a next-meeting badge (`Now`, or
   minutes under an hour away) unless **Next meeting countdown** is off in
   **Settings → Calendar**.
