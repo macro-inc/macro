@@ -1,13 +1,11 @@
 import { createTagFacetContext } from '@app/features/soup';
 import { useAnalytics } from '@app/lib/analytics/analytics-context';
 import { t } from '@app/lib/i18n';
-import { replacePaneSearchParams } from '@app/lib/split-router';
 import { HeaderActionGroup } from '@components/app/HeaderActionGroup';
 import { toast } from '@core/component/Toast/Toast';
 import { useUserId } from '@core/context/user';
 import { useHotkeyDOMScope } from '@core/hotkey/hotkeys';
 import { useCombinedRecipients } from '@core/signal/useCombinedRecipient';
-import { writeClipboardData } from '@core/util/dataTransfer';
 import { fireAndForget } from '@core/util/fireAndForget';
 import PlusIcon from '@icon/system/regular/plus.svg';
 import BookmarkIcon from '@phosphor/bookmark-simple.svg';
@@ -59,7 +57,6 @@ import {
   SavedViewDialog,
 } from '../../saved-views/views/saved-view-dialogs';
 import { EmailSavedViewFields } from '../components/EmailSavedViewFields';
-import { emailTabSearch, emailTabSearchCodec } from '../email-route';
 import { useEmailView } from '../email-view-context';
 import {
   canSaveEmailTab,
@@ -284,21 +281,6 @@ export function useCreateEmailSavedView(owner: Owner | null = getOwner()) {
   };
 }
 
-async function copyEmailSavedViewLink(id: string) {
-  const params = emailTabSearchCodec.serialize({
-    tab: 'all',
-    savedView: id,
-  });
-  if (!params) return;
-  const url = new URL('/app/component/mail', window.location.origin);
-  replacePaneSearchParams(url.searchParams, [
-    { [emailTabSearch.namespace]: params },
-  ]);
-  if (await writeClipboardData({ 'text/plain': url.toString() }))
-    toast.success(t('emailViews.linkCopied'));
-  else toast.failure(t('emailViews.linkCopyFailed'));
-}
-
 function EmailSavedViewMenuItems(props: {
   record: SavedView;
   owner: Owner | null;
@@ -361,9 +343,6 @@ function EmailSavedViewMenuItems(props: {
           })
         );
       }}
-      onCopyLink={() =>
-        fireAndForget(copyEmailSavedViewLink(props.record.id), 'saved-views')
-      }
       onMoveUp={props.onMoveUp}
       onMoveDown={props.onMoveDown}
       onDelete={remove}

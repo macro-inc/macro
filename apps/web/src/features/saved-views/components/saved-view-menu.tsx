@@ -13,7 +13,8 @@ export function SavedViewMenuItems(props: {
   disabled?: boolean;
   onEdit: () => void;
   onDuplicate: () => void;
-  onCopyLink: () => void;
+  /** Offered only by consumers whose links can open the view for someone. */
+  onCopyLink?: () => void;
   onDelete: () => void;
   /** Present only in lists the viewer can reorder; absent at either end. */
   onMoveUp?: () => void;
@@ -32,10 +33,14 @@ export function SavedViewMenuItems(props: {
           <CopyIcon class="size-4" />
           Duplicate
         </Dropdown.Item>
-        <Dropdown.Item onSelect={props.onCopyLink}>
-          <LinkIcon class="size-4" />
-          Copy link
-        </Dropdown.Item>
+        <Show when={props.onCopyLink}>
+          {(onCopyLink) => (
+            <Dropdown.Item onSelect={onCopyLink()}>
+              <LinkIcon class="size-4" />
+              Copy link
+            </Dropdown.Item>
+          )}
+        </Show>
       </Dropdown.Group>
       <Show when={props.onMoveUp || props.onMoveDown}>
         <Dropdown.Group>

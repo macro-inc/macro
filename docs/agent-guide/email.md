@@ -1398,8 +1398,9 @@ live mail with the viewer's access. See `docs/design/saved-views.md`.
   `…` menu, and built-in tabs stop looking selected. Changing a filter shows
   **Save changes** (owner) and **Reset**. Choosing a tab, or Return to Email
   from an unavailable view, goes back to the tab and inboxes it was opened from.
-  The URL carries `mail.savedView=<id>`; Copy link shares it, and a view the
-  viewer can't open shows the unavailable state, never all mail.
+  The URL carries `mail.savedView=<id>`; a view the viewer can't open shows
+  the unavailable state, never all mail. Email views are private, so their
+  menus have no Copy link.
 - **Order and unread.** Rows drag to reorder (a 4px move starts the drag, so a
   click still opens the view) or use Move up/Move down in the row menu; the
   order is personal and follows the account. A dot marks a view whose first

@@ -9,8 +9,6 @@ export default {
   retryLoading: 'Retry loading views',
   loadMore: 'Load more views',
   reorderFailed: 'Could not reorder views',
-  linkCopied: 'Link copied',
-  linkCopyFailed: 'Could not copy link',
   // Header and drawer actions
   viewActions: 'Saved view actions',
   saveView: 'Save view',

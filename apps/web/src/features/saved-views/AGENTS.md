@@ -17,7 +17,7 @@ Reusable named view definitions. Consumers are main Tasks and Email; the generic
 
 - Keep Task filters, navigation, and configuration decoding in `features/tasks-view`, and Email's in `features/email-view`.
 - Order is personal and server-owned (`reorderSavedViews`); consumers show a pending move locally only until the list itself changes, never by splicing the cache.
-- Consumers pass the list's accessible label, row status (`trailing` plus `statusLabel`), drag wiring, and Move up/Move down handlers; rows never create drag items themselves, since only a desktop list mounts the drag provider.
+- Consumers pass the list's accessible label, row status (`trailing` plus `statusLabel`), drag wiring, and Move up/Move down handlers; rows never create drag items themselves, since only a desktop list mounts the drag provider. Pass `onCopyLink` only when a link can open the view for someone else (Tasks shares with teams; Email views are private).
 - A consumer that edits definitions in the dialog passes `fields`, `invalid`, and a replacement `config`; edit without `config` keeps renaming and sharing only.
 - Do not migrate CRM's legacy personal views or team settings into this consumer.
 - Share definitions, not access to their matching entities; the backend owns authorization.

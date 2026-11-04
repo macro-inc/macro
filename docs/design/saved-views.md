@@ -498,7 +498,8 @@ Email is the second consumer (`kind: "email"`, `version: 1`), behind the
   rather than widening. People are fixed addresses or domains; email views have
   no viewer-relative “Me”, so someone who wants their own mail adds their own
   address. The builder suggests domains from the team's CRM companies and the
-  viewer's contacts. `receivedWithinDays` resolves to a day boundary so the
+  viewer's contacts. Email views are private (no team sharing), so their menus
+  omit Copy link. `receivedWithinDays` resolves to a day boundary so the
   query stays stable while open.
 - Values within one condition are alternatives; conditions all apply, as in
   Tasks. Shared threads are excluded, like Signal and Noise.
