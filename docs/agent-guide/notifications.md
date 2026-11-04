@@ -26,15 +26,15 @@ mention stays one). It is as tall as it has something to say: who did it (for ex
 **&lt;first name&gt; assigned you a task**), with an unread dot; what it is about;
 and up to two lines of what was said. An email has all three (sender, subject,
 snippet), a message in a channel has no middle line, and a task has no last one.
-Several notifications on a row make a stack, with paper edges and a count: it names
+Several notifications on a row make a stack, with paper edges: it names
 who, what they share (the top-level message when a notification carries it, the
 channel, session, document or thread), and the newest line, with its sender when
 there are several people.
-Choosing a stack opens it and leaves it folded; only its count button unfolds it,
+Choosing a stack opens it and leaves it folded; only its caret unfolds it,
 as sections of the card, one per notification. Each opens that notification:
 its message or reply, its comment, or an agent's turn. A channel invite and an
 email have no message of their own, so they open the channel or the thread.
-A stack stays open as new notifications land. The time shows on hover. The author is
+A stack stays open as new notifications land. The time always shows; on hover Mark done takes its place, and nothing else moves. The author is
 the row's actor: a Macro user by first name, an agent by its bot name, or
 **Macro**; a row from outside Macro names its email sender, and GitHub rows
 keep the GitHub login. A row type, author kind, or button this build doesn't
@@ -91,7 +91,7 @@ the All and Unread toggle and a filter drawer (Type). Cards keep the same anatom
 and inline row buttons; at phone width they have a larger avatar and slightly larger
 text and sit further apart; a read card there loses its fill, fades its avatar and
 mutes its text, so unread cards stand out. A tablet keeps the desktop's sizes. Tapping a card or an unfolded notification opens it
-full-screen in place, tapping a stack's count unfolds it, a left swipe marks it
+full-screen in place, tapping a stack's caret unfolds it, a left swipe marks it
 done (with the same Undo), and pulling down refreshes. Hover controls and the preview pane are desktop-only. The
 dock keeps the bell active while the view shows.
 
@@ -104,7 +104,7 @@ Verify with two accounts and the inbox left open: two top-level messages in a
 channel stack on it; two reactions to your message, or a reaction and a reply, stack
 on that message and leave the channel's card; comments in different threads of a
 document share one card. Each appears within a second with no reload. Unfold a stack
-with its count and choose each notification: the preview moves to that message or
+with its caret and choose each notification: the preview moves to that message or
 comment, and stays there as new ones land. Marking one
 done leaves the others, Undo restores it in place, and a new notification in a done
 row brings it back with only what's new.
