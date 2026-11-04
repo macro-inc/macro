@@ -253,6 +253,24 @@ async fn authorize_offers_chatgpt_a_sign_in_choice() {
     );
 }
 
+/// Claude's directory reviewers need the same way in as ChatGPT's; other
+/// clients still go straight to Google, and so does a lookalike host.
+#[test]
+fn the_sign_in_choice_covers_claude_only_on_its_own_host() {
+    assert!(super::offers_sign_in_choice(
+        "https://claude.ai/api/mcp/auth_callback"
+    ));
+    assert!(!super::offers_sign_in_choice(
+        "https://claude.ai.attacker.example/api/mcp/auth_callback"
+    ));
+    assert!(!super::offers_sign_in_choice(
+        "http://claude.ai/api/mcp/auth_callback"
+    ));
+    assert!(!super::offers_sign_in_choice(
+        "https://cursor.com/oauth/callback"
+    ));
+}
+
 /// Whatever the query holds is re-encoded before it reaches the page.
 #[tokio::test]
 async fn the_sign_in_choice_escapes_the_query() {

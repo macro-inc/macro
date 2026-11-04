@@ -85,9 +85,9 @@ async fn register<I: InflightAuthStore + 'static>(
 }
 
 /// Hosts whose users pick how to sign in, rather than going straight to
-/// Google. OpenAI's reviewers sign in with a password, and can't get through
-/// Google's challenges on a shared account.
-const SIGN_IN_CHOICE_HOSTS: [&str; 2] = ["chatgpt.com", "chat.openai.com"];
+/// Google. Directory reviewers at OpenAI and Anthropic sign in with a password,
+/// and can't get through Google's challenges on a shared account.
+const SIGN_IN_CHOICE_HOSTS: [&str; 3] = ["chatgpt.com", "chat.openai.com", "claude.ai"];
 
 fn offers_sign_in_choice(redirect_uri: &str) -> bool {
     url::Url::parse(redirect_uri).is_ok_and(|uri| {
