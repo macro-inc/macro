@@ -23,7 +23,9 @@ pub struct LongTransaction {
     pub transaction_age: Duration,
     /// Time since `state` last changed.
     pub state_age: Option<Duration>,
+    /// Class of what the session is waiting on, such as `Lock` or `Client`.
     pub wait_event_type: Option<String>,
+    /// The specific wait within `wait_event_type`.
     pub wait_event: Option<String>,
     /// The running statement, or the last one when the session is idle.
     pub query: Option<String>,
@@ -56,7 +58,9 @@ pub trait ActivitySource: Send {
 /// How often to sample and what counts as long.
 #[derive(Debug, Clone, Copy)]
 pub struct SamplerConfig {
+    /// Time between samples.
     pub interval: Duration,
+    /// Minimum transaction age to report.
     pub older_than: Duration,
 }
 
