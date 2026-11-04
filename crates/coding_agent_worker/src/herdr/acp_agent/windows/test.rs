@@ -8,7 +8,7 @@ async fn a_prompt_retry_adopts_the_agent_after_an_unconfirmed_first_launch() {
         let script = root.path().join("herdr");
         std::fs::write(&script, include_str!("herdr.sh")).unwrap();
         std::fs::set_permissions(&script, std::fs::Permissions::from_mode(0o700)).unwrap();
-        let (mut adapter, _) = super::super::test::test_adapter(root.path());
+        let (mut adapter, mut output) = super::super::test::test_adapter(root.path());
         let adapter_mut = Arc::get_mut(&mut adapter).unwrap();
         adapter_mut.herdr = Some(HerdrCli::new(script, None));
         adapter_mut.options.kind = kind;
@@ -31,8 +31,8 @@ async fn a_prompt_retry_adopts_the_agent_after_an_unconfirmed_first_launch() {
         assert!(saved.window.is_some());
 
         assert_eq!(adapter.prompt(&session, "/fast").await.unwrap(), "end_turn");
-        let guard = session.live.lock().await;
-        let live = guard.as_ref().unwrap();
+        let mut guard = session.live.lock().await;
+        let live = guard.as_mut().unwrap();
         assert_eq!(
             live.started,
             std::time::UNIX_EPOCH + Duration::from_secs(saved.started)
@@ -45,6 +45,17 @@ async fn a_prompt_retry_adopts_the_agent_after_an_unconfirmed_first_launch() {
         assert_eq!(calls.matches("agent start").count(), 1);
         assert_eq!(calls.matches("agent prompt").count(), 1);
         assert!(!calls.contains("rename"));
+
+        // Recovery observed this agent alive, so a later close is reported.
+        while output.try_recv().is_ok() {}
+        std::fs::remove_file(root.path().join("agent.json")).unwrap();
+        adapter
+            .report_if_closed(adapter.herdr.as_ref().unwrap(), &session, live)
+            .await;
+        assert_eq!(
+            output.try_recv().unwrap(),
+            json!({"jsonrpc":"2.0", "method":"_session/closed", "params":{"sessionId":session.id}})
+        );
         adapter.shutdown.cancel();
     }
 }
@@ -290,7 +301,7 @@ async fn retries_and_reloads_reuse_the_workspace_and_socket_errors_do_not_create
         .to_string(),
     )
     .unwrap();
-    let (mut connected, _) = super::super::test::test_adapter(root.path());
+    let (mut connected, mut connected_output) = super::super::test::test_adapter(root.path());
     Arc::get_mut(&mut connected).unwrap().herdr = Some(herdr.clone());
     connected.load_session(&params).await.unwrap();
     assert_eq!(
@@ -326,6 +337,19 @@ async fn retries_and_reloads_reuse_the_workspace_and_socket_errors_do_not_create
     assert!(!calls.contains("agent start"));
     assert_eq!(calls.matches("workspace create").count(), 1);
     upgraded.shutdown.cancel();
+
+    // Loading observed the agent alive before the idle observer could run.
+    std::fs::remove_file(root.path().join("agent.json")).unwrap();
+    let connected_session = connected.session(&params).unwrap();
+    let mut connected_live = connected_session.live.lock().await;
+    while connected_output.try_recv().is_ok() {}
+    connected
+        .report_if_closed(&herdr, &connected_session, connected_live.as_mut().unwrap())
+        .await;
+    assert_eq!(
+        connected_output.try_recv().unwrap(),
+        json!({"jsonrpc":"2.0", "method":"_session/closed", "params":{"sessionId":session.id}})
+    );
 
     std::fs::remove_file(root.path().join("pane.json")).unwrap();
     reloaded

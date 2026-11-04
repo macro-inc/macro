@@ -326,7 +326,7 @@ function PullRequestPreviewBody(props: { id: string; fallbackLabel?: string }) {
                   href={url()}
                   target="_blank"
                   rel="noreferrer"
-                  class="shrink-0 text-link hover:text-link-hover visited:text-link-visited"
+                  class="shrink-0 text-ink-muted hover:text-ink"
                   onClick={(e) => e.stopPropagation()}
                 >
                   <OpenIcon class="size-4" />
@@ -463,7 +463,7 @@ function UnsyncedPullRequestPreviewCard(props: {
                 href={url()}
                 target="_blank"
                 rel="noreferrer"
-                class="shrink-0 text-link hover:text-link-hover visited:text-link-visited"
+                class="shrink-0 text-ink-muted hover:text-ink"
                 onClick={(e) => e.stopPropagation()}
               >
                 <OpenIcon class="size-4" />
@@ -544,7 +544,7 @@ function PullRequestMentionContent(props: PullRequestMentionDecoratorProps) {
       <span class="relative top-[0.125em] size-[1em] shrink-0 inline-flex mx-1">
         <PullRequestStatusIcon status={status()} />
       </span>
-      <span class="flex min-w-0 items-baseline underline decoration-current/20 decoration-[max(1px,0.1em)] underline-offset-2">
+      <span class="flex min-w-0 items-baseline text-ink underline decoration-current/20 decoration-[max(1px,0.1em)] underline-offset-2">
         <span class="min-w-0 truncate">{parts().name}</span>
         <Show when={parts().number}>
           {(number) => (
@@ -642,7 +642,7 @@ export function PullRequestMention(props: PullRequestMentionDecoratorProps) {
           href={props.url}
           target="_blank"
           rel="noreferrer"
-          class="text-link hover:text-link-hover visited:text-link-visited underline"
+          class="text-ink underline decoration-current/20 decoration-[max(1px,0.1em)] underline-offset-2 hover:decoration-current"
         >
           {fallbackLabel(mentionFallbackLabel(props))}
         </a>

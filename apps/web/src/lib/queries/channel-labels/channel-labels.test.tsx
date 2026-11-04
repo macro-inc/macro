@@ -1,12 +1,20 @@
 import { catchToResult } from '@core/util/result';
+import type { ChannelLabelScopeSelection } from '@service-storage/generated/schemas/channelLabelScopeSelection';
 import type { ChannelLabelsList } from '@service-storage/generated/schemas/channelLabelsList';
+import type { SmartTagPreview } from '@service-storage/generated/schemas/smartTagPreview';
 import { cleanup, render, waitFor } from '@solidjs/testing-library';
-import { type QueryClient, QueryClientProvider } from '@tanstack/solid-query';
+import {
+  focusManager,
+  type QueryClient,
+  QueryClientProvider,
+} from '@tanstack/solid-query';
 import { type Ok, ok } from 'neverthrow';
 import { createSignal } from 'solid-js';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { channelKeys } from '../channel/keys';
 import { queryClient } from '../client';
 import {
+  useAvailableSectionChannelsQuery,
   useChannelLabelsData,
   useChannelLabelsQuery,
   useSetChannelLabelMutation,
@@ -20,6 +28,7 @@ const mocks = vi.hoisted(() => ({
   list: vi.fn(),
   preview: vi.fn(),
   assign: vi.fn(),
+  channels: vi.fn(),
 }));
 vi.mock('@app/lib/analytics/posthog', () => ({
   useFeatureFlag: () => () => ({ enabled: mocks.enabled() }),
@@ -36,6 +45,7 @@ vi.mock('@service-storage/client', () => ({
     },
   },
 }));
+vi.mock('../channel/channels', () => ({ fetchAllChannels: mocks.channels }));
 vi.mock('../client', async () => {
   const { QueryClient } = await import('@tanstack/solid-query');
   return { queryClient: new QueryClient() };
@@ -60,6 +70,7 @@ let client: QueryClient;
 beforeEach(() => {
   mocks.userId = () => 'viewer';
   mocks.assign.mockReset().mockResolvedValue(ok(undefined));
+  mocks.channels.mockReset().mockResolvedValue([]);
   mocks.list.mockReset().mockResolvedValue(ok(labels));
   mocks.preview
     .mockReset()
@@ -73,9 +84,47 @@ beforeEach(() => {
 afterEach(() => {
   cleanup();
   client.clear();
+  focusManager.setFocused(undefined);
 });
 
 describe('channel tag query rollout', () => {
+  it('isolates available channels by account and follows channel-list invalidation', async () => {
+    mocks.enabled = () => true;
+    const [userId, setUserId] = createSignal('viewer');
+    mocks.userId = userId;
+    let finishOld!: (channels: { id: string }[]) => void;
+    mocks.channels.mockImplementationOnce(
+      () =>
+        new Promise((resolve) => {
+          finishOld = resolve;
+        })
+    );
+    mocks.channels.mockResolvedValueOnce([{ id: 'current' }]);
+    let query!: ReturnType<typeof useAvailableSectionChannelsQuery>;
+    const Probe = () => {
+      query = useAvailableSectionChannelsQuery();
+      return null;
+    };
+    render(() => (
+      <QueryClientProvider client={client}>
+        <Probe />
+      </QueryClientProvider>
+    ));
+    await waitFor(() => expect(mocks.channels).toHaveBeenCalledTimes(1));
+    setUserId('new-viewer');
+    await waitFor(() => expect(query.isPending).toBe(false));
+    expect(query.data?.map((channel) => channel.id)).toEqual(['current']);
+    finishOld([{ id: 'old-account' }]);
+    await waitFor(() => expect(client.isFetching()).toBe(0));
+    expect(query.data?.map((channel) => channel.id)).toEqual(['current']);
+
+    mocks.channels.mockResolvedValueOnce([{ id: 'joined' }]);
+    await client.invalidateQueries({
+      queryKey: channelKeys.listChannels.queryKey,
+    });
+    expect(query.data?.map((channel) => channel.id)).toEqual(['joined']);
+  });
+
   it('does not fetch while disabled and hides cached labels when switched off', async () => {
     const [enabled, setEnabled] = createSignal(false);
     mocks.enabled = enabled;
@@ -117,6 +166,65 @@ describe('channel tag query rollout', () => {
     expect(
       client.getQueryData(channelLabelKeys.list(undefined, 'viewer').queryKey)
     ).toEqual(labels);
+  });
+
+  it('inherits bounded retries for transient section failures and retains cached labels', async () => {
+    mocks.enabled = () => true;
+    client.setDefaultOptions({ queries: { retry: 1, retryDelay: 0 } });
+    client.setQueryData(
+      channelLabelKeys.list('personal', 'viewer').queryKey,
+      labels
+    );
+    mocks.list.mockRejectedValueOnce(new Error('Network unavailable'));
+    mocks.list.mockResolvedValueOnce(ok(labels));
+    let data!: ReturnType<typeof useChannelLabelsData>;
+    let query!: ReturnType<typeof useChannelLabelsQuery>;
+    const Probe = () => {
+      data = useChannelLabelsData('personal');
+      query = useChannelLabelsQuery('personal');
+      return null;
+    };
+    render(() => (
+      <QueryClientProvider client={client}>
+        <Probe />
+      </QueryClientProvider>
+    ));
+
+    expect(data()).toEqual(labels.labels);
+    await client.invalidateQueries({
+      queryKey: channelLabelKeys.list('personal', 'viewer').queryKey,
+    });
+
+    expect(mocks.list).toHaveBeenCalledTimes(2);
+    expect(query.isError).toBe(false);
+    expect(data()).toEqual(labels.labels);
+  });
+
+  it('recovers an initial section failure when the app regains focus', async () => {
+    mocks.enabled = () => true;
+    client.setDefaultOptions({
+      queries: { retry: false, refetchOnWindowFocus: false },
+    });
+    mocks.list.mockRejectedValueOnce(new Error('Network unavailable'));
+    mocks.list.mockResolvedValueOnce(ok(labels));
+    let query!: ReturnType<typeof useChannelLabelsQuery>;
+    const Probe = () => {
+      query = useChannelLabelsQuery('personal');
+      return null;
+    };
+    render(() => (
+      <QueryClientProvider client={client}>
+        <Probe />
+      </QueryClientProvider>
+    ));
+    await waitFor(() => expect(query.isError).toBe(true));
+
+    focusManager.setFocused(false);
+    focusManager.setFocused(true);
+
+    await waitFor(() => expect(query.isSuccess).toBe(true));
+    expect(query.data?.labels).toEqual(labels.labels);
+    expect(mocks.list).toHaveBeenCalledTimes(2);
   });
 
   it('keeps personal and team list caches independent', async () => {
@@ -194,6 +302,57 @@ describe('channel tag query rollout', () => {
     await client.invalidateQueries({ queryKey: channelLabelKeys._def });
     expect(mocks.preview).toHaveBeenCalledTimes(1);
   });
+  it('switches smart preview scope without remounting and ignores the old scope response', async () => {
+    mocks.enabled = () => true;
+    const [scope, setScope] =
+      createSignal<ChannelLabelScopeSelection>('personal');
+    let finishPersonal!: (value: Ok<SmartTagPreview, never>) => void;
+    mocks.preview.mockImplementationOnce(
+      () =>
+        new Promise((resolve) => {
+          finishPersonal = resolve;
+        })
+    );
+    mocks.preview.mockResolvedValueOnce(
+      ok({
+        channels: [{ id: 'team-channel', name: 'Team channel' }],
+        totalCount: 1,
+      })
+    );
+    let preview!: ReturnType<typeof useSmartTagPreviewQuery>;
+    const Probe = () => {
+      preview = useSmartTagPreviewQuery(() => 'channel', scope);
+      return null;
+    };
+    render(() => (
+      <QueryClientProvider client={client}>
+        <Probe />
+      </QueryClientProvider>
+    ));
+    await waitFor(() => expect(mocks.preview).toHaveBeenCalledTimes(1));
+    setScope('team');
+    await waitFor(() => expect(preview.isPending).toBe(false));
+    expect(mocks.preview).toHaveBeenLastCalledWith(
+      { attribute: 'name', contains: 'channel' },
+      expect.any(AbortSignal),
+      'team'
+    );
+    expect(preview.data?.channels.map((channel) => channel.id)).toEqual([
+      'team-channel',
+    ]);
+
+    finishPersonal(
+      ok({
+        channels: [{ id: 'private-channel', name: 'Private channel' }],
+        totalCount: 1,
+      })
+    );
+    await waitFor(() => expect(client.isFetching()).toBe(0));
+    expect(preview.data?.channels.map((channel) => channel.id)).toEqual([
+      'team-channel',
+    ]);
+  });
+
   it('does not publish late reads into another account', async () => {
     const [userId, setUserId] = createSignal('viewer');
     mocks.userId = userId;

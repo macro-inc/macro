@@ -1,12 +1,12 @@
 # Type Alias: UpdateScheduledActionData
 
-> **UpdateScheduledActionData** = \{ `body`: [`UpdateScheduledAction`](UpdateScheduledAction.md); `path`: \{ `id`: `string`; \}; `query?`: `never`; `url`: `"/scheduled-actions/{id}"`; \}
+> **UpdateScheduledActionData** = \{ `body`: [`ActionConfigurationUpdate`](ActionConfigurationUpdate.md); `path`: \{ `id`: `string`; \}; `query?`: `never`; `url`: `"/scheduled-actions/{id}"`; \}
 
 ## Properties
 
 | Property | Type | Description |
 | ------ | ------ | ------ |
-| <a id="property-body"></a> `body` | [`UpdateScheduledAction`](UpdateScheduledAction.md) | - |
+| <a id="property-body"></a> `body` | [`ActionConfigurationUpdate`](ActionConfigurationUpdate.md) | - |
 | <a id="property-path"></a> `path` | \{ `id`: `string`; \} | - |
 | `path.id` | `string` | ID of the scheduled action |
 | <a id="property-query"></a> `query?` | `never` | - |

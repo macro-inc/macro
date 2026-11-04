@@ -1,6 +1,8 @@
 # Class: MacroApiError
 
 A non-2xx HTTP response (Macro API, or a raw fetch like presigned downloads).
+The message includes the server's explanation, such as a validation error,
+and `data` holds the parsed error body.
 
 ## Extends
 
@@ -9,6 +11,7 @@ A non-2xx HTTP response (Macro API, or a raw fetch like presigned downloads).
 ## Extended by
 
 - [`MacroOpRefusedError`](../../../entities/databases/database/classes/MacroOpRefusedError.md)
+- [`MacroForbiddenError`](MacroForbiddenError.md)
 
 ## Constructors
 

@@ -98,6 +98,7 @@ impl Adapter {
                         ));
                     }
                     self.remember_window(session, live, &info)?;
+                    live.seen_alive = true;
                 }
                 Err(error) if error.missing_agent() => {
                     let mut restarted = self.launch(herdr, session, text, guard.as_ref()).await?;
@@ -273,6 +274,7 @@ impl Adapter {
                 Ok(info) => {
                     missing = 0;
                     self.remember_window(session, live, &info)?;
+                    live.seen_alive = true;
                     if info.session_id.is_some() {
                         *lock(&session.native_id) = info.session_id.clone();
                     }

@@ -31,7 +31,7 @@
     "webhook": "bun scripts/webhook.ts",
     "validate-webhook": "bun scripts/validate-webhook.ts",
     "coverage": "bun src/coverage/check.ts",
-    "generate": "openapi-ts",
+    "generate": "bun scripts/generate.ts",
     "build:js": "bun scripts/build.ts",
     "build:types": "tsc -p tsconfig.build.json",
     "build": "bun run build:js && bun run build:types",

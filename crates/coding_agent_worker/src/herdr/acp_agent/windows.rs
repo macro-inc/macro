@@ -54,6 +54,8 @@ impl Adapter {
             path: record.transcript,
             cursor: Cursor::default(),
             pending: VecDeque::new(),
+            seen_alive: true,
+            closed_reported: false,
         };
         if lock(&session.native_id).is_none() {
             *lock(&session.native_id) = info.session_id.clone();

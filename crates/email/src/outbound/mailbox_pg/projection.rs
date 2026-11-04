@@ -28,7 +28,7 @@ impl MailboxProjectionRepository for PgMailboxSync {
             )
             UPDATE email_projection_outbox o SET lease_id = $1,lease_until = now() + interval '3 minutes',attempts = attempts + 1
             FROM candidate c,email_links l WHERE o.id = c.id AND l.id = o.link_id
-            RETURNING o.id,o.link_id,o.generation,o.payload,l.sync_generation,l.grant_generation
+            RETURNING o.id,o.link_id,o.generation,o.payload,o.attempts,l.sync_generation,l.grant_generation
         "#,lease_id).fetch_optional(&self.db).await.map_err(db_error)?;
         row.map(|row| {
             Ok(ProjectionLease {
@@ -42,6 +42,7 @@ impl MailboxProjectionRepository for PgMailboxSync {
                 event: serde_json::from_value(row.payload)
                     .map_err(|_| MailboxError::Persistence)?,
                 from_current_generation: row.generation == row.sync_generation,
+                attempts: row.attempts,
             })
         })
         .transpose()
@@ -53,7 +54,7 @@ impl MailboxProjectionRepository for PgMailboxSync {
     ) -> Result<Option<ProjectionContext>, MailboxError> {
         let link = email_db_client::links::get::fetch_link_by_id(&self.db, lease.mailbox.link_id)
             .await
-            .map_err(|_| MailboxError::Persistence)?;
+            .map_err(wrapped_db_error)?;
         let Some(link) = link.filter(|link| link.is_sync_active) else {
             return Ok(None);
         };
@@ -89,22 +90,26 @@ impl MailboxProjectionRepository for PgMailboxSync {
     async fn finish_projection(
         &self,
         lease: &ProjectionLease,
-        success: bool,
+        retry_after_seconds: Option<u32>,
     ) -> Result<(), MailboxError> {
-        if success {
-            sqlx::query!("DELETE FROM email_projection_outbox WHERE id = $1 AND lease_id = $2 AND lease_until > now()",lease.id,lease.lease_id)
-                .execute(&self.db).await.map_err(db_error)?;
-        } else {
-            sqlx::query!(
-                r#"UPDATE email_projection_outbox SET lease_id = NULL,lease_until = NULL,
-                available_at = now() + make_interval(secs => LEAST(600,30 * attempts))
-                WHERE id = $1 AND lease_id = $2"#,
-                lease.id,
-                lease.lease_id
-            )
-            .execute(&self.db)
-            .await
-            .map_err(db_error)?;
+        match retry_after_seconds {
+            None => {
+                sqlx::query!("DELETE FROM email_projection_outbox WHERE id = $1 AND lease_id = $2 AND lease_until > now()",lease.id,lease.lease_id)
+                    .execute(&self.db).await.map_err(db_error)?;
+            }
+            Some(delay) => {
+                sqlx::query!(
+                    r#"UPDATE email_projection_outbox SET lease_id = NULL,lease_until = NULL,
+                    available_at = now() + make_interval(secs => $3)
+                    WHERE id = $1 AND lease_id = $2"#,
+                    lease.id,
+                    lease.lease_id,
+                    f64::from(delay)
+                )
+                .execute(&self.db)
+                .await
+                .map_err(db_error)?;
+            }
         }
         Ok(())
     }
@@ -141,7 +146,7 @@ impl PgMailboxSync {
                 vec![db_message],
             )
             .await
-            .map_err(|_| MailboxError::Persistence)?
+            .map_err(wrapped_db_error)?
             .pop()
         else {
             return Ok(None);

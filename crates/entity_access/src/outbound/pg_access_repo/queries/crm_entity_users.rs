@@ -37,10 +37,10 @@ pub async fn get_crm_entity_users(
                 r#"
                 SELECT tu.user_id
                 FROM crm_contacts ct
-                JOIN crm_companies c ON c.id = ct.company_id
-                JOIN team_user tu ON tu.team_id = c.team_id
+                LEFT JOIN crm_companies c ON c.id = ct.company_id
+                JOIN team_user tu ON tu.team_id = ct.team_id
                 WHERE ct.id = $1
-                  AND (NOT (ct.hidden OR c.hidden) OR tu.team_role <> 'member')
+                  AND (NOT (ct.hidden OR c.hidden IS TRUE) OR tu.team_role <> 'member')
                 "#,
                 entity_id
             )

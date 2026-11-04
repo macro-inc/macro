@@ -3,7 +3,7 @@
 > **unwrap**\<`TData`, `TError`\>(`res`): `TData`
 
 Turn a hey-api `{ data, error, response? }` result into either the success
-payload or a thrown MacroApiError.
+payload or a thrown MacroApiError (MacroForbiddenError for a 403).
 
 ## Type Parameters
 

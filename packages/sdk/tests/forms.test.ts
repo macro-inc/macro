@@ -25,6 +25,8 @@ const registration = {
     respondentColumnId: null,
     audience: 'members',
     tallyVisible: false,
+    responsesVisible: false,
+    anonymous: false,
     status: 'open',
     closesAt: null,
     confirmationMessage: 'See you there!',
@@ -311,6 +313,7 @@ describe('Forms', () => {
       paths.push(path);
       if (path.endsWith('/responses/mine'))
         return Response.json({
+          kind: 'saved',
           response: {
             id: responseId,
             formId,
@@ -332,6 +335,7 @@ describe('Forms', () => {
     const macro = new Macro({ token: 'user-token', hosts: { storage: host } });
     const form = macro.forms.byId(formId);
     const mine = await form.myResponse();
+    if (mine.kind !== 'saved') throw new Error('a saved response');
     expect(mine.response.form).toBe(form);
     expect(mine.response.id).toBe(responseId);
     expect(mine.row?.id).toBe(rowId);
@@ -359,6 +363,22 @@ describe('Forms', () => {
       `/forms/${formId}`,
       `/forms/${formId}/responses/mine`,
     ]);
+  });
+
+  test('reads an anonymous form response as only having responded', async () => {
+    const paths: string[] = [];
+    globalThis.fetch = (async (input) => {
+      const request = input instanceof Request ? input : new Request(input);
+      const path = new URL(request.url).pathname;
+      paths.push(path);
+      if (path.endsWith('/responses/mine'))
+        return Response.json({ kind: 'anonymous' });
+      return Response.json(registration);
+    }) as typeof fetch;
+    const macro = new Macro({ token: 'user-token', hosts: { storage: host } });
+    const form = macro.forms.byId(formId);
+    expect(await form.myResponse()).toEqual({ kind: 'anonymous' });
+    expect(paths).toEqual([`/forms/${formId}/responses/mine`]);
   });
 
   test('edits responses with PUT and returns a stopped section without reading rows', async () => {

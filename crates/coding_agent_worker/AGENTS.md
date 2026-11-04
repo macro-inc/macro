@@ -119,6 +119,7 @@ external chat replies depend on it. Direct session controls still mint IDs.
   window IDs before launch, and preserve existing workspace and tab names;
   `src/herdr/acp_agent/windows.rs` owns reuse, recovery after unconfirmed launches,
   and rollback. Readiness timeouts must leave the pending prompt unsubmitted.
+  Recovered agents count as observed live agents when reporting later closure.
 - `src/herdr/acp_agent/prompt.rs` owns native prompt delivery. Ordinary Codex
   follow-ups steer an active turn, including after recovery; require the matching
   transcript user message before accepting completion. Keep slash commands,

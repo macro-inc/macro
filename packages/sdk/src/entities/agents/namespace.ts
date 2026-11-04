@@ -11,7 +11,12 @@ export class AgentNamespace {
     return Agent.byId(this.client, id);
   }
 
-  /** All accessible agents. */
+  /**
+   * Accessible custom agents. Pass one to
+   * {@link AgentSessionNamespace.createManaged} to start a session as that
+   * persona. System personas such as Cursor are constructed with
+   * {@link Agent.byId}.
+   */
   async list(): Promise<Agent[]> {
     return unwrap(await this.client.storage.listAgents()).map((a) =>
       Agent.from(this.client, a),

@@ -91,6 +91,18 @@ Table version for optimistic operation batches.
 
 ***
 
+### views()
+
+> **views**(): `Promise`\<[`PipelineView`](PipelineView.md)[]\>
+
+Stored views in display order.
+
+#### Returns
+
+`Promise`\<[`PipelineView`](PipelineView.md)[]\>
+
+***
+
 ### from()
 
 > `static` **from**(`client`, `pipeline`, `record`): `PipelineTable`
