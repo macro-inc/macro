@@ -659,6 +659,7 @@ async fn run() -> anyhow::Result<()> {
         }
         None => None,
     };
+    // One flag client for every per-user agent rollout.
     let feature_flags = config
         .posthog_api_key
         .value()
@@ -829,11 +830,16 @@ async fn run() -> anyhow::Result<()> {
         inmem_engine = inmem_engine.with_tool_mode(Arc::clone(selector));
     }
     // `auto-skills` decides, per user, whether a turn loads the user's skills
-    // its request needs.
+    // its request needs, and whether code-mode turns load the SDK areas a
+    // request needs instead of carrying every area's guidance.
     if let Some(flags) = &feature_flags {
-        inmem_engine = inmem_engine.with_skill_routing(Arc::new(
-            agent_inmem::domain::skill_routing::FlaggedSkillRouting::new(flags.clone()),
-        ));
+        inmem_engine = inmem_engine
+            .with_skill_routing(Arc::new(
+                agent_inmem::domain::skill_routing::FlaggedSkillRouting::new(flags.clone()),
+            ))
+            .with_entity_routing(Arc::new(
+                agent_inmem::domain::entity_routing::FlaggedEntityRouting::new(flags.clone()),
+            ));
     }
     let inmem_model_engine: Arc<dyn TurnEngine> = Arc::new(inmem_engine);
     // Normalize uploaded images before any provider sees them. In addition to

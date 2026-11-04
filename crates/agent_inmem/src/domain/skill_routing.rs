@@ -19,8 +19,7 @@ mod eval;
 #[cfg(test)]
 mod test;
 
-/// PostHog key evaluated for the session owner.
-pub const AUTO_SKILLS: &str = "auto-skills";
+pub use crate::domain::entity_routing::AUTO_SKILLS;
 
 /// Most skills one session keeps loaded; the oldest go first.
 pub const SKILLS_PER_SESSION: usize = 8;

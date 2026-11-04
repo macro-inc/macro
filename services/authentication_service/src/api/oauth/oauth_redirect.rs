@@ -1,4 +1,6 @@
-use crate::api::webhooks::user::create_user_webhook::revert_unconfirmed_agent;
+use crate::api::webhooks::user::create_user_webhook::{
+    mark_sso_signup_as_agent, revert_unconfirmed_agent,
+};
 use crate::api::{
     context::ApiContext,
     login::sso::{SsoState, is_allowed_original_url, redact_original_url_for_logging},
@@ -157,9 +159,16 @@ pub async fn handler(
         Err(_) => false,
     };
 
-    // A provider just verified this address, so a person is signing in.
-    if !just_signed_up && let Ok(user_id) = decoded_user_id.as_ref() {
-        revert_unconfirmed_agent(&ctx, user_id.as_ref(), user_id.email_str()).await;
+    let agent_signup = state.as_ref().is_some_and(|state| state.is_agent);
+    if let Ok(user_id) = decoded_user_id.as_ref() {
+        if just_signed_up && agent_signup {
+            mark_sso_signup_as_agent(&ctx, user_id.as_ref(), user_id.email_str()).await;
+        }
+        // A provider just verified this address, so a person is signing in,
+        // unless they came through the agent signup page.
+        if !just_signed_up && !agent_signup {
+            revert_unconfirmed_agent(&ctx, user_id.as_ref(), user_id.email_str()).await;
+        }
     }
 
     // Only a brand-new account counts as referred: an existing user who signs

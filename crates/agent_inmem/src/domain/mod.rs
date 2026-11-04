@@ -6,6 +6,8 @@ pub mod agent;
 /// Which model an Auto turn runs on.
 pub mod auto_model;
 pub mod engine;
+/// Whether a code-mode turn routes SDK entities and their guidance.
+pub mod entity_routing;
 pub mod mcp;
 pub mod model_access;
 /// ACP session configuration generated from the turn engine catalog.

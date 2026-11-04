@@ -17755,6 +17755,7 @@ export const CodeToolsDescription = z.object({
           z.object({
             name: z.string(),
             description: z.string(),
+            guide: z.union([z.string(), z.null()]).optional(),
             index: z.union([z.string(), z.null()]).optional(),
           })
         ),
@@ -17797,6 +17798,7 @@ export const CodeToolsDescription = z.object({
     z.object({
       name: z.string(),
       description: z.string(),
+      guide: z.union([z.string(), z.null()]).optional(),
       index: z.union([z.string(), z.null()]).optional(),
     })
   ),

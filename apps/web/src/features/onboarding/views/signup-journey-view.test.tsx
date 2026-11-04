@@ -26,6 +26,7 @@ function setup() {
         onGoogle={google}
         onBackFromEmail={() => {}}
         onSignIn={signIn}
+        onAgentSignup={() => {}}
         showingEmail={false}
       />
     ),

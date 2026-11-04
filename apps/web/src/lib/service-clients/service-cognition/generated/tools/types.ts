@@ -16434,9 +16434,14 @@ export interface SdkDocumentation {
    */
   name: string;
   /**
-   * Compact capability summary.
+   * When to use the entity: its `@routing` sentence, "Use when …; not …".
    */
   description: string;
+  /**
+   * How this area of Macro works: the entity's `@agent` guidance, when it
+   * has some; omitted in a compact catalog.
+   */
+  guide?: string | null;
   /**
    * Every class, method and type the entity declares, one line each and
    * named by the symbol `ReadCodeDocs` reads; omitted in a compact catalog.
