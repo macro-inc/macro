@@ -28,9 +28,6 @@ vi.mock('@queries/email/link', () => ({
 vi.mock('@core/component/HoverCard', () => ({
   HoverCard: (props: { trigger: unknown }) => <>{props.trigger}</>,
 }));
-vi.mock('@core/component/UserTooltip', () => ({
-  UserTooltip: () => null,
-}));
 vi.mock('@core/component/Toast/Toast', () => ({
   toast: { success: () => {} },
 }));

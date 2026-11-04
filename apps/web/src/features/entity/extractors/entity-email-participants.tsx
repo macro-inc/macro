@@ -3,7 +3,6 @@ import { HoverCard } from '@core/component/HoverCard';
 import { StaticMarkdown } from '@core/component/LexicalMarkdown/component/core/StaticMarkdown';
 import { unifiedListMarkdownTheme } from '@core/component/LexicalMarkdown/theme';
 import { toast } from '@core/component/Toast/Toast';
-import { UserTooltip } from '@core/component/UserTooltip';
 import { emailToMacroId, getDisplayName } from '@core/user';
 import {
   highlightTermsInText,
@@ -13,7 +12,7 @@ import CopyIcon from '@icon/system/regular/copy.svg';
 import { Telemetry } from '@macro-inc/observability';
 import { useInboxEmail } from '@queries/email/inbox-email';
 import { Surface } from '@ui';
-import { createSignal, For, Show } from 'solid-js';
+import { For, Show } from 'solid-js';
 import type { EmailEntity, EmailThreadParticipants } from '../types/entity';
 import { isSearchEntity } from '../types/search';
 
@@ -55,45 +54,22 @@ type ResolvedParticipant = {
   displayName: string;
 };
 
-function ParticipantWithTooltip(props: {
-  participant: EmailThreadParticipants[number];
-  displayName: string;
-  highlighted?: string;
-}) {
-  const macroId = () => emailToMacroId(props.participant.email);
-  const macroDisplayName = () => getDisplayName(macroId());
-  const tooltipName = () =>
-    resolveParticipantName(props.participant, macroDisplayName());
-  const [open, setOpen] = createSignal(false);
-
+/**
+ * A sender's name in a list row. It is part of the row, not a person-card
+ * trigger: a card opened from one row covers the rows below it, so the next
+ * click on a sender would land on the card, and through it on the wrong row.
+ */
+function ParticipantName(props: { displayName: string; highlighted?: string }) {
   return (
-    <HoverCard
-      open={open()}
-      onOpenChange={setOpen}
-      triggerAs="span"
-      trigger={
-        <Show
-          when={props.highlighted}
-          fallback={<span>{props.displayName}</span>}
-        >
-          {(md) => (
-            <StaticMarkdown
-              markdown={md()}
-              theme={unifiedListMarkdownTheme}
-              singleLine
-            />
-          )}
-        </Show>
-      }
-      content={
-        <UserTooltip
-          displayName={tooltipName()}
-          email={props.participant.email}
-          id={macroId()}
-          onClose={() => setOpen(false)}
+    <Show when={props.highlighted} fallback={<span>{props.displayName}</span>}>
+      {(md) => (
+        <StaticMarkdown
+          markdown={md()}
+          theme={unifiedListMarkdownTheme}
+          singleLine
         />
-      }
-    />
+      )}
+    </Show>
   );
 }
 
@@ -233,8 +209,7 @@ export function EntityEmailParticipants(props: { entity: EmailEntity }) {
         {(resolved, index) => (
           <>
             <Show when={index() > 0}>, </Show>
-            <ParticipantWithTooltip
-              participant={resolved.participant}
+            <ParticipantName
               displayName={resolved.displayName}
               highlighted={highlightName(resolved.displayName)}
             />
