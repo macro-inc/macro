@@ -1710,9 +1710,9 @@ export type PatchSettingsResponse = {
 /**
  * View type. Supported values include standard labels and a custom user label user:<label>
  */
-export type PreviewView = 'inbox' | 'sent' | 'drafts' | 'starred' | 'all' | 'important' | 'other' | string;
+export type PreviewView = 'inbox' | 'sent' | 'drafts' | 'starred' | 'all' | 'spam' | 'trash' | 'important' | 'other' | string;
 
-export type PreviewViewStandardLabel = 'inbox' | 'sent' | 'drafts' | 'starred' | 'all' | 'important' | 'other';
+export type PreviewViewStandardLabel = 'inbox' | 'sent' | 'drafts' | 'starred' | 'all' | 'spam' | 'trash' | 'important' | 'other';
 
 /**
  * Payload for the `refresh_email` connection gateway event: identifies the
@@ -1743,6 +1743,10 @@ export type RefreshEmailEvent = {
     link_id: string;
     status: BackfillStatus;
     total_threads: number;
+} | {
+    event: 'focus_updated';
+    link_id: string;
+    traceparent?: string | null;
 };
 
 /**

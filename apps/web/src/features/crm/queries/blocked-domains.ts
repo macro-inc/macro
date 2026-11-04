@@ -17,28 +17,7 @@ import { queryOptions, useMutation, useQuery } from '@tanstack/solid-query';
 import type { BlockedDomainsSource } from '../context/crm-sources';
 import type { CrmQueryDependencies } from './dependencies';
 import { crmKeys } from './keys';
-
-function excludesCrmRecords(filter: unknown): boolean {
-  if (typeof filter !== 'object' || filter === null) return false;
-  if ('&' in filter && Array.isArray(filter['&']))
-    return filter['&'].some(excludesCrmRecords);
-  return (
-    'l' in filter &&
-    typeof filter.l === 'object' &&
-    filter.l !== null &&
-    'id' in filter.l &&
-    filter.l.id === '00000000-0000-0000-0000-000000000000'
-  );
-}
-
-function listCanIncludeCrm(body: unknown): boolean {
-  if (typeof body !== 'object' || body === null) return false;
-  const excludesCompanies = 'ccf' in body && excludesCrmRecords(body.ccf);
-  // Contacts are opt-in, unlike companies in a general Soup list.
-  const excludesContacts =
-    !('crmf' in body) || body.crmf == null || excludesCrmRecords(body.crmf);
-  return !(excludesCompanies && excludesContacts);
-}
+import { listCanIncludeCrm } from './list-refresh';
 
 async function refreshBlockedDomainRecords(): Promise<void> {
   await Promise.all([

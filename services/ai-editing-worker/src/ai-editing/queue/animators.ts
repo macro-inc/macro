@@ -557,6 +557,15 @@ export function animate(op: DocumentOp, ctx: AnimatorCtx): DocumentOpStep[] {
           displayFormat: o.displayFormat,
         }),
       ])
+      // databases — focus the block, apply the presentation or location change
+      .with({ kind: 'setDatabaseQueryView' }, (o) => [
+        ...focus(o.node, ctx),
+        edit(o),
+      ])
+      .with({ kind: 'setDatabaseLocation' }, (o) => [
+        ...focus(o.node, ctx),
+        edit(o),
+      ])
       // animation primitives — pass through as-is (animators call these directly,
       // but they should never be dispatched through animate() in normal use)
       .with({ kind: 'insertText' }, (o) => [edit(o)])

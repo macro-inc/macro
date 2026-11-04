@@ -469,6 +469,28 @@ describe('AgentSession', () => {
     });
   });
 
+  test('a created session serializes with its web app link', async () => {
+    globalThis.fetch = (async (_input) =>
+      Response.json({ session }, { status: 201 })) as typeof fetch;
+    const macro = new Macro({
+      token: 'user-token',
+      hosts: { 'agent-harness': 'https://agent.example.test' },
+      webAppUrl: 'https://app.example.test',
+    });
+
+    const created = await macro.agentSessions.createManaged({
+      prompt: 'Fix it',
+    });
+
+    expect(created.webUrl()).toBe(
+      'https://app.example.test/app/agent/0198a4cc-e138-7670-a308-a6b766602700',
+    );
+    expect(JSON.parse(JSON.stringify(created))).toMatchObject({
+      id: '0198a4cc-e138-7670-a308-a6b766602700',
+      url: 'https://app.example.test/app/agent/0198a4cc-e138-7670-a308-a6b766602700',
+    });
+  });
+
   test('prompt is sugar over control and reports queueing', async () => {
     let request: Request | undefined;
     globalThis.fetch = (async (input) => {

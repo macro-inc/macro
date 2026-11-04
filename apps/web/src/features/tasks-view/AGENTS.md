@@ -71,6 +71,8 @@ Main Tasks and reusable task-list hosts. Projects and CRM embed `TasksViewProvid
 - Preserve the raw saved layout during mobile or flag fallbacks; capture that layout instead of the displayed list fallback.
 - Block ordinary definition saves while unsupported settings remain; only explicit banner cleanup removes them, and metadata writes leave the definition unchanged.
 
+- Mark task row notifications through `notifications/mark-row-seen.ts` when opening inline details or a split, including board and Gantt rows; keep the mounted Markdown marker for direct routes.
+
 ## Checks
 
 Run from `apps/web`:

@@ -312,6 +312,10 @@ pub struct InviteToTeamMetadata {
     /// Whether this email reminds the invitee of an invite they have not answered.
     #[serde(default)]
     pub reminder: bool,
+
+    /// Whether the invite creates an agent account.
+    #[serde(default)]
+    pub is_agent: bool,
 }
 
 /// What a team invitee gets by joining.

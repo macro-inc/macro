@@ -90,6 +90,7 @@ fn notification_retry_preserves_ids_and_staff_push_policy() {
             is_new: true,
         },
         from_current_generation: true,
+        attempts: 1,
     };
     let first = notifications(&lease, &context);
     let retry = notifications(&lease, &context);

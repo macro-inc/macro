@@ -324,6 +324,28 @@ function mount(search = '') {
 describe('Email list query transitions', () => {
   const alias = { inboxId: 'inbox-a', emailAddress: 'resident@example.com' };
 
+  it.each(['spam', 'trash'] as const)(
+    'ignores stale search and isolates %s discovery and retained previews',
+    (tab) => {
+      const root = mount('invoice');
+      root.setState({ tab, facets: { read: ['unread'] } });
+      root.setEntities([email('folder-result')]);
+      expect(ids(root.source)).toEqual(['folder-result']);
+      for (const [args, options] of vi.mocked(useSoupAstItemsQuery).mock
+        .calls) {
+        const request = typeof args === 'function' ? args() : args;
+        const settings = options?.();
+        expect(request.transport).toBe('rest');
+        expect(settings?.keepPreviousData).toBe(false);
+        expect(settings?.meta?.normalize).toBe(false);
+        expect(settings?.meta?.insertFilter?.({} as never)).toBe(false);
+      }
+      for (const [, options] of searchQueryMock.mock.calls) {
+        expect(options().enabled).toBe(false);
+      }
+    }
+  );
+
   it('refreshes the current alias membership readers after refreshing search, but not inactive readers', async () => {
     const root = mount('invoice');
     root.setSearchHasMore(false);

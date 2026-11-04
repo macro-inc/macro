@@ -9,4 +9,5 @@
 
 - [CreateReviewOptions](type-aliases/CreateReviewOptions.md)
 - [ReviewCalendarDraft](type-aliases/ReviewCalendarDraft.md)
+- [ReviewDraft](type-aliases/ReviewDraft.md)
 - [ReviewEmailDraft](type-aliases/ReviewEmailDraft.md)

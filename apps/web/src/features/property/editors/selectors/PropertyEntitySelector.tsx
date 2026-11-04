@@ -3,6 +3,7 @@ import { isBotPrincipalId } from '@core/constant/macroAgent';
 import { useEmail, useUserId } from '@core/context/user';
 import { emailToId, useAugmentUserWithDmActivity } from '@core/user';
 import { createFreshSearch } from '@core/util/freshSort';
+import { isEditableInput } from '@core/util/isEditableInput';
 import { useKeyPressed } from '@core/util/useKeyPressed';
 import { useSelectedFirst } from '@core/util/useSelectedFirst';
 import {
@@ -44,7 +45,7 @@ import {
   userToEntity,
 } from './entityUtils';
 import { OptionCheckBox } from './OptionCheckBox';
-import type { EntitySelectorConfig, PinnedOption } from './types';
+import type { EntitySelectorConfig } from './types';
 
 type EntityInputProps = {
   config: EntitySelectorConfig;
@@ -56,7 +57,6 @@ type EntityInputProps = {
   onClose?: () => void;
   /** Escape in the search; `onClose` when absent, as a popover saves on close. */
   onCancel?: () => void;
-  pinnedOptions?: PinnedOption[];
   /** Caller-prioritized ids stay ahead of other matching entities. */
   priorityIds?: ReadonlySet<string>;
   /** Optional action row, reachable through the same keyboard navigation. */
@@ -127,15 +127,6 @@ export function PropertyEntitySelector(props: EntityInputProps) {
   const [selectedIndex, setSelectedIndex] = createSignal(0);
   const openedSelectedIds = new Set(props.selectedOptions());
   const keyboardMode = useKeyPressed(100);
-
-  // Pinned options filtered by search term
-  const visiblePinnedOptions = createMemo(() => {
-    const options = props.pinnedOptions ?? [];
-    const term = searchTerm();
-    if (!term) return options;
-    return options.filter((o) => o.label.toLowerCase().includes(term));
-  });
-  const pinnedCount = () => visiblePinnedOptions().length;
 
   let scrollContainerRef: HTMLDivElement | undefined;
 
@@ -407,27 +398,7 @@ export function PropertyEntitySelector(props: EntityInputProps) {
     }
   };
 
-  const togglePinnedOption = (option: PinnedOption) => {
-    const newSelected = new Set(props.selectedOptions());
-    if (newSelected.has(option.id)) {
-      newSelected.delete(option.id);
-    } else {
-      if (!props.config.isMultiSelect) newSelected.clear();
-      newSelected.add(option.id);
-    }
-    props.setSelectedOptions(newSelected);
-
-    if (!props.config.isMultiSelect && props.onClose) {
-      props.onClose();
-    } else if (props.config.isMultiSelect && searchInputRef) {
-      setInputValue('');
-      setSearchTerm('');
-      setTimeout(() => searchInputRef.focus(), 0);
-    }
-  };
-
-  const resultCount = () =>
-    pinnedCount() + sortedEntities().length + (customEmail() ? 1 : 0);
+  const resultCount = () => sortedEntities().length + (customEmail() ? 1 : 0);
   const totalCount = () => resultCount() + (props.action ? 1 : 0);
 
   // Reset selected index to top when search term or list changes
@@ -440,16 +411,22 @@ export function PropertyEntitySelector(props: EntityInputProps) {
   // Scroll the selected row into view during keyboard navigation
   createEffect(() => {
     const index = selectedIndex();
-    const pCount = pinnedCount();
-    if (!keyboardMode() || index < pCount || !scrollContainerRef) return;
+    if (!keyboardMode() || !scrollContainerRef) return;
     const row = scrollContainerRef.querySelector<HTMLDivElement>(
-      `[data-entity-index="${index - pCount}"]`
+      `[data-entity-index="${index}"]`
     );
     row?.scrollIntoView({ block: 'nearest' });
   });
 
   const handleKeyDown = (e: KeyboardEvent) => {
     if (e.target instanceof HTMLElement && e.target.closest('button')) return;
+    // Another field on the page keeps its own keys.
+    if (
+      e.target !== searchInputRef &&
+      e.target instanceof Element &&
+      isEditableInput(e.target)
+    )
+      return;
     const total = totalCount();
     if (total === 0) return;
 
@@ -462,11 +439,8 @@ export function PropertyEntitySelector(props: EntityInputProps) {
     } else if (e.key === 'Enter') {
       e.preventDefault();
       const idx = selectedIndex();
-      const pCount = pinnedCount();
-      if (idx < pCount) {
-        togglePinnedOption(visiblePinnedOptions()[idx]);
-      } else if (idx < pCount + sortedEntities().length) {
-        const entity = sortedEntities()[idx - pCount];
+      if (idx < sortedEntities().length) {
+        const entity = sortedEntities()[idx];
         if (entity) toggleEntity(entity);
       } else if (props.action && idx === resultCount()) {
         runAction();
@@ -522,40 +496,6 @@ export function PropertyEntitySelector(props: EntityInputProps) {
           onPointerDown={keepSearchFocus}
           onMouseDown={keepSearchFocus}
         >
-          <For each={visiblePinnedOptions()}>
-            {(option, i) => {
-              const isSelected = () => props.selectedOptions().has(option.id);
-              const isKeyboardSelected = () => i() === selectedIndex();
-
-              return (
-                <div
-                  class="group rounded-lg w-full flex items-center justify-between gap-1.5 p-1.5 px-2 text-left text-ink font-normal cursor-default min-w-0 touch:min-h-12"
-                  classList={{
-                    'bg-hover': isKeyboardSelected(),
-                  }}
-                  onClick={() => togglePinnedOption(option)}
-                  onMouseEnter={() => {
-                    if (!keyboardMode()) {
-                      setSelectedIndex(i());
-                    }
-                  }}
-                >
-                  <Show when={props.config.isMultiSelect}>
-                    <div class="shrink-0">
-                      <OptionCheckBox checked={isSelected()} multiselect />
-                    </div>
-                  </Show>
-                  <div class="flex items-center gap-2 flex-1 min-w-0">
-                    <div class="size-4 shrink-0">{option.icon}</div>
-                    <span class="truncate min-w-0">{option.label}</span>
-                  </div>
-                  <Show when={!props.config.isMultiSelect && isSelected()}>
-                    <CheckIcon class="size-3.5 shrink-0 text-accent" />
-                  </Show>
-                </div>
-              );
-            }}
-          </For>
           <Show when={sortedEntities().length > 0}>
             <div
               ref={scrollContainerRef}
@@ -569,11 +509,9 @@ export function PropertyEntitySelector(props: EntityInputProps) {
             >
               <For each={sortedEntities()}>
                 {(entity, index) => {
-                  const adjustedIndex = () => index() + pinnedCount();
                   const isSelected = () =>
                     props.selectedOptions().has(entity.id);
-                  const isKeyboardSelected = () =>
-                    adjustedIndex() === selectedIndex();
+                  const isKeyboardSelected = () => index() === selectedIndex();
 
                   return (
                     <>
@@ -592,7 +530,7 @@ export function PropertyEntitySelector(props: EntityInputProps) {
                         }
                         onMouseEnter={() => {
                           if (!keyboardMode()) {
-                            setSelectedIndex(adjustedIndex());
+                            setSelectedIndex(index());
                           }
                         }}
                       >
@@ -601,6 +539,7 @@ export function PropertyEntitySelector(props: EntityInputProps) {
                             <OptionCheckBox
                               checked={isSelected()}
                               multiselect
+                              visible={props.config.visibleCheckboxes}
                             />
                           </div>
                         </Show>
@@ -671,7 +610,7 @@ export function PropertyEntitySelector(props: EntityInputProps) {
           </Show>
           <Show when={customEmail()}>
             {(email) => {
-              const rowIndex = () => pinnedCount() + sortedEntities().length;
+              const rowIndex = () => sortedEntities().length;
               const entity = () => customEmailEntity();
               return (
                 <div

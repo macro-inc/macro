@@ -65,6 +65,7 @@
 - [ListScheduledActionsResponses](type-aliases/ListScheduledActionsResponses.md)
 - [PayloadCondition](type-aliases/PayloadCondition.md)
 - [PayloadScalar](type-aliases/PayloadScalar.md)
+- [PropertySelector](type-aliases/PropertySelector.md)
 - [RoutineModelId](type-aliases/RoutineModelId.md)
 - [RoutineTemplate](type-aliases/RoutineTemplate.md)
 - [RoutineTrigger](type-aliases/RoutineTrigger.md)
