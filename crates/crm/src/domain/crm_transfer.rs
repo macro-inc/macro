@@ -486,6 +486,10 @@ where
                     row.values
                         .iter()
                         .find(|(h, _)| h == header)
+                        .filter(|(_, value)| {
+                            !pipeline.commercial_fields.is_system_select(field.id)
+                                || !value.trim().is_empty()
+                        })
                         .map(|(_, value)| (field.name.clone(), field_input(field, value)))
                 })
                 .collect();
@@ -518,8 +522,8 @@ where
                         let FieldInput::One(value) = field_input(field, value) else {
                             return false;
                         };
-                        !value.trim().is_empty()
-                            && field
+                        value.trim().is_empty()
+                            || field
                                 .options
                                 .iter()
                                 .any(|(_, option)| option.trim().eq_ignore_ascii_case(value.trim()))

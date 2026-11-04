@@ -510,6 +510,97 @@ async fn a_rejected_currency_row_does_not_add_its_stage_option() {
 }
 
 #[tokio::test]
+async fn blank_commercial_values_use_defaults_without_skipping_stage_options() {
+    let mut workflows = Workflows::new(overview(PipelineRecordType::Company));
+    let outcome = PipelineField {
+        options: vec![
+            (OptionId::new(), "Open".into()),
+            (OptionId::new(), "Won".into()),
+            (OptionId::new(), "Lost".into()),
+        ],
+        ..field("Outcome", FieldKind::Select)
+    };
+    workflows
+        .overview
+        .pipeline
+        .pipeline
+        .commercial_fields
+        .outcome = Some(outcome.id);
+    workflows.overview.fields.push(outcome);
+
+    let currency = PipelineField {
+        options: vec![
+            (OptionId::new(), "USD".into()),
+            (OptionId::new(), "EUR".into()),
+        ],
+        ..field("Revenue currency", FieldKind::Select)
+    };
+    workflows
+        .overview
+        .pipeline
+        .pipeline
+        .commercial_fields
+        .money
+        .push(crate::domain::pipeline_commercial::MoneyColumn {
+            amount: workflows.overview.fields[3].id,
+            currency: currency.id,
+        });
+    workflows.overview.fields.push(currency);
+
+    let pipeline = workflows.overview.pipeline.pipeline.id;
+    let service = CrmTransferServiceImpl::new(
+        Arc::new(workflows),
+        Records {
+            domains: HashMap::from([
+                ("no-outcome.example".into(), Uuid::now_v7()),
+                ("no-currency.example".into(), Uuid::now_v7()),
+            ]),
+            ..Records::default()
+        },
+        Files::default(),
+    );
+
+    let outcome = service
+        .import_to_pipeline(
+            &viewer(),
+            pipeline,
+            CsvInput::Text(
+                "Company,Domain,Stage,Outcome,Revenue,Revenue currency\n\
+                 No outcome,no-outcome.example,Prospect,,10,EUR\n\
+                 No currency,no-currency.example,New lead,Won,20,   \n"
+                    .into(),
+            ),
+        )
+        .await
+        .unwrap();
+
+    assert_eq!(outcome.added, 2);
+    assert!(outcome.invalid.is_empty());
+    assert_eq!(
+        outcome.added_options,
+        [("Stage".into(), vec!["Prospect".into(), "New lead".into()])]
+    );
+    let additions = service.workflows.added.lock().unwrap();
+    assert_eq!(additions.len(), 2);
+    assert!(!additions.iter().any(|addition| {
+        addition.set.iter().any(|(name, value)| {
+            matches!(name.as_str(), "Outcome" | "Revenue currency")
+                && *value == FieldInput::One(String::new())
+        })
+    }));
+    assert!(
+        additions[0]
+            .set
+            .contains(&("Revenue currency".into(), FieldInput::One("EUR".into())))
+    );
+    assert!(
+        additions[1]
+            .set
+            .contains(&("Outcome".into(), FieldInput::One("Won".into())))
+    );
+}
+
+#[tokio::test]
 async fn new_contacts_at_one_new_domain_share_one_new_company() {
     let mut contacts = overview(PipelineRecordType::Contact);
     contacts.fields[0].name = "Contact".into();
