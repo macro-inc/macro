@@ -1,8 +1,10 @@
 import type {
   AccessiblePipeline,
+  CardPosition,
   ColumnDetail,
   CreatePipeline,
   DatabaseOp,
+  DatabaseView as DatabaseViewRecord,
   OpBatch,
   StorageRow,
   StorageRowsQuery,
@@ -110,6 +112,17 @@ export class CrmPipeline extends MacroEntity<AccessiblePipeline> {
     return PipelineTable.from(this.client, this, await this.tableRecord());
   }
 
+  /** Saved card order through this pipeline's authorization boundary. */
+  async viewPositions(view: PipelineView): Promise<CardPosition[]> {
+    if (view.table.pipeline.id !== this.id)
+      throw new Error('View belongs to another pipeline');
+    return unwrap(
+      await this.client.storage.getCrmPipelineViewPositions({
+        path: { id: this.id, view: view.id },
+      }),
+    );
+  }
+
   /** @internal Cached table snapshot shared by all pipeline table handles. */
   tableRecord(): Promise<TableDetail> {
     return this.tableDetail.get();
@@ -215,6 +228,13 @@ export class PipelineTable extends MacroEntity<TableDetail> {
     );
   }
 
+  /** Stored views in display order. */
+  async views(): Promise<PipelineView[]> {
+    return (await this.pipeline.tableRecord()).views.map((view) =>
+      PipelineView.byId(this, view.id),
+    );
+  }
+
   /** Table version for optimistic operation batches. */
   async version(): Promise<number> {
     return (await this.pipeline.tableRecord()).table.version;
@@ -228,6 +248,51 @@ export class PipelineTable extends MacroEntity<TableDetail> {
   /** Rows from the authorized pipeline surface. */
   rows(): AsyncGenerator<PipelineRow> {
     return this.pipeline.rows();
+  }
+}
+
+/** A view owned and authorized by its CRM pipeline. */
+export class PipelineView {
+  private constructor(
+    /** The pipeline table this view shows. */
+    readonly table: PipelineTable,
+    /** View identity within the pipeline. */
+    readonly id: string,
+  ) {}
+
+  /** A handle to a stored view within a pipeline table. */
+  static byId(table: PipelineTable, id: string): PipelineView {
+    return new PipelineView(table, id);
+  }
+
+  /** The current view definition from the pipeline's shared schema cache. */
+  async detail(): Promise<DatabaseViewRecord> {
+    const found = (await this.table.pipeline.tableRecord()).views.find(
+      (view) => view.id === this.id,
+    );
+    if (!found)
+      throw new MacroNotFoundError(
+        `view ${this.id} is not on table ${this.table.id}`,
+      );
+    return found;
+  }
+
+  /**
+   * Read only cards with saved positions; unplaced cards are omitted.
+   * A saved lane may be stale after a row's grouping value changes outside a
+   * card move. Compare each lane with the row's current grouping before using it.
+   */
+  positions(): Promise<CardPosition[]> {
+    return this.table.pipeline.viewPositions(this);
+  }
+
+  /** Serialize identity without an authenticated client. */
+  toJSON(): { id: string; tableId: string; pipelineId: string } {
+    return {
+      id: this.id,
+      tableId: this.table.id,
+      pipelineId: this.table.pipeline.id,
+    };
   }
 }
 

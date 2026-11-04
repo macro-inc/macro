@@ -473,8 +473,18 @@ click.
 Stored views are everyone's and are written through the pipeline, so changing one
 changes it for all viewers; All records is each viewer's own. A board can move a
 card to another group from its card menu or by dragging, which sets the row's
-grouping cell. Card order within a group is not read back after a reload, and
-views cannot be reordered yet. The selected view is remembered per pipeline.
+grouping cell. Stored boards restore card order after a reload and keep each
+view's positions separate. Switching boards during a save clears the previous
+board's temporary drag placement; the save still completes on its original board.
+Card titles wrap long company/contact names, and
+visible fields show their labels above full-width values; unset fields show a
+dash. Click the title to open its record, edit a field inline, or use the grip
+at the top right to drag the card with a mouse. On touch screens, swipe
+horizontally between lanes and use the card's Move menu to change groups.
+Views cannot be reordered yet. The selected view is remembered
+per pipeline. To verify a board, move a card between lanes and within a lane,
+reload, and confirm its group and order; also check click-to-open and field
+editing in light and dark themes.
 **Trash pipeline** removes its table from navigation without deleting the linked
 companies or contacts, then returns to Companies.
 

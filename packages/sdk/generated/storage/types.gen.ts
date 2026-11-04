@@ -19964,6 +19964,22 @@ export type TrashCrmPipelineResponses = {
 
 export type TrashCrmPipelineResponse = TrashCrmPipelineResponses[keyof TrashCrmPipelineResponses];
 
+export type GetCrmPipelineViewPositionsData = {
+    body?: never;
+    path: {
+        id: string;
+        view: string;
+    };
+    query?: never;
+    url: '/crm/pipelines/{id}/views/{view}/positions';
+};
+
+export type GetCrmPipelineViewPositionsResponses = {
+    200: Array<CardPosition>;
+};
+
+export type GetCrmPipelineViewPositionsResponse = GetCrmPipelineViewPositionsResponses[keyof GetCrmPipelineViewPositionsResponses];
+
 export type GetCrmTeamSettingsData = {
     body?: never;
     path?: never;

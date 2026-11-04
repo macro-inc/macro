@@ -6,8 +6,8 @@ use models_properties::service::property_value::PropertyValue;
 use serde::{Deserialize, Serialize};
 
 use super::models::{
-    AppliedOps, ColumnId, DatabaseError, DatabaseId, OpBatch, RowId, TableDetail, TableId,
-    TableVersion, Viewer,
+    AppliedOps, CardPosition, ColumnId, DatabaseError, DatabaseId, OpBatch, RowId, TableDetail,
+    TableId, TableVersion, ViewId, Viewer,
 };
 
 /// One storage row, with cells keyed by column placement.
@@ -48,6 +48,13 @@ pub struct StorageRowsQuery {
 /// Trusted domain capability. Consumers enforce access and hold their own
 /// lifecycle guard through each call. This never creates a database app entity.
 pub trait DatabaseStorageService: Send + Sync + 'static {
+    /// Read saved card positions for a view in the authorized resource and table.
+    fn storage_view_positions(
+        &self,
+        id: DatabaseId,
+        table: TableId,
+        view: ViewId,
+    ) -> impl Future<Output = Result<Vec<CardPosition>, DatabaseError>> + Send;
     /// Read schema from an authorized core resource.
     fn storage_tables(
         &self,

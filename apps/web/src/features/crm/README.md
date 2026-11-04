@@ -44,6 +44,12 @@ booleans through component props or the CRM source contract.
 
 Shared entity representations, transport clients, property editors, and
 collection mechanics remain shared. CRM owns its record queries and cache updates.
+Pipeline board positions load through the pipeline-authorized endpoint and are
+cached by pipeline and view. Move results update the originating view's cache,
+even if the viewer switches boards while saving. The adapter supplies the selected
+view ID so switching boards also retires unfinished visual moves and sort prompts.
+`browser-test/board.tsx` exercises shared cards, lane composition, and saved ordering with synthetic data.
+
 Successful domain block and unblock mutations evict indexed company rows and
 contact suggestions from the GraphQL cache before refreshing CRM and Soup
 queries. Refresh mounted GraphQL lists that can contain CRM records too: the

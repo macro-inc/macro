@@ -346,7 +346,7 @@ export function DatabaseRecordsView(props: DatabaseRecordsViewProps) {
           <GridCell
             {...options}
             column={column()}
-            emptyLabel=""
+            emptyLabel={options?.emptyLabel ?? ''}
             value={rowValue(row(), column().id)}
             canEdit={props.canEdit}
             renderTextEditor={props.renderTextEditor}

@@ -61,6 +61,9 @@ tools/HTTP/GraphQL surfaces over them.
 
 ## Gotchas
 
+- Pipeline board-position reads require a pipeline View receipt, hold its live
+  lifecycle guard, and scope the view to its backing table/database through
+  `DatabaseStorage::storage_view_positions`.
 - `src/domain/generic_email_domains.rs` filters both manual company creation
   and email-driven contact population. Cover legitimate company-domain
   exceptions with regression tests when correcting the blocklist.
