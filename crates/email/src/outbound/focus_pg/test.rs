@@ -1061,6 +1061,80 @@ async fn a_thread_in_focus_for_more_than_the_hold_stays_after_the_event(
         scripts("email_focus", "email_focus_waiting")
     )
 )]
+async fn a_held_thread_marked_done_leaves_focus(pool: Pool<Postgres>) -> Result<(), Report> {
+    let repo = FocusPgRepository(pool.clone());
+    let now = Utc::now();
+    let thread = notice_thread(
+        &pool,
+        "Rescheduled: Demo",
+        Some(invite(
+            InvitationMethod::Request,
+            1,
+            now + Duration::days(2),
+        )),
+        now - Duration::hours(1),
+        true,
+    )
+    .await?;
+    assert_held(&repo, thread).await?;
+    sqlx::query!(
+        "UPDATE email_threads SET inbox_visible = false WHERE id = $1",
+        thread
+    )
+    .execute(&pool)
+    .await?;
+    let (listed, focus) = read_at(&repo, thread, now).await?;
+    assert!(!listed && !focus.is_focus);
+    assert_ne!(focus.category, FocusCategory::Calendar);
+    Ok(())
+}
+
+#[sqlx::test(
+    migrator = "MACRO_DB_MIGRATIONS",
+    fixtures(
+        path = "../../../fixtures",
+        scripts("email_focus", "email_focus_waiting")
+    )
+)]
+async fn the_sweep_ignores_a_change_only_in_the_owners_mail_or_a_draft(
+    pool: Pool<Postgres>,
+) -> Result<(), Report> {
+    let repo = FocusPgRepository(pool.clone());
+    let now = Utc::now();
+    for (is_sent, is_draft) in [(false, true), (true, false)] {
+        let thread = notice_thread(&pool, "Lunch?", None, now - Duration::hours(2), true).await?;
+        let id = macro_uuid::generate_uuid_v7();
+        sqlx::query!(
+            r#"
+            INSERT INTO email_messages (
+                id, thread_id, link_id, provider_id, is_sent, from_contact_id, internal_date_ts,
+                subject, body_text, has_attachments, is_read, is_starred, is_draft, created_at, updated_at
+            )
+            VALUES ($1, $2, $3, $4, $5, $6, $7, 'Rescheduled: Demo', '', false, true, false, $8, NOW(), NOW())
+            "#,
+            id,
+            thread,
+            OWNER_LINK,
+            id.to_string(),
+            is_sent,
+            STRANGER,
+            now - Duration::hours(1),
+            is_draft,
+        )
+        .execute(&pool)
+        .await?;
+        assert!(!is_stale(&repo, thread).await?, "{is_sent} {is_draft}");
+    }
+    Ok(())
+}
+
+#[sqlx::test(
+    migrator = "MACRO_DB_MIGRATIONS",
+    fixtures(
+        path = "../../../fixtures",
+        scripts("email_focus", "email_focus_waiting")
+    )
+)]
 async fn a_cancellation_is_in(pool: Pool<Postgres>) -> Result<(), Report> {
     let repo = FocusPgRepository(pool.clone());
     let now = Utc::now();
@@ -1195,6 +1269,24 @@ async fn a_person_writing_after_a_notice_makes_it_a_conversation(
     let (listed, _) = read_at(&repo, signal, now).await?;
     assert!(!listed);
 
+    // A hold already stored is gone with the reclassification, not just hidden.
+    let held = notice_thread(
+        &pool,
+        "Rescheduled: Demo",
+        Some(invite(InvitationMethod::Request, 1, end)),
+        at,
+        false,
+    )
+    .await?;
+    assert_held(&repo, held).await?;
+    insert_message_from(&pool, held, STRANGER, false, now - Duration::hours(1)).await?;
+    assert!(matches!(
+        low.classify_thread(held).await?,
+        ClassifyOutcome::Classified(_)
+    ));
+    let (listed, focus) = read_at(&repo, held, now).await?;
+    assert!(!listed && !focus.is_focus);
+
     // New invites and RSVPs are no veto once someone has written after them.
     for (subject, invite) in [
         (
@@ -1307,6 +1399,13 @@ async fn a_thread_that_lost_signal_leaves_focus_unless_pinned(
             .contains(&INVOICE)
     );
 
+    // The labels read the same as the list, so nothing reads as owed.
+    let focus = repo
+        .focus_for_threads(&owner(), &[INVOICE], now, now)
+        .await?;
+    let out = focus.get(&INVOICE).expect("stored");
+    assert!(!out.is_focus && !out.needs_reply && !out.needs_follow_up);
+
     let mut pinned = record(INVOICE, LATEST_MESSAGE, now, 60);
     pinned.verdict.pinned = true;
     repo.save(&pinned).await?;
@@ -1315,6 +1414,39 @@ async fn a_thread_that_lost_signal_leaves_focus_unless_pinned(
             .await?
             .contains(&INVOICE)
     );
+    Ok(())
+}
+
+#[sqlx::test(
+    migrator = "MACRO_DB_MIGRATIONS",
+    fixtures(
+        path = "../../../fixtures",
+        scripts("email_focus", "email_focus_waiting")
+    )
+)]
+async fn a_follow_up_that_lost_signal_reads_as_out(pool: Pool<Postgres>) -> Result<(), Report> {
+    project_threads(&pool).await?;
+    let repo = FocusPgRepository(pool.clone());
+    let now = Utc::now();
+    let thread = load_thread(&repo, REPLIED_YESTERDAY)
+        .await?
+        .expect("thread");
+    let latest = thread.messages.last().expect("message");
+    let mut flagged = record(REPLIED_YESTERDAY, latest.id, latest.at, 60);
+    flagged.verdict.needs_reply = false;
+    flagged.verdict.needs_follow_up = true;
+    repo.save(&flagged).await?;
+    sqlx::query!(
+        "UPDATE email_threads SET is_signal = false WHERE id = $1",
+        REPLIED_YESTERDAY
+    )
+    .execute(&pool)
+    .await?;
+    let focus = repo
+        .focus_for_threads(&owner(), &[REPLIED_YESTERDAY], now - Duration::days(3), now)
+        .await?;
+    let out = focus.get(&REPLIED_YESTERDAY).expect("stored");
+    assert!(!out.is_focus && !out.needs_follow_up);
     Ok(())
 }
 
