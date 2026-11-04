@@ -1391,3 +1391,44 @@ fn routine_run_finished_names_the_routine_and_its_outcome() {
     .unwrap();
     assert!(matches!(event, NotifEvent::RoutineRunFinished(_)));
 }
+
+#[test]
+fn manual_notifications_push_the_senders_words() {
+    let metadata = ManualMetadata {
+        title: "Deploy finished".to_string(),
+        body: Some("All 3 services are live.".to_string()),
+        agent_id: Some(Uuid::nil()),
+    };
+    let entity = EntityType::Document.with_entity_str("doc-1");
+
+    let value = serde_json::to_value(NotifEvent::Manual(metadata.clone())).unwrap();
+    assert_eq!(
+        value,
+        serde_json::json!({
+            "tag": "manual",
+            "content": {
+                "title": "Deploy finished",
+                "body": "All 3 services are live.",
+                "agentId": "00000000-0000-0000-0000-000000000000",
+            },
+        })
+    );
+    let event: NotifEvent = serde_json::from_value(value).unwrap();
+    assert!(matches!(event, NotifEvent::Manual(decoded) if decoded == metadata));
+
+    let apns = metadata.as_apns(None, &entity, Uuid::nil()).unwrap();
+    let Some(Alert::Dictionary(alert)) = apns.aps.alert else {
+        panic!("manual notifications push an alert");
+    };
+    assert_eq!(alert.title.as_deref(), Some("Deploy finished"));
+    assert_eq!(alert.body.as_deref(), Some("All 3 services are live."));
+
+    let other_title = ManualMetadata {
+        title: "Deploy failed".to_string(),
+        ..metadata.clone()
+    };
+    assert_ne!(
+        metadata.collapse_key(&entity).into_hashed().into_inner(),
+        other_title.collapse_key(&entity).into_hashed().into_inner()
+    );
+}

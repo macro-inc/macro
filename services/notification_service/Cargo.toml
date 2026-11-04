@@ -29,9 +29,11 @@ aws-sdk-sesv2 = { workspace = true }
 aws-sdk-sns = { workspace = true }
 aws-sdk-sqs = { workspace = true }
 axum = { workspace = true }
+axum-extra = { workspace = true }
 chrono = { workspace = true }
 database_env_vars = { path = "../../crates/database_env_vars" }
 email_formatting = { path = "../../crates/email_formatting" }
+entity_access = { path = "../../crates/entity_access", default-features = false, features = ["outbound"] }
 hmac = { workspace = true }
 http-body-util = { workspace = true }
 itertools = { workspace = true }
@@ -66,9 +68,10 @@ models_pagination = { path = "../../crates/models_pagination", features = [
 notification = { path = "../../crates/notification", features = ["axum"] }
 notification_db_client = { path = "../../crates/notification_db_client" }
 paste = { workspace = true }
-rate_limit = { path = "../../crates/rate_limit" }
+rate_limit = { path = "../../crates/rate_limit", features = ["axum"] }
 redis = { workspace = true }
 regex = { workspace = true }
+rootcause = { workspace = true }
 secretsmanager_client = { path = "../../crates/secretsmanager_client" }
 serde = { workspace = true }
 serde_json = { workspace = true }

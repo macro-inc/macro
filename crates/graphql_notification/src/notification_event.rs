@@ -29,9 +29,10 @@ use model_notifications::{
     GithubPrComment, GithubPrCommentKind, GithubPrEventAction, GithubPrEventStatus,
     GithubPrMention, GithubPrMentionLocation, GithubPrNotificationCommon, GithubPrReview,
     GithubPrReviewState, GithubPrStatusChanged, GithubReviewRequested, InboxReauthRequiredMetadata,
-    InviteToTeamMetadata, MentionedInDocumentCommentMetadata, NewEmailMetadata, NotifEvent,
-    NotificationDocumentSubType, ReminderMetadata, RepliedToDocumentCommentThreadMetadata,
-    RoutineRunFinishedMetadata, RoutineRunOutcome, TaskAssignedMetadata,
+    InviteToTeamMetadata, ManualMetadata, MentionedInDocumentCommentMetadata, NewEmailMetadata,
+    NotifEvent, NotificationDocumentSubType, ReminderMetadata,
+    RepliedToDocumentCommentThreadMetadata, RoutineRunFinishedMetadata, RoutineRunOutcome,
+    TaskAssignedMetadata,
 };
 
 /// GraphQL channel type used by notification metadata.
@@ -771,6 +772,28 @@ impl GraphqlRoutineRunFinishedMetadata {
     }
 }
 
+/// GraphQL wrapper for manual notification metadata.
+pub struct GraphqlManualMetadata(ManualMetadata);
+
+/// Metadata for a notification its sender wrote.
+#[Object]
+impl GraphqlManualMetadata {
+    /// The headline, as the sender wrote it.
+    async fn title(&self) -> &str {
+        &self.0.title
+    }
+
+    /// More detail, as the sender wrote it.
+    async fn body(&self) -> Option<&str> {
+        self.0.body.as_deref()
+    }
+
+    /// The agent whose code sent it, when one did.
+    async fn agent_id(&self) -> Option<ID> {
+        self.0.agent_id.map(|id| ID(id.to_string()))
+    }
+}
+
 /// GraphQL wrapper for team invitation metadata.
 pub struct GraphqlInviteToTeamMetadata(InviteToTeamMetadata);
 
@@ -1333,6 +1356,8 @@ pub enum GraphqlNotifEvent {
     CalendarEventJoinRequest(GraphqlCalendarEventJoinRequestMetadata),
     /// Finished routine run metadata.
     RoutineRunFinished(GraphqlRoutineRunFinishedMetadata),
+    /// Manual notification metadata.
+    Manual(GraphqlManualMetadata),
     /// Schema-only stub for released clients. Never returned.
     WhatsappGroupMessage(GraphqlWhatsappGroupMessageMetadata),
 }
@@ -1392,6 +1417,7 @@ impl From<NotifEvent> for GraphqlNotifEvent {
             NotifEvent::RoutineRunFinished(metadata) => {
                 Self::RoutineRunFinished(GraphqlRoutineRunFinishedMetadata(metadata))
             }
+            NotifEvent::Manual(metadata) => Self::Manual(GraphqlManualMetadata(metadata)),
             NotifEvent::InboxReauthRequired(metadata) => {
                 Self::InboxReauthRequired(GraphqlInboxReauthRequiredMetadata(metadata))
             }

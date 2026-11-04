@@ -36,6 +36,7 @@ use std::sync::Arc;
 mod api;
 mod config;
 mod env;
+mod manual;
 mod model;
 mod notification;
 
@@ -248,6 +249,23 @@ pub async fn main() -> anyhow::Result<()> {
             redis: redis_client,
         },
     };
+    let manual_notification_state = api::manual_notification::ManualNotificationState {
+        notifications: Arc::new(manual::ManualNotifications {
+            access: manual::entity_access::EntityAccessLinks(
+                entity_access::domain::service::EntityAccessServiceImpl::new(
+                    entity_access::outbound::PgAccessRepository::new(db.clone()),
+                ),
+            ),
+            ingress: ::notification::domain::service::SqsNotificationIngress {
+                queue: ::notification::outbound::queue::SqsQueue::new(
+                    aws_sdk_sqs::Client::new(&aws_config),
+                    macro_queues::NotificationIngressQueue::new().to_string(),
+                ),
+            },
+        }),
+        rate_limiter: rate_limit_adapter.clone(),
+        authorization_state: authorization_state.clone(),
+    };
 
     let egress_state_machine =
         ::notification::domain::models::email_notification_digest::StateMachineDriverB {
@@ -364,6 +382,7 @@ pub async fn main() -> anyhow::Result<()> {
             authorization_state,
         },
         ingress_state,
+        manual_notification_state,
     )
     .await?;
 
