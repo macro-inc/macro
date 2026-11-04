@@ -1032,7 +1032,7 @@ async fn once_routine_fires_for_exactly_one_of_concurrent_claims_and_then_is_don
     let mut action = sample_action(user_owner(USER_A), "check back");
     action.trigger = ActionTrigger::Once { at };
     action.next_run_at = Some(at);
-    let created = repo.create_action(action).await.unwrap();
+    let created = repo.create_action(action, None).await.unwrap();
     let id = created.id.unwrap();
     assert_eq!(
         repo.get_action(&id).await.unwrap().unwrap().trigger,
@@ -1082,7 +1082,7 @@ async fn once_inside_multiple_is_stored_and_other_shapes_are_rejected(pool: PgPo
     ]}))
     .unwrap();
     action.next_run_at = Some(at);
-    let created = repo.create_action(action.clone()).await.unwrap();
+    let created = repo.create_action(action.clone(), None).await.unwrap();
     assert_eq!(
         repo.get_action(&created.id.unwrap())
             .await
