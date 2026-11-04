@@ -48,7 +48,7 @@ const initial: SavedReview = {
 };
 
 /**
- * Serves the review the card polls every two seconds. `onSave` decides when
+ * Serves the review the card reads, polled or announced. `onSave` decides when
  * an edit's response is released; the edit is committed when it arrives.
  */
 async function serveReview(
@@ -212,4 +212,54 @@ test('a review loaded before presentation becomes editable once presented', asyn
   await page.keyboard.type(' again');
   await expect(body).toHaveText('Hello again');
   await expect(page.getByTestId('created')).toHaveText('0');
+});
+
+test('an announced revision replaces the open card, and nothing else reads it', async ({
+  page,
+}) => {
+  await page.clock.install();
+  const server = await serveReview(page, initial);
+  const reads: string[] = [];
+  page.on('request', (request) => {
+    if (request.method() === 'GET' && request.url().includes('/reviews/'))
+      reads.push(request.url());
+  });
+  // The composer saves its normalized draft once it mounts.
+  const mounted = page.waitForResponse(
+    (response) =>
+      response.request().method() === 'POST' &&
+      response.url().includes('/reviews/')
+  );
+  await page.goto(
+    '/src/features/email-compose/browser-test/agent-review.html?updates=announced'
+  );
+  await mounted;
+
+  // The log announces the card's own save, then nothing for a while.
+  await page.evaluate(() =>
+    window.dispatchEvent(new CustomEvent('review-updated', { detail: 2 }))
+  );
+  await page.clock.runFor(10_000);
+  expect(reads).toHaveLength(1);
+
+  server.record = {
+    ...server.record,
+    revision: 3,
+    items: server.record.items.map((item) => ({
+      ...item,
+      status: 'dismissed',
+    })),
+  };
+  const read = page.waitForResponse(
+    (response) =>
+      response.request().method() === 'GET' &&
+      response.url().includes('/reviews/')
+  );
+  await page.evaluate(() =>
+    window.dispatchEvent(new CustomEvent('review-updated', { detail: 3 }))
+  );
+  await read;
+
+  await expect(page.getByRole('status').getByText('Dismissed')).toBeVisible();
+  expect(reads).toHaveLength(2);
 });
