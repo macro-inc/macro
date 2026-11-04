@@ -545,7 +545,7 @@ fn spawn_human_signup_content(ctx: &ApiContext, user_id: &str, email: &str) {
     // block user creation.
     tokio::spawn({
         let loops_client = ctx.loops_client.clone();
-        let email = loops_client::normalize_email(&email);
+        let email = loops_client::normalize_email(email);
         let user_id = user_id.clone();
         async move {
             let _ = loops_client

@@ -1,12 +1,9 @@
 import { CredentialField } from '@channel/Bots/CredentialField';
 import { LoadingSpinner } from '@core/component/LoadingSpinner';
 import { toast } from '@core/component/Toast/Toast';
-import { throwOnErr } from '@core/util/result';
-import { Telemetry } from '@macro-inc/observability';
+import { useAgentSetupMutation } from '@queries/auth/agent-setup';
 import { useCompleteTutorialMutation } from '@queries/auth/tutorial';
 import { useUserInfoQuery } from '@queries/auth/user-info';
-import { authServiceClient } from '@service-auth/client';
-import { useMutation } from '@tanstack/solid-query';
 import { Button, Dialog, Panel } from '@ui';
 import { createEffect, Match, Show, Switch } from 'solid-js';
 
@@ -54,13 +51,7 @@ export function AgentSetupModal() {
 }
 
 function AgentSetupDialog() {
-  const setup = useMutation(() => ({
-    mutationFn: () =>
-      Telemetry.span('agent.setup', () =>
-        throwOnErr(async () => await authServiceClient.agentSetup())
-      ),
-    retry: 2,
-  }));
+  const setup = useAgentSetupMutation();
   const confirm = useCompleteTutorialMutation({
     onError: () => toast.failure('Failed to save. Try again.'),
   });
