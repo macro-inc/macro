@@ -24,7 +24,7 @@ export function createThreadReadAdapter(
   const markSeenMutation = useMarkThreadAsSeenMutation();
   const markUnreadMutation = useMarkThreadAsUnreadMutation();
 
-  // Viewing a thread marks it read (EmailDebouncedReadMarker), so each thread
+  // Viewing a thread marks it read (EmailReadMarker), so each thread
   // starts with the toggle offering Mark Unread.
   const [threadMarkedUnread, setThreadMarkedUnread] = createSignal(false);
   const [threadMarkedRead, setThreadMarkedRead] = createSignal(false);

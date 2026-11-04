@@ -1,3 +1,7 @@
+vi.mock('@notifications/mark-row-seen', () => ({
+  markRowNotificationsSeenOnOpen: vi.fn(),
+}));
+
 import { createRoot } from 'solid-js';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 

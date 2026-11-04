@@ -24,6 +24,7 @@ type SimpleNotificationEntityType =
   | 'email_thread'
   | 'foreign'
   | 'foreign_entity'
+  | 'initiative'
   | 'project'
   | 'reminder';
 
@@ -63,6 +64,7 @@ export function toNotificationEntityRef(
     case 'email_thread':
     case 'foreign':
     case 'foreign_entity':
+    case 'initiative':
     case 'project':
     case 'reminder':
       return { type: entity.type, id: entity.id };
@@ -95,6 +97,7 @@ const ENTITY_TYPE_TO_GRAPHQL = {
   email_thread: 'EMAIL_THREAD',
   foreign: 'FOREIGN_ENTITY',
   foreign_entity: 'FOREIGN_ENTITY',
+  initiative: 'INITIATIVE',
   project: 'PROJECT',
   reminder: 'REMINDER',
 } as const satisfies Record<SimpleNotificationEntityType, GraphqlEntityType>;

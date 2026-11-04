@@ -1,8 +1,10 @@
-import { markCrmNotificationsSeenOnOpen } from '@app/features/crm/mark-record-notifications-seen';
+vi.mock('@queries/email/read-state', () => ({ markEmailThreadSeen: vi.fn() }));
+
 import { withEntityNotifications } from '@app/features/soup/entity-notifications';
 import type { CrmCompanyEntity, CrmContactEntity } from '@entity/types/entity';
 import { unreadFilterFn } from '@entity/utils/filter';
 import { Telemetry } from '@macro-inc/observability';
+import { markRowNotificationsSeenOnOpen } from '@notifications/mark-row-seen';
 import type { ConnectionGatewayWebsocket } from '@service-connection/websocket';
 import { createRoot, createSignal } from 'solid-js';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
@@ -138,7 +140,7 @@ describe.each([COMPANY, CONTACT])('opening $type notifications', (record) => {
       dispose,
     }));
     try {
-      markCrmNotificationsSeenOnOpen(record, source);
+      markRowNotificationsSeenOnOpen(record, source);
       expect(mocks.refetch).toHaveBeenCalledOnce();
       expect(mocks.seen).not.toHaveBeenCalled();
       loaded.resolve();
@@ -165,10 +167,10 @@ describe.each([COMPANY, CONTACT])('opening $type notifications', (record) => {
       dispose,
     }));
     try {
-      markCrmNotificationsSeenOnOpen({ ...record, notifications: [] }, source);
+      markRowNotificationsSeenOnOpen({ ...record, notifications: [] }, source);
       await reported.promise;
       expect(telemetry).toHaveBeenCalledWith(error, {
-        surface: 'crm-notification-read',
+        surface: 'row-notification-read',
       });
     } finally {
       dispose();
@@ -205,7 +207,7 @@ describe.each([COMPANY, CONTACT])('opening $type notifications', (record) => {
       const rendered = withEntityNotifications(row, source);
       try {
         expect(unreadFilterFn(rendered)).toBe(true);
-        markCrmNotificationsSeenOnOpen(row, source);
+        markRowNotificationsSeenOnOpen(row, source);
         expect(unreadFilterFn(rendered)).toBe(false);
         expect(mocks.seen).toHaveBeenLastCalledWith({
           notificationIds: [`${record.id}-pending-${shape}`],
@@ -241,13 +243,13 @@ describe.each([COMPANY, CONTACT])('opening $type notifications', (record) => {
       source
     );
     try {
-      markCrmNotificationsSeenOnOpen(row, source);
+      markRowNotificationsSeenOnOpen(row, source);
       expect(unreadFilterFn(row)).toBe(false);
       pending.reject(new Error('offline'));
       await reported.promise;
       expect(unreadFilterFn(row)).toBe(true);
       mocks.seen.mockResolvedValueOnce(undefined);
-      markCrmNotificationsSeenOnOpen(row, source);
+      markRowNotificationsSeenOnOpen(row, source);
       expect(unreadFilterFn(row)).toBe(false);
     } finally {
       dispose();
@@ -264,7 +266,7 @@ describe.each([COMPANY, CONTACT])('opening $type notifications', (record) => {
         dispose,
       }));
       try {
-        markCrmNotificationsSeenOnOpen(
+        markRowNotificationsSeenOnOpen(
           { ...record, notifications: shape === 'empty' ? [] : undefined },
           source
         );

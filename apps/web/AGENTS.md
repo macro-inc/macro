@@ -549,10 +549,15 @@ resolved session ID; keep the existing `AgentSessionProvider` subscription to
 - Add Google Meet account hints only to join actions using the displayed calendar's
   connected email; keep stored and copied conference links unchanged. See the
   [calendar walkthrough](../../docs/agent-guide/calendar.md).
-- Mark loaded calendar, agent-session, and CRM company/contact row notifications
-  through the notification source (`markRowNotificationsSeenOnOpen`) so read dots update
-  immediately and failed writes roll back; calendar grid selections and links
-  to an event also mark the canonical event read, excluding team projections.
+- Share row-open reads through `features/notifications/mark-row-seen.ts` for
+  documents/tasks, legacy chats, email, calendar, agents, CRM, PRs, calls, and
+  projects; use it for previews, keyboard following, action advance, and split
+  opens. Keep email mailbox writes in `queries/email/read-state.ts` with the
+  owning inbox, and keep channel/external-message visibility policies separate.
+  Ready document/chat/PR/email details mark read on mount for direct links.
+  Calendar grid selections and links mark the canonical event, excluding team projections.
+- Target modern projects as `initiative` / `INITIATIVE` for entity-wide
+  notification writes; reserve `project` / `PROJECT` for legacy Drive folders.
 - Route explicit meeting-page exits using the server's `callEnded` result: ended
   calls open their record; ongoing channel and scheduled calls return to the
   channel and Calendar. Leaving from a channel's Call tab stays in the channel. Preserve the session ID and send the server leave before media
