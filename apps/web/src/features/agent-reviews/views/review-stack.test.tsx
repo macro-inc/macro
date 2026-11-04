@@ -1,4 +1,11 @@
 /** @vitest-environment jsdom */
+
+import { ThrownResultError } from '@core/util/result';
+import { INVALID_REVIEW_DECISION } from '@service-agent-harness/reviews';
+import type {
+  ReviewItem,
+  ReviewItems_Serialize,
+} from '@service-agent-reviews/generated/types';
 import {
   cleanup,
   fireEvent,
@@ -8,16 +15,27 @@ import {
   within,
 } from '@solidjs/testing-library';
 import { createSignal } from 'solid-js';
+import { match } from 'ts-pattern';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import type { Review, ReviewDecision, ReviewItem } from '../core/review';
+import type { Review, ReviewDecision } from '../core/review';
 import { ReviewStack } from './review-stack';
 
-const editor = vi.hoisted(() => ({
-  ready: true,
-  valid: true,
-  submitReady: undefined as Promise<void> | undefined,
-  executed: undefined as Promise<boolean> | undefined,
-}));
+type EmailReview = Review & { kind: 'email' };
+
+const editor = vi.hoisted(() => {
+  const state: {
+    ready: boolean;
+    valid: boolean;
+    submitReady: Promise<void> | undefined;
+    executed: Promise<boolean> | undefined;
+  } = {
+    ready: true,
+    valid: true,
+    submitReady: undefined,
+    executed: undefined,
+  };
+  return state;
+});
 const mobile = vi.hoisted(() => ({ value: false }));
 vi.mock('@core/mobile/isMobile', () => ({ isMobile: () => mobile.value }));
 vi.mock('@core/mobile/virtualKeyboard', () => ({
@@ -103,74 +121,127 @@ afterEach(() => {
   vi.unstubAllGlobals();
 });
 
+/** The fake server's answer to a decision for one saved item. */
+function decided<Draft, Outcome>(
+  item: ReviewItem<Draft, Outcome>,
+  decision: ReviewDecision,
+  draft: Draft | undefined,
+  failedItem: string | undefined
+): ReviewItem<Draft, Outcome> {
+  if (decision.action === 'edit')
+    return item.id === decision.item && draft !== undefined
+      ? { ...item, draft }
+      : item;
+  if (
+    item.status !== 'pending' ||
+    (decision.items.length > 0 && !decision.items.includes(item.id))
+  )
+    return item;
+  if (decision.action === 'submit' && item.id === failedItem)
+    return { ...item, error: 'The destination rejected this draft.' };
+  return {
+    ...item,
+    status: decision.action === 'submit' ? 'completed' : 'dismissed',
+  };
+}
+
 function setup(
   options: {
     canAct?: boolean;
     presentedAt?: number | null;
-    items?: ReviewItem[];
-    kind?: Review['kind'];
+    content?: ReviewItems_Serialize;
     failSave?: boolean;
     failedItem?: string;
+    refuseSubmit?: (record: Review) => string | undefined;
   } = {}
 ) {
   let record: Review = {
     id: 'review',
     sessionId: 'session',
+    actingUser: 'macro|owner@macro.local',
     executionId: 'execution',
-    kind: options.kind ?? 'email',
     title: 'Drafts to review',
     revision: 0,
     updatedAt: 0,
     presentedAt: options.presentedAt === undefined ? 1 : options.presentedAt,
-    items: options.items ?? [
-      {
-        id: 'first',
-        status: 'pending',
-        draft: {
-          subject: 'First email',
-          body: 'Hello',
-          to: [{ email: 'first@example.com' }],
+    decision: null,
+    ...(options.content ?? {
+      kind: 'email',
+      items: [
+        {
+          id: 'first',
+          status: 'pending',
+          error: null,
+          result: null,
+          draft: {
+            subject: 'First email',
+            body: 'Hello',
+            to: [{ email: 'first@example.com' }],
+          },
         },
-      },
-      {
-        id: 'second',
-        status: 'pending',
-        draft: {
-          subject: 'Second email',
-          body: 'World',
-          to: [{ email: 'second@example.com' }],
+        {
+          id: 'second',
+          status: 'pending',
+          error: null,
+          result: null,
+          draft: {
+            subject: 'Second email',
+            body: 'World',
+            to: [{ email: 'second@example.com' }],
+          },
         },
-      },
-    ],
+      ],
+    }),
   };
-  const decide = vi.fn(async (decision: ReviewDecision) => {
+  const decide = vi.fn(async (decision: ReviewDecision): Promise<Review> => {
     if (
       decision.revision !== record.revision ||
       (options.failSave && decision.action === 'edit')
     )
       throw new Error('conflict');
-    record = {
-      ...record,
-      revision: record.revision + 1,
-      items: record.items.map((item) => {
-        if (decision.action === 'edit')
-          return item.id === decision.item
-            ? { ...item, draft: decision.draft }
-            : item;
-        if (
-          item.status !== 'pending' ||
-          (decision.items.length > 0 && !decision.items.includes(item.id))
-        )
-          return item;
-        if (decision.action === 'submit' && item.id === options.failedItem) {
-          return { ...item, error: 'The destination rejected this draft.' };
-        }
+    const refusal =
+      decision.action === 'submit' ? options.refuseSubmit?.(record) : undefined;
+    if (refusal)
+      throw new ThrownResultError([
+        { code: INVALID_REVIEW_DECISION, message: refusal },
+      ]);
+    const revision = record.revision + 1;
+    record = match(record)
+      .with({ kind: 'email' }, (review): Review => {
+        const draft =
+          decision.action === 'edit' && decision.draft.kind === 'email'
+            ? decision.draft.draft
+            : undefined;
         return {
-          ...item,
-          status: decision.action === 'submit' ? 'completed' : 'dismissed',
+          ...review,
+          revision,
+          items: review.items.map((item) =>
+            decided(item, decision, draft, options.failedItem)
+          ),
         };
-      }),
-    };
+      })
+      // Calendar composers in these tests never change their drafts.
+      .with(
+        { kind: 'calendar' },
+        (review): Review => ({
+          ...review,
+          revision,
+          items: review.items.map((item) =>
+            decided(item, decision, undefined, options.failedItem)
+          ),
+        })
+      )
+      .with(
+        { kind: 'import' },
+        (review): Review => ({
+          ...review,
+          revision,
+          items: [
+            decided(review.items[0], decision, undefined, options.failedItem),
+          ],
+        })
+      )
+      .exhaustive();
     return record;
   });
   render(() => (
@@ -214,17 +285,22 @@ describe('review deck', () => {
   );
   it('shows a single draft in its composer without navigation or batch actions', () => {
     setup({
-      items: [
-        {
-          id: 'one',
-          status: 'pending',
-          draft: {
-            subject: 'One email',
-            body: 'Hello',
-            to: [{ email: 'one@example.com' }],
+      content: {
+        kind: 'email',
+        items: [
+          {
+            id: 'one',
+            status: 'pending',
+            error: null,
+            result: null,
+            draft: {
+              subject: 'One email',
+              body: 'Hello',
+              to: [{ email: 'one@example.com' }],
+            },
           },
-        },
-      ],
+        ],
+      },
     });
     expect(screen.getByLabelText('Draft body')).toBeTruthy();
     expect(screen.queryByRole('navigation')).toBeNull();
@@ -254,7 +330,7 @@ describe('review deck', () => {
     expect(decide.mock.calls[0][0]).toMatchObject({
       action: 'edit',
       item: 'first',
-      draft: { body: 'Edited first' },
+      draft: { kind: 'email', draft: { body: 'Edited first' } },
     });
     fireEvent.click(screen.getByRole('button', { name: 'Previous draft' }));
     await waitFor(() =>
@@ -332,9 +408,12 @@ describe('review deck', () => {
     expect(screen.getByText(/1 sent · 1 needs attention/)).toBeTruthy();
   });
   it('opens an uncertain draft once when a locally submitted batch finishes through polling', async () => {
-    let server: Review = {
+    let server: EmailReview = {
       id: 'review',
       sessionId: 'session',
+      actingUser: 'macro|owner@macro.local',
+      executionId: null,
+      decision: null,
       kind: 'email',
       title: 'Polled drafts',
       revision: 0,
@@ -344,6 +423,8 @@ describe('review deck', () => {
         {
           id: 'first',
           status: 'pending',
+          error: null,
+          result: null,
           draft: {
             subject: 'First email',
             body: 'Hello',
@@ -353,6 +434,8 @@ describe('review deck', () => {
         {
           id: 'second',
           status: 'pending',
+          error: null,
+          result: null,
           draft: {
             subject: 'Second email',
             body: 'World',
@@ -421,9 +504,12 @@ describe('review deck', () => {
     expect(decide).toHaveBeenCalledOnce();
   });
   it('does not change the selected card for outcomes from a batch started elsewhere', async () => {
-    const initial: Review = {
+    const initial: EmailReview = {
       id: 'review',
       sessionId: 'session',
+      actingUser: 'macro|owner@macro.local',
+      executionId: null,
+      decision: null,
       kind: 'email',
       title: 'Polled drafts',
       revision: 0,
@@ -433,6 +519,8 @@ describe('review deck', () => {
         {
           id: 'first',
           status: 'submitting',
+          error: null,
+          result: null,
           draft: {
             subject: 'First email',
             body: 'Hello',
@@ -442,6 +530,8 @@ describe('review deck', () => {
         {
           id: 'second',
           status: 'submitting',
+          error: null,
+          result: null,
           draft: {
             subject: 'Second email',
             body: 'World',
@@ -478,16 +568,20 @@ describe('review deck', () => {
         review={{
           id: 'review',
           sessionId: 'session',
+          actingUser: 'macro|owner@macro.local',
+          executionId: null,
           kind: 'email',
           title: 'Follow-ups',
           revision: 2,
           updatedAt: 1,
           presentedAt: 1,
-          decision: { via: 'chat' },
+          decision: { by: 'owner', via: 'chat', revision: 1, items: ['first'] },
           items: [
             {
               id: 'first',
               status: 'completed',
+              error: null,
+              result: null,
               draft: {
                 subject: 'First email',
                 body: 'Hello',
@@ -508,31 +602,53 @@ describe('review deck', () => {
       screen.getByText('Started by the agent at your request')
     ).toBeTruthy();
   });
-  it('opens an invalid unvisited draft without dispatching any email', async () => {
+  it('shows the server refusing an incomplete draft without blocking the review', async () => {
     const decide = setup({
-      items: [
-        {
-          id: 'first',
-          status: 'pending',
-          draft: {
-            subject: 'Ready email',
-            body: 'Ready',
-            to: [{ email: 'one@example.com' }],
+      content: {
+        kind: 'email',
+        items: [
+          {
+            id: 'first',
+            status: 'pending',
+            error: null,
+            result: null,
+            draft: {
+              subject: 'Ready email',
+              body: 'Ready',
+              to: [{ email: 'one@example.com' }],
+            },
           },
-        },
-        {
-          id: 'second',
-          status: 'pending',
-          draft: { subject: 'Needs a recipient', body: 'Hello', to: [] },
-        },
-      ],
+          {
+            id: 'second',
+            status: 'pending',
+            error: null,
+            result: null,
+            draft: { subject: 'Needs a recipient', body: 'Hello', to: [] },
+          },
+        ],
+      },
+      refuseSubmit: (record) =>
+        record.kind === 'email' &&
+        record.items.some((item) => item.draft.to.length === 0)
+          ? 'Add at least one recipient.'
+          : undefined,
     });
     await confirmBatch();
-    await screen.findByText('Needs a recipient');
-    expect(screen.getByRole('alert').textContent).toBe(
+    expect((await screen.findByRole('alert')).textContent).toBe(
       'Add at least one recipient.'
     );
-    expect(decide).not.toHaveBeenCalled();
+    expect(decide).toHaveBeenCalledExactlyOnceWith({
+      action: 'submit',
+      revision: 0,
+      items: ['first', 'second'],
+    });
+    expect(
+      screen.queryByRole('button', { name: 'Reload saved review' })
+    ).toBeNull();
+    expect(
+      screen.getByRole<HTMLButtonElement>('button', { name: 'Send all (2)' })
+        .disabled
+    ).toBe(false);
   });
   it('keeps an unprepared draft editable without a generic instruction banner', async () => {
     const decide = setup();
@@ -587,15 +703,20 @@ describe('review deck', () => {
     async (isMobile) => {
       mobile.value = isMobile;
       setup({
-        items: Array.from({ length: 12 }, (_, index) => ({
-          id: `draft-${index}`,
-          status: 'pending',
-          draft: {
-            subject: `Email ${index + 1}`,
-            body: `Body ${index + 1}`,
-            to: [{ email: `person${index + 1}@example.com` }],
-          },
-        })),
+        content: {
+          kind: 'email',
+          items: Array.from({ length: 12 }, (_, index) => ({
+            id: `draft-${index}`,
+            status: 'pending',
+            error: null,
+            result: null,
+            draft: {
+              subject: `Email ${index + 1}`,
+              body: `Body ${index + 1}`,
+              to: [{ email: `person${index + 1}@example.com` }],
+            },
+          })),
+        },
       });
       const picker = screen.getByRole('button', {
         name: 'Choose draft, 1 of 12',
@@ -623,34 +744,62 @@ describe('review deck', () => {
   );
   it('creates every remaining calendar event with the same batch control', async () => {
     const decide = setup({
-      kind: 'calendar',
-      items: [
-        {
-          id: 'first',
-          status: 'pending',
-          draft: {
-            title: 'First event',
-            time: {
-              kind: 'timed',
-              startsAt: '2026-10-16T09:00:00Z',
-              endsAt: '2026-10-16T10:00:00Z',
-              timeZone: 'UTC',
+      content: {
+        kind: 'calendar',
+        items: [
+          {
+            id: 'first',
+            status: 'pending',
+            error: null,
+            result: null,
+            draft: {
+              title: 'First event',
+              time: {
+                kind: 'timed',
+                startsAt: '2026-10-16T09:00:00Z',
+                endsAt: '2026-10-16T10:00:00Z',
+                timeZone: 'UTC',
+              },
+              description: null,
+              location: null,
+              attendees: [],
+              recurrenceLines: [],
+              calendarId: null,
+              reminders: null,
+              addMacroCall: false,
+              addConference: false,
+              eventType: 'default',
+              outOfOffice: null,
+              guestPolicy: null,
             },
           },
-        },
-        {
-          id: 'second',
-          status: 'pending',
-          draft: {
-            title: 'Second event',
-            time: {
-              kind: 'allDay',
-              startDate: '2026-10-17',
-              endDate: '2026-10-18',
+          {
+            id: 'second',
+            status: 'pending',
+            error: null,
+            result: null,
+            draft: {
+              title: 'Second event',
+              time: {
+                kind: 'allDay',
+                startDate: '2026-10-17',
+                endDate: '2026-10-18',
+              },
+              description: null,
+              location: null,
+              attendees: [],
+              recurrenceLines: [],
+              calendarId: null,
+              reminders: null,
+              addMacroCall: false,
+              addConference: false,
+              eventType: 'default',
+              outOfOffice: null,
+              guestPolicy: null,
             },
           },
-        },
-      ],
+        ],
+      },
     });
     await confirmBatch('Create all (2)', 'Create 2 events');
     await waitFor(() => expect(decide).toHaveBeenCalledOnce());

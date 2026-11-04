@@ -377,6 +377,11 @@ not to account-wide paired runtime count; a user can pair several computers.
 - All Mail previews exclude spam/junk and trash. Keep draft edits from restoring
   an excluded preview or timestamp, including synced Macro drafts; Drafts and
   Sent retain their own canonical membership.
+- Spam and Trash use scoped REST pages without shared preview normalization or
+  service search; restore through the provider-neutral thread-state mutation.
+  Refresh these isolated lists after read-state writes, provider sync events, and
+  settled Outlook operations; shared-cache updates cannot reach them. Preserve
+  newer selections when a pending folder restore finishes.
 
 Agent split headers show live viewers through `BlockLiveIndicators` with the
 resolved session ID; keep the existing `AgentSessionProvider` subscription to
@@ -544,10 +549,15 @@ resolved session ID; keep the existing `AgentSessionProvider` subscription to
 - Add Google Meet account hints only to join actions using the displayed calendar's
   connected email; keep stored and copied conference links unchanged. See the
   [calendar walkthrough](../../docs/agent-guide/calendar.md).
-- Mark loaded calendar, agent-session, and CRM company/contact row notifications
-  through the notification source (`markRowNotificationsSeenOnOpen`) so read dots update
-  immediately and failed writes roll back; calendar grid selections and links
-  to an event also mark the canonical event read, excluding team projections.
+- Share row-open reads through `features/notifications/mark-row-seen.ts` for
+  documents/tasks, legacy chats, email, calendar, agents, CRM, PRs, calls, and
+  projects; use it for previews, keyboard following, action advance, and split
+  opens. Keep email mailbox writes in `queries/email/read-state.ts` with the
+  owning inbox, and keep channel/external-message visibility policies separate.
+  Ready document/chat/PR/email details mark read on mount for direct links.
+  Calendar grid selections and links mark the canonical event, excluding team projections.
+- Target modern projects as `initiative` / `INITIATIVE` for entity-wide
+  notification writes; reserve `project` / `PROJECT` for legacy Drive folders.
 - Route explicit meeting-page exits using the server's `callEnded` result: ended
   calls open their record; ongoing channel and scheduled calls return to the
   channel and Calendar. Leaving from a channel's Call tab stays in the channel. Preserve the session ID and send the server leave before media
@@ -683,6 +693,8 @@ resolved session ID; keep the existing `AgentSessionProvider` subscription to
 - Memory tool results use expandable rows on desktop and mobile; explicit preferences and activity reports remain inspectable after each tool call.
 
 ## Rules
+
+- Pass persistent touch row controls through `ListEntity.touchActions`; hover actions are hidden on touch, and the narrow inbox layout must retain the touch controls.
 
 Conventions for this app live in `.agents/rules/web/` and load when you touch
 matching files: data fetching, Solid reactivity, architecture, UI, UI primitives,
@@ -1045,6 +1057,28 @@ and bot personas share one renderer; keep surface sizing in the caller.
 
 - Advertise Mail v5 capsules only for the current browser engine or a verified supported installed native build; OTA bundle version alone cannot establish native capability.
 - Bound native Mail capability discovery to 1.5 seconds and cache the legacy profile on failure or timeout so stalled IPC cannot block GraphQL transport; record the selected profile and bounded outcome in HTTP and WebSocket setup spans without error text.
+
+### Inline comment drafts
+
+Use `MessageLoadError` for compact discussion/thread failures; missing resources
+show an unavailable state without a retry action or composer.
+
+Keep collaborative drafts as cursor-based overlays outside the shared editor tree.
+Flush pending text, catch up missing server history before publication, then
+publish the mark from an isolated peer with `PeerCommentUpdate`,
+and post the message only after acknowledgement. Refused operations never enter
+the editor's WAL. Preserve input on failure. Cancelled publications retry mark
+cleanup from the user/document-scoped IndexedDB queue; preserve marks when a
+message request's outcome is uncertain. Keep failed cleanup entries queued without
+blocking later entries. Overlapping comments must retain each
+saved range through cancel, save, and collaboration updates.
+Comment controls preserve editor focus on both pointerdown and mousedown.
+The backend-free browser regression is
+`bunx playwright test --config src/features/block-md/comments/browser-test/playwright.config.ts`.
+It exercises selection, press, cancel, retry, and repeated posting in editor and
+commenter modes. The collaboration fixture includes concurrent remote edits and
+rejected updates; provider tests cover message metadata arriving on either side
+of posting, multi-paragraph anchors, saved ranges, and cancellation during posting.
 
 ## Performance
 

@@ -93,15 +93,23 @@ const emailTabSources = {
   archived: 'soup',
   all: 'soup',
   focus: 'focus-list',
+  spam: 'provider-folder-rest',
+  trash: 'provider-folder-rest',
 } as const satisfies Record<
   (typeof EMAIL_TABS)[number]['id'],
-  'soup' | 'scheduled-message-service' | 'reminder-collection' | 'focus-list'
+  | 'soup'
+  | 'scheduled-message-service'
+  | 'reminder-collection'
+  | 'provider-folder-rest'
+  | 'focus-list'
 >;
 const taskTabSources = {
   'my-tasks': 'soup',
-  'created-by-me': 'soup',
   'team-tasks': 'soup',
+  'created-by-me': 'soup',
+  'my-projects': 'project-collection',
   projects: 'project-collection',
+  'created-projects': 'project-collection',
 } as const satisfies Record<
   (typeof TASK_TABS)[number]['id'],
   'soup' | 'project-collection'

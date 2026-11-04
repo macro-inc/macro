@@ -471,6 +471,16 @@ gen-agent-fold-types:
     cargo run -p agent_fold --bin export_types
     bunx biome format --write {{justfile_directory()}}/src/lib/service-clients/service-agent-fold/generated/types.ts
 
+# Regenerate src/lib/service-clients/service-agent-reviews/generated/types.ts
+# (and the SDK's packages/sdk/generated/agent-reviews/index.ts) from
+# agent_code_mode's review types with specta. Run after changing a review type
+# or a type a review draft or result reuses (SendEmail, CreateCalendarEvent,
+# their responses, the import report); biome reformats specta's output for the
+# same reason as gen-agent-fold-types.
+gen-agent-review-types:
+    SQLX_OFFLINE=true cargo run -p agent_code_mode --bin export_review_types
+    bunx biome format --write {{justfile_directory()}}/src/lib/service-clients/service-agent-reviews/generated/types.ts
+
 # Regenerate the dynamic-UI view types (src/features/dynamic-ui/generated/types.ts
 # and lexical-core's copy) from `crates/dynamic_ui` with specta. Run after
 # changing a widget; biome reformats specta's output as in gen-agent-fold-types.

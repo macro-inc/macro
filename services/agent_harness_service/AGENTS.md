@@ -30,6 +30,9 @@ Pulumi stacks; they do not host extra agent processes.
   `ai-code-mode` get only `ExecuteCode`/`DescribeCodeTools`/`ReadCodeDocs` on
   `tools/list` (`tool_service.rs`); hidden native tools stay callable. The flag
   is cached per user (`tool_mode_cache.rs`).
+  Code execution's destination list in `src/code_mode.rs` also includes the
+  configured editing worker, whose comment-mark endpoint requires a scoped
+  document token; this does not grant permission to edit document content.
   `src/public_mcp/analytics.rs` sends PostHog `$mcp_initialize` /
   `$mcp_tool_call` events (PostHog MCP analytics schema) in the background,
   with the user's team as the `team` group. At most 64 sends run at once
