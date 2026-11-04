@@ -35,9 +35,8 @@ export type NotificationRowProps = {
  * who did what. Choosing it opens it. Several notifications show as a stack with
  * paper edges, and its own button unfolds them below the card, which they
  * continue. With a pointer, the time and Mark done appear on hover; touch shows
- * the time and marks done by swiping the row. A phone runs the card edge to edge
- * with larger text, and a read card gives up its fill and fades, so unread ones
- * stand out at a glance.
+ * the time and marks done by swiping the row. A phone shows larger text, and a
+ * read card gives up its fill and fades, so unread ones stand out at a glance.
  */
 export function NotificationRow(props: NotificationRowProps) {
   const isStack = () => props.count > 1;
@@ -51,7 +50,7 @@ export function NotificationRow(props: NotificationRowProps) {
       data-stack={isStack() ? '' : undefined}
       data-unfolded={isOpen() ? '' : undefined}
       class={cn(
-        'group/notification relative w-full min-w-0 flex-1 px-3 mobile:px-0',
+        'group/notification relative w-full min-w-0 flex-1 px-3',
         isStack() && !props.unfolded && 'pb-5 mobile:pb-5.5',
         !isStack() && 'pb-2.5 mobile:pb-3'
       )}
@@ -61,7 +60,7 @@ export function NotificationRow(props: NotificationRowProps) {
       <div
         role="gridcell"
         class={cn(
-          'relative z-1 border mobile:rounded-none mobile:border-x-0',
+          'relative z-1 border',
           isOpen() ? 'rounded-t-xl border-b-0' : 'rounded-xl',
           props.highlighted
             ? 'border-edge-frame bg-control-raised'
@@ -187,7 +186,7 @@ export function NotificationRow(props: NotificationRowProps) {
           aria-hidden="true"
           data-stack-edge=""
           class={cn(
-            'absolute inset-x-[19px] h-[5px] rounded-b-[9px] border border-t-0 border-edge-button bg-control/60 mobile:inset-x-[7px]',
+            'absolute inset-x-[19px] h-[5px] rounded-b-[9px] border border-t-0 border-edge-button bg-control/60',
             !props.unseen && 'mobile:bg-transparent'
           )}
         />
@@ -195,7 +194,7 @@ export function NotificationRow(props: NotificationRowProps) {
           aria-hidden="true"
           data-stack-edge=""
           class={cn(
-            'absolute inset-x-[26px] mt-[5px] h-[5px] rounded-b-[9px] border border-t-0 border-edge-button bg-control/30 mobile:inset-x-[14px]',
+            'absolute inset-x-[26px] mt-[5px] h-[5px] rounded-b-[9px] border border-t-0 border-edge-button bg-control/30',
             !props.unseen && 'mobile:bg-transparent'
           )}
         />

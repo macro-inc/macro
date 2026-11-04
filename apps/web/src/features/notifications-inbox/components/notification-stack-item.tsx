@@ -38,7 +38,7 @@ export function NotificationStackItem(props: NotificationStackItemProps) {
       aria-selected={props.highlighted}
       data-stack-item=""
       class={cn(
-        'relative w-full min-w-0 flex-1 px-3 mobile:px-0',
+        'relative w-full min-w-0 flex-1 px-3',
         props.last && 'pb-2.5 mobile:pb-3'
       )}
       onMouseMove={() => props.onHover()}
@@ -47,7 +47,7 @@ export function NotificationStackItem(props: NotificationStackItemProps) {
       <div
         role="gridcell"
         class={cn(
-          'overflow-hidden border-x border-t border-edge-button bg-control mobile:rounded-none mobile:border-x-0',
+          'overflow-hidden border-x border-t border-edge-button bg-control',
           props.last && 'rounded-b-xl border-b',
           !props.unseen && 'mobile:bg-transparent'
         )}
