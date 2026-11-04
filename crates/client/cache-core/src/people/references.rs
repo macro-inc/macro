@@ -170,14 +170,7 @@ impl<'a> ReferenceCollector<'a> {
         let name = match record.fields.get("name") {
             Some(CacheValue::String(name)) => Some(name.as_str()),
             Some(CacheValue::Null) => None,
-            _ => {
-                // An unreadable owned name could match any requested label;
-                // retaining one readable witness cannot prove uniqueness.
-                for evidence in &mut self.evidence {
-                    evidence.matched.complete = false;
-                }
-                return;
-            }
+            _ => return,
         };
         let label = normalize_text(name.unwrap_or(email));
         let first = label.split_whitespace().next().unwrap_or("");

@@ -1,6 +1,6 @@
 /**
  * The engine's browser row source: tables are read as Soup database rows through the
- * normalized cache, newest first; `people` come from the contacts query.
+ * normalized cache, newest first. People queries must use the database read boundary.
  */
 
 import { readRecordsByKeys, selectRecords } from '@app/lib/graphql-cache';
@@ -17,7 +17,6 @@ import type {
   Page,
   Propf,
   Row,
-  Table,
 } from '@core/database-sql/generated/types';
 import type { DatabaseSqlStepTrace } from '@core/database-sql/trace';
 import type { CacheHost } from '@graphql-cache/host/types';
@@ -52,14 +51,7 @@ import {
 } from '@urql/core';
 import { err, errAsync, ok, okAsync, Result, ResultAsync } from 'neverthrow';
 import { match, P } from 'ts-pattern';
-import { NIL as NIL_UUID, v5 as uuidV5 } from 'uuid';
-
-/** One person the viewer can see, as the `people` table lists them. */
-export interface Person {
-  id: string;
-  name: string;
-  email: string;
-}
+import { NIL as NIL_UUID } from 'uuid';
 
 interface GraphqlRowSourceCapabilities {
   /** The app's GraphQL client; its exchanges decide cache or network. */
@@ -69,8 +61,6 @@ interface GraphqlRowSourceCapabilities {
   requestPolicy: RequestPolicy;
   /** Probe the cache without subscribing to a shared urql operation. */
   cache?: Pick<CacheHost, 'readQuery'>;
-  /** Everyone the viewer can see. */
-  people: () => Promise<Person[]>;
   /**
    * Table membership as the local filter index knows it. A read from the
    * network records each first page as evidence; a later read with
@@ -93,12 +83,6 @@ export interface LocalMembership {
 
 /** Past this many join values a narrowed filter costs more than it saves. */
 const MAX_KEY_HINT_VALUES = 100;
-
-/**
- * `people` rows need UUID ids: the RFC 4122 OID namespace names a person's
- * row as the engine's own tests do (`Uuid::NAMESPACE_OID`).
- */
-const PERSON_ROW_NAMESPACE = '6ba7b812-9dad-11d1-80b4-00c04fd430c8';
 
 type DatabaseRowItem = Extract<
   DatabaseRowFieldsFragment,
@@ -185,7 +169,6 @@ export function createGraphqlRowSource({
   catalog,
   requestPolicy,
   cache,
-  people,
   membership,
 }: GraphqlRowSourceCapabilities): RowSource {
   return {
@@ -197,7 +180,11 @@ export function createGraphqlRowSource({
             soupPage(client, requestPolicy, input, membership, step, cache)
           )
         )
-        .with({ type: 'people' }, ({ ids }) => peoplePage(catalog, people, ids))
+        .with({ type: 'people' }, () =>
+          errAsync(
+            fetchFailure('People queries require database-side execution')
+          )
+        )
         .with({ type: 'groupSoup' }, () =>
           errAsync(fetchFailure('a grouped query is read as bins, not pages'))
         )
@@ -593,43 +580,4 @@ function groupBins(
         )
       )
     );
-}
-
-function peoplePage(
-  catalog: Catalog,
-  people: () => Promise<Person[]>,
-  ids: string[] | null
-): ResultAsync<Page, DatabaseSqlFetchFailure> {
-  const table = catalog.tables.find(
-    (candidate): candidate is Table => candidate.source === 'people'
-  );
-  if (!table) return errAsync(fetchFailure('this catalog has no people table'));
-  const column = (name: string): Result<string, DatabaseSqlFetchFailure> => {
-    const found = table.columns.find((candidate) => candidate.name === name);
-    return found
-      ? ok(found.id)
-      : err(fetchFailure(`the people table has no ${name} column`));
-  };
-  const wanted = ids ? new Set(ids) : undefined;
-  return Result.combine([
-    column('id'),
-    column('name'),
-    column('email'),
-  ]).asyncAndThen(([id, name, email]) =>
-    ResultAsync.fromPromise(people(), thrownFetchFailure).map(
-      (everyone): Page => ({
-        rows: everyone
-          .filter((person) => !wanted || wanted.has(person.id))
-          .map((person) => ({
-            id: uuidV5(person.id, PERSON_ROW_NAMESPACE),
-            cells: {
-              [id]: { type: 'entities', value: [person.id] },
-              [name]: { type: 'text', value: person.name },
-              [email]: { type: 'text', value: person.email },
-            },
-          })),
-        next: null,
-      })
-    )
-  );
 }

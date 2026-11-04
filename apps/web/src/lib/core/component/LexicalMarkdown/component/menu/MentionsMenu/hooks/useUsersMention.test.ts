@@ -149,10 +149,11 @@ it('decorates only the current window and never widens an empty or explicit rost
         users: scope,
         transformUsers: (users) => [...users, agent],
       });
-      expect(new Set(mention.users().map((row) => row.id))).toEqual(
-        new Set([person.id, agent.id])
-      );
-      expect(mention.users().find((row) => row.id === person.id)).toBe(item);
+      expect(mention.availableUsers().map((row) => row.id)).toEqual([
+        person.id,
+        agent.id,
+      ]);
+      expect(mention.availableUsers()[0]).toBe(item);
       expect(mention.hasMore()).toBe(true);
       await mention.loadMore();
       expect(mocks.loadMore).toHaveBeenCalledOnce();
@@ -163,23 +164,26 @@ it('decorates only the current window and never widens an empty or explicit rost
           email: 'next@example.com',
         }),
       ]);
-      expect(new Set(mention.users().map((row) => row.id))).toEqual(
-        new Set(['macro|next@example.com', agent.id])
-      );
+      expect(mention.availableUsers().map((row) => row.id)).toEqual([
+        'macro|next@example.com',
+        agent.id,
+      ]);
       setScope([]);
-      expect(mention.users().map((row) => row.id)).toEqual([agent.id]);
+      expect(mention.availableUsers().map((row) => row.id)).toEqual([agent.id]);
       expect(mention.hasMore()).toBe(false);
       expect(mention.windowKey()).toBeUndefined();
       await mention.loadMore();
       expect(mocks.loadMore).toHaveBeenCalledOnce();
       setScope([person]);
-      expect(new Set(mention.users().map((row) => row.id))).toEqual(
-        new Set([person.id, agent.id])
-      );
+      expect(mention.availableUsers().map((row) => row.id)).toEqual([
+        person.id,
+        agent.id,
+      ]);
       setScope(undefined);
-      expect(new Set(mention.users().map((row) => row.id))).toEqual(
-        new Set(['macro|next@example.com', agent.id])
-      );
+      expect(mention.availableUsers().map((row) => row.id)).toEqual([
+        'macro|next@example.com',
+        agent.id,
+      ]);
     } finally {
       dispose();
     }

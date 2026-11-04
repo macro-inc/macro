@@ -183,11 +183,30 @@ function fakeClient(
   };
 }
 
-const noPeople = async () => {
-  throw new Error('no people in this catalog');
-};
-
 describe('the GraphQL row source', () => {
+  it('refuses people requests instead of enumerating a browser directory', async () => {
+    const server = fakeClient(() => {
+      throw new Error('No network rows expected');
+    });
+    const source = createGraphqlRowSource({
+      client: server.client,
+      catalog: { tables: [] },
+      requestPolicy: 'network-only',
+    });
+    const result = await source.page(
+      { type: 'people', ids: null },
+      [],
+      null,
+      500,
+      {
+        decode: (_rows, operation) => operation(),
+        request: () => {},
+        headers: () => ({}),
+      }
+    );
+    expect(result.isErr() && result.error.kind).toBe('fetch');
+    expect(server.operationNames()).toEqual([]);
+  });
   it('reads a select-column filter as one Soup query over the table', async () => {
     const transcript = readTranscript('select-column-filter');
     const server = fakeClient(() => soupPage([acme, globex], null));
@@ -197,7 +216,6 @@ describe('the GraphQL row source', () => {
         client: server.client,
         catalog: transcript.catalog,
         requestPolicy: 'network-only',
-        people: noPeople,
       }),
       open: replay(transcript),
     });
@@ -238,7 +256,6 @@ describe('the GraphQL row source', () => {
         client: server.client,
         catalog: transcript.catalog,
         requestPolicy: 'network-only',
-        people: noPeople,
       }),
       open: replay(transcript),
     });
@@ -288,7 +305,6 @@ describe('the GraphQL row source', () => {
         client: server.client,
         catalog: transcript.catalog,
         requestPolicy: 'network-only',
-        people: noPeople,
       }),
       open: replay(transcript),
     });
@@ -329,7 +345,6 @@ describe('the GraphQL row source', () => {
         client: server.client,
         catalog: transcript.catalog,
         requestPolicy: 'network-only',
-        people: noPeople,
       }),
       open: replay(transcript),
     });
@@ -378,7 +393,6 @@ describe('the GraphQL row source', () => {
       client: server.client,
       catalog: { tables: [] },
       requestPolicy: 'network-only',
-      people: noPeople,
     });
 
     const page = await source.page(
@@ -415,7 +429,6 @@ describe('the GraphQL row source', () => {
         client: server.client,
         catalog: transcript.catalog,
         requestPolicy: 'network-only',
-        people: noPeople,
       }),
       open: replay(transcript),
     });
@@ -502,7 +515,6 @@ describe('concurrent SQL cache and network reads', () => {
             catalog: transcript.catalog,
             requestPolicy: policy,
             cache: host,
-            people: noPeople,
           }),
           open: replay(transcript),
         });

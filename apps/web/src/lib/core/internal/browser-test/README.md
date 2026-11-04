@@ -45,6 +45,13 @@ offline/retry and late replies after filter edits, navigation or replacement log
 Mobile retains its existing manual-only UI. Saved-view action chrome and task loading
 are stand-ins; this fixture does not claim saved-view dialog or live model coverage.
 
+`/?sql-people` uses the real SQL wasm compiler, live query controller, read-only
+HTTP client and generated response validator. Playwright supplies the bounded endpoint
+responses; tests cover routing without local people reads, write refusal before RPC,
+missing endpoint failure, foreign-viewer rejection and session replacement. The local
+fixture account is reactive. This is client composition coverage, not a live DSS or
+PostgreSQL test; the native SQL suite separately exercises the real 100k database path.
+
 `/?linear-import` mounts the real importer, CSV conversion, batched reference reader
 and single-user property picker. It reuses the virtual 100k property window fixture;
 contact transport, auth scope and task/history writes are stand-ins. Desktop/phone
@@ -102,8 +109,8 @@ selection preservation and input focus. The source unit regression additionally
 checks twenty replacements, close/reopen reset and query-history collection.
 New message/channel, call, routine-template and sharing pickers use this source;
 main email fields also use it, with composition coverage in
-`features/email-compose/browser-test/recipient-directory.app.e2e.ts`. The database
-SQL people source still requires its separate migration.
+`features/email-compose/browser-test/recipient-directory.app.e2e.ts`. People SQL
+now uses the read-only boundary rather than the browser contacts source.
 
 This is UI/adapter coverage, not a WASM memory measurement or live-backend trace.
 Real Turso/OPFS hydration/search coverage lives in `crates/client/cache-turso`.

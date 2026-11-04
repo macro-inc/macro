@@ -111,6 +111,9 @@ pub enum RunFailure<SourceFailure, WriteFailure> {
     rename_all_fields = "camelCase"
 )]
 pub enum RunError {
+    /// A read-only caller supplied a write or schema command.
+    #[error("only SELECT statements are allowed")]
+    ReadOnly,
     /// The text was not a statement of the supported grammar.
     #[error(transparent)]
     Parse(ParseError),
@@ -567,7 +570,34 @@ pub async fn run<Source: RowSource, Sink: OpsSink>(
     source: &Source,
     sink: &Sink,
 ) -> Result<Outcome, RunFailure<Source::Error, Sink::Error>> {
-    let (mut engine, mut step) = Engine::start(catalog, sql)?;
+    let (engine, step) = Engine::start(catalog, sql)?;
+    drive(engine, step, source, sink).await
+}
+
+/// Execute an already resolved SELECT without exposing a write sink.
+pub async fn run_select<Source: RowSource>(
+    catalog: &Catalog,
+    select: SelectQuery,
+    source: &Source,
+) -> Result<Outcome, RunFailure<Source::Error, RunError>> {
+    let (engine, step) = Engine::from_select(catalog, select)?;
+    drive(engine, step, source, &ReadOnly).await
+}
+
+struct ReadOnly;
+impl OpsSink for ReadOnly {
+    type Error = RunError;
+    async fn apply(&self, _: DatabaseId, _: Vec<DatabaseOp>) -> Result<Vec<OpResult>, Self::Error> {
+        Err(RunError::ReadOnly)
+    }
+}
+
+async fn drive<Source: RowSource, Sink: OpsSink>(
+    mut engine: Engine,
+    mut step: Step,
+    source: &Source,
+    sink: &Sink,
+) -> Result<Outcome, RunFailure<Source::Error, Sink::Error>> {
     loop {
         step = match step {
             Step::Done(outcome) => return Ok(outcome),
@@ -596,6 +626,47 @@ pub async fn run<Source: RowSource, Sink: OpsSink>(
             }
         };
     }
+}
+
+/// Read metadata without fetching data or creating a row catalog.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Type)]
+#[serde(rename_all = "camelCase")]
+pub struct ReadDescription {
+    /// Tables actually bound by the compiler, not text matches in SQL.
+    pub read_tables: Vec<TableId>,
+    /// Expected output column identities, names and kinds.
+    pub columns: Vec<OutcomeColumn>,
+}
+
+/// Compile and describe a read, rejecting writes before any source is touched.
+pub fn describe_read(catalog: &Catalog, sql: &str) -> Result<ReadDescription, RunError> {
+    if crate::parse::parse_schema(sql)
+        .map_err(RunError::Parse)?
+        .is_some()
+    {
+        return Err(RunError::ReadOnly);
+    }
+    let crate::resolve::Query::Select(select) = crate::resolve::compile(catalog, sql)? else {
+        return Err(RunError::ReadOnly);
+    };
+    describe_select(catalog, &select)
+}
+
+/// Describe a compiled SELECT, including views, without executing its plan.
+pub fn describe_select(
+    catalog: &Catalog,
+    select: &SelectQuery,
+) -> Result<ReadDescription, RunError> {
+    let mut read_tables = Vec::new();
+    for relation in &select.relations {
+        if !read_tables.contains(&relation.table) {
+            read_tables.push(relation.table);
+        }
+    }
+    Ok(ReadDescription {
+        read_tables,
+        columns: result_columns(catalog, select)?,
+    })
 }
 
 /// The columns a resolved `SELECT` returns, named and typed as its outcome

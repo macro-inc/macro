@@ -73,12 +73,10 @@ function TaskSavedViewSummary(props: {
       ?.label;
   };
   const people = useContactFilterLabels(() =>
-    [
-      ...new Set([
-        ...(selection().facets.assignees ?? []),
-        ...(selection().facets['created-by'] ?? []),
-      ]),
-    ].filter((id) => id !== TASK_VIEWER)
+    [...new Set([
+      ...(selection().facets.assignees ?? []),
+      ...(selection().facets['created-by'] ?? []),
+    ])].filter((id) => id !== TASK_VIEWER)
   );
   return (
     <>

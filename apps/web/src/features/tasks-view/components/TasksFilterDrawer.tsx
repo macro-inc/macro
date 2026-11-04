@@ -242,39 +242,30 @@ export function TasksFilterDrawer() {
                     label={group().label}
                     activeCount={activeCount()}
                   >
-                    <Show
-                      when={group().createSource}
-                      fallback={
-                        <>
-                          <Show when={group().id === 'assignees'}>
-                            <div class="flex items-center gap-2 px-3 pb-2">
-                              <Input
-                                class="min-w-0 flex-1"
-                                aria-label={group().searchPlaceholder}
-                                placeholder={group().searchPlaceholder}
-                                value={assigneeSearch()}
-                                onInput={(event) =>
-                                  setAssigneeSearch(event.currentTarget.value)
-                                }
-                              />
-                            </div>
-                          </Show>
-                          {renderOptions(orderedOptions)}
-                        </>
-                      }
-                    >
+                    <Show when={group().createSource} fallback={
+                      <>
+                        <Show when={group().id === 'assignees'}>
+                          <div class="flex items-center gap-2 px-3 pb-2">
+                            <Input
+                              class="min-w-0 flex-1"
+                              aria-label={group().searchPlaceholder}
+                              placeholder={group().searchPlaceholder}
+                              value={assigneeSearch()}
+                              onInput={(event) => setAssigneeSearch(event.currentTarget.value)}
+                            />
+                          </div>
+                        </Show>
+                        {renderOptions(orderedOptions)}
+                      </>
+                    }>
                       {(createSource) => (
                         <MobileFilterDrawer.SourceOptions
                           groupId={group().id}
                           createSource={createSource()}
                           activeIds={() => filters.selectedIds(group().id)}
-                          enabled={() =>
-                            open() && expandedSections().includes(group().id)
-                          }
+                          enabled={() => open() && expandedSections().includes(group().id)}
                           placeholder={group().searchPlaceholder}
-                          onChange={(id, checked) =>
-                            filters.setSelected(group().id, id, checked)
-                          }
+                          onChange={(id, checked) => filters.setSelected(group().id, id, checked)}
                         />
                       )}
                     </Show>

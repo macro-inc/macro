@@ -380,10 +380,8 @@ export function PropertyEntitySelector(props: EntityInputProps) {
         .map((result) => result.item)
         .filter(excludeFilter);
     } else {
-      localResults = sortEntitiesWithSelfFirst(
-        allEntities.filter(excludeFilter),
-        userId
-      ).slice(0, MAX_VISIBLE_ENTITIES_NO_SEARCH);
+      localResults = sortEntitiesWithSelfFirst(allEntities.filter(excludeFilter), userId)
+        .slice(0, MAX_VISIBLE_ENTITIES_NO_SEARCH);
     }
 
     // For THREAD or generic entity: merge local + server results
@@ -486,11 +484,7 @@ export function PropertyEntitySelector(props: EntityInputProps) {
   });
 
   const handleKeyDown = (e: KeyboardEvent) => {
-    if (
-      e.defaultPrevented ||
-      (e.target instanceof HTMLElement && e.target.closest('button'))
-    )
-      return;
+    if (e.defaultPrevented || (e.target instanceof HTMLElement && e.target.closest('button'))) return;
     // Another field on the page keeps its own keys.
     if (
       e.target !== searchInputRef &&

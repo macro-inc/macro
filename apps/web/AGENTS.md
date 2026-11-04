@@ -1,12 +1,12 @@
 ## Development Commands
 
 - Use `bun` as the package manager and script runner (`bun run build`, `bunx tsc`).
-- `bun run test`: run tests
+- `bun run test`: run tests 
 - `bun run check`: check typescript changes
 - Forward `CacheHost.people` through the app's retiring host, resolving the current host on each call even for captured methods; retired reads return unsupported and context writes reject rather than acknowledge discarded publication.
-- `CacheHost.people` contracts come from cache-core models: `bun run gen-cache-people-schema --rust` regenerates Rust JSON plus Zod/types; `--check --rust` verifies both. `bun run check` verifies JSON-to-frontend generation, while cache-core tests verify Rust-to-JSON drift. Missing native person commands mean unsupported, never permission to issue an unscoped write.
-- `bun run lint`: lint with biome
-- `bun run format`: format changes with biome
+- `CacheHost.people` contracts come from cache-core models: `bun run gen-cache-people-schema --rust` regenerates Rust JSON plus Zod/types; `--check --rust` verifies both. `bun run check` verifies JSON-to-frontend generation, while cache-core tests verify Rust-to-JSON drift. Missing native person commands mean unsupported, never permission to issue an unscoped write. 
+- `bun run lint`: lint with biome 
+- `bun run format`: format changes with biome 
 - `bun run knip`: to check for dead code
 - Run Linux native cache-plugin tests from the repository root with `nix develop .#tauri-linux --command cargo test --manifest-path apps/web/tauri/Cargo.toml -p graphql_cache_plugin`; the [Tauri platform shell](../../docs/development/running-locally.md) supplies the required desktop libraries.
 - Refresh `nix-support/node_modules-hashes.json` for Linux and Darwin when dependency manifests, the lockfile, or dependency patches change.
@@ -147,6 +147,19 @@ per-label complete/ambiguous evidence and separate exact identity lookup. Its
 reader keeps one physical read plus one replaceable pending input, samples cache
 completeness before scanning, and wakes incomplete reads only on readiness
 transitions. Source data is scoped and immediately collected, not a people pool.
+
+Browser SQL describes reads with the actual wasm compiler before choosing execution.
+Any statement bound to `macro.people` uses the dedicated `/databases/read` route;
+ordinary tables keep their local GraphQL/cache path, including tables named people.
+Never enumerate contacts or fall back to the read/write endpoint. Validate the
+response's viewer, definition IDs and result shape; fence account/session, input
+transitions and disposal. Keep last same-owner results on ordinary failures, but
+clear them on account changes, authorization refusals or a foreign-viewer response,
+even before local auth refresh. Keep server query refusals distinct from network/offline failures. Remote SQL does not claim cache availability or rerun on
+hydration hints; committed changes coalesce behind an active read. Preserve explicit
+post-disposal refreshes used to finish accepted database writes only for the original
+account/session. Fresh people SQL requires the new backend route; offline/unsupported
+responses stay errors, not authoritative empty answers.
 
 ## Verifying a change in a real browser
 

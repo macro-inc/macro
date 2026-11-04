@@ -15,6 +15,16 @@ export default defineConfig({
       name: 'soup-filter-test-adapters',
       enforce: 'pre',
       resolveId(source, importer) {
+        if (
+          importer?.endsWith('/database-sql/server-read.ts') &&
+          source === '@queries/auth/account-scope'
+        )
+          return `${directory}/test-account.ts`;
+        if (
+          importer?.endsWith('/service-storage/databases.ts') &&
+          source === '@core/constant/servers'
+        )
+          return `${directory}/sql-read-services.ts`;
         if (importer?.includes('/integrations/import-linear/')) {
           if (
             [

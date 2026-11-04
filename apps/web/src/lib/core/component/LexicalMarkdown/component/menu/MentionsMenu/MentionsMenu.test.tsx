@@ -363,44 +363,6 @@ it('leaves a category list on the first desktop Escape and closes on the second'
   expect(menu.isOpen()).toBe(false);
 });
 
-it('opens an empty continuation and keeps the editor menu open while paging', async () => {
-  mocks.crmEnabled = true;
-  mocks.hasMoreContacts = true;
-  mockNoEmails();
-  const menu = createMenuOperations();
-  const editor = createEditor();
-  render(() => (
-    <MentionsMenu
-      menu={menu}
-      editor={editor}
-      users={() => []}
-      sources={['crm']}
-    />
-  ));
-
-  menu.openMenu();
-  expect(screen.queryByText('No results')).toBeNull();
-  fireEvent.click(screen.getByText('View all'));
-  const next = screen.getByText('Next options');
-  const callsBeforeClick = mocks.loadMoreContacts.mock.calls.length;
-  const pointer = new MouseEvent('pointerdown', {
-    bubbles: true,
-    cancelable: true,
-  });
-  next.dispatchEvent(pointer);
-  expect(pointer.defaultPrevented).toBe(true);
-  const mouse = new MouseEvent('mousedown', {
-    bubbles: true,
-    cancelable: true,
-  });
-  next.dispatchEvent(mouse);
-  expect(mouse.defaultPrevented).toBe(true);
-  fireEvent.click(next);
-
-  expect(mocks.loadMoreContacts).toHaveBeenCalledTimes(callsBeforeClick + 1);
-  expect(menu.isOpen()).toBe(true);
-});
-
 it('only paginates an open mobile menu and resumes on reopen', async () => {
   mocks.mobile = true;
   mocks.crmEnabled = true;

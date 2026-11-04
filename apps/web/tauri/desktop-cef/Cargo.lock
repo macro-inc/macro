@@ -1016,7 +1016,6 @@ dependencies = [
  "apollo-parser",
  "chrono",
  "lru",
- "macro_user_id",
  "maybe_send",
  "miniz_oxide 0.8.9",
  "postcard",
@@ -1024,7 +1023,6 @@ dependencies = [
  "serde",
  "serde_json",
  "sha2 0.10.9",
- "subsequence_match",
  "thiserror 2.0.21",
  "uuid",
 ]
@@ -7885,10 +7883,6 @@ dependencies = [
  "quote",
  "syn 2.0.119",
 ]
-
-[[package]]
-name = "subsequence_match"
-version = "0.1.0"
 
 [[package]]
 name = "subtle"

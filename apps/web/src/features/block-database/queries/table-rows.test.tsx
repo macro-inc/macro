@@ -257,7 +257,11 @@ function engine(
   const read: DatabaseSqlQueryCapabilities = {
     client: () => client,
     cacheHost: () => undefined,
-    people: async () => [],
+    account: () => ({ userId: 'macro|viewer@example.com', session: 0 }),
+    describe: async (catalog) => ({
+      readTables: catalog.tables.map((table) => table.id),
+      columns: [],
+    }),
     catalog: async () => ({
       tables: [
         {
@@ -818,7 +822,8 @@ describe('a column type change', () => {
           createDatabaseSqlQuery(statement, {
             client: () => client,
             cacheHost: () => undefined,
-            people: async () => [],
+            account: () => ({ userId: 'macro|viewer@example.com', session: 0 }),
+            describe: async (catalog) => ({ readTables: catalog.tables.map(table => table.id), columns: [] }),
             catalog: async (schema) => ({
               tables: [
                 {

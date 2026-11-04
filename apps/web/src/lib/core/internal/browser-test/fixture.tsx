@@ -22,6 +22,7 @@ import { OnboardingContactsFixture } from './onboarding-contacts-fixture';
 import { RecipientDirectoryFixture } from './recipient-directory-fixture';
 import { RecipientRankingFixture } from './recipient-ranking-fixture';
 import { SoupFilterFixture } from './soup-filter-fixture';
+import { SqlPeopleFixture } from './sql-people-fixture';
 import { TaskFilterFixture } from './task-filter-fixture';
 import { TaskListLabelFixture } from './task-list-label-fixture';
 
@@ -146,6 +147,9 @@ render(
   () => (
     <QueryClientProvider client={client}>
       <Switch fallback={<App />}>
+        <Match when={new URLSearchParams(location.search).has('sql-people')}>
+          <SqlPeopleFixture />
+        </Match>
         <Match when={new URLSearchParams(location.search).has('linear-import')}>
           <LinearImportFixture />
         </Match>

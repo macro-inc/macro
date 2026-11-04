@@ -35,6 +35,10 @@ export type DatabaseSqlFailure =
   | { kind: 'fetch'; message: string }
   /** The caller replaced or disposed this read. */
   | { kind: 'cancelled' }
+  /** The server refused a valid transport request; this is not an offline result. */
+  | { kind: 'rejected'; message: string }
+  /** Account or access authority changed. Old answers must clear. */
+  | { kind: 'scope-changed'; message: string }
   /** The statement writes, and only reads run here. */
   | { kind: 'read-only' };
 
@@ -89,8 +93,10 @@ function isEngineError(thrown: unknown): thrown is EngineError {
 
 /** The engine throws an `EngineError`; anything else is a crash. */
 export function engineFailure(thrown: unknown): DatabaseSqlFailure {
-  if (isEngineError(thrown))
+  if (isEngineError(thrown)) {
+    if (thrown.error.stage === 'readOnly') return { kind: 'read-only' };
     return { kind: 'engine', error: thrown.error, message: thrown.message };
+  }
   return {
     kind: 'crash',
     message: thrown instanceof Error ? thrown.message : String(thrown),

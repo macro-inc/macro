@@ -1302,6 +1302,11 @@ domain and retains at most six non-self emails, with zero-history scoped queries
 Linear import resolves only uploaded assignee labels in serial bounded exact batches;
 manual mapping uses personal property windows and keeps explicit choices separate.
 Its retained names scale with the uploaded file, not the personal directory.
+Browser SQL compiles dependency metadata and routes people-containing statements to
+`/databases/read`; the local row source no longer accepts a personal-directory array.
+The server rejects writes and bounds output, and its viewer witness plus column IDs
+fence foreign/stale results. Fresh people SQL is network-dependent; no cache/full-list
+or read/write fallback is permitted. Wider query parity and legacy cleanup remain open.
 Calendar create/edit, event-detail guest actions and AI-draft
 composers now use bounded property windows with event-owned guest extras. Chosen
 names stay in selection metadata rather than a directory map, and person pages

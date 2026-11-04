@@ -12,6 +12,7 @@ uses the wasm build directly).
 - `openapi` feature: optional derives for the HTTP result contract; keep native transport dependencies out of the engine.
 - `src/lib.rs`: the pipeline diagram and the public re-exports — read this
   before any other file.
+- `run::describe_read` / `describe_select` return compiler-bound table and column metadata without fetching rows; `run_select` executes a resolved read without a write sink. Browser routing must use this metadata, never SQL-text matching. The wasm shell exposes `describeRead` / `describeView`.
 - `src/parse.rs` / `src/resolve.rs` / `src/split.rs` / `src/engine.rs` /
   `src/fold.rs`: the pipeline stages, in order; each has a sibling `test.rs`.
 - `examples/repl.rs`: an interactive console against a live stack; `examples/gql.rs`

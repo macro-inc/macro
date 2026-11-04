@@ -1262,6 +1262,14 @@ export type PropfValue =
   /**  A referenced entity id. */
   | ({ er: string } & { so?: never });
 
+/**  Read metadata without fetching data or creating a row catalog. */
+export type ReadDescription = {
+  /**  Tables actually bound by the compiler, not text matches in SQL. */
+  readTables: TableId[];
+  /**  Expected output column identities, names and kinds. */
+  columns: OutcomeColumn[];
+};
+
 /**  One fetch the engine wants. */
 export type Request = {
   /**  Identifies the request; the feed must quote it. */
@@ -1680,6 +1688,23 @@ export type RowsResult =
  *  its `Display` text is what an agent reads.
  */
 export type RunError =
+  /**  A read-only caller supplied a write or schema command. */
+  | ({ stage: 'readOnly' } & {
+      column?: never;
+      expected?: never;
+      fed?: never;
+      invariant?: never;
+      key?: never;
+      limit?: never;
+      message?: never;
+      position?: never;
+      received?: never;
+      request?: never;
+      row?: never;
+      sent?: never;
+      table?: never;
+      what?: never;
+    })
   /**  The text was not a statement of the supported grammar. */
   | ({
       stage: 'parse';
