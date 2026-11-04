@@ -36,14 +36,15 @@ fn invalid() -> CalendarProviderError {
     )
 }
 /// A Graph event property Macro cannot represent, named by its path in the
-/// event, such as `recurrence.range.endDate`.
+/// event, such as `recurrence.range.endDate`. Paths are built only from
+/// literals, so a log of one never carries event content.
 #[derive(Debug, PartialEq, Eq)]
 struct Rejected(String);
 impl Rejected {
-    fn at(field: &str) -> Self {
+    fn at(field: &'static str) -> Self {
         Self(field.to_owned())
     }
-    fn under(self, parent: &str) -> Self {
+    fn under(self, parent: &'static str) -> Self {
         Self(format!("{parent}.{}", self.0))
     }
 }
@@ -73,10 +74,10 @@ fn error(error: EmailApiError) -> CalendarProviderError {
         },
     )
 }
-fn string<'a>(value: &'a Value, key: &str) -> Result<&'a str, CalendarProviderError> {
+fn string<'a>(value: &'a Value, key: &'static str) -> Result<&'a str, CalendarProviderError> {
     Ok(field(value, key)?)
 }
-fn field<'a>(value: &'a Value, key: &str) -> Result<&'a str, Rejected> {
+fn field<'a>(value: &'a Value, key: &'static str) -> Result<&'a str, Rejected> {
     value[key]
         .as_str()
         .filter(|s| !s.is_empty())

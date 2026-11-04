@@ -364,9 +364,12 @@ reminder dispatch, team availability, and provider/Postgres persistence.
   one error blocks the calendar. An event the adapter cannot normalize is not
   an error: it comes back as `OutlookEventRefresh::Unreadable` with the Graph
   property it rejected, and the sync skips it, as Google never shows an event
-  it cannot normalize. It stays absent if it was never imported and keeps its
-  last stored copy otherwise. The warning `skipping an Outlook event Macro
-  cannot read` and the `calendar.outlook_sync` span carry `calendar_id`,
+  it cannot normalize. The event is absent: a copy stored before is retired
+  (`OutlookCalendarProgress::Unreadable`), since without the calendar error
+  Google shows beside its old copy a stale copy would look current, but its
+  page membership stays so later tombstones resolve. The round still finishes
+  as a clean sync. The warning `skipping an Outlook event Macro cannot read`
+  and the `calendar.outlook_sync` span carry `calendar_id`,
   `provider_event_id` and `rejected_field`.
 - A sync of a `ready`, already synced account stays `ready`, on Google as on
   Outlook, including after a re-grant that kept calendar access, whose sync tokens

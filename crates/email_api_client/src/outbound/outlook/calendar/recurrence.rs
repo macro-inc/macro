@@ -28,8 +28,8 @@ pub(super) fn from_graph(event: &Value) -> Result<Vec<String>, Rejected> {
     }
     let p = &recurrence["pattern"];
     let r = &recurrence["range"];
-    let pattern = |key: &str| Rejected::at(key).under("recurrence.pattern");
-    let range = |key: &str| Rejected::at(key).under("recurrence.range");
+    let pattern = |key: &'static str| Rejected::at(key).under("recurrence.pattern");
+    let range = |key: &'static str| Rejected::at(key).under("recurrence.range");
     let kind = field(p, "type").map_err(|e| e.under("recurrence.pattern"))?;
     let (_, _, start, _) = normalize::time_body(&normalize::event_time(event)?)
         .map_err(|_| Rejected::at("start.timeZone"))?;
