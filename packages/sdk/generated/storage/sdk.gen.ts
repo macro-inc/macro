@@ -662,7 +662,7 @@ export class Sdk extends HeyApiClient {
     }
 
     /**
-     * Rename a label of the caller's authorized scope.
+     * Update a label, optionally moving it to another authorized scope.
      */
     public renameChannelLabel<ThrowOnError extends boolean = false>(options: Options<RenameChannelLabelData, ThrowOnError>): RequestResult<RenameChannelLabelResponses, RenameChannelLabelErrors, ThrowOnError> {
         return (options.client ?? this.client).patch<RenameChannelLabelResponses, RenameChannelLabelErrors, ThrowOnError>({

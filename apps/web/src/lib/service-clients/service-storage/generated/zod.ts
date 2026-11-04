@@ -3151,7 +3151,9 @@ export const listChannelLabelsResponse = zod
               .describe('Owning team, or `None` for account-private labels.'),
             updatedAt: zod.iso
               .datetime({})
-              .describe('When the label was last renamed or reordered.'),
+              .describe(
+                "When the label's name, rule, scope, or order last changed."
+              ),
           })
           .describe(
             'A shared or account-private label grouping chat channels in the sidebar.\n\n`channel_ids` is viewer-relative: it lists only the labelled channels the\nrequesting user participates in. `channel_count` counts every channel in\nthe label so clients can warn accurately before a delete.'
@@ -3258,7 +3260,7 @@ export const createChannelLabelResponse = zod
       .describe('Owning team, or `None` for account-private labels.'),
     updatedAt: zod.iso
       .datetime({})
-      .describe('When the label was last renamed or reordered.'),
+      .describe("When the label's name, rule, scope, or order last changed."),
   })
   .describe(
     'A shared or account-private label grouping chat channels in the sidebar.\n\n`channel_ids` is viewer-relative: it lists only the labelled channels the\nrequesting user participates in. `channel_count` counts every channel in\nthe label so clients can warn accurately before a delete.'
@@ -3354,7 +3356,7 @@ export const deleteChannelLabelQueryParams = zod.object({
 });
 
 /**
- * @summary Rename a label of the caller's authorized scope.
+ * @summary Update a label, optionally moving it to another authorized scope.
  */
 export const renameChannelLabelParams = zod.object({
   label_id: zod.uuid().describe('The label id.'),
@@ -3390,8 +3392,20 @@ export const renameChannelLabelBody = zod
           ),
       ])
       .optional(),
+    targetScope: zod
+      .union([
+        zod.null(),
+        zod
+          .enum(['personal', 'team'])
+          .describe(
+            'Requested label namespace. Omission retains the deployed automatic selection.'
+          ),
+      ])
+      .optional(),
   })
-  .describe('Request body for renaming a label.');
+  .describe(
+    "Request body for updating a label's name, smart rule, or sharing scope."
+  );
 
 export const renameChannelLabelResponse = zod
   .object({
@@ -3437,7 +3451,7 @@ export const renameChannelLabelResponse = zod
       .describe('Owning team, or `None` for account-private labels.'),
     updatedAt: zod.iso
       .datetime({})
-      .describe('When the label was last renamed or reordered.'),
+      .describe("When the label's name, rule, scope, or order last changed."),
   })
   .describe(
     'A shared or account-private label grouping chat channels in the sidebar.\n\n`channel_ids` is viewer-relative: it lists only the labelled channels the\nrequesting user participates in. `channel_count` counts every channel in\nthe label so clients can warn accurately before a delete.'

@@ -41,6 +41,31 @@ export function filterChannelLabelMembers(
   });
 }
 
+/** Scope changes keep every member; unavailable channels cannot be silently dropped. */
+export function channelSectionScopeChangeError(
+  label: Pick<ChannelLabel, 'channelIds' | 'channelCount'>,
+  channelsById: ReadonlyMap<
+    string,
+    Pick<ChannelEntity, 'channelType' | 'teamId' | 'isParticipant'>
+  >,
+  target: Pick<ChannelLabel, 'teamId'>
+): 'unavailable' | 'team-only' | undefined {
+  if (new Set(label.channelIds).size !== label.channelCount) {
+    return 'unavailable';
+  }
+
+  for (const id of label.channelIds) {
+    const channel = channelsById.get(id);
+    if (!channel || channel.isParticipant === false) {
+      return 'unavailable';
+    }
+
+    if (!canAssignChannel(channel, target)) {
+      return target.teamId ? 'team-only' : 'unavailable';
+    }
+  }
+}
+
 /** Explain blocked section drops with the same membership rules as the picker. */
 export function channelSectionDropError(options: {
   section: ChannelSectionKey;
