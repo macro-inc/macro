@@ -1,8 +1,4 @@
-import {
-  describeCron,
-  formatTimeLabel,
-  getDefaultTimezone,
-} from '@core/util/cron';
+import { formatTimeLabel, getDefaultTimezone } from '@core/util/cron';
 import { SYSTEM_PROPERTY_IDS } from '@property/identifiers';
 import { match } from 'ts-pattern';
 import { z } from 'zod';
