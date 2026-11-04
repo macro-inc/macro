@@ -11,9 +11,8 @@ import {
   appRoutes,
   createTestPolicy,
 } from '@app/lib/split-router/tests/fixtures';
-import type { SplitId } from '@components/app/split-layout/layoutManager';
 import { createRoot } from 'solid-js';
-import { afterEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, describe, expect, it } from 'vitest';
 import {
   createTabManager,
   MAX_PARKED_TABS,
