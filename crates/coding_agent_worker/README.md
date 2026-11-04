@@ -90,9 +90,10 @@ agent has stopped; if it keeps running, macrod follows it to its real end.
 An ordinary prompt from Macro is submitted to a working Codex session as
 steering input, so the active turn can receive it before finishing. This also
 applies after reconnecting or recovering a launch. Codex's transcript must
-record that prompt before a turn completion can acknowledge it; a preceding
-turn finishing during submission cannot complete the new request. Receipt is
-logged with the session ID, without recording prompt contents.
+record that prompt, ignoring surrounding whitespace, before a turn completion
+can acknowledge it; a preceding turn finishing during submission cannot complete
+the new request. Receipt is logged with the session ID, without recording prompt
+contents.
 
 Slash commands, Claude Code prompts, and prompts sent while a native dialog is
 blocking still wait for the turn to finish. The running turn keeps streaming

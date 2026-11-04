@@ -365,7 +365,11 @@ impl Adapter {
             if let LogEvent::Update(update) | LogEvent::LateUpdate(update) = &event
                 && update["sessionUpdate"] == "user_message_chunk"
                 && expected_prompt.is_some_and(|text| {
-                    update.pointer("/content/text").and_then(Value::as_str) == Some(text.trim())
+                    update
+                        .pointer("/content/text")
+                        .and_then(Value::as_str)
+                        .map(str::trim)
+                        == Some(text.trim())
                 })
             {
                 *expected_prompt = None;

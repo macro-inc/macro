@@ -4,15 +4,20 @@ use std::os::unix::fs::PermissionsExt as _;
 
 #[tokio::test]
 async fn codex_followup_reaches_a_working_turn_without_waiting_for_idle() {
-    check_codex_steering(false).await;
+    check_codex_steering(false, "from macro").await;
 }
 
 #[tokio::test]
 async fn recovered_codex_followup_reaches_the_existing_working_turn() {
-    check_codex_steering(true).await;
+    check_codex_steering(true, "from macro").await;
 }
 
-async fn check_codex_steering(recover: bool) {
+#[tokio::test]
+async fn codex_receipt_accepts_preserved_surrounding_whitespace() {
+    check_codex_steering(false, " \nfrom macro\t ").await;
+}
+
+async fn check_codex_steering(recover: bool, text: &str) {
     let root = tempfile::tempdir().unwrap();
     let id = uuid::Uuid::now_v7().to_string();
     let transcript = save_transcript(root.path(), &id);
@@ -40,7 +45,7 @@ async fn check_codex_steering(recover: bool) {
             // The preceding turn can finish between PTY submission and receipt.
             json!({"type":"event_msg","payload":{"type":"task_complete"}}),
             json!({"type":"event_msg","payload":{"type":"item_completed","item":{
-                "id":"followup","type":"UserMessage","content":[{"text":"from macro"}]
+                "id":"followup","type":"UserMessage","content":[{"text":text}]
             }}}),
             json!({"type":"event_msg","payload":{"type":"task_complete"}}),
         ),
@@ -63,11 +68,7 @@ async fn check_codex_steering(recover: bool) {
         *session.live.lock().await = None;
     }
 
-    let result = tokio::time::timeout(
-        Duration::from_secs(3),
-        adapter.prompt(&session, "from macro"),
-    )
-    .await;
+    let result = tokio::time::timeout(Duration::from_secs(3), adapter.prompt(&session, text)).await;
     adapter.shutdown.cancel();
     assert_eq!(
         result
@@ -81,10 +82,7 @@ async fn check_codex_steering(recover: bool) {
         2,
         "only the submitted prompt's end is forwarded"
     );
-    assert_eq!(
-        updates[0]["params"]["update"]["content"]["text"],
-        "from macro"
-    );
+    assert_eq!(updates[0]["params"]["update"]["content"]["text"], text);
     assert_eq!(updates[1]["method"], "_session/turn_complete");
     let calls = std::fs::read_to_string(root.path().join("calls")).unwrap();
     assert_eq!(calls.matches("agent prompt").count(), 1);
