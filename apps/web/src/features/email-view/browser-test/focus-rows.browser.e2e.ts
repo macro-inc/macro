@@ -132,7 +132,7 @@ for (const size of WIDTHS) {
     }) => {
       await open(page);
       const pill = (id: string, label: string | RegExp) =>
-        page.getByTestId(`row-${id}`).getByText(label);
+        page.getByTestId(`row-${id}`).getByText(label, { exact: true });
 
       for (const sort of ['Most recent', 'Importance']) {
         await page.getByRole('button', { name: sort }).click();
@@ -143,7 +143,7 @@ for (const size of WIDTHS) {
         await expect(pill('due-tomorrow', 'Due tomorrow')).toBeVisible();
         await expect(pill('overdue', 'Overdue')).toBeVisible();
         await expect(
-          pill('due-no-reason', /^Due [A-Z][a-z]{2} \d/)
+          pill('due-no-reason', /^Due [A-Z][a-z]{2} \d{1,2}(, \d{4})?$/)
         ).toBeVisible();
         await expect(
           page.getByTestId('row-reply').getByText(/^(Due|Overdue)/)
