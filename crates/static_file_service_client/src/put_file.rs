@@ -16,6 +16,7 @@ pub struct PutFileRequest {
     /// don't put anything private in here it is public
     pub extension_data: Option<Value>,
     /// Exact upload size in bytes, signed into the upload URL when set.
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub content_length: Option<u64>,
 }
 
