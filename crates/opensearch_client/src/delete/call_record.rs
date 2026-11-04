@@ -50,21 +50,14 @@ async fn delete_by_term(
         .refresh(true)
         .send()
         .await
-        .map_err(|err| OpensearchClientError::Unknown {
-            details: err.to_string(),
-            method: Some(method.to_string()),
-        })?;
+        .map_err(|err| OpensearchClientError::request_failed(method, &err))?;
 
     let status = response.status_code();
     if !status.is_success() {
-        let body =
-            response
-                .text()
-                .await
-                .map_err(|err| OpensearchClientError::DeserializationFailed {
-                    details: err.to_string(),
-                    method: Some(method.to_string()),
-                })?;
+        let body = response
+            .text()
+            .await
+            .map_err(|err| OpensearchClientError::deserialization_failed(method, &err))?;
         tracing::error!(status_code = ?status, body = ?body, "error deleting call records");
         return Err(OpensearchClientError::Unknown {
             details: body,

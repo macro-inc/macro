@@ -22,6 +22,14 @@ pub enum OpensearchClientError {
         method: Option<String>,
     },
 
+    /// The request produced no response: connect, TLS, timeout, or a
+    /// connection closed or reset before the response arrived.
+    #[error("request to opensearch failed. method: {method:?} details: {details}")]
+    RequestFailed {
+        details: String,
+        method: Option<String>,
+    },
+
     #[error("a network error occurred. status_code: {status_code} message: {message}")]
     NetworkError { status_code: u16, message: String },
 
@@ -59,6 +67,42 @@ pub enum OpensearchClientError {
     SearchWithExhaustedCursor,
 }
 
+impl OpensearchClientError {
+    /// A request that never produced a response.
+    pub(crate) fn request_failed(method: &str, error: &Error) -> Self {
+        Self::RequestFailed {
+            details: error_chain(error),
+            method: Some(method.to_owned()),
+        }
+    }
+
+    /// A response body that could not be read or parsed, including one cut
+    /// off by a dropped connection.
+    pub(crate) fn deserialization_failed(method: &str, error: &Error) -> Self {
+        Self::DeserializationFailed {
+            details: error_chain(error),
+            method: Some(method.to_owned()),
+        }
+    }
+}
+
+/// reqwest's `Display` omits the cause (timeout, reset, refused connection),
+/// which only its source chain carries.
+pub(crate) fn error_chain(error: &(dyn std::error::Error + 'static)) -> String {
+    let mut details = error.to_string();
+    let mut source = error.source();
+    while let Some(cause) = source {
+        let cause_text = cause.to_string();
+        // `opensearch::Error` displays exactly like the reqwest error it wraps.
+        if !details.ends_with(&cause_text) {
+            details.push_str(": ");
+            details.push_str(&cause_text);
+        }
+        source = cause.source();
+    }
+    details
+}
+
 impl From<anyhow::Error> for OpensearchClientError {
     fn from(err: anyhow::Error) -> Self {
         OpensearchClientError::Unknown {
@@ -90,8 +134,8 @@ impl ResponseExt for Result<Response, Error> {
     async fn map_client_error(self) -> Result<Response, OpensearchClientError> {
         match self {
             Ok(response) => response.map_client_error().await,
-            Err(e) => Err(OpensearchClientError::Unknown {
-                details: e.to_string(),
+            Err(e) => Err(OpensearchClientError::RequestFailed {
+                details: error_chain(&e),
                 method: None,
             }),
         }

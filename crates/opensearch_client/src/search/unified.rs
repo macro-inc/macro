@@ -2,7 +2,7 @@ use std::collections::HashSet;
 
 use crate::{
     Result,
-    error::{OpensearchClientError, ResponseExt},
+    error::{OpensearchClientError, ResponseExt, error_chain},
     search::{
         builder::{SearchQueryConfig, updated_at_sort},
         calendar_events::{
@@ -992,7 +992,7 @@ pub(crate) async fn search_unified(
         .bytes()
         .await
         .map_err(|e| OpensearchClientError::HttpBytesError {
-            details: e.to_string(),
+            details: error_chain(&e),
         })?;
 
     let result: DefaultSearchResponse<serde_json::Value> =

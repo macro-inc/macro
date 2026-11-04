@@ -44,6 +44,13 @@ projects.
 - `cargo test -p opensearch_client` (`SQLX_OFFLINE` unset; needs a running
   OpenSearch — see `crates/opensearch_query_builder/docker-compose.yml`).
 
+## Gotchas
+
+- Map a failed `.send()` with `OpensearchClientError::request_failed` and a
+  failed body read with `deserialization_failed`. Both keep the error's source
+  chain; reqwest's `Display` alone drops the cause (timeout, reset, refused
+  connection).
+
 ## Related
 
 - Docs: `README.md`, `examples/`

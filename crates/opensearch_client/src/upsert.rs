@@ -69,21 +69,14 @@ pub(crate) async fn bulk_upsert_to_index(
         .body(bulk_body)
         .send()
         .await
-        .map_err(|err| OpensearchClientError::Unknown {
-            details: err.to_string(),
-            method: Some(method_name.to_string()),
-        })?;
+        .map_err(|err| OpensearchClientError::request_failed(method_name, &err))?;
 
     let status_code = response.status_code();
     if !status_code.is_success() {
-        let body =
-            response
-                .text()
-                .await
-                .map_err(|err| OpensearchClientError::DeserializationFailed {
-                    details: err.to_string(),
-                    method: Some(method_name.to_string()),
-                })?;
+        let body = response
+            .text()
+            .await
+            .map_err(|err| OpensearchClientError::deserialization_failed(method_name, &err))?;
 
         tracing::error!(
             status_code = ?status_code,
@@ -97,14 +90,10 @@ pub(crate) async fn bulk_upsert_to_index(
         });
     }
 
-    let response_body: serde_json::Value =
-        response
-            .json()
-            .await
-            .map_err(|err| OpensearchClientError::DeserializationFailed {
-                details: err.to_string(),
-                method: Some(method_name.to_string()),
-            })?;
+    let response_body: serde_json::Value = response
+        .json()
+        .await
+        .map_err(|err| OpensearchClientError::deserialization_failed(method_name, &err))?;
 
     Ok(parse_bulk_response(&response_body))
 }

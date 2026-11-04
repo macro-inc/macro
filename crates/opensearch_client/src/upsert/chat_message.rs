@@ -97,18 +97,12 @@ pub(crate) async fn upsert_chat_message(
         .body(parent_body)
         .send()
         .await
-        .map_err(|err| OpensearchClientError::DeserializationFailed {
-            details: err.to_string(),
-            method: Some("upsert_chat_message_parent".to_string()),
-        })?;
+        .map_err(|err| OpensearchClientError::request_failed("upsert_chat_message_parent", &err))?;
 
     if !parent_response.status_code().is_success() {
         let status_code = parent_response.status_code();
         let body = parent_response.text().await.map_err(|err| {
-            OpensearchClientError::DeserializationFailed {
-                details: err.to_string(),
-                method: Some("upsert_chat_message_parent".to_string()),
-            }
+            OpensearchClientError::deserialization_failed("upsert_chat_message_parent", &err)
         })?;
         tracing::error!(
             status_code=%status_code,
@@ -129,10 +123,7 @@ pub(crate) async fn upsert_chat_message(
         .body(child_body)
         .send()
         .await
-        .map_err(|err| OpensearchClientError::DeserializationFailed {
-            details: err.to_string(),
-            method: Some("upsert_chat_message_child".to_string()),
-        })?;
+        .map_err(|err| OpensearchClientError::request_failed("upsert_chat_message_child", &err))?;
 
     let status_code = child_response.status_code();
     if status_code.is_success() {
@@ -141,10 +132,7 @@ pub(crate) async fn upsert_chat_message(
     }
 
     let body = child_response.text().await.map_err(|err| {
-        OpensearchClientError::DeserializationFailed {
-            details: err.to_string(),
-            method: Some("upsert_chat_message_child".to_string()),
-        }
+        OpensearchClientError::deserialization_failed("upsert_chat_message_child", &err)
     })?;
 
     tracing::error!(
@@ -182,10 +170,7 @@ pub(crate) async fn update_chat_metadata(
         .body(body)
         .send()
         .await
-        .map_err(|err| OpensearchClientError::DeserializationFailed {
-            details: err.to_string(),
-            method: Some("update_chat_metadata".to_string()),
-        })?;
+        .map_err(|err| OpensearchClientError::request_failed("update_chat_metadata", &err))?;
 
     let status_code = response.status_code();
     if status_code.is_success() {
@@ -197,14 +182,9 @@ pub(crate) async fn update_chat_metadata(
         return Ok(());
     }
 
-    let body =
-        response
-            .text()
-            .await
-            .map_err(|err| OpensearchClientError::DeserializationFailed {
-                details: err.to_string(),
-                method: Some("update_chat_metadata".to_string()),
-            })?;
+    let body = response.text().await.map_err(|err| {
+        OpensearchClientError::deserialization_failed("update_chat_metadata", &err)
+    })?;
 
     tracing::error!(
         status_code=?status_code,
@@ -246,24 +226,16 @@ pub(crate) async fn update_chat_properties(
         .body(body)
         .send()
         .await
-        .map_err(|err| OpensearchClientError::DeserializationFailed {
-            details: err.to_string(),
-            method: Some("update_chat_properties".to_string()),
-        })?;
+        .map_err(|err| OpensearchClientError::request_failed("update_chat_properties", &err))?;
 
     let status_code = response.status_code();
     if status_code.is_success() {
         tracing::trace!(chat_id=%chat_id, "chat properties updated");
         return Ok(());
     }
-    let body =
-        response
-            .text()
-            .await
-            .map_err(|err| OpensearchClientError::DeserializationFailed {
-                details: err.to_string(),
-                method: Some("update_chat_properties".to_string()),
-            })?;
+    let body = response.text().await.map_err(|err| {
+        OpensearchClientError::deserialization_failed("update_chat_properties", &err)
+    })?;
 
     // A *missing document* 404 is a no-op: the chat isn't indexed yet, so the
     // next message upsert will include its properties. A *missing index* 404

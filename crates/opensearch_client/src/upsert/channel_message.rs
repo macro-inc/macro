@@ -38,23 +38,15 @@ pub(crate) async fn upsert_channel_message(
         .body(args)
         .send()
         .await
-        .map_err(|err| OpensearchClientError::DeserializationFailed {
-            details: err.to_string(),
-            method: Some("upsert_channel_message".to_string()),
-        })?;
+        .map_err(|err| OpensearchClientError::request_failed("upsert_channel_message", &err))?;
 
     let status_code = response.status_code();
     if status_code.is_success() {
         tracing::trace!(id=%id, "channel message upserted successfully");
     } else {
-        let body =
-            response
-                .text()
-                .await
-                .map_err(|err| OpensearchClientError::DeserializationFailed {
-                    details: err.to_string(),
-                    method: Some("upsert_channel_message".to_string()),
-                })?;
+        let body = response.text().await.map_err(|err| {
+            OpensearchClientError::deserialization_failed("upsert_channel_message", &err)
+        })?;
 
         tracing::error!(
             status_code=%status_code,

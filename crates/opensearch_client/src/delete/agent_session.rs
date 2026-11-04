@@ -19,10 +19,7 @@ pub(crate) async fn delete_agent_session(
         .refresh(true)
         .send()
         .await
-        .map_err(|error| OpensearchClientError::Unknown {
-            details: error.to_string(),
-            method: Some("delete_agent_session".to_owned()),
-        })?;
+        .map_err(|error| OpensearchClientError::request_failed("delete_agent_session", &error))?;
 
     crate::agent_session::check_delete_response(response, "delete_agent_session").await
 }

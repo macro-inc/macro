@@ -181,9 +181,8 @@ pub(crate) async fn update_call_record_properties(
         .body(body)
         .send()
         .await
-        .map_err(|err| OpensearchClientError::DeserializationFailed {
-            details: err.to_string(),
-            method: Some("update_call_record_properties".to_string()),
+        .map_err(|err| {
+            OpensearchClientError::request_failed("update_call_record_properties", &err)
         })?;
 
     let status_code = response.status_code();
@@ -191,14 +190,9 @@ pub(crate) async fn update_call_record_properties(
         tracing::trace!(call_id=%call_id, "call record properties updated");
         return Ok(());
     }
-    let body =
-        response
-            .text()
-            .await
-            .map_err(|err| OpensearchClientError::DeserializationFailed {
-                details: err.to_string(),
-                method: Some("update_call_record_properties".to_string()),
-            })?;
+    let body = response.text().await.map_err(|err| {
+        OpensearchClientError::deserialization_failed("update_call_record_properties", &err)
+    })?;
 
     // A *missing document* 404 is a no-op: the call isn't indexed yet, so the
     // next segment upsert will include its properties. A *missing index* 404

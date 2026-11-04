@@ -51,10 +51,7 @@ pub(crate) async fn upsert_project(
         .body(body)
         .send()
         .await
-        .map_err(|err| OpensearchClientError::Unknown {
-            details: err.to_string(),
-            method: Some("upsert_project".to_string()),
-        })?;
+        .map_err(|err| OpensearchClientError::request_failed("upsert_project", &err))?;
 
     let status_code = response.status_code();
     if status_code.is_success() {
@@ -62,14 +59,10 @@ pub(crate) async fn upsert_project(
         return Ok(());
     }
 
-    let body =
-        response
-            .text()
-            .await
-            .map_err(|err| OpensearchClientError::DeserializationFailed {
-                details: err.to_string(),
-                method: Some("upsert_project".to_string()),
-            })?;
+    let body = response
+        .text()
+        .await
+        .map_err(|err| OpensearchClientError::deserialization_failed("upsert_project", &err))?;
 
     tracing::error!(
         status_code=?status_code,
@@ -109,24 +102,16 @@ pub(crate) async fn update_project_properties(
         .body(body)
         .send()
         .await
-        .map_err(|err| OpensearchClientError::DeserializationFailed {
-            details: err.to_string(),
-            method: Some("update_project_properties".to_string()),
-        })?;
+        .map_err(|err| OpensearchClientError::request_failed("update_project_properties", &err))?;
 
     let status_code = response.status_code();
     if status_code.is_success() {
         tracing::trace!(project_id=%project_id, "project properties updated");
         return Ok(());
     }
-    let body =
-        response
-            .text()
-            .await
-            .map_err(|err| OpensearchClientError::DeserializationFailed {
-                details: err.to_string(),
-                method: Some("update_project_properties".to_string()),
-            })?;
+    let body = response.text().await.map_err(|err| {
+        OpensearchClientError::deserialization_failed("update_project_properties", &err)
+    })?;
 
     // A *missing document* 404 is a no-op: the doc isn't indexed yet, so the
     // next full upsert will include its properties. A *missing index* 404

@@ -17,24 +17,16 @@ pub async fn delete_project_by_id(
         .delete(opensearch::DeleteParts::IndexId(index, project_id))
         .send()
         .await
-        .map_err(|err| OpensearchClientError::Unknown {
-            details: err.to_string(),
-            method: Some("delete_project_by_id".to_string()),
-        })?;
+        .map_err(|err| OpensearchClientError::request_failed("delete_project_by_id", &err))?;
 
     let status_code = response.status_code();
     if status_code.is_success() {
         return Ok(());
     }
 
-    let body =
-        response
-            .text()
-            .await
-            .map_err(|err| OpensearchClientError::DeserializationFailed {
-                details: err.to_string(),
-                method: Some("delete_project_by_id".to_string()),
-            })?;
+    let body = response.text().await.map_err(|err| {
+        OpensearchClientError::deserialization_failed("delete_project_by_id", &err)
+    })?;
 
     if status_code.as_u16() == 404 {
         let result = serde_json::from_str::<serde_json::Value>(&body)

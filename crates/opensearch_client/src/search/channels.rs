@@ -2,7 +2,7 @@ pub use crate::search::builder::ChannelSortMode;
 
 use crate::{
     Result, delegate_methods,
-    error::{OpensearchClientError, ResponseExt},
+    error::{OpensearchClientError, ResponseExt, error_chain},
     search::{
         builder::{SearchQueryBuilder, SearchQueryConfig, thread_sort, updated_at_sort},
         model::{
@@ -243,7 +243,7 @@ pub(crate) async fn search_channel(
         .bytes()
         .await
         .map_err(|e| OpensearchClientError::HttpBytesError {
-            details: e.to_string(),
+            details: error_chain(&e),
         })?;
 
     let result: DefaultSearchResponse<ChannelMessageIndex> = serde_json::from_slice(&bytes)
