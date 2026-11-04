@@ -67,6 +67,14 @@ impl RoutineCode for Checker {
         format!("declarations for {} problems", problems.len())
     }
 
+    fn symbol_references(&self, symbols: &[String]) -> String {
+        if symbols.is_empty() {
+            String::new()
+        } else {
+            format!("reference for {}", symbols.join(", "))
+        }
+    }
+
     async fn rewrite(
         &self,
         _: &MacroUserIdStr<'static>,

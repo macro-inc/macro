@@ -14,19 +14,22 @@ fn owner() -> MacroUserIdStr<'static> {
     MacroUserIdStr::parse_from_str(OWNER).unwrap()
 }
 
-/// Answers with each queued answer in turn, `None` once they run out, and
-/// records every request.
+/// Answers each request for a draft with the next queued answer, `None` once
+/// they run out, and every request for symbols to read with `symbols`.
+/// Records both.
 #[derive(Default)]
 struct Model {
     answers: Mutex<VecDeque<Option<Value>>>,
     asked: Mutex<Vec<(String, String, Value)>>,
+    symbols: Vec<String>,
+    symbol_requests: Mutex<Vec<String>>,
 }
 
 impl Model {
     fn answering(answers: impl IntoIterator<Item = Option<Value>>) -> Arc<Self> {
         Arc::new(Self {
             answers: Mutex::new(answers.into_iter().collect()),
-            asked: Mutex::default(),
+            ..Default::default()
         })
     }
 
@@ -41,6 +44,13 @@ impl DraftModel for Model {
         _: &MacroUserIdStr<'static>,
         completion: DraftCompletion<'_>,
     ) -> Option<Value> {
+        if completion.schema.name == "symbols" {
+            self.symbol_requests
+                .lock()
+                .unwrap()
+                .push(completion.instructions.to_owned());
+            return Some(json!({ "symbols": self.symbols }));
+        }
         self.asked.lock().unwrap().push((
             completion.instructions.to_owned(),
             completion.prompt.to_owned(),
@@ -533,6 +543,50 @@ async fn changes_a_code_step_in_place_keeping_its_output_name() {
     assert_eq!(prompt, "label bills too");
     assert!(instructions.contains("The person wants to change this code step:"));
     assert!(instructions.contains("TaskNamespace methods for: Label: label bills too"));
+}
+
+#[tokio::test]
+async fn reads_the_reference_for_the_symbols_its_code_will_use_before_writing() {
+    let model = Arc::new(Model {
+        answers: Mutex::new([answer(json!([]), json!([code_step("Count", "good")]))].into()),
+        symbols: vec!["TaskNamespace.search".into(), "SearchOpts".into()],
+        ..Default::default()
+    });
+    let drafts = drafts(Checker::default(), &model);
+
+    drafted_routine(draft(&drafts, routine("count my tasks")).await);
+
+    let read = model.symbol_requests.lock().unwrap().clone();
+    assert_eq!(read.len(), 1);
+    assert!(read[0].contains("TaskNamespace methods for: count my tasks"));
+    assert!(read[0].ends_with(READ_SYMBOLS));
+    let (instructions, _, _) = &model.asked()[0];
+    assert!(instructions.contains("reference for TaskNamespace.search, SearchOpts"));
+    assert!(!instructions.contains(READ_SYMBOLS));
+}
+
+#[tokio::test]
+async fn writes_without_references_when_it_names_none_or_writes_no_code() {
+    let model = Model::answering([answer(json!([]), json!([code_step("Count", "good")]))]);
+    let drafts = drafts(Checker::default(), &model);
+    drafted_routine(draft(&drafts, routine("count")).await);
+    assert!(
+        !model.asked()[0]
+            .0
+            .contains("The SDK reference for what the code uses")
+    );
+
+    let off = DraftContext {
+        code: false,
+        ..context()
+    };
+    let model = Model::answering([answer(json!([]), json!([agent_step()]))]);
+    let drafts = self::drafts(Checker::default(), &model);
+    drafts
+        .draft(owner(), routine("research"), off)
+        .await
+        .unwrap();
+    assert!(model.symbol_requests.lock().unwrap().is_empty());
 }
 
 #[test]

@@ -12,6 +12,7 @@ use std::{
 
 use agent::structured_output::{DynamicSchema, dynamic_structured_completion};
 use agent::{Message, PredefinedModel};
+use agent_code_mode::domain::symbol_reference;
 use agent_egress::outbound::macro_mcp::MacroApiTokenSigner;
 use code_execution::domain::{
     CheckError, ExecuteRequest, Outcome, ProgramChecker, ProgramExecutor, RunEnvironment,
@@ -51,6 +52,9 @@ const MAX_MESSAGE_CHARS: usize = 500;
 const MAX_CALLS: usize = 128;
 /// SDK declarations a rewrite reads, in bytes.
 const REWRITE_DECLARATION_BYTES: usize = 48 * 1024;
+/// SDK reference a draft reads, in bytes: the symbols its model names,
+/// then the types their references name.
+const DRAFT_REFERENCE_BYTES: usize = 48 * 1024;
 
 const REWRITE_INSTRUCTIONS: &str = "You maintain TypeScript that a Macro routine runs against Macro's SDK. Macro's SDK has changed and the code no longer type-checks. Rewrite it so it type-checks against the declarations you are given, changing only what the type checker's errors require. Keep exactly what it does: the same reads, the same changes, the same decisions and the same return value. Keep the module's shape, `export async function main(...: StepContext)` with no imports, and keep reading the step's settings from `knobs` as it did. If a call it made no longer exists, use the declarations' replacement for it.";
 
@@ -336,10 +340,19 @@ impl<Credentials: RoutineCredentials> RoutineCode for SdkRoutineCode<Credentials
         let span = tracing::Span::current();
         span.record("entities", documentation.entities.len());
         span.record("status", tracing::field::debug(documentation.status));
+        // The drafter reads symbols through `symbol_references`, not the
+        // ReadCodeDocs tool the indexes point code mode's agent to.
         let mut reference: String = documentation
             .entities
             .iter()
             .filter_map(|entity| entity.index.as_deref())
+            .map(|index| {
+                index
+                    .lines()
+                    .filter(|line| !line.starts_with("Read any symbol below"))
+                    .collect::<Vec<_>>()
+                    .join("\n")
+            })
             .collect::<Vec<_>>()
             .join("\n\n");
         if reference.is_empty() {
@@ -355,6 +368,10 @@ impl<Credentials: RoutineCredentials> RoutineCode for SdkRoutineCode<Credentials
 
     fn declarations(&self, problems: &[String]) -> String {
         declarations_for(problems)
+    }
+
+    fn symbol_references(&self, symbols: &[String]) -> String {
+        symbol_references(symbols)
     }
 
     async fn rewrite(
@@ -425,6 +442,42 @@ fn declarations_for(problems: &[String]) -> String {
         .into_iter()
         .map(|(path, text)| format!("// @macro-inc/sdk/{path}\n{text}\n"))
         .collect()
+}
+
+/// The SDK reference for `symbols`, as code mode's ReadCodeDocs reads them,
+/// then for the types their references name, once each, until the budget
+/// is spent; unknown names are skipped.
+fn symbol_references(symbols: &[String]) -> String {
+    let requested: Vec<&str> = symbols
+        .iter()
+        .map(|symbol| symbol.trim())
+        .filter(|symbol| symbol_reference(symbol).is_some())
+        .collect();
+    let named: Vec<&str> = requested
+        .iter()
+        .filter_map(|symbol| symbol_reference(symbol))
+        .flat_map(backticked)
+        .filter(|name| symbol_reference(name).is_some())
+        .collect();
+    let mut read: Vec<&str> = Vec::new();
+    let mut output = String::new();
+    for symbol in requested.into_iter().chain(named) {
+        let Some(reference) = symbol_reference(symbol) else {
+            continue;
+        };
+        if read.contains(&symbol) || output.len() + reference.len() > DRAFT_REFERENCE_BYTES {
+            continue;
+        }
+        read.push(symbol);
+        // A method's reference is headed by its name alone, without its class.
+        output.push_str(&format!("## `{symbol}`\n{reference}\n\n"));
+    }
+    output
+}
+
+/// The names a reference writes in backticks, such as `SearchOpts`.
+fn backticked(reference: &str) -> impl Iterator<Item = &str> {
+    reference.split('`').skip(1).step_by(2)
 }
 
 /// The identifiers type-checker messages quote, such as `'TaskNamespace'`

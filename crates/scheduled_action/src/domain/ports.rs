@@ -468,6 +468,14 @@ pub trait RoutineCode: Send + Sync + 'static {
     /// the code.
     fn declarations(&self, problems: &[String]) -> String;
 
+    /// The SDK reference for `symbols`, named as [`Self::reference`]'s
+    /// entity indexes name them, with the types those references name, for
+    /// whoever writes code that uses them. Empty when none is known.
+    fn symbol_references(&self, symbols: &[String]) -> String {
+        let _ = symbols;
+        String::new()
+    }
+
     /// Rewrite `step`'s source so the problems [`Self::check_program`]
     /// found go away, keeping what it does, billed to `owner`. `steps` is
     /// the TypeScript type of the outputs it reads. The model sees the code
@@ -621,6 +629,12 @@ impl<Code: RoutineCode> RoutineCode for Option<Code> {
     fn declarations(&self, problems: &[String]) -> String {
         self.as_ref()
             .map(|code| code.declarations(problems))
+            .unwrap_or_default()
+    }
+
+    fn symbol_references(&self, symbols: &[String]) -> String {
+        self.as_ref()
+            .map(|code| code.symbol_references(symbols))
             .unwrap_or_default()
     }
 

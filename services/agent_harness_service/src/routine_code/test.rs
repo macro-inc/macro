@@ -673,3 +673,21 @@ export async function main({ macro, trigger, steps, run }: StepContext) {
         assert_eq!(problems, Vec::new(), "the CreateRoutine example");
     }
 }
+
+#[test]
+fn a_draft_reads_the_symbols_it_names_then_the_types_they_name() {
+    let reference = symbol_references(&[
+        "TaskNamespace.search".to_owned(),
+        "Nope.nothing".to_owned(),
+        "TaskNamespace.search".to_owned(),
+    ]);
+
+    // A method's reference is headed by its full name, once.
+    assert!(reference.starts_with("## `TaskNamespace.search`\n"));
+    assert_eq!(reference.matches("## `TaskNamespace.search`").count(), 1);
+    // Its options type, which its reference names.
+    assert!(reference.contains("## `SearchOpts`\n"));
+    assert!(!reference.contains("Nope"));
+    assert!(reference.len() <= DRAFT_REFERENCE_BYTES + 64);
+    assert_eq!(symbol_references(&[]), "");
+}
