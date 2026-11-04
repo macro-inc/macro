@@ -65,7 +65,7 @@ Zone America/Los_Angeles -7:52:58 -	LMT	1883 Nov 18 20:00u
 			-8:00	US	P%sT	1946
 			-8:00	CA	P%sT	1967
 			-8:00	US	P%sT
-Zone America/Juneau	 15:02:19 -	LMT	1867 Oct 19 15:33:32
+Zone America/Juneau	 15:02:19 -	LMT	1867 Oct 19  0:31:13u
 			 -8:57:41 -	LMT	1900 Aug 20 12:00
 			 -8:00	-	PST	1942
 			 -8:00	US	P%sT	1946
@@ -75,7 +75,7 @@ Zone America/Juneau	 15:02:19 -	LMT	1867 Oct 19 15:33:32
 			 -8:00	US	P%sT	1983 Oct 30  2:00
 			 -9:00	US	Y%sT	1983 Nov 30
 			 -9:00	US	AK%sT
-Zone America/Sitka	 14:58:47 -	LMT	1867 Oct 19 15:30
+Zone America/Sitka	 14:58:47 -	LMT	1867 Oct 19  0:31:13u
 			 -9:01:13 -	LMT	1900 Aug 20 12:00
 			 -8:00	-	PST	1942
 			 -8:00	US	P%sT	1946
@@ -83,7 +83,7 @@ Zone America/Sitka	 14:58:47 -	LMT	1867 Oct 19 15:30
 			 -8:00	US	P%sT	1983 Oct 30  2:00
 			 -9:00	US	Y%sT	1983 Nov 30
 			 -9:00	US	AK%sT
-Zone America/Metlakatla	 15:13:42 -	LMT	1867 Oct 19 15:44:55
+Zone America/Metlakatla	 15:13:42 -	LMT	1867 Oct 19  0:31:13u
 			 -8:46:18 -	LMT	1900 Aug 20 12:00
 			 -8:00	-	PST	1942
 			 -8:00	US	P%sT	1946
@@ -93,14 +93,14 @@ Zone America/Metlakatla	 15:13:42 -	LMT	1867 Oct 19 15:44:55
 			 -9:00	US	AK%sT	2018 Nov  4  2:00
 			 -8:00	-	PST	2019 Jan 20  2:00
 			 -9:00	US	AK%sT
-Zone America/Yakutat	 14:41:05 -	LMT	1867 Oct 19 15:12:18
+Zone America/Yakutat	 14:41:05 -	LMT	1867 Oct 19  0:31:13u
 			 -9:18:55 -	LMT	1900 Aug 20 12:00
 			 -9:00	-	YST	1942
 			 -9:00	US	Y%sT	1946
 			 -9:00	-	YST	1969
 			 -9:00	US	Y%sT	1983 Nov 30
 			 -9:00	US	AK%sT
-Zone America/Anchorage	 14:00:24 -	LMT	1867 Oct 19 14:31:37
+Zone America/Anchorage	 14:00:24 -	LMT	1867 Oct 19  0:31:13u
 			 -9:59:36 -	LMT	1900 Aug 20 12:00
 			-10:00	-	AST	1942
 			-10:00	US	A%sT	1967 Apr
@@ -108,7 +108,7 @@ Zone America/Anchorage	 14:00:24 -	LMT	1867 Oct 19 14:31:37
 			-10:00	US	AH%sT	1983 Oct 30  2:00
 			 -9:00	US	Y%sT	1983 Nov 30
 			 -9:00	US	AK%sT
-Zone America/Nome	 12:58:22 -	LMT	1867 Oct 19 13:29:35
+Zone America/Nome	 12:58:22 -	LMT	1867 Oct 19  0:31:13u
 			-11:01:38 -	LMT	1900 Aug 20 12:00
 			-11:00	-	NST	1942
 			-11:00	US	N%sT	1946
@@ -117,7 +117,7 @@ Zone America/Nome	 12:58:22 -	LMT	1867 Oct 19 13:29:35
 			-11:00	US	B%sT	1983 Oct 30  2:00
 			 -9:00	US	Y%sT	1983 Nov 30
 			 -9:00	US	AK%sT
-Zone America/Adak	 12:13:22 -	LMT	1867 Oct 19 12:44:35
+Zone America/Adak	 12:13:22 -	LMT	1867 Oct 19  0:31:13u
 			-11:46:38 -	LMT	1900 Aug 20 12:00
 			-11:00	-	NST	1942
 			-11:00	US	N%sT	1946
@@ -458,7 +458,9 @@ Rule	Winn	1966	2005	-	Oct	lastSun	2:00s	0	S
 Rule	Winn	1987	2005	-	Apr	Sun>=1	2:00s	1:00	D
 Zone America/Winnipeg	-6:28:36 -	LMT	1887 Jul 16
 			-6:00	Winn	C%sT	2006
-			-6:00	Canada	C%sT
+			-6:00	Canada	C%sT	2026 Oct 31
+			-6:00	Canada	CDT	2026 Nov  1  2:00
+			-5:00	-	EST
 Rule	Regina	1918	only	-	Apr	14	2:00	1:00	D
 Rule	Regina	1918	only	-	Oct	27	2:00	0	S
 Rule	Regina	1930	1934	-	May	Sun>=1	0:00	1:00	D
@@ -504,7 +506,9 @@ Rule	Edm	1972	1986	-	Apr	lastSun	2:00	1:00	D
 Rule	Edm	1972	2006	-	Oct	lastSun	2:00	0	S
 Zone America/Edmonton	-7:33:52 -	LMT	1906 Sep
 			-7:00	Edm	M%sT	1987
-			-7:00	Canada	M%sT
+			-7:00	Canada	M%sT	2026 Jun 18
+			-7:00	Canada	MDT	2026 Nov  1  2:00
+			-6:00	-	CST
 Rule	Vanc	1918	only	-	Apr	14	2:00	1:00	D
 Rule	Vanc	1918	only	-	Oct	27	2:00	0	S
 Rule	Vanc	1942	only	-	Feb	 9	2:00	1:00	W
@@ -516,7 +520,9 @@ Rule	Vanc	1947	1961	-	Sep	lastSun	2:00	0	S
 Rule	Vanc	1962	2006	-	Oct	lastSun	2:00	0	S
 Zone America/Vancouver	-8:12:28 -	LMT	1884
 			-8:00	Vanc	P%sT	1987
-			-8:00	Canada	P%sT
+			-8:00	Canada	P%sT	2026 Mar  9
+			-8:00	Canada	PDT	2026 Nov  1  2:00
+			-7:00	-	MST
 Zone America/Dawson_Creek -8:00:56 -	LMT	1884
 			-8:00	Canada	P%sT	1947
 			-8:00	Vanc	P%sT	1972 Aug 30  2:00
@@ -562,7 +568,9 @@ Zone America/Cambridge_Bay 0	-	-00	1920
 Zone America/Inuvik	0	-	-00	1953
 			-8:00	NT_YK	P%sT	1979 Apr lastSun  2:00
 			-7:00	NT_YK	M%sT	1980
-			-7:00	Canada	M%sT
+			-7:00	Canada	M%sT	2026 Aug 21
+			-7:00	Canada	MDT	2026 Nov  1  2:00
+			-6:00	-	CST
 Zone America/Whitehorse	-9:00:12 -	LMT	1900 Aug 20
 			-9:00	NT_YK	Y%sT	1965
 			-9:00	Yukon	Y%sT	1966 Feb 27  0:00
@@ -692,9 +700,7 @@ Zone America/Tijuana	-7:48:04 -	LMT	1922 Jan  1  7:00u
 			-8:00	1:00	PDT	1951 Sep 30  2:00
 			-8:00	-	PST	1952 Apr 27  2:00
 			-8:00	1:00	PDT	1952 Sep 28  2:00
-			-8:00	-	PST	1954
-			-8:00	CA	P%sT	1961
-			-8:00	-	PST	1976
+			-8:00	CA	P%sT	1967
 			-8:00	US	P%sT	1996
 			-8:00	Mexico	P%sT	2001
 			-8:00	US	P%sT	2002 Feb 20
@@ -794,8 +800,10 @@ Rule	Cuba	2009	2010	-	Mar	Sun>=8	0:00s	1:00	D
 Rule	Cuba	2011	only	-	Mar	Sun>=15	0:00s	1:00	D
 Rule	Cuba	2011	only	-	Nov	13	0:00s	0	S
 Rule	Cuba	2012	only	-	Apr	1	0:00s	1:00	D
-Rule	Cuba	2012	max	-	Nov	Sun>=1	0:00s	0	S
-Rule	Cuba	2013	max	-	Mar	Sun>=8	0:00s	1:00	D
+Rule	Cuba	2012	2025	-	Nov	Sun>=1	0:00s	0	S
+Rule	Cuba	2013	2026	-	Mar	Sun>=8	0:00s	1:00	D
+Rule	Cuba	2027	max	-	Nov	Sun>=1	0:00s	0	S
+Rule	Cuba	2028	max	-	Mar	Sun>=8	0:00s	1:00	D
 Zone	America/Havana	-5:29:28 -	LMT	1890
 			-5:29:36 -	HMT	1925 Jul 19 12:00
 			-5:00	Cuba	C%sT

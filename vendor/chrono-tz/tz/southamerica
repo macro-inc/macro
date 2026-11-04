@@ -172,19 +172,20 @@ Zone	America/La_Paz	-4:32:36 -	LMT	1890
 			-4:32:36 1:00	BST	1932 Mar 21
 			-4:00	-	%z
 Rule	Brazil	1931	only	-	Oct	 3	11:00	1:00	-
-Rule	Brazil	1932	1933	-	Apr	 1	 0:00	0	-
+Rule	Brazil	1932	1933	-	Mar	31	24:00	0	-
 Rule	Brazil	1932	only	-	Oct	 3	 0:00	1:00	-
 Rule	Brazil	1949	1952	-	Dec	 1	 0:00	1:00	-
 Rule	Brazil	1950	only	-	Apr	16	 1:00	0	-
-Rule	Brazil	1951	1952	-	Apr	 1	 0:00	0	-
-Rule	Brazil	1953	only	-	Mar	 1	 0:00	0	-
+Rule	Brazil	1951	1952	-	Mar	31	24:00	0	-
+Rule	Brazil	1953	only	-	Feb	28	24:00	0	-
 Rule	Brazil	1963	only	-	Dec	 9	 0:00	1:00	-
 Rule	Brazil	1964	only	-	Mar	 1	 0:00	0	-
 Rule	Brazil	1965	only	-	Jan	31	 0:00	1:00	-
-Rule	Brazil	1965	only	-	Mar	31	 0:00	0	-
-Rule	Brazil	1965	only	-	Dec	 1	 0:00	1:00	-
-Rule	Brazil	1966	1968	-	Mar	 1	 0:00	0	-
+Rule	Brazil	1965	only	-	Mar	31	24:00	0	-
+Rule	Brazil	1965	only	-	Nov	30	24:00	1:00	-
+Rule	Brazil	1966	only	-	Mar	 1	 1:00	0	-
 Rule	Brazil	1966	1967	-	Nov	 1	 0:00	1:00	-
+Rule	Brazil	1967	1968	-	Mar	 1	 0:00	0	-
 Rule	Brazil	1985	only	-	Nov	 2	 0:00	1:00	-
 Rule	Brazil	1986	only	-	Mar	15	 0:00	0	-
 Rule	Brazil	1986	only	-	Oct	25	 0:00	1:00	-
@@ -399,7 +400,7 @@ Zone Antarctica/Palmer	0	-	-00	1965
 			-3:00	Arg	%z	1982 May
 			-4:00	Chile	%z	2016 Dec  4
 			-3:00	-	%z
-Rule	CO	1992	only	-	May	 3	 0:00	1:00	-
+Rule	CO	1992	only	-	May	 2	 0:00	1:00	-
 Rule	CO	1993	only	-	Feb	 6	24:00	0	-
 Zone	America/Bogota	-4:56:16 -	LMT	1884 Mar 13
 			-4:56:16 -	BMT	1914 Nov 23

@@ -79,6 +79,8 @@ Zone	Europe/Dublin	-0:25:21 -	LMT	1880 Aug  2
 			-0:25:21 -	DMT	1916 May 21  2:00s
 			-0:25:21 1:00	IST	1916 Oct  1  2:00s
 			 0:00	GB-Eire	%s	1921 Dec  6
+			 0:00	GB-Eire	GMT/IST	1925 Sep Sun>=16 2:00s
+			 0:00	-	GMT	1926
 			 0:00	GB-Eire	GMT/IST	1940 Feb 25  2:00s
 			 0:00	1:00	IST	1946 Oct  6  2:00s
 			 0:00	-	GMT	1947 Mar 16  2:00s
@@ -522,8 +524,8 @@ Zone	Europe/Malta	0:58:04 -	LMT	1893 Nov  2
 			1:00	Italy	CE%sT	1973 Mar 31
 			1:00	Malta	CE%sT	1981
 			1:00	EU	CE%sT
-Rule	Moldova	1997	max	-	Mar	lastSun	 2:00	1:00	S
-Rule	Moldova	1997	max	-	Oct	lastSun	 3:00	0	-
+Rule	Moldova	1997	2021	-	Mar	lastSun	 2:00	1:00	S
+Rule	Moldova	1997	2021	-	Oct	lastSun	 3:00	0	-
 Zone	Europe/Chisinau	1:55:20 -	LMT	1880
 			1:55	-	CMT	1918 Feb 15
 			1:44:24	-	BMT	1931 Jul 24
@@ -533,7 +535,8 @@ Zone	Europe/Chisinau	1:55:20 -	LMT	1880
 			3:00	Russia	MSK/MSD	1990 May  6  2:00
 			2:00	Russia	EE%sT	1992
 			2:00	E-Eur	EE%sT	1997
-			2:00	Moldova	EE%sT
+			2:00	Moldova	EE%sT	2022
+			2:00	EU	EE%sT
 Rule	Poland	1918	1919	-	Sep	16	2:00s	0	-
 Rule	Poland	1919	only	-	Apr	15	2:00s	1:00	S
 Rule	Poland	1944	only	-	Apr	 3	2:00s	1:00	S

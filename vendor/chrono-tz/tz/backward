@@ -13,7 +13,6 @@ Link	America/Noronha		Brazil/DeNoronha
 Link	America/Sao_Paulo	Brazil/East
 Link	America/Manaus		Brazil/West
 Link	Europe/Brussels		CET
-Link	America/Chicago		CST6CDT
 Link	America/Halifax		Canada/Atlantic
 Link	America/Winnipeg	Canada/Central
 Link	America/Toronto		Canada/Eastern
@@ -27,7 +26,6 @@ Link	Pacific/Easter		Chile/EasterIsland
 Link	America/Havana		Cuba
 Link	Europe/Athens		EET
 Link	America/Panama		EST
-Link	America/New_York	EST5EDT
 Link	Africa/Cairo		Egypt
 Link	Europe/Dublin		Eire
 Link	Etc/GMT			Etc/GMT+0
@@ -53,7 +51,6 @@ Link	Pacific/Kwajalein	Kwajalein
 Link	Africa/Tripoli		Libya
 Link	Europe/Brussels		MET
 Link	America/Phoenix		MST
-Link	America/Denver		MST7MDT
 Link	America/Tijuana		Mexico/BajaNorte
 Link	America/Mazatlan	Mexico/BajaSur
 Link	America/Mexico_City	Mexico/General
@@ -251,6 +248,22 @@ Link	Atlantic/Faroe		Atlantic/Faeroe
 Link	Europe/Kyiv		Europe/Kiev
 Link	Asia/Nicosia		Europe/Nicosia
 Link	Pacific/Honolulu	HST
-Link	America/Los_Angeles	PST8PDT
 Link	Pacific/Guadalcanal	Pacific/Ponape
 Link	Pacific/Port_Moresby	Pacific/Truk
+Rule	USback	1918	1919	-	Mar	lastSun	2:00	1:00	D
+Rule	USback	1918	1919	-	Oct	lastSun	2:00	0	S
+Rule	USback	1942	only	-	Feb	9	2:00	1:00	D
+Rule	USback	1945	only	-	Aug	14	23:00u	1:00	D
+Rule	USback	1945	only	-	Sep	30	2:00	0	S
+Rule	USback	1967	2006	-	Oct	lastSun	2:00	0	S
+Rule	USback	1967	1973	-	Apr	lastSun	2:00	1:00	D
+Rule	USback	1974	only	-	Jan	6	2:00	1:00	D
+Rule	USback	1975	only	-	Feb	lastSun	2:00	1:00	D
+Rule	USback	1976	1986	-	Apr	lastSun	2:00	1:00	D
+Rule	USback	1987	2006	-	Apr	Sun>=1	2:00	1:00	D
+Rule	USback	2007	max	-	Mar	Sun>=8	2:00	1:00	D
+Rule	USback	2007	max	-	Nov	Sun>=1	2:00	0	S
+Zone	PST8PDT		 -8:00	USback	P%sT
+Zone	MST7MDT		 -7:00	USback	M%sT
+Zone	CST6CDT		 -6:00	USback	C%sT
+Zone	EST5EDT		 -5:00	USback	E%sT

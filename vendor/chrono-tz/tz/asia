@@ -210,12 +210,12 @@ Zone Asia/Jayapura	9:22:48 -	LMT	1932 Nov
 			9:00	-	%z	1944 Sep  1
 			9:30	-	%z	1964
 			9:00	-	WIT
-Rule	Iran	1910	only	-	Jan	 1	00:00	0	-
+Rule	Iran	1910	only	-	Jan	 1	 0:00	0	-
 Rule	Iran	1977	only	-	Mar	21	23:00	1:00	-
 Rule	Iran	1977	only	-	Oct	20	24:00	0	-
 Rule	Iran	1978	only	-	Mar	24	24:00	1:00	-
-Rule	Iran	1978	only	-	Aug	 5	01:00	0	-
-Rule	Iran	1979	only	-	May	26	24:00	1:00	-
+Rule	Iran	1978	only	-	Aug	 5	 1:00	0	-
+Rule	Iran	1979	only	-	May	26	 0:00	1:00	-
 Rule	Iran	1979	only	-	Sep	18	24:00	0	-
 Rule	Iran	1980	only	-	Mar	20	24:00	1:00	-
 Rule	Iran	1980	only	-	Sep	22	24:00	0	-
