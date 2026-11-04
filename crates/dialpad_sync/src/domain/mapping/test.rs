@@ -45,6 +45,20 @@ fn event(state: &str, timestamp: i64, extra: serde_json::Value) -> CallEvent {
     serde_json::from_value(event).unwrap()
 }
 
+/// An event with only `fields` beyond its call, state and time: Dialpad's
+/// events need not repeat a call's details.
+fn sparse(state: &str, timestamp: i64, fields: serde_json::Value) -> CallEvent {
+    let mut event = json!({
+        "call_id": 5747322335264768_i64,
+        "state": state,
+        "event_timestamp": timestamp,
+    });
+    if let serde_json::Value::Object(fields) = fields {
+        event.as_object_mut().unwrap().extend(fields);
+    }
+    serde_json::from_value(event).unwrap()
+}
+
 fn line(kind: &str, name: &str, time: &str, content: &str) -> TranscriptLine {
     serde_json::from_value(json!({"type": kind, "name": name, "time": time, "content": content}))
         .unwrap()
@@ -154,6 +168,74 @@ fn a_call_is_rebuilt_from_all_its_events_in_any_order() {
         transcript.segments[1].speaker_label.as_deref(),
         Some("Sam Rep")
     );
+}
+
+#[test]
+fn sparse_events_merge_field_by_field_and_the_newest_value_wins() {
+    let events = vec![
+        sparse(
+            "hangup",
+            1_746_469_071_000,
+            json!({
+                "direction": "inbound",
+                "date_started": 1_746_469_000_000_i64,
+                "date_connected": 1_746_469_010_000_i64,
+                "date_ended": 1_746_469_070_000_i64,
+                "external_number": "+1604311",
+                "target": {"id": 5908860123456789_i64, "name": "Sam Rep", "email": "sam@example.com"},
+                "contact": {"name": "Jane Doe", "phone": "+1604311", "email": "jane@example.com"},
+            }),
+        ),
+        // Later events repeat only some details, and blank others.
+        sparse(
+            "call_transcription",
+            1_746_469_100_000,
+            json!({
+                "date_started": 1_746_469_000_000_i64,
+                "target": {"id": 5908860123456789_i64},
+                "contact": {"name": "", "email": ""},
+                "company_call_review_share_link": "https://dialpad.com/shared/call/abc",
+            }),
+        ),
+        sparse(
+            "recap_summary",
+            1_746_469_190_000,
+            json!({"recap_summary": "Jane wants a quote.", "date_ended": 1_746_469_080_000_i64}),
+        ),
+    ];
+    assert_eq!(
+        needs(&events),
+        Some(Needs {
+            transcript: true,
+            recap: false
+        }),
+        "a later event without date_connected does not make the call unanswered"
+    );
+    let call = imported_call(&connection(), &events, None, None).unwrap();
+
+    assert_eq!(call.title.as_deref(), Some("Call with Jane Doe"));
+    assert_eq!(
+        call.started_at,
+        DateTime::from_timestamp_millis(1_746_469_010_000)
+    );
+    assert_eq!(
+        call.ended_at,
+        DateTime::from_timestamp_millis(1_746_469_080_000),
+        "the newest value wins"
+    );
+    assert_eq!(
+        call.source.external_url.as_deref(),
+        Some("https://dialpad.com/shared/call/abc")
+    );
+    assert_eq!(call.source.metadata["direction"], "inbound");
+    let [rep, caller] = call.participants.as_slice() else {
+        panic!("expected the rep and the caller");
+    };
+    assert_eq!(rep.display_name.as_deref(), Some("Sam Rep"));
+    assert_eq!(rep.email.as_deref(), Some("sam@example.com"));
+    assert_eq!(caller.display_name.as_deref(), Some("Jane Doe"));
+    assert_eq!(caller.email.as_deref(), Some("jane@example.com"));
+    assert_eq!(caller.phone.as_deref(), Some("+1604311"));
 }
 
 #[test]

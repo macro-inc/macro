@@ -48,6 +48,7 @@ A first-connect backfill pages `GET /call` one page per reconcile.
 
 - Imports replace the stored call wholesale, so a snapshot must always be
   built from every stored event of the call, never only the triggering one.
+  Events can be sparse: details merge field by field, newest value first.
 - Setup success and failure must both match the lease that stored the secret.
   If activation fails, retire the newly created registration before returning.
 - Backfill commits must match the enrollment and cursor read before fetching.

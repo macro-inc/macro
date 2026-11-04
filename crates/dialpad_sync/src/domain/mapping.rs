@@ -25,8 +25,7 @@ pub struct Needs {
 
 /// `None` when the call never connected (missed, voicemail): nothing to import.
 pub fn needs(events: &[CallEvent]) -> Option<Needs> {
-    let latest = latest_details(events)?;
-    latest.date_connected?;
+    details(events)?.date_connected?;
     let has = |state| events.iter().any(|event| event.state == state);
     let backfill = has(CallState::Backfill);
     let recap_in_events = has(CallState::RecapSummary) && has(CallState::RecapActionItems);
@@ -36,12 +35,60 @@ pub fn needs(events: &[CallEvent]) -> Option<Needs> {
     })
 }
 
-/// The newest event that carries the call's details.
-fn latest_details(events: &[CallEvent]) -> Option<&CallEvent> {
-    events
-        .iter()
-        .filter(|event| event.date_started.is_some() || event.date_connected.is_some())
-        .max_by_key(|event| event.occurred_at())
+/// The call's details merged across its events: for each field, the newest
+/// event with a value wins. Events can be sparse, so no single one is
+/// trusted to carry them all.
+fn details(events: &[CallEvent]) -> Option<CallEvent> {
+    let mut ordered: Vec<&CallEvent> = events.iter().collect();
+    ordered.sort_by_key(|event| event.occurred_at());
+    let (oldest, newer) = ordered.split_first()?;
+    let mut details = (*oldest).clone();
+    for event in newer {
+        merge_details(&mut details, event);
+    }
+    Some(details)
+}
+
+/// Every detail field `imported_call` reads must be merged here.
+fn merge_details(details: &mut CallEvent, newer: &CallEvent) {
+    keep_newer(&mut details.direction, &newer.direction);
+    keep_newer(&mut details.date_started, &newer.date_started);
+    keep_newer(&mut details.date_connected, &newer.date_connected);
+    keep_newer(&mut details.date_ended, &newer.date_ended);
+    keep_newer_text(&mut details.external_number, &newer.external_number);
+    keep_newer_text(&mut details.internal_number, &newer.internal_number);
+    keep_newer(&mut details.master_call_id, &newer.master_call_id);
+    keep_newer_text(
+        &mut details.company_call_review_share_link,
+        &newer.company_call_review_share_link,
+    );
+    if let Some(newer) = &newer.contact {
+        let contact = details.contact.get_or_insert_with(Contact::default);
+        keep_newer_text(&mut contact.id, &newer.id);
+        keep_newer_text(&mut contact.name, &newer.name);
+        keep_newer_text(&mut contact.email, &newer.email);
+        keep_newer_text(&mut contact.phone, &newer.phone);
+    }
+    if let Some(newer) = &newer.target {
+        let target = details.target.get_or_insert_with(Target::default);
+        keep_newer(&mut target.id, &newer.id);
+        keep_newer_text(&mut target.name, &newer.name);
+        keep_newer_text(&mut target.email, &newer.email);
+        keep_newer_text(&mut target.phone, &newer.phone);
+    }
+}
+
+fn keep_newer<T: Clone>(field: &mut Option<T>, newer: &Option<T>) {
+    if newer.is_some() {
+        field.clone_from(newer);
+    }
+}
+
+/// Dialpad sends blank text for unknown values; blank never replaces text.
+fn keep_newer_text(field: &mut Option<String>, newer: &Option<String>) {
+    if non_empty(newer.as_deref()).is_some() {
+        field.clone_from(newer);
+    }
 }
 
 fn latest_with<'a, T>(
@@ -69,7 +116,7 @@ pub fn imported_call(
     transcript: Option<Vec<TranscriptLine>>,
     fetched_recap: Option<Recap>,
 ) -> Option<ImportedCall> {
-    let details = latest_details(events)?;
+    let details = details(events)?;
     let started_at = details
         .date_connected
         .and_then(DateTime::from_timestamp_millis)?;
@@ -172,10 +219,7 @@ pub fn imported_call(
             provider: CallProvider::Dialpad,
             object_type: "call".into(),
             external_id: ExternalCallId(details.call_id.to_string()),
-            external_url: events
-                .iter()
-                .rev()
-                .find_map(|event| non_empty(event.company_call_review_share_link.as_deref())),
+            external_url: non_empty(details.company_call_review_share_link.as_deref()),
             external_updated_at: revision,
             synced_at: Some(Utc::now()),
             metadata,
