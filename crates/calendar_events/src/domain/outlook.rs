@@ -66,6 +66,13 @@ pub enum OutlookCalendarProgress {
         /// Whether the current provider event still exists.
         exists: bool,
     },
+    /// The event exists but Macro cannot read it. Retire any copy stored
+    /// before, which would show a version Microsoft no longer has, but keep
+    /// the event's page membership so later tombstones still resolve.
+    Unreadable {
+        /// Master/single ID from this lease's pending work.
+        id: String,
+    },
     /// Finish a page, or atomically prune and commit the terminal cursor.
     Finish,
     /// Restart an expired or unresolvable delta with a new full snapshot.
@@ -79,8 +86,8 @@ pub enum OutlookEventRefresh {
     /// Microsoft no longer has the event on this calendar.
     Gone,
     /// Microsoft has the event, but Macro cannot represent it. The sync skips
-    /// it and keeps any copy stored before, as Google sync does with an event
-    /// it cannot normalize.
+    /// it and retires any copy stored before, so the calendar never shows an
+    /// event Macro could not read, as Google sync never shows one.
     Unreadable {
         /// Path of the Graph property Macro rejected, such as
         /// `recurrence.range.endDate` or `instances.start.dateTime`.
@@ -249,9 +256,10 @@ impl<
                 let progress = if let Some(id) = lease.pending_ids.first() {
                     span.record("step", "event");
                     span.record("provider_event_id", id.as_str());
-                    let exists = match self
+                    let id = id.clone();
+                    match self
                         .provider
-                        .refresh_calendar_event(&token, target, id)
+                        .refresh_calendar_event(&token, target, &id)
                         .await?
                     {
                         OutlookEventRefresh::Refreshed(upsert) => {
@@ -263,11 +271,11 @@ impl<
                                 })
                                 .await
                                 .map_err(storage_error)?;
-                            true
+                            OutlookCalendarProgress::Event { id, exists: true }
                         }
                         OutlookEventRefresh::Gone => {
                             span.record("outcome", "gone");
-                            false
+                            OutlookCalendarProgress::Event { id, exists: false }
                         }
                         OutlookEventRefresh::Unreadable { field } => {
                             span.record("outcome", "unreadable");
@@ -278,12 +286,8 @@ impl<
                                 rejected_field = %field,
                                 "skipping an Outlook event Macro cannot read"
                             );
-                            true
+                            OutlookCalendarProgress::Unreadable { id }
                         }
-                    };
-                    OutlookCalendarProgress::Event {
-                        id: id.clone(),
-                        exists,
                     }
                 } else if lease.page_loaded {
                     span.record("step", "finish");
