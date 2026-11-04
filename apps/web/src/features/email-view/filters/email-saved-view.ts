@@ -1,4 +1,5 @@
 import type { FacetSelection, TagFacetContext } from '@app/features/soup';
+import { DOMAIN_PATTERN } from '@core/util/domain';
 import { startOfDay, subDays } from 'date-fns';
 import { err, ok, type Result } from 'neverthrow';
 import { match } from 'ts-pattern';
@@ -38,9 +39,6 @@ const SAVED_FACET_IDS: readonly string[] = [
   'calendar',
   'tags',
 ];
-
-// Mirrors the server's bare-domain rule: no local part, two or more labels.
-const DOMAIN_PATTERN = /^[a-z0-9-]+(\.[a-z0-9-]+)+$/i;
 
 const identifierSchema = z
   .string()

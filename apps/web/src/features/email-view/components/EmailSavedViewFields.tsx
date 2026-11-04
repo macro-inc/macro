@@ -4,7 +4,15 @@ import type {
   CombinedRecipientItem,
   WithCustomUserInput,
 } from '@core/user/combinedRecipient';
-import { Button, Checkbox, Input, Tabs } from '@ui';
+import { parseDomain } from '@core/util/domain';
+import {
+  Button,
+  Checkbox,
+  ChipCombobox,
+  type ChipComboboxOption,
+  Input,
+  Tabs,
+} from '@ui';
 import {
   type Accessor,
   createMemo,
@@ -22,9 +30,6 @@ import {
 } from '../types';
 
 type RecipientKind = 'user' | 'contact';
-
-// Mirrors the codec's bare-domain rule so typed entries show as accepted.
-const DOMAIN_PATTERN = /^[a-z0-9-]+(\.[a-z0-9-]+)+$/i;
 
 // Enter in a list field ends the entry, never submits the whole view.
 const keepEnterInField = (event: KeyboardEvent) => {
@@ -111,25 +116,24 @@ export function EmailSavedViewFields(props: {
   onChange: (filters: EmailSavedViewFilters) => void;
   inboxes: readonly { id: string; label: string }[];
   recipientOptions: Accessor<CombinedRecipientItem<RecipientKind>[]>;
+  domainOptions: Accessor<ChipComboboxOption[]>;
 }) {
   const lookInId = createUniqueId();
   const set = <K extends keyof EmailSavedViewFilters>(
     key: K,
     value: EmailSavedViewFilters[K]
   ) => props.onChange({ ...props.filters, [key]: value });
-  const [domainsText, setDomainsText] = createSignal(
-    props.filters.participants
-      .flatMap((person) => (person.type === 'domain' ? [person.domain] : []))
-      .join(', ')
-  );
   const [subjectText, setSubjectText] = createSignal(
     props.filters.subject.join(', ')
   );
-  const rejectedDomains = () =>
-    splitList(domainsText()).filter((entry) => !DOMAIN_PATTERN.test(entry));
-
-  const domains = () =>
-    props.filters.participants.filter((person) => person.type === 'domain');
+  const domains = createMemo(
+    () =>
+      props.filters.participants.flatMap((person) =>
+        person.type === 'domain' ? [person.domain] : []
+      ),
+    undefined,
+    { equals: sameList }
+  );
   // Other edits rebuild `filters`; keep the chips unless the people change.
   const addresses = createMemo(
     () =>
@@ -148,9 +152,10 @@ export function EmailSavedViewFields(props: {
         type: 'address' as const,
         email,
       })),
-      ...(next.domains ?? domains().map((person) => person.domain)).map(
-        (domain) => ({ type: 'domain' as const, domain })
-      ),
+      ...(next.domains ?? domains()).map((domain) => ({
+        type: 'domain' as const,
+        domain,
+      })),
     ];
     set('participants', people);
   };
@@ -215,28 +220,17 @@ export function EmailSavedViewFields(props: {
           showChipAddresses
           portalScope="local"
         />
-        <Input
+        <ChipCombobox
           aria-label={t('emailViews.domains')}
           placeholder={t('emailViews.domainsPlaceholder')}
-          value={domainsText()}
-          onKeyDown={keepEnterInField}
-          onInput={(event) => {
-            const text = event.currentTarget.value;
-            setDomainsText(text);
-            setParticipants({
-              domains: splitList(text)
-                .filter((entry) => DOMAIN_PATTERN.test(entry))
-                .map((entry) => entry.toLowerCase()),
-            });
-          }}
+          values={domains()}
+          onChange={(next) => setParticipants({ domains: next })}
+          options={props.domainOptions()}
+          parseValue={parseDomain}
+          addLabel={(domain) => t('emailViews.addDomain', { domain })}
+          removeLabel={(domain) => t('emailViews.removeDomain', { domain })}
+          portalScope="local"
         />
-        <Show when={rejectedDomains().length}>
-          <p role="alert" class="text-xs text-failure-ink">
-            {t('emailViews.notDomains', {
-              entries: rejectedDomains().join(', '),
-            })}
-          </p>
-        </Show>
         <div class="flex flex-wrap items-center gap-1.5">
           <span id={lookInId} class="mr-1 text-xs text-ink-muted">
             {t('emailViews.lookIn')}

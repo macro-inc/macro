@@ -1383,7 +1383,10 @@ live mail with the viewer's access. See `docs/design/saved-views.md`.
 
 - **Create.** The sidebar **Saved views** `+` (or the empty state's Create view)
   opens the builder: name, People (contacts, typed addresses, or your own),
-  Domains, Look in (From/To/Cc/Bcc toggle buttons, at least one on), Subject contains,
+  Domains (chips suggesting CRM companies by name, then your contacts' domains
+  by how many contacts use them; a typed domain, address or website is added
+  with Enter, a comma, or leaving the field), Look in (From/To/Cc/Bcc toggle
+  buttons, at least one on), Subject contains,
   Importance, Status, Done, Latest activity, Inboxes (with two or more linked),
   and Starred, calendar invite and attachment requirements. Values within one
   condition are alternatives; conditions all apply. On a filtered Signal, Noise,

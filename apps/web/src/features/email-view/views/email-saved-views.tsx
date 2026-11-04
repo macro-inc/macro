@@ -69,6 +69,7 @@ import {
   type EmailSavedViewFilters,
   readEmailSavedView,
 } from '../filters/email-saved-view';
+import { useEmailDomainSuggestions } from '../queries/use-email-domain-suggestions';
 import { useEmailSavedViewUnread } from '../queries/use-email-saved-view-unread';
 
 export const EMAIL_SAVED_VIEWS_SECTION_ID = 'saved-views';
@@ -138,6 +139,7 @@ type BuilderProps = ManagedDialogProps & {
 /** The view builder: the shared name dialog around the email conditions. */
 function EmailSavedViewDialog(props: BuilderProps) {
   const { users } = useCombinedRecipients();
+  const domainOptions = useEmailDomainSuggestions();
   const analytics = useAnalytics();
   const [filters, setFilters] = createSignal(props.initial);
   const config = () => configOf(filters());
@@ -147,6 +149,7 @@ function EmailSavedViewDialog(props: BuilderProps) {
       onChange={setFilters}
       inboxes={props.inboxes}
       recipientOptions={users}
+      domainOptions={domainOptions}
     />
   );
   const shared = {
