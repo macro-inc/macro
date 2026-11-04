@@ -7,7 +7,7 @@ import { SignatureWorkspace } from './signature-workspace';
 
 export function SignatureForm(props: {
   email: string;
-  shared: boolean;
+  shared?: boolean;
   value: string;
   onInput: (html: string) => void;
   onReady: (api: { setContent: (html: string) => void }) => void;

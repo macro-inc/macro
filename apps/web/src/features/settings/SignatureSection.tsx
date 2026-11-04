@@ -178,7 +178,7 @@ export function SignatureSection(props: {
   return (
     <SignatureForm
       email={props.link.email_address}
-      shared={props.shared ?? false}
+      shared={props.shared}
       value={isMobile() ? persisted() : (draft() ?? persisted())}
       onInput={(html) => {
         setDraft(html);
