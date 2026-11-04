@@ -4,7 +4,11 @@ use models_opensearch::SearchIndex;
 
 use super::BulkUpsertResult;
 use super::properties::IndexedProperty;
-use crate::{Result, date_format::EpochMillis, error::OpensearchClientError};
+use crate::{
+    Result,
+    date_format::EpochMillis,
+    error::{OpensearchClientError, OpensearchOperation},
+};
 
 /// Relation name for parent docs in the join field.
 const PARENT_RELATION: &str = "document";
@@ -164,8 +168,13 @@ async fn bulk_upsert_single_chunk(
         bulk_body.push(child_doc_body(doc).to_string());
     }
 
-    let result =
-        super::bulk_upsert_to_index(client, index, bulk_body, "bulk_upsert_single_chunk").await?;
+    let result = super::bulk_upsert_to_index(
+        client,
+        index,
+        bulk_body,
+        OpensearchOperation::BulkUpsertSingleChunk,
+    )
+    .await?;
 
     tracing::trace!(
         chunk_total = documents.len(),
@@ -287,7 +296,13 @@ pub(crate) async fn upsert_document(
         child_doc_body(args).to_string(),
     ];
 
-    let result = super::bulk_upsert_to_index(client, index, bulk_body, "upsert_document").await?;
+    let result = super::bulk_upsert_to_index(
+        client,
+        index,
+        bulk_body,
+        OpensearchOperation::UpsertDocument,
+    )
+    .await?;
 
     if result.failed > 0 {
         return Err(OpensearchClientError::Unknown {
@@ -295,7 +310,7 @@ pub(crate) async fn upsert_document(
                 "upsert_document had {} failures: {:?}",
                 result.failed, result.errors
             ),
-            method: Some("upsert_document".to_string()),
+            operation: OpensearchOperation::UpsertDocument,
         });
     }
 
@@ -329,8 +344,13 @@ pub(crate) async fn upsert_parent_document(
     let index = resolve_destination(index_override);
     let bulk_body = parent_only_bulk_body(args);
 
-    let result =
-        super::bulk_upsert_to_index(client, index, bulk_body, "upsert_parent_document").await?;
+    let result = super::bulk_upsert_to_index(
+        client,
+        index,
+        bulk_body,
+        OpensearchOperation::UpsertParentDocument,
+    )
+    .await?;
 
     if result.failed > 0 {
         return Err(OpensearchClientError::Unknown {
@@ -338,7 +358,7 @@ pub(crate) async fn upsert_parent_document(
                 "upsert_parent_document had {} failures: {:?}",
                 result.failed, result.errors
             ),
-            method: Some("upsert_parent_document".to_string()),
+            operation: OpensearchOperation::UpsertParentDocument,
         });
     }
 
@@ -373,7 +393,9 @@ pub(crate) async fn update_document_metadata(
         .body(body)
         .send()
         .await
-        .map_err(|err| OpensearchClientError::request_failed("update_document_metadata", &err))?;
+        .map_err(|err| {
+            OpensearchClientError::request_failed(OpensearchOperation::UpdateDocumentMetadata, &err)
+        })?;
 
     let status_code = response.status_code();
     if status_code.is_success() {
@@ -386,7 +408,10 @@ pub(crate) async fn update_document_metadata(
     }
 
     let body = response.text().await.map_err(|err| {
-        OpensearchClientError::deserialization_failed("update_document_metadata", &err)
+        OpensearchClientError::deserialization_failed(
+            OpensearchOperation::UpdateDocumentMetadata,
+            &err,
+        )
     })?;
 
     // A *missing document* 404 is a no-op: the doc isn't indexed yet, so the
@@ -415,7 +440,7 @@ pub(crate) async fn update_document_metadata(
 
     Err(OpensearchClientError::Unknown {
         details: body,
-        method: Some("update_document_metadata".to_string()),
+        operation: OpensearchOperation::UpdateDocumentMetadata,
     })
 }
 
@@ -435,7 +460,7 @@ pub(crate) async fn update_document_properties(
     let properties_value =
         serde_json::to_value(properties).map_err(|err| OpensearchClientError::Unknown {
             details: err.to_string(),
-            method: Some("update_document_properties".to_string()),
+            operation: OpensearchOperation::UpdateDocumentProperties,
         })?;
     let body = json!({ "doc": { "properties": properties_value } });
 
@@ -445,7 +470,12 @@ pub(crate) async fn update_document_properties(
         .body(body)
         .send()
         .await
-        .map_err(|err| OpensearchClientError::request_failed("update_document_properties", &err))?;
+        .map_err(|err| {
+            OpensearchClientError::request_failed(
+                OpensearchOperation::UpdateDocumentProperties,
+                &err,
+            )
+        })?;
 
     let status_code = response.status_code();
     if status_code.is_success() {
@@ -453,7 +483,10 @@ pub(crate) async fn update_document_properties(
         return Ok(());
     }
     let body = response.text().await.map_err(|err| {
-        OpensearchClientError::deserialization_failed("update_document_properties", &err)
+        OpensearchClientError::deserialization_failed(
+            OpensearchOperation::UpdateDocumentProperties,
+            &err,
+        )
     })?;
 
     // A *missing document* 404 is a no-op: the doc isn't indexed yet, so the
@@ -483,7 +516,7 @@ pub(crate) async fn update_document_properties(
 
     Err(OpensearchClientError::Unknown {
         details: body,
-        method: Some("update_document_properties".to_string()),
+        operation: OpensearchOperation::UpdateDocumentProperties,
     })
 }
 

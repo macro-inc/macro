@@ -1,6 +1,9 @@
 use models_opensearch::SearchIndex;
 
-use crate::{Result, error::OpensearchClientError};
+use crate::{
+    Result,
+    error::{OpensearchClientError, OpensearchOperation},
+};
 
 /// Deletes all chat messages with the specified chat_id
 #[tracing::instrument(skip(client))]
@@ -24,13 +27,15 @@ pub async fn delete_chat_by_id(
         .refresh(true) // Ensure the index reflects changes immediately
         .send()
         .await
-        .map_err(|err| OpensearchClientError::request_failed("delete_chat_by_id", &err))?;
+        .map_err(|err| {
+            OpensearchClientError::request_failed(OpensearchOperation::DeleteChatById, &err)
+        })?;
 
     let status_code = response.status_code();
 
     if !status_code.is_success() {
         let body = response.text().await.map_err(|err| {
-            OpensearchClientError::deserialization_failed("delete_chat_by_id", &err)
+            OpensearchClientError::deserialization_failed(OpensearchOperation::DeleteChatById, &err)
         })?;
 
         tracing::error!(
@@ -41,7 +46,7 @@ pub async fn delete_chat_by_id(
 
         return Err(OpensearchClientError::Unknown {
             details: body,
-            method: Some("delete_chat_by_id".to_string()),
+            operation: OpensearchOperation::DeleteChatById,
         });
     }
 
@@ -82,13 +87,18 @@ pub async fn delete_chat_message_by_id(
         .refresh(true) // Ensure the index reflects changes immediately
         .send()
         .await
-        .map_err(|err| OpensearchClientError::request_failed("delete_chat_message_by_id", &err))?;
+        .map_err(|err| {
+            OpensearchClientError::request_failed(OpensearchOperation::DeleteChatMessageById, &err)
+        })?;
 
     let status_code = response.status_code();
 
     if !status_code.is_success() {
         let body = response.text().await.map_err(|err| {
-            OpensearchClientError::deserialization_failed("delete_chat_message_by_id", &err)
+            OpensearchClientError::deserialization_failed(
+                OpensearchOperation::DeleteChatMessageById,
+                &err,
+            )
         })?;
 
         tracing::error!(
@@ -99,7 +109,7 @@ pub async fn delete_chat_message_by_id(
 
         return Err(OpensearchClientError::Unknown {
             details: body,
-            method: Some("delete_chat_message_by_id".to_string()),
+            operation: OpensearchOperation::DeleteChatMessageById,
         });
     }
 
@@ -125,13 +135,18 @@ pub async fn delete_chat_by_user_id(client: &opensearch::OpenSearch, user_id: &s
         .refresh(true) // Ensure the index reflects changes immediately
         .send()
         .await
-        .map_err(|err| OpensearchClientError::request_failed("delete_chat_by_user_id", &err))?;
+        .map_err(|err| {
+            OpensearchClientError::request_failed(OpensearchOperation::DeleteChatByUserId, &err)
+        })?;
 
     let status_code = response.status_code();
 
     if !status_code.is_success() {
         let body = response.text().await.map_err(|err| {
-            OpensearchClientError::deserialization_failed("delete_chat_by_user_id", &err)
+            OpensearchClientError::deserialization_failed(
+                OpensearchOperation::DeleteChatByUserId,
+                &err,
+            )
         })?;
 
         tracing::error!(
@@ -142,7 +157,7 @@ pub async fn delete_chat_by_user_id(client: &opensearch::OpenSearch, user_id: &s
 
         return Err(OpensearchClientError::Unknown {
             details: body,
-            method: Some("delete_chat_by_user_id".to_string()),
+            operation: OpensearchOperation::DeleteChatByUserId,
         });
     }
 

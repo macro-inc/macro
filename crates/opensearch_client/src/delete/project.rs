@@ -1,6 +1,9 @@
 use models_opensearch::SearchIndex;
 
-use crate::{Result, error::OpensearchClientError};
+use crate::{
+    Result,
+    error::{OpensearchClientError, OpensearchOperation},
+};
 
 /// Deletes a project doc by id. The projects index is flat with `_id` =
 /// project id, so this is a direct delete. A missing-doc 404 is a no-op —
@@ -17,7 +20,9 @@ pub async fn delete_project_by_id(
         .delete(opensearch::DeleteParts::IndexId(index, project_id))
         .send()
         .await
-        .map_err(|err| OpensearchClientError::request_failed("delete_project_by_id", &err))?;
+        .map_err(|err| {
+            OpensearchClientError::request_failed(OpensearchOperation::DeleteProjectById, &err)
+        })?;
 
     let status_code = response.status_code();
     if status_code.is_success() {
@@ -25,7 +30,7 @@ pub async fn delete_project_by_id(
     }
 
     let body = response.text().await.map_err(|err| {
-        OpensearchClientError::deserialization_failed("delete_project_by_id", &err)
+        OpensearchClientError::deserialization_failed(OpensearchOperation::DeleteProjectById, &err)
     })?;
 
     if status_code.as_u16() == 404 {
@@ -46,6 +51,6 @@ pub async fn delete_project_by_id(
 
     Err(OpensearchClientError::Unknown {
         details: body,
-        method: Some("delete_project_by_id".to_string()),
+        operation: OpensearchOperation::DeleteProjectById,
     })
 }

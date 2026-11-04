@@ -1,6 +1,9 @@
 use models_opensearch::SearchIndex;
 
-use crate::{Result, error::OpensearchClientError};
+use crate::{
+    Result,
+    error::{OpensearchClientError, OpensearchOperation},
+};
 
 /// Deletes all channel messages with the specified channel_id
 #[tracing::instrument(skip(client))]
@@ -24,13 +27,18 @@ pub async fn delete_channel_by_id(
         .refresh(true) // Ensure the index reflects changes immediately
         .send()
         .await
-        .map_err(|err| OpensearchClientError::request_failed("delete_channel_by_id", &err))?;
+        .map_err(|err| {
+            OpensearchClientError::request_failed(OpensearchOperation::DeleteChannelById, &err)
+        })?;
 
     let status_code = response.status_code();
 
     if !status_code.is_success() {
         let body = response.text().await.map_err(|err| {
-            OpensearchClientError::deserialization_failed("delete_channel_by_id", &err)
+            OpensearchClientError::deserialization_failed(
+                OpensearchOperation::DeleteChannelById,
+                &err,
+            )
         })?;
 
         tracing::error!(
@@ -41,7 +49,7 @@ pub async fn delete_channel_by_id(
 
         return Err(OpensearchClientError::Unknown {
             details: body,
-            method: Some("delete_channel_by_id".to_string()),
+            operation: OpensearchOperation::DeleteChannelById,
         });
     }
 
@@ -83,14 +91,20 @@ pub async fn delete_channel_message_by_id(
         .send()
         .await
         .map_err(|err| {
-            OpensearchClientError::request_failed("delete_channel_message_by_id", &err)
+            OpensearchClientError::request_failed(
+                OpensearchOperation::DeleteChannelMessageById,
+                &err,
+            )
         })?;
 
     let status_code = response.status_code();
 
     if !status_code.is_success() {
         let body = response.text().await.map_err(|err| {
-            OpensearchClientError::deserialization_failed("delete_channel_message_by_id", &err)
+            OpensearchClientError::deserialization_failed(
+                OpensearchOperation::DeleteChannelMessageById,
+                &err,
+            )
         })?;
 
         tracing::error!(
@@ -101,7 +115,7 @@ pub async fn delete_channel_message_by_id(
 
         return Err(OpensearchClientError::Unknown {
             details: body,
-            method: Some("delete_channel_message_by_id".to_string()),
+            operation: OpensearchOperation::DeleteChannelMessageById,
         });
     }
 

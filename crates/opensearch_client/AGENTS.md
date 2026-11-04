@@ -47,9 +47,11 @@ projects.
 ## Gotchas
 
 - Map a failed `.send()` with `OpensearchClientError::request_failed` and a
-  failed body read with `deserialization_failed`. Both keep the error's source
-  chain; reqwest's `Display` alone drops the cause (timeout, reset, refused
-  connection).
+  failed body read with `deserialization_failed`. Both take an
+  `OpensearchOperation`: add a variant for a new request rather than passing a
+  name. `request_failed` classifies the cause as a `TransportFailure` (timeout,
+  connect, connection closed, other) and keeps the full source chain in
+  `details`; reqwest's `Display` alone drops the cause.
 
 ## Related
 

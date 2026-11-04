@@ -2,7 +2,7 @@ use std::collections::HashSet;
 
 use crate::{
     Result,
-    error::{OpensearchClientError, ResponseExt, error_chain},
+    error::{OpensearchClientError, OpensearchOperation, ResponseExt, error_chain},
     search::{
         builder::{SearchQueryConfig, updated_at_sort},
         calendar_events::{
@@ -342,7 +342,7 @@ impl UnifiedSearchIndex {
                     details: format!(
                         "hit matched no single known entity clause: {matched_queries:?}"
                     ),
-                    method: Some("UnifiedSearchIndex::from_matched".to_string()),
+                    operation: OpensearchOperation::SearchUnified,
                 })?;
 
         fn parse<T: serde::de::DeserializeOwned>(
@@ -355,7 +355,7 @@ impl UnifiedSearchIndex {
                         "`{}` hit did not match its own shape: {error}",
                         entity.query_name()
                     ),
-                    method: Some("UnifiedSearchIndex::from_matched".to_string()),
+                    operation: OpensearchOperation::SearchUnified,
                 }
             })
         }
@@ -985,7 +985,7 @@ pub(crate) async fn search_unified(
         .body(search_request)
         .send()
         .await
-        .map_client_error()
+        .map_client_error(OpensearchOperation::SearchUnified)
         .await?;
 
     let bytes = response
@@ -1003,7 +1003,7 @@ pub(crate) async fn search_unified(
             }
         })?;
 
-    result.warn_on_shard_failures("search_unified");
+    result.warn_on_shard_failures(OpensearchOperation::SearchUnified);
 
     tracing::info!(
         response_body_bytes = bytes.len(),

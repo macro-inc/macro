@@ -2,7 +2,11 @@ use models_opensearch::SearchIndex;
 
 use super::BulkUpsertResult;
 use super::properties::IndexedProperty;
-use crate::{Result, date_format::EpochMillis, error::OpensearchClientError};
+use crate::{
+    Result,
+    date_format::EpochMillis,
+    error::{OpensearchClientError, OpensearchOperation},
+};
 
 /// The arguments for upserting an email message into the opensearch index
 #[derive(Debug, serde::Serialize)]
@@ -66,14 +70,19 @@ pub(crate) async fn upsert_email_message(
         .body(args)
         .send()
         .await
-        .map_err(|err| OpensearchClientError::request_failed("upsert_email_message", &err))?;
+        .map_err(|err| {
+            OpensearchClientError::request_failed(OpensearchOperation::UpsertEmailMessage, &err)
+        })?;
 
     let status_code = response.status_code();
     if status_code.is_success() {
         tracing::trace!(id=%id, "email message upserted successfully");
     } else {
         let body = response.text().await.map_err(|err| {
-            OpensearchClientError::deserialization_failed("upsert_email_message", &err)
+            OpensearchClientError::deserialization_failed(
+                OpensearchOperation::UpsertEmailMessage,
+                &err,
+            )
         })?;
 
         tracing::error!(
@@ -84,7 +93,7 @@ pub(crate) async fn upsert_email_message(
 
         return Err(OpensearchClientError::Unknown {
             details: body,
-            method: Some("upsert_email_message".to_string()),
+            operation: OpensearchOperation::UpsertEmailMessage,
         });
     }
     Ok(())
@@ -115,14 +124,20 @@ pub(crate) async fn bulk_upsert_email_messages(
         bulk_body.push(serde_json::to_string(msg).map_err(|e| {
             OpensearchClientError::SerializationFailed {
                 details: e.to_string(),
-                method: Some("bulk_upsert_email_messages".to_string()),
+                operation: OpensearchOperation::BulkUpsertEmailMessages,
             }
         })?);
     }
 
     let index = index_override.unwrap_or(SearchIndex::Emails.as_ref());
 
-    super::bulk_upsert_to_index(client, index, bulk_body, "bulk_upsert_email_messages").await
+    super::bulk_upsert_to_index(
+        client,
+        index,
+        bulk_body,
+        OpensearchOperation::BulkUpsertEmailMessages,
+    )
+    .await
 }
 
 /// Update only the denormalized `properties` on every message doc of a
@@ -140,7 +155,7 @@ pub(crate) async fn update_email_thread_properties(
     let properties_value =
         serde_json::to_value(properties).map_err(|err| OpensearchClientError::Unknown {
             details: err.to_string(),
-            method: Some("update_email_thread_properties".to_string()),
+            operation: OpensearchOperation::UpdateEmailThreadProperties,
         })?;
     let body = serde_json::json!({
         "query": { "term": { "entity_id": thread_id } },
@@ -161,14 +176,20 @@ pub(crate) async fn update_email_thread_properties(
         .send()
         .await
         .map_err(|err| {
-            OpensearchClientError::request_failed("update_email_thread_properties", &err)
+            OpensearchClientError::request_failed(
+                OpensearchOperation::UpdateEmailThreadProperties,
+                &err,
+            )
         })?;
 
     let status_code = response.status_code();
     if status_code.is_success() {
         // A 200 can still carry per-document failures in the body.
         let body: serde_json::Value = response.json().await.map_err(|err| {
-            OpensearchClientError::deserialization_failed("update_email_thread_properties", &err)
+            OpensearchClientError::deserialization_failed(
+                OpensearchOperation::UpdateEmailThreadProperties,
+                &err,
+            )
         })?;
         if let Some(failures) = body.get("failures").and_then(|f| f.as_array())
             && !failures.is_empty()
@@ -180,14 +201,17 @@ pub(crate) async fn update_email_thread_properties(
             );
             return Err(OpensearchClientError::Unknown {
                 details: format!("update_by_query failures: {failures:?}"),
-                method: Some("update_email_thread_properties".to_string()),
+                operation: OpensearchOperation::UpdateEmailThreadProperties,
             });
         }
         tracing::trace!(thread_id=%thread_id, "email thread properties updated");
         return Ok(());
     }
     let body = response.text().await.map_err(|err| {
-        OpensearchClientError::deserialization_failed("update_email_thread_properties", &err)
+        OpensearchClientError::deserialization_failed(
+            OpensearchOperation::UpdateEmailThreadProperties,
+            &err,
+        )
     })?;
 
     tracing::error!(
@@ -199,6 +223,6 @@ pub(crate) async fn update_email_thread_properties(
 
     Err(OpensearchClientError::Unknown {
         details: body,
-        method: Some("update_email_thread_properties".to_string()),
+        operation: OpensearchOperation::UpdateEmailThreadProperties,
     })
 }

@@ -1,6 +1,7 @@
 use serde_json::json;
 
 use super::*;
+use crate::error::TransportFailure;
 
 fn args() -> ReconcileAgentSessionArgs {
     ReconcileAgentSessionArgs {
@@ -177,10 +178,10 @@ async fn a_load_balancer_error_page_on_prune_is_reported_with_its_body() {
     )
     .await;
 
-    let Err(OpensearchClientError::Unknown { details, method }) = result else {
+    let Err(OpensearchClientError::Unknown { details, operation }) = result else {
         panic!("expected the 502 page to be reported, got {result:?}");
     };
-    assert_eq!(method.as_deref(), Some("reconcile_agent_session_prune"));
+    assert_eq!(operation, OpensearchOperation::ReconcileAgentSessionPrune);
     assert!(details.contains("502 Bad Gateway"), "{details}");
 }
 
@@ -213,10 +214,16 @@ async fn a_connection_closed_without_a_response_reports_the_transport_cause() {
     let result = client.reconcile_agent_session(&args(), None).await;
     server.join().unwrap();
 
-    let Err(OpensearchClientError::RequestFailed { details, method }) = result else {
+    let Err(OpensearchClientError::RequestFailed {
+        details,
+        cause,
+        operation,
+    }) = result
+    else {
         panic!("expected a request failure, got {result:?}");
     };
-    assert_eq!(method.as_deref(), Some("reconcile_agent_session_parent"));
+    assert_eq!(operation, OpensearchOperation::ReconcileAgentSessionParent);
+    assert_eq!(cause, TransportFailure::ConnectionClosed);
     assert!(
         details.contains("connection closed before message completed"),
         "{details}"

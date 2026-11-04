@@ -1,7 +1,11 @@
 use models_opensearch::SearchIndex;
 
 use super::properties::IndexedProperty;
-use crate::{Result, date_format::EpochMillis, error::OpensearchClientError};
+use crate::{
+    Result,
+    date_format::EpochMillis,
+    error::{OpensearchClientError, OpensearchOperation},
+};
 
 /// The arguments for upserting a project into the opensearch index.
 ///
@@ -43,7 +47,7 @@ pub(crate) async fn upsert_project(
     let index = resolve_destination(index_override);
     let body = serde_json::to_value(args).map_err(|err| OpensearchClientError::Unknown {
         details: err.to_string(),
-        method: Some("upsert_project".to_string()),
+        operation: OpensearchOperation::UpsertProject,
     })?;
 
     let response = client
@@ -51,7 +55,9 @@ pub(crate) async fn upsert_project(
         .body(body)
         .send()
         .await
-        .map_err(|err| OpensearchClientError::request_failed("upsert_project", &err))?;
+        .map_err(|err| {
+            OpensearchClientError::request_failed(OpensearchOperation::UpsertProject, &err)
+        })?;
 
     let status_code = response.status_code();
     if status_code.is_success() {
@@ -59,10 +65,9 @@ pub(crate) async fn upsert_project(
         return Ok(());
     }
 
-    let body = response
-        .text()
-        .await
-        .map_err(|err| OpensearchClientError::deserialization_failed("upsert_project", &err))?;
+    let body = response.text().await.map_err(|err| {
+        OpensearchClientError::deserialization_failed(OpensearchOperation::UpsertProject, &err)
+    })?;
 
     tracing::error!(
         status_code=?status_code,
@@ -73,7 +78,7 @@ pub(crate) async fn upsert_project(
 
     Err(OpensearchClientError::Unknown {
         details: body,
-        method: Some("upsert_project".to_string()),
+        operation: OpensearchOperation::UpsertProject,
     })
 }
 
@@ -93,7 +98,7 @@ pub(crate) async fn update_project_properties(
     let properties_value =
         serde_json::to_value(properties).map_err(|err| OpensearchClientError::Unknown {
             details: err.to_string(),
-            method: Some("update_project_properties".to_string()),
+            operation: OpensearchOperation::UpdateProjectProperties,
         })?;
     let body = json!({ "doc": { "properties": properties_value } });
 
@@ -102,7 +107,12 @@ pub(crate) async fn update_project_properties(
         .body(body)
         .send()
         .await
-        .map_err(|err| OpensearchClientError::request_failed("update_project_properties", &err))?;
+        .map_err(|err| {
+            OpensearchClientError::request_failed(
+                OpensearchOperation::UpdateProjectProperties,
+                &err,
+            )
+        })?;
 
     let status_code = response.status_code();
     if status_code.is_success() {
@@ -110,7 +120,10 @@ pub(crate) async fn update_project_properties(
         return Ok(());
     }
     let body = response.text().await.map_err(|err| {
-        OpensearchClientError::deserialization_failed("update_project_properties", &err)
+        OpensearchClientError::deserialization_failed(
+            OpensearchOperation::UpdateProjectProperties,
+            &err,
+        )
     })?;
 
     // A *missing document* 404 is a no-op: the doc isn't indexed yet, so the
@@ -138,6 +151,6 @@ pub(crate) async fn update_project_properties(
 
     Err(OpensearchClientError::Unknown {
         details: body,
-        method: Some("update_project_properties".to_string()),
+        operation: OpensearchOperation::UpdateProjectProperties,
     })
 }

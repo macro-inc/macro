@@ -2,7 +2,7 @@ pub use crate::search::builder::ChannelSortMode;
 
 use crate::{
     Result, delegate_methods,
-    error::{OpensearchClientError, ResponseExt, error_chain},
+    error::{OpensearchClientError, OpensearchOperation, ResponseExt, error_chain},
     search::{
         builder::{SearchQueryBuilder, SearchQueryConfig, thread_sort, updated_at_sort},
         model::{
@@ -236,7 +236,7 @@ pub(crate) async fn search_channel(
         .body(search_request)
         .send()
         .await
-        .map_client_error()
+        .map_client_error(OpensearchOperation::SearchChannel)
         .await?;
 
     let bytes = response
@@ -251,7 +251,7 @@ pub(crate) async fn search_channel(
             details: e.to_string(),
             raw_body: String::from_utf8_lossy(&bytes).to_string(),
         })?;
-    result.warn_on_shard_failures("search_channel");
+    result.warn_on_shard_failures(OpensearchOperation::SearchChannel);
 
     let total = result.hits.total.value;
 

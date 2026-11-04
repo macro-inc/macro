@@ -1,7 +1,11 @@
 use models_opensearch::SearchIndex;
 
 use super::properties::IndexedProperty;
-use crate::{Result, date_format::EpochMillis, error::OpensearchClientError};
+use crate::{
+    Result,
+    date_format::EpochMillis,
+    error::{OpensearchClientError, OpensearchOperation},
+};
 
 /// The arguments for upserting a calendar event into the opensearch index.
 ///
@@ -80,7 +84,7 @@ pub(crate) async fn upsert_calendar_event(
     let index = resolve_destination(index_override);
     let body = serde_json::to_value(args).map_err(|err| OpensearchClientError::Unknown {
         details: err.to_string(),
-        method: Some("upsert_calendar_event".to_string()),
+        operation: OpensearchOperation::UpsertCalendarEvent,
     })?;
 
     let response = client
@@ -88,7 +92,9 @@ pub(crate) async fn upsert_calendar_event(
         .body(body)
         .send()
         .await
-        .map_err(|err| OpensearchClientError::request_failed("upsert_calendar_event", &err))?;
+        .map_err(|err| {
+            OpensearchClientError::request_failed(OpensearchOperation::UpsertCalendarEvent, &err)
+        })?;
 
     let status_code = response.status_code();
     if status_code.is_success() {
@@ -97,7 +103,10 @@ pub(crate) async fn upsert_calendar_event(
     }
 
     let body = response.text().await.map_err(|err| {
-        OpensearchClientError::deserialization_failed("upsert_calendar_event", &err)
+        OpensearchClientError::deserialization_failed(
+            OpensearchOperation::UpsertCalendarEvent,
+            &err,
+        )
     })?;
 
     tracing::error!(
@@ -109,7 +118,7 @@ pub(crate) async fn upsert_calendar_event(
 
     Err(OpensearchClientError::Unknown {
         details: body,
-        method: Some("upsert_calendar_event".to_string()),
+        operation: OpensearchOperation::UpsertCalendarEvent,
     })
 }
 
@@ -127,7 +136,7 @@ pub(crate) async fn update_calendar_event_properties(
     let properties_value =
         serde_json::to_value(properties).map_err(|err| OpensearchClientError::Unknown {
             details: err.to_string(),
-            method: Some("update_calendar_event_properties".to_string()),
+            operation: OpensearchOperation::UpdateCalendarEventProperties,
         })?;
     let body = json!({ "doc": { "properties": properties_value } });
 
@@ -137,7 +146,10 @@ pub(crate) async fn update_calendar_event_properties(
         .send()
         .await
         .map_err(|err| {
-            OpensearchClientError::request_failed("update_calendar_event_properties", &err)
+            OpensearchClientError::request_failed(
+                OpensearchOperation::UpdateCalendarEventProperties,
+                &err,
+            )
         })?;
 
     let status_code = response.status_code();
@@ -146,7 +158,10 @@ pub(crate) async fn update_calendar_event_properties(
         return Ok(());
     }
     let body = response.text().await.map_err(|err| {
-        OpensearchClientError::deserialization_failed("update_calendar_event_properties", &err)
+        OpensearchClientError::deserialization_failed(
+            OpensearchOperation::UpdateCalendarEventProperties,
+            &err,
+        )
     })?;
 
     // A *missing document* 404 is a no-op: the doc isn't indexed yet, so the
@@ -174,6 +189,6 @@ pub(crate) async fn update_calendar_event_properties(
 
     Err(OpensearchClientError::Unknown {
         details: body,
-        method: Some("update_calendar_event_properties".to_string()),
+        operation: OpensearchOperation::UpdateCalendarEventProperties,
     })
 }
