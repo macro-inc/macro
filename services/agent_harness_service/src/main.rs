@@ -1263,6 +1263,8 @@ async fn run() -> anyhow::Result<()> {
     // to speak through: it is the same service instance the harness routes
     // commands with, and a clone shares its replica identity.
     let draining_sessions = sessions.clone();
+    // Reviews announce each save in their session's log.
+    let review_log = sessions.clone();
     let conversation_turns = Arc::new(
         agent_harness::outbound::conversation_turns::PgConversationTurnStore::new(pool.clone()),
     );
@@ -1336,6 +1338,7 @@ async fn run() -> anyhow::Result<()> {
         )),
         Arc::new(code_mode::reviews::Actions {
             sessions: session_repo.clone(),
+            log: review_log,
             harness: harness.clone(),
             context: tool_context.clone(),
             tools: ai_tools::code_mode_tools(),
