@@ -43,13 +43,13 @@ export type FakeCacheWrite = {
 const variablesKey = (variables: unknown) => JSON.stringify(variables ?? {});
 
 /**
- * A urql client for the work feed: queries stay pending until answered,
+ * A urql client for an attention feed: queries stay pending until answered,
  * subscriptions are driven by the test, and mutations answer from
  * `mutationData` keyed by operation name. Its `host` stands in for the
  * normalized cache: reads answer with each page's latest data, and a write
  * re-emits the page to its query the way a cache reread does.
  */
-export function createFakeWorkFeedClient(
+export function createFakeAttentionFeedClient(
   mutationData: Record<string, unknown> = {}
 ) {
   const queries: FakeQuery[] = [];
@@ -96,7 +96,7 @@ export function createFakeWorkFeedClient(
     const name = operationName(query);
     mutations.push({ name, variables });
     return {
-      toPromise: async () => ({ data: mutationData[name] }),
+      toPromise: async () => ({ data: await mutationData[name] }),
     };
   };
 
