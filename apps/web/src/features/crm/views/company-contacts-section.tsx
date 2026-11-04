@@ -30,6 +30,7 @@ function ContactRow(props: {
   contact: CrmContact;
   onOpen: (event: MouseEvent) => void;
   ownerId: string;
+  archived: boolean;
 }) {
   const email = props.contact.email;
   const photo = email ? useCrmContext().createContactPhoto?.(email) : undefined;
@@ -37,6 +38,7 @@ function ContactRow(props: {
   const entity = (): CrmContactEntity => ({
     ...props.contact,
     type: 'crm_contact',
+    hidden: props.archived,
     name: name(),
     ownerId: props.ownerId,
     sortTs: props.contact.lastInteraction,
@@ -64,7 +66,7 @@ function ContactRow(props: {
       }
       titleTrailing={
         <>
-          <Show when={props.contact.hidden}>
+          <Show when={props.archived}>
             <ArchivedRecordBadge />
           </Show>
           <Show when={props.contact.name && props.contact.email}>
@@ -180,6 +182,7 @@ export function CompanyContactsSection(props: {
                   {(contact) => (
                     <ContactRow
                       contact={contact}
+                      archived={archived()}
                       ownerId={props.company?.ownerId ?? ''}
                       onOpen={(event) => {
                         if (props.onOpenContact && !event.shiftKey) {

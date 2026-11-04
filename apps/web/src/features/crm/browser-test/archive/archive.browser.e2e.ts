@@ -145,7 +145,7 @@ test('chip explanation has its own keyboard and touch lifecycle with narrow layo
 test('restoring a person whose company is archived routes to company confirmation', async ({
   page,
 }) => {
-  await page.goto('/?companyArchived');
+  await page.goto('/?companyArchived&legacyParent');
   await page.getByRole('button', { name: 'Restore', exact: true }).click();
   const dialog = page.getByRole('dialog');
   await expect(dialog).toContainText('Restore the company first');
@@ -187,6 +187,17 @@ test('Team Visible and Archived are exclusive and preserve scoped search', async
   await page.screenshot({ path: info.outputPath('team-archived.png') });
   await page.evaluate(() => window.archiveFixture.setRole('member'));
   await expect(filter).toContainText('Visible');
+  await page.goto('/?kind=company&team&companyArchived&legacyParent');
+  await filter.click();
+  await page
+    .getByRole('menuitemradio', { name: 'Archived', exact: true })
+    .click();
+  await page.keyboard.press('Escape');
+  await expect(
+    page
+      .getByRole('button', { name: /Example person/ })
+      .getByText('Archived', { exact: true })
+  ).toBeVisible();
 });
 
 test('Details uses the same record details then references order', async ({

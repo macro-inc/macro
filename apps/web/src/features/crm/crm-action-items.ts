@@ -1,3 +1,4 @@
+import { t } from '@app/lib/i18n';
 import type { EntityData } from '@entity';
 import { useIsTeamAdmin } from '@queries/team/teams';
 import type { EntityActionListState } from '../next-soup/actions/entity-action-context';
@@ -56,7 +57,9 @@ export function createCrmEntityActionItems() {
     ) {
       crmItems.push({
         id: 'hide-company',
-        label: singleEntity.hidden ? 'Restore' : 'Archive',
+        label: singleEntity.hidden
+          ? t('viewMenus.crmRestore')
+          : t('viewMenus.crmArchive'),
         onClick: () => hideCompanyAction.executeWithSoup(entities, soup),
       });
     }

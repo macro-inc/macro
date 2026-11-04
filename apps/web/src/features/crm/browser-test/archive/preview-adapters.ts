@@ -58,7 +58,10 @@ let contacts: CrmContactResponse[] = ['Example person', 'Second person'].map(
     companyId: company.id,
     name,
     email: `person${index + 1}@example.com`,
-    hidden: company.hidden || index === 1 || params.has('archived'),
+    hidden:
+      params.has('legacyParent') && index === 0
+        ? false
+        : company.hidden || index === 1 || params.has('archived'),
     createdAt: '2026-10-15',
     updatedAt: '2026-10-15',
     firstInteraction: '2026-10-15',
