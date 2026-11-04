@@ -111,6 +111,8 @@ function TutorialVideoDialog(props: {
       tutorial: 'macro-mail',
       action: 'played',
     });
+    // The play overlay unmounts, so hand focus to the video: Space and Escape keep working.
+    video.focus();
     fireAndForget(video.play(), 'email-view');
   };
 
@@ -142,6 +144,9 @@ function TutorialVideoDialog(props: {
           playsinline
           controls={started()}
           onPlay={() => setStarted(true)}
+          onKeyDown={(event) => {
+            if (event.key === 'Escape') changeOpen(false);
+          }}
           class="max-h-full w-full object-contain mobile:aspect-video"
         />
         <Show when={!started()}>
