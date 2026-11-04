@@ -21,8 +21,9 @@ pub use focus::{
     load_email_focus_thread_ids, load_email_thread_focus,
 };
 pub use loaders::{
-    EmailContentKey, EmailContentLoad, EmailContentLoader, EmailContentMessage,
-    EmailServiceEmailContentReader, EmailThreadMailProjectionLoad, EmailThreadMailProjectionLoader,
+    EmailContentKey, EmailContentLimits, EmailContentLoad, EmailContentLoader, EmailContentMessage,
+    EmailServiceEmailContentReader, EmailThreadMailProjectionDataLoader,
+    EmailThreadMailProjectionLoad, EmailThreadMailProjectionLoader, EmailThreadMetadataDataLoader,
     EmailThreadMetadataLoad, EmailThreadMetadataLoader, EmailThreadUnavailable,
     NoOpSoupEmailContentEdgeReader, SoupEmailContentEdgeReader, SoupEmailEdgeReader,
     SoupEmailThreadMailProjectionEdgeReader, SoupEmailThreadMetadataEdgeReader,

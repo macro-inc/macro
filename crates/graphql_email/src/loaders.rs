@@ -3,7 +3,7 @@ use std::{
     sync::Arc,
 };
 
-use async_graphql::dataloader::{DataLoader, Loader};
+use async_graphql::dataloader::{DataLoader, HashMapCache, Loader};
 use email::domain::{
     models::{EmailThreadMailProjection, EmailThreadMetadata, Message, ParsedMessage},
     ports::{EmailContentService, EmailThreadMailProjectionService, EmailThreadMetadataService},
@@ -14,8 +14,30 @@ use macro_user_id::user_id::MacroUserIdStr;
 use tracing::Instrument;
 use uuid::Uuid;
 
-pub(crate) const MAX_EMAIL_CONTENT_KEYS: usize = 20;
-pub(crate) const MAX_EMAIL_CONTENT_MESSAGES: usize = 100;
+/// How much message content one email-content batch may request.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct EmailContentLimits {
+    /// Most threads (or latest-message requests) in one batch.
+    pub max_keys: usize,
+    /// Most messages requested across one batch.
+    pub max_messages: usize,
+}
+
+impl EmailContentLimits {
+    /// One GraphQL operation: 20 threads, 100 messages.
+    pub const PER_OPERATION: Self = Self {
+        max_keys: 20,
+        max_messages: 100,
+    };
+
+    /// One page of the streamed cache sync. Scales with the Soup page cap
+    /// (500 threads) at the 20 messages per thread the sync's content lane
+    /// asks for, so the lane's page size, not this cap, sets the batch.
+    pub const SYNC_STREAM: Self = Self {
+        max_keys: 500,
+        max_messages: 500 * 20,
+    };
+}
 const MAX_EMAIL_THREAD_METADATA_KEYS: usize = 500;
 const MAX_EMAIL_THREAD_MAIL_PROJECTION_KEYS: usize = 500;
 
@@ -718,22 +740,35 @@ where
     }
 }
 
+/// The request's canonical email-thread metadata loader. It can cache, but
+/// its cache starts off: see [`email_thread_metadata_loader`].
+pub type EmailThreadMetadataDataLoader<R> = DataLoader<EmailThreadMetadataLoader<R>, HashMapCache>;
+
+/// The request's Mail projection loader. It can cache, but its cache starts
+/// off: see [`email_thread_mail_projection_loader`].
+pub type EmailThreadMailProjectionDataLoader<R> =
+    DataLoader<EmailThreadMailProjectionLoader<R>, HashMapCache>;
+
 /// Build a canonical email-thread metadata DataLoader scoped to the requesting user.
+///
+/// Its cache starts off: subscription connection data outlives one payload,
+/// and a request may mutate a thread between two reads. A query-only request
+/// (a streamed sync page) turns it on with `enable_all_cache(true)` so a
+/// page's prefetched metadata serves its threads' fields.
 pub fn email_thread_metadata_loader<R>(
     user_id: MacroUserIdStr<'static>,
     viewer_id: Option<Uuid>,
     reader: R,
-) -> DataLoader<EmailThreadMetadataLoader<R>>
+) -> EmailThreadMetadataDataLoader<R>
 where
     R: SoupEmailThreadMetadataEdgeReader,
 {
-    let loader = DataLoader::new(
+    let loader = DataLoader::with_cache(
         EmailThreadMetadataLoader::new(user_id, viewer_id, reader),
         spawn_in_current_span,
+        HashMapCache::default(),
     )
     .max_batch_size(MAX_EMAIL_THREAD_METADATA_KEYS);
-    // Subscription connection data outlives one payload. Coalesce concurrent
-    // fields, but do not retain mutable timestamps across update events.
     loader.enable_all_cache(false);
     loader
 }
@@ -786,21 +821,22 @@ where
 }
 
 /// Build a Mail projection DataLoader scoped to the requesting user.
+///
+/// Its cache starts off, as [`email_thread_metadata_loader`]'s does.
 pub fn email_thread_mail_projection_loader<R>(
     user_id: MacroUserIdStr<'static>,
     viewer_id: Option<Uuid>,
     reader: R,
-) -> DataLoader<EmailThreadMailProjectionLoader<R>>
+) -> EmailThreadMailProjectionDataLoader<R>
 where
     R: SoupEmailThreadMailProjectionEdgeReader,
 {
-    let loader = DataLoader::new(
+    let loader = DataLoader::with_cache(
         EmailThreadMailProjectionLoader::new(user_id, viewer_id, reader),
         spawn_in_current_span,
+        HashMapCache::default(),
     )
     .max_batch_size(MAX_EMAIL_THREAD_MAIL_PROJECTION_KEYS);
-    // Subscription connection data outlives one payload. Coalesce concurrent
-    // fields, but do not retain mutable projection facts across update events.
     loader.enable_all_cache(false);
     loader
 }
@@ -809,6 +845,7 @@ where
 pub struct EmailContentLoader<R> {
     user_id: MacroUserIdStr<'static>,
     reader: R,
+    limits: EmailContentLimits,
 }
 
 /// Error returned when a GraphQL operation exceeds the email-content cost cap.
@@ -816,22 +853,23 @@ pub struct EmailContentLoader<R> {
 pub struct EmailContentLoaderError {
     key_count: usize,
     message_count: usize,
+    limits: EmailContentLimits,
 }
 
 impl std::fmt::Display for EmailContentLoaderError {
     fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        if self.key_count > MAX_EMAIL_CONTENT_KEYS {
+        if self.key_count > self.limits.max_keys {
             return write!(
                 formatter,
-                "email content edge supports at most {MAX_EMAIL_CONTENT_KEYS} requests per operation (received {})",
-                self.key_count
+                "email content edge supports at most {} requests per operation (received {})",
+                self.limits.max_keys, self.key_count
             );
         }
 
         write!(
             formatter,
-            "email content edge supports at most {MAX_EMAIL_CONTENT_MESSAGES} requested messages per operation (received {})",
-            self.message_count
+            "email content edge supports at most {} requested messages per operation (received {})",
+            self.limits.max_messages, self.message_count
         )
     }
 }
@@ -840,8 +878,12 @@ impl std::error::Error for EmailContentLoaderError {}
 
 impl<R> EmailContentLoader<R> {
     /// Create a DataLoader scoped to the requesting user.
-    pub fn new(user_id: MacroUserIdStr<'static>, reader: R) -> Self {
-        Self { user_id, reader }
+    pub fn new(user_id: MacroUserIdStr<'static>, reader: R, limits: EmailContentLimits) -> Self {
+        Self {
+            user_id,
+            reader,
+            limits,
+        }
     }
 }
 
@@ -857,17 +899,19 @@ where
         keys: &[EmailContentKey],
     ) -> Result<HashMap<EmailContentKey, Self::Value>, Self::Error> {
         let message_count = keys.iter().map(|key| key.requested_message_count()).sum();
-        if keys.len() > MAX_EMAIL_CONTENT_KEYS || message_count > MAX_EMAIL_CONTENT_MESSAGES {
+        let limits = self.limits;
+        if keys.len() > limits.max_keys || message_count > limits.max_messages {
             tracing::warn!(
                 key_count = keys.len(),
                 message_count,
-                max_key_count = MAX_EMAIL_CONTENT_KEYS,
-                max_message_count = MAX_EMAIL_CONTENT_MESSAGES,
+                max_key_count = limits.max_keys,
+                max_message_count = limits.max_messages,
                 "rejecting oversized Soup email content batch"
             );
             return Err(Arc::new(EmailContentLoaderError {
                 key_count: keys.len(),
                 message_count,
+                limits,
             }));
         }
 
@@ -878,18 +922,21 @@ where
     }
 }
 
-/// Build an email-content DataLoader scoped to the requesting user.
+/// Build an email-content DataLoader scoped to the requesting user, capped at
+/// `limits` per batch.
 pub fn email_content_loader<R>(
     user_id: MacroUserIdStr<'static>,
     reader: R,
+    limits: EmailContentLimits,
 ) -> DataLoader<EmailContentLoader<R>>
 where
     R: SoupEmailContentEdgeReader,
 {
     DataLoader::new(
-        EmailContentLoader::new(user_id, reader),
+        EmailContentLoader::new(user_id, reader, limits),
         spawn_in_current_span,
     )
+    .max_batch_size(limits.max_keys)
 }
 
 #[cfg(test)]

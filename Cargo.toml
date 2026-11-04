@@ -173,6 +173,7 @@ members = [
   "crates/slack_integration",
   "crates/soup_filter_cache_adapter",
   "crates/soup_filter_projection",
+  "crates/soup_sync_stream",
   "crates/soup_realtime",
   "crates/system_skills",
   "crates/system_status",

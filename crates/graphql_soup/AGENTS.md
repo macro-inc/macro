@@ -62,3 +62,10 @@ viewer pattern), which apply to every type defined here.
   cursors carry their own sort tag and string identifiers, separate from timestamp and selected-property cursors.
 - External chats are intentionally excluded from Soup hydration; use the `/external-chats` API.
 - `SoupPatch::hydrate_updated` omits kinds without a `GraphqlSoupEntityType` (databases, forms, external chats), so a committed mutation on them returns empty effects, not a GraphQL error.
+- `SoupIdLists` (request data, one per sync stream) makes `soup` pages that
+  select only `__typename id` slices of one ordered list built on the lane's
+  first page (`id_list.rs`); without it, those pages run like any other.
+- `SoupPagePrefetch` (request data) lets `resolve_soup` load a page's email
+  thread projections and metadata in one batch
+  (`SoupEntityEdges::prefetch_email_threads`). Insert it only when the request's
+  email loaders cache (stream pages), or the threads load twice.

@@ -29,6 +29,11 @@ threads, pins, recents, notifications, folders, activity.
   `no_scope_reaches_graphql_where_it_is_mounted` holds `agent_correlation`'s
   `ANY_WRITE` to that mount) GraphQL API — the frontend's main read path for Home/Recent/
   search ("Soup" items); see `crates/graphql_soup` for resolvers/loaders.
+- `src/api/graphql_soup/stream.rs`: `POST /soup/graphql/stream` (streamed
+  cache sync): runs paged Soup and calendar queries with the `/soup/graphql`
+  request context and writes NDJSON; one open stream per user per task (409)
+  and at most `MAX_STREAMS_PER_TASK` per task (503 with `Retry-After`). Lane
+  loop and wire format: `crates/soup_sync_stream`.
 - `src/server.rs`: composition root, including access-request routes and the
   tracked delivery dispatcher; `src/outbound/access_requests.rs` composes the
   notification/withdrawal/realtime ports. Policy lives in `crates/access_requests`.

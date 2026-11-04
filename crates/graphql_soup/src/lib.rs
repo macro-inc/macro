@@ -8,6 +8,8 @@
 
 /// User-scoped accessible folders query for the Drive sidebar.
 mod folders;
+/// Stream-scoped ordered id lists for ID-only Soup pages.
+mod id_list;
 /// GraphQL inputs and conversion into Soup domain requests.
 mod inputs;
 /// DataLoader-backed hydration for realtime Soup patches.
@@ -23,6 +25,7 @@ pub use folders::{
     FoldersQuery, FoldersQueryError, FoldersQueryReader, NoOpFoldersQueryReader, resolve_folders,
 };
 pub use graphql_common::{GraphqlRequestParts, GraphqlSoupEntityType};
+pub use id_list::SoupIdLists;
 pub use inputs::{GraphqlSimpleSortMethod, GroupedSoupInput, SoupChannelReads, SoupInput};
 pub use loaders::{
     AgentSessionEntityLoader, EntityAccessEmailThreadReader, PrimarySoupItemLoader,
@@ -33,13 +36,13 @@ pub use mutation_thread::{
     EmailMutationThreadLoader, EmailMutationThreadReader, email_mutation_thread_loader,
 };
 pub use objects::{
-    GraphqlReminderScheduleType, GraphqlSoupAgentSession, GraphqlSoupBin, GraphqlSoupCall,
-    GraphqlSoupChannel, GraphqlSoupChannelMessage, GraphqlSoupChannelMessagePreview,
-    GraphqlSoupChat, GraphqlSoupCrmCompany, GraphqlSoupCrmContact, GraphqlSoupDatabaseRow,
-    GraphqlSoupDocument, GraphqlSoupDocumentSubType, GraphqlSoupEmailThread, GraphqlSoupEntity,
-    GraphqlSoupForeignEntity, GraphqlSoupInitiative, GraphqlSoupProject, GraphqlSoupReminder,
-    GraphqlSoupReminderReference, GroupedSoup, SoupCacheProjection, SoupEntityEdges, SoupPage,
-    SoupPatch, SoupUpdated,
+    EmailThreadPrefetch, GraphqlReminderScheduleType, GraphqlSoupAgentSession, GraphqlSoupBin,
+    GraphqlSoupCall, GraphqlSoupChannel, GraphqlSoupChannelMessage,
+    GraphqlSoupChannelMessagePreview, GraphqlSoupChat, GraphqlSoupCrmCompany,
+    GraphqlSoupCrmContact, GraphqlSoupDatabaseRow, GraphqlSoupDocument, GraphqlSoupDocumentSubType,
+    GraphqlSoupEmailThread, GraphqlSoupEntity, GraphqlSoupForeignEntity, GraphqlSoupInitiative,
+    GraphqlSoupProject, GraphqlSoupReminder, GraphqlSoupReminderReference, GroupedSoup,
+    SoupCacheProjection, SoupEntityEdges, SoupPage, SoupPagePrefetch, SoupPatch, SoupUpdated,
 };
 pub use resolvers::{
     PRIMARY_CHANNEL_READS_REFUSED, PRIMARY_CHANNEL_SOUP_MISSING, PrimaryChannelSoup,

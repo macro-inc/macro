@@ -15,7 +15,8 @@ use graphql_activity::{
 };
 use graphql_crm::{CrmRecord, GraphqlCrmPipelineEntry, load_pipeline_entries};
 use graphql_email::{
-    EmailContentKey, GraphqlEmailThreadFocus, GraphqlSoupEmailMessage, SoupEmailEdgeReader,
+    EmailContentKey, EmailThreadMailProjectionDataLoader, EmailThreadMetadataDataLoader,
+    GraphqlEmailThreadFocus, GraphqlSoupEmailMessage, SoupEmailEdgeReader,
     email_message_selection_requires_full_payload, load_email_messages, load_email_thread_focus,
     load_email_thread_mail_projection, load_email_thread_metadata, load_latest_email_message,
 };
@@ -28,7 +29,7 @@ use graphql_permission::{
     EntityPermissionEdgeReader, GraphqlEntityPermission, load_entity_permission,
 };
 use graphql_properties::{EntityPropertyReader, GraphqlProperty, load_entity_properties};
-use graphql_soup::SoupEntityEdges;
+use graphql_soup::{EmailThreadPrefetch, SoupEntityEdges};
 use graphql_time_tracking::{GraphqlTimeEntryPage, load_time_entries};
 use predicate_index::{RecordKey, utc_timestamp_micros};
 use soup_filter_projection::{
@@ -136,6 +137,29 @@ where
             ),
         );
         Ok(Some(encode_cache_projection_supplement(&supplement)?))
+    }
+
+    async fn prefetch_email_threads(
+        ctx: &Context<'_>,
+        thread_ids: Vec<Uuid>,
+        prefetch: EmailThreadPrefetch,
+    ) {
+        let projections = async {
+            if prefetch.mail_projections
+                && let Ok(loader) = ctx.data::<EmailThreadMailProjectionDataLoader<ER>>()
+            {
+                // Infallible: unavailable threads come back as values.
+                let _ = loader.load_many(thread_ids.iter().copied()).await;
+            }
+        };
+        let metadata = async {
+            if prefetch.metadata
+                && let Ok(loader) = ctx.data::<EmailThreadMetadataDataLoader<ER>>()
+            {
+                let _ = loader.load_many(thread_ids.iter().copied()).await;
+            }
+        };
+        tokio::join!(projections, metadata);
     }
 
     fn initiative_edges(initiative_id: Uuid) -> Self::InitiativeEdges {

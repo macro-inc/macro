@@ -290,6 +290,15 @@ enum GraphqlGroupByField {
     Property,
 }
 
+/// What the cursors of a timestamp-sorted Soup query carry besides the
+/// position: its sort and filter.
+pub(crate) struct SimpleSortKey {
+    /// The timestamp sort.
+    pub(crate) sort: SimpleSortMethod,
+    /// The filter, as the request gave it.
+    pub(crate) filter: EntityFilterAst,
+}
+
 impl SoupInput {
     /// Where this page reads its channels.
     pub(crate) fn channel_reads(&self) -> SoupChannelReads {
@@ -306,9 +315,36 @@ impl SoupInput {
         macro_user_id: MacroUserIdStr<'static>,
         link_ids: Vec<Uuid>,
     ) -> async_graphql::Result<SoupRequest<EntityFilterAst>> {
+        Ok(self.convert(macro_user_id, link_ids, false)?.0)
+    }
+
+    /// Convert this value into the request representation, with its sort key
+    /// when it is a timestamp sort.
+    pub(crate) fn into_keyed_request(
+        self,
+        macro_user_id: MacroUserIdStr<'static>,
+        link_ids: Vec<Uuid>,
+    ) -> async_graphql::Result<(SoupRequest<EntityFilterAst>, Option<SimpleSortKey>)> {
+        self.convert(macro_user_id, link_ids, true)
+    }
+
+    /// The cursor this input continues from, if it is a continuation.
+    pub(crate) fn continuation_cursor(&self) -> Option<&str> {
         match self {
-            Self::Initial(input) => input.into_request(macro_user_id, link_ids),
-            Self::Continuation(input) => input.into_request(macro_user_id, link_ids),
+            Self::Initial(_) => None,
+            Self::Continuation(input) => Some(&input.cursor),
+        }
+    }
+
+    fn convert(
+        self,
+        macro_user_id: MacroUserIdStr<'static>,
+        link_ids: Vec<Uuid>,
+        keyed: bool,
+    ) -> async_graphql::Result<(SoupRequest<EntityFilterAst>, Option<SimpleSortKey>)> {
+        match self {
+            Self::Initial(input) => input.into_request(macro_user_id, link_ids, keyed),
+            Self::Continuation(input) => input.into_request(macro_user_id, link_ids, keyed),
         }
     }
 }
@@ -319,7 +355,8 @@ impl SoupInitialInput {
         self,
         macro_user_id: MacroUserIdStr<'static>,
         link_ids: Vec<Uuid>,
-    ) -> async_graphql::Result<SoupRequest<EntityFilterAst>> {
+        keyed: bool,
+    ) -> async_graphql::Result<(SoupRequest<EntityFilterAst>, Option<SimpleSortKey>)> {
         let filter = self
             .filters
             .map(GraphqlEntityFilterAst::into_ast)
@@ -328,36 +365,50 @@ impl SoupInitialInput {
         let method = self
             .sort_method
             .unwrap_or(GraphqlSimpleSortMethod::ViewedAt);
-        let cursor = if matches!(
+        let (cursor, key) = if matches!(
             method,
             GraphqlSimpleSortMethod::Property | GraphqlSimpleSortMethod::Name
         ) {
-            SoupQuery::Property(models_pagination::Query::Sort(
-                selected_sort(
-                    method,
-                    self.sort_property_definition_id,
-                    self.sort_direction,
-                )?,
-                filter,
-            ))
+            let sort = selected_sort(
+                method,
+                self.sort_property_definition_id,
+                self.sort_direction,
+            )?;
+            (
+                SoupQuery::Property(models_pagination::Query::Sort(sort, filter)),
+                None,
+            )
         } else {
             if self.sort_property_definition_id.is_some() {
                 return Err(async_graphql::Error::new(
                     "sortPropertyDefinitionId requires PROPERTY",
                 ));
             }
-            method.into_query(filter)?
+            match method {
+                GraphqlSimpleSortMethod::NotifiedAt => (method.into_query(filter)?, None),
+                sort => {
+                    let sort = sort.into_model()?;
+                    let key = keyed.then(|| SimpleSortKey {
+                        sort,
+                        filter: filter.clone(),
+                    });
+                    (SoupQuery::new_sort_simple(sort, filter), key)
+                }
+            }
         };
 
-        Ok(SoupRequest {
-            soup_type: soup_type(self.expand),
-            limit: self.limit.unwrap_or(20).min(500),
-            sort_direction: sort_direction(&cursor, self.sort_direction)?,
-            cursor,
-            user: macro_user_id,
-            email_preview_view: email_preview_view(self.email_view)?,
-            link_ids,
-        })
+        Ok((
+            SoupRequest {
+                soup_type: soup_type(self.expand),
+                limit: self.limit.unwrap_or(20).min(500),
+                sort_direction: sort_direction(&cursor, self.sort_direction)?,
+                cursor,
+                user: macro_user_id,
+                email_preview_view: email_preview_view(self.email_view)?,
+                link_ids,
+            },
+            key,
+        ))
     }
 }
 
@@ -367,34 +418,54 @@ impl SoupContinuationInput {
         self,
         macro_user_id: MacroUserIdStr<'static>,
         link_ids: Vec<Uuid>,
-    ) -> async_graphql::Result<SoupRequest<EntityFilterAst>> {
+        keyed: bool,
+    ) -> async_graphql::Result<(SoupRequest<EntityFilterAst>, Option<SimpleSortKey>)> {
         let cursor = Base64Str::<SoupContinuationCursor>::new_from_string(self.cursor)
             .decode_json()
             .map_err(|err| async_graphql::Error::new(format!("invalid cursor: {err}")))?;
-        let (limit, cursor) = match cursor {
+        let (limit, cursor, key) = match cursor {
             SoupContinuationCursor::Property(cursor) => (
                 cursor.limit,
                 SoupQuery::Property(models_pagination::Query::Cursor(cursor)),
+                None,
             ),
             SoupContinuationCursor::Simple(cursor) => {
-                (cursor.limit, SoupQuery::new_cursor_simple(cursor))
+                let key = keyed.then(|| SimpleSortKey {
+                    sort: cursor.val.sort_type,
+                    filter: cursor.filter.clone(),
+                });
+                (cursor.limit, SoupQuery::new_cursor_simple(cursor), key)
             }
             SoupContinuationCursor::Notified(cursor) => {
-                (cursor.limit, SoupQuery::new_cursor_notified(cursor))
+                (cursor.limit, SoupQuery::new_cursor_notified(cursor), None)
             }
         };
         let limit = u16::try_from(limit).unwrap_or(500).min(500);
 
-        Ok(SoupRequest {
-            soup_type: soup_type(self.expand),
-            limit,
-            sort_direction: sort_direction(&cursor, self.sort_direction)?,
-            cursor,
-            user: macro_user_id,
-            email_preview_view: email_preview_view(self.email_view)?,
-            link_ids,
-        })
+        Ok((
+            SoupRequest {
+                soup_type: soup_type(self.expand),
+                limit,
+                sort_direction: sort_direction(&cursor, self.sort_direction)?,
+                cursor,
+                user: macro_user_id,
+                email_preview_view: email_preview_view(self.email_view)?,
+                link_ids,
+            },
+            key,
+        ))
     }
+}
+
+/// Decode an opaque timestamp-sort Soup cursor.
+pub(crate) fn decode_simple_cursor(
+    cursor: String,
+) -> async_graphql::Result<CursorWithValAndFilter<Uuid, SimpleSortMethod, EntityFilterAst>> {
+    Base64Str::<CursorWithValAndFilter<Uuid, SimpleSortMethod, EntityFilterAst>>::new_from_string(
+        cursor,
+    )
+    .decode_json()
+    .map_err(|err| async_graphql::Error::new(format!("invalid cursor: {err}")))
 }
 
 /// Decode ordinary timestamp, notification, and property position cursors.

@@ -1679,6 +1679,7 @@ impl TestHarness {
             .data(graphql_email::email_content_loader(
                 user_id.clone(),
                 self.email_content_reader.clone(),
+                graphql_email::EmailContentLimits::PER_OPERATION,
             ))
             .data(graphql_email::email_thread_metadata_loader(
                 user_id.clone(),

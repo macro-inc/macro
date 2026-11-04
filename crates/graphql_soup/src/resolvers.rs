@@ -25,11 +25,12 @@ use soup::domain::{
 use soup_realtime::domain::{models::Patch, ports::SoupRealtimeSubscriptionService};
 
 use crate::{
+    id_list::{SoupIdLists, selects_ids_only},
     inputs::{GroupedSoupInput, SoupChannelReads, SoupInput},
     loaders::{AgentSessionEntityLoader, PrimarySoupItemLoader, SoupItemDataLoader},
     objects::{
-        GraphqlSoupAgentSession, GraphqlSoupEmailThread, GraphqlSoupEntity, GroupedSoup,
-        SoupEntityEdges, SoupPage, SoupPatch,
+        EmailThreadPrefetch, GraphqlSoupAgentSession, GraphqlSoupEmailThread, GraphqlSoupEntity,
+        GroupedSoup, SoupEntityEdges, SoupPage, SoupPagePrefetch, SoupPatch,
     },
 };
 
@@ -380,7 +381,14 @@ where
     let Cached(MultiEmailLinkExtractor(links, _)) =
         extract_part::<Cached<MultiEmailLinkExtractor<E, Auth>>, St>(ctx).await?;
     let link_ids: Vec<_> = links.into_iter().map(|link| link.id).collect();
-    let request = input.into_request(macro_user_id.clone(), link_ids.clone())?;
+    let id_lists = ctx
+        .data_opt::<SoupIdLists>()
+        .filter(|_| selects_ids_only(ctx));
+    let continuation = input.continuation_cursor().map(str::to_owned);
+    let (request, sort_key) = match id_lists {
+        Some(_) => input.into_keyed_request(macro_user_id, link_ids)?,
+        None => (input.into_request(macro_user_id, link_ids)?, None),
+    };
     span.record("limit", request.limit);
     if channel_reads == SoupChannelReads::Primary && !request.is_channel_directory_page() {
         return Err(async_graphql::Error::new(PRIMARY_CHANNEL_READS_REFUSED));
@@ -395,25 +403,58 @@ where
     .await?;
     let team_receipt = team.entity_access_receipt;
 
+    // An ID-only page of a sync stream is a slice of the lane's ordered list.
+    if let Some(id_lists) = id_lists
+        && let Some(sort_key) = sort_key
+    {
+        let page = id_lists
+            .page(
+                service,
+                request,
+                sort_key,
+                continuation.as_deref(),
+                team_receipt,
+            )
+            .await?;
+        return Ok(SoupPage::new(page));
+    }
+
     let include_frecency = ctx
         .look_ahead()
         .field("items")
         .field("frecencyScore")
         .exists();
 
-    if include_frecency {
+    let page = if include_frecency {
         let page = service
             .get_user_soup_with_frecency_and_projection(request, team_receipt)
             .await?;
-        Ok(SoupPage::new_from_enriched_with_projection(
-            page.type_erase(),
-        ))
+        SoupPage::new_from_enriched_with_projection(page.type_erase())
     } else {
         let page = service
             .get_user_soup_with_projection(request, team_receipt)
             .await?;
-        Ok(SoupPage::new_with_projection(page.type_erase()))
+        SoupPage::new_with_projection(page.type_erase())
+    };
+    if ctx.data_opt::<SoupPagePrefetch>().is_some() {
+        let prefetch = EmailThreadPrefetch::for_soup_items(ctx);
+        let thread_ids = page.email_thread_ids();
+        if prefetch.any() && !thread_ids.is_empty() {
+            prefetch_email_threads::<Edges>(ctx, thread_ids, prefetch).await;
+        }
     }
+    Ok(page)
+}
+
+/// Loads the page's email threads' per-thread data in one batch per loader.
+/// Boxed so its loaders' futures get no slot in the resolver's poll frame
+/// (see `SoupIdLists::page`).
+fn prefetch_email_threads<'a, Edges: SoupEntityEdges>(
+    ctx: &'a Context<'_>,
+    thread_ids: Vec<uuid::Uuid>,
+    prefetch: EmailThreadPrefetch,
+) -> Pin<Box<dyn Future<Output = ()> + Send + 'a>> {
+    Box::pin(Edges::prefetch_email_threads(ctx, thread_ids, prefetch))
 }
 
 #[cfg(test)]

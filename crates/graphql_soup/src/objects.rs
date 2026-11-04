@@ -41,6 +41,57 @@ use uuid::Uuid;
 
 use crate::loaders::SoupItemDataLoader;
 
+/// Request data marking that the request's email loaders cache their values,
+/// so a Soup page may load its email threads' per-thread data up front
+/// ([`SoupEntityEdges::prefetch_email_threads`]). Inserted for streamed sync
+/// pages, which are query-only.
+#[derive(Clone, Copy, Debug, Default)]
+pub struct SoupPagePrefetch;
+
+/// Which per-thread email data a Soup page's selection reads.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub struct EmailThreadPrefetch {
+    /// Mail projections: `cacheProjection` and the Mail draft and preview fields.
+    pub mail_projections: bool,
+    /// Canonical thread metadata: link, timestamps and reminder fields.
+    pub metadata: bool,
+}
+
+impl EmailThreadPrefetch {
+    /// Email-thread fields read through the Mail projection loader.
+    const MAIL_PROJECTION_FIELDS: [&'static str; 5] = [
+        "cacheProjection",
+        "mailDraftState",
+        "mailAllPreview",
+        "mailDraftPreview",
+        "mailSentPreview",
+    ];
+    /// Email-thread fields read through the metadata loader.
+    const METADATA_FIELDS: [&'static str; 6] = [
+        "linkId",
+        "latestInboundMessageTs",
+        "hasReceivedMail",
+        "reminderReturnedAt",
+        "latestOutboundMessageTs",
+        "latestNonSpamMessageTs",
+    ];
+
+    /// What the `items` selection of a `soup` field context reads.
+    pub(crate) fn for_soup_items(ctx: &Context<'_>) -> Self {
+        let items = ctx.look_ahead().field("items");
+        let selects = |fields: &[&str]| fields.iter().any(|field| items.field(field).exists());
+        Self {
+            mail_projections: selects(&Self::MAIL_PROJECTION_FIELDS),
+            metadata: selects(&Self::METADATA_FIELDS),
+        }
+    }
+
+    /// Whether anything is prefetched.
+    pub fn any(self) -> bool {
+        self.mail_projections || self.metadata
+    }
+}
+
 /// Opaque, version-framed server-fact supplement selected only by cache-aware
 /// Soup operations.
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -103,6 +154,20 @@ pub trait SoupEntityEdges: ObjectType + Clone + Send + Sync + 'static {
         ctx: &Context<'_>,
         email_thread_id: Uuid,
     ) -> impl Future<Output = async_graphql::Result<Option<String>>> + Send;
+
+    /// Loads what a page's email threads read per thread, for all of them in
+    /// one batch, into the request's loaders. Each thread's fields then read
+    /// the loaders' cache, instead of batching whatever few keys reach a
+    /// loader within its delay. Called only when the request's loaders cache
+    /// ([`SoupPagePrefetch`]); the default does nothing.
+    fn prefetch_email_threads(
+        ctx: &Context<'_>,
+        email_thread_ids: Vec<Uuid>,
+        prefetch: EmailThreadPrefetch,
+    ) -> impl Future<Output = ()> + Send {
+        let _ = (ctx, email_thread_ids, prefetch);
+        async {}
+    }
 
     /// Additional fields attached only to initiative entities.
     type InitiativeEdges: ObjectType + Clone + Send + Sync + 'static;
@@ -192,6 +257,17 @@ impl<E: SoupEntityEdges> SoupPage<E> {
                 .collect(),
             next_cursor: page.next_cursor,
         }
+    }
+
+    /// The page's email threads, in page order.
+    pub(crate) fn email_thread_ids(&self) -> Vec<Uuid> {
+        self.items
+            .iter()
+            .filter_map(|item| match item {
+                GraphqlSoupEntity::EmailThread(thread) => Some(thread.0.thread.id),
+                _ => None,
+            })
+            .collect()
     }
 
     /// Construct a GraphQL page from frecency-enriched Soup items.

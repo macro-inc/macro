@@ -9,9 +9,9 @@ use email::domain::models::{
 
 use crate::loaders::{
     EmailContentKey, EmailContentLoad, EmailContentLoader, EmailContentMessage,
-    EmailThreadMailProjectionLoad, EmailThreadMailProjectionLoader, EmailThreadMetadataLoad,
-    EmailThreadMetadataLoader, SoupEmailContentEdgeReader, SoupEmailThreadMailProjectionEdgeReader,
-    SoupEmailThreadMetadataEdgeReader,
+    EmailThreadMailProjectionDataLoader, EmailThreadMailProjectionLoad,
+    EmailThreadMetadataDataLoader, EmailThreadMetadataLoad, SoupEmailContentEdgeReader,
+    SoupEmailThreadMailProjectionEdgeReader, SoupEmailThreadMetadataEdgeReader,
 };
 
 const FULL_MESSAGE_FIELDS: &[&str] = &[
@@ -500,7 +500,7 @@ pub async fn load_email_thread_metadata<R>(
 where
     R: SoupEmailThreadMetadataEdgeReader,
 {
-    let loader = ctx.data::<DataLoader<EmailThreadMetadataLoader<R>>>()?;
+    let loader = ctx.data::<EmailThreadMetadataDataLoader<R>>()?;
     match loader.load_one(thread_id).await? {
         Some(EmailThreadMetadataLoad::Found(metadata)) => Ok(metadata),
         Some(EmailThreadMetadataLoad::Unavailable(_)) | None => Err(async_graphql::Error::new(
@@ -517,7 +517,7 @@ pub async fn load_email_thread_mail_projection<R>(
 where
     R: SoupEmailThreadMailProjectionEdgeReader,
 {
-    let loader = ctx.data::<DataLoader<EmailThreadMailProjectionLoader<R>>>()?;
+    let loader = ctx.data::<EmailThreadMailProjectionDataLoader<R>>()?;
     match loader.load_one(thread_id).await? {
         Some(EmailThreadMailProjectionLoad::Found(projection)) => Ok(projection),
         Some(EmailThreadMailProjectionLoad::Unavailable(_)) | None => Err(
@@ -571,7 +571,10 @@ mod tests {
     use uuid::Uuid;
 
     use super::*;
-    use crate::{EmailThreadUnavailable, SoupEmailContentEdgeReader, email_content_loader};
+    use crate::{
+        EmailContentLimits, EmailThreadUnavailable, SoupEmailContentEdgeReader,
+        email_content_loader,
+    };
 
     struct ContentQuery;
 
@@ -694,7 +697,11 @@ mod tests {
     async fn executes_paginated_messages_with_request_scoped_loader() {
         let user_id = MacroUserIdStr::try_from_email("reader@example.com").unwrap();
         let schema = Schema::build(ContentQuery, EmptyMutation, EmptySubscription)
-            .data(email_content_loader(user_id, ContentReader))
+            .data(email_content_loader(
+                user_id,
+                ContentReader,
+                EmailContentLimits::PER_OPERATION,
+            ))
             .finish();
 
         let response = schema
@@ -712,7 +719,11 @@ mod tests {
     async fn executes_content_field_with_request_scoped_loader() {
         let user_id = MacroUserIdStr::try_from_email("reader@example.com").unwrap();
         let schema = Schema::build(ContentQuery, EmptyMutation, EmptySubscription)
-            .data(email_content_loader(user_id, ContentReader))
+            .data(email_content_loader(
+                user_id,
+                ContentReader,
+                EmailContentLimits::PER_OPERATION,
+            ))
             .finish();
 
         let response = schema

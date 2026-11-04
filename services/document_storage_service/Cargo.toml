@@ -280,6 +280,7 @@ soup_realtime = { path = "../../crates/soup_realtime", default-features = false,
   "consumer",
   "outbound",
 ] }
+soup_sync_stream = { path = "../../crates/soup_sync_stream" }
 sqlx = { workspace = true }
 sqs_client = { path = "../../crates/sqs_client", default-features = false, features = [
   "document",
