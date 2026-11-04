@@ -29,7 +29,7 @@ pub use models::{
     FocusRecord, FocusSignals, FocusThread, FocusVerdict, SentNote, StaleThread,
     StoredClassification, ThreadFocus,
 };
-pub use ports::{FocusClassifier, FocusClassifierError, FocusStore, ProfileSource};
+pub use ports::{FocusClassifier, FocusClassifierError, FocusNotifier, FocusStore, ProfileSource};
 pub use questions::{FOCUS_QUESTIONS, FocusQuestion};
 pub use rule::{FOCUS_RULE_VERSION, decide};
 pub use service::{ClassifyOutcome, FocusQueries, FocusService, SweepReport};
