@@ -3613,6 +3613,77 @@
           }
         }
       }
+    },
+    "/voices": {
+      "get": {
+        "tags": ["voices"],
+        "summary": "Provider voice metadata for the Invite agent form and agent settings.",
+        "operationId": "get_agent_voices",
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/Voice"
+                  }
+                }
+              }
+            }
+          },
+          "403": {
+            "description": ""
+          },
+          "502": {
+            "description": ""
+          }
+        }
+      }
+    },
+    "/voices/{model}/sample": {
+      "get": {
+        "tags": ["voices"],
+        "summary": "Cached audio generated through Macro using a fixed preview line.",
+        "operationId": "get_agent_voice_sample",
+        "parameters": [
+          {
+            "name": "model",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "WAV audio sample",
+            "content": {
+              "audio/wav": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "type": "integer",
+                    "format": "int32",
+                    "minimum": 0
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": ""
+          },
+          "403": {
+            "description": ""
+          },
+          "502": {
+            "description": ""
+          }
+        }
+      }
     }
   },
   "components": {
@@ -7531,6 +7602,39 @@
                 "description": "The explicit team access level. Omit to leave unchanged or pass `null` to disable team\nsharing. Only the actual owner may change this setting; `owner` is not an allowed level."
               }
             ]
+          }
+        }
+      },
+      "Voice": {
+        "type": "object",
+        "description": "One Aura-2 voice returned by the provider catalog.",
+        "required": ["model", "name", "accent", "tags", "languages"],
+        "properties": {
+          "accent": {
+            "type": "string",
+            "description": "Provider's accent label."
+          },
+          "languages": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "Languages this voice supports."
+          },
+          "model": {
+            "type": "string",
+            "description": "Exact model selector."
+          },
+          "name": {
+            "type": "string",
+            "description": "Provider's voice name."
+          },
+          "tags": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "Provider's gender and character tags."
           }
         }
       },

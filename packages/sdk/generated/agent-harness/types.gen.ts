@@ -2713,6 +2713,32 @@ export type UpdateSharePermissionRequestV2 = {
 };
 
 /**
+ * One Aura-2 voice returned by the provider catalog.
+ */
+export type Voice = {
+    /**
+     * Provider's accent label.
+     */
+    accent: string;
+    /**
+     * Languages this voice supports.
+     */
+    languages: Array<string>;
+    /**
+     * Exact model selector.
+     */
+    model: string;
+    /**
+     * Provider's voice name.
+     */
+    name: string;
+    /**
+     * Provider's gender and character tags.
+     */
+    tags: Array<string>;
+};
+
+/**
  * A client-minted id deduplicates warm calls without creating a conversation.
  */
 export type WarmAgentSessionRequest = {
@@ -4429,3 +4455,45 @@ export type ExtractResponses = {
 };
 
 export type ExtractResponse = ExtractResponses[keyof ExtractResponses];
+
+export type GetAgentVoicesData = {
+    body?: never;
+    path?: never;
+    query?: never;
+    url: '/voices';
+};
+
+export type GetAgentVoicesErrors = {
+    403: unknown;
+    502: unknown;
+};
+
+export type GetAgentVoicesResponses = {
+    200: Array<Voice>;
+};
+
+export type GetAgentVoicesResponse = GetAgentVoicesResponses[keyof GetAgentVoicesResponses];
+
+export type GetAgentVoiceSampleData = {
+    body?: never;
+    path: {
+        model: string;
+    };
+    query?: never;
+    url: '/voices/{model}/sample';
+};
+
+export type GetAgentVoiceSampleErrors = {
+    400: unknown;
+    403: unknown;
+    502: unknown;
+};
+
+export type GetAgentVoiceSampleResponses = {
+    /**
+     * WAV audio sample
+     */
+    200: Array<number>;
+};
+
+export type GetAgentVoiceSampleResponse = GetAgentVoiceSampleResponses[keyof GetAgentVoiceSampleResponses];

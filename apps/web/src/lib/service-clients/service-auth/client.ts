@@ -24,6 +24,7 @@ import type {
 } from './ai-billing-types';
 import { fetchWithAuth as _fetchWithAuth } from './fetch';
 import type {
+  AgentVoice,
   CheckoutSessionV2Response,
   ComputerSize,
   CreateTeamAgent,
@@ -1380,6 +1381,19 @@ export const authServiceClient = {
     return fetchWithAuth<TeamAgents>(`${authHost}/team_agents`, {
       method: 'GET',
     });
+  },
+
+  getTeamAgentVoice(userId: string) {
+    return fetchWithAuth<AgentVoice>(
+      `${authHost}/team_agents/${encodeURIComponent(userId)}/voice`,
+      { method: 'GET' }
+    );
+  },
+  setTeamAgentVoice(userId: string, voice: AgentVoice) {
+    return fetchWithAuth<AgentVoice>(
+      `${authHost}/team_agents/${encodeURIComponent(userId)}/voice`,
+      { method: 'PUT', body: JSON.stringify(voice) }
+    );
   },
 
   getTeamAgentSizes() {

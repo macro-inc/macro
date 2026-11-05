@@ -59,6 +59,7 @@ import {
   Show,
   Suspense,
 } from 'solid-js';
+import { AgentVoiceDialog } from './components/agent-voice-dialog';
 import { InviteAgentDialog } from './components/invite-agent-dialog';
 import { MemberInviteActions } from './components/member-invite-actions';
 import { TeamAgentRow } from './components/team-agent-row';
@@ -281,16 +282,18 @@ export function TeamMembers(props: { team: TeamSummary }) {
   const invitesQuery = useTeamInvitesQuery(() => props.team.id);
   const agentFlag = useFeatureFlag(enableTeamAgents);
   const canManageAgents = () => isAdminOrOwner() && !!agentFlag().enabled;
-  const agentsQuery = useTeamAgentsQuery(() => props.team.id, canManageAgents);
+  const canViewAgents = () => !!agentFlag().enabled;
+  const agentsQuery = useTeamAgentsQuery(() => props.team.id, canViewAgents);
   usePending(
     'team-agent.roster',
-    () => canManageAgents() && agentsQuery.isLoading
+    () => canViewAgents() && agentsQuery.isLoading
   );
   const agents = () =>
-    canManageAgents() && queryReadyGate(agentsQuery)
+    canViewAgents() && queryReadyGate(agentsQuery)
       ? agentsQuery.data.agents
       : [];
   const [inviteAgentOpen, setInviteAgentOpen] = createSignal(false);
+  const [voiceAgent, setVoiceAgent] = createSignal<TeamAgent>();
   const [removeAgent, setRemoveAgent] = createSignal<TeamAgent>();
   const deleteAgent = useDeleteTeamAgentMutation();
   const retryAgent = useRetryTeamAgentMutation();
@@ -461,12 +464,12 @@ export function TeamMembers(props: { team: TeamSummary }) {
         >
           <Show
             when={
-              canManageAgents() && agentsQuery.isPending && !agentsQuery.isError
+              canViewAgents() && agentsQuery.isPending && !agentsQuery.isError
             }
           >
             <p role="status">Loading agents…</p>
           </Show>
-          <Show when={canManageAgents() && agentsQuery.isError}>
+          <Show when={canViewAgents() && agentsQuery.isError}>
             <div role="alert" class="text-sm text-failure">
               Couldn't refresh agents.{' '}
               <Button
@@ -583,7 +586,7 @@ export function TeamMembers(props: { team: TeamSummary }) {
                     />
                   )}
                 </For>
-                <Show when={canManageAgents()}>
+                <Show when={canViewAgents()}>
                   <Suspense
                     fallback={
                       <p class="p-4" role="status">
@@ -607,25 +610,34 @@ export function TeamMembers(props: { team: TeamSummary }) {
                             retryAgent.isError &&
                             retryAgent.variables?.userId === agent.userId
                           }
-                          onRetry={() => {
-                            if (
-                              !canManageAgents() ||
-                              retryAgent.isPending ||
-                              !canRetryTeamAgent(agent)
-                            )
-                              return;
-                            retryAgent.mutate({
-                              teamId: props.team.id,
-                              userId: agent.userId,
-                            });
-                          }}
-                          onRemove={() => {
-                            if (
-                              canManageAgents() &&
-                              agent.payment !== 'pending'
-                            )
-                              setRemoveAgent(agent);
-                          }}
+                          onVoice={() => setVoiceAgent(agent)}
+                          onRetry={
+                            canManageAgents()
+                              ? () => {
+                                  if (
+                                    !canManageAgents() ||
+                                    retryAgent.isPending ||
+                                    !canRetryTeamAgent(agent)
+                                  )
+                                    return;
+                                  retryAgent.mutate({
+                                    teamId: props.team.id,
+                                    userId: agent.userId,
+                                  });
+                                }
+                              : undefined
+                          }
+                          onRemove={
+                            canManageAgents()
+                              ? () => {
+                                  if (
+                                    canManageAgents() &&
+                                    agent.payment !== 'pending'
+                                  )
+                                    setRemoveAgent(agent);
+                                }
+                              : undefined
+                          }
                         />
                       )}
                     </For>
@@ -636,6 +648,11 @@ export function TeamMembers(props: { team: TeamSummary }) {
           </Show>
         </SettingsSection>
 
+        <AgentVoiceDialog
+          teamId={props.team.id}
+          agent={voiceAgent()}
+          onClose={() => setVoiceAgent(undefined)}
+        />
         <Show when={canManageAgents()}>
           <InviteAgentDialog
             teamId={props.team.id}

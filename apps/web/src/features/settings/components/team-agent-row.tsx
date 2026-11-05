@@ -12,7 +12,7 @@ export function AgentStatusPill(props: {
   agent: TeamAgent;
   retrying?: boolean;
   retryError?: boolean;
-  onRetry(): void;
+  onRetry?(): void;
 }) {
   const computerStatus = () =>
     match(props.agent.status)
@@ -27,7 +27,7 @@ export function AgentStatusPill(props: {
       .with('unbilled', () => 'Payment failed / not billed')
       .with('paid', 'comped', null, undefined, () => computerStatus())
       .exhaustive(() => computerStatus());
-  const canRetry = () => canRetryTeamAgent(props.agent);
+  const canRetry = () => !!props.onRetry && canRetryTeamAgent(props.agent);
   const step = () =>
     match(props.agent.setup?.step)
       .with('paying', () => 'Confirming payment')
@@ -89,7 +89,7 @@ export function AgentStatusPill(props: {
           variant="ghost"
           size="sm"
           disabled={props.retrying}
-          onClick={() => canRetry() && props.onRetry()}
+          onClick={() => canRetry() && props.onRetry?.()}
         >
           Retry
         </Button>
@@ -109,8 +109,9 @@ export function TeamAgentRow(props: {
   avatar: JSX.Element;
   retrying: boolean;
   retryError?: boolean;
-  onRetry(): void;
-  onRemove(): void;
+  onRetry?(): void;
+  onRemove?(): void;
+  onVoice?(): void;
 }) {
   const lastActive = () => {
     if (props.agent.status === 'provisioning' && props.agent.setup) {
@@ -146,6 +147,7 @@ export function TeamAgentRow(props: {
       <TeamAgentMenu
         agent={props.agent}
         onRemove={props.onRemove}
+        onVoice={props.onVoice}
         onRetry={props.onRetry}
         retrying={props.retrying}
       />
@@ -157,7 +159,8 @@ export function TeamAgentMenu(props: {
   agent: TeamAgent;
   retrying?: boolean;
   onRetry?(): void;
-  onRemove(): void;
+  onRemove?(): void;
+  onVoice?(): void;
 }) {
   return (
     <Dropdown>
@@ -180,12 +183,21 @@ export function TeamAgentMenu(props: {
             {t('common.retry')}
           </Dropdown.Item>
         </Show>
-        <Dropdown.Item
-          disabled={props.agent.payment === 'pending'}
-          onSelect={() => props.agent.payment !== 'pending' && props.onRemove()}
-        >
-          {t('common.removeTeamAgent')}
-        </Dropdown.Item>
+        <Show when={props.onVoice}>
+          <Dropdown.Item onSelect={() => props.onVoice?.()}>
+            Change voice
+          </Dropdown.Item>
+        </Show>
+        <Show when={props.onRemove}>
+          <Dropdown.Item
+            disabled={props.agent.payment === 'pending'}
+            onSelect={() =>
+              props.agent.payment !== 'pending' && props.onRemove?.()
+            }
+          >
+            {t('common.removeTeamAgent')}
+          </Dropdown.Item>
+        </Show>
       </Dropdown.Content>
     </Dropdown>
   );

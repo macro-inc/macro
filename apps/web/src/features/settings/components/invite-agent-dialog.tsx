@@ -7,6 +7,7 @@ import {
   useTeamAgentQuoteQuery,
   useTeamAgentSizesQuery,
 } from '@queries/team-agents';
+import { useVoicePickerSource } from '@queries/team-agents/voices';
 import type { ComputerSize } from '@service-auth/generated/schemas';
 import { createSignal, Show, Suspense } from 'solid-js';
 import { InviteAgentForm } from './invite-agent-form';
@@ -20,6 +21,7 @@ function ConnectedInviteAgentForm(props: { teamId: string; onClose(): void }) {
     () => true
   );
   const create = useCreateTeamAgentMutation();
+  const voices = useVoicePickerSource(() => props.teamId);
   usePending('team-agent.sizes', () => sizes.isLoading);
   usePending('team-agent.quote', () => quote.isLoading);
   return (
@@ -29,6 +31,7 @@ function ConnectedInviteAgentForm(props: { teamId: string; onClose(): void }) {
       onClose={props.onClose}
       size={size()}
       setSize={setSize}
+      voices={voices}
       source={{
         specsForSize: (value) =>
           queryReadyGate(sizes)

@@ -419,3 +419,17 @@ push producer, notification/activity, permission and answer phases, and status
 HTTP requests; connection and cancellation outcomes end the incoming trace.
 For local collector verification and the exporter fixture, see
 [native call tracing](../development/android.md#native-call-tracing).
+
+## Calling an agent teammate
+
+Ring the agent or start a live DM call with it. The brain also joins meetings it
+is invited to and channels explicitly opted in through `config/calls.json`.
+Customer channel exclusions and the hang-up list take precedence. The agent
+uses the voice selected during invitation or **Team → Members → More → Change
+voice**. A settings change applies to its next call.
+
+The agent listens per participant, can be interrupted while speaking, and can
+hand off longer work to its normal work tier. That work continues after the
+call and reports in the conversation. On leaving, the agent remembers a summary
+and posts it in the channel or DM; a standalone meeting uses a DM with its host.
+Saying goodbye or asking it to hang up prevents automatic rejoining of that call.

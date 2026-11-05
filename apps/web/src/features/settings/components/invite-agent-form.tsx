@@ -18,6 +18,8 @@ import {
   type JSX,
   Show,
 } from 'solid-js';
+import { recommendedVoice, type VoicePickerSource } from '../core/voices';
+import { VoicePicker } from './voice-picker';
 
 export type AgentInviteSource = {
   quote: Accessor<TeamAgentQuote | undefined>;
@@ -30,7 +32,7 @@ export type AgentInviteSource = {
   create(request: CreateTeamAgent, parentSpan?: Span): Promise<unknown>;
 };
 
-function InviteSurface(props: {
+export function AgentFormSurface(props: {
   open: boolean;
   title: string;
   close(): void;
@@ -100,10 +102,15 @@ export function InviteAgentForm(props: {
   size: ComputerSize;
   setSize(size: ComputerSize): void;
   source: AgentInviteSource;
+  voices?: VoicePickerSource;
 }) {
   const [name, setName] = createSignal('');
   const [role, setRole] = createSignal('');
   const [personality, setPersonality] = createSignal('');
+  const [chosenVoice, setChosenVoice] = createSignal<string>();
+  const voice = () =>
+    chosenVoice() ??
+    recommendedVoice(props.voices?.choices() ?? [], personality())?.model;
   const [avatar, setAvatar] = createSignal('');
   const [review, setReview] = createSignal(false);
   const [submitting, setSubmitting] = createSignal(false);
@@ -132,6 +139,7 @@ export function InviteAgentForm(props: {
     !!name().trim() &&
     !!role().trim() &&
     !!personality().trim() &&
+    (!props.voices || !!voice()) &&
     avatarValid();
   const busy = () => submitting() || props.source.pending();
   const close = () => {
@@ -172,6 +180,7 @@ export function InviteAgentForm(props: {
               name: name().trim(),
               jobDescription: role().trim(),
               personality: personality().trim(),
+              voice: voice(),
               size: props.size,
               expectedIncluded: quote.included,
               avatarUrl: avatar().trim() || undefined,
@@ -209,7 +218,7 @@ export function InviteAgentForm(props: {
       currency: quote.currency,
     }).format(amount / 100);
   return (
-    <InviteSurface
+    <AgentFormSurface
       open={props.open}
       title={review() ? 'Confirm agent invitation' : 'Invite agent'}
       close={close}
@@ -239,6 +248,7 @@ export function InviteAgentForm(props: {
                       },
                     }
                   );
+                  setChosenVoice(voice());
                   setReview(true);
                   operation.afterPaint();
                 }}
@@ -347,6 +357,16 @@ export function InviteAgentForm(props: {
             <TextField.Label>Personality</TextField.Label>
             <TextField.TextArea required />
           </TextField>
+          <Show when={props.voices}>
+            {(source) => (
+              <VoicePicker
+                source={source()}
+                value={voice()}
+                onChange={setChosenVoice}
+                disabled={busy()}
+              />
+            )}
+          </Show>
           <RadioGroup
             value={props.size}
             onChange={(value) => {
@@ -393,6 +413,6 @@ export function InviteAgentForm(props: {
           </TextField>
         </div>
       </Show>
-    </InviteSurface>
+    </AgentFormSurface>
   );
 }

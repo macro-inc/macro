@@ -261,7 +261,10 @@ shows **Included for Macro**, with no currency charge.
    **Personality**. Choose **Standard**, **Large**, or **XL** using the quoted
    vCPU, RAM, and disk specifications beside each size (available even without
    a paid plan), and optionally enter
-   an HTTPS **Avatar URL**.
+   an HTTPS **Avatar URL**. Choose a **Voice** and use **Play sample** to hear
+   the fixed preview line. The suggested voice matches the persona's descriptive
+   tags; choosing another voice keeps that choice through price review.
+   A playing sample stops when the voice changes or the form closes.
 2. Choose **Review price**. Review the server's **Agent seat**, **Computer**,
    and **Total per month/year**, in its quoted currency. **Back** preserves
    the draft. A loading or failed quote disables confirmation; **Try again**
@@ -322,6 +325,15 @@ cancellation on desktop, phone, and tablet.
 The backend-free browser check exercises the real invitation form with scripted
 quotes and purchases:
 `bunx playwright test --config src/features/settings/browser-test/team-agents/playwright.config.ts`.
+
+The agent row's **More → Change voice** opens the same voice picker later.
+Team admins and the agent's creator can save a new voice; a creator who is no
+longer an admin sees only their own agents and cannot retry or remove computers.
+**Save voice** commits `config/voice.json` in the agent's repository and takes
+effect on the next call. Failed saves preserve the selection for retry. Desktop
+uses the existing dialog; phone uses the settings drawer with reachable actions.
+Samples are synthesized through Macro with a fixed line, cached, and billed to
+the team when synthesis is needed. Provider credentials stay at the gateway.
 
 ### Navigation
 
