@@ -269,15 +269,19 @@ async fn a_person_can_ask_an_agent_to_manage_them() {
 }
 
 #[tokio::test]
-async fn an_agent_can_manage_another_agent() {
-    let (service, _, _) = service();
+async fn an_agent_can_never_be_managed() {
+    let (service, _, delivery) = service();
 
-    let grant = service
+    let offered = service
         .request(&user(AGENT), &user(AGENT_2), AccountManagerRole::Manager)
-        .await
-        .unwrap();
+        .await;
+    let asked = service
+        .request(&user(AGENT), &user(AGENT_2), AccountManagerRole::Managed)
+        .await;
 
-    assert_eq!(grant.managed_user_id.as_ref(), AGENT_2);
+    assert!(matches!(offered, Err(AccountManagerError::BadRequest(_))));
+    assert!(matches!(asked, Err(AccountManagerError::BadRequest(_))));
+    assert!(delivery.posts.lock().unwrap().is_empty());
 }
 
 #[tokio::test]

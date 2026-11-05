@@ -4,7 +4,7 @@ import type { MacroClient } from '../../utils/client';
 import { MacroEntity } from '../entity';
 import { User } from '../users/user';
 
-/** A request for an agent account to manage another account, and what became of it. */
+/** A request for an agent account to manage a person's account, and what became of it. */
 export class AccountManagerGrant extends MacroEntity<AccountManagerGrantRecord> {
   /** Construct a lazy grant handle. */
   static byId(client: MacroClient, id: string): AccountManagerGrant {

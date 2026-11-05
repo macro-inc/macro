@@ -22,7 +22,7 @@ pub const CARD_TAG: &str = "m-account-manager-request";
 #[serde(rename_all = "camelCase")]
 #[strum(serialize_all = "camelCase")]
 pub enum AccountManagerRole {
-    /// The account being managed.
+    /// The person whose account is being managed.
     Managed,
     /// The agent account doing the managing.
     Manager,

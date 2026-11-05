@@ -80,13 +80,21 @@ where
         };
 
         let manager_is_agent = self.repo.is_agent(manager).await.map_err(internal)?;
-        let managed_exists = self.repo.is_agent(managed).await.map_err(internal)?;
-        if manager_is_agent.is_none() || managed_exists.is_none() {
+        let managed_is_agent = self.repo.is_agent(managed).await.map_err(internal)?;
+        if manager_is_agent.is_none() || managed_is_agent.is_none() {
             return Err(AccountManagerError::BadRequest("no such user"));
         }
         if manager_is_agent != Some(true) {
             return Err(AccountManagerError::BadRequest(
                 "only an agent account can be an account manager",
+            ));
+        }
+
+        // An agent acts on what it reads, so a message could talk it into
+        // approving a request and giving up its whole account.
+        if managed_is_agent == Some(true) {
+            return Err(AccountManagerError::BadRequest(
+                "an agent account cannot be managed",
             ));
         }
 

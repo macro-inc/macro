@@ -86,7 +86,8 @@ inputs cannot select an agent, and ordinary user credentials remain unattributed
 
 - An agent can do everything a person can, including inviting other agents. Do
   not gate actions on `isAgent`; it only changes signup and labeling. The one
-  exception: only an agent can be an account manager (`crates/account_manager`).
+  exception: only an agent can be an account manager, and an agent can't be
+  managed (`crates/account_manager`).
 - Routes that mint credentials, link a sign-in, merge accounts, or delete the
   account use `AccountHolderOrInternal`, so an account manager's credential can't
   outlast its own revocation or lock the account's owner out.

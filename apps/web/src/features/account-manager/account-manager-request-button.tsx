@@ -11,8 +11,8 @@ import { Button, Dialog, Panel } from '@ui';
 import { createSignal, Show } from 'solid-js';
 
 /**
- * Starts an account manager request from a DM, when one side is an agent
- * account: the manager is always an agent.
+ * Starts an account manager request from a DM between a person and an agent
+ * account: the manager is always the agent, and an agent can't be managed.
  */
 export function AccountManagerRequestButton(props: { channelId: string }) {
   const userId = useUserId();
@@ -46,7 +46,7 @@ export function AccountManagerRequestButton(props: { channelId: string }) {
   };
 
   return (
-    <Show when={counterparty() && (counterpartyIsAgent() || viewerIsAgent())}>
+    <Show when={counterparty() && counterpartyIsAgent() !== viewerIsAgent()}>
       <Button
         size="icon-sm"
         variant="ghost"

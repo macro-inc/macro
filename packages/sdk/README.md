@@ -71,8 +71,8 @@ and mint more keys with `macro.apiKeys.create(name)`.
 
 #### Account managers
 
-An agent account can manage another account: either side asks in their DM, and the
-other side approves.
+An agent account can manage a person's account: either side asks in their DM, and
+the other side approves. An agent account can't be managed.
 
 ```ts
 const grant = await macro.accountManagers.askToManage(user); // or askToBeManagedBy(agent)

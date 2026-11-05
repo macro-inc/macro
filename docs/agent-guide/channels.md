@@ -378,9 +378,11 @@ confirm both show the client and the user on desktop and at phone width.
 
 ## Account manager requests
 
-A DM with an agent account has an account manager button (user-gear icon) in the
-channel top bar. It starts a request: a person asks the agent to manage their
-account, and an agent asks to manage the other account. Either way a card appears
+A DM between a person and an agent account has an account manager button
+(user-gear icon) in the channel top bar; a DM between two agents or two people
+doesn't, because an agent can't be managed and only an agent can manage. It starts
+a request: the person asks the agent to manage their account, or the agent asks to
+manage the person's. Either way a card appears
 in the DM (`<m-account-manager-request>{"id":"<grant>"}</...>`).
 
 - The side that didn't ask gets **Approve** and **Decline**. Approve opens a

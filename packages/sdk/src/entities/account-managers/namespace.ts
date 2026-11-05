@@ -3,7 +3,7 @@ import type { MacroClient } from '../../utils/client';
 import type { User } from '../users/user';
 import { AccountManagerGrant } from './grant';
 
-/** Account managers: an agent account's full access to another account. */
+/** Account managers: an agent account's full access to a person's account. */
 export class AccountManagerNamespace {
   constructor(private readonly client: MacroClient) {}
 
@@ -19,12 +19,12 @@ export class AccountManagerNamespace {
     );
   }
 
-  /** Ask to manage `user`'s account, in your DM. The caller must be an agent account. */
+  /** Ask to manage `user`'s account, in your DM. The caller must be an agent account and `user` a person. */
   async askToManage(user: User): Promise<AccountManagerGrant> {
     return this.request(user, 'manager');
   }
 
-  /** Ask `user`, an agent account, to manage the caller's account, in your DM. */
+  /** Ask `user`, an agent account, to manage the caller's account, in your DM. The caller must be a person. */
   async askToBeManagedBy(user: User): Promise<AccountManagerGrant> {
     return this.request(user, 'managed');
   }

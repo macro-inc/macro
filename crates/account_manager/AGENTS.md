@@ -2,7 +2,7 @@
 
 ## What it is
 
-Part of account security: lets an agent account (`User."isAgent"`) manage another
+Part of account security: lets an agent account (`User."isAgent"`) manage a person's
 account. Either side asks in their DM, the other side approves, and the agent
 claims a credential once. The managed account revokes it from settings.
 
@@ -34,9 +34,10 @@ claims a credential once. The managed account revokes it from settings.
 
 ## Gotchas
 
-- The manager is always an agent; the managed account can be a person or another
-  agent. Whichever side didn't ask responds, and an agent may respond with its own
-  API key.
+- The manager is always an agent and the managed account is always a person, so
+  there are no chains. An agent acts on what it reads, so a message could talk it
+  into approving a request and giving up its account. Whichever side didn't ask
+  responds; a manager may accept with its own API key.
 - A credential is a normal `mak_` key to the SDK, but it lives here, not in
   `"UserApiKey"`, so it never appears in the API Keys tab or counts toward its
   limit. Only its hash is stored.
