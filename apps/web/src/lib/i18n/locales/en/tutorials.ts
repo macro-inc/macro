@@ -29,7 +29,7 @@ export default {
   docsBlock: 'Macro Docs',
   docsSnippet:
     'Mention anything, edit live with your team, and agents with a live cursor',
-  docsLength: '1:48',
+  docsLength: '1:46',
   tasksTitle: 'Learn how to use Macro Tasks',
   tasksBlock: 'Macro Tasks',
   tasksSnippet:
