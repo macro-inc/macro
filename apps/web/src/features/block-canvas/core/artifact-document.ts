@@ -52,11 +52,14 @@ const entry = (
  * element. An unknown component keeps its children, and an unknown style is dropped.
  */
 function expandLibrary(parsed: Document, library: ArtifactLibrary) {
+  // One work list rather than re-querying after each expansion, which is quadratic.
+  const pending = Array.from(parsed.querySelectorAll('macro-component'));
   let expansions = 0;
   let expandedLength = 0;
-  for (;;) {
-    const use = parsed.querySelector('macro-component');
-    if (!use) break;
+  while (pending.length) {
+    const use = pending.pop()!;
+    // Gone with a component that had no slot for it.
+    if (!use.isConnected) continue;
 
     const source = entry(library.components, use.getAttribute('name'));
     expansions += 1;
@@ -64,18 +67,19 @@ function expandLibrary(parsed: Document, library: ArtifactLibrary) {
     if (
       expansions > MAX_COMPONENT_EXPANSIONS ||
       expandedLength > MAX_EXPANDED_LENGTH
-    )
-      break;
+    ) {
+      // Past the budget, keep what the remaining uses wrap without expanding them.
+      use.replaceWith(...use.childNodes);
+      continue;
+    }
 
     const template = parsed.createElement('template');
     template.innerHTML = source ?? '<slot></slot>';
+    const nested = template.content.querySelectorAll('macro-component');
+    pending.push(...nested);
     template.content.querySelector('slot')?.replaceWith(...use.childNodes);
     use.replaceWith(template.content);
   }
-
-  // Past the budget, keep what the remaining uses wrap without expanding them.
-  for (const use of parsed.querySelectorAll('macro-component'))
-    use.replaceWith(...use.childNodes);
 
   for (const use of parsed.querySelectorAll('macro-style')) {
     const source = entry(library.styles, use.getAttribute('name'));
