@@ -579,7 +579,9 @@ async fn a_message_from_me_addressed_by_lid_carries_the_from_me_flag_and_own_pai
         &plain_locator,
     ));
 
-    super::complete_sender(&lids, &mut event).await.unwrap();
+    super::complete_sender(&lids, &lids, &mut event)
+        .await
+        .unwrap();
 
     assert_eq!(
         sender_of(&event),
@@ -614,14 +616,75 @@ async fn another_member_addressed_only_by_lid_is_paired_from_the_lid_store() {
         &plain_locator,
     ));
 
-    super::complete_sender(&lids, &mut known).await.unwrap();
-    super::complete_sender(&lids, &mut unknown).await.unwrap();
+    super::complete_sender(&lids, &lids, &mut known)
+        .await
+        .unwrap();
+    super::complete_sender(&lids, &lids, &mut unknown)
+        .await
+        .unwrap();
 
     assert_eq!(
         sender_of(&known),
         ("987654321@lid", Some("15550001111@s.whatsapp.net"), false)
     );
     assert_eq!(sender_of(&unknown), ("111222333@lid", None, false));
+}
+
+fn sender_name(event: &whatsapp_linked::domain::events::InboundEvent) -> Option<&str> {
+    let InboundKind::Message(message) = &event.kind else {
+        panic!("expected a message");
+    };
+    message.sender.display_name.as_deref()
+}
+
+/// History messages carry no WhatsApp name; the account's store keeps the
+/// one WhatsApp sent with history sync or an earlier message, under either
+/// of the sender's addresses.
+#[tokio::test]
+async fn a_sender_without_a_whatsapp_name_is_named_from_the_contact_store() {
+    let store = whatsmeow::store::MemoryStore::default();
+    let [ana, shop, stranger] = ["5550001", "5550002", "5550003"]
+        .map(|user| whatsmeow::types::new_jid(user, whatsmeow::types::DEFAULT_USER_SERVER));
+    whatsmeow::store::LidStore::put_lid_mapping(&store, &"987654321@lid".parse().unwrap(), &ana)
+        .await
+        .unwrap();
+    whatsmeow::store::ContactStore::put_push_name(&store, &ana, "Ana")
+        .await
+        .unwrap();
+    whatsmeow::store::ContactStore::put_business_name(&store, &shop, "Corner shop")
+        .await
+        .unwrap();
+    let unnamed = |id: &str, sender: &str| {
+        let Event::Message(mut message) = lid_message(id, sender, false) else {
+            unreachable!()
+        };
+        message.info.push_name.clear();
+        inbound(map_event(
+            ACCOUNT,
+            &Event::Message(message),
+            now(),
+            &plain_locator,
+        ))
+    };
+    let mut ana = unnamed("3EB0F010", "987654321@lid");
+    let mut shop = unnamed("3EB0F011", &shop.to_string());
+    let mut stranger = unnamed("3EB0F012", &stranger.to_string());
+    let mut named = inbound(map_event(
+        ACCOUNT,
+        &lid_message("3EB0F013", "987654321@lid", false),
+        now(),
+        &plain_locator,
+    ));
+
+    for event in [&mut ana, &mut shop, &mut stranger, &mut named] {
+        super::complete_sender(&store, &store, event).await.unwrap();
+    }
+
+    assert_eq!(sender_name(&ana), Some("Ana"));
+    assert_eq!(sender_name(&shop), Some("Corner shop"));
+    assert_eq!(sender_name(&stranger), None);
+    // The name a message carries is the sender's newest.
+    assert_eq!(sender_name(&named), Some("Wolf"));
 }
 
 #[test]
@@ -1291,14 +1354,22 @@ async fn a_lid_store_failure_is_reported_instead_of_completing_nothing() {
     ));
 
     assert!(
-        super::complete_addresses(&BrokenLids, &mut event)
-            .await
-            .is_err()
+        super::complete_addresses(
+            &BrokenLids,
+            &whatsmeow::store::MemoryStore::default(),
+            &mut event
+        )
+        .await
+        .is_err()
     );
     assert!(
-        super::complete_sender(&BrokenLids, &mut event)
-            .await
-            .is_err()
+        super::complete_sender(
+            &BrokenLids,
+            &whatsmeow::store::MemoryStore::default(),
+            &mut event
+        )
+        .await
+        .is_err()
     );
 }
 

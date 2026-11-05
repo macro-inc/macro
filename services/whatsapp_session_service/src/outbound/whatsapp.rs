@@ -205,16 +205,16 @@ struct Forwarder {
 }
 
 impl Forwarder {
-    /// [`events::complete_addresses`]; `false` when the LID store failed, so
-    /// the event is left unacknowledged and WhatsApp redelivers it.
+    /// [`events::complete_addresses`]; `false` when the LID or contact store
+    /// failed, so the event is left unacknowledged and WhatsApp redelivers it.
     async fn complete_addresses(&self, event: &mut InboundEvent) -> bool {
-        match events::complete_addresses(self.store.as_ref(), event).await {
+        match events::complete_addresses(self.store.as_ref(), self.store.as_ref(), event).await {
             Ok(()) => true,
             Err(error) => {
                 tracing::warn!(
                     account_id = %self.account,
                     error = %error,
-                    "Reading the WhatsApp LID store failed; leaving the event unacknowledged"
+                    "Reading the WhatsApp LID or contact store failed; leaving the event unacknowledged"
                 );
                 false
             }
@@ -360,8 +360,9 @@ impl Forwarder {
                 let votes = events::history_poll_votes(self.account, &parsed, now);
                 let mut message_kept = true;
                 for mut event in std::iter::once(event).chain(votes) {
+                    let pushed = SenderNames::named(&event);
                     let completed = self.complete_addresses(&mut event).await;
-                    names.count(self.store.as_ref(), &event).await;
+                    names.count(pushed, SenderNames::named(&event));
                     message_kept &= completed && Box::pin(self.inbound.accept(&event)).await;
                 }
                 if message_kept {
@@ -410,16 +411,17 @@ struct SenderNames {
 }
 
 impl SenderNames {
-    async fn count(&mut self, contacts: &dyn ContactStore, event: &InboundEvent) {
-        let InboundKind::Message(message) = &event.kind else {
-            return;
-        };
-        if message.sender.display_name.is_some() {
+    /// Whether the event's sender has a name.
+    fn named(event: &InboundEvent) -> bool {
+        matches!(&event.kind, InboundKind::Message(message) if message.sender.display_name.is_some())
+    }
+
+    /// `pushed`: the message named its sender; `named`: it is named after
+    /// the contact store completed it.
+    fn count(&mut self, pushed: bool, named: bool) {
+        if pushed {
             self.push += 1;
-        } else if matches!(
-            events::contact_name(contacts, &message.sender).await,
-            Ok(Some(_))
-        ) {
+        } else if named {
             self.contact += 1;
         } else {
             self.none += 1;
