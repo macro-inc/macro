@@ -25,7 +25,7 @@ use serde::{Deserialize, Serialize};
 use utoipa::ToSchema;
 
 use crate::domain::models::{
-    WebFetchRequest, WebFetchResponse, WebSearchError, WebSearchRequest, WebSearchResponse,
+    WebFetch, WebFetchResponse, WebSearch, WebSearchError, WebSearchResponse,
 };
 use crate::domain::service::{WebCaller, WebSearchService};
 
@@ -209,7 +209,7 @@ fn invalid_body(rejection: JsonRejection) -> WebFailure {
     path = "/web/search",
     operation_id = "search_web",
     tag = "web",
-    request_body = WebSearchRequest,
+    request_body = WebSearch,
     responses(
         (status = 200, description = "Results, best match first", body = WebSearchResponse),
         (status = 400, description = "Invalid query or filters", body = WebErrorBody),
@@ -224,7 +224,7 @@ pub async fn search_handler<R, Auth>(
     Cached(caller): Cached<MacroAuthorizationExtractor<Auth, ActingUser>>,
     _limit: RateLimitExtractor<PerUserWebRateLimit<Auth>, WebRouterState<R, Auth>>,
     State(state): State<WebRouterState<R, Auth>>,
-    request: Result<Json<WebSearchRequest>, JsonRejection>,
+    request: Result<Json<WebSearch>, JsonRejection>,
 ) -> Result<Json<WebSearchResponse>, WebFailure>
 where
     R: RateLimitService + Clone,
@@ -247,7 +247,7 @@ where
     path = "/web/fetch",
     operation_id = "fetch_web_page",
     tag = "web",
-    request_body = WebFetchRequest,
+    request_body = WebFetch,
     responses(
         (status = 200, description = "The page text", body = WebFetchResponse),
         (status = 400, description = "Invalid URL or length", body = WebErrorBody),
@@ -263,7 +263,7 @@ pub async fn fetch_handler<R, Auth>(
     Cached(caller): Cached<MacroAuthorizationExtractor<Auth, ActingUser>>,
     _limit: RateLimitExtractor<PerUserWebRateLimit<Auth>, WebRouterState<R, Auth>>,
     State(state): State<WebRouterState<R, Auth>>,
-    request: Result<Json<WebFetchRequest>, JsonRejection>,
+    request: Result<Json<WebFetch>, JsonRejection>,
 ) -> Result<Json<WebFetchResponse>, WebFailure>
 where
     R: RateLimitService + Clone,

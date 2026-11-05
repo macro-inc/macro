@@ -8,9 +8,8 @@ use macro_uuid::Uuid;
 
 use super::{WebCaller, WebSearchService};
 use crate::domain::models::{
-    Billed, FetchedPage, PageRequest, ProviderError, SearchQuery, WebFetchRequest,
-    WebFetchResponse, WebSearchError, WebSearchRequest, WebSearchResponse, WebSearchResult,
-    WebSearchTopic,
+    Billed, FetchedPage, PageRequest, ProviderError, SearchQuery, WebFetch, WebFetchResponse,
+    WebSearch, WebSearchError, WebSearchResponse, WebSearchResult, WebSearchTopic,
 };
 use crate::domain::ports::SearchProvider;
 
@@ -107,7 +106,7 @@ async fn search_passes_defaults_and_meters_credits_to_the_user() {
                 user: user(),
                 entity: Some(entity),
             },
-            WebSearchRequest {
+            WebSearch {
                 query: "  macro docs  ".into(),
                 domains: None,
                 exclude_domains: None,
@@ -176,7 +175,7 @@ async fn search_content_is_cut_to_eight_thousand_characters() {
     let response = service
         .search(
             WebCaller::user(user()),
-            WebSearchRequest {
+            WebSearch {
                 query: "macro".into(),
                 domains: None,
                 exclude_domains: None,
@@ -206,7 +205,7 @@ async fn invalid_requests_never_reach_the_provider() {
     );
 
     for request in [
-        WebSearchRequest {
+        WebSearch {
             query: "   ".into(),
             domains: None,
             exclude_domains: None,
@@ -215,7 +214,7 @@ async fn invalid_requests_never_reach_the_provider() {
             max_results: None,
             include_content: None,
         },
-        WebSearchRequest {
+        WebSearch {
             query: "x".repeat(401),
             domains: None,
             exclude_domains: None,
@@ -224,7 +223,7 @@ async fn invalid_requests_never_reach_the_provider() {
             max_results: None,
             include_content: None,
         },
-        WebSearchRequest {
+        WebSearch {
             query: "macro".into(),
             domains: None,
             exclude_domains: None,
@@ -233,7 +232,7 @@ async fn invalid_requests_never_reach_the_provider() {
             max_results: Some(21),
             include_content: None,
         },
-        WebSearchRequest {
+        WebSearch {
             query: "macro".into(),
             domains: Some(vec!["not a domain".into()]),
             exclude_domains: None,
@@ -257,7 +256,7 @@ async fn invalid_requests_never_reach_the_provider() {
         let error = service
             .fetch(
                 WebCaller::user(user()),
-                WebFetchRequest {
+                WebFetch {
                     url: url.into(),
                     max_chars: None,
                 },
@@ -283,7 +282,7 @@ async fn admission_refusal_skips_the_provider_and_metering() {
     let error = service
         .fetch(
             WebCaller::user(user()),
-            WebFetchRequest {
+            WebFetch {
                 url: "https://example.com/".into(),
                 max_chars: None,
             },
@@ -314,7 +313,7 @@ async fn fetch_cuts_on_character_boundaries() {
     let response = service
         .fetch(
             WebCaller::user(user()),
-            WebFetchRequest {
+            WebFetch {
                 url: "https://example.com/page".into(),
                 max_chars: Some(2),
             },

@@ -10,7 +10,7 @@ use async_trait::async_trait;
 use macro_uuid::Uuid;
 
 use crate::domain::models::{
-    WebFetchRequest, WebFetchResponse, WebSearchError, WebSearchRequest, WebSearchResponse,
+    WebFetch, WebFetchResponse, WebSearch, WebSearchError, WebSearchResponse,
 };
 use crate::domain::service::{WebCaller, WebSearchService};
 
@@ -29,17 +29,17 @@ pub struct WebToolContext {
 /// The web tools.
 pub fn web_toolset() -> AsyncToolCollection<WebToolContext> {
     AsyncToolCollection::new()
-        .add_tool::<WebSearchRequest, WebToolContext>()
-        .add_tool::<WebFetchRequest, WebToolContext>()
+        .add_tool::<WebSearch, WebToolContext>()
+        .add_tool::<WebFetch, WebToolContext>()
 }
 
-impl ToolAnnotated for WebSearchRequest {
+impl ToolAnnotated for WebSearch {
     const ANNOTATIONS: ToolAnnotations = ToolAnnotations::read_only("Search the web")
         .with_open_world()
         .without_idempotent();
 }
 
-impl ToolAnnotated for WebFetchRequest {
+impl ToolAnnotated for WebFetch {
     const ANNOTATIONS: ToolAnnotations = ToolAnnotations::read_only("Fetch a web page")
         .with_open_world()
         .without_idempotent();
@@ -53,7 +53,7 @@ fn tool_error(error: WebSearchError) -> ToolCallError {
 }
 
 #[async_trait]
-impl AsyncTool<WebToolContext> for WebSearchRequest {
+impl AsyncTool<WebToolContext> for WebSearch {
     type Output = WebSearchResponse;
 
     async fn call(
@@ -76,7 +76,7 @@ impl AsyncTool<WebToolContext> for WebSearchRequest {
 }
 
 #[async_trait]
-impl AsyncTool<WebToolContext> for WebFetchRequest {
+impl AsyncTool<WebToolContext> for WebFetch {
     type Output = WebFetchResponse;
 
     async fn call(

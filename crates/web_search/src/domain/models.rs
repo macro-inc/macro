@@ -42,7 +42,7 @@ pub enum WebSearchTopic {
     title = "WebSearch",
     description = "Search the public web. Returns up to `maxResults` pages, each with its title, URL, a query-relevant snippet and, for news, its publication date. Snippets are often enough to answer; call WebFetch on a result's URL when you need the full page. Cite the URLs you use."
 )]
-pub struct WebSearchRequest {
+pub struct WebSearch {
     /// What to search for, in natural language or keywords (at most 400 characters).
     pub query: String,
     /// Only return pages from these domains, e.g. `["docs.rs", "github.com"]`.
@@ -98,7 +98,7 @@ pub struct WebSearchResponse {
     title = "WebFetch",
     description = "Read the text of one public web page as Markdown. Use it on a URL the user gave you or one WebSearch returned, when the snippet is not enough. Pages that need a login, or that render only with JavaScript, may fail. Cite the URL you read."
 )]
-pub struct WebFetchRequest {
+pub struct WebFetch {
     /// The `http` or `https` URL of the page.
     pub url: String,
     /// Most characters of page text to return, 1 to 100,000 (default 20,000).

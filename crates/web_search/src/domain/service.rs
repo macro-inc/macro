@@ -11,8 +11,7 @@ use macro_uuid::Uuid;
 use super::models::{
     Billed, DEFAULT_FETCH_CHARS, DEFAULT_RESULTS, MAX_DOMAINS, MAX_EXCLUDED_DOMAINS,
     MAX_FETCH_CHARS, MAX_QUERY_CHARS, MAX_RESULTS, PageRequest, SEARCH_CONTENT_CHARS, SearchQuery,
-    WebFetchRequest, WebFetchResponse, WebSearchError, WebSearchRequest, WebSearchResponse,
-    WebSearchResult,
+    WebFetch, WebFetchResponse, WebSearch, WebSearchError, WebSearchResponse, WebSearchResult,
 };
 use super::ports::SearchProvider;
 
@@ -67,7 +66,7 @@ impl WebSearchService {
     pub async fn search(
         &self,
         caller: WebCaller,
-        request: WebSearchRequest,
+        request: WebSearch,
     ) -> Result<WebSearchResponse, WebSearchError> {
         let query = validate_search(request)?;
         tracing::Span::current().record("web.max_results", query.max_results);
@@ -102,7 +101,7 @@ impl WebSearchService {
     pub async fn fetch(
         &self,
         caller: WebCaller,
-        request: WebFetchRequest,
+        request: WebFetch,
     ) -> Result<WebFetchResponse, WebSearchError> {
         let (page, max_chars) = validate_fetch(request)?;
         self.admission
@@ -136,7 +135,7 @@ impl WebSearchService {
     }
 }
 
-fn validate_search(request: WebSearchRequest) -> Result<SearchQuery, WebSearchError> {
+fn validate_search(request: WebSearch) -> Result<SearchQuery, WebSearchError> {
     let query = request.query.trim().to_owned();
     if query.is_empty() || query.chars().count() > MAX_QUERY_CHARS {
         return Err(WebSearchError::InvalidRequest(format!(
@@ -195,7 +194,7 @@ fn validate_domains(
     Ok(domains)
 }
 
-fn validate_fetch(request: WebFetchRequest) -> Result<(PageRequest, usize), WebSearchError> {
+fn validate_fetch(request: WebFetch) -> Result<(PageRequest, usize), WebSearchError> {
     let url = url::Url::parse(request.url.trim())
         .map_err(|_| WebSearchError::InvalidRequest("url must be an absolute URL".into()))?;
     if !matches!(url.scheme(), "http" | "https") || url.host_str().is_none() {

@@ -9,8 +9,8 @@ use macro_uuid::Uuid;
 
 use super::WebToolContext;
 use crate::domain::models::{
-    Billed, FetchedPage, PageRequest, ProviderError, SearchQuery, WebFetchRequest,
-    WebSearchRequest, WebSearchResult,
+    Billed, FetchedPage, PageRequest, ProviderError, SearchQuery, WebFetch, WebSearch,
+    WebSearchResult,
 };
 use crate::domain::ports::SearchProvider;
 use crate::domain::service::WebSearchService;
@@ -65,7 +65,7 @@ async fn fetch_is_attributed_to_the_requesting_user_and_turn_entity() {
         entity: Some(entity),
     });
 
-    let page = WebFetchRequest {
+    let page = WebFetch {
         url: "https://example.com/".into(),
         max_chars: None,
     }
@@ -90,7 +90,7 @@ async fn a_missing_key_reaches_the_model_as_a_clear_error() {
         entity: None,
     });
 
-    let error = WebSearchRequest {
+    let error = WebSearch {
         query: "macro".into(),
         domains: None,
         exclude_domains: None,
