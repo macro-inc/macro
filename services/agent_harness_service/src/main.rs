@@ -365,6 +365,14 @@ async fn run() -> anyhow::Result<()> {
         ),
         admission.clone(),
     ));
+    let thread_due_dates = Arc::new(
+        universal_input::domain::temporal::thread_due_date::ThreadDueDateService::new(
+            universal_input::outbound::thread_due_date::AgentThreadFactExtractor::new(
+                recorder.clone(),
+            ),
+            admission.clone(),
+        ),
+    );
     let lifecycle_publisher = Arc::new(BrokerLifecyclePublisher::new(broker.clone()));
     // Shared with every replica: runtime command forwarding, model probes,
     // and the agent session log stream.
@@ -1807,12 +1815,22 @@ async fn run() -> anyhow::Result<()> {
             .with_code_executions(code_executions)
             .with_notifications(notification_ingress)
             .with_cognition(cognition_router)
-            .with_universal_input(universal_input::inbound::axum_router::axum_router(
-                universal_input::inbound::axum_router::UniversalInputRouterState::new(
-                    input_service,
-                    MacroAuthorizationState::new(Arc::new(authorization_service.clone())),
+            .with_universal_input(
+                universal_input::inbound::axum_router::axum_router(
+                    universal_input::inbound::axum_router::UniversalInputRouterState::new(
+                        input_service,
+                        MacroAuthorizationState::new(Arc::new(authorization_service.clone())),
+                    ),
+                )
+                .merge(
+                    universal_input::inbound::axum_router::thread_due_date_router(
+                        universal_input::inbound::axum_router::ThreadDueDateRouterState::new(
+                            thread_due_dates,
+                            MacroAuthorizationState::new(Arc::new(authorization_service.clone())),
+                        ),
+                    ),
                 ),
-            ))
+            )
             .with_scheduling(scheduling_router)
             .with_preview(preview_router)
             .with_public_mcp(public_mcp_router)

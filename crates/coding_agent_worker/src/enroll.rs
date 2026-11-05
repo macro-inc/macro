@@ -23,7 +23,7 @@ use rootcause::prelude::ResultExt as _;
 use crate::capabilities::ENROLLED_MARKER;
 use crate::config::{Config, HarnessCredentials};
 use crate::outbound::pairing::{ClaimStatus, PairingClient};
-use crate::service::{ServiceOptions, ServiceScope};
+use crate::service::ServiceOptions;
 use crate::tui::config_form::ConfigForm;
 
 #[cfg(test)]
@@ -205,7 +205,7 @@ async fn run_enroll_with_host(options: EnrollOptions, host: &impl Host) -> rootc
     } else {
         Some(crate::service::installed_agent(&options.agent)?)
     };
-    write_config(&options, agent, &enrollment, urls.as_ref())?;
+    write_config(&options, agent, urls.as_ref())?;
     ensure_credentials(&options.config, &enrollment).await?;
     own_like_parent(&options.config, host)?;
 
@@ -340,7 +340,6 @@ impl DeploymentUrls {
 fn write_config(
     options: &EnrollOptions,
     agent: Option<crate::tui::agent_catalog::DetectedAgent>,
-    enrollment: &Enrollment,
     urls: Option<&DeploymentUrls>,
 ) -> rootcause::Result<()> {
     crate::service::configure(
@@ -350,9 +349,6 @@ fn write_config(
             config: Some(options.config.clone()),
             agent: None,
             workspace: Some(options.workspace.clone()),
-            name: Some(enrollment.name.clone()),
-            scope: Some(ServiceScope::Team),
-            allow_permission_bypass: None,
         },
         agent,
     )?;

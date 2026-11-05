@@ -50,6 +50,8 @@ before touching the edit flow.
 
 - Change the Canvas SDK: `src/canvas/editor.ts` and `schema.ts` →
   `scripts/generate-sandbox.ts` (regenerates `src/canvas/sandbox-code.ts`).
+  Artifact operations also need `isArtifactOp` and `artifact-prompt.md`, the guide
+  given only to users with the `enable-canvas-artifacts` rollout.
   Commands validate on a disposable editor and commit once through the live
   backend. `mentionUser` inserts the shared person-chip format without flattening
   other text; ReadCanvas exposes bounded identities/offsets, with one U+FFFC per

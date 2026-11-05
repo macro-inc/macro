@@ -43,13 +43,11 @@ async fn insert_user(pool: &PgPool, user_id: &str) {
 
 fn new_pairing(code: &str, secret: &str) -> NewPairing {
     NewPairing {
-        requested_allow_permission_bypass: None,
         id: Uuid::new_v4(),
         code: code.to_owned(),
         device_secret_hash: harness_token::hash_token(secret),
         requested_name: "erics-macbook".to_owned(),
         host: Some("eric@macbook / darwin".to_owned()),
-        requested_scope: Some(RequestedHarnessScope::Team),
         expires_at: Utc::now() + Duration::minutes(15),
     }
 }
@@ -78,10 +76,6 @@ async fn pairing_walks_create_approve_claim_exactly_once(pool: PgPool) {
     let row = repo.get_pairing("KX7M-4QHD").await.unwrap().unwrap();
     assert_eq!(row.status, PairingStatus::Pending);
     assert_eq!(row.details.requested_name, "erics-macbook");
-    assert_eq!(
-        row.details.requested_scope,
-        Some(RequestedHarnessScope::Team)
-    );
     let harness = repo
         .approve_pairing("KX7M-4QHD", new_harness())
         .await
@@ -542,30 +536,66 @@ async fn permission_bypass_survives_registration_and_listing(pool: PgPool) {
 }
 
 #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
-async fn pairing_permission_ceiling_roundtrips(pool: PgPool) {
-    let repo = PgHarnessRepo::new(pool);
-    for (code, allowed) in [
-        ("AAAA-AAAA", None),
-        ("BBBB-BBBB", Some(false)),
-        ("CCCC-CCCC", Some(true)),
-    ] {
-        let mut pairing = new_pairing(code, "device-secret");
-        pairing.requested_allow_permission_bypass = allowed;
-        assert!(repo.insert_pairing(pairing).await.unwrap());
-        let stored = repo.get_pairing(code).await.unwrap().unwrap();
-        assert_eq!(stored.details.requested_allow_permission_bypass, allowed);
-    }
+async fn update_harness_changes_only_the_named_columns(pool: PgPool) {
+    let repo = PgHarnessRepo::new(pool.clone());
+    insert_user(&pool, OWNER_ID).await;
+    repo.insert_pairing(new_pairing("AAAA-BBBB", "secret"))
+        .await
+        .unwrap();
+    let harness = repo
+        .approve_pairing("AAAA-BBBB", new_harness())
+        .await
+        .unwrap()
+        .unwrap();
+
+    let bypassed = repo
+        .update_harness(
+            harness.id,
+            HarnessChanges {
+                name: None,
+                allow_permission_bypass: Some(true),
+            },
+        )
+        .await
+        .unwrap()
+        .unwrap();
+    assert!(bypassed.allow_permission_bypass);
+    assert_eq!(bypassed.name, harness.name);
+
+    let renamed = repo
+        .update_harness(
+            harness.id,
+            HarnessChanges {
+                name: Some("studio".to_owned()),
+                allow_permission_bypass: None,
+            },
+        )
+        .await
+        .unwrap()
+        .unwrap();
+    assert_eq!(renamed.name, "studio");
+    assert!(renamed.allow_permission_bypass);
+    assert_eq!(
+        repo.get_harness(harness.id).await.unwrap().unwrap().name,
+        "studio"
+    );
+
+    assert!(repo.delete_harness(harness.id).await.unwrap());
+    assert!(
+        repo.update_harness(harness.id, HarnessChanges::default())
+            .await
+            .unwrap()
+            .is_none()
+    );
 }
 
 fn hosted_pairing(pairing_id: Uuid, secret: &str) -> NewPairing {
     NewPairing {
-        requested_allow_permission_bypass: Some(false),
         id: pairing_id,
         code: format!("hosted:{pairing_id}"),
         device_secret_hash: harness_token::hash_token(secret),
         requested_name: "Standard computer".to_owned(),
         host: None,
-        requested_scope: Some(RequestedHarnessScope::Team),
         // Already past expiry: an approved pairing stays claimable.
         expires_at: Utc::now() - Duration::minutes(1),
     }
@@ -617,6 +647,30 @@ async fn hosted_pairing_is_born_approved_rotates_on_retry_and_claims_once(pool: 
         repo.harness_computer(harness_id).await.unwrap(),
         Some(computer_id)
     );
+
+    repo.set_capabilities(harness_id, HarnessCapabilities { screen: true })
+        .await
+        .unwrap();
+    repo.set_claude_mode(harness_id, ClaudeMode::OwnAccount)
+        .await
+        .unwrap();
+    let renamed = repo
+        .update_harness(
+            harness_id,
+            HarnessChanges {
+                name: Some("Renamed computer".to_owned()),
+                allow_permission_bypass: Some(true),
+            },
+        )
+        .await
+        .unwrap()
+        .unwrap();
+    assert_eq!(renamed.name, "Renamed computer");
+    assert!(renamed.allow_permission_bypass);
+    assert_eq!(renamed.owner, HarnessOwner::Team { team_id });
+    assert_eq!(renamed.computer_id, Some(computer_id));
+    assert_eq!(renamed.capabilities, HarnessCapabilities { screen: true });
+    assert_eq!(renamed.claude_mode, ClaudeMode::OwnAccount);
 
     // A retry keeps the pairing and harness and takes the new secret.
     let rotated = repo

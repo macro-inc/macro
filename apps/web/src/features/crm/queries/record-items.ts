@@ -45,9 +45,9 @@ const participants = (scope: CrmRecordScope): AstNode[] =>
     .with({ type: 'company' }, ({ domains }) =>
       domains.map((domain) => leaf({ eap: { Domain: domain } }))
     )
-    .with({ type: 'contact' }, ({ email }) => [
-      leaf({ eap: { Complete: email } }),
-    ])
+    .with({ type: 'contact' }, ({ email }) =>
+      email ? [leaf({ eap: { Complete: email } })] : []
+    )
     .exhaustive(() => []);
 
 /**

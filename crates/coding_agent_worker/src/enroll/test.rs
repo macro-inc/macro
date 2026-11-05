@@ -297,7 +297,6 @@ path = "/"
 [credentials]
 harness_id = "00000000-0000-0000-0000-0000000000a1"
 token = "mhns_claimed"
-scope = "team"
 "#,
     )
     .unwrap();
@@ -311,7 +310,7 @@ scope = "team"
     let enrollment = enrollment();
     let urls = DeploymentUrls::from_overrides(&enrollment.service_url_overrides).unwrap();
 
-    write_config(&options, None, &enrollment, urls.as_ref()).unwrap();
+    write_config(&options, None, urls.as_ref()).unwrap();
     ensure_credentials(&config, &enrollment).await.unwrap();
 
     let loaded = Config::load(&config).unwrap();
@@ -327,7 +326,6 @@ scope = "team"
     assert_eq!(loaded.macro_api.web_url, "http://10.200.0.1:41000/app");
     assert_eq!(loaded.workspace.path, workspace);
     assert!(workspace.is_dir());
-    assert_eq!(loaded.identity.name.as_deref(), Some("Standard computer"));
     assert_eq!(
         loaded.credentials.map(|credentials| credentials.token),
         Some("mhns_claimed".to_owned())

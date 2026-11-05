@@ -1,15 +1,16 @@
 ---
 title: WebFetch
 description: >-
-  Fetch the contents of a web page using Claude's built-in web fetch tool.
+  Read the text of one public web page as Markdown.
 ---
 
 # WebFetch
 
-Fetch the contents of a web page using Claude's built-in web fetch tool.
+Read the text of one public web page as Markdown. Use it on a URL the user gave you or one WebSearch returned, when the snippet is not enough. Pages that need a login, or that render only with JavaScript, may fail. Cite the URL you read.
 
 ## Parameters
 
 | Parameter | Type | Required | Description |
 | --- | --- | --- | --- |
-| `input` | string | Yes | The URL to fetch or an instruction describing what to fetch. |
+| `url` | string | Yes | The `http` or `https` URL of the page. |
+| `maxChars` | integer | No | Most characters of page text to return, 1 to 100,000 (default 20,000). |

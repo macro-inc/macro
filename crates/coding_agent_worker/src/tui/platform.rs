@@ -2,6 +2,8 @@ pub(crate) const BYO_AGENT_URL: &str = "https://docs.macro.com/AI/bring-your-own
 
 pub(crate) enum BrowserTarget {
     Pairing(String),
+    /// The web settings page that owns the runtime's name, access, and permissions.
+    Settings(String),
     BringYourOwn,
 }
 
@@ -12,6 +14,11 @@ pub(crate) fn open_pending_browser(pending: &mut Option<BrowserTarget>) -> Optio
             url,
             "sent the approval page to your browser",
             "could not launch a browser; use the pairing link",
+        ),
+        BrowserTarget::Settings(url) => (
+            url,
+            "opened the runtime settings in your browser",
+            "could not launch a browser; open the settings link shown in Config",
         ),
         BrowserTarget::BringYourOwn => (
             BYO_AGENT_URL.to_owned(),

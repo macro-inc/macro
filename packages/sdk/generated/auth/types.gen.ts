@@ -298,6 +298,7 @@ export type ComputerStatus = {
     harnessId?: string | null;
     id: string;
     name: string;
+    payment: PaymentOutcome;
     personaName?: string | null;
     poweredOn: boolean;
     /**
@@ -312,7 +313,7 @@ export type ComputerStatus = {
 /**
  * The coarse status the team sees.
  */
-export type ComputerStatusKind = 'setting_up' | 'ready' | 'asleep' | 'waking' | 'stopping' | 'stopped' | 'failed' | 'released';
+export type ComputerStatusKind = 'setting_up' | 'ready' | 'asleep' | 'waking' | 'stopping' | 'stopped' | 'failed' | 'payment_failed' | 'released';
 
 export type CreateAccountMergeRequest = {
     /**
@@ -1535,6 +1536,11 @@ export type PatchUserTutorialRequest = {
      */
     tutorialComplete: boolean;
 };
+
+/**
+ * Whether the computer's purchase has ever been paid.
+ */
+export type PaymentOutcome = 'pending' | 'paid' | 'unbilled';
 
 export type Permission = {
     /**

@@ -15,10 +15,11 @@ use super::{
         ApprovePairingRequest, ClaimOutcome, ClaimPairingRequest, ClaimedPairing, ClaudeMode,
         CreateHostedPairing, CreatePairingRequest, CreatedPairing, Harness, HarnessAccess,
         HarnessAgent, HarnessCapabilities, HarnessOwner, HarnessSession, HostedPairing,
-        PairingDetails, PairingStatus, RequestedHarnessScope,
+        PairingDetails, PairingStatus, PatchHarnessRequest,
     },
     ports::{
-        HarnessError, HarnessRepo, HarnessService, HostedPairingUpsert, NewHarness, NewPairing,
+        HarnessChanges, HarnessError, HarnessRepo, HarnessService, HostedPairingUpsert, NewHarness,
+        NewPairing,
     },
     tokens,
 };
@@ -36,14 +37,15 @@ const CODE_ATTEMPTS: usize = 5;
 const MAX_NAME_CHARS: usize = 100;
 const MAX_HOST_CHARS: usize = 200;
 
-fn validated_name(name: &str) -> Result<&str, HarnessError> {
+/// A trimmed display name within the length limit.
+fn validated_name(name: &str) -> Result<String, HarnessError> {
     let name = name.trim();
     if name.is_empty() || name.chars().count() > MAX_NAME_CHARS {
         return Err(HarnessError::BadRequest(format!(
             "name must be 1..={MAX_NAME_CHARS} characters"
         )));
     }
-    Ok(name)
+    Ok(name.to_owned())
 }
 
 /// Harness service backed by a repository.
@@ -97,6 +99,7 @@ where
         req: CreatePairingRequest,
     ) -> Result<CreatedPairing, HarnessError> {
         let name = validated_name(&req.name)?;
+        let name = name.as_str();
         let host = req
             .host
             .as_deref()
@@ -133,8 +136,6 @@ where
                     device_secret_hash,
                     requested_name: name.to_owned(),
                     host: host.clone(),
-                    requested_scope: req.scope,
-                    requested_allow_permission_bypass: req.allow_permission_bypass,
                     expires_at,
                 })
                 .await
@@ -191,15 +192,10 @@ where
         // Reuses the pending/expired policy so approval failures report the
         // same way the lookup does.
         let details = self.get_pairing(code).await?;
-        if req.allow_permission_bypass && details.requested_allow_permission_bypass == Some(false) {
-            return Err(HarnessError::BadRequest(
-                "this daemon requires permission prompts".to_owned(),
-            ));
-        }
         let code = tokens::normalize_pairing_code(code).expect("get_pairing validated the code");
 
         let name = match &req.name {
-            Some(name) => validated_name(name)?.to_owned(),
+            Some(name) => validated_name(name)?,
             None => details.requested_name,
         };
 
@@ -302,6 +298,35 @@ where
             .map_err(Into::into)?)
     }
 
+    #[tracing::instrument(skip(self, req), fields(caller = %caller), err)]
+    async fn patch_harness(
+        &self,
+        caller: MacroUserIdStr<'static>,
+        harness_id: HarnessId,
+        req: PatchHarnessRequest,
+    ) -> Result<Harness, HarnessError> {
+        let harness = self
+            .repo
+            .get_harness(harness_id)
+            .await
+            .map_err(Into::into)?
+            .ok_or_else(|| HarnessError::NotFound("unknown harness".to_owned()))?;
+        self.ensure_may_manage(&caller, &harness).await?;
+
+        let changes = HarnessChanges {
+            name: req.name.as_deref().map(validated_name).transpose()?,
+            allow_permission_bypass: req.allow_permission_bypass,
+        };
+        if changes == HarnessChanges::default() {
+            return Ok(harness);
+        }
+        self.repo
+            .update_harness(harness_id, changes)
+            .await
+            .map_err(Into::into)?
+            .ok_or_else(|| HarnessError::NotFound("unknown harness".to_owned()))
+    }
+
     #[tracing::instrument(skip(self), fields(caller = %caller), err)]
     async fn delete_harness(
         &self,
@@ -402,14 +427,13 @@ where
         &self,
         req: CreateHostedPairing,
     ) -> Result<HostedPairing, HarnessError> {
-        let name = validated_name(&req.name)?.to_owned();
+        let name = validated_name(&req.name)?;
         let device_secret = tokens::generate_device_secret();
         let new_pairing_id = Uuid::now_v7();
         let upserted = self
             .repo
             .upsert_hosted_pairing(
                 NewPairing {
-                    requested_allow_permission_bypass: Some(req.allow_permission_bypass),
                     id: new_pairing_id,
                     // Never shown or typed: the code only has to be unique,
                     // and its shape keeps it out of code lookups entirely.
@@ -417,7 +441,6 @@ where
                     device_secret_hash: harness_token::hash_token(&device_secret),
                     requested_name: name.clone(),
                     host: None,
-                    requested_scope: Some(RequestedHarnessScope::Team),
                     expires_at: Utc::now() + Duration::minutes(PAIRING_TTL_MINUTES),
                 },
                 NewHarness {

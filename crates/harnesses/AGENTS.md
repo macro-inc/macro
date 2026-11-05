@@ -41,6 +41,8 @@ already authorized the team admin, never for an HTTP route.
   the access rule for other services' harness routes: view = owner or team
   member, manage = the delete rule. `set_claude_mode` (trusted) records
   `claude_mode` (`macro_credits` | `own_account`) once macrod confirmed it.
+- `patch_harness` lets managers change the name and permission bypass while
+  preserving computer identity, capabilities, and Claude billing mode.
 - Harness rows carry `capabilities` (jsonb, `HarnessCapabilities`, e.g.
   `screen`), which macrod reports through `PUT /harnesses/me/capabilities`,
   and `computer_id` (set only for Macro computers; unique among live rows).

@@ -5,7 +5,7 @@ use macro_user_id::user_id::MacroUserIdStr;
 
 use super::*;
 use crate::domain::{
-    models::{PairingClaimFacts, RequestedHarnessScope},
+    models::PairingClaimFacts,
     ports::{HostedPairingUpsert, OpenPairingCounts, PairingRow},
 };
 
@@ -39,11 +39,9 @@ fn harness(owner: HarnessOwner) -> Harness {
 fn pending_pairing() -> PairingRow {
     PairingRow {
         details: PairingDetails {
-            requested_allow_permission_bypass: None,
             code: CODE.to_owned(),
             requested_name: "erics-macbook".to_owned(),
             host: Some("eric@macbook / darwin".to_owned()),
-            requested_scope: Some(RequestedHarnessScope::Team),
             created_at: Utc::now(),
             expires_at: Utc::now() + Duration::minutes(10),
         },
@@ -57,6 +55,7 @@ struct Calls {
     approved: Vec<(String, NewHarness)>,
     claimed: Vec<Uuid>,
     deleted: Vec<HarnessId>,
+    updated: Vec<(HarnessId, HarnessChanges)>,
     team_lookups: Vec<(String, Uuid)>,
     hosted_upserts: Vec<(NewPairing, NewHarness)>,
     capability_reports: Vec<(HarnessId, HarnessCapabilities)>,
@@ -221,6 +220,25 @@ impl HarnessRepo for FakeRepo {
         Ok(self.harness.clone())
     }
 
+    async fn update_harness(
+        &self,
+        harness_id: HarnessId,
+        changes: HarnessChanges,
+    ) -> Result<Option<Harness>, Self::Err> {
+        self.calls
+            .lock()
+            .unwrap()
+            .updated
+            .push((harness_id, changes.clone()));
+        Ok(self.harness.clone().map(|harness| Harness {
+            name: changes.name.unwrap_or(harness.name),
+            allow_permission_bypass: changes
+                .allow_permission_bypass
+                .unwrap_or(harness.allow_permission_bypass),
+            ..harness
+        }))
+    }
+
     async fn delete_harness(&self, harness_id: HarnessId) -> Result<bool, Self::Err> {
         self.calls.lock().unwrap().deleted.push(harness_id);
         Ok(self.delete_result)
@@ -271,10 +289,8 @@ async fn creating_a_pairing_returns_code_and_secret_and_persists_only_hashes() {
     let repo = FakeRepo::default();
     let created = service(repo.clone())
         .create_pairing(CreatePairingRequest {
-            allow_permission_bypass: None,
             name: "  erics-macbook  ".to_owned(),
             host: Some("eric@macbook".to_owned()),
-            scope: Some(RequestedHarnessScope::Team),
         })
         .await
         .unwrap();
@@ -286,7 +302,6 @@ async fn creating_a_pairing_returns_code_and_secret_and_persists_only_hashes() {
     let calls = repo.calls.lock().unwrap();
     let inserted = &calls.inserted_pairings[0];
     assert_eq!(inserted.requested_name, "erics-macbook");
-    assert_eq!(inserted.requested_scope, Some(RequestedHarnessScope::Team));
     assert_eq!(inserted.code, created.code);
     assert_eq!(
         inserted.device_secret_hash,
@@ -302,10 +317,8 @@ async fn pairing_creation_retries_code_collisions() {
     };
     let created = service(repo.clone())
         .create_pairing(CreatePairingRequest {
-            allow_permission_bypass: None,
             name: "erics-macbook".to_owned(),
             host: None,
-            scope: None,
         })
         .await
         .unwrap();
@@ -326,20 +339,16 @@ async fn pairing_creation_is_throttled_and_validates_the_name() {
     };
     let result = service(throttled)
         .create_pairing(CreatePairingRequest {
-            allow_permission_bypass: None,
             name: "erics-macbook".to_owned(),
             host: None,
-            scope: None,
         })
         .await;
     assert!(matches!(result, Err(HarnessError::Throttled)));
 
     let result = service(FakeRepo::default())
         .create_pairing(CreatePairingRequest {
-            allow_permission_bypass: None,
             name: "   ".to_owned(),
             host: None,
-            scope: None,
         })
         .await;
     assert!(matches!(result, Err(HarnessError::BadRequest(_))));
@@ -702,59 +711,133 @@ async fn approval_records_explicit_permission_bypass_consent() {
 }
 
 #[tokio::test]
-async fn pairing_creation_preserves_the_daemons_permission_ceiling() {
-    for allowed in [None, Some(false), Some(true)] {
-        let repo = FakeRepo::default();
-        service(repo.clone())
-            .create_pairing(CreatePairingRequest {
-                allow_permission_bypass: allowed,
-                name: "laptop".to_owned(),
-                host: None,
-                scope: None,
-            })
-            .await
-            .unwrap();
-        assert_eq!(
-            repo.calls.lock().unwrap().inserted_pairings[0].requested_allow_permission_bypass,
-            allowed
-        );
-    }
+async fn a_manager_changes_bypass_and_name_on_the_web() {
+    let repo = FakeRepo {
+        harness: Some(harness(HarnessOwner::User {
+            user_id: OWNER_ID.to_owned(),
+        })),
+        ..FakeRepo::default()
+    };
+    let updated = service(repo.clone())
+        .patch_harness(
+            caller(OWNER_ID),
+            HarnessId::TEST_A,
+            PatchHarnessRequest {
+                name: Some("  studio  ".to_owned()),
+                allow_permission_bypass: Some(true),
+            },
+        )
+        .await
+        .unwrap();
+
+    assert!(updated.allow_permission_bypass);
+    assert_eq!(updated.name, "studio");
+    assert_eq!(
+        repo.calls.lock().unwrap().updated,
+        [(
+            HarnessId::TEST_A,
+            HarnessChanges {
+                name: Some("studio".to_owned()),
+                allow_permission_bypass: Some(true),
+            }
+        )]
+    );
 }
 
 #[tokio::test]
-async fn approval_requires_daemon_consent_when_the_daemon_names_a_ceiling() {
-    for requested in [None, Some(false), Some(true)] {
-        for approved in [false, true] {
-            let mut pairing = pending_pairing();
-            pairing.details.requested_allow_permission_bypass = requested;
-            let repo = FakeRepo {
-                pairing: Some(pairing),
-                approve_result: Some(harness(HarnessOwner::User {
-                    user_id: OWNER_ID.to_owned(),
-                })),
-                ..FakeRepo::default()
-            };
-            let result = service(repo.clone())
-                .approve_pairing(
-                    caller(OWNER_ID),
-                    CODE,
-                    ApprovePairingRequest {
-                        allow_permission_bypass: approved,
-                        name: None,
-                        team_id: None,
-                    },
-                )
-                .await;
-            let calls = repo.calls.lock().unwrap();
-            if requested == Some(false) && approved {
-                assert!(matches!(result, Err(HarnessError::BadRequest(_))));
-                assert!(calls.approved.is_empty());
-            } else {
-                result.unwrap();
-                assert_eq!(calls.approved[0].1.allow_permission_bypass, approved);
-            }
+async fn an_empty_patch_writes_nothing() {
+    let repo = FakeRepo {
+        harness: Some(harness(HarnessOwner::User {
+            user_id: OWNER_ID.to_owned(),
+        })),
+        ..FakeRepo::default()
+    };
+    let unchanged = service(repo.clone())
+        .patch_harness(
+            caller(OWNER_ID),
+            HarnessId::TEST_A,
+            PatchHarnessRequest::default(),
+        )
+        .await
+        .unwrap();
+
+    assert_eq!(unchanged.name, "erics-macbook");
+    assert!(repo.calls.lock().unwrap().updated.is_empty());
+}
+
+#[tokio::test]
+async fn a_patch_rejects_a_blank_name() {
+    let repo = FakeRepo {
+        harness: Some(harness(HarnessOwner::User {
+            user_id: OWNER_ID.to_owned(),
+        })),
+        ..FakeRepo::default()
+    };
+    let result = service(repo.clone())
+        .patch_harness(
+            caller(OWNER_ID),
+            HarnessId::TEST_A,
+            PatchHarnessRequest {
+                name: Some("   ".to_owned()),
+                allow_permission_bypass: None,
+            },
+        )
+        .await;
+
+    assert!(matches!(result, Err(HarnessError::BadRequest(_))));
+    assert!(repo.calls.lock().unwrap().updated.is_empty());
+}
+
+#[tokio::test]
+async fn only_a_harness_manager_may_patch() {
+    for (owner, caller_id, allowed) in [
+        (
+            HarnessOwner::User {
+                user_id: OWNER_ID.to_owned(),
+            },
+            MEMBER_ID,
+            false,
+        ),
+        (HarnessOwner::Team { team_id: TEAM_ID }, MEMBER_ID, false),
+        (HarnessOwner::Team { team_id: TEAM_ID }, OWNER_ID, true),
+    ] {
+        let repo = FakeRepo {
+            harness: Some(harness(owner.clone())),
+            ..FakeRepo::default()
+        };
+        let result = service(repo.clone())
+            .patch_harness(
+                caller(caller_id),
+                HarnessId::TEST_A,
+                PatchHarnessRequest {
+                    name: None,
+                    allow_permission_bypass: Some(true),
+                },
+            )
+            .await;
+
+        if allowed {
+            assert!(result.unwrap().allow_permission_bypass, "{owner:?}");
+        } else {
+            assert!(
+                matches!(result, Err(HarnessError::Unauthorized)),
+                "{owner:?} by {caller_id}"
+            );
+            assert!(repo.calls.lock().unwrap().updated.is_empty());
         }
     }
+
+    let result = service(FakeRepo::default())
+        .patch_harness(
+            caller(OWNER_ID),
+            HarnessId::TEST_A,
+            PatchHarnessRequest {
+                name: None,
+                allow_permission_bypass: Some(false),
+            },
+        )
+        .await;
+    assert!(matches!(result, Err(HarnessError::NotFound(_))));
 }
 
 const COMPUTER_ID: Uuid = Uuid::from_u128(42);
@@ -797,8 +880,6 @@ async fn hosted_pairing_registers_an_approved_team_harness_past_the_throttle() {
     );
     assert_eq!(pairing.requested_name, "Standard computer");
     assert_eq!(pairing.host, None);
-    assert_eq!(pairing.requested_scope, Some(RequestedHarnessScope::Team));
-    assert_eq!(pairing.requested_allow_permission_bypass, Some(true));
     assert!(pairing.expires_at > Utc::now());
     assert_eq!(new_harness.name, "Standard computer");
     assert_eq!(new_harness.owner, HarnessOwner::Team { team_id: TEAM_ID });
