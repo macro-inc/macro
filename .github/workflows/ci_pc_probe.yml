@@ -1,0 +1,35 @@
+name: ci path check probe
+on:
+  pull_request:
+    branches: [main]
+    paths: ['.github/workflows/ci_pc_probe.yml']
+jobs:
+  probe:
+    strategy:
+      fail-fast: false
+      matrix:
+        n: [1, 2, 3]
+    runs-on: namespace-profile-linux-small;overrides.cache-tag=sccache-ci
+    timeout-minutes: 10
+    steps:
+    - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
+      with:
+        fetch-depth: 2
+    - uses: namespacelabs/nscloud-cache-action@15799a6b54e5765f85b2aac25b3f0df43ed571c0
+      with:
+        path: |-
+          /home/runner/.cache/macro-nextest-filter
+          /home/runner/.cargo/registry
+          /home/runner/.cargo/git
+      continue-on-error: true
+    - name: metadata
+      run: |
+        t() { s=$(date +%s.%N); "$@" >/dev/null 2>&1; rc=$?; e=$(date +%s.%N); echo "RESULT $1_$2 rc=$rc $(python3 -c "print(round($e-$s,2))")"; }
+        du -sh ~/.cargo/registry ~/.cargo/git 2>/dev/null
+        ls ~/.cargo/registry/src/*/ 2>/dev/null | wc -l
+        t cargo metadata --format-version 1 --locked
+        t cargo metadata --format-version 1 --locked
+        t cargo metadata --format-version 1 --locked --offline
+        t find ~/.cargo/registry/src -name Cargo.toml
+        s=$(date +%s.%N); find ~/.cargo/registry/src ~/.cargo/git/checkouts -name Cargo.toml -exec cat {} + > /dev/null 2>&1; e=$(date +%s.%N); echo "RESULT read_manifests $(python3 -c "print(round($e-$s,2))")"
+        t cargo metadata --format-version 1 --locked
