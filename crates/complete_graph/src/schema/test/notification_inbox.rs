@@ -11,9 +11,9 @@ use ::attention_feed::{
     inbound::viewers::FeedViewerResolver,
 };
 use ::notification_inbox::domain::models::{
-    InboxActor, InboxChange, InboxDoneOutcome, InboxEntry, InboxNotificationDoneOutcome, InboxPage,
-    InboxQuery, InboxRow, InboxRowAction, InboxRowActionKind, InboxRowId, InboxRowTarget,
-    InboxRowType, InboxScope,
+    InboxActor, InboxChange, InboxClearOutcome, InboxClearRequest, InboxDoneOutcome, InboxEntry,
+    InboxNotificationDoneOutcome, InboxPage, InboxQuery, InboxRow, InboxRowAction,
+    InboxRowActionKind, InboxRowId, InboxRowTarget, InboxRowType, InboxScope,
 };
 use async_graphql::futures_util::{StreamExt as _, future::BoxFuture, pin_mut};
 use entity_access::domain::models::{EntityAccessReceipt, MemberTeamRole};
@@ -106,6 +106,7 @@ struct RecordingInboxService {
     recomputes: Mutex<Vec<(InboxScope, Vec<FeedKey>)>>,
     dones: Mutex<Vec<Vec<InboxRowTarget>>>,
     notification_dones: Mutex<Vec<(InboxScope, InboxRowId, Uuid)>>,
+    clears: Mutex<Vec<InboxClearRequest>>,
     undos: Mutex<Vec<(InboxScope, DoneReceipt)>>,
     seens: Mutex<Vec<(InboxScope, Vec<InboxRowId>)>>,
 }
@@ -198,6 +199,28 @@ impl NotificationInboxGraphqlService for Recording {
                     notification_ids: vec![notification],
                     ..Default::default()
                 },
+            })
+        })
+    }
+
+    fn clear(
+        &self,
+        _viewer: FeedViewer,
+        request: InboxClearRequest,
+    ) -> BoxFuture<'_, Result<InboxClearOutcome, FeedError>> {
+        self.0.clears.lock().unwrap().push(request);
+        Box::pin(async {
+            Ok(InboxClearOutcome {
+                rows: 3,
+                receipt: DoneReceipt {
+                    keys: vec![doc_group().id()],
+                    notification_ids: vec![Uuid::from_u128(1), Uuid::from_u128(2)],
+                    ..Default::default()
+                },
+                next: Some(FeedPosition {
+                    sort_at: at(7),
+                    entity_id: DOC_ID.to_string(),
+                }),
             })
         })
     }
@@ -475,6 +498,57 @@ async fn one_notification_of_a_row_is_marked_done() {
     assert_eq!(dones[0].0.row_types, vec![InboxRowType::DiscussionThread]);
     assert_eq!(dones[0].1, thread_row_id());
     assert_eq!(dones[0].2, notification);
+}
+
+#[tokio::test]
+async fn the_inbox_is_cleared_one_batch_at_a_time() {
+    let harness = harness();
+    let service = Arc::new(RecordingInboxService::default());
+    let triggers = ManualTriggers::default();
+
+    let cleared = harness
+        .schema
+        .execute(
+            harness
+                .request(
+                    r#"mutation { clearNotificationInbox(input: {
+                        scope: { rowTypes: [EMAIL] }, unreadOnly: true,
+                        since: "2024-06-01T00:00:00+02:00", limit: 150
+                    }) { rowCount undoToken nextCursor } }"#,
+                    authenticated_parts(),
+                )
+                .data(viewer_id())
+                .data(context(&service, &triggers)),
+        )
+        .await;
+
+    assert!(cleared.errors.is_empty(), "{:?}", cleared.errors);
+    let cleared = cleared.data.into_json().unwrap();
+    assert_eq!(cleared["clearNotificationInbox"]["rowCount"], 3);
+    let token = cleared["clearNotificationInbox"]["undoToken"]
+        .as_str()
+        .unwrap();
+    assert_eq!(
+        DoneReceipt::decode(token).unwrap().notification_ids.len(),
+        2
+    );
+    let cursor = cleared["clearNotificationInbox"]["nextCursor"]
+        .as_str()
+        .unwrap();
+    assert_eq!(FeedPosition::decode(cursor).unwrap().sort_at, at(7));
+    let clears = service.clears.lock().unwrap();
+    assert_eq!(clears[0].scope.row_types, vec![InboxRowType::Email]);
+    assert!(clears[0].unread_only);
+    assert_eq!(
+        clears[0].since,
+        Some(
+            chrono::DateTime::parse_from_rfc3339("2024-05-31T22:00:00Z")
+                .unwrap()
+                .with_timezone(&chrono::Utc)
+        )
+    );
+    assert_eq!(clears[0].limit, 150);
+    assert!(clears[0].after.is_none());
 }
 
 #[tokio::test]

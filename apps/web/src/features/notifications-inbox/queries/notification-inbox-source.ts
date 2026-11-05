@@ -18,6 +18,7 @@ import type {
   InboxScope,
   NotificationInboxRow,
 } from '../context/notifications-inbox-context';
+import { clearIncludes, type InboxClear } from '../core/inbox-filters';
 import {
   markRows,
   type RowMarks,
@@ -33,6 +34,7 @@ import {
   orderInboxRows,
 } from './notification-inbox-groups';
 import {
+  clearInboxBatch,
   markInboxNotificationDone,
   markInboxRowsDone,
   markInboxRowsSeen,
@@ -42,6 +44,8 @@ import { notificationInboxShape } from './notification-inbox-shape';
 
 /** Entries fetched per inbox page. */
 export const INBOX_PAGE_LIMIT = 50;
+/** Most batches one clear sends: 20,000 groups at the server's default. */
+const MAX_CLEAR_BATCHES = 200;
 
 const inboxCachedQuery = {
   query: stringifyDocument(NotificationInboxDocument),
@@ -291,6 +295,55 @@ export function createNotificationInboxSource(
     };
   };
 
+  const clear = async (request: InboxClear) => {
+    const client = options.client();
+    const hidden = (rows() ?? []).filter((row) => clearIncludes(request, row));
+    const hiddenIds = hidden.map((row) => row.id);
+    setDone((current) => markRows(current, hidden));
+    const input = {
+      scope: encodeInboxScope({ rowTypes: request.rowTypes }),
+      unreadOnly: request.unreadOnly,
+      since:
+        request.since === undefined
+          ? null
+          : new Date(request.since).toISOString(),
+    };
+    const undoTokens: string[] = [];
+    let count = 0;
+    let cursor: string | null = null;
+    try {
+      for (let batch = 0; batch < MAX_CLEAR_BATCHES; batch++) {
+        const cleared = await clearInboxBatch(client, { ...input, cursor });
+        undoTokens.push(cleared.undoToken);
+        count += cleared.rowCount;
+        cursor = cleared.nextCursor;
+        if (!cursor) break;
+      }
+    } catch (error) {
+      // Earlier batches stand; a fresh read shows what is left.
+      setDone((current) => unmarkRows(current, hiddenIds));
+      fireAndForget(live.refetch(), 'notifications-inbox');
+      throw error;
+    }
+    revalidate(client);
+    // Pages past those loaded may hold what moves up into view.
+    fireAndForget(live.refetch(), 'notifications-inbox');
+    return {
+      count,
+      undo: async () => {
+        // The filter may have changed since the clear; restore into this one.
+        const scope = scopeInput();
+        for (const token of undoTokens) {
+          const patches = await undoInboxRowsDone(client, token, scope);
+          applyIfCurrent(scope, patches);
+        }
+        setDone((current) => unmarkRows(current, hiddenIds));
+        revalidate(client);
+        fireAndForget(live.refetch(), 'notifications-inbox');
+      },
+    };
+  };
+
   const markSeen = async (targets: readonly NotificationInboxRow[]) => {
     const unseen = targets.filter((row) => row.unseen);
     if (unseen.length === 0) return;
@@ -321,6 +374,7 @@ export function createNotificationInboxSource(
     refresh: live.refetch,
     markDone,
     markNotificationDone,
+    clear,
     markSeen,
   };
 }

@@ -8,6 +8,7 @@ version = "0.1.0"
 async-graphql = { workspace = true }
 async-stream = { workspace = true }
 attention_feed = { path = "../attention_feed", features = ["inbound"] }
+chrono = { workspace = true }
 futures = { workspace = true }
 graphql_common = { path = "../graphql_common" }
 graphql_notification = { path = "../graphql_notification" }
