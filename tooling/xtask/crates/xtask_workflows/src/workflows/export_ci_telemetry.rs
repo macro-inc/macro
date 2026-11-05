@@ -93,9 +93,17 @@ pub fn export_ci_telemetry() -> Workflow {
         .add_job("export", export())
 }
 
+/// Run embedded TypeScript on the hosted image's Node, which strips types itself, so
+/// the exporter needs no checkout, build or dependency.
+fn node_script(source: &str) -> String {
+    format!(
+        "node --disable-warning=ExperimentalWarning --input-type=module-typescript <<'TELEMETRY_SCRIPT'\n{source}\nawait main();\nTELEMETRY_SCRIPT\n"
+    )
+}
+
 fn export() -> Job {
     Job::default()
-        // GitHub's hosted image supplies AWS CLI and Python without a checkout/setup step.
+        // GitHub's hosted image supplies AWS CLI, Python and Node without a checkout/setup step.
         .runs_on("ubuntu-latest")
         .timeout_minutes(10u32)
         .add_step(
@@ -111,8 +119,8 @@ fn export() -> Job {
         // Before any credential exists, so nothing the run produced shares a step with it.
         .add_step(
             Step::new("Collect push, job and step events")
-                .run(include_str!("scripts/ci_telemetry_collect.py"))
-                .shell("python3 {0}")
+                .run(node_script(include_str!("scripts/ci_telemetry_collect.ts")))
+                .shell("bash")
                 .if_condition(Expression::new("always()"))
                 .continue_on_error(true)
                 .timeout_minutes(2u32)
@@ -145,8 +153,8 @@ fn export() -> Job {
         // the only record of a run the trace exporter refuses.
         .add_step(
             Step::new("Send push, job and step events")
-                .run(include_str!("scripts/ci_telemetry_send.py"))
-                .shell("python3 {0}")
+                .run(node_script(include_str!("scripts/ci_telemetry_send.ts")))
+                .shell("bash")
                 .if_condition(Expression::new("always()"))
                 .continue_on_error(true)
                 .timeout_minutes(1u32)

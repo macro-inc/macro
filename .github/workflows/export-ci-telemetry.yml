@@ -115,467 +115,598 @@ jobs:
     - name: Collect push, job and step events
       if: always()
       run: |
-        """Turn one completed workflow run into CI telemetry events, as an OTLP logs file.
+        node --disable-warning=ExperimentalWarning --input-type=module-typescript <<'TELEMETRY_SCRIPT'
+        // Turn one completed workflow run into CI telemetry events, as an OTLP logs file.
+        //
+        // Runs in the privileged exporter without the ingestion token. Everything here is
+        // best effort: an error becomes a warning, and the observed workflow is never
+        // affected. Events carry ids, names of our own jobs and steps, and timings, never
+        // branch names, actors, titles or file paths.
 
-        Runs in the privileged exporter without the ingestion token. Everything here is
-        best effort: an error becomes a warning, and the observed workflow is never
-        affected. Events carry ids, names of our own jobs and steps, and timings, never
-        branch names, actors, titles or file paths.
-        """
+        import { createHash } from 'node:crypto';
+        import { readFileSync, writeFileSync } from 'node:fs';
 
-        import datetime
-        import hashlib
-        import json
-        import os
-        import re
-        import sys
-        import time
-        import urllib.parse
-        import urllib.request
+        const API = 'https://api.github.com';
+        const PR_EVENTS = new Set(['pull_request', 'pull_request_target']);
+        // Runs after a PR closes, so it is never part of waiting for checks.
+        const NOT_A_CHECK = new Set(['Cleanup Preview']);
+        // Experiment branches stay queryable but are flagged out of the real PR numbers.
+        const EXPERIMENT_BRANCH = /^[^/]+\/ci-/;
+        // A warm volume restores the dev shell in about 4 s, an empty one takes 110 s or more.
+        export const DEV_SHELL_STEP = 'Setup Nix dev shell';
+        const COLD_VOLUME_SECONDS = 30;
+        // A start this long after the push was not caused by it: a reopen or leaving draft.
+        const MAX_PUSH_LAG_SECONDS = 600;
+        // Below this a step is noise, and it stays visible in the trace.
+        const MIN_STEP_SECONDS = 1;
+        // Stop before the exporter's own traces start failing for lack of API budget.
+        const MIN_RATE_REMAINING = 100;
+        const MAX_FILE_PAGES = 3;
+        // Roll-up jobs finish last by design, so they never say what held a push up.
+        const ROLL_UP_JOB = /status[ -]check/i;
+        // Loki refuses a line this far behind its stream's newest one.
+        export const MAX_EVENT_AGE_SECONDS = 1800;
+        const SMALL_RUST_CRATES = 2;
+        const MEDIUM_RUST_CRATES = 9;
+        const WEB_SUFFIXES = ['.ts', '.tsx', '.js', '.jsx', '.css', '.html', '.svelte'];
+        const RUST_ROOT_FILES = new Set(['Cargo.toml', 'Cargo.lock', 'rust-toolchain.toml']);
+        const CRATE_DIRECTORIES = new Set(['src', 'tests', 'benches', 'examples', 'migrations']);
 
-        API = "https://api.github.com"
-        PR_EVENTS = {"pull_request", "pull_request_target"}
-        # Runs after a PR closes, so it is never part of waiting for checks.
-        NOT_A_CHECK = {"Cleanup Preview"}
-        # Experiment branches stay queryable but are flagged out of the real PR numbers.
-        EXPERIMENT_BRANCH = re.compile(r"^[^/]+/ci-")
-        # A warm volume restores the dev shell in about 4 s, an empty one takes 110 s or more.
-        DEV_SHELL_STEP = "Setup Nix dev shell"
-        COLD_VOLUME_SECONDS = 30
-        # A start this long after the push was not caused by it: a reopen or leaving draft.
-        MAX_PUSH_LAG_SECONDS = 600
-        # Below this a step is noise, and it stays visible in the trace.
-        MIN_STEP_SECONDS = 1
-        # Stop before the exporter's own traces start failing for lack of API budget.
-        MIN_RATE_REMAINING = 100
-        MAX_FILE_PAGES = 3
-        # Roll-up jobs finish last by design, so they never say what held a push up.
-        ROLL_UP_JOB = re.compile(r"status[ -]check", re.IGNORECASE)
-        # Loki refuses a line this far behind its stream's newest one.
-        MAX_EVENT_AGE_SECONDS = 1800
-        SMALL_RUST_CRATES = 2
-        MEDIUM_RUST_CRATES = 9
-        WEB_SUFFIXES = (".ts", ".tsx", ".js", ".jsx", ".css", ".html", ".svelte")
-        RUST_ROOT_FILES = {"Cargo.toml", "Cargo.lock", "rust-toolchain.toml"}
-        CRATE_DIRECTORIES = {"src", "tests", "benches", "examples", "migrations"}
+        export type Timed = {
+          started_at?: string | null;
+          completed_at?: string | null;
+          conclusion?: string | null;
+        };
 
+        export type Step = Timed & { name: string };
 
-        def parse_time(value):
-            return datetime.datetime.fromisoformat(value.replace("Z", "+00:00")) if value else None
+        export type Job = Timed & {
+          id: number;
+          name: string;
+          created_at?: string | null;
+          labels?: string[] | null;
+          steps?: Step[] | null;
+        };
 
+        export type Run = {
+          id: number;
+          name: string;
+          run_attempt: number;
+          event: string;
+          head_sha: string;
+          head_branch?: string | null;
+          status: string;
+          conclusion: string | null;
+          created_at: string;
+          updated_at: string;
+          pull_requests?: { number: number }[] | null;
+          head_repository?: { fork?: boolean } | null;
+        };
 
-        def seconds(start, end):
-            return int((end - start).total_seconds())
+        export type PullRequest = { created_at: string; draft?: boolean };
 
+        type Interval = [Date, Date];
+        type Attributes = Record<string, string | number | boolean>;
 
-        class Github:
-            """Counts its own calls and stops before exhausting the shared token budget."""
+        export type TelemetryEvent = {
+          body: string;
+          at: Date;
+          attributes: Attributes;
+          ids: [traceId: string, spanId: string];
+        };
 
-            def __init__(self, repo, token):
-                self.repo, self.token = repo, token
-                self.calls = 0
-                self.rate_limit = self.rate_remaining = None
+        export interface GithubApi {
+          get(path: string, params?: Record<string, string | number>): Promise<any>;
+          calls: number;
+          rateLimit: number | null;
+          rateRemaining: number | null;
+        }
 
-            def get(self, path, **params):
-                if self.rate_remaining is not None and self.rate_remaining < MIN_RATE_REMAINING:
-                    raise RuntimeError("GitHub API budget is low")
-                query = f"?{urllib.parse.urlencode(params)}" if params else ""
-                request = urllib.request.Request(
-                    f"{API}/repos/{self.repo}/{path}{query}",
-                    headers={
-                        "Authorization": f"Bearer {self.token}",
-                        "Accept": "application/vnd.github+json",
-                    },
-                )
-                self.calls += 1
-                with urllib.request.urlopen(request, timeout=20) as response:
-                    self.rate_limit = int(response.headers.get("x-ratelimit-limit") or 0) or None
-                    self.rate_remaining = int(response.headers.get("x-ratelimit-remaining") or 0)
-                    return json.load(response)
+        function parseTime(value: string | null | undefined): Date | null {
+          return value ? new Date(value) : null;
+        }
 
+        function seconds(start: Date, end: Date): number {
+          return Math.trunc((end.getTime() - start.getTime()) / 1000);
+        }
 
-        def crate_root(parts):
-            """The directory holding a crate's sources, which may be nested in a workspace."""
-            for index, part in enumerate(parts[:-1]):
-                if part in CRATE_DIRECTORIES:
-                    return "/".join(parts[:index])
-            return "/".join(parts[:-1]) or parts[0]
+        function maxBy<T>(items: T[], key: (item: T) => number): T {
+          return items.reduce((best, item) => (key(item) > key(best) ? item : best));
+        }
 
+        export class HttpError extends Error {
+          code: number;
 
-        def classify_files(paths):
-            """Return (pr_type, rust_crates_changed) from the changed paths.
+          constructor(code: number) {
+            super(`HTTP ${code}`);
+            this.code = code;
+          }
+        }
 
-            Sizes count changed crates, because the workflow API can't see how many
-            packages path-check selected.
-            """
-            crates, root_manifest = set(), False
-            web = infra = False
-            for path in paths:
-                parts = path.split("/")
-                if parts[0] in ("infra", ".github") or path.endswith(".nix"):
-                    infra = True
-                elif path.endswith(".rs") or parts[0] in ("crates", ".sqlx") or parts[-1] in RUST_ROOT_FILES:
-                    if len(parts) == 1:
-                        root_manifest = True
-                    crates.add(crate_root(parts))
-                elif parts[0] in ("apps", "packages") or path.endswith(WEB_SUFFIXES):
-                    web = True
-                elif parts[0] == "tooling":
-                    infra = True
-            rust = bool(crates)
-            if rust and web:
-                return "mixed", len(crates)
-            if rust:
-                if root_manifest or len(crates) > MEDIUM_RUST_CRATES:
-                    return "rust-large", len(crates)
-                return ("rust-small" if len(crates) <= SMALL_RUST_CRATES else "rust-medium"), len(crates)
-            if web:
-                return "web", 0
-            return ("infra" if infra else "other"), 0
+        /** Counts its own calls and stops before exhausting the shared token budget. */
+        class Github implements GithubApi {
+          repo: string;
+          token: string;
+          calls = 0;
+          rateLimit: number | null = null;
+          rateRemaining: number | null = null;
 
+          constructor(repo: string, token: string) {
+            this.repo = repo;
+            this.token = token;
+          }
 
-        def run_attributes(run):
-            pull_requests = run.get("pull_requests") or []
-            attributes = {
-                "workflow": run["name"],
-                "run_id": run["id"],
-                "run_attempt": run["run_attempt"],
-                "event_name": run["event"],
-                "head_sha": run["head_sha"],
-                "experiment": bool(EXPERIMENT_BRANCH.match(run.get("head_branch") or "")),
-                "rerun": run["run_attempt"] > 1,
+          async get(path: string, params: Record<string, string | number> = {}) {
+            if (this.rateRemaining !== null && this.rateRemaining < MIN_RATE_REMAINING) {
+              throw new Error('GitHub API budget is low');
             }
-            if pull_requests:
-                attributes["pr_number"] = pull_requests[0]["number"]
-            return attributes
+            const query = new URLSearchParams(
+              Object.entries(params).map(([key, value]): [string, string] => [key, String(value)])
+            ).toString();
+            this.calls += 1;
+            const response = await fetch(`${API}/repos/${this.repo}/${path}${query ? `?${query}` : ''}`, {
+              headers: {
+                Authorization: `Bearer ${this.token}`,
+                Accept: 'application/vnd.github+json',
+              },
+              signal: AbortSignal.timeout(20_000),
+            });
+            if (!response.ok) throw new HttpError(response.status);
+            this.rateLimit = Number(response.headers.get('x-ratelimit-limit')) || null;
+            this.rateRemaining = Number(response.headers.get('x-ratelimit-remaining')) || 0;
+            return response.json();
+          }
+        }
 
+        /** The directory holding a crate's sources, which may be nested in a workspace. */
+        function crateRoot(parts: string[]): string {
+          for (const [index, part] of parts.slice(0, -1).entries()) {
+            if (CRATE_DIRECTORIES.has(part)) return parts.slice(0, index).join('/');
+          }
+          return parts.slice(0, -1).join('/') || parts[0];
+        }
 
-        def trace_ids(repo, run, suffix=None):
-            """Reproduce gha-otel-export's ids, so an event links to its workflow trace."""
-            prefix = f"{repo}{run['id']}{run['run_attempt']}"
-            trace_id = hashlib.sha256(f"{prefix}t".encode()).hexdigest()[:32]
-            span_id = hashlib.sha256(f"{prefix}{'s' if suffix is None else suffix}".encode()).hexdigest()
-            return trace_id, span_id[16:32]
+        /**
+         * Return [pr_type, rust_crates_changed] from the changed paths.
+         *
+         * Sizes count changed crates, because the workflow API can't see how many packages
+         * path-check selected.
+         */
+        export function classifyFiles(paths: readonly string[]): [string, number] {
+          const crates = new Set<string>();
+          let rootManifest = false;
+          let web = false;
+          let infra = false;
+          for (const path of paths) {
+            const parts = path.split('/');
+            if (parts[0] === 'infra' || parts[0] === '.github' || path.endsWith('.nix')) {
+              infra = true;
+            } else if (
+              path.endsWith('.rs') ||
+              parts[0] === 'crates' ||
+              parts[0] === '.sqlx' ||
+              RUST_ROOT_FILES.has(parts[parts.length - 1])
+            ) {
+              if (parts.length === 1) rootManifest = true;
+              crates.add(crateRoot(parts));
+            } else if (
+              parts[0] === 'apps' ||
+              parts[0] === 'packages' ||
+              WEB_SUFFIXES.some((suffix) => path.endsWith(suffix))
+            ) {
+              web = true;
+            } else if (parts[0] === 'tooling') {
+              infra = true;
+            }
+          }
+          if (crates.size > 0 && web) return ['mixed', crates.size];
+          if (crates.size > 0) {
+            if (rootManifest || crates.size > MEDIUM_RUST_CRATES) return ['rust-large', crates.size];
+            return [crates.size <= SMALL_RUST_CRATES ? 'rust-small' : 'rust-medium', crates.size];
+          }
+          if (web) return ['web', 0];
+          return [infra ? 'infra' : 'other', 0];
+        }
 
+        function runAttributes(run: Run): Attributes {
+          const attributes: Attributes = {
+            workflow: run.name,
+            run_id: run.id,
+            run_attempt: run.run_attempt,
+            event_name: run.event,
+            head_sha: run.head_sha,
+            experiment: EXPERIMENT_BRANCH.test(run.head_branch ?? ''),
+            rerun: run.run_attempt > 1,
+          };
+          const pullRequest = run.pull_requests?.[0];
+          if (pullRequest) attributes.pr_number = pullRequest.number;
+          return attributes;
+        }
 
-        def timed(entry):
-            """Started and finished, not skipped, and with times GitHub didn't copy from an old attempt."""
-            start, end = parse_time(entry.get("started_at")), parse_time(entry.get("completed_at"))
-            if entry.get("conclusion") == "skipped" or not start or not end or end < start:
-                return None
-            return start, end
+        /** Reproduce gha-otel-export's ids, so an event links to its workflow trace. */
+        export function traceIds(
+          repo: string,
+          run: Pick<Run, 'id' | 'run_attempt'>,
+          suffix?: string
+        ): [string, string] {
+          const prefix = `${repo}${run.id}${run.run_attempt}`;
+          const hash = (input: string) => createHash('sha256').update(input).digest('hex');
+          return [hash(`${prefix}t`).slice(0, 32), hash(`${prefix}${suffix ?? 's'}`).slice(16, 32)];
+        }
 
+        /** Started and finished, not skipped, and with times GitHub didn't copy from an old attempt. */
+        function timed(entry: Timed): Interval | null {
+          const start = parseTime(entry.started_at);
+          const end = parseTime(entry.completed_at);
+          if (entry.conclusion === 'skipped' || !start || !end || end < start) return null;
+          return [start, end];
+        }
 
-        def volume_state(job):
-            for step in job.get("steps") or []:
-                times = timed(step)
-                if step["name"] == DEV_SHELL_STEP and times:
-                    return ("cold" if seconds(*times) >= COLD_VOLUME_SECONDS else "warm"), seconds(*times)
-            return None, None
+        function volumeState(job: Job): [string, number] | null {
+          for (const step of job.steps ?? []) {
+            const times = timed(step);
+            if (step.name === DEV_SHELL_STEP && times) {
+              const duration = seconds(...times);
+              return [duration >= COLD_VOLUME_SECONDS ? 'cold' : 'warm', duration];
+            }
+          }
+          return null;
+        }
 
+        /** Null for a partial rerun's copied job, which starts before it was created. */
+        function queueSeconds(job: Job, times: Interval): number | null {
+          const created = parseTime(job.created_at);
+          if (!created || times[0] < created) return null;
+          return seconds(created, times[0]);
+        }
 
-        def queue_seconds(job, times):
-            """None for a partial rerun's copied job, which starts before it was created."""
-            created = parse_time(job.get("created_at"))
-            if not created or times[0] < created:
-                return None
-            return seconds(created, times[0])
+        /** One event per job that ran, and one per step long enough to matter. */
+        export function jobEvents(repo: string, run: Run, jobs: Job[]): TelemetryEvent[] {
+          const base = runAttributes(run);
+          const events: TelemetryEvent[] = [];
+          for (const job of jobs) {
+            const times = timed(job);
+            if (!times) continue;
+            const attributes: Attributes = {
+              ...base,
+              event: 'job',
+              job: job.name,
+              job_id: job.id,
+              conclusion: job.conclusion ?? '',
+              run_seconds: seconds(...times),
+            };
+            const queue = queueSeconds(job, times);
+            if (queue !== null) attributes.queue_seconds = queue;
+            const label = job.labels?.[0];
+            if (label) attributes.runner_profile = label.split(';')[0];
+            const volume = volumeState(job);
+            if (volume) {
+              attributes.volume_state = volume[0];
+              attributes.dev_shell_seconds = volume[1];
+            }
+            events.push({
+              body: `job ${job.id} ${run.run_attempt}`,
+              at: times[1],
+              attributes,
+              ids: traceIds(repo, run, job.name),
+            });
+            for (const [number, step] of (job.steps ?? []).entries()) {
+              const stepTimes = timed(step);
+              if (!stepTimes || seconds(...stepTimes) < MIN_STEP_SECONDS) continue;
+              events.push({
+                body: `step ${job.id} ${number} ${run.run_attempt}`,
+                at: stepTimes[1],
+                attributes: {
+                  ...base,
+                  event: 'step',
+                  job: job.name,
+                  job_id: job.id,
+                  step: step.name,
+                  conclusion: step.conclusion ?? '',
+                  run_seconds: seconds(...stepTimes),
+                },
+                ids: traceIds(repo, run, job.name + step.name),
+              });
+            }
+          }
+          return events;
+        }
 
+        /**
+         * The runs started together with this one, and how many such groups came before.
+         *
+         * A run that starts after everything on the head has finished wasn't part of that
+         * wait: it came from a PR edit, a label or leaving draft.
+         */
+        export function sameTriggerRuns(runs: Run[], run: Pick<Run, 'id'>): [Run[], number] {
+          const created = (entry: Run) => new Date(entry.created_at).getTime();
+          const groups: Run[][] = [];
+          let groupEnd = 0;
+          for (const candidate of [...runs].sort((a, b) => created(a) - created(b))) {
+            const end =
+              candidate.status === 'completed' ? new Date(candidate.updated_at).getTime() : Infinity;
+            const group = groups[groups.length - 1];
+            if (group && created(candidate) <= groupEnd) {
+              group.push(candidate);
+              groupEnd = Math.max(groupEnd, end);
+            } else {
+              groups.push([candidate]);
+              groupEnd = end;
+            }
+          }
+          for (const [index, group] of groups.entries()) {
+            if (group.some((candidate) => candidate.id === run.id)) return [group, index];
+          }
+          return [[], 0];
+        }
 
-        def job_events(repo, run, jobs):
-            """One event per job that ran, and one per step long enough to matter."""
-            base = run_attributes(run)
-            events = []
-            for job in jobs:
-                times = timed(job)
-                if not times:
-                    continue
-                labels = job.get("labels") or []
-                attributes = {
-                    **base,
-                    "event": "job",
-                    "job": job["name"],
-                    "job_id": job["id"],
-                    "conclusion": job["conclusion"],
-                    "run_seconds": seconds(*times),
-                }
-                queue = queue_seconds(job, times)
-                if queue is not None:
-                    attributes["queue_seconds"] = queue
-                if labels:
-                    attributes["runner_profile"] = labels[0].split(";")[0]
-                volume, dev_shell = volume_state(job)
-                if volume:
-                    attributes["volume_state"] = volume
-                    attributes["dev_shell_seconds"] = dev_shell
-                events.append(
-                    (f"job {job['id']} {run['run_attempt']}", times[1], attributes, trace_ids(repo, run, job["name"]))
-                )
-                for number, step in enumerate(job.get("steps") or []):
-                    step_times = timed(step)
-                    if not step_times or seconds(*step_times) < MIN_STEP_SECONDS:
-                        continue
-                    events.append(
-                        (
-                            f"step {job['id']} {number} {run['run_attempt']}",
-                            step_times[1],
-                            {
-                                **base,
-                                "event": "step",
-                                "job": job["name"],
-                                "job_id": job["id"],
-                                "step": step["name"],
-                                "conclusion": step["conclusion"],
-                                "run_seconds": seconds(*step_times),
-                            },
-                            trace_ids(repo, run, job["name"] + step["name"]),
-                        )
+        /** A workflow's newest run decides, since a PR edit can correct an earlier failure. */
+        function conclusionOf(runs: Run[]): string {
+          const ordered = [...runs].sort(
+            (a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime() || a.id - b.id
+          );
+          const newest = new Map(ordered.map((run) => [run.name, run]));
+          const conclusions = new Set([...newest.values()].map((run) => run.conclusion));
+          if (['failure', 'timed_out', 'startup_failure'].some((failed) => conclusions.has(failed))) {
+            return 'failure';
+          }
+          return conclusions.has('cancelled') ? 'cancelled' : 'success';
+        }
+
+        /** When the wait began: the push, or opening the PR when that came later. */
+        export function clockStart(
+          firstCreated: Date,
+          pushedAt: Date | null,
+          prCreatedAt: Date | null
+        ): [Date, string] {
+          if (!pushedAt) return [firstCreated, 'first_run'];
+          const start = prCreatedAt && prCreatedAt > pushedAt ? prCreatedAt : pushedAt;
+          if (start > firstCreated || seconds(start, firstCreated) > MAX_PUSH_LAG_SECONDS) {
+            return [firstCreated, 'first_run'];
+          }
+          return [start, start === pushedAt ? 'push' : 'pr_open'];
+        }
+
+        type Finished = { end: Date; times: Interval; job: Job; run: Run };
+
+        /**
+         * The whole push: start to last job, by PR type. Null when no job ran.
+         *
+         * `repeat` counts earlier groups of runs on this head. Those later groups are not
+         * the push's wait, so they are flagged as reruns.
+         */
+        export function pushEvent(
+          repo: string,
+          run: Run,
+          runs: Run[],
+          jobsByRun: Map<number, Job[]>,
+          pushedAt: Date | null,
+          pullRequest: PullRequest | null,
+          files: readonly string[] | null,
+          repeat = 0
+        ): TelemetryEvent | null {
+          const finished: Finished[] = [];
+          for (const candidate of runs) {
+            for (const job of jobsByRun.get(candidate.id) ?? []) {
+              const times = timed(job);
+              if (times) finished.push({ end: times[1], times, job, run: candidate });
+            }
+          }
+          if (finished.length === 0) return null;
+          const firstCreated = new Date(Math.min(...runs.map((c) => new Date(c.created_at).getTime())));
+          const prCreatedAt = pullRequest ? new Date(pullRequest.created_at) : null;
+          const [start, startSource] = clockStart(firstCreated, pushedAt, prCreatedAt);
+          const end = maxBy(finished, (entry) => entry.end.getTime()).end;
+          const notRollUp = finished.filter((entry) => !ROLL_UP_JOB.test(entry.job.name));
+          const work = notRollUp.length > 0 ? notRollUp : finished;
+          const last = maxBy(work, (entry) => entry.end.getTime());
+          const slowest = maxBy(work, (entry) => seconds(...entry.times));
+          const queues = finished
+            .map((entry) => queueSeconds(entry.job, entry.times))
+            .filter((queue) => queue !== null);
+          const [prType, rustCrates] = files !== null ? classifyFiles(files) : ['unknown', 0];
+          const attributes: Attributes = {
+            ...runAttributes(run),
+            event: 'push',
+            pr_type: prType,
+            rust_crates_changed: rustCrates,
+            conclusion: conclusionOf(runs),
+            wall_seconds: seconds(start, end),
+            wall_start: startSource,
+            start_lag_seconds: seconds(start, firstCreated),
+            last_workflow: last.run.name,
+            last_job: last.job.name,
+            last_job_seconds: seconds(...last.times),
+            slowest_job: slowest.job.name,
+            slowest_job_seconds: seconds(...slowest.times),
+            queue_max_seconds: Math.max(0, ...queues),
+            queue_total_seconds: queues.reduce((sum, queue) => sum + queue, 0),
+            workflows: runs.length,
+            jobs: finished.length,
+            cold_volumes: finished.filter((entry) => volumeState(entry.job)?.[0] === 'cold').length,
+            rerun: repeat > 0 || runs.some((candidate) => candidate.run_attempt > 1),
+          };
+          delete attributes.workflow;
+          delete attributes.run_id;
+          delete attributes.run_attempt;
+          if (files !== null) attributes.files_changed = files.length;
+          if (pullRequest) attributes.pr_draft = Boolean(pullRequest.draft);
+          if (run.head_repository?.fork) attributes.fork = true;
+          const attempts = runs.reduce((sum, candidate) => sum + candidate.run_attempt, 0);
+          // The body and time are the same from every exporter that sees the push finish,
+          // so Loki drops the duplicates when two runs complete together.
+          return {
+            body: `push ${run.head_sha} ${repeat} ${attempts}`,
+            at: end,
+            attributes,
+            ids: traceIds(repo, last.run, last.job.name),
+          };
+        }
+
+        async function pushedTime(github: GithubApi, branch: string, headSha: string) {
+          const activity: { after?: string; timestamp: string }[] = await github.get('activity', {
+            ref: `refs/heads/${branch}`,
+            per_page: 30,
+          });
+          const entry = activity.find((candidate) => candidate.after === headSha);
+          return entry ? new Date(entry.timestamp) : null;
+        }
+
+        async function changedFiles(github: GithubApi, number: number) {
+          const paths: string[] = [];
+          for (let page = 1; page <= MAX_FILE_PAGES; page += 1) {
+            const batch: { filename: string }[] = await github.get(`pulls/${number}/files`, {
+              per_page: 100,
+              page,
+            });
+            paths.push(...batch.map((entry) => entry.filename));
+            if (batch.length < 100) break;
+          }
+          return paths;
+        }
+
+        /** The push event once this completion is the last one, otherwise null. */
+        export async function collectPush(
+          github: GithubApi,
+          repo: string,
+          run: Run
+        ): Promise<TelemetryEvent | null> {
+          if (!PR_EVENTS.has(run.event)) return null;
+          const listing: { workflow_runs: Run[] } = await github.get('actions/runs', {
+            head_sha: run.head_sha,
+            per_page: 100,
+          });
+          const checks = listing.workflow_runs.filter(
+            (candidate) => PR_EVENTS.has(candidate.event) && !NOT_A_CHECK.has(candidate.name)
+          );
+          const [runs, repeat] = sameTriggerRuns(checks, run);
+          if (runs.length === 0 || runs.some((candidate) => candidate.status !== 'completed')) {
+            return null;
+          }
+          const jobsByRun = new Map<number, Job[]>();
+          for (const candidate of runs) {
+            jobsByRun.set(
+              candidate.id,
+              candidate.conclusion === 'skipped'
+                ? []
+                : (
+                    await github.get(
+                      `actions/runs/${candidate.id}/attempts/${candidate.run_attempt}/jobs`,
+                      { per_page: 100 }
                     )
-            return events
+                  ).jobs
+            );
+          }
+          const number = run.pull_requests?.[0]?.number;
+          const pullRequest: PullRequest | null = number ? await github.get(`pulls/${number}`) : null;
+          const files = number ? await changedFiles(github, number) : null;
+          const pushedAt =
+            !run.head_repository?.fork && run.head_branch
+              ? await pushedTime(github, run.head_branch, run.head_sha)
+              : null;
+          return pushEvent(repo, run, runs, jobsByRun, pushedAt, pullRequest, files, repeat);
+        }
 
+        function otlpValue(value: string | number | boolean) {
+          if (typeof value === 'boolean') return { boolValue: value };
+          if (typeof value === 'number') return { intValue: String(value) };
+          return { stringValue: value };
+        }
 
-        def same_trigger_runs(runs, run):
-            """The runs started together with this one, and how many such groups came before.
+        /** OTLP logs. A record's time is its event's, clamped to what Loki will accept. */
+        export function toOtlp(events: TelemetryEvent[], now: Date) {
+          const oldest = now.getTime() - MAX_EVENT_AGE_SECONDS * 1000;
+          const logRecords = events.map(({ body, at, attributes, ids: [traceId, spanId] }) => ({
+            timeUnixNano: `${Math.trunc(Math.max(at.getTime(), oldest) / 1000)}000000000`,
+            severityText: 'INFO',
+            body: { stringValue: body },
+            traceId,
+            spanId,
+            attributes: Object.entries(attributes).map(([key, value]) => ({
+              key,
+              value: otlpValue(value),
+            })),
+          }));
+          const attributes = [
+            { key: 'service.name', value: { stringValue: 'ci-telemetry' } },
+            { key: 'deployment.environment', value: { stringValue: 'ci' } },
+          ];
+          return {
+            resourceLogs: [
+              {
+                resource: { attributes },
+                scopeLogs: [{ scope: { name: 'ci-telemetry' }, logRecords }],
+              },
+            ],
+          };
+        }
 
-            A run that starts after everything on the head has finished wasn't part of that
-            wait: it came from a PR edit, a label or leaving draft.
-            """
-            groups, group_end = [], None
-            for candidate in sorted(runs, key=lambda entry: parse_time(entry["created_at"])):
-                created = parse_time(candidate["created_at"])
-                end = parse_time(candidate["updated_at"]) if candidate["status"] == "completed" else datetime.datetime.max.replace(tzinfo=datetime.timezone.utc)
-                if groups and created <= group_end:
-                    groups[-1].append(candidate)
-                    group_end = max(group_end, end)
-                else:
-                    groups.append([candidate])
-                    group_end = end
-            for index, group in enumerate(groups):
-                if any(candidate["id"] == run["id"] for candidate in group):
-                    return group, index
-            return [], 0
+        export async function collect(github: GithubApi, repo: string, run: Run) {
+          const events: TelemetryEvent[] = [];
+          try {
+            const { jobs } = await github.get(
+              `actions/runs/${run.id}/attempts/${run.run_attempt}/jobs`,
+              { per_page: 100 }
+            );
+            events.push(...jobEvents(repo, run, jobs));
+            const push = await collectPush(github, repo, run);
+            if (push) events.push(push);
+          } catch (error) {
+            // A partial export still helps. The class and status can't carry a token or a payload.
+            console.log(`::warning::CI telemetry partly collected: ${describe(error)}`);
+          }
+          return events;
+        }
 
+        function describe(error: unknown): string {
+          if (error instanceof HttpError) return `HttpError ${error.code}`;
+          return error instanceof Error ? error.constructor.name : 'unknown error';
+        }
 
-        def conclusion_of(runs):
-            """A workflow's newest run decides, since a PR edit can correct an earlier failure."""
-            newest = {}
-            for run in sorted(runs, key=lambda entry: (parse_time(entry["created_at"]), entry["id"])):
-                newest[run["name"]] = run
-            conclusions = {run["conclusion"] for run in newest.values()}
-            if conclusions & {"failure", "timed_out", "startup_failure"}:
-                return "failure"
-            return "cancelled" if "cancelled" in conclusions else "success"
+        function required(name: string): string {
+          const value = process.env[name];
+          if (!value) throw new Error('A required environment variable is missing');
+          return value;
+        }
 
+        async function runCollection() {
+          const started = performance.now();
+          const repo = required('GITHUB_REPOSITORY');
+          const run: Run = JSON.parse(readFileSync(required('GITHUB_EVENT_PATH'), 'utf8')).workflow_run;
+          const github = new Github(repo, required('GITHUB_TOKEN'));
+          const events = await collect(github, repo, run);
+          const now = new Date();
+          const counts: Attributes = {
+            event: 'export',
+            ...runAttributes(run),
+            events: events.length,
+            api_calls: github.calls,
+            collect_seconds: Math.round((performance.now() - started) / 1000),
+          };
+          if (github.rateRemaining !== null) counts.rate_remaining = github.rateRemaining;
+          if (github.rateLimit) counts.rate_limit = github.rateLimit;
+          events.push({
+            body: `export ${run.id} ${run.run_attempt}`,
+            at: now,
+            attributes: counts,
+            ids: traceIds(repo, run),
+          });
+          writeFileSync(required('CI_TELEMETRY_EVENTS'), JSON.stringify(toOtlp(events, now)));
+          console.log(`${events.length} events, ${github.calls} API calls`);
+        }
 
-        def clock_start(first_created, pushed_at, pr_created_at):
-            """When the wait began: the push, or opening the PR when that came later."""
-            if not pushed_at:
-                return first_created, "first_run"
-            start = max(pushed_at, pr_created_at) if pr_created_at else pushed_at
-            if start > first_created or seconds(start, first_created) > MAX_PUSH_LAG_SECONDS:
-                return first_created, "first_run"
-            return start, "push" if start == pushed_at else "pr_open"
+        /** Entry point, called by the workflow step and never by an import. */
+        export async function main() {
+          try {
+            await runCollection();
+          } catch (error) {
+            console.log(`::warning::CI telemetry not collected: ${describe(error)}`);
+          }
+        }
 
-
-        def push_event(repo, run, runs, jobs_by_run, pushed_at, pull_request, files, repeat=0):
-            """The whole push: start to last job, by PR type. None when no job ran.
-
-            `repeat` counts earlier groups of runs on this head. Those later groups are not
-            the push's wait, so they are flagged as reruns.
-            """
-            finished = []
-            for candidate in runs:
-                for job in jobs_by_run[candidate["id"]]:
-                    times = timed(job)
-                    if times:
-                        finished.append((times[1], times, job, candidate))
-            if not finished:
-                return None
-            first_created = min(parse_time(candidate["created_at"]) for candidate in runs)
-            pr_created_at = parse_time(pull_request["created_at"]) if pull_request else None
-            start, start_source = clock_start(first_created, pushed_at, pr_created_at)
-            end = max(entry[0] for entry in finished)
-            work = [entry for entry in finished if not ROLL_UP_JOB.search(entry[2]["name"])] or finished
-            _, last_times, last_job, last_run = max(work, key=lambda entry: entry[0])
-            slowest = max(work, key=lambda entry: seconds(*entry[1]))
-            queues = [q for q in (queue_seconds(job, times) for _, times, job, _ in finished) if q is not None]
-            volumes = [volume_state(job)[0] for _, _, job, _ in finished]
-            pr_type, rust_crates = classify_files(files) if files is not None else ("unknown", 0)
-            attributes = {
-                **run_attributes(run),
-                "event": "push",
-                "pr_type": pr_type,
-                "rust_crates_changed": rust_crates,
-                "conclusion": conclusion_of(runs),
-                "wall_seconds": seconds(start, end),
-                "wall_start": start_source,
-                "start_lag_seconds": seconds(start, first_created),
-                "last_workflow": last_run["name"],
-                "last_job": last_job["name"],
-                "last_job_seconds": seconds(*last_times),
-                "slowest_job": slowest[2]["name"],
-                "slowest_job_seconds": seconds(*slowest[1]),
-                "queue_max_seconds": max(queues, default=0),
-                "queue_total_seconds": sum(queues),
-                "workflows": len(runs),
-                "jobs": len(finished),
-                "cold_volumes": volumes.count("cold"),
-                "rerun": repeat > 0 or any(candidate["run_attempt"] > 1 for candidate in runs),
-            }
-            attributes.pop("workflow")
-            attributes.pop("run_id")
-            attributes.pop("run_attempt")
-            if files is not None:
-                attributes["files_changed"] = len(files)
-            if pull_request:
-                attributes["pr_draft"] = bool(pull_request.get("draft"))
-            if (run.get("head_repository") or {}).get("fork"):
-                attributes["fork"] = True
-            attempts = sum(candidate["run_attempt"] for candidate in runs)
-            # The body and time are the same from every exporter that sees the push finish,
-            # so Loki drops the duplicates when two runs complete together.
-            body = f"push {run['head_sha']} {repeat} {attempts}"
-            return (body, end, attributes, trace_ids(repo, last_run, last_job["name"]))
-
-
-        def pushed_time(github, branch, head_sha):
-            activity = github.get("activity", ref=f"refs/heads/{branch}", per_page=30)
-            for entry in activity:
-                if entry.get("after") == head_sha:
-                    return parse_time(entry["timestamp"])
-            return None
-
-
-        def changed_files(github, number):
-            paths = []
-            for page in range(1, MAX_FILE_PAGES + 1):
-                batch = github.get(f"pulls/{number}/files", per_page=100, page=page)
-                paths += [entry["filename"] for entry in batch]
-                if len(batch) < 100:
-                    break
-            return paths
-
-
-        def collect_push(github, repo, run):
-            """The push event once this completion is the last one, otherwise None."""
-            if run["event"] not in PR_EVENTS:
-                return None
-            listing = github.get("actions/runs", head_sha=run["head_sha"], per_page=100)
-            runs = [
-                candidate
-                for candidate in listing["workflow_runs"]
-                if candidate["event"] in PR_EVENTS and candidate["name"] not in NOT_A_CHECK
-            ]
-            runs, repeat = same_trigger_runs(runs, run)
-            if not runs or any(candidate["status"] != "completed" for candidate in runs):
-                return None
-            jobs_by_run = {}
-            for candidate in runs:
-                jobs_by_run[candidate["id"]] = (
-                    []
-                    if candidate["conclusion"] == "skipped"
-                    else github.get(
-                        f"actions/runs/{candidate['id']}/attempts/{candidate['run_attempt']}/jobs",
-                        per_page=100,
-                    )["jobs"]
-                )
-            number = ((run.get("pull_requests") or [{}])[0]).get("number")
-            pull_request = github.get(f"pulls/{number}") if number else None
-            files = changed_files(github, number) if number else None
-            pushed_at = None
-            if not (run.get("head_repository") or {}).get("fork") and run.get("head_branch"):
-                pushed_at = pushed_time(github, run["head_branch"], run["head_sha"])
-            return push_event(repo, run, runs, jobs_by_run, pushed_at, pull_request, files, repeat)
-
-
-        def otlp_value(value):
-            if isinstance(value, bool):
-                return {"boolValue": value}
-            if isinstance(value, int):
-                return {"intValue": str(value)}
-            return {"stringValue": str(value)}
-
-
-        def to_otlp(events, now):
-            """OTLP logs. A record's time is its event's, clamped to what Loki will accept."""
-            oldest = now - datetime.timedelta(seconds=MAX_EVENT_AGE_SECONDS)
-            records = []
-            for body, at, attributes, (trace_id, span_id) in events:
-                nanos = int(max(at, oldest).timestamp()) * 1_000_000_000
-                records.append(
-                    {
-                        "timeUnixNano": str(nanos),
-                        "severityText": "INFO",
-                        "body": {"stringValue": body},
-                        "traceId": trace_id,
-                        "spanId": span_id,
-                        "attributes": [
-                            {"key": key, "value": otlp_value(value)} for key, value in attributes.items()
-                        ],
-                    }
-                )
-            resource = [
-                {"key": "service.name", "value": {"stringValue": "ci-telemetry"}},
-                {"key": "deployment.environment", "value": {"stringValue": "ci"}},
-            ]
-            return {
-                "resourceLogs": [
-                    {
-                        "resource": {"attributes": resource},
-                        "scopeLogs": [{"scope": {"name": "ci-telemetry"}, "logRecords": records}],
-                    }
-                ]
-            }
-
-
-        def collect(github, repo, run):
-            events = []
-            try:
-                jobs = github.get(
-                    f"actions/runs/{run['id']}/attempts/{run['run_attempt']}/jobs", per_page=100
-                )["jobs"]
-                events += job_events(repo, run, jobs)
-                push = collect_push(github, repo, run)
-                if push:
-                    events.append(push)
-            except Exception as error:
-                # A partial export still helps. The class and status can't carry a token or a payload.
-                print(f"::warning::CI telemetry partly collected: {type(error).__name__} {getattr(error, 'code', '')}")
-            return events
-
-
-        def main():
-            started = time.monotonic()
-            repo = os.environ["GITHUB_REPOSITORY"]
-            with open(os.environ["GITHUB_EVENT_PATH"], encoding="utf-8") as handle:
-                run = json.load(handle)["workflow_run"]
-            github = Github(repo, os.environ["GITHUB_TOKEN"])
-            events = collect(github, repo, run)
-            now = datetime.datetime.now(datetime.timezone.utc)
-            counts = {
-                "event": "export",
-                **run_attributes(run),
-                "events": len(events),
-                "api_calls": github.calls,
-                "collect_seconds": round(time.monotonic() - started),
-            }
-            if github.rate_remaining is not None:
-                counts["rate_remaining"] = github.rate_remaining
-            if github.rate_limit:
-                counts["rate_limit"] = github.rate_limit
-            events.append((f"export {run['id']} {run['run_attempt']}", now, counts, trace_ids(repo, run)))
-            with open(os.environ["CI_TELEMETRY_EVENTS"], "w", encoding="utf-8") as handle:
-                json.dump(to_otlp(events, now), handle)
-            print(f"{len(events)} events, {github.calls} API calls")
-
-
-        if __name__ == "__main__":
-            try:
-                main()
-            except Exception as error:
-                print(f"::warning::CI telemetry not collected: {type(error).__name__}")
-            sys.exit(0)
-      shell: python3 {0}
+        await main();
+        TELEMETRY_SCRIPT
+      shell: bash
       env:
         GITHUB_TOKEN: ${{ github.token }}
         CI_TELEMETRY_EVENTS: ${{ runner.temp }}/ci-telemetry-events.json
@@ -607,68 +738,83 @@ jobs:
     - name: Send push, job and step events
       if: always()
       run: |
-        """Send the collected CI telemetry to the OTLP logs route. Best effort, never fails the job."""
+        node --disable-warning=ExperimentalWarning --input-type=module-typescript <<'TELEMETRY_SCRIPT'
+        // Send the collected CI telemetry to the OTLP logs route. Best effort, never fails the job.
 
-        import gzip
-        import os
-        import sys
-        import time
-        import urllib.parse
-        import urllib.request
+        import { existsSync, readFileSync } from 'node:fs';
+        import { gzipSync } from 'node:zlib';
 
-        ATTEMPTS = 2
-        TIMEOUT_SECONDS = 10
-        RETRY_DELAY_SECONDS = 2
+        const ATTEMPTS = 2;
+        const TIMEOUT_MILLISECONDS = 10_000;
+        const RETRY_DELAY_MILLISECONDS = 2_000;
 
+        /** Read the `Authorization=Bearer%20...` form the credential step writes. */
+        export function authorization(headers: string): [string, string] {
+          const separator = headers.indexOf('=');
+          return [headers.slice(0, separator), decodeURIComponent(headers.slice(separator + 1))];
+        }
 
-        def authorization(headers):
-            """Read the `Authorization=Bearer%20...` form the credential step writes."""
-            name, _, value = headers.partition("=")
-            return name, urllib.parse.unquote(value)
+        async function send(url: string, body: Buffer, header: [string, string]) {
+          const response = await fetch(url, {
+            method: 'POST',
+            body: gzipSync(body),
+            headers: {
+              'Content-Type': 'application/json',
+              'Content-Encoding': 'gzip',
+              [header[0]]: header[1],
+            },
+            signal: AbortSignal.timeout(TIMEOUT_MILLISECONDS),
+          });
+          if (!response.ok) throw new Error(`HTTP ${response.status}`);
+          return response.status;
+        }
 
+        function required(name: string): string {
+          const value = process.env[name];
+          if (!value) throw new Error('A required environment variable is missing');
+          return value;
+        }
 
-        def send(url, body, header):
-            request = urllib.request.Request(
-                url,
-                data=gzip.compress(body),
-                method="POST",
-                headers={
-                    "Content-Type": "application/json",
-                    "Content-Encoding": "gzip",
-                    header[0]: header[1],
-                },
-            )
-            with urllib.request.urlopen(request, timeout=TIMEOUT_SECONDS) as response:
-                return response.status
+        async function sendEvents() {
+          const started = performance.now();
+          const path = required('CI_TELEMETRY_EVENTS');
+          if (!existsSync(path)) {
+            console.log('Nothing to send');
+            return;
+          }
+          const body = readFileSync(path);
+          const header = authorization(required('OTLP_HEADERS'));
+          const url = required('OTLP_LOGS_URL');
+          for (let attempt = 1; attempt <= ATTEMPTS; attempt += 1) {
+            try {
+              const status = await send(url, body, header);
+              const elapsed = ((performance.now() - started) / 1000).toFixed(1);
+              console.log(`Sent ${body.length} bytes, HTTP ${status}, ${elapsed} s`);
+              return;
+            } catch (error) {
+              // Only the class, so neither the header nor a response reaches the log.
+              const reason = error instanceof Error ? error.constructor.name : 'unknown error';
+              console.log(`::warning::CI telemetry send attempt ${attempt} failed: ${reason}`);
+              if (attempt < ATTEMPTS) {
+                await new Promise((resolve) => setTimeout(resolve, RETRY_DELAY_MILLISECONDS));
+              }
+            }
+          }
+        }
 
+        /** Entry point, called by the workflow step and never by an import. */
+        export async function main() {
+          try {
+            await sendEvents();
+          } catch (error) {
+            const reason = error instanceof Error ? error.constructor.name : 'unknown error';
+            console.log(`::warning::CI telemetry not sent: ${reason}`);
+          }
+        }
 
-        def main():
-            started = time.monotonic()
-            path = os.environ["CI_TELEMETRY_EVENTS"]
-            if not os.path.exists(path):
-                print("Nothing to send")
-                return
-            with open(path, "rb") as handle:
-                body = handle.read()
-            header = authorization(os.environ["OTLP_HEADERS"])
-            for attempt in range(1, ATTEMPTS + 1):
-                try:
-                    status = send(os.environ["OTLP_LOGS_URL"], body, header)
-                    print(f"Sent {len(body)} bytes, HTTP {status}, {time.monotonic() - started:.1f} s")
-                    return
-                except Exception as error:
-                    print(f"::warning::CI telemetry send attempt {attempt} failed: {type(error).__name__}")
-                    if attempt < ATTEMPTS:
-                        time.sleep(RETRY_DELAY_SECONDS)
-
-
-        if __name__ == "__main__":
-            try:
-                main()
-            except Exception as error:
-                print(f"::warning::CI telemetry not sent: {type(error).__name__}")
-            sys.exit(0)
-      shell: python3 {0}
+        await main();
+        TELEMETRY_SCRIPT
+      shell: bash
       env:
         CI_TELEMETRY_EVENTS: ${{ runner.temp }}/ci-telemetry-events.json
         OTLP_LOGS_URL: https://otlp.macro-internal.com/v1/logs

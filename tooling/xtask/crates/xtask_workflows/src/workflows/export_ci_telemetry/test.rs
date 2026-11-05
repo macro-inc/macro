@@ -74,19 +74,31 @@ fn every_pull_request_workflow_is_observed() {
     assert!(missing.is_empty(), "add to OBSERVED_WORKFLOWS: {missing:?}");
 }
 
+/// Actions would expand this in the embedded source before the shell ever saw it.
+#[test]
+fn embedded_scripts_contain_no_actions_expressions() {
+    for script in [
+        include_str!("../scripts/ci_telemetry_collect.ts"),
+        include_str!("../scripts/ci_telemetry_send.ts"),
+    ] {
+        assert!(!script.contains("${{"));
+    }
+}
+
 #[test]
 fn collector_scenarios() {
-    let output = std::process::Command::new("python3")
-        .args(["-B", "-m", "unittest", "test_ci_telemetry"])
+    let output = std::process::Command::new("node")
+        .args(["--test", "ci_telemetry.test.ts"])
         .current_dir(concat!(
             env!("CARGO_MANIFEST_DIR"),
             "/src/workflows/scripts"
         ))
         .output()
-        .expect("run CI telemetry scenarios with Python");
+        .expect("run CI telemetry scenarios with Node");
     assert!(
         output.status.success(),
-        "CI telemetry scenarios failed:\n{}",
+        "CI telemetry scenarios failed:\n{}\n{}",
+        String::from_utf8_lossy(&output.stdout),
         String::from_utf8_lossy(&output.stderr)
     );
 }
