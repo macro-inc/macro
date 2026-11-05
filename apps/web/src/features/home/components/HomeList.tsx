@@ -1,3 +1,5 @@
+import { usePending } from '@app/observability/flow';
+import { markRowNotificationsSeenOnOpen } from '@notifications/mark-row-seen';
 import '@entity/composed/ListEntity.css';
 import {
   createListController,
@@ -61,7 +63,6 @@ import {
 import { InboxListEntity } from '../../next-soup/soup-view/views/inbox/InboxListEntity';
 import {
   markChannelNotificationsSeenOnOpen,
-  markRowNotificationsSeenOnOpen,
   openEntityInSplitFromUnifiedList,
 } from '../../next-soup/utils';
 import { useHomeView } from '../home-view-context';
@@ -113,6 +114,8 @@ export function HomeList(props: HomeListProps) {
     useHomeDataSource(state)
   );
 
+  usePending('home.items', source.isLoading);
+
   const list = withSplitPanelOwner(listOwnedSlotName('controller'), () =>
     createListController<HomeDataSourceItem, HomeListActivationMetadata>({
       items: source.items,
@@ -134,6 +137,7 @@ export function HomeList(props: HomeListProps) {
       controller: list,
       handle: panel.handle,
       openEntityInSplit: (entity, options) => {
+        markRowNotificationsSeenOnOpen(entity, notificationSource);
         fireAndForget(
           openEntityInSplitFromUnifiedList(entity, {
             splitHandle: panel.handle,
@@ -170,7 +174,12 @@ export function HomeList(props: HomeListProps) {
       metadata?.newSplit === true || metadata?.event?.shiftKey === true;
 
     if (!isTouchDevice() && !newSplit) {
-      markEntitySeen(sourceRow.entity);
+      if (!isNonMemberChannelEntity(sourceRow.entity)) {
+        markChannelNotificationsSeenOnOpen(
+          sourceRow.entity,
+          notificationSource
+        );
+      }
       showPreview(sourceRow.entity, { activate: true });
       props.onPreviewActivate?.();
       // Home keeps the keyboard only when the item opened in Home itself.
@@ -195,13 +204,11 @@ export function HomeList(props: HomeListProps) {
   }
 
   function showPreview(
-    entity: WithNotification<EntityData>,
+    entity: WithNotification<EntityData> | undefined,
     options?: { activate?: boolean }
   ) {
-    props.onPreviewEntityChange(
-      entity?.type === 'initiative' ? undefined : entity,
-      options
-    );
+    if (entity) markRowNotificationsSeenOnOpen(entity, notificationSource);
+    props.onPreviewEntityChange(entity, options);
   }
 
   const previewAfterNavigation = debounce(showPreview, 150);
@@ -301,9 +308,7 @@ export function HomeList(props: HomeListProps) {
 
     return ({ entity }) => {
       previewAfterNavigation.clear();
-      props.onPreviewEntityChange(
-        entity?.type === 'initiative' ? undefined : entity
-      );
+      showPreview(entity);
     };
   };
 

@@ -1,12 +1,15 @@
 import { useFeatureFlag } from '@app/lib/analytics/posthog';
 import { URL_PARAMS as CHANNEL_PARAMS } from '@block-channel/constants';
-import { EntityIcon as CoreEntityIcon } from '@core/component/EntityIcon';
+import {
+  EntityIcon as CoreEntityIcon,
+  type EntityIconProps,
+} from '@core/component/EntityIcon';
 import { UserIcon } from '@core/component/UserIcon';
 import { fileTypeToBlockName } from '@core/constant/allBlocks';
 import { enableProjects } from '@core/constant/featureFlags';
 import { useChannelName } from '@core/context/channels';
 import { useUserId } from '@core/context/user';
-import ProjectIcon from '@icon/system/regular/stack.svg';
+import ProjectIcon from '@icon/system/regular/cube.svg';
 import { isAccessiblePreviewItem, useItemPreview } from '@queries/preview';
 import type { EntityType } from '@service-properties/generated/schemas/entityType';
 import { createLazyMemo } from '@solid-primitives/memo';
@@ -57,21 +60,29 @@ type PropertyEntityDisplayResult = {
  * Hook to resolve entity display information (name, icon) for property entity values.
  * Handles preview fetching, channel name resolution, and user display names.
  *
- * @param entityId - The entity's unique identifier
- * @param entityType - The type of entity (USER, CHANNEL, DOCUMENT, etc.)
+ * @param entityIdSource - The entity's unique identifier
+ * @param entityTypeSource - The type of entity (USER, CHANNEL, DOCUMENT, etc.)
  * @param options - Optional configuration
  * @returns Object with name, icon, isLoading, and blockOrFileType accessors
  */
 export function usePropertyEntityDisplay(
-  entityId: Accessor<string>,
-  entityType: Accessor<EntityType | undefined>,
+  entityIdSource: Accessor<string>,
+  entityTypeSource: Accessor<EntityType | undefined>,
   options?: {
     /** Custom fallback icon for unknown entity types (null to show nothing) */
     fallbackIcon?: JSX.Element | null;
+    /** Size passed to the entity icon renderer; defaults to xs. */
+    iconSize?: EntityIconProps['size'];
     /** Specific message ID for THREAD/CHANNEL/CHAT entities */
     specificMessageId?: Accessor<string | null | undefined>;
+    /** Name to show while the entity's own read loads, such as a picker's label. */
+    loadingName?: Accessor<string | undefined>;
   }
 ): PropertyEntityDisplayResult {
+  // Callers usually read these from a property value, which every properties
+  // emission replaces. Only a real change may rebuild or re-run the reads below.
+  const entityId = createMemo(entityIdSource);
+  const entityType = createMemo(entityTypeSource);
   const projectsFlag = createMemo(() =>
     entityType() === 'INITIATIVE' ? useFeatureFlag(enableProjects) : undefined
   );
@@ -130,19 +141,21 @@ export function usePropertyEntityDisplay(
     return !previewItem || previewItem.loading;
   });
 
+  const loadingName = () => options?.loadingName?.() || 'Loading...';
+
   const name = createMemo(() =>
     match(entityType())
       .with('INITIATIVE', () => {
         const source = projectSource();
         if (!source) return 'Project';
-        if (source.isPending) return 'Loading...';
+        if (source.isPending) return loadingName();
         return (!source.isError && source.data?.name) || 'Project unavailable';
       })
       .with('USER', () => user.name())
       .with('CHANNEL', () => channelName() || 'Channel')
       .otherwise(() => {
         const item = preview();
-        if (!item || item.loading) return 'Loading...';
+        if (!item || item.loading) return loadingName();
         if (isAccessiblePreviewItem(item)) {
           return item.name;
         }
@@ -160,29 +173,59 @@ export function usePropertyEntityDisplay(
       .with('USER', () => (
         <UserIcon id={entityId()} size="sm" photoUrl={user.photoUrl()} />
       ))
-      .with('CHANNEL', () => <CoreEntityIcon targetType="channel" size="xs" />)
-      .with('TASK', () => <CoreEntityIcon targetType="task" size="xs" />)
+      .with('CHANNEL', () => (
+        <CoreEntityIcon targetType="channel" size={options?.iconSize ?? 'xs'} />
+      ))
+      .with('TASK', () => (
+        <CoreEntityIcon targetType="task" size={options?.iconSize ?? 'xs'} />
+      ))
       .with('DOCUMENT', () => {
         const item = preview();
         if (!item || !isAccessiblePreviewItem(item)) {
-          return <CoreEntityIcon targetType="unknown" size="xs" />;
+          return (
+            <CoreEntityIcon
+              targetType="unknown"
+              size={options?.iconSize ?? 'xs'}
+            />
+          );
         }
         const { subType, fileType } = item;
         const blockName = fileTypeToBlockName(subType?.type ?? fileType, true);
-        return <CoreEntityIcon targetType={blockName} size="xs" />;
+        return (
+          <CoreEntityIcon
+            targetType={blockName}
+            size={options?.iconSize ?? 'xs'}
+          />
+        );
       })
-      .with('PROJECT', () => <CoreEntityIcon targetType="project" size="xs" />)
-      .with('CHAT', () => <CoreEntityIcon targetType="chat" size="xs" />)
-      .with('COMPANY', () => (
-        <CoreEntityIcon targetType="crm_company" size="xs" />
+      .with('PROJECT', () => (
+        <CoreEntityIcon targetType="project" size={options?.iconSize ?? 'xs'} />
       ))
-      .with('CONTACT', () => <CoreEntityIcon targetType="contact" size="xs" />)
-      .with('THREAD', () => <CoreEntityIcon targetType="email" size="xs" />)
+      .with('CHAT', () => (
+        <CoreEntityIcon targetType="chat" size={options?.iconSize ?? 'xs'} />
+      ))
+      .with('COMPANY', () => (
+        <CoreEntityIcon
+          targetType="crm_company"
+          size={options?.iconSize ?? 'xs'}
+        />
+      ))
+      .with('CONTACT', () => (
+        <CoreEntityIcon targetType="contact" size={options?.iconSize ?? 'xs'} />
+      ))
+      .with('THREAD', () => (
+        <CoreEntityIcon targetType="email" size={options?.iconSize ?? 'xs'} />
+      ))
       .otherwise(() => {
         if (options && 'fallbackIcon' in options) {
           return options.fallbackIcon;
         }
-        return <CoreEntityIcon targetType="unknown" size="xs" />;
+        return (
+          <CoreEntityIcon
+            targetType="unknown"
+            size={options?.iconSize ?? 'xs'}
+          />
+        );
       })
   );
 

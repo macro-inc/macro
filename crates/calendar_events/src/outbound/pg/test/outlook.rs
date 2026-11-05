@@ -1,3 +1,5 @@
+use super::changes::{counter, ops_after};
+use super::join_requests::{insert_join_request_notification, recipient_holds};
 use super::*;
 use crate::domain::models::{
     AutomaticDeclinePolicy, OutOfOfficeAutoDeclineMode, OutOfOfficeProperties,
@@ -1395,5 +1397,314 @@ async fn the_organizer_repair_stores_outlook_organizers_as_holding_their_meeting
         counter().await,
         before + 1,
         "a rerun finds nothing left to fix"
+    );
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn an_outlook_cancellation_or_removal_retires_join_request_notifications(pool: PgPool) {
+    let (repo, _, owner) = mailbox(&pool).await;
+    let member = "macro|outlook-member@example.com";
+    insert_user(&pool, member).await;
+    let lease = calendar(&repo).await;
+    repo.checkpoint_outlook_calendar(
+        &lease,
+        OutlookCalendarProgress::Page(OutlookCalendarPage {
+            members: vec![("provider-removed".into(), "provider-removed".into())],
+            removed: vec![],
+            next: None,
+            delta: Some("baseline".into()),
+        }),
+    )
+    .await
+    .unwrap();
+    let event = claim(&repo).await.unwrap();
+    let cancelled_id = store(&repo, &event, "cancelled").await;
+    let removed_id = store(&repo, &event, "removed").await;
+    let (request, _) = repo
+        .open_join_request(cancelled_id, member, "member@work.example.com")
+        .await
+        .unwrap();
+    let (removed_request, _) = repo
+        .open_join_request(removed_id, member, "member@work.example.com")
+        .await
+        .unwrap();
+    let on_cancelled = insert_join_request_notification(&pool, &request, &[&owner]).await;
+    let on_removed = insert_join_request_notification(&pool, &removed_request, &[&owner]).await;
+
+    // Outlook can keep a cancelled meeting: the row stays, with its request.
+    let mut cancelled = upsert(&event, "cancelled");
+    cancelled.event.status = EventStatus::Cancelled;
+    cancelled.event.sequence = 1;
+    cancelled.event.updated_at += Duration::minutes(1);
+    repo.upsert_event(CalendarEventWrite::OutlookSync {
+        lease: Box::new(event.clone()),
+        upsert: cancelled,
+    })
+    .await
+    .unwrap();
+    assert!(!recipient_holds(&pool, on_cancelled).await);
+    assert_eq!(
+        repo.get_join_request(request.id).await.unwrap(),
+        Some(request)
+    );
+    assert!(recipient_holds(&pool, on_removed).await);
+
+    repo.checkpoint_outlook_calendar(
+        &event,
+        OutlookCalendarProgress::Event {
+            id: "provider-removed".into(),
+            exists: false,
+        },
+    )
+    .await
+    .unwrap();
+    assert!(!recipient_holds(&pool, on_removed).await);
+}
+
+/// Makes a released work row due before any other and claims it.
+async fn reclaim(
+    pool: &PgPool,
+    repo: &PgCalendarRepository,
+    work_id: Uuid,
+) -> OutlookCalendarLease {
+    sqlx::query!(
+        "UPDATE calendar_outlook_work SET next_run_at=now()-interval '1 day' WHERE id=$1",
+        work_id
+    )
+    .execute(pool)
+    .await
+    .unwrap();
+    let lease = claim(repo).await.unwrap();
+    assert_eq!(lease.id, work_id);
+    lease
+}
+
+/// Fails a primary calendar's sync `times` times with `kind`, reclaiming it
+/// after each failure, and returns the next lease.
+async fn fail_times(
+    pool: &PgPool,
+    repo: &PgCalendarRepository,
+    mut lease: OutlookCalendarLease,
+    kind: CalendarProviderErrorKind,
+    times: i32,
+) -> OutlookCalendarLease {
+    for _ in 0..times {
+        repo.fail_outlook_calendar(&lease, kind).await.unwrap();
+        lease = reclaim(pool, repo, lease.id).await;
+    }
+    lease
+}
+
+/// Runs one clean round of a primary calendar: its last page, then the finish.
+async fn clean_round(repo: &PgCalendarRepository, lease: &OutlookCalendarLease) {
+    repo.checkpoint_outlook_calendar(
+        lease,
+        OutlookCalendarProgress::Page(OutlookCalendarPage {
+            members: vec![],
+            removed: vec![],
+            next: None,
+            delta: Some("terminal".into()),
+        }),
+    )
+    .await
+    .unwrap();
+    let finish = claim(repo).await.unwrap();
+    assert_eq!(finish.id, lease.id);
+    repo.checkpoint_outlook_calendar(&finish, OutlookCalendarProgress::Finish)
+        .await
+        .unwrap();
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn an_outlook_sync_error_badge_logs_when_it_appears_and_when_it_changes(pool: PgPool) {
+    let (repo, link, _) = mailbox(&pool).await;
+    let lease = calendar(&repo).await;
+    let calendar_id = lease.target.as_ref().unwrap().calendar_id;
+    let before = counter(&pool, link).await;
+
+    let lease = fail_times(
+        &pool,
+        &repo,
+        lease,
+        CalendarProviderErrorKind::Permanent,
+        CALENDAR_SYNC_FAILURE_BADGE_THRESHOLD + 1,
+    )
+    .await;
+    assert_eq!(
+        ops_after(&pool, link, before).await,
+        vec![CalendarChangeOp::UpsertCalendar(calendar_id)],
+        "only the failure that crosses the threshold shows a badge"
+    );
+
+    let lease = fail_times(&pool, &repo, lease, CalendarProviderErrorKind::Transient, 2).await;
+    repo.fail_outlook_calendar(&lease, CalendarProviderErrorKind::ReauthRequired)
+        .await
+        .unwrap();
+    assert_eq!(
+        ops_after(&pool, link, before).await,
+        vec![CalendarChangeOp::UpsertCalendar(calendar_id); 3],
+        "each reworded badge logs once; a repeat of the shown one does not"
+    );
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn a_clean_outlook_round_logs_a_cleared_badge_once(pool: PgPool) {
+    let (repo, link, _) = mailbox(&pool).await;
+    let lease = calendar(&repo).await;
+    let calendar_id = lease.target.as_ref().unwrap().calendar_id;
+    let lease = fail_times(
+        &pool,
+        &repo,
+        lease,
+        CalendarProviderErrorKind::Permanent,
+        CALENDAR_SYNC_FAILURE_BADGE_THRESHOLD,
+    )
+    .await;
+    let before = counter(&pool, link).await;
+
+    clean_round(&repo, &lease).await;
+    assert_eq!(
+        ops_after(&pool, link, before).await,
+        vec![CalendarChangeOp::UpsertCalendar(calendar_id)],
+        "the round that clears a shown badge logs it"
+    );
+
+    let lease = reclaim(&pool, &repo, lease.id).await;
+    clean_round(&repo, &lease).await;
+    let lease = reclaim(&pool, &repo, lease.id).await;
+    let lease = fail_times(
+        &pool,
+        &repo,
+        lease,
+        CalendarProviderErrorKind::Permanent,
+        CALENDAR_SYNC_FAILURE_BADGE_THRESHOLD - 1,
+    )
+    .await;
+    clean_round(&repo, &lease).await;
+    assert_eq!(
+        ops_after(&pool, link, before).await,
+        vec![CalendarChangeOp::UpsertCalendar(calendar_id)],
+        "routine rounds and an error that never showed log nothing"
+    );
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn reconnecting_clears_a_reauth_badge_through_the_change_log(pool: PgPool) {
+    let (repo, link, _) = mailbox(&pool).await;
+    let lease = calendar(&repo).await;
+    let calendar_id = lease.target.as_ref().unwrap().calendar_id;
+    let before = counter(&pool, link).await;
+    let lease = fail_times(
+        &pool,
+        &repo,
+        lease,
+        CalendarProviderErrorKind::Permanent,
+        CALENDAR_SYNC_FAILURE_BADGE_THRESHOLD - 1,
+    )
+    .await;
+    repo.fail_outlook_calendar(&lease, CalendarProviderErrorKind::ReauthRequired)
+        .await
+        .unwrap();
+    assert!(
+        claim(&repo).await.is_none(),
+        "reauthorization parks the account"
+    );
+    assert_eq!(
+        ops_after(&pool, link, before).await,
+        vec![CalendarChangeOp::UpsertCalendar(calendar_id)],
+        "the reauthorization failure shows the badge"
+    );
+
+    sqlx::query!(
+        "UPDATE email_links SET grant_generation=2,sync_generation=2 WHERE id=$1",
+        link
+    )
+    .execute(&pool)
+    .await
+    .unwrap();
+    sqlx::query!(
+        "UPDATE email_link_microsoft_scopes SET grant_generation=2 WHERE link_id=$1",
+        link
+    )
+    .execute(&pool)
+    .await
+    .unwrap();
+    let catalog = claim(&repo).await.unwrap();
+    assert!(catalog.target.is_none());
+    repo.commit_outlook_calendars(&catalog, vec![discovered_calendar("primary")])
+        .await
+        .unwrap();
+    let lease = claim(&repo).await.unwrap();
+    assert_eq!(lease.target.as_ref().unwrap().calendar_id, calendar_id);
+    clean_round(&repo, &lease).await;
+    assert_eq!(
+        ops_after(&pool, link, before).await,
+        vec![CalendarChangeOp::UpsertCalendar(calendar_id); 2],
+        "the first clean round on the new grant clears the badge"
+    );
+}
+
+/// The migration that logs every visible Outlook calendar, so caches that
+/// missed a change to its sync error badge refetch it.
+const LOG_OUTLOOK_CALENDARS: &str = include_str!(
+    "../../../../../macro_db_client/migrations/20261105002046_log_outlook_calendars_for_their_sync_error.sql"
+);
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn the_badge_backfill_logs_every_visible_outlook_calendar(pool: PgPool) {
+    let (repo, link, owner) = mailbox(&pool).await;
+    let discovery = claim(&repo).await.unwrap();
+    repo.commit_outlook_calendars(
+        &discovery,
+        vec![
+            discovered_calendar("primary"),
+            discovered_calendar("shared"),
+            discovered_calendar("removed"),
+        ],
+    )
+    .await
+    .unwrap();
+    let discovery = reclaim(&pool, &repo, discovery.id).await;
+    repo.commit_outlook_calendars(
+        &discovery,
+        vec![
+            discovered_calendar("primary"),
+            discovered_calendar("shared"),
+        ],
+    )
+    .await
+    .unwrap();
+    let google_link = insert_link(&pool, &owner).await;
+    provider_ids(&repo, google_link).await;
+    let visible = sqlx::query_scalar!(
+        r#"SELECT c.id FROM calendars c JOIN calendar_accounts a ON a.id=c.account_id
+        WHERE a.email_link_id=$1 AND NOT c.is_deleted ORDER BY c.id"#,
+        link
+    )
+    .fetch_all(&pool)
+    .await
+    .unwrap();
+    assert_eq!(visible.len(), 2);
+    let before = counter(&pool, link).await;
+    let google_before = counter(&pool, google_link).await;
+
+    sqlx::raw_sql(LOG_OUTLOOK_CALENDARS)
+        .execute(&pool)
+        .await
+        .unwrap();
+
+    assert_eq!(
+        ops_after(&pool, link, before).await,
+        visible
+            .into_iter()
+            .map(CalendarChangeOp::UpsertCalendar)
+            .collect::<Vec<_>>(),
+        "each visible Outlook calendar logs once; a removed one does not"
+    );
+    assert_eq!(counter(&pool, link).await, before + 2);
+    assert_eq!(
+        ops_after(&pool, google_link, google_before).await,
+        Vec::<CalendarChangeOp>::new(),
+        "Google calendars already log their badge"
     );
 }

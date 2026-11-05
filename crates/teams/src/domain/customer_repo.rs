@@ -54,11 +54,11 @@ pub trait CustomerRepository: Clone + Send + Sync + 'static {
     ) -> impl Future<Output = Result<(), CustomerError>> + Send;
 
     /// The customer's active subscription, or their trialing one when none is
-    /// active. Errors with `SubscriptionNotActive` when they have neither.
+    /// active. `None` when they have neither.
     fn get_subscription_id_for_customer(
         &self,
         customer_id: &stripe::CustomerId,
-    ) -> impl Future<Output = Result<stripe::SubscriptionId, CustomerError>> + Send;
+    ) -> impl Future<Output = Result<Option<stripe::SubscriptionId>, CustomerError>> + Send;
 
     /// Add `amount` seats on `plan` to a subscription.
     fn increment_seat_count(

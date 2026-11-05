@@ -22,10 +22,32 @@ agent resumes its native session on the next prompt. Socket errors do not create
 replacement agents. Changing the configured provider does not convert existing
 sessions into sessions for the other provider.
 
+After macrod restarts or its runtime connection reconnects, the harness service
+initializes the new connection and calls ACP `session/list`. herdr-acp lists
+the sessions whose Herdr agent still runs, and the service loads each one. That
+replays local history Macro missed and resumes forwarding without a Macro
+prompt. Agents closed in Herdr are not reopened.
+
+Closing a session's agent in Herdr (its tab or pane, by you or the agent) is
+reported to Macro once with the ACP extension notification `_session/closed`.
+Only Herdr's explicit `agent_not_found` answer counts, checked every few
+seconds while no Macro prompt runs; socket errors, timeouts, and unreadable
+answers are never reported, and neither is macrod or its connection stopping.
+Only an agent this macrod run launched or saw running counts, so sessions
+restored after Herdr itself restarted, whose agents are all gone, stay visible.
+Macro archives the session if its owner turned on archiving when the runtime
+closes and the session is idle. The next prompt still relaunches the agent,
+and a close of that new agent is reported again.
+
 A background reader forwards local TUI turns even without a Macro prompt.
 Complete JSONL records are read in bounded batches. Partial lines wait for the
 next append; truncation or replacement requires a reload. Turn boundaries are
 forwarded in order, including multiple local turns between polls.
+Only typed prompts start a local turn; Claude Code's own transcript lines
+(reminders, compaction summaries, local slash command output) do not, and an
+Esc interrupt ends the turn as cancelled. A local turn whose transcript never
+records an end, such as one cut short by a closed CLI, ends once Herdr reports
+the agent idle and the transcript has been quiet for a few seconds.
 
 ### Native controls and MCP
 
@@ -43,7 +65,20 @@ unconfigured session reports the native default. Claude identifies the actual
 model when its first assistant record arrives.
 
 Unconfirmed prompt submission is reported as an error, never retried by pressing
-Enter. Cancellation sends Escape without a delayed input-clearing key.
+Enter. Cancellation (Stop in Macro, for a Macro prompt or an observed native
+turn) presses Escape until Herdr reports the agent stopped, at most three times
+(Claude Code's vim editor mode spends the first Escape leaving insert mode), and
+never sends an input-clearing key. The turn reports `cancelled` only once the
+agent has stopped; if it keeps running, macrod follows it to its real end.
+
+A prompt from Macro while the native agent is working or showing a dialog
+waits, like input typed into the TUI mid-turn. The running turn keeps streaming
+and its permission dialogs still reach Macro; the prompt is typed once the turn
+ends. Stopping from Macro while it waits interrupts the native turn and drops
+the prompt, which fails with a `prompt_not_delivered` notice so Macro shows the
+message was never typed in rather than a stopped turn. Claude Code's exit confirmation, left by a second Ctrl-C while
+background work runs, is dismissed with Escape ("Stay") before the prompt is
+typed.
 
 New and reloaded sessions advertise `/compact`, `/init`, and `/fast` in Macro;
 Codex also advertises `/ultrafast`. Speed controls are delivered unchanged to
@@ -109,13 +144,40 @@ Start macrod inside Herdr and choose **Claude Code in herdr** or **Codex in
 herdr** in Quickstart. Select a workspace directory containing your existing
 clones and pair with Macro. Native CLI authentication and Git credentials are
 reused. Each instance has one configuration, with no profiles to choose per run.
+The TUI and `macrod service` share `~/.macrod/macrod.toml`
+(`%USERPROFILE%\.macrod\macrod.toml` on Windows; `--config` overrides it), and
+only one macrod can serve a config at a time. The runtime's name, access, and
+permission bypass are set on the web at Settings → Agents → Runtimes.
 
-The Config tab adds **Model** (empty uses the native default), **Extra args**
+The Config tab adds **Model** (empty uses the native default, and is only the
+launch fallback: Macro picks each agent's model), **Extra args**
 (shell-style quoting), **Storage** (empty uses automatic instance storage), and
 **Open sessions** (foreground or background). Switching agents clears the
 previous agent's model and extra arguments. Storage and focus preferences remain.
 Session metadata stays in the instance directory even with custom worktree storage.
 Choose a repository in Macro's composer; local sessions always start from `main`.
+
+### Herdr versions
+
+macrod drives both herdrs and picks by where it runs (`src/herdr/cli.rs`):
+
+- **herdr 0.9** (`HERDR_ENV=1`): the `herdr` CLI. Herdr creates worktrees, opens
+  tabs, starts agents, and reports their status and session IDs.
+- **herdr-core and the herdr app** (`HC_TERMINAL_ID`): the `hc` CLI, which must
+  be on `PATH`. Each session is a core terminal labelled with the app's
+  `herdr.space` and `herdr.tab`, so the app shows it as a tab in macrod's space.
+  A managed worktree gets its own space. macrod starts the shell and then types
+  `exec <agent> …` into it, so the agent gets the operator's login environment.
+  git creates the worktrees. Tab names and focus go through `herdr-app do`, and
+  macrod skips them when the app is not running.
+
+herdr-core does not guess status; it shows what a program reports through
+OSC 7501. Claude Code reports it. Codex does not, so under herdr-core a Codex
+session loses three things: busy detection before a prompt, remote permission
+answers (approve in Herdr), and cancelling a turn Macro did not start.
+Transcripts still end its turns. Without a reported session ID, macrod finds
+Codex's transcript by working directory and start time. Viewer windows
+(`macrod herdr-pane`) report their own state through OSC 7501.
 
 ## Replies to chat-agent mentions
 

@@ -3,14 +3,17 @@ import { openEntityInSplitFromUnifiedList } from '@app/features/next-soup/utils'
 import { projectRouteId } from '@app/features/projects/core/route';
 import { createSoupRowStore } from '@app/features/soup/collection/row-store';
 import { t } from '@app/lib/i18n';
+import { usePending } from '@app/observability/flow';
 import { MobileTopEdgeFade } from '@components/app/mobile/MobileEdgeFade';
 import { MobileViewsRow } from '@components/app/mobile/MobileViewsRow';
 import { useSplitLayout } from '@components/app/split-layout/layout';
 import { useSplitPanelOrThrow } from '@components/app/split-layout/layoutUtils';
 import { StaticMarkdownContext } from '@core/component/LexicalMarkdown/component/core/StaticMarkdown';
 import { toast } from '@core/component/Toast/Toast';
+import type { QuickAccessItem } from '@core/context/quickAccess';
 import { useIsAuthenticated, useUserId } from '@core/context/user';
 import { fireAndForget } from '@core/util/fireAndForget';
+import { useOpenDirectMessage } from '@core/util/open-direct-message';
 import { isTransientRequestError } from '@core/util/request-error';
 import {
   type EntityData,
@@ -20,7 +23,6 @@ import {
   type SearchLocation,
 } from '@entity';
 import { Telemetry } from '@macro-inc/observability';
-import { useGetOrCreateDirectMessageMutation } from '@queries/channel/get-or-create-dm';
 import { useDatabaseDiscoverySync } from '@queries/storage/databases';
 import { Button, CommandMenuListItem } from '@ui';
 import { createMemo, createSignal, For, Show, Suspense } from 'solid-js';
@@ -28,10 +30,7 @@ import { type VirtualizerHandle, VList } from 'virtua/solid';
 import { useUniversalInputEnabled } from '../../universal-input/use-universal-input';
 import { ItemDisplay } from '../CommandItem';
 import { commandSearchResultKey } from '../contact-items';
-import {
-  type EntitySearchItem,
-  useEntitySearch,
-} from '../queries/entity-search';
+import { useEntitySearch } from '../queries/entity-search';
 import { createMobileFullTextSearch } from '../queries/mobile-full-text-search';
 import { createMobileSearchEntry } from './create-mobile-search-entry';
 import { createSearchPagination } from './create-search-pagination';
@@ -52,11 +51,13 @@ function MobileNameResults(props: {
     enabled: () => true,
     contactDiscovery: useCrmContactDiscovery,
   });
+  usePending('search.names', source.isLoadingEntities);
+  usePending('search.rank', source.isSettling);
   useDatabaseDiscoverySync(() => true);
   const incoming = createMemo(() =>
     source.rankItems(source.items(), state.query())
   );
-  const itemKey = (item: EntitySearchItem) =>
+  const itemKey = (item: QuickAccessItem) =>
     commandSearchResultKey(item, props.accountId);
   const results = createSearchResultWindow({
     key: 'mobileSearch.nameOrder',
@@ -124,24 +125,18 @@ function MobileNameResults(props: {
   });
   const { openWithSplit } = useSplitLayout();
   const panel = useSplitPanelOrThrow();
-  const directMessage = useGetOrCreateDirectMessageMutation();
-  const open = async (item: EntitySearchItem) => {
+  const openDirectMessage = useOpenDirectMessage();
+  const open = async (item: QuickAccessItem) => {
     await Telemetry.span('mobile.search.open', async (span) => {
       span.setAttr('entity.id', item.id);
       span.setAttr('entity.type', item.bucket);
-      if (item.kind === 'initiative') {
+      if (item.kind === 'entity' && item.bucket === 'initiative') {
         openWithSplit({
           type: 'component',
           id: projectRouteId({ id: item.id, section: 'overview' }),
         });
       } else if (item.kind === 'user') {
-        const result = await directMessage.mutateAsync({
-          recipient_id: item.id,
-        });
-        openWithSplit(
-          { type: 'channel', id: result.channel_id },
-          { reopen: 'latest' }
-        );
+        await openDirectMessage(item.id, { parentSpan: span });
       } else {
         await openEntityInSplitFromUnifiedList(item.data, {
           splitHandle: panel.handle,
@@ -149,7 +144,7 @@ function MobileNameResults(props: {
       }
     });
   };
-  const select = async (item: EntitySearchItem) => {
+  const select = async (item: QuickAccessItem) => {
     results.preserveOrder();
     try {
       await open(item);
@@ -218,6 +213,7 @@ function MobileFullTextResults(props: {
   const state = props.session;
   const category = useMobileSearchCategory(state.category);
   const search = createMobileFullTextSearch(state.query, category);
+  usePending('search.full-text', search.isSettling);
   const hasAuthoritativeError = () =>
     !!search.error() && !isTransientRequestError(search.error());
   const panel = useSplitPanelOrThrow();

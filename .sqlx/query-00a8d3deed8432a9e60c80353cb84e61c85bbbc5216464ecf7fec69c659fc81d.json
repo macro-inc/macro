@@ -1,0 +1,17 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            UPDATE memory_profile SET content = $3, through_date = $4,\n                revision = revision + 1, updated_at = NOW()\n            WHERE user_id = $1 AND revision = $2\n        ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Text",
+        "Int8",
+        "Text",
+        "Date"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "00a8d3deed8432a9e60c80353cb84e61c85bbbc5216464ecf7fec69c659fc81d"
+}

@@ -51,6 +51,7 @@ Applies to `apps/web/src/components/ui`, including ports from shadcn-solid.
 - Keep ordinary children in the Button's flex row so trailing carets, truncation,
   and custom spacing work. Only loading actions need the reserved-content layer.
   Preserve native disabled behavior and activation guards for polymorphic controls.
+- Pass only styling fields to Button style helpers; spreading props with `children` evaluates Solid getters and can detach memoized content.
 - Compose groups explicitly with `ButtonGroup.Button`; standalone Buttons do not
   inherit group styling. Segments inherit size and variant unless overridden,
   remain flat, and own their hover/pressed/disabled states. The frame owns its
@@ -76,7 +77,7 @@ Applies to `apps/web/src/components/ui`, including ports from shadcn-solid.
   native inputs, accessible labels, controlled/uncontrolled state, and keyboard behavior.
 - Keep unchecked checkbox and radio faces transparent. Checked and indeterminate
   controls use the accent fill. Checkbox marks and radio indicators share the
-  primary Button's `button-primary-ink` token.
+  accent Button's `button-accent-ink` token.
 - Set checkbox/radio size on the root: `sm` is 14px, `md` (default) is 16px,
   and `lg` is 20px. `ToggleSwitch` tracks use `xs` 28×14px, `sm` (default)
   32×16px, and `md` 40×20px. Do not resize internal SVGs or override selection

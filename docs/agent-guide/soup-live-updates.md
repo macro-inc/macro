@@ -40,8 +40,9 @@ network behavior.
 ### Grouped views
 
 With maintained GraphQL cache queries, supported filters and a created/updated
-sort, loaded grouped rows also reconcile locally. Initial and per-group “load
-more” pages share one owner. Property edits (including multiple assignees),
+sort, loaded grouped rows also reconcile locally. Initial and per-group
+continuation pages share one owner; a group's next page loads when the end of
+that group scrolls into view. Property edits (including multiple assignees),
 project changes and UTC date rollover can move loaded rows between bins; proven
 filter nonmatches leave the view. Unknown evidence keeps the previous membership.
 If local selection is incomplete, normalized display-field updates from initial
@@ -50,16 +51,17 @@ This is not a complete offline grouping query: uncached/unloaded candidates are
 not added, and counts preserve unseen server rows rather than counting only the
 loaded page. Unsupported sorts/filters retain server membership.
 
-To verify, load a second page in a property group, then edit a property on a row
+To verify, scroll to the end of a property group to load its second page, then
+edit a property on a row
 from that page. It should appear in its destination once, disappear from its old
 group, and reverse on rollback without a grouped-query network round trip. Check
-multi-value membership and group counts, then load another page: the request must
+multi-value membership and group counts, then scroll to load another page: the request must
 use the server continuation cursor. Switch filters or reset the cache during a
 pending local read; its late result must not restore old rows. A server refresh
 rebuilds loaded continuation pages while retaining their rows until replacement
 pages are ready. Delay or fail a continuation response and confirm the list does
 not collapse to its first page; retry and verify fresh rows replace the old ones.
-An in-flight load-more must remain covered by the replacement chain. Refreshes
+An in-flight continuation page must remain covered by the replacement chain. Refreshes
 emit `graphql_cache.soup_grouped_refresh`; the local phase emits
 `graphql_cache.soup_grouped_local_evaluation`.
 
@@ -158,6 +160,12 @@ these postings atomically; rollback does not restore unrelated property values.
 Checkpoint v14 rehydrates older projections without wiping normalized records or
 queued mutations. General Soup still uses its existing server pagination; filter-only
 offline checks use an ungrouped view with a created/updated timestamp sort.
+
+The email Focus list is not a Soup list the cache maintains: membership comes from
+the worker's classifications, so it reads `user.emailFocus` again when told to. See
+the [Focus walkthrough](email.md) and `useEmailFocusQuery`. A list like it pushes
+over the connection gateway and refreshes through `createVisibleRefresh`, which
+holds a hidden tab to one read when it next shows.
 
 Realtime Soup batches coalesce repeated entity IDs (including entity type), keeping
 that entity's last operation in the batch. Emitted `SoupUpdated` items are non-null.

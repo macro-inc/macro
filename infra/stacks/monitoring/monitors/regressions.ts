@@ -33,7 +33,7 @@ const dashboard = new datadog.Dashboard('regression-alerts', {
       thresholdGraph({
         title: 'Internal span errors abnormally high',
         query:
-          "anomalies(sum:trace.Internal.errors{env:prod} by {service}.as_count(), 'agile', 3)",
+          "anomalies(sum:trace.Internal.errors{env:prod AND NOT service:web-app} by {service}.as_count(), 'agile', 3)",
       }),
       thresholdGraph({
         title: 'Queue consumer errors abnormally high',
@@ -77,16 +77,18 @@ prodMonitor('apm-server-error-anomaly', {
   runbook: 'docs/runbooks/regressions.md#errors',
 });
 
+// Excludes web-app: browser spans fail on users' networks and devices, so its
+// band swings with traffic. Browser errors have their own RUM monitors.
 prodMonitor('apm-internal-error-anomaly', {
   title: 'Internal span errors abnormally high',
   service: 'apm',
   query:
-    "avg(last_4h):anomalies(sum:trace.Internal.errors{env:prod} by {service}.as_count(), 'agile', 3, direction='above', interval=300, alert_window='last_30m', count_default_zero='true') >= 1",
+    "avg(last_4h):anomalies(sum:trace.Internal.errors{env:prod AND NOT service:web-app} by {service}.as_count(), 'agile', 3, direction='above', interval=300, alert_window='last_30m', count_default_zero='true') >= 1",
   monitorThresholds: ANOMALY_THRESHOLDS,
   monitorThresholdWindows: ANOMALY_WINDOWS,
   pages: false,
   description:
-    '{{service.name}} is recording more failed internal spans (background jobs, workers, browser operations) than its usual band. Check the latest deploy of that service first.',
+    '{{service.name}} is recording more failed internal spans (background jobs, workers) than its usual band. Check the latest deploy of that service first.',
   dashboard: dashboard.url,
   runbook: 'docs/runbooks/regressions.md#errors',
 });

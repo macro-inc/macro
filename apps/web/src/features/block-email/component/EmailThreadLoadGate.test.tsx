@@ -21,7 +21,7 @@ vi.mock('@queries/email/local-draft-source', () => ({
 }));
 beforeEach(() => localDrafts.mockReset().mockReturnValue([]));
 vi.mock('@notifications', () => ({
-  EmailDebouncedReadMarker: (props: { threadId: string; linkId?: string }) => {
+  EmailReadMarker: (props: { threadId: string; linkId?: string }) => {
     const id = props.threadId;
     onMount(() => markers.mounts.push(id));
     onCleanup(() => markers.releases.push(id));
@@ -122,6 +122,7 @@ it('clears the previous thread and read marker when a reused host navigates', ()
       link_id: `${id}-inbox`,
       access_level: 'owner',
       inbox_visible: true,
+      has_received_mail: true,
       is_read: false,
       messages: [],
       created_at: '2026-09-01T10:00:00Z',

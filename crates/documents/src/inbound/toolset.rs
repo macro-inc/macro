@@ -63,7 +63,9 @@ use entity_access::domain::{
 };
 use lexical_client::LexicalClient;
 use macro_user_id::user_id::MacroUserIdStr;
-use messages::domain::{api::MessageServiceApi, ports::MessageError, service::MessageWrite};
+use messages::domain::{
+    api::MessageServiceApi, models::MessageAttribution, ports::MessageError, service::MessageWrite,
+};
 use model_owner::CreationPrincipal;
 use std::sync::Arc;
 use sync_service_client::SyncServiceClient;
@@ -99,6 +101,11 @@ pub struct DocumentToolContext<
 
     /// Editing worker service for the EditDocument tool.
     pub editing: Arc<EDSvc>,
+
+    /// Whether a user has Canvas artifacts. Hosts without a flag provider keep
+    /// the default, which is off for everyone; wire one with
+    /// [`Self::with_canvas_artifacts`].
+    pub canvas_artifacts: crate::domain::canvas::CanvasArtifactsRollout,
 
     /// A document's comment threads, read by the ReadContent tool.
     pub comments: Arc<dyn DocumentComments>,
@@ -156,6 +163,10 @@ pub struct DocumentToolContext<
     /// already read, so it hands the name over rather than have every tool
     /// look it up again.
     actor_name: Option<EditorName>,
+
+    /// The client the requesting user drives these tools through, such as an
+    /// MCP client, set with [`Self::with_via`]; comments carry it as a label.
+    via: Option<String>,
 }
 
 impl<
@@ -172,6 +183,7 @@ impl<
             sync_service_client: self.sync_service_client.clone(),
             creator: self.creator.clone(),
             editing: self.editing.clone(),
+            canvas_artifacts: self.canvas_artifacts.clone(),
             comments: self.comments.clone(),
             messages: self.messages.clone(),
             spreadsheet: self.spreadsheet.clone(),
@@ -185,6 +197,7 @@ impl<
             recorder: self.recorder.clone(),
             actor: self.actor,
             actor_name: self.actor_name.clone(),
+            via: self.via.clone(),
         }
     }
 }
@@ -242,6 +255,7 @@ impl<
             sync_service_client,
             creator,
             editing,
+            canvas_artifacts: Arc::new(|_| Box::pin(async { false })),
             comments,
             messages,
             spreadsheet,
@@ -255,6 +269,7 @@ impl<
             recorder: Arc::new(ai_usage::NoOpUsageRecorder),
             actor: bot_id::MACRO_AI_BOT_ID,
             actor_name: None,
+            via: None,
         }
     }
 
@@ -321,6 +336,15 @@ impl<
         self
     }
 
+    /// Read each user's Canvas artifacts rollout from this provider.
+    pub fn with_canvas_artifacts(
+        mut self,
+        rollout: crate::domain::canvas::CanvasArtifactsRollout,
+    ) -> Self {
+        self.canvas_artifacts = rollout;
+        self
+    }
+
     /// Set the bot these tools act as.
     pub fn with_actor(mut self, actor: BotId) -> Self {
         self.actor = actor;
@@ -332,6 +356,23 @@ impl<
     pub fn with_actor_name(mut self, name: &str) -> Self {
         self.actor_name = EditorName::new(name);
         self
+    }
+
+    /// Label the comments these tools post with the client the requesting
+    /// user works through, such as an MCP client.
+    pub fn with_via(mut self, client: String) -> Self {
+        self.via = Some(client);
+        self
+    }
+
+    /// How a comment posted by these tools is attributed.
+    pub fn attribution(&self) -> MessageAttribution {
+        match &self.via {
+            Some(client) => MessageAttribution::ActingUserVia {
+                client: client.clone(),
+            },
+            None => MessageAttribution::ActingUser,
+        }
     }
 
     /// The name readers see on what these tools write as it happens - the

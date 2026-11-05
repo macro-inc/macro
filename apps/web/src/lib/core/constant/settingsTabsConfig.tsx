@@ -28,7 +28,7 @@ import { useHasPermission } from '../context/user';
 import { isMobile } from '../mobile/isMobile';
 import { isNativeMobilePlatform } from '../mobile/isNativeMobilePlatform';
 import { isTouchDevice } from '../mobile/isTouchDevice';
-import { isPlatform } from '../util/platform';
+import { isDesktopPlatform, isPlatform } from '../util/platform';
 import {
   botManagement,
   DEV_MODE_ENV,
@@ -133,11 +133,6 @@ export const SETTINGS_TAB_GROUPS: SettingsTabGroup[] = [
           'seats',
         ],
       }),
-      tabItem('tabTeamConnections', {
-        tab: 'Team Connections',
-        icon: PlugIcon,
-        keywords: ['team', 'slack', 'github', 'import', 'app'],
-      }),
     ],
   },
   {
@@ -239,6 +234,9 @@ export const SETTINGS_TAB_GROUPS: SettingsTabGroup[] = [
           'agent',
           'tools',
           'mcp',
+          'slack',
+          'github',
+          'import',
         ],
       }),
     ],
@@ -306,7 +304,6 @@ const SETTINGS_TAB_SLUGS: Record<SettingsTab, string> = {
   Bots: 'bots',
   Team: 'team',
   'Team Members': 'team-members',
-  'Team Connections': 'team-connections',
   Calendar: 'calendar',
   Tags: 'tags',
   CRM: 'crm',
@@ -326,6 +323,8 @@ const SETTINGS_SLUG_TO_TAB = new Map<string, SettingsTab>(
 SETTINGS_SLUG_TO_TAB.set('harness', 'Harness');
 SETTINGS_SLUG_TO_TAB.set('connections', 'Connected');
 SETTINGS_SLUG_TO_TAB.set('agent-connections', 'Connected');
+// Team connections (Slack export, GitHub App) moved into Integrations.
+SETTINGS_SLUG_TO_TAB.set('team-connections', 'Connected');
 
 /** The URL slug for a settings tab (e.g. `Connected` → `connections`). */
 export const settingsTabToSlug = (tab: SettingsTab): string =>
@@ -369,7 +368,6 @@ export const useSettingsTabAvailable = () => {
         return !isMobile();
       case 'Team':
       case 'Team Members':
-      case 'Team Connections':
       case 'Tags':
         return true;
       // CRM is still rolling out (Macro-internal only); keep the settings tab
@@ -390,10 +388,10 @@ export const useSettingsTabAvailable = () => {
         );
       case 'Agent':
         return !isNativeMobilePlatform();
-      // Configurable agents are still rolling out; keep both tabs behind the
-      // same enable-chat-v3-agents gate as the channel mention surfaces, so
-      // settings never advertises agents to a user who cannot mention one.
+      // The bundled desktop runtime can be set up from Home even while the
+      // configurable Agents view is still rolling out.
       case 'Harness':
+        return isDesktopPlatform() || chatV3AgentsFlag().enabled;
       case 'Agents':
         return chatV3AgentsFlag().enabled;
       // Touch hides the Agents sidebar that lists Routines on desktop, so

@@ -29,6 +29,7 @@ universal_input = { path = "../../crates/universal_input" }
 models_ai_projection = { path = "../../crates/models_ai_projection" }
 activity = { path = "../../crates/activity", default-features = false }
 agent = { path = "../../crates/agent", features = ["debug-messages"] }
+agent-client-protocol = { workspace = true }
 agent_changes = { path = "../../crates/agent_changes" }
 agent_code_mode = { path = "../../crates/agent_code_mode" }
 agent_egress = { path = "../../crates/agent_egress" }
@@ -46,6 +47,7 @@ agent_api_keys = { path = "../../crates/agent_api_keys" }
 ai_projections = { path = "../../crates/ai_projections", features = ["agent"] }
 ai_tools = { path = "../../crates/ai_tools" }
 ai_toolset = { path = "../../crates/ai_toolset" }
+calendar_events = { path = "../../crates/calendar_events", features = ["postgres"] }
 ai_usage = { path = "../../crates/ai_usage" }
 analytics_client = { path = "../../crates/analytics_client" }
 anyhow = { workspace = true }
@@ -89,7 +91,7 @@ document_sub_type = { path = "../../crates/document_sub_type" }
 documents = { path = "../../crates/documents", features = ["ai_tools", "attachment", "outbound", "ports"] }
 doppleganger = { workspace = true }
 doppler-config = { workspace = true }
-email = { path = "../../crates/email", features = ["attachment", "outbound"] }
+email = { path = "../../crates/email", features = ["attachment", "outbound", "sqs"] }
 email_service_client = { path = "../../crates/email_service_client" }
 entity_access = { path = "../../crates/entity_access", features = ["inbound", "outbound"] }
 entity_access_db_utils = { path = "../../crates/entity_access_db_utils" }
@@ -101,13 +103,14 @@ foreign_entity = { path = "../../crates/foreign_entity" }
 frecency = { path = "../../crates/frecency", features = ["outbound", "postgres"] }
 fusionauth = { path = "../../crates/fusionauth" }
 futures = { workspace = true }
-github = { path = "../../crates/github", default-features = false, features = ["outbound", "ports", "sync"] }
+github = { path = "../../crates/github", default-features = false, features = ["installation_claims", "outbound", "ports", "sync"] }
 github_pull_requests = { path = "../../crates/github_pull_requests", features = ["outbound", "s3", "service"] }
 granola_sync = { path = "../../crates/granola_sync" }
 harness_id = { path = "../../crates/harness_id" }
 harnesses = { path = "../../crates/harnesses", default-features = false, features = ["outbound", "ports"] }
 http = { workspace = true }
 http-body-util = { workspace = true }
+image_generation = { path = "../../crates/image_generation", features = ["axum"] }
 import = { path = "../../crates/import" }
 import_notion = { path = "../../crates/import_notion" }
 import_linear = { path = "../../crates/import_linear" }
@@ -161,6 +164,7 @@ prompt = { path = "../../crates/prompt" }
 properties = { path = "../../crates/properties", default-features = false, features = ["outbound"] }
 rdkafka = { workspace = true }
 readonly_pool = { path = "../../crates/readonly_pool" }
+rate_limit = { path = "../../crates/rate_limit" }
 redis = { workspace = true, features = ["aio", "streams", "tokio-comp", "tokio-rustls-comp"] }
 regex = { workspace = true }
 reqwest = { workspace = true }
@@ -200,11 +204,11 @@ url = { workspace = true }
 utoipa = { workspace = true, features = ["axum_extras", "chrono"] }
 utoipa-swagger-ui = { workspace = true, features = ["axum"] }
 uuid = { workspace = true }
+web_search = { path = "../../crates/web_search", features = ["axum"] }
 workspace-hack = { version = "0.1", path = "../../crates/workspace-hack" }
 
 [dev-dependencies]
 agent = { path = "../../crates/agent" }
-agent-client-protocol = { workspace = true }
 agent_session = { path = "../../crates/agent_session", features = ["test-utils"] }
 ai_tools = { path = "../../crates/ai_tools", features = ["test-support"] }
 async-trait = { workspace = true }

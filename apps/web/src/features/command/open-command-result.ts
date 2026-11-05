@@ -3,6 +3,7 @@ import { createGlobalSearchOpener } from '@app/features/next-soup/open-search';
 import { getViewPreset } from '@app/features/next-soup/sidebar/soup-filter-presets';
 import { useFeatureFlag } from '@app/lib/analytics/posthog';
 import { t } from '@app/lib/i18n';
+import { globalSplitManager } from '@app/signal/splitLayout';
 import { useSplitLayout } from '@components/app/split-layout/layout';
 import type { ReferredFrom } from '@components/app/split-layout/layoutManager';
 import { toast } from '@core/component/Toast/Toast';
@@ -12,10 +13,11 @@ import {
   USE_MACRO_PR_SUMMARY_BLOCK,
 } from '@core/constant/featureFlags';
 import { fireAndForget } from '@core/util/fireAndForget';
+import { useOpenDirectMessage } from '@core/util/open-direct-message';
 import { openExternalUrl } from '@core/util/url';
 import { isGithubPrEntity } from '@entity';
-import { useGetOrCreateDirectMessageMutation } from '@queries/channel/get-or-create-dm';
 import { projectRouteId } from '../projects/core/route';
+import { routineContent } from '../routines/routine-navigation';
 import { getCategorySearchFilters } from './category-search-filters';
 import {
   type CommandMenuItem,
@@ -32,27 +34,14 @@ export function createCommandResultOpener(
   const { openWithSplit } = useSplitLayout();
   const navigateSearch = createGlobalSearchOpener(referredFrom);
   const projectsFlag = useFeatureFlag(enableProjects);
-  const getOrCreateDirectMessage = useGetOrCreateDirectMessageMutation();
+  const openDm = useOpenDirectMessage();
   // A person without a conversation yet: open one, as the user card does.
   const openDirectMessage = async (
     recipientId: string,
     openInNewSplit: boolean
   ) => {
-    try {
-      const { channel_id } = await getOrCreateDirectMessage.mutateAsync({
-        recipient_id: recipientId,
-      });
-      openWithSplit(
-        { type: 'channel', id: channel_id },
-        {
-          referredFrom,
-          preferNewSplit: openInNewSplit,
-          reopen: 'latest',
-        }
-      );
-    } catch {
-      toast.failure(t('commandMenu.unableToOpenConversation'));
-    }
+    await openDm(recipientId, { referredFrom, preferNewSplit: openInNewSplit });
+    globalSplitManager()?.returnFocus();
   };
 
   const openEntity = (
@@ -115,15 +104,25 @@ export function createCommandResultOpener(
   };
 
   return (item: CommandMenuItem, openInNewSplit = false): boolean => {
-    if (item.kind === 'initiative' && !projectsFlag().enabled) return false;
-    if (item.kind === 'initiative') {
+    const isProject = isEntityItem(item) && item.bucket === 'initiative';
+    if (isProject && !projectsFlag().enabled) return false;
+    if (isProject) {
       openWithSplit(
         {
           type: 'component',
           id: projectRouteId({ id: item.id, section: 'overview' }),
         },
-        { preferNewSplit: openInNewSplit }
+        { referredFrom, preferNewSplit: openInNewSplit }
       );
+      return true;
+    }
+
+    if (isEntityItem(item) && item.bucket === 'routine') {
+      openWithSplit(routineContent(item.id), {
+        referredFrom,
+        preferNewSplit: openInNewSplit,
+        search: {},
+      });
       return true;
     }
 

@@ -1,10 +1,18 @@
 export default {
+  notSpam: 'Not spam',
+  restoreEmail: 'Restore',
+  toastEmailRestoreRequested: 'Restore requested',
+  toastEmailRestoreFailed: {
+    one: 'Could not restore {{count}} email. Try again.',
+    other: 'Could not restore {{count}} emails. Try again.',
+  },
   // Action labels shared by the entity menus, file menu, command menu and
   // project/folder menus.
   markDone: 'Mark Done',
   markNotDone: 'Mark Not Done',
   markRead: 'Mark Read',
   markUnread: 'Mark Unread',
+  open: 'Open',
   openInNewSplit: 'Open in new split',
   openInCurrentSplit: 'Open in current split',
   openFullscreen: 'Open fullscreen',
@@ -17,6 +25,13 @@ export default {
   addToFavorites: 'Add to favorites',
   archive: 'Archive',
   unarchive: 'Unarchive',
+  // An agent session's auto-archive overrides.
+  archiveWhenPullRequestsMerge: 'Archive when PRs merge',
+  archiveWhenSessionCloses: 'Archive when session closes',
+  autoArchiveUseDefaultOn: 'Use default (On)',
+  autoArchiveUseDefaultOff: 'Use default (Off)',
+  autoArchiveOn: 'On',
+  autoArchiveOff: 'Off',
   openOnGitHub: 'Open on GitHub',
   viewItemsWithTag: 'View all items with tag',
   editTag: 'Edit tag',
@@ -27,6 +42,10 @@ export default {
   remindMe: 'Remind me',
   addTag: 'Add tag',
   addToProject: 'Add to project…',
+  openProjectNamed: 'Open project {{name}}',
+  changeProject: 'Change project',
+  openSourceNamed: 'Open source {{name}}',
+  changeSource: 'Change source',
   moveToFolder: 'Move to folder',
   removeFromFolder: 'Remove from folder',
   duplicate: 'Duplicate',
@@ -36,11 +55,18 @@ export default {
   markDoneCommand: 'Mark done',
   markReadCommand: 'Mark read',
   markUnreadCommand: 'Mark unread',
+  discardDraftCommand: {
+    one: 'Discard draft',
+    other: 'Discard drafts',
+  },
   copyLinkCommand: 'Copy link',
   copyBranchNameCommand: 'Copy branch name',
   copyId: 'Copy ID',
   share: 'Share',
   downloadDocx: 'Download',
+  downloadEml: 'Download .eml',
+  downloadEmlFailed: 'Failed to download email. Please try again.',
+  createEvent: 'Create event',
   senderToSignal: 'Sender → Signal',
   senderToNoise: 'Sender → Noise',
   blockSender: 'Block Sender',
@@ -75,6 +101,10 @@ export default {
   undo: 'Undo',
 
   // Toasts.
+  toastChannelAccessRequestFailed: 'Could not send your request to join',
+  toastChannelAccessWithdrawalFailed: 'Could not withdraw your request',
+  toastChannelAccessResolveFailed: 'Could not answer this request',
+  toastAutoArchiveFailed: 'Could not update auto-archive',
   toastCopied: 'Copied',
   toastCopiedCount: {
     one: 'Copied {{count}} item',
@@ -96,6 +126,11 @@ export default {
     other: 'Deleted {{count}} items',
   },
   toastDeleteFailed: 'Failed to delete',
+  toastDiscardedDrafts: {
+    one: 'Draft discarded',
+    other: '{{count}} drafts discarded',
+  },
+  toastDiscardDraftFailed: 'Failed to discard draft',
   toastAddedToFavorites: 'Added to favorites',
   toastAddedCountToFavorites: {
     one: 'Added {{count}} item to favorites',
@@ -172,6 +207,7 @@ export default {
   toastCountNotRestored: { other: '{{count}} could not be restored.' },
   toastNotificationsNotRestored: 'Some notifications could not be restored.',
   toastWithWarnings: '{{message}}. {{warnings}}',
+  toastWaitingToSync: '{{message}}, waiting to sync',
   toastMarkedRead: 'Marked as read',
   toastMarkedReadCount: {
     one: 'Marked {{count}} item as read',
@@ -190,6 +226,28 @@ export default {
     other: 'Moved {{count}} items',
   },
   toastMoveToFolderFailed: 'Failed to move to folder',
+  movePickerTitle: {
+    one: 'Move {{count}} item to folder',
+    other: 'Move {{count}} items to folder',
+  },
+  movePickerSearch: 'Search folders or name a new one…',
+  movePickerOpenInSplit: 'Open in split',
+  movePickerCreatedByYou: 'Created by you',
+  movePickerSharedWithYou: 'Shared with you',
+  movePickerCreate: 'New folder “{{name}}”',
+  movePickerLoading: 'Loading folders…',
+  movePickerEmpty: 'No folders yet. Type a name to create one.',
+  movePickerMoving: 'Moving…',
+  movePickerKeyboardHint: '↑ ↓ to choose · Enter to move · Esc to cancel',
+  movePickerTouchHint: 'Tap a folder to move here',
+  dragMoreItems: {
+    one: '+ {{count}} more item',
+    other: '+ {{count}} more items',
+  },
+  dropIntoFolder: {
+    one: 'Move {{count}} item to this folder',
+    other: 'Move {{count}} items to this folder',
+  },
   toastRemovedFromFolder: 'Removed from folder',
   toastRemovedCountFromFolder: {
     one: 'Removed {{count}} item from folder',

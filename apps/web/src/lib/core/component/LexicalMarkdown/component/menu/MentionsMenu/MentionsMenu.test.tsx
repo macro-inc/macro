@@ -35,6 +35,20 @@ vi.mock('@app/features/crm/record-adapter', () => ({
   },
 }));
 
+vi.mock('@app/features/routines/routine-mentions', () => ({
+  useRoutineMentionSource:
+    (_searchTerm: () => string, enabled: () => boolean) => () =>
+      enabled()
+        ? [
+            {
+              kind: 'routine',
+              id: 'routine-1',
+              data: { id: 'routine-1', name: 'Weekly digest' },
+            },
+          ]
+        : [],
+}));
+
 vi.mock('@app/lib/analytics/analytics-context', () => ({
   useAnalytics: () => ({ track: vi.fn() }),
 }));
@@ -359,8 +373,7 @@ it('only paginates an open mobile menu and resumes on reopen', async () => {
       menu={menu}
       editor={editor}
       users={() => []}
-      sources={['users']}
-      includeContacts
+      sources={['crm']}
     />
   ));
   expect(mocks.loadMoreContacts).not.toHaveBeenCalled();
@@ -515,4 +528,67 @@ it("offers the viewer's own WhatsApp chats to share by mention, only in channel 
   ));
   expect(screen.queryByText('WhatsApp chats')).toBeNull();
   expect(mocks.whatsappUserIds.every((id) => id === '')).toBe(true);
+});
+
+it("offers the viewer's routines to share by mention, only in channel composers", () => {
+  Element.prototype.scrollIntoView = vi.fn();
+  vi.mocked(useEmailSearchMention).mockReturnValue({
+    emails: () => [],
+    totalCount: () => 0,
+    hasMore: () => false,
+    isLoadingMore: () => false,
+    loadMore: async () => {},
+  } as unknown as ReturnType<typeof useEmailSearchMention>);
+  const menu = createMenuOperations();
+  menu.openMenu();
+  render(() => (
+    <MentionsMenu
+      menu={menu}
+      users={() => []}
+      block="channel"
+      anchor={document.createElement('div')}
+      onPick={vi.fn()}
+    />
+  ));
+  expect(screen.getByText('Routines')).toBeTruthy();
+  expect(screen.getByText('Weekly digest')).toBeTruthy();
+  cleanup();
+
+  render(() => (
+    <MentionsMenu
+      menu={menu}
+      users={() => []}
+      anchor={document.createElement('div')}
+      onPick={vi.fn()}
+    />
+  ));
+  expect(screen.queryByText('Routines')).toBeNull();
+});
+
+it('marks an offline agent and refuses to mention it', () => {
+  Element.prototype.scrollIntoView = vi.fn();
+  const offlineAgent: IUser = {
+    id: 'bot|agent-1',
+    name: 'Dev box agent',
+    email: 'Dev box agent',
+    offline: true,
+  };
+  const menu = createMenuOperations();
+  menu.openMenu();
+  const onPick = vi.fn();
+  render(() => (
+    <MentionsMenu
+      menu={menu}
+      entities={() => []}
+      users={() => [offlineAgent]}
+      sources={['users']}
+      anchor={document.createElement('div')}
+      onPick={onPick}
+    />
+  ));
+
+  expect(screen.getByText('Offline')).toBeTruthy();
+  fireEvent.click(screen.getByTitle('Dev box agent — offline'));
+  expect(onPick).not.toHaveBeenCalled();
+  expect(menu.isOpen()).toBe(true);
 });

@@ -17,6 +17,7 @@ beforeEach(() => {
     'ResizeObserver',
     class {
       observe() {}
+      unobserve() {}
       disconnect() {}
     }
   );
@@ -109,7 +110,7 @@ it('keeps keyboard-focused actions alive until focus leaves the list', () => {
   ).toBe(true);
 });
 
-it('preserves actions and only reports explicit close as a user dismissal', () => {
+it('preserves actions and only reports explicit dismissal as a user dismissal', () => {
   render(() => <ToastRegion />);
   const action = vi.fn();
   const onUserDismiss = vi.fn();
@@ -124,7 +125,8 @@ it('preserves actions and only reports explicit close as a user dismissal', () =
   fireEvent.click(screen.getByRole('button', { name: 'Reconnect' }));
   expect(action).toHaveBeenCalledOnce();
   expect(onUserDismiss).not.toHaveBeenCalled();
-  fireEvent.click(screen.getByRole('button', { name: 'Close' }));
+  expect(screen.queryByRole('button', { name: 'Close' })).toBeNull();
+  fireEvent.click(screen.getByRole('button', { name: 'Dismiss' }));
   expect(onUserDismiss).toHaveBeenCalledOnce();
   expect(
     screen
@@ -150,7 +152,7 @@ it('keeps only the latest transient notice on mobile', () => {
   expect(screen.getByText('Latest mobile notice')).toBeTruthy();
 });
 
-it('keeps mobile prompt descriptions and close actions accessible', () => {
+it('keeps mobile prompt descriptions accessible', () => {
   mobile.value = true;
   render(() => <ToastRegion />);
   toast.custom(
@@ -158,5 +160,4 @@ it('keeps mobile prompt descriptions and close actions accessible', () => {
     { persistent: true }
   );
   expect(screen.getByText('Helpful details')).toBeTruthy();
-  expect(screen.getByRole('button', { name: 'Close' })).toBeTruthy();
 });

@@ -5,6 +5,7 @@ const EXCLUDED =
   '[data-icon-motion="none"], [disabled], [aria-disabled="true"], [aria-busy="true"], [inert], .animate-spin, .animate-pulse';
 const STATE_ICON =
   /^(caret|caret-double|arrow|arrows|spinner|circle|dot|check|minus|warning|x)(-|$)/;
+const STILL_ICON = /^(sparkle)(-|$)/;
 const HOVER_ICON = /^(magnifying-glass|gear|gear-six|plus)$/;
 
 function controlAt(target: EventTarget | null) {
@@ -20,7 +21,7 @@ function actionIcon(control: HTMLElement) {
   )) {
     if (svg.closest(CONTROL) !== control || svg.closest(EXCLUDED)) continue;
     const name = svg.dataset.macroIcon?.replace(/-(fill|bold)$/, '') ?? '';
-    if (STATE_ICON.test(name)) continue;
+    if (STATE_ICON.test(name) || STILL_ICON.test(name)) continue;
     const target = svg.closest<HTMLElement>('[data-icon-motion-target]') ?? svg;
     const { width, height } = target.getBoundingClientRect();
     // Illustrations and hidden glyphs are not interaction feedback.

@@ -175,6 +175,23 @@ export type BulkGetByEventItemIdsRequest = {
     eventItemIds: Array<string>;
 };
 
+export type BulkItem = {
+    item_id: string;
+    item_type: EntityType;
+};
+
+export type BulkRemoveItemsRequest = {
+    items: Array<BulkItem>;
+};
+
+export type BulkSetItemsRequest = {
+    items: Array<BulkItem>;
+    /**
+     * A future resume time. Omit to mute indefinitely.
+     */
+    snoozed_until?: string | null;
+};
+
 /**
  * A channel member who sees a calendar event only through a channel share
  * asked the person who shared it to add them as a guest. Sent to the sharer,
@@ -258,6 +275,20 @@ export type CallStartedMetadata = {
      * Profile picture URL of the user who started the call, when available.
      */
     sender_profile_picture_url?: string | null;
+};
+
+/**
+ * A person asked to join a channel the recipient participates in.
+ */
+export type ChannelAccessRequestedMetadata = CommonChannelMetadata & {
+    /**
+     * The attempt to join, which is also this notification's id.
+     */
+    requestId: string;
+    /**
+     * Optional requester profile picture URL.
+     */
+    senderProfilePictureUrl?: string | null;
 };
 
 /**
@@ -966,6 +997,10 @@ export type InviteToTeamMetadata = {
      */
     inviteePlan?: InviteePlan;
     /**
+     * Whether the invite creates an agent account.
+     */
+    isAgent?: boolean;
+    /**
      * Whether this email reminds the invitee of an invite they have not answered.
      */
     reminder?: boolean;
@@ -1280,6 +1315,18 @@ export type NotifEvent = {
      */
     content: CalendarEventJoinRequestMetadata;
     tag: 'calendar_event_join_request';
+} | {
+    /**
+     * Someone asked to join a channel the user participates in.
+     */
+    content: ChannelAccessRequestedMetadata;
+    tag: 'channel_access_requested';
+} | {
+    /**
+     * One of the user's routines finished a run, successfully or not.
+     */
+    content: RoutineRunFinishedMetadata;
+    tag: 'routine_run_finished';
 };
 
 /**
@@ -1482,6 +1529,30 @@ export type RepliedToDocumentCommentThreadMetadata = {
 export type RequestedAccessLevel = 'view' | 'comment' | 'edit';
 
 /**
+ * One of the recipient's routines finished a run. Every run notifies,
+ * whether it succeeded or failed.
+ */
+export type RoutineRunFinishedMetadata = {
+    /**
+     * How the run ended.
+     */
+    outcome: RoutineRunOutcome;
+    /**
+     * The routine that ran.
+     */
+    routineId: string;
+    /**
+     * The routine's name when it ran.
+     */
+    routineName: string;
+};
+
+/**
+ * How a routine run ended, as its notification reports it.
+ */
+export type RoutineRunOutcome = 'succeeded' | 'failed';
+
+/**
  * Metadata for when a user is assigned to a task
  */
 export type TaskAssignedMetadata = {
@@ -1628,6 +1699,48 @@ export type UnsubscribeItemResponses = {
 };
 
 export type UnsubscribeItemResponse = UnsubscribeItemResponses[keyof UnsubscribeItemResponses];
+
+export type RemoveUnsubscribeItemsData = {
+    body: BulkRemoveItemsRequest;
+    path?: never;
+    query?: never;
+    url: '/unsubscribe/items';
+};
+
+export type RemoveUnsubscribeItemsErrors = {
+    400: ErrorResponse;
+    401: ErrorResponse;
+    500: ErrorResponse;
+};
+
+export type RemoveUnsubscribeItemsError = RemoveUnsubscribeItemsErrors[keyof RemoveUnsubscribeItemsErrors];
+
+export type RemoveUnsubscribeItemsResponses = {
+    200: EmptyResponse;
+};
+
+export type RemoveUnsubscribeItemsResponse = RemoveUnsubscribeItemsResponses[keyof RemoveUnsubscribeItemsResponses];
+
+export type UnsubscribeItemsData = {
+    body: BulkSetItemsRequest;
+    path?: never;
+    query?: never;
+    url: '/unsubscribe/items';
+};
+
+export type UnsubscribeItemsErrors = {
+    400: ErrorResponse;
+    401: ErrorResponse;
+    500: ErrorResponse;
+};
+
+export type UnsubscribeItemsError = UnsubscribeItemsErrors[keyof UnsubscribeItemsErrors];
+
+export type UnsubscribeItemsResponses = {
+    200: EmptyResponse;
+};
+
+export type UnsubscribeItemsResponse = UnsubscribeItemsResponses[keyof UnsubscribeItemsResponses];
 
 export type RemoveUnsubscribeAllData = {
     body?: never;

@@ -36,6 +36,17 @@ describe('Pipedream connections model', () => {
     }
   );
 
+  it('carries the backend holding the grant', () => {
+    const model = toConnectionsModel({
+      pipedream: [{ ...connection('linear'), provider: 'connect' }],
+      nativeMcp: [],
+    });
+    expect(capabilitiesFor(model, 'linear')[0]).toMatchObject({
+      mechanism: 'pipedream',
+      grantProvider: 'connect',
+    });
+  });
+
   it('preserves disabled Slack connections', () => {
     const model = toConnectionsModel({
       pipedream: [connection('slack_v2', false)],
@@ -81,7 +92,6 @@ describe('Pipedream connections model', () => {
             kind: 'pipedream',
             id: 'pipedream:slack_v2',
             title: 'slack_v2 account',
-            subtitle: 'slack_v2',
             appSlug: 'slack_v2',
             enabled: slackV2Enabled,
           },
@@ -105,7 +115,6 @@ describe('Pipedream connections model', () => {
         kind: 'pipedream',
         id: 'pipedream:posthog',
         title: 'Connected account',
-        subtitle: 'posthog',
         appSlug: 'posthog',
         enabled: false,
       },

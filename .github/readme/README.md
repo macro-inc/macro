@@ -1,0 +1,96 @@
+# README assets
+
+## Header
+
+`header.png` is the approved 2700×1050 banner: Julia’s supplied white Macro
+logo and wordmark above a fresh capture of the internal Sheets Improvements
+project board. The logo is placed at its native 867-pixel width; the board is
+downscaled from a 3010×916 crop to 2220 pixels wide. Neither raster is upscaled.
+The capture uses existing task content and statuses, with window chrome and
+the pointer excluded by cropping. No UI content was repainted or reconstructed.
+The editable composition and source assets remain in the local
+`Macro README header/2026-10-29-corrected-brand/` design package.
+
+## Product screenshots
+
+The README references the nine PNGs in `framed/`. Each uses the marketing
+Calls hero’s `monterey-dark.jpg` background with `grayscale(1) brightness(1.6)
+contrast(1.05)`, reduced padding of 30 pixels per 1200-pixel frame, and the same
+proportional 16-pixel inner and outer corner radius. Outer corners are transparent
+so they work on both GitHub themes. Screenshot content is unchanged and never
+upscaled; CRM retains its lower source resolution. The header,
+security badges, and star-history charts are not part of this treatment.
+
+Unframed sources are retained below for future edits. Editable compositions and
+the rendering recipe are in the local
+`Macro README header/2026-11-02-all-framed/` package.
+
+The root README uses nine product screenshots. The October 29 final gallery
+supplies Databases, Agents, and Calendar. A subsequent sharpness review replaces
+Chat, Tasks, and Docs with the user's higher-resolution first-pass captures.
+CRM retains the clean demo JPEG pending an equivalent sharp recapture.
+Email and Chat were recaptured from the desktop app on November 4.
+Chat shows a feature request, agent handoff, and completed session card.
+Email shows the user-selected internal test thread. Both retain navigation,
+exclude the cursor and app tabs, and use the shared narrow background frame.
+Original November 4 captures and editable sources are in the local
+`Macro README screenshots/2026-11-04-refresh/` folder. The CRM pipeline and database contain fictional sample data.
+Calendar retains the real meeting names explicitly selected by the user.
+Calls uses the approved web capture of the internal Tasks & Docs design review
+at 3:45, with the recording and speaker-labelled transcript visible. The
+2374×1470 focused crop preserves the call header and actual playback frame.
+
+Chat and Tasks use 3024-pixel-wide desktop sources, trimmed by 6 pixels left,
+8 right, and 12 bottom to remove capture edges. Docs uses the 2402×1308 compact
+capture unchanged. The existing new Databases/Agents/Calendar PNGs have the same
+6/8/12 edge trim. These are genuine source crops, with no upscaling or alteration
+of UI content. Original captures remain outside the repository.
+
+Keep enough source pixels for a sharp display on high-density screens. Capture
+at a useful desktop viewport and retain roughly 2× pixels; do not downsample to
+the README's display width before saving. Use lossless PNG for cropped UI text.
+
+| Unframed source | README asset | View |
+| --- | --- | --- |
+| November 4 desktop capture | `framed/email.png` | Internal team test thread with participants, replies, and email navigation |
+| November 4 desktop capture | `framed/chat.png` | Feature request with an agent mention and completed coding-session card |
+| `tasks-list.png` | `framed/tasks.png` | Search Surface Area project grouped by assignee, higher-resolution desktop capture |
+| `docs-prd.png` | `framed/docs.png` | PRD: Team Channels, compact desktop view with tags, assignees, and document content |
+| `crm-board.jpg` | `framed/crm.png` | Sales Demo pipeline, showing 9 fictional companies in Lead, Demo, and Customer; 2 Churned companies are outside the crop; all deal values are sample data |
+| `databases-table.png` | `framed/databases.png` | Donations Example, showing dates, amounts, designations, and donor relations |
+| `agents-task-handoff.png` | `framed/agents.png` | Add Reminder Icon To Tasks, recaptured on web with a successful audit and PR #8824 |
+| `calls-recording.png` | `framed/calls.png` | Tasks & Docs Page Design Review with Jacob, recording at 3:45 and speaker-labelled transcript |
+| `calendar-week.png` | `framed/calendar.png` | Populated weekly calendar with connected calendars and booking-link controls |
+
+Keep the navigation rail visible; show the expanded sidebar when it adds useful context. Capture browser page
+content so macOS screen-sharing indicators and window controls stay out of the
+image. Move the pointer away from controls and wait for tooltips to disappear.
+
+Before refreshing screenshots, inspect all visible content, including sidebar
+items. Use navigation search or collapse unrelated sections where needed. Avoid
+private customer details, credentials, financial information, and personal
+conversations. Use a populated pipeline board with fictional sample companies
+for CRM and keep the root README's alt text consistent with each displayed
+view. Review every saved image before staging it.
+Previous Chat, Tasks, Docs, and Agents JPEGs remain available but are no longer
+referenced by the root README. A booking-link companion image remains optional.
+
+The marketing homepage's separate screenshot copies under
+`apps/marketing/src/app/assets/desktop-feature-screens` are independent.
+
+## Star history
+
+`star-history.py` embeds a GitHub stargazer timestamp snapshot through
+November 4, 2026 (6,144 stars). It counts current stargazers, so removed stars
+are absent from the historical totals.
+
+Refresh the source timestamps with:
+
+```sh
+gh api --paginate -H 'Accept: application/vnd.github.star+json' \
+  'repos/macro-inc/macro/stargazers?per_page=100' --jq '.[].starred_at'
+```
+
+Update `SERIES`, its snapshot comment, the axis bounds and month labels as
+needed, and the root README's image description. From the repository root,
+run `python3 .github/readme/star-history.py` to regenerate both SVG themes.

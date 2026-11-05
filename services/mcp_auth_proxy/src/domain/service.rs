@@ -12,13 +12,16 @@ use std::{
 };
 
 use super::{
+    access_token_clients::AccessTokenClients,
+    browser_binding::BrowserBinding,
     models::{
-        AuthorizeRequest, CallbackRequest, ClientRegistrationRequest, ClientRegistrationResponse,
-        IssuedAuthorizationCode, PendingAuthorization, RefreshToken, RefreshTokenBinding,
-        RegisteredClient, RevocationRequest, TokenRequest, TokenResponse,
+        AuthorizationStart, AuthorizeRequest, CallbackRequest, ClientRegistrationRequest,
+        ClientRegistrationResponse, ConsentPrompt, IssuedAuthorizationCode, PendingAuthorization,
+        RefreshToken, RefreshTokenBinding, RegisteredClient, RevocationRequest, TokenRequest,
+        TokenResponse, UserConsent,
     },
     ports::{ClientRegistrationStore, OAuthProvider, RefreshTokenBindingStore},
-    redirect_uri::RedirectUriPolicy,
+    redirect_uri::{RedirectTrust, RedirectUriPolicy},
 };
 
 pub(crate) const PENDING_AUTH_TTL: Duration = Duration::from_secs(10 * 60);
@@ -42,6 +45,10 @@ pub const REVOKED_GRANT_TTL: Duration = REFRESH_TOKEN_BINDING_TTL;
 const MAX_REDIRECT_URIS_PER_CLIENT: usize = 8;
 /// Longest redirect URI accepted at registration.
 const MAX_REDIRECT_URI_LEN: usize = 512;
+/// Longest client name the consent screen shows before shortening it.
+const MAX_CONSENT_CLIENT_NAME_CHARS: usize = 64;
+/// What the consent screen calls a client whose name has nothing printable.
+const UNNAMED_CLIENT: &str = "Unnamed app";
 
 /// Domain interface for the MCP OAuth broker.
 pub trait McpAuthProxyService: Clone + Send + Sync + 'static {
@@ -54,15 +61,21 @@ pub trait McpAuthProxyService: Clone + Send + Sync + 'static {
         &self,
         request: ClientRegistrationRequest,
     ) -> impl Future<Output = Result<ClientRegistrationResponse, RegisterClientError>> + Send;
-    /// Starts an OAuth authorization flow and returns the upstream authorize URL.
+    /// Starts an OAuth authorization flow for the browser holding `browser`:
+    /// either the upstream sign-in to send it to, or the consent prompt to show
+    /// first when the client's redirect URI needs the user's approval.
     fn start_authorization(
         &self,
         params: AuthorizeRequest,
-    ) -> impl Future<Output = Result<String, StartAuthorizationError>> + Send;
-    /// Completes the upstream callback and returns the loopback redirect URL.
+        browser: BrowserBinding,
+        consent: UserConsent,
+    ) -> impl Future<Output = Result<AuthorizationStart, StartAuthorizationError>> + Send;
+    /// Completes the upstream callback in the browser that started the flow
+    /// and returns the client redirect URL.
     fn complete_callback(
         &self,
         params: CallbackRequest,
+        browser: Option<BrowserBinding>,
     ) -> impl Future<Output = Result<String, CompleteCallbackError>> + Send;
     /// Exchanges a broker-issued code or refresh token for bearer credentials.
     fn exchange_token(
@@ -145,6 +158,7 @@ pub struct McpAuthProxyServiceImpl<I> {
     inflight_auth: Arc<I>,
     client_registrations: Arc<dyn ClientRegistrationStore>,
     refresh_token_bindings: Arc<dyn RefreshTokenBindingStore>,
+    access_token_clients: AccessTokenClients,
     oauth_provider: Arc<dyn OAuthProvider>,
     redirect_uri_policy: RedirectUriPolicy,
     public_url: String,
@@ -156,6 +170,7 @@ impl<I> Clone for McpAuthProxyServiceImpl<I> {
             inflight_auth: Arc::clone(&self.inflight_auth),
             client_registrations: Arc::clone(&self.client_registrations),
             refresh_token_bindings: Arc::clone(&self.refresh_token_bindings),
+            access_token_clients: self.access_token_clients.clone(),
             oauth_provider: Arc::clone(&self.oauth_provider),
             redirect_uri_policy: self.redirect_uri_policy.clone(),
             public_url: self.public_url.clone(),
@@ -180,12 +195,38 @@ where
 
         Self {
             inflight_auth,
+            access_token_clients: AccessTokenClients::new(
+                Arc::clone(&refresh_token_bindings),
+                Arc::clone(&client_registrations),
+            ),
             client_registrations,
             refresh_token_bindings,
             oauth_provider,
             redirect_uri_policy,
             public_url,
         }
+    }
+
+    /// The record of which client each issued access token went to, for the
+    /// MCP route to label what a client writes.
+    pub fn access_token_clients(&self) -> AccessTokenClients {
+        self.access_token_clients.clone()
+    }
+
+    /// Records the client an access token was issued to. Like a failed
+    /// rebind, a failed write costs only the label on that token's writes, so
+    /// it is logged rather than withholding a token the user approved.
+    async fn bind_access_token(&self, access_token: &str, binding: &RefreshTokenBinding) {
+        self.access_token_clients
+            .bind(access_token, binding)
+            .await
+            .unwrap_or_else(|error| {
+                tracing::error!(
+                    error=?error,
+                    client_id = %binding.client_id,
+                    "failed to record the client an access token was issued to"
+                );
+            });
     }
 
     /// Refreshes an upstream token for the client the refresh token belongs to.
@@ -252,6 +293,9 @@ where
                 tracing::error!(error=?error, %client_id, "failed to bind rotated refresh token");
             })
             .is_ok();
+
+        self.bind_access_token(tokens.access_token.as_str(), &binding)
+            .await;
 
         if rebound && rotated_digest != presented_digest {
             self.refresh_token_bindings
@@ -325,16 +369,16 @@ where
             None => return Err(TokenExchangeError::CodeVerifierRequired),
         }
 
+        let binding = RefreshTokenBinding {
+            client_id: issued.client_id,
+            grant_id: uuid::Uuid::new_v4().to_string(),
+        };
         self.refresh_token_bindings
-            .bind(
-                &refresh_token_digest(&issued.refresh_token),
-                &RefreshTokenBinding {
-                    client_id: issued.client_id,
-                    grant_id: uuid::Uuid::new_v4().to_string(),
-                },
-            )
+            .bind(&refresh_token_digest(&issued.refresh_token), &binding)
             .await
             .map_err(TokenExchangeError::RefreshTokenBindingStore)?;
+        self.bind_access_token(issued.access_token.as_str(), &binding)
+            .await;
 
         Ok(TokenResponse {
             access_token: issued.access_token,
@@ -380,9 +424,9 @@ where
     /// Handles dynamic client registration for public MCP clients.
     ///
     /// Registration is open, as MCP clients require, but it is not
-    /// unconstrained: every submitted redirect URI must satisfy the
-    /// deployment's redirect URI policy, and the accepted set is persisted so
-    /// later authorize requests have something to be checked against.
+    /// unconstrained: every submitted redirect URI must be one the redirect
+    /// URI policy accepts at all, and the accepted set is persisted so later
+    /// authorize requests have something to be checked against.
     async fn register_client(
         &self,
         request: ClientRegistrationRequest,
@@ -394,7 +438,7 @@ where
             return Err(RegisterClientError::TooManyRedirectUris);
         }
         for uri in &request.redirect_uris {
-            if uri.len() > MAX_REDIRECT_URI_LEN || !self.redirect_uri_policy.permits(uri) {
+            if uri.len() > MAX_REDIRECT_URI_LEN || self.redirect_uri_policy.trust(uri).is_none() {
                 return Err(RegisterClientError::UnsupportedRedirectUri { uri: uri.clone() });
             }
         }
@@ -429,11 +473,18 @@ where
         })
     }
 
-    /// Starts an OAuth authorization flow and returns the upstream authorize URL.
+    /// Starts an OAuth authorization flow.
+    ///
+    /// A redirect URI the deployment does not trust needs the user's approval
+    /// first, so until the consent screen reports it the flow stops at the
+    /// prompt and records nothing. The pending flow is bound to `browser`, so
+    /// only the browser that was shown the prompt can finish it.
     fn start_authorization(
         &self,
         params: AuthorizeRequest,
-    ) -> impl Future<Output = Result<String, StartAuthorizationError>> + Send {
+        browser: BrowserBinding,
+        consent: UserConsent,
+    ) -> impl Future<Output = Result<AuthorizationStart, StartAuthorizationError>> + Send {
         let service = self.clone();
         async move {
             if params.response_type != "code" {
@@ -444,9 +495,10 @@ where
             }
             // Applied ahead of the registered set so a registration made
             // before the policy was narrowed cannot still be used.
-            if !service.redirect_uri_policy.permits(&params.redirect_uri) {
-                return Err(StartAuthorizationError::InvalidRedirectUri);
-            }
+            let trust = service
+                .redirect_uri_policy
+                .trust(&params.redirect_uri)
+                .ok_or(StartAuthorizationError::InvalidRedirectUri)?;
 
             let client = service
                 .client_registrations
@@ -463,7 +515,31 @@ where
                 return Err(StartAuthorizationError::UnregisteredRedirectUri);
             }
 
+            if trust == RedirectTrust::RequiresConsent {
+                let redirect_host = redirect_host(&params.redirect_uri)
+                    .ok_or(StartAuthorizationError::InvalidRedirectUri)?;
+
+                if consent == UserConsent::NotAsked {
+                    tracing::info!(
+                        client_id = %client.client_id,
+                        %redirect_host,
+                        "asking the user to approve an MCP client"
+                    );
+                    return Ok(AuthorizationStart::ConsentRequired(ConsentPrompt {
+                        client_name: consent_client_name(&client.client_name),
+                        redirect_host,
+                    }));
+                }
+
+                tracing::info!(
+                    client_id = %client.client_id,
+                    %redirect_host,
+                    "user approved an MCP client"
+                );
+            }
+
             let session_id = uuid::Uuid::new_v4().to_string();
+            let sign_in = params.sign_in.unwrap_or_default();
             tracing::info!(%session_id, client_id = %client.client_id, "starting OAuth authorize flow");
 
             service
@@ -475,6 +551,7 @@ where
                         code_challenge: params.code_challenge,
                         client_state: params.state,
                         client_redirect_uri: params.redirect_uri,
+                        browser_binding_digest: Some(browser.digest()),
                     },
                 )
                 .await
@@ -482,16 +559,24 @@ where
 
             service
                 .oauth_provider
-                .construct_authorize_url(&session_id)
+                .construct_authorize_url(&session_id, sign_in)
+                .map(AuthorizationStart::SignIn)
                 .map_err(StartAuthorizationError::ConstructAuthorizeUrl)
         }
     }
 
     /// Completes the upstream OAuth callback and returns the redirect URL for
-    /// the MCP client loopback callback.
+    /// the MCP client callback.
+    ///
+    /// The upstream signs in a user with an existing session without asking,
+    /// so a sign-in link someone else started would otherwise complete
+    /// silently in a victim's browser and send the victim's code to the
+    /// starter's client. Requiring the browser binding of the browser that
+    /// started the flow closes that.
     async fn complete_callback(
         &self,
         params: CallbackRequest,
+        browser: Option<BrowserBinding>,
     ) -> Result<String, CompleteCallbackError> {
         let session_id = params
             .state
@@ -507,6 +592,22 @@ where
             .await
             .map_err(CompleteCallbackError::InflightStore)?
             .ok_or(CompleteCallbackError::UnknownOrExpiredSession)?;
+
+        let started_in_this_browser = match &pending.browser_binding_digest {
+            Some(digest) => browser.is_some_and(|browser| browser.matches_digest(digest)),
+            None => {
+                self.redirect_uri_policy.trust(&pending.client_redirect_uri)
+                    == Some(RedirectTrust::Trusted)
+            }
+        };
+        if !started_in_this_browser {
+            tracing::warn!(
+                %session_id,
+                client_id = %pending.client_id,
+                "oauth callback arrived in a browser that did not start the flow"
+            );
+            return Err(CompleteCallbackError::DifferentBrowser);
+        }
 
         if let Some(error) = params.error {
             tracing::warn!(
@@ -658,6 +759,56 @@ fn refresh_token_digest(refresh_token: &RefreshToken) -> String {
     URL_SAFE_NO_PAD.encode(digest)
 }
 
+/// The host (and port, when not the default) a redirect URI delivers to, as
+/// the consent screen names it. `url` renders internationalized hosts in
+/// punycode, so a lookalike host cannot pass for the one it imitates.
+fn redirect_host(uri: &str) -> Option<String> {
+    let parsed = url::Url::parse(uri).ok()?;
+    let host = parsed.host_str()?;
+
+    match parsed.port() {
+        Some(port) => Some(format!("{host}:{port}")),
+        None => Some(host.to_owned()),
+    }
+}
+
+/// The self-reported client name as the consent screen shows it: control,
+/// bidirectional-override and zero-width characters dropped and length
+/// capped, so a name cannot restyle or crowd out the rest of the prompt.
+fn consent_client_name(client_name: &str) -> String {
+    let printable: String = client_name
+        .chars()
+        .filter(|character| !character.is_control() && !is_invisible_formatting(*character))
+        .collect();
+    let trimmed = printable.trim();
+
+    if trimmed.is_empty() {
+        return UNNAMED_CLIENT.to_owned();
+    }
+    if trimmed.chars().count() <= MAX_CONSENT_CLIENT_NAME_CHARS {
+        return trimmed.to_owned();
+    }
+
+    let mut shortened: String = trimmed
+        .chars()
+        .take(MAX_CONSENT_CLIENT_NAME_CHARS)
+        .collect();
+    shortened.push('\u{2026}');
+    shortened
+}
+
+/// Characters that change how surrounding text renders without showing
+/// themselves: bidirectional overrides and isolates, and zero-width marks.
+fn is_invisible_formatting(character: char) -> bool {
+    matches!(
+        character,
+        '\u{200B}'..='\u{200F}'
+            | '\u{202A}'..='\u{202E}'
+            | '\u{2060}'..='\u{2069}'
+            | '\u{FEFF}'
+    )
+}
+
 /// Appends query parameters to a redirect URI, keeping any query the client
 /// registered on it.
 fn append_query_params(uri: &str, params: &[(&str, String)]) -> String {
@@ -734,6 +885,10 @@ pub enum CompleteCallbackError {
     /// Pending broker session was missing or expired.
     #[error("unknown or expired session")]
     UnknownOrExpiredSession,
+    /// The callback arrived in a browser other than the one that started the
+    /// flow.
+    #[error("authorization was started in a different browser")]
+    DifferentBrowser,
     /// Inflight auth state could not be loaded or updated.
     #[error("failed to access inflight auth state")]
     InflightStore(anyhow::Error),

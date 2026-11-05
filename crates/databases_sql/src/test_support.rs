@@ -252,6 +252,7 @@ impl DatabasesService for FakeDatabases {
             owner_id: input.owner_id.to_string(),
             created_at: Utc::now(),
             trashed_at: None,
+            project_id: None,
         };
         self.0.lock().unwrap().created.push(input);
         Ok(database)
@@ -261,9 +262,16 @@ impl DatabasesService for FakeDatabases {
     }
     async fn get_database(
         &self,
-        _: EntityAccessReceipt<ViewAccessLevel>,
+        receipt: EntityAccessReceipt<ViewAccessLevel>,
     ) -> Result<DatabaseDetail, DatabaseError> {
-        unimplemented!("SQL reads every database at once")
+        self.0
+            .lock()
+            .unwrap()
+            .databases
+            .iter()
+            .find(|database| database.database.id.to_string() == receipt.entity().entity_id)
+            .cloned()
+            .ok_or(DatabaseError::NotFound)
     }
     async fn rename_database(
         &self,
@@ -631,6 +639,9 @@ impl SoupService for FakeSoup {
                     .take(10)
                     .enumerate()
                     .map(move |(index, member)| ItemGroupingInfo {
+                        sort_key: None,
+                        display_order: None,
+                        document_server_facts: None,
                         key: key.clone(),
                         total_group_count,
                         index_in_group: index + 1,
@@ -674,6 +685,15 @@ impl SoupService for FakeSoup {
     {
         unimplemented!("SQL never reads frecency")
     }
+    async fn group_labels<'a>(
+        &'a self,
+        _user_id: MacroUserIdStr<'a>,
+        _group_by: &'a soup::domain::models::grouping::GroupByField,
+        _keys: &'a [String],
+    ) -> Result<soup::domain::models::grouping::GroupLabels, SoupErr> {
+        Ok(Default::default())
+    }
+
     async fn caller_tag_sets<'a>(
         &self,
         _: MacroUserIdStr<'a>,

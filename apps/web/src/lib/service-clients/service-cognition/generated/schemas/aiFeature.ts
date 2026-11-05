@@ -28,4 +28,6 @@ export const AiFeature = {
   agent_mode_choice: 'agent_mode_choice',
   dictation: 'dictation',
   image_generation: 'image_generation',
+  email_focus: 'email_focus',
+  web_search: 'web_search',
 } as const;

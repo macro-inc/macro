@@ -2,8 +2,9 @@ use std::sync::Arc;
 
 use crate::domain::event_trigger::ActionTrigger;
 use crate::domain::models::{
-    ActionExecutionRecord, ActionPolicyError, AlreadyRunningError, CreateScheduledAction,
-    InProgressExecution, OwnerNotUserError, Schedule, ScheduledAction, UpdateScheduledAction,
+    ActionConfiguration, ActionConfigurationUpdate, ActionExecutionRecord, ActionPolicyError,
+    AlreadyRunningError, InProgressExecution, LastRun, ListedAction, OwnerNotUserError, Schedule,
+    ScheduledAction,
 };
 use crate::domain::ports::ScheduledActionService;
 use crate::domain::target_validation::TargetValidationError;
@@ -32,7 +33,7 @@ use serde::{Deserialize, Serialize};
 use utoipa::{IntoParams, ToSchema};
 
 #[cfg(test)]
-mod test;
+pub(crate) mod test;
 
 /// Canonical trigger plus deprecated cron fields for existing clients. Event
 /// responses omit legacy fields rather than inventing a schedule or timezone.
@@ -50,6 +51,10 @@ pub struct ScheduledActionResponse {
     #[serde(skip_serializing_if = "Option::is_none")]
     #[schema(value_type = Option<String>)]
     pub timezone: Option<Tz>,
+    /// The latest finished run. Present only in lists, and only once the
+    /// routine has finished a run.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub last_run: Option<LastRun>,
 }
 
 impl From<ScheduledAction> for ScheduledActionResponse {
@@ -63,6 +68,16 @@ impl From<ScheduledAction> for ScheduledActionResponse {
             action,
             schedule,
             timezone,
+            last_run: None,
+        }
+    }
+}
+
+impl From<ListedAction> for ScheduledActionResponse {
+    fn from(listed: ListedAction) -> Self {
+        Self {
+            last_run: listed.last_run,
+            ..Self::from(listed.action)
         }
     }
 }
@@ -224,7 +239,7 @@ pub async fn health() -> impl IntoResponse {
     path = "/scheduled-actions",
     tag = "scheduled actions",
     operation_id = "create_scheduled_action",
-    request_body = CreateScheduledAction,
+    request_body = ActionConfiguration,
     responses(
         (status = 201, body = ScheduledActionResponse),
         (status = 400, body = String),
@@ -236,7 +251,7 @@ pub async fn health() -> impl IntoResponse {
 pub async fn create_action<S, Svc, Auth>(
     State(state): State<ScheduledActionRouterState<S, Svc, Auth>>,
     CreationPrincipalExtractor { principal, .. }: CreationPrincipalExtractor<Auth>,
-    body: Result<Json<CreateScheduledAction>, JsonRejection>,
+    body: Result<Json<ActionConfiguration>, JsonRejection>,
 ) -> Result<impl IntoResponse, ScheduledActionApiError>
 where
     S: ScheduledActionService + Send + Sync + 'static,
@@ -321,7 +336,7 @@ where
     tag = "scheduled actions",
     operation_id = "update_scheduled_action",
     params(("id" = String, Path, description = "ID of the scheduled action")),
-    request_body = UpdateScheduledAction,
+    request_body = ActionConfigurationUpdate,
     responses(
         (status = 200, body = ScheduledActionResponse),
         (status = 400, body = String),
@@ -337,7 +352,7 @@ pub async fn update_action<S, Svc, Auth>(
         entity_access_receipt,
         ..
     }: ScheduledActionAccessExtractor<EditAccessLevel, Svc, Auth>,
-    body: Result<Json<UpdateScheduledAction>, JsonRejection>,
+    body: Result<Json<ActionConfigurationUpdate>, JsonRejection>,
 ) -> Result<impl IntoResponse, ScheduledActionApiError>
 where
     S: ScheduledActionService + Send + Sync + 'static,
@@ -506,7 +521,8 @@ impl IntoResponse for ScheduledActionApiError {
                 } else {
                     StatusCode::BAD_REQUEST
                 };
-                return (status, "invalid scheduled action request").into_response();
+                // The caller's own input, naming the field it rejected.
+                return (status, rejection.body_text()).into_response();
             }
             Self::Service(error) => error,
         };
@@ -519,7 +535,8 @@ impl IntoResponse for ScheduledActionApiError {
                 ActionPolicyError::UpdateConflict => StatusCode::CONFLICT,
                 ActionPolicyError::NoFutureFirings
                 | ActionPolicyError::EventManagementDisabled
-                | ActionPolicyError::ConditionsDisabled => StatusCode::BAD_REQUEST,
+                | ActionPolicyError::ConditionsDisabled
+                | ActionPolicyError::GithubNotLinked => StatusCode::BAD_REQUEST,
             };
             return (status, policy.to_string()).into_response();
         }
@@ -528,7 +545,7 @@ impl IntoResponse for ScheduledActionApiError {
         }
         if let Some(validation) = error.downcast_ref::<TargetValidationError>() {
             let status = match validation {
-                TargetValidationError::InvalidTask | TargetValidationError::AgentsDisabled => {
+                TargetValidationError::InvalidTask | TargetValidationError::SessionsUnavailable => {
                     StatusCode::BAD_REQUEST
                 }
                 TargetValidationError::ExplicitAgentRequired

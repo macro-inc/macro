@@ -23,6 +23,8 @@ threads, pins, recents, notifications, folders, activity.
 - `src/server.rs`: composition root, including access-request routes and the
   tracked delivery dispatcher; `src/outbound/access_requests.rs` composes the
   notification/withdrawal/realtime ports. Policy lives in `crates/access_requests`.
+  It also builds the attention feeds (Home's work feed and the notifications
+  inbox) from one set of `attention_feed` adapters, triggers and viewer lookup.
 - `src/external_chat.rs`: composes `ExternalChatService<WhatsAppProvider>`,
   mounts `/external-chats` (`crates/external_chat`) and `/whatsapp`
   (`crates/whatsapp_linked`) and runs the notification/import worker (LISTEN
@@ -42,6 +44,13 @@ threads, pins, recents, notifications, folders, activity.
   objects keyed by part paths/hashes. The export route maps the documents domain's
   pending result to 409 with `Retry-After`; never reuse document-id-only archives.
   Location and export URLs share signing helpers in `src/service/cloudfront.rs`.
+- `src/outbound/calendar_refresh.rs`: the `refresh_calendar` nudge for a new
+  request to join a calendar event, which this service hosts while answers
+  belong to `calendar_service`. It finds delegates by `link_id` alone, as the
+  request list admits them; `get_primaries_for_link` also filters on the child,
+  which a promoted shared mailbox's older events do not carry as their owner.
+  Nudges follow a committed write, so they share `event_broker_tracker`'s
+  bounded shutdown drain with event broker publishes.
 - `src/service/delete_document_worker.rs`: background worker handling document
   deletion side effects (feature-gated: `delete_document_worker`).
 - `src/service/conn_gateway.rs`: pushes realtime updates through
@@ -61,7 +70,9 @@ threads, pins, recents, notifications, folders, activity.
 - Add a Soup GraphQL field: resolver/loader in `crates/graphql_soup` →
   `src/api/graphql_soup.rs` if wiring changes.
 - Add a REST route: `src/api/<area>.rs` → `src/api.rs` (router) →
-  `src/openapi.rs`.
+  `src/api/swagger.rs`; register query-only schemas explicitly in its components list.
+  Then `bun run gen-api cloud-storage` in `apps/web` regenerates
+  `service-storage/openapi.json` and its clients.
 - Add a config value or feature-gated behavior: `src/config.rs` → the
   `[features]` table in `Cargo.toml` if it should be independently toggleable.
 
@@ -69,10 +80,18 @@ threads, pins, recents, notifications, folders, activity.
 
 - `cargo test -p document_storage_service` (`SQLX_OFFLINE` unset; needs
   MacroDB + Redis — `just run_dbs` from repo root; DynamoDB local via
-  `just ensure::ensure_dynamodb`, see `justfile`).
+  `just ensure::ensure_dynamodb` from `services/document_storage_service`,
+  whose `justfile` declares the `ensure` module).
 - After query changes: `nix develop --command just prepare_db` from the repo root.
 
 ## Gotchas
+
+- Compose Soup without a separate property-definition reader; REST and GraphQL validate DATE range inputs before calling the service.
+
+- Don't declare a function that reaches the router `pub async fn`, even in a private
+  module. rustc compiles the body of every non-generic `pub async fn` in every build,
+  so the lib test would compile the whole service. `server::run` returns `impl Future`
+  for that reason.
 
 - Several behaviors are Cargo-feature-gated (`connection_gateway`,
   `delete_document_worker`, `location_check`, all on by `default`) — a feature
@@ -92,3 +111,5 @@ threads, pins, recents, notifications, folders, activity.
 ## Related
 
 - Rules: `.agents/rules/rust/db.md`, `.agents/rules/observability.md`
+
+- Negotiate Mail cache profiles through `x-macro-mail-cache-profile` (CORS-enabled HTTP) and `mailCacheProfile` (WebSocket connection init); preserve authenticated connection data and default unknown capabilities to v2.

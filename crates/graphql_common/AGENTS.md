@@ -30,13 +30,16 @@ schema types (entity type, owner type, property filters).
   `model-entity`, `model_owner`, `models_properties`.
 - Used by: every `graphql_*` domain adapter crate (favorite, initiative,
   calendar, email, notification, soup_filter_input, entity_mutation,
-  properties, crm, soup, channel, work_feed, activity) and `complete_graph`
+  properties, crm, soup, channel, work_feed, notification_inbox, activity) and
+  `complete_graph`
   (the schema that composes them all).
 
 ## Recipes
 
 - Add a shared filter/input type: `src/property_filter.rs` or
   `src/filter_input.rs` → used from the domain crate's input types.
+- Keep property DATE bounds nullable RFC3339 strings and normalize offsets to UTC; an open `dateRange` means present and outer `not` means absent.
+- Translate `CALL_RECORD` property filters to their canonical scope; reference-only `CONTACT` values remain unsupported filter targets.
 - Change the request context: `src/request_context.rs` → `src/extract.rs` →
   every domain crate that reads a new field from it.
 

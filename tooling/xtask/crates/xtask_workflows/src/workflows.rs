@@ -9,6 +9,7 @@
 //! files — [`runners`] (runner labels), [`vars`] (env / secrets / concurrency),
 //! and [`steps`] (reusable step + job helpers).
 
+mod android_play_publish;
 mod android_play_release;
 mod android_release_drift;
 mod android_release_watch;
@@ -16,6 +17,7 @@ mod assign_author;
 mod assign_labels;
 mod build_agent_daemon_on_tag;
 mod build_appimage_on_tag;
+mod build_cef_codecs;
 mod build_desktop_on_tag;
 mod build_dmg_on_tag;
 mod build_web_app;
@@ -35,13 +37,13 @@ mod deploy_all_services;
 mod deploy_cla_worker;
 mod deploy_fusionauth_instance;
 mod deploy_on_push;
-mod deploy_preview;
 mod deploy_sdk_docs;
 mod deploy_sync_service;
 mod deploy_web_app;
 mod deploy_website;
 mod ensure_daytona_snapshot;
 mod export_ci_telemetry;
+mod ios_app_store_publish;
 mod ios_app_store_release;
 mod ios_preview;
 mod ios_release_drift;
@@ -59,6 +61,7 @@ mod reusable_preview_service;
 mod runners;
 mod sdk_check;
 mod steps;
+mod test_macrod_update;
 mod vars;
 mod web_app_check_main;
 mod web_artifact_paths;
@@ -136,6 +139,11 @@ const WORKFLOWS: &[WorkflowFile] = &[
         slug: "build_agent_daemon_on_tag",
         file_name: "build_agent_daemon_on_tag.yml",
         render_yaml: || render_gh_workflow(build_agent_daemon_on_tag::build_agent_daemon_on_tag)(),
+    },
+    WorkflowFile {
+        slug: "test_macrod_update",
+        file_name: "test_macrod_update.yml",
+        render_yaml: || render_gh_workflow(test_macrod_update::test_macrod_update)(),
     },
     WorkflowFile {
         slug: "build_appimage_on_tag",
@@ -253,11 +261,6 @@ const WORKFLOWS: &[WorkflowFile] = &[
         },
     },
     WorkflowFile {
-        slug: "deploy_preview",
-        file_name: "deploy_preview.yml",
-        render_yaml: || render_gh_workflow(deploy_preview::deploy_preview)(),
-    },
-    WorkflowFile {
         slug: "deploy_sync_service",
         file_name: "deploy_sync_service.yml",
         render_yaml: || {
@@ -276,6 +279,11 @@ const WORKFLOWS: &[WorkflowFile] = &[
         slug: "deploy_website",
         file_name: "deploy_website.yml",
         render_yaml: || render_patched(deploy_website::deploy_website, deploy_website::patch),
+    },
+    WorkflowFile {
+        slug: "build_cef_codecs",
+        file_name: "build_cef_codecs.yml",
+        render_yaml: || render_gh_workflow(build_cef_codecs::build_cef_codecs)(),
     },
     WorkflowFile {
         slug: "ensure_daytona_snapshot",
@@ -313,6 +321,11 @@ const WORKFLOWS: &[WorkflowFile] = &[
         render_yaml: || render_gh_workflow(ios_app_store_release::ios_app_store_release)(),
     },
     WorkflowFile {
+        slug: "ios_app_store_publish",
+        file_name: "ios-app-store-publish.yml",
+        render_yaml: || render_gh_workflow(ios_app_store_publish::ios_app_store_publish)(),
+    },
+    WorkflowFile {
         slug: "native_check_label",
         file_name: "native-check-label.yml",
         render_yaml: || render_gh_workflow(native_check_label::native_check_label)(),
@@ -326,6 +339,11 @@ const WORKFLOWS: &[WorkflowFile] = &[
         slug: "android_play_release",
         file_name: "android-play-release.yml",
         render_yaml: || render_gh_workflow(android_play_release::android_play_release)(),
+    },
+    WorkflowFile {
+        slug: "android_play_publish",
+        file_name: "android-play-publish.yml",
+        render_yaml: || render_gh_workflow(android_play_publish::android_play_publish)(),
     },
     WorkflowFile {
         slug: "android_release_watch",

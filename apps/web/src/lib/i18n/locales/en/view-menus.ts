@@ -1,5 +1,18 @@
 export default {
+  crmVisibility: 'Visibility',
+  crmVisible: 'Visible',
+  crmArchived: 'Archived',
+  crmArchive: 'Archive',
+  crmRestore: 'Restore',
   // View tabs
+  favorites: 'Favorites',
+  scheduled: 'Scheduled',
+  reminders: 'Reminders',
+  archived: 'Archived',
+  spam: 'Spam',
+  trash: 'Trash',
+  inbox: 'Inbox',
+  library: 'Library',
   signal: 'Signal',
   noise: 'Noise',
   all: 'All',
@@ -14,6 +27,15 @@ export default {
   attachments: 'Attachments',
   folders: 'Folders',
   myTasks: 'My tasks',
+  allTasks: 'All tasks',
+  createdByMe: 'Created by me',
+  projects: 'Projects',
+  myProjects: 'My projects',
+  allProjects: 'All projects',
+  taskViews: 'Task views',
+  projectViews: 'Project views',
+  projectsCreatedByMe: 'Projects created by me',
+  newProject: 'New project',
   recent: 'Recent',
   people: 'People',
   teams: 'Teams',
@@ -41,6 +63,14 @@ export default {
   priorities: 'Priorities',
   assignee: 'Assignee',
 
+  // People display options
+  peopleDisplayOptions: 'People display options',
+  showRemovedPeople: 'Show removed people',
+  removedPeople: 'Removed people',
+  removedPeopleDescription:
+    'Removed people in this team. Open a person and use Restore. People in hidden companies stay removed until their company is restored.',
+  showActivePeople: 'Show active people',
+
   // List controls
   layout: 'Layout',
   layoutList: 'List',
@@ -50,6 +80,7 @@ export default {
   groupList: 'Group list',
   filterList: 'Filter list',
   clearFilters: 'Clear filters',
+  showHiddenRoutineRuns: 'Show hidden routine runs',
 
   // Filter menu
   filter: 'Filter',

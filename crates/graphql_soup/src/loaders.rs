@@ -250,6 +250,7 @@ where
             .map(|thread| SoupProjectionHydration {
                 item: SoupItem::EmailThread(thread),
                 document_server_facts: None,
+                sort_key: None,
             })
             .chain(items);
         let mut loaded = HashMap::with_capacity(requested.len());
@@ -460,7 +461,25 @@ impl SoupItemDataLoader {
 /// and querying second; both need every committed row, which a replica
 /// lagging by seconds does not have. Lists keep the replica-backed reader.
 #[derive(Clone)]
-pub struct AgentSessionEntityLoader(pub SoupItemDataLoader);
+pub struct AgentSessionEntityLoader(pub(crate) SoupItemDataLoader);
+
+impl AgentSessionEntityLoader {
+    /// Build the reader over a primary-backed Soup service. It always rechecks
+    /// the viewer's team: linked pull requests are stored for the team, so a
+    /// read without it reports every session's PR state as unknown.
+    pub fn new<S, E, A>(soup_service: S, email_service: Arc<E>, access: A) -> Self
+    where
+        S: SoupService,
+        E: EmailThreadPreviewService,
+        A: EntityAccessService,
+    {
+        Self(soup_item_loader_with_team_access(
+            soup_service,
+            email_service,
+            access,
+        ))
+    }
+}
 
 /// Primary-backed Soup reader for reads that must see a write committed
 /// moments earlier, before a replica has replayed it: `soupUpdates`
@@ -468,7 +487,24 @@ pub struct AgentSessionEntityLoader(pub SoupItemDataLoader);
 /// caches it as current, and `soupEntity`, which opens an entity right after
 /// it is created or edited. Lists keep the replica-backed reader.
 #[derive(Clone)]
-pub struct PrimarySoupItemLoader(pub SoupItemDataLoader);
+pub struct PrimarySoupItemLoader(pub(crate) SoupItemDataLoader);
+
+impl PrimarySoupItemLoader {
+    /// Build the reader over a primary-backed Soup service, rechecking the
+    /// viewer's team so team-stored PRs and CRM records hydrate.
+    pub fn new<S, E, A>(soup_service: S, email_service: Arc<E>, access: A) -> Self
+    where
+        S: SoupService,
+        E: EmailThreadPreviewService,
+        A: EntityAccessService,
+    {
+        Self(soup_item_loader_with_team_access(
+            soup_service,
+            email_service,
+            access,
+        ))
+    }
+}
 
 /// Build the Soup DataLoader from the Soup service and the access-checked
 /// email thread reader.
@@ -507,15 +543,23 @@ where
     SoupItemDataLoader::new(loader)
 }
 
-/// Build an OR tree from literals, falling back to an impossible literal when empty.
+/// Build an OR tree from literals, falling back to an impossible literal when
+/// empty. Balanced, not folded: a batch of hundreds of ids folded linearly is
+/// a tree too deep for downstream walkers and serializers.
 fn literal_tree<T>(literals: Vec<T>, impossible: T) -> Arc<Expr<T>> {
-    Arc::new(
-        literals
-            .into_iter()
-            .map(Expr::val)
-            .reduce(Expr::or)
-            .unwrap_or_else(|| Expr::val(impossible)),
-    )
+    let mut nodes = literals.into_iter().map(Expr::val).collect::<Vec<_>>();
+    while nodes.len() > 1 {
+        let mut pairs = nodes.into_iter();
+        let mut next = Vec::new();
+        while let Some(left) = pairs.next() {
+            next.push(match pairs.next() {
+                Some(right) => Expr::or(left, right),
+                None => left,
+            });
+        }
+        nodes = next;
+    }
+    Arc::new(nodes.pop().unwrap_or_else(|| Expr::val(impossible)))
 }
 
 /// Parse an entity's id, which every Soup-hydrated entity carries as a UUID.

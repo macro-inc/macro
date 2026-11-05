@@ -339,6 +339,72 @@ async fn repeated_metadata_recompute_is_noop(pool: Pool<Postgres>) -> anyhow::Re
     Ok(())
 }
 
+/// Archived sent mail to `recipient` with a Macro reply draft, recomputed.
+async fn reply_draft_to_sent_mail_inbox_state(
+    pool: &Pool<Postgres>,
+    recipient: &str,
+) -> anyhow::Result<ThreadInboxState> {
+    let link_id = Uuid::parse_str("aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa")?;
+    let (thread_id, sent_id) = (Uuid::now_v7(), Uuid::now_v7());
+    let mut contacts = Vec::new();
+    for email in ["me@example.com", recipient] {
+        contacts.push(sqlx::query_scalar!(
+            "INSERT INTO email_contacts (id, link_id, email_address) VALUES ($1, $2, $3)
+            ON CONFLICT (link_id, email_address) DO UPDATE SET email_address = EXCLUDED.email_address RETURNING id",
+            Uuid::now_v7(), link_id, email,
+        ).fetch_one(pool).await?);
+    }
+    let (sender, recipient_contact) = (contacts[0], contacts[1]);
+    sqlx::query!(
+        "INSERT INTO email_threads (id, link_id, provider_id) VALUES ($1, $2, $3)",
+        thread_id,
+        link_id,
+        thread_id.to_string(),
+    )
+    .execute(pool)
+    .await?;
+    sqlx::query!(
+        "INSERT INTO email_messages (id, thread_id, link_id, provider_id, from_contact_id, is_sent, internal_date_ts) VALUES ($1, $2, $3, $4, $5, TRUE, '2025-01-01T10:00:00Z')",
+        sent_id, thread_id, link_id, sent_id.to_string(), sender,
+    ).execute(pool).await?;
+    sqlx::query!(
+        "INSERT INTO email_message_recipients (message_id, contact_id, recipient_type) VALUES ($1, $2, 'TO')",
+        sent_id,
+        recipient_contact,
+    )
+    .execute(pool)
+    .await?;
+    sqlx::query!(
+        "INSERT INTO email_messages (id, thread_id, link_id, is_draft) VALUES ($1, $2, $3, TRUE)",
+        Uuid::now_v7(),
+        thread_id,
+        link_id,
+    )
+    .execute(pool)
+    .await?;
+    update_thread_metadata(&mut *pool.acquire().await?, thread_id, link_id).await?;
+    fetch_inbox_state(pool, &thread_id.to_string()).await
+}
+
+// Mail the user sent to themselves is mail they received, so a reply draft
+// brings it back to the inbox. Mail sent only to others stays archived.
+#[sqlx::test(
+    migrator = "MACRO_DB_MIGRATIONS",
+    fixtures(path = "../../../../email/fixtures", scripts("email_thread_labels"))
+)]
+async fn a_message_sent_to_its_own_sender_counts_as_received_mail(
+    pool: Pool<Postgres>,
+) -> anyhow::Result<()> {
+    let to_self = reply_draft_to_sent_mail_inbox_state(&pool, "me@example.com").await?;
+    assert!(to_self.inbox_visible);
+    assert!(to_self.latest_inbound_message_ts.is_some());
+
+    let to_other = reply_draft_to_sent_mail_inbox_state(&pool, "other@example.com").await?;
+    assert!(!to_other.inbox_visible);
+    assert!(to_other.latest_inbound_message_ts.is_none());
+    Ok(())
+}
+
 #[sqlx::test(
     migrator = "MACRO_DB_MIGRATIONS",
     fixtures(path = "../../../../email/fixtures", scripts("email_thread_labels"))

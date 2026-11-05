@@ -1,15 +1,16 @@
 import { openAgentsPage } from '@app/features/agents-view/primitives/open-page';
 import { openBulkEditModal } from '@app/features/entity/bulk-edit/BulkEditEntityModal';
+import { useFeatureFlag } from '@app/lib/analytics/posthog';
 import { useSplitLayout } from '@components/app/split-layout/layout';
 import { useSplitPanelOrThrow } from '@components/app/split-layout/layoutUtils';
 import { useHasPaidAccess } from '@core/auth/license';
 import { useBlockId } from '@core/block';
 import { defaultModelForPlan } from '@core/component/AI/constant';
 import { toast } from '@core/component/Toast/Toast';
+import { enableRoutineSharing } from '@core/constant/featureFlags';
 import { useUserId } from '@core/context/user';
 import { writeClipboardData } from '@core/util/dataTransfer';
 import { getOwner, onMount, Show } from 'solid-js';
-import type { ScheduleDraft } from './core/draft';
 import { getErrorMessage } from './core/routine-draft';
 import {
   createAgentHistoryMetadata,
@@ -20,7 +21,7 @@ import { createRoutineConnectedApps, RoutineApps } from './routine-apps';
 import { RoutineExecutionPicker } from './routine-execution-picker';
 import { RoutinePromptEditor } from './routine-prompt-editor';
 import {
-  openShareTemplateDialog,
+  openShareRoutineDialog,
   RoutineTemplatePage,
 } from './routine-template';
 import { RoutineTriggers } from './routine-triggers';
@@ -52,6 +53,7 @@ export function RoutineDetail(props: {
   const panel = useSplitPanelOrThrow();
   const userId = useUserId();
   const hasPaidAccess = useHasPaidAccess();
+  const sharing = useFeatureFlag(enableRoutineSharing);
   const back = () =>
     props.onBack ? props.onBack() : openAgentsPage(layout, 'routines');
   const open = (id: string) =>
@@ -80,16 +82,13 @@ export function RoutineDetail(props: {
     });
   };
   const owner = getOwner();
-  const shareTemplate = () => {
+  const share = () => {
     const routine = source.routine();
     if (!routine) return;
-    openShareTemplateDialog(
+    openShareRoutineDialog(
       {
         routineId: routine.id,
         name: routine.name,
-        prompt: routine.draft?.prompt ?? '',
-        timezone: scheduleTimezone(routine.draft),
-        ownerId: routine.ownerId,
       },
       owner
     );
@@ -127,8 +126,8 @@ export function RoutineDetail(props: {
             toast.success('Prompt copied');
           else toast.alert('Could not copy prompt');
         }}
-        onShareTemplate={shareTemplate}
-        onOpenTemplate={open}
+        onShare={sharing().enabled ? share : undefined}
+        onOpenTemplate={sharing().enabled ? open : undefined}
         slots={{
           PromptEditor: RoutinePromptEditor,
           ExecutionPicker: RoutineExecutionPicker,
@@ -141,13 +140,4 @@ export function RoutineDetail(props: {
       />
     </Show>
   );
-}
-
-/** The time zone a routine's schedules run in, for sharing it as a template. */
-function scheduleTimezone(draft: ScheduleDraft | undefined) {
-  const schedule = draft?.triggers?.find(
-    (trigger) => trigger.kind === 'schedule'
-  );
-  if (schedule?.kind === 'schedule') return schedule.timezone;
-  return draft?.triggers ? undefined : draft?.timezone;
 }

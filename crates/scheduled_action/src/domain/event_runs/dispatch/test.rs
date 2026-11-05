@@ -266,7 +266,7 @@ fn preparation_binds_receipt_to_authenticated_owner_entity_and_kind() {
         let receipt = EntityAccessReceipt::try_new(
             auth,
             Entity {
-                entity_id: pending.event.entity_id().to_string(),
+                entity_id: pending.event.entity_id().unwrap().to_string(),
                 entity_type: EntityType::Document,
             },
             EntityPermission::AccessLevel {
@@ -285,7 +285,7 @@ fn preparation_binds_receipt_to_authenticated_owner_entity_and_kind() {
     }
     for (id, kind) in [
         (generate_uuid_v7(), EntityType::Document),
-        (pending.event.entity_id(), EntityType::Chat),
+        (pending.event.entity_id().unwrap(), EntityType::Chat),
     ] {
         let receipt = EntityAccessReceipt::try_new_authenticated_user(
             user(),

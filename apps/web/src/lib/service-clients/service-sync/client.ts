@@ -190,7 +190,8 @@ export const syncServiceClient = {
   /**
    * Look up who last edited a given Lexical node and when. `user_id` is a
    * MacroId resolved server-side; `null` if the peer has no recorded user
-   * (anonymous edits or legacy data not yet mirrored locally).
+   * (anonymous edits or legacy data not yet mirrored locally). `actor` is the
+   * signed agent actor (`bot|<uuid>`) the peer edited as, null for humans.
    */
   async getNodeBlame(args: { documentId: string; nodeId: string }) {
     const token = await getPermissionToken('document', args.documentId);
@@ -209,10 +210,11 @@ export const syncServiceClient = {
     if (response.isErr()) {
       return err(response.error);
     }
-    const { peer_id, user_id, timestamp_ms } = response.value;
+    const { peer_id, user_id, actor, timestamp_ms } = response.value;
     return ok({
       peerId: peer_id,
       userId: user_id ?? null,
+      actor: actor ?? null,
       editedAt: new Date(timestamp_ms),
     });
   },

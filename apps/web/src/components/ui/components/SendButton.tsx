@@ -9,11 +9,6 @@ export type SendButtonProps = Omit<
   'size' | 'variant' | 'appearance'
 > & {
   appearance?: 'default' | 'composer';
-  /**
-   * Empty composer with a queue waiting: the same send control, ringed so it
-   * reads as flushing that queue rather than sending a new message.
-   */
-  intent?: 'send' | 'flush';
   /** Show a spinner instead of the arrow (e.g. while a send mutation is in-flight). */
   pending?: boolean;
   /** Drop the button from the layout — used to hide on mobile when the input is empty. */
@@ -32,27 +27,18 @@ export function SendButton(props: SendButtonProps) {
     'aria-label',
     'tooltip',
     'actionLabel',
-    'intent',
   ]);
   const resolved = children(() => local.children);
 
   return (
     <Button
-      variant="neutral"
+      variant="primary"
       size="icon-md"
       draggable={false}
-      aria-label={
-        local['aria-label'] ??
-        (local.intent === 'flush' ? 'Flush queued messages' : 'Send')
-      }
-      tooltip={
-        local.tooltip ??
-        (local.intent === 'flush' ? 'Flush queued messages' : 'Send')
-      }
-      data-intent={local.intent === 'flush' ? 'flush' : undefined}
+      aria-label={local['aria-label'] ?? 'Send'}
+      tooltip={local.tooltip ?? 'Send'}
       class={cn(
         'border-0',
-        local.intent === 'flush' && 'ring-2 ring-accent/60',
         local.appearance === 'composer' &&
           local.actionLabel &&
           'not-touch:w-auto! not-touch:aspect-auto! not-touch:px-3 not-touch:gap-1.5',

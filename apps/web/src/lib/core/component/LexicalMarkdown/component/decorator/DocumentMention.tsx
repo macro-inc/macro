@@ -67,6 +67,7 @@ import { blockNameToItemType } from '@service-storage/client';
 import { createCallback } from '@solid-primitives/rootless';
 import { Button, Tooltip } from '@ui';
 import {
+  $createTextNode,
   $getNodeByKey,
   COMMAND_PRIORITY_NORMAL,
   type EditorThemeClasses,
@@ -118,7 +119,7 @@ function MentionContainer(props: {
         {props.icon}
       </span>
       <Show when={!props.collapsed}>
-        <span class="underline decoration-current/20 decoration-[max(1px,0.1em)] underline-offset-[0.125em]">
+        <span class="text-ink underline decoration-current/20 decoration-[max(1px,0.1em)] underline-offset-[0.125em]">
           {props.text}
         </span>
       </Show>
@@ -1115,6 +1116,14 @@ function DocumentMentionInner(props: DocumentMentionDecoratorProps) {
     });
   };
 
+  const convertToText = (link: string) => {
+    editor?.update(() => {
+      const node = $getNodeByKey(props.key);
+      if (!$isDocumentMentionNode(node)) return;
+      node.replace($createTextNode(link));
+    });
+  };
+
   const convertToCard = () => {
     if (!editor) return;
     editor.update(() => {
@@ -1145,6 +1154,9 @@ function DocumentMentionInner(props: DocumentMentionDecoratorProps) {
   const previewContentProps: DocumentPreviewContentProps = {
     get delete() {
       return editor?.isEditable() ? deleteMention : undefined;
+    },
+    get convertToText() {
+      return editor?.isEditable() ? convertToText : undefined;
     },
     get collapseInfo() {
       return {

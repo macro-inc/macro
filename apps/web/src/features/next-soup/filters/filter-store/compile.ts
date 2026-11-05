@@ -27,6 +27,7 @@ type QueryTarget =
   | 'cthf'
   | 'cf'
   | 'pf'
+  | 'if'
   | 'callf'
   | 'fef'
   | 'ccf'
@@ -156,6 +157,10 @@ const FIELD_CONFIG: Record<
   folderOwnerId: { target: 'pf', field: 'o' },
   folderSeen: { target: 'pf', field: 'ns', notification: 'seen' },
   folderDone: { target: 'pf', field: 'ns', notification: 'done' },
+  // Projects are opt-in server-side, so a notification-state literal is also
+  // what includes them in a query.
+  initiativeSeen: { target: 'if', field: 'ns', notification: 'seen' },
+  initiativeDone: { target: 'if', field: 'ns', notification: 'done' },
   callId: { target: 'callf', field: 'CallId' },
   callChannelId: { target: 'callf', field: 'ChannelId' },
   callSpeakerId: { target: 'callf', field: 'Speaker' },
@@ -169,6 +174,7 @@ const FIELD_CONFIG: Record<
   crmCompanyId: { target: 'ccf', field: 'id' },
   crmCompanyHidden: { target: 'ccf', field: 'hidden' },
   crmContactHidden: { target: 'crmf', field: 'hidden' },
+  crmContactTeamId: { target: 'crmf', field: 'team_id' },
   crmContactSearch: { target: 'crmf', field: 'search' },
   agentSessionId: { target: 'asf', field: 'id' },
   agentSessionOwnerId: { target: 'asf', field: 'o' },
@@ -230,6 +236,7 @@ const emptyTargetAstLists = (): Record<QueryTarget, BackendAst[]> => ({
   cthf: [],
   cf: [],
   pf: [],
+  if: [],
   callf: [],
   fef: [],
   ccf: [],

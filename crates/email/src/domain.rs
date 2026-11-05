@@ -6,6 +6,8 @@ pub mod calendar_invitation_parser;
 pub mod event_forward;
 pub mod events;
 #[cfg(feature = "ports")]
+pub mod focus;
+#[cfg(feature = "ports")]
 pub mod followup;
 #[cfg(feature = "ports")]
 pub mod forwarded_attachments;
@@ -18,7 +20,10 @@ pub mod invitation_resolution;
 #[cfg(feature = "mailbox")]
 pub mod mailbox;
 pub mod models;
+#[cfg(feature = "ports")]
+pub mod read_receipts;
 pub mod senders;
+pub mod shared_thread_replies;
 
 #[cfg(feature = "ports")]
 pub mod assembler;
@@ -41,6 +46,10 @@ pub mod attachment_cleanup;
 
 #[cfg(feature = "mailbox")]
 pub mod attachment_access;
+
+/// Authorized original-source (`.eml`) reads of synced messages.
+#[cfg(feature = "mailbox")]
+pub mod message_source;
 
 /// Provider-neutral mailbox connection entitlements.
 pub mod inbox_entitlement;

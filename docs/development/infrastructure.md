@@ -122,10 +122,12 @@ specifically:
 
 Deployment builds use the filtered source in `nix/cloud-storage.nix`, rather than
 an entire checkout. Include any new `include_str!` or `include_bytes!` assets in
-its source filter. The `code-execution-assets` Nix check verifies that the Deno
-bootstrap, SDK and Handlebars bundles survive both the workspace filter and the
-pruned agent-harness deployment source; Rust CI runs this check before clippy.
-Run it locally with `nix build --no-link .#checks.x86_64-linux.code-execution-assets`.
+its source filter. Assets generated from JavaScript are built in their own
+derivation instead: the `code-mode-assets` package bundles the SDK from the Nix
+`node_modules`, and every crane build of `crates/code_mode_assets` reads it
+through `CODE_MODE_ASSETS_DIR`; Rust CI exports the same variable before cargo,
+restoring the output from Namespace's remote cache when another job already built it.
+Run it locally with `nix build --no-link .#code-mode-assets`.
 
 ## Other resources
 
@@ -161,7 +163,7 @@ local resources.
 | Trigger | What runs |
 | --- | --- |
 | Push to `main` | `deploy_on_push.yml`: builds nix binaries and Lambdas, runs migrations on the in-VPC runner, then `pulumi up` on dev for every service in `.github/services-config.json` |
-| Published GitHub release | `release-production.yml`: the same flow against prod, then workers, website, and web app |
+| Published GitHub release | `release-production.yml`: the same flow against prod, then workers, website, and web app; once the web app is deployed, `ios-app-store-publish.yml` releases the held iOS App Store version |
 | Pull request touching a mapped stack | `pulumi_preview_pr.yml` previews against dev and comments; `code_check_infra.yml` runs Biome and `tsc` |
 | Manual | `deploy-pulumi-stack.yml`, `deploy-service-generic.yml`, `migrate-macro-db.yml` |
 

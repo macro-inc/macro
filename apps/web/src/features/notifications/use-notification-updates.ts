@@ -15,6 +15,7 @@ import { teamKeys } from '@queries/team/keys';
 import { onCleanup } from 'solid-js';
 import { match, P } from 'ts-pattern';
 import { shareEntity } from '../access-requests/core/types';
+import { scheduledActionKeys } from '../routines/queries/keys';
 import type { NotificationSource } from './notification-source';
 import type { UnifiedNotification } from './types';
 
@@ -142,9 +143,13 @@ export function handleNotificationUpdate(notification: UnifiedNotification) {
         'notifications'
       );
     })
-    .with({ tag: 'channel_invite' }, () => {
-      refreshChannel(notification);
-    })
+    .with(
+      { tag: 'channel_invite' },
+      { tag: 'channel_access_requested' },
+      () => {
+        refreshChannel(notification);
+      }
+    )
     .with({ tag: 'channel_message_send' }, () => {
       refreshChannel(notification);
     })
@@ -168,6 +173,11 @@ export function handleNotificationUpdate(notification: UnifiedNotification) {
     })
     .with({ tag: 'inbox_reauth_required' }, () => {
       invalidateEmailLinks();
+    })
+    .with({ tag: 'routine_run_finished' }, () => {
+      queryClient.invalidateQueries({
+        queryKey: scheduledActionKeys.list.queryKey,
+      });
     })
     .with({ tag: 'invite_to_team' }, () => {
       queryClient.invalidateQueries({

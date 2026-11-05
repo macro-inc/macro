@@ -142,7 +142,6 @@ export function MeetingMediaSetup(props: {
               size="icon-lg"
               class="size-12"
               disabled={props.disabled}
-              aria-pressed={media.microphoneEnabled()}
               onClick={() =>
                 media.setMicrophoneEnabled(!media.microphoneEnabled())
               }
@@ -170,7 +169,6 @@ export function MeetingMediaSetup(props: {
               size="icon-lg"
               class="size-12"
               disabled={props.disabled}
-              aria-pressed={media.cameraEnabled()}
               onClick={() => media.setCameraEnabled(!media.cameraEnabled())}
             >
               <Show

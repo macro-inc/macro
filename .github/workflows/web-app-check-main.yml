@@ -15,8 +15,11 @@ jobs:
     runs-on: namespace-profile-linux-tiny-no-cache
     outputs:
       should_run: ${{ steps.filter.outputs.should_run }}
-      codegen_changed: ${{ steps.filter.outputs.codegen_changed }}
+      codegen_changed: ${{ steps.codegen.outputs.codegen_changed }}
+      web_artifact_changed: ${{ steps.filter.outputs.web_artifact_changed }}
       i18n_changed: ${{ steps.filter.outputs.i18n_changed }}
+      database_grid_changed: ${{ steps.filter.outputs.database_grid_changed }}
+      calendar_details_changed: ${{ steps.filter.outputs.calendar_details_changed }}
     steps:
     - name: Checkout Repo
       uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10
@@ -48,16 +51,27 @@ jobs:
             - 'packages/sdk-docs/**'
             - 'services/ai-editing-worker/**'
             - 'packages/code-mode-sdk/**'
-            - 'crates/code_execution/src/outbound/deno/*.mjs'
-            - 'crates/agent_code_mode/src/domain/documentation.json'
             - 'crates/agent_code_mode/SKILL.md'
-            - 'crates/ai_tools/src/display_results/schema.generated.json'
             - '.github/actions/setup-reqs-web/**'
-          codegen_changed:
-            - 'crates/**/*.rs'
-            - 'services/**/*.rs'
+          web_artifact_changed:
+            - 'package.json'
+            - 'bun.lock'
+            - 'apps/web/**'
+            - 'packages/**'
+            - 'crates/folds/agent_fold/**'
+            - 'crates/agent_runtime_protocol/**'
+            - 'crates/client/cache-core/**'
+            - 'crates/client/cache-turso/**'
+            - 'crates/client/cache-wasm/**'
+            - 'crates/client/turso-opfs/**'
+            - 'crates/database_sql/**'
+            - 'crates/filter_ast/**'
+            - 'crates/item_filters/**'
+            - 'static_assets/schema.graphql'
             - 'Cargo.toml'
             - 'Cargo.lock'
+            - 'rust-toolchain.toml'
+          codegen_inputs:
             - 'apps/web/scripts/generate-api-schema.ts'
             - 'apps/web/scripts/services.ts'
             - 'packages/sdk/**'
@@ -69,13 +83,51 @@ jobs:
             - 'apps/web/src/lib/core/constant/settingsTabsConfig.tsx'
             - 'apps/web/src/components/ui/components/Dropdown.tsx'
             - 'apps/web/src/features/settings/**'
+          database_grid_changed:
+            - 'apps/web/src/features/database/**'
+          calendar_details_changed:
+            - 'apps/web/src/features/calendar-view/**'
+            - 'apps/web/src/features/calendar/**'
+            - 'apps/web/src/lib/queries/calendar/**'
+    - id: codegen
+      name: Detect schema changes
+      run: |
+        set -euo pipefail
+        result() {
+          echo "$1"
+          echo "codegen_changed=$2" >> "$GITHUB_OUTPUT"
+          exit 0
+        }
+        [ "$CODEGEN_INPUTS" = true ] && result "A generator input changed." true
+        # The merge commit's first parent is the main this merge result was
+        # built on; a fresh fetch of main could be newer.
+        base=$(git cat-file -p HEAD | sed -n 's/^parent //p' | sed -n 1p)
+        [ -n "$base" ] || result "No base commit to compare with." true
+        git fetch -q --depth=1 origin "$base"
+        names='utoipa|ToSchema|IntoParams|specta|schemars|JsonSchema'
+        # Every grep here reads all its input. One that stopped at its first
+        # match would close the pipe, and pipefail reads the writer's SIGPIPE as
+        # no match.
+        if git diff "$base" HEAD -- Cargo.toml Cargo.lock | grep -E "^[-+].*($names)"; then
+          result "A schema crate's version changed." true
+        fi
+        while IFS= read -r file; do
+          for revision in HEAD "$base"; do
+            if git show "$revision:$file" 2>/dev/null | grep -E "$names" > /dev/null; then
+              result "$file names a schema item." true
+            fi
+          done
+        done < <(git diff --name-only --no-renames "$base" HEAD -- 'crates/*.rs' 'services/*.rs')
+        result "No changed Rust file names a schema item." false
+      env:
+        CODEGEN_INPUTS: ${{ steps.filter.outputs.codegen_inputs }}
   android-native-check:
     name: Android Native Check
     runs-on: namespace-profile-linux-tiny-no-cache
     permissions:
       contents: read
       pull-requests: read
-      id-token: write
+      statuses: read
     steps:
     - name: Checkout PR merge commit
       uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10
@@ -110,29 +162,29 @@ jobs:
         bun scripts/android-version-check.mjs "$base"
       shell: bash
       working-directory: apps/web
-    - id: auth
-      name: Authenticate to Google Play
-      if: steps.android-version.outputs.changed == 'true' && steps.labels.outputs.skip != 'true'
-      uses: google-github-actions/auth@7c6bc770dae815cd3e89ee6cdf493a5fab2cc093
-      with:
-        workload_identity_provider: ${{ vars.GOOGLE_PLAY_WORKLOAD_IDENTITY_PROVIDER }}
-        service_account: ${{ vars.GOOGLE_PLAY_SERVICE_ACCOUNT }}
-        token_format: access_token
-        access_token_scopes: https://www.googleapis.com/auth/androidpublisher
-        create_credentials_file: 'false'
-        export_environment_variables: 'false'
+    - name: Keep the Android native build floor without a release
+      if: steps.labels.outputs.skip == 'true'
+      run: |
+        set -euo pipefail
+        base=$(git cat-file -p HEAD | sed -n 's/^parent //p' | head -1)
+        git fetch -q --depth=1 origin "$base"
+        bun scripts/android-version-check.mjs --skip-release "$base"
+      shell: bash
+      working-directory: apps/web
     - name: Require the Play release to be live
       if: steps.android-version.outputs.changed == 'true' && steps.labels.outputs.skip != 'true'
       run: |
         # --- authenticated fetch ------------------------------------------------------
         # gh_fetch <sha|ref>: make a commit that is not in this checkout (the base
         # commit, a moved PR head, GitHub's test merge commit) available. Checkouts
-        # here don't persist credentials, so authenticate the way actions/checkout
-        # does. Fails if the commit is unreachable (a force-pushed-away head).
+        # may persist credentials, so clear inherited headers before supplying one
+        # explicitly. Keep Nix build libraries out of the host Git HTTPS helper.
+        # Fails if the commit is unreachable (a force-pushed-away head).
         gh_fetch() {
           local auth
           auth=$(printf 'x-access-token:%s' "$GH_TOKEN" | base64 | tr -d '\n')
-          git -c "http.https://github.com/.extraheader=AUTHORIZATION: basic ${auth}" \
+          LD_LIBRARY_PATH= git -c "http.https://github.com/.extraheader=" \
+            -c "http.https://github.com/.extraheader=AUTHORIZATION: basic ${auth}" \
             fetch -q --depth=1 origin "$1"
         }
         # ------------------------------------------------------------------------------
@@ -154,11 +206,11 @@ jobs:
               return 0
             fi
             if [[ "$mergeable" == "CONFLICTING" ]]; then
-              echo "::error::PR #${PR_NUMBER} conflicts with its base branch, so there is no merge result to check; resolve the conflicts first." >&2
+              echo "PR #${PR_NUMBER} conflicts with its base branch, so GitHub has no merge result for it." >&2
               return 1
             fi
             if (( $(date +%s) > deadline )); then
-              echo "::error::GitHub has not computed PR #${PR_NUMBER}'s merge commit yet (mergeable=${mergeable}); retry in a minute." >&2
+              echo "GitHub has not computed PR #${PR_NUMBER}'s merge commit yet (mergeable=${mergeable})." >&2
               return 1
             fi
             echo "Merge commit not computed yet (mergeable=${mergeable}); waiting." >&2
@@ -166,20 +218,107 @@ jobs:
           done
         }
         # ------------------------------------------------------------------------------
+        # --- Android Play commit statuses ---------------------------------------------
+        # Only workflows that run main's copy may sign in to Google Play, so they
+        # record what they learn as commit statuses on the PR's commits, where the
+        # PR-side jobs (the merge gate, the drift check) read it:
+        #
+        #   android-play/release  set by Android Play Publish on the commit it built:
+        #                         pending just before the production promotion, then
+        #                         success or failure.
+        #   android-play/live     set by Android Release Watch on the PR head once the
+        #                         release is live on production.
+        #
+        # Readers match the descriptions exactly, so they are built only here.
+        # Needs GH_TOKEN and GH_REPO; pr_commit_statuses also PR_NUMBER.
+
+        # android_release_description <version code> <native hash>
+        android_release_description() {
+          printf 'Version code %s (native tree %s)' "$1" "$2"
+        }
+
+        # android_live_description <version code> <native hash> <PR number>
+        android_live_description() {
+          printf 'Version code %s is live on Google Play (native tree %s, PR #%s)' "$1" "$2" "$3"
+        }
+
+        # commit_status <sha> <context>: `<state> <description>` of the commit's latest
+        # status with that context, or nothing.
+        commit_status() {
+          gh api "repos/${GH_REPO}/commits/$1/status" \
+            --jq ".statuses[] | select(.context == \"$2\") | \"\(.state) \(.description)\""
+        }
+
+        # pr_commit_statuses <context>: `<sha> <state> <description>` for each of PR
+        # #PR_NUMBER's last 100 commits that has a status with that context (its
+        # latest one), states in lower case like the REST API's.
+        pr_commit_statuses() {
+          gh api graphql -F owner="${GH_REPO%%/*}" -F name="${GH_REPO#*/}" -F pr="$PR_NUMBER" -F context="$1" \
+            -f query='query($owner: String!, $name: String!, $pr: Int!, $context: String!) {
+              repository(owner: $owner, name: $name) {
+                pullRequest(number: $pr) {
+                  commits(last: 100) { nodes { commit { oid status { context(name: $context) { state description } } } } }
+                }
+              }
+            }' \
+            --jq '.data.repository.pullRequest.commits.nodes[].commit
+              | select(.status.context != null)
+              | "\(.oid) \(.status.context.state | ascii_downcase) \(.status.context.description)"'
+        }
+
+        # set_commit_status <sha> <context> <state> <description>, linking this run.
+        set_commit_status() {
+          gh api "repos/${GH_REPO}/statuses/$1" -f context="$2" -f state="$3" -f description="$4" \
+            -f target_url="${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}" >/dev/null
+        }
+        # ------------------------------------------------------------------------------
         set -euo pipefail
+        # The Android merge gate proper: version code $VERSION_CODE must be live on
+        # Google Play production, built from the Android native code of PR
+        # #PR_NUMBER's *current* merge result (fetched through the API: a re-run
+        # checks out the merge commit of the run's original event, which may predate
+        # native code landing on main). This job cannot sign in to Play — only
+        # workflows that run main's copy can — so it reads the `android-play/live`
+        # status that Android Release Watch sets once the release is live. Any of the
+        # PR's commits counts: web-only pushes after the release keep it valid, and
+        # the native hash in the description pins it to this merge result.
         merge=$(pr_merge_commit)
         gh_fetch "$merge"
         native_hash=$(bun scripts/android-native.mjs hash "$merge")
         echo "Merge result ${merge:0:10}: Android native hash ${native_hash}"
-        bun scripts/android-play-status.mjs --version-code "$VERSION_CODE" --require-live \
-          --native-hash "$native_hash" --pr "$PR_NUMBER"
+        want=$(android_live_description "$VERSION_CODE" "$native_hash" "$PR_NUMBER")
+        statuses=$(pr_commit_statuses android-play/live)
+        while read -r sha state description; do
+          if [[ "$state" == success && "$description" == "$want" ]]; then
+            echo "${sha:0:10} is marked android-play/live: ${description}."
+            exit 0
+          fi
+        done <<<"$statuses"
+        echo "Android native changes require version code ${VERSION_CODE} to be live on Google Play before merging," \
+          "built from native tree ${native_hash}, but no commit of this PR is marked so (android-play/live)." >&2
+        if [[ -n "$statuses" ]]; then
+          echo "android-play/live statuses on this PR's commits:" >&2
+          while read -r sha state description; do
+            echo "  ${sha:0:10} ${state}: ${description}" >&2
+          done <<<"$statuses"
+        fi
+        cat >&2 <<'EOF'
+          - Not started yet? Add the `android-update` label to the PR to build, upload
+            and promote it.
+          - Promoted? Wait for Google review; the `Android Release Watch` workflow marks
+            the PR and re-runs this check within half an hour of the release.
+          - Native code changed since the release (pushed to the PR, or landed on main)?
+            Bump (`just android-bump`), commit, re-add `android-update`.
+          - If the native change doesn't break the native/web contract, add the
+            `skip-android-update` label instead.
+        EOF
+        exit 1
       shell: bash
       env:
         GH_TOKEN: ${{ github.token }}
         GH_REPO: ${{ github.repository }}
         PR_NUMBER: ${{ github.event.pull_request.number }}
         VERSION_CODE: ${{ steps.android-version.outputs.version_code }}
-        GOOGLE_PLAY_ACCESS_TOKEN: ${{ steps.auth.outputs.access_token }}
       working-directory: apps/web
     - name: Skipped via label
       if: steps.labels.outputs.skip == 'true'
@@ -203,16 +342,13 @@ jobs:
       uses: './.github/actions/setup-nix'
     - name: Setup Prereqs
       uses: './.github/actions/setup-reqs-web'
-    - name: Check Dynamic UI Schema
-      run: bun run check-dynamic-ui-schema
-      working-directory: apps/web
     - name: Check Types
       run: bun run type-check
       working-directory: apps/web
     - name: Check Floating Promises
       run: bun run lint:oxlint --quiet
     - name: Check Functional Test Types
-      run: bun run --bun --silent tsc --project tests/functional/tsconfig.json
+      run: bun ../../node_modules/typescript-native/bin/tsc --noEmit --skipLibCheck --project tests/functional/tsconfig.json
       working-directory: apps/web
     - name: Check Collaboration Package Types
       run: bun run type-check
@@ -247,6 +383,7 @@ jobs:
     env:
       CARGO_PROFILE_DEV_DEBUG: '0'
       RUSTFLAGS: '-C link-arg=-fuse-ld=mold'
+    timeout-minutes: 45
     steps:
     - name: Checkout Repo
       uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10
@@ -263,6 +400,7 @@ jobs:
       uses: './.github/actions/setup-nix'
     - name: Setup Prereqs
       uses: './.github/actions/setup-reqs-web'
+      timeout-minutes: 15
     - name: Configure Namespace remote sccache
       if: (github.event_name != 'pull_request' && github.event_name != 'pull_request_target') || github.event.pull_request.head.repo.full_name == github.repository
       run: |-
@@ -285,11 +423,58 @@ jobs:
             esac
           done < "$env_file"
           cat "$env_file" >> "$GITHUB_ENV"
+          # The server checks the WebDAV backend before it reports ready, and the
+          # client's default 10s wait can run out. This limit has no env var.
+          sccache_conf="$RUNNER_TEMP/sccache.toml"
+          echo 'server_startup_timeout_ms = 60000' > "$sccache_conf"
+          echo "SCCACHE_CONF=$sccache_conf" >> "$GITHUB_ENV"
           # Force the next compiler invocation to start a server with the new remote
           # backend even if a setup hook happened to launch one already.
           sccache --stop-server >/dev/null 2>&1 || true
         else
           echo "::warning::Namespace remote sccache setup failed; using local cache fallback"
+        fi
+    - name: Build code-mode assets
+      run: |
+        set -euo pipefail
+
+        # Build the code-mode assets once per SDK state, not once per job. Cache volumes
+        # are forks of past jobs, so most jobs miss the store path another job just built.
+        # The key is the store path, which covers every input of the build.
+        assets="$(nix eval --raw .#code-mode-assets.outPath)"
+        echo "CODE_MODE_ASSETS_DIR=$assets" >> "$GITHUB_ENV"
+
+        if nix-store --check-validity "$assets" 2>/dev/null; then
+          echo "Code-mode assets already in the store"
+          exit 0
+        fi
+
+        # Forks have no remote cache credentials.
+        if [ -z "${SCCACHE_WEBDAV_ENDPOINT:-}" ]; then
+          nix build --no-link --print-build-logs .#code-mode-assets
+          exit 0
+        fi
+
+        cache_url="$SCCACHE_WEBDAV_ENDPOINT/code-mode-assets/$(basename "$assets").closure.gz"
+
+        # The token goes through a config descriptor so it stays out of curl's arguments.
+        cache_request() {
+          curl --fail --silent --show-error --max-time 30 --retry 2 \
+            -K <(printf 'header = "Authorization: Bearer %s"\n' "$SCCACHE_WEBDAV_TOKEN") "$@"
+        }
+
+        if cache_request "$cache_url" | gunzip | nix-store --import; then
+          echo "Code-mode assets restored from the remote cache"
+          exit 0
+        fi
+
+        nix build --no-link --print-build-logs .#code-mode-assets
+
+        # Losing the upload costs the next job a rebuild, not a failure.
+        if nix-store --export "$assets" | gzip | cache_request --upload-file - "$cache_url"; then
+          echo "Code-mode assets saved to the remote cache"
+        else
+          echo "::warning::Could not save code-mode assets to the remote cache"
         fi
     - name: Build schema binaries
       run: |
@@ -328,8 +513,10 @@ jobs:
       run: |
         just gen-agent-fold-types
         just gen-database-sql-types
-        if ! git diff --exit-code -- src/lib/service-clients/service-agent-fold/generated src/lib/core/database-sql/generated; then
-          echo "Generated wasm wire types are stale. Run 'just gen-agent-fold-types' and 'just gen-database-sql-types' in apps/web and commit the result."
+        just gen-dynamic-ui-types
+        just gen-agent-review-types
+        if ! git diff --exit-code -- src/lib/service-clients/service-agent-fold/generated src/lib/core/database-sql/generated src/features/dynamic-ui/generated ../../packages/lexical-core/generated src/lib/service-clients/service-agent-reviews/generated ../../packages/sdk/generated/agent-reviews; then
+          echo "Generated specta types are stale. Run 'just gen-agent-fold-types', 'just gen-database-sql-types', 'just gen-dynamic-ui-types' and 'just gen-agent-review-types' in apps/web and commit the result."
           exit 1
         fi
       working-directory: apps/web
@@ -365,6 +552,8 @@ jobs:
     - name: Run Collaboration Package Biome
       run: biome ci --changed --no-errors-on-unmatched --error-on-warnings
       working-directory: packages/collaboration
+    - name: Check Browser Floor and Native Permissions
+      run: bunx --yes @ast-grep/cli@0.44.1 scan --filter '^(tsx?-browser-floor-apis|plist-media-.+)$'
     - name: Teardown Nix
       if: always()
       uses: './.github/actions/teardown-nix'
@@ -372,8 +561,15 @@ jobs:
     needs:
     - path-check
     if: needs.path-check.outputs.should_run == 'true'
-    name: Test
+    name: Test (${{ matrix.shard }}/3)
     runs-on: namespace-profile-linux-mid;overrides.cache-tag=web-ci
+    strategy:
+      matrix:
+        shard:
+        - 1
+        - 2
+        - 3
+      fail-fast: false
     steps:
     - name: Checkout Repo
       uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10
@@ -383,67 +579,68 @@ jobs:
         cache: nix
         path: |-
           /home/runner/.bun/install/cache
+          /home/runner/.cargo/registry
+          /home/runner/.cargo/git
+          /home/runner/.cache/.wasm-pack
           /home/runner/.cache/vitest-modules
+          /home/runner/.cache/wasm-pkgs
       continue-on-error: true
     - name: Setup Nix
       uses: './.github/actions/setup-nix'
     - name: Setup
       uses: './.github/actions/setup-reqs-web'
-      with:
-        playwright: 'true'
+    - name: Configure Namespace remote sccache
+      if: (github.event_name != 'pull_request' && github.event_name != 'pull_request_target') || github.event.pull_request.head.repo.full_name == github.repository
+      run: |-
+        set -euo pipefail
+        env_file="$(mktemp "$RUNNER_TEMP/namespace-sccache.XXXXXX")"
+        trap 'rm -f "$env_file"' EXIT
+        if nsc cache sccache setup --cache_name web-ci > "$env_file"; then
+          # Register credential values as masked BEFORE exporting: GitHub only
+          # masks `secrets.*`, so without this SCCACHE_WEBDAV_TOKEN — a broad,
+          # ~24h Namespace workspace token (registry + cache write) — printed
+          # verbatim in every subsequent step's env dump. Masking is selective by
+          # key name: masking non-secrets like the endpoint URL or key prefix
+          # would redact those strings everywhere in the logs.
+          while IFS= read -r line; do
+            k="${line%%=*}"
+            v="${line#*=}"
+            [ -n "$v" ] && [ "$k" != "$line" ] || continue
+            case "$k" in
+              *TOKEN*|*SECRET*|*PASSWORD*) echo "::add-mask::$v" ;;
+            esac
+          done < "$env_file"
+          cat "$env_file" >> "$GITHUB_ENV"
+          # The server checks the WebDAV backend before it reports ready, and the
+          # client's default 10s wait can run out. This limit has no env var.
+          sccache_conf="$RUNNER_TEMP/sccache.toml"
+          echo 'server_startup_timeout_ms = 60000' > "$sccache_conf"
+          echo "SCCACHE_CONF=$sccache_conf" >> "$GITHUB_ENV"
+          # Force the next compiler invocation to start a server with the new remote
+          # backend even if a setup hook happened to launch one already.
+          sccache --stop-server >/dev/null 2>&1 || true
+        else
+          echo "::warning::Namespace remote sccache setup failed; using local cache fallback"
+        fi
     - name: Build agent-fold WASM for tests
       run: just build-agent-fold-wasm
+      env:
+        WASM_PKG_CACHE_DIR: /home/runner/.cache/wasm-pkgs
       timeout-minutes: 15
       working-directory: apps/web
     - name: Test
-      run: bun run test
+      run: bun run test --shard=${{ matrix.shard }}/3
       env:
         VITEST_MODULE_CACHE_DIR: /home/runner/.cache/vitest-modules
       working-directory: apps/web
-    - name: Sign-up Browser Tests
-      run: just test-signup-browser
-      working-directory: apps/web
-    - name: Interface Language Browser Tests
-      if: needs.path-check.outputs.i18n_changed == 'true'
-      run: |-
-        bunx playwright install-deps chromium
-        just test-i18n-browser
-      working-directory: apps/web
     - name: Teardown Nix
       if: always()
       uses: './.github/actions/teardown-nix'
-  cycles:
+  functional:
     needs:
     - path-check
     if: needs.path-check.outputs.should_run == 'true'
-    name: Cycles Import Check
-    runs-on: namespace-profile-linux-small;overrides.cache-tag=web-ci
-    steps:
-    - name: Checkout
-      uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10
-    - name: Mount /nix cache volume
-      uses: namespacelabs/nscloud-cache-action@15799a6b54e5765f85b2aac25b3f0df43ed571c0
-      with:
-        cache: nix
-      continue-on-error: true
-    - name: Setup Nix
-      uses: './.github/actions/setup-nix'
-    - name: Setup Nix dev shell
-      uses: './.github/actions/setup-nix-dev-shell'
-    - name: Cycles Import Check
-      run: biome lint --changed --no-errors-on-unmatched --only=suspicious/noImportCycles
-      working-directory: apps/web
-    - name: Collaboration Package Cycles Import Check
-      run: biome lint --changed --no-errors-on-unmatched --only=suspicious/noImportCycles
-      working-directory: packages/collaboration
-    - name: Teardown Nix
-      if: always()
-      uses: './.github/actions/teardown-nix'
-  build:
-    needs:
-    - path-check
-    if: needs.path-check.outputs.should_run == 'true'
-    name: Build
+    name: Functional Tests
     runs-on: namespace-profile-linux-mid;overrides.cache-tag=web-ci
     steps:
     - name: Checkout Repo
@@ -487,6 +684,212 @@ jobs:
             esac
           done < "$env_file"
           cat "$env_file" >> "$GITHUB_ENV"
+          # The server checks the WebDAV backend before it reports ready, and the
+          # client's default 10s wait can run out. This limit has no env var.
+          sccache_conf="$RUNNER_TEMP/sccache.toml"
+          echo 'server_startup_timeout_ms = 60000' > "$sccache_conf"
+          echo "SCCACHE_CONF=$sccache_conf" >> "$GITHUB_ENV"
+          # Force the next compiler invocation to start a server with the new remote
+          # backend even if a setup hook happened to launch one already.
+          sccache --stop-server >/dev/null 2>&1 || true
+        else
+          echo "::warning::Namespace remote sccache setup failed; using local cache fallback"
+        fi
+    - name: Start sccache server
+      run: sccache --start-server
+    - name: Build wasm packages
+      run: just build-wasm
+      env:
+        CARGO_PROFILE_FIG_ENGINE_WASM_LTO: 'off'
+        CARGO_PROFILE_FIG_ENGINE_WASM_CODEGEN_UNITS: '16'
+        CARGO_PROFILE_PSD_ENGINE_WASM_LTO: 'off'
+        CARGO_PROFILE_PSD_ENGINE_WASM_CODEGEN_UNITS: '16'
+        CARGO_PROFILE_AI_ENGINE_WASM_LTO: 'off'
+        CARGO_PROFILE_AI_ENGINE_WASM_CODEGEN_UNITS: '16'
+        WASM_PKG_CACHE_DIR: /home/runner/.cache/wasm-pkgs
+      working-directory: apps/web
+    - name: Functional Browser Tests
+      run: bun run test:functional
+      env:
+        FUNCTIONAL_TEST_WORKERS: '8'
+      working-directory: apps/web
+    - name: show sccache stats
+      if: always()
+      run: sccache --show-stats || true
+    - name: Teardown Nix
+      if: always()
+      uses: './.github/actions/teardown-nix'
+  browser:
+    needs:
+    - path-check
+    if: needs.path-check.outputs.should_run == 'true'
+    name: Browser Tests
+    runs-on: namespace-profile-linux-mid;overrides.cache-tag=web-ci
+    steps:
+    - name: Checkout Repo
+      uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10
+    - name: Mount Namespace cache volume
+      uses: namespacelabs/nscloud-cache-action@15799a6b54e5765f85b2aac25b3f0df43ed571c0
+      with:
+        cache: nix
+        path: |-
+          /home/runner/.bun/install/cache
+          /home/runner/.cargo/registry
+          /home/runner/.cargo/git
+          /home/runner/.cache/.wasm-pack
+          /home/runner/.cache/vitest-modules
+          /home/runner/.cache/wasm-pkgs
+      continue-on-error: true
+    - name: Setup Nix
+      uses: './.github/actions/setup-nix'
+    - name: Setup
+      uses: './.github/actions/setup-reqs-web'
+      with:
+        playwright: 'true'
+    - name: Configure Namespace remote sccache
+      if: (github.event_name != 'pull_request' && github.event_name != 'pull_request_target') || github.event.pull_request.head.repo.full_name == github.repository
+      run: |-
+        set -euo pipefail
+        env_file="$(mktemp "$RUNNER_TEMP/namespace-sccache.XXXXXX")"
+        trap 'rm -f "$env_file"' EXIT
+        if nsc cache sccache setup --cache_name web-ci > "$env_file"; then
+          # Register credential values as masked BEFORE exporting: GitHub only
+          # masks `secrets.*`, so without this SCCACHE_WEBDAV_TOKEN — a broad,
+          # ~24h Namespace workspace token (registry + cache write) — printed
+          # verbatim in every subsequent step's env dump. Masking is selective by
+          # key name: masking non-secrets like the endpoint URL or key prefix
+          # would redact those strings everywhere in the logs.
+          while IFS= read -r line; do
+            k="${line%%=*}"
+            v="${line#*=}"
+            [ -n "$v" ] && [ "$k" != "$line" ] || continue
+            case "$k" in
+              *TOKEN*|*SECRET*|*PASSWORD*) echo "::add-mask::$v" ;;
+            esac
+          done < "$env_file"
+          cat "$env_file" >> "$GITHUB_ENV"
+          # The server checks the WebDAV backend before it reports ready, and the
+          # client's default 10s wait can run out. This limit has no env var.
+          sccache_conf="$RUNNER_TEMP/sccache.toml"
+          echo 'server_startup_timeout_ms = 60000' > "$sccache_conf"
+          echo "SCCACHE_CONF=$sccache_conf" >> "$GITHUB_ENV"
+          # Force the next compiler invocation to start a server with the new remote
+          # backend even if a setup hook happened to launch one already.
+          sccache --stop-server >/dev/null 2>&1 || true
+        else
+          echo "::warning::Namespace remote sccache setup failed; using local cache fallback"
+        fi
+    - name: Build agent-fold WASM for tests
+      run: just build-agent-fold-wasm
+      env:
+        WASM_PKG_CACHE_DIR: /home/runner/.cache/wasm-pkgs
+      timeout-minutes: 15
+      working-directory: apps/web
+    - name: Sign-up Browser Tests
+      run: just test-signup-browser
+      working-directory: apps/web
+    - name: Interface Language Browser Tests
+      if: needs.path-check.outputs.i18n_changed == 'true'
+      run: |-
+        bunx playwright install-deps chromium
+        just test-i18n-browser
+      working-directory: apps/web
+    - name: Database Grid Browser Tests
+      if: needs.path-check.outputs.database_grid_changed == 'true'
+      run: |-
+        bunx playwright install-deps chromium
+        just test-database-browser
+      working-directory: apps/web
+    - name: Calendar Event Details Browser Tests
+      if: needs.path-check.outputs.calendar_details_changed == 'true'
+      run: |-
+        bunx playwright install-deps chromium
+        just test-calendar-details-browser
+      working-directory: apps/web
+    - name: Teardown Nix
+      if: always()
+      uses: './.github/actions/teardown-nix'
+  cycles:
+    needs:
+    - path-check
+    if: needs.path-check.outputs.should_run == 'true'
+    name: Cycles Import Check
+    runs-on: namespace-profile-linux-small;overrides.cache-tag=web-ci
+    steps:
+    - name: Checkout
+      uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10
+    - name: Mount /nix cache volume
+      uses: namespacelabs/nscloud-cache-action@15799a6b54e5765f85b2aac25b3f0df43ed571c0
+      with:
+        cache: nix
+      continue-on-error: true
+    - name: Setup Nix
+      uses: './.github/actions/setup-nix'
+    - name: Setup Nix dev shell
+      uses: './.github/actions/setup-nix-dev-shell'
+    - name: Cycles Import Check
+      run: biome lint --changed --no-errors-on-unmatched --only=suspicious/noImportCycles
+      working-directory: apps/web
+    - name: Collaboration Package Cycles Import Check
+      run: biome lint --changed --no-errors-on-unmatched --only=suspicious/noImportCycles
+      working-directory: packages/collaboration
+    - name: Teardown Nix
+      if: always()
+      uses: './.github/actions/teardown-nix'
+  build:
+    needs:
+    - path-check
+    if: needs.path-check.outputs.should_run == 'true'
+    name: Build
+    runs-on: namespace-profile-linux-mid;overrides.cache-tag=web-ci
+    permissions:
+      contents: read
+      pull-requests: write
+    steps:
+    - name: Checkout Repo
+      uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10
+    - name: Mount Namespace cache volume
+      uses: namespacelabs/nscloud-cache-action@15799a6b54e5765f85b2aac25b3f0df43ed571c0
+      with:
+        cache: nix
+        path: |-
+          /home/runner/.bun/install/cache
+          /home/runner/.cargo/registry
+          /home/runner/.cargo/git
+          /home/runner/.cache/.wasm-pack
+          /home/runner/.cache/wasm-pkgs
+      continue-on-error: true
+    - name: Setup Nix
+      uses: './.github/actions/setup-nix'
+    - name: Setup
+      uses: './.github/actions/setup-reqs-web'
+    - name: Configure Namespace remote sccache
+      if: (github.event_name != 'pull_request' && github.event_name != 'pull_request_target') || github.event.pull_request.head.repo.full_name == github.repository
+      run: |-
+        set -euo pipefail
+        env_file="$(mktemp "$RUNNER_TEMP/namespace-sccache.XXXXXX")"
+        trap 'rm -f "$env_file"' EXIT
+        if nsc cache sccache setup --cache_name web-ci > "$env_file"; then
+          # Register credential values as masked BEFORE exporting: GitHub only
+          # masks `secrets.*`, so without this SCCACHE_WEBDAV_TOKEN — a broad,
+          # ~24h Namespace workspace token (registry + cache write) — printed
+          # verbatim in every subsequent step's env dump. Masking is selective by
+          # key name: masking non-secrets like the endpoint URL or key prefix
+          # would redact those strings everywhere in the logs.
+          while IFS= read -r line; do
+            k="${line%%=*}"
+            v="${line#*=}"
+            [ -n "$v" ] && [ "$k" != "$line" ] || continue
+            case "$k" in
+              *TOKEN*|*SECRET*|*PASSWORD*) echo "::add-mask::$v" ;;
+            esac
+          done < "$env_file"
+          cat "$env_file" >> "$GITHUB_ENV"
+          # The server checks the WebDAV backend before it reports ready, and the
+          # client's default 10s wait can run out. This limit has no env var.
+          sccache_conf="$RUNNER_TEMP/sccache.toml"
+          echo 'server_startup_timeout_ms = 60000' > "$sccache_conf"
+          echo "SCCACHE_CONF=$sccache_conf" >> "$GITHUB_ENV"
           # Force the next compiler invocation to start a server with the new remote
           # backend even if a setup hook happened to launch one already.
           sccache --stop-server >/dev/null 2>&1 || true
@@ -498,14 +901,78 @@ jobs:
     - name: Build
       run: just build-dev
       env:
+        CARGO_PROFILE_FIG_ENGINE_WASM_LTO: 'off'
+        CARGO_PROFILE_FIG_ENGINE_WASM_CODEGEN_UNITS: '16'
+        CARGO_PROFILE_PSD_ENGINE_WASM_LTO: 'off'
+        CARGO_PROFILE_PSD_ENGINE_WASM_CODEGEN_UNITS: '16'
+        CARGO_PROFILE_AI_ENGINE_WASM_LTO: 'off'
+        CARGO_PROFILE_AI_ENGINE_WASM_CODEGEN_UNITS: '16'
         WASM_PKG_CACHE_DIR: /home/runner/.cache/wasm-pkgs
-      working-directory: apps/web
-    - name: Test Optimistic Mutations in Chromium
-      run: bun run test:functional
+        VITE_SEGMENT_WRITE_KEY: ${{ secrets.SEGMENT_WRITE_KEY_PRODUCTION }}
+        VITE_POSTHOG_API_KEY: ${{ secrets.POSTHOG_API_KEY }}
       working-directory: apps/web
     - name: show sccache stats
       if: always()
       run: sccache --show-stats || true
+    - id: preview-credentials
+      name: Configure AWS Credentials
+      if: needs.path-check.outputs.web_artifact_changed == 'true' && !contains(github.event.pull_request.title, '[no preview]') && github.event.pull_request.head.repo.full_name == github.repository
+      uses: aws-actions/configure-aws-credentials@e7f100cf4c008499ea8adda475de1042d6975c7b
+      with:
+        aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY }}
+        aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+        aws-region: us-east-1
+      continue-on-error: true
+    - id: preview-id
+      name: Get or create preview ID
+      if: needs.path-check.outputs.web_artifact_changed == 'true' && !contains(github.event.pull_request.title, '[no preview]') && github.event.pull_request.head.repo.full_name == github.repository && steps.preview-credentials.outcome == 'success'
+      run: |
+        PREVIEW_ID=$(bun scripts/preview/get-or-create-id.ts \
+          --pr ${{ github.event.pull_request.number }} \
+          --repo ${{ github.repository }} \
+          --token ${{ secrets.GITHUB_TOKEN }} \
+          --branch "${{ github.head_ref }}")
+        echo "id=$PREVIEW_ID" >> $GITHUB_OUTPUT
+        echo "Preview ID: $PREVIEW_ID"
+      env:
+        PREVIEW_BUCKET: macro-preview-assets-dev
+      continue-on-error: true
+      working-directory: apps/web
+    - id: preview-bucket
+      name: Validate bucket name
+      if: needs.path-check.outputs.web_artifact_changed == 'true' && !contains(github.event.pull_request.title, '[no preview]') && github.event.pull_request.head.repo.full_name == github.repository && steps.preview-id.outcome == 'success'
+      run: |
+        if [[ "${{ env.PREVIEW_BUCKET }}" != "macro-preview-assets-dev" ]]; then
+          echo "ERROR: PREVIEW_BUCKET must be 'macro-preview-assets-dev'"
+          exit 1
+        fi
+      env:
+        PREVIEW_BUCKET: macro-preview-assets-dev
+      continue-on-error: true
+    - id: preview-deploy
+      name: Deploy to S3
+      if: needs.path-check.outputs.web_artifact_changed == 'true' && !contains(github.event.pull_request.title, '[no preview]') && github.event.pull_request.head.repo.full_name == github.repository && steps.preview-bucket.outcome == 'success'
+      run: |
+        bun scripts/preview/deploy.ts \
+          --preview-id ${{ steps.preview-id.outputs.id }} \
+          --skip-build
+      env:
+        PREVIEW_BUCKET: macro-preview-assets-dev
+      continue-on-error: true
+      working-directory: apps/web
+    - name: Comment on PR
+      if: needs.path-check.outputs.web_artifact_changed == 'true' && !contains(github.event.pull_request.title, '[no preview]') && github.event.pull_request.head.repo.full_name == github.repository && steps.preview-deploy.outcome == 'success'
+      run: |
+        bun scripts/preview/post-comment.ts \
+          --pr ${{ github.event.pull_request.number }} \
+          --repo ${{ github.repository }} \
+          --token ${{ secrets.GITHUB_TOKEN }} \
+          --preview-id ${{ steps.preview-id.outputs.id }} \
+          --sha ${{ github.sha }}
+      env:
+        PREVIEW_BUCKET: macro-preview-assets-dev
+      continue-on-error: true
+      working-directory: apps/web
     - name: Teardown Nix
       if: always()
       uses: './.github/actions/teardown-nix'
@@ -542,8 +1009,6 @@ jobs:
             - '!apps/web/tauri/**/desktop/**'
             - '!apps/web/tauri/**/desktop-*'
             - '!apps/web/tauri/**/desktop-*/**'
-            - '!apps/web/tauri/**/desktop_*'
-            - '!apps/web/tauri/**/desktop_*/**'
             - '!apps/web/tauri/**/desktop.*'
             - '!apps/web/tauri/desktop-release.json'
             - '!apps/web/tauri/.helix/**'
@@ -667,7 +1132,7 @@ jobs:
       env:
         DOPPLER_TOKEN: ${{ secrets.IOS_RELEASE_DOPPLER_TOKEN }}
     - id: live
-      name: Require the App Store release to be live
+      name: Require Apple's approval of the App Store release
       if: (steps.native-filter.outputs.ios_native == 'true' || steps.cache-wasm.outputs.bumped == 'true') && steps.labels.outputs.skip != 'true'
       run: |
         # --- native tree ------------------------------------------------------------
@@ -675,11 +1140,13 @@ jobs:
         # apps/web/tauri except the paths that never reach the iOS binary, recognised
         # by the same naming convention the Android gate uses (android-native.mjs,
         # which excludes iOS/macOS/linux/windows/apple/desktop-named paths): a path
-        # component that is `android`, `macos`, `linux`, `windows` or `desktop`,
-        # starts with that name plus `_`, `.` or `-`, or an extension-style
-        # `.android.` / `.macos.` / `.linux.` / `.windows.` infix (the android_*
-        # plugins, tauri.android.conf.json and tauri.macos.conf.json, desktop_update
-        # and the desktop_* modules, linux_notification, the macos icons; the Rust
+        # component that is `android`, `macos`, `linux` or `windows` or starts with
+        # that name plus `_`, `.` or `-`; one that is `desktop` or starts with
+        # `desktop.` / `desktop-` (not `desktop_`: desktop_update and its Status type
+        # compile into mobile, only desktop_update/desktop/ is cfg(desktop)); or an
+        # extension-style `.android.` / `.macos.` / `.linux.` / `.windows.` infix (the
+        # android_* plugins, tauri.android.conf.json and tauri.macos.conf.json,
+        # src/desktop/, desktop-cef, linux_notification, the macos icons; the Rust
         # ones are all behind cfg(target_os) / cfg(desktop)) — plus the desktop
         # updater manifest, editor config and Markdown docs. `apple`/`ios` paths
         # stay included: gen/apple is the Xcode project. Plus one thing outside that tree: the
@@ -688,24 +1155,31 @@ jobs:
         # natively, and the team bumps that version when a cache change must ship, so
         # the bump — not every edit under crates/client — is the native signal. The
         # release stamps uploaded builds with the hash, the merge gate compares the
-        # live build's stamp against the merge result's, and the drift / head guards
+        # approved build's stamp against the merge result's, and the drift / head guards
         # compare commits with it. Must match nativeTreeHash() in
         # apps/web/scripts/ios-app-store.mjs and the iOS Native Check's change
         # detection (web_app_check_main/ios_native_check.rs).
         NATIVE_TREE_PATH=apps/web/tauri
         CACHE_WASM_MANIFEST=crates/client/cache-wasm/Cargo.toml
-        export NATIVE_TREE_EXCLUDE='(^|/)(android|macos|linux|windows|desktop)([_./-]|$)|\.(android|macos|linux|windows)\.|\.md$|^desktop-release\.json$|^\.helix/'
+        export NATIVE_TREE_EXCLUDE='(^|/)(android|macos|linux|windows)([_./-]|$)|(^|/)desktop([./-]|$)|\.(android|macos|linux|windows)\.|\.md$|^desktop-release\.json$|^\.helix/'
 
-        # native_tree_hash <commit>: prints the hash, fails if the path is missing.
+        # native_tree_listing <commit>: what the hash covers — the filtered ls-tree
+        # lines plus the cache wasm version — fails if the path is missing.
         # (--full-tree: ls-tree otherwise narrows its output to the current directory,
         # which would silently hash nothing when run from apps/web.)
-        native_tree_hash() {
+        native_tree_listing() {
           git rev-parse -q --verify "$1:${NATIVE_TREE_PATH}" >/dev/null || return 1
-          {
-            git ls-tree -r --full-tree "$1:${NATIVE_TREE_PATH}" \
-              | awk -F'\t' '$2 !~ ENVIRON["NATIVE_TREE_EXCLUDE"]'
-            echo "cache-wasm-version $(cache_wasm_version "$1")"
-          } | git hash-object --stdin
+          git ls-tree -r --full-tree "$1:${NATIVE_TREE_PATH}" \
+            | awk -F'\t' '$2 !~ ENVIRON["NATIVE_TREE_EXCLUDE"]'
+          echo "cache-wasm-version $(cache_wasm_version "$1")"
+        }
+
+        # native_tree_hash <commit>: prints the hash of the listing, and fails when the
+        # listing does (a pipe would hash nothing and succeed).
+        native_tree_hash() {
+          local listing
+          listing=$(native_tree_listing "$1") || return 1
+          git hash-object --stdin <<<"$listing"
         }
 
         # cache_wasm_version <commit>: the `version` of the client cache wasm package
@@ -746,11 +1220,11 @@ jobs:
               return 0
             fi
             if [[ "$mergeable" == "CONFLICTING" ]]; then
-              echo "::error::PR #${PR_NUMBER} conflicts with its base branch, so there is no merge result to check; resolve the conflicts first." >&2
+              echo "PR #${PR_NUMBER} conflicts with its base branch, so GitHub has no merge result for it." >&2
               return 1
             fi
             if (( $(date +%s) > deadline )); then
-              echo "::error::GitHub has not computed PR #${PR_NUMBER}'s merge commit yet (mergeable=${mergeable}); retry in a minute." >&2
+              echo "GitHub has not computed PR #${PR_NUMBER}'s merge commit yet (mergeable=${mergeable})." >&2
               return 1
             fi
             echo "Merge commit not computed yet (mergeable=${mergeable}); waiting." >&2
@@ -759,13 +1233,14 @@ jobs:
         }
         # ------------------------------------------------------------------------------
         set -euo pipefail
-        # The gate proper: the committed version + build must be live, built from the
-        # native code of the PR's current merge result.
+        # The gate proper: Apple must have approved the committed version + build
+        # (held for release or live), built from the native code of the PR's current
+        # merge result.
         merge=$(pr_merge_commit)
         native_tree_fetch "$merge"
         native_tree=$(native_tree_hash "$merge")
         echo "Merge result ${merge:0:10}: native tree ${native_tree}"
-        bun scripts/ios-app-store.mjs status --require-live --native-tree "$native_tree"
+        bun scripts/ios-app-store.mjs status --require-approved --native-tree "$native_tree"
       shell: bash
       env:
         GH_TOKEN: ${{ github.token }}
@@ -821,7 +1296,7 @@ jobs:
             lines.push('### iOS release check could not complete', '',
               `Failed step: **${failed.map(([id]) => names[id] ?? id).join(', ')}**.`, '',
               `See the [workflow logs](${runUrl}) for the error, fix it, then rerun the check.`,
-              'This failure does not establish whether the App Store release is live.');
+              'This failure does not establish whether Apple approved the App Store release.');
           } else if (!native && detectionComplete) {
             lines.push('### iOS release not required', '', 'This PR no longer changes native iOS code.');
           } else if (steps.labels?.outputs?.skip === 'true') {
@@ -829,16 +1304,15 @@ jobs:
               'The `skip-ios-update` label bypasses this check. App Store availability has not been verified.');
           } else if (release) {
             const name = `iOS ${release.version} (build ${release.build})`;
-            if (release.kind === 'live') {
-              lines.push(`### ${name} is live and verified`, '',
-                'The App Store build matches this PR’s current merge result. The iOS release requirement is satisfied; other checks and approvals still apply.');
+            if (release.kind === 'approved') {
+              lines.push(`### ${name} is approved and verified`, '',
+                'Apple approved the App Store build, and it matches this PR’s current merge result. The iOS release requirement is satisfied; other checks and approvals still apply.');
+              if (release.state) lines.push('', `App Store state: \`${release.state}\`.`);
             } else {
-              lines.push(`### ${name} must be live before this PR can merge`, '', release.reason);
+              lines.push(`### ${name} must be approved before this PR can merge`, '', release.reason);
               if (release.state) lines.push('', `App Store state: \`${release.state}\`.`);
               if (release.kind === 'waiting') {
-                lines.push('', release.state === 'PENDING_DEVELOPER_RELEASE'
-                  ? 'Release the approved version in App Store Connect.'
-                  : 'Wait for Apple to approve and make the release available.');
+                lines.push('', 'Wait for Apple to approve the release.');
               } else if (release.kind === 'mismatch') {
                 lines.push('', 'Bump the release numbers, commit, push, then remove and re-add `ios-update` to release the current native code. Use `--no-min` for a release that does not need a higher native build floor.');
               } else {
@@ -846,9 +1320,9 @@ jobs:
                   ? 'The `ios-update` label is already present. Follow the **iOS App Store Release** run; if it failed, fix the reported problem, then remove and re-add the label to retry. Resolve any rejection or metadata issue in App Store Connect first.'
                   : 'Once the other checks pass and the PR is ready, add **`ios-update`** to build, upload, and submit it for App Review.');
               }
-              lines.push('', 'After release, **iOS Release Watch** reruns this check within 30 minutes. You can also rerun it manually. Optionally enable **auto-merge** to merge once all requirements pass.');
+              lines.push('', 'After approval, **iOS Release Watch** reruns this check within 30 minutes. You can also rerun it manually. Optionally enable **auto-merge** to merge once all requirements pass.');
             }
-            lines.push('', `The next prod web deploy will use minimum supported iOS build **${release.floor}**, as committed in this PR.`,
+            lines.push('', `The next prod deploy releases ${name} on the App Store and makes the web bundle require iOS build **${release.floor}** or later, as committed in this PR.`,
               '', `[App Store Connect](${release.distributionUrl})`);
           } else {
             // No structured result means verification never completed; never infer an
@@ -876,6 +1350,8 @@ jobs:
     - generated-code
     - biome-check
     - test
+    - functional
+    - browser
     - cycles
     - build
     - ios-native-check
@@ -891,18 +1367,24 @@ jobs:
         echo "generated-code: ${{ needs.generated-code.result }}"
         echo "biome-check: ${{ needs.biome-check.result }}"
         echo "test: ${{ needs.test.result }}"
+        echo "functional: ${{ needs.functional.result }}"
+        echo "browser: ${{ needs.browser.result }}"
         echo "cycles: ${{ needs.cycles.result }}"
         echo "build: ${{ needs.build.result }}"
         echo "ios-native-check: ${{ needs.ios-native-check.result }}"
 
         # Fail if any job failed (skipped and success are both OK). The iOS
-        # gate is the merge gate, so a cancelled gate is not OK either.
+        # gate is the merge gate, so a cancelled gate is not OK either. The same
+        # goes for generated code: a job that hits its timeout reports cancelled.
         if [[ "${{ needs.android-native-check.result }}" != "success" ]] || \
            [[ "${{ needs.path-check.result }}" == "failure" ]] || \
            [[ "${{ needs.typescript.result }}" == "failure" ]] || \
            [[ "${{ needs.generated-code.result }}" == "failure" ]] || \
+           [[ "${{ needs.generated-code.result }}" == "cancelled" ]] || \
            [[ "${{ needs.biome-check.result }}" == "failure" ]] || \
            [[ "${{ needs.test.result }}" == "failure" ]] || \
+           [[ "${{ needs.functional.result }}" == "failure" ]] || \
+           [[ "${{ needs.browser.result }}" == "failure" ]] || \
            [[ "${{ needs.cycles.result }}" == "failure" ]] || \
            [[ "${{ needs.build.result }}" == "failure" ]] || \
            [[ "${{ needs.ios-native-check.result }}" == "failure" ]] || \

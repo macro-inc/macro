@@ -48,12 +48,42 @@ mutation barrier across HTTP requests, WebSocket messages, alarms and closes.
 
 Socket write policy allows viewers to read, document commenters to change only
 comment marks, and editors to write full updates. Surface commenters cannot
-write. The HTTP API schema is generated with `just openapi`; WebSocket messages
+write. `PeerCommentUpdate` requires comment-only validation even on an editor's
+connection, so a staged annotation cannot alter document text. Deploy support
+for this message before deploying clients that send it; the dev push and
+production release workflows enforce this order while building the web app in
+parallel. The worker deployment job waits 300 seconds after deployment for
+[active Durable Objects to adopt the new code](https://developers.cloudflare.com/durable-objects/deployments/durable-objects-code-updates/).
+When the live version was built from the same inputs, recorded in its deployment
+message, the job skips migrations and deployment and waits only for what remains
+of those 300 seconds.
+Manual deployments must preserve the same order and wait at least five minutes
+before publishing clients. Keep the workflow wait aligned with any future
+`code_update_strategy` change. Older workers refuse
+the unknown variant without acknowledging or applying it. The HTTP API schema
+is generated with `just openapi`; WebSocket messages
 continue to use the Bebop schema. Regenerate the HTTP types from
 `apps/web/src/lib/service-clients` with
 `bun run orval --config orval.config.ts --project syncService`. The existing web
 transport handles binary payloads and permission tokens; Orval generates shared
 models only.
+
+## Comment validation configuration
+
+Document commenters authenticate to lexical-service with the worker secret
+`LEXICAL_SERVICE_AUTH_KEY`. Provision it in each deployed environment with the
+matching lexical-service `INTERNAL_AUTH_KEY` through `wrangler secret put`.
+Never store its value in Wrangler vars or source control. Missing or invalid
+credentials fail closed. Current clients stage anchors outside the live editor,
+wait for acknowledgement, and retain the draft instead of posting a message when
+validation fails. Older clients can create the message independently while the
+anchor remains unacknowledged in their WAL and local snapshot; another browser
+then cannot display that inline comment.
+
+CI and the `just deploy-*` recipes run `check-secrets` before migrations or
+worker deployment. This checks binding names only, not credential validity;
+validate comment-only writes after provisioning or rotating a key. Rejected
+validation spans include `document.id` and `op.id` for correlation with clients.
 
 ## Bebop
 The bebop schema is defined in `./bebop/schema.bop`.
@@ -61,8 +91,15 @@ The bebop schema is defined in `./bebop/schema.bop`.
 #### Generating typescript bindings locally
 The typescript bindings are primarily used for testing and QA environemnt.
 ```bash
-cd bebop && npx bebop-tools build
+\cd bebop
+../../../node_modules/.bin/bebopc build
 ```
+
+Use the repository-pinned generator. Copy `schema.bop` to
+`packages/collaboration/src/sync-service/generated/schema.bop` and run
+`../../node_modules/.bin/bebopc build` from `packages/collaboration` to update
+the web bindings from the same schema. The package's `generate-sync-schema`
+command fetches the deployed schema and is unsuitable for an unreleased change.
 
 #### Generating rust bindings locally
 Rust bindings get automatically generated when building the worker.
@@ -197,7 +234,12 @@ Deploy DSS before Sync to enable Activity hints immediately. If an older DSS
 rejects the optional `editors` field, Sync retries once without it so search
 continues working. Old Sync requests and old Kafka events remain supported.
 
+Each registered peer is recorded in D1 `peer_user_map` with the token's user and
+signed agent actor (NULL for humans); the metadata and blame endpoints return
+both, and the web labels agent edits with the agent's name and other AI-peer
+edits as `<user> (AI)`.
+
 Active peer queries (`include_ai=false`) exclude both signed agent actors and
-legacy reserved AI peer IDs. Canvas workers use independent full-width random
+reserved AI peer IDs. Canvas workers use independent full-width random
 Loro peer identities across worker isolates; signed actor claims still supply
 durable provenance. Cursor names remain untrusted ephemeral presentation.

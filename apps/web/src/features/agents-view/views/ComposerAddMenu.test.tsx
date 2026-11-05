@@ -15,7 +15,6 @@ const [savedConnection, setSavedConnection] = createSignal<Leftover>({
   kind: 'pipedream',
   id: 'pd-slack',
   title: 'Slack workspace',
-  subtitle: 'Slack',
   appSlug: 'slack_v2',
   enabled: false,
 });
@@ -60,6 +59,9 @@ vi.mock('../../settings/connections/integrations-view', () => ({
         : 'Available integrations'}
     </p>
   ),
+}));
+vi.mock('@core/pipedream/ConnectedAppIcon', () => ({
+  ConnectedAppIcon: () => <svg aria-hidden="true" />,
 }));
 vi.mock('../../settings/connections/leftover-row', () => ({
   LeftoverRow: (props: { leftover: Leftover }) => (

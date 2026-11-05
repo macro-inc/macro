@@ -261,6 +261,8 @@ impl DocumentService for FakeDocumentService {
     async fn update_task_status(
         &self,
         _entity_access_receipt: EntityAccessReceipt<EditAccessLevel>,
+        _credited_user: Option<MacroUserIdStr<'static>>,
+        _source: Option<models_properties::service::property_change_source::PropertyChangeSource>,
         _status: &str,
     ) -> Result<(), DocumentError> {
         panic!("unexpected update_task_status call")
@@ -327,6 +329,34 @@ impl DocumentService for FakeDocumentService {
         _share: bool,
     ) -> Result<DocumentTeamShareResponse, DocumentError> {
         panic!("unexpected set_team_share call")
+    }
+
+    async fn set_skill_description(
+        &self,
+        _entity_access_receipt: entity_access::domain::models::EntityAccessReceipt<
+            models_permissions::share_permission::access_level::EditAccessLevel,
+        >,
+        _description: crate::domain::skill_description::SkillDescription,
+    ) -> Result<(), DocumentError> {
+        panic!("unexpected set_skill_description call")
+    }
+
+    async fn describe_new_skill(
+        &self,
+        _document_id: &str,
+        _description: crate::domain::skill_description::SkillDescription,
+    ) -> Result<(), DocumentError> {
+        Ok(())
+    }
+
+    async fn skill_descriptions(
+        &self,
+        _document_ids: &[String],
+    ) -> Result<
+        std::collections::HashMap<String, crate::domain::skill_description::SkillDescription>,
+        DocumentError,
+    > {
+        Ok(std::collections::HashMap::new())
     }
 }
 
@@ -548,6 +578,7 @@ impl EditingWorkerService for FakeEditingWorker {
         _: &str,
         _: &DocumentPermissionToken,
         _: &crate::domain::canvas::CanvasRequest,
+        _: bool,
     ) -> anyhow::Result<crate::domain::canvas::CanvasResult> {
         panic!("unexpected canvas call")
     }
@@ -641,6 +672,7 @@ impl EditingWorkerService for FakeEditingWorker {
             edits_applied: 1,
             usage: Vec::new(),
             clarification: None,
+            revision: None,
         })
     }
 

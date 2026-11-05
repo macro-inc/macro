@@ -1,15 +1,19 @@
 import { analytics } from '@app/lib/analytics';
 
 /**
- * This constant reflects whether the app is running locally with hot reload enabled
+ * This constant reflects whether the app is running locally: under the Vite
+ * dev server with hot reload (`just run_local`, `bun run dev`), or as the
+ * bundle `just stack` builds, which sets `VITE_LOCAL_ONLY` so a headless
+ * stack gets the same local-only flags, routes and tools.
  *
- * @returns true in bun run dev, false otherwise
+ * @returns true in bun run dev and `just stack` bundles, false otherwise
  *
  * Distinct from `import.meta.env.DEV` (true under vite serve *and* local-backend
- * static bundles) and `DEV_MODE_ENV` (true whenever MODE=development, including
- * dev.macro.com).
+ * static bundles, including test builds) and `DEV_MODE_ENV` (true whenever
+ * MODE=development, including dev.macro.com).
  */
-export const LOCAL_ONLY = !!import.meta.hot;
+export const LOCAL_ONLY =
+  !!import.meta.hot || import.meta.env.VITE_LOCAL_ONLY === 'true';
 
 const parseBooleanOverride = (value: unknown): boolean | undefined =>
   value === 'true' ? true : value === 'false' ? false : undefined;
@@ -150,6 +154,24 @@ export const PROD_MODE_ENV = import.meta.env.MODE === 'production';
 
 const onInDev = DEV_MODE_ENV || undefined;
 
+/**
+ * Connect apps Macro Connect serves through it instead of Pipedream. The
+ * backend reads the same PostHog key and decides per app; this side only
+ * reserves the consent popup inside the click. Off in dev too: dev has no
+ * Connect customer key until one is added to Doppler.
+ */
+export const macroConnect = defineFlag({
+  key: 'macro-connect',
+  env: 'ENABLE_MACRO_CONNECT',
+});
+
+/** HTML artifact nodes on Canvas, including running their scripts in a sandbox. */
+export const enableCanvasArtifacts = defineFlag({
+  key: 'enable-canvas-artifacts',
+  env: 'ENABLE_CANVAS_ARTIFACTS',
+  default: onInDev,
+});
+
 /** Browser-style tabs in the macOS desktop title bar; each tab holds a split layout. */
 export const enableDesktopTabs = defineFlag({
   key: 'enable-desktop-tabs',
@@ -186,6 +208,18 @@ export const enableTasksReviews = defineFlag({
   key: 'enable-tasks-reviews',
   env: 'ENABLE_TASKS_REVIEWS',
   default: onInDev,
+});
+
+/**
+ * Sends a new session's first prompt on its create. A harness that predates
+ * `promptActionId` and `promptAttachments` ignores them, duplicating the
+ * prompt bubble and dropping its files, so deployed environments stay off
+ * until that harness is live; local stacks build both together.
+ */
+export const enableFirstPromptOnCreate = defineFlag({
+  key: 'enable-first-prompt-on-create',
+  env: 'ENABLE_FIRST_PROMPT_ON_CREATE',
+  default: LOCAL_ONLY || undefined,
 });
 
 /** Gantt is visible in local previews; deployed apps retain the remote rollout. */
@@ -471,6 +505,15 @@ export const enableEmailSignatures = defineFlag({
   default: onInDev,
 });
 
+// Email read receipts: the per-inbox switch in Settings › Email and the
+// opened status on sent messages. Which copies load Macro's pixels, and so
+// count as opens, does not depend on this flag.
+export const enableEmailReadReceipts = defineFlag({
+  key: 'enable-email-read-receipts',
+  env: 'ENABLE_EMAIL_READ_RECEIPTS',
+  default: onInDev,
+});
+
 // CRM companies & contacts frontend: the Companies view + sidebar entry, the
 // company/contact detail blocks, CRM mentions / quick-access, and CRM rows in
 // global search. PostHog-gated (currently targeted at the Macro team in prod)
@@ -510,6 +553,13 @@ export const enableProjects = defineFlag({
   default: onInDev,
 });
 
+/** Prefill the editable Source property from contextual task actions. */
+export const enableTaskSourceProperty = defineFlag({
+  key: 'enable-task-source-property',
+  env: 'ENABLE_TASK_SOURCE_PROPERTY',
+  default: onInDev,
+});
+
 // Email snooze: the "Remind me" action, its 'h' shortcut, and the shared
 // time-selection command menu.
 // Every surface routes through `makeCreateReminderAction().canExecute`, so this
@@ -517,6 +567,15 @@ export const enableProjects = defineFlag({
 export const enableReminders = defineFlag({
   key: 'enable-reminders',
   env: 'ENABLE_REMINDERS',
+  default: onInDev,
+});
+
+// The Focus tab in Mail: signal threads the email focus worker classified as
+// worth the owner's attention. Only allowlisted inboxes are classified, so the
+// tab is empty for everyone else.
+export const enableEmailFocus = defineFlag({
+  key: 'enable-email-focus',
+  env: 'ENABLE_EMAIL_FOCUS',
   default: onInDev,
 });
 
@@ -634,15 +693,6 @@ export const enableCalendarUi = defineFlag({
   default: onInDev,
 });
 
-// Calendar meeting notes and document-side meeting-link management. On in dev;
-// production uses PostHog's internal-user rollout. This is a UI rollout, not
-// an authorization check: saved meeting grants remain enforced by the service.
-export const enableCalendarMeetingNotes = defineFlag({
-  key: 'enable-calendar-meeting-notes',
-  env: 'ENABLE_CALENDAR_MEETING_NOTES',
-  default: onInDev,
-});
-
 // Calendar event search UI: the Search view's Calendar type (and calendar
 // rows) plus the in-calendar keyword search. A sub-feature of the calendar UI
 // — opening a hit needs the calendar block — so it only takes effect where
@@ -755,6 +805,14 @@ export const enableTagTeamSharing = defineFlag({
   default: onInDev,
 });
 
+// Redesigned Chat sidebar sections. On in development;
+// deployed environments defer to PostHog. Override with VITE_ENABLE_CHAT_SIDEBAR_SECTIONS.
+export const enableChatSidebarSections = defineFlag({
+  key: 'enable-chat-sidebar-sections',
+  env: 'ENABLE_CHAT_SIDEBAR_SECTIONS',
+  default: onInDev,
+});
+
 // Manual and smart channel labels, including their queries and drag/drop UI.
 // Off until PostHog enables them; override with VITE_ENABLE_CHANNEL_TAGS.
 export const enableChannelTags = defineFlag({
@@ -790,6 +848,25 @@ export const enableEntityActivitySection = defineFlag({
 export const enableActivityFeed = defineFlag({
   key: 'enable-activity-feed',
   env: 'ENABLE_ACTIVITY_FEED',
+  default: onInDev,
+});
+
+// The unified notifications view: the /notifications route (redirects to Home
+// when off), the rail bell, its go-to hotkey, and the mobile dock bell's
+// target. PostHog-gated with a dev-mode default; override with
+// VITE_ENABLE_UNIFIED_NOTIFICATIONS.
+export const enableUnifiedNotifications = defineFlag({
+  key: 'enable-unified-notifications',
+  env: 'ENABLE_UNIFIED_NOTIFICATIONS',
+  default: onInDev,
+});
+
+// Agents home: pending updates from coding agents shown as a stack under the
+// new-chat composer, and the Open PRs section in the Agents sidebar.
+// Override with VITE_ENABLE_AGENT_UPDATES.
+export const enableAgentUpdates = defineFlag({
+  key: 'enable-agent-updates',
+  env: 'ENABLE_AGENT_UPDATES',
   default: onInDev,
 });
 
@@ -840,6 +917,13 @@ export const enableRoutineConditions = defineFlag({
   key: 'enable-routine-conditions',
   env: 'ENABLE_ROUTINE_CONDITIONS',
   default: onInDev,
+});
+
+// Templates are not ready for general use. Follow PostHog even in development
+// so the UI and the server's per-user rollout agree.
+export const enableRoutineSharing = defineFlag({
+  key: 'enable-routine-sharing',
+  env: 'ENABLE_ROUTINE_SHARING',
 });
 
 // The Recent view: the touched-by-me feed (everything the viewer mutated,

@@ -49,9 +49,9 @@ export function EventGuestRow(props: {
       <div class="min-w-0 flex-1 truncate text-sm">
         {guestDisplayName(props.guest)}
         <Show when={guestDisplayName(props.guest) !== guestEmail(props.guest)}>
-          <span class="ml-[0.5em] text-ink-muted">
-            {guestEmail(props.guest)}
-          </span>
+          {/* An en space is the 0.5em gap; unlike a margin, Safari's truncated-text tooltip keeps it. */}
+          {' '}
+          <span class="text-ink-muted">{guestEmail(props.guest)}</span>
         </Show>
       </div>
       {props.children}
@@ -70,6 +70,8 @@ export function EventGuestPicker(props: {
   excluded?: SelectedEventEditorGuest[];
   onChange: (selected: SelectedEventEditorGuest[]) => void;
   onClose: () => void;
+  /** Fill a sized container, such as a sheet, rather than a popover's height. */
+  fillHeight?: boolean;
 }) {
   const known = () => [...(props.excluded ?? []), ...props.selected];
   const users = createMemo((): IUser[] => {
@@ -93,6 +95,7 @@ export function EventGuestPicker(props: {
         users,
         excludedIds,
         allowCustomEmail: true,
+        fillHeight: props.fillHeight,
       }}
       selectedOptions={() => new Set(props.selected.map((guest) => guest.id))}
       setSelectedOptions={(ids) => {

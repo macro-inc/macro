@@ -25,6 +25,13 @@ to the browser via `inbound/wasm`.
   into SDK activity rows for conversation snapshots, independent of harness.
 - `src/domain/model.rs`: the renderable vocabulary (`FoldedMessage`,
   `ToolStatus`, …) folds produce.
+- `src/domain/model/segment.rs`: activity rows for conversations. A row's
+  `card` is what its step put in front of the person; only the call the
+  harness presents for `execution.views.present` (`view_<id>`) carries one.
+- `src/domain/fold/tool_call.rs`: `view_detail` folds `DisplayResults` and
+  the presented `PresentView` to `ToolDetail::View`, the `dynamic_ui::View`
+  their result carries, decoded. Their arguments are the model's, streamed
+  undecoded, and are never read.
 - `src/domain/log.rs`: the raw log vocabulary folds consume.
 - `src/domain/ports.rs`: `FoldedMessageRepo`, the driving port services call
   directly — there is no HTTP adapter; only the browser gets `inbound/wasm`.
@@ -59,6 +66,9 @@ to the browser via `inbound/wasm`.
 `FoldedMessage::last_text` supplies the same terminal prose to live lifecycle
 signals and harness recovery from a persisted log. Keep these interpretations
 aligned; recovery must never guess the answer from another turn.
+
+`_macro/review_updated` frames project each review's newest saved revision
+into `SessionMetadata.reviewRevisions`; they never touch messages or the turn.
 
 Notification log frames open system turns without user messages. Their events
 project into `SessionMetadata.notifications`, separate from message search and
@@ -97,6 +107,10 @@ session projection carries that state to list rows without loading transcripts.
   returned as an error — `fold` must stay total (see `domain/fold.rs` docs).
 - `scripts/sanitize_recording.py` strips real-session fixtures before they
   land under `fixtures/real/`; never commit an unsanitized recording.
+- A user-issued `set_model` closes the open turn so later agent output gets
+  a new turn id and sorts below the control line. A `set_model` with no
+  `user_id` is the session applying its own model (create/resume) and draws
+  no line. `set_config_option` (mode, effort) does not split a turn.
 
 ## Related
 

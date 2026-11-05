@@ -14,12 +14,14 @@ import {
 import {
   useDeleteHarnessMutation,
   useHarnessesQuery,
+  usePatchHarnessMutation,
 } from '@queries/harnesses/harnesses';
 import type { Harness as RegisteredHarness } from '@service-storage/client';
 import { useSearchParams } from '@solidjs/router';
-import { ApiKeyInput, Button, confirmDialog, Dialog, Panel } from '@ui';
-import { createSignal, For, onMount, Show } from 'solid-js';
+import { ApiKeyInput, Button, confirmDialog, Dialog, Input, Panel } from '@ui';
+import { createSignal, onMount, Show } from 'solid-js';
 import { CodexHarness } from './codex/views/CodexHarness';
+import { ConnectedRuntimesSection } from './components/connected-runtimes-section';
 import { CursorDefaultModel } from './components/cursor-default-model';
 import { LocalRuntimeCard } from './components/local-runtime-card';
 import {
@@ -27,18 +29,12 @@ import {
   CURSOR_KEY_PREFIX,
   isCursorApiKey,
 } from './core/cursor-api-key';
-import { ConnectAction, HarnessIcon, StatusDot } from './integration-ui';
+import { HarnessIcon } from './integration-ui';
 import { SettingsCard, SettingsPage } from './primitives';
 import { RuntimePairingPage } from './RuntimePairingPage';
 
 function failureMessage(error: unknown, fallback: string): string {
   return (error instanceof ThrownResultError && error.message) || fallback;
-}
-
-function lastConnectedText(harness: RegisteredHarness): string {
-  return harness.last_connected_at
-    ? `Last connected ${new Date(harness.last_connected_at).toLocaleString()}`
-    : 'Never connected';
 }
 
 /** Settings UI for choosing and configuring the available agent harnesses. */
@@ -64,6 +60,8 @@ export function Harness(
     setPairingDialog(undefined);
   };
   const [removingHarness, setRemovingHarness] =
+    createSignal<RegisteredHarness>();
+  const [renamingHarness, setRenamingHarness] =
     createSignal<RegisteredHarness>();
   const [searchParams, setSearchParams] = useSearchParams();
 
@@ -134,7 +132,7 @@ export function Harness(
           backLabel={props.backLabel ?? 'Agents'}
           actions={
             <Button
-              variant="neutral"
+              variant="primary"
               size="sm"
               onClick={() => setPairingDialog({})}
             >
@@ -143,6 +141,12 @@ export function Harness(
             </Button>
           }
         >
+          <ConnectedRuntimesSection
+            harnesses={harnessesQuery.isSuccess ? harnessesQuery.data : []}
+            error={harnessesQuery.isError}
+            onRename={setRenamingHarness}
+            onRemove={setRemovingHarness}
+          />
           <LocalRuntimeCard />
           <div>
             <h2 class="mb-3 px-6 text-sm font-semibold text-ink">
@@ -286,68 +290,6 @@ export function Harness(
               </Show>
             </SettingsCard>
           </div>
-
-          <Show
-            when={!harnessesQuery.isSuccess || harnessesQuery.data.length > 0}
-          >
-            <div>
-              <h2 class="mb-3 px-6 text-sm font-semibold text-ink">
-                Paired runtimes
-              </h2>
-              <SettingsCard>
-                <For
-                  each={harnessesQuery.isSuccess ? harnessesQuery.data : []}
-                  fallback={
-                    <div class="flex flex-col items-center py-6 text-center">
-                      <p class="text-sm text-ink">
-                        {harnessesQuery.isError
-                          ? 'Could not load runtimes.'
-                          : 'Loading runtimes…'}
-                      </p>
-                    </div>
-                  }
-                >
-                  {(harness) => (
-                    <div class="flex items-center justify-between gap-4 px-4 py-3">
-                      <div class="min-w-0 flex-1">
-                        <div class="flex min-w-0 items-center gap-2">
-                          <p class="min-w-0 flex-1 truncate text-sm text-ink">
-                            {harness.name}
-                          </p>
-                          <span class="inline-flex h-5 shrink-0 items-center whitespace-nowrap rounded-md border border-edge-muted px-2 text-xxs/none font-medium uppercase text-ink-extra-muted">
-                            {harness.owner.type === 'team' ? 'Team' : 'Private'}
-                          </span>
-                          <StatusDot
-                            state={
-                              harness.connected ? 'connected' : 'disconnected'
-                            }
-                            label={
-                              harness.connected ? 'Connected' : 'Disconnected'
-                            }
-                          />
-                        </div>
-                        <p class="mt-0.5 truncate text-xs text-ink-extra-muted">
-                          {lastConnectedText(harness)}
-                        </p>
-                      </div>
-                      <div class="shrink-0">
-                        <ConnectAction
-                          label="Remove"
-                          variant="danger"
-                          onClick={() => setRemovingHarness(harness)}
-                        />
-                      </div>
-                    </div>
-                  )}
-                </For>
-                <Show when={harnessesQuery.isError}>
-                  <p class="px-4 py-3 text-xs text-negative">
-                    Could not load your runtimes. Try refreshing this page.
-                  </p>
-                </Show>
-              </SettingsCard>
-            </div>
-          </Show>
         </SettingsPage>
       </Show>
 
@@ -356,6 +298,14 @@ export function Harness(
           <RuntimePairingPage
             initialCode={dialog.initialCode}
             onClose={closePairing}
+          />
+        )}
+      </Show>
+      <Show when={renamingHarness()} keyed>
+        {(harness) => (
+          <HarnessRenameDialog
+            harness={harness}
+            onClose={() => setRenamingHarness(undefined)}
           />
         )}
       </Show>
@@ -370,6 +320,90 @@ export function Harness(
         )}
       </Show>
     </>
+  );
+}
+
+function HarnessRenameDialog(props: {
+  harness: RegisteredHarness;
+  onClose: () => void;
+}) {
+  const patchHarness = usePatchHarnessMutation();
+  const [name, setName] = createSignal(props.harness.name);
+  const canSave = () =>
+    !patchHarness.isPending &&
+    name().trim().length > 0 &&
+    name().trim() !== props.harness.name;
+
+  const save = async () => {
+    if (!canSave()) return;
+    try {
+      await patchHarness.mutateAsync({
+        harnessId: props.harness.id,
+        name: name().trim(),
+      });
+      props.onClose();
+    } catch (error) {
+      toast.failure(failureMessage(error, 'Failed to rename runtime'));
+    }
+  };
+
+  return (
+    <Dialog
+      open
+      onOpenChange={(open) =>
+        !open && !patchHarness.isPending && props.onClose()
+      }
+      position="center"
+      visibleScrim
+      class="w-[min(480px,calc(100vw-16px))]"
+    >
+      <Panel depth={2} class="rounded-xl text-ink">
+        <Panel.Header class="px-5 py-3">
+          <Dialog.Title class="text-sm font-semibold">
+            Rename runtime
+          </Dialog.Title>
+        </Panel.Header>
+        <form
+          onSubmit={(event) => {
+            event.preventDefault();
+            fireAndForget(save(), 'harness-settings');
+          }}
+        >
+          <Panel.Body class="flex flex-col gap-1.5 p-5">
+            <label for="harness-rename" class="text-xs font-medium text-ink">
+              Name
+            </label>
+            <Input
+              id="harness-rename"
+              size="sm"
+              autofocus
+              maxLength={100}
+              value={name()}
+              onInput={(event) => setName(event.currentTarget.value)}
+            />
+          </Panel.Body>
+          <Panel.Footer class="justify-end gap-2 px-5 py-3">
+            <Button
+              type="button"
+              variant="ghost"
+              size="sm"
+              disabled={patchHarness.isPending}
+              onClick={props.onClose}
+            >
+              Cancel
+            </Button>
+            <Button
+              type="submit"
+              variant="secondary"
+              size="sm"
+              disabled={!canSave()}
+            >
+              {patchHarness.isPending ? 'Saving…' : 'Save'}
+            </Button>
+          </Panel.Footer>
+        </form>
+      </Panel>
+    </Dialog>
   );
 }
 

@@ -53,9 +53,24 @@ const handles = (message: string): string[] =>
     /@(?:webhook|slack|pagerduty|opsgenie|teams)-[\w-]+|[\w.+-]+@[\w-]+\.[\w.]+/g
   ) ?? [];
 
-test('every monitor and synthetic test notifies only GoAlert', () => {
+// Dev and staging monitors stay in Datadog but notify no one.
+const nonProd = (r: pulumi.runtime.MockResourceArgs) =>
+  /\[(DEV|STAGING)\]/.test(r.inputs.name);
+
+test('dev and staging monitors notify no one', () => {
+  const quiet = monitors().filter(nonProd);
+  expect(quiet.length).toBeGreaterThan(5);
+  for (const resource of quiet) {
+    expect({
+      name: resource.name,
+      handles: handles(resource.inputs.message),
+    }).toEqual({ name: resource.name, handles: [] });
+  }
+});
+
+test('every prod monitor and synthetic test notifies only GoAlert', () => {
   const routed = [...monitors(), ...synthetics()].filter(
-    (r) => r.name !== 'goalert-health'
+    (r) => r.name !== 'goalert-health' && !nonProd(r)
   );
   expect(routed.length).toBeGreaterThan(80);
   for (const resource of routed) {
@@ -149,7 +164,7 @@ test('every prod monitor is graphed on its dashboard with its thresholds', () =>
   const prod = monitors().filter((r) =>
     r.inputs.message.includes('Runbook: https://github.com/macro-inc/macro/')
   );
-  expect(prod).toHaveLength(25);
+  expect(prod).toHaveLength(31);
   for (const monitor of prod) {
     const linked = monitor.inputs.message.match(
       /Dashboard: https:\/\/us5\.datadoghq\.com\/dashboard\/([\w-]+)\//
@@ -162,8 +177,8 @@ test('every prod monitor is graphed on its dashboard with its thresholds', () =>
           group.groupDefinition.widgets
       )
       .find(
-        (widget: { timeseriesDefinition: { title: string } }) =>
-          widget.timeseriesDefinition.title === title
+        (widget: { timeseriesDefinition?: { title: string } }) =>
+          widget.timeseriesDefinition?.title === title
       );
     const { critical, warning } = monitor.inputs.monitorThresholds;
     const anomaly = monitor.inputs.query.includes('anomalies(');

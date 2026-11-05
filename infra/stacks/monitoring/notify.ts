@@ -30,7 +30,15 @@ export const RENOTIFY_MINUTES = 60;
  * have warned before it alerted, or recovered from no data; closing an alert
  * GoAlert does not have open does nothing.
  */
-export function notify({ pages }: { pages: boolean }): string {
+export function notify({
+  pages,
+  environment = 'prod',
+}: {
+  pages: boolean;
+  /** Dev and staging monitors stay visible in Datadog but notify no one: on-call is for prod. */
+  environment?: 'prod' | 'dev' | 'staging';
+}): string {
+  if (environment !== 'prod') return '';
   const critical = pages
     ? `{{#is_alert}}Paging on-call. ${GOALERT}{{/is_alert}}`
     : `{{#is_alert}}${GOALERT_NOTIFY}{{/is_alert}}`;
@@ -52,19 +60,28 @@ export function alertMessage({
   runbook,
   dashboard,
   pages,
+  alertDetail = '{{value}} (threshold {{threshold}})',
+  warningDetail = '{{value}} (warning threshold {{warn_threshold}})',
+  recoveryDetail = '{{value}}',
 }: {
   description: string;
   runbook: string;
   /** A dashboard's `url`, a path such as `/dashboard/abc-def-ghi/title`. */
   dashboard?: pulumi.Input<string>;
   pages: boolean;
+  /** Text after `CRITICAL:` in the state line. */
+  alertDetail?: string;
+  /** Text after `WARNING:` in the state line. */
+  warningDetail?: string;
+  /** Text after `RECOVERED:` in the state line. */
+  recoveryDetail?: string;
 }): pulumi.Output<string> {
   return pulumi.output(dashboard).apply((path) => {
     const links = [
       `Runbook: https://github.com/macro-inc/macro/blob/main/${runbook}`,
     ];
     if (path !== undefined) links.push(`Dashboard: ${DATADOG_SITE}${path}`);
-    return `{{#is_alert}}🔴 CRITICAL: {{value}} (threshold {{threshold}}){{/is_alert}}{{#is_warning}}🟠 WARNING: {{value}} (warning threshold {{warn_threshold}}){{/is_warning}}{{#is_recovery}}✅ RECOVERED: {{value}}{{/is_recovery}}
+    return `{{#is_alert}}🔴 CRITICAL: ${alertDetail}{{/is_alert}}{{#is_warning}}🟠 WARNING: ${warningDetail}{{/is_warning}}{{#is_recovery}}✅ RECOVERED: ${recoveryDetail}{{/is_recovery}}
 
 ${description}
 

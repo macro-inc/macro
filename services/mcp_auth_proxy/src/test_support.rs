@@ -11,10 +11,11 @@ use base64::{Engine, engine::general_purpose::URL_SAFE_NO_PAD};
 use sha2::{Digest, Sha256};
 
 use crate::domain::{
+    browser_binding::BrowserBinding,
     models::{
         AccessToken, AuthorizeRequest, CallbackRequest, ClientRegistrationRequest,
         IssuedAuthorizationCode, PendingAuthorization, RefreshToken, RefreshTokenBinding,
-        RegisteredClient, UpstreamTokens,
+        RegisteredClient, SignInMethod, UpstreamTokens, UserConsent,
     },
     ports::{
         ClientRegistrationStore, GrantRevokedFuture, OAuthProvider, RefreshTokenBindingFuture,
@@ -41,6 +42,9 @@ pub const LOOPBACK_REDIRECT_URI: &str = "http://127.0.0.1:51000/oauth/callback";
 pub const TRUSTED_REDIRECT_URI: &str = "https://claude.ai/api/mcp/auth_callback";
 /// Callback under an attacker's control.
 pub const ATTACKER_REDIRECT_URI: &str = "https://attacker.example/steal";
+/// An `https` callback on a host outside the trusted list, such as a
+/// self-hosted MCP gateway's.
+pub const GATEWAY_REDIRECT_URI: &str = "https://gateway.example/oauth/callback";
 /// Access token the fake upstream provider returns for a refresh.
 pub const REFRESHED_ACCESS_TOKEN: &str = "refreshed-access-token";
 /// Upstream access token lifetime the fake provider reports, matching the one
@@ -76,6 +80,11 @@ impl FakeInflightAuth {
     /// Returns whether a broker code is still redeemable.
     pub fn holds_issued_code(&self, code: &str) -> bool {
         self.issued.lock().expect("issued lock").contains_key(code)
+    }
+
+    /// Returns whether any broker code has been issued.
+    pub fn holds_any_issued_code(&self) -> bool {
+        !self.issued.lock().expect("issued lock").is_empty()
     }
 
     /// Returns the recorded upstream expiry of the only issued code, panicking
@@ -255,8 +264,16 @@ impl FakeOAuthProvider {
 }
 
 impl OAuthProvider for FakeOAuthProvider {
-    fn construct_authorize_url(&self, state: &str) -> anyhow::Result<String> {
-        Ok(format!("https://upstream.example/authorize?state={state}"))
+    fn construct_authorize_url(
+        &self,
+        state: &str,
+        sign_in: SignInMethod,
+    ) -> anyhow::Result<String> {
+        let page = match sign_in {
+            SignInMethod::Google => "authorize",
+            SignInMethod::Login => "login",
+        };
+        Ok(format!("https://upstream.example/{page}?state={state}"))
     }
 
     fn exchange_authorization_code<'a>(&'a self, _code: &'a str) -> UpstreamTokensFuture<'a> {
@@ -319,6 +336,8 @@ pub struct Harness {
     pub registry: Arc<FakeClientRegistry>,
     /// The upstream provider the service was built with.
     pub provider: Arc<FakeOAuthProvider>,
+    /// The secret cookie of the browser the tests drive flows from.
+    pub browser: BrowserBinding,
 }
 
 impl Harness {
@@ -334,7 +353,7 @@ impl Harness {
         let provider = Arc::new(provider);
         let service = McpAuthProxyServiceImpl::new(McpAuthProxyServiceDeps {
             public_url: "https://mcp.macro.com".to_owned(),
-            redirect_uri_policy: RedirectUriPolicy::new(["claude.ai"]),
+            redirect_uri_policy: RedirectUriPolicy::new(["claude.ai", "chatgpt.com"]),
             inflight_auth: Arc::clone(&inflight),
             client_registrations: Arc::clone(&registry) as Arc<dyn ClientRegistrationStore>,
             refresh_token_bindings: Arc::clone(&registry) as Arc<dyn RefreshTokenBindingStore>,
@@ -346,6 +365,7 @@ impl Harness {
             inflight,
             registry,
             provider,
+            browser: BrowserBinding::generate(),
         }
     }
 
@@ -375,6 +395,7 @@ impl Harness {
             state: "client-state".to_owned(),
             code_challenge: code_challenge.to_owned(),
             code_challenge_method: "S256".to_owned(),
+            sign_in: None,
             scope: None,
         }
     }
@@ -388,23 +409,26 @@ impl Harness {
         code_verifier: &str,
     ) -> String {
         self.service
-            .start_authorization(self.authorize_request(
-                client_id,
-                redirect_uri,
-                &code_challenge_for(code_verifier),
-            ))
+            .start_authorization(
+                self.authorize_request(client_id, redirect_uri, &code_challenge_for(code_verifier)),
+                self.browser.clone(),
+                UserConsent::NotAsked,
+            )
             .await
             .expect("authorize should succeed");
 
         let session_id = self.inflight.only_pending_session_id();
         let redirect = self
             .service
-            .complete_callback(CallbackRequest {
-                code: Some("upstream-code".to_owned()),
-                state: Some(session_id),
-                error: None,
-                error_description: None,
-            })
+            .complete_callback(
+                CallbackRequest {
+                    code: Some("upstream-code".to_owned()),
+                    state: Some(session_id),
+                    error: None,
+                    error_description: None,
+                },
+                Some(self.browser.clone()),
+            )
             .await
             .expect("callback should succeed");
 
@@ -420,4 +444,54 @@ pub fn query_param(url: &str, name: &str) -> Option<String> {
         .split('&')
         .find_map(|pair| pair.strip_prefix(&prefix))
         .map(str::to_owned)
+}
+
+#[cfg(feature = "outbound")]
+pub use fake_kms::FakeKms;
+
+#[cfg(feature = "outbound")]
+mod fake_kms {
+    use std::{collections::HashMap, sync::Mutex};
+
+    use cursor_api_key::cipher::{KmsCiphertexts, KmsCiphertextsError};
+    use zeroize::Zeroizing;
+
+    /// A ciphertext, the context it was encrypted under, and its plaintext.
+    type Encryption = (Vec<u8>, HashMap<String, String>, Vec<u8>);
+
+    /// A KMS that, like the real one, refuses a decrypt whose context differs
+    /// from the one the ciphertext was encrypted under.
+    #[derive(Default)]
+    pub struct FakeKms {
+        stored: Mutex<Vec<Encryption>>,
+    }
+
+    #[async_trait::async_trait]
+    impl KmsCiphertexts for FakeKms {
+        async fn encrypt(
+            &self,
+            encryption_context: HashMap<String, String>,
+            plaintext: &[u8],
+        ) -> Result<(Vec<u8>, String), KmsCiphertextsError> {
+            let mut stored = self.stored.lock().expect("lock");
+            let ciphertext = format!("ciphertext-{}", stored.len()).into_bytes();
+            stored.push((ciphertext.clone(), encryption_context, plaintext.to_vec()));
+            Ok((ciphertext, "fake-kms-key".to_owned()))
+        }
+
+        async fn decrypt(
+            &self,
+            _kms_key_id: &str,
+            ciphertext: &[u8],
+            encryption_context: HashMap<String, String>,
+        ) -> Result<Zeroizing<Vec<u8>>, KmsCiphertextsError> {
+            self.stored
+                .lock()
+                .expect("lock")
+                .iter()
+                .find(|(stored, context, _)| stored == ciphertext && *context == encryption_context)
+                .map(|(_, _, plaintext)| Zeroizing::new(plaintext.clone()))
+                .ok_or(KmsCiphertextsError)
+        }
+    }
 }

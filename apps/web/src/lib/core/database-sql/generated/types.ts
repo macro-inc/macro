@@ -1706,13 +1706,17 @@ export type RunError =
       /**  The row. */
       row: RowId;
     } & {
+      column?: never;
       expected?: never;
       fed?: never;
+      invariant?: never;
+      key?: never;
       limit?: never;
       message?: never;
       received?: never;
       request?: never;
       sent?: never;
+      table?: never;
       what?: never;
     })
   /**  An `UPDATE` or `DELETE` matched more rows than a statement reads. */
@@ -1721,14 +1725,18 @@ export type RunError =
       /**  The most rows a statement reads. */
       limit: number;
     } & {
+      column?: never;
       expected?: never;
       fed?: never;
+      invariant?: never;
+      key?: never;
       message?: never;
       position?: never;
       received?: never;
       request?: never;
       row?: never;
       sent?: never;
+      table?: never;
       what?: never;
     })
   /**
@@ -1744,12 +1752,16 @@ export type RunError =
       /**  What was fed. */
       fed: Answer;
     } & {
+      column?: never;
+      invariant?: never;
+      key?: never;
       limit?: never;
       message?: never;
       position?: never;
       received?: never;
       row?: never;
       sent?: never;
+      table?: never;
       what?: never;
     })
   /**
@@ -1757,8 +1769,11 @@ export type RunError =
    *  answer.
    */
   | ({ stage: 'notAnsweredByBins' } & {
+      column?: never;
       expected?: never;
       fed?: never;
+      invariant?: never;
+      key?: never;
       limit?: never;
       message?: never;
       position?: never;
@@ -1766,6 +1781,7 @@ export type RunError =
       request?: never;
       row?: never;
       sent?: never;
+      table?: never;
       what?: never;
     })
   /**  The sink answered a different number of results than ops sent. */
@@ -1774,14 +1790,18 @@ export type RunError =
       /**  The results that came back. */
       received: number;
     } & {
+      column?: never;
       expected?: never;
       fed?: never;
+      invariant?: never;
+      key?: never;
       limit?: never;
       message?: never;
       position?: never;
       request?: never;
       row?: never;
       sent?: never;
+      table?: never;
       what?: never;
     })
   /**  The sink answered an op with a result of another kind. */
@@ -1792,13 +1812,17 @@ export type RunError =
       /**  The result that came back. */
       received: OpResultKind;
     } & {
+      column?: never;
       expected?: never;
       fed?: never;
+      invariant?: never;
+      key?: never;
       limit?: never;
       message?: never;
       position?: never;
       request?: never;
       row?: never;
+      table?: never;
       what?: never;
     })
   /**  A feed quoted a request the engine is not waiting on. */
@@ -1809,6 +1833,9 @@ export type RunError =
       /**  The id fed. */
       fed: number;
     } & {
+      column?: never;
+      invariant?: never;
+      key?: never;
       limit?: never;
       message?: never;
       position?: never;
@@ -1816,6 +1843,7 @@ export type RunError =
       request?: never;
       row?: never;
       sent?: never;
+      table?: never;
       what?: never;
     })
   /**  A feed arrived when nothing was outstanding. */
@@ -1824,7 +1852,10 @@ export type RunError =
       /**  The id fed. */
       fed: number;
     } & {
+      column?: never;
       expected?: never;
+      invariant?: never;
+      key?: never;
       limit?: never;
       message?: never;
       position?: never;
@@ -1832,6 +1863,7 @@ export type RunError =
       request?: never;
       row?: never;
       sent?: never;
+      table?: never;
       what?: never;
     })
   /**  A value handed to the engine is not the shape it reads. */
@@ -1842,14 +1874,18 @@ export type RunError =
       /**  Why it could not be read. */
       message: string;
     } & {
+      column?: never;
       expected?: never;
       fed?: never;
+      invariant?: never;
+      key?: never;
       limit?: never;
       position?: never;
       received?: never;
       request?: never;
       row?: never;
       sent?: never;
+      table?: never;
     })
   /**  A value the engine hands back could not be written out. */
   | ({
@@ -1857,20 +1893,27 @@ export type RunError =
       /**  Why it could not be written. */
       message: string;
     } & {
+      column?: never;
       expected?: never;
       fed?: never;
+      invariant?: never;
+      key?: never;
       limit?: never;
       position?: never;
       received?: never;
       request?: never;
       row?: never;
       sent?: never;
+      table?: never;
       what?: never;
     })
   /**  The first step was asked for twice. */
   | ({ stage: 'alreadyStarted' } & {
+      column?: never;
       expected?: never;
       fed?: never;
+      invariant?: never;
+      key?: never;
       limit?: never;
       message?: never;
       position?: never;
@@ -1878,6 +1921,117 @@ export type RunError =
       request?: never;
       row?: never;
       sent?: never;
+      table?: never;
+      what?: never;
+    })
+  /**
+   *  The statement names a table its catalog does not have: it was
+   *  resolved against another catalog.
+   */
+  | ({
+      stage: 'tableNotInCatalog';
+      /**  The table. */
+      table: TableId;
+    } & {
+      column?: never;
+      expected?: never;
+      fed?: never;
+      invariant?: never;
+      key?: never;
+      limit?: never;
+      message?: never;
+      position?: never;
+      received?: never;
+      request?: never;
+      row?: never;
+      sent?: never;
+      what?: never;
+    })
+  /**
+   *  The statement names a column its table does not have: it was
+   *  resolved against another catalog.
+   */
+  | ({
+      stage: 'columnNotInTable';
+      /**  The table. */
+      table: TableId;
+      /**  The column's definition. */
+      column: string;
+    } & {
+      expected?: never;
+      fed?: never;
+      invariant?: never;
+      key?: never;
+      limit?: never;
+      message?: never;
+      position?: never;
+      received?: never;
+      request?: never;
+      row?: never;
+      sent?: never;
+      what?: never;
+    })
+  /**  A select item names a key nothing in the statement binds. */
+  | ({
+      stage: 'unboundColumn';
+      /**  The key. */
+      key: string;
+    } & {
+      column?: never;
+      expected?: never;
+      fed?: never;
+      invariant?: never;
+      limit?: never;
+      message?: never;
+      position?: never;
+      received?: never;
+      request?: never;
+      row?: never;
+      sent?: never;
+      table?: never;
+      what?: never;
+    })
+  /**  A value for a column is not of the column's type. */
+  | ({
+      stage: 'mismatchedValue';
+      /**  The column's name. */
+      column: string;
+    } & {
+      expected?: never;
+      fed?: never;
+      invariant?: never;
+      key?: never;
+      limit?: never;
+      message?: never;
+      position?: never;
+      received?: never;
+      request?: never;
+      row?: never;
+      sent?: never;
+      table?: never;
+      what?: never;
+    })
+  /**
+   *  The engine broke one of its own invariants: a bug in the engine, not
+   *  a problem with the statement.
+   */
+  | ({
+      stage: 'internal';
+      /**  The invariant broken. */
+      invariant: string;
+    } & {
+      column?: never;
+      expected?: never;
+      fed?: never;
+      key?: never;
+      limit?: never;
+      message?: never;
+      position?: never;
+      received?: never;
+      request?: never;
+      row?: never;
+      sent?: never;
+      table?: never;
       what?: never;
     });
 

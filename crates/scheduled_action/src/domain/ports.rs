@@ -2,8 +2,8 @@ use super::event_runs::{AuthorizedEventRun, ClaimToken, ConfigurationRevision};
 use super::event_trigger::{EventName, EventReference};
 use super::execution::ExecutionHandle;
 use super::models::{
-    ActionExecutionRecord, CreateScheduledAction, DispatchEvent, InProgressExecution,
-    ScheduledAction, ScheduledActionUpdate, UpdateScheduledAction,
+    ActionConfiguration, ActionConfigurationUpdate, ActionExecutionRecord, DispatchEvent,
+    InProgressExecution, LastRun, ListedAction, ScheduledAction, ScheduledActionUpdate,
 };
 use super::templates::{RoutineTemplate, ShareRoutineTemplate, TemplateSnapshot};
 use anyhow::Result;
@@ -16,6 +16,7 @@ use macro_user_id::user_id::MacroUserIdStr;
 use macro_uuid::Uuid;
 use model_owner::{CreationPrincipal, Owner};
 use rootcause::Report;
+use std::collections::HashMap;
 use tokio::sync::mpsc::{Receiver, Sender};
 use trigger_context::RoutineEvent;
 
@@ -100,6 +101,13 @@ pub trait ScheduledActionRepo: Send + Sync + 'static {
         action_id: &Uuid,
     ) -> impl Future<Output = Result<Vec<ActionExecutionRecord>>> + Send;
 
+    /// The latest finished run of each action that has one. Ids without runs
+    /// are omitted.
+    fn last_runs(
+        &self,
+        action_ids: &[Uuid],
+    ) -> impl Future<Output = Result<HashMap<Uuid, LastRun>>> + Send;
+
     /// Advance the cron firing time; event actions are left unchanged.
     fn update_next_run_at(&self, id: &Uuid) -> impl Future<Output = Result<()>> + Send;
 
@@ -146,7 +154,7 @@ pub trait ScheduledActionService: Send + Sync + 'static {
     fn create_action(
         &self,
         principal: &CreationPrincipal,
-        input: CreateScheduledAction,
+        input: ActionConfiguration,
     ) -> impl Future<Output = Result<ScheduledAction>> + Send;
 
     /// `create_action` for a routine activated from `template_id`, recorded
@@ -154,7 +162,7 @@ pub trait ScheduledActionService: Send + Sync + 'static {
     fn create_action_from_template(
         &self,
         principal: &CreationPrincipal,
-        input: CreateScheduledAction,
+        input: ActionConfiguration,
         template_id: Uuid,
     ) -> impl Future<Output = Result<ScheduledAction>> + Send;
 
@@ -165,12 +173,12 @@ pub trait ScheduledActionService: Send + Sync + 'static {
         &self,
         user_id: MacroUserIdStr<'static>,
         include_events: bool,
-    ) -> impl Future<Output = Result<Vec<ScheduledAction>>> + Send;
+    ) -> impl Future<Output = Result<Vec<ListedAction>>> + Send;
 
     fn update_action(
         &self,
         receipt: EntityAccessReceipt<EditAccessLevel>,
-        input: UpdateScheduledAction,
+        input: ActionConfigurationUpdate,
     ) -> impl Future<Output = Result<ScheduledAction>> + Send;
 
     /// Change activation without touching configuration. Requesting the
@@ -230,8 +238,12 @@ pub trait RoutineTemplateService: Send + Sync + 'static {
         receipt: EntityAccessReceipt<OwnerAccessLevel>,
     ) -> impl Future<Output = Result<()>> + Send;
 
-    /// Read a template by its unguessable ID for any authenticated viewer.
-    fn get_template(&self, id: Uuid) -> impl Future<Output = Result<RoutineTemplate>> + Send;
+    /// Read a template by its unguessable ID for a viewer with sharing enabled.
+    fn get_template(
+        &self,
+        user: &MacroUserIdStr<'_>,
+        id: Uuid,
+    ) -> impl Future<Output = Result<RoutineTemplate>> + Send;
 
     /// Create the principal's own routine from a shared template. The input
     /// is the activator's filled-in configuration, validated like any create.
@@ -239,7 +251,7 @@ pub trait RoutineTemplateService: Send + Sync + 'static {
         &self,
         principal: &CreationPrincipal,
         template_id: Uuid,
-        input: CreateScheduledAction,
+        input: ActionConfiguration,
     ) -> impl Future<Output = Result<ScheduledAction>> + Send;
 }
 
@@ -356,6 +368,7 @@ pub enum RunEnd {
 pub struct FinishedRoutineRun {
     pub owner: MacroUserIdStr<'static>,
     pub routine_id: Uuid,
+    pub routine_name: String,
     pub trigger: RunTrigger,
     pub target: RunTarget,
     pub end: RunEnd,
@@ -370,4 +383,12 @@ pub trait RoutineRunObserver: Send + Sync + 'static {
 
 impl RoutineRunObserver for () {
     fn run_finished(&self, _run: FinishedRoutineRun) {}
+}
+
+/// Tells both observers, in order.
+impl<First: RoutineRunObserver, Second: RoutineRunObserver> RoutineRunObserver for (First, Second) {
+    fn run_finished(&self, run: FinishedRoutineRun) {
+        self.0.run_finished(run.clone());
+        self.1.run_finished(run);
+    }
 }

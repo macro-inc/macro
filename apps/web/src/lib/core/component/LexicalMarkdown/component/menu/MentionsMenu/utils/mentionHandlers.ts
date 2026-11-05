@@ -1,7 +1,9 @@
+import { toast } from '@core/component/Toast/Toast';
 import type { EntityItem } from '@core/context/quickAccess';
 import { trackMention } from '@core/signal/mention';
 import type { DateOption } from '@core/util/dateSearch/useDateSearch';
 import type { ChannelEntity, CrmCompanyEntity, EmailEntity } from '@entity';
+import { Telemetry } from '@macro-inc/observability';
 import { match } from 'ts-pattern';
 import { REMOVE_INLINE_SEARCH_COMMAND } from '../../../../plugins';
 import {
@@ -88,7 +90,7 @@ async function handleCrmMention(
     documentId: entity.id,
     documentName:
       entity.type === 'crm_contact'
-        ? entity.name || entity.email
+        ? entity.name || entity.email || ''
         : entityDisplayName(item),
     blockName: entity.type === 'crm_contact' ? 'contact' : 'company',
     ...(mentionUuid ? { mentionUuid } : {}),
@@ -231,6 +233,45 @@ async function handleExternalChatMention(
 }
 
 /**
+ * Mentioning your routine shares it as a template: everyone who can read the
+ * message can activate their own copy from its card. The chip goes in only
+ * once the template reflects the routine's current setup.
+ */
+async function handleRoutineMention(
+  routine: { id: string; name: string },
+  dependencies: HandlerDependencies
+): Promise<void> {
+  const shared = await Telemetry.span(
+    'routine.template.share',
+    async (span) => {
+      span.setAttr('routine.id', routine.id);
+      span.setAttr('routine.template.source', 'mention');
+      try {
+        const { publishRoutineTemplate } = await import(
+          '@app/features/routines/queries/templates'
+        );
+        await span.run(() => publishRoutineTemplate(routine.id));
+        return true;
+      } catch {
+        span.error('Sharing the routine failed');
+        return false;
+      }
+    }
+  );
+  if (!shared) {
+    toast.failure('Could not share this routine', {
+      subtext: 'Please try again',
+    });
+    return;
+  }
+  dependencies.editor.dispatchCommand(INSERT_DOCUMENT_MENTION_COMMAND, {
+    documentId: routine.id,
+    documentName: routine.name,
+    blockName: 'routine',
+  });
+}
+
+/**
  * Creates a handler for MentionItem selection.
  */
 export function createItemHandler(dependencies: HandlerDependencies) {
@@ -260,6 +301,8 @@ export function createItemHandler(dependencies: HandlerDependencies) {
         return await handleEntityMention(item, dependencies);
       case 'externalChat':
         return await handleExternalChatMention(item.data, dependencies);
+      case 'routine':
+        return await handleRoutineMention(item.data, dependencies);
     }
   };
 }

@@ -40,7 +40,6 @@ import { Virtualizer, type VirtualizerHandle } from 'virtua/solid';
 import type { ChannelsDataSource } from '../queries';
 import { ChannelPin, ChannelPinGrid } from './ChannelPins';
 import { ChannelsEmptyState } from './ChannelsEmptyState';
-import { HideSupportChannelsMobileButton } from './HideSupportChannelsButton';
 import { IncomingCallActions } from './rail/ChannelRailItems';
 import { useChannelCalls } from './rail/hooks/useChannelCalls';
 import { useChannelRailActivity } from './rail/hooks/useChannelRailActivity';
@@ -180,7 +179,6 @@ export function ChannelsMobileView(props: {
             aria-hidden="true"
             class="h-[calc(var(--mobile-content-inset-top,0px)+0.75rem)]"
           />
-          <HideSupportChannelsMobileButton />
           <Show when={pinned().length > 0}>
             <ChannelPinGrid>
               <For each={pinned()}>

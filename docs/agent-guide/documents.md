@@ -14,47 +14,17 @@ The document header has separate Share, Copy Share Link, and Side Panel buttons.
 They are borderless with a soft rounded background on hover. Share opens the
 sharing dialog; copying a link is a separate action.
 
-In the Share dialog's **Optional message**, paste an image with Cmd/Ctrl+V,
-use **Attach files**, or drop a file into the composer. Images show a removable
-preview and are sent inline beside the shared item to each selected person or
-channel. Share (including Cmd/Ctrl+Enter and the phone drawer's Share button)
-waits for uploads; Enter still inserts a newline. Removing an uploading image
+In the Share dialog's **Optional message**, paste an image with Cmd/Ctrl+V
+or drop a file into the composer. Share composers have no paperclip button on
+desktop or mobile. Images show a removable preview and are sent inline beside
+the shared item to each selected person or channel. Share (including
+Cmd/Ctrl+Enter and the phone drawer's Share button) waits for uploads; Enter still inserts a newline. Removing an uploading image
 keeps it removed, and closing the dialog discards its attachment draft.
-Verify paste, file selection, drop, removal during upload, upload failure, and
+Verify paste, drop, removal during upload, upload failure, and
 sending to both a person and a channel. On touch, attachment previews scroll
-horizontally and removal remains available without hover.
-
-With `enable-calendar-meeting-notes` enabled, owned markdown documents' Share
-panel also lists **Meeting links** (under the **Link** tab on mobile).
-Each shows its occurrence and optional team view grant. Toggle **Also share with
-<team>** here to update that link’s team access; changes save immediately.
-Calendar notes’ **Options → Share** opens this same dialog.
-Use **Unlink** and confirm to remove that grant without deleting the document.
-This remains available when the meeting is cancelled or no longer shared with
-you; unavailable meeting details are hidden. See [Calendar meeting notes](calendar.md#meeting-notes).
-Turning the flag off does not revoke saved grants. If meeting access cannot be
-checked, the share status uses **Restricted** instead of claiming **Just me**;
-known public, team, or shared access still appears.
-This status follows the current document and account when navigating with Share open.
-
-When meeting notes are enabled, the document side panel’s **References** section
-also lists linked calendar events, including when there are no document or message
-references. Each row uses the same single-line style, with the meeting title and
-date inline. Open a row to jump to
-your calendar copy; meetings shared through a channel or team without a personal
-copy use a read-only event preview. The preview also works when the Calendar
-view is disabled. Readers see only
-meetings they can view in detail. Owners retain safe
-unavailable-meeting entries, which can be removed through Share. Linking or
-unlinking updates the References count.
-
-Verify a note linked to two meetings, a note with both message and calendar
-references, a rescheduled one-time event, and a recurring occurrence. A cancelled
-instance must never open a later instance. Check full-detail team sharing, a
-reader who can see both entities, a reader with document-only access, and the
-feature flag off. On phone, open References from the document side panel and
-follow a meeting without leaving a sheet over the calendar. Closing a read-only
-meeting preview must return to the document details sheet.
+horizontally and removal remains available without hover. Composer fixture
+screenshots: [desktop](media/share-images/desktop.png) and
+[phone](media/share-images/mobile.png).
 
 Verify **Public → View** links in a fresh signed-out browser context. The
 `/app/drive/md/<id>` route (including folder/tab document links and legacy
@@ -82,7 +52,10 @@ reloads when it receives the grant update. Signed-out visitors are prompted to
 sign in first; ordinary load failures retain **Try again**.
 An already-open document reloads after a permission upgrade on desktop and touch
 devices. Removing its last grant closes the editor and returns to Request access;
-a failed background refresh must not restore the revoked document.
+a failed background refresh must not restore the revoked document. The denied
+view shows **Loading access requests…** until its own request-state read lands,
+never a request row or **Could not load access requests** left over from before
+the change, and a document deleted while it is open shows the not-found view.
 
 In **People with access**, a non-owner can use **Request access** beneath the
 owner to request a supported upgrade (**Comment** or **Edit**). PDFs offer
@@ -100,8 +73,12 @@ lets a reviewer choose an access level and **Grant access**, or **Deny**. Team
 owners/admins and the human responsible for a bot-owned item review on its behalf.
 Only the first review of a request succeeds. Grants notify the requester; denials
 do not. Approved users appear in People with access, with controls to change or
-remove their direct grant. Opening a permission-request notification navigates
-to its item and opens Share.
+remove their direct grant. A pending request also puts the item, projects
+included, on the reviewer's Home feed until it is resolved. A project row has
+no Home preview: clicking it opens the project in place, Shift-click opens it
+in a new split, and when the project is already open in another split that
+split is focused. Opening a permission-request notification navigates to its
+item and opens Share.
 
 Both **Edit with AI** and selected-text AI edits open the shared usage-limit dialog
 when the backend refuses a request with a usage-limit code. Free users can choose
@@ -146,9 +123,9 @@ Long keys wrap without displacing the Unpin button.
 **Delete from item** stays below, where removal is allowed (removes the
 assignment without deleting the shared property definition). Task builtins cannot
 be deleted from these pills. Pins are saved with the document, including an
-explicitly empty pin list. Tasks initially show Status, Priority, Assignees, and
-Project when enabled; changing pins keeps the other defaults unless they are
-explicitly unpinned.
+explicitly empty pin list. Tasks initially show Status, Priority, Assignees, Due Date,
+and Project when enabled. Defaults apply only without a saved pin list; customized
+pins stay unchanged. Changing pins keeps the other defaults unless explicitly unpinned.
 
 Markdown code blocks have a **Copy Code** button in both editable and read-only
 views. Successful copies briefly animate the icon to a solid green check-circle;
@@ -225,6 +202,8 @@ folder option. Insertion uses the position captured when I is pressed. Verify
 keyboard selection, closing/reopening, upload cancellation, and placement after
 pan/zoom. The shortcut is inactive during text/embed editing and in read-only canvases.
 Reference cards register with the shared reference system when the canvas saves.
+In both editable and read-only canvases, click a reference card's title to open
+its document; selecting the rest of the card leaves the canvas in place.
 Verify the backlink on the target, duplicate cards retaining one reference, and
 removing the final card followed by undo/redo. Reload must preserve tracking.
 Existing untracked cards register on their next content save.
@@ -297,6 +276,19 @@ When an editor's selection spans two or more checklist items, the button reads
 **N tasks** and creates one task per item without opening the composer; each
 item is replaced by its task mention and a **Created N tasks** toast appears.
 
+## Images in lists
+
+An image inserted or dropped while the caret is in a list item goes under that
+item's text, left-aligned with it, and stays resizable; the list is not split
+and numbered items keep counting. On the empty item Enter leaves after an item,
+the image goes under the item above and the caret stays on the empty item;
+pressing Enter again leaves the list, and an image inserted then sits below it.
+Enter at the end of an item's text starts the next item below its images.
+Dropped files target the item under the pointer's lower half, or the item
+above. Markdown saves the image as an indented line under its item. Verify
+with `list-images.browser.e2e.ts` in
+`apps/web/src/lib/core/component/LexicalMarkdown/component/core/browser-test`.
+
 ## Markdown outline
 
 On desktop, Markdown documents with at least three headings show a tick rail in
@@ -342,7 +334,9 @@ The **Filter** and **Sort** icons open their panels. The pickers support keyboar
 navigation and mark the selected table. Rows added or edited elsewhere, including
 by AI, appear through the database's gateway subscription. The editor catches up after
 reconnecting or returning to the tab after a long absence.
-Edits write to the original database. **Open** opens the full database.
+Edits write to the original database. **Open** opens the full database; opening
+a row (its row-number button, a board card or a timeline bar) opens the full
+database at that row.
 **Collapse** converts the editor to a small mention; **Expand** brings it back.
 Removing either reference leaves the database and its rows intact.
 
@@ -507,8 +501,10 @@ its days are `gridcell` buttons marked `data-active` (the keyboard's day),
 `data-selected` (the cell's date) and `data-today`.
 
 Images and charts (column, bar, line and area, each clustered, stacked or
-100% stacked, plus pie, doughnut, scatter, combo, radar, bubble, stock and
-surface, drawn as a contour) are drawn over their cells and move with them;
+100% stacked, plus pie, pie of pie, bar of pie, doughnut, scatter, combo,
+radar, bubble, stock, surface drawn as a contour, and Excel 2016's histogram,
+pareto, waterfall, funnel, box and whisker, treemap and sunburst) are drawn
+over their cells and move with them;
 charts redraw as the cells they read change. A 100% stacked chart fills each
 category to 100% of its positive values and to 100% of its negative values.
 Scatter charts plot markers without connecting lines. A combo chart draws
@@ -518,8 +514,15 @@ image description. The toolbar's **Insert chart, image or checkbox** menu (chart
 adds a chart of the selected cells — or, from one cell, of the table around
 it, placed beside it — or an image file (PNG, JPEG, GIF, WebP or BMP up to
 2 MB) at the active cell. Its **More charts** submenu holds Radar, Filled
-radar, Bubble, Stock and Contour. Edit chart's type list also offers 100%
-stacked bar, stacked line, 100% stacked line, 100% stacked area and Combo. A
+radar, Bubble, Stock, Contour, Histogram, Waterfall, Funnel, Box and whisker,
+Treemap and Sunburst. Edit chart's type list also offers 100% stacked bar,
+stacked line, 100% stacked line, 100% stacked area, Combo, Pareto, Pie of pie
+and Bar of pie. A histogram bins one column of numbers (Scott's rule, as
+Excel's automatic bins) or, with labels, sums values by label; a treemap or
+sunburst reads every column before its values as a level, a blank label
+continuing the one above. Excel 2016 charts download as chartEx parts with
+Excel's fallback note for older versions; Excel 2016 maps import as that
+fallback. A
 stock chart needs three or four series (high, low, close, with open first for
 up-down bars), a bubble chart reads x values from the first column, then
 values and sizes in pairs, and a combo chart needs at least two series. Imported shapes, text boxes, lines,
@@ -876,7 +879,7 @@ must be saved before persistent comments are available.
 ## Ask Macro about a spreadsheet
 
 **Ask Macro** sits immediately left of **Share**. Select the relevant cells, then
-click it to open a new agent session in a split beside the workbook. The composer starts
+click it to open the agent composer in a split beside the workbook. The composer starts
 with the workbook mention followed by one space; nothing sends automatically.
 The mention captures the active sheet ID/name and normalized selected range at
 click time. Changing the selection later does not change that draft attachment.
@@ -1470,8 +1473,8 @@ and as colored dots on the thumbnails of slides they are on. A viewer who opens
 a deck nobody has shared yet, or anyone when the sync service is unreachable,
 gets the stored file read-only.
 
-**Ask Macro**, in the header beside **Share**, opens a new agent session in a
-split with the deck mentioned in the composer (nothing sends automatically).
+**Ask Macro**, in the header beside **Share**, opens the agent composer in a
+split with the deck mentioned (nothing sends automatically).
 Macro AI reads decks with `ReadPresentation` (slides, layouts, theme colors,
 sections, transitions, header and footer, and every shape with its id, kind,
 placeholder role, position in points, text, table cells with merges and style,
@@ -2414,12 +2417,21 @@ stay text instead of becoming mentions, long pastes do not collapse into a
 4. The document auto-saves continuously (collaborative CRDT; no save button). The tab title
    and header update to the typed title.
 
+On desktop, opening a document through Cmd/Ctrl+K focuses its body editor after
+the content and title have loaded. Creating a document focuses its empty title;
+if the new document already has a title, it focuses the body. Ordinary clicks
+and Back/Forward do not move focus into the editor. A control the user focused
+while the document loaded keeps focus.
+
 The a11y snapshot exposes the entire body as the contenteditable's `value` and as paragraph
 nodes — use the snapshot itself to verify content. For formatting checks, run
 `evaluate_script` over `[contenteditable] strong` etc.
 
 Body placeholder advertises: `/` for block commands, `@` to reference files, `;` for snippets.
-Markdown auto-format works while typing (`#` heading, `[]` checklist, `>` quote).
+Markdown auto-format works while typing (`#` heading, `[]` checklist, `>` quote,
+`6.` or `6. ` for an ordered list that starts at 6).
+Pasting multiple paragraphs inside a quote keeps those paragraphs quoted;
+see [block formatting](channels.md#block-formatting) for verification.
 Imported Markdown recognizes bare URLs with the same shared matcher as messages;
 code and escaped URLs remain literal. Remove link persists through Markdown and
 editor-state saves. See [message links](channels.md#message-links) for verification.
@@ -2471,10 +2483,14 @@ To verify nesting, give a list item a child and grandchild, then swipe the
 parent right and left: all three should shift one level together, preserving
 their relative depths and order.
 
-## CRM company mentions
+## CRM company and contact mentions
 
 With CRM enabled, type `@` followed by a company name or domain in an editor or
-composer. Companies appear in their own mention bucket. With
+composer. Companies and contacts appear together under **Contacts & Companies**;
+**People** holds Macro users and groups only. Selecting a CRM contact inserts
+its record link, including when its email matches a Macro user. User-only pickers
+exclude CRM records. On mobile, the single list includes both CRM record types, while only
+Macro people and groups are pinned. With
 `ENABLE_GRAPHQL_SOUP` enabled, results include cached companies even if they are
 absent from the first 500 companies in the REST Quick Access feed; the REST feed
 remains a fallback. Cache search covers synchronized companies, not the entire CRM.
@@ -2490,7 +2506,7 @@ With Projects enabled, type `@` followed by a project name in an editor,
 composer or spreadsheet cell. Projects (not folders) come from Quick Access, so
 they appear alongside documents and tasks in the **Documents, Agents, & Tasks**
 section and in entity property pickers that accept projects. The command menu
-keeps its own project search. Selecting one inserts a document mention with the
+searches the same Quick Access projects. Selecting one inserts a document mention with the
 project's icon and current name, like a channel mention. Clicking it or
 pressing Enter on it opens the project the way a task mention opens a task:
 in Tasks, under **Projects** › the project (on touch devices, as the project
@@ -2540,11 +2556,12 @@ With CRM enabled, any task, document or call can point at CRM records through th
 `Companies` and `Contacts` system properties: side panel `Properties` →
 `Add property`. Both pickers list Quick Access records: the team's companies and
 its most recently interacted contacts, filtered by name, domain or email. CRM
-contacts have their own Quick Access bucket, apart from people, and are not
-offered in `@` mentions or the command menu. Values show the
-record's name and open the company or contact. An entity can carry the property
-without listing it (set at creation or through the API); adding that property
-pins the existing value rather than clearing it. Calls are linked automatically
+contacts have their own Quick Access bucket, apart from people. They appear
+under **Contacts & Companies** in `@` mentions and under **People** in the
+command menu. Values show the record's name and open the company or contact.
+An entity can carry the property without listing it (set at creation or through
+the API); adding that property pins the existing value rather than clearing it.
+Calls are linked automatically
 when they end, from their participants and the invitees of the calendar event
 carrying the meeting link; verify on a finished call's `Properties`.
 
@@ -2605,7 +2622,10 @@ after an expanded reference remains in separate paragraphs.
 Hover a document reference chip to open its preview without navigating. With
 the preview open, the compact header shows a tinted icon, title, and author/time
 byline. Click the title to open the document; the Reference actions ellipsis menu contains copy
-link, split, embed/collapse, AI, and delete actions when applicable. The preview
+link, split, embed/collapse, AI, and delete actions when applicable. In an editable
+editor it also offers **Convert to Plain Text**, which replaces the chip with the
+item's link as ordinary text, so sending it shares nothing; the `No Access` and
+`Deleted` cards show the menu there too. The preview
 stays open while this menu is active, and moving over other reference chips must
 not open their previews. Click outside or press Escape to dismiss the menu;
 other references can then be hovered again. Images use an inset frame and task chips
@@ -2613,8 +2633,8 @@ appear below the header. Long titles wrap in place without a full-name tooltip.
 
 A reference to something deleted reads `Deleted`, and one the viewer can't open
 reads `No Access`. Clicking either keeps its card open instead of doing nothing,
-and on a touch device a tap opens the same card as a bottom sheet. The card names
-the item: `This document was deleted or doesn't exist.`, `This channel was deleted
+and on a touch device a tap opens the same card as an opaque bottom sheet. The
+card names the item: `This document was deleted or doesn't exist.`, `This channel was deleted
 or doesn't exist.`, `You don't have access to this event`, and so on (a calendar
 event's reads `This event was deleted or cancelled.`). Skill, task and snippet
 references name their kind rather than "document". Database, form and routine
@@ -2672,9 +2692,11 @@ access to the title and property controls.
 
 ## AI edit
 
-1. Click `Edit with AI` (button directly under the editor body).
-2. A focused prompt box appears (placeholder `Describe the edit…`). Type the instruction,
-   press Enter (or click `Send`).
+1. Select text in the document, then click `AI edit` in the selection toolbar (on touch,
+   `Edit with AI` in the selection toolbar opens the same prompt in a drawer).
+2. A focused prompt box appears (placeholder `Describe changes`). Type the instruction,
+   press Enter (or click `Send`). The edit runs in fast mode and its changes apply
+   client-side, so they land in the user's undo stack.
    Selected-text AI edit uses the shared Send button: muted and disabled for an
    empty or whitespace-only prompt, black with a white arrow in light mode once
    an instruction is entered (inverted for dark mode), on desktop and mobile.
@@ -2722,6 +2744,36 @@ On touch devices, the Discussion section is hidden until it contains a comment;
 the floating **Leave a comment...** input remains available. If the discussion
 becomes empty again, the section disappears. Desktop keeps the empty section
 and inline input.
+
+Select plain text or text already covered by a comment, then press **Comment**.
+The press keeps the editor selection until the draft opens. Cancel with Escape
+or the composer's close control, then select the same text and try again: the
+new draft highlight should clear on cancellation and the existing comment
+should keep its full range. Repeat with a selection spanning paragraphs and
+with a collaborator editing another part of the document. Draft marks stay
+local until the comment is posted. Posting first saves the highlight, then the
+message. Refuse an anchor update and verify that no message is posted, the input
+survives, and cancelling lets another comment open without changing document text.
+Document typing briefly pauses during anchor publication so pending text is
+flushed before the highlight is saved. Repeat posting and starting another comment
+with both edit and comment-only access; creating a document tests the owner path.
+For comment-only access, use a document no editor has opened since it was
+created: a commenter's session writes nothing to the document, so its comments
+still post.
+Also withhold a collaborator's update before posting: catch up its missing history
+before publishing the highlight, preserving both the remote text and the comment.
+Confirm the posted comment appears in a separate browser, since reopening the
+same client can restore an unsynced mark from its local snapshot. When messages
+and notifications exist but another browser has no inline highlights, check WAL
+acknowledgements and sync-service's comment-validation errors.
+Cancellation retries unconfirmed highlight cleanup after reconnect or reopening.
+An uncertain message response preserves its highlight rather than risking a saved
+comment becoming invisible.
+
+Discussion and thread loading errors use compact muted text and a separate
+**Retry** button. Retry is disabled while fetching. A missing parent or thread
+shows an unavailable message without Retry; a deleted task cannot load comments
+until it is restored. Verify that an unavailable discussion hides its composer.
 
 Comments anchored to selected text open in a floating margin card on desktop and
 a `Comments` drawer on touch devices. Hovering a desktop card reveals its actions
@@ -2817,9 +2869,13 @@ Discussion's timeline or expanding it. Existing highlights locate threads by
 their stable mark IDs. Replies, attachments, reactions, and editing use the same
 message controls as channels. In every floating comment card (the Markdown,
 PDF, and Word margins and expanded minimized threads), a long comment folds to
-a faded preview with **Show more**; **Show less** folds it again. Short
-comments, the phone drawer, the bottom Discussion, and channels always show the
-full text. Markdown and Word margin cards stack without overlapping: a tall or expanded card
+a faded preview with **Show more**; **Show less** folds it again. A press
+outside the card does the same, including the press that closes an expanded
+minimized card. Presses on the card, its margin badge, and menus or dialogs
+the card opened leave the body expanded. In that card, Open session is the
+icon-only button from a narrow agent card, so the label does not take a line
+of its own. Channels keep the labeled chip. Short comments, the phone drawer,
+the bottom Discussion, and channels always show the full text. Markdown and Word margin cards stack without overlapping: a tall or expanded card
 pushes the cards below it down (past the end of a short document if needed),
 and no card starts above the top of the document. Check this with a long
 thread active near the bottom of a short document that has another thread
@@ -2982,9 +3038,8 @@ updates live and shows each collaborator's caret with their name
   `addComment` ones) are.
 - The stored upload is not rewritten yet. Search, the PDF export and AI
   `ReadContent` still see the original file.
-- **Ask Macro**, in the header beside **Share**, opens a new agent session in
-  a split with the document mentioned in the composer (nothing sends
-  automatically).
+- **Ask Macro**, in the header beside **Share**, opens the agent composer in
+  a split with the document mentioned (nothing sends automatically).
 - AI `ReadWordDocument` and `EditWordDocument` read and edit the live copy, so
   open editors patch agent edits in as they land. `ReadWordDocument` lists
   every paragraph, table cell and content control with its id. `EditWordDocument`
@@ -3005,6 +3060,10 @@ Scrub the graph to preview a point in time, or select a session to see its chang
 selected version into a separate document. **Close history** or Escape returns
 to the mounted editor without losing its scroll position. The two columns scroll
 independently, and other app splits remain available.
+
+Sessions, diffs, and blame tooltips name AI edits by who made them: an agent's
+edits show the agent's name, and other AI-editor writes show
+`<user> (AI)` for the user they were made for.
 
 ## Side panel
 
@@ -3095,3 +3154,7 @@ an empty circle, and subtype-only previews use their completion flag. See
 Sharing labels describe their audience: Only people with access, Anyone with the link, and Team members with the link. Permission choices say Can view, Can comment, and Can edit. Copying a restricted link still does not grant access. The existing immediately opening dialog and its deferred loading remain unchanged.
 
 Drive's existing New controls open a wide menu with icons and short descriptions for creation and uploads, while preserving the current destination and feature gates.
+
+Opening a row clears its unread state immediately; direct details mark read when
+ready. See [reading items](notifications.md#reading-items) for failure, keyboard,
+mobile, and email inbox checks.

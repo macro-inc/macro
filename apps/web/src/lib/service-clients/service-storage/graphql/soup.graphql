@@ -78,6 +78,25 @@ fragment MailPreviewFields on GraphqlMailPreviewMessage {
 	senderPhotoUrl
 }
 
+# Independent selections keep known flags live even on a partial thread.
+fragment MailReadStateFields on GraphqlSoupEmailThread {
+	__typename
+	id
+	isRead
+}
+
+fragment MailInboxStateFields on GraphqlSoupEmailThread {
+	__typename
+	id
+	inboxVisible
+}
+
+fragment MailSignalStateFields on GraphqlSoupEmailThread {
+	__typename
+	id
+	isSignal
+}
+
 # Local-only selection: materialize canonical preview references instead of the
 # query-dependent preview fields last written by a different tab/filter.
 fragment MailItemFields on GraphqlSoupEntity {
@@ -169,6 +188,7 @@ fragment SoupItemPreviewFields on GraphqlSoupEntity {
 		providerId
 		ownerId
 		inboxVisible
+		hasReceivedMail
 		linkId
 		latestInboundMessageTs
 		latestOutboundMessageTs
@@ -332,7 +352,8 @@ fragment SoupEntityCoreFields on GraphqlSoupEntity {
 # the session reports a committed change: see AgentSessionRow.
 fragment SoupAgentSessionFields on GraphqlSoupAgentSession {
 	sessionName: name
-	isArchived
+	archivedBy
+	archivedAt
 	ownerId
 	botId
 	harness
@@ -585,6 +606,12 @@ fragment SoupNotificationNavigationMetadataFields on GraphqlNotifEvent {
 		channelMessageReactionChannelName: channelName
 		channelMessageReactionSenderProfilePictureUrl: senderProfilePictureUrl
 	}
+	... on GraphqlChannelAccessRequestedMetadata {
+		channelAccessRequestedRequestId: requestId
+		channelAccessRequestedChannelType: channelType
+		channelAccessRequestedChannelName: channelName
+		channelAccessRequestedSenderProfilePictureUrl: senderProfilePictureUrl
+	}
 	... on GraphqlChannelReplyMetadata {
 		channelReplyThreadId: threadId
 		channelReplyMessageId: messageId
@@ -606,6 +633,11 @@ fragment SoupNotificationNavigationMetadataFields on GraphqlNotifEvent {
 	}
 	... on GraphqlInboxReauthRequiredMetadata {
 		inboxReauthRequiredEmailAddress: emailAddress
+	}
+	... on GraphqlRoutineRunFinishedMetadata {
+		routineRunFinishedRoutineId: routineId
+		routineRunFinishedRoutineName: routineName
+		routineRunFinishedSucceeded: succeeded
 	}
 	... on GraphqlInviteToTeamMetadata {
 		inviteToTeamTeamName: teamName

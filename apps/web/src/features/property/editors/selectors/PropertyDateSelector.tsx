@@ -1,6 +1,7 @@
 import { DatePickerUI } from '@core/component/DatePicker/DatePickerUI';
 import { useDateSearch } from '@core/util/dateSearch/useDateSearch';
 import { useKeyPressed } from '@core/util/useKeyPressed';
+import CalendarIcon from '@icon/system/regular/calendar-blank.svg';
 import SearchIcon from '@icon/system/regular/magnifying-glass.svg';
 import type { DateProperty } from '@property/types';
 import { useSearchInputFocus } from '@property/utils/focus';
@@ -17,6 +18,7 @@ import {
   Show,
   Switch,
 } from 'solid-js';
+import { formatDate } from '../../utils/formatting';
 
 type DateSelectorMode = 'search' | 'calendar';
 
@@ -27,6 +29,8 @@ type DateSelectorProps = {
   initialQuery?: string;
   onSelectDate: (date: Date | null) => void;
   onClose?: () => void;
+  /** Fill a sized container, such as a sheet, rather than a popover's height. */
+  fillHeight?: boolean;
 };
 
 export const PropertyDateSelector = (props: DateSelectorProps) => {
@@ -42,6 +46,12 @@ export const PropertyDateSelector = (props: DateSelectorProps) => {
   });
 
   const hasClear = () => props.selectedDate != null;
+  const selectedDateLabel = () => {
+    const date = props.selectedDate;
+    return date
+      ? formatDate(date)
+      : `No ${props.property.displayName.toLowerCase()}`;
+  };
   // When a date is set, replace the last suggestion with the Clear row so
   // the section height stays the same.
   const visibleDateOptions = createMemo(() => {
@@ -146,8 +156,12 @@ export const PropertyDateSelector = (props: DateSelectorProps) => {
     handleSelectDate(date);
   };
 
+  const keepSearchFocus = (event: Event) => event.preventDefault();
+
   return (
-    <div class="relative flex min-h-0 flex-col">
+    <div
+      class={cn('relative flex min-h-0 flex-col', props.fillHeight && 'flex-1')}
+    >
       <div class="flex w-full shrink-0 items-center py-2 gap-2 px-2 border-b border-edge-muted">
         <SearchIcon class="size-4 text-ink-muted" />
         <input
@@ -169,10 +183,27 @@ export const PropertyDateSelector = (props: DateSelectorProps) => {
           disabled={mode() !== 'search'}
         />
       </div>
+      <p class="flex items-center gap-2 border-b border-edge-muted px-3 py-2">
+        <CalendarIcon class="size-4 shrink-0 text-ink-muted" />
+        <span class="text-ink-muted">Current:</span>
+        <span class="min-w-0 truncate">{selectedDateLabel()}</span>
+      </p>
       <Switch>
         <Match when={mode() === 'search'}>
-          <div class="flex min-h-0 flex-1 p-1.5">
-            <div class="max-h-50 min-h-0 flex-1 overflow-y-auto overflow-x-hidden scrollbar-hidden">
+          {/* Picking a row keeps focus in the date field, so the phone
+              keyboard stays up. iOS devices still send mousedown after a
+              cancelled pointerdown. */}
+          <div
+            class="flex min-h-0 flex-1 p-1.5"
+            onPointerDown={keepSearchFocus}
+            onMouseDown={keepSearchFocus}
+          >
+            <div
+              class={cn(
+                'min-h-0 flex-1 overflow-y-auto overflow-x-hidden scrollbar-hidden',
+                !props.fillHeight && 'max-h-50'
+              )}
+            >
               <Show
                 when={visibleDateOptions().length > 0}
                 fallback={
@@ -197,7 +228,7 @@ export const PropertyDateSelector = (props: DateSelectorProps) => {
                     <div
                       data-date-index={index()}
                       class={cn(
-                        'group rounded-lg w-full flex items-center justify-between gap-1.5 p-1.5 px-2 text-left text-ink font-normal cursor-default',
+                        'group rounded-lg w-full flex items-center justify-between gap-1.5 p-1.5 px-2 text-left text-ink font-normal cursor-default touch:min-h-12',
                         index() === selectedIndex() && 'bg-hover'
                       )}
                       onClick={() => handleSelectDate(option.date)}
@@ -223,7 +254,7 @@ export const PropertyDateSelector = (props: DateSelectorProps) => {
                 <div
                   data-date-index={calendarOptionIndex()}
                   class={cn(
-                    'group rounded-lg w-full flex items-center justify-between gap-1.5 p-1.5 px-2 text-left text-ink font-normal cursor-default',
+                    'group rounded-lg w-full flex items-center justify-between gap-1.5 p-1.5 px-2 text-left text-ink font-normal cursor-default touch:min-h-12',
                     selectedIndex() === calendarOptionIndex() && 'bg-hover'
                   )}
                   onClick={() => setMode('calendar')}
@@ -248,7 +279,7 @@ export const PropertyDateSelector = (props: DateSelectorProps) => {
                   <div
                     data-date-index={clearOptionIndex()}
                     class={cn(
-                      'group rounded-lg w-full flex items-center justify-between gap-1.5 p-1.5 px-2 text-left text-ink font-normal cursor-default',
+                      'group rounded-lg w-full flex items-center justify-between gap-1.5 p-1.5 px-2 text-left text-ink font-normal cursor-default touch:min-h-12',
                       selectedIndex() === clearOptionIndex() && 'bg-hover'
                     )}
                     onClick={() => handleClearDate()}

@@ -6,6 +6,7 @@ export type AuthUser = {
   id: string;
   email: string | undefined;
   tutorialComplete: boolean;
+  isAgent: boolean;
 };
 
 export type AuthSession =
@@ -14,7 +15,7 @@ export type AuthSession =
   | { t: 'signed-in'; user: AuthUser };
 
 export type SsoProvider = 'google' | 'apple';
-export type AuthIntent = 'login' | 'signup';
+export type AuthIntent = 'login' | 'signup' | 'agent-signup';
 
 export type SendCodeResult =
   /** `autoCode`: local backends return the code so dev logins are one click. */
@@ -53,6 +54,7 @@ export type AuthContext = {
   sendEmailCode(input: {
     email: string;
     password?: string;
+    isAgent: boolean;
   }): Promise<SendCodeResult>;
   verifyEmailCode(input: {
     email: string;
@@ -63,10 +65,15 @@ export type AuthContext = {
   /** Refreshes everything that depends on who is signed in. */
   completeLogin(): Promise<void>;
   sendMobileWelcomeEmail(email: string): Promise<MobileWelcomeResult>;
-  identify(user: { id: string; email: string | undefined }): void;
+  identify(user: {
+    id: string;
+    email: string | undefined;
+    /** Person properties set once. Mobile capture uses this for attribution. */
+    setOnce?: Record<string, string>;
+  }): void;
   /** Ad conversions for a mobile-web lead, deduplicated by email. */
   trackMobileSignupLead(email: string): void;
-  pageView(name: 'login' | 'signup'): void;
+  pageView(name: AuthIntent): void;
   track: TrackAuth;
   notifyFailure(message: string): void;
 };

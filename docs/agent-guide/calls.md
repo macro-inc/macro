@@ -37,6 +37,8 @@ Old copied `/app/call/<callId>` links redirect to the Calls detail without losin
 the transcript target. Existing `/app/drive/call/<callId>` links still work.
 The detail shows a loading state, recording/transcript/summary, Share, and a call
 side panel below the breadcrumb header; a failed load shows Retry.
+While the call is in progress, a `Join call` button under the title joins it
+(desktop and phone); it is hidden once you are in that call.
 `call_transcript_id=<segmentId>` seeks the matching video segment after loading.
 Check a direct link, both old link formats, a Calls-list click, a second split,
 the breadcrumb return, browser Back/Forward, and clicking the same transcript
@@ -198,6 +200,9 @@ call without gaining access to the channel.
 
 The join screen, in-call participant tiles, and incoming direct-call badges use
 profile pictures; initials are the fallback when no photo is available.
+In-call participant tiles fill their grid cell but are never wider than 16:9,
+so a wide window centers them instead of cropping cameras; check a single remote
+participant in a wide window and at phone width.
 The join screen has microphone, camera, and background effects buttons over the
 preview, with pill selectors below for microphone, speaker, camera, and
 backgrounds. The background button over the preview toggles the selected effect
@@ -207,20 +212,108 @@ Backgrounds use a simple menu with None, Light blur, Strong blur, and image uplo
 Selected devices and backgrounds carry into the call; unsupported browsers use
 the system speaker. If a background cannot be applied, the camera stays off
 until the user retries or chooses None. The screen uses a gray join
-button. The in-call header has a gray `Copy Meeting Url` button with a copy icon
-and shows the current local time before the call name. Owners can click the name
+button. During a desktop or tablet call, `Copy Meeting Url` sits at the
+bottom-left; narrow panes show only its copy icon. Active phone calls fill the
+available viewport, retaining header islands for Back and Copy Meeting Url.
+The header shows the current local time before the call name. Owners can click the name
 to rename it, then Save or press Enter; Cancel or Escape discards the edit. Guests and other participants see a
 read-only name.
 
 Join-preview and in-call controls use the standard Macro icon buttons. In a
-call, the microphone and camera are split buttons (`ButtonGroup`): the left half
-toggles the device (pressed while on), and the caret opens a settings menu above
-the toolbar on click only; hovering opens nothing. **Audio settings** lists
-microphones, speakers (when the browser can choose one), and noise suppression.
+call, a fully rounded toolbar contains the controls. The microphone and camera
+are split buttons (`ButtonGroup`): the left half
+toggles the device, with a failure-colored slashed icon when off, and the caret
+opens a settings menu above the toolbar on click only; hovering opens nothing.
+**Audio settings** lists microphones, speakers (when the browser can choose one),
+and a noise suppression switch with its label on the left.
 **Video settings** lists cameras and the background effects as tiles: None,
-Light blur, Strong blur, a selected custom image, and Upload. Screen share and
-Leave call are separate buttons. Click outside or press Escape to close a menu.
-The controls also work by keyboard and touch.
+Light blur, Strong blur, a selected custom image, and Upload. Screen share is
+also a split button: the left half starts or stops sharing (pressed while
+sharing), and **Screen share settings** holds **Share audio**, off by default,
+saved per device, and locked while sharing. With it on, the browser picker offers
+tab audio (and system audio where Chromium supports it), and other participants
+hear it alongside microphones, even away from the Call tab. Leave call is a
+separate button. Live channel calls also include **Call sharing** in the toolbar:
+its menu offers **Team sharing** and **Private**, each with a short explanation
+and a checkmark on the current choice. The icon changes between team and lock.
+Audio settings, video settings, screen share settings, and call sharing use
+bottom drawers on phones, with a handle and scrollable options; desktop and
+tablet keep dropdowns.
+The sharing icons align with the option titles, with short descriptions below.
+Click outside or press Escape to close and return focus to the opener. The
+controls also work by keyboard and touch.
+The floating mobile **New** action is hidden while the call view is open and
+returns when you leave the call view. Phone calls also hide the app's bottom
+navigation and channel Invite action, but keep the channel header island visible.
+Invite returns when you leave the call tab, including in the block-hosted channel
+header; Invite remains available on setup screens, desktop, and tablets. Back
+returns to the app without hanging up; when a channel has no navigation history, Back opens its
+Messages tab instead. Only **Leave call** ends participation.
+
+Focus is unavailable when you are the only participant. Otherwise, click or tap
+a participant, including your own tile, to focus them. Focusing
+someone else keeps your own tile in the small picture-in-picture window;
+focusing yourself moves the remote participant grid into that window instead.
+Tap a tile in the small window to switch focus, or use the solid **Back to grid**
+button on the focused tile to restore the grid. If that participant leaves, the grid
+returns automatically. Focus changes keep the existing video tracks mounted.
+A talking participant has an accent-colored border above their video or avatar.
+
+Open **Chat** and **Participants** from the button beside the media controls.
+The sidebar and phone drawer share a compact grouped section switcher at the top.
+**Participants** shows the live attendee count and a scrollable roster, including
+you and connected guests but excluding recording agents. Rows show names,
+avatars, microphone and camera state, and a speaking indicator. Off microphones
+and cameras use the failure color. Known users use the shared user icon:
+hover it on desktop or tap it on touch to open the profile card; guests use
+the shared avatar fallback.
+This is the current call roster, not the channel member list. Participant media
+controls remain read-only. The roster remains available when chat is unavailable,
+without starting message queries.
+
+On phones, the fully rounded control bar fits its buttons instead of filling the
+available width. Controls have 8px gaps, expanding to 12px in roomy bars and
+contracting on narrow phones so all controls fit. The sidebar button stays
+separate on the right with a 48px tap target and the row keeps its side gutters.
+On phones at most 416px wide, the sidebar button moves below the bar so the
+additional screen-share settings control fits without clipping. Controls wrap
+on smaller available widths without shrinking their split-button segments.
+On desktop, the sidebar button stays at the bottom-right and Copy Meeting Url
+stays at the bottom-left, without horizontal padding on the footer row. On
+phones, Copy Meeting Url uses the shared `CopyButton` in a standard 40px
+header island, without custom button colors or sizing. Media controls occupy a
+separate row below the video, never over it. Controls remain visible while idle;
+auto-hide is disabled for now. Header islands also stay visible. Check 320px
+phones, safe-area insets, and rotation.
+
+In wide desktop panes, the sidebar fills the call content height alongside the
+video and controls, with a rounded, raised background. Drag its divider, or focus
+the divider and use the arrow keys, to resize it between 280px and 480px while
+leaving at least 320px for the call. It starts at 360px and retains its resized
+width when closed and reopened. Narrow desktop panes overlay the sidebar;
+phones use the shared bottom sheet instead of a resize handle.
+
+Both presentations have a **Close chat and participants** button beside the tabs.
+Dismiss the sheet with that button, its handle, backdrop, or Escape; desktop also
+closes with Escape. Opening and closing animate unless reduced motion is enabled.
+The desktop sidebar stays anchored to the right edge and closes to the right,
+without crossing the call area. Closing returns focus to the footer button.
+Switching tabs, closing, and resizing preserve the message draft and scroll
+position. Tab changes keep keyboard focus on the selected tab instead of moving
+it into the composer; reopening retains the existing autofocus behavior.
+Message hover actions stay within the chat's scroll viewport. The toolbar wraps
+its action groups when the sidebar is narrow, keeping the final actions inside
+the visible surface. Check the first and last visible messages while scrolling,
+with every action available. Check both signed-in and guest calls.
+
+In the macOS desktop app, Screen share opens Macro's own **Share your screen**
+picker (screens first, the main display preselected, then open windows), since
+its Chromium has no system picker. Share publishes the chosen source; Cancel
+leaves sharing off. Without macOS Screen Recording access the picker says so
+and macOS shows its prompt; the user reopens Macro after allowing it. A refused
+or failed capture shows its reason under the call controls. Browsers
+and older desktop builds keep the browser's own picker. Verify on a Mac by
+sharing a display and a window, stopping, and cancelling the picker.
 
 ### Browser call diagnostics
 
@@ -250,7 +343,10 @@ guest names, and bearer URLs/tokens are not attributes.
 `call.connect` and background `call.media.setup` are children of the join flow.
 `call.media.publish_prejoin`, `enable`, and `toggle` expose publishing/capture
 failures after admission; `enumerate` and `background` cover waiting-room
-device lists and effects. A completed join/setup does not imply every device
+device lists and effects. `call.media.screen_share` records which picker ran
+(`native` or `browser`), Screen Recording access, the source count and kind,
+and whether the user cancelled; failures add the underlying
+`call.media.screen_share.error_type`. A completed join/setup does not imply every device
 worked: inspect its media children. Later toggles and connection-state samples
 are searchable by `call.id`. `call.connection.disconnected` records the SDK's
 numeric reason when available. These spans cover the browser LiveKit path,
@@ -268,19 +364,22 @@ opening the call tab alone does not create a link. If loading fails, click again
 to retry. If clipboard access fails, a selectable URL appears below the button.
 
 A channel call's **Share** dialog has a `Team access` control (None or View) for the same canonical
-team share. Its side panel has a `Sharing` section with one `Share with team` checkbox, and the
-in-call controls carry the same checkbox while a call is live. It is canonical team sharing (the
-same `Team access` model documents and AI chats use), fixed at **view**. While the call is **live**
-the checkbox is a pending toggle (on by default for channel calls)
-that any participant with edit access can flip;
-other participants see it update live. When the call ends it is applied: with the toggle on,
-everyone on the creator's team can open the recorded call, read the transcript and AI summary,
-and find it under Calls and in search; off means nothing is shared. Afterwards only the call's
-**creator** can change it — everyone else sees the checkbox read-only with a note saying so.
+team share. Its side panel has a `Sharing` section with one `Share with team` checkbox.
+While a call is live, the controls bar instead has a **Call sharing** dropdown with
+**Team sharing** and **Private** options. Each option explains the resulting team
+access under its name; choosing the current option does not save again. Controls
+are disabled while connecting or saving. Team sharing is canonical **view** access
+(the same `Team access` model documents and AI chats use), enabled by default for
+channel calls. Any participant with edit access can change it, and other
+participants see it update live. When the call ends, **Team sharing** lets the
+creator's team open the recorded call, read the transcript and AI summary, and find
+it under Calls and in search; **Private** grants no automatic team access.
+Afterwards only the call's **creator** can change it; everyone else sees the
+side-panel checkbox read-only with a note saying so.
 Team sharing is independent of channel access and of link sharing.
 
 Standalone instant and scheduled calls are excluded from team memory. They have no
-`Share with team` or `Team access` controls during the call or on the saved recording.
+team-sharing or `Team access` controls during the call or on the saved recording.
 Signed-in participants keep direct access to their recordings, transcripts, and summaries;
 joining a standalone call never makes its content available to the wider team.
 
@@ -296,9 +395,27 @@ iOS: tap it to reopen the drawer, drag it to another corner, or drag it past a s
 to tuck it away (an edge tab brings it back once someone else is in the call). Leaving the app continues the call in system PiP (you and the
 active speaker); tapping PiP shows Android's menu with Mute, **Leave** and expand,
 which reopens the drawer. **Open call controls** in the web call controls also
-reopens the drawer. Leaving the channel does not end the call. Incoming calls
-expose Answer/Decline in the **Calls** notification channel, including while
-locked/backgrounded; while Android 14+ blocks full-screen notifications, a toast
+reopens the drawer. Leaving the channel does not end the call. While ringing,
+a locked phone opens a full-screen incoming-call screen when permitted, with
+caller initials/name, channel context and large Answer/Decline controls. Back
+hides this screen and leaves the call available in its notification. Incoming calls
+also expose Answer/Decline in the **Calls** notification channel, including while
+locked/backgrounded. When full-screen access is unavailable, the notification
+remains usable; Answer opens the call screen directly for microphone permission
+and retry errors. Verify allowed/denied full-screen access, missing microphone
+permission, cancellation/expiry and stale notification actions after a replacement
+call arrives. While Android 14+ blocks full-screen notifications, a toast
 offers **Allow** (system setting) or **Hide**. PiP is a native, device-dependent
 flow. Browser-only tests cannot validate Telecom, FCM wakeup or background media;
 follow the hardware matrix in [Android development](../development/android.md#native-calling).
+
+Synthetic emulator captures: [incoming screen](media/calls/android-incoming-call.png),
+[notification fallback](media/calls/android-call-notification.png), and
+[microphone permission after Answer](media/calls/android-call-microphone-permission.png).
+
+Native Android call spans use service `android-calls` and the opaque `call.id`.
+The existing telemetry gate also controls cold calls. W3C context connects the
+push producer, notification/activity, permission and answer phases, and status
+HTTP requests; connection and cancellation outcomes end the incoming trace.
+For local collector verification and the exporter fixture, see
+[native call tracing](../development/android.md#native-call-tracing).

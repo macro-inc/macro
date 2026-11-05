@@ -29,6 +29,7 @@ import {
 import type { AccessLevel } from '@service-storage/generated/schemas/accessLevel';
 import type { NewAttachment } from '@service-storage/generated/schemas/newAttachment';
 import type { SharePermissionV2ChannelSharePermissions } from '@service-storage/generated/schemas/sharePermissionV2ChannelSharePermissions';
+import type { SimpleMention } from '@service-storage/generated/schemas/simpleMention';
 import { Button, cn, Hotkey } from '@ui';
 import {
   type Accessor,
@@ -51,10 +52,7 @@ type Recipient = WithCustomUserInput<'user' | 'contact' | 'channel'>;
 interface MobileForwardToChannelLayoutProps
   extends Pick<
     ForwardToChannelProps,
-    | 'submitPermissionInfo'
-    | 'hideAccessLevelSelector'
-    | 'editPermissionEnabled'
-    | 'allowedAccessLevels'
+    'submitPermissionInfo' | 'editPermissionEnabled' | 'allowedAccessLevels'
   > {
   isAuthenticated: Accessor<boolean | undefined>;
   selectedOptions: Accessor<Recipient[]>;
@@ -133,10 +131,7 @@ function MobileForwardToChannelLayout(
         </div>
       </Show>
       <Show
-        when={
-          props.submitPermissionInfo?.userPermissions === Permissions.OWNER &&
-          !props.hideAccessLevelSelector
-        }
+        when={props.submitPermissionInfo?.userPermissions === Permissions.OWNER}
       >
         <div class="px-3 py-2 flex items-center">
           <span class="text-sm text-ink-muted pr-2">Access:</span>
@@ -184,12 +179,16 @@ interface ForwardToChannelProps {
     handleSubmit: () => void;
     canSubmit: () => boolean;
   }) => void;
-  hideAccessLevelSelector?: boolean;
   initialAccessLevel?: AccessLevel | null;
   /** Levels the picker offers; all when absent. */
   allowedAccessLevels?: readonly AccessLevel[];
   /** Attach an entity that has no block, instead of `blockId`/`blockName`. */
   entity?: NewAttachment;
+  /**
+   * Reference `entity` in the message text instead of attaching it, for
+   * entities messages show only as mentions (routines).
+   */
+  inlineReference?: { markdown: string; mention: SimpleMention };
   /**
    * Grant the destination before the message is sent, for entities that
    * sending does not grant. Rejecting cancels that delivery.
@@ -364,9 +363,20 @@ export function ForwardToChannel(props: ForwardToChannelProps) {
   ) {
     const prepare = props.prepareChannel;
     const composed = composer.message();
+    const inline = props.inlineReference;
     const message = {
       ...composed,
-      attachments: [asAttachment(), ...(composed.attachments ?? [])],
+      ...(inline
+        ? {
+            content: [composed.content.trim(), inline.markdown]
+              .filter(Boolean)
+              .join('\n\n'),
+            mentions: [...composed.mentions, inline.mention],
+            attachments: composed.attachments ?? [],
+          }
+        : {
+            attachments: [asAttachment(), ...(composed.attachments ?? [])],
+          }),
       beforeSend:
         prepare &&
         ((id: string) =>
@@ -579,7 +589,6 @@ export function ForwardToChannel(props: ForwardToChannelProps) {
             triedToSubmit={triedToSubmit}
             destinationOptions={destinationOptions}
             submitPermissionInfo={props.submitPermissionInfo}
-            hideAccessLevelSelector={props.hideAccessLevelSelector}
             allowedAccessLevels={props.allowedAccessLevels}
             submitAccessLevel={submitAccessLevel}
             setSubmitAccessLevel={setSubmitAccessLevel}
@@ -610,7 +619,7 @@ export function ForwardToChannel(props: ForwardToChannelProps) {
             <Show
               when={
                 props.submitPermissionInfo?.userPermissions ===
-                  Permissions.OWNER && !props.hideAccessLevelSelector
+                Permissions.OWNER
               }
             >
               <div class="shrink-0 pr-2 flex items-center gap-2">

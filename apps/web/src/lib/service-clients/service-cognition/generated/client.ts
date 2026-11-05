@@ -14,6 +14,9 @@ import type {
   ChatMessageError,
   CompleteOnboardingRequest,
   CreateChatRequest,
+  CreatePipedreamMcpTokenBody,
+  DatabaseQueryAnswer,
+  DatabaseQueryRequest,
   DecisionErrorBody,
   DecisionRequest,
   DecisionResponse,
@@ -23,6 +26,9 @@ import type {
   DocumentTextPart,
   ErrorBody,
   ErrorResponse,
+  GenerateImageErrorBody,
+  GenerateImageRequest,
+  GenerateImageResponse,
   GetBatchPreviewRequest,
   GetBatchPreviewResponse,
   GetChatPermissionsResponse,
@@ -39,6 +45,7 @@ import type {
   PatchChatRequest,
   PipedreamCatalogResponse,
   PipedreamCompleteRequest,
+  PipedreamConnectCompleteRequest,
   PipedreamConnectionResponse,
   PipedreamOverlayResponse,
   PipedreamRecoverRequest,
@@ -66,6 +73,11 @@ import type {
   UpsertProjectionRequest,
   UsageRequest,
   UsageSummary,
+  WebErrorBody,
+  WebFetch,
+  WebFetchResponse,
+  WebSearch,
+  WebSearchResponse,
 } from './schemas';
 
 /**
@@ -1191,6 +1203,87 @@ export const getCitationHandler = async (
   } as getCitationHandlerResponse;
 };
 
+export type generateDatabaseQueryResponse200 = {
+  data: DatabaseQueryAnswer;
+  status: 200;
+};
+
+export type generateDatabaseQueryResponse401 = {
+  data: void;
+  status: 401;
+};
+
+export type generateDatabaseQueryResponse402 = {
+  data: StructuredCompletionError;
+  status: 402;
+};
+
+export type generateDatabaseQueryResponse403 = {
+  data: StructuredCompletionError;
+  status: 403;
+};
+
+export type generateDatabaseQueryResponse500 = {
+  data: StructuredCompletionError;
+  status: 500;
+};
+
+export type generateDatabaseQueryResponse503 = {
+  data: StructuredCompletionError;
+  status: 503;
+};
+
+export type generateDatabaseQueryResponse504 = {
+  data: StructuredCompletionError;
+  status: 504;
+};
+
+export type generateDatabaseQueryResponseSuccess =
+  generateDatabaseQueryResponse200 & {
+    headers: Headers;
+  };
+export type generateDatabaseQueryResponseError = (
+  | generateDatabaseQueryResponse401
+  | generateDatabaseQueryResponse402
+  | generateDatabaseQueryResponse403
+  | generateDatabaseQueryResponse500
+  | generateDatabaseQueryResponse503
+  | generateDatabaseQueryResponse504
+) & {
+  headers: Headers;
+};
+
+export type generateDatabaseQueryResponse =
+  | generateDatabaseQueryResponseSuccess
+  | generateDatabaseQueryResponseError;
+
+export const getGenerateDatabaseQueryUrl = () => {
+  return `/database-query`;
+};
+
+export const generateDatabaseQuery = async (
+  databaseQueryRequest: DatabaseQueryRequest,
+  options?: RequestInit
+): Promise<generateDatabaseQueryResponse> => {
+  const res = await fetch(getGenerateDatabaseQueryUrl(), {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(databaseQueryRequest),
+  });
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+
+  const data: generateDatabaseQueryResponse['data'] = body
+    ? JSON.parse(body)
+    : {};
+  return {
+    data,
+    status: res.status,
+    headers: res.headers,
+  } as generateDatabaseQueryResponse;
+};
+
 export type decisionsResponse200 = {
   data: DecisionResponse;
   status: 200;
@@ -1315,6 +1408,100 @@ export const healthHandler = async (
     status: res.status,
     headers: res.headers,
   } as healthHandlerResponse;
+};
+
+/**
+ * @summary Generate an image with Nano Banana and store it as a static file owned by
+the caller. Charged to the acting user's AI allowance.
+ */
+export type generateImageResponse200 = {
+  data: GenerateImageResponse;
+  status: 200;
+};
+
+export type generateImageResponse400 = {
+  data: GenerateImageErrorBody;
+  status: 400;
+};
+
+export type generateImageResponse401 = {
+  data: void;
+  status: 401;
+};
+
+export type generateImageResponse402 = {
+  data: GenerateImageErrorBody;
+  status: 402;
+};
+
+export type generateImageResponse403 = {
+  data: GenerateImageErrorBody;
+  status: 403;
+};
+
+export type generateImageResponse422 = {
+  data: GenerateImageErrorBody;
+  status: 422;
+};
+
+export type generateImageResponse500 = {
+  data: GenerateImageErrorBody;
+  status: 500;
+};
+
+export type generateImageResponse502 = {
+  data: GenerateImageErrorBody;
+  status: 502;
+};
+
+export type generateImageResponse503 = {
+  data: GenerateImageErrorBody;
+  status: 503;
+};
+
+export type generateImageResponseSuccess = generateImageResponse200 & {
+  headers: Headers;
+};
+export type generateImageResponseError = (
+  | generateImageResponse400
+  | generateImageResponse401
+  | generateImageResponse402
+  | generateImageResponse403
+  | generateImageResponse422
+  | generateImageResponse500
+  | generateImageResponse502
+  | generateImageResponse503
+) & {
+  headers: Headers;
+};
+
+export type generateImageResponse =
+  | generateImageResponseSuccess
+  | generateImageResponseError;
+
+export const getGenerateImageUrl = () => {
+  return `/images/generate`;
+};
+
+export const generateImage = async (
+  generateImageRequest: GenerateImageRequest,
+  options?: RequestInit
+): Promise<generateImageResponse> => {
+  const res = await fetch(getGenerateImageUrl(), {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(generateImageRequest),
+  });
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+
+  const data: generateImageResponse['data'] = body ? JSON.parse(body) : {};
+  return {
+    data,
+    status: res.status,
+    headers: res.headers,
+  } as generateImageResponse;
 };
 
 /**
@@ -2064,9 +2251,8 @@ export const startMcpAuth = async (
 };
 
 /**
- * Returns the current memory if one exists. If the memory is stale or missing,
-a background generation is triggered and the endpoint returns the stale
-memory (200) or 404 if none exists yet.
+ * Compose stored private preferences, latest activity, and current team profiles.
+Enrolls the caller for daily refresh; generation never runs on this request.
  * @summary Get the authenticated user's latest memory.
  */
 export type getMemoryHandlerResponse200 = {
@@ -2440,6 +2626,80 @@ export const completePipedreamMcpConnection = async (
 };
 
 /**
+ * Answers 404 until Connect lists an active connection for this user and
+app, so the frontend can poll it while the consent window is open.
+ * @summary Record an app the user connected through Macro Connect.
+ */
+export type completePipedreamMcpConnectResponse200 = {
+  data: PipedreamConnectionResponse;
+  status: 200;
+};
+
+export type completePipedreamMcpConnectResponse401 = {
+  data: string;
+  status: 401;
+};
+
+export type completePipedreamMcpConnectResponse404 = {
+  data: ErrorResponse;
+  status: 404;
+};
+
+export type completePipedreamMcpConnectResponse500 = {
+  data: ErrorResponse;
+  status: 500;
+};
+
+export type completePipedreamMcpConnectResponse501 = {
+  data: ErrorResponse;
+  status: 501;
+};
+
+export type completePipedreamMcpConnectResponseSuccess =
+  completePipedreamMcpConnectResponse200 & {
+    headers: Headers;
+  };
+export type completePipedreamMcpConnectResponseError = (
+  | completePipedreamMcpConnectResponse401
+  | completePipedreamMcpConnectResponse404
+  | completePipedreamMcpConnectResponse500
+  | completePipedreamMcpConnectResponse501
+) & {
+  headers: Headers;
+};
+
+export type completePipedreamMcpConnectResponse =
+  | completePipedreamMcpConnectResponseSuccess
+  | completePipedreamMcpConnectResponseError;
+
+export const getCompletePipedreamMcpConnectUrl = () => {
+  return `/pipedream/mcp/connect/complete`;
+};
+
+export const completePipedreamMcpConnect = async (
+  pipedreamConnectCompleteRequest: PipedreamConnectCompleteRequest,
+  options?: RequestInit
+): Promise<completePipedreamMcpConnectResponse> => {
+  const res = await fetch(getCompletePipedreamMcpConnectUrl(), {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(pipedreamConnectCompleteRequest),
+  });
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+
+  const data: completePipedreamMcpConnectResponse['data'] = body
+    ? JSON.parse(body)
+    : {};
+  return {
+    data,
+    status: res.status,
+    headers: res.headers,
+  } as completePipedreamMcpConnectResponse;
+};
+
+/**
  * @summary List the MCP apps connected by the authenticated user.
  */
 export type listPipedreamMcpConnectionsResponse200 = {
@@ -2776,9 +3036,12 @@ export const recoverPipedreamMcpConnection = async (
 };
 
 /**
- * The frontend opens Pipedream's hosted Connect UI with this token; the
-user picks (or is deep-linked into) an app and authorizes it there.
- * @summary Create a short-lived Pipedream Connect token for the authenticated user.
+ * By default, a short-lived Pipedream Connect token: the frontend opens
+Pipedream's hosted Connect UI with it, and the user picks (or is
+deep-linked into) an app and authorizes it there. When the body names an
+app Macro Connect serves and the `macro-connect` rollout is on for the
+user, a Connect URL instead.
+ * @summary Start a connect flow for the authenticated user.
  */
 export type createPipedreamMcpTokenResponse200 = {
   data: PipedreamTokenResponse;
@@ -2821,11 +3084,14 @@ export const getCreatePipedreamMcpTokenUrl = () => {
 };
 
 export const createPipedreamMcpToken = async (
+  createPipedreamMcpTokenBody: CreatePipedreamMcpTokenBody,
   options?: RequestInit
 ): Promise<createPipedreamMcpTokenResponse> => {
   const res = await fetch(getCreatePipedreamMcpTokenUrl(), {
     ...options,
     method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(createPipedreamMcpTokenBody),
   });
 
   const body = [204, 205, 304].includes(res.status) ? null : await res.text();
@@ -3108,4 +3374,172 @@ export const structuredCompletion = async (
     status: res.status,
     headers: res.headers,
   } as structuredCompletionResponse;
+};
+
+/**
+ * @summary Read one public web page as Markdown. Charged to the acting user's AI allowance.
+ */
+export type fetchWebPageResponse200 = {
+  data: WebFetchResponse;
+  status: 200;
+};
+
+export type fetchWebPageResponse400 = {
+  data: WebErrorBody;
+  status: 400;
+};
+
+export type fetchWebPageResponse401 = {
+  data: void;
+  status: 401;
+};
+
+export type fetchWebPageResponse402 = {
+  data: WebErrorBody;
+  status: 402;
+};
+
+export type fetchWebPageResponse422 = {
+  data: WebErrorBody;
+  status: 422;
+};
+
+export type fetchWebPageResponse429 = {
+  data: void;
+  status: 429;
+};
+
+export type fetchWebPageResponse502 = {
+  data: WebErrorBody;
+  status: 502;
+};
+
+export type fetchWebPageResponse503 = {
+  data: WebErrorBody;
+  status: 503;
+};
+
+export type fetchWebPageResponseSuccess = fetchWebPageResponse200 & {
+  headers: Headers;
+};
+export type fetchWebPageResponseError = (
+  | fetchWebPageResponse400
+  | fetchWebPageResponse401
+  | fetchWebPageResponse402
+  | fetchWebPageResponse422
+  | fetchWebPageResponse429
+  | fetchWebPageResponse502
+  | fetchWebPageResponse503
+) & {
+  headers: Headers;
+};
+
+export type fetchWebPageResponse =
+  | fetchWebPageResponseSuccess
+  | fetchWebPageResponseError;
+
+export const getFetchWebPageUrl = () => {
+  return `/web/fetch`;
+};
+
+export const fetchWebPage = async (
+  webFetch: WebFetch,
+  options?: RequestInit
+): Promise<fetchWebPageResponse> => {
+  const res = await fetch(getFetchWebPageUrl(), {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(webFetch),
+  });
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+
+  const data: fetchWebPageResponse['data'] = body ? JSON.parse(body) : {};
+  return {
+    data,
+    status: res.status,
+    headers: res.headers,
+  } as fetchWebPageResponse;
+};
+
+/**
+ * @summary Search the public web. Charged to the acting user's AI allowance.
+ */
+export type searchWebResponse200 = {
+  data: WebSearchResponse;
+  status: 200;
+};
+
+export type searchWebResponse400 = {
+  data: WebErrorBody;
+  status: 400;
+};
+
+export type searchWebResponse401 = {
+  data: void;
+  status: 401;
+};
+
+export type searchWebResponse402 = {
+  data: WebErrorBody;
+  status: 402;
+};
+
+export type searchWebResponse429 = {
+  data: void;
+  status: 429;
+};
+
+export type searchWebResponse502 = {
+  data: WebErrorBody;
+  status: 502;
+};
+
+export type searchWebResponse503 = {
+  data: WebErrorBody;
+  status: 503;
+};
+
+export type searchWebResponseSuccess = searchWebResponse200 & {
+  headers: Headers;
+};
+export type searchWebResponseError = (
+  | searchWebResponse400
+  | searchWebResponse401
+  | searchWebResponse402
+  | searchWebResponse429
+  | searchWebResponse502
+  | searchWebResponse503
+) & {
+  headers: Headers;
+};
+
+export type searchWebResponse =
+  | searchWebResponseSuccess
+  | searchWebResponseError;
+
+export const getSearchWebUrl = () => {
+  return `/web/search`;
+};
+
+export const searchWeb = async (
+  webSearch: WebSearch,
+  options?: RequestInit
+): Promise<searchWebResponse> => {
+  const res = await fetch(getSearchWebUrl(), {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(webSearch),
+  });
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+
+  const data: searchWebResponse['data'] = body ? JSON.parse(body) : {};
+  return {
+    data,
+    status: res.status,
+    headers: res.headers,
+  } as searchWebResponse;
 };

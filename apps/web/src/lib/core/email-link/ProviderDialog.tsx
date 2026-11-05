@@ -6,11 +6,15 @@ import {
   openDialog,
   Panel,
 } from '@ui';
-import { type Owner, Show } from 'solid-js';
+import { type Owner, onCleanup, runWithOwner, Show } from 'solid-js';
+import { OutlookBetaBadge } from './OutlookBetaBadge';
 
 export type EmailProvider = 'GMAIL' | 'OUTLOOK';
 
-/** Shared provider choice for onboarding, empty states and additional inboxes. */
+/**
+ * Shared provider choice for onboarding, empty states and additional inboxes.
+ * Outlook appears only when the server offers it to this user.
+ */
 export function EmailProviderDialog(
   props: ManagedDialogProps & {
     onSelect: (provider: EmailProvider) => void;
@@ -33,8 +37,18 @@ export function EmailProviderDialog(
         </Panel.Header>
         <Panel.Body class="p-6 font-sans flex flex-col gap-3">
           <Dialog.Description class="text-ink-muted text-sm/tight">
-            Connect Gmail, Outlook.com, or an individual Microsoft 365 account.
+            <Show
+              when={props.outlookAvailable}
+              fallback="Connect a Gmail or Google Workspace account."
+            >
+              Connect Gmail, Outlook.com, or an individual Microsoft 365
+              account.
+            </Show>
           </Dialog.Description>
+          <p class="text-ink-muted text-sm/tight">
+            Macro connects an account's email and calendar together, so keep the
+            email permissions checked on the provider's screen.
+          </p>
           <Button
             variant="secondary"
             disabled={props.disabled}
@@ -42,17 +56,15 @@ export function EmailProviderDialog(
           >
             Gmail
           </Button>
-          <Button
-            variant="secondary"
-            disabled={props.disabled || !props.outlookAvailable}
-            onClick={() => props.onSelect('OUTLOOK')}
-          >
-            Outlook / Microsoft 365
-          </Button>
-          <Show when={!props.outlookAvailable}>
-            <p class="text-ink-muted text-sm">
-              New Outlook connections are temporarily unavailable.
-            </p>
+          <Show when={props.outlookAvailable}>
+            <Button
+              variant="secondary"
+              disabled={props.disabled}
+              onClick={() => props.onSelect('OUTLOOK')}
+            >
+              Outlook / Microsoft 365
+              <OutlookBetaBadge />
+            </Button>
           </Show>
           <Button
             variant="ghost"
@@ -67,21 +79,35 @@ export function EmailProviderDialog(
   );
 }
 
-/** Cancellation and owner disposal resolve without starting an OAuth attempt. */
+/**
+ * Cancellation and owner disposal resolve without starting an OAuth attempt.
+ * With Gmail the only provider on offer, there is nothing to choose.
+ */
 export async function selectEmailProvider(
   owner: Owner | null
 ): Promise<EmailProvider | undefined> {
+  // Registered before the read: a caller gone by the time it answers must not
+  // be sent to a consent screen.
+  let disposed = false;
+  if (owner)
+    runWithOwner(owner, () =>
+      onCleanup(() => {
+        disposed = true;
+      })
+    );
   let outlookAvailable = false;
   try {
     outlookAvailable = (await fetchEmailConnectionProviders()).outlook;
   } catch {
     /* Gmail remains available when the availability read fails. */
   }
+  if (disposed) return undefined;
+  if (!outlookAvailable) return 'GMAIL';
   let selected: EmailProvider | undefined;
   const handle = openDialog(
     EmailProviderDialog,
     {
-      outlookAvailable,
+      outlookAvailable: true,
       onSelect: (provider) => {
         selected = provider;
         handle.close();

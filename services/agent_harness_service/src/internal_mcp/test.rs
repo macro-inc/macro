@@ -74,6 +74,9 @@ impl SessionTasks for FixedTasks {
                 title: "Fix the thing".into(),
                 url: format!("https://macro.com/app/task/{task}"),
                 reference: "ENG-42".into(),
+                mention: format!(
+                    r#"<m-document-mention>{{"documentId":"{task}","blockName":"task","documentName":"Fix the thing","blockParams":{{}},"collapsed":false}}</m-document-mention>"#
+                ),
                 pull_request: None,
             })
         })
@@ -174,6 +177,7 @@ async fn each_harness_gets_only_internal_tools_and_writes_only_its_session() {
                 cognition: None,
                 reviews: Arc::new(OnceLock::new()),
                 gate: Arc::new(agent_inmem::domain::tool_gate::UngatedNativeTools),
+                app_url: "https://macro.com".into(),
             },
         );
         assert_eq!(
@@ -293,6 +297,7 @@ async fn each_harness_gets_only_internal_tools_and_writes_only_its_session() {
                 "title": "Fix the thing",
                 "url": "https://macro.com/app/task/MACRO-abc",
                 "reference": "ENG-42",
+                "mention": "<m-document-mention>{\"documentId\":\"MACRO-abc\",\"blockName\":\"task\",\"documentName\":\"Fix the thing\",\"blockParams\":{},\"collapsed\":false}</m-document-mention>",
                 "pull_request": null,
             })
         );
@@ -335,6 +340,15 @@ async fn each_harness_gets_only_internal_tools_and_writes_only_its_session() {
         })).await;
         assert!(called.get("error").is_none(), "{called}");
         assert_ne!(called["result"]["isError"], true, "{called}");
+        let output: serde_json::Value =
+            serde_json::from_str(called["result"]["content"][0]["text"].as_str().unwrap()).unwrap();
+        assert_eq!(
+            output,
+            serde_json::json!({
+                "pull_request_url": "https://github.com/org/repo/pull/1",
+                "session_url": format!("https://macro.com/app/agent/{}", session.id),
+            })
+        );
         assert_eq!(
             repo.get(session.id)
                 .await

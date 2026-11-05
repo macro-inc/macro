@@ -9,6 +9,7 @@ permissions:
   actions: write
   contents: read
   pull-requests: write
+  statuses: write
   id-token: write
 jobs:
   watch:
@@ -59,13 +60,69 @@ jobs:
         # --- authenticated fetch ------------------------------------------------------
         # gh_fetch <sha|ref>: make a commit that is not in this checkout (the base
         # commit, a moved PR head, GitHub's test merge commit) available. Checkouts
-        # here don't persist credentials, so authenticate the way actions/checkout
-        # does. Fails if the commit is unreachable (a force-pushed-away head).
+        # may persist credentials, so clear inherited headers before supplying one
+        # explicitly. Keep Nix build libraries out of the host Git HTTPS helper.
+        # Fails if the commit is unreachable (a force-pushed-away head).
         gh_fetch() {
           local auth
           auth=$(printf 'x-access-token:%s' "$GH_TOKEN" | base64 | tr -d '\n')
-          git -c "http.https://github.com/.extraheader=AUTHORIZATION: basic ${auth}" \
+          LD_LIBRARY_PATH= git -c "http.https://github.com/.extraheader=" \
+            -c "http.https://github.com/.extraheader=AUTHORIZATION: basic ${auth}" \
             fetch -q --depth=1 origin "$1"
+        }
+        # ------------------------------------------------------------------------------
+        # --- Android Play commit statuses ---------------------------------------------
+        # Only workflows that run main's copy may sign in to Google Play, so they
+        # record what they learn as commit statuses on the PR's commits, where the
+        # PR-side jobs (the merge gate, the drift check) read it:
+        #
+        #   android-play/release  set by Android Play Publish on the commit it built:
+        #                         pending just before the production promotion, then
+        #                         success or failure.
+        #   android-play/live     set by Android Release Watch on the PR head once the
+        #                         release is live on production.
+        #
+        # Readers match the descriptions exactly, so they are built only here.
+        # Needs GH_TOKEN and GH_REPO; pr_commit_statuses also PR_NUMBER.
+
+        # android_release_description <version code> <native hash>
+        android_release_description() {
+          printf 'Version code %s (native tree %s)' "$1" "$2"
+        }
+
+        # android_live_description <version code> <native hash> <PR number>
+        android_live_description() {
+          printf 'Version code %s is live on Google Play (native tree %s, PR #%s)' "$1" "$2" "$3"
+        }
+
+        # commit_status <sha> <context>: `<state> <description>` of the commit's latest
+        # status with that context, or nothing.
+        commit_status() {
+          gh api "repos/${GH_REPO}/commits/$1/status" \
+            --jq ".statuses[] | select(.context == \"$2\") | \"\(.state) \(.description)\""
+        }
+
+        # pr_commit_statuses <context>: `<sha> <state> <description>` for each of PR
+        # #PR_NUMBER's last 100 commits that has a status with that context (its
+        # latest one), states in lower case like the REST API's.
+        pr_commit_statuses() {
+          gh api graphql -F owner="${GH_REPO%%/*}" -F name="${GH_REPO#*/}" -F pr="$PR_NUMBER" -F context="$1" \
+            -f query='query($owner: String!, $name: String!, $pr: Int!, $context: String!) {
+              repository(owner: $owner, name: $name) {
+                pullRequest(number: $pr) {
+                  commits(last: 100) { nodes { commit { oid status { context(name: $context) { state description } } } } }
+                }
+              }
+            }' \
+            --jq '.data.repository.pullRequest.commits.nodes[].commit
+              | select(.status.context != null)
+              | "\(.oid) \(.status.context.state | ascii_downcase) \(.status.context.description)"'
+        }
+
+        # set_commit_status <sha> <context> <state> <description>, linking this run.
+        set_commit_status() {
+          gh api "repos/${GH_REPO}/statuses/$1" -f context="$2" -f state="$3" -f description="$4" \
+            -f target_url="${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}" >/dev/null
         }
         # ------------------------------------------------------------------------------
         set -euo pipefail
@@ -73,16 +130,18 @@ jobs:
         # Google Play whether the version code committed at the PR head is live on
         # production, built from the Android native code of the PR's merge result
         # (`merge` is GitHub's test merge commit; the gate hashes the same). When it
-        # is, and the PR's latest `Android Native Check` job (of the web app PR checks
-        # run) failed — it fails until the release is live — re-run that job so the
-        # gate, and the `Web App Status Check` that depends on it, go green without
-        # anyone clicking "Re-run". GH_TOKEN needs actions:write + pull-requests:write;
-        # GOOGLE_PLAY_ACCESS_TOKEN the androidpublisher scope.
+        # is, mark the PR head `android-play/live` (the gate cannot ask Play, so it
+        # reads that status), and if the PR's latest `Android Native Check` job (of
+        # the web app PR checks run) failed — it fails until the release is live —
+        # re-run that job so the gate, and the `Web App Status Check` that depends on
+        # it, go green without anyone clicking "Re-run". GH_TOKEN needs actions:write,
+        # pull-requests:write and statuses:write; GOOGLE_PLAY_ACCESS_TOKEN the
+        # androidpublisher scope.
         cd apps/web
         conf_path="apps/web/tauri/src-tauri/tauri.android.conf.json"
 
         check_pr() {
-          local pr=$1 number sha merge native_hash version_code run run_id status run_url job conclusion job_id reruns
+          local pr=$1 number sha merge native_hash version_code live run run_id status run_url job conclusion job_id reruns
           number=$(jq -r '.number' <<<"$pr")
           sha=$(jq -r '.sha' <<<"$pr")
           merge=$(jq -r '.merge // empty' <<<"$pr")
@@ -102,6 +161,13 @@ jobs:
             return 0
           fi
           echo "  live on Google Play production"
+          live=$(android_live_description "$version_code" "$native_hash" "$number")
+          if [[ "$(commit_status "$sha" android-play/live)" == "success ${live}" ]]; then
+            echo "  ${sha:0:10} already marked android-play/live"
+          else
+            set_commit_status "$sha" android-play/live success "$live"
+            echo "  marked ${sha:0:10} android-play/live"
+          fi
 
           run=$(gh run list --workflow web-app-check-main.yml --commit "$sha" \
             --json databaseId,status,url --limit 1 --jq '.[0] // empty')

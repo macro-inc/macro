@@ -11,6 +11,9 @@ between the sandbox and the rest of the product.
 
 - `src/domain/service.rs` + `src/domain/ports.rs`: the harness service and
   the ports every runtime/container provider implements.
+- `src/domain/model/coding_preferences/`: workflows injected into coding
+  sessions (create-tasks, open-pull-requests). Task mentions use the lexical
+  `<m-document-mention>` chip.
 - `src/domain/codex.rs`: per-runtime session setup.
 - `src/outbound/sidecar.rs` + `sidecar_pump.rs`: the container sidecar
   transport that speaks `agent_runtime_protocol`.
@@ -19,6 +22,8 @@ between the sandbox and the rest of the product.
 - `src/outbound/cursor/manager.rs`: compose Cursor sessions, including public
   prompt-image fetching through the `cursor_cloud_agents` image-fetcher port.
 - `src/domain/trigger_router.rs`: routes an incoming trigger to a session.
+- `src/domain/runtime_closed.rs`: the turn observer that hands a runtime's
+  `_session/closed` (a deliberate close, never a disconnect) to auto-archive.
 - `src/inbound/kafka.rs`: trigger ingestion.
 - `src/domain/mode_choice.rs` + `src/inbound/mode_choice.rs`: the agent
   composer's Auto mode, `POST /agent-mode-choice`, which asks Clef Flash
@@ -64,6 +69,15 @@ Remember successful announcements. After 24 hours, recover replies without a
 persisted completion at most hourly, preserving late answers after lost callbacks.
 Persisted completions bypass this backoff; direct completion handling is immediate.
 
+External runtimes bind sessions lazily. On each dial `RuntimeRegistry` has the
+connection run `initialize` (shared with every session through its handshake)
+and ACP `session/list`, and `AgentHarnessService::reattach_live_sessions` runs
+`HarnessCommand::Reattach` for the listed sessions bound to that harness,
+restoring each (`session/load` or `session/resume`) without a prompt, then
+dispatching whatever its durable queue still holds when no turn is running;
+attached, archived and managed sessions are skipped. macrod's herdr-acp lists native
+sessions whose Herdr agent still runs.
+
 Durable system events use the `agent_session` outbox, distinct from the user
 push notifications planned in `domain/notifications.rs`. The serialized session
 worker drains waking batches after a turn; quiet batches join a real prompt.
@@ -85,6 +99,19 @@ wakes; interrupted quiet batches return to the next real prompt.
 - `cargo nextest run -p agent_harness --lib --test-threads=2` (`SQLX_OFFLINE`
   unset). Use CI's process isolation for the full database-backed suite so each
   test has its own process and runtime.
+
+## Gotchas
+
+- A session's first prompt carries static files from the mentioning message
+  and the rest of its thread (mention first, then root and replies), capped
+  at 8 and deduped by file id; follow-ups carry only their own files.
+  Background channel messages are not attached. `trigger_router` fills each
+  context attachment's `url` from `StaticFileLinks`, and `<m-agent-context>`
+  lists them per message; ACP `resource_link`s are what vision models fetch.
+- Every composed prompt's `<m-agent-context>` states `<current_time>` in the
+  sender's (else owner's) primary calendar time zone, via the
+  `UserTimeZones` port, or UTC when unknown. Models have no other source
+  for the date, so never drop it from a composition path.
 
 ## Related
 

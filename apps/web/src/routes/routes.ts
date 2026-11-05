@@ -11,9 +11,14 @@ import { CALENDAR_VIEW_ID } from '@app/features/calendar-view/types';
 import { changesSearch } from '@app/features/changes/changes-search';
 import { mobileSearchRouteStateSchema } from '@app/features/command/mobile/mobile-search-route-state';
 import {
+  crmItemBlockType,
+  crmItemParams,
+  crmItemStateSchema,
   crmPipelineParams,
   crmPipelineReference,
   crmRecordClaim,
+  crmRecordFileItemParams,
+  crmRecordItemParams,
   crmRecordParams,
   crmRecordReference,
   crmRecordTrailSchema,
@@ -106,6 +111,27 @@ export const signupRoute = defineRoute({
   externalSearch: '*',
 });
 
+/** Signup for an AI agent: Google or email only, then its SDK token. */
+export const agentSignupRoute = defineRoute({
+  id: 'agent-signup',
+  path: 'signup/agent',
+  externalSearch: '*',
+});
+
+/** A new agent's SDK token and first steps, as a markdown page. */
+export const agentSetupRoute = defineRoute({
+  id: 'agent-setup',
+  path: 'agent-setup',
+  externalSearch: '*',
+});
+
+/** Confirms an agent saved its token, then opens the app. */
+export const agentSetupDoneRoute = defineRoute({
+  id: 'agent-setup-done',
+  path: 'agent-setup/done',
+  externalSearch: '*',
+});
+
 export const emailSignupCallbackRoute = defineRoute({
   id: 'email-signup-callback',
   path: EMAIL_SIGNUP_CALLBACK_PATH,
@@ -164,6 +190,13 @@ export const inviteRoute = defineRoute({
 export const internalInviteLinksRoute = defineRoute({
   id: 'internal-invite-links',
   path: 'internal/invite-links',
+  externalSearch: '*',
+});
+
+/** Macro staff only: set the status banner every user sees. */
+export const internalSystemStatusRoute = defineRoute({
+  id: 'internal-system-status',
+  path: 'internal/status',
   externalSearch: '*',
 });
 
@@ -464,6 +497,13 @@ export const activityRoute = defineRoute({
   claim: () => ({ namespace: 'component', id: 'activity' }),
 });
 
+export const notificationsRoute = defineRoute({
+  id: 'view-notifications',
+  path: 'notifications',
+  search: '*' as const,
+  claim: () => ({ namespace: 'component', id: 'notifications' }),
+});
+
 export const routinesRoute = defineRoute({
   id: ROUTINES_ROUTE_ID,
   path: 'routines',
@@ -494,6 +534,14 @@ export const agentsViewRoute = defineRoute({
   search: '*' as const,
   externalSearch: ['createAgent'],
   claim: () => ({ namespace: 'component', id: 'agents' }),
+});
+
+/** A new email, composed beside the list on desktop. */
+export const emailComposeRoute = defineRoute({
+  id: 'mail-compose',
+  path: 'new',
+  // Each open is a fresh composer, even in a Mail view already composing.
+  remountKey: (_params, { entryId }) => entryId,
 });
 
 export const emailThreadRoute = defineRoute({
@@ -675,6 +723,50 @@ export const crmPipelineRecordRoute = defineRoute({
   toReference: crmRecordReference,
 });
 
+/** An item opened from a Customers activity view or record section. */
+export const crmItemRoute = defineRoute({
+  id: 'companies-item',
+  path: ':itemType/:itemId/:itemFileType?/:itemSubType?',
+  params: crmItemParams,
+  state: crmItemStateSchema,
+  claim: (params) => ({
+    namespace: 'block',
+    id: `${driveDocumentBlockType(crmItemBlockType(params))}:${params.itemId}`,
+  }),
+  toReference: (params) =>
+    uuidRouteReference(params.itemId, crmItemBlockType(params)),
+});
+
+export const crmPipelineItemRoute = defineRoute({
+  ...crmItemRoute,
+  id: 'companies-pipeline-item',
+});
+
+/** A typed record section already identifies the selected item's renderer. */
+export const crmRecordItemRoute = defineRoute({
+  ...crmItemRoute,
+  id: 'companies-record-item',
+  path: ':recordType/:recordId/:section/:itemId',
+  params: crmRecordItemParams,
+});
+
+export const crmPipelineRecordItemRoute = defineRoute({
+  ...crmRecordItemRoute,
+  id: 'companies-pipeline-record-item',
+});
+
+export const crmRecordFileItemRoute = defineRoute({
+  ...crmItemRoute,
+  id: 'companies-record-file-item',
+  path: ':recordType/:recordId/:section?/:itemType/:itemId/:itemFileType?/:itemSubType?',
+  params: crmRecordFileItemParams,
+});
+
+export const crmPipelineRecordFileItemRoute = defineRoute({
+  ...crmRecordFileItemRoute,
+  id: 'companies-pipeline-record-file-item',
+});
+
 export const crmPipelineRoute = defineRoute({
   id: 'companies-pipeline',
   path: 'pipeline/:pipelineId',
@@ -742,6 +834,7 @@ const debugComponentIds = [
         'dynamic-ui',
         'agent-ui',
         'agent-replay',
+        'agent-progress',
         'agent-changes-ui',
         'diff-view-ui',
       ]

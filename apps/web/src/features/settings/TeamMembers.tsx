@@ -1,10 +1,16 @@
 import { ListSkeleton } from '@app/components/view-shell/ListSkeleton';
 import { SearchBar } from '@app/components/view-shell/SearchBar';
 import { useFeatureFlag } from '@app/lib/analytics/posthog';
+import { AgentTag } from '@core/component/AgentTag';
 import { UserIcon } from '@core/component/UserIcon';
 import { enableAiUsageBilling } from '@core/constant/featureFlags';
 import { useUserId } from '@core/context/user';
-import { getDisplayName, macroIdToEmail, tryMacroId } from '@core/user';
+import {
+  getDisplayName,
+  isAgentAccount,
+  macroIdToEmail,
+  tryMacroId,
+} from '@core/user';
 import { debouncedDependent } from '@core/util/debounce';
 import { fuzzyFilter } from '@core/util/fuzzy';
 import CaretDownIcon from '@icon/system/regular/caret-down.svg';
@@ -156,11 +162,16 @@ function MemberRow(props: {
           <UserIcon id={props.member.user_id} isDeleted={false} size="lg" />
         </div>
         <div class="min-w-0 flex-1">
-          <div class="text-sm font-medium text-ink truncate">
-            {displayName()}
-            {props.isCurrentUser && (
-              <span class="text-ink-muted font-normal"> (you)</span>
-            )}
+          <div class="flex items-center gap-1.5 min-w-0">
+            <div class="text-sm font-medium text-ink truncate">
+              {displayName()}
+              {props.isCurrentUser && (
+                <span class="text-ink-muted font-normal"> (you)</span>
+              )}
+            </div>
+            <Show when={isAgentAccount(tryMacroId(props.member.user_id))}>
+              <AgentTag />
+            </Show>
           </div>
           <Show when={showEmail()}>
             <div class="text-xs text-ink-muted truncate">{email()}</div>
@@ -383,7 +394,7 @@ export function TeamMembers(props: { team: TeamSummary }) {
             {/* Inverted (black on light, white on dark) so inviting is the
                 page's primary action. */}
             <Button
-              variant="neutral"
+              variant="primary"
               class="text-[15px]"
               onClick={() => setShowInviteModal(true)}
             >

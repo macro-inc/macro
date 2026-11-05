@@ -49,7 +49,8 @@ mod threads;
 // auth based constants
 pub const MACRO_INTERNAL_USER_ID: &str = "macro|INTERNAL@macro.com";
 
-pub async fn setup_and_serve(state: ApiContext) -> anyhow::Result<()> {
+// `pub(crate)`, not `pub`: see `server::run`.
+pub(crate) async fn setup_and_serve(state: ApiContext) -> anyhow::Result<()> {
     let sync_sessions = state.sync_sessions.clone();
     let app = api_router(state.clone())
         .layer(
@@ -61,7 +62,12 @@ pub async fn setup_and_serve(state: ApiContext) -> anyhow::Result<()> {
                     },
                     validate_api_version,
                 ))
-                .layer(macro_cors::cors_layer().expose_headers([axum::http::header::RETRY_AFTER]))
+                .layer(
+                    macro_cors::cors_layer_with_headers(vec![axum::http::HeaderName::from_static(
+                        complete_graph::MAIL_CACHE_PROFILE_HEADER,
+                    )])
+                    .expose_headers([axum::http::header::RETRY_AFTER]),
+                )
                 .layer(CompressionLayer::new().gzip(true)),
         )
         // The health router is attached here so we don't attach the logging middleware to it
@@ -251,7 +257,11 @@ fn api_router(state: ApiContext) -> Router {
         ))
         .nest(
             "/channels",
-            channels::inbound::axum_router::channels_router(state.channels_state.clone()),
+            channels::inbound::axum_router::channels_router(state.channels_state.clone()).merge(
+                channels::inbound::axum_router::channel_access_requests_router(
+                    state.channels_state.clone(),
+                ),
+            ),
         )
         .nest(
             "/messages",

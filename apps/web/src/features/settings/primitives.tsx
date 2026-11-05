@@ -358,6 +358,8 @@ export function IntegrationRow(props: {
   /** The brand icon, rendered at its native size inside a fixed slot. */
   icon?: JSX.Element;
   title: JSX.Element;
+  /** Shown right after the title, e.g. a Beta badge. */
+  badge?: JSX.Element;
   description?: JSX.Element;
   /** Proven facts under the description (e.g. connected accounts). Wraps. */
   facts?: JSX.Element;
@@ -380,8 +382,15 @@ export function IntegrationRow(props: {
           {props.icon}
         </div>
       </Show>
-      <div class="flex-1 min-w-0 flex flex-col gap-0.5">
-        <div class="flex items-center gap-2 min-w-0">
+      {/* The basis wraps actions below the text on narrow screens. */}
+      <div class="flex-1 basis-48 min-w-0 flex flex-col gap-0.5">
+        {/* With a badge, narrow rows wrap instead of truncating the title. */}
+        <div
+          class={cn(
+            'flex items-center gap-2 min-w-0',
+            props.badge && 'flex-wrap gap-y-1'
+          )}
+        >
           <div
             class={cn(
               'text-sm font-medium truncate',
@@ -390,6 +399,7 @@ export function IntegrationRow(props: {
           >
             {props.title}
           </div>
+          {props.badge}
           <Show when={props.status}>{props.status}</Show>
         </div>
         <Show when={props.description}>

@@ -26,17 +26,18 @@ ${notify({ pages: true })}`,
 });
 
 // https://us5.datadoghq.com/monitors/4178105
+// No warning: SES has reported a flat 0.47% complaint rate since at least
+// 2026-10-15 while recording no complaints, so a 0.1% warning never cleared.
 adopted('ses-complaint-rate', {
   name: '[SES] Complaint Rate Increasing',
   type: 'query alert',
   query:
     'avg(last_1h):avg:aws.ses.reputation_complaint_rate{aws_account:569036502058} > 0.005',
-  message: `SES Bounce Rate Increasing. Action needs to be taken to prevent account suspension.
+  message: `SES complaint rate is {{value}}. SES may pause sending at 0.5%.
 
 ${notify({ pages: true })}`,
   monitorThresholds: {
     critical: '0.005',
-    warning: '0.001',
   },
   onMissingData: 'default',
   notifyAudit: false,

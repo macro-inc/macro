@@ -11,13 +11,19 @@ the gateway `/email` prefix.
 - `src/main.rs` / `src/lib.rs`: entrypoint and `run()`.
 - `src/api.rs` + `src/api/context.rs`: HTTP surface and `ApiContext`.
 - `src/pubsub/`: SQS pubsub workers, one module per concern — `inbox_sync`,
-  `link_manager` (Gmail re-subscribe), `scheduled` (scheduled sends),
+  `link_manager` (Gmail re-subscribe, health checks, inbox deletion),
+  `scheduled` (scheduled sends),
   `sfs_uploader`/`sfs_deleter` (attachment storage), `gmail_ops`, `backfill`,
   `crm_cleanup`, `worker_lifecycle`.
 - `src/backfill_outbox.rs`, `src/backfill_init_service.rs`,
   `src/backfill_completion_service.rs`: Gmail history backfill orchestration.
 - `src/crm_enrichment_worker.rs`: periodic pass that resolves pending CRM
-  company directory entries (names/logos) left by binaries without a resolver.
+  company directory entries (names/logos) left by binaries without a resolver,
+  using the public-homepage `UnfurlCompanyMetadataResolver` wired in
+  `pubsub_workers`. It requires no enrichment-provider key or selection flag.
+- `src/mailbox_sync_worker.rs`: the Outlook mailbox loops (sync, projections,
+  contacts, drafts, commands, settings, watches) and `run_health`, the
+  per-minute Outlook health snapshot.
 - `src/bin/`: standalone binaries — `pubsub_workers` (the queue consumer
   process), plus one-off backfill/cleanup scripts.
 
@@ -153,6 +159,23 @@ the gateway `/email` prefix.
 - Header addresses that Gmail accepts can fail `MacroUserIdStr::try_from_email`.
   Skip the bad address with a WARN that omits it (the parse error echoes it)
   instead of failing the step; see `pubsub::util::build_contact_connections`.
+- The `link_manager` worker receives one message at a time and renews its
+  visibility while processing. Don't raise its receive batch: messages queued
+  behind a long mailbox purge would be redelivered and purged twice.
+  `PurgePacing` (`email_db_client::links::delete`) sets the purge's write rate.
+- `run_health` runs in every `pubsub_workers` task: each flushes its in-memory
+  Outlook import counts every minute, and the task that wins the Redis key
+  `outlook:health_snapshot` logs one "outlook mailbox health" line per Outlook
+  mailbox. Its fields, the `outlook.sync.*`, `outlook.graph_request` and
+  `outlook.token.acquire` spans and the import lifecycle logs are read by the
+  Outlook sync monitors in `infra/stacks/monitoring`; rename them only
+  together. Loops whose domain service logs its own deferrals use `reported`,
+  the others `record`, which logs gate refusals at DEBUG.
+- `GET /opens/{token}` is public and must return the same uncacheable GIF for
+  every token. Gmail sends add the pixel only to the provider copy in
+  `outbound/scheduled_delivery.rs`; Outlook adds it through the materializer
+  wrapper in the `pubsub_workers` binary. Pixels use `EmailServiceUrl`, so the
+  local Docker stack embeds an in-network host recipients cannot load.
 
 ## Related
 

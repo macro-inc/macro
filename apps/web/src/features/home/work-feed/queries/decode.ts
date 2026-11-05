@@ -1,19 +1,13 @@
 import type { UnifiedNotification } from '@notifications/types';
-import {
-  isDisplayableSoupItem,
-  mapApiSoupItemToEntity,
-} from '@queries/soup/transform-utils';
+import { attentionFeedSoupItem } from '@queries/attention-feed/attention-feed-entity';
+import { mapApiSoupItemToEntity } from '@queries/soup/transform-utils';
 import type {
   WorkFeedItemState as GraphqlWorkFeedItemState,
   WorkFeedItemType as GraphqlWorkFeedItemType,
   WorkFeedEntryFieldsFragment,
   WorkFeedScopeInput,
 } from '@service-storage/graphql/generated/graphql';
-import {
-  type GraphqlSoupItem,
-  mapGraphqlNotification,
-  mapGraphqlSoupItem,
-} from '@service-storage/graphql-soup';
+import { mapGraphqlNotification } from '@service-storage/graphql-soup';
 import { match } from 'ts-pattern';
 import type {
   WorkFeedEntry,
@@ -63,13 +57,8 @@ export function decodeWorkFeedEntry(
 ): WorkFeedEntry | null {
   const { item } = entry;
   const notifications = stackNotifications(item);
-  // The stacks replace the entity's own notification edge, which would
-  // read every notification of a channel, including its threads'.
-  const soupItem = mapGraphqlSoupItem({
-    ...item.entity,
-    notifications: [],
-  } as GraphqlSoupItem);
-  if (!soupItem || !isDisplayableSoupItem(soupItem)) return null;
+  const soupItem = attentionFeedSoupItem(item.entity);
+  if (!soupItem) return null;
 
   const sortAt = toTimestamp(entry.sortAt);
   if (sortAt === undefined) return null;
@@ -107,6 +96,7 @@ const toGraphqlItemType = (type: WorkFeedItemType): GraphqlWorkFeedItemType =>
     .with('task', () => 'TASK' as const)
     .with('chat', () => 'CHAT' as const)
     .with('project', () => 'PROJECT' as const)
+    .with('initiative', () => 'INITIATIVE' as const)
     .with('email', () => 'EMAIL' as const)
     .with('channel', () => 'CHANNEL' as const)
     .with('channel_thread', () => 'CHANNEL_THREAD' as const)

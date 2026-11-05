@@ -4,9 +4,10 @@
 // remove them freely once the rollout settles.
 //
 // Thresholds sit above the 7 days before the 2026-10-11 ramp: none of these
-// would have fired in that week except where noted. Volume, gateway
-// connections and task count were raised on 2026-10-29 above the 7 days
-// before it, after the rollout outgrew the pre-ramp numbers. PostHog covers
+// would have fired in that week except where noted. Gateway connections and
+// task count were raised on 2026-10-29 above the 7 days before it, after the
+// rollout outgrew the pre-ramp numbers; request volume and websocket upgrades
+// were raised again on 2026-11-04 from post-rollout traffic. PostHog covers
 // the client side (exceptions, browser cache and draft-queue logs, usage) on
 // https://us.posthog.com/project/299018/dashboard/2198651.
 //
@@ -45,6 +46,8 @@ function rolloutMonitor(
     description: string;
     critical: string;
     warning: string;
+    criticalRecovery?: string;
+    warningRecovery?: string;
     service: string;
     severe?: boolean;
   }
@@ -62,7 +65,12 @@ ${ROLLOUT_CONTEXT}
 ${notify({ pages: args.severe ?? false })}`,
       tags: ['env:prod', `service:${args.service}`, 'rollout:graphql-soup'],
       priority: args.severe ? '2' : '3',
-      monitorThresholds: { critical: args.critical, warning: args.warning },
+      monitorThresholds: {
+        critical: args.critical,
+        warning: args.warning,
+        criticalRecovery: args.criticalRecovery,
+        warningRecovery: args.warningRecovery,
+      },
       renotifyInterval: RENOTIFY_MINUTES,
       // APM and log counts are sparse at night; a full window would skip
       // evaluations, and an empty count must read as zero rather than alert.
@@ -178,27 +186,37 @@ rolloutMonitor('graphql-soup-unauthenticated-mutations', {
 });
 
 // Volume. There is no rate limit on the endpoint, so a client retry loop or
-// reconnect herd shows up here before it shows up as errors. Over the 7 days
-// to 2026-10-29 the average was 16k requests per 15 minutes, peak 42k.
+// reconnect herd shows up here before it shows up as errors. Thresholds sit
+// at about 1.5x and 2x the 15-minute peaks of the 7 days to 2026-11-04, after
+// the flag reached 100% and traffic levelled off; none would have fired in
+// the 14 days to then. Recovery thresholds keep a value hovering at a
+// threshold from flapping. Retune if the client polls or reconnects more.
 rolloutMonitor('graphql-soup-request-volume', {
   name: '[PROD] GraphQL soup: request volume surge',
   type: 'query alert',
-  query: `sum(last_15m):sum:trace.http.server.request.hits{${GRAPHQL}}.as_count() > 50000`,
+  query: `sum(last_15m):sum:trace.http.server.request.hits{${GRAPHQL}}.as_count() > 100000`,
   description:
-    'POST /dss/items/soup/graphql received {{value}} requests in 15 minutes (normal is about 16k, weekly peak 42k). Check for a client retry loop before scaling.',
-  critical: '50000',
-  warning: '45000',
+    'POST /dss/items/soup/graphql received {{value}} requests in 15 minutes (weekday median about 27k, US daytime 39k-46k, 7-day peak 51k). Roughly double the daytime rate points to a client retry loop; check it before scaling.',
+  critical: '100000',
+  criticalRecovery: '80000',
+  warning: '75000',
+  warningRecovery: '60000',
   service: 'cloud-storage-service',
 });
 
+// Each deploy drains tasks and their clients reconnect at once: 130-340
+// upgrades in a minute, up to 733 in 15 minutes. Clients also reconnect at
+// about minute 27 of every hour (65-120 in that minute).
 rolloutMonitor('graphql-soup-websocket-surge', {
   name: '[PROD] GraphQL soup: websocket upgrade surge',
   type: 'query alert',
-  query: `sum(last_15m):sum:trace.http.server.request.hits{${GRAPHQL_WS}}.as_count() > 300`,
+  query: `sum(last_15m):sum:trace.http.server.request.hits{${GRAPHQL_WS}}.as_count() > 1800`,
   description:
-    'GraphQL websocket upgrades reached {{value}} in 15 minutes (pre-rollout max was 168). A spike after a deploy or network blip is a reconnect herd.',
-  critical: '300',
-  warning: '150',
+    'GraphQL websocket upgrades reached {{value}} in 15 minutes (normal 100-460, 7-day peak 733 when a deploy drained tasks). Above that, clients are reconnecting in a loop rather than once.',
+  critical: '1800',
+  criticalRecovery: '1400',
+  warning: '1200',
+  warningRecovery: '950',
   service: 'cloud-storage-service',
 });
 
@@ -282,11 +300,11 @@ rolloutMonitor('graphql-soup-db-cpu', {
 rolloutMonitor('graphql-soup-alb-bytes', {
   name: '[PROD] GraphQL soup: prod-gateway-alb processed bytes surge',
   type: 'query alert',
-  query: `sum(last_15m):sum:aws.applicationelb.processed_bytes{${GATEWAY_ALB}}.as_count() > 3000000000`,
+  query: `sum(last_15m):sum:aws.applicationelb.processed_bytes{${GATEWAY_ALB}}.as_count() > 8000000000`,
   description:
-    'prod-gateway-alb processed {{value}} bytes in 15 minutes (pre-rollout max was 1.9 GB). GraphQL request bodies are unbounded.',
-  critical: '3000000000',
-  warning: '1500000000',
+    'prod-gateway-alb processed {{value}} bytes in 15 minutes (the 7 days to 2026-10-29 averaged 0.7 GB and peaked at 4.1 GB). GraphQL request bodies are unbounded.',
+  critical: '8000000000',
+  warning: '6000000000',
   service: 'prod-gateway-alb',
 });
 

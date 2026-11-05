@@ -13,7 +13,7 @@ adopted('web-app-errors-staging', {
     'rum("@type:error @application.name:\\"Web App\\" env:production @view.url_host:staging.macro.com").rollup("count").last("5m") > 90',
   message: `The staging web app recorded {{value}} errors in 5 minutes.
 
-${notify({ pages: false })}`,
+${notify({ pages: false, environment: 'staging' })}`,
   monitorThresholds: {
     critical: '90',
     warning: '50',

@@ -17,6 +17,9 @@ const mocks = vi.hoisted(() => ({
   fetchServers: vi.fn(),
   reservePopup: vi.fn(),
   assignUrl: vi.fn(),
+  linkGithub: vi.fn(),
+  completeConnect: vi.fn(),
+  macroConnect: false,
   overlays: [] as { app_slug: string; server_url: string }[],
   overlaysUnavailable: false,
   cachedOverlays: undefined as
@@ -24,6 +27,13 @@ const mocks = vi.hoisted(() => ({
     | undefined,
 }));
 vi.mock('@core/util/platform', () => ({ isTauri: () => mocks.native }));
+vi.mock('@core/constant/featureFlags', () => ({
+  macroConnect: { key: 'macro-connect' },
+  isFeatureEnabled: () => mocks.macroConnect,
+}));
+vi.mock('@core/auth/authorize-github', () => ({
+  linkGithubAccount: mocks.linkGithub,
+}));
 vi.mock('@core/pipedream/connect-native', () => ({
   openNativePipedreamConnectUI: mocks.openNative,
 }));
@@ -54,10 +64,11 @@ vi.mock('@service-cognition/client', () => ({
     completePipedreamConnection: mocks.complete,
     startMcpAuth: mocks.startAuth,
     recoverPipedreamConnection: mocks.recover,
+    completeMacroConnect: mocks.completeConnect,
   },
 }));
 
-import { connectPipedreamApp } from './pipedream-connectors';
+import { connectPipedreamApp, overlaidAppSlug } from './pipedream-connectors';
 
 beforeEach(() => {
   vi.clearAllMocks();
@@ -66,6 +77,7 @@ beforeEach(() => {
   mocks.overlays = [];
   mocks.overlaysUnavailable = false;
   mocks.cachedOverlays = undefined;
+  mocks.macroConnect = false;
   mocks.token.mockImplementation(async () => ok({ token: 'fixture' }));
   mocks.open.mockImplementation(() => ({ close: mocks.close }));
   mocks.openNative.mockImplementation(() => ({ close: mocks.close }));
@@ -262,6 +274,35 @@ describe('overlaid apps connect through their own MCP server', () => {
   });
 });
 
+describe('GitHub connects through the account link', () => {
+  const github = {
+    app_slug: 'github',
+    server_url: 'https://api.githubcopilot.com/mcp',
+  };
+
+  beforeEach(() => {
+    mocks.cachedOverlays = [github];
+  });
+
+  it('links the account instead of authorizing the server or Pipedream', async () => {
+    mocks.linkGithub.mockResolvedValue(true);
+
+    expect(await connectPipedreamApp({ appSlug: 'github' })).toBe('connected');
+    expect(mocks.linkGithub).toHaveBeenCalled();
+    expect(mocks.reservePopup).not.toHaveBeenCalled();
+    expect(mocks.startAuth).not.toHaveBeenCalled();
+    expect(mocks.token).not.toHaveBeenCalled();
+    expect(mocks.invalidate).toHaveBeenCalled();
+  });
+
+  it('reports closed when the page leaves for GitHub or the link fails', async () => {
+    mocks.linkGithub.mockResolvedValue(false);
+
+    expect(await connectPipedreamApp({ appSlug: 'github' })).toBe('closed');
+    expect(mocks.startAuth).not.toHaveBeenCalled();
+  });
+});
+
 describe('a backend without overlays', () => {
   it('connects through Pipedream when the overlay list cannot be read', async () => {
     mocks.overlaysUnavailable = true;
@@ -269,5 +310,89 @@ describe('a backend without overlays', () => {
     event({ type: 'close' });
     expect(await pending).toBe('closed');
     expect(mocks.token).toHaveBeenCalledOnce();
+  });
+});
+
+describe('overlaidAppSlug', () => {
+  const overlays = [
+    { app_slug: 'sentry', server_url: 'https://mcp.sentry.dev/mcp' },
+  ];
+  it('matches a connected server to its catalog app despite a trailing slash', () => {
+    expect(overlaidAppSlug(overlays, 'https://mcp.sentry.dev/mcp/')).toBe(
+      'sentry'
+    );
+  });
+  it('leaves custom servers unmatched', () => {
+    expect(
+      overlaidAppSlug(overlays, 'https://example.com/mcp')
+    ).toBeUndefined();
+  });
+});
+
+describe('apps Macro Connect serves', () => {
+  const popup = { closed: false, close: vi.fn() };
+  const notYet = err([{ code: 'NOT_FOUND', message: 'Resource not found' }]);
+
+  beforeEach(() => {
+    vi.useFakeTimers();
+    popup.closed = false;
+    mocks.macroConnect = true;
+    mocks.reservePopup.mockReturnValue(popup);
+    mocks.token.mockResolvedValue(
+      ok({ provider: 'connect', connect_url: 'https://connect.test/c/tok' })
+    );
+    return () => vi.useRealTimers();
+  });
+
+  it('opens Connect in the reserved tab and records the app once Connect confirms it', async () => {
+    mocks.completeConnect
+      .mockResolvedValueOnce(notYet)
+      .mockResolvedValueOnce(
+        ok({ app_slug: 'linear', server_name: 'Linear', enabled: true })
+      );
+
+    const pending = connectPipedreamApp({ appSlug: 'linear' });
+    await vi.runAllTimersAsync();
+
+    await expect(pending).resolves.toBe('connected');
+    expect(mocks.token).toHaveBeenCalledWith({ app_slug: 'linear' });
+    expect(mocks.assignUrl).toHaveBeenCalledWith(
+      popup,
+      'https://connect.test/c/tok'
+    );
+    expect(mocks.completeConnect).toHaveBeenCalledTimes(2);
+    expect(mocks.open).not.toHaveBeenCalled();
+    expect(mocks.setData).toHaveBeenCalled();
+  });
+
+  it('reports closed when the tab closes before Connect has the app', async () => {
+    mocks.completeConnect.mockImplementation(async () => {
+      popup.closed = true;
+      return notYet;
+    });
+
+    const pending = connectPipedreamApp({ appSlug: 'linear' });
+    await vi.runAllTimersAsync();
+
+    await expect(pending).resolves.toBe('closed');
+    expect(mocks.setData).not.toHaveBeenCalled();
+  });
+
+  it('closes the reserved tab and uses Pipedream when the backend answers with a token', async () => {
+    mocks.token.mockResolvedValue(ok({ provider: 'pipedream', token: 'pd' }));
+    mocks.open.mockImplementation(({ onEvent }) => {
+      onEvent({ type: 'close' });
+      return { close: mocks.close };
+    });
+
+    const pending = connectPipedreamApp({ appSlug: 'linear' });
+    await vi.runAllTimersAsync();
+
+    await expect(pending).resolves.toBe('closed');
+    expect(popup.close).toHaveBeenCalled();
+    expect(mocks.open).toHaveBeenCalledWith(
+      expect.objectContaining({ token: 'pd', app: 'linear' })
+    );
+    expect(mocks.completeConnect).not.toHaveBeenCalled();
   });
 });

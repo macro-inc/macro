@@ -22,7 +22,7 @@ type LabelProps = ComponentProps<typeof KobalteCheckbox.Label>;
 
 const CheckboxSizeContext = createContext((): CheckboxSize => 'md');
 const checkboxVariants = createVariants(
-  'inline-grid shrink-0 place-items-center rounded border border-border-primary bg-transparent text-button-primary-ink data-checked:border-accent data-checked:bg-accent data-indeterminate:border-accent data-indeterminate:bg-accent',
+  'inline-grid shrink-0 place-items-center rounded border border-border-primary bg-transparent text-button-accent-ink data-checked:border-accent data-checked:bg-accent data-indeterminate:border-accent data-indeterminate:bg-accent',
   {
     size: {
       sm: 'size-3.5',
@@ -43,6 +43,7 @@ function CheckboxMark(props: {
   checked: boolean;
   indeterminate: boolean;
   size: CheckboxSize;
+  animate?: boolean;
 }) {
   return (
     <svg
@@ -60,14 +61,22 @@ function CheckboxMark(props: {
         pathLength="1"
         stroke-dasharray="1 2"
         stroke-dashoffset={props.checked && !props.indeterminate ? 0 : 1.2}
-        class="transition-[stroke-dashoffset] duration-100 ease-out motion-reduce:transition-none"
+        class={
+          props.animate === false
+            ? undefined
+            : 'transition-[stroke-dashoffset] duration-100 ease-out motion-reduce:transition-none'
+        }
       />
       <path
         d="M2.5 6h7"
         pathLength="1"
         stroke-dasharray="1 2"
         stroke-dashoffset={props.indeterminate ? 0 : 1.2}
-        class="transition-[stroke-dashoffset] duration-100 ease-out motion-reduce:transition-none"
+        class={
+          props.animate === false
+            ? undefined
+            : 'transition-[stroke-dashoffset] duration-100 ease-out motion-reduce:transition-none'
+        }
       />
     </svg>
   );
@@ -103,7 +112,7 @@ function CheckboxControl(props: ControlProps) {
       <KobalteCheckbox.Control
         class={cn(
           checkboxVariants({ size: size() }),
-          'data-disabled:cursor-not-allowed data-invalid:border-failure peer-focus-visible:outline-2 peer-focus-visible:outline-offset-2 peer-focus-visible:outline-accent',
+          'data-disabled:cursor-not-allowed data-readonly:not-data-checked:not-data-indeterminate:border-ink-muted data-invalid:border-failure peer-focus-visible:outline-2 peer-focus-visible:outline-offset-2 peer-focus-visible:outline-accent',
           local.class
         )}
         {...rest}
@@ -126,6 +135,7 @@ function CheckboxLabel(props: LabelProps) {
  * @do Render a Checkbox.Label or provide an accessible name on the root.
  * @do Use indeterminate when only part of a select-all group is checked.
  * @do Use InlineCheckbox when an enclosing option owns the interaction.
+ * @do Mark displayed values readOnly to preserve contrast, even when disabled.
  * @dont Add Checkbox.Input yourself; Checkbox.Control already renders one.
  * @dont Use a checkbox for an immediate setting change; use ToggleSwitch.
  */
@@ -136,7 +146,7 @@ export const Checkbox = Object.assign(
       <CheckboxSizeContext.Provider value={() => local.size ?? 'md'}>
         <KobalteCheckbox
           class={cn(
-            'relative inline-flex items-center gap-2 data-disabled:cursor-not-allowed data-disabled:opacity-50',
+            'relative inline-flex items-center gap-2 data-disabled:cursor-not-allowed data-disabled:not-data-readonly:opacity-50',
             local.class
           )}
           {...rest}
@@ -165,6 +175,7 @@ export const InlineCheckbox = (props: {
   checked: boolean;
   indeterminate?: boolean;
   size?: CheckboxSize;
+  animate?: boolean;
 }) => (
   <span
     aria-hidden="true"
@@ -176,6 +187,7 @@ export const InlineCheckbox = (props: {
       checked={props.checked}
       indeterminate={props.indeterminate ?? false}
       size={props.size ?? 'sm'}
+      animate={props.animate}
     />
   </span>
 );

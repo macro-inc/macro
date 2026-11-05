@@ -17,12 +17,12 @@ mod update_calendar_event;
 #[cfg(test)]
 mod test;
 
-use std::collections::HashMap;
 use std::sync::Arc;
 
 use ai_toolset::{AsyncToolCollection, ToolCallError};
 use chrono::NaiveDate;
 use chrono::{DateTime, Utc};
+use email_validator::EmailAddress;
 use rootcause::compat::boxed_error::IntoBoxedError;
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
@@ -30,10 +30,11 @@ use uuid::Uuid;
 
 use crate::domain::{
     copies::{CopyChange, check_copy},
+    labels::{CalendarLabels, EventRole},
     meeting_links::{CreateEventWithMacroCallError, EventWithMacroCall, MeetingLinkError},
     models::{
         CalendarAttendeeInput, CalendarEvent, EventReminderOverride, EventReminders, EventTime,
-        OutOfOfficeAutoDeclineMode, OutOfOfficeProperties, VisibleCalendar,
+        OutOfOfficeAutoDeclineMode, OutOfOfficeProperties,
     },
     ports::{
         CalendarMutationError, CalendarMutationService, CalendarOccurrenceService,
@@ -167,7 +168,7 @@ where
 }
 
 /// The mutually exclusive time shape supplied to calendar tools.
-#[derive(Debug, Clone, PartialEq, Deserialize, JsonSchema)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, JsonSchema, specta::Type)]
 #[serde(rename_all = "camelCase", tag = "kind")]
 pub enum EventTimeInput {
     /// A clock-time event with absolute instants.
@@ -179,6 +180,7 @@ pub enum EventTimeInput {
         ends_at: DateTime<Utc>,
         /// IANA time zone the event was scheduled in (e.g.
         /// America/New_York). Recurring events expand in this zone.
+        #[serde(default)]
         time_zone: Option<String>,
     },
     /// An all-day event spanning whole local dates.
@@ -216,12 +218,12 @@ impl From<EventTimeInput> for EventTime {
 }
 
 /// An attendee supplied to a calendar tool.
-#[derive(Debug, Clone, PartialEq, Eq, Deserialize, JsonSchema)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema, specta::Type)]
 #[serde(rename_all = "camelCase")]
 pub struct AttendeeInput {
     /// Attendee email address.
     #[schemars(description = "The attendee's email address.")]
-    pub email: String,
+    pub email: EmailAddress,
     /// Whether attendance is optional.
     #[schemars(
         description = "Whether attendance is optional for this attendee. Defaults to required."
@@ -233,7 +235,7 @@ pub struct AttendeeInput {
 impl From<AttendeeInput> for CalendarAttendeeInput {
     fn from(input: AttendeeInput) -> Self {
         Self {
-            email: input.email,
+            email: input.email.into_inner(),
             is_optional: input.is_optional,
             response_status: None,
         }
@@ -241,7 +243,7 @@ impl From<AttendeeInput> for CalendarAttendeeInput {
 }
 
 /// One reminder override supplied to a calendar tool.
-#[derive(Debug, Clone, PartialEq, Eq, Deserialize, JsonSchema)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema, specta::Type)]
 #[serde(rename_all = "camelCase")]
 pub struct EventReminderOverrideInput {
     /// Provider reminder method. `popup` creates a Macro notification.
@@ -260,7 +262,7 @@ impl From<EventReminderOverrideInput> for EventReminderOverride {
 }
 
 /// Reminder configuration supplied when creating a calendar event.
-#[derive(Debug, Clone, PartialEq, Eq, Deserialize, JsonSchema)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema, specta::Type)]
 #[serde(rename_all = "camelCase")]
 pub struct EventRemindersInput {
     /// Whether the selected calendar's default reminders should apply.
@@ -280,7 +282,9 @@ impl From<EventRemindersInput> for EventReminders {
 }
 
 /// The kind of event a create tool call makes.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Deserialize, JsonSchema)]
+#[derive(
+    Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize, JsonSchema, specta::Type,
+)]
 #[serde(rename_all = "snake_case")]
 pub enum CalendarEventTypeInput {
     /// A regular calendar event.
@@ -293,7 +297,7 @@ pub enum CalendarEventTypeInput {
 }
 
 /// How an out-of-office event handles conflicting invitations.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize, JsonSchema)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, JsonSchema, specta::Type)]
 #[serde(rename_all = "snake_case")]
 pub enum AutoDeclineModeInput {
     /// Leave conflicting invitations alone.
@@ -315,7 +319,9 @@ impl From<AutoDeclineModeInput> for OutOfOfficeAutoDeclineMode {
 }
 
 /// Out-of-office decline behavior supplied to the calendar tools.
-#[derive(Debug, Clone, PartialEq, Eq, Default, Deserialize, JsonSchema)]
+#[derive(
+    Debug, Clone, PartialEq, Eq, Default, Serialize, Deserialize, JsonSchema, specta::Type,
+)]
 #[serde(rename_all = "camelCase")]
 pub struct OutOfOfficeInput {
     /// How conflicting invitations are handled. Defaults to declining nothing,
@@ -337,7 +343,7 @@ impl From<OutOfOfficeInput> for OutOfOfficeProperties {
 }
 
 /// An attendee of a calendar event, as returned by calendar tools.
-#[derive(Debug, Serialize, JsonSchema)]
+#[derive(Debug, Clone, Serialize, Deserialize, JsonSchema, specta::Type)]
 #[serde(rename_all = "camelCase")]
 pub struct ToolEventAttendee {
     /// Attendee email address.
@@ -351,7 +357,7 @@ pub struct ToolEventAttendee {
 }
 
 /// A calendar event as returned by the create and update tools.
-#[derive(Debug, Serialize, JsonSchema)]
+#[derive(Debug, Clone, Serialize, Deserialize, JsonSchema, specta::Type)]
 #[serde(rename_all = "camelCase")]
 pub struct ToolCalendarEvent {
     /// Macro calendar event id, used by UpdateCalendarEvent and
@@ -381,6 +387,7 @@ pub struct ToolCalendarEvent {
     /// Attendees, capped at 20; `attendee_count` has the full number.
     pub attendees: Vec<ToolEventAttendee>,
     /// Total number of attendees.
+    #[specta(type = u32)]
     pub attendee_count: usize,
     /// Organizer email address, when known.
     pub organizer_email: Option<String>,
@@ -395,91 +402,36 @@ pub struct ToolCalendarEvent {
     pub calendar_id: Option<uuid::Uuid>,
     /// Display name of that calendar, when known.
     pub calendar_name: Option<String>,
-    /// Connected inbox address the calendar belongs to, when known.
+    /// Connected inbox address syncing the calendar, when known. It stays the
+    /// user's own address on a colleague's calendar, so it never says whose
+    /// calendar it is.
     pub inbox: Option<String>,
     /// Whether the user organizes this event or is a guest on it, through
-    /// that inbox; absent when they are neither.
+    /// that inbox; absent when they are neither, can only write that
+    /// calendar, or a read-only calendar names them organizer.
     pub my_role: Option<ToolEventRole>,
 }
 
 /// What the user is on one copy of an event, through the inbox holding it.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, JsonSchema)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, JsonSchema, specta::Type)]
 #[serde(rename_all = "snake_case")]
 pub enum ToolEventRole {
     /// The inbox organizes the event, or the event has no guests and is the
-    /// user's own.
+    /// user's own. Being able to write someone else's calendar is not this,
+    /// nor is a read-only calendar naming them organizer; `viewerCan` says
+    /// what the user may do there.
     Organizer,
     /// The inbox is invited to the event.
     Guest,
 }
 
 impl ToolEventRole {
-    /// The role of the copy's inbox, read the way clients read it: `organize`
-    /// marks the organizer, and only the copy's own inbox row is `is_self`.
-    fn of(event: &CalendarEvent) -> Option<Self> {
-        let own_row = event.attendees.iter().find(|attendee| attendee.is_self);
-        if event.viewer_can.organize || own_row.is_some_and(|attendee| attendee.is_organizer) {
-            Some(Self::Organizer)
-        } else {
-            own_row.map(|_| Self::Guest)
-        }
-    }
-}
-
-/// The calendars the user can see, to name the calendar and inbox each
-/// event copy belongs to.
-#[derive(Default)]
-struct CalendarLabels {
-    by_calendar: HashMap<Uuid, VisibleCalendar>,
-    inbox_by_link: HashMap<Uuid, String>,
-}
-
-impl CalendarLabels {
-    /// Load the requester's visible calendars. Labels only describe a result,
-    /// so a failure leaves them out rather than failing a call whose change
-    /// may already have reached the provider.
-    async fn load<M: CalendarMutationService>(mutations: &M, requester_id: &str) -> Self {
-        let Ok(calendars) = mutations
-            .list_visible_calendars(requester_id)
-            .await
-            .inspect_err(|error| {
-                tracing::warn!(error = ?error, "failed to load calendar names for a tool result");
-            })
-        else {
-            return Self::default();
-        };
-        Self::from_calendars(calendars)
-    }
-
-    /// Labels from calendars the tool already listed.
-    fn from_calendars(calendars: Vec<VisibleCalendar>) -> Self {
-        let inbox_by_link = calendars
-            .iter()
-            .map(|calendar| (calendar.email_link_id, calendar.email_address.clone()))
-            .collect();
-        let by_calendar = calendars
-            .into_iter()
-            .map(|calendar| (calendar.id, calendar))
-            .collect();
-        Self {
-            by_calendar,
-            inbox_by_link,
-        }
-    }
-
-    fn calendar_name(&self, calendar_id: Option<Uuid>) -> Option<String> {
-        calendar_id
-            .and_then(|id| self.by_calendar.get(&id))
-            .map(|calendar| calendar.name.clone())
-    }
-
-    /// The inbox holding a copy: its calendar's inbox, else the inbox whose
-    /// grant backs it.
-    fn inbox(&self, calendar_id: Option<Uuid>, link_id: Option<Uuid>) -> Option<String> {
-        calendar_id
-            .and_then(|id| self.by_calendar.get(&id))
-            .map(|calendar| calendar.email_address.clone())
-            .or_else(|| link_id.and_then(|id| self.inbox_by_link.get(&id)).cloned())
+    /// The rule [`CalendarLabels::role`] applies to every reader of an event.
+    fn of(event: &CalendarEvent, labels: &CalendarLabels) -> Option<Self> {
+        labels.role(event).map(|role| match role {
+            EventRole::Organizer => Self::Organizer,
+            EventRole::Guest => Self::Guest,
+        })
     }
 }
 
@@ -584,7 +536,7 @@ impl ToolCalendarEvent {
             calendar_id: event.calendar_id,
             calendar_name: labels.calendar_name(event.calendar_id),
             inbox: labels.inbox(event.calendar_id, None),
-            my_role: ToolEventRole::of(event),
+            my_role: ToolEventRole::of(event, labels),
         }
     }
 

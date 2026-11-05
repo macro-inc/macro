@@ -16,6 +16,7 @@ mod labels;
 pub mod mailbox;
 mod messages;
 pub use messages::SEPARATE_LABEL_WRITES_BELOW;
+mod raw_message;
 mod send;
 mod subscription;
 mod sync;
@@ -207,7 +208,7 @@ where
 fn log_operation_error(error: &EmailApiError) {
     match error {
         EmailApiError::RateLimited {
-            origin: RateLimitOrigin::Local,
+            origin: RateLimitOrigin::Local | RateLimitOrigin::Gate(_),
             ..
         } => tracing::debug!(error = %error),
         EmailApiError::RateLimited { origin, .. } => {

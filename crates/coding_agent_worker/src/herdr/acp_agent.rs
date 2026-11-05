@@ -27,13 +27,18 @@ use serde_json::{Value, json};
 use tokio::io::{AsyncBufReadExt as _, AsyncWriteExt as _, BufReader};
 use tokio::sync::{mpsc, oneshot};
 use tokio_util::sync::CancellationToken;
+use tracing::Instrument as _;
 
 use super::HerdrSession;
-use super::cli::{HerdrCli, HerdrError};
+use super::cli::{AgentLaunch, HerdrCli, HerdrError};
 use super::hub::title_from;
 use super::store::{Record, Store, write_private};
 use super::tail::Cursor;
+use agent_client_protocol::schema::v1::{
+    ListSessionsRequest, ListSessionsResponse, SessionId, SessionInfo,
+};
 use agent_fold::domain::transcript::{Fold, LogEvent};
+use agent_runtime_protocol::domain::turn::{FailureNotice, FailureNoticeKind};
 use claude_fold::ClaudeLog;
 use codex_fold::CodexLog;
 
@@ -50,6 +55,8 @@ use permission::{OpenTool, track_open_tool};
 pub(crate) const SUBCOMMAND: &str = "herdr-acp";
 
 const MODEL_CONFIG_ID: &str = "model";
+/// Attempts to read one native agent's state while listing live sessions.
+const LIVE_SESSION_LOOKUPS: usize = 3;
 const DEFAULT_MODEL: &str = "default";
 const CLAUDE_MODELS: &[(&str, &str)] = &[
     (DEFAULT_MODEL, "Default (Claude Code's choice)"),
@@ -69,10 +76,19 @@ const STATUS_EVERY: u32 = 4;
 /// Consecutive ready status checks, with no transcript ending, that end a
 /// turn anyway (slash commands and interrupted turns write no final message).
 const SETTLED_CHECKS: u32 = 3;
-/// How long a new tab's shell may take to reach its prompt.
-const SHELL_READY_TIMEOUT: Duration = Duration::from_secs(10);
+/// How long the transcript must stay quiet before a ready status ends a turn.
+const SETTLED_QUIET: Duration = Duration::from_secs(3);
 const QUIET_START: Duration = Duration::from_secs(20);
 const MISSING_AGENT_CHECKS: u32 = 5;
+/// Esc presses a cancel spends before the native turn is left to run.
+const INTERRUPT_PRESSES: u32 = 3;
+/// Status checks, one per [`POLL`], after each Esc press.
+const INTERRUPT_CHECKS: u32 = 4;
+/// Transcript polls per check, while idle, that the session's native agent
+/// still exists in herdr.
+const CLOSED_CHECK_EVERY: u32 = 20;
+/// How long that check may take before it is skipped as inconclusive.
+const CLOSED_CHECK_TIMEOUT: Duration = Duration::from_secs(2);
 /// Which coding-agent TUI each session runs.
 #[derive(
     Debug,
@@ -99,6 +115,15 @@ impl TuiAgent {
         match self {
             Self::Claude => "claude",
             Self::Codex => "codex",
+        }
+    }
+
+    /// Whether the TUI reports its own status through OSC 7501, which
+    /// herdr-core relies on to see it working, blocked, or ready.
+    pub(crate) fn reports_status(self) -> bool {
+        match self {
+            Self::Claude => true,
+            Self::Codex => false,
         }
     }
 
@@ -155,6 +180,7 @@ pub(crate) struct AdapterOptions {
 struct RpcError {
     code: i64,
     message: String,
+    data: Option<Value>,
 }
 
 impl RpcError {
@@ -162,6 +188,7 @@ impl RpcError {
         Self {
             code: -32603,
             message: message.into(),
+            data: None,
         }
     }
 
@@ -169,6 +196,23 @@ impl RpcError {
         Self {
             code: -32602,
             message: message.into(),
+            data: None,
+        }
+    }
+
+    /// A prompt that was stopped before it was typed into the TUI. Answering
+    /// `cancelled` would read in Macro as a message the agent saw.
+    fn not_delivered() -> Self {
+        let notice = FailureNotice {
+            kind: FailureNoticeKind::PromptNotDelivered,
+            title: "Message not delivered".to_owned(),
+            body: "The turn running in Herdr was stopped before this message was typed in, so the agent never received it. Send it again.".to_owned(),
+            link: None,
+        };
+        Self {
+            code: -32603,
+            message: "the prompt was stopped before it reached the native agent".to_owned(),
+            data: serde_json::to_value(notice).ok(),
         }
     }
 }
@@ -215,9 +259,7 @@ pub async fn run(options: AdapterOptions) -> rootcause::Result<()> {
         pending: Mutex::new(HashMap::new()),
         next_id: AtomicU64::new(0),
         sessions: Mutex::new(HashMap::new()),
-        herdr: herdr
-            .as_ref()
-            .map(|herdr| HerdrCli::new(&herdr.bin, herdr.workspace_id.clone())),
+        herdr: herdr.as_ref().map(HerdrSession::cli),
         options,
         home,
         store: Store(state_dir),
@@ -330,6 +372,13 @@ struct Live {
     path: Option<PathBuf>,
     cursor: Cursor,
     pending: VecDeque<LogEvent>,
+    /// This process launched the agent or saw it running. Only such an
+    /// agent's disappearance is a close: a session restored after herdr
+    /// itself restarted finds every agent gone without anyone closing them.
+    seen_alive: bool,
+    /// `_session/closed` was sent for this agent. A relaunch starts a new
+    /// `Live`, so a later close of the new agent is reported again.
+    closed_reported: bool,
 }
 
 fn lock<T>(mutex: &Mutex<T>) -> std::sync::MutexGuard<'_, T> {
@@ -346,11 +395,13 @@ impl Adapter {
     fn respond(&self, id: Value, result: Result<Value, RpcError>) {
         self.send(match result {
             Ok(result) => json!({"jsonrpc": "2.0", "id": id, "result": result}),
-            Err(error) => json!({
-                "jsonrpc": "2.0",
-                "id": id,
-                "error": {"code": error.code, "message": error.message},
-            }),
+            Err(error) => {
+                let mut body = json!({"code": error.code, "message": error.message});
+                if let Some(data) = error.data {
+                    body["data"] = data;
+                }
+                json!({"jsonrpc": "2.0", "id": id, "error": body})
+            }
         });
     }
 
@@ -413,12 +464,16 @@ impl Adapter {
             let Ok(info) = herdr.agent_info(&name).await else {
                 return;
             };
-            if native_id.is_some()
-                && info.session_id == native_id
-                && matches!(info.status.as_str(), "working" | "blocked")
-                && let Err(error) = herdr.send_keys(&name, &["esc"]).await
+            if native_id.is_none()
+                || info.session_id != native_id
+                || !matches!(info.status.as_str(), "working" | "blocked")
             {
-                tracing::warn!(%error, "could not interrupt native turn");
+                return;
+            }
+            match interrupt(&herdr, &name).await {
+                Ok(true) => {}
+                Ok(false) => tracing::warn!(%name, "the native turn kept running after Esc"),
+                Err(error) => tracing::warn!(%error, "could not interrupt native turn"),
             }
         });
     }
@@ -429,11 +484,18 @@ impl Adapter {
                 "protocolVersion": 1,
                 "agentCapabilities": {
                     "loadSession": true,
+                    "sessionCapabilities": {"list": {}},
                     "promptCapabilities": {"image": false, "audio": false, "embeddedContext": false},
                 },
                 "authMethods": [],
                 "agentInfo": {"name": "macrod-herdr", "version": env!("CARGO_PKG_VERSION")},
             })),
+            "session/list" => {
+                let request = serde_json::from_value::<ListSessionsRequest>(params)
+                    .map_err(|error| RpcError::invalid(error.to_string()))?;
+                serde_json::to_value(self.list_sessions(request.cwd.as_deref()).await)
+                    .map_err(|error| RpcError::internal(error.to_string()))
+            }
             "session/new" => self.new_session(&params),
             "session/load" => self.load_session(&params).await,
             "session/set_config_option" => {
@@ -460,8 +522,50 @@ impl Adapter {
             _ => Err(RpcError {
                 code: -32601,
                 message: format!("{method} is not supported"),
+                data: None,
             }),
         }
+    }
+
+    /// `session/list`: stored sessions whose Herdr agent still runs, oldest
+    /// first, in `cwd` when given. Read-only: the client's following
+    /// `session/load` attaches them. A closed agent is not live, so it is
+    /// never reopened; other lookup failures are retried before a session is
+    /// left out.
+    async fn list_sessions(&self, cwd: Option<&Path>) -> ListSessionsResponse {
+        use futures::StreamExt as _;
+        let Some(herdr) = &self.herdr else {
+            return ListSessionsResponse::new(Vec::new());
+        };
+        let mut records: Vec<Record> = futures::stream::iter(
+            self.store.list().into_iter().filter(|record| {
+                record.kind == self.options.kind && cwd.is_none_or(|cwd| record.cwd == cwd)
+            }),
+        )
+        .map(|record| async move {
+            let name = agent_name(&record.id);
+            for _ in 0..LIVE_SESSION_LOOKUPS {
+                match herdr.agent_info(&name).await {
+                    Ok(_) => return Some(record),
+                    Err(error) if error.missing_agent() => return None,
+                    Err(error) => {
+                        tracing::warn!(%name, %error, "could not tell whether a native agent still runs");
+                    }
+                }
+            }
+            None
+        })
+        .buffer_unordered(8)
+        .filter_map(std::future::ready)
+        .collect()
+        .await;
+        records.sort_by(|a, b| a.started.cmp(&b.started).then_with(|| a.id.cmp(&b.id)));
+        ListSessionsResponse::new(
+            records
+                .into_iter()
+                .map(|record| SessionInfo::new(SessionId::new(record.id), record.cwd))
+                .collect(),
+        )
     }
 
     fn new_session(self: &Arc<Self>, params: &Value) -> Result<Value, RpcError> {
@@ -555,6 +659,8 @@ impl Adapter {
             path: record.transcript,
             cursor: Cursor::default(),
             pending: VecDeque::new(),
+            seen_alive: false,
+            closed_reported: false,
         };
         if live.path.is_none() {
             live.path = self.locate(&live, record.native_id.as_deref());
@@ -596,6 +702,11 @@ impl Adapter {
         let shutdown = self.shutdown.clone();
         tokio::spawn(async move {
             let mut ticks = 0u32;
+            // A turn started in the TUI: only its transcript or a settled
+            // native status can end it.
+            let mut open = false;
+            let mut settled = 0u32;
+            let mut last_output = Instant::now();
             loop {
                 tokio::select! {
                     () = shutdown.cancelled() => break,
@@ -615,16 +726,85 @@ impl Adapter {
                     continue;
                 };
                 ticks = ticks.wrapping_add(1);
-                if let Err(error) = adapter.forward(&session, live, &mut None) {
-                    tracing::warn!(session = %session.id, error = %error.message, "native transcript observation stopped");
-                    adapter.turn_complete(&session.id, "failed");
-                    break;
+                match adapter.forward(&session, live, &mut None) {
+                    Ok((moved, ended)) => {
+                        if moved {
+                            last_output = Instant::now();
+                            settled = 0;
+                        }
+                        open = ended.is_none() && (open || moved);
+                    }
+                    Err(error) => {
+                        tracing::warn!(session = %session.id, error = %error.message, "native transcript observation stopped");
+                        adapter.turn_complete(&session.id, "failed");
+                        break;
+                    }
                 }
                 if ticks.is_multiple_of(STATUS_EVERY) {
                     adapter.sync_model(&session, live).await;
+                    // Interrupted turns, killed CLIs, and CLI events nothing
+                    // answers write no turn end; herdr still sees the TUI idle.
+                    if open {
+                        settled = if adapter.native_idle(live).await {
+                            settled + 1
+                        } else {
+                            0
+                        };
+                        if settled >= SETTLED_CHECKS && last_output.elapsed() >= SETTLED_QUIET {
+                            tracing::info!(session = %session.id, "native turn settled without a transcript ending");
+                            adapter.turn_complete(&session.id, "end_turn");
+                            open = false;
+                            settled = 0;
+                        }
+                    }
+                }
+                if ticks.is_multiple_of(CLOSED_CHECK_EVERY)
+                    && let Some(herdr) = &adapter.herdr
+                {
+                    adapter.report_if_closed(herdr, &session, live).await;
                 }
             }
         });
+    }
+
+    /// Tell the client, once per native agent, that the agent was closed in
+    /// herdr - its tab or pane ended by the person or the agent. Only herdr's
+    /// explicit `agent_not_found` for an agent this process saw running
+    /// counts: a socket error, timeout, or unreadable answer may be transient,
+    /// and an agent missing since startup was lost, not closed. The next
+    /// prompt still relaunches the session.
+    async fn report_if_closed(&self, herdr: &HerdrCli, session: &Session, live: &mut Live) {
+        if live.closed_reported {
+            return;
+        }
+        let error =
+            match tokio::time::timeout(CLOSED_CHECK_TIMEOUT, herdr.agent_info(&live.name)).await {
+                Ok(Ok(_)) => {
+                    live.seen_alive = true;
+                    return;
+                }
+                Ok(Err(error)) => error,
+                Err(_) => return,
+            };
+        if !live.seen_alive || !error.missing_agent() {
+            return;
+        }
+        live.closed_reported = true;
+        tracing::info!(session = %session.id, "native agent was closed in herdr");
+        self.send(
+            json!({"jsonrpc":"2.0", "method":"_session/closed", "params":{"sessionId":session.id}}),
+        );
+    }
+
+    /// Whether herdr reports the session's native agent done with its turn.
+    async fn native_idle(&self, live: &Live) -> bool {
+        let Some(herdr) = &self.herdr else {
+            return false;
+        };
+        herdr
+            .agent_info(&live.name)
+            .await
+            .is_ok_and(|info| matches!(info.status.as_str(), "idle" | "done"))
     }
 
     fn turn_complete(&self, session: &str, stop: &str) {
@@ -651,13 +831,59 @@ impl Adapter {
         let _cancellation = PromptCancellation(&session.cancel);
 
         let mut guard = session.live.lock().await;
-        if let Some(live) = guard.as_ref() {
-            match herdr.agent_info(&live.name).await {
-                Ok(info) if matches!(info.status.as_str(), "working" | "blocked") => {
-                    return Err(RpcError::invalid(
-                        "the native session is busy; finish its current turn in Herdr first",
-                    ));
+        if let Some(live) = guard.as_mut() {
+            // Queued like input typed into the TUI mid-turn: the prompt waits
+            // for the native turn, which streams and asks for permission
+            // meanwhile, and a stop interrupts that turn.
+            let wait = tracing::info_span!(
+                "macrod.herdr.prompt_wait",
+                session_id = %session.id,
+                native_turns = 0u32,
+                exit_dismissed = false,
+                outcome = tracing::field::Empty,
+            );
+            let waited = async {
+                let mut native_turns = 0u32;
+                loop {
+                    if cancel.is_cancelled() {
+                        return Ok(None);
+                    }
+                    let info = herdr.agent_info(&live.name).await;
+                    if !info
+                        .as_ref()
+                        .is_ok_and(|info| matches!(info.status.as_str(), "working" | "blocked"))
+                    {
+                        return Ok(Some(info));
+                    }
+                    if info.as_ref().is_ok_and(|info| info.status == "blocked")
+                        && self.stay(herdr, &live.name).await?
+                    {
+                        tracing::Span::current().record("exit_dismissed", true);
+                        continue;
+                    }
+                    native_turns += 1;
+                    tracing::Span::current().record("native_turns", native_turns);
+                    // An interrupted native turn ends "cancelled" too; only a
+                    // Stop from Macro drops the waiting prompt, which then
+                    // answers as not delivered.
+                    self.follow(herdr, session, live, &cancel, true).await?;
+                    if cancel.is_cancelled() {
+                        return Ok(None);
+                    }
                 }
+            }
+            .instrument(wait.clone())
+            .await
+            .inspect_err(|error: &RpcError| {
+                wait.record("outcome", "failed");
+                tracing::warn!(parent: &wait, error = %error.message, "queued prompt failed while waiting");
+            })?;
+            let Some(info) = waited else {
+                wait.record("outcome", "not_delivered");
+                return Err(RpcError::not_delivered());
+            };
+            wait.record("outcome", "ready");
+            match info {
                 Ok(info) => {
                     if info.cwd.as_ref().is_some_and(|cwd| cwd != &session.cwd)
                         || info
@@ -692,19 +918,17 @@ impl Adapter {
             return Err(RpcError::internal("the Claude Code window did not start"));
         };
 
-        if live.pending.is_empty() {
-            live.pending = self.drain(live)?.into();
+        // Relay whatever the native session did before this prompt, so a
+        // turn end already in the transcript never ends this prompt's turn.
+        loop {
+            let offset = live.cursor.offset;
+            self.forward(session, live, &mut None)?;
+            if offset == live.cursor.offset && live.pending.is_empty() {
+                break;
+            }
         }
-        while let Some(LogEvent::ModelChanged(_)) = live.pending.front() {
-            let Some(LogEvent::ModelChanged(model)) = live.pending.pop_front() else {
-                unreachable!()
-            };
-            self.report_model(session, live, &model)?;
-        }
-        if !live.pending.is_empty() {
-            return Err(RpcError::invalid(
-                "the native transcript has new activity; retry once it has synchronized",
-            ));
+        if cancel.is_cancelled() {
+            return Err(RpcError::not_delivered());
         }
         // The observer cannot acquire this session until the turn ends. Publish
         // native settings now, while the freshly started composer is visible.
@@ -740,10 +964,38 @@ impl Adapter {
             }));
             return Ok("end_turn");
         }
-        let outcome = self.follow(herdr, session, live, &cancel).await;
+        let outcome = self.follow(herdr, session, live, &cancel, false).await;
         *lock(&session.cancel) = None;
         self.save(session, guard.as_ref())?;
         outcome
+    }
+
+    /// Dismiss the exit confirmation a second Ctrl-C in Herdr leaves behind,
+    /// so the prompt waiting on it can run. Returns whether it pressed Esc.
+    async fn stay(&self, herdr: &HerdrCli, name: &str) -> Result<bool, RpcError> {
+        let before = herdr.agent_info(name).await?;
+        let screen = herdr.read_agent(name).await?;
+        if !super::controls::exit_confirmation(self.options.kind, &screen) {
+            return Ok(false);
+        }
+        let after = herdr.agent_info(name).await?;
+        let current = herdr.read_agent(name).await?;
+        if !super::controls::same_dialog(
+            &screen,
+            &current,
+            before.state_change_seq,
+            after.state_change_seq,
+            &after.status,
+        ) {
+            return Ok(false);
+        }
+        herdr.send_keys(name, &["esc"]).await?;
+        tracing::info!(
+            agent = name,
+            "dismissed the native exit confirmation for a queued prompt"
+        );
+        tokio::time::sleep(POLL).await;
+        Ok(true)
     }
 
     /// Open the session's herdr window and start the agent in it.
@@ -755,17 +1007,14 @@ impl Adapter {
     ) -> Result<Live, RpcError> {
         let kind = self.options.kind;
         let label = title_from(first_prompt).unwrap_or_else(|| kind.herdr_kind().to_owned());
-        let window = if self.options.managed_worktrees {
-            let source = crate::outbound::git::primary_worktree(&session.cwd)
-                .await
-                .map_err(|error| RpcError::internal(error.to_string()))?;
-            herdr
-                .open_worktree(&source, &session.cwd, &label, !self.options.no_focus)
-                .await?
+        let source = if self.options.managed_worktrees {
+            Some(
+                crate::outbound::git::primary_worktree(&session.cwd)
+                    .await
+                    .map_err(|error| RpcError::internal(error.to_string()))?,
+            )
         } else {
-            herdr
-                .open_window(&session.cwd, &label, !self.options.no_focus)
-                .await?
+            None
         };
 
         let model = lock(&session.model).clone();
@@ -799,40 +1048,32 @@ impl Adapter {
                 ]);
             }
         }
+        let mut environment = None;
         if kind == TuiAgent::Codex && !session.mcp_servers.is_empty() {
             let prepared = super::mcp::codex(
                 &self.store.0.join("mcp").join(&session.id),
                 &session.mcp_servers,
             )
             .map_err(|error| RpcError::internal(error.to_string()))?;
-            herdr
-                .run_in_pane(
-                    &window.pane_id,
-                    &format!(
-                        ". {}",
-                        shell_words::quote(&prepared.environment.to_string_lossy())
-                    ),
-                )
-                .await?;
             args.extend(prepared.args);
+            environment = Some(prepared.environment);
         }
         args.extend(self.options.agent_args.iter().cloned());
         let name = agent_name(&session.id);
         let started = std::time::SystemTime::now();
-        // The tab's shell must reach its prompt before an agent can start,
-        // and a worktree's direnv can hold it for seconds.
-        let deadline = tokio::time::Instant::now() + SHELL_READY_TIMEOUT;
-        loop {
-            match herdr
-                .start_agent(&name, kind.herdr_kind(), &window.pane_id, &args)
-                .await
-            {
-                Err(error) if error.pane_busy() && tokio::time::Instant::now() < deadline => {
-                    tokio::time::sleep(POLL).await;
-                }
-                result => break result?,
-            }
-        }
+        let window = herdr
+            .launch_agent(&AgentLaunch {
+                name: &name,
+                kind: kind.herdr_kind(),
+                reports_status: kind.reports_status(),
+                cwd: &session.cwd,
+                label: &label,
+                focus: !self.options.no_focus,
+                worktree_source: source.as_deref(),
+                environment: environment.as_deref(),
+                args: &args,
+            })
+            .await?;
         tracing::info!(
             session = %session.id,
             pane = %window.pane_id,
@@ -851,6 +1092,8 @@ impl Adapter {
             path: None,
             cursor: Cursor::default(),
             pending: VecDeque::new(),
+            seen_alive: true,
+            closed_reported: false,
         })
     }
 
@@ -870,19 +1113,22 @@ impl Adapter {
         Ok(Some(path))
     }
 
-    /// Stream the turn from the transcript until it ends.
+    /// Stream the turn from the transcript until it ends. `running` says
+    /// the native turn is known to have started, so it may end without
+    /// ever reporting `working` (a dialog dismissed in Herdr).
     async fn follow(
         self: &Arc<Self>,
         herdr: &HerdrCli,
         session: &Arc<Session>,
         live: &mut Live,
         cancel: &CancellationToken,
+        running: bool,
     ) -> Result<&'static str, RpcError> {
         let started = Instant::now();
         let mut ticks = 0u32;
         let mut settled = 0u32;
         let mut missing = 0u32;
-        let mut active = false;
+        let mut active = running;
         let mut open_tool: Option<OpenTool> = None;
         // Bumped whenever a dialog is asked about or goes away, so a late
         // answer from Macro never presses keys into a different dialog.
@@ -890,14 +1136,19 @@ impl Adapter {
         let mut asking = false;
         let mut last_output = Instant::now();
         let mut asked_seq = None;
+        let mut interrupt_failed = false;
         let _epoch = PermissionEpoch(generation.clone());
         loop {
             tokio::select! {
-                () = cancel.cancelled() => {
-                    herdr.send_keys(&live.name, &["esc"]).await?;
-                    tokio::time::sleep(Duration::from_secs(1)).await;
-                    self.forward(session, live, &mut open_tool)?;
-                    return Ok("cancelled");
+                () = cancel.cancelled(), if !interrupt_failed => {
+                    if interrupt(herdr, &live.name).await? {
+                        self.forward(session, live, &mut open_tool)?;
+                        return Ok("cancelled");
+                    }
+                    // Answering `cancelled` now would end the turn in Macro
+                    // while the agent keeps working; follow it to its end.
+                    tracing::warn!(session = %session.id, "the native turn kept running after Esc");
+                    interrupt_failed = true;
                 }
                 () = tokio::time::sleep(POLL) => {}
             }
@@ -964,9 +1215,7 @@ impl Adapter {
                 }
                 "idle" | "done" => {
                     settled += 1;
-                    if active
-                        && settled >= SETTLED_CHECKS
-                        && last_output.elapsed() >= Duration::from_secs(3)
+                    if active && settled >= SETTLED_CHECKS && last_output.elapsed() >= SETTLED_QUIET
                     {
                         self.forward(session, live, &mut open_tool)?;
                         return Ok("end_turn");
@@ -1066,6 +1315,34 @@ impl Adapter {
 }
 
 /// A herdr agent name for the session: `[a-z][a-z0-9_-]{0,31}`.
+/// Press Esc until herdr reports the agent `idle` or `done`, and say whether
+/// it is. One press is not proof: in Claude Code's vim editor mode the first
+/// Esc only leaves insert mode. No press follows a stop, since Esc at an idle
+/// Claude Code prompt opens its rewind menu.
+#[tracing::instrument(
+    name = "macrod.herdr.interrupt",
+    skip(herdr),
+    fields(herdr.agent = name, presses, stopped),
+    err
+)]
+async fn interrupt(herdr: &HerdrCli, name: &str) -> Result<bool, HerdrError> {
+    let span = tracing::Span::current();
+    for press in 1..=INTERRUPT_PRESSES {
+        span.record("presses", press);
+        herdr.send_keys(name, &["esc"]).await?;
+        for _ in 0..INTERRUPT_CHECKS {
+            tokio::time::sleep(POLL).await;
+            let status = herdr.agent_info(name).await?.status;
+            if matches!(status.as_str(), "idle" | "done") {
+                span.record("stopped", true);
+                return Ok(true);
+            }
+        }
+    }
+    span.record("stopped", false);
+    Ok(false)
+}
+
 pub(crate) fn agent_name(session: &str) -> String {
     let short: String = session
         .chars()

@@ -335,7 +335,7 @@ export function ActionMenu(props: {
       <ScopedPortal scope={props.portalScope}>
         <div
           data-holds-prompts
-          class="w-60 cursor-default select-none z-modal-content menu-open-animation"
+          class="w-60 mobile:w-[calc(100cqw-1rem-2px)] max-w-[calc(100cqw-1rem-2px)] cursor-default select-none z-modal-content menu-open-animation"
           use:floatWithElement={floatWithElementProps()}
           use:floatWithSelection={floatWithSelectionProps()}
           use:clickOutside={clickOutsideHandler}

@@ -10,11 +10,11 @@ AI system prompts: one module per prompt section, each exporting a
 ## Start here
 
 - `src/lib.rs`: the module list — one file per topic (`about_macro.rs`,
-  `agent_identity.rs`, `mentions.rs`, `databases.rs`, `crm_pipelines.rs`, ...).
+  `agent_identity.rs`, `mentions.rs`, `user_tools.rs`, ...).
 - `src/types.rs`: `StaticPrompt` and `ComposedPrompt` — the composition
   mechanism every module uses.
-- `src/databases.rs` / `src/crm_pipelines.rs`: examples pairing a `.rs` module
-  with a sibling `.md` file for the actual prompt text.
+- `src/coding_agents.rs`: an example pairing a `.rs` module with a sibling
+  text file for the actual prompt text.
 
 ## Scope
 
@@ -33,6 +33,12 @@ AI system prompts: one module per prompt section, each exporting a
 - Add a prompt section: new `src/<topic>.rs` (+ `src/<topic>.md` if the text
   is long) exporting a `pub static PROMPT: StaticPrompt` → `pub mod` it in
   `src/lib.rs` → compose it where the caller builds its prompt.
+- Guidance for one tool goes in that tool's description, and how an area of
+  Macro works (databases, CRM, email, calendar, channels, tasks, routines,
+  documents, search) in its SDK namespace's `@agent` TSDoc block, never here:
+  `ai_tools` inlines it from the generated catalog, and routed turns load it
+  per entity. Only cross-cutting rules live in this crate. `code_mode.rs` is
+  only the general code-mode section.
 
 ## Tool contracts
 
@@ -44,6 +50,11 @@ The agent-session prompt distinguishes typed `<m-notifications>` system facts
 from user requests and defines the notification-only `<noop/>` contract.
 In-app replies use `m-document-mention` with `blockName: "routine"` for routines;
 external MCP replies use `/app/routines/<id>` URLs.
+A form for a channel is a poll (one required select question, tally visible),
+posted once as `<m-document-card>` with `blockName: "form"`; the card's message
+reference grants the channel View, so no second message or link is needed.
+
+- `src/privacy.rs` supplies generation/judge privacy policy; `compose` joins runtime memory sections without static lifetimes.
 
 ## Checks
 

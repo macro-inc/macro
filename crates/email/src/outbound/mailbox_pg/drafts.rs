@@ -196,10 +196,14 @@ impl DraftRepository for PgMailboxSync {
     }
 
     async fn release_draft(&self, lease: &DraftLease, seconds: u32) -> Result<(), MailboxError> {
+        // A discard that arrived during this lease restarts from inspection,
+        // which deletes whichever version Outlook holds; this step's
+        // checkpoint can expect a version a lost response never confirmed.
         let changed = sqlx::query!(r#"
-            UPDATE email_mailbox_drafts SET lease_id = NULL,lease_until = NULL,available_at = now() + make_interval(secs => $3::double precision)
+            UPDATE email_mailbox_drafts SET lease_id = NULL,lease_until = NULL,available_at = now() + make_interval(secs => $3::double precision),
+                checkpoint = CASE WHEN delete_requested AND NOT $4 AND checkpoint->>'stage' IS DISTINCT FROM 'creating' THEN NULL ELSE checkpoint END
             WHERE message_id = $1 AND lease_id = $2 AND lease_until > now() AND state = 'running'
-        "#,lease.message_id,lease.lease_id,f64::from(seconds)).execute(&self.db).await.map_err(db_error)?.rows_affected();
+        "#,lease.message_id,lease.lease_id,f64::from(seconds),lease.delete_requested).execute(&self.db).await.map_err(db_error)?.rows_affected();
         if changed != 1 {
             return Err(MailboxError::Stale);
         }
@@ -213,7 +217,16 @@ impl DraftRepository for PgMailboxSync {
     ) -> Result<(), MailboxError> {
         let mut tx = self.db.begin().await.map_err(db_error)?;
         Self::lock_draft(&mut tx, lease).await?;
-        sqlx::query!("UPDATE email_mailbox_drafts SET state = $2,error_code = $3,lease_id = NULL,lease_until = NULL,updated_at = now() WHERE message_id = $1",lease.message_id,failure.state(),failure.code()).execute(&mut *tx).await.map_err(db_error)?;
+        // A discard that arrived during this lease runs next instead, as it
+        // would have after the failure (see `delete_draft_message`).
+        sqlx::query!(r#"
+            UPDATE email_mailbox_drafts SET lease_id = NULL,lease_until = NULL,updated_at = now(),
+                state = CASE WHEN delete_requested AND NOT $4 THEN 'pending' ELSE $2 END,
+                error_code = CASE WHEN delete_requested AND NOT $4 THEN NULL ELSE $3 END,
+                checkpoint = CASE WHEN delete_requested AND NOT $4 AND checkpoint->>'stage' IS DISTINCT FROM 'creating' THEN NULL ELSE checkpoint END,
+                available_at = CASE WHEN delete_requested AND NOT $4 THEN now() ELSE available_at END
+            WHERE message_id = $1
+        "#,lease.message_id,failure.state(),failure.code(),lease.delete_requested).execute(&mut *tx).await.map_err(db_error)?;
         if matches!(failure, DraftFailure::Invalid) {
             // A deterministic save rejection never submitted the message. Let
             // the user correct it without leaving a committed schedule behind.

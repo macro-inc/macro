@@ -58,17 +58,29 @@ retains notification ACP inputs and their replies; the transcript fold separatel
 omits system input from its message projection. PresentReview, GetReview and
 DecideReview are eager internal tools in both standard and code modes.
 
+- Owner memory is composed by the memory domain on each read; daily generation is hosted by cognition, not agent turns.
+
 ## Checks
 
 - `cargo test -p agent_inmem` (`SQLX_OFFLINE` unset).
 
 ## Gotchas
 
+- Owners with `auto-skills` (`domain::entity_routing`) route SDK entities on
+  code-mode turns: the prompt is `routed_prompt` (no area guidance) and the
+  entities `select_documentation` picks bring their `@agent` guide with their
+  index into the turn part. Everyone else keeps `prompt`, which inlines every
+  guide.
 - `auto` is a picker entry, not a routable id: `RigTurnEngine` asks its
   `AutoModelSelector` (Jev through cognition's named decisions, 1 s budget) per turn and runs
   Opus 5.5 (hard), GPT-6.1 Sol (mid) or Gemini 3.8 Flash (simple, and
   whenever Jev is unavailable). Capability lookups go through
   `models::resolve`.
+- Owners with the `auto-skills` flag route each turn's request to their skills
+  (`skills::domain::selection`, Jev, 1 s). Loaded skills are appended to the
+  user message that loaded them in the model's copy only, and remembered per
+  session in `SessionSkills` (memory; lost on restart). Eval:
+  `route_evaluation` (ignored; needs `TYPESAFE_API_KEY`).
 - Keep session-aware `NameSearch`, `ContentSearch`, and `ListEntities` native in
   code mode; legacy `ReadChat` must not appear in either runtime tool catalog.
 - Every turn cuts tool results over `agent::ToolResultLimit`'s limit (about

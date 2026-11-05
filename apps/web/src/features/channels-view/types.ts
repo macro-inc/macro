@@ -11,6 +11,14 @@ export type ChannelsSortGroup = ChannelsGroup | 'threads';
 /** Collapsible sections of the All tab. */
 export type ChannelsRailSection = 'favorites' | ChannelsGroup;
 
+export type ChannelSectionKey = ChannelsRailSection | `label:${string}`;
+export type ChannelSectionPreferences = {
+  sort?: ChannelListSort | 'name' | 'manual';
+  unreadOnly?: boolean;
+  /** Preferred expanded body height in pixels; absent means size to content. */
+  height?: number;
+};
+
 export type ChannelsQueryScope = ChannelsGroup | 'recents';
 
 export type ChannelsViewState = {
@@ -28,13 +36,11 @@ export type ChannelsViewState = {
    */
   threadsChannelId: string | undefined;
   sortBy: Record<ChannelsSortGroup, ChannelListSort>;
-  asideWidth: number;
-  /**
-   * Staff-only: hide seeded `Macro Support x …` conversations in Chat lists.
-   * Search still finds them. Default on so those conversations do not bury
-   * the rest of the sidebar.
-   */
-  hideSupportChannels: boolean;
+  sectionPreferences: Partial<
+    Record<ChannelSectionKey, ChannelSectionPreferences>
+  >;
+  /** Personal display order, independent of shared section membership. */
+  sectionOrder: ChannelSectionKey[];
 };
 
 export type ChannelsViewStateOptions = Partial<

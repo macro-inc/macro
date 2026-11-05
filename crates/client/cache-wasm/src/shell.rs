@@ -151,6 +151,8 @@ struct JsQueryRegistration {
 #[serde(rename_all = "camelCase")]
 struct JsWriteResult {
     #[serde(skip_serializing_if = "Option::is_none")]
+    unchanged_views: Option<Vec<String>>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     field_changes: Option<Vec<cache_core::field_changes::RecordFieldChange>>,
     #[serde(skip_serializing_if = "Vec::is_empty")]
     identity_errors: Vec<String>,
@@ -169,6 +171,7 @@ struct JsWriteResult {
 #[derive(Serialize)]
 #[serde(rename_all = "camelCase")]
 struct JsHydrationWriteResult {
+    unchanged_views: Vec<String>,
     search_changed_buckets: std::collections::BTreeSet<String>,
     revision: String,
     revision_advanced: bool,
@@ -457,6 +460,7 @@ enum JsRollbackOptimisticWriteResult {
 
 fn js_write_result(result: WriteResult, ops: &OpInterner) -> JsWriteResult {
     JsWriteResult {
+        unchanged_views: None,
         field_changes: result.field_changes,
         identity_errors: result.identity_errors,
         revision: result.revision.to_string(),
@@ -1473,6 +1477,18 @@ impl CacheEngine {
                 }
             }
             if let Some(mail) = request.mail {
+                let baseline = request
+                    .baseline
+                    .unwrap_or_default()
+                    .into_iter()
+                    .map(|entry| {
+                        soup_filter_cache_adapter::reconciliation_baseline_entry(
+                            entry.key,
+                            &entry.sort_timestamp,
+                        )
+                    })
+                    .collect::<Result<Vec<_>, _>>()
+                    .map_err(err_js)?;
                 let generation = state.mail_generation.clone();
                 let result = soup_filter_cache_adapter::mail::page_current(
                     state.engine_mut()?,
@@ -1482,6 +1498,7 @@ impl CacheEngine {
                     &request.sort_direction,
                     request.limit,
                     mail,
+                    &baseline,
                 )
                 .await
                 .map_err(|error| match error {
@@ -1780,7 +1797,14 @@ impl CacheEngine {
                 )
                 .await;
             let result = state.engine_result(result)?;
+            // A failed optional proof must still deliver the committed write and broad invalidation.
+            let unchanged_views = state
+                .engine_mut()?
+                .unchanged_observed_windows()
+                .await
+                .unwrap_or_default();
             to_js(&JsHydrationWriteResult {
+                unchanged_views,
                 search_changed_buckets: result.search_changed_buckets,
                 revision: result.write_result.revision.to_string(),
                 revision_advanced: result.write_result.revision_advanced,

@@ -41,6 +41,7 @@ activity = { path = "../../crates/activity" }
 ai_tools = { path = "../../crates/ai_tools" }
 ai_usage = { path = "../../crates/ai_usage" }
 analytics_client = { path = "../../crates/analytics_client" }
+attention_feed = { path = "../../crates/attention_feed", features = ["inbound", "outbound"] }
 anyhow = { workspace = true }
 async-graphql = { workspace = true }
 async-graphql-axum = "7.0.17"
@@ -115,12 +116,13 @@ forms = { path = "../../crates/forms", features = [
   "gateway",
   "inbound",
   "postgres",
+  "static_files",
 ] }
 document_sub_type = { path = "../../crates/document_sub_type" }
 documents_hex = { path = "../../crates/documents", package = "documents", features = ["purge"] }
 doppler-config = { workspace = true }
 dynamodb_client = { path = "../../crates/dynamodb_client" }
-email = { path = "../../crates/email", features = ["outbound", "ports", "gmail_senders"] }
+email = { path = "../../crates/email", features = ["outbound", "ports", "gmail_senders", "sqs"] }
 gmail_client = { path = "../../crates/gmail_client" }
 authentication_service_client = { path = "../../crates/authentication_service_client" }
 embedding = { path = "../../crates/embedding" }
@@ -156,6 +158,8 @@ github_pull_requests = { path = "../../crates/github_pull_requests", default-fea
 graphql_soup = { path = "../../crates/graphql_soup" }
 graphql_crm = { path = "../../crates/graphql_crm" }
 graphql_initiative = { path = "../../crates/graphql_initiative" }
+graphql_databases = { path = "../../crates/graphql_databases" }
+
 graphql_calendar = { path = "../../crates/graphql_calendar" }
 graphql_scheduled_action = { path = "../../crates/graphql_scheduled_action" }
 harnesses = { path = "../../crates/harnesses" }
@@ -194,6 +198,7 @@ opentelemetry = { workspace = true }
 tracing-opentelemetry = { workspace = true }
 macro_tower_layers = { path = "../../crates/macro_tower_layers" }
 macro_user_id = { path = "../../crates/macro_user_id" }
+mcp_client = { path = "../../crates/mcp_client" }
 macro_uuid = { path = "../../crates/macro_uuid" }
 mockall = { workspace = true }
 model = { path = "../../crates/model" }
@@ -212,6 +217,7 @@ models_permissions = { path = "../../crates/models_permissions" }
 models_properties = { path = "../../crates/models_properties" }
 models_soup = { path = "../../crates/models_soup", features = ["schema"] }
 notification = { path = "../../crates/notification" }
+notification_inbox = { path = "../../crates/notification_inbox" }
 opensearch_client = { path = "../../crates/opensearch_client" }
 projects_hex = { path = "../../crates/projects", package = "projects" }
 properties = { path = "../../crates/properties" }
@@ -298,7 +304,7 @@ webhook = { path = "../../crates/webhook", features = [
   "outbound",
   "worker",
 ] }
-work_feed = { path = "../../crates/work_feed", features = ["outbound"] }
+work_feed = { path = "../../crates/work_feed" }
 workspace-hack = { version = "0.1", path = "../../crates/workspace-hack" }
 zip = { workspace = true }
 
@@ -310,7 +316,13 @@ cool_asserts = "2"
 flate2 = "1"
 frecency = { path = "../../crates/frecency", features = ["mock"] }
 macro_auth = { path = "../../crates/macro_auth", features = ["testing"] }
+macro_db_migrator = { path = "../../crates/macro_db_migrator" }
+opentelemetry = { workspace = true, features = ["trace"] }
+opentelemetry_sdk = { workspace = true, features = ["testing", "trace"] }
 ordered-float = { workspace = true }
+tracing-opentelemetry = { workspace = true }
+tracing-subscriber = { workspace = true }
+wiremock = { workspace = true }
 
 [package.metadata.cargo-machete]
 ignored = ["connection_gateway_client"]

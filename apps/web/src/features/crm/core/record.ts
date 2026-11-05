@@ -3,11 +3,16 @@ export type CrmRecordTarget = { type: 'company' | 'contact'; id: string };
 /** Record identity and already-loaded associations for a new task. */
 export type CrmTaskRecord =
   | { type: 'company'; id: string }
-  | { type: 'contact'; id: string; companyId?: string };
+  | { type: 'contact'; id: string; companyId?: string | null };
 /** A CRM record whose associated files, tasks and calls a record tab lists. */
 export type CrmRecordScope =
   | { type: 'company'; id: string; domains: string[] }
-  | { type: 'contact'; id: string; email: string; companyId: string };
+  | {
+      type: 'contact';
+      id: string;
+      email?: string | null;
+      companyId?: string | null;
+    };
 
 /**
  * Whether two scopes describe the same record. Record views keep their
@@ -56,13 +61,3 @@ export const CONTACT_SECTIONS = [
 export type CompanySection = (typeof COMPANY_SECTIONS)[number];
 export type ContactSection = (typeof CONTACT_SECTIONS)[number];
 export type CrmRecordSection = CompanySection | ContactSection;
-
-export const CRM_RECORD_SECTION_LABELS: Record<CrmRecordSection, string> = {
-  overview: 'Overview',
-  team: 'Team',
-  emails: 'Emails',
-  files: 'Files',
-  tasks: 'Tasks',
-  calls: 'Calls',
-  databases: 'Databases',
-};

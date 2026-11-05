@@ -14,7 +14,7 @@ use macro_authorization::{
 };
 use macro_uuid::Uuid;
 
-use crate::domain::models::CreateScheduledAction;
+use crate::domain::models::ActionConfiguration;
 use crate::domain::ports::RoutineTemplateService;
 use crate::domain::templates::{RoutineTemplate, ShareRoutineTemplate};
 use crate::inbound::axum_router::{ScheduledActionApiError, ScheduledActionResponse};
@@ -49,8 +49,8 @@ impl<T, Svc, Auth> FromRef<RoutineTemplateRouterState<T, Svc, Auth>>
     }
 }
 
-/// Like routine creation, a team bot reaches the domain so its non-user owner
-/// gets the explicit `OwnerNotUserError` instead of a generic 403.
+/// Let the domain apply the rollout to the creation principal; a team bot
+/// without an acting user has no enabled user rollout.
 impl<T, Svc, Auth> FromRef<RoutineTemplateRouterState<T, Svc, Auth>> for NonUserOwners {
     fn from_ref(_state: &RoutineTemplateRouterState<T, Svc, Auth>) -> Self {
         NonUserOwners::Enabled
@@ -163,14 +163,19 @@ where
 )]
 pub async fn get_template<T, Svc, Auth>(
     State(state): State<RoutineTemplateRouterState<T, Svc, Auth>>,
-    _user: MacroAuthorizationExtractor<Auth, UserOrInternal>,
+    user: MacroAuthorizationExtractor<Auth, UserOrInternal>,
     Path(id): Path<Uuid>,
 ) -> Result<Json<RoutineTemplate>, ScheduledActionApiError>
 where
     T: RoutineTemplateService,
     Auth: MacroAuthorizationService,
 {
-    Ok(Json(state.service.get_template(id).await?))
+    Ok(Json(
+        state
+            .service
+            .get_template(&user.authorization.user.macro_user_id, id)
+            .await?,
+    ))
 }
 
 #[utoipa::path(
@@ -179,7 +184,7 @@ where
     tag = "scheduled actions",
     operation_id = "activate_scheduled_action_template",
     params(("id" = String, Path, description = "ID of the shared routine")),
-    request_body = CreateScheduledAction,
+    request_body = ActionConfiguration,
     responses(
         (status = 201, body = ScheduledActionResponse),
         (status = 400, body = String),
@@ -193,7 +198,7 @@ pub async fn activate_template<T, Svc, Auth>(
     State(state): State<RoutineTemplateRouterState<T, Svc, Auth>>,
     Path(id): Path<Uuid>,
     CreationPrincipalExtractor { principal, .. }: CreationPrincipalExtractor<Auth>,
-    body: Result<Json<CreateScheduledAction>, JsonRejection>,
+    body: Result<Json<ActionConfiguration>, JsonRejection>,
 ) -> Result<impl IntoResponse, ScheduledActionApiError>
 where
     T: RoutineTemplateService,

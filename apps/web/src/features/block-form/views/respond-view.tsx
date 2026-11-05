@@ -1,4 +1,9 @@
 import { ListSkeleton } from '@app/components/view-shell/ListSkeleton';
+import { usePending } from '@app/observability/flow';
+import {
+  startUiOperation,
+  type UiOperation,
+} from '@app/observability/ui-operation';
 import { fireAndForget } from '@core/util/fireAndForget';
 import ArrowLeft from '@icon/system/regular/arrow-left.svg';
 import ArrowRight from '@icon/system/regular/arrow-right.svg';
@@ -26,12 +31,14 @@ import {
   StopScreen,
 } from '../components/respond/respond-screens';
 import { useFormContext } from '../context/form-context';
+import { brandingStyle } from '../core/branding';
 import { questionNumbers } from '../core/form-layout';
 import type { FormCellValue, FormDetail } from '../core/form-model';
 import { formAvailability, shortDate } from '../core/form-status';
 import { resolvedWidget } from '../core/question-types';
 import { createRespond } from '../primitives/create-respond';
 import { BookingStepView } from './booking-step-view';
+import '../components/respond/branding.css';
 
 /**
  * The respond page (RFC 02 §4), shared by the app split, the public route
@@ -49,6 +56,8 @@ export function RespondView(props: {
   scrollContainer?: () => HTMLElement | undefined;
   /** Read the form again; resolves whether the read succeeded. */
   refetch: () => Promise<boolean>;
+  /** Open the Responses table, offered when the form shares its responses. */
+  onOpenResponses?: () => void;
 }) {
   const context = useFormContext();
   // One per mount: a form can show as a page and a card at once.
@@ -73,9 +82,23 @@ export function RespondView(props: {
       context.responses.editMine(props.detail.form.id, answers),
     now: () => new Date(),
   });
+  usePending('form.response', () => respond.view().kind === 'loading');
   let root: HTMLDivElement | undefined;
+  let submission: UiOperation | undefined;
+  let disposed = false;
+  onCleanup(() => {
+    disposed = true;
+    submission?.cancel();
+    submission = undefined;
+  });
 
   const form = () => props.detail.form;
+  // An inline card stays in Macro's look; the page wears the owner's.
+  const branding = () => (props.compact ? undefined : form().branding);
+  const brandingImage = (
+    fileId: string | null | undefined,
+    size: 'small' | 'medium'
+  ) => (fileId ? context.branding.imageUrl(fileId, size) : undefined);
   const isPublic = () => form().audience === 'public';
   const numbers = createMemo(() => questionNumbers(props.detail.layout));
 
@@ -92,6 +115,7 @@ export function RespondView(props: {
 
   function revealTop() {
     queueMicrotask(() => {
+      if (disposed) return;
       const container = props.scrollContainer?.();
       if (container) container.scrollTo({ top: 0, behavior: 'smooth' });
       else root?.scrollIntoView({ block: 'start', behavior: 'smooth' });
@@ -101,6 +125,7 @@ export function RespondView(props: {
   /** Bring the first refused question into view and focus it. */
   function revealProblem() {
     queueMicrotask(() => {
+      if (disposed) return;
       const first = Object.keys(respond.problems())[0];
       if (!first) return;
       const field = document.getElementById(fieldId(scope, first));
@@ -109,10 +134,30 @@ export function RespondView(props: {
     });
   }
 
-  async function submitAndReveal() {
-    await respond.submit();
-    revealProblem();
-    if (respond.view().kind !== 'answering') revealTop();
+  async function submitAndReveal(event: Event) {
+    submission?.cancel();
+    const operation = startUiOperation('form.submit', {
+      event,
+      onFinish: () => {
+        if (submission === operation) submission = undefined;
+      },
+      attributes: {
+        'form.id': props.detail.form.id,
+        'form.preview': !!props.preview,
+      },
+    });
+    submission = operation;
+    try {
+      await operation.run(() => respond.submit());
+      if (disposed) return;
+      revealProblem();
+      if (respond.view().kind !== 'answering') revealTop();
+      if (respond.failure()) operation.finish('error');
+      else operation.afterPaint();
+    } catch (error) {
+      operation.finish('error');
+      throw error;
+    }
   }
 
   /** From the update notice: read the form again, then back to the answers. */
@@ -175,15 +220,27 @@ export function RespondView(props: {
         ref={root}
         class={cn(
           'mx-auto flex w-full flex-col',
-          props.compact ? 'gap-3' : 'max-w-3xl gap-6 pt-12 pb-24'
+          props.compact ? 'gap-3' : 'max-w-3xl gap-6 pt-12 pb-24',
+          branding()?.accentColor && 'form-branded'
         )}
+        style={brandingStyle(branding()?.accentColor ?? null)}
         data-form-respond={form().id}
       >
         <Show when={props.header}>{props.header}</Show>
+        <Show when={brandingImage(branding()?.coverFileId, 'medium')}>
+          {(cover) => (
+            <img
+              src={cover()}
+              alt=""
+              class="aspect-[4/1] w-full rounded-xl object-cover"
+            />
+          )}
+        </Show>
         <Show when={!props.compact}>
           <RespondTitleCard
             name={form().name}
             description={form().description}
+            logoUrl={brandingImage(branding()?.logoFileId, 'small')}
             compact={false}
           />
         </Show>
@@ -358,7 +415,13 @@ export function RespondView(props: {
                 message={form().confirmationMessage}
                 fresh={confirmation().fresh}
                 submittedAt={confirmation().submittedAt}
-                receipt={receipt(confirmation().answers)}
+                receipt={
+                  // An anonymous response's answers are known only to the
+                  // visit that gave them.
+                  form().anonymous && !confirmation().fresh
+                    ? []
+                    : receipt(confirmation().answers)
+                }
                 canEdit={confirmation().canEdit}
                 compact={props.compact}
                 renderEntityLabel={context.ui.renderEntityLabel}
@@ -368,15 +431,27 @@ export function RespondView(props: {
                 }}
                 notice={
                   <>
-                    <Show when={!confirmation().fresh && !open()}>
+                    <Show
+                      when={
+                        !confirmation().fresh && !open() && !form().anonymous
+                      }
+                    >
                       <p class="text-xs text-ink">
                         This form is closed, so your response can’t be changed.
                       </p>
                     </Show>
                     <Show when={confirmation().alreadyResponded}>
                       <p class="text-xs text-ink">
-                        You had already responded, so the answers you just gave
-                        weren’t sent. This is your saved response.
+                        {form().anonymous
+                          ? 'You had already responded, so the answers you just gave weren’t sent.'
+                          : 'You had already responded, so the answers you just gave weren’t sent. This is your saved response.'}
+                      </p>
+                    </Show>
+                    <Show when={!confirmation().fresh && form().anonymous}>
+                      <p class="text-xs text-ink">
+                        You responded. This form is anonymous, so your answers
+                        aren’t kept with your name and can’t be shown or
+                        changed.
                       </p>
                     </Show>
                   </>
@@ -396,9 +471,24 @@ export function RespondView(props: {
                         Book a time
                       </Button>
                     </Show>
+                    <Show when={props.onOpenResponses}>
+                      {(open) => (
+                        <Button
+                          variant="secondary"
+                          class="self-start"
+                          onClick={() => open()()}
+                        >
+                          See responses
+                        </Button>
+                      )}
+                    </Show>
                     <p class="px-1 text-xs text-ink-muted">
-                      Stored as a row in a database the form owner controls.
-                      Your answers are visible to the form’s editors.
+                      Stored as a row in a database the form owner controls.{' '}
+                      {props.detail.form.anonymous
+                        ? 'This form is anonymous: nobody in Macro, its owner included, can see which response is yours, and it can’t be changed.'
+                        : props.detail.form.responsesVisible
+                          ? 'Everyone who can open this form sees your answers and your name.'
+                          : 'Your answers are visible to the form’s editors.'}
                     </p>
                   </>
                 }
@@ -419,7 +509,7 @@ export function RespondView(props: {
                 onSubmit={(event) => {
                   event.preventDefault();
                   if (answering().isLast) {
-                    fireAndForget(submitAndReveal(), 'form-respond');
+                    fireAndForget(submitAndReveal(event), 'form-respond');
                     return;
                   }
                   if (respond.next()) revealTop();

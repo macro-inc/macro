@@ -60,6 +60,7 @@ const auth = createFakeAuth(
             id: `macro|${email}`,
             email,
             tutorialComplete: draft.accounts[email].tutorialComplete,
+            isAgent: false,
           };
         });
         location.assign(location.href);

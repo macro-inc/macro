@@ -1,6 +1,7 @@
 import { useFeatureFlag } from '@app/lib/analytics/posthog';
 import { ProgressChip } from '@core/component/LexicalMarkdown/component/status/Progress';
 import { enableProjects } from '@core/constant/featureFlags';
+import { fireAndForget } from '@core/util/fireAndForget';
 import { buildTaskProjectDefaultProperty } from '@entity/extractors-property';
 import { AddPropertyButton } from '@property/component/AddPropertyButton';
 import { Modals } from '@property/component/modal';
@@ -19,11 +20,11 @@ import { InlineFetchedEntityTagsPill } from '@property/tags';
 import type { Property, PropertyApiValues } from '@property/types';
 import { useBulkSaveEntityPropertiesMutation } from '@queries/properties/entity';
 import { useTagsQuery } from '@queries/properties/tags';
+import { Key } from '@solid-primitives/keyed';
 import {
   createEffect,
   createMemo,
   createSignal,
-  For,
   Show,
   Suspense,
 } from 'solid-js';
@@ -84,7 +85,7 @@ export function InlineTaskProperties() {
     if (definitionIds?.length) {
       setPendingPins((pending) => new Set([...pending, ...definitionIds]));
     }
-    refetch();
+    fireAndForget(refetch(), 'inline-task-property-added-refresh');
   };
   const clearPendingPin = (definitionId: string) => {
     setPendingPins((pending) => {
@@ -118,9 +119,12 @@ export function InlineTaskProperties() {
         )
     );
     if (documentKind !== 'task') return visible;
-    const order = [
-      ...getDefaultPinnedProperties('task'),
+    const order: readonly string[] = [
+      SYSTEM_PROPERTY_IDS.STATUS,
+      SYSTEM_PROPERTY_IDS.PRIORITY,
+      SYSTEM_PROPERTY_IDS.DUE_DATE,
       SYSTEM_PROPERTY_IDS.PROJECT,
+      SYSTEM_PROPERTY_IDS.ASSIGNEES,
     ];
     return [...visible].sort((left, right) => {
       const leftIndex = order.indexOf(left.propertyDefinitionId);
@@ -178,27 +182,38 @@ export function InlineTaskProperties() {
             entityType={entityType}
             variant="secondary"
             size="xs"
+            class={documentKind === 'task' ? 'touch:min-h-9' : undefined}
             showAddButton={documentKind === 'document' && canEdit()}
           />
-          <For each={inlineProperties()}>
+          {/* A placeholder keeps its chip, and a pick in it, when saving assigns its ID. */}
+          <Key each={inlineProperties()} by="propertyDefinitionId">
             {(property) => (
               <InlinePropertyValue
-                property={property}
+                property={property()}
                 entityId={blockId}
+                showLabel={
+                  documentKind === 'task' &&
+                  property().propertyDefinitionId ===
+                    SYSTEM_PROPERTY_IDS.DUE_DATE
+                    ? false
+                    : undefined
+                }
                 canManage={
-                  !property.propertyId.startsWith('pending:') ||
-                  defaultDefinitionIds().includes(property.propertyDefinitionId)
+                  !property().propertyId.startsWith('pending:') ||
+                  defaultDefinitionIds().includes(
+                    property().propertyDefinitionId
+                  )
                 }
                 canRemove={
-                  !property.propertyId.startsWith('pending:') &&
+                  !property().propertyId.startsWith('pending:') &&
                   (documentKind !== 'task' ||
                     !getBuiltinPropertyIds('task').includes(
-                      property.propertyDefinitionId
+                      property().propertyDefinitionId
                     ))
                 }
               />
             )}
-          </For>
+          </Key>
           <Show when={documentKind === 'document' && canEdit()}>
             <AddPropertyButton variant="secondary" size="xs" class="gap-1.5" />
           </Show>

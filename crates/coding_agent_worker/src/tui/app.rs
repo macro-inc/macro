@@ -16,8 +16,8 @@ use super::logging::LogBuffer;
 use super::platform::{BrowserTarget, copy_to_clipboard};
 use super::process;
 use crate::config::{Config, HarnessCredentials};
-use crate::daemon::Daemon;
-use crate::outbound::pairing::{ClaimStatus, PairingClient};
+use crate::daemon::{Daemon, InheritedAgent};
+use crate::outbound::pairing::{ClaimStatus, PairingClient, machine_name};
 
 /// How often the dashboard re-reads the server.
 pub(crate) const REFRESH_EVERY: Duration = Duration::from_secs(3);
@@ -96,16 +96,13 @@ pub(crate) enum Mode {
     },
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub(crate) enum ApplyConfig {
-    Now,
-    NextPairing,
-}
-
 /// Everything the UI renders from.
 pub(crate) struct App {
     pub(crate) config_path: PathBuf,
     pub(crate) config: Config,
+    /// This machine's hostname: the name pairing requests, shown until the
+    /// server's name is known.
+    pub(crate) machine_name: String,
     pub(crate) credentials: Option<HarnessCredentials>,
     pub(crate) snapshot: Snapshot,
     /// This process's pid - the TUI and the daemon are this one process.
@@ -121,13 +118,23 @@ pub(crate) struct App {
     pub(crate) spinner: usize,
     pub(crate) logs: LogBuffer,
     pub(crate) daemon: Option<Daemon>,
+    /// The agent the previous macrod handed over, relayed by the first start.
+    inherited: Option<InheritedAgent>,
+    /// A release staged for the next launch (Windows), shown until restart.
+    /// The persistent update log the Logs tab points at.
+    pub(crate) update_log: Option<PathBuf>,
+    pub(crate) update_ready: Option<String>,
     pub(crate) pending_browser: Option<BrowserTarget>,
     last_refresh: Option<Instant>,
     pub(crate) quit: bool,
 }
 
 impl App {
-    pub(crate) fn load(config_path: &Path, logs: LogBuffer) -> rootcause::Result<Self> {
+    pub(crate) fn load(
+        config_path: &Path,
+        logs: LogBuffer,
+        inherited: Option<InheritedAgent>,
+    ) -> rootcause::Result<Self> {
         let config = Config::load(config_path)?;
         let credentials = config
             .credentials
@@ -138,6 +145,7 @@ impl App {
         Ok(Self {
             config_path: config_path.to_owned(),
             config,
+            machine_name: machine_name(),
             credentials,
             snapshot: Snapshot::default(),
             pid: std::process::id(),
@@ -151,6 +159,9 @@ impl App {
             spinner: 0,
             logs,
             daemon: None,
+            inherited,
+            update_ready: None,
+            update_log: crate::update::log::user_log_path(),
             pending_browser: None,
             last_refresh: None,
             quit: false,
@@ -170,7 +181,14 @@ impl App {
         let Some(credentials) = self.credentials.clone() else {
             return false;
         };
-        match Daemon::start(self.config.clone(), credentials, &self.config_path).await {
+        match Daemon::start(
+            self.config.clone(),
+            credentials,
+            &self.config_path,
+            self.inherited.take(),
+        )
+        .await
+        {
             Ok(daemon) => {
                 self.daemon = Some(daemon);
                 true
@@ -247,14 +265,14 @@ impl App {
     }
 
     pub(crate) async fn start_pairing(&mut self) {
-        // Re-read the config so an edit saved a moment ago (a new name or
-        // scope) is what this pairing asks for.
+        // Re-read the config so a deployment edited a moment ago is the one
+        // this pairing targets.
         match Config::load(&self.config_path) {
             Ok(config) => self.config = config,
             Err(error) => return self.fail(format!("config reload failed: {error}")),
         }
         let client = PairingClient::new(&self.config);
-        match client.start(&self.config).await {
+        match client.start().await {
             Ok(created) => {
                 // The approval page pre-fills the code, so opening the
                 // browser is usually the whole remaining gesture.
@@ -426,7 +444,7 @@ impl App {
 
     async fn apply_agent(&mut self, agent: &DetectedAgent) {
         self.form.apply_agent(agent);
-        self.save_config(ApplyConfig::Now).await;
+        self.save_config().await;
     }
 
     pub(crate) async fn poll_install(&mut self) {
@@ -475,17 +493,7 @@ impl App {
         if let Err(message) = self.form.apply_text(setting, &input) {
             return self.fail(message);
         }
-        let apply = match setting {
-            Setting::Workspace
-            | Setting::HerdrModel
-            | Setting::HerdrArguments
-            | Setting::HerdrStorage => ApplyConfig::Now,
-            Setting::Name => ApplyConfig::NextPairing,
-            Setting::Agent | Setting::Scope | Setting::PermissionBypass | Setting::HerdrFocus => {
-                unreachable!("not edited as text")
-            }
-        };
-        self.save_config(apply).await;
+        self.save_config().await;
     }
 
     async fn on_agent_picker_key(&mut self, key: KeyEvent) {
@@ -541,7 +549,7 @@ impl App {
         }
     }
 
-    async fn save_config(&mut self, apply: ApplyConfig) {
+    async fn save_config(&mut self) {
         match self.form.save() {
             Ok(()) => match Config::load(&self.config_path) {
                 Ok(config) => {
@@ -550,14 +558,10 @@ impl App {
                     // means a restart to apply it.
                     self.selected_setting =
                         self.selected_setting.min(settings(&self.config).len() - 1);
-                    if apply == ApplyConfig::Now && self.paired() {
-                        if self.restart_daemon().await {
-                            self.ok("saved and applied");
-                        }
-                    } else if apply == ApplyConfig::NextPairing && self.paired() {
-                        self.ok("saved; applies at next pairing");
-                    } else {
+                    if !self.paired() {
                         self.ok("saved");
+                    } else if self.restart_daemon().await {
+                        self.ok("saved and applied");
                     }
                 }
                 Err(error) => self.fail(format!("saved, but reload failed: {error}")),
@@ -589,6 +593,11 @@ impl App {
             }
             KeyCode::Char('p') => self.start_pairing().await,
             KeyCode::Char('d') if self.paired() => self.mode = Mode::ConfirmDelete,
+            KeyCode::Char('o') if self.tab == Tab::Config => {
+                self.pending_browser = Some(BrowserTarget::Settings(
+                    self.config.macro_api.settings_url(),
+                ));
+            }
             KeyCode::Up | KeyCode::Char('k') if self.tab == Tab::Config => {
                 self.selected_setting = self.selected_setting.saturating_sub(1);
             }
@@ -609,21 +618,11 @@ impl App {
                             .unwrap_or(self.agents.len());
                         self.mode = Mode::AgentPicker { selected };
                     }
-                    Setting::Scope => {
-                        self.form.toggle_scope(&self.config);
-                        self.save_config(ApplyConfig::NextPairing).await;
-                    }
-                    Setting::PermissionBypass => {
-                        self.form
-                            .set_permission_bypass(!self.config.identity.allow_permission_bypass);
-                        self.save_config(ApplyConfig::NextPairing).await;
-                    }
                     Setting::HerdrFocus => {
                         self.form.toggle_herdr_focus(&self.config);
-                        self.save_config(ApplyConfig::Now).await;
+                        self.save_config().await;
                     }
                     setting @ (Setting::Workspace
-                    | Setting::Name
                     | Setting::HerdrModel
                     | Setting::HerdrArguments
                     | Setting::HerdrStorage) => {

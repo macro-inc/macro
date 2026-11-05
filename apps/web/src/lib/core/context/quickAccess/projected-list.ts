@@ -29,6 +29,7 @@ const PROJECTED_BUCKETS: ReadonlySet<Bucket> = new Set([
   'dm',
   'crm_company',
   'crm_contact',
+  'initiative',
 ]);
 const BROWSE_PAGE_SIZE = 50;
 const SEARCH_LIMIT = 500;
@@ -166,6 +167,8 @@ export function createProjectedList<T extends { id: string }>(options: {
         fetchedPages < pageBudget &&
         (pageCount > 0 || !foundNewRow)
       );
+      span.setAttr('search.page_count', fetchedPages);
+      span.setAttr('search.materialized_count', merged.size);
       request.cursor = cursor;
       request.pages = pages;
       setError(undefined);

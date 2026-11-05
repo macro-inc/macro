@@ -1,6 +1,7 @@
 //! Composition of the domain GraphQL adapter crates (`graphql_soup`,
 //! `graphql_channel`, `graphql_properties`, `graphql_notification`, `graphql_email`,
-//! `graphql_favorite`, `graphql_entity_mutation`, `graphql_work_feed`) into the
+//! `graphql_favorite`, `graphql_entity_mutation`, `graphql_work_feed`,
+//! `graphql_notification_inbox`) into the
 //! complete schema served by
 //! `document_storage_service` and exported as SDL.
 #![deny(missing_docs)]
@@ -8,6 +9,7 @@
 
 /// Cross-domain fields composed onto Soup entities.
 mod edges;
+mod mail_cache_profile;
 mod realtime;
 mod saved_view;
 /// Complete schema types and construction helpers.
@@ -34,14 +36,15 @@ pub use graphql_channel::{
 pub use graphql_common::GraphqlRequestParts;
 pub use graphql_email::{
     DeleteEmailDraftInput, DeleteEmailDraftPayload, EmailContentKey, EmailContentLoad,
-    EmailContentLoader, EmailMutationService, EmailServiceEmailContentReader,
-    EmailThreadMailProjectionLoad, EmailThreadMailProjectionLoader, EmailThreadMetadataLoad,
-    EmailThreadMetadataLoader, EmailThreadUnavailable, GraphqlEmailLabel, GraphqlEmailLink,
-    GraphqlEmailLinkSettings, GraphqlEmailMutation, GraphqlEmailProvider, GraphqlEmailQuery,
-    GraphqlEmailSyncStatus, MarkEmailThreadSeenInput, NoOpSoupEmailContentEdgeReader,
-    SaveEmailDraftContactInput, SaveEmailDraftInput, SaveEmailDraftPayload,
-    SoupEmailContentEdgeReader, SoupEmailEdgeReader, SoupEmailThreadMailProjectionEdgeReader,
-    SoupEmailThreadMetadataEdgeReader, UpdateEmailThreadLabelInput, email_content_loader,
+    EmailContentLoader, EmailFocusContext, EmailFocusReader, EmailMutationService,
+    EmailServiceEmailContentReader, EmailThreadFocusLoader, EmailThreadMailProjectionLoad,
+    EmailThreadMailProjectionLoader, EmailThreadMetadataLoad, EmailThreadMetadataLoader,
+    EmailThreadUnavailable, GraphqlEmailLabel, GraphqlEmailLink, GraphqlEmailLinkSettings,
+    GraphqlEmailMutation, GraphqlEmailProvider, GraphqlEmailQuery, GraphqlEmailSyncStatus,
+    MarkEmailThreadSeenInput, NoOpSoupEmailContentEdgeReader, SaveEmailDraftContactInput,
+    SaveEmailDraftInput, SaveEmailDraftPayload, SoupEmailContentEdgeReader, SoupEmailEdgeReader,
+    SoupEmailThreadMailProjectionEdgeReader, SoupEmailThreadMetadataEdgeReader,
+    UpdateEmailThreadLabelInput, email_content_loader, email_thread_focus_loader,
     email_thread_mail_projection_loader, email_thread_metadata_loader,
 };
 pub use graphql_entity_mutation::{
@@ -61,6 +64,9 @@ pub use graphql_notification::{
     NotificationMutationRoot, NotificationMutationService, SoupNotificationEdgeReader,
     UpdateNotificationsForEntityInput, UpdateNotificationsInput, entity_notifications_loader,
 };
+pub use graphql_notification_inbox::{
+    NotificationInboxGraphqlContext, NotificationInboxGraphqlService,
+};
 pub use graphql_permission::{
     EntityPermissionEdgeReader, EntityPermissionLoader, GraphqlAccessLevelPermission,
     GraphqlChannelParticipantRole, GraphqlChannelRolePermission, GraphqlChannelViewOnlyPermission,
@@ -72,10 +78,8 @@ pub use graphql_properties::{
     PropertiesEntityPropertyReader, PropertiesEntityPropertyWriter, PropertiesMutationRoot,
     entity_properties_loader,
 };
-pub use graphql_work_feed::{
-    EntityAccessWorkFeedViewers, WorkFeedGraphqlContext, WorkFeedGraphqlService,
-    WorkFeedViewerResolver,
-};
+pub use graphql_work_feed::{WorkFeedGraphqlContext, WorkFeedGraphqlService};
+pub use mail_cache_profile::{MAIL_CACHE_PROFILE_HEADER, MailCacheProfile};
 pub use realtime::{AgentSessionLogSubscriptions, agent_session_log_subscriptions};
 pub use schema::{
     EmailThreadInput, SchemaOnlySoupSchema, SchemaOnlyState, SharedSoupSchema, SoupQueryRoot,

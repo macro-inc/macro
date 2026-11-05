@@ -13,8 +13,8 @@ pub enum InitiativeLiteral {
     ///
     /// Initiatives are **off by default** — a query that
     /// says nothing about them gets none, so adding them to Soup did not
-    /// change what pre-existing Soup views return. Asking for specific ids
-    /// or owners also counts as opting in.
+    /// change what pre-existing Soup views return. Asking for specific ids,
+    /// owners or notification states also counts as opting in.
     #[serde(rename = "inc")]
     Include,
     /// Case-insensitive substring of the initiative name.
@@ -29,6 +29,9 @@ pub enum InitiativeLiteral {
     /// Filter by the initiative's owner.
     #[serde(rename = "o")]
     Owner(Owner),
+    /// An initiative with a non-deleted notification in this exact state.
+    #[serde(rename = "ns")]
+    NotificationState(crate::NotificationState),
 }
 
 impl ExpandFrame<InitiativeLiteral> for InitiativeFilters {
@@ -44,9 +47,16 @@ impl ExpandFrame<InitiativeLiteral> for InitiativeFilters {
             name,
             due_before,
             due_after,
+            notification_filters,
         } = filter_request;
 
         let include = include.then_some(Expr::val(InitiativeLiteral::Include));
+
+        let notification_state = notification_filters
+            .into_unique_states()
+            .into_iter()
+            .map(|state| Expr::val(InitiativeLiteral::NotificationState(state)))
+            .reduce(Expr::or);
 
         let ids = initiative_ids
             .iter()
@@ -65,6 +75,7 @@ impl ExpandFrame<InitiativeLiteral> for InitiativeFilters {
             name.map(|v| Expr::val(InitiativeLiteral::NameContains(v))),
             due_before.map(|v| Expr::val(InitiativeLiteral::DueBefore(v))),
             due_after.map(|v| Expr::val(InitiativeLiteral::DueAfter(v))),
+            notification_state,
         ]
         .into_iter()
         .fold_with(Expr::and))

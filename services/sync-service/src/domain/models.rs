@@ -39,6 +39,8 @@ pub struct PeerResponse {
 pub struct PeerWithUserId {
     pub peer_id: String,
     pub user_id: String,
+    /// Signed agent actor (`bot|<uuid>`) the peer edited as; null for humans.
+    pub actor: Option<String>,
 }
 
 #[derive(serde::Deserialize, serde::Serialize)]
@@ -46,5 +48,7 @@ pub struct PeerWithUserId {
 pub struct BlameRow {
     pub peer_id: String,
     pub user_id: Option<String>,
+    /// Signed agent actor (`bot|<uuid>`) the peer edited as; null for humans.
+    pub actor: Option<String>,
     pub timestamp_ms: i64,
 }

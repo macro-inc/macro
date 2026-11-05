@@ -385,7 +385,7 @@ async fn projection_ack_keeps_version_watermark_and_exposes_normalized_state(db:
     );
     assert!(message.is_present);
     repo.renew_projection(&event).await.unwrap();
-    repo.finish_projection(&event, true).await.unwrap();
+    repo.finish_projection(&event, None).await.unwrap();
     repo.ingest(
         &work,
         snapshot(link, work.provider_id.as_str(), state, "v1"),
@@ -429,7 +429,7 @@ async fn projection_crash_reclaims_work_and_old_worker_cannot_ack_successor(db: 
         repo.renew_projection(&old).await,
         Err(MailboxError::Stale)
     ));
-    repo.finish_projection(&old, true).await.unwrap();
+    repo.finish_projection(&old, None).await.unwrap();
     assert_eq!(
         sqlx::query_scalar!(
             "SELECT count(*) FROM email_projection_outbox WHERE id = $1",
@@ -440,7 +440,7 @@ async fn projection_crash_reclaims_work_and_old_worker_cannot_ack_successor(db: 
         .unwrap(),
         Some(1)
     );
-    repo.finish_projection(&successor, true).await.unwrap();
+    repo.finish_projection(&successor, None).await.unwrap();
 }
 
 #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]

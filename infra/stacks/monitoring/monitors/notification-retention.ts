@@ -5,13 +5,15 @@ import { goalertWebhooks } from '../goalert';
 import { notify, RENOTIFY_MINUTES } from '../notify';
 
 const HEALTH = '@telemetry_event:notification_consumer_health';
-const CONTEXT = `Notification-retention rollout: pause scheduled cleanup before investigating.
+const context = (
+  environment: 'dev' | 'prod'
+) => `Notification-retention rollout: pause scheduled cleanup before investigating.
 Check consumer health/backlog, notification.delete.publish spans, database latency,
 and replica lag. A zero application backlog is not an end-to-end delivery ACK:
 Postgres NOTIFY publication and WebSocket delivery can still fail.
-${notify({ pages: false })}`;
+${notify({ pages: false, environment })}`;
 
-for (const environment of ['dev', 'prod']) {
+for (const environment of ['dev', 'prod'] as const) {
   const query = `${HEALTH} env:${environment}`;
   const common = {
     tags: [
@@ -31,7 +33,7 @@ for (const environment of ['dev', 'prod']) {
       name: `[${environment.toUpperCase()}] Notification consumer: application backlog high`,
       type: 'log alert',
       query: `logs("${query} @consumer_health:healthy").index("*").rollup("avg", "@max_offset_backlog").by("@consumer_instance").last("5m") > 1000`,
-      message: `One consumer's maximum partition offset backlog averages over {{threshold}} for five minutes. This is not committed-offset lag. The initial threshold is conservative; tune after observing dry-run and canary baselines.\n${CONTEXT}`,
+      message: `One consumer's maximum partition offset backlog averages over {{threshold}} for five minutes. This is not committed-offset lag. The initial threshold is conservative; tune after observing dry-run and canary baselines.\n${context(environment)}`,
       monitorThresholds: { critical: '1000', warning: '100' },
       // A retired process must not leave its old lag alert firing forever.
       // Stalls in live processes produce explicit health events below.
@@ -46,7 +48,7 @@ for (const environment of ['dev', 'prod']) {
       name: `[${environment.toUpperCase()}] Notification consumer: telemetry stale or unavailable`,
       type: 'log alert',
       query: `logs("${query} @consumer_health:(stale OR unavailable OR disconnected)").index("*").rollup("count").by("@consumer_instance").last("5m") > 0`,
-      message: `A live consumer has stale statistics, unknown offsets, or no connected brokers after its startup grace period. Do not interpret missing/partial telemetry as zero lag.\n${CONTEXT}`,
+      message: `A live consumer has stale statistics, unknown offsets, or no connected brokers after its startup grace period. Do not interpret missing/partial telemetry as zero lag.\n${context(environment)}`,
       monitorThresholds: { critical: '0' },
       onMissingData: 'resolve',
     },
@@ -59,7 +61,7 @@ for (const environment of ['dev', 'prod']) {
       name: `[${environment.toUpperCase()}] Notification consumer: no telemetry`,
       type: 'log alert',
       query: `logs("${query}").index("*").rollup("count").last("5m") < 1`,
-      message: `No notification-consumer health events arrived for five minutes. Verify DSS consumers are running and log ingestion is healthy. Deploy the consumer instrumentation before enabling this monitor.\n${CONTEXT}`,
+      message: `No notification-consumer health events arrived for five minutes. Verify DSS consumers are running and log ingestion is healthy. Deploy the consumer instrumentation before enabling this monitor.\n${context(environment)}`,
       monitorThresholds: { critical: '1' },
       onMissingData: 'default',
     },
@@ -87,7 +89,7 @@ for (const environment of ['dev', 'prod']) {
       name: `[${environment.toUpperCase()}] Notification deletion: realtime publication failed`,
       type: 'log alert',
       query: `logs("env:${environment} \\"failed to publish notification delete realtime update\\"").index("*").rollup("count").last("5m") > 0`,
-      message: `A database deletion could not be forwarded to realtime. Deletion has already committed; PostgreSQL NOTIFY is best-effort, not a durable retry queue.\n${CONTEXT}`,
+      message: `A database deletion could not be forwarded to realtime. Deletion has already committed; PostgreSQL NOTIFY is best-effort, not a durable retry queue.\n${context(environment)}`,
       monitorThresholds: { critical: '0' },
       onMissingData: 'default',
     },
@@ -104,7 +106,7 @@ new datadog.Monitor(
     type: 'log alert',
     query:
       'logs("\\"notification retention telemetry flush\\"").index("*").rollup("count").last("15m") > 0',
-    message: `Cleanup may have succeeded while its traces were lost. Check the Datadog extension, its scoped secret access, and OTLP receiver. Do not retry deletion merely to retry telemetry.\n${CONTEXT}`,
+    message: `Cleanup may have succeeded while its traces were lost. Check the Datadog extension, its scoped secret access, and OTLP receiver. Do not retry deletion merely to retry telemetry.\n${context('prod')}`,
     tags: ['service:notification-retention', 'rollout:notification-retention'],
     priority: '3',
     monitorThresholds: { critical: '0' },

@@ -13,7 +13,7 @@ import type { Calendar } from '../calendar/calendar';
 import { CalendarEvent } from '../calendar/event';
 import { PropertiedEntity } from '../entity';
 import { Project } from '../projects/project';
-import { entitySearch } from '../search';
+import { entitySearch } from '../search/options';
 import { EntityAccess } from '../sharing/access';
 import {
   type SharePermissionOptions,
@@ -40,6 +40,21 @@ export interface ReplyEmailOptions {
   subject?: string;
   /** The message being replied to. */
   replyingTo?: EmailMessage;
+}
+
+/** Open tracking for one of the caller's sent messages. */
+export interface EmailReadReceipt {
+  /** The tracked message. */
+  message: EmailMessage;
+
+  /** Counted pixel fetches; repeats within a few seconds count once. */
+  openCount: number;
+
+  /** When the first counted fetch happened, if any. */
+  firstOpenedAt?: string;
+
+  /** When the latest counted fetch happened, if any. */
+  lastOpenedAt?: string;
 }
 
 /**
@@ -108,6 +123,25 @@ export class EmailThread extends PropertiedEntity<ThreadDetail> {
     return CalendarEvent.fromRecord(this.client, record);
   }
 
+  /**
+   * Opens recorded for messages sent from the caller's own or delegated
+   * inboxes with read receipts on, newest message first. Counts are
+   * approximate: some mail apps prefetch images and others block them.
+   */
+  async readReceipts(): Promise<EmailReadReceipt[]> {
+    const { receipts } = unwrap(
+      await this.client.email.getThreadReadReceipts({
+        path: { thread_id: this.id },
+      }),
+    );
+    return receipts.map((receipt) => ({
+      message: EmailMessage.byId(this.client, receipt.message_id),
+      openCount: receipt.open_count,
+      firstOpenedAt: receipt.first_opened_at ?? undefined,
+      lastOpenedAt: receipt.last_opened_at ?? undefined,
+    }));
+  }
+
   /** Change project membership or share permissions for this thread. */
   async update(options: {
     project?: Project | null;
@@ -143,6 +177,16 @@ export class EmailThread extends PropertiedEntity<ThreadDetail> {
       }),
     );
     return thread;
+  }
+
+  /** The thread's URL in the Macro web app; hand it to users as the link. */
+  webUrl(): string {
+    return `${this.client.webAppUrl}/app/mail/${this.id}`;
+  }
+
+  /** Identity, loaded detail and {@link webUrl}, so serialized handles carry their link. */
+  override toJSON() {
+    return { ...super.toJSON(), url: this.webUrl() };
   }
 
   /** A handle to a thread by id. Details load on first access. */

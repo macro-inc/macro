@@ -9,7 +9,7 @@ import type { MacroClient } from '../../utils/client';
 import { PropertiedEntity } from '../entity';
 import { Project } from '../projects/project';
 import type { EntityReference } from '../reference';
-import { entitySearch } from '../search';
+import { entitySearch } from '../search/options';
 import { EntityAccess } from '../sharing/access';
 import { ChatGeneration, ChatMessage } from './generation';
 
@@ -156,6 +156,11 @@ export class Chat extends PropertiedEntity<ChatDetail> implements Mentionable {
   /** The chat's URL in the Macro web app. */
   webUrl(): string {
     return `${this.client.webAppUrl}/app/chat/${this.id}`;
+  }
+
+  /** Identity, loaded detail and {@link webUrl}, so serialized handles carry their link. */
+  override toJSON() {
+    return { ...super.toJSON(), url: this.webUrl() };
   }
 
   /** Search chats by name and content, most relevant first, auto-paginated. */

@@ -3,9 +3,11 @@ use crate::public_mcp::analytics::{
 };
 use crate::public_mcp::markdown_images::MarkdownImageResolver;
 use crate::public_mcp::tool_response::tool_result_with_media;
-use agent_code_mode::inbound::toolset::UserCodeModeToolContext;
+use agent_code_mode::{domain::UserCodeMode, inbound::toolset::UserCodeModeToolContext};
 use agent_inmem::domain::tool_mode::{ToolMode, ToolModeSelector};
+use ai_toolset::ToolCaller;
 use ai_toolset::{AsyncToolCollection, RequestContext, ToolSet};
+use cognition::domain::Cognition;
 use macro_user_id::user_id::MacroUserIdStr;
 use rmcp::{
     handler::server::ServerHandler,
@@ -41,14 +43,30 @@ fn definitions<Context>(toolset: &AsyncToolCollection<Context>) -> impl Iterator
     })
 }
 
-/// Code mode for flagged users: SDK-covered native tools give way to the SDK.
-pub struct CodeModeSurface<Context> {
-    /// Native tools still listed in code mode, from `tools_for_mcp_code_mode`.
-    pub native: Arc<AsyncToolCollection<Context>>,
+/// A tool context that runs its tools for the caller the request authenticated.
+pub trait CalledBy {
+    /// Run mutating tools for `caller`, still on the authenticated user's behalf.
+    fn called_by(self, caller: &ToolCaller) -> impl Future<Output = Self> + Send;
+}
+
+impl CalledBy for ai_tools::ToolServiceContext {
+    async fn called_by(self, caller: &ToolCaller) -> Self {
+        self.for_caller(caller).await
+    }
+}
+
+impl CalledBy for () {
+    async fn called_by(self, _caller: &ToolCaller) -> Self {}
+}
+
+/// Code mode for flagged users: `tools/list` is the SDK entrypoints only.
+pub struct CodeModeSurface {
     /// `ExecuteCode`, `DescribeCodeTools` and `ReadCodeDocs`.
     pub tools: Arc<AsyncToolCollection<UserCodeModeToolContext>>,
-    /// User-scoped execution and Jev.
-    pub context: UserCodeModeToolContext,
+    /// User-scoped execution.
+    pub service: Arc<dyn UserCodeMode>,
+    /// Jev, for selecting documentation by task.
+    pub cognition: Option<Arc<dyn Cognition>>,
     /// The `ai-code-mode` flag, per user.
     pub selector: Arc<dyn ToolModeSelector>,
 }
@@ -68,7 +86,7 @@ pub struct AuthenticatedToolService<Context> {
     /// Static file CDN used for attachments returned by authorized channel reads.
     static_file_base_url: url::Url,
     /// Present when this deployment can run code.
-    code_mode: Option<Arc<CodeModeSurface<Context>>>,
+    code_mode: Option<Arc<CodeModeSurface>>,
     /// Records sessions and tool calls to product analytics.
     analytics: McpAnalytics,
 }
@@ -93,7 +111,7 @@ impl<Context> AuthenticatedToolService<Context> {
     }
 
     /// Offer code mode to users with the `ai-code-mode` flag.
-    pub fn with_code_mode(mut self, code_mode: Arc<CodeModeSurface<Context>>) -> Self {
+    pub fn with_code_mode(mut self, code_mode: Arc<CodeModeSurface>) -> Self {
         self.code_mode = Some(code_mode);
         self
     }
@@ -102,18 +120,26 @@ impl<Context> AuthenticatedToolService<Context> {
         definitions(&self.toolset).collect()
     }
 
-    /// Tools listed for a mode. Code mode lists the reduced native set plus the
-    /// SDK tools; every native tool stays callable either way.
+    /// Tools listed for a mode. Code mode lists only `ExecuteCode` and
+    /// `DescribeCodeTools`. Native tools stay callable if a client already
+    /// knows their names.
     fn tool_definitions_for(&self, mode: ToolMode) -> Vec<Tool> {
         match (mode, &self.code_mode) {
-            (ToolMode::Code, Some(code_mode)) => definitions(&code_mode.native)
-                .chain(definitions(&code_mode.tools))
-                .collect(),
+            (ToolMode::Code, Some(code_mode)) => definitions(&code_mode.tools).collect(),
             _ => self.tool_definitions(),
         }
     }
 
-    async fn tool_mode(&self, user_id: &MacroUserIdStr<'static>) -> ToolMode {
+    /// The mode for one request. ChatGPT always gets the standard tools: its
+    /// plugin directory refuses generic executors, whatever the user's flag.
+    async fn tool_mode(
+        &self,
+        user_id: &MacroUserIdStr<'static>,
+        extensions: &rmcp::model::Extensions,
+    ) -> ToolMode {
+        if caller(extensions).is_ok_and(|caller| may_be_chatgpt(&caller)) {
+            return ToolMode::Standard;
+        }
         match &self.code_mode {
             Some(code_mode) => code_mode.selector.select(user_id).await,
             None => ToolMode::Standard,
@@ -136,12 +162,58 @@ impl<Context> AuthenticatedToolService<Context> {
     }
 }
 
+/// The caller the bearer middleware authenticated the request as. Every
+/// authenticated request carries one; there is no default to fall back to.
+/// Nothing the request says for itself (headers, arguments) can name a bot.
+fn caller(extensions: &rmcp::model::Extensions) -> Result<ToolCaller, rmcp::ErrorData> {
+    extensions
+        .get::<http::request::Parts>()
+        .and_then(|parts| parts.extensions.get::<ToolCaller>().cloned())
+        .ok_or_else(|| {
+            rmcp::ErrorData::internal_error("missing tool caller — is auth configured?", None)
+        })
+}
+
+/// Tools ChatGPT is never offered. Each one runs code or hands an open-ended
+/// task to an agent, and the plugin directory refuses generic executors.
+const HIDDEN_FROM_CHATGPT: [&str; 6] = [
+    "BashCodeExecution",
+    "CreateAgentSession",
+    "DispatchCodingAgent",
+    "ManageAgentSession",
+    "Subagent",
+    "TextEditorCodeExecution",
+];
+
+/// Whether an OAuth caller might be ChatGPT: registered under its name, or
+/// holding a token with no recorded client, which fails closed until the next
+/// refresh records one. The name is self-reported, which is fine here: this
+/// picks how tools are presented and grants nothing, and a client naming itself
+/// ChatGPT only loses code mode and the tools above.
+fn may_be_chatgpt(caller: &ToolCaller) -> bool {
+    match caller {
+        ToolCaller::McpClient { name: None } => true,
+        ToolCaller::McpClient { name: Some(name) } => name.eq_ignore_ascii_case("chatgpt"),
+        ToolCaller::Agent(_) | ToolCaller::ApiKey => false,
+    }
+}
+
 #[cfg(test)]
 mod test;
 
+/// The server instructions' shared rules, and how the areas MCP clients write
+/// into work, from the SDK's `@agent` guidance.
+fn mcp_instructions(base_url: &str) -> String {
+    format!(
+        "{}{}",
+        prompt::mcp_instructions(base_url),
+        agent_code_mode::domain::mcp_guides()
+    )
+}
+
 impl<Context> ServerHandler for AuthenticatedToolService<Context>
 where
-    Context: Clone + Send + Sync + MarkdownImageResolver + 'static,
+    Context: Clone + Send + Sync + MarkdownImageResolver + CalledBy + 'static,
 {
     fn get_info(&self) -> ServerInfo {
         let mut info = ServerInfo::new(ServerCapabilities::builder().enable_tools().build());
@@ -171,7 +243,7 @@ where
              Use ListSkills to discover available skills, SearchSkills to find a skill by name, \
              and ReadSkill to read its full instructions before following them for the current request. \
              Use ListEntities to browse recent items.\n\n{}",
-            prompt::mcp_instructions(base_url),
+            mcp_instructions(base_url),
         ));
         info
     }
@@ -197,11 +269,13 @@ where
             context.peer.set_peer_info(request);
         }
         let mut info = self.get_info();
-        if self.tool_mode(&user_id).await == ToolMode::Code
-            && let Some(instructions) = info.instructions.as_mut()
-        {
-            instructions.push_str("\n\n");
-            instructions.push_str(include_str!("code_mode_instructions.md"));
+        if self.tool_mode(&user_id, &context.extensions).await == ToolMode::Code {
+            let base_url = self.item_base_url.trim_end_matches('/');
+            info.instructions = Some(format!(
+                "{}\n\n{}",
+                include_str!("code_mode_instructions.md").trim(),
+                mcp_instructions(base_url),
+            ));
         }
         Ok(info)
     }
@@ -212,10 +286,14 @@ where
         context: rmcp::service::RequestContext<rmcp::RoleServer>,
     ) -> Result<ListToolsResult, rmcp::ErrorData> {
         let user_id = Self::authenticated_user_id(&context.extensions)?;
-        let mode = self.tool_mode(&user_id).await;
+        let mode = self.tool_mode(&user_id, &context.extensions).await;
+        let mut tools = self.tool_definitions_for(mode);
+        if caller(&context.extensions).is_ok_and(|caller| may_be_chatgpt(&caller)) {
+            tools.retain(|tool| !HIDDEN_FROM_CHATGPT.contains(&tool.name.as_ref()));
+        }
 
         Ok(ListToolsResult {
-            tools: self.tool_definitions_for(mode),
+            tools,
             ..Default::default()
         })
     }
@@ -247,7 +325,7 @@ where
 
 impl<Context> AuthenticatedToolService<Context>
 where
-    Context: Clone + Send + Sync + MarkdownImageResolver + 'static,
+    Context: Clone + Send + Sync + MarkdownImageResolver + CalledBy + 'static,
 {
     /// Runs one tool call and classifies how it ended, for analytics.
     async fn run_tool(
@@ -260,6 +338,20 @@ where
         Result<rmcp::model::CallToolResult, rmcp::ErrorData>,
     ) {
         let mut request_context = RequestContext::new(user_id.clone());
+        let caller = match caller(&context.extensions) {
+            Ok(caller) => caller,
+            Err(error) => return (ToolCallOutcome::InvalidRequest, Err(error)),
+        };
+
+        if may_be_chatgpt(&caller) && HIDDEN_FROM_CHATGPT.contains(&request.name.as_ref()) {
+            return (
+                ToolCallOutcome::InvalidRequest,
+                Err(rmcp::ErrorData::resource_not_found(
+                    format!("tool {} not found", request.name),
+                    None,
+                )),
+            );
+        }
 
         let Some(arguments) = request.arguments.map(serde_json::Value::Object) else {
             return (
@@ -271,7 +363,7 @@ where
         if let Some(code_mode) = &self.code_mode
             && code_mode.tools.tools.contains_key(request.name.as_ref())
         {
-            if self.tool_mode(&user_id).await != ToolMode::Code {
+            if self.tool_mode(&user_id, &context.extensions).await != ToolMode::Code {
                 return (
                     ToolCallOutcome::InvalidRequest,
                     Err(rmcp::ErrorData::resource_not_found(
@@ -284,7 +376,11 @@ where
             let result = match code_mode
                 .tools
                 .try_tool_call(
-                    code_mode.context.clone(),
+                    UserCodeModeToolContext {
+                        service: code_mode.service.clone(),
+                        cognition: code_mode.cognition.clone(),
+                        caller,
+                    },
                     request_context,
                     &request.name,
                     &arguments,
@@ -317,7 +413,7 @@ where
         let result = match self
             .toolset
             .try_tool_call(
-                self.context.clone(),
+                self.context.clone().called_by(&caller).await,
                 request_context,
                 &request.name,
                 &arguments,

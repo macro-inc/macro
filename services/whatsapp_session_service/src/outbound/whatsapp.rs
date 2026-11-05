@@ -13,9 +13,10 @@ use tokio_util::sync::CancellationToken;
 use tracing::Instrument;
 use uuid::Uuid;
 use whatsapp_linked::domain::events::{
-    ChatUpdate, ClaimedSend, InboundEvent, MediaImport, MessageAnchor, OutboundMedia,
-    OutgoingContent, SessionScope, Target,
+    ChatUpdate, ClaimedSend, InboundEvent, InboundKind, LookupAnswer, MediaImport, MessageAnchor,
+    OutboundMedia, OutgoingContent, SessionScope, Target,
 };
+use whatsapp_linked::domain::jid::PhoneNumber;
 use whatsapp_linked::domain::models::{GroupInfo, Identity, Participant};
 use whatsapp_store_pg::kms::WhatsAppKms;
 use whatsapp_store_pg::{PgWhatsAppStore, WhatsAppStoreError};
@@ -25,7 +26,7 @@ use whatsmeow::proto::wa_history_sync::Conversation;
 use whatsmeow::proto::wa_history_sync::history_sync::HistorySyncType;
 use whatsmeow::send::{SendRequestExtra, build_edit};
 use whatsmeow::signal::CurveSignatures;
-use whatsmeow::store::Device;
+use whatsmeow::store::{ContactStore, Device};
 use whatsmeow::types::{Jid, MessageInfo, MessageSource, WebAuthnResponse};
 use whatsmeow::{
     Client, ClientConfig, ClientError, Dialer, Event, EventHandler, QrChannelItem, Signal,
@@ -238,6 +239,32 @@ impl Forwarder {
         let _ = self.events.send(SessionEvent::Chats(chats));
     }
 
+    /// The address book's saved contacts join the chat list, so the owner
+    /// can start a chat with someone never written to. Read on connect and
+    /// after each app-state sync (contacts sync through app state); rows
+    /// that did not change signal nothing.
+    async fn saved_contacts(&self) {
+        let span = tracing::info_span!(
+            "whatsapp.contacts.sync",
+            account_id = %self.account,
+            contacts = tracing::field::Empty,
+        );
+        async {
+            match self.store.get_all_contacts().await {
+                Ok(contacts) => {
+                    let chats = events::contact_chats(&contacts);
+                    tracing::Span::current().record("contacts", chats.len());
+                    self.chats(chats).await;
+                }
+                Err(error) => {
+                    tracing::warn!(error = %error, "Reading the WhatsApp address book failed");
+                }
+            }
+        }
+        .instrument(span)
+        .await;
+    }
+
     /// A history-sync bundle: the chat list (initial, recent, full and
     /// push-name syncs), or an answer to an on-demand request for a chat's
     /// earlier messages.
@@ -289,6 +316,9 @@ impl Forwarder {
             unreadable = tracing::field::Empty,
             skipped = tracing::field::Empty,
             skipped_stub_types = tracing::field::Empty,
+            push_named = tracing::field::Empty,
+            contact_named = tracing::field::Empty,
+            unnamed = tracing::field::Empty,
             outcome = tracing::field::Empty,
         );
         async {
@@ -296,6 +326,7 @@ impl Forwarder {
                 return;
             };
             let mut stored = 0usize;
+            let mut names = SenderNames::default();
             let mut unreadable: Vec<i32> = vec![];
             // Messages Macro does not import, by WhatsApp stub type (0: not
             // a stub), so a page that stores less than it got is explained.
@@ -329,8 +360,9 @@ impl Forwarder {
                 let votes = events::history_poll_votes(self.account, &parsed, now);
                 let mut message_kept = true;
                 for mut event in std::iter::once(event).chain(votes) {
-                    message_kept &= self.complete_addresses(&mut event).await
-                        && Box::pin(self.inbound.accept(&event)).await;
+                    let completed = self.complete_addresses(&mut event).await;
+                    names.count(self.store.as_ref(), &event).await;
+                    message_kept &= completed && Box::pin(self.inbound.accept(&event)).await;
                 }
                 if message_kept {
                     stored += 1;
@@ -340,6 +372,9 @@ impl Forwarder {
             }
             let span = tracing::Span::current();
             span.record("stored", stored);
+            span.record("push_named", names.push);
+            span.record("contact_named", names.contact);
+            span.record("unnamed", names.none);
             span.record("unreadable", unreadable.len());
             span.record("skipped", skipped.len());
             span.record("skipped_stub_types", format!("{skipped:?}"));
@@ -361,6 +396,34 @@ impl Forwarder {
         }
         .instrument(span)
         .await;
+    }
+}
+
+/// How the senders of a history page could be named, for its span: by a
+/// WhatsApp name the message carries, by the account's contact store, or
+/// not at all. Counts only; never the names.
+#[derive(Default)]
+struct SenderNames {
+    push: usize,
+    contact: usize,
+    none: usize,
+}
+
+impl SenderNames {
+    async fn count(&mut self, contacts: &dyn ContactStore, event: &InboundEvent) {
+        let InboundKind::Message(message) = &event.kind else {
+            return;
+        };
+        if message.sender.display_name.is_some() {
+            self.push += 1;
+        } else if matches!(
+            events::contact_name(contacts, &message.sender).await,
+            Ok(Some(_))
+        ) {
+            self.contact += 1;
+        } else {
+            self.none += 1;
+        }
     }
 }
 
@@ -408,6 +471,9 @@ impl EventHandler for Forwarder {
             }
             Event::Message(message) => {
                 Box::pin(self.chats(events::message_chat(message).into_iter().collect())).await;
+            }
+            Event::Connected(_) | Event::AppStateSyncComplete(_) => {
+                Box::pin(self.saved_contacts()).await;
             }
             event => {
                 Box::pin(self.chats(events::chat_setting(event).into_iter().collect())).await;
@@ -474,6 +540,9 @@ fn rejected(error: &ClientError) -> Option<&'static str> {
         ClientError::RecipientAdJid
         | ClientError::BroadcastListUnsupported
         | ClientError::UnknownServer => Some("invalid_recipient"),
+        ClientError::RecipientNotOnWhatsApp => Some("recipient_not_on_provider"),
+        // Only the queries before the message (recipient lookups) are IQs.
+        _ if error.is_iq_code(429) => Some("rate_limited"),
         _ => None,
     }
 }
@@ -946,6 +1015,15 @@ impl WhatsAppSession for WhatsmeowSession {
             .await
             .map(|_| ())
             .map_err(internal)
+    }
+
+    async fn look_up(&self, phone: &PhoneNumber) -> Result<LookupAnswer, SessionError> {
+        let answers = self
+            .client
+            .is_on_whatsapp(&[phone.as_str()])
+            .await
+            .map_err(internal)?;
+        Ok(events::lookup_answer(self.store.as_ref(), self.store.as_ref(), phone, &answers).await)
     }
 
     async fn logout(&self) {

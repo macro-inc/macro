@@ -157,6 +157,12 @@ body.tauri-ios {
   --invert-success: var(--color-success);
   --invert-warning: var(--color-warning);
   --invert-failure: var(--color-failure);
+  --invert-priority-urgent: var(--color-priority-urgent);
+  --invert-task-status-not-started: var(--color-task-status-not-started);
+  --invert-task-status-in-progress: var(--color-task-status-in-progress);
+  --invert-task-status-in-review: var(--color-task-status-in-review);
+  --invert-task-status-completed: var(--color-task-status-completed);
+  --invert-task-status-canceled: var(--color-task-status-canceled);
 }
 
 [data-invert] {
@@ -182,6 +188,12 @@ body.tauri-ios {
   --color-success: color-mix(in oklch, var(--invert-success) 20%, var(--invert-palette-target));
   --color-warning: color-mix(in oklch, var(--invert-warning) 20%, var(--invert-palette-target));
   --color-failure: color-mix(in oklch, var(--invert-failure) 20%, var(--invert-palette-target));
+  --color-priority-urgent: color-mix(in oklch, var(--invert-priority-urgent) 20%, var(--invert-palette-target));
+  --color-task-status-not-started: color-mix(in oklch, var(--invert-task-status-not-started) 20%, var(--invert-palette-target));
+  --color-task-status-in-progress: color-mix(in oklch, var(--invert-task-status-in-progress) 20%, var(--invert-palette-target));
+  --color-task-status-in-review: color-mix(in oklch, var(--invert-task-status-in-review) 20%, var(--invert-palette-target));
+  --color-task-status-completed: color-mix(in oklch, var(--invert-task-status-completed) 20%, var(--invert-palette-target));
+  --color-task-status-canceled: color-mix(in oklch, var(--invert-task-status-canceled) 20%, var(--invert-palette-target));
   --color-accent-contrast: var(--invert-surface);
   --color-accent-contrast-muted: oklch(from var(--color-accent-contrast) l c h / 0.7);
   --theme-surface: initial;
@@ -411,6 +423,12 @@ body.tauri-ios {
   --color-success: var(--color-green);
   --color-warning: var(--color-amber);
   --color-failure: var(--color-red);
+  --color-priority-urgent: var(--color-orange);
+  --color-task-status-not-started: var(--color-content-1);
+  --color-task-status-in-progress: color-mix(in srgb, var(--color-amber) 80%, var(--color-content-0));
+  --color-task-status-in-review: var(--color-violet);
+  --color-task-status-completed: var(--color-accent);
+  --color-task-status-canceled: var(--color-content-1);
   --color-chrome: color-mix(in oklch, var(--color-surface-3) 98%, var(--color-content-0));
 
   /* Generated compatibility tokens. */
@@ -541,13 +559,14 @@ body.tauri-ios {
   --animate-update-glow: update-glow-spin 8s infinite, update-glow-fade 8s linear infinite;
   --animate-accordion-down: accordion-down 150ms ease-out;
   --animate-accordion-up: accordion-up 150ms ease-out;
+  --animate-agent-step-in: agent-step-in 240ms cubic-bezier(0.16, 1, 0.3, 1);
 
   /* Z-index scale — the single source of truth for stacking. Classes come
      from these tokens (`--z-index-foo` -> `z-foo`).
 
      Bands:
        0- 99  in-page — viewer internals (0-19), app chrome (20-30),
-              cross-panel content (31), floating widgets (90)
+              cross-panel content (31), floating widgets (90), phone prompts (95)
      100-199  modal stack, drag previews, menus
      200-299  always on top — tooltips, toasts
 
@@ -597,6 +616,11 @@ body.tauri-ios {
   /* App-level floating widgets (`z-float`: draggable call controls, incoming
      calls). Above all other in-page content, below the modal stack. */
   --z-index-float:          90;
+  /* Phone prompts and reminders wait for an answer, so they stay above the
+     dock and floating widgets but under the modal stack: an open sheet, its
+     scrim and the pickers and menus on it cover them. Phone transient toasts
+     stay on `z-toast-region`. */
+  --z-index-mobile-prompt-region: 95;
 
   /* ---- 100-199: modal stack, drag previews, menus ----------------------- */
   /* Anchored at 100 so nothing in-page can ever cover a modal. */
@@ -635,6 +659,12 @@ body.tauri-ios {
    Root-only and device conditions retain their existing scope. */
 :root,
 [data-theme-light] {
+  --color-priority-urgent: var(--color-orange);
+  --color-task-status-not-started: var(--color-content-1);
+  --color-task-status-in-progress: color-mix(in srgb, var(--color-amber) 80%, var(--color-content-0));
+  --color-task-status-in-review: var(--color-violet);
+  --color-task-status-completed: var(--color-accent);
+  --color-task-status-canceled: var(--color-content-1);
   /* Neutral borders. Focus, status, and glass edges stay independent. */
   --border-primary: oklch(1 0 0 / 16%);
   --border-secondary: oklch(1 0 0 / 12%);
@@ -642,15 +672,15 @@ body.tauri-ios {
   --divider: oklch(1 0 0 / 4%);
 
   /* Button materials. */
-  --button-primary-bg: var(--color-accent);
-  --button-primary-ink: white;
-  --button-primary-state-mix: black;
-  --button-primary-hover: color-mix(in srgb, var(--button-primary-bg) 82%, var(--button-primary-state-mix));
-  --button-primary-pressed: color-mix(in srgb, var(--button-primary-bg) 72%, var(--button-primary-state-mix));
-  --button-neutral-bg: white;
-  --button-neutral-ink: black;
-  --button-neutral-hover: color-mix(in srgb, var(--button-neutral-bg) 82%, var(--button-neutral-ink));
-  --button-neutral-pressed: color-mix(in srgb, var(--button-neutral-bg) 72%, var(--button-neutral-ink));
+  --button-primary-bg: white;
+  --button-primary-ink: black;
+  --button-primary-hover: color-mix(in srgb, var(--button-primary-bg) 82%, var(--button-primary-ink));
+  --button-primary-pressed: color-mix(in srgb, var(--button-primary-bg) 72%, var(--button-primary-ink));
+  --button-accent-bg: var(--color-accent);
+  --button-accent-ink: white;
+  --button-accent-state-mix: black;
+  --button-accent-hover: color-mix(in srgb, var(--button-accent-bg) 82%, var(--button-accent-state-mix));
+  --button-accent-pressed: color-mix(in srgb, var(--button-accent-bg) 72%, var(--button-accent-state-mix));
   --button-focus: var(--color-edge-focus, var(--color-accent));
   --button-elevated-outline: var(--glass-desktop-outline);
   --button-elevated-top-edge: var(--glass-desktop-top-edge);
@@ -712,6 +742,7 @@ body.tauri-ios {
 }
 
 [data-theme-light='true'] {
+  --color-task-status-in-progress: color-mix(in srgb, var(--color-amber) 85%, var(--color-content-0));
   /* Neutral borders. */
   --border-primary: oklch(0 0 0 / 16%);
   --border-secondary: oklch(0 0 0 / 12%);
@@ -719,8 +750,8 @@ body.tauri-ios {
   --divider: oklch(0 0 0 / 4%);
 
   /* Button materials. */
-  --button-neutral-bg: black;
-  --button-neutral-ink: white;
+  --button-primary-bg: black;
+  --button-primary-ink: white;
   /* Keep hover and pressed shading neutral over the lightly tinted face. */
   --button-secondary-bg: var(--button-secondary-face);
   --button-secondary-hover: color-mix(in srgb, var(--button-secondary-face), black 4%);
@@ -782,10 +813,10 @@ body.tauri-ios {
   --color-button-primary-hover: var(--button-primary-hover);
   --color-button-primary-pressed: var(--button-primary-pressed);
   --color-button-primary-ink: var(--button-primary-ink);
-  --color-button-neutral-bg: var(--button-neutral-bg);
-  --color-button-neutral-ink: var(--button-neutral-ink);
-  --color-button-neutral-hover: var(--button-neutral-hover);
-  --color-button-neutral-pressed: var(--button-neutral-pressed);
+  --color-button-accent-bg: var(--button-accent-bg);
+  --color-button-accent-ink: var(--button-accent-ink);
+  --color-button-accent-hover: var(--button-accent-hover);
+  --color-button-accent-pressed: var(--button-accent-pressed);
   --color-button-secondary-bg: var(--button-secondary-bg);
   --color-button-secondary-hover: var(--button-secondary-hover);
   --color-button-secondary-pressed: var(--button-secondary-pressed);
@@ -1320,28 +1351,33 @@ html[data-platform='ios'][data-touch-device='true'] :is(
   }
 }
 
+/* One pass, then a rest: the highlight crosses in the first 60% of the
+   period and the label stays dim for the remainder. */
 @keyframes magic-chip-shimmer {
   0% {
     background-position: 100% 0;
   }
+  60%,
   100% {
     background-position: 0% 0;
   }
 }
 
+/* A highlight wider than the label, with a sharp leading edge and a long
+   tail, so the whole label lifts quickly from dim and fades back slowly. */
 .magic-chip-shimmer {
   background: linear-gradient(
     90deg,
-    var(--color-ink-extra-muted) 40%,
-    var(--color-ink) 50%,
-    var(--color-ink-extra-muted) 60%
+    color-mix(in oklch, var(--color-ink-disabled) 60%, transparent) 25%,
+    var(--color-ink-muted) 58%,
+    color-mix(in oklch, var(--color-ink-disabled) 60%, transparent) 70%
   );
-  background-size: 250% 100%;
+  background-size: 400% 100%;
   /* The highlight starts and ends just outside the text, without tiling. */
   background-repeat: no-repeat;
   background-clip: text;
   color: transparent;
-  animation: magic-chip-shimmer 1.8s linear infinite;
+  animation: magic-chip-shimmer 1.2s linear infinite;
 }
 
 @media (prefers-reduced-motion: reduce) {
@@ -1352,38 +1388,87 @@ html[data-platform='ios'][data-touch-device='true'] :is(
   }
 }
 
-/* The three dots leading an open agent turn that has nothing to expand yet.
-   A staggered ripple on the shimmer's period, so the row reads as one motion,
-   not two. */
-@keyframes agent-working-wave {
+/* One dot of `WorkingDots`: it brightens, then fades back to faint for the
+   rest of its cycle. */
+@keyframes agent-working-dot {
   0%,
-  60%,
+  70%,
   100% {
-    opacity: 0.35;
-    transform: translateY(0);
+    opacity: 0.15;
   }
-  30% {
+  35% {
     opacity: 1;
-    transform: translateY(-2px);
   }
 }
 
-.agent-working-wave > * {
-  animation: agent-working-wave 1.8s ease-in-out infinite;
+.agent-working-dot {
+  animation: agent-working-dot 1.4s ease-in-out infinite;
 }
 
-.agent-working-wave > :nth-child(2) {
-  animation-delay: 0.2s;
+/* `WorkingDots` turning a full circle in eighths, so the loop ends where it
+   began and no dot jumps: each 45° step turns for 0.2s, then holds for 0.4s. */
+@keyframes agent-working-twirl {
+  0%,
+  8.5% {
+    transform: rotate(0deg);
+  }
+  12.5%,
+  21% {
+    transform: rotate(45deg);
+  }
+  25%,
+  33.5% {
+    transform: rotate(90deg);
+  }
+  37.5%,
+  46% {
+    transform: rotate(135deg);
+  }
+  50%,
+  58.5% {
+    transform: rotate(180deg);
+  }
+  62.5%,
+  71% {
+    transform: rotate(225deg);
+  }
+  75%,
+  83.5% {
+    transform: rotate(270deg);
+  }
+  87.5%,
+  96% {
+    transform: rotate(315deg);
+  }
+  100% {
+    transform: rotate(360deg);
+  }
 }
 
-.agent-working-wave > :nth-child(3) {
-  animation-delay: 0.4s;
+.agent-working-twirl {
+  animation: agent-working-twirl 4.8s ease-in-out infinite;
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .agent-working-wave > * {
+  .agent-working-twirl {
     animation: none;
-    opacity: 0.55;
+  }
+
+  .agent-working-dot {
+    animation: none;
+    opacity: 0.6;
+  }
+}
+
+/* The next step rising into an agent's one-line progress. */
+@keyframes agent-step-in {
+  from {
+    opacity: 0;
+    transform: translateY(60%);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
   }
 }
 

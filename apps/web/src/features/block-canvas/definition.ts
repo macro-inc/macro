@@ -21,7 +21,7 @@ export const definition = defineBlock({
     canvas: 'application/x-macro-canvas',
   },
   liveTrackingEnabled: true,
-  async load(source, intent) {
+  async load(source, intent, parentSpan) {
     if (source.type === 'dss') {
       if (intent === 'preload') {
         await fetchFileDocumentOpenContext(source.id);
@@ -32,7 +32,7 @@ export const definition = defineBlock({
       }
 
       const maybeDocument = await loadResult(
-        catchToResult(() => loadCanvasDocument(source.id))
+        catchToResult(() => loadCanvasDocument(source.id, parentSpan))
       );
       if (maybeDocument.isErr()) return err(maybeDocument.error);
       const documentResult = maybeDocument.value;

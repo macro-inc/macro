@@ -10,6 +10,54 @@ function heldResponse() {
   };
 }
 
+for (const result of ['emails', 'empty'] as const) {
+  test(`a cold Noise tab stays loading until its first server result: ${result}`, async ({
+    page,
+  }) => {
+    const network = heldResponse();
+    await page.route('**/__mail-flicker/graphql', async (route) => {
+      const request: { variables: SoupQueryVariables } = route
+        .request()
+        .postDataJSON();
+      const initial = request.variables.input.initial;
+      const noise =
+        initial?.filters?.emailFilter?.tree?.literal?.importance === false;
+      if (!noise) {
+        await route.fulfill({ json: { data: response([]) } });
+        return;
+      }
+      network.requested.resolve();
+      await network.release.promise;
+      await route.fulfill({
+        json: { data: response(result === 'emails' ? SERVER_IDS : []) },
+      });
+    });
+    await page.goto(
+      `/?scope=cold-noise-${crypto.randomUUID()}&seed=false&tab=signal`
+    );
+    await page.evaluate(() => window.mailFlicker.releaseLocalReads());
+    const list = page.locator('#mail-list');
+    const rows = page.locator('[data-thread-id]');
+    await expect(list).toHaveAttribute('data-source', 'network');
+    await expect(list).toHaveAttribute('aria-busy', 'false');
+    await page.getByRole('button', { name: 'Noise', exact: true }).click();
+    await network.requested.promise;
+    await page.evaluate(() => window.mailFlicker.releaseLocalReads());
+    // The real worker has finished its empty local query, while HTTP is still
+    // held. That is incomplete mailbox coverage, not a confirmed empty tab.
+    await expect(list).toHaveAttribute('data-source', 'local');
+    await expect(rows).toHaveCount(0);
+    await expect(list).toHaveAttribute('aria-busy', 'true');
+    network.release.resolve();
+    await expect(list).toHaveAttribute('data-source', 'network');
+    await expect(list).toHaveAttribute('aria-busy', 'false');
+    await expect(rows).toHaveCount(result === 'emails' ? SERVER_IDS.length : 0);
+    expect(
+      await page.evaluate(() => window.mailFlicker.stopRecording().cacheErrors)
+    ).toEqual([]);
+  });
+}
+
 test('Noise never reintroduces repaired stale threads between cached and network renders', async ({
   page,
 }, testInfo) => {
@@ -46,6 +94,7 @@ test('Noise never reintroduces repaired stale threads between cached and network
   await page.evaluate(() => window.mailFlicker.startRecording());
   await page.evaluate(() => window.mailFlicker.releaseLocalReads());
   await expect(list).toHaveAttribute('data-source', 'local');
+  await expect(list).toHaveAttribute('aria-busy', 'false');
   network.release.resolve();
   await expect(list).toHaveAttribute('data-source', 'network');
   await expect(rows).toHaveCount(SERVER_IDS.length);

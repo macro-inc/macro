@@ -6,7 +6,7 @@ import {
 import { useSettingsState } from '@core/constant/SettingsState';
 import { useSettingsTabAvailable } from '@core/constant/settingsTabsConfig';
 import { isMobile } from '@core/mobile/isMobile';
-import { PipedreamConnectorIcon } from '@core/pipedream/ConnectorIcon';
+import { ConnectedAppIcon } from '@core/pipedream/ConnectedAppIcon';
 import LightningIcon from '@icon/system/regular/lightning.svg';
 import PlugsIcon from '@icon/system/regular/plugs.svg';
 import PlusIcon from '@icon/system/regular/plus.svg';
@@ -111,7 +111,7 @@ export function AgentComposerAddMenu(props: {
             : 'Disabled · Open settings',
           icon:
             connection.kind === 'pipedream' ? (
-              <PipedreamConnectorIcon appSlug={connection.appSlug} />
+              <ConnectedAppIcon appSlug={connection.appSlug} />
             ) : (
               <PlugsIcon />
             ),
@@ -222,6 +222,10 @@ export function AgentComposerAddMenu(props: {
                     onOpenMacroMcp={() => {
                       setTarget(undefined);
                       settings.openSettings('Agent');
+                    }}
+                    onOpenEmailSettings={() => {
+                      setTarget(undefined);
+                      settings.openSettings('Email');
                     }}
                   />
                 }

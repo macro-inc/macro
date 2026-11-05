@@ -77,6 +77,10 @@ pub enum AiFeature {
     Dictation,
     /// Image generation and editing.
     ImageGeneration,
+    /// Classifying signal email threads for the Focus view.
+    EmailFocus,
+    /// Web search and page fetches for agents and the SDK.
+    WebSearch,
 }
 
 /// Strip a provider prefix from a routing id, yielding the bare model api id
@@ -112,6 +116,11 @@ pub enum UsageAmount {
         /// Provider-reported duration of the audio.
         duration: std::time::Duration,
     },
+    /// Credits a vendor billed for a request (e.g. Tavily search/extract credits).
+    ProviderCredits {
+        /// Vendor-reported credits consumed.
+        credits: u64,
+    },
 }
 
 /// Rates for a model's billing unit.
@@ -133,6 +142,11 @@ pub enum ModelPricing {
         /// Audio minute rate.
         per_minute: f32,
     },
+    /// Price per vendor credit (USD).
+    ProviderCredits {
+        /// Credit rate.
+        per_credit: f32,
+    },
 }
 
 impl ModelPricing {
@@ -152,6 +166,7 @@ impl ModelPricing {
                     && cache_write.is_none_or(valid)
             }
             Self::Audio { per_minute } => valid(per_minute),
+            Self::ProviderCredits { per_credit } => valid(per_credit),
         };
         if is_valid {
             Ok(self)
@@ -197,6 +212,10 @@ impl Price {
             (ModelPricing::Audio { per_minute }, UsageAmount::Audio { duration }) => {
                 duration.as_secs_f64() / 60.0 * f64::from(per_minute)
             }
+            (
+                ModelPricing::ProviderCredits { per_credit },
+                UsageAmount::ProviderCredits { credits },
+            ) => credits as f64 * f64::from(per_credit),
             _ => return None,
         };
         Some(Self {
@@ -242,7 +261,7 @@ pub struct CompletionUsage {
     /// The agent's own API key that paid for the completion, if Macro
     /// did not. Such usage is recorded but never counted toward a quota.
     pub agent_api_key_id: Option<Uuid>,
-    /// Token/audio usage and cost.
+    /// Token/audio/credit usage and cost.
     pub cost: Usage,
 }
 
@@ -372,6 +391,18 @@ impl UsageContext {
             entity: self.entity,
             model,
             amount: UsageAmount::Audio { duration },
+            agent_api_key_id: self.agent_api_key_id,
+        }
+    }
+
+    /// Build a credit-based event for a vendor that bills in its own credits.
+    pub fn into_provider_credits_event(self, model: String, credits: u64) -> UsageEvent {
+        UsageEvent {
+            feature: self.feature,
+            user: self.user,
+            entity: self.entity,
+            model,
+            amount: UsageAmount::ProviderCredits { credits },
             agent_api_key_id: self.agent_api_key_id,
         }
     }

@@ -107,6 +107,7 @@ export const TOKENS = {
     searchMenu: 'global.searchMenu',
     toggleSettings: 'global.toggleSettings',
     createNewSplit: 'global.createNewSplit',
+    createNewSplitBelow: 'global.createNewSplitBelow',
     inviteTeam: 'global.inviteTeam',
     undo: 'global.undo',
     redo: 'global.redo',
@@ -129,6 +130,7 @@ export const TOKENS = {
     goToLeader: 'sidebar.goToLeader',
     goTo: {
       home: 'sidebar.goTo.home',
+      notifications: 'sidebar.goTo.notifications',
       recent: 'sidebar.goTo.recent',
       activity: 'sidebar.goTo.activity',
       calendar: 'sidebar.goTo.calendar',
@@ -172,6 +174,7 @@ export const TOKENS = {
     toggleReadingPane: 'email.toggleReadingPane',
     star: 'email.star',
     mute: 'email.mute',
+    createEvent: 'email.createEvent',
     compose: {
       edit: {
         recipients: 'email.compose.edit.recipients',

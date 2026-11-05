@@ -23,6 +23,10 @@ import type { CrmRoute, CrmWorkspace } from './context/workspace-context';
 import type { CrmViewConfig } from './core/saved-view';
 import { createCrmCollectionFilters } from './filter-adapter';
 import { COMPANY_GROUP_OPTIONS } from './group-options';
+import {
+  bindPeopleVisibility,
+  createPeopleVisibility,
+} from './primitives/people-visibility';
 import { createSettingsPage } from './primitives/settings-page';
 
 // The filter context lands in cached soup query meta, so its stage resolvers
@@ -76,6 +80,17 @@ export function createCrmWorkspace(
 ) {
   const soup = useSoup();
   const panel = useSplitPanelOrThrow();
+  const team = crm.createTeamSource();
+  const isAdmin = crm.isTeamAdmin();
+  const peopleVisibility = createPeopleVisibility({
+    userId: crm.userId,
+    teamId: () =>
+      !team.isPending && team.data?.team.crm_enabled
+        ? team.data.team.id
+        : undefined,
+    isAdmin,
+    activeTab: route.tab,
+  });
   const stages = crm.createDealStages();
   const stageResolvers = stageFilterResolvers(stages);
   const [persistFilters] = useSoupFilterPersistence();
@@ -102,6 +117,7 @@ export function createCrmWorkspace(
       },
       filterContext: () => ({
         ...stageResolvers,
+        crmRemovedPeopleTeamId: peopleVisibility.removedTeamId(),
         owners: filters.state.ownerFilter(),
         stages: filters.state.stageFilter(),
       }),
@@ -119,7 +135,9 @@ export function createCrmWorkspace(
     return tab !== VIEW_TAB_PRESETS.companies.default ? tab : undefined;
   });
   // A record link names its list; nothing may move it off the record.
-  const initialRecordOpen = untrack(() => route.records().length > 0);
+  const initialRecordOpen = untrack(
+    () => route.records().length > 0 || !!route.item()
+  );
   const initialTabPreset =
     initialUrlTab && initialUrlTab in VIEW_TAB_PRESETS.companies.tabs
       ? getViewPreset('companies', initialUrlTab)
@@ -287,8 +305,10 @@ export function createCrmWorkspace(
       route.commentTarget()?.seek ?? '',
     ].join(' ')
   );
+  bindPeopleVisibility(peopleVisibility, soupView);
   const context: CrmWorkspace = {
     ...soupView,
+    peopleVisibility,
     setActiveTab: wrappedSetActiveTab,
     host: {
       scopeId: panel.splitHotkeyScope,

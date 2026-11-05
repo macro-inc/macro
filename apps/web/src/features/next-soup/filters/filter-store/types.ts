@@ -95,6 +95,8 @@ export type ScalarFieldFilters = {
   chatDone?: boolean;
   folderSeen?: boolean;
   folderDone?: boolean;
+  initiativeSeen?: boolean;
+  initiativeDone?: boolean;
   foreignEntitySeen?: boolean;
   foreignEntityDone?: boolean;
   foreignEntityIncludesMe?: boolean;
@@ -102,6 +104,8 @@ export type ScalarFieldFilters = {
   callAttended?: boolean;
   crmCompanyHidden?: boolean;
   crmContactHidden?: boolean;
+  /** Owning teams, applied by the server before contact deduplication and paging. */
+  crmContactTeamId?: string[];
   /** Literal text matched against a CRM contact's name or email. */
   crmContactSearch?: string;
   calendarEventSeen?: boolean;

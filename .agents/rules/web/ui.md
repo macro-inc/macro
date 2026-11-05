@@ -16,11 +16,13 @@ Components, styling, and interaction conventions.
 - **FE-23** Disclosure carets rotate 180° to point down when expanded, matching
   Discussion, SplitFileMenu, CollapsibleMessage, etc.
 - **FE-24** Truncated/collapsed controls get a tooltip (matching the app's
-  tooltip pattern) so the lost label stays discoverable.
+  tooltip pattern) so the lost label stays discoverable. Use shared tooltips or
+  popovers instead of native `title`; give each target one hint surface.
 - **FE-25** Semantic color tokens, not raw Tailwind palette classes — the
   default palette is disabled via `--color-*: initial` in
   `apps/web/src/index.css`, so classes like `text-red-500` silently render
   nothing. Enforced by ast-grep `tsx-no-raw-tailwind-palette`, CI error.
+  Use existing semantic surface tokens instead of component-local color mixes.
 - Keep runtime theme tokens together in `apps/web/src/index.css`: one
   `:root, [data-theme-light]` block for dark defaults, followed by one
   `[data-theme-light='true']` override block. Keep any narrower root/device
@@ -28,7 +30,8 @@ Components, styling, and interaction conventions.
   component utilities and layer/inversion rules keep their own responsibilities.
   Do not append separate border, Button, glass, or avatar theme blocks elsewhere.
 - **FE-26** Prefer composition over configurability; keep reusable components
-  small and free of queries/complex state.
+  small and free of queries/complex state. Prefer children or JSX slots over
+  render props when the parent provides no data to the child.
 - **FE-27** Don't add `cursor-pointer` to clickable elements. Enforced by
   ast-grep `tsx-no-cursor-pointer`, warning.
 - **FE-28** Dialogs rely on Kobalte's default autofocus: make the intended

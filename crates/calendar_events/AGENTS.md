@@ -15,8 +15,6 @@ reminder dispatch, team availability, and provider/Postgres persistence.
 - `src/domain/capabilities.rs`: Google's organizer-set `GuestPolicy` and the
   `ViewerCapabilities` every read surface exposes as `viewerCan`.
 - `src/domain/team_availability.rs` + `src/domain/team.rs`: team sharing/availability.
-- `src/domain/notes.rs`, `src/outbound/pg_notes.rs`, `src/inbound/notes_router.rs`:
-  occurrence-scoped markdown links and optional team view access (feature `notes`).
 - `src/outbound/google.rs`, `src/outbound/pg.rs`: Google Calendar and Postgres adapters.
 - `src/outbound/pg/outlook.rs`: durable Outlook synchronization; preserve
   provider-specific coverage on discovery.
@@ -37,7 +35,7 @@ reminder dispatch, team availability, and provider/Postgres persistence.
   `notification` (feature `notify`), `model_notifications`, `aws-sdk-sqs`
   (feature `dispatch-sqs`).
 - Used by: `email`, `ai_tools`, `channel_bots`, `graphql_calendar`, `complete_graph`,
-  `calendar_scheduling`.
+  `calendar_scheduling`, `search_service`.
 
 ## Recipes
 
@@ -52,17 +50,9 @@ reminder dispatch, team availability, and provider/Postgres persistence.
 ## Checks
 
 - `cargo test -p calendar_events` (`SQLX_OFFLINE` unset).
-- `cargo test -p calendar_events --features notes,postgres` covers meeting-note
-  policy and its document-access integration against a migrated local MacroDB.
 
 ## Gotchas
 
-- Keep note links separate from sync-owned occurrence rows; require a live
-  occurrence and corroborated inbox copies for inherited view access. A document
-  owner can unlink after losing meeting access. Document readers can discover
-  only links whose meeting details they can currently see; owners also retain
-  unavailable links for revocation. See
-  [meeting-note access](../../docs/architecture/calendar-meeting-notes.md).
 - `CalendarEvent` is the stable Macro entity; external calendars and email
   invitations are sources feeding it, and recurrence instances are queryable
   occurrence projections, not separate events — don't model them as new entities.
@@ -155,8 +145,8 @@ reminder dispatch, team availability, and provider/Postgres persistence.
   `CalendarSnapshotImporter::import_snapshot`, fed an `EventSnapshot` that
   `crates/email`'s `invitation_import` builds from the email's saved snapshot.
   Only the channel-share path strips the Macro call
-  (`EventSnapshot::without_macro_call`); a forwarded file keeps the join link
-  it carries.
+  (`content_without_macro_call`, behind `EventSnapshot::without_macro_call`);
+  a forwarded file keeps the join link it carries.
   The other direction, a guest forwarding their copy of an event, renders it
   through `CalendarEventForwardSource::event_forward`, which also names the
   inbox holding that copy (`meeting_copies`), and is `None` for a channel
@@ -185,12 +175,64 @@ reminder dispatch, team availability, and provider/Postgres persistence.
   sharer twice. While the requester's request is pending or accepted,
   `copy_shared_event` refuses with `JoinRequestOpen`: the answer is an
   invitation under the meeting's UID, which a snapshot imported meanwhile
-  would take in. A declined requester may still add a copy.
+  would take in. A declined requester may still add a copy. Nothing in the
+  domain retires the sharer's notification: opening the event marks it seen,
+  a trigger on `calendar_event_join_requests` running
+  `delete_answered_join_request_notification` deletes it when anyone answers
+  the request, a second there running
+  `delete_removed_join_request_notification` deletes it with the request row,
+  which the requester's account deletion cascades away, and two triggers on
+  `calendar_events` running `delete_calendar_event_join_request_notifications`
+  delete it with the event row, or when the row turns `cancelled` (Outlook can
+  keep a cancelled meeting). That covers the ways a copy goes away listed for
+  channel grants above, and each delete reaches open clients through
+  `trg_notify_user_notification_deletes`. An event can hold several open
+  requests, so the triggers on the request row match the `requestId` in the
+  notification's metadata, not the event alone. The notifier only queues, so a
+  backlog can deliver a notification after that cleanup; a `notification`
+  insert trigger skips it while the event is gone or cancelled or the request
+  is no longer pending, locking the event and then the request to decide in
+  order with a change in flight. Deleting an event reaches both delete cleanups
+  in one transaction, and whichever runs first leaves nothing for the other.
+  Both lock only `notification` rows, once the delete holds its row, so neither
+  changes that order. The cancelled row keeps its requests, as it keeps its
+  grants, and a cancelled occurrence changes neither.
+  An answer that changes the request reaches open clients through
+  `CalendarRefreshNotifier`, after it is stored (an acceptance's invite nudges
+  before that, too early to carry it): `calendar_changed` for the owner and
+  delegates of the sharer's inbox, whose `refresh_calendar` refetches open
+  request lists, and `join_request_answered` for the requester, who views the
+  event through the share, so that signal names the event and never the
+  sharer's inbox. A list reader may hold no notification, so the delete above
+  is not that signal. An answer to a request no longer pending returns it
+  unchanged and stays quiet; the client reads a status other than its decision
+  as already answered. Only an acceptance whose invitation is being written
+  overrules a decline (`resolve_join_request`), and it returns `accepted`.
+  A new request reaches open lists the same way: `request_to_join` sends
+  `calendar_changed` for the inbox of the sharer's copy once the row is stored,
+  and only when this ask created it, so a repeat or a refused ask stays quiet.
+  Each inbox holds its own entity, so however many of its calendars hold the
+  event there is one list and one nudge, and another inbox's copy has its own
+  list. The signal names that inbox, so it goes only to the list's readers;
+  the requester is never one, since a reader's own view of the event is
+  `OwnCopy`, which refuses the ask. The web also refetches the list when the
+  sharer's notification lands, but that is not the signal: it reaches no
+  delegate, a muted category never sends it, and the notifier only queues.
+  `document_storage_service` hosts the ask, so it has its own
+  `CalendarRefreshNotifier` (`src/outbound/calendar_refresh.rs`).
 - Calendar mentions reach the agent as document mentions (`blockName`
   `calendar`), but `ReadContent` and `ReadMetadata` need document access, which
   a channel-shared event never grants. The agent reads a mentioned event with
   `ReadCalendarEvent` (`src/inbound/toolset/read_calendar_event.rs`), which goes
-  through `mention_previews`: the hover card's visibility and fields.
+  through `mention_previews`: the hover card's visibility and fields. A preview
+  that falls back to a channel share loses its Macro call there, in the
+  repository and before the description cap, since the join line closes the
+  description. Whoever resolves to their own copy keeps it: the card's Join
+  button reads the link from the preview. Only the generated Macro call goes;
+  join text a provider wrote into the body, as a Teams invitation's, stays, as
+  it does in a snapshot. Search rows apply the same rule, but a row stays on
+  the hit instead of resolving to the viewer's copy, so there a snapshot does
+  not count as holding the meeting.
 - Google names the calendar an event was made on as its organizer, so an
   event on a secondary calendar has that calendar's id
   (`…@group.calendar.google.com`) as `organizer_email`; Google's
@@ -263,15 +305,94 @@ reminder dispatch, team availability, and provider/Postgres persistence.
   (`agent_code_mode::covered_by_code_sdk`), so the routes and the SDK docs are
   what reach them; the web, which opens one copy, sends no `inbox` and is not
   checked.
+- No provider field says whose calendar it is. An inbox syncs every calendar
+  its account can see under its own address, and Google gives `accessRole`
+  `owner` to anyone with manage rights, on a colleague's primary calendar too;
+  Outlook stores only `canEdit`; `is_primary` is false on a person's own other
+  calendars. `VisibleCalendar::contributes_to_availability` is the nearest
+  signal: the user's setting, by default the primaries of inboxes they own.
+  With meetings they attend, it is their own schedule for agents as for
+  `TeamSourceOccurrence::is_personally_busy`. `viewer_can.organize` stays a
+  capability, since writing a calendar lets the user act as its organizer, so
+  `EventRole::of` and the SDK's `eventRole` count it only on such a
+  calendar, and `ReadCalendarEvent` reports anything else as
+  `on_visible_calendar`. Microsoft Graph names the mailbox owner as organizer
+  on every event of a read-only calendar such as Outlook's holidays, and the
+  normalizer turns that into an own attendee row, so both role readers give no
+  role (not `guest`) for that row on a read-only event. Gate it on
+  `is_read_only`, never on availability: the copy rules read the role of the
+  copy the user organizes, which may be off availability. The entity carries
+  its canonical copy's flag, and a writable copy outranks a read-only one, so
+  a meeting the user organizes keeps its role when a read-only calendar shows
+  it too. The calendar's name is what tells an agent whose it is: Google names
+  a person's primary calendar after them or their address. `domain::labels` is
+  the one place these rules live: the agent tools read `CalendarLabels` and
+  `EventRole::of` from it, and search rows, which agents read as often as
+  occurrences, get the same answer through `CalendarEventLabelReader`, which
+  labels every hit (`EventLabels::of`) from one read of the requester's
+  calendars and inboxes. Search reaches it as a trait object the host injects,
+  so it needs no outbound code from this crate. `off_schedule_summary` is the
+  plain sentence for an event that is not the user's: `ReadCalendarEvent` and
+  `NameSearch` both give it, because models follow it more reliably than the
+  fields behind it.
+- A series Google split off another without moving it in time has the id
+  `<parent>_R<first start>`, a UID of its own and the parent's `created`; a
+  split that moved it gets an unrelated id. A change to a `_R` series' recurrence
+  answers with a new event, new id and UID at `sequence` + 1, and leaves the old
+  id, and every later `_R` slice of that parent, a cancelled tombstone Google
+  refuses to patch (`badRequest`). The entity follows the UID, so the echo lands
+  on a new entity: `delete_copy` retires the old id's source in the same request,
+  or the old entity keeps every occurrence until the tombstone syncs, and
+  `truncate_recurring_event` reads a tombstone as gone, so a delete from a copy
+  or later slice that has not synced yet retires it too.
 - Copies of one meeting pair by `calendar_meeting_uid(ical_uid)`, not the raw
   UID: Exchange gives a meeting it imports from an invitation its own UID that
   wraps the original after `vCal-Uid`, and the SQL function unwraps it, so an
   Outlook copy of a Google meeting pairs with its Google copies in
-  `meeting_copies`, the mention preview, `event_export` and email invitation
-  matching (`pg/invitations.rs`), where an Outlook inbox's invitation card
-  resolves to that inbox's own copy and answers as it.
+  `meeting_copies`, the mention preview, `event_export`, the channel-shared
+  search scope and email invitation matching (`pg/invitations.rs`), where an
+  Outlook inbox's invitation card resolves to that inbox's own copy and answers
+  as it.
 - Preserve the conservative OOO refresh hint on write outcomes and sync reports;
   its contract is in [team sharing](../../docs/design/calendar-team-sharing.md).
+  Retirements carry it per event (`RetiredCalendarEvent::team_ooo_changed`): only
+  removing a source whose typed `event_type` is out of office raises it, since
+  every sync of a removed meeting's attendees reaches their teammates' calendars
+  and the hint blanks their overlay.
+- The Outlook sync (`src/domain/outlook.rs`) refreshes a page's events one
+  at a time, first pending id first, and retries that id after any error, so
+  one error blocks the calendar. An event the adapter cannot normalize is not
+  an error: it comes back as `OutlookEventRefresh::Unreadable` with the Graph
+  property it rejected, and the sync skips it, as Google never shows an event
+  it cannot normalize. The event is absent: a copy stored before is retired
+  (`OutlookCalendarProgress::Unreadable`), since without the calendar error
+  Google shows beside its old copy a stale copy would look current, but its
+  page membership stays so later tombstones resolve. The round still finishes
+  as a clean sync. The warning `skipping an Outlook event Macro cannot read`
+  and the `calendar.outlook_sync` span carry `calendar_id`,
+  `provider_event_id` and `rejected_field`. Discovery does not fail on a
+  mailbox time zone Macro cannot map to IANA either: `OutlookDiscovery`
+  stores the account's calendars with no `time_zone`, which every reader
+  treats as unknown, as it does a Google calendar's zone it cannot read
+  (reminders and automatic declines anchor all-day dates at UTC, team
+  availability reports the zone missing). The warning `ignoring an Outlook
+  mailbox time zone Macro cannot map` and the span carry `unmapped_time_zone`.
+- A calendar's sync error reaches calendar caches only as an `UpsertCalendar`
+  change-log entry, since they read the calendar list once and then follow
+  the log. Google and Outlook log one when the shown error
+  (`visible_calendar_sync_error_tx`, past
+  `CALENDAR_SYNC_FAILURE_BADGE_THRESHOLD` failures) appears or is reworded
+  (`failure_changes_sync_error_badge`) and when the round that clears it
+  commits, never on a routine round (Outlook polls every two minutes).
+  Neither nudges open clients for it, so a tab sees it on its next delta.
+  Outlook logged none before November 2026;
+  `20261105002046_log_outlook_calendars_for_their_sync_error.sql` logs every
+  visible Outlook calendar once so caches that missed a change refetch it.
+- A sync of a `ready`, already synced account stays `ready`, on Google as on
+  Outlook, including after a re-grant that kept calendar access, whose sync tokens
+  survive. Any other state is catching up and marks it `syncing`: a first import,
+  a retry, or a return from `disabled` or `reauth_required`. The web's
+  `Syncing your calendar…` banner and its 5 second poll read that state.
 - The team out-of-office overlay (`src/outbound/pg_team/ooo.rs`) starts from
   the viewer's teammates and reaches sources through
   `calendar_event_sources_out_of_office_idx` on the source's typed

@@ -117,15 +117,20 @@ Nothing checks this at compile time. A missing insert surfaces only when a clien
 selects the field, as a "data does not exist" error. The `complete_graph` tests
 insert their own data, so they don't catch it.
 
-**Replica or primary.** Ordinary queries, lists, and subscription hydration read
-the replica (`readonly_db`). In production it lags 1–9 s. Mutation replies, and
-anything read right after a write (a just-created entity, a subscribe-then-query
-log), need a primary-backed loader. Copy `AgentSessionEntityLoader` in
-`crates/graphql_soup/src/loaders.rs` or `email_mutation_thread_loader` in
-`crates/graphql_soup/src/mutation_thread.rs`. A new agent session read from the
-replica came back `null` and the client reported "not accessible". Local stacks
-can't reproduce this because their replica URL is the primary, so decide
-deliberately.
+**Replica or primary.** Ordinary queries and lists read the replica
+(`readonly_db`). In production it lags 1–9 s. Mutation replies, `soupUpdates`
+hydration, and anything read right after a write (a just-created entity, a
+subscribe-then-query log), need a primary-backed loader. Copy
+`AgentSessionEntityLoader` in `crates/graphql_soup/src/loaders.rs` or
+`email_mutation_thread_loader` in `crates/graphql_soup/src/mutation_thread.rs`.
+A new agent session read from the replica came back `null` and the client
+reported "not accessible". Local stacks can't reproduce this because their
+replica URL is the primary, so decide deliberately.
+
+**Team access.** Build Soup entity loaders with their `::new` constructors or
+`soup_item_loader_with_team_access`. GitHub pull requests and CRM records are
+stored for the team, so a loader without the viewer's team returns sessions
+whose PR state is unknown. The client then caches that state over the list's.
 
 ## 5. Regenerate the SDL (required)
 

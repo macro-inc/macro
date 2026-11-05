@@ -1,5 +1,6 @@
 import type {
   CreateCrmCompanyRequest,
+  CreateCrmTeamContactRequest,
   CrmStagesResponse,
   CrmTeamSettingsResponse,
   ReplaceCrmStagesRequest,
@@ -11,6 +12,16 @@ import { Company } from './company';
 import { Contact } from './contact';
 import { PipelineNamespace } from './pipelines';
 
+/**
+ * @routing Use when working with CRM deals, pipelines, stages, companies or contacts; not generic databases, and not a search that merely names a company.
+ *
+ * @agent
+ * ## How CRM pipelines work
+ *
+ * A pipeline is a board of deals. Each entry tracks one CRM company or contact and has its own fields: usually Stage, Owner and Revenue, plus any the team added. "Deal", "opportunity", "lead", "the pipeline", "move Acme to Negotiation" and "who's in Demo" all refer to pipeline entries. A pipeline is not a Macro database: work with it through the CRM pipeline methods, never database queries or SQL.
+ *
+ * A company also has its own Stage, Owner and Revenue properties on its CRM page. They are separate from every pipeline and not kept in sync with it. When the user has pipelines, deal and stage requests mean pipeline entries; change the company's own properties only when the user asks for those properties specifically.
+ */
 export class CrmNamespace {
   /** Pipelines, their records and sharing settings. */
   readonly pipelines: PipelineNamespace;
@@ -64,6 +75,46 @@ export class CrmNamespace {
       this.client,
       unwrap(await this.client.storage.createCrmCompany({ body: opts })),
     );
+  }
+
+  /**
+   * Create a contact without a company for the caller's current team. The
+   * email is optional and may be at any domain. To add someone to a company,
+   * use {@link Company.createContact}.
+   */
+  async createContact(opts: CreateCrmTeamContactRequest): Promise<Contact> {
+    return Contact.from(
+      this.client,
+      unwrap(await this.client.storage.createCrmTeamContact({ body: opts })),
+    );
+  }
+
+  /** The domains the caller's current team keeps out of email sync. */
+  async blockedDomains(): Promise<string[]> {
+    return unwrap(await this.client.storage.listCrmBlockedDomains()).map(
+      (blocked) => blocked.domain,
+    );
+  }
+
+  /**
+   * Block a domain (like `acme.com`): email sync skips it, and the company
+   * that owns it, that company's contacts, and contacts without a company at
+   * the domain are hidden. A contact attached to another company follows that
+   * company's domains. Requires a team admin or owner.
+   */
+  async blockDomain(domain: string): Promise<void> {
+    unwrap(await this.client.storage.blockCrmDomain({ path: { domain } }));
+  }
+
+  /**
+   * Unblock a domain: email sync resumes for addresses the team's
+   * personal-email and generic-provider filters allow. Contacts without a
+   * company at this domain are shown again. Its company and attached contacts
+   * stay hidden until the company's last blocked domain is removed, then are
+   * shown even if hidden by hand before blocking. Requires a team admin or owner.
+   */
+  async unblockDomain(domain: string): Promise<void> {
+    unwrap(await this.client.storage.unblockCrmDomain({ path: { domain } }));
   }
 
   /** The caller's current team's CRM settings. */

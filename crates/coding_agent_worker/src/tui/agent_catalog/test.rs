@@ -104,6 +104,52 @@ fn adapter_agents_point_the_adapter_at_the_installed_cli() {
 }
 
 #[test]
+fn claude_code_gets_the_program_behind_an_npm_cmd_shim() {
+    // Windows npm installs `claude.cmd`. The Claude SDK spawns
+    // `CLAUDE_CODE_EXECUTABLE` without a shell, and Node refuses `.cmd` files
+    // there, so the adapter must get the binary the shim runs. codex-acp is a
+    // native program that launches `.cmd` files itself.
+    let npm = tempfile::tempdir().expect("temp dir");
+    let claude = npm.path().join("claude.cmd");
+    std::fs::write(
+        &claude,
+        "@ECHO off\r\nCALL :find_dp0\r\n\"%dp0%\\node_modules\\@anthropic-ai\\claude-code\\bin\\claude.exe\"   %*\r\n",
+    )
+    .expect("write shim");
+    let codex = npm.path().join("codex.cmd");
+    std::fs::write(
+        &codex,
+        "@ECHO off\r\n\"%_prog%\"  \"%dp0%\\node_modules\\@openai\\codex\\bin\\codex.js\" %*\r\n",
+    )
+    .expect("write shim");
+    let commands = Commands(HashMap::from([
+        ("claude", claude),
+        ("codex", codex.clone()),
+        ("npm", npm.path().join("npm.cmd")),
+    ]));
+
+    let agents = discover(&commands);
+
+    assert_eq!(
+        agents[0].launch.env,
+        BTreeMap::from([(
+            "CLAUDE_CODE_EXECUTABLE".to_owned(),
+            npm.path()
+                .join("node_modules/@anthropic-ai/claude-code/bin/claude.exe")
+                .to_string_lossy()
+                .into_owned()
+        )])
+    );
+    assert_eq!(
+        agents[1].launch.env,
+        BTreeMap::from([(
+            "CODEX_PATH".to_owned(),
+            codex.to_string_lossy().into_owned()
+        )])
+    );
+}
+
+#[test]
 fn existing_launch_specs_are_recognized() {
     assert_eq!(name_for(&harness("hermes", &["acp"])), Some("Hermes Agent"));
     assert_eq!(name_for(&harness("my-agent", &[])), None);

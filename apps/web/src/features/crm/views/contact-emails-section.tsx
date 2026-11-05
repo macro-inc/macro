@@ -2,7 +2,10 @@ import EmptyStateEmailGraphic from '@design/empty-state-email.svg';
 import { Tabs } from '@ui';
 import { createSignal } from 'solid-js';
 import { CrmListEmpty } from '../components/list-state';
-import { RecordSection } from '../components/record-section';
+import {
+  RecordSection,
+  RecordSectionFilters,
+} from '../components/record-section';
 import { useCrmContext } from '../context/crm-context';
 import type {
   CrmEmailSignal as EmailSignalView,
@@ -13,7 +16,7 @@ import { RecordItemList } from './record-item-list';
 import { useContactEmailsQuery } from './use-crm';
 
 export function ContactEmailsSection(props: { contact?: CrmContactResponse }) {
-  const email = () => props.contact?.email;
+  const email = () => props.contact?.email ?? undefined;
   const [search, setSearch] = createSignal('');
   const crm = useCrmContext();
   const [view, setView] = createSignal<EmailView>('team');
@@ -25,8 +28,20 @@ export function ContactEmailsSection(props: { contact?: CrmContactResponse }) {
       title="Emails"
       search={search()}
       onSearchChange={setSearch}
+      createAction={{
+        label: 'New email',
+        onClick: () => crm.openEmailComposer(email()),
+      }}
       actions={
-        <>
+        <RecordSectionFilters
+          activeCount={
+            Number(signalView() !== 'all') + Number(view() !== 'team')
+          }
+          onClear={() => {
+            setSignalView('all');
+            setView('team');
+          }}
+        >
           <Tabs
             aria-label="Email importance"
             size="sm"
@@ -49,7 +64,7 @@ export function ContactEmailsSection(props: { contact?: CrmContactResponse }) {
             value={view()}
             onChange={setView}
           />
-        </>
+        </RecordSectionFilters>
       }
     >
       <RecordItemList
@@ -64,7 +79,7 @@ export function ContactEmailsSection(props: { contact?: CrmContactResponse }) {
             description="Email this contact to start a conversation."
             action={{
               label: 'New email',
-              onClick: () => crm.openEmailComposer(props.contact?.email),
+              onClick: () => crm.openEmailComposer(email()),
             }}
           />
         }

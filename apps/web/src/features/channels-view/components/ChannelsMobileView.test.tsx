@@ -65,13 +65,6 @@ vi.mock('@core/component/Toast/Toast', () => ({
   toast: { failure: mocks.failure },
 }));
 vi.mock('@core/context/user', () => ({ useUserId: () => () => 'viewer' }));
-vi.mock('../channels-view-context', () => ({
-  useChannelsView: () => ({
-    canHideSupportChannels: () => false,
-    hideSupportChannels: () => false,
-    setHideSupportChannels: vi.fn(),
-  }),
-}));
 vi.mock('@entity', () => ({ Entity: { Icon: () => null } }));
 vi.mock('@entity/composed/list-entity/shared', () => ({
   InboxDivider: () => <hr />,

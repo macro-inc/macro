@@ -17,12 +17,14 @@ use crate::inbound::template_router::{
     __path_activate_template, __path_get_template, __path_share_template, __path_unshare_template,
 };
 
-use crate::domain::event_trigger::{ActionTrigger, EventFilter, EventFilters, EventName};
+use crate::domain::event_trigger::{
+    ActionTrigger, EventFilter, EventFilters, EventName, GithubSelectorInput,
+    PayloadConditionInput, PayloadScalar, PropertySelector,
+};
 use crate::domain::models::{
     ActionConfiguration, ActionConfigurationUpdate, ActionExecutionRecord, ActionKind, AgentTask,
-    AgentTaskAgent, CreateScheduledAction, ExecutionResource, ExecutionResourceType,
-    ExecutionResult, InProgressExecution, LegacyActionConfiguration, RoutineModelId, Schedule,
-    ScheduledAction, ScheduledActionUpdate, UpdateScheduledAction,
+    AgentTaskAgent, ExecutionResource, ExecutionResourceType, ExecutionResult, InProgressExecution,
+    LastRun, RoutineModelId, Schedule, ScheduledAction, ScheduledActionUpdate,
 };
 use ai_billing::inbound::admission::AiAdmissionErrorBody;
 use model::response::EmptyResponse;
@@ -56,15 +58,16 @@ use model::response::EmptyResponse;
             ScheduledActionResponse,
             ActionConfiguration,
             ActionConfigurationUpdate,
-            LegacyActionConfiguration,
-            ActionTrigger,
+                        ActionTrigger,
             crate::domain::event_trigger::RoutineTrigger,
             crate::domain::event_trigger::RoutineTriggers,
             EventFilter,
             EventFilters,
             EventName,
-            CreateScheduledAction,
-            UpdateScheduledAction,
+            GithubSelectorInput,
+            PayloadConditionInput,
+            PayloadScalar,
+            PropertySelector,
             SetScheduledActionEnabled,
             Schedule,
             ActionKind,
@@ -76,6 +79,7 @@ use model::response::EmptyResponse;
             ExecutionResult,
             InProgressExecution,
             ActionExecutionRecord,
+            LastRun,
             ScheduledActionUpdate,
             EmptyResponse,
             crate::domain::templates::RoutineTemplate,

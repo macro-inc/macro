@@ -13,10 +13,17 @@ import {
 import { createSignal, type JSX, onMount, Show } from 'solid-js';
 import { Portal } from 'solid-js/web';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { useViewShell, ViewShell, ViewSidebarToggle } from './ViewShell';
+import {
+  useViewShell,
+  ViewShell,
+  type ViewShellRootProps,
+  ViewSidebarToggle,
+} from './ViewShell';
 import { ViewSidebar } from './ViewSidebar';
 
-const measurement = vi.hoisted(() => ({ width: (): number => 1200 }));
+const measurement = vi.hoisted(() => ({
+  width: (): number | undefined => 1200,
+}));
 
 vi.mock('@core/hotkey/hotkeys', () => ({ registerHotkey: vi.fn() }));
 
@@ -28,6 +35,10 @@ vi.mock('@solid-primitives/resize-observer', () => ({
     },
     height: 800,
   }),
+}));
+
+vi.mock('./create-frame-width', () => ({
+  createFrameWidth: () => () => measurement.width(),
 }));
 
 vi.mock('@ui', async () => ({
@@ -105,21 +116,17 @@ it('keeps navigation controls inside their own workspaces', () => {
   expect(collapsed.get('mail')?.()).toBe(true);
 });
 
-function setup(preserveDuringResize: boolean, persistWidth = false) {
+function setup(preserveDuringResize: boolean, app = 'tasks') {
   const [width, setWidth] = createSignal(1200);
-  const [configuredWidth, setConfiguredWidth] = createSignal(256);
   measurement.width = width;
-  const onWidthChangeEnd = vi.fn((width: number) => {
-    if (persistWidth) setConfiguredWidth(width);
-  });
   const view = render(() => (
     <ViewShell.Root
       resizable
-      asidePreferenceKey="tasks"
-      aside={{ width: configuredWidth(), preserveDuringResize }}
+      asidePreferenceKey={app}
+      aside={{ preserveDuringResize }}
       main={{ preferredWidth: 640 }}
     >
-      <ViewShell.Aside onWidthChangeEnd={onWidthChangeEnd}>
+      <ViewShell.Aside>
         <ViewSidebar.Header>
           <ViewSidebar.Title>Tasks</ViewSidebar.Title>
         </ViewSidebar.Header>
@@ -146,14 +153,15 @@ function setup(preserveDuringResize: boolean, persistWidth = false) {
     fireEvent(window, new MouseEvent('pointermove', { clientX: 296 }));
     fireEvent(window, new MouseEvent('pointerup', { clientX: 296 }));
   };
+  const savedWidth = () =>
+    localStorage.getItem(`macro:pref:view-sidebar:width:${app}`);
   return {
     ...view,
     asideWidth,
     growAside,
     dragAside,
     setWidth,
-    setConfiguredWidth,
-    onWidthChangeEnd,
+    savedWidth,
   };
 }
 
@@ -170,24 +178,21 @@ describe('ViewShell aside resize preference', () => {
     }
   });
 
-  it.each([false, true])(
-    'keeps a manual resize in a constrained split stable as the split grows (persist=%s)',
-    async (persistWidth) => {
-      const view = setup(false, persistWidth);
-      view.setWidth(890);
-      expect(view.asideWidth()).toBeCloseTo(249);
-      await view.growAside();
-      expect(view.asideWidth()).toBeCloseTo(269);
-      for (const width of [891, 900, 1000, 1200]) {
-        view.setWidth(width);
-        expect(view.asideWidth()).toBeCloseTo(269);
-      }
-      view.setWidth(880);
-      expect(view.asideWidth()).toBeCloseTo(259);
-      view.setWidth(1200);
+  it('keeps a manual resize in a constrained split stable as the split grows', async () => {
+    const view = setup(false);
+    view.setWidth(890);
+    expect(view.asideWidth()).toBeCloseTo(249);
+    await view.growAside();
+    expect(view.asideWidth()).toBeCloseTo(269);
+    for (const width of [891, 900, 1000, 1200]) {
+      view.setWidth(width);
       expect(view.asideWidth()).toBeCloseTo(269);
     }
-  );
+    view.setWidth(880);
+    expect(view.asideWidth()).toBeCloseTo(259);
+    view.setWidth(1200);
+    expect(view.asideWidth()).toBeCloseTo(269);
+  });
 
   it('preserves the chosen width through manual collapse and narrow overlays', async () => {
     const view = setup(false);
@@ -212,7 +217,7 @@ describe('ViewShell aside resize preference', () => {
     expect(view.asideWidth()).toBeCloseTo(276);
     view.setWidth(1100);
     expect(view.asideWidth()).toBeCloseTo(276);
-    expect(view.onWidthChangeEnd).toHaveBeenCalledOnce();
+    expect(Number(view.savedWidth())).toBeCloseTo(276);
   });
 
   it('remembers the width after a pointer drag', () => {
@@ -221,7 +226,7 @@ describe('ViewShell aside resize preference', () => {
     expect(view.asideWidth()).toBeCloseTo(296);
     view.setWidth(1100);
     expect(view.asideWidth()).toBeCloseTo(296);
-    expect(view.onWidthChangeEnd).toHaveBeenCalledOnce();
+    expect(Number(view.savedWidth())).toBeCloseTo(296);
   });
 
   it.each([true, false])(
@@ -229,17 +234,32 @@ describe('ViewShell aside resize preference', () => {
     async (preserve) => {
       const view = setup(preserve);
       expect(view.asideWidth()).toBeCloseTo(256);
+      expect(view.savedWidth()).toBeNull();
       await view.growAside();
       expect(view.asideWidth()).toBeCloseTo(276);
-      expect(view.onWidthChangeEnd).toHaveBeenCalledOnce();
-      expect(view.onWidthChangeEnd.mock.calls[0][0]).toBeCloseTo(276);
       view.setWidth(1100);
       expect(view.asideWidth()).toBeCloseTo(276);
       view.setWidth(1400);
       expect(view.asideWidth()).toBeCloseTo(276);
-      expect(view.onWidthChangeEnd).toHaveBeenCalledOnce();
+      expect(Number(view.savedWidth())).toBeCloseTo(276);
     }
   );
+
+  it('restores the dragged width per app after the view remounts', () => {
+    const first = setup(false);
+    first.dragAside();
+    first.unmount();
+
+    expect(setup(false).asideWidth()).toBeCloseTo(296);
+    cleanup();
+    expect(setup(false, 'email').asideWidth()).toBeCloseTo(256);
+  });
+
+  it('fits a saved width to the current bounds', () => {
+    localStorage.setItem('macro:pref:view-sidebar:width:tasks', '900');
+    const view = setup(false);
+    expect(view.asideWidth()).toBeCloseTo(360);
+  });
 
   it('yields to the main preference, then restores the chosen width', async () => {
     const view = setup(false);
@@ -252,26 +272,26 @@ describe('ViewShell aside resize preference', () => {
     view.setWidth(1200);
     expect(view.asideWidth()).toBeCloseTo(276);
   });
-
-  it('honors a new configured width after a manual resize', async () => {
-    const view = setup(true);
-    await view.growAside();
-    view.setConfiguredWidth(300);
-    expect(view.asideWidth()).toBeCloseTo(300);
-    view.setWidth(1100);
-    expect(view.asideWidth()).toBeCloseTo(300);
-  });
 });
 
 function Workspace(props: {
   app: string;
   asideRequired?: boolean;
   asidePinned?: boolean;
+  breakpoints?: ViewShellRootProps['breakpoints'];
   mounted?: () => void;
 }) {
   function Content() {
+    const shell = useViewShell();
     onMount(() => props.mounted?.());
-    return <input aria-label={`${props.app} draft`} />;
+    return (
+      <>
+        <input aria-label={`${props.app} draft`} />
+        <button type="button" onClick={shell.aside.collapse}>
+          Collapse navigation
+        </button>
+      </>
+    );
   }
   return (
     <section aria-label={props.app}>
@@ -279,6 +299,7 @@ function Workspace(props: {
         asidePreferenceKey={props.app}
         asideRequired={props.asideRequired}
         asidePinned={props.asidePinned}
+        breakpoints={props.breakpoints}
       >
         <ViewShell.Aside>
           <ViewSidebar.Header>
@@ -545,6 +566,22 @@ describe('pinned navigation', () => {
     expect(
       screen.queryByRole('button', { name: 'Hide navigation' })
     ).toBeNull();
+  });
+
+  it('keeps an open narrow overlay open when the pin changes', () => {
+    measurement.width = () => 600;
+    const [pinned, setPinned] = createSignal(true);
+    render(() => <Workspace app="channels" asidePinned={pinned()} />);
+    fireEvent.click(screen.getByRole('button', { name: 'Show navigation' }));
+
+    setPinned(false);
+    expect(
+      screen.getByRole('button', { name: 'Close navigation backdrop' })
+    ).toBeTruthy();
+    setPinned(true);
+    expect(
+      screen.getByRole('button', { name: 'Close navigation backdrop' })
+    ).toBeTruthy();
   });
 });
 
@@ -816,3 +853,277 @@ describe.each(['home', 'channels', 'tasks', 'email'])(
     );
   }
 );
+
+describe('automatic docked navigation exit', () => {
+  const originalAnimate = Object.getOwnPropertyDescriptor(
+    HTMLElement.prototype,
+    'animate'
+  );
+  const animations: { target: HTMLElement; animation: Animation }[] = [];
+  const animate = vi.fn<HTMLElement['animate']>(function (this: HTMLElement) {
+    const animation = {
+      cancel: vi.fn(),
+      onfinish: null,
+    } as unknown as Animation;
+    animations.push({ target: this, animation });
+    return animation;
+  });
+  beforeEach(() => {
+    animations.length = 0;
+    animate.mockClear();
+    vi.stubGlobal(
+      'matchMedia',
+      vi.fn(() => ({ matches: false }))
+    );
+    Object.defineProperty(HTMLElement.prototype, 'animate', {
+      configurable: true,
+      value: animate,
+    });
+    vi.spyOn(HTMLElement.prototype, 'getBoundingClientRect').mockImplementation(
+      function (this: HTMLElement) {
+        return new DOMRect(
+          0,
+          0,
+          this.matches('[data-resize-panel]') &&
+            !this.classList.contains('hidden')
+            ? Number.parseFloat(this.style.width)
+            : 0,
+          800
+        );
+      }
+    );
+  });
+  afterEach(() => {
+    vi.restoreAllMocks();
+    if (originalAnimate) {
+      Object.defineProperty(HTMLElement.prototype, 'animate', originalAnimate);
+    } else {
+      Reflect.deleteProperty(HTMLElement.prototype, 'animate');
+    }
+  });
+
+  it.each([
+    [undefined, 600],
+    [undefined, 1000],
+    [0, 600],
+    [0, 1000],
+  ] as const)(
+    'settles an initial width of %s at %s without animating the Home content',
+    async (initialWidth, settledWidth) => {
+      const [width, setWidth] = createSignal<number | undefined>(initialWidth);
+      measurement.width = width;
+      const view = render(() => <Workspace app="home" />);
+      const savePreference = vi.spyOn(localStorage, 'setItem');
+
+      setWidth(settledWidth);
+      await Promise.resolve();
+
+      expect(animate).not.toHaveBeenCalled();
+      expect(
+        view.container.querySelectorAll('[data-view-shell-aside]')
+      ).toHaveLength(settledWidth === 600 ? 0 : 1);
+      expect(savePreference).not.toHaveBeenCalled();
+
+      setWidth(settledWidth === 600 ? 1000 : 600);
+      await Promise.resolve();
+      expect(animate).toHaveBeenCalled();
+    }
+  );
+
+  it('retains and collapses the docked host until its 140ms exit finishes', async () => {
+    const [width, setWidth] = createSignal(1000);
+    measurement.width = width;
+    const view = render(() => <Workspace app="tasks" />);
+    const docked = view.container.querySelector<HTMLElement>(
+      '[data-view-shell-aside]'
+    )!.parentElement!;
+    const savePreference = vi.spyOn(localStorage, 'setItem');
+
+    setWidth(600);
+    expect(
+      view.container.querySelectorAll('[data-view-shell-aside]')
+    ).toHaveLength(1);
+    expect(docked.isConnected).toBe(true);
+    expect(docked.classList.contains('hidden')).toBe(true);
+    const main = view.container.querySelector<HTMLElement>(
+      '[data-view-shell-main]'
+    )!.parentElement!;
+    expect(main.style.left).toBe('0px');
+    expect(main.style.width).toBe('600px');
+    expect(
+      screen.getByRole('button', { name: 'Show navigation' })
+    ).toBeTruthy();
+    await Promise.resolve();
+    const exitIndex = animations.findIndex(({ target }) => target === docked);
+    const exit = animations[exitIndex]?.animation;
+    expect(exit).toBeDefined();
+    expect(animate.mock.calls[exitIndex]?.[0]).toMatchObject([
+      { width: '256px' },
+      { width: '0px', opacity: 0 },
+    ]);
+    expect(animate.mock.calls[exitIndex]?.[1]).toMatchObject({ duration: 140 });
+    expect(docked.style.display).toBe('block');
+    expect(savePreference).not.toHaveBeenCalled();
+    fireEvent.click(
+      screen.getByRole('button', { name: 'Collapse navigation' })
+    );
+
+    exit?.onfinish?.(new Event('finish') as AnimationPlaybackEvent);
+    expect(docked.isConnected).toBe(false);
+    expect(
+      view.container.querySelectorAll('[data-view-shell-aside]')
+    ).toHaveLength(0);
+    expect(savePreference).not.toHaveBeenCalled();
+  });
+
+  it.each([undefined, 0, 600])(
+    'ignores stale exits after width %s during a wide reversal',
+    async (intermediateWidth) => {
+      const [width, setWidth] = createSignal<number | undefined>(1000);
+      measurement.width = width;
+      const view = render(() => <Workspace app="tasks" />);
+      const docked = view.container.querySelector<HTMLElement>(
+        '[data-view-shell-aside]'
+      )!.parentElement!;
+      setWidth(600);
+      await Promise.resolve();
+      const stale = animations.find(
+        ({ target }) => target === docked
+      )?.animation;
+      setWidth(intermediateWidth);
+      setWidth(1000);
+      stale?.onfinish?.(new Event('finish') as AnimationPlaybackEvent);
+      await Promise.resolve();
+      expect(docked.isConnected).toBe(true);
+      expect(docked.classList.contains('hidden')).toBe(false);
+      expect(
+        view.container.querySelectorAll('[data-view-shell-aside]')
+      ).toHaveLength(1);
+      expect(
+        screen.getByRole('button', { name: 'Hide navigation' })
+      ).toBeTruthy();
+    }
+  );
+
+  it('cancels an exit before its animation starts when the breakpoint reverses', async () => {
+    const [width, setWidth] = createSignal(1000);
+    measurement.width = width;
+    const view = render(() => <Workspace app="tasks" />);
+    const docked = view.container.querySelector<HTMLElement>(
+      '[data-view-shell-aside]'
+    )!.parentElement!;
+    setWidth(600);
+    setWidth(1000);
+    await Promise.resolve();
+    expect(docked.isConnected).toBe(true);
+    expect(docked.classList.contains('hidden')).toBe(false);
+    expect(
+      view.container.querySelectorAll('[data-view-shell-aside]')
+    ).toHaveLength(1);
+  });
+
+  it('keeps the overlay mounted when breakpoint settings change within narrow', () => {
+    measurement.width = () => 600;
+    const [breakpoints, setBreakpoints] = createSignal({ narrow: 720 });
+    const view = render(() => (
+      <Workspace app="tasks" breakpoints={breakpoints()} />
+    ));
+    fireEvent.click(screen.getByRole('button', { name: 'Show navigation' }));
+    const overlay = view.container.querySelector('[data-view-shell-aside]');
+    setBreakpoints({ narrow: 700 });
+    expect(view.container.querySelector('[data-view-shell-aside]')).toBe(
+      overlay
+    );
+    expect(
+      screen.getByRole('button', { name: 'Close navigation backdrop' })
+    ).toBeTruthy();
+  });
+
+  it('gives explicit opening and required navigation priority over an unfinished exit', async () => {
+    const [width, setWidth] = createSignal(1000);
+    const [required, setRequired] = createSignal(false);
+    measurement.width = width;
+    const view = render(() => (
+      <Workspace app="tasks" asideRequired={required()} />
+    ));
+    const docked = view.container.querySelector<HTMLElement>(
+      '[data-view-shell-aside]'
+    )!.parentElement!;
+    setWidth(600);
+    await Promise.resolve();
+    const stale = animations.find(({ target }) => target === docked)?.animation;
+    fireEvent.click(screen.getByRole('button', { name: 'Show navigation' }));
+    expect(docked.isConnected).toBe(false);
+    expect(
+      view.container.querySelectorAll('[data-view-shell-aside]')
+    ).toHaveLength(1);
+    expect(
+      screen.getByRole('button', { name: 'Close navigation backdrop' })
+    ).toBeTruthy();
+    stale?.onfinish?.(new Event('finish') as AnimationPlaybackEvent);
+    expect(
+      view.container.querySelectorAll('[data-view-shell-aside]')
+    ).toHaveLength(1);
+    fireEvent.click(
+      screen.getByRole('button', { name: 'Close navigation backdrop' })
+    );
+    setWidth(1000);
+    setWidth(600);
+    setRequired(true);
+    expect(
+      view.container.querySelectorAll('[data-view-shell-aside]')
+    ).toHaveLength(1);
+    expect(
+      screen.getByRole('button', { name: 'Close navigation backdrop' })
+    ).toBeTruthy();
+  });
+
+  it('keeps the pending exit through a pin change at the narrow breakpoint', async () => {
+    const [width, setWidth] = createSignal(1000);
+    const [pinned, setPinned] = createSignal(true);
+    measurement.width = width;
+    const view = render(() => <Workspace app="tasks" asidePinned={pinned()} />);
+    const docked = view.container.querySelector<HTMLElement>(
+      '[data-view-shell-aside]'
+    )!.parentElement!;
+    setWidth(600);
+    await Promise.resolve();
+    const exit = animations.find(({ target }) => target === docked)?.animation;
+    expect(exit).toBeDefined();
+    setPinned(false);
+    expect(docked.isConnected).toBe(true);
+    expect(exit?.onfinish).toBeTruthy();
+    exit?.onfinish?.(new Event('finish') as AnimationPlaybackEvent);
+    expect(docked.isConnected).toBe(false);
+    expect(
+      view.container.querySelectorAll('[data-view-shell-aside]')
+    ).toHaveLength(0);
+  });
+
+  it.each(['reduced motion', 'missing WAAPI'])(
+    'releases the docked host without animation for %s',
+    async (fallback) => {
+      if (fallback === 'reduced motion') {
+        vi.stubGlobal(
+          'matchMedia',
+          vi.fn(() => ({ matches: true }))
+        );
+      } else {
+        Reflect.deleteProperty(HTMLElement.prototype, 'animate');
+      }
+      const [width, setWidth] = createSignal(1000);
+      measurement.width = width;
+      const view = render(() => <Workspace app="tasks" />);
+      const docked = view.container.querySelector<HTMLElement>(
+        '[data-view-shell-aside]'
+      )!.parentElement!;
+      setWidth(600);
+      await Promise.resolve();
+      expect(docked.isConnected).toBe(false);
+      expect(
+        view.container.querySelectorAll('[data-view-shell-aside]')
+      ).toHaveLength(0);
+      expect(animate).not.toHaveBeenCalled();
+    }
+  );
+});

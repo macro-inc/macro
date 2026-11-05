@@ -1,10 +1,14 @@
-import { ListFilterDropdown } from '@app/components/view-shell';
+import {
+  ListFilterDropdown,
+  ListSortDropdown,
+} from '@app/components/view-shell';
 import { HeaderActionGroup } from '@components/app/HeaderActionGroup';
 import { TOKENS } from '@core/hotkey/tokens';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import ColumnsIcon from '@icon/system/regular/columns.svg';
 import { ButtonGroup } from '@ui';
 import { Show } from 'solid-js';
+import { EMAIL_FOCUS_SORT_OPTIONS } from '../constants';
 import { useEmailView } from '../email-view-context';
 import { useEmailFilters } from '../filters/use-email-filters';
 import { EmailInboxMenu } from './EmailInboxSelector';
@@ -17,7 +21,7 @@ export type EmailControlsProps = {
 
 export function EmailControls(props: EmailControlsProps) {
   const filters = useEmailFilters();
-  const { readingPane, setReadingPane } = useEmailView();
+  const { state, setFocusSort, readingPane, setReadingPane } = useEmailView();
 
   return (
     <>
@@ -46,6 +50,16 @@ export function EmailControls(props: EmailControlsProps) {
         </HeaderActionGroup>
       </div>
       <HeaderActionGroup label="Email view options" size="md">
+        <Show when={state.tab === 'focus'}>
+          <ListSortDropdown
+            grouped
+            size="icon-md"
+            label="Sort Focus"
+            value={state.focusSort}
+            options={EMAIL_FOCUS_SORT_OPTIONS}
+            onChange={setFocusSort}
+          />
+        </Show>
         <Show when={!isTouchDevice()}>
           <ButtonGroup.Button
             aria-label={

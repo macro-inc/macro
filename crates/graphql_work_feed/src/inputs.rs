@@ -1,7 +1,8 @@
 use async_graphql::{Enum, ID, InputObject};
+use attention_feed::domain::models::{FeedKey, FeedPosition, FeedRevision};
 use work_feed::domain::models::{
-    WorkFeedDoneTarget, WorkFeedItemKey, WorkFeedItemState, WorkFeedItemType, WorkFeedMode,
-    WorkFeedPosition, WorkFeedQuery, WorkFeedRevision, WorkFeedScope,
+    WorkFeedDoneTarget, WorkFeedItemState, WorkFeedItemType, WorkFeedMode, WorkFeedQuery,
+    WorkFeedScope,
 };
 
 use crate::objects::GraphqlWorkFeedItemState;
@@ -46,8 +47,10 @@ pub enum GraphqlWorkFeedItemType {
     Task,
     /// AI chats.
     Chat,
-    /// Projects.
+    /// Projects (folders).
     Project,
+    /// Task projects (initiatives).
+    Initiative,
     /// Email threads.
     Email,
     /// Channel activity outside a dedicated thread item.
@@ -69,6 +72,7 @@ impl From<GraphqlWorkFeedItemType> for WorkFeedItemType {
             GraphqlWorkFeedItemType::Task => Self::Task,
             GraphqlWorkFeedItemType::Chat => Self::Chat,
             GraphqlWorkFeedItemType::Project => Self::Project,
+            GraphqlWorkFeedItemType::Initiative => Self::Initiative,
             GraphqlWorkFeedItemType::Email => Self::Email,
             GraphqlWorkFeedItemType::Channel => Self::Channel,
             GraphqlWorkFeedItemType::ChannelThread => Self::ChannelThread,
@@ -130,7 +134,7 @@ impl WorkFeedInput {
             graphql_common::parse_limit(self.limit, DEFAULT_WORK_FEED_LIMIT, MAX_WORK_FEED_LIMIT)?;
         let after = self
             .cursor
-            .map(|cursor| WorkFeedPosition::decode(&cursor))
+            .map(|cursor| FeedPosition::decode(&cursor))
             .transpose()
             .map_err(|_| async_graphql::Error::new("invalid work feed cursor"))?;
         let state = match self.state {
@@ -180,11 +184,11 @@ impl MarkWorkFeedItemsDoneInput {
         self.items
             .into_iter()
             .map(|item| {
-                let key = WorkFeedItemKey::parse(&item.id)
+                let key = FeedKey::parse(&item.id)
                     .map_err(|_| async_graphql::Error::new("invalid work feed item id"))?;
                 let revision = item
                     .revision
-                    .map(|revision| WorkFeedRevision::decode(&revision))
+                    .map(|revision| FeedRevision::decode(&revision))
                     .transpose()
                     .map_err(|_| async_graphql::Error::new("invalid work feed revision"))?;
                 Ok(WorkFeedDoneTarget { key, revision })

@@ -21,6 +21,7 @@ mod import_jobs;
 mod import_trackers;
 mod import_workspace;
 mod mcp_app_catalog;
+pub mod memory;
 mod schemas;
 pub mod search;
 mod search_tools;
@@ -68,11 +69,14 @@ use teams::inbound::toolset::team_toolset;
 pub use build_context::build_anthropic_tool_context_test;
 pub use build_context::{
     build_anthropic_tool_context, build_cognition_tool_context, build_image_generator_from_env,
-    build_tool_service_context_from_env,
+    build_tool_service_context_from_env, build_web_search_provider_from_env,
 };
 pub use deferred::{DeferredToolSet, deferred_tools};
 pub use import_jobs::{IMPORT_JOBS_HANDOVER_TIMEOUT, ImportJobs};
-pub use mcp_app_catalog::{PipedreamMcpAppCatalog, pipedream_client_from_env};
+pub use mcp_app_catalog::{
+    PipedreamMcpAppCatalog, canvas_artifacts_rollout, canvas_artifacts_rollout_from_env,
+    connect_adapter, connector_backends_from_env, macro_connect_rollout, pipedream_client_from_env,
+};
 pub use search::search_toolset;
 pub use tool_context::{
     ChannelSideEffectClients, FormsToolConfig, MaybeToolEventBroker, NoOpCallRtcClient,
@@ -143,7 +147,13 @@ pub fn database_read_only_tools() -> AiToolSet {
 
 pub struct ToolSetWithPrompt {
     pub toolset: Arc<AiToolSet>,
+    /// The prompt with how each area of Macro works inline, generated from the
+    /// SDK's `@agent` guidance.
     pub prompt: Box<dyn std::fmt::Display + Send + Sync>,
+    /// The prompt for turns that route SDK entities, whose selected entities
+    /// bring their guidance into the turn; [`Self::prompt`] on hosts that do
+    /// not route.
+    pub routed_prompt: Box<dyn std::fmt::Display + Send + Sync>,
     /// The tools a [`DeferredToolSet`] keeps out of every request; the prompt
     /// lists them. Empty on hosts that send every schema.
     pub deferred: Arc<[ai_toolset::SearchableTool]>,
@@ -193,6 +203,9 @@ pub(crate) fn subagent_toolset() -> AiToolSet {
         .add_subtoolset::<ToolDatabasesSqlToolContext>(databases_sql_toolset())
         .add_subtoolset::<ToolSkillToolContext>(skill_toolset())
         .add_subtoolset::<AnthropicToolContext>(anthropic_toolset())
+        .add_subtoolset::<web_search::inbound::toolset::WebToolContext>(
+            web_search::inbound::toolset::web_toolset(),
+        )
 }
 
 /// The host a toolset is assembled for.
@@ -215,7 +228,8 @@ pub enum AiHost {
     /// as [`AiHost::Chat`], but its user tools are reviewed in the turn - the
     /// agent loop's finisher puts the call to the user over ACP and the tool
     /// returns the outcome - so the prompt describes a review card the agent
-    /// waits on, never a pending composer.
+    /// waits on, never a pending composer. It presents views with the
+    /// harness's `execution.views.present` instead of `DisplayResults`.
     AgentSession,
     /// The channel-mention bot: no composer, so `CreateCalendarEvent`
     /// executes directly in the agent loop and `SendEmail` is omitted. Replies
@@ -274,12 +288,6 @@ pub fn tools_for_agent_code_mode() -> ToolSetWithPrompt {
     tools_for_inner(AiHost::AgentSession, true)
 }
 
-/// Public MCP tools for users with code mode: SDK-covered tools are hidden in
-/// favor of `ExecuteCode`, as in agent sessions.
-pub fn tools_for_mcp_code_mode() -> ToolSetWithPrompt {
-    tools_for_inner(AiHost::Mcp, true)
-}
-
 /// Existing agent-session tools exposed through the code-mode capability policy.
 pub fn code_mode_tools() -> Arc<AiToolSet> {
     tools_for(AiHost::AgentSession).toolset
@@ -287,6 +295,7 @@ pub fn code_mode_tools() -> Arc<AiToolSet> {
 
 fn tools_for_inner(host: AiHost, code_mode_direct: bool) -> ToolSetWithPrompt {
     let toolset = subagent_toolset()
+        .add_subtoolset::<memory::ToolMemoryContext>(::memory::inbound::toolset::memory_toolset())
         .add_subtoolset::<ToolBookingManagementToolContext>(booking_management_toolset())
         .add_subtoolset::<ToolNotificationToolContext>(notification_toolset())
         .add_subtoolset::<ToolItemNotificationPreferenceToolContext>(
@@ -314,7 +323,7 @@ fn tools_for_inner(host: AiHost, code_mode_direct: bool) -> ToolSetWithPrompt {
     let toolset = match host {
         AiHost::Chat | AiHost::AgentSession => {
             toolset.add_subtoolset::<ToolMcpServerToolContext>(mcp_server_toolset::<
-                mcp_client::outbound::pg_server_repo::PgServerRepo,
+                mcp_client::outbound::NativeServerStore,
             >())
         }
         AiHost::ChannelBot | AiHost::Mcp => toolset,
@@ -325,11 +334,11 @@ fn tools_for_inner(host: AiHost, code_mode_direct: bool) -> ToolSetWithPrompt {
             .add_tool::<LoadTools, ToolServiceContext>(),
         AiHost::Mcp => toolset,
     };
+    // Agent sessions present views with the harness's `execution.views.present`,
+    // which checks a view before it is drawn and posts it with a DM reply.
     let toolset = match host {
-        AiHost::Chat | AiHost::AgentSession => {
-            toolset.add_tool::<DisplayResults, ToolServiceContext>()
-        }
-        AiHost::ChannelBot | AiHost::Mcp => toolset,
+        AiHost::Chat => toolset.add_tool::<DisplayResults, ToolServiceContext>(),
+        AiHost::AgentSession | AiHost::ChannelBot | AiHost::Mcp => toolset,
     };
     // A direct upload needs a client that can PUT the bytes itself; in-app
     // hosts have no network-capable shell, so only MCP clients get it.
@@ -368,35 +377,49 @@ fn tools_for_inner(host: AiHost, code_mode_direct: bool) -> ToolSetWithPrompt {
         }
         AiHost::Mcp => Arc::from([]),
     };
-    let prompt: Box<dyn std::fmt::Display + Send + Sync> = match host {
-        AiHost::Chat => Box::new(prompt::TOOL_USE_PROMPT.compose(&prompt::coding_agents::PROMPT)),
-        AiHost::AgentSession if code_mode_direct => Box::new(
-            prompt::CODE_MODE_SESSION_TOOL_USE_PROMPT.compose(&prompt::coding_agents::PROMPT),
+    use agent_code_mode::domain::{GuideHost, inline_guides};
+    // Code mode starts agent sessions through the SDK, whose guidance says
+    // how; direct hosts keep the dispatch tools' own guidance.
+    let (tools_prompt, guides): (String, &str) = match host {
+        AiHost::Chat => (
+            prompt::TOOL_USE_PROMPT
+                .compose(&prompt::coding_agents::PROMPT)
+                .to_string(),
+            inline_guides(GuideHost::Direct),
         ),
-        AiHost::AgentSession => {
-            Box::new(prompt::SESSION_TOOL_USE_PROMPT.compose(&prompt::coding_agents::PROMPT))
-        }
-        AiHost::ChannelBot | AiHost::Mcp => {
-            Box::new(prompt::DIRECT_TOOL_USE_PROMPT.compose(&prompt::coding_agents::PROMPT))
-        }
-    };
-    let prompt: Box<dyn std::fmt::Display + Send + Sync> = if code_mode_direct {
-        Box::new(format!("{prompt}{}", prompt::tool_usage::CODE_MODE_ROUTING))
-    } else {
-        prompt
+        AiHost::AgentSession if code_mode_direct => (
+            prompt::CODE_MODE_SESSION_TOOL_USE_PROMPT.to_string(),
+            inline_guides(GuideHost::Code),
+        ),
+        AiHost::AgentSession => (
+            prompt::SESSION_TOOL_USE_PROMPT
+                .compose(&prompt::coding_agents::PROMPT)
+                .to_string(),
+            inline_guides(GuideHost::Direct),
+        ),
+        AiHost::ChannelBot | AiHost::Mcp => (
+            prompt::DIRECT_TOOL_USE_PROMPT
+                .compose(&prompt::coding_agents::PROMPT)
+                .to_string(),
+            inline_guides(GuideHost::Direct),
+        ),
     };
     let catalog: Vec<(&str, &str)> = deferred
         .iter()
         .map(|tool| (tool.name.as_str(), tool.description.as_str()))
         .collect();
-    let prompt: Box<dyn std::fmt::Display + Send + Sync> =
-        match prompt::deferred_tools::render(&catalog) {
-            Some(section) => Box::new(format!("{prompt}{section}")),
-            None => prompt,
-        };
+    let deferred_section = prompt::deferred_tools::render(&catalog).unwrap_or_default();
+    let prompt = format!("{tools_prompt}{guides}{deferred_section}");
+    // Only code-mode sessions route SDK entities per turn.
+    let routed_prompt = if code_mode_direct {
+        format!("{tools_prompt}{deferred_section}")
+    } else {
+        prompt.clone()
+    };
     ToolSetWithPrompt {
         toolset: Arc::new(toolset),
-        prompt,
+        prompt: Box::new(prompt),
+        routed_prompt: Box::new(routed_prompt),
         deferred,
     }
 }
@@ -422,6 +445,7 @@ pub fn all_tool_frontend_schemas() -> FrontendSchemas {
 pub fn no_tools() -> ToolSetWithPrompt {
     ToolSetWithPrompt {
         prompt: Box::new(&prompt::BASE_PROMPT),
+        routed_prompt: Box::new(&prompt::BASE_PROMPT),
         toolset: Arc::new(AsyncToolCollection::new()),
         deferred: Arc::from([]),
     }

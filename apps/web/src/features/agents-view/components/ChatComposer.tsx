@@ -115,11 +115,6 @@ export function ChatComposer(props: {
   const drawerOpen = () => props.drawerOpen && !collapsed();
   useTouchOutsideToDismissKeyboard(() => container);
   const disabled = () => !!props.blockedReason || props.session?.disabled;
-  const canSendNext = () =>
-    !hasContent() &&
-    props.session?.hasQueuedMessages &&
-    props.session.onStop &&
-    !disabled();
   const editor = buildConfig('chat')
     .withAppLinkResolver(useMacroMentionLinkResolver())
     .namespace('agents-chat-composer')
@@ -144,7 +139,6 @@ export function ChatComposer(props: {
       // button is the only way to submit.
       if (isTouchDevice()) return false;
       if (markdown.trim() || attachments().length > 0) send(markdown);
-      else if (canSendNext()) sendNext();
       return true;
     })
     .onFocusLeave({
@@ -226,10 +220,6 @@ export function ChatComposer(props: {
     props.onSend(prompt, attached);
   };
 
-  const sendNext = () => {
-    if (canSendNext()) (props.session?.onSendNext ?? props.session?.onStop)?.();
-  };
-
   const focusEditor = (event: Event) => {
     const target = event.target as HTMLElement | null;
     if (
@@ -286,7 +276,7 @@ export function ChatComposer(props: {
       class="min-w-0 flex-1 self-center overflow-y-auto px-[9.375px] not-touch:group-data-[composer-compact=false]/composer:px-1.5 group-data-[composer-compact=true]/composer:px-0 group-data-[composer-coding=true]/composer:min-h-[58px] touch:group-data-[composer-compact=false]/composer:min-h-18 group-data-[composer-compact=false]/composer:flex-none group-data-[composer-compact=false]/composer:basis-full"
     >
       <MarkdownShell
-        class="h-auto min-h-6 text-base leading-6 [&_[data-markdown-editable]]:min-h-6 [&_[data-markdown-editable]]:outline-none [&_[data-markdown-editable]>.md-p]:my-0 [&_[data-markdown-placeholder]]:max-w-full [&_[data-markdown-placeholder]>p]:m-0 [&_[data-markdown-placeholder]>p]:truncate"
+        class="h-auto min-h-6 text-base leading-6 [&_[data-markdown-editable]]:min-h-6 [&_[data-markdown-editable]]:outline-none [&_[data-markdown-editable]>.md-p:first-child]:mt-0 [&_[data-markdown-editable]>.md-p:last-child]:mb-0 [&_[data-markdown-placeholder]]:max-w-full [&_[data-markdown-placeholder]>p]:m-0 [&_[data-markdown-placeholder]>p]:truncate"
         config={editor}
         initialValue={props.draft}
         placeholder={
@@ -465,8 +455,8 @@ export function ChatComposer(props: {
                     </div>
                     <Show
                       when={
-                        (props.session?.busy || canSendNext()) &&
-                        props.session?.onStop &&
+                        props.session?.busy &&
+                        props.session.onStop &&
                         !hasContent()
                       }
                       fallback={
@@ -485,34 +475,17 @@ export function ChatComposer(props: {
                         />
                       }
                     >
-                      <Show
-                        when={canSendNext()}
-                        fallback={
-                          <Button
-                            aria-label="Stop"
-                            tooltip="Stop"
-                            variant="secondary"
-                            class="touch:glass touch:bg-chrome touch:text-ink touch:data-disabled:bg-chrome"
-                            size="icon-md"
-                            disabled={disabled()}
-                            onClick={() => props.session?.onStop?.()}
-                          >
-                            <div class="size-3.5 rounded-sm bg-current" />
-                          </Button>
-                        }
+                      <Button
+                        aria-label="Stop"
+                        tooltip="Stop"
+                        variant="secondary"
+                        class="touch:glass touch:bg-chrome touch:text-ink touch:data-disabled:bg-chrome"
+                        size="icon-md"
+                        disabled={disabled()}
+                        onClick={() => props.session?.onStop?.()}
                       >
-                        <SendButton
-                          appearance="composer"
-                          class="touch:bg-transparent touch:text-ink touch:data-disabled:bg-transparent"
-                          intent="flush"
-                          aria-label="Flush queued messages"
-                          tooltip={{
-                            content: 'Flush queued messages',
-                            shortcut: 'Enter',
-                          }}
-                          onClick={sendNext}
-                        />
-                      </Show>
+                        <div class="size-3.5 rounded-sm bg-current" />
+                      </Button>
                     </Show>
                   </div>
                 </div>

@@ -14,7 +14,7 @@ import { Button, EntityComposer } from '@ui';
 import { createSignal, onMount, Show, Suspense } from 'solid-js';
 import { DocumentFields } from '../../document-composer/components/document-fields';
 import { createDocumentEditor } from '../../document-composer/primitives/create-document-editor';
-import type { ComposeTaskSuccess } from '../component/ComposeTask';
+import type { ComposeTaskSuccess } from '../../task-composer/core/types';
 import { createDocumentWithTags } from '../queries/create-document-with-tags';
 import { createDocumentComposerTags } from '../util/documentComposerProperties';
 

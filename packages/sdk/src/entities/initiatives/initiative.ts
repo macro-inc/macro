@@ -32,6 +32,16 @@ export class Initiative extends MacroEntity<InitiativeDetail> {
   /** Access requests and direct user grants. */
   readonly access = new EntityAccess(this.client, 'initiative', this);
 
+  /** The initiative's URL in the Macro web app; hand it to users as the link. */
+  webUrl(): string {
+    return `${this.client.webAppUrl}/app/initiative/${this.id}`;
+  }
+
+  /** Identity, loaded detail and {@link webUrl}, so serialized handles carry their link. */
+  override toJSON() {
+    return { ...super.toJSON(), url: this.webUrl() };
+  }
+
   /** Construct a lazy initiative handle. */
   static byId(client: MacroClient, id: string): Initiative {
     return new Initiative(client, id);
@@ -63,7 +73,10 @@ export class Initiative extends MacroEntity<InitiativeDetail> {
     ids.map((id) => User.byId(this.client, id)),
   );
 
-  /** Tasks in this initiative. */
+  /**
+   * Tasks in this initiative. For their names, pass them to
+   * `macro.tasks.summaries` (one request) instead of calling `name()` on each.
+   */
   readonly tasks = this.mappedField('taskIds', (ids) =>
     ids.map((id) => Task.byId(this.client, id)),
   );

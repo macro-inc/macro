@@ -1,5 +1,7 @@
 export * from './affine';
 export { resolveAppearance } from './appearance';
+export * from './artifact-commands';
+export * from './artifact-order';
 export type { GraphicsBackend } from './backend';
 export {
   fitImageCamera,
@@ -32,6 +34,7 @@ export { type LayerOperation, reorderNodes } from './layering';
 export { fullyConnected, layoutBounds, layoutRoots } from './layout';
 export type {
   Appearance,
+  ArtifactItem,
   Bounds,
   Camera,
   EllipseItem,
@@ -73,6 +76,7 @@ export {
   selectionContainsPoint,
   selectionFrame,
 } from './selection-frame';
+export * from './shapes/artifact';
 export {
   type ConnectorAnchor,
   type ConnectorBinding,

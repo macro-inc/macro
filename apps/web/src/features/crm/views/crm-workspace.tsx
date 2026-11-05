@@ -57,6 +57,7 @@ import { CrmCreateMenu } from '../components/crm-create-menu';
 import { CrmMobileTabs } from '../components/crm-mobile-tabs';
 import { CrmSidebar } from '../components/crm-sidebar';
 import { CrmListError, CrmListSkeleton } from '../components/list-state';
+import { PeopleDisplayMenu } from '../components/people-display-menu';
 import { PipelineDialog } from '../components/pipeline-dialog';
 import { PipelineSidebar } from '../components/pipeline-sidebar';
 import { useCrmContext } from '../context/crm-context';
@@ -75,6 +76,7 @@ import { useApplyCrmView } from './apply-view';
 import { Crm as CrmSettings } from './crm-settings';
 import { CrmExport } from './export-companies';
 import { CrmImport } from './import-companies';
+import { CrmItemDetail } from './item-detail';
 import { PipelineView } from './pipeline';
 import { CrmRecordDetail } from './record-detail';
 import { CompanyDisplayMenu, CompanyViewsMenu } from './saved-views-menu';
@@ -287,7 +289,12 @@ export function CrmWorkspaceView(props: {
   const settings = view.host.settings;
   const { openWithSplit } = useCrmContext().createNavigation();
   const records = view.host.record.records;
-  const recordOpen = () => records().length > 0;
+  const itemKey = () => {
+    const item = view.host.record.item();
+    return item ? `${item.itemType}:${item.itemId}` : undefined;
+  };
+  const itemOpen = () => !!itemKey();
+  const recordOpen = () => records().length > 0 && !itemOpen();
   const showRecord = (record: CrmRecordRef) => {
     // The list unmounts; its entry keeps the scroll position for the return.
     view.host.captureEntryState();
@@ -594,7 +601,7 @@ export function CrmWorkspaceView(props: {
             </>
           }
         >
-          <Show when={isTouchDevice() && !recordOpen()}>
+          <Show when={isTouchDevice() && !recordOpen() && !itemOpen()}>
             <ViewShell.Header>
               <CrmMobileTabs
                 active={activeRecord()}
@@ -622,6 +629,16 @@ export function CrmWorkspaceView(props: {
               </Suspense>
             </Show>
           </Show>
+          <Show when={itemKey()} keyed>
+            <CrmItemDetail
+              sourceName={activePipeline()?.name ?? title()}
+              navigation={
+                <NavigationToggle onExpand={() => setCollapsed(false)}>
+                  <Suspense>{sidebar()}</Suspense>
+                </NavigationToggle>
+              }
+            />
+          </Show>
           <Show when={recordOpen()}>
             <CrmRecordDetail
               records={records()}
@@ -639,7 +656,7 @@ export function CrmWorkspaceView(props: {
               }
             />
           </Show>
-          <Show when={!recordOpen() && pipelineId()} keyed>
+          <Show when={!recordOpen() && !itemOpen() && pipelineId()} keyed>
             {(id) => (
               <Show when={activePipeline()}>
                 {(pipeline) => (
@@ -669,7 +686,11 @@ export function CrmWorkspaceView(props: {
               </Show>
             )}
           </Show>
-          <Show when={!recordOpen() && pipelineId() && !activePipeline()}>
+          <Show
+            when={
+              !recordOpen() && !itemOpen() && pipelineId() && !activePipeline()
+            }
+          >
             <Show
               when={!pipelines.loading()}
               fallback={<CrmListSkeleton label="Loading pipeline" />}
@@ -687,10 +708,19 @@ export function CrmWorkspaceView(props: {
               </Button>
             </Show>
           </Show>
-          <Show when={!recordOpen() && !pipelineId() && activityPending()}>
+          <Show
+            when={
+              !recordOpen() && !itemOpen() && !pipelineId() && activityPending()
+            }
+          >
             <CrmListSkeleton label="Loading CRM activity" />
           </Show>
-          <Show when={!recordOpen() && !pipelineId() && activityTab()} keyed>
+          <Show
+            when={
+              !recordOpen() && !itemOpen() && !pipelineId() && activityTab()
+            }
+            keyed
+          >
             {(tab) => (
               <Suspense
                 fallback={<CrmListSkeleton label="Loading CRM activity" />}
@@ -714,6 +744,7 @@ export function CrmWorkspaceView(props: {
           <Show
             when={
               !recordOpen() &&
+              !itemOpen() &&
               !pipelineId() &&
               !activityTab() &&
               !activityPending()
@@ -722,13 +753,16 @@ export function CrmWorkspaceView(props: {
             <Show
               when={!isTouchDevice()}
               fallback={
-                <Show when={peopleActive()}>
-                  <ViewShell.Header class="touch:pt-0">
-                    <div class="flex min-w-0 items-center justify-between gap-3">
+                <ViewShell.Header class="touch:pt-0">
+                  <div class="flex min-w-0 items-center justify-between gap-3">
+                    <Show when={peopleActive()}>
                       <PeopleSearchBar
                         value={peopleSearch()}
                         onValueChange={searchPeople}
                       />
+                    </Show>
+                    <PeopleDisplayMenu visibility={view.peopleVisibility} />
+                    <Show when={peopleActive()}>
                       <Button
                         variant="secondary"
                         class="ml-auto shrink-0"
@@ -737,9 +771,9 @@ export function CrmWorkspaceView(props: {
                         <PlusIcon class="size-4" />
                         New contact
                       </Button>
-                    </div>
-                  </ViewShell.Header>
-                </Show>
+                    </Show>
+                  </div>
+                </ViewShell.Header>
               }
             >
               <ListHeader
@@ -775,6 +809,7 @@ export function CrmWorkspaceView(props: {
                     </Show>
                   </HeaderActionGroup>
                 </Show>
+                <PeopleDisplayMenu visibility={view.peopleVisibility} />
                 {toolbarCreateMenu()}
                 <CrmHeaderSearch
                   label={peopleActive() ? 'Search people' : 'Search companies'}
