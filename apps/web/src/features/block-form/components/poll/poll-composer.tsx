@@ -9,15 +9,13 @@ export type PollComposerDraft = {
   question: string;
   options: string[];
   multi: boolean;
-  showResults: boolean;
   shareResponses: boolean;
   anonymous: boolean;
 };
 
 /**
  * The `/poll` composer: a question, two options to start with and Add
- * option, Multiple answers, Show results to respondents (on by default),
- * Share responses with team, and Anonymous.
+ * option, Multiple answers, Share responses with team, and Anonymous.
  */
 export function PollComposer(props: {
   pending: boolean;
@@ -28,7 +26,6 @@ export function PollComposer(props: {
   const [question, setQuestion] = createSignal('');
   const [options, setOptions] = createSignal(['', '']);
   const [multi, setMulti] = createSignal(false);
-  const [showResults, setShowResults] = createSignal(true);
   const [shareResponses, setShareResponses] = createSignal(false);
   const [anonymous, setAnonymous] = createSignal(false);
   const optionInputs: HTMLInputElement[] = [];
@@ -50,7 +47,6 @@ export function PollComposer(props: {
           question: question(),
           options: options(),
           multi: multi(),
-          showResults: showResults(),
           shareResponses: shareResponses(),
           anonymous: anonymous(),
         });
@@ -145,19 +141,6 @@ export function PollComposer(props: {
             <Checkbox.Control />
             <Checkbox.Label class="text-sm">Multiple answers</Checkbox.Label>
           </Checkbox>
-          <div class="flex flex-col gap-1.5">
-            <Checkbox checked={showResults()} onChange={setShowResults}>
-              <Checkbox.Control />
-              <Checkbox.Label class="text-sm">
-                Show results to respondents
-              </Checkbox.Label>
-            </Checkbox>
-            <p class="pl-6 text-xs leading-5 text-ink-muted">
-              {showResults()
-                ? 'Voters can see the counts before and after voting.'
-                : 'Only you and other editors can see the counts.'}
-            </p>
-          </div>
           <div class="flex flex-col gap-1.5">
             <Checkbox checked={shareResponses()} onChange={setShareResponses}>
               <Checkbox.Control />
