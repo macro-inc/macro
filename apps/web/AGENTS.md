@@ -857,6 +857,19 @@ provisioning profile for the communication entitlement; see
 `tauri/src-tauri/README.md`. This requires a native macOS release; see the
 [notification walkthrough](../../docs/agent-guide/notifications.md).
 
+## Desktop printing
+
+`GlobalHotkeys` mounts `desktop-print-shortcut.ts` to cancel unhandled
+Ctrl/Cmd+P on desktop Tauri platforms. Capture installs temporary bubble
+listeners after existing handlers along the event path. Cancel only when
+propagation stops or reaches `window`, so isolated inputs cannot print the
+shell and document handlers can keep their own print actions. Abort the
+temporary listeners after handling, before the next print event, and on cleanup.
+Use the captured path node in each fallback; Solid rewrites `event.currentTarget`
+during delegated key handling.
+Browser and native mobile shortcuts are unaffected; PDF printing uses its own
+iframe through `features/block-pdf/util/printUtil.ts`.
+
 ## Desktop page zoom
 
 The desktop app binds `Ctrl/Cmd` with `+`, `-`, and `0` itself in
