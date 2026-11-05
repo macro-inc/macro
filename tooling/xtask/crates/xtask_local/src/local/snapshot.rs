@@ -178,16 +178,17 @@ pub fn restore(stage: &Stage, instance: &Instance, plan: &Plan) -> Result<()> {
     stage.run_step(
         &format!("Restoring init snapshot ({})", plan.short_key()),
         || {
-            for (archive, volume) in &pairs {
+            for (archive, _) in &pairs {
                 if !dir.join(archive).exists() {
                     bail!("snapshot {} is missing {archive}", dir.display());
                 }
-                helper_tar(
-                    &format!("{volume}:/vol"),
-                    &format!("{}:/snap:ro", dir.display()),
-                    &format!("tar xzf /snap/{archive} -C /vol"),
-                )?;
             }
+            helper_tar(
+                &pairs,
+                "",
+                &format!("{}:/snap:ro", dir.display()),
+                |archive, vol| format!("tar xzf /snap/{archive} -C {vol}"),
+            )?;
             mark_used(&dir);
             Ok(())
         },
@@ -218,13 +219,12 @@ pub fn save(
             std::fs::remove_dir_all(&tmp)?;
         }
         std::fs::create_dir_all(&tmp)?;
-        for (archive, volume) in &pairs {
-            helper_tar(
-                &format!("{volume}:/vol:ro"),
-                &format!("{}:/snap", tmp.display()),
-                &format!("tar czf /snap/{archive} -C /vol ."),
-            )?;
-        }
+        helper_tar(
+            &pairs,
+            ":ro",
+            &format!("{}:/snap", tmp.display()),
+            |archive, vol| format!("tar czf /snap/{archive} -C {vol} ."),
+        )?;
         let manifest = Manifest {
             format: FORMAT,
             key: plan.key.clone(),
@@ -300,13 +300,33 @@ fn prune_unused(root: &std::path::Path, keep: &str) {
     }
 }
 
-/// Run `tar` in the helper container with two mounts. The stack's own stage
-/// plumbing is bypassed on purpose — these run inside `run_step` parents.
-fn helper_tar(vol_mount: &str, snap_mount: &str, script: &str) -> Result<()> {
-    let out = Command::new("docker")
-        .args(["run", "--rm", "-v", vol_mount, "-v", snap_mount])
+/// Run one `tar` per archive, all at once, in a single helper container that
+/// mounts every volume (with `volume_mode`, such as `:ro`) and the snapshot
+/// dir. `tar_for(archive, volume mount point)` is that archive's command. The
+/// stack's own stage plumbing is bypassed on purpose — this runs inside
+/// `run_step` parents.
+fn helper_tar(
+    pairs: &[(&str, String)],
+    volume_mode: &str,
+    snap_mount: &str,
+    tar_for: impl Fn(&str, &str) -> String,
+) -> Result<()> {
+    let mut cmd = Command::new("docker");
+    cmd.args(["run", "--rm", "-v", snap_mount]);
+    // Each tar runs in the background; waiting on each pid in turn makes the
+    // script (under `-e`) fail if any of them did.
+    let mut script = String::new();
+    for (index, (archive, volume)) in pairs.iter().enumerate() {
+        let mount = format!("/vol/{index}");
+        cmd.arg("-v").arg(format!("{volume}:{mount}{volume_mode}"));
+        script.push_str(&format!("{} & pid{index}=$!\n", tar_for(archive, &mount)));
+    }
+    for index in 0..pairs.len() {
+        script.push_str(&format!("wait $pid{index}\n"));
+    }
+    let out = cmd
         .arg(HELPER_IMAGE)
-        .args(["sh", "-ceu", script])
+        .args(["sh", "-ceu", &script])
         .output()
         .context("running snapshot helper container")?;
     if !out.status.success() {

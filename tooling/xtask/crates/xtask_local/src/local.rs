@@ -1050,9 +1050,24 @@ fn bring_up_infra(
     } else {
         &["redis", "kafka", "localstack"]
     };
+    // FusionAuth needs only its own database, so it boots alongside the rest
+    // of the infra instead of after it: its JVM start is the longest wait here.
+    let fusionauth_start = spec.runs_local_infra.then(|| {
+        let mut fa = compose_cmd(instance, env);
+        fa.arg("up").arg("-d").arg("fusionauth");
+        let stage = stage.background();
+        std::thread::spawn(move || stage.run("Starting FusionAuth", &mut fa))
+    });
     let mut up = compose_cmd(instance, env);
     up.arg("up").arg("-d").arg("--wait").args(waited);
-    stage.run("Starting infra (docker compose up -d --wait)", &mut up)?;
+    let infra = stage.run("Starting infra (docker compose up -d --wait)", &mut up);
+    let fusionauth_started = fusionauth_start.map(|handle| {
+        handle
+            .join()
+            .map_err(|_| anyhow::anyhow!("starting FusionAuth panicked"))?
+    });
+    infra?;
+    fusionauth_started.transpose()?;
 
     // LocalStack has no healthcheck: poll its API, then provision S3/SQS/DynamoDB.
     let localstack_health = format!(
@@ -1080,13 +1095,10 @@ fn bring_up_infra(
             stage.run_step("Creating Kafka topics", || kafka::provision(instance))?;
         }
 
-        // Start FusionAuth on its own (impatient healthcheck → no `--wait`) and
-        // poll it patiently until it's up. On a full init that wait covers the
-        // ~minute kickstart; on a snapshot restore the kickstart is already in
-        // the restored volumes, so this is just JVM boot.
-        let mut fa = compose_cmd(instance, env);
-        fa.arg("up").arg("-d").arg("fusionauth");
-        stage.run("Starting FusionAuth", &mut fa)?;
+        // FusionAuth was started above without `--wait` (its healthcheck is
+        // impatient); poll it patiently until it's up. On a full init that wait
+        // covers the ~minute kickstart; on a snapshot restore the kickstart is
+        // already in the restored volumes, so this is just JVM boot.
         fusionauth::wait_ready(stage, instance)?;
         fusionauth::apply_redirect_urls(stage, instance)?;
 

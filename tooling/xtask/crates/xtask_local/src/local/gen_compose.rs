@@ -279,7 +279,7 @@ fn add_localstack_service(
                 timeout: Some("10s".to_string()),
                 retries: 5,
                 start_period: Some("180s".to_string()),
-                start_interval: Some("2s".to_string()),
+                start_interval: Some("1s".to_string()),
                 ..Default::default()
             }),
             ports: dct::Ports::Short(vec![format!("{}:4566", instance.port(Port::LocalStack))]),
