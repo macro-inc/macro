@@ -1,4 +1,10 @@
-import { cleanup, fireEvent, screen, waitFor } from '@solidjs/testing-library';
+import {
+  cleanup,
+  fireEvent,
+  screen,
+  waitFor,
+  within,
+} from '@solidjs/testing-library';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import {
   readPendingConnectors,
@@ -58,6 +64,9 @@ describe('onboarding tools', () => {
         ).disabled
       ).toBe(false)
     );
+    fireEvent.click(
+      screen.getByRole('button', { name: 'Browse all integrations' })
+    );
     fireEvent.input(screen.getByRole('searchbox'), {
       target: { value: 'Google' },
     });
@@ -86,6 +95,9 @@ it('keeps native GitHub available during hosted connection failures and offers r
         { slug: 'stripe', name: 'Stripe', iconUrl: null },
       ],
     }
+  );
+  fireEvent.click(
+    screen.getByRole('button', { name: 'Browse all integrations' })
   );
   expect(
     (
@@ -167,4 +179,47 @@ it('reports a GitHub connect that lands after the OAuth reload', async () => {
     ])
   );
   expect(readPendingConnectors().size).toBe(0);
+});
+it('suggests the tools the inbox shows, with why, and always another inbox', async () => {
+  const { fake } = renderWithFakeOnboarding(
+    () => <ToolsStep onContinue={vi.fn()} />,
+    {
+      emailAccounts: [
+        { address: 'ada@acme.com', isPrimary: true, ownerId: 'macro|ada' },
+      ],
+      senderDomainCounts: { 'stripe.com': 31, 'posthog.com': 4 },
+    }
+  );
+  const list = screen.getByRole('list', { name: 'Suggested connections' });
+  expect(
+    within(list)
+      .getAllByRole('button')
+      .map((button) => button.getAttribute('aria-label'))
+  ).toEqual([
+    'Connect Stripe',
+    'Connect PostHog',
+    'Connect Slack',
+    'Connect Linear',
+    'Add another inbox',
+  ]);
+  expect(within(list).getByText('31 emails in your inbox')).toBeTruthy();
+  expect(within(list).getByText('ada@acme.com connected')).toBeTruthy();
+  // Suggested tools aren't repeated in the full catalog.
+  fireEvent.click(
+    screen.getByRole('button', { name: 'Browse all integrations' })
+  );
+  expect(
+    within(
+      screen.getByRole('region', { name: 'Available integrations' })
+    ).queryByRole('button', { name: 'Connect Linear' })
+  ).toBeNull();
+  fireEvent.click(screen.getByRole('button', { name: 'Add another inbox' }));
+  await waitFor(() => expect(fake.calls()).toContain('connectInbox'));
+});
+it('suggests the defaults when the inbox check fails', () => {
+  renderWithFakeOnboarding(() => <ToolsStep onContinue={vi.fn()} />, {
+    failures: { senderDomainCounts: 'unavailable' },
+  });
+  expect(screen.getByText('Popular tools to connect first.')).toBeTruthy();
+  expect(screen.getByRole('button', { name: 'Connect Slack' })).toBeTruthy();
 });

@@ -37,6 +37,8 @@ export type FakeOnboardingWorld = {
   invites: TeamInvite[];
   contacts: string[];
   catalog: Tool[];
+  /** Recent messages per sender domain, as the mail provider reports them. */
+  senderDomainCounts: Record<string, number>;
   connectedTools: string[];
   githubLinkStatus: 'linked' | 'unlinked' | 'reauthentication_required';
   nativeTools: ServerResponse[];
@@ -58,6 +60,7 @@ export type FakeOnboardingWorld = {
       | 'record'
       | 'teams'
       | 'catalog'
+      | 'senderDomainCounts'
       | 'createTeam'
       | 'joinTeam'
       | 'teamInviteLink'
@@ -97,6 +100,7 @@ export function defaultFakeWorld(): FakeOnboardingWorld {
         iconUrl: fixtureConnectorIcon(name.toLowerCase()),
       })
     ),
+    senderDomainCounts: {},
     connectedTools: [],
     githubLinkStatus: 'unlinked',
     nativeTools: [],
@@ -247,6 +251,15 @@ export function createFakeOnboarding(
         retry: () => call('retryCatalog'),
       };
     },
+    createSenderDomainCounts: (domains) => () =>
+      loadable('senderDomainCounts', () =>
+        Object.fromEntries(
+          domains.map((domain) => [
+            domain,
+            world.senderDomainCounts[domain] ?? 0,
+          ])
+        )
+      ),
     createConnectedTools: () => ({
       connected: () =>
         onboardingConnectedTools(

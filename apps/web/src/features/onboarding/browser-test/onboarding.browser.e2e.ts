@@ -41,8 +41,6 @@ test('a new user signs up, connects everything, and starts the trial', async ({
   await page.getByRole('button', { name: 'Skip for now' }).click();
 
   await expect(heading(page, 'Connect your tools.')).toBeVisible();
-  await page.getByLabel('Search integrations and MCPs').fill('lin');
-  await expect(page.getByRole('button', { name: /Notion/ })).toHaveCount(0);
   await page.getByRole('button', { name: 'Connect Linear' }).click();
   await expect(
     page.getByRole('button', { name: 'Connected to Linear' })
@@ -573,21 +571,32 @@ test('tools keep Drive and Sheets, hide excluded Google apps and preserve native
   await expect(
     page.getByRole('button', { name: 'Connect Notion' })
   ).toBeEnabled();
-  const cards = page
-    .getByRole('region', { name: 'Available integrations' })
-    .getByRole('button');
-  await expect(cards).toHaveCount(22);
+  // Suggested tools lead; the catalog behind Browse leaves them out.
+  expect(
+    await page
+      .getByRole('list', { name: 'Suggested connections' })
+      .getByRole('button')
+      .evaluateAll((buttons) =>
+        buttons.map((button) => button.getAttribute('aria-label'))
+      )
+  ).toEqual([
+    'Connect Slack',
+    'Connected to Linear',
+    'Connect Notion',
+    'Connect GitHub',
+    'Add another inbox',
+  ]);
+  await page.getByRole('button', { name: 'Browse all integrations' }).click();
+  const catalog = page.getByRole('region', { name: 'Available integrations' });
+  const cards = catalog.getByRole('button');
+  await expect(cards).toHaveCount(18);
   expect(
     await cards.evaluateAll((buttons) =>
       buttons.map((button) => button.getAttribute('aria-label'))
     )
   ).toEqual([
-    'Connected to Linear',
-    'Connect Notion',
-    'Connect Slack',
     'Connect PostHog',
     'Connect Stripe',
-    'Connect GitHub',
     'Connect Figma',
     'Connect Intercom',
     'Connect HubSpot',
@@ -606,10 +615,13 @@ test('tools keep Drive and Sheets, hide excluded Google apps and preserve native
     'Connect Supabase',
   ]);
   // Exercise directory logos, including apps without a bundled native icon.
-  await expect(cards.locator('img')).toHaveCount(21);
+  await expect(cards.locator('img')).toHaveCount(18);
   await expect(
     page
-      .getByRole('button', { name: 'Connect Notion', exact: true })
+      .getByRole('listitem')
+      .filter({
+        has: page.getByRole('button', { name: 'Connect Notion', exact: true }),
+      })
       .locator('img')
   ).toHaveCSS('filter', /invert\(0\)/);
   const stripeIcon = page
@@ -639,7 +651,7 @@ test('tools keep Drive and Sheets, hide excluded Google apps and preserve native
     page.getByRole('button', { name: 'Connect MySQL', exact: true })
   ).toBeVisible();
   await expect(
-    page.getByRole('button', { name: 'Connect Slack', exact: true })
+    catalog.getByRole('button', { name: 'Connect Slack', exact: true })
   ).toHaveCount(0);
   await page.getByRole('searchbox').fill('Google');
   await expect(

@@ -106,6 +106,13 @@ export type OnboardingContext = {
   connectInbox(): Promise<void>;
   createToolCatalog(): ToolCatalogSource;
   /**
+   * Recent message counts per sender domain across the viewer's own inboxes,
+   * read live from the mail provider: onboarding runs before the backfill.
+   */
+  createSenderDomainCounts(
+    domains: readonly string[]
+  ): Accessor<Loadable<Readonly<Record<string, number>>>>;
+  /**
    * Independent provider states. `poll` re-checks while connections change.
    */
   createConnectedTools(options: { poll: boolean }): ConnectedToolsSource;
