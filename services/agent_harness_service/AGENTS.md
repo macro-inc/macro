@@ -25,6 +25,20 @@ Pulumi stacks; they do not host extra agent processes.
   `agent-harness-pull-request-archive`) and auto-archives sessions whose
   linked pull requests finished (`agent_session::domain::auto_archive`).
 - `src/internal_mcp.rs`: the internal MCP server exposed to running sessions.
+- `src/anthropic_gateway.rs` + `src/anthropic_gateway/`: `/anthropic/v1/messages`
+  and `/anthropic/v1/messages/count_tokens` on the egress listener, for runtimes
+  on Macro credits (Claude Code on a Macro computer). Both values come from
+  the `macro_internal` MCP server in `session/new`/`load`/`resume`:
+  `ANTHROPIC_BASE_URL` is its URL with `/mcp/internal` replaced by
+  `/anthropic`, and `ANTHROPIC_AUTH_TOKEN` is the session egress token from
+  its `Authorization: Bearer` header (re-minted on every attach, so restart
+  the runtime with the latest one). Requests pass through unchanged with
+  `ANTHROPIC_API_KEY`; only `anthropic-version`/`anthropic-beta` are
+  forwarded. Models are a const allowlist (`ALLOWED_MODELS`, each mapped to
+  its `ai_pricing` id). `messages` is admitted as `AiFeature::AgentSession`
+  for the session owner, and its `usage` (SSE `message_start`/`message_delta`
+  or the JSON body) goes to the process's settling recorder, which charges
+  only under `ENABLE_AI_USAGE_BILLING`. Span: `anthropic_gateway.messages`.
 - `src/public_mcp.rs` + `src/public_mcp/`: public workspace MCP and OAuth;
   reuses the harness tool context and retains bearer authentication. Users with
   `ai-code-mode` get only `ExecuteCode`/`DescribeCodeTools`/`ReadCodeDocs` on

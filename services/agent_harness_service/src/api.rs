@@ -241,23 +241,30 @@ impl<T, R, Opener, Bots, Requests, Access, Auth, Models, Changes>
     }
 }
 
-/// Serve session egress and Macro Internal MCP on the existing egress listener.
+/// Serve session egress, Macro Internal MCP, and the Anthropic gateway on the
+/// existing egress listener.
 ///
-/// Both authenticate session credentials; internal tools also serve external
-/// runtimes. No browser-facing CORS layer or Swagger is needed.
+/// All authenticate session credentials and also serve external runtimes. No
+/// browser-facing CORS layer or Swagger is needed.
 pub async fn serve_egress<Service>(
     service: std::sync::Arc<Service>,
     internal_mcp: Router,
+    anthropic_gateway: Router,
     port: u16,
     shutdown: impl Future<Output = ()> + Send + 'static,
 ) -> anyhow::Result<()>
 where
     Service: EgressService + 'static,
 {
-    let app = egress_app(EgressRouterState::new(service)).merge(mount_at_root_and_prefix(
-        internal_mcp,
-        EGRESS_GATEWAY_PATH_PREFIX,
-    ));
+    let app = egress_app(EgressRouterState::new(service))
+        .merge(mount_at_root_and_prefix(
+            internal_mcp,
+            EGRESS_GATEWAY_PATH_PREFIX,
+        ))
+        .merge(mount_at_root_and_prefix(
+            anthropic_gateway,
+            EGRESS_GATEWAY_PATH_PREFIX,
+        ));
 
     let listener = tokio::net::TcpListener::bind(format!("0.0.0.0:{port}"))
         .await

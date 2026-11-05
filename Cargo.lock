@@ -677,6 +677,7 @@ dependencies = [
  "sqlx",
  "sqs_client",
  "sqs_worker",
+ "sse-core",
  "static_file",
  "static_file_service_client",
  "stream",

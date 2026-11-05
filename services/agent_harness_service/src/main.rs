@@ -8,6 +8,7 @@
 //! the orchestrator from the resulting `macro.agent_sessions` events.
 
 mod agent_runtime_directory;
+mod anthropic_gateway;
 mod api;
 mod bots_directory;
 mod code_mode;
@@ -793,6 +794,13 @@ async fn run() -> anyhow::Result<()> {
                 session_tasks.clone(),
             ),
         );
+    let anthropic_gateway = anthropic_gateway::router(anthropic_gateway::GatewayState::new(
+        Arc::new(session_repo.clone()),
+        admission.clone(),
+        recorder.clone(),
+        anthropic_gateway::ANTHROPIC_API_URL,
+        &config.anthropic_api_key,
+    )?);
     // The MCP connector feeds the harness, while review presentation needs that
     // harness. Fill this startup-only cell before any HTTP or agent work is served.
     let reviews_cell = Arc::new(std::sync::OnceLock::new());
@@ -1914,6 +1922,7 @@ async fn run() -> anyhow::Result<()> {
         if let Err(error) = api::serve_egress(
             egress,
             internal_mcp,
+            anthropic_gateway,
             egress_port,
             egress_shutdown.clone().cancelled_owned(),
         )

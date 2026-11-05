@@ -181,6 +181,7 @@ soup = { path = "../../crates/soup", features = ["outbound"] }
 sqlx = { workspace = true }
 sqs_client = { path = "../../crates/sqs_client", default-features = false, features = ["ai_projection", "chat", "document_text_extractor", "email", "gmail", "search"] }
 sqs_worker = { path = "../../crates/sqs_worker" }
+sse-core = { workspace = true }
 static_file = { path = "../../crates/static_file", features = ["attachment"] }
 static_file_service_client = { path = "../../crates/static_file_service_client" }
 stream = { path = "../../crates/stream" }
