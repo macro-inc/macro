@@ -48,7 +48,7 @@ pub const NIX_CACHE_URL: &str = "${{ vars.NIX_CACHE_URL }}";
 pub const NIX_CACHE_PUBLIC_KEY: &str = "${{ vars.NIX_CACHE_PUBLIC_KEY }}";
 
 /// Limit concurrent test links, which can each consume several GiB.
-pub const RUST_TEST_BUILD_JOBS: u32 = 2;
+pub const RUST_TEST_BUILD_JOBS: u32 = 8;
 
 /// Nextest thread count for the test job. Tuned for the previous
 /// `linux-extra-beefy` runner; revisit if `namespace-profile-linux-mid` is
