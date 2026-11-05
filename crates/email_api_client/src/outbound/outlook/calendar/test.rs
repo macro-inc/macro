@@ -200,6 +200,29 @@ fn local_times_use_the_zones_2026_rules() {
 }
 
 #[test]
+fn cldr_49_windows_zones_map_to_the_zones_they_replace() {
+    for (windows, zone) in [
+        ("British Columbia Standard Time", "America/Vancouver"),
+        ("Alberta Standard Time", "America/Edmonton"),
+        ("Manitoba Standard Time", "America/Winnipeg"),
+    ] {
+        let (_, utc) = CANADA_2026.iter().find(|(z, _)| *z == zone).unwrap();
+        let read = json!({"dateTime": "2026-11-02T02:16:00.0000000", "timeZone": windows});
+        assert_eq!(
+            normalize::instant(&read).unwrap(),
+            utc.parse::<DateTime<Utc>>().unwrap(),
+            "{windows}"
+        );
+        let mut v = event("e");
+        v["originalStartTimeZone"] = json!(windows);
+        assert!(
+            matches!(normalize::event_time(&v).unwrap(), EventTime::Timed { time_zone: Some(ref z), .. } if z == zone),
+            "{windows}"
+        );
+    }
+}
+
+#[test]
 fn all_day_utc_responses_use_the_zones_2026_rules() {
     for (zone, utc) in CANADA_2026 {
         let midnight = utc.parse::<DateTime<Utc>>().unwrap() - chrono::Duration::minutes(136);

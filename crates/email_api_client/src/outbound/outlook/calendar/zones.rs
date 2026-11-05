@@ -1,5 +1,7 @@
-//! Windows to IANA global mappings from Unicode CLDR 48.
+//! Windows to IANA global mappings from Unicode CLDR 48, plus the British
+//! Columbia, Alberta and Manitoba zones CLDR 49 added, in CLDR 49's order.
 //! Source: https://github.com/unicode-org/cldr/blob/release-48/common/supplemental/windowsZones.xml
+//! and https://github.com/unicode-org/cldr/blob/release-49/common/supplemental/windowsZones.xml
 //! License: CLDR-LICENSE.txt in this directory. Generated territory="001" entries.
 use chrono_tz::Tz;
 
@@ -23,12 +25,15 @@ pub(super) fn zone(name: &str) -> Option<Tz> {
         "US Mountain Standard Time" => "America/Phoenix",
         "Mountain Standard Time (Mexico)" => "America/Mazatlan",
         "Mountain Standard Time" => "America/Denver",
+        "British Columbia Standard Time" => "America/Vancouver",
         "Yukon Standard Time" => "America/Whitehorse",
+        "Alberta Standard Time" => "America/Edmonton",
         "Central America Standard Time" => "America/Guatemala",
         "Central Standard Time" => "America/Chicago",
         "Easter Island Standard Time" => "Pacific/Easter",
         "Central Standard Time (Mexico)" => "America/Mexico_City",
         "Canada Central Standard Time" => "America/Regina",
+        "Manitoba Standard Time" => "America/Winnipeg",
         "SA Pacific Standard Time" => "America/Bogota",
         "Eastern Standard Time (Mexico)" => "America/Cancun",
         "Eastern Standard Time" => "America/New_York",
