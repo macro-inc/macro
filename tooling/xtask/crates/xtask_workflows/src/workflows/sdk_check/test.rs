@@ -25,6 +25,6 @@ fn the_package_job_needs_no_rust_toolchain() {
     assert!(!yaml.contains("sccache"));
     assert!(
         !yaml.contains("crates/**"),
-        "Rust changes reach the SDK through the web app's Generated Code Check: {yaml}"
+        "Rust changes reach the SDK through Regenerate Generated Code: {yaml}"
     );
 }

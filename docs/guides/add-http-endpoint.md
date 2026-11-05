@@ -152,8 +152,8 @@ bun run sync-specs && bun run generate
 `just update-generated` in `packages/sdk` does both steps, for every service.
 
 - Commit `openapi.json`, `generated/`, `packages/sdk/specs/`, and
-  `packages/sdk/generated/`. The *Generated Code Check* job in
-  `.github/workflows/web-app-check-main.yml` reruns both and fails on any diff.
+  `packages/sdk/generated/`. After merge, the *Regenerate Generated Code*
+  workflow reruns both and opens a pull request if they differ from `main`.
 - Never hand-edit `generated/`, `openapi.json`, or the SDK specs. Fix the Rust
   annotation and regenerate.
 

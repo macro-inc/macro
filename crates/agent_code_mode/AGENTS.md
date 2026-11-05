@@ -98,5 +98,5 @@ Import reviews contain exactly one draft, with source `notion`, `linear`, or
 
 The web and SDK review types are generated from these Rust types with specta
 (`src/bin/export_review_types.rs`, `just gen-agent-review-types` in `apps/web`).
-Regenerate after changing a review type or a type a draft or result reuses; CI
-fails on stale output.
+Regenerate after changing a review type or a type a draft or result reuses;
+otherwise CI opens a pull request with the stale output after merge.

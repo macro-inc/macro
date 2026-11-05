@@ -165,9 +165,9 @@ you are only giving it an editor (as `pptx` and `docx` did).
   pipelines would try to decode them.
 - **Generated clients.** The `FileType` enum reaches the storage, cognition, and
   search OpenAPI specs. Regenerate the web clients (`bun run gen-api` in
-  `apps/web`) and the SDK (`just update-generated` in `packages/sdk`); CI's
-  Generated Code Check fails on stale output. The `item_filters` snapshot
-  `crates/item_filters/src/ast/tests/other.json` also changes with each new
+  `apps/web`) and the SDK (`just update-generated` in `packages/sdk`); otherwise
+  CI opens a pull request with the stale output after merge. The `item_filters`
+  snapshot `crates/item_filters/src/ast/tests/other.json` also changes with each new
   type in a category it expands.
 - **Frontend mirror.** `apps/web/src/lib/service-clients/service-storage/fileTypeMap.ts`
   is a copy of the Rust enum that no codegen step refreshes. Generate the rows

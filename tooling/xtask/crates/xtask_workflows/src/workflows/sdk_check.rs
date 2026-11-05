@@ -5,9 +5,9 @@ use crate::workflows::steps;
 #[cfg(test)]
 mod test;
 
-/// Build the workflow. Whether `packages/sdk`'s generated layer is fresh is
-/// checked by the web app workflow's `Generated Code Check`, which builds the
-/// spec binaries once for every Rust-generated artifact.
+/// Build the workflow. `Regenerate Generated Code` keeps `packages/sdk`'s
+/// generated layer fresh after merge, building the spec binaries once for every
+/// Rust-generated artifact.
 pub fn sdk_check() -> Workflow {
     Workflow::new("SDK Check")
         .on(Event::default()

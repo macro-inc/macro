@@ -72,8 +72,8 @@ fn filters(yaml: &str) -> (&str, &str) {
         .and_then(|rest| rest.split("id: filter").next())
         .expect("path-check filters");
     filters
-        .split_once("codegen_changed:")
-        .expect("should_run block, then codegen_changed block")
+        .split_once("i18n_changed:")
+        .expect("should_run block, then the path-gated suites")
 }
 
 /// A job's rendered YAML, from its id up to the next job's id. Slicing by id
@@ -148,7 +148,7 @@ fn status_check_requires_the_ios_native_check() {
 #[test]
 fn typecheck_runs_lexical_service_check_and_tests() {
     let yaml = web_app_check_main().to_string().expect("workflow yaml");
-    let typescript = job(&yaml, "typescript", "generated-code");
+    let typescript = job(&yaml, "typescript", "biome-check");
     assert!(
         typescript.contains("bun run check"),
         "Typecheck must type-check lexical-service: {typescript}"
@@ -169,7 +169,7 @@ fn sdk_and_documentation_changes_run_their_checks() {
     let (should_run, _) = filters(&yaml);
     assert!(should_run.contains("packages/sdk/**"));
     assert!(should_run.contains("packages/sdk-docs/**"));
-    let typescript = job(&yaml, "typescript", "generated-code");
+    let typescript = job(&yaml, "typescript", "biome-check");
     assert!(typescript.contains("name: Install SDK Documentation Dependencies"));
     assert!(typescript.contains("name: Check SDK Documentation"));
     assert!(typescript.contains("working-directory: packages/sdk-docs"));
@@ -178,126 +178,32 @@ fn sdk_and_documentation_changes_run_their_checks() {
 #[test]
 fn typecheck_compiles_no_rust() {
     let yaml = web_app_check_main().to_string().expect("workflow yaml");
-    let typescript = job(&yaml, "typescript", "generated-code");
+    let typescript = job(&yaml, "typescript", "biome-check");
     for rust in ["gen-api", "cargo", "sccache", "just gen-"] {
         assert!(
             !typescript.contains(rust),
-            "generated code is checked in its own job, so Typecheck must not run `{rust}`: {typescript}"
+            "generated code is regenerated after merge, so Typecheck must not run `{rust}`: {typescript}"
         );
     }
     assert!(
-        typescript.contains("should_run == 'true'") && !typescript.contains("codegen_changed"),
+        typescript.contains("should_run == 'true'"),
         "a Rust-only change does not start Typecheck: {typescript}"
     );
 }
 
-/// The OpenAPI clients, specta types, SDK and docs tool pages all come from
-/// workspace binaries, so one job builds them once and checks all four.
+/// Generated code is proposed after merge by `regenerate_generated_code`, so a
+/// pull request neither builds the schema binaries nor waits on them.
 #[test]
-fn generated_code_checks_every_rust_generated_artifact_in_one_job() {
+fn pull_requests_do_not_run_the_generators() {
     let yaml = web_app_check_main().to_string().expect("workflow yaml");
-    let generated = job(&yaml, "generated-code", "biome-check");
-    // Specta runs last: its `cargo run -p` builds resolve features per
-    // package and would otherwise make the docs build recompile.
-    let order = [
-        "Build schema binaries",
-        "bun run gen-api -- --check",
-        "bun run sync-specs",
-        "git status --porcelain -- packages/sdk",
-        "bun run generate:tools",
-        "git status --porcelain -- apps/docs",
-        "just gen-agent-fold-types",
-        "just gen-database-sql-types",
-        "just gen-dynamic-ui-types",
-        "just gen-agent-review-types",
-    ];
-    let positions: Vec<usize> = order
-        .iter()
-        .map(|needle| {
-            generated
-                .find(needle)
-                .unwrap_or_else(|| panic!("missing `{needle}`: {generated}"))
-        })
-        .collect();
-    assert!(
-        positions.windows(2).all(|pair| pair[0] < pair[1]),
-        "the binaries build first, then each artifact is checked: {generated}"
-    );
-    let sdk = generated
-        .split("name: Regenerate SDK code")
-        .nth(1)
-        .and_then(|rest| rest.split("- name:").next())
-        .expect("SDK regeneration step");
-    assert!(
-        !sdk.contains("gen-api") && !sdk.contains("update-generated"),
-        "the SDK reuses the specs gen-api wrote instead of rerunning it: {sdk}"
-    );
-    assert!(
-        generated.contains("nsc cache sccache setup --cache_name web-ci"),
-        "the build uses the shared web-ci remote sccache: {generated}"
-    );
-}
-
-/// Debug info only slows the throwaway generator build. Set at job level so
-/// every cargo call in the job shares the profile and reuses one build.
-#[test]
-fn generated_code_builds_without_debug_info_for_every_step() {
-    let yaml = web_app_check_main().to_string().expect("workflow yaml");
-    let generated = job(&yaml, "generated-code", "biome-check");
-    let (header, steps) = generated
-        .split_once("\n    steps:\n")
-        .expect("job header, then steps");
-    assert!(
-        header.contains("CARGO_PROFILE_DEV_DEBUG: '0'"),
-        "the job env turns debug info off: {header}"
-    );
-    assert!(
-        header.contains("RUSTFLAGS: '-C link-arg=-fuse-ld=mold'"),
-        "the job links with mold like the Rust jobs: {header}"
-    );
-    for flag in ["CARGO_PROFILE_DEV_DEBUG", "RUSTFLAGS", "--config"] {
-        assert!(
-            !steps.contains(flag),
-            "no step may override `{flag}`, or its build stops reusing the others: {steps}"
-        );
-    }
-}
-
-#[test]
-fn codegen_filter_covers_every_input_of_the_generated_code_job() {
-    let yaml = web_app_check_main().to_string().expect("workflow yaml");
-    let (_, codegen) = filters(&yaml);
-    for path in [
-        "'crates/**/*.rs'",
-        "'services/**/*.rs'",
-        "'Cargo.toml'",
-        "'Cargo.lock'",
-        "'apps/web/scripts/generate-api-schema.ts'",
-        "'apps/web/scripts/services.ts'",
-        "'packages/sdk/**'",
-        "'apps/docs/**'",
+    for generator in [
+        "gen-api",
+        "codegen_changed",
+        "generated-code",
+        "gen_tool_schemas",
     ] {
-        assert!(
-            codegen.contains(path),
-            "codegen_changed must include {path}: {codegen}"
-        );
+        assert!(!yaml.contains(generator), "{generator} still runs on PRs");
     }
-    let generated = job(&yaml, "generated-code", "biome-check");
-    assert!(generated.contains("needs.path-check.outputs.codegen_changed == 'true'"));
-}
-
-#[test]
-fn status_check_requires_generated_code() {
-    let yaml = web_app_check_main().to_string().expect("workflow yaml");
-    let status = yaml
-        .split("\n  status-check:\n")
-        .nth(1)
-        .expect("status check job");
-    assert!(status.contains("- generated-code"), "{status}");
-    assert!(
-        status.contains("needs.generated-code.result }}\" == \"failure\""),
-        "{status}"
-    );
 }
 
 #[test]
