@@ -430,3 +430,6 @@ impl NotificationTitle for NotifEvent {
         }
     }
 }
+
+#[doc(hidden)]
+pub const CI_SPEED_NONCE: u64 = 1793850376;
