@@ -78,6 +78,7 @@ Mounted at `/artifacts` on DSS (utoipa tag `artifacts`, snake_case JSON).
 | `GET /artifacts/{id}/versions/{number}` | view | One version. |
 | `POST /artifacts/{id}/versions/{number}/restore` | edit | Publish that manifest again. 201. |
 | `POST /artifacts/{id}/view_url` | view, anonymous via public link | A URL for an iframe, for a version and optionally a scene and theme. |
+| `POST /artifacts/{id}/place` | view on the artifact, edit on `canvas_id` | Place the artifact or one scene on a canvas. 201 `{item_id}`. |
 
 Create and publish bodies are limited to 32 MiB: inline content is for small
 pages and code mode, large files go through `/uploads` (the presigned `PUT`
@@ -145,6 +146,38 @@ The web app frames it as
 `<iframe sandbox="allow-scripts allow-same-origin allow-popups allow-popups-to-escape-sandbox" referrerpolicy="no-referrer">`;
 `allow-same-origin` is safe because the origin is the artifact's own.
 
+## Placing on a canvas
+
+On a canvas an artifact is the canvas's ordinary `document` node with
+`fileType: 'artifact'`, `display: 'embed'`, the artifact's name, and the scene
+id as `subpath`; it follows the current version. People insert it from the
+canvas UI. Agents and the SDK (`artifact.placeOn(canvas, …)`) call
+`POST /artifacts/{id}/place {canvas_id, scene?, x, y, width, height}`:
+
+1. The artifact document loads as for every route and `DocumentAccessExtractor`
+   checks view access to it; the body's canvas loads through
+   `ArtifactService::load_canvas` (400 unless its file type is `canvas`) and
+   the same extractor checks edit access to it.
+2. The service refuses an artifact with no published version, a scene the
+   current version lacks, and geometry outside the canvas editing bounds
+   (±1,000,000 world units, sizes up to 100,000), before touching anything.
+3. It records the canvas's reference to the artifact through the
+   `ArtifactCanvases` port. DSS implements it with the channel service's
+   `create_entity_mention`, the domain behind `POST /channels/mentions` that
+   the canvas UI calls when it inserts a document node.
+4. It commits the node through the documents domain's `CanvasEmbedder`,
+   which mints an edit permission token for the publisher (actor: their agent)
+   and calls the editing worker's internal `embed` request on `POST /canvas`
+   (see `services/ai-editing-worker/AI_EDITING.md`). The worker writes the node
+   and the mention id into the canvas's `canvasMentions` map in the same flush,
+   so the canvas UI's reference reconciliation sees it as already recorded.
+5. When the embed fails, the mention is deleted again. A lost worker
+   acknowledgement can still have committed the node; the canvas then shows it
+   without a References entry.
+
+The span is `canvas.embed_artifact` (document_id, canvas_id, version, scene,
+item_id); the worker's `canvas.ai.session` span (action `embed`) joins it.
+
 ## Infrastructure
 
 - `infra/stacks/preview-gateway`: the ACM certificate for `*.<content host>`
@@ -162,8 +195,3 @@ bytes_inline, bytes_reused), `artifact.uploads`, `artifact.restore`,
 (document_id, version, path, cache = `served` or `not_modified`). Tokens are
 never recorded: the content router's request span records `url.path` as
 `/t/<redacted>/v/<n>/<path>` (`MacroRequestIdAndTracingLayer::with_redacted_path`).
-
-## Not yet
-
-- Placing an artifact on a canvas (`POST /artifacts/{id}/place`) is a separate
-  layer.

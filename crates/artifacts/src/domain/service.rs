@@ -15,30 +15,33 @@ use tracing::field::Empty;
 use super::manifest::{ManifestDraft, parse_content_type, parse_sha256};
 use super::models::{
     Artifact, ArtifactError, ArtifactPath, ArtifactVersion, ArtifactVersionSummary, ContentOrigin,
-    ContentRequest, ContentResponse, CreateArtifact, ENTRY_PATH, MAX_FILE_BYTES, MAX_FILES,
-    Manifest, PublishVersion, Publisher, Sha256, UploadInput, UploadTarget, ViewUrl,
-    ViewUrlRequest, Viewer,
+    ContentRequest, ContentResponse, CreateArtifact, ENTRY_PATH, MAX_CANVAS_COORDINATE,
+    MAX_CANVAS_SIZE, MAX_FILE_BYTES, MAX_FILES, Manifest, PlaceArtifact, Placement, PublishVersion,
+    Publisher, Sha256, UploadInput, UploadTarget, ViewUrl, ViewUrlRequest, Viewer,
 };
 use super::ports::{
-    ArtifactDocuments, ArtifactNotifier, ArtifactObjectStore, ArtifactRepository, ArtifactService,
-    NewVersion, ViewTokens,
+    ArtifactCanvases, ArtifactDocuments, ArtifactNotifier, ArtifactObjectStore, ArtifactRepository,
+    ArtifactService, CanvasDocumentNode, NewVersion, ViewTokens,
 };
 
 /// The file type documents of artifacts carry.
 const ARTIFACT_FILE_TYPE: &str = "artifact";
+/// The file type of canvases artifacts are placed on.
+const CANVAS_FILE_TYPE: &str = "canvas";
 
 /// The artifact service over its ports.
-pub struct ArtifactServiceImpl<Repository, ObjectStore, Documents, Tokens, Notifier> {
+pub struct ArtifactServiceImpl<Repository, ObjectStore, Documents, Tokens, Notifier, Canvases> {
     repository: Repository,
     object_store: ObjectStore,
     documents: Documents,
     tokens: Tokens,
     notifier: Notifier,
+    canvases: Canvases,
     origin: ContentOrigin,
 }
 
-impl<Repository, ObjectStore, Documents, Tokens, Notifier>
-    ArtifactServiceImpl<Repository, ObjectStore, Documents, Tokens, Notifier>
+impl<Repository, ObjectStore, Documents, Tokens, Notifier, Canvases>
+    ArtifactServiceImpl<Repository, ObjectStore, Documents, Tokens, Notifier, Canvases>
 {
     /// Assemble the service.
     pub fn new(
@@ -47,6 +50,7 @@ impl<Repository, ObjectStore, Documents, Tokens, Notifier>
         documents: Documents,
         tokens: Tokens,
         notifier: Notifier,
+        canvases: Canvases,
         origin: ContentOrigin,
     ) -> Self {
         Self {
@@ -55,6 +59,7 @@ impl<Repository, ObjectStore, Documents, Tokens, Notifier>
             documents,
             tokens,
             notifier,
+            canvases,
             origin,
         }
     }
@@ -72,14 +77,15 @@ fn clean_message(message: Option<String>) -> Option<String> {
         .filter(|message| !message.is_empty())
 }
 
-impl<Repository, ObjectStore, Documents, Tokens, Notifier>
-    ArtifactServiceImpl<Repository, ObjectStore, Documents, Tokens, Notifier>
+impl<Repository, ObjectStore, Documents, Tokens, Notifier, Canvases>
+    ArtifactServiceImpl<Repository, ObjectStore, Documents, Tokens, Notifier, Canvases>
 where
     Repository: ArtifactRepository,
     ObjectStore: ArtifactObjectStore,
     Documents: ArtifactDocuments,
     Tokens: ViewTokens,
     Notifier: ArtifactNotifier,
+    Canvases: ArtifactCanvases,
 {
     /// Sizes of digests stored for the artifact: recorded by a version, or
     /// uploaded to the object store.
@@ -213,14 +219,15 @@ where
     }
 }
 
-impl<Repository, ObjectStore, Documents, Tokens, Notifier> ArtifactService
-    for ArtifactServiceImpl<Repository, ObjectStore, Documents, Tokens, Notifier>
+impl<Repository, ObjectStore, Documents, Tokens, Notifier, Canvases> ArtifactService
+    for ArtifactServiceImpl<Repository, ObjectStore, Documents, Tokens, Notifier, Canvases>
 where
     Repository: ArtifactRepository,
     ObjectStore: ArtifactObjectStore,
     Documents: ArtifactDocuments,
     Tokens: ViewTokens,
     Notifier: ArtifactNotifier,
+    Canvases: ArtifactCanvases,
 {
     async fn load_document(&self, document_id: &str) -> Result<DocumentBasic, ArtifactError> {
         let not_found = || ArtifactError::NotFound(format!("artifact {document_id:?} not found"));
@@ -514,6 +521,114 @@ where
             version: version.number,
             expires_at: minted.expires_at,
         })
+    }
+
+    async fn load_canvas(&self, canvas_id: &str) -> Result<DocumentBasic, ArtifactError> {
+        let canvas =
+            self.documents.load(canvas_id).await?.ok_or_else(|| {
+                ArtifactError::NotFound(format!("canvas {canvas_id:?} not found"))
+            })?;
+
+        if canvas.file_type.as_deref() != Some(CANVAS_FILE_TYPE) {
+            return Err(ArtifactError::BadRequest(format!(
+                "{canvas_id:?} is not a canvas"
+            )));
+        }
+        Ok(canvas)
+    }
+
+    #[tracing::instrument(
+        name = "canvas.embed_artifact",
+        skip_all,
+        fields(
+            document_id = Empty,
+            canvas_id = Empty,
+            version = Empty,
+            scene = request.scene.as_deref(),
+            item_id = Empty,
+        ),
+        err
+    )]
+    async fn place(
+        &self,
+        artifact: EntityAccessReceipt<ViewAccessLevel>,
+        canvas: EntityAccessReceipt<EditAccessLevel>,
+        publisher: &Publisher,
+        request: PlaceArtifact,
+    ) -> Result<Placement, ArtifactError> {
+        let document_id = document_id_of(&artifact);
+        let canvas_id = document_id_of(&canvas);
+        let span = tracing::Span::current();
+        span.record("document_id", document_id.as_str());
+        span.record("canvas_id", canvas_id.as_str());
+
+        let coordinates_valid = [request.x, request.y]
+            .iter()
+            .all(|value| value.is_finite() && value.abs() <= MAX_CANVAS_COORDINATE);
+        let size_valid = [request.width, request.height]
+            .iter()
+            .all(|value| value.is_finite() && *value > 0.0 && *value <= MAX_CANVAS_SIZE);
+        if !coordinates_valid || !size_valid {
+            return Err(ArtifactError::BadRequest(format!(
+                "x and y must be within {MAX_CANVAS_COORDINATE} of the origin, and width and height positive and at most {MAX_CANVAS_SIZE}"
+            )));
+        }
+
+        let current = self
+            .repository
+            .current_version(&document_id)
+            .await?
+            .ok_or_else(|| {
+                ArtifactError::NotFound("the artifact has no published version yet".to_string())
+            })?;
+        span.record("version", current.number);
+        if let Some(scene) = &request.scene
+            && !current
+                .manifest
+                .scenes
+                .iter()
+                .any(|candidate| candidate.id.as_str() == scene)
+        {
+            return Err(ArtifactError::NotFound(format!(
+                "scene {scene:?} not found in version {}",
+                current.number
+            )));
+        }
+
+        let document = self.load_document(&document_id).await?;
+        let mention_id = self
+            .canvases
+            .record_reference(&canvas_id, &document_id, &publisher.user_id)
+            .await?;
+        let embedded = self
+            .canvases
+            .embed(
+                canvas,
+                publisher,
+                CanvasDocumentNode {
+                    document_id: document_id.clone(),
+                    name: document.document_name.clone(),
+                    file_type: ARTIFACT_FILE_TYPE.to_string(),
+                    subpath: request.scene,
+                    x: request.x,
+                    y: request.y,
+                    width: request.width,
+                    height: request.height,
+                    mention_id: mention_id.clone(),
+                },
+            )
+            .await;
+
+        match embedded {
+            Ok(item_id) => {
+                span.record("item_id", item_id.as_str());
+                Ok(Placement { item_id })
+            }
+            Err(error) => {
+                self.canvases.forget_reference(&mention_id).await;
+                Err(error)
+            }
+        }
     }
 
     #[tracing::instrument(

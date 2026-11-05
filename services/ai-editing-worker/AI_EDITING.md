@@ -244,6 +244,12 @@ Measurement is asynchronous: target and region preconditions are revalidated
 before any durable write. New
 media/document references and deletion of embedded items remain in the host's
 authorized asset/reference flow. Existing references can move/resize/style.
+The one server path that adds a document node is the internal `embed` action
+(`src/canvas/embed.ts`): it needs the `x-internal-auth-key` header and an edit
+token, takes a caller-recorded mention id, and commits an `embedDocument` op
+(outside `canvasOpsSchema`, so snippets can never emit it) plus the mention's
+`canvasMentions` entry in one acknowledged flush. Placing artifacts
+(`POST /artifacts/{id}/place` in DSS) is its caller.
 
 `ReadCanvas` returns a bounded live overview with stable IDs, geometry,
 containment/order, world bounds and plain text. It reports truncation and
