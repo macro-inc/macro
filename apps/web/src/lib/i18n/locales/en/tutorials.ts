@@ -69,7 +69,7 @@ export default {
   agentsBlock: 'Macro Agents',
   agentsSnippet:
     'Agents in your channels, tasks for agents, macroD and unified memory',
-  agentsLength: '1:06',
+  agentsLength: '1:05',
   driveTitle: 'Learn how to use Macro Drive',
   driveBlock: 'Macro Drive',
   driveSnippet:
