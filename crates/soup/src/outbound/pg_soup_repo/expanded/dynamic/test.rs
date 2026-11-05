@@ -340,6 +340,10 @@ async fn grouped_query_explain_local(pool: PgPool) -> anyhow::Result<()> {
         calendar_event_filter: Some(Arc::new(Expr::val(CalendarEventLiteral::Id(Uuid::nil())))),
         ..EntityFilterAst::mock_empty()
     };
+    let owner = sqlx::query_scalar!(r#"SELECT owner FROM "Document" WHERE id = $1"#, &ids[0])
+        .fetch_one(&pool)
+        .await?;
+    let source_ids = fetch_user_source_ids(&mut *pool.acquire().await?, &owner).await?;
     for sort in [SimpleSortMethod::UpdatedAt, SimpleSortMethod::ViewedUpdated] {
         for (label, filter, field, group_key) in [
             (
@@ -389,7 +393,7 @@ async fn grouped_query_explain_local(pool: PgPool) -> anyhow::Result<()> {
                 &mut DocumentIdArrays::starting_at(first_document_id_slot(sort.into(), true)),
             );
             // Dynamic AST/grouping SQL cannot use a compile-time macro.
-            // Mirror the production timestamp query's ten fixed parameters.
+            // Mirror the production timestamp query's ten fixed parameters and source ids.
             let sql = format!(
                 "EXPLAIN (ANALYZE, BUFFERS, VERBOSE, FORMAT JSON) {}",
                 builder.sql()
@@ -409,7 +413,8 @@ async fn grouped_query_explain_local(pool: PgPool) -> anyhow::Result<()> {
                     .bind(SystemPropertyKey::STATUS_UUID)
                     .bind(SystemPropertyKey::ASSIGNEES_UUID)
                     .bind(grouping.group_key.clone())
-                    .bind(entity_type.clone());
+                    .bind(entity_type.clone())
+                    .bind(&source_ids);
                 let plan = query.persistent(false).fetch_one(&pool).await?;
                 println!("EXPLAIN {label} {sort} repetition={repetition}: {plan}");
             }
