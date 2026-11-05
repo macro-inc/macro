@@ -164,6 +164,12 @@
    "base": false
   },
   {
+   "file": "dbus-user-session_1.14.10-4ubuntu4.1_amd64.deb",
+   "url": "https://snapshot.ubuntu.com/ubuntu/20261101T000000Z/pool/main/d/dbus/dbus-user-session_1.14.10-4ubuntu4.1_amd64.deb",
+   "hash": "sha512-XKy4JI6zn+g3HfOj4EB8UmMWUFvdLCiuXAXhTjgGjQgBbnitc7bPWMmLWcQaPcwAhtKYzj/QeQp9XVMIJL22/Q==",
+   "base": false
+  },
+  {
    "file": "dbus_1.14.10-4ubuntu4.1_amd64.deb",
    "url": "https://snapshot.ubuntu.com/ubuntu/20261101T000000Z/pool/main/d/dbus/dbus_1.14.10-4ubuntu4.1_amd64.deb",
    "hash": "sha512-UJm+6lSacJl4CwGjV61k4PgVOdrep6xQSiypCUY6l6oGQTfBklC29fC2m7aB5rQNYU/s0DrqpKNNSYbDXRla8A==",
@@ -1470,6 +1476,12 @@
    "url": "https://snapshot.ubuntu.com/ubuntu/20261101T000000Z/pool/main/p/pam/libpam-runtime_1.5.3-5ubuntu5.7_all.deb",
    "hash": "sha512-D2n4U9rbylVlBFgEPiHAMUCIM/ui50BO7d5gNQhyUjDPBplEEfUdyg9A9gFPn/YDbxdfP9jGlAtmsZjsSp946w==",
    "base": true
+  },
+  {
+   "file": "libpam-systemd_255.4-1ubuntu8.18_amd64.deb",
+   "url": "https://snapshot.ubuntu.com/ubuntu/20261101T000000Z/pool/main/s/systemd/libpam-systemd_255.4-1ubuntu8.18_amd64.deb",
+   "hash": "sha512-4uU1m0II06zZ73W99qijXAgAA4GTkPc5i/PjOkb//VW8QY5G4b51fx7Elk0lUMF/NDBdmR72FXonsp7UUH67Yw==",
+   "base": false
   },
   {
    "file": "libpam0g_1.5.3-5ubuntu5.7_amd64.deb",

@@ -59,6 +59,11 @@ in_chroot -s /.fakeroot -- /bin/bash -euo pipefail -c '
   dpkg --force-confold --configure --pending
   unconfigured=$(dpkg --audit)
   if [ -n "$unconfigured" ]; then echo "$unconfigured" >&2; exit 1; fi
+  # The kernel may configure before initramfs-tools, whose trigger then only
+  # updates existing images; build the initrd explicitly.
+  rm -f /boot/initrd.img-*
+  update-initramfs -c -k all
+  test -s /boot/initrd.img
 ' bash "${required[@]}"
 
 in_chroot -i /.fakeroot -s /.fakeroot -- /bin/bash -euo pipefail -c '

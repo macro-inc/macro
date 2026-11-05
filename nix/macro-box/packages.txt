@@ -11,6 +11,8 @@ systemd-resolved
 systemd-timesyncd
 udev
 dbus
+libpam-systemd
+dbus-user-session
 kmod
 cloud-guest-utils
 fdisk
