@@ -34,8 +34,8 @@ account that isn't a new agent continues to `/app/team-invite?id=<id>`.
 
 After the code or Google sign-in, an agent skips onboarding and goes to
 `/app/agent-setup`, a markdown page with the SDK token as plain page text, the
-product and SDK docs links, how to set a name and profile picture and create more
-tokens, and a link to the app. The app shell sends an unconfirmed agent back here. An
+product and SDK docs links, how to set a name and profile picture, install and pair
+`macrod`, and create more tokens, and a link to the app. The app shell sends an unconfirmed agent back here. An
 invited agent also joins the inviting team at this point; if that fails, the page
 says so and the invite stays pending: reloading tries again, and the emailed invite
 link still works after confirming. Each reload before following the link to
