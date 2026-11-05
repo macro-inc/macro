@@ -207,6 +207,83 @@ async fn paid_computer(
     id
 }
 
+struct IdleSessions;
+
+impl SessionActivity for IdleSessions {
+    type Err = FakeError;
+
+    async fn is_idle_since(
+        &self,
+        harness_id: Uuid,
+        since: DateTime<Utc>,
+    ) -> Result<bool, FakeError> {
+        assert_eq!(harness_id, HARNESS);
+        assert_eq!(since, now() - IDLE_AFTER);
+        Ok(true)
+    }
+}
+
+#[tokio::test]
+async fn idle_sleep_keeps_personas_running_and_freezes_session_only_computers() {
+    let persona = Persona {
+        name: "Agent".to_owned(),
+        os_user: "agent".to_owned(),
+        extra_service: PersonaService {
+            unit_name: "macro-agent".to_owned(),
+            exec: "/usr/local/bin/agent".to_owned(),
+            env: BTreeMap::new(),
+        },
+        config: BTreeMap::new(),
+    };
+    for (persona, expected_frozen) in [(Some(persona), 0), (None, 1)] {
+        let operator = operator(FakeFleet::default()).await;
+        let id = paid_computer(&operator).await;
+        operator
+            .repo
+            .computers
+            .lock()
+            .unwrap()
+            .get_mut(&id)
+            .unwrap()
+            .persona = persona;
+        operator.run_fleet_effects().await.unwrap();
+        operator.macrod_connected(HARNESS).await.unwrap();
+        operator.fleet.calls.lock().unwrap().clear();
+
+        assert_eq!(
+            operator.sleep_idle(&IdleSessions).await.unwrap(),
+            expected_frozen
+        );
+        let computer = operator.repo.get(id).await.unwrap().unwrap();
+        assert_eq!(
+            computer.state.phase,
+            if expected_frozen == 0 {
+                Phase::Running { host: HOST }
+            } else {
+                Phase::Frozen { host: HOST }
+            }
+        );
+        let freeze_effects = operator
+            .repo
+            .effects
+            .lock()
+            .unwrap()
+            .iter()
+            .filter(|pending| matches!(pending.effect, Effect::Freeze { .. }))
+            .count();
+        assert_eq!(freeze_effects, expected_frozen);
+        operator.run_fleet_effects().await.unwrap();
+        assert_eq!(
+            *operator.fleet.calls.lock().unwrap(),
+            if expected_frozen == 0 {
+                vec![]
+            } else {
+                vec![format!("freeze {id}")]
+            }
+        );
+    }
+}
+
 #[tokio::test]
 async fn create_enrolls_the_computer_and_connection_makes_it_ready() {
     let operator = operator(FakeFleet::default()).await;

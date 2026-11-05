@@ -68,6 +68,7 @@ lifecycle, capacity, purchase/billing orchestration and the fleet ports.
   `macrod enroll` creates `os_user`, writes `config` to `/etc/macro/personas/<os_user>.env`
   (the unit's `EnvironmentFile`), and installs + starts `/etc/systemd/system/<unit_name>.service`
   as that user. Validated by `service::validate_persona`.
+- Persona computers are never idle-frozen; they run until powered off or canceled.
 - **Gateway**: computers call Claude via `ANTHROPIC_BASE_URL=<agent harness service>/anthropic`
   with a per-session token; see `services/agent_harness_service/AGENTS.md`.
 
