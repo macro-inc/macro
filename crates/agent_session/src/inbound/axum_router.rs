@@ -2517,3 +2517,4 @@ pub async fn warm_agent_session_handler<
 
 /// Internal service controls used by AI tools.
 pub mod tool_actions;
+// ci-speed: a comment in a file over 64 KB that names a schema item
