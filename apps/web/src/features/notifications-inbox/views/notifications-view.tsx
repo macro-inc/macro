@@ -72,7 +72,6 @@ import {
 } from '../components/inbox-status-tabs';
 import { NotificationRow } from '../components/notification-row';
 import { NotificationStackItem } from '../components/notification-stack-item';
-import { NotificationsBreadcrumb } from '../components/notifications-breadcrumb';
 import { RowActionButtons } from '../components/row-action-buttons';
 import { NotificationsCalendarPaneProvider } from '../context/notifications-calendar-context';
 import {
@@ -97,7 +96,11 @@ import {
 } from '../primitives/inbox-date-headers';
 import { createInboxFilters } from '../primitives/inbox-filters';
 import { createInboxList } from '../primitives/inbox-list';
-import { createInboxSelection } from '../primitives/inbox-selection';
+import {
+  createInboxSelection,
+  type InboxShownRow,
+  type InboxShownRowLocation,
+} from '../primitives/inbox-selection';
 import {
   agentTurnParams,
   crmCommentParams,
@@ -105,6 +108,8 @@ import {
 import { createRowActions, rowButtons } from '../primitives/row-actions';
 
 type ActivationMetadata = { event?: MouseEvent; newSplit?: boolean };
+/** Stepping through the list and moving on from a done row replace the entry. */
+type HistoryOptions = { replace?: boolean };
 
 export type NotificationsViewProps = {
   /** Open what a row is about, or one of its notifications; the host decides where. */
@@ -114,12 +119,19 @@ export type NotificationsViewProps = {
   ) => void;
   /** Open the settings that decide which notifications are delivered. */
   onOpenSettings: () => void;
+  /** Where the shown row is kept, so opening one is a history entry. */
+  shownRow: InboxShownRowLocation;
   /** Calendar events show in the content area through the view's calendar route. */
   calendarPreview: {
-    /** Show the event in the content area; false when it can't be shown there. */
-    open: (entity: CalendarPreviewSelection) => boolean;
-    /** Leave the calendar, when it is shown. */
-    close: () => void;
+    /**
+     * Show the event in the content area, keeping the row that chose it in
+     * the same history entry; false when it can't be shown there.
+     */
+    open: (
+      entity: CalendarPreviewSelection,
+      navigation: { shown: InboxShownRow; replace: boolean }
+    ) => boolean;
+    isOpen: Accessor<boolean>;
     /** Bumped when the shown event is chosen again. */
     refocus: Accessor<number>;
   };
@@ -319,7 +331,7 @@ export function NotificationsView(props: NotificationsViewProps) {
 
   const orchestrator = useGlobalBlockOrchestrator();
   const guard = createPreviewSelectionGuard();
-  const selection = createInboxSelection(rows);
+  const selection = createInboxSelection(rows, props.shownRow);
   const previewTarget = createMemo(() => {
     const row = selection.selected();
     if (!row) return undefined;
@@ -335,19 +347,22 @@ export function NotificationsView(props: NotificationsViewProps) {
   /**
    * Show a row in the preview, at one of its notifications when one is named:
    * a calendar event in the Calendar, anything else in its block. A row with
-   * no inline preview opens instead.
+   * no inline preview opens instead. Each shown row is a history entry.
    */
   const preview = (
     row: NotificationInboxRow,
-    notification?: UnifiedNotification
+    notification?: UnifiedNotification,
+    history: HistoryOptions = {}
   ) => {
     const calendarEvent = calendarSelection(entityOf(row, notification));
     if (
       calendarEvent &&
       guard.canSelect(undefined) &&
-      props.calendarPreview.open(calendarEvent)
+      props.calendarPreview.open(calendarEvent, {
+        shown: { row: row.id, item: notification?.id ?? '' },
+        replace: history.replace ?? false,
+      })
     ) {
-      selection.select(row, notification?.id);
       guard(undefined);
       markSeen(row);
       return;
@@ -358,18 +373,31 @@ export function NotificationsView(props: NotificationsViewProps) {
       return;
     }
     if (!guard.canSelect(target)) return;
-    props.calendarPreview.close();
-    selection.select(row, notification?.id);
+    selection.select(row, notification?.id, history);
     guard(target);
     markSeen(row);
   };
 
-  /** Leave what the content area shows for the empty state. */
-  const closePreview = () => {
-    props.calendarPreview.close();
-    selection.clear();
-  };
-  const previewAfterMove = debounce(preview, 150);
+  // Back and forward change the shown row too; the preview claims what it
+  // shows, and yields to another split that already shows it.
+  createEffect(
+    on(
+      previewTarget,
+      (target) => {
+        if (!guard(target)) selection.clear({ replace: true });
+      },
+      { defer: true }
+    )
+  );
+
+  /** Leave what the content area shows for the list. */
+  const closePreview = (history: HistoryOptions = {}) =>
+    selection.clear(history);
+  const previewAfterMove = debounce(
+    (row: NotificationInboxRow, notification?: UnifiedNotification) =>
+      preview(row, notification, { replace: true }),
+    150
+  );
   onCleanup(() => previewAfterMove.clear());
 
   const list = createListController<InboxListItem, ActivationMetadata>({
@@ -407,8 +435,8 @@ export function NotificationsView(props: NotificationsViewProps) {
     complete: (row) => {
       stacks.collapse(row.id);
       const next = selection.afterLeaving([row.id]);
-      if (next === 'none') closePreview();
-      else if (next !== 'stay') preview(next);
+      if (next === 'none') closePreview({ replace: true });
+      else if (next !== 'stay') preview(next, undefined, { replace: true });
       return feed.markDone([row]);
     },
     notices: {
@@ -420,8 +448,8 @@ export function NotificationsView(props: NotificationsViewProps) {
   const markDone = (done: readonly NotificationInboxRow[]) => {
     for (const row of done) stacks.collapse(row.id);
     const next = selection.afterLeaving(done.map((row) => row.id));
-    if (next === 'none') closePreview();
-    else if (next !== 'stay') preview(next);
+    if (next === 'none') closePreview({ replace: true });
+    else if (next !== 'stay') preview(next, undefined, { replace: true });
     fireAndForget(inbox.markDone(done), 'notifications-inbox');
   };
 
@@ -872,6 +900,13 @@ export function NotificationsView(props: NotificationsViewProps) {
               asidePreferenceKey="notifications"
               // Rows read as sentences, so the list starts wider than a nav rail.
               aside={{ width: 360, max: 480, preserveDuringResize: false }}
+              // Narrow, the list and what it opens take turns.
+              asideList={{
+                open:
+                  props.calendarPreview.isOpen() ||
+                  previewTarget() !== undefined,
+                onBack: () => closePreview(),
+              }}
               main={{ preferredWidth: 640 }}
               resizable
             >
@@ -916,10 +951,7 @@ export function NotificationsView(props: NotificationsViewProps) {
               </ViewShell.Aside>
               <ViewShell.Main class="overflow-hidden">
                 <NotificationsCalendarPaneProvider
-                  value={{
-                    refocus: props.calendarPreview.refocus,
-                    onReturn: closePreview,
-                  }}
+                  value={{ refocus: props.calendarPreview.refocus }}
                 >
                   {/* A calendar event shows under the view's calendar route,
                       which loads lazily: suspend only this pane, so the list
@@ -945,11 +977,6 @@ export function NotificationsView(props: NotificationsViewProps) {
                             navigationRequest={selection.navigationRequest()}
                             orchestrator={orchestrator}
                             splitPanelContext={panel}
-                            headerLeading={
-                              <NotificationsBreadcrumb
-                                onReturn={closePreview}
-                              />
-                            }
                           />
                         </Show>
                       )}
