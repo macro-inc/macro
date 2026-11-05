@@ -25,7 +25,9 @@ rendering; past five, the least recently used unmount and reload when next
 opened. Closing the active tab runs its unsaved-changes guards. A tab holding more than one split shows a
 split icon with the count. The strip's `+` button (and `Cmd+T`) opens a tab on
 Home; the `X` or a middle click closes one (the last tab cannot close;
-`Shift+Cmd+W` closes the active tab); `Ctrl+Tab` / `Ctrl+Shift+Tab` cycle.
+`Shift+Cmd+W` closes the active tab); `Ctrl+Tab` / `Ctrl+Shift+Tab` cycle;
+`Cmd+1`–`Cmd+8` jump to that tab and `Cmd+9` to the last. The AI and PSD editors
+keep their own `Cmd+1` and `Cmd+7` while they have focus.
 Cmd+click (Ctrl elsewhere) on anything that navigates opens the destination in
 a background tab; adding Shift also switches to it. Tabs are not draggable.
 Tabs persist per user and restore on launch. In the browser and on other

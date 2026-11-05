@@ -69,6 +69,30 @@ function registerTabHotkeys(tabManager: TabManager) {
     },
     runWithInputFocused: true,
   });
+
+  const tabNumbers = ['1', '2', '3', '4', '5', '6', '7', '8', '9'] as const;
+
+  tabNumbers.forEach((key) => {
+    const number = Number(key);
+
+    registerHotkey({
+      hotkeyToken: TOKENS.tabs.goTo[key],
+      hotkey: `cmd+${key}`,
+      scopeId: 'global',
+      description: () =>
+        number === 9 ? t('tabs.goToLastTab') : t('tabs.goToTab', { number }),
+      condition: () => tabManager.tabByNumber(number) !== undefined,
+      keyDownHandler: () => {
+        const tab = tabManager.tabByNumber(number);
+        if (!tab) return false;
+
+        tabManager.activateTab(tab.id);
+        return true;
+      },
+      runWithInputFocused: true,
+      hide: true,
+    });
+  });
 }
 
 function TabsOwner(props: {

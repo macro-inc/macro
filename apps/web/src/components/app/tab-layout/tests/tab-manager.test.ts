@@ -150,6 +150,21 @@ describe('desktop tab manager', () => {
     expect(tabManager.revealSplit(parkedSplit)).toBe(false);
   });
 
+  it('numbers tabs by position, with 9 always the last', async () => {
+    const { router, tabManager } = track(setup('/mail'));
+    tabManager.newTab();
+    await flush(router);
+    tabManager.newTab();
+    await flush(router);
+    const [first, second, third] = tabManager.tabs();
+
+    expect(tabManager.tabByNumber(1)).toBe(first);
+    expect(tabManager.tabByNumber(2)).toBe(second);
+    expect(tabManager.tabByNumber(3)).toBe(third);
+    expect(tabManager.tabByNumber(4)).toBeUndefined();
+    expect(tabManager.tabByNumber(9)).toBe(third);
+  });
+
   it('closing the active tab activates its neighbor and restores it', async () => {
     const { router, tabManager } = track(setup('/mail/t1'));
     const [first] = tabManager.tabs();
