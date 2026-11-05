@@ -562,6 +562,169 @@ describe('AgentSession', () => {
     );
   });
 
+  test('lists the caller updates as session handles', async () => {
+    let request: Request | undefined;
+    globalThis.fetch = (async (input) => {
+      request = input instanceof Request ? input : new Request(input);
+      return Response.json({
+        items: [
+          {
+            sessionId,
+            sessionName: 'Fix login',
+            harness: 'cursor',
+            pullRequestUrl: null,
+            kind: 'tool_approval',
+            summary: 'Approve send_email on Gmail',
+            since: '2026-11-01T10:00:00Z',
+            options: [],
+          },
+        ],
+        truncated: false,
+        truncationNotice: null,
+      });
+    }) as typeof fetch;
+    const macro = new Macro({
+      token: 'user-token',
+      hosts: { 'agent-harness': 'https://agent.example.test' },
+    });
+
+    const updates = await macro.agentSessions.updates();
+
+    expect(request?.method).toBe('GET');
+    expect(request?.url).toBe(
+      'https://agent.example.test/agent-sessions/updates',
+    );
+    expect(updates.truncated).toBe(false);
+    expect(updates.truncationNotice).toBeUndefined();
+    expect(updates.items).toHaveLength(1);
+    expect(updates.items[0]?.session.id).toBe(sessionId);
+    expect(updates.items[0]).toMatchObject({
+      sessionName: 'Fix login',
+      harness: 'cursor',
+      pullRequestUrl: undefined,
+      kind: 'tool_approval',
+      summary: 'Approve send_email on Gmail',
+      since: '2026-11-01T10:00:00Z',
+      options: [],
+    });
+  });
+
+  test('lists only the held tool calls still pending as answerable approvals', async () => {
+    const bot = { id: session.botId, name: 'Agent', handle: 'agent' };
+    const messages: FoldedMessage[] = [
+      {
+        agentSessionId: sessionId,
+        key: '0:agent',
+        turn: 0,
+        author: { kind: 'agent' },
+        requestId: null,
+        parts: [
+          { kind: 'text', text: 'Sending it now.' },
+          {
+            kind: 'tool_approval',
+            approvalId: 'approval-answered',
+            serverSlug: 'macro',
+            serverName: 'Macro',
+            toolName: 'send_email',
+            arguments: { to: 'a' },
+            requestedBy: 'macro|teammate@example.com',
+            status: 'approved',
+            resolvedBy: 'macro|owner@example.com',
+            remembered: false,
+          },
+          {
+            kind: 'tool_approval',
+            approvalId: 'approval-pending',
+            serverSlug: 'gmail',
+            serverName: 'Gmail',
+            toolName: 'send_email',
+            arguments: { to: 'b' },
+            requestedBy: 'macro|teammate@example.com',
+            status: 'pending',
+            resolvedBy: null,
+            remembered: false,
+          },
+        ],
+        stop: null,
+        pending: false,
+        segments: [],
+        phase: null,
+        postedAt: null,
+      },
+    ];
+    const requests: Request[] = [];
+    globalThis.fetch = (async (input) => {
+      const request = input instanceof Request ? input : new Request(input);
+      requests.push(request);
+      if (request.url.endsWith('/log/folded')) {
+        return Response.json({ bot, messages });
+      }
+      return Response.json({ status: 'approved' });
+    }) as typeof fetch;
+    const macro = new Macro({
+      token: 'user-token',
+      hosts: { 'agent-harness': 'https://agent.example.test' },
+    });
+
+    const pending = await macro.agentSessions
+      .byId(sessionId)
+      .pendingApprovals();
+
+    expect(pending).toHaveLength(1);
+    expect(pending[0]?.approval.toJSON()).toEqual({
+      id: 'approval-pending',
+      sessionId,
+    });
+    expect(pending[0]?.requestedBy?.id).toBe('macro|teammate@example.com');
+    expect(pending[0]).toMatchObject({
+      serverName: 'Gmail',
+      toolName: 'send_email',
+      arguments: { to: 'b' },
+    });
+
+    await pending[0]?.approval.answer('approve');
+    expect(requests.map((request) => [request.method, request.url])).toEqual([
+      [
+        'GET',
+        `https://agent.example.test/agent-sessions/${sessionId}/log/folded`,
+      ],
+      [
+        'POST',
+        `https://agent.example.test/agent-sessions/${sessionId}/tool-approvals/approval-pending`,
+      ],
+    ]);
+  });
+
+  test('links a session to a task and returns the task handle', async () => {
+    const taskId = '0198a4cc-e138-7670-a308-a6b7666027aa';
+    let request: Request | undefined;
+    globalThis.fetch = (async (input) => {
+      request = input instanceof Request ? input : new Request(input);
+      return Response.json({
+        taskId,
+        reference: 'MACRO-abc',
+        pullRequestUrl: 'https://github.com/acme/web/pull/7',
+      });
+    }) as typeof fetch;
+    const macro = new Macro({
+      token: 'user-token',
+      hosts: { 'agent-harness': 'https://agent.example.test' },
+    });
+
+    const linked = await macro.agentSessions
+      .byId(sessionId)
+      .linkTask(macro.tasks.byId(taskId));
+
+    expect(request?.method).toBe('PUT');
+    expect(request?.url).toBe(
+      `https://agent.example.test/agent-sessions/${sessionId}/task`,
+    );
+    expect(await request?.json()).toEqual({ taskId });
+    expect(linked.task.id).toBe(taskId);
+    expect(linked.reference).toBe('MACRO-abc');
+    expect(linked.pullRequestUrl).toBe('https://github.com/acme/web/pull/7');
+  });
+
   test('lists the queue and edits, steers, or removes an entry through its handle', async () => {
     const actionId = '0198a4cc-e138-7670-a308-a6b766602704';
     const requests: Request[] = [];
