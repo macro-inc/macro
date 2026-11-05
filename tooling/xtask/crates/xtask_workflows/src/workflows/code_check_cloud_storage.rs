@@ -9,6 +9,10 @@
 //! Critical path: `path-check` (no Rust compile on a warm binary cache) →
 //! `test`. `check` (fmt + clippy), `doppler-config`, and
 //! `graphql-schema-compat` run alongside `test`.
+//!
+//! `check` lints every affected package. `test` runs only the changed packages
+//! and their direct dependents; `main_rust_check` runs the whole suite after
+//! merge.
 
 use gh_workflow::{
     Container, Env, Event, Expression, Job, Port, PullRequest, PullRequestType, Run, Step, Workflow,
@@ -55,11 +59,12 @@ const FILTER_CACHE_DIR: RuntimePath<'static> =
     xtask_paths::runtime_path!("/home/runner/.cache/macro-nextest-filter");
 
 /// Decide whether the rest of the workflow runs and compute the nextest
-/// filter. Deliberately light: no Nix, no sccache, and a cached release
-/// binary for the filter.
+/// filter. Deliberately light: no Nix, and a cached release binary for the filter.
+/// The sccache step supplies only that cache's credentials; nothing compiles through
+/// it here.
 fn path_check() -> Job {
     Job::default()
-        .runs_on(runners::Runner::Small.with_cache_tag(vars::NEXTEST_FILTER_CACHE_TAG))
+        .runs_on(runners::Runner::Small.with_cache_tag(vars::CI_CACHE_TAG))
         .add_output("should_run", "${{ steps.filter.outputs.should_run }}")
         .add_output(
             "doppler_candidates",
@@ -72,6 +77,10 @@ fn path_check() -> Job {
         .add_output(
             "rust_packages",
             "${{ steps.nextest-filter.outputs.rust_packages }}",
+        )
+        .add_output(
+            "test_packages",
+            "${{ steps.nextest-filter.outputs.test_packages }}",
         )
         .add_output(
             "skip_tests",
@@ -87,18 +96,25 @@ fn path_check() -> Job {
                 .if_condition(Expression::new("steps.filter.outputs.should_run == 'true'")),
         )
         .add_step(
-            steps::mount_path_cache_volume("Mount nextest-filter binary cache", FILTER_CACHE_DIR)
-                .if_condition(Expression::new(format!(
-                    "steps.filter.outputs.should_run == 'true' && ({TRUSTED_CONTEXT})"
-                ))),
+            steps::mount_nextest_filter_cache(FILTER_CACHE_DIR).if_condition(Expression::new(
+                format!("steps.filter.outputs.should_run == 'true' && ({TRUSTED_CONTEXT})"),
+            )),
         )
+        .add_step(steps::configure_namespace_sccache(vars::CI_SCCACHE_NAME))
         .add_step(compute_nextest_filter())
 }
 
 /// fmt + clippy.
 fn check() -> Job {
-    steps::gated_job()
-        .runs_on(runners::Runner::RustCi.with_cache_tag(vars::CI_CACHE_TAG))
+    check_job(
+        steps::gated_job(),
+        "${{ needs.path-check.outputs.rust_packages }}",
+    )
+}
+
+/// `check`'s body on top of `base`, linting `packages`.
+pub(super) fn check_job(base: Job, packages: &str) -> Job {
+    base.runs_on(runners::Runner::Large.with_cache_tag(vars::CI_CACHE_TAG))
         .map(with_check_env)
         .add_step(steps::checkout(false, false))
         .add_step(steps::mount_cache_volume())
@@ -107,7 +123,7 @@ fn check() -> Job {
         .add_step(steps::configure_namespace_sccache(vars::CI_SCCACHE_NAME))
         .add_step(steps::code_mode_assets())
         .add_step(cargo_fmt())
-        .add_step(cargo_clippy())
+        .add_step(cargo_clippy(packages))
         .add_step(steps::show_sccache_stats())
         .add_step(steps::teardown_nix())
 }
@@ -170,17 +186,23 @@ fn graphql_schema_compat() -> Job {
 /// the path filter selected no Rust packages (Nix-only / unmapped files) or
 /// when `skip_tests` is set (`.sqlx`-only diffs still clippy the snapshot).
 fn test() -> Job {
-    steps::gated_job()
-        .cond(Expression::new(
-            "needs.path-check.outputs.should_run == 'true' && github.event.pull_request.draft == false && needs.path-check.outputs.rust_packages != 'none' && needs.path-check.outputs.skip_tests != 'true'",
-        ))
-        .runs_on(runners::Runner::RustCi.with_cache_tag(vars::CI_CACHE_TAG))
-        .add_env((
-            "RUST_PACKAGES",
-            "${{ needs.path-check.outputs.rust_packages }}",
-        ))
+    test_job(
+        steps::gated_job().cond(Expression::new(
+            "needs.path-check.outputs.should_run == 'true' && github.event.pull_request.draft == false && needs.path-check.outputs.test_packages != 'none' && needs.path-check.outputs.skip_tests != 'true'",
+        )),
+        "${{ needs.path-check.outputs.test_packages }}",
+    )
+}
+
+/// `test`'s body on top of `base`, testing `packages`.
+pub(super) fn test_job(base: Job, packages: &str) -> Job {
+    base.runs_on(runners::Runner::Large.with_cache_tag(vars::CI_CACHE_TAG))
+        .add_env(("RUST_PACKAGES", packages))
         .add_env(("NEXTEST_TEST_THREADS", vars::NEXTEST_TEST_THREADS))
-        .add_env(("CARGO_BUILD_JOBS", vars::RUST_TEST_BUILD_JOBS))
+        // Debug info is most of what test builds write and link. Panic locations
+        // don't depend on it; only backtrace frames lose their file and line.
+        .add_env(("CARGO_PROFILE_DEV_DEBUG", "0"))
+        .add_env(("CARGO_PROFILE_TEST_DEBUG", "0"))
         .add_env(("RUSTFLAGS", "-Dwarnings -C link-arg=-fuse-ld=mold"))
         // The default 10-minute idle timeout can stop the server during long
         // link or test phases, which resets the stats reported at the end.
@@ -220,7 +242,8 @@ fn setup_execution_runtime() -> Step<gh_workflow::Use> {
 /// Exercise the real permission boundary and authenticated SDK execution in CI.
 fn test_execution_runtime() -> Step<Run> {
     Step::new("Test Deno sandbox and authenticated SDK execution")
-        .run("cargo test --locked -p code_execution -- --ignored --test-threads=2\ncargo test --locked -p agent_harness_service authenticated_mcp_runs_javascript_and_persists_source_and_result -- --ignored")
+        .run(include_str!("scripts/run_tests.sh"))
+        .add_env(("NEXTEST_RUN_DENO_TESTS", "true"))
         .if_condition(Expression::new(
             "env.RUST_PACKAGES == 'all' || contains(env.RUST_PACKAGES, 'code_execution') || contains(env.RUST_PACKAGES, 'agent_code_mode') || contains(env.RUST_PACKAGES, 'agent_harness_service')",
         ))
@@ -358,14 +381,11 @@ fn cargo_fmt() -> Step<Run> {
     Step::new("fmt").run("cargo fmt --check")
 }
 
-/// `cargo clippy`, scoped to the same package set as nextest.
-fn cargo_clippy() -> Step<Run> {
+/// `cargo clippy`, scoped to every package the change can affect.
+fn cargo_clippy(packages: &str) -> Step<Run> {
     Step::new("clippy")
         .run(include_str!("scripts/cargo_clippy.sh"))
-        .add_env((
-            "RUST_PACKAGES",
-            "${{ needs.path-check.outputs.rust_packages }}",
-        ))
+        .add_env(("RUST_PACKAGES", packages))
 }
 
 /// Match production's PostgreSQL major version so CI rejects incompatible migrations.
@@ -379,8 +399,8 @@ fn postgres_service() -> Container {
         )
         .ports(vec![Port::Name("5432:5432".to_string())])
         .options(
-            "--health-cmd pg_isready --health-interval 10s --health-timeout 5s \
-             --health-retries 5 --shm-size 1g",
+            "--health-cmd pg_isready --health-interval 1s --health-start-period 30s \
+             --health-timeout 5s --health-retries 5 --shm-size 1g",
         )
 }
 
@@ -390,7 +410,7 @@ fn redis_service() -> Container {
         .image("redis:7")
         .ports(vec![Port::Name("6379:6379".to_string())])
         .options(
-            "--health-cmd \"redis-cli ping\" --health-interval 10s \
+            "--health-cmd \"redis-cli ping\" --health-interval 1s --health-start-period 30s \
              --health-timeout 5s --health-retries 5",
         )
 }

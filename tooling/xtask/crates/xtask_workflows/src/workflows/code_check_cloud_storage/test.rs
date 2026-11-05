@@ -54,7 +54,7 @@ fn filter_binary_cache_is_trusted_only() {
         .as_array()
         .unwrap()
         .iter()
-        .find(|step| step["name"] == "Mount nextest-filter binary cache")
+        .find(|step| step["name"] == "Mount nextest-filter and cargo registry cache")
         .expect("binary cache mount");
     let condition = mount["if"].as_str().unwrap();
     assert!(
@@ -237,6 +237,13 @@ fn tests_build_dependencies_without_debug_info() {
 }
 
 #[test]
+fn test_job_builds_workspace_crates_without_debug_info() {
+    let job = serde_json::to_value(test()).unwrap();
+    assert_eq!(job["env"]["CARGO_PROFILE_DEV_DEBUG"], "0");
+    assert_eq!(job["env"]["CARGO_PROFILE_TEST_DEBUG"], "0");
+}
+
+#[test]
 fn test_job_keeps_one_sccache_server_for_the_whole_run() {
     let job = serde_json::to_value(test()).unwrap();
     assert_eq!(job["env"]["SCCACHE_IDLE_TIMEOUT"], "0");
@@ -282,4 +289,14 @@ fn schema_changes_run_the_compatibility_check() {
     );
     let job = job.to_string();
     assert!(job.contains("graphql-schema-compat --base HEAD^1"), "{job}");
+}
+
+/// Plain `cargo test` here rebuilt hundreds of crates under different flags to run
+/// about four seconds of tests.
+#[test]
+fn deno_tests_reuse_the_test_run_build() {
+    let deno_step = serde_json::to_value(test_execution_runtime()).unwrap();
+    let test_step = serde_json::to_value(run_tests()).unwrap();
+    assert_eq!(deno_step["run"], test_step["run"]);
+    assert_eq!(deno_step["env"]["NEXTEST_RUN_DENO_TESTS"], "true");
 }
