@@ -228,6 +228,7 @@ async fn get_channel_participants_for_thread_id(
               ON m.parent_entity_type = 'channel' AND m.parent_entity_id = cp.channel_id::text AND cp.user_id = m.sender_id
             WHERE (m.id = $1 OR m.thread_id = $1)
               AND m.deleted_at IS NULL
+              AND m.kind = 'message'
               AND cp.left_at IS NULL
             UNION
             SELECT em.entity_id AS id
@@ -845,11 +846,11 @@ fn push_channel_thread_participant_filter_expr(
             WHERE (tm.id = m.id OR tm.thread_id = m.id)
               AND tm.deleted_at IS NULL
               AND (
-                tm.sender_id = "#,
+                (tm.kind = 'message' AND tm.sender_id = "#,
     );
     builder.push_bind(participant.clone());
     builder.push(
-        r#"
+        r#")
                 OR EXISTS (
                     SELECT 1
                     FROM comms_entity_mentions em

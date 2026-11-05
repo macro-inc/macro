@@ -83,12 +83,21 @@ maybe_env_vars! {
     /// Optional Meta test event code — routes events to Meta's test events
     /// view instead of production tracking.
     pub struct MetaTestEventCode;
+    /// PostHog project key for backend feature flags. Without it, flagged
+    /// features stay off.
+    pub struct PosthogApiKey;
+    /// PostHog host; defaults to the project's US region.
+    pub struct PosthogHost;
 }
 
 /// The configuration parameters for the application.
 #[derive(macro_config::MacroConfig)]
 #[serde(rename_all = "SCREAMING_SNAKE_CASE")]
 pub struct Config {
+    /// PostHog API key (optional)
+    pub posthog_api_key: PosthogApiKey,
+    /// PostHog host (optional)
+    pub posthog_host: PosthogHost,
     /// Default-off quota admission and prospective usage counting.
     #[macro_config_default(ai_usage::AiUsageEnforcement::Disabled)]
     pub enable_ai_usage_enforcement: ai_usage::AiUsageEnforcement,

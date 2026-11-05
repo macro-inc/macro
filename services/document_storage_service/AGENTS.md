@@ -86,6 +86,9 @@ threads, pins, recents, notifications, folders, activity.
 
 ## Gotchas
 
+- `POSTHOG_API_KEY` is optional. Without it, the flags read here stay off; today that is
+  `enable-call-channel-thread`, so every call keeps its own chat.
+
 - Compose Soup without a separate property-definition reader; REST and GraphQL validate DATE range inputs before calling the service.
 
 - Several behaviors are Cargo-feature-gated (`connection_gateway`,

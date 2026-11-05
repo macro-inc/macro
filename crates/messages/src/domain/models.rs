@@ -432,6 +432,20 @@ impl std::fmt::Display for SimpleMention {
     }
 }
 
+/// What a persisted message is. Set by the server, never by a client.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "schema", derive(utoipa::ToSchema))]
+#[cfg_attr(feature = "json-schema", derive(schemars::JsonSchema))]
+#[serde(rename_all = "snake_case")]
+pub enum MessageKind {
+    /// Something someone wrote.
+    #[default]
+    Message,
+    /// The root of a channel call's thread. Its id is the call id, and it
+    /// stands for the call rather than for anything the caller said.
+    CallRoot,
+}
+
 /// Shared message representation for channel timelines and entity discussions.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[cfg_attr(feature = "schema", derive(utoipa::ToSchema))]
@@ -443,6 +457,9 @@ pub struct Message {
     pub parent: MessageParent,
     /// Root message UUID for replies; absent on roots.
     pub thread_id: Option<Uuid>,
+    /// What this message is.
+    #[serde(default)]
+    pub kind: MessageKind,
     /// Authenticated actor or owner of imported content.
     #[cfg_attr(feature = "schema", schema(value_type = String))]
     #[cfg_attr(feature = "json-schema", schemars(with = "String"))]
