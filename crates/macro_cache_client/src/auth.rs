@@ -1,3 +1,5 @@
+use std::time::{Duration, Instant};
+
 use anyhow::Context;
 use redis::AsyncCommands;
 
@@ -32,10 +34,10 @@ fn mobile_login_session_key(session_code: &str) -> String {
 }
 
 /// A redeemed session code's session: the refresh token it was minted for and
-/// how long the code had left. `Debug` leaves the token out.
+/// the moment the code expires. `Debug` leaves the token out.
 pub struct MobileLoginSession {
     refresh_token: String,
-    remaining_ms: u64,
+    expires_at: Instant,
 }
 
 impl MobileLoginSession {
@@ -43,12 +45,17 @@ impl MobileLoginSession {
     pub fn refresh_token(&self) -> &str {
         &self.refresh_token
     }
+
+    /// How long the code has left, counted from its original deadline.
+    fn remaining(&self) -> Duration {
+        self.expires_at.saturating_duration_since(Instant::now())
+    }
 }
 
 impl std::fmt::Debug for MobileLoginSession {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.debug_struct("MobileLoginSession")
-            .field("remaining_ms", &self.remaining_ms)
+            .field("remaining", &self.remaining())
             .finish_non_exhaustive()
     }
 }
@@ -124,23 +131,28 @@ impl MacroCache {
             .invoke_async(&mut connection)
             .await
             .context("unable to redeem mobile login session")?;
+        // Fix the deadline now: a restore after a slow refresh must not get
+        // back the time the refresh took.
         Ok(
             taken.map(|(refresh_token, remaining_ms)| MobileLoginSession {
                 refresh_token,
-                remaining_ms: u64::try_from(remaining_ms).unwrap_or(0),
+                expires_at: Instant::now()
+                    + Duration::from_millis(u64::try_from(remaining_ms).unwrap_or(0)),
             }),
         )
     }
 
-    /// Puts back a session whose redemption failed after it was taken, for
-    /// the rest of its original lifetime, so the client can retry. Never
-    /// overwrites a code that exists again. Returns whether it was restored.
+    /// Puts back a session whose redemption failed after it was taken, until
+    /// its original deadline, so the client can retry. Never restores an
+    /// expired code or overwrites one that exists again. Returns whether it
+    /// was restored.
     pub async fn restore_mobile_login_session(
         &self,
         session_code: &str,
         session: &MobileLoginSession,
     ) -> anyhow::Result<bool> {
-        if session.remaining_ms == 0 {
+        let remaining_ms = u64::try_from(session.remaining().as_millis()).unwrap_or(u64::MAX);
+        if remaining_ms == 0 {
             return Ok(false);
         }
         let mut connection = self
@@ -150,7 +162,7 @@ impl MacroCache {
             .context("unable to connect to redis")?;
         let options = redis::SetOptions::default()
             .conditional_set(redis::ExistenceCheck::NX)
-            .with_expiration(redis::SetExpiry::PX(session.remaining_ms));
+            .with_expiration(redis::SetExpiry::PX(remaining_ms));
         let restored: Option<String> = connection
             .set_options(
                 mobile_login_session_key(session_code),

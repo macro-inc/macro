@@ -90,8 +90,8 @@ async fn a_restored_session_redeems_once_more_within_its_lifetime() {
         .await
         .unwrap()
         .unwrap();
-    let lifetime_ms = MACRO_MOBILE_LOGIN_SESSION_EXPIRY_SECONDS * 1000;
-    assert!(taken.remaining_ms > 0 && taken.remaining_ms <= lifetime_ms);
+    let lifetime = std::time::Duration::from_secs(MACRO_MOBILE_LOGIN_SESSION_EXPIRY_SECONDS);
+    assert!(!taken.remaining().is_zero() && taken.remaining() <= lifetime);
     assert!(
         cache
             .restore_mobile_login_session(&code, &taken)
@@ -106,7 +106,7 @@ async fn a_restored_session_redeems_once_more_within_its_lifetime() {
         .unwrap();
     assert_eq!(again.refresh_token(), "fake-refresh-token");
     // The restore keeps the original deadline instead of starting a new one.
-    assert!(again.remaining_ms <= taken.remaining_ms);
+    assert!(again.expires_at <= taken.expires_at);
     assert!(
         cache
             .take_mobile_login_session(&code)
@@ -166,7 +166,38 @@ async fn errors_and_debug_output_never_contain_the_code_or_token() {
 
     let session = MobileLoginSession {
         refresh_token: "fake-refresh-token".into(),
-        remaining_ms: 1,
+        expires_at: std::time::Instant::now(),
     };
     assert!(!format!("{session:?}").contains("fake-refresh-token"));
+}
+
+#[tokio::test]
+async fn a_session_past_its_original_deadline_is_not_restored() {
+    let cache = cache();
+    let code = fresh_code("expired");
+    cache
+        .set_mobile_login_session(&code, "fake-refresh-token")
+        .await
+        .unwrap();
+    let mut taken = cache
+        .take_mobile_login_session(&code)
+        .await
+        .unwrap()
+        .unwrap();
+    // The refresh outlasted the code's original five minutes.
+    taken.expires_at = std::time::Instant::now() - std::time::Duration::from_millis(1);
+
+    assert!(
+        !cache
+            .restore_mobile_login_session(&code, &taken)
+            .await
+            .unwrap()
+    );
+    assert!(
+        cache
+            .take_mobile_login_session(&code)
+            .await
+            .unwrap()
+            .is_none()
+    );
 }
