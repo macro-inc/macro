@@ -474,3 +474,176 @@ git, agent harness, document storage, and auth), for example:
 ```bash
 nix/hosts/computers-tunnels.sh reverse <gateway> <egress> <git> <harness> <storage> <auth> # Incus tunnel running
 nix/hosts/computers-tunnels.sh all <gateway> <egress> <git> <harness> <storage> <auth> # neither tunnel running
+```
+
+Run it under `systemd-run --user -p Restart=always` to keep it up. Starting
+the stack again wipes the database but not the VMs: delete leftover instances
+on the host with `incus delete --force <name>`.
+
+Check the generated wiring without starting anything:
+
+```bash
+cargo x validate-local-compose --instance computers --computers-incus
+```
+
+## Port Conflicts (macOS)
+
+The default instance binds a fixed set of host ports. macOS reserves some of them
+for its own services. If the app loads but API calls return unexpected HTML, a
+port is probably hijacked by an unrelated process. The two most common conflicts
+on a fresh Mac:
+
+- **Port 8080** — macOS WebDriver service (`com.apple.WebDriver.HTTPService`). It listens on this port when remote automation is on. The auth service cannot bind it.
+- **Port 8090** — another project's dev server, for example an Expo server with `--port 8090`. The proxy cannot bind it.
+
+The frontend loads, but login and API calls hit the other process. You see HTML
+or console errors instead of JSON. `just doctor-local` reports the busy ports
+before you start.
+
+Run the stack on a port window that is free on your machine. You do not need to
+kill the other process:
+
+```bash
+just doctor-local                         # see which default ports are busy
+just doctor-local --instance test --port-base 31000   # check the new window is free
+just run_local --no-doppler --instance test --port-base 31000
+```
+
+A named instance binds every service at `port-base + offset`. A free base like
+`31000` moves the whole stack to one contiguous window. Use any base that is free
+on your machine. See `just doctor-local` for the busy ports. Keep the same
+`--instance` name and `--port-base` on later runs so the ports stay deterministic.
+
+Use the same two flags for every command. Run the stack, seed it, and check it
+with the same `--instance` and `--port-base` values:
+
+```bash
+just run_local --no-doppler --instance test --port-base 31000
+just seed-scenario --instance test --port-base 31000 apply --file seed/scenarios/team-perms.json
+just seed-scenario --instance test --port-base 31000 status --file seed/scenarios/team-perms.json
+just status_local --instance test --port-base 31000
+```
+
+If you omit `--port-base`, a named instance gets a deterministic port window
+derived from its name. That window is different from the one you chose. A stack
+started with an explicit `--port-base` must be seeded with the same explicit
+`--port-base`, or the seed CLI looks at the wrong database. The default instance
+(no `--instance`) always uses the fixed ports and needs no extra flags.
+
+The seeded persona login links embed the frontend port. If you switch ports, run
+`just seed-scenario apply` again to get links that match the new window.
+`just status_local`, with the same two flags, prints the live endpoints.
+
+## What the Stack Rebuilds
+
+The Rust services are built on the host with `cargo zigbuild`. The binaries are mounted into a shared runtime image. Docker does not compile these services during a normal `run_local`.
+
+Press `r` to rebuild the binaries. Only the services whose binaries changed restart.
+
+Three services have Docker-built images. They are not rebuilt by default:
+
+- `sync_service`
+- `lexical_service`
+- `websocket_service`
+
+If you change these services, the running stack can use a stale image. Force a rebuild with this flag:
+
+```bash
+just run_local --build-aux-services
+```
+
+When you start the stack with `--build-aux-services`, press `r` to rebuild those images and recreate their containers. This is slower, so leave the flag off unless you work on those services.
+
+If you started without the flag and suspect a stale image, press `q`. Then start again with the flag.
+
+## Headless Mode
+
+`just stack` runs the same stack without an attached terminal. There is no hotkey loop and no dev server. The frontend is built once and served statically by the proxy. The bundle counts as local, as `run_local`'s dev server does: flags, routes and tools gated on `LOCAL_ONLY` are on. The whole product lives behind one origin. A finished `up` leaves only Docker containers running.
+
+Both headless and attached startup prepare the browser WebAssembly packages
+through `bun run dev:prepare`. A fresh worktree builds them before serving the app;
+later starts reuse the generated packages when they are current. See
+[Integration Secrets](#integration-secrets) for credential-free startup limitations.
+
+```bash
+just stack up                  # bring everything up, print URLs, return
+just stack status --json      # machine-readable state (containers, health, URLs)
+just stack update             # rebuild and reload only the changed services (the `r` hotkey)
+just stack update --frontend  # also rebuild the frontend bundle
+just stack update --binaries-dir <dir>  # remount a prebuilt set; volumes stay
+just stack down               # remove containers, volumes, and state
+```
+
+All the `run_local` flags apply to `stack` too. This includes `--instance`, `--no-doppler`, `--no-build`, and `--binaries-dir`.
+
+The app is served at `<proxy>/app/`. The bundle resolves its backend from the origin it is served on. The same stack works on localhost or behind any hostname without a rebuild.
+
+For Pipedream Connect on a machine hostname, include that HTTPS origin in
+`PIPEDREAM_ALLOWED_ORIGINS` through `--env-file`; the headless default names only
+localhost. Reuse that override file on subsequent stack invocations.
+
+### Init Snapshots
+
+`just run_local` and `stack up` both cache the expensive infrastructure initialization. The first cold run:
+
+- Migrates the database
+- Creates the Kafka topics
+- Waits for the FusionAuth kickstart
+- Creates the search indices
+
+It saves these volumes as an init snapshot. The snapshot is content-addressed and stored under `infra/local/generated/.snapshots`. Later runs restore the snapshot and skip the initialization. An input change causes a cache miss and a normal full init — the key *is* the definition of clean state, so the full-delete/full-create guarantee is unchanged.
+
+Useful commands:
+
+```bash
+just run_local --no-snapshot  # skip the snapshot cache
+just stack up --no-snapshot   # same flag, headless
+```
+
+Cursor Cloud bakes the snapshot during environment install. Later `stack up` restores it.
+
+## Common Commands
+
+Run local binaries against shared dev resources instead of a full local stack:
+
+```bash
+just run_dev
+```
+
+`run_dev` uses shared dev resources. It needs Doppler and real cloud access. It is for contributors with team access.
+
+See what a running or stopped instance looks like. The output shows endpoints with live reachability probes, plus the state and host ports of every container. It does not start or rebuild anything:
+
+```bash
+just status_local
+```
+
+Stop an instance but keep its volumes:
+
+```bash
+just stop_local --instance agent-a
+```
+
+Remove the containers, volumes, and named-instance networks of an instance:
+
+```bash
+just destroy_local --instance agent-a
+```
+
+Drop, recreate, and migrate an instance database:
+
+```bash
+just reset_local --instance agent-a
+```
+
+### Finding out where a bring-up spent its time
+
+Every run prints its slowest stages before the summary. To compare runs, point
+`MACRO_LOCAL_TIMINGS` at a file — each run appends one JSON line of every stage
+and its duration:
+
+```bash
+MACRO_LOCAL_TIMINGS=/tmp/run-local-timings.jsonl just run_local
+```
+
+For the default instance, omit `--instance`.

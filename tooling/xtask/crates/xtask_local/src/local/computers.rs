@@ -66,10 +66,6 @@ const MACROD_SERVICES: &[(&str, Option<Port>)] = &[
     ),
     ("OVERRIDE_AGENT_GIT_SERVICE_URL", Some(Port::AgentGit)),
     (
-        "OVERRIDE_AGENT_HARNESS_EGRESS_URL",
-        Some(Port::AgentHarnessEgress),
-    ),
-    (
         "OVERRIDE_AGENT_HARNESS_SERVICE_URL",
         Some(Port::AgentHarness),
     ),
