@@ -11,6 +11,7 @@ export const MAX_KEY_BYTES = 80;
 export const MAX_BODY_BYTES = 64 * 1024;
 export const DEFAULT_MAX_QUESTION_CHARS = 500;
 export type JevConfig = {
+  mode?: 'all' | 'filtered';
   threshold: number;
   questions: Record<string, string>;
   /** The wake rule in words, for the agent reading its own file. */
@@ -25,6 +26,20 @@ export function parseJevConfig(raw: unknown): JevConfig {
   };
   if (typeof raw !== 'object' || raw === null) return fail('must be an object');
   const value = raw as Record<string, unknown>;
+  if (value.mode === 'all') {
+    if ('questions' in value || 'threshold' in value)
+      return fail('all mode has no questions or threshold');
+    return {
+      mode: 'all',
+      threshold: 0,
+      questions: {},
+      rule: 'Wake on everything; learn before narrowing.',
+      wakeIf: [[]],
+      maxQuestionChars: DEFAULT_MAX_QUESTION_CHARS,
+    };
+  }
+  if (value.mode !== undefined && value.mode !== 'filtered')
+    return fail('mode must be all or filtered');
   const threshold = value.threshold;
   if (typeof threshold !== 'number' || threshold < 0 || threshold > 1) {
     return fail('threshold must be a number within 0..1');
@@ -122,6 +137,8 @@ export type JudgedMessage = {
   thread: string | null;
 };
 export type Candidate = {
+  fromCreator?: boolean;
+  eventType?: string;
   messageId: string;
   channel: string;
   mentionsMe: boolean;
@@ -132,6 +149,9 @@ export type Candidate = {
   recent: JudgedMessage[];
 };
 export type Reason =
+  | 'all'
+  | 'creator'
+  | 'deterministic'
   | 'mentioned'
   | 'direct_message'
   | 'decided'
@@ -202,11 +222,15 @@ async function decideCandidate(
   candidate: Candidate,
   deps: JevDeps
 ): Promise<Decision> {
+  if (candidate.fromCreator)
+    return { relevant: true, reason: 'creator', probabilities: {} };
   if (candidate.mentionsMe)
     return { relevant: true, reason: 'mentioned', probabilities: {} };
   if (candidate.directMessage)
     return { relevant: true, reason: 'direct_message', probabilities: {} };
   const config = await deps.config();
+  if (config.mode === 'all')
+    return { relevant: true, reason: 'all', probabilities: {} };
   const ask = async (recent: JudgedMessage[]): Promise<Decision> => {
     const request = fitBody({
       input: {

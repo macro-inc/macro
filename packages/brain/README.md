@@ -30,7 +30,7 @@ credentials configured.
 event stream ─▶ history/ ─▶ work running here? ─▶ inject into it
                                    │ no
                                    ▼
-                        Jev (mentions, DMs skip) ─▶ lane per conversation ─▶ respond turn
+                        all-mode/Jev (creator, mentions, DMs always wake) ─▶ conversation batch ─▶ cheap triage ─▶ respond
 heartbeat timer / schedule wake-up ─────────────────────────────────────────▶ heartbeat turn
 respond turn `brain handoff` ─▶ Macro task + work/<task>/ worktree ───────────▶ work turn ─▶ report
 every turn ─▶ commit `turn <id>: <summary>` ─▶ pull --rebase ─▶ push
@@ -41,7 +41,7 @@ every turn ─▶ commit `turn <id>: <summary>` ─▶ pull --rebase ─▶ push
 | `style.ts` | Re-read every Markdown communication guide under `prompts/style/`, except README.md, for all tiers. |
 | `workspace.ts` | Persona files, `.gitignore` enforcement, the single-writer commit + push queue. |
 | `events.ts` | SSE on `{dss}/webhook/events/stream`, idle watchdog, doubling reconnect, catch-up since the drop. |
-| `jev.ts` | `config/jev.json` (Tod's format plus `wakeIf`), the decide call with fallbacks, `log/decisions.jsonl`. |
+| `jev.ts`, `learning.ts` | Explicit all-event start, deterministic/Jev filtering, decision and feedback history, must-wake regressions and tune tasks. |
 | `lanes.ts` | Durable JSONL queue per conversation; bursts batch, crashes replay, failures go to `failed/`. |
 | `pool.ts` | Per-tier concurrency, one speaking turn at a time, per-run and per-day spend caps. |
 | `runner.ts` | `start(turn) → { events, inject, abort, done }` over the Claude Agent SDK with streaming input. |
@@ -105,7 +105,7 @@ and the service contract.
 The workspace owns composition in `brain.ts` and `brain/*.ts`; imports resolve
 only to the exact installed version in `brain.lock`. Run `brain check` in a work
 branch before merging to main: typecheck, own tests, fake-event boot. The runner
-rechecks a committed main snapshot, drains existing turns, activates and requires
+rechecks a committed main snapshot, connects replacement intake before draining, activates and requires
 continuous healthy probation (`BRAIN_HEALTH_MINUTES`, default five) before saving
 `cache/wiring/last-good`. Failure restores wiring and records memory plus a
 `cache/rewiring-notice` added to subsequent turn instructions. Remove that notice
@@ -170,3 +170,14 @@ replacement queue processing. Receipt IDs persist across the handoff to avoid
 duplicate delivery. Every activation independently verifies a fake DM answer,
 the health shape, and draining an admitted turn on abort; workspace tests cannot
 replace these conformance checks.
+
+New templates subscribe to `*` with Jev `{ "mode": "all" }`. Unknown events
+join conversation/event lanes and cheap tool-free triage before full turns.
+Creator messages, DMs and mentions always wake. The daily tune schedule and
+100-wake threshold create a normal work-tier branch to narrow subscriptions,
+`brain/triage.ts` and Jev configuration from decision/outcome/feedback history.
+`brain/fixtures/` and the supervisor's durable regression union prevent dropping
+must-wake cases. Heartbeats collect reactions on the agent's own messages;
+`brain react` records outbound reactions. Health and telemetry expose filter
+size and wake rate without message text. Configuration is frozen with checked
+wiring; style, prompt and persona text are still read fresh each turn.

@@ -24,6 +24,7 @@ export const conversationKey = (conversation: Conversation) =>
 type Running = InFlight & {
   handle: RunHandle;
   conversationRef: Conversation;
+  report: boolean;
 };
 export type WorkDeps = {
   pool: Pool;
@@ -90,7 +91,8 @@ export class Work {
   async start(
     conversation: Conversation,
     label: string,
-    description: string
+    description: string,
+    options: { report?: boolean } = {}
   ): Promise<CreatedTask> {
     if (this.draining) throw new Error('work is draining');
     const key = conversationKey(conversation);
@@ -106,7 +108,13 @@ export class Work {
       );
     }
     this.starting.add(key);
-    const launching = this.launch(key, conversation, label, description);
+    const launching = this.launch(
+      key,
+      conversation,
+      label,
+      description,
+      options.report ?? true
+    );
     this.launches.add(launching);
     try {
       return await launching;
@@ -119,7 +127,8 @@ export class Work {
     key: string,
     conversation: Conversation,
     label: string,
-    description: string
+    description: string,
+    report: boolean
   ): Promise<CreatedTask> {
     const task = await this.deps.tasks.create(label, description);
     const worktree = `${this.deps.workDir}/${task.id}`;
@@ -161,6 +170,7 @@ export class Work {
     this.running.set(key, {
       conversation: key,
       conversationRef: conversation,
+      report,
       taskId: task.id,
       label,
       startedAt: new Date().toISOString(),
@@ -205,7 +215,7 @@ export class Work {
       outcome.status === 'success'
         ? outcome.result
         : `I couldn't finish "${run.label}" (${outcome.status}${outcome.result ? `: ${outcome.result}` : ''}).`;
-    await this.deps.report(run.conversationRef, report);
+    if (run.report) await this.deps.report(run.conversationRef, report);
     await this.deps.commit(turnId, `work ${run.label}: ${outcome.status}`);
     await this.cleanUp(worktree, branch);
   }

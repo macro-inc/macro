@@ -2,6 +2,7 @@
 // every event: messages, channels, typing, decisions, secrets, the event
 // stream. Request shapes mirror crates/agent_brain's client. `fetch` is
 // injected so tests never touch the network.
+import type { CountedReaction } from '../../sdk/generated/storage/types.gen.ts';
 import type { Hosts } from './config.ts';
 export const API_KEY_HEADER = 'x-macro-user-api-key';
 export type Fetch = (input: string, init?: RequestInit) => Promise<Response>;
@@ -64,11 +65,11 @@ export class MacroHttpError extends Error {
 }
 export class MacroHttp {
   readonly hosts: Hosts;
-  private readonly apiKey: string;
+  readonly #apiKey: string;
   private readonly fetch: Fetch;
   constructor(hosts: Hosts, apiKey: string, fetch: Fetch) {
     this.hosts = hosts;
-    this.apiKey = apiKey;
+    this.#apiKey = apiKey;
     this.fetch = fetch;
   }
   async send(
@@ -77,7 +78,7 @@ export class MacroHttp {
     init: RequestInit = {}
   ): Promise<Response> {
     const headers = new Headers(init.headers);
-    headers.set(API_KEY_HEADER, this.apiKey);
+    headers.set(API_KEY_HEADER, this.#apiKey);
     if (init.body !== undefined)
       headers.set('content-type', 'application/json');
     const response = await this.fetch(url, { ...init, headers });
@@ -121,6 +122,23 @@ export class MacroHttp {
       {
         method: 'POST',
         body: JSON.stringify(body),
+      }
+    );
+  }
+  async reactions(channel: string, id: string): Promise<CountedReaction[]> {
+    const message = await this.json<{ reactions: CountedReaction[] }>(
+      'read message reactions',
+      `${this.hosts.storage}/messages/channel/${channel}/items/${id}`
+    );
+    return message.reactions;
+  }
+  async react(channel: string, id: string, emoji: string): Promise<void> {
+    await this.send(
+      'react to a message',
+      `${this.hosts.storage}/messages/channel/${channel}/items/${id}/reactions`,
+      {
+        method: 'POST',
+        body: JSON.stringify({ add: true, emoji }),
       }
     );
   }

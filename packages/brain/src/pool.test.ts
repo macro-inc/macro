@@ -118,3 +118,73 @@ test('a spent day refuses the turn and frees its slots', async () => {
   assert.deepEqual(runner.started, []);
   assert.deepEqual(pool.lastTurnAt(), null);
 });
+
+test('concurrent tiers reserve the remaining daily cap before starting runners', async () => {
+  const directory = await nodeFs.mkdtemp(
+    nodePath.join(nodeOs.tmpdir(), 'brain-budget-reservation-')
+  );
+  try {
+    const runner = new HeldRunner();
+    const ledger = new SpendLedger(directory);
+    const pool = new Pool({
+      runner,
+      limits: { work: 3, respond: 1, heartbeat: 1 },
+      budget: async () => BUDGET,
+      ledger,
+      log: () => {},
+    });
+    const first = await pool.start(turn('first', 'work'));
+    await assert.rejects(
+      () => pool.start(turn('second', 'work')),
+      BudgetExceeded
+    );
+    assert.equal(runner.started[0]?.maxBudgetUsd, 10);
+    runner.finish.get('first')?.({
+      status: 'success',
+      result: '',
+      costUsd: 2,
+      sessionId: null,
+    });
+    await first.done;
+    await pool.start(turn('third', 'work'));
+    assert.equal(runner.started[1]?.maxBudgetUsd, 8);
+  } finally {
+    await nodeFs.rm(directory, { recursive: true });
+  }
+});
+
+test('failed durable cost accounting refuses further spend instead of releasing unknown charges', async () => {
+  const directory = await nodeFs.mkdtemp(
+    nodePath.join(nodeOs.tmpdir(), 'brain-budget-accounting-')
+  );
+  try {
+    const ledger = new (class extends SpendLedger {
+      override async record(_usd: number): Promise<number> {
+        throw new Error('disk unavailable');
+      }
+    })(directory);
+    const runner = new HeldRunner();
+    const pool = new Pool({
+      runner,
+      limits: { work: 2 },
+      budget: async () => BUDGET,
+      ledger,
+      log: () => {},
+    });
+    const first = await pool.start(turn('first', 'work'));
+    runner.finish.get('first')?.({
+      status: 'success',
+      result: '',
+      costUsd: 2,
+      sessionId: null,
+    });
+    await assert.rejects(() => first.done, /disk unavailable/);
+    await assert.rejects(
+      () => pool.start(turn('second', 'work')),
+      /accounting unavailable/
+    );
+    assert.equal(runner.started.length, 1);
+  } finally {
+    await nodeFs.rm(directory, { recursive: true });
+  }
+});

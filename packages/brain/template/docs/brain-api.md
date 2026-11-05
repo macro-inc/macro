@@ -19,19 +19,21 @@ const compose: Composition = (deps) => new Brain(deps, {
 export default compose;
 ```
 
-The template preserves the default stream → Jev → conversation lane → respond
-turn, heartbeat, scheduled wake-up and work handoff behavior. `onEvent` observes
+The template starts with every visible event, an unfiltered Jev policy, and a
+cheap triage turn per conversation batch before an ordinary respond turn.
+Creator messages, DMs and mentions always wake. Heartbeats, schedules and work
+handoffs use the same default primitives. `onEvent` observes
 every event before its default handler; `relevance: typeof judge` replaces Jev.
-Errors in my handlers fail the process and trigger recovery. Subscriptions alone
-do not install handlers. Never record credentials or private message bodies in logs.
+Errors in my handlers fail the process and trigger recovery. With learning enabled, events without a specialized handler enter a lane
+and cheap triage too. Never record credentials or private message bodies in logs.
 
 The public module exports these typed primitives:
 
 | API | Contract |
 | --- | --- |
 | `Composition` | `(deps: BrainDeps) => BrainRuntime \| Promise<BrainRuntime>`. Default export. |
-| `BrainRuntime` | `run(signal: AbortSignal): Promise<void>`. Abort stops intake, drains turns, closes resources. |
-| `Brain(deps, wiring?)` | Default composition. `Wiring` has `subscriptions`, `onEvent`, `relevance`. Public control methods include `post`, `reply`, `handoff`, `remember`, `schedule`, `health`. |
+| `BrainRuntime` | `prepare(signal)`, `run(signal)`, `health()`, `post(...)`, `checkFixture(fixture)`. Abort drains admitted turns. |
+| `Brain(deps, wiring?)` | Default composition. `Wiring` has typed event, filter, turn, tool, tier, schedule, outbound and call hooks. Public control methods include `post`, `reply`, `handoff`, `remember`, `schedule`, `health`. |
 | `BrainDeps` | Scoped config, HTTP, tasks, routines, runner, git, presence, executable, base environment and log adapters. Replace adapters to compose behavior or test it. Credentials belong in these adapters, never in prompts. |
 | `events` | `eventStream`, `parseEnvelope`, event types and reconnect/catch-up helpers. Unknown events retain `eventType` and `metadata`. |
 | `judge(input, deps)` | Async relevance decision; custom relevance implements the same signature. |
@@ -108,7 +110,7 @@ async onSchedule(wake, brain) {
 ```ts
 // Middleware wraps both post and reply, in array order; next may transform.
 outbound: [async (message, next) => {
-  if (new Date().getUTCHours() < 8)
+  if (message.root !== null && new Date().getUTCHours() < 8)
     return { suppressed: true, reason: 'quiet hours' };
   return next({ ...message, text: message.text.trim() });
 }],
@@ -125,7 +127,7 @@ async onCall(call, brain) {
 `BrainCall` has `id`, `phase: incoming | connected | ended`, and opaque `metadata`.
 `RouteItem` is a discriminated union: respond has lane/batch, heartbeat has reason,
 and work has task/conversation/description. `TurnRequest` has optional
-`maxBudgetUsd` and in-process `tools`; `afterTurn` receives the admitted `Turn`.
+`maxBudgetUsd`, in-process `tools`, and Claude `builtinTools` (`[]` disables built-ins), and `strictMcpConfig` (ignores on-disk MCP servers); `afterTurn` receives the admitted `Turn`.
 Suppressed posts return `{ suppressed: true, reason }` and do not update last-said
 memory. Middleware that calls `next` records the actual transformed text.
 
@@ -133,10 +135,66 @@ See [the complete release-manager composition](examples/release-manager.ts) for
 a checked example combining subscriptions, relevance, tools, tiers and schedules.
 
 The runtime contract is `prepare(signal)`, `run(signal)`, `health()` and
-`post(turn, channel, text)`. `prepare` connects and buffers events without
+`post(turn, channel, text)` and `checkFixture(fixture)`. `prepare` connects and buffers events without
 mutating workspace queues. The supervisor starts replacement intake alongside
 the old process, then stops old intake and drains its turns before activating
 replacement queue processing. Receipt IDs persist across the handoff to avoid
 duplicate delivery. Every activation independently verifies a fake DM answer,
 the health shape, and draining an admitted turn on abort; workspace tests cannot
 replace these conformance checks.
+
+## How I get better at knowing what's for me
+
+Day one is explicit: `config/events.json` has `events: ["*"]` and
+`config/jev.json` is `{ "mode": "all" }`, with no questions or threshold.
+The stream wildcard remains scoped to my account's entity/workspace access.
+My composition can narrow subscriptions after evidence; it cannot unsubscribe
+from the message and routine events the library requires.
+
+`log/decisions.jsonl` records event decisions, wakes, cheap triage, turn outcomes,
+posted/reacted/ignored signals, negative instructions such as "stop" or "not
+you", and creator feedback. Message context stays in workspace history/cache
+and fixture files, never telemetry. Because the broker has no reaction fact,
+heartbeats poll reactions on my own messages; future reaction events use the
+same feedback path. `brain react <channel> <message> <emoji>` records my own
+reaction as an outcome too.
+
+The template declares a daily `tune` schedule (04:00 UTC). Its `onSchedule`
+handler calls `brain.tune()` in code, and every 100 real wakes triggers the same
+maintenance task. This creates a normal work-tier branch/worktree and asks me
+to review evidence, change one small part of the filter, run `brain check`,
+commit, then merge to main. With insufficient evidence I make no filter change.
+
+```ts
+// First deterministic rules belong in brain/triage.ts.
+triage(candidate) {
+  if (candidate.message.text.includes('release rollback')) return true;
+  return undefined; // Delegate other cases to Jev.
+},
+learning: { wakesPerTune: 100, triageModel: 'claude-haiku-4-5' },
+```
+
+Creator messages, DMs and mentions override a false filter decision. Protected
+examples and successful actions accumulate as `MustWakeFixture` JSON in
+`brain/fixtures/`. A creator's "you missed this" reply protects the referenced
+message. An independent cache registry retains the growing union, even if a
+proposed commit removes a fixture. `brain check` replays the composition's
+`checkFixture` using the same `evaluate` filter as intake and recorded Jev
+probabilities; changing question names requires deterministic rules that still
+admit those examples. It refuses a dropped must-wake example or removed useful
+event subscription. Full replacement runtimes must implement this contract.
+
+Ordinary events are batched per conversation, then pass through a quiet,
+Haiku triage tier (no tools, $0.05 per run) before a full turn. DMs, mentions and
+creator messages and retained useful/missed fixture IDs bypass that cheap rejection gate. Tier reservations and the
+persisted daily cap apply across triage, respond, heartbeat and work.
+`/health.filterSize` counts configured subscriptions plus Jev questions;
+`/health.wakeRate` is real wakes divided by decisions. Telemetry reports these
+counts/rates without message text.
+
+Filtering configuration and TypeScript composition are frozen to the checked
+main snapshot. New commits to `brain.ts`, `brain/**/*.ts`, `brain.lock`, or the
+three config JSON files use the same check/health/revert path. Fixture-only,
+style, prompt and memory commits do not reload code; style and persona text
+remain fresh each turn. A library upgrade is an exact installed `brain.lock`
+bump with the same checks and recovery.

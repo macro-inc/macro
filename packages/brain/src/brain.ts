@@ -24,6 +24,7 @@ import {
   missedMessages,
   type StreamItem,
 } from './events.ts';
+import { Filter } from './filter.ts';
 import {
   HeartbeatStore,
   snapshotHash,
@@ -32,8 +33,9 @@ import {
 } from './heartbeat.ts';
 import { type Entry, History } from './history.ts';
 import { closeHttp, serveHttp } from './http.ts';
-import { judge } from './jev.ts';
+import type { Candidate, Decision } from './jev.ts';
 import { Lanes } from './lanes.ts';
+import { Learning, type MustWakeFixture, TUNE_TASK } from './learning.ts';
 import type { ChannelDetail, MacroHttp } from './macro.ts';
 import { Memory } from './memory.ts';
 import { Pool } from './pool.ts';
@@ -54,6 +56,8 @@ import { type Git, GitWriter, Workspace } from './workspace.ts';
 export type { Wiring } from './wiring.ts';
 export type BrainDeps = {
   config: Omit<Config, 'macroApiKey' | 'anthropicAuthToken'>;
+  /** Frozen composition/config snapshot selected by the supervisor. */
+  wiringRoot?: string;
   http: MacroHttp;
   tasks: Tasks;
   routines: Routines;
@@ -80,6 +84,13 @@ export class Brain implements Control {
   private readonly history: History;
   private readonly ledger: SpendLedger;
   private readonly heartbeatStore: HeartbeatStore;
+  private readonly learning: Learning;
+  private readonly filter: Filter;
+  private readonly turnSources = new Map<string, string[]>();
+  private readonly postedTurns = new Set<string>();
+  private readonly reactedTurns = new Set<string>();
+  private creator = '';
+  private tuneRunning = false;
   private readonly controlToken = crypto.randomUUID();
   private readonly channels = new Map<string, ChannelDetail>();
   private readonly seen = new Set<string>();
@@ -98,9 +109,13 @@ export class Brain implements Control {
   constructor(deps: BrainDeps, wiring: Wiring = {}) {
     this.deps = deps;
     this.wiring = wiring;
-    this.workspace = new Workspace(deps.config.workspace);
+    this.workspace = new Workspace(deps.config.workspace, deps.wiringRoot);
     this.writer = new GitWriter(this.workspace, deps.git);
     this.memory = new Memory(this.workspace, this.writer);
+    this.learning = new Learning(this.workspace, this.writer);
+    this.filter = new Filter(this.workspace, wiring, deps.http, (line) =>
+      this.appendLog('decisions.jsonl', line)
+    );
     this.history = new History(this.workspace.path('history'));
     this.ledger = new SpendLedger(this.workspace.path('cache'));
     this.heartbeatStore = new HeartbeatStore(this.workspace.path('cache'));
@@ -187,11 +202,17 @@ export class Brain implements Control {
     }
     await this.workspace.enforceGitignore();
     const persona = await this.workspace.persona();
+    this.creator =
+      /^- (.+) set me up\./m.exec(
+        await this.workspace.read('OPERATING.md')
+      )?.[1] ?? '';
+    await this.learning.resume();
     this.me = (await this.deps.http.me()).user_id;
     this.log({ brain: 'starting', me: this.me, brain_lock: persona.brainLock });
     this.pool = new Pool({
       runner: this.deps.runner,
       limits: {
+        triage: 1,
         ...persona.events.concurrency,
         ...Object.fromEntries(
           Object.entries(this.wiring.tiers ?? {}).map(([name, tier]) => [
@@ -216,6 +237,7 @@ export class Brain implements Control {
         return {
           ...budget,
           perRunUsd: {
+            triage: 0.05,
             ...budget.perRunUsd,
             ...Object.fromEntries(
               Object.entries(this.wiring.tiers ?? {}).map(([name, tier]) => [
@@ -253,6 +275,7 @@ export class Brain implements Control {
             conversation,
           }),
           system: current.operating,
+
           model: current.events.model,
           env: this.turnEnv(`work-${task.id}`),
         };
@@ -343,6 +366,28 @@ export class Brain implements Control {
               : `a routine run with no schedule record: ${wake.sessionName}`;
             queueHeartbeat(reason);
           }
+        } else {
+          const metadata = event.metadata;
+          if (
+            event.eventType.includes('reaction') &&
+            typeof metadata === 'object' &&
+            metadata !== null &&
+            'message_id' in metadata &&
+            typeof metadata.message_id === 'string'
+          ) {
+            const negative =
+              'emoji' in metadata &&
+              /thumbs_down|👎/.test(String(metadata.emoji));
+            await this.learning.reaction(metadata.message_id, !negative);
+          }
+          if (this.wiring.learning)
+            await this.onGenericEvent(event.eventId, event.eventType, metadata);
+          else
+            await this.learning.record({
+              kind: 'event',
+              event_type: event.eventType,
+              woke: false,
+            });
         }
       }
     } finally {
@@ -422,10 +467,6 @@ export class Brain implements Control {
       channel: entry.channelId,
       root: dm ? null : entry.root,
     });
-    if (this.work.inject(key, [entry])) {
-      this.log({ message_id: entry.id, injected_into_work: key });
-      return;
-    }
     const judged = (message: Entry) => ({
       id: message.id,
       from: message.from,
@@ -433,25 +474,111 @@ export class Brain implements Control {
       text: message.text,
       thread: message.thread,
     });
-    const decision = await (this.wiring.relevance ?? judge)(
-      {
-        messageId: entry.id,
-        channel: entry.channel,
-        mentionsMe: entry.mentionsMe,
-        directMessage: dm,
-        inMyThread: recent.some(
-          (message) => message.from === this.me && message.root === entry.root
-        ),
-        message: judged(entry),
-        recent: recent.map(judged),
-      },
-      {
-        config: () => this.workspace.jev(),
-        decide: (request) => this.deps.http.decide(request),
-        log: (line) => this.appendLog('decisions.jsonl', line),
-      }
-    );
+    const candidate: Candidate = {
+      messageId: entry.id,
+      channel: entry.channel,
+      mentionsMe: entry.mentionsMe,
+      directMessage: dm,
+      fromCreator: entry.from === this.creator,
+      inMyThread: recent.some(
+        (message) => message.from === this.me && message.root === entry.root
+      ),
+      message: judged(entry),
+      recent: recent.map(judged),
+    };
+    const decision = await this.evaluate(candidate);
+    await this.learning.decided(candidate, decision);
+    const referenced =
+      recent.find(
+        (message) => message.id === (posted.thread_id ?? posted.root_id)
+      ) ??
+      recent
+        .filter(
+          (message) => message.from !== this.creator && message.from !== this.me
+        )
+        .at(-1);
+    await this.learning.feedback(candidate, referenced?.id);
+    if (this.work.inject(key, [entry])) {
+      await this.learning.woke([entry.id]);
+      await this.learning.record({
+        kind: 'injected',
+        message_id: entry.id,
+        conversation: key,
+      });
+      return;
+    }
     if (decision.relevant) await this.lanes.push(key, entry);
+  }
+  /** Shared admission and regression replay; protected messages always wake. */
+  evaluate(
+    candidate: Candidate,
+    probabilities?: Record<string, number>
+  ): Promise<Decision> {
+    return this.filter.evaluate(candidate, probabilities);
+  }
+  checkFixture(fixture: MustWakeFixture): Promise<boolean> {
+    return this.filter.checkFixture(fixture);
+  }
+  private async onGenericEvent(
+    id: string,
+    type: string,
+    metadata: unknown
+  ): Promise<void> {
+    const channel =
+      typeof metadata === 'object' &&
+      metadata !== null &&
+      'channel_id' in metadata &&
+      typeof metadata.channel_id === 'string'
+        ? metadata.channel_id
+        : `event:${type}`;
+    const entry: Entry = {
+      id,
+      eventType: type,
+      channelId: channel,
+      channel: channel,
+      root: id,
+      thread: null,
+      dm: false,
+      from: 'event',
+      at: new Date().toISOString(),
+      text: JSON.stringify({ event_type: type, metadata }),
+      mentionsMe: false,
+    };
+    const candidate: Candidate = {
+      messageId: id,
+      eventType: type,
+      channel,
+      directMessage: false,
+      mentionsMe: false,
+      inMyThread: false,
+      message: {
+        id,
+        text: entry.text,
+        at: entry.at,
+        from: entry.from,
+        thread: null,
+      },
+      recent: [],
+    };
+    const decision = await this.evaluate(candidate);
+    await this.learning.decided(candidate, decision, type);
+    if (decision.relevant) await this.lanes.push(channel, entry);
+  }
+  /** A normal work-tier task owns its branch and checks before merging any narrowing. */
+  async tune(): Promise<void> {
+    if (this.tuneRunning || this.draining) return;
+    this.tuneRunning = true;
+    try {
+      await this.work.start(
+        { channel: 'internal:tune', root: null },
+        'Tune relevance',
+        `${TUNE_TASK}\nMain workspace: ${this.workspace.root}`,
+        { report: false }
+      );
+      await this.learning.tuned();
+    } finally {
+      this.tuneRunning = false;
+    }
   }
   private async catchUp(since: Date): Promise<void> {
     for (const channelId of await this.history.channels()) {
@@ -476,7 +603,47 @@ export class Brain implements Control {
     };
     if (this.work.inject(lane, batch)) return;
     const persona = await this.workspace.persona();
+    const protectedFixture = (
+      await Promise.all(
+        batch.map((entry) => this.learning.isProtected(entry.id))
+      )
+    ).some(Boolean);
+    const protectedBatch =
+      protectedFixture ||
+      batch.some(
+        (entry) => entry.dm || entry.mentionsMe || entry.from === this.creator
+      );
+    if (this.wiring.learning && !protectedBatch) {
+      const triage = await this.pool.start({
+        id: `triage-${crypto.randomUUID()}`,
+        tier: 'triage',
+        lane,
+        prompt: `Is this batch worth a real turn for this agent? Reply only WAKE or IGNORE. Never use tools.\n${JSON.stringify(batch)}`,
+        system: persona.operating,
+        model: this.wiring.learning.triageModel,
+        tools: [],
+        builtinTools: [],
+        strictMcpConfig: true,
+        cwd: this.workspace.root,
+        env: this.deps.baseEnv,
+      });
+      const judged = await triage.done;
+      const worthy =
+        judged.status === 'success' && /^WAKE\b/i.test(judged.result.trim());
+      await this.learning.record({
+        kind: 'triage',
+        message_ids: batch.map((entry) => entry.id),
+        woke: worthy,
+        ignored: !worthy,
+        status: judged.status,
+      });
+      if (!worthy) return;
+    }
     const turnId = `respond-${stamp()}-${lane.slice(0, 8)}`;
+    this.turnSources.set(
+      turnId,
+      batch.map((entry) => entry.id)
+    );
     const prompt = respondPrompt({
       instructions: persona.prompts.respond,
       talk: talkCommands(this.deps.exe, 'respond'),
@@ -486,17 +653,19 @@ export class Brain implements Control {
     });
     // Typing starts before the turn so even its first post finds it on; the
     // post stops it, and so does the turn ending.
-    const stopTyping = startTyping(
-      (active) =>
-        this.deps.http.typing(
-          conversation.channel,
-          conversation.root ?? undefined,
-          active
-        ),
-      {
-        log: (line) => this.log(line),
-      }
-    );
+    const stopTyping = last.channelId.startsWith('event:')
+      ? async () => {}
+      : startTyping(
+          (active) =>
+            this.deps.http.typing(
+              conversation.channel,
+              conversation.root ?? undefined,
+              active
+            ),
+          {
+            log: (line) => this.log(line),
+          }
+        );
     this.typing.set(turnId, stopTyping);
     let handle: RunHandle;
     try {
@@ -518,7 +687,23 @@ export class Brain implements Control {
       () => handle.abort(),
       persona.events.respondTimeoutMinutes * 60000
     );
+    await this.learning.woke(batch.map((entry) => entry.id));
     const outcome = await handle.done;
+    await this.learning.outcome(
+      batch.map((entry) => entry.id),
+      turnId,
+      outcome.status,
+      this.postedTurns.delete(turnId),
+      this.reactedTurns.delete(turnId)
+    );
+    this.turnSources.delete(turnId);
+    if (
+      this.wiring.learning &&
+      (await this.learning.tuneDue(this.wiring.learning.wakesPerTune))
+    )
+      await this.tune().catch((error) =>
+        this.log({ tune_failed: String(error) })
+      );
     clearTimeout(timeout);
     await stopTyping();
     this.typing.delete(turnId);
@@ -567,6 +752,12 @@ export class Brain implements Control {
     this.heartbeatRunning = true;
     try {
       const persona = await this.workspace.persona();
+      if (this.wiring.learning)
+        await this.learning
+          .pollReactions(this.deps.http, this.me)
+          .catch((error) =>
+            this.log({ reaction_feedback_failed: String(error) })
+          );
       const snapshot = snapshotText({
         self: await this.memory.self(),
         schedules: await this.scheduleBook.list(),
@@ -624,6 +815,12 @@ export class Brain implements Control {
         outbound.root ?? undefined
       );
       await this.memory.said(conversationKey(outbound), outbound.text);
+      if (outbound.turn) this.postedTurns.add(outbound.turn);
+      await this.learning.posted(
+        message.id,
+        outbound.turn ? (this.turnSources.get(outbound.turn) ?? []) : [],
+        outbound.channel
+      );
       return { id: message.id };
     };
     const pipeline = (this.wiring.outbound ?? []).reduceRight<OutboundNext>(
@@ -653,6 +850,15 @@ export class Brain implements Control {
     const problems = [...this.problems];
     if (!this.connected) problems.push('event stream disconnected');
     const state = problems.length === 0 ? 'ok' : 'degraded';
+    const persona = await this.workspace.persona();
+    const filterSize =
+      new Set([...persona.events.events, ...(this.wiring.subscriptions ?? [])])
+        .size + Object.keys(persona.jev.questions).length;
+    const wakeRate = this.learning.stats().wakeRate;
+    startSpan('brain.filter.metrics', {
+      'filter.size': filterSize,
+      'filter.wake_rate': wakeRate,
+    }).end();
     if (this.previousHealth !== state) {
       const span = startSpan('brain.health', {
         'health.state': state,
@@ -672,8 +878,25 @@ export class Brain implements Control {
       turns: this.pool?.active() ?? [],
       work: this.work?.inFlight() ?? [],
       spentTodayUsd: await this.ledger.spentToday(),
+      filterSize,
+      wakeRate,
       problems,
     };
+  }
+  async react(
+    turn: string | null,
+    channel: string,
+    message: string,
+    emoji: string
+  ): Promise<void> {
+    await this.deps.http.react(channel, message, emoji);
+    if (turn) this.reactedTurns.add(turn);
+    await this.learning.record({
+      kind: 'reacted',
+      message_id: message,
+      turn,
+      reacted: true,
+    });
   }
   post(turn: string | null, channel: string, text: string) {
     return this.say(turn, { channel, root: null }, text);

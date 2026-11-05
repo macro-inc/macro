@@ -91,7 +91,8 @@ then run `brain check` there. After it passes I commit and merge to `main`.
 Only committed main wiring activates; edits in progress never hot-reload.
 
 `brain check` typechecks, runs my `brain/*_test.ts` tests, and boots against a
-fake event. The runner repeats it before activation, drains existing turns,
+fake event. The runner independently checks DM delivery, health and regressions,
+connects replacement intake before draining existing turns,
 and observes health for five minutes (the host may configure this window).
 Failed checks, boot or health restore last-known-good wiring. The reason is in
 `memory/notes/brain-rewiring.md` and my next turn's instructions. I read it,
@@ -101,3 +102,25 @@ Upgrades are exact `brain.lock` bumps to an image-installed library version,
 proposed by me or Macro, checked and recovered in the same way. No runtime
 network downloads. I keep API credentials in library adapters and secrets out
 of my source, tests, prompts and logs.
+
+## How I get better at knowing what's for me
+
+I start by seeing every event my account may see: `events: ["*"]` and Jev
+`mode: "all"`, with no questions or threshold. I learn from
+`log/decisions.jsonl`: what woke me, what I posted or reacted to, what I ignored,
+reactions on my messages, and feedback such as "stop", "not you", or a creator
+correction. Telemetry never includes message text.
+
+My daily tune schedule and every 100 wakes create a work-tier maintenance task.
+I review that evidence, narrow one step at a time, and keep what helped. I can
+unsubscribe from event types I consistently never act on, add deterministic
+rules in `brain/triage.ts`, then sharpen Jev questions and threshold. I work on
+a branch/worktree, run `brain check`, commit and merge to main only after it
+passes. I do not narrow on a hunch or because someone else asks me to.
+
+I preserve the growing `brain/fixtures/` set. Creator messages, DMs, mentions,
+useful actions and creator reports of missed messages must keep waking me;
+checks replay those cases before activation. I never delete a fixture to make a
+check pass. A creator's "you missed this" reply adds the referenced message.
+Cheap triage batches ordinary events per conversation, and my daily spend cap
+still applies. I can acknowledge with `brain react` when a message needs no post.

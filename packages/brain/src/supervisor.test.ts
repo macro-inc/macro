@@ -194,6 +194,7 @@ test('supervisor conformance rejects a broken health contract independently of o
         dryRun((deps) => {
           const brain = new Brain(deps);
           return {
+            checkFixture: (fixture) => brain.checkFixture(fixture),
             prepare: (signal) => brain.prepare(signal),
             run: (signal) => brain.run(signal),
             post: (turn, channel, text) => brain.post(turn, channel, text),
@@ -208,4 +209,41 @@ test('supervisor conformance rejects a broken health contract independently of o
   } finally {
     await nodeFs.rm(root, { recursive: true });
   }
+});
+
+test('a rejected proposal leaves the healthy generation listening without a restart', async () => {
+  let head = 'good';
+  let stops = 0;
+  let starts = 0;
+  let now = 0;
+  const supervisor = new Supervisor({
+    head: async () => head,
+    snapshot: async (commit) => commit,
+    check: async (snapshot) => {
+      if (snapshot === 'bad') throw new Error('broken');
+    },
+    launch: async () => {
+      starts++;
+      return {
+        activate: async () => {},
+        healthy: async () => true,
+        exited: () => false,
+        stop: async () => {
+          stops++;
+        },
+      };
+    },
+    reject: async () => {},
+    save: async () => {},
+    now: () => now,
+    probationMs: 1,
+  });
+  await supervisor.tick();
+  now = 1;
+  await supervisor.tick();
+  head = 'bad';
+  await supervisor.tick();
+  assert.equal(starts, 1);
+  assert.equal(stops, 0);
+  await supervisor.stop();
 });

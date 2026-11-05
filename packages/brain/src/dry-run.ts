@@ -1,6 +1,7 @@
 // A real boot through the event stream and a fake turn. No network or model calls.
 import type { BrainDeps } from './brain.ts';
 import { gatewayHosts } from './config.ts';
+import { fixtures } from './learning.ts';
 import { MacroHttp } from './macro.ts';
 import type { BrainRuntime, Composition } from './mod.ts';
 import type { Outcome, Turn } from './runner.ts';
@@ -13,7 +14,8 @@ export async function dryRun(
     event_type: string;
     metadata: unknown;
   }[] = [],
-  verifyDelivery = true
+  verifyDelivery = true,
+  regressionRoot = workspace
 ): Promise<void> {
   const stop = new AbortController();
   let received = false;
@@ -93,12 +95,20 @@ export async function dryRun(
     runner: {
       start(turn) {
         turns++;
-        admitted.resolve(turn);
+        if (turn.lane === 'check') admitted.resolve(turn);
         return {
           events: (async function* () {})(),
           inject() {},
           abort() {},
-          done: completed.promise,
+          done:
+            turn.lane === 'check'
+              ? completed.promise
+              : Promise.resolve({
+                  status: 'success' as const,
+                  result: 'IGNORE',
+                  costUsd: 0,
+                  sessionId: null,
+                }),
         };
       },
     },
@@ -133,6 +143,15 @@ export async function dryRun(
     typeof runtime.health !== 'function'
   )
     throw new Error('composition must implement prepare, run, health and post');
+  for (const fixture of [
+    ...(await fixtures(workspace)),
+    ...(await fixtures(regressionRoot)),
+  ]) {
+    if (!(await runtime.checkFixture(fixture)))
+      throw new Error(
+        `filter drops must-wake fixture ${fixture.candidate.messageId}`
+      );
+  }
   await runtime.prepare(stop.signal);
   const running = runtime.run(stop.signal);
   try {

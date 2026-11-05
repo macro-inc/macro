@@ -21,6 +21,7 @@ export function talkCommands(
   const lines = [
     `- Post top level (DMs): \`${exe} post <channel_id> -\`, text on stdin.`,
     `- Reply in a thread: \`${exe} reply <channel_id> <root_id> -\`, text on stdin.`,
+    `- React instead of posting an acknowledgment: \`${exe} react <channel_id> <message_id> <emoji>\`.`,
     `- Read a conversation: \`${exe} context <channel_id> [root_id]\`.`,
     `- Memory: \`${exe} remember <topic> -\`, \`${exe} recall <words>\`, \`${exe} forget <topic>\`.`,
     `- Your state: \`${exe} focus -\` (what you're on now), \`${exe} promise <to> -\` (a commitment), \`${exe} release <words>\` (a commitment kept or dropped).`,

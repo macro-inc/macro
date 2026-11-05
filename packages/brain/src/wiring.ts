@@ -3,7 +3,8 @@ import type { Brain } from './brain.ts';
 import type { Conversation } from './control.ts';
 import type { MacroEvent } from './events.ts';
 import type { Entry } from './history.ts';
-import type { judge } from './jev.ts';
+import type { Candidate, judge } from './jev.ts';
+import type { LearningConfig } from './learning.ts';
 import type { BrainTool, Outcome, Tier, Turn, TurnRequest } from './runner.ts';
 import type { Trigger, Wake } from './schedules.ts';
 import type { CreatedTask } from './work.ts';
@@ -56,6 +57,9 @@ export type Wiring = {
   subscriptions?: string[];
   onEvent?(event: MacroEvent, brain: Brain): Promise<void>;
   relevance?: typeof judge;
+  /** Deterministic first pass; undefined delegates to Jev. Protected messages always wake. */
+  triage?(candidate: Candidate): Awaitable<boolean | undefined>;
+  learning?: LearningConfig;
   tiers?: Record<string, TierDefinition>;
   route?(item: RouteItem): Awaitable<Tier>;
   /** Runs before admission; budget remains bounded by tier and daily limits. */

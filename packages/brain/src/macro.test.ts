@@ -41,3 +41,12 @@ test('a failed call names what it was doing and the status', async () => {
       error.message.includes('could not read a secret: HTTP 404 no such secret')
   );
 });
+
+test('scoped HTTP adapters do not serialize their credential into agent code', () => {
+  const http = new MacroHttp(
+    gatewayHosts('https://gateway.example'),
+    'private-agent-key',
+    async () => new Response()
+  );
+  assert.equal(JSON.stringify(http).includes('private-agent-key'), false);
+});

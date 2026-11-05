@@ -58,6 +58,7 @@ test('an injected message joins the running session and the input closes after i
       })();
     },
   });
+  assert.equal(JSON.stringify(runner).includes('gateway-token'), false);
   const run = runner.start(TURN);
   run.inject('also use the new rate');
   injected.resolve();
@@ -152,4 +153,27 @@ test('composition tools are exposed through a real in-process MCP server', async
     await client.close();
     await server.instance.close();
   }
+});
+
+test('classification turns disable built-ins and ignore workspace MCP configuration', async () => {
+  let options: Options | undefined;
+  const runner = new AgentSdkRunner({
+    ...RUNNER_OPTIONS,
+    query: (params) => {
+      options = params.options;
+      return (async function* () {
+        yield result('IGNORE', 0.01);
+      })();
+    },
+  });
+  await runner.start({
+    ...TURN,
+    tier: 'triage',
+    tools: [],
+    builtinTools: [],
+    strictMcpConfig: true,
+  }).done;
+  assert.deepEqual(options?.tools, []);
+  assert.equal(options?.strictMcpConfig, true);
+  assert.equal(options?.mcpServers, undefined);
 });
