@@ -21,4 +21,4 @@ pub mod inbound;
 ))]
 pub mod outbound;
 #[doc(hidden)]
-pub const CI_INTEGRATE_NONCE: &str = "1793884309-5";
+pub const CI_INTEGRATE_NONCE: &str = "1793884907-1";
