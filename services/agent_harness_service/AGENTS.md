@@ -39,6 +39,33 @@ Pulumi stacks; they do not host extra agent processes.
   for the session owner, and its `usage` (SSE `message_start`/`message_delta`
   or the JSON body) goes to the process's settling recorder, which charges
   only under `ENABLE_AI_USAGE_BILLING`. Span: `anthropic_gateway.messages`.
+- `src/computers.rs`: configures the optional fleet operator, runs fleet effects,
+  timers, reconciliation and idle sleep, reports macrod presence, and wakes
+  sleeping computers before forwarding prompts. `COMPUTERS_FLEET` selects
+  `incus` or local-only `docker`; unset disables the control plane.
+- `src/computer_screen.rs` + `src/computer_screen/`: Macro computer routes.
+  `POST /harnesses/{id}/claude-sign-in` → `{url}`,
+  `POST /harnesses/{id}/claude-sign-in/complete` `{code}` → `{signedIn}`,
+  `POST /harnesses/{id}/claude-sign-out` → `{mode}` (manage rights; mode is
+  written to the harness row on macrod's confirmation; a shared 180-second
+  account-change lease covers the command and mode write, preventing opposing
+  requests from persisting out of order; concurrent requests get 409),
+  `GET /harnesses/{id}/claude-mode` → `{mode}` (manage rights), and two
+  websockets: the viewer's `GET /harnesses/{id}/screen[?control=true]` (view
+  rights; `control` needs manage, else `rfb.rs` drops input messages and
+  fails closed on anything unreadable) and macrod's
+  `GET /harnesses/me/screen?stream=` (harness token). Commands reach
+  macrod as `computerControl` runtime messages; `bus.rs` carries them over
+  Redis (`agent-harness.computer-control`: claim with `SET NX`, ack within
+  3 s or 409, then the answer) when the runtime is on another replica, and
+  always carries screen bytes over per-stream channels, so either socket may
+  land on any replica. Each screen socket sends a ping every 20 seconds so a
+  static desktop stays connected through the load balancer. Both sides require
+  initial peer RFB bytes within 20 seconds, cleaning up cancelled upgrades.
+  Spans:
+  `computer_control.request`/`.execute`,
+  `computer_screen.view`/`.computer` (joined by `stream_id` and propagated
+  context).
 - `src/public_mcp.rs` + `src/public_mcp/`: public workspace MCP and OAuth;
   reuses the harness tool context and retains bearer authentication. Users with
   `ai-code-mode` get only `ExecuteCode`/`DescribeCodeTools`/`ReadCodeDocs` on

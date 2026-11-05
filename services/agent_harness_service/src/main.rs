@@ -14,6 +14,7 @@ mod bots_directory;
 mod code_mode;
 mod coding_agent;
 mod coding_agents;
+mod computer_screen;
 mod computers;
 mod config;
 mod containers;
@@ -1633,6 +1634,14 @@ async fn run() -> anyhow::Result<()> {
         session_repo.clone(),
         MacroAuthorizationState::new(Arc::new(authorization_service.clone())),
     );
+    let computer_screen = computer_screen::router(
+        Arc::clone(&runtimes),
+        redis.clone(),
+        harnesses::domain::service::HarnessServiceImpl::new(PgHarnessRepo::new(pool.clone())),
+        MacroAuthorizationState::new(Arc::new(authorization_service.clone())),
+        &computer_tasks,
+        service_shutdown.clone(),
+    );
     let gateway_state = RuntimeGatewayState::new(
         runtimes,
         MacroAuthorizationState::new(Arc::new(authorization_service.clone())),
@@ -1780,6 +1789,7 @@ async fn run() -> anyhow::Result<()> {
             .with_routine_sessions(routine_sessions)
             .with_conversations(conversations)
             .with_coding_agents(coding_agents)
+            .with_computer_screen(computer_screen)
             .with_capabilities(capabilities)
             .with_mode_choice(mode_choice)
             .with_pull_requests(pull_requests)
@@ -2200,6 +2210,8 @@ async fn run() -> anyhow::Result<()> {
     }
 
     service_shutdown.cancel();
+    computer_tasks.close();
+    computer_tasks.wait().await;
     scheduling_runtime.stop();
     cognition_runtime.stop();
     notification_cancel.cancel();

@@ -1,6 +1,7 @@
 #![allow(unused)]
 
 mod api;
+mod computer_screen;
 mod config;
 
 use utoipa::OpenApi;

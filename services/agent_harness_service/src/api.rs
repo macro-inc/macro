@@ -78,6 +78,7 @@ pub struct ApiStates<T, R, Opener, Bots, Requests, Access, Auth, Models, Changes
     sharing: Router,
     routine_sessions: Router,
     coding_agents: Router,
+    computer_screen: Router,
     capabilities: Router,
     mode_choice: Router,
     conversations: Router,
@@ -119,6 +120,7 @@ impl<T, R, Opener, Bots, Requests, Access, Auth, Models, Changes>
             sharing: Router::new(),
             routine_sessions: Router::new(),
             coding_agents: Router::new(),
+            computer_screen: Router::new(),
             capabilities: Router::new(),
             mode_choice: Router::new(),
             conversations: Router::new(),
@@ -207,6 +209,12 @@ impl<T, R, Opener, Bots, Requests, Access, Auth, Models, Changes>
     /// Attach internal coding agent discovery and dispatch routes.
     pub fn with_coding_agents(mut self, router: Router) -> Self {
         self.coding_agents = router;
+        self
+    }
+
+    /// Attach Macro computer screen and Claude sign-in routes.
+    pub fn with_computer_screen(mut self, router: Router) -> Self {
+        self.computer_screen = router;
         self
     }
 
@@ -378,6 +386,7 @@ where
         .merge(agent_repositories_router(states.repositories))
         .merge(states.routine_sessions)
         .merge(states.coding_agents)
+        .merge(states.computer_screen)
         .merge(states.capabilities)
         .merge(states.mode_choice)
         .merge(states.conversations)
