@@ -19,7 +19,7 @@ export default {
   crmBlock: 'Macro CRM',
   crmSnippet:
     'A pipeline that updates itself: kanban, routines after calls, AI chat',
-  crmLength: '1:27',
+  crmLength: '1:26',
   githubTitle: 'Learn how to use Macro with GitHub',
   githubBlock: 'GitHub in Macro',
   githubSnippet:
