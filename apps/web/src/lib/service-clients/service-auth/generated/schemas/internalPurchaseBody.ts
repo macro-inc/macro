@@ -8,12 +8,14 @@
 import type { ComputerSize } from './computerSize';
 import type { InternalPurchaseBodyName } from './internalPurchaseBodyName';
 import type { InternalPurchaseBodyPersona } from './internalPurchaseBodyPersona';
+import type { PurchaseBilling } from './purchaseBilling';
 import type { SubscriptionItem } from './subscriptionItem';
 
 /**
  * Body of an internal purchase.
  */
 export interface InternalPurchaseBody {
+  billing: PurchaseBilling;
   /** The team admin or owner the caller authorized. */
   createdBy: string;
   /** Joined into the same subscription update, e.g. an agent seat. */

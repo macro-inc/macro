@@ -7357,6 +7357,10 @@
             "format": "date-time",
             "description": "When billing stops, for a computer canceled at period end."
           },
+          "compReason": {
+            "type": ["string", "null"],
+            "description": "Present for a comped purchase, including after release."
+          },
           "createdAt": {
             "type": "string",
             "format": "date-time"
@@ -8625,8 +8629,11 @@
       "InternalPurchaseBody": {
         "type": "object",
         "description": "Body of an internal purchase.",
-        "required": ["teamId", "createdBy", "size"],
+        "required": ["billing", "teamId", "createdBy", "size"],
         "properties": {
+          "billing": {
+            "$ref": "#/components/schemas/PurchaseBilling"
+          },
           "createdBy": {
             "type": "string",
             "description": "The team admin or owner the caller authorized."
@@ -9023,8 +9030,8 @@
       },
       "PaymentOutcome": {
         "type": "string",
-        "description": "Whether the computer's purchase has ever been paid.",
-        "enum": ["pending", "paid", "unbilled"]
+        "description": "The purchase outcome, latched after payment or comp confirmation.",
+        "enum": ["pending", "paid", "unbilled", "comped"]
       },
       "Permission": {
         "type": "object",
@@ -9259,6 +9266,34 @@
           }
         }
       },
+      "PurchaseBilling": {
+        "oneOf": [
+          {
+            "type": "object",
+            "required": ["kind"],
+            "properties": {
+              "kind": {
+                "type": "string",
+                "enum": ["stripe"]
+              }
+            }
+          },
+          {
+            "type": "object",
+            "required": ["reason", "kind"],
+            "properties": {
+              "kind": {
+                "type": "string",
+                "enum": ["comped"]
+              },
+              "reason": {
+                "type": "string"
+              }
+            }
+          }
+        ],
+        "description": "Server-selected purchase funding. Team clients cannot select this value."
+      },
       "PurchaseBody": {
         "type": "object",
         "description": "Body of a team purchase.",
@@ -9270,7 +9305,8 @@
           "size": {
             "$ref": "#/components/schemas/ComputerSize"
           }
-        }
+        },
+        "additionalProperties": false
       },
       "Purchased": {
         "type": "object",
@@ -9355,7 +9391,8 @@
             "$ref": "#/components/schemas/BillingInterval"
           },
           "priceId": {
-            "type": "string"
+            "type": "string",
+            "description": "Empty for a comped team without a subscription."
           },
           "size": {
             "$ref": "#/components/schemas/ComputerSize"
