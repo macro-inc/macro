@@ -107,6 +107,13 @@ type ThreadListProps = {
    * scrolls behind the floating chrome. Included in virtual measurements and navigation.
    */
   insets?: ScrollInsets;
+  /**
+   * Pressing a disclosure (`[aria-expanded]`) in a row stops following the
+   * end until the reader scrolls back to it or navigates. Rows that keep
+   * growing below, like a streaming reply, then leave what they opened under
+   * the pointer instead of carrying it away.
+   */
+  holdOnDisclosure?: boolean;
 };
 
 const NEAR_TOP_THRESHOLD = 800;
@@ -129,6 +136,7 @@ export function ThreadList(props: ThreadListProps) {
   let contentRef: HTMLDivElement | undefined;
   const [scrollEl, setScrollEl] = createSignal<HTMLDivElement>();
   const [viewportSize, setViewportSize] = createSignal(0);
+  const [holding, setHolding] = createSignal(false);
   const insets = () => props.insets ?? NO_SCROLL_INSETS;
   // Capture each key array so the previous virtualizer options still describe
   // the previous page while TanStack resolves its prepend anchor.
@@ -317,7 +325,11 @@ export function ThreadList(props: ThreadListProps) {
     },
     // Use the same end tolerance for append, resize, navigation, and snapshots.
     // A loose tolerance also mistakes optimistic row estimates for a pin.
-    scrollEndThreshold: NEAR_BOTTOM_THRESHOLD,
+    // While the reader holds a position, no offset counts as the end, so the
+    // core neither pins it across row growth nor follows appended rows.
+    get scrollEndThreshold() {
+      return holding() ? Number.NEGATIVE_INFINITY : NEAR_BOTTOM_THRESHOLD;
+    },
     // The core reads scrollHeight for the end offset, forcing a layout whenever
     // rows just mounted (the initial scroll to latest, each reconcile frame,
     // every end check). The scroller holds only the sizer, max(viewport,
@@ -395,7 +407,17 @@ export function ThreadList(props: ThreadListProps) {
             offset,
             isScrolling && !isOwnScroll
           ) ?? offset;
+        const previousOffset = instance.scrollOffset ?? 0;
         callback(logicalOffset, isScrolling && !isOwnScroll);
+        // Scrolling back down to the end resumes following.
+        if (
+          holding() &&
+          isScrolling &&
+          !isOwnScroll &&
+          logicalOffset > previousOffset &&
+          instance.getDistanceFromEnd() <= NEAR_BOTTOM_THRESHOLD
+        )
+          setHolding(false);
       };
       const cleanup = observeElementOffset(instance, reportOffset);
       // A short list clamps the initial end scroll to zero without emitting a
@@ -427,7 +449,12 @@ export function ThreadList(props: ThreadListProps) {
         scheduleScrollState();
         // The core anchors item resizes; viewport resizes (composer, keyboard,
         // split pane) need an explicit end scroll when previously pinned.
-        if (previousHeight > 0 && previousHeight !== rect.height && wasAtEnd) {
+        if (
+          previousHeight > 0 &&
+          previousHeight !== rect.height &&
+          wasAtEnd &&
+          !holding()
+        ) {
           scrollCompensation?.finish();
           instance.scrollToEnd();
         }
@@ -548,6 +575,7 @@ export function ThreadList(props: ThreadListProps) {
     scrollToLatest: (behavior) => {
       if (!canNavigate() || !props.keys().length) return false;
       lifecycle.send('navigate');
+      setHolding(false);
       scrollCompensation?.finish();
       virtualizer.scrollToEnd({ behavior });
       scheduleScrollState();
@@ -556,6 +584,7 @@ export function ThreadList(props: ThreadListProps) {
     scrollToMessage: (id, options) => {
       if (!canNavigate() || !props.keys().includes(id)) return false;
       lifecycle.send('navigate');
+      setHolding(false);
       if (options?.userIntent) scrollIntent.markUserIntent(options.userIntent);
       return scrollToMessage(id, options?.align);
     },
@@ -563,6 +592,7 @@ export function ThreadList(props: ThreadListProps) {
       const el = scrollEl();
       if (!canNavigate() || !el || !el.contains(targetElement)) return false;
       lifecycle.send('navigate');
+      setHolding(false);
       scrollCompensation?.finish();
       // Both rects come from the same committed layout, including short-list
       // bottom alignment and floating chrome. No stale estimate is involved.
@@ -671,13 +701,45 @@ export function ThreadList(props: ThreadListProps) {
         delta -
         viewportSize() -
         (virtualizer.scrollOffset ?? 0);
-      if (delta !== 0 && previousDistance <= NEAR_BOTTOM_THRESHOLD) {
+      if (
+        delta !== 0 &&
+        previousDistance <= NEAR_BOTTOM_THRESHOLD &&
+        !holding()
+      ) {
         scrollCompensation?.finish();
         virtualizer.scrollToEnd();
       }
       scheduleScrollState();
     })
   );
+
+  // Capture phase: a disclosure may stop propagation of its own events.
+  createEffect(() => {
+    const element = scrollEl();
+    if (!element || !props.holdOnDisclosure) return;
+    const holdOnDisclosure = (target: EventTarget | null) => {
+      if (
+        target instanceof Element &&
+        contentRef?.contains(target) &&
+        target.closest('[aria-expanded]')
+      )
+        setHolding(true);
+    };
+    const onPointerDown = (event: PointerEvent) =>
+      holdOnDisclosure(event.target);
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key === 'Enter' || event.key === ' ')
+        holdOnDisclosure(event.target);
+    };
+    element.addEventListener('pointerdown', onPointerDown, { capture: true });
+    element.addEventListener('keydown', onKeyDown, { capture: true });
+    onCleanup(() => {
+      element.removeEventListener('pointerdown', onPointerDown, {
+        capture: true,
+      });
+      element.removeEventListener('keydown', onKeyDown, { capture: true });
+    });
+  });
 
   onMount(() => {
     // Suspense can construct a channel in an inert template document and
