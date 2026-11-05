@@ -65,6 +65,11 @@ From `infra/`:
   It finds the Graph and token spans by `@outlook.throttle_origin` and
   `@outlook.token_cache`, not by name: Datadog renames an HTTP client span to
   `http.client.request` with its method as the resource.
+- `monitors/ai-providers.ts` reads the `ai provider account unavailable` and
+  `ai usage priced` logs (`crates/genai_telemetry/src/provider_account.rs`,
+  `crates/ai_usage/src/domain/service.rs`) and the AI editing worker's
+  `ai.provider_account_unavailable` span; its header is the field contract.
+  `MONTHLY_CAPS` must match each provider's billing console.
 - `monitors/calls.ts` matches the text of the `voip push: SNS delivery failed`
   log in `crates/notification/src/domain/service/voip.rs` and the
   `PushEndpointUnavailable` message. Rewording either silently breaks it.
