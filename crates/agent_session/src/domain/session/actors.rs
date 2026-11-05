@@ -323,14 +323,7 @@ where
                 let result = self
                     .logs
                     .present_tool(self.machine.id(), session_id, presentation)
-                    .await
-                    .inspect_err(|error| {
-                        tracing::error!(
-                            error = ?error,
-                            id = %self.machine.id(),
-                            "agent session failed to persist a tool presentation"
-                        );
-                    });
+                    .await;
                 let failed = result.is_err();
                 let _ = completed.send(result);
                 if failed {
@@ -515,11 +508,6 @@ where
                         .await
                         .unwrap_or_else(|_| Err(AgentSessionError::LogTimedOut(self.machine.id())));
                     if let Err(error) = result {
-                        tracing::error!(
-                            error = ?error,
-                            id = %self.machine.id(),
-                            "agent session failed to persist its shared initialization"
-                        );
                         self.fail_remaining_completions(&mut effects, error);
                         effects.extend(self.machine.handle(Input::Closed(CloseReason::LogFailed)));
                     }
