@@ -34,7 +34,7 @@ export default {
   tasksBlock: 'Macro Tasks',
   tasksSnippet:
     'List, board and timeline, projects and tags, linked to email, docs and channels',
-  tasksLength: '1:59',
+  tasksLength: '1:57',
   chatTitle: 'Learn how to use Macro Chat',
   chatBlock: 'Macro Chat',
   chatSnippet:
