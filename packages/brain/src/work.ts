@@ -8,22 +8,23 @@ import type { Pool } from './pool.ts';
 import { followUp, type InFlight } from './prompts.ts';
 import type { Outcome, RunHandle, Tier } from './runner.ts';
 import type { Git } from './workspace.ts';
-
-export type CreatedTask = { id: string; url: string };
-
+export type CreatedTask = {
+  id: string;
+  url: string;
+};
 export interface Tasks {
   /** Create a task assigned to the agent. */
   create(name: string, markdown: string): Promise<CreatedTask>;
 }
-
 /** The lane key of a conversation: a DM is the channel, a thread is channel + root. */
 export const conversationKey = (conversation: Conversation) =>
   conversation.root
     ? `${conversation.channel}.${conversation.root}`
     : conversation.channel;
-
-type Running = InFlight & { handle: RunHandle; conversationRef: Conversation };
-
+type Running = InFlight & {
+  handle: RunHandle;
+  conversationRef: Conversation;
+};
 export type WorkDeps = {
   pool: Pool;
   /** Work runs allowed at once; a hand-off past it is refused, never queued behind a respond timeout. */
@@ -50,8 +51,8 @@ export type WorkDeps = {
   commit(turnId: string, summary: string): Promise<unknown>;
   log(line: object): void;
 };
-
 export class Work {
+  private readonly deps: WorkDeps;
   private readonly running = new Map<string, Running>();
   /** Conversations whose hand-off is being set up, so a second one can't race it. */
   private readonly starting = new Set<string>();
@@ -59,9 +60,9 @@ export class Work {
   private draining = false;
   /** Runs reporting, committing and cleaning up after they end. */
   private readonly finishing = new Set<Promise<void>>();
-
-  constructor(private readonly deps: WorkDeps) {}
-
+  constructor(deps: WorkDeps) {
+    this.deps = deps;
+  }
   inFlight(): InFlight[] {
     return [...this.running.values()].map(
       ({ conversation, taskId, label, startedAt }) => ({
@@ -72,7 +73,6 @@ export class Work {
       })
     );
   }
-
   /** Inject follow-ups into the work running for this conversation; false when none is. */
   inject(key: string, entries: Entry[]): boolean {
     const run = this.running.get(key);
@@ -86,7 +86,6 @@ export class Work {
       return false;
     }
   }
-
   /** Start a work run; resolves once it is running, not when it finishes. */
   async start(
     conversation: Conversation,
@@ -106,7 +105,6 @@ export class Work {
         `already running ${this.running.size} work runs, the limit; finish or stop one first`
       );
     }
-
     this.starting.add(key);
     const launching = this.launch(key, conversation, label, description);
     this.launches.add(launching);
@@ -117,7 +115,6 @@ export class Work {
       this.launches.delete(launching);
     }
   }
-
   private async launch(
     key: string,
     conversation: Conversation,
@@ -140,7 +137,6 @@ export class Work {
       throw new Error(
         `could not create the worktree for task ${task.id}: ${added.stderr.trim()}`
       );
-
     const turnId = `work-${task.id}`;
     const { prompt, system, model, env, tier } = await this.deps.turn(
       task,
@@ -162,7 +158,6 @@ export class Work {
       await this.cleanUp(worktree, branch);
       throw error;
     }
-
     this.running.set(key, {
       conversation: key,
       conversationRef: conversation,
@@ -172,7 +167,6 @@ export class Work {
       handle,
     });
     this.deps.log({ work: task.id, started: label, conversation: key });
-
     const finished = handle.done
       .then((outcome) => this.finish(key, turnId, outcome, worktree, branch))
       .catch((error) =>
@@ -182,25 +176,21 @@ export class Work {
     this.finishing.add(finished);
     return task;
   }
-
   /** Stop admissions and finish starts already underway, then all active turns. */
   async drain(): Promise<void> {
     this.draining = true;
     await Promise.allSettled(this.launches);
     await this.settled();
   }
-
   /** Abort every running work run and wait for them to report and clean up (shutdown). */
   async stopAll(): Promise<void> {
     for (const run of this.running.values()) run.handle.abort();
     await this.settled();
   }
-
   /** Wait until every ended run has reported, committed and cleaned up. */
   async settled(): Promise<void> {
     while (this.finishing.size > 0) await Promise.all(this.finishing);
   }
-
   private async finish(
     key: string,
     turnId: string,
@@ -211,7 +201,6 @@ export class Work {
     const run = this.running.get(key);
     this.running.delete(key);
     if (!run) return;
-
     const report =
       outcome.status === 'success'
         ? outcome.result
@@ -220,7 +209,6 @@ export class Work {
     await this.deps.commit(turnId, `work ${run.label}: ${outcome.status}`);
     await this.cleanUp(worktree, branch);
   }
-
   /** Remove the worktree and branch unless they hold uncommitted or unmerged work. */
   private async cleanUp(worktree: string, branch: string) {
     const removed = await this.deps.git(['worktree', 'remove', worktree]);

@@ -1,78 +1,51 @@
 { pkgs }:
 let
   inherit (pkgs) lib;
+  version = "0.2.0";
   source = lib.fileset.toSource {
-    root = ../..;
+    root = ../../packages/brain;
     fileset = lib.fileset.unions [
-      ../../packages/brain/deno.json
-      ../../packages/brain/deno.lock
-      ../../packages/brain/compile.sh
+      ../../packages/brain/package.json
+      ../../packages/brain/package-lock.json
+      ../../packages/brain/tsconfig.json
       ../../packages/brain/src
-      # Endpoint coverage bookkeeping is not imported by the brain.
+    ];
+  };
+  sdkSource = lib.fileset.toSource {
+    root = ../../packages/sdk;
+    fileset = lib.fileset.unions [
       (lib.fileset.difference ../../packages/sdk/src ../../packages/sdk/src/coverage)
       ../../packages/sdk/generated
     ];
   };
-  # Fetch the lockfile graph once; compilation below has no network access.
-  dependencies = pkgs.stdenvNoCC.mkDerivation {
-    name = "macro-brain-dependencies";
-    src = source;
-    nativeBuildInputs = [
-      pkgs.deno
-      pkgs.cacert
-    ];
-    dontFixup = true;
-    outputHashMode = "recursive";
-    outputHashAlgo = "sha256";
-    outputHash = "sha256-w6V0acnmv5hkM0I1WG+ozImAU3T/b1uApiLkbPnAeiE=";
-    buildPhase = ''
-      export HOME=$TMPDIR/home DENO_DIR=$out/cache
-      mkdir -p "$HOME" "$DENO_DIR"
-      cd packages/brain
-      deno cache --frozen src/main.ts
-    '';
-    installPhase = ''
-      mkdir -p $out
-      cp -a node_modules $out/node_modules
-      # SQLite caches and logs carry timestamps; only download content is input.
-      find $out/cache -maxdepth 1 -type f -delete
-    '';
-  };
-  compiled = pkgs.stdenvNoCC.mkDerivation {
-    __structuredAttrs = true;
-    pname = "macro-brain-compiled";
-    version = "0.1.0-${builtins.substring 0 12 (builtins.hashString "sha256" (toString source))}";
-    src = source;
-    nativeBuildInputs = [ pkgs.deno ];
-    dontFixup = true;
-    outputHashMode = "recursive";
-    outputHashAlgo = "sha256";
-    outputHash = "sha256-jLEXoL+TRYPOeWd9aJVsLp/uaEKnGXgo6uGjI8aHd64=";
-    # FODs cannot retain store references. The final package below rediscovers
-    # the denort runtime closure after copying the hash-verified binary.
-    unsafeDiscardReferences.out = true;
-    buildPhase = ''
-      export DENORT_BIN=${pkgs.deno.denort}/bin/denort
-      export HOME=$TMPDIR/home DENO_DIR=$TMPDIR/deno
-      mkdir -p "$HOME"
-      cp -a ${dependencies}/cache "$DENO_DIR"
-      chmod -R u+w "$DENO_DIR"
-      cd packages/brain
-      cp -a ${dependencies}/node_modules .
-      chmod -R u+w node_modules
-      deno task compile --cached-only --frozen
-    '';
-    installPhase = ''
-      install -Dm755 dist/brain $out/bin/brain
-    '';
-  };
 in
-pkgs.runCommand "macro-brain-0.1.0"
-  {
-    runtime = pkgs.deno.denort;
-    passthru = { inherit dependencies compiled; };
-  }
-  ''
-    mkdir -p $out/bin
-    cp ${compiled}/bin/brain $out/bin/brain
-  ''
+pkgs.buildNpmPackage {
+  pname = "macro-brain";
+  inherit version;
+  src = source;
+  nodejs = pkgs.nodejs_24;
+  npmDepsHash = "sha256-8Fzro9n+ADQ+l5jCrrs2NZNza7Trh/L9I/y++kCk4zI=";
+  npmFlags = [ "--ignore-scripts" "--omit=optional" ];
+  dontNpmBuild = true;
+  nativeBuildInputs = [ pkgs.makeWrapper pkgs.esbuild ];
+  buildPhase = ''
+    runHook preBuild
+    # Vendor the fixed SDK at image build time. Workspace brain.ts runs directly.
+    esbuild ${sdkSource}/src/macro.ts --bundle --format=esm --platform=node \
+      --packages=external --outfile=vendor/macro-sdk.js
+    runHook postBuild
+  '';
+  installPhase = ''
+    runHook preInstall
+    library=$out/lib/brain/${version}
+    mkdir -p "$library" $out/bin $out/lib/brain/sdk
+    cp -r src package.json package-lock.json tsconfig.json node_modules vendor "$library/"
+    cp -r ${sdkSource}/src ${sdkSource}/generated $out/lib/brain/sdk/
+    ln -s ../${version}/node_modules $out/lib/brain/sdk/node_modules
+    makeWrapper ${pkgs.nodejs_24}/bin/node $out/bin/brain \
+      --set BRAIN_LIBRARY_ROOT $out/lib/brain \
+      --set BRAIN_EXECUTABLE $out/bin/brain \
+      --add-flags "$library/src/main.ts"
+    runHook postInstall
+  '';
+}

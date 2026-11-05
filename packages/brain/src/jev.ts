@@ -5,13 +5,11 @@
 // the model. Every decision is a line in log/decisions.jsonl.
 import type { DecideRequest, DecideResponse } from './macro.ts';
 import { withSpan } from './telemetry.ts';
-
 /** Limits the decide endpoint enforces (crates/agent_brain relevance.rs). */
 export const MAX_QUESTIONS = 32;
 export const MAX_KEY_BYTES = 80;
 export const MAX_BODY_BYTES = 64 * 1024;
 export const DEFAULT_MAX_QUESTION_CHARS = 500;
-
 export type JevConfig = {
   threshold: number;
   questions: Record<string, string>;
@@ -20,21 +18,17 @@ export type JevConfig = {
   wakeIf: string[][];
   maxQuestionChars: number;
 };
-
 export class JevConfigError extends Error {}
-
 export function parseJevConfig(raw: unknown): JevConfig {
   const fail = (message: string): never => {
     throw new JevConfigError(`config/jev.json: ${message}`);
   };
   if (typeof raw !== 'object' || raw === null) return fail('must be an object');
-
   const value = raw as Record<string, unknown>;
   const threshold = value.threshold;
   if (typeof threshold !== 'number' || threshold < 0 || threshold > 1) {
     return fail('threshold must be a number within 0..1');
   }
-
   const maxQuestionChars =
     value.max_question_chars ?? DEFAULT_MAX_QUESTION_CHARS;
   if (
@@ -44,13 +38,10 @@ export function parseJevConfig(raw: unknown): JevConfig {
   ) {
     return fail(`max_question_chars must be 1..${DEFAULT_MAX_QUESTION_CHARS}`);
   }
-
   const questions = parseQuestions(value.questions, maxQuestionChars);
-
   const rule = value.rule;
   if (typeof rule !== 'string')
     return fail('rule must describe the wake rule in words');
-
   return {
     threshold,
     questions,
@@ -59,7 +50,6 @@ export function parseJevConfig(raw: unknown): JevConfig {
     maxQuestionChars,
   };
 }
-
 function parseQuestions(
   raw: unknown,
   maxQuestionChars: number
@@ -94,7 +84,6 @@ function parseQuestions(
   }
   return questions;
 }
-
 function parseWakeIf(
   raw: unknown,
   questions: Record<string, string>
@@ -116,7 +105,6 @@ function parseWakeIf(
     });
   });
 }
-
 /** Whether `probabilities` satisfy the wake rule; missing keys count as 0. */
 export function isRelevant(
   config: JevConfig,
@@ -126,7 +114,6 @@ export function isRelevant(
     group.every((key) => (probabilities[key] ?? 0) >= config.threshold)
   );
 }
-
 export type JudgedMessage = {
   id: string;
   from: string;
@@ -134,7 +121,6 @@ export type JudgedMessage = {
   text: string;
   thread: string | null;
 };
-
 export type Candidate = {
   messageId: string;
   channel: string;
@@ -145,26 +131,22 @@ export type Candidate = {
   message: JudgedMessage;
   recent: JudgedMessage[];
 };
-
 export type Reason =
   | 'mentioned'
   | 'direct_message'
   | 'decided'
   | 'in_my_thread';
-
 export type Decision = {
   relevant: boolean;
   reason: Reason;
   probabilities: Record<string, number>;
 };
-
 export type DecisionInput = {
   channel: string;
   direct_message: boolean;
   recent_messages: JudgedMessage[];
   new_message: JudgedMessage;
 };
-
 /** Drop the oldest recent messages until the request fits the endpoint's body limit. */
 export function fitBody(request: {
   input: DecisionInput;
@@ -189,14 +171,12 @@ export function fitBody(request: {
   }
   return fitted;
 }
-
 export type JevDeps = {
   config(): Promise<JevConfig>;
   decide(request: DecideRequest): Promise<DecideResponse>;
   log(line: object): Promise<void>;
   now?: () => Date;
 };
-
 /** Judge one message. A failed decide call retries with less context, then falls back to "my thread". */
 export async function judge(
   candidate: Candidate,
@@ -218,7 +198,6 @@ export async function judge(
     return decision;
   });
 }
-
 async function decideCandidate(
   candidate: Candidate,
   deps: JevDeps
@@ -227,7 +206,6 @@ async function decideCandidate(
     return { relevant: true, reason: 'mentioned', probabilities: {} };
   if (candidate.directMessage)
     return { relevant: true, reason: 'direct_message', probabilities: {} };
-
   const config = await deps.config();
   const ask = async (recent: JudgedMessage[]): Promise<Decision> => {
     const request = fitBody({
@@ -246,7 +224,6 @@ async function decideCandidate(
       probabilities,
     };
   };
-
   try {
     return await ask(candidate.recent);
   } catch (first) {

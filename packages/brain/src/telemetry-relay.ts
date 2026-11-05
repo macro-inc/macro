@@ -1,4 +1,4 @@
-// Keep the collector outside the workspace process's network capabilities.
+// Keep collector configuration in the supervisor rather than the workspace environment.
 import type { SpanContext } from '@opentelemetry/api';
 import { ExportResultCode } from '@opentelemetry/core';
 import { OTLPTraceExporter } from '@opentelemetry/exporter-trace-otlp-http';
@@ -10,7 +10,6 @@ type WireSpan = Omit<ReadableSpan, 'spanContext' | 'resource'> & {
   context: SpanContext;
   resource: ReadableSpan['resource']['attributes'];
 };
-
 export const stdioExporter: SpanExporter = {
   export(spans, done) {
     for (const span of spans) {
@@ -39,23 +38,22 @@ export const stdioExporter: SpanExporter = {
   },
   shutdown: async () => {},
 };
-
-/** Forward child spans without granting it collector net access or credentials. */
+/** Forward child spans without passing collector configuration or credentials. */
 export async function relayTelemetry(
-  stream: ReadableStream<Uint8Array>,
+  stream: AsyncIterable<Uint8Array>,
   endpoint: string | undefined,
   sink?: SpanExporter
 ): Promise<void> {
   const exporter =
     sink ?? (endpoint ? new OTLPTraceExporter({ url: endpoint }) : undefined);
   let buffer = '';
-
   try {
-    for await (const text of stream.pipeThrough(new TextDecoderStream())) {
-      buffer += text;
+    const decoder = new TextDecoder();
+    for await (const chunk of stream) {
+      buffer += decoder.decode(chunk, { stream: true });
       const lines = buffer.split('\n');
       buffer = lines.pop() ?? '';
-      if (buffer.length > 1_000_000) buffer = '';
+      if (buffer.length > 1000000) buffer = '';
       for (const line of lines) {
         if (!line.startsWith(PREFIX)) {
           console.log(line);

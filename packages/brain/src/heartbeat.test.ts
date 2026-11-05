@@ -1,33 +1,32 @@
-import { assertEquals } from '@std/assert';
+import assert from 'node:assert/strict';
+import { test } from 'node:test';
 import { snapshotText, wakeReason } from './heartbeat.ts';
 
-Deno.test('the heartbeat sleeps through an unchanged snapshot until the sweep is due', () => {
+test('the heartbeat sleeps through an unchanged snapshot until the sweep is due', () => {
   const unchanged = {
     hash: 'abc',
     lastHash: 'abc',
-    lastRunSeconds: 1_000_000,
+    lastRunSeconds: 1000000,
     sweepHours: 24,
   };
-
-  assertEquals(
-    wakeReason({ ...unchanged, nowSeconds: 1_000_000 + 3600 }),
+  assert.deepEqual(
+    wakeReason({ ...unchanged, nowSeconds: 1000000 + 3600 }),
     null
   );
-  assertEquals(
-    wakeReason({ ...unchanged, nowSeconds: 1_000_000 + 25 * 3600 }),
+  assert.deepEqual(
+    wakeReason({ ...unchanged, nowSeconds: 1000000 + 25 * 3600 }),
     'sweep due'
   );
-  assertEquals(
+  assert.deepEqual(
     wakeReason({
       ...unchanged,
       hash: 'def',
-      nowSeconds: 1_000_000 + 25 * 3600,
+      nowSeconds: 1000000 + 25 * 3600,
     }),
     'snapshot changed; sweep due'
   );
 });
-
-Deno.test('the snapshot lists focus, commitments, schedules and work', () => {
+test('the snapshot lists focus, commitments, schedules and work', () => {
   const text = snapshotText({
     self: {
       focus: 'March books',
@@ -51,8 +50,7 @@ Deno.test('the snapshot lists focus, commitments, schedules and work', () => {
       },
     ],
   });
-
-  assertEquals(
+  assert.deepEqual(
     text,
     [
       'Focus: March books',

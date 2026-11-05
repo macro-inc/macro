@@ -1,16 +1,22 @@
-import { assertEquals, assertStringIncludes } from '@std/assert';
+import assert from 'node:assert/strict';
+import * as nodeFs from 'node:fs/promises';
+import * as nodeOs from 'node:os';
+import * as nodePath from 'node:path';
+import { test } from 'node:test';
 import { Brain } from './brain.ts';
 import { AsyncQueue } from './channel.ts';
 import { gatewayHosts } from './config.ts';
 import { MacroHttp } from './macro.ts';
 import type { RunEvent, Turn } from './runner.ts';
 import { readStyle } from './style.ts';
+import { runCommand } from './subprocess.ts';
 import { gitCli } from './workspace.ts';
 
 const TEMPLATE = new URL('../template/', import.meta.url).pathname;
-
-Deno.test('respond, heartbeat and work turns receive every style guide, including edits made between turns', async () => {
-  const root = await Deno.makeTempDir({ prefix: 'brain-style-turns-' });
+test('respond, heartbeat and work turns receive every style guide, including edits made between turns', async () => {
+  const root = await nodeFs.mkdtemp(
+    nodePath.join(nodeOs.tmpdir(), 'brain-style-turns-')
+  );
   const workspace = `${root}/workspace`;
   const git = gitCli(workspace);
   const stop = new AbortController();
@@ -27,14 +33,13 @@ Deno.test('respond, heartbeat and work turns receive every style guide, includin
     await gitCli(root)(['clone', '-q', `${root}/remote.git`, workspace]);
     await git(['config', 'user.email', 'agent@example.com']);
     await git(['config', 'user.name', 'Example']);
-    const copied = await new Deno.Command('cp', {
+    const copied = await runCommand('cp', {
       args: ['-r', `${TEMPLATE}.`, workspace],
-    }).output();
-    assertEquals(copied.code, 0);
+    });
+    assert.deepEqual(copied.code, 0);
     await git(['add', '-A']);
     await git(['-c', 'commit.gpgsign=false', 'commit', '-q', '-m', 'seed']);
     await git(['push', '-q', '-u', 'origin', 'main']);
-
     const responded = Promise.withResolvers<Turn>();
     const turns: Turn[] = [];
     const http = new MacroHttp(
@@ -130,14 +135,13 @@ Deno.test('respond, heartbeat and work turns receive every style guide, includin
     const original = await readStyle(`${workspace}/prompts/style`);
     running = brain.run(stop.signal);
     const respond = await responded.promise;
-    assertStringIncludes(respond.system, original);
-
-    await Deno.mkdir(`${workspace}/prompts/style/local`);
-    await Deno.writeTextFile(
+    assert.ok(respond.system.includes(original));
+    await nodeFs.mkdir(`${workspace}/prompts/style/local`);
+    await nodeFs.writeFile(
       `${workspace}/prompts/style/local/team.md`,
       'A newly added team guide.'
     );
-    await Deno.writeTextFile(
+    await nodeFs.writeFile(
       `${workspace}/prompts/style/brevity.md`,
       'A revised brevity guide.'
     );
@@ -150,23 +154,22 @@ Deno.test('respond, heartbeat and work turns receive every style guide, includin
     );
     stop.abort();
     await running;
-
-    assertEquals(
+    assert.deepEqual(
       turns.map((turn) => turn.tier),
       ['respond', 'heartbeat', 'work']
     );
     for (const turn of turns.slice(1)) {
-      assertStringIncludes(turn.system, revised);
-      assertStringIncludes(turn.system, 'A newly added team guide.');
-      assertStringIncludes(turn.system, 'A revised brevity guide.');
+      assert.ok(turn.system.includes(revised));
+      assert.ok(turn.system.includes('A newly added team guide.'));
+      assert.ok(turn.system.includes('A revised brevity guide.'));
     }
     for (const turn of turns) {
-      assertEquals(turn.system.includes('# Style library'), false);
-      assertStringIncludes(turn.prompt, 'prompts/style/');
+      assert.deepEqual(turn.system.includes('# Style library'), false);
+      assert.ok(turn.prompt.includes('prompts/style/'));
     }
   } finally {
     stop.abort();
     await running;
-    await Deno.remove(root, { recursive: true });
+    await nodeFs.rm(root, { recursive: true });
   }
 });

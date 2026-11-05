@@ -3,7 +3,6 @@
 // `AgentSdkRunner` runs the Claude Agent SDK in-process with streaming input:
 // each `inject` is another user message in the same session, and the input
 // closes once every message has its result.
-
 import type {
   Options,
   SDKMessage,
@@ -14,7 +13,6 @@ import { context, SpanStatusCode, trace } from '@opentelemetry/api';
 import { match } from 'ts-pattern';
 import { AsyncQueue } from './channel.ts';
 import { startSpan, traceHeaders } from './telemetry.ts';
-
 export type Tier = string;
 export type BrainTool = NonNullable<
   Parameters<typeof createSdkMcpServer>[0]['tools']
@@ -22,7 +20,6 @@ export type BrainTool = NonNullable<
 export type TurnRequest = Omit<Turn, 'maxBudgetUsd'> & {
   maxBudgetUsd?: number;
 };
-
 export type Turn = {
   id: string;
   tier: Tier;
@@ -40,14 +37,20 @@ export type Turn = {
   /** Environment for the agent's tools (talk commands reach the brain through it). */
   env: Record<string, string>;
 };
-
 export type RunEvent =
-  | { kind: 'text'; text: string }
-  | { kind: 'tool'; name: string }
-  | { kind: 'result'; outcome: Outcome };
-
+  | {
+      kind: 'text';
+      text: string;
+    }
+  | {
+      kind: 'tool';
+      name: string;
+    }
+  | {
+      kind: 'result';
+      outcome: Outcome;
+    };
 export type OutcomeStatus = 'success' | 'error' | 'over_budget' | 'aborted';
-
 export type Outcome = {
   status: OutcomeStatus;
   /** The run's last result text (the agent's final message). */
@@ -55,23 +58,19 @@ export type Outcome = {
   costUsd: number;
   sessionId: string | null;
 };
-
 export type RunHandle = {
   events: AsyncIterable<RunEvent>;
   inject(message: string): void;
   abort(): void;
   done: Promise<Outcome>;
 };
-
 export interface Runner {
   start(turn: Turn): RunHandle;
 }
-
 export type QueryFunction = (params: {
   prompt: AsyncIterable<SDKUserMessage>;
   options: Options;
 }) => AsyncIterable<SDKMessage>;
-
 export type AgentSdkRunnerOptions = {
   query: QueryFunction;
   tools?: Options['tools'];
@@ -85,17 +84,17 @@ export type AgentSdkRunnerOptions = {
   /** Inherited environment for the subprocess (PATH, HOME). */
   baseEnv: Record<string, string>;
 };
-
 const userMessage = (text: string): SDKUserMessage => ({
   type: 'user',
   message: { role: 'user', content: text },
   parent_tool_use_id: null,
   origin: { kind: 'human' },
 });
-
 export class AgentSdkRunner implements Runner {
-  constructor(private readonly options: AgentSdkRunnerOptions) {}
-
+  private readonly options: AgentSdkRunnerOptions;
+  constructor(options: AgentSdkRunnerOptions) {
+    this.options = options;
+  }
   start(turn: Turn): RunHandle {
     const span = startSpan('brain.turn', {
       'brain.tier': turn.tier,
@@ -110,7 +109,6 @@ export class AgentSdkRunner implements Runner {
     const abortController = new AbortController();
     let sent = 0;
     let answered = 0;
-
     const send = (text: string) => {
       if (input.isClosed)
         throw new Error(
@@ -120,7 +118,6 @@ export class AgentSdkRunner implements Runner {
       input.push(userMessage(text));
     };
     send(turn.prompt);
-
     let messages: AsyncIterable<SDKMessage>;
     try {
       messages = context.with(parent, () =>
@@ -170,7 +167,6 @@ export class AgentSdkRunner implements Runner {
       span.end();
       throw error;
     }
-
     const done = context.with(parent, async (): Promise<Outcome> => {
       let outcome: Outcome = {
         status: 'error',
@@ -182,7 +178,6 @@ export class AgentSdkRunner implements Runner {
         for await (const message of messages) {
           for (const event of toEvents(message)) events.push(event);
           if (message.type !== 'result') continue;
-
           span.setAttribute(
             'gen_ai.usage.input_tokens',
             message.usage.input_tokens
@@ -240,7 +235,6 @@ export class AgentSdkRunner implements Runner {
         ? { ...outcome, status: 'aborted' }
         : outcome;
     });
-
     return {
       events,
       inject: send,
@@ -252,7 +246,6 @@ export class AgentSdkRunner implements Runner {
     };
   }
 }
-
 function toEvents(message: SDKMessage): RunEvent[] {
   if (message.type !== 'assistant') return [];
   const found: RunEvent[] = [];

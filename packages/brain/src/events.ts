@@ -7,22 +7,22 @@
 import { AsyncQueue } from './channel.ts';
 import type { ListedMessage, Mention, Message } from './macro.ts';
 import { startSpan, withSpan } from './telemetry.ts';
-
 export const MESSAGE_POSTED = 'message.posted';
 export const AGENT_SESSION_OPENED = 'agent_session.opened';
-
 export type MessagePosted = {
   message_id: string;
   content: string;
   created_at: string;
   mentions?: Mention[];
   attachments?: unknown[];
-  parent: { type: string; id: string };
+  parent: {
+    type: string;
+    id: string;
+  };
   root_id: string;
   thread_id?: string | null;
   sender: string;
 };
-
 export type SessionOpened = {
   identity: {
     session_id: string;
@@ -31,22 +31,37 @@ export type SessionOpened = {
     source?: 'user' | 'agent' | 'routine';
   };
 };
-
 export type MacroEvent =
-  | { eventId: string; type: typeof MESSAGE_POSTED; metadata: MessagePosted }
+  | {
+      eventId: string;
+      type: typeof MESSAGE_POSTED;
+      metadata: MessagePosted;
+    }
   | {
       eventId: string;
       type: typeof AGENT_SESSION_OPENED;
       metadata: SessionOpened;
     }
-  | { eventId: string; type: 'other'; eventType: string; metadata: unknown };
-
+  | {
+      eventId: string;
+      type: 'other';
+      eventType: string;
+      metadata: unknown;
+    };
 export type StreamItem =
-  | { kind: 'event'; event: MacroEvent }
-  | { kind: 'reconnected'; disconnectedAt: Date };
-
-type Envelope = { event_id: string; event_type: string; metadata?: unknown };
-
+  | {
+      kind: 'event';
+      event: MacroEvent;
+    }
+  | {
+      kind: 'reconnected';
+      disconnectedAt: Date;
+    };
+type Envelope = {
+  event_id: string;
+  event_type: string;
+  metadata?: unknown;
+};
 /** Decode one SSE `data` payload (the broker envelope). */
 export function parseEnvelope(data: string): MacroEvent {
   const envelope = JSON.parse(data) as Envelope;
@@ -78,7 +93,6 @@ export function parseEnvelope(data: string): MacroEvent {
     metadata: envelope.metadata,
   };
 }
-
 /** The `data` of each SSE event in a byte stream (multi-line data joined with newlines). */
 export async function* sseData(
   bytes: ReadableStream<Uint8Array>,
@@ -104,7 +118,6 @@ export async function* sseData(
     }
   }
 }
-
 export type StreamDeps = {
   open(signal: AbortSignal): Promise<ReadableStream<Uint8Array>>;
   sleep(milliseconds: number, signal: AbortSignal): Promise<void>;
@@ -115,7 +128,6 @@ export type StreamDeps = {
   /** The server sends a keep-alive every 20s; this long without a byte means the connection is dead. */
   idleMilliseconds?: number;
 };
-
 /** Yield events until `signal` aborts, reconnecting forever. */
 export function eventStream(
   deps: StreamDeps,
@@ -123,15 +135,13 @@ export function eventStream(
 ): AsyncIterable<StreamItem> {
   const items = new AsyncQueue<StreamItem>();
   const now = deps.now ?? (() => new Date());
-  const initialDelay = deps.initialDelay ?? 1_000;
-  const maxDelay = deps.maxDelay ?? 60_000;
-  const idleMilliseconds = deps.idleMilliseconds ?? 60_000;
-
+  const initialDelay = deps.initialDelay ?? 1000;
+  const maxDelay = deps.maxDelay ?? 60000;
+  const idleMilliseconds = deps.idleMilliseconds ?? 60000;
   const pump = async () => {
     let delay = initialDelay;
     let connectedBefore = false;
     let disconnectedAt: Date | null = null;
-
     while (!signal.aborted) {
       const connection = new AbortController();
       const stop = () => connection.abort();
@@ -141,7 +151,6 @@ export function eventStream(
         clearTimeout(idle);
         idle = setTimeout(stop, idleMilliseconds);
       };
-
       try {
         const bytes = await withSpan(
           'brain.events.connect',
@@ -162,7 +171,6 @@ export function eventStream(
           });
         connectedBefore = true;
         disconnectedAt = null;
-
         for await (const data of sseData(bytes, alive)) {
           delay = initialDelay;
           try {
@@ -195,7 +203,6 @@ export function eventStream(
   });
   return items;
 }
-
 /** Resolve after `milliseconds`, or reject when `signal` aborts. */
 export function abortableSleep(
   milliseconds: number,
@@ -217,7 +224,6 @@ export function abortableSleep(
     signal.addEventListener('abort', onAbort, { once: true });
   });
 }
-
 /**
  * Messages a channel timeline page shows that arrived at or after `since` and
  * were not seen live, oldest first, as the `message.posted` they missed.

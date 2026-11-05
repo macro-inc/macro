@@ -11,14 +11,14 @@ import type {
   Turn,
   TurnRequest,
 } from './runner.ts';
-
 /** A FIFO counting semaphore. */
 export class Semaphore {
+  private readonly limit: number;
   private readonly waiting: (() => void)[] = [];
   private held = 0;
-
-  constructor(private readonly limit: number) {}
-
+  constructor(limit: number) {
+    this.limit = limit;
+  }
   async acquire(): Promise<() => void> {
     if (this.held >= this.limit) {
       await new Promise<void>((resolve) => this.waiting.push(resolve));
@@ -35,15 +35,12 @@ export class Semaphore {
     };
   }
 }
-
 export class BudgetExceeded extends Error {}
-
 const SPEAKING: Record<Tier, boolean> = {
   respond: true,
   heartbeat: true,
   work: false,
 };
-
 export type PoolDeps = {
   runner: Runner;
   speaking?: Record<Tier, boolean>;
@@ -54,17 +51,20 @@ export type PoolDeps = {
   ledger: SpendLedger;
   log(line: object): void;
 };
-
 export class Pool {
+  private readonly deps: PoolDeps;
   private readonly tiers: Record<Tier, Semaphore>;
   private readonly speaking = new Semaphore(1);
   private lastCompletedAt: string | null = null;
   private readonly running = new Map<
     string,
-    { tier: Tier; startedAt: string }
+    {
+      tier: Tier;
+      startedAt: string;
+    }
   >();
-
-  constructor(private readonly deps: PoolDeps) {
+  constructor(deps: PoolDeps) {
+    this.deps = deps;
     this.tiers = Object.fromEntries(
       Object.entries(deps.limits).map(([tier, limit]) => [
         tier,
@@ -72,17 +72,18 @@ export class Pool {
       ])
     );
   }
-
   /** Latest completed turn across all tiers, for the computer health report. */
   lastTurnAt(): string | null {
     return this.lastCompletedAt;
   }
-
   /** Turns running now, for health and prompts. */
-  active(): { id: string; tier: Tier; startedAt: string }[] {
+  active(): {
+    id: string;
+    tier: Tier;
+    startedAt: string;
+  }[] {
     return [...this.running].map(([id, run]) => ({ id, ...run }));
   }
-
   /** Run `speak` while holding the speaking gate (a work run's report). */
   async speak<Result>(speak: () => Promise<Result>): Promise<Result> {
     const release = await this.speaking.acquire();
@@ -92,7 +93,6 @@ export class Pool {
       release();
     }
   }
-
   /** Wait for slots, then start the turn under the budget. Throws `BudgetExceeded` when the day is spent. */
   async start(request: TurnRequest): Promise<RunHandle> {
     const turn = (await this.deps.beforeTurn?.(request)) ?? request;
@@ -108,7 +108,6 @@ export class Pool {
       releaseTier();
       this.running.delete(turn.id);
     };
-
     let handle: RunHandle;
     let admitted: Turn;
     try {
@@ -135,7 +134,6 @@ export class Pool {
       release();
       throw error;
     }
-
     this.running.set(turn.id, {
       tier: turn.tier,
       startedAt: new Date().toISOString(),

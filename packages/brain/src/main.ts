@@ -2,6 +2,7 @@
 // the commands a turn uses to talk and remember through the running brain.
 import { match, P } from 'ts-pattern';
 import { callBrain } from './control.ts';
+import { stdinText } from './subprocess.ts';
 
 const USAGE = `usage: brain <command>
   run                                      run the brain (env: MACRO_API_KEY, MACRO_GATEWAY, BRAIN_WORKSPACE,
@@ -15,23 +16,21 @@ inside a turn:
   focus <text|->                           promise <to> <text|->         release <words...>
   schedule (--once <time> | --cron <expr> --timezone <tz>) <note|->
   schedules                                unschedule <routine_id>       secret <name>`;
-
 class UsageError extends Error {}
-
-const env = (name: string) => Deno.env.get(name);
-
+const env = (name: string) => process.env[name];
 /** The argument, or stdin when it is `-`. Empty text is refused. */
 async function textArgument(value: string | undefined): Promise<string> {
   if (value === undefined)
     throw new UsageError('missing text (pass it, or - to read stdin)');
-  const text =
-    value === '-' ? await new Response(Deno.stdin.readable).text() : value;
+  const text = value === '-' ? await stdinText() : value;
   if (text.trim() === '') throw new UsageError('empty text');
   return text.trim();
 }
-
 /** `--name value` flags and the remaining positional arguments. */
-function flags(args: string[]): { named: Map<string, string>; rest: string[] } {
+function flags(args: string[]): {
+  named: Map<string, string>;
+  rest: string[];
+} {
   const named = new Map<string, string>();
   const rest: string[] = [];
   for (let index = 0; index < args.length; index++) {
@@ -46,29 +45,24 @@ function flags(args: string[]): { named: Map<string, string>; rest: string[] } {
   }
   return { named, rest };
 }
-
 const required = (value: string | undefined, name: string): string => {
   if (!value) throw new UsageError(`missing ${name}`);
   return value;
 };
-
 const print = (value: unknown) =>
   console.log(
     typeof value === 'string' ? value : JSON.stringify(value, null, 2)
   );
-
 async function run(): Promise<void> {
   const { supervise } = await import('./supervisor.ts');
   await supervise();
 }
-
 async function health(): Promise<number> {
   const port = required(env('BRAIN_HEALTH_PORT'), 'BRAIN_HEALTH_PORT');
   const response = await fetch(`http://127.0.0.1:${port}/health`);
   print(await response.json());
   return response.ok ? 0 : 1;
 }
-
 async function command(args: string[]): Promise<number> {
   const [name, ...rest] = args;
   const brain = (
@@ -77,15 +71,14 @@ async function command(args: string[]): Promise<number> {
     body?: object
   ) => callBrain(env, fetch, method, path, body);
   const { named, rest: positional } = flags(rest);
-
   await match(name ?? 'help')
     .with('run', run)
     .with('check', async () => {
       const { checkWorkspace } = await import('./supervisor.ts');
-      await checkWorkspace(Deno.cwd());
+      await checkWorkspace(process.cwd());
     })
     .with('health', async () => {
-      Deno.exitCode = await health();
+      process.exitCode = await health();
     })
     .with('post', async () =>
       print(
@@ -197,25 +190,26 @@ async function command(args: string[]): Promise<number> {
       const { value } = (await brain(
         'GET',
         `/secrets/${encodeURIComponent(required(rest[0], 'name'))}`
-      )) as { value: string };
-      await Deno.stdout.write(new TextEncoder().encode(value));
+      )) as {
+        value: string;
+      };
+      process.stdout.write(value);
     })
     .with(P.union('--help', 'help'), () => console.log(USAGE))
     .otherwise((unknown) => {
       throw new UsageError(`unknown command ${unknown}`);
     });
-  return Deno.exitCode;
+  return Number(process.exitCode ?? 0);
 }
-
 if (import.meta.main) {
   try {
-    await command(Deno.args);
+    await command(process.argv.slice(2));
   } catch (error) {
     console.error(
       error instanceof UsageError
         ? `${error.message}\n\n${USAGE}`
         : String(error)
     );
-    Deno.exit(error instanceof UsageError ? 2 : 1);
+    process.exit(error instanceof UsageError ? 2 : 1);
   }
 }

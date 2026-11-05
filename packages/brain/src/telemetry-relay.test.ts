@@ -1,12 +1,13 @@
+import assert from 'node:assert/strict';
+import { test } from 'node:test';
 import {
   BasicTracerProvider,
   InMemorySpanExporter,
   SimpleSpanProcessor,
 } from '@opentelemetry/sdk-trace-base';
-import { assertEquals } from '@std/assert';
 import { relayTelemetry, stdioExporter } from './telemetry-relay.ts';
 
-Deno.test('stdio telemetry preserves span identity and survives malformed child output', async () => {
+test('stdio telemetry preserves span identity and survives malformed child output', async () => {
   const lines: string[] = [];
   const log = console.log;
   const provider = new BasicTracerProvider({
@@ -43,11 +44,11 @@ Deno.test('stdio telemetry preserves span identity and survives malformed child 
       export(spans, done) {
         collector.export(spans, done);
         forwarded += spans.length;
-        assertEquals(received()[0]?.spanContext(), context);
+        assert.deepEqual(received()[0]?.spanContext(), context);
       },
       shutdown: async () => {},
     }
   );
-  assertEquals(forwarded, 1);
+  assert.deepEqual(forwarded, 1);
   await provider.shutdown();
 });

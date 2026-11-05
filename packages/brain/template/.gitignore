@@ -5,3 +5,4 @@ work/
 secrets
 secrets.*
 *.secret
+node_modules/

@@ -4,14 +4,22 @@ import { gatewayHosts } from './config.ts';
 import { MacroHttp } from './macro.ts';
 import type { Composition } from './mod.ts';
 import { gitCli } from './workspace.ts';
-
 export async function dryRun(
   compose: Composition,
-  workspace: string
+  workspace: string,
+  before: {
+    event_id: string;
+    event_type: string;
+    metadata: unknown;
+  }[] = []
 ): Promise<void> {
   const stop = new AbortController();
   let received = false;
   let turns = 0;
+  const routines: {
+    id: string;
+    name: string;
+  }[] = [];
   const http = new MacroHttp(
     gatewayHosts('https://gateway.invalid'),
     'fake',
@@ -30,6 +38,10 @@ export async function dryRun(
         return new Response(
           new ReadableStream<Uint8Array>({
             start(controller) {
+              for (const event of before)
+                controller.enqueue(
+                  new TextEncoder().encode(`data: ${JSON.stringify(event)}\n\n`)
+                );
               controller.enqueue(
                 new TextEncoder().encode(
                   `data: ${JSON.stringify({
@@ -55,6 +67,8 @@ export async function dryRun(
           })
         );
       }
+      if (path === '/dss/messages/channel/check')
+        return Response.json({ id: 'check-post' });
       if (path.endsWith('/typing')) return new Response(null, { status: 204 });
       throw new Error(`dry boot made an unexpected request: ${path}`);
     }
@@ -93,9 +107,11 @@ export async function dryRun(
       },
     },
     routines: {
-      list: async () => [],
-      create() {
-        throw new Error('no schedules during check');
+      list: async () => routines,
+      async create(options) {
+        const routine = { id: `check-${routines.length}`, name: options.name };
+        routines.push(routine);
+        return routine;
       },
       delete: async () => {},
     },

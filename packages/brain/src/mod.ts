@@ -23,7 +23,6 @@ export { Work } from './work.ts';
 export { GitWriter, gitCli, Workspace } from './workspace.ts';
 
 import type { BrainDeps } from './brain.ts';
-
 /** Abort means stop intake, finish in-flight turns and release resources. */
 export interface BrainRuntime {
   run(signal: AbortSignal): Promise<void>;
@@ -32,7 +31,6 @@ export interface BrainRuntime {
 export type Composition = (
   deps: BrainDeps
 ) => BrainRuntime | Promise<BrainRuntime>;
-
 export { tool } from '@anthropic-ai/claude-agent-sdk';
 export { z } from 'zod';
 export type { BrainTool, TurnRequest } from './runner.ts';

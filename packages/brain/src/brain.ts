@@ -1,3 +1,4 @@
+import * as nodeFs from 'node:fs/promises';
 // The running brain: events in, Jev, lanes, tiered turns, commits out.
 //
 // message.posted → history → (work running in that conversation? inject) →
@@ -31,6 +32,7 @@ import {
   wakeReason,
 } from './heartbeat.ts';
 import { type Entry, History } from './history.ts';
+import { closeHttp, serveHttp } from './http.ts';
 import { judge } from './jev.ts';
 import { Lanes } from './lanes.ts';
 import type { ChannelDetail, MacroHttp } from './macro.ts';
@@ -51,7 +53,6 @@ import { conversationKey, type Tasks, Work } from './work.ts';
 import { type Git, GitWriter, Workspace } from './workspace.ts';
 
 export type { Wiring } from './wiring.ts';
-
 export type BrainDeps = {
   config: Omit<Config, 'macroApiKey' | 'anthropicAuthToken'>;
   http: MacroHttp;
@@ -68,14 +69,13 @@ export type BrainDeps = {
   baseEnv: Record<string, string>;
   log(line: object): void;
 };
-
 const RELEVANCE_CONTEXT = 6;
 const PROMPT_HISTORY = 20;
-const SEEN_LIMIT = 5_000;
-
+const SEEN_LIMIT = 5000;
 const stamp = () => new Date().toISOString().replace(/[-:.]/g, '').slice(0, 15);
-
 export class Brain implements Control {
+  private readonly deps: BrainDeps;
+  private readonly wiring: Wiring;
   readonly workspace: Workspace;
   private readonly writer: GitWriter;
   private readonly memory: Memory;
@@ -88,7 +88,6 @@ export class Brain implements Control {
   private readonly typing = new Map<string, () => Promise<void>>();
   private readonly startedAt = new Date().toISOString();
   private readonly problems = new Set<string>();
-
   private draining = false;
   private me = '';
   private connected = false;
@@ -98,11 +97,9 @@ export class Brain implements Control {
   private work!: Work;
   private lanes!: Lanes<Entry>;
   private scheduleBook!: Schedules;
-
-  constructor(
-    private readonly deps: BrainDeps,
-    private readonly wiring: Wiring = {}
-  ) {
+  constructor(deps: BrainDeps, wiring: Wiring = {}) {
+    this.deps = deps;
+    this.wiring = wiring;
     this.workspace = new Workspace(deps.config.workspace);
     this.writer = new GitWriter(this.workspace, deps.git);
     this.memory = new Memory(this.workspace, this.writer);
@@ -110,30 +107,25 @@ export class Brain implements Control {
     this.ledger = new SpendLedger(this.workspace.path('cache'));
     this.heartbeatStore = new HeartbeatStore(this.workspace.path('cache'));
   }
-
   private previousHealth: string | undefined;
-
   private log(line: object) {
     this.deps.log(line);
   }
-
   private async appendLog(name: string, line: object) {
     const dir = this.workspace.path('log');
-    await Deno.mkdir(dir, { recursive: true });
-    await Deno.writeTextFile(
+    await nodeFs.mkdir(dir, { recursive: true });
+    await nodeFs.writeFile(
       join(dir, name),
       `${JSON.stringify({ at: new Date().toISOString(), ...line })}\n`,
-      { append: true }
+      { flag: 'a' }
     );
   }
-
   /** Run until `signal` aborts. Startup fails loudly on a broken persona or an unreachable Macro. */
   async run(signal: AbortSignal): Promise<void> {
     await this.workspace.enforceGitignore();
     const persona = await this.workspace.persona();
     this.me = (await this.deps.http.me()).user_id;
     this.log({ brain: 'starting', me: this.me, brain_lock: persona.brainLock });
-
     this.pool = new Pool({
       runner: this.deps.runner,
       limits: {
@@ -232,15 +224,12 @@ export class Brain implements Control {
       (lane, batch) => this.respond(lane, batch),
       (line) => this.log(line)
     );
-
     const resumed = await this.lanes.resume();
     if (resumed > 0) this.log({ lanes_resumed: resumed });
-
-    const server = Deno.serve(
+    const server = await serveHttp(
       {
         hostname: '127.0.0.1',
         port: this.deps.config.healthPort,
-        onListen: () => {},
       },
       controlHandler(this, this.controlToken, (line) => this.log(line))
     );
@@ -260,14 +249,13 @@ export class Brain implements Control {
     };
     const heartbeat = setInterval(
       () => queueHeartbeat(null),
-      persona.events.heartbeatMinutes * 60_000
+      persona.events.heartbeatMinutes * 60000
     );
     this.scheduleBook
       .reconcile()
       .catch((error) =>
         this.log({ schedules_reconcile_failed: String(error) })
       );
-
     const filters = [
       {
         events: [
@@ -292,7 +280,6 @@ export class Brain implements Control {
       },
       signal
     );
-
     try {
       for await (const item of stream) {
         if (item.kind === 'reconnected') {
@@ -314,11 +301,7 @@ export class Brain implements Control {
         } else if (event.type === AGENT_SESSION_OPENED) {
           const wake = await this.scheduleBook.wakeFor(event.metadata, this.me);
           if (wake) {
-            if (
-              this.wiring.onSchedule &&
-              (await this.wiring.onSchedule(wake, this)) !== false
-            )
-              continue;
+            if (await this.onSchedule(wake)) continue;
             const reason = wake.schedule
               ? `schedule: ${wake.schedule.note}`
               : `a routine run with no schedule record: ${wake.sessionName}`;
@@ -335,11 +318,10 @@ export class Brain implements Control {
       await this.lanes.shutdown();
       await this.work.drain();
       await Promise.all(heartbeats);
-      await server.shutdown();
+      await closeHttp(server);
       this.log({ brain: 'stopped' });
     }
   }
-
   /** Environment a turn's tools get: how to reach this brain, never the Macro key. */
   private turnEnv(turnId: string): Record<string, string> {
     return {
@@ -349,7 +331,6 @@ export class Brain implements Control {
       BRAIN_TURN_ID: turnId,
     };
   }
-
   private async channel(channelId: string): Promise<ChannelDetail> {
     const cached = this.channels.get(channelId);
     if (cached) return cached;
@@ -357,7 +338,6 @@ export class Brain implements Control {
     this.channels.set(channelId, detail);
     return detail;
   }
-
   private markSeen(id: string): boolean {
     if (this.seen.has(id)) return false;
     this.seen.add(id);
@@ -367,7 +347,6 @@ export class Brain implements Control {
     }
     return true;
   }
-
   private mentionsMe(posted: MessagePosted): boolean {
     const me = this.me.toLowerCase();
     if (
@@ -378,11 +357,9 @@ export class Brain implements Control {
       return true;
     return posted.content.toLowerCase().includes(`"userid":"${me}"`);
   }
-
   async onMessage(posted: MessagePosted): Promise<void> {
     if (posted.parent.type !== 'channel' || !this.markSeen(posted.message_id))
       return;
-
     const detail = await this.channel(posted.parent.id);
     const dm = detail.channel_type === 'direct_message';
     const entry: Entry = {
@@ -397,14 +374,12 @@ export class Brain implements Control {
       text: posted.content,
       mentionsMe: this.mentionsMe(posted),
     };
-
     const recent = await this.history.recent(
       entry.channelId,
       RELEVANCE_CONTEXT
     );
     await this.history.append(entry);
     if (entry.from === this.me || entry.from.startsWith('bot|')) return;
-
     const key = conversationKey({
       channel: entry.channelId,
       root: dm ? null : entry.root,
@@ -413,7 +388,6 @@ export class Brain implements Control {
       this.log({ message_id: entry.id, injected_into_work: key });
       return;
     }
-
     const judged = (message: Entry) => ({
       id: message.id,
       from: message.from,
@@ -441,7 +415,6 @@ export class Brain implements Control {
     );
     if (decision.relevant) await this.lanes.push(key, entry);
   }
-
   private async catchUp(since: Date): Promise<void> {
     for (const channelId of await this.history.channels()) {
       const page = await this.deps.http.channelMessages(channelId, {
@@ -455,7 +428,6 @@ export class Brain implements Control {
       for (const posted of missed) await this.onMessage(posted);
     }
   }
-
   /** A respond turn for one lane's batch. Typing shows from start until the first post. */
   private async respond(lane: string, batch: Entry[]): Promise<void> {
     const last = batch.at(-1);
@@ -465,7 +437,6 @@ export class Brain implements Control {
       root: last.dm ? null : last.root,
     };
     if (this.work.inject(lane, batch)) return;
-
     const persona = await this.workspace.persona();
     const turnId = `respond-${stamp()}-${lane.slice(0, 8)}`;
     const prompt = respondPrompt({
@@ -475,7 +446,6 @@ export class Brain implements Control {
       history: await this.history.recent(last.channelId, PROMPT_HISTORY),
       inFlight: this.work.inFlight(),
     });
-
     // Typing starts before the turn so even its first post finds it on; the
     // post stops it, and so does the turn ending.
     const stopTyping = startTyping(
@@ -508,14 +478,12 @@ export class Brain implements Control {
     }
     const timeout = setTimeout(
       () => handle.abort(),
-      persona.events.respondTimeoutMinutes * 60_000
+      persona.events.respondTimeoutMinutes * 60000
     );
-
     const outcome = await handle.done;
     clearTimeout(timeout);
     await stopTyping();
     this.typing.delete(turnId);
-
     for (const item of batch)
       await this.appendLog('handled.jsonl', {
         message_id: item.id,
@@ -529,7 +497,6 @@ export class Brain implements Control {
     if (outcome.status === 'error')
       throw new Error(`respond turn ${turnId} failed: ${outcome.result}`);
   }
-
   private async startTurn(
     tier: Tier,
     turnId: string,
@@ -556,7 +523,6 @@ export class Brain implements Control {
       throw error;
     }
   }
-
   /** A heartbeat turn when the snapshot changed, a sweep is due, or `forced` names a reason. */
   async heartbeat(forced: string | null): Promise<void> {
     if (this.heartbeatRunning && forced === null) return;
@@ -581,7 +547,6 @@ export class Brain implements Control {
           sweepHours: persona.events.sweepHours,
         });
       if (reason === null) return;
-
       const turnId = `heartbeat-${stamp()}`;
       const prompt = heartbeatPrompt({
         instructions: persona.prompts.heartbeat,
@@ -608,7 +573,6 @@ export class Brain implements Control {
       this.heartbeatRunning = false;
     }
   }
-
   /** Post in a conversation as the agent; stops the turn's typing and records what was said. */
   private async say(
     turn: string | null,
@@ -634,7 +598,13 @@ export class Brain implements Control {
       if (turn) await this.typing.get(turn)?.();
     }
   }
-
+  /** Return true when a composition handles a routine wake entirely in code. */
+  async onSchedule(wake: import('./schedules.ts').Wake): Promise<boolean> {
+    return (
+      this.wiring.onSchedule !== undefined &&
+      (await this.wiring.onSchedule(wake, this)) !== false
+    );
+  }
   /** Call adapters dispatch lifecycle events here; transports are supplied separately. */
   async onCall(call: BrainCall): Promise<void> {
     if (this.draining && call.phase !== 'ended') throw new Error('brain is draining for reload');
@@ -673,9 +643,7 @@ export class Brain implements Control {
       spent: async (usd) => { await this.ledger.record(usd); },
     }, policy);
   }
-
   // Control: what turns and macrod call.
-
   async health(): Promise<Health> {
     const problems = [...this.problems];
     if (!this.connected) problems.push('event stream disconnected');
@@ -702,15 +670,12 @@ export class Brain implements Control {
       problems,
     };
   }
-
   post(turn: string | null, channel: string, text: string) {
     return this.say(turn, { channel, root: null }, text);
   }
-
   reply(turn: string | null, channel: string, root: string, text: string) {
     return this.say(turn, { channel, root }, text);
   }
-
   async context(channel: string, root: string | null): Promise<unknown[]> {
     const page = await this.deps.http.channelMessages(
       channel,
@@ -734,49 +699,38 @@ export class Brain implements Control {
       ]);
     return page.reverse().map(line);
   }
-
   async handoff(conversation: Conversation, label: string, task: string) {
     if (this.draining) throw new Error('brain is draining for reload');
     const created = await this.work.start(conversation, label, task);
     return { taskId: created.id };
   }
-
   remember(topic: string, text: string) {
     return this.memory.remember(topic, text);
   }
-
   recall(query: string) {
     return this.memory.recall(query);
   }
-
   forget(topic: string) {
     return this.memory.forget(topic);
   }
-
   focus(focus: string) {
     return this.memory.setFocus(focus);
   }
-
   promise(what: string, to: string, conversation: string | null) {
     return this.memory.commit({ what, to, conversation });
   }
-
   async release(match: string) {
     return { released: await this.memory.release(match) };
   }
-
   schedule(note: string, trigger: Trigger) {
     return this.scheduleBook.create(note, trigger);
   }
-
   schedules() {
     return this.scheduleBook.list();
   }
-
   unschedule(routineId: string) {
     return this.scheduleBook.delete(routineId);
   }
-
   secret(name: string) {
     return this.deps.http.secret(name);
   }

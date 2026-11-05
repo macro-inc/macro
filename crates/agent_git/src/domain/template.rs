@@ -20,56 +20,7 @@ pub struct WorkspaceTemplate {
 
 /// The canonical brain workspace, embedded from `packages/brain/template/`.
 pub const WORKSPACE_TEMPLATE: WorkspaceTemplate = WorkspaceTemplate {
-    files: &[
-        TemplateFile {
-            path: "OPERATING.md",
-            contents: include_str!("../../../../packages/brain/template/OPERATING.md"),
-        },
-        TemplateFile {
-            path: "brain.ts",
-            contents: include_str!("../../../../packages/brain/template/brain.ts"),
-        },
-        TemplateFile {
-            path: "docs/brain-api.md",
-            contents: include_str!("../../../../packages/brain/template/docs/brain-api.md"),
-        },
-        TemplateFile {
-            path: "brain.lock",
-            contents: include_str!("../../../../packages/brain/template/brain.lock"),
-        },
-        TemplateFile {
-            path: "config/budget.json",
-            contents: include_str!("../../../../packages/brain/template/config/budget.json"),
-        },
-        TemplateFile {
-            path: "config/events.json",
-            contents: include_str!("../../../../packages/brain/template/config/events.json"),
-        },
-        TemplateFile {
-            path: "config/jev.json",
-            contents: include_str!("../../../../packages/brain/template/config/jev.json"),
-        },
-        TemplateFile {
-            path: "memory/self.json",
-            contents: include_str!("../../../../packages/brain/template/memory/self.json"),
-        },
-        TemplateFile {
-            path: "prompts/respond.md",
-            contents: include_str!("../../../../packages/brain/template/prompts/respond.md"),
-        },
-        TemplateFile {
-            path: "prompts/heartbeat.md",
-            contents: include_str!("../../../../packages/brain/template/prompts/heartbeat.md"),
-        },
-        TemplateFile {
-            path: "prompts/work.md",
-            contents: include_str!("../../../../packages/brain/template/prompts/work.md"),
-        },
-        TemplateFile {
-            path: ".gitignore",
-            contents: include_str!("../../template/gitignore"),
-        },
-    ],
+    files: include!(concat!(env!("OUT_DIR"), "/workspace_template.rs")),
 };
 
 /// Who the agent is, written into its charter when the repo is created.
@@ -175,3 +126,6 @@ fn truncate_utf16(value: &str, limit: usize) -> String {
         })
         .collect()
 }
+
+#[cfg(test)]
+mod test;

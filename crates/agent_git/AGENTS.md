@@ -9,7 +9,7 @@ plus the internal create/delete API and its client.
 ## How it works
 
 `POST /internal/repos` creates the bare repo from the canonical
-`packages/brain/template/`, plus `template/gitignore`, with the
+`packages/brain/template/`, including its `.gitignore`, with the
 request's persona seed substituted into `OPERATING.md` (one initial commit on
 `main`) and upserts the `agent_repos` row with the SHA-256 of a new
 `mrt_` token, returned once. Git requests (`/{agent_user_id}.git/...`, id
@@ -17,6 +17,9 @@ percent-encoded) go through `AgentGitService::serve_git`, which authorizes,
 enforces limits, and hands the request to `git http-backend` (CGI, both bodies
 streamed).
 
+`build.rs` recursively embeds every file under the canonical template, watching
+directories so additions and removals rebuild it; no file manifest is maintained.
+The HTTP clone test verifies every rendered file is seeded with its contents.
 Embed every file the brain reads before starting: its charter, prompts, JSON
 configuration, exact library lock, composition (`brain.ts`), API reference and initial self memory. `creator_id` records the creating
 admin's Macro user ID; older saved seeds may omit it and use the team owner.
