@@ -11,6 +11,10 @@ enforced by the ordinary backend APIs.
 - `src/macro.ts`: public exports and namespace registration.
 - `documents.createCanvas()` creates shared content before returning a Document handle;
   it requires no browser open or upload.
+- File bytes must work inside code mode, whose sandbox reaches only Macro hosts:
+  `documents.upload()` posts them to storage's `/documents/upload`, and
+  `Document.bytes()` downloads through the CloudFront export host (`document-content`
+  in the harness's `sdk_hosts`). Never return a presigned S3 URL as the only path.
 - `src/entities/entity.ts`: lazy detail reads, mutation invalidation and safe JSON.
 - `src/entities/workspace/namespace.ts`: filtered activity pages and iteration,
   agent sessions included.
@@ -135,6 +139,14 @@ the existing gateway prefixes.
 - Pipeline schema reads share the parent's cache; successful op batches clear it.
 - Email sends and other writes against hosted data are real actions; use mocks
   for automated SDK mutation tests.
+- `email.send`, `EmailThread.reply` and `calendar.createEvent` are refused
+  (403) for an agent's program, and so are `EmailDraft.send`/`schedule`
+  without `userConfirmation`. Programs act through
+  `execution.reviews.create` or the confirmed methods: `email.sendConfirmed`
+  and `EmailMessage.forwardConfirmed` (cognition `send-confirmed`, typed with
+  the generated `SendEmail`/`SendEmailResponse` review types) and
+  `calendar.createConfirmed` (`CreateCalendarEvent_Deserialize`,
+  `ToolCalendarEvent`); the OpenAPI schemas are opaque.
 
 - Carry the generation read with the draft through each mutation, including
   transfer and save. Attachment handles retain their reservation generation

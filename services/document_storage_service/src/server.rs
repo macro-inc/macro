@@ -209,9 +209,7 @@ maybe_env_vars! {
 }
 
 /// Build the service from the environment and serve until shutdown.
-// Not a `pub async fn`: rustc compiles the body of every non-generic `pub async fn`
-// in every build, tests included, even when nothing calls it. This one reaches the
-// whole router, so the lib test would compile the entire service.
+// Not a `pub async fn`: see CS-73.
 pub fn run() -> impl Future<Output = anyhow::Result<()>> {
     run_server()
 }

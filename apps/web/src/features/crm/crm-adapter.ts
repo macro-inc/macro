@@ -11,7 +11,6 @@ import {
   enableCrmActivity,
   enableCrmLists,
   enableCrmPipelines,
-  enableDatabases,
 } from '@core/constant/featureFlags';
 import { useUserId } from '@core/context/user';
 import { useProfilePictureUrl } from '@core/signal/profilePicture';
@@ -23,17 +22,11 @@ import { useTagSets, useTagSetsReady } from '@property/tags/tag-sets-context';
 import { queryReadyGate } from '@queries/gate';
 import { useListPropertiesQuery } from '@queries/properties/definitions';
 import { useBulkSaveEntityPropertiesMutation } from '@queries/properties/entity';
-import { createSoupLiveQuery } from '@queries/soup/graphql/create-soup-live-query';
 import {
   type SoupAstItemsQuery,
   useSoupAstItemsQuery,
 } from '@queries/soup/items';
 import { getSoupEntityById } from '@queries/soup/normalized-cache';
-import {
-  onDatabaseBatchCommitted,
-  onDatabaseTableAdvanced,
-  useDatabasesQuery,
-} from '@queries/storage/databases';
 import {
   invalidateUserTeams,
   useCurrentTeamQuery,
@@ -86,7 +79,6 @@ import {
   useSetContactNameMutation,
   useSetContactPhonesMutation,
 } from './queries/contacts';
-import { createCrmDatabasesSource } from './queries/databases';
 import { fetchCrmExportCompanies } from './queries/export';
 import { useCrmLists } from './queries/lists';
 import { createPipelineTransfer } from './queries/pipeline-transfer';
@@ -205,19 +197,14 @@ export function createAppCrmContext(): CrmContext {
   const panel = useSplitPanel();
   const createContext = useCreateContext();
   const activityFlag = useFeatureFlag(enableCrmActivity);
-  const databasesFlag = useFeatureFlag(enableDatabases);
   const navigate = useNavigate();
-  const openCreateItem = async (kind: 'notes' | 'calls' | 'databases') => {
+  const openCreateItem = async (kind: 'notes' | 'calls') => {
     if (kind === 'calls') {
       navigate('/meet/new');
       return;
     }
     const { runCreateAction } = await import('@app/features/command/Launcher');
-    const type = {
-      notes: 'md',
-      databases: 'database',
-    } as const;
-    runCreateAction(type[kind], { source: 'crm' });
+    runCreateAction('md', { source: 'crm' });
   };
   const createSettings = () => useTeamCrmConfig(deps);
   return {
@@ -261,17 +248,6 @@ export function createAppCrmContext(): CrmContext {
     createContactEmails: (...args) =>
       withRowNotifications(
         useContactEmailsQuery(useSoupAstItemsQuery, ...args)
-      ),
-    createDatabases: (scope) =>
-      createCrmDatabasesSource(
-        {
-          createRows: createSoupLiveQuery,
-          createListing: useDatabasesQuery,
-          onCommitted: onDatabaseBatchCommitted,
-          onTableAdvanced: onDatabaseTableAdvanced,
-        },
-        scope,
-        () => !!userId() && databasesFlag().enabled
       ),
     openCreateItem: (kind) => fireAndForget(openCreateItem(kind), 'crm'),
     openEmailComposer: (recipient) =>

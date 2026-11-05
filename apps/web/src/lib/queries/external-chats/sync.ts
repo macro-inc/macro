@@ -9,6 +9,7 @@ import { z } from 'zod';
 import { queryClient } from '../client';
 import { parseMessageData } from '../storage/databases-sync';
 import { whatsappLinkedKeys } from '../whatsapp-linked/keys';
+import { invalidateExternalChatMessages } from './index';
 import { externalChatsKeys } from './keys';
 
 /** DSS pings this with no data; readers re-fetch. */
@@ -69,13 +70,13 @@ export function useExternalChatListsSync() {
 }
 
 function refreshChat(userId: string, chatId: string) {
-  return Promise.all(
-    [
+  return Promise.all([
+    invalidateExternalChatMessages(userId, chatId),
+    ...[
       externalChatsKeys.detail(userId, chatId).queryKey,
-      externalChatsKeys.messages(userId, chatId).queryKey,
       externalChatsKeys.delivery(userId, chatId).queryKey,
-    ].map((queryKey) => queryClient.invalidateQueries({ queryKey }))
-  );
+    ].map((queryKey) => queryClient.invalidateQueries({ queryKey })),
+  ]);
 }
 
 /** While one chat is open: its members, timeline and send outcomes. */
