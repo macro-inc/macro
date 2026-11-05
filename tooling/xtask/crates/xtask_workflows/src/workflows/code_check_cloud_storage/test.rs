@@ -54,7 +54,7 @@ fn filter_binary_cache_is_trusted_only() {
         .as_array()
         .unwrap()
         .iter()
-        .find(|step| step["name"] == "Mount nextest-filter binary cache")
+        .find(|step| step["name"] == "Mount nextest-filter and cargo registry cache")
         .expect("binary cache mount");
     let condition = mount["if"].as_str().unwrap();
     assert!(
@@ -292,4 +292,17 @@ fn deno_tests_reuse_the_test_run_build() {
     let test_step = serde_json::to_value(run_tests()).unwrap();
     assert_eq!(deno_step["run"], test_step["run"]);
     assert_eq!(deno_step["env"]["NEXTEST_RUN_DENO_TESTS"], "true");
+}
+
+/// Per-test database creation is the bulk of the test run's time, and the
+/// settings `configure_postgres` applies only survive its restart on a bind mount.
+#[test]
+fn test_postgres_keeps_its_data_in_shared_memory_across_a_restart() {
+    let service = serde_json::to_value(postgres_service()).unwrap();
+    let options = service["options"].as_str().unwrap();
+    assert!(
+        options.contains("-v /dev/shm/pgdata:/var/lib/postgresql/data"),
+        "{options}"
+    );
+    assert!(!options.contains("--tmpfs"), "{options}");
 }

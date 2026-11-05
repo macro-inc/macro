@@ -47,12 +47,9 @@ pub const NIX_CACHE_URL: &str = "${{ vars.NIX_CACHE_URL }}";
 /// paths verify.
 pub const NIX_CACHE_PUBLIC_KEY: &str = "${{ vars.NIX_CACHE_PUBLIC_KEY }}";
 
-/// Limit concurrent test links, which can each consume several GiB.
-pub const RUST_TEST_BUILD_JOBS: u32 = 2;
-
-/// Nextest thread count for the test job. Tuned for the previous
-/// `linux-extra-beefy` runner; revisit if `namespace-profile-linux-mid` is
-/// smaller.
+/// Nextest thread count for the test job, one per vCPU of [`Runner::Large`].
+///
+/// [`Runner::Large`]: crate::workflows::runners::Runner::Large
 pub const NEXTEST_TEST_THREADS: u32 = 32;
 
 /// Explicit Namespace cache-volume tag for the heavy compile jobs (check +
@@ -81,12 +78,6 @@ pub const NIX_CHECKS_CACHE_TAG: &str = "nix-checks";
 /// generators. Kept separate from [`CI_SCCACHE_NAME`] because these jobs have
 /// a different workload and runner profile.
 pub const WEB_SCCACHE_NAME: &str = "web-ci";
-
-/// Namespace cache tag for `path-check`, which keeps its release
-/// `xtask_nextest_filter` binary on the volume. Without a fixed tag the small
-/// profile's volume is scoped per branch and PR runs never persisted, so every
-/// run rebuilt the filter.
-pub const NEXTEST_FILTER_CACHE_TAG: &str = "nextest-filter";
 
 /// Namespace cache tag for the sync-service worker deploy. Its own pool: this
 /// job compiles for `wasm32-unknown-unknown`, so nothing in the host-target
