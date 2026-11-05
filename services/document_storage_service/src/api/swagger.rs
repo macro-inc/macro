@@ -937,7 +937,6 @@ use utoipa::OpenApi;
             harnesses::domain::models::HarnessOwner,
             harnesses::domain::models::HarnessAgent,
             harnesses::domain::models::HarnessSession,
-            harnesses::domain::models::RequestedHarnessScope,
             harnesses::domain::models::CreatePairingRequest,
             harnesses::domain::models::CreatedPairing,
             harnesses::domain::models::PairingDetails,

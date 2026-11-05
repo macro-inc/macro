@@ -132,8 +132,6 @@ where
                     device_secret_hash,
                     requested_name: name.to_owned(),
                     host: host.clone(),
-                    requested_scope: req.scope,
-                    requested_allow_permission_bypass: req.allow_permission_bypass,
                     expires_at,
                 })
                 .await

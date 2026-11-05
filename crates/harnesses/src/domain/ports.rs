@@ -11,14 +11,12 @@ use uuid::Uuid;
 use super::models::{
     ApprovePairingRequest, ClaimOutcome, ClaimPairingRequest, CreatePairingRequest, CreatedPairing,
     Harness, HarnessAgent, HarnessOwner, HarnessSession, PairingClaimFacts, PairingDetails,
-    PairingStatus, PatchHarnessRequest, RequestedHarnessScope,
+    PairingStatus, PatchHarnessRequest,
 };
 
 /// A pairing row to persist.
 #[derive(Debug, Clone)]
 pub struct NewPairing {
-    /// Daemon operator consent ceiling for permission bypass.
-    pub requested_allow_permission_bypass: Option<bool>,
     /// Pairing id.
     pub id: Uuid,
     /// Normalized pairing code, `XXXX-XXXX`.
@@ -29,8 +27,6 @@ pub struct NewPairing {
     pub requested_name: String,
     /// Display-only machine description.
     pub host: Option<String>,
-    /// The scope the daemon's config asked for.
-    pub requested_scope: Option<RequestedHarnessScope>,
     /// When the pairing expires.
     pub expires_at: DateTime<Utc>,
 }

@@ -43,13 +43,11 @@ async fn insert_user(pool: &PgPool, user_id: &str) {
 
 fn new_pairing(code: &str, secret: &str) -> NewPairing {
     NewPairing {
-        requested_allow_permission_bypass: None,
         id: Uuid::new_v4(),
         code: code.to_owned(),
         device_secret_hash: harness_token::hash_token(secret),
         requested_name: "erics-macbook".to_owned(),
         host: Some("eric@macbook / darwin".to_owned()),
-        requested_scope: Some(RequestedHarnessScope::Team),
         expires_at: Utc::now() + Duration::minutes(15),
     }
 }
@@ -77,10 +75,6 @@ async fn pairing_walks_create_approve_claim_exactly_once(pool: PgPool) {
     let row = repo.get_pairing("KX7M-4QHD").await.unwrap().unwrap();
     assert_eq!(row.status, PairingStatus::Pending);
     assert_eq!(row.details.requested_name, "erics-macbook");
-    assert_eq!(
-        row.details.requested_scope,
-        Some(RequestedHarnessScope::Team)
-    );
     let harness = repo
         .approve_pairing("KX7M-4QHD", new_harness())
         .await
@@ -537,22 +531,6 @@ async fn permission_bypass_survives_registration_and_listing(pool: PgPool) {
                 .allow_permission_bypass,
             allowed
         );
-    }
-}
-
-#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
-async fn pairing_permission_ceiling_roundtrips(pool: PgPool) {
-    let repo = PgHarnessRepo::new(pool);
-    for (code, allowed) in [
-        ("AAAA-AAAA", None),
-        ("BBBB-BBBB", Some(false)),
-        ("CCCC-CCCC", Some(true)),
-    ] {
-        let mut pairing = new_pairing(code, "device-secret");
-        pairing.requested_allow_permission_bypass = allowed;
-        assert!(repo.insert_pairing(pairing).await.unwrap());
-        let stored = repo.get_pairing(code).await.unwrap().unwrap();
-        assert_eq!(stored.details.requested_allow_permission_bypass, allowed);
     }
 }
 
