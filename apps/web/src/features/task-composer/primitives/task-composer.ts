@@ -27,11 +27,6 @@ import type { MentionLinkResolver } from '@core/component/LexicalMarkdown/plugin
 import { initializeEditorEmpty } from '@core/component/LexicalMarkdown/utils';
 import type { PortalScope } from '@core/component/ScopedPortal';
 import { toast } from '@core/component/Toast/Toast';
-import {
-  enableCrm,
-  enableCrmActivity,
-  isFeatureEnabled,
-} from '@core/constant/featureFlags';
 import { registerHotkey, useHotkeyDOMScope } from '@core/hotkey/hotkeys';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import { fireAndForget } from '@core/util/fireAndForget';
@@ -54,7 +49,10 @@ import {
 import { reconcile, unwrap } from 'solid-js/store';
 import { tabbable } from 'tabbable';
 import type { ComposeTaskProps, ComposeTaskSuccess } from '../core/types';
-import { CUSTOMER_CONTACT_PROPERTY_IDS } from '../customer-contact';
+import {
+  CUSTOMER_CONTACT_PROPERTY_IDS,
+  customerContactEnabled,
+} from '../customer-contact';
 import { showTaskCreatedToast } from './taskCreatedToast';
 
 type ComposerTagLayoutMode = 'bottom' | 'title';
@@ -226,8 +224,7 @@ export function createTaskComposer(
   };
 
   // Read once per opening, so a flag change leaves an open draft's row alone.
-  const showCustomerContact =
-    isFeatureEnabled(enableCrm) && isFeatureEnabled(enableCrmActivity);
+  const showCustomerContact = customerContactEnabled();
 
   const {
     propertyValues,

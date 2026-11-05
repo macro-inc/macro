@@ -852,7 +852,7 @@ composer is not feature-flagged. Create-menu actions, shortcuts, and pane button
 capture the provider during setup and read the preset when invoked.
 
 With PostHog `enable-crm` and `enable-crm-activity` both on, every opening of the
-composer shows one **Customer / Contact** pill, a single-choice picker of companies
+composer, and Universal Input's task mode, shows one **Customer / Contact** pill, a single-choice picker of companies
 and contacts that writes the Companies and Contacts properties. Picking a company
 leaves the contact unset; picking a contact also sets its company, and the pill
 shows the contact with both named on hover. A team with no CRM records sees the

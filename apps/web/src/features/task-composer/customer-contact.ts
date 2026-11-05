@@ -1,3 +1,8 @@
+import {
+  enableCrm,
+  enableCrmActivity,
+  isFeatureEnabled,
+} from '@core/constant/featureFlags';
 import { SYSTEM_PROPERTY_IDS } from '@property/identifiers';
 import type { PropertyApiValues } from '@property/types';
 import type { EntityReference } from '@service-properties/generated/schemas/entityReference';
@@ -7,6 +12,11 @@ export const CUSTOMER_CONTACT_PROPERTY_IDS: readonly string[] = [
   SYSTEM_PROPERTY_IDS.COMPANIES,
   SYSTEM_PROPERTY_IDS.CONTACTS,
 ];
+
+/** Whether task creation shows the pill. Read once per opening of a form. */
+export function customerContactEnabled(): boolean {
+  return isFeatureEnabled(enableCrm) && isFeatureEnabled(enableCrmActivity);
+}
 
 function entityReferences(value: PropertyApiValues | undefined) {
   return value?.valueType === 'ENTITY' ? (value.refs ?? []) : [];

@@ -821,7 +821,9 @@ while inference is pending. Email and message modes show their outgoing body
 and resolved recipients. Email uses the Email Composer's inbox picker, recipient
 chips with address completion, separate Cc/Bcc controls, subject control, rich Markdown editor, and HTML
 preparation for delivery. Task creation uses the task composer's rich title,
-Markdown description, and editable property pills, including Due date.
+Markdown description, and editable property pills, including Due date, and the
+same **Customer / Contact** pill as the task composer when its flags are on (see
+[tasks](tasks.md)). Extraction never fills that pill.
 Calendar uses the event composer's date/time popovers and calendar, guest, and
 location and recurrence pills, including the shared custom recurrence builder.
 Manual recurrence choices, including Does not repeat, survive later predictions.
