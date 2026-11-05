@@ -19,7 +19,7 @@ Task creation also preserves the composer's selected fields as per-task pins.
 - Treat zero and false as populated values; treat empty lists and text as blank.
 - Retain blank selected fields so creation can pin them below the task title.
 - Keep Source references contextual; capture the Source field without its current value.
-- Apply only property definitions available to the current viewer.
+- Wait for property definitions before applying, editing, or saving templates; apply only definitions available to the viewer.
 - Preserve settings for unavailable fields when editing a template.
 - Keep No template as the default, and retain the selected template across Create More.
 - Reapply the saved template to each fresh task instead of copying task-specific edits.

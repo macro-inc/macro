@@ -232,7 +232,8 @@ export function createTaskComposer(
     return (
       !isCreating() &&
       ((selection.kind !== 'new' && selection.kind !== 'editing') ||
-        (Boolean(selection.name.trim()) &&
+        (availableProperties().length > 0 &&
+          Boolean(selection.name.trim()) &&
           (selection.kind !== 'new' ||
             !selection.teamId ||
             selection.teamId === team()?.id))) &&
@@ -472,6 +473,11 @@ export function createTaskComposer(
     const taskContent = content().trim();
     const selection = structuredClone(templateSelection());
     const kind = templateSubmitKind(selection, taskTitle);
+    if (
+      (selection.kind === 'new' || selection.kind === 'editing') &&
+      availableProperties().length === 0
+    )
+      return;
     if (
       selection.kind === 'new' &&
       selection.teamId &&
@@ -850,7 +856,7 @@ export function createTaskComposer(
     }
   };
   const selectTemplate = (template: SavedTaskTemplate) => {
-    if (!canChangeTemplate()) return;
+    if (!canChangeTemplate() || availableProperties().length === 0) return;
     applyTemplate(template.contents);
     setTemplateSelection({
       kind: 'saved',
@@ -859,8 +865,7 @@ export function createTaskComposer(
   };
 
   const editTemplate = (template: SavedTaskTemplate) => {
-    if (!canChangeTemplate()) return;
-    // Explicit editing starts from saved defaults, not task-creation context.
+    if (!canChangeTemplate() || availableProperties().length === 0) return;
     const next = structuredClone(template.contents);
     setTitle('');
     setVisiblePropertyIds(next.propertyIds);
