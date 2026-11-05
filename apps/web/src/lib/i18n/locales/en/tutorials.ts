@@ -21,8 +21,8 @@ export default {
   docsLength: '1:48',
   tasksTitle: 'Learn how to use Macro Tasks',
   tasksSnippet:
-    'Create tasks from anywhere, from email, docs and channels, linked back both ways',
-  tasksLength: '1:22',
+    'List, board and timeline, projects and tags, linked to email, docs and channels',
+  tasksLength: '1:59',
   chatTitle: 'Learn how to use Macro Chat',
   chatSnippet:
     'Mention anything, turn messages into tasks, inline replies and a real inbox',
