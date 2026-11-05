@@ -89,8 +89,10 @@ deploy repo, which Argo CD syncs.
   the Nix and republish.
 - The pool's free space counts as dataset size on ZFS, so kubelet percentage
   thresholds misfire on a shared pool. big-pickle sets absolute ones.
-- CI jobs reach the forge through a fixed ClusterIP on the ingress Service, mapped
-  with `--add-host`, because `git.localhost` is loopback.
+- CI jobs reach the forge at its in-cluster address (`http://gitea-http:3000`, the
+  runner's instance URL), so they need no route to `git.localhost` or the dev CA.
+- The forge's Docker MTU is below the overlay's: Docker's default of 1500 makes
+  small requests work and large downloads hang.
 - A copied store path keeps RUNPATHs to the original. On a Nix host the files are
   hardlinks and `ld.so` merges them; in an image they load twice. `fusionauthJdk`
   rewrites its RUNPATH for this reason.

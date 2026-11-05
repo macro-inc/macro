@@ -13,6 +13,8 @@ jobs:
     outputs:
       should_run: ${{ steps.filter.outputs.should_run }}
     steps:
+    - name: Put Cargo on PATH
+      run: echo "$HOME/.cargo/bin" >> "$GITHUB_PATH"
     - name: Checkout
       uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
       with:
@@ -40,6 +42,8 @@ jobs:
     name: ast-grep Conventions
     runs-on: linux-ci
     steps:
+    - name: Put Cargo on PATH
+      run: echo "$HOME/.cargo/bin" >> "$GITHUB_PATH"
     - name: Checkout
       uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
       with:
@@ -62,6 +66,8 @@ jobs:
     name: Conventions Status Check
     runs-on: linux-ci
     steps:
+    - name: Put Cargo on PATH
+      run: echo "$HOME/.cargo/bin" >> "$GITHUB_PATH"
     - name: Check job results
       run: |
         echo "path-check: ${{ needs.path-check.result }}"

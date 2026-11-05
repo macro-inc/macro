@@ -310,8 +310,7 @@ fn ensure_deploy_repo(stage: &Stage) -> Result<()> {
     )
 }
 
-/// What the forge's runners need before Argo CD starts them: a registration
-/// token and the development CA, which jobs trust to reach the forge.
+/// What the forge's runners need before Argo CD starts them: a registration token.
 fn ensure_runner_secrets(stage: &Stage) -> Result<()> {
     if read_secret(FORGE_NAMESPACE, RUNNER_TOKEN_SECRET, "token").is_err() {
         let out = kubectl()
@@ -348,23 +347,7 @@ fn ensure_runner_secrets(stage: &Stage) -> Result<()> {
             )],
         )?;
     }
-    let ca = std::fs::read_to_string(ca_file())?;
-    // Tools that replace the system roots still need the public ones.
-    let bundle = format!("{}\n{ca}", std::fs::read_to_string("/etc/ssl/certs/ca-bundle.crt")?);
-    apply_items(
-        stage,
-        "forge CA",
-        &[secret(
-            FORGE_NAMESPACE,
-            "forge-ca",
-            "Opaque",
-            &[
-                ("ca.pem".to_owned(), ca),
-                ("ca-bundle.pem".to_owned(), bundle),
-            ]
-            .into(),
-        )],
-    )
+    Ok(())
 }
 
 fn wait_for_forge(stage: &Stage) -> Result<()> {

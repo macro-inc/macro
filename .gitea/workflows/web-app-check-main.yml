@@ -14,6 +14,8 @@ jobs:
       i18n_changed: ${{ steps.filter.outputs.i18n_changed }}
       database_grid_changed: ${{ steps.filter.outputs.database_grid_changed }}
     steps:
+    - name: Put Cargo on PATH
+      run: echo "$HOME/.cargo/bin" >> "$GITHUB_PATH"
     - name: Checkout Repo
       uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10
     - id: filter
@@ -76,6 +78,8 @@ jobs:
       pull-requests: read
       id-token: write
     steps:
+    - name: Put Cargo on PATH
+      run: echo "$HOME/.cargo/bin" >> "$GITHUB_PATH"
     - name: Checkout PR merge commit
       uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10
     - name: Setup Bun
@@ -201,6 +205,8 @@ jobs:
     name: Typecheck
     runs-on: linux-ci
     steps:
+    - name: Put Cargo on PATH
+      run: echo "$HOME/.cargo/bin" >> "$GITHUB_PATH"
     - name: Checkout Repo
       uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10
     - name: Setup Nix
@@ -252,6 +258,8 @@ jobs:
       CARGO_PROFILE_DEV_DEBUG: '0'
       RUSTFLAGS: -C link-arg=-fuse-ld=mold
     steps:
+    - name: Put Cargo on PATH
+      run: echo "$HOME/.cargo/bin" >> "$GITHUB_PATH"
     - name: Checkout Repo
       uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10
     - name: Setup Nix
@@ -341,6 +349,8 @@ jobs:
     name: Biome Check
     runs-on: linux-ci
     steps:
+    - name: Put Cargo on PATH
+      run: echo "$HOME/.cargo/bin" >> "$GITHUB_PATH"
     - name: Checkout Repo
       uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10
       with:
@@ -367,6 +377,8 @@ jobs:
     name: Test
     runs-on: linux-ci
     steps:
+    - name: Put Cargo on PATH
+      run: echo "$HOME/.cargo/bin" >> "$GITHUB_PATH"
     - name: Checkout Repo
       uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10
     - name: Setup Nix
@@ -409,6 +421,8 @@ jobs:
     name: Cycles Import Check
     runs-on: linux-ci
     steps:
+    - name: Put Cargo on PATH
+      run: echo "$HOME/.cargo/bin" >> "$GITHUB_PATH"
     - name: Checkout
       uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10
     - name: Setup Nix
@@ -431,6 +445,8 @@ jobs:
     name: Build
     runs-on: linux-ci
     steps:
+    - name: Put Cargo on PATH
+      run: echo "$HOME/.cargo/bin" >> "$GITHUB_PATH"
     - name: Checkout Repo
       uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10
     - name: Setup Nix
@@ -497,6 +513,8 @@ jobs:
     name: Web App Status Check
     runs-on: linux-ci
     steps:
+    - name: Put Cargo on PATH
+      run: echo "$HOME/.cargo/bin" >> "$GITHUB_PATH"
     - name: Check job results
       run: |
         echo "path-check: ${{ needs.path-check.result }}"

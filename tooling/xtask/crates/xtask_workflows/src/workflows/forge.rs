@@ -69,7 +69,8 @@ pub const PORTED: &[Ported] = &[
 /// Namespace cache volumes (the runner keeps its own), none of `dropped`, and no
 /// `types` filter on pull requests. Gitea does not match `synchronize` there, so
 /// a filtered workflow would never re-run on a push; the default activity types
-/// are what these workflows want.
+/// are what these workflows want. Each job first puts Cargo's bin directory on
+/// PATH, which hosted runners do and the job image does not.
 pub fn port(yaml: &str, dropped: &[&str]) -> Result<String> {
     let mut root: Value = serde_yaml::from_str(yaml).context("parsing workflow")?;
     if let Some(pull_request) = root
@@ -101,6 +102,13 @@ pub fn port(yaml: &str, dropped: &[&str]) -> Result<String> {
             *runs_on = Value::from(RUNNER_LABEL);
         }
         if let Some(steps) = job.get_mut("steps").and_then(Value::as_sequence_mut) {
+            steps.insert(
+                0,
+                serde_yaml::from_str(
+                    "{ name: Put Cargo on PATH, run: 'echo \"$HOME/.cargo/bin\" >> \"$GITHUB_PATH\"' }",
+                )
+                .context("parsing the PATH step")?,
+            );
             steps.retain(|step| {
                 !step
                     .get("uses")
@@ -141,7 +149,8 @@ jobs:
         let build = &ported["jobs"]["build"];
         assert_eq!(build["runs-on"], RUNNER_LABEL);
         assert_eq!(build["needs"].as_sequence().unwrap().len(), 1);
-        assert_eq!(build["steps"].as_sequence().unwrap().len(), 1);
+        assert_eq!(build["steps"].as_sequence().unwrap().len(), 2);
+        assert_eq!(build["steps"][0]["name"], "Put Cargo on PATH");
         assert!(ported["jobs"].get("ios").is_none());
         assert!(ported["on"]["pull_request"].get("types").is_none());
         assert!(ported["on"]["pull_request"].get("branches").is_some());

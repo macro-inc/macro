@@ -22,6 +22,8 @@ jobs:
       rust_packages: ${{ steps.nextest-filter.outputs.rust_packages }}
       skip_tests: ${{ steps.nextest-filter.outputs.skip_tests }}
     steps:
+    - name: Put Cargo on PATH
+      run: echo "$HOME/.cargo/bin" >> "$GITHUB_PATH"
     - name: Checkout
       uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
       with:
@@ -233,6 +235,8 @@ jobs:
       RUSTDOCFLAGS: -Dwarnings
       SQLX_OFFLINE: 'true'
     steps:
+    - name: Put Cargo on PATH
+      run: echo "$HOME/.cargo/bin" >> "$GITHUB_PATH"
     - name: Checkout
       uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
       with:
@@ -353,6 +357,8 @@ jobs:
     name: Cloud Storage Status Check
     runs-on: linux-ci
     steps:
+    - name: Put Cargo on PATH
+      run: echo "$HOME/.cargo/bin" >> "$GITHUB_PATH"
     - name: Check job results
       run: |
         echo "path-check: ${{ needs.path-check.result }}"
@@ -399,6 +405,8 @@ jobs:
         - 6379:6379
         options: --health-cmd "redis-cli ping" --health-interval 10s --health-timeout 5s --health-retries 5
     steps:
+    - name: Put Cargo on PATH
+      run: echo "$HOME/.cargo/bin" >> "$GITHUB_PATH"
     - name: Checkout
       uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
       with:
@@ -527,6 +535,8 @@ jobs:
     if: needs.path-check.outputs.should_run == 'true' && github.event.pull_request.draft == false && needs.path-check.outputs.graphql_schema == 'true'
     runs-on: linux-ci
     steps:
+    - name: Put Cargo on PATH
+      run: echo "$HOME/.cargo/bin" >> "$GITHUB_PATH"
     - name: Checkout
       uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
       with:

@@ -28,12 +28,6 @@ let
     ];
   };
 
-  # Jobs must reach the forge at the address in its ROOT_URL, which on a dev
-  # cluster resolves to loopback. Job containers get a hosts file mapping the name
-  # to this Service instead; `--add-host` conflicts with the shared network Docker
-  # actions use. Hosted clusters have real DNS and do not need it.
-  ingressClusterIP = "10.43.9.43";
-
   runnerImage = platformLib.image {
     name = "forge-runner";
     contents = [ pkgs.gitea-actions-runner ];
@@ -65,21 +59,12 @@ let
         file = "/data/.runner";
         capacity = 1;
         timeout = "6h";
-        envs = {
-          GIT_SSL_CAINFO = "/macro-ca/ca.pem";
-          NODE_EXTRA_CA_CERTS = "/macro-ca/ca.pem";
-          SSL_CERT_FILE = "/macro-ca/ca-bundle.pem";
-        };
         labels = [ runnerLabel ];
       };
       cache.enabled = true;
       container = {
-        options = "-v /macro-hosts/hosts:/etc/hosts:ro -v /macro-ca:/macro-ca:ro -v nix:/nix";
-        valid_volumes = [
-          "nix"
-          "/macro-ca"
-          "/macro-hosts/hosts"
-        ];
+        options = "-v nix:/nix";
+        valid_volumes = [ "nix" ];
         force_pull = false;
       };
     }
@@ -183,18 +168,6 @@ let
           }
         ];
       };
-      services.traefik.spec = {
-        clusterIP = ingressClusterIP;
-        selector.app = "traefik";
-        ports = [
-          {
-            name = "websecure";
-            port = 9443;
-            targetPort = traefikPort;
-            protocol = "TCP";
-          }
-        ];
-      };
       deployments.traefik.spec = {
         # One pod owns the host port; a rolling update would deadlock on it.
         strategy.type = "Recreate";
@@ -223,11 +196,6 @@ let
 
   forgeRunners = {
     namespace = "forge";
-    resources.configMaps.forge-job-hosts.data.hosts = ''
-      127.0.0.1 localhost
-      ::1 localhost
-      ${ingressClusterIP} ${forgeHost}
-    '';
     resources.statefulSets.forge-runner.spec = {
       serviceName = "forge-runner";
       replicas = 2;
@@ -310,16 +278,6 @@ let
                   name = "docker-socket";
                   mountPath = "/var/run";
                 }
-                {
-                  name = "macro-ca";
-                  mountPath = "/macro-ca";
-                  readOnly = true;
-                }
-                {
-                  name = "job-hosts";
-                  mountPath = "/macro-hosts";
-                  readOnly = true;
-                }
               ];
             };
           };
@@ -331,14 +289,6 @@ let
             {
               name = "docker-socket";
               emptyDir = { };
-            }
-            {
-              name = "macro-ca";
-              secret.secretName = "forge-ca";
-            }
-            {
-              name = "job-hosts";
-              configMap.name = "forge-job-hosts";
             }
           ];
         };
