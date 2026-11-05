@@ -19,6 +19,16 @@ env:
     - main
     - 'synoet/ci-seed-arms-base'
 jobs:
+  decide-arm:
+    runs-on: namespace-profile-linux-tiny-no-cache
+    outputs:
+      arm: ${{ steps.read.outputs.arm }}
+    steps:
+    - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
+      with:
+        persist-credentials: 'false'
+    - id: read
+      run: echo "arm=$(cat crates/email/ci-seed-arm.txt)" >> "$GITHUB_OUTPUT"
   path-check:
     runs-on: namespace-profile-linux-small;overrides.cache-tag=sccache-ci
     outputs:
@@ -300,7 +310,8 @@ jobs:
   check-control:
     needs:
     - path-check
-    if: needs.path-check.outputs.should_run == 'true' && github.event.pull_request.draft == false
+    - decide-arm
+    if: needs.decide-arm.outputs.arm == 'control' && needs.path-check.outputs.should_run == 'true' && github.event.pull_request.draft == false
     runs-on: namespace-profile-linux-large-build;overrides.cache-tag=ci-seed-arm-c-check-${{ github.run_id }}-${{ github.run_attempt }}
     env:
       RUSTFLAGS: '-Dwarnings -Dclippy::disallowed_methods -C link-arg=-fuse-ld=mold'
@@ -470,7 +481,8 @@ jobs:
   check-seed:
     needs:
     - path-check
-    if: needs.path-check.outputs.should_run == 'true' && github.event.pull_request.draft == false
+    - decide-arm
+    if: needs.decide-arm.outputs.arm == 'seed' && needs.path-check.outputs.should_run == 'true' && github.event.pull_request.draft == false
     runs-on: namespace-profile-linux-large-build;overrides.cache-tag=ci-seed-arm-s-check-${{ github.run_id }}-${{ github.run_attempt }}
     env:
       RUSTFLAGS: '-Dwarnings -Dclippy::disallowed_methods -C link-arg=-fuse-ld=mold'
@@ -845,7 +857,8 @@ jobs:
   test-control:
     needs:
     - path-check
-    if: needs.path-check.outputs.should_run == 'true' && github.event.pull_request.draft == false && needs.path-check.outputs.test_packages != 'none' && needs.path-check.outputs.skip_tests != 'true'
+    - decide-arm
+    if: needs.decide-arm.outputs.arm == 'control' && needs.path-check.outputs.should_run == 'true' && github.event.pull_request.draft == false && needs.path-check.outputs.test_packages != 'none' && needs.path-check.outputs.skip_tests != 'true'
     runs-on: namespace-profile-linux-large-build;overrides.cache-tag=ci-seed-arm-c-test-${{ github.run_id }}-${{ github.run_attempt }}
     env:
       RUST_PACKAGES: ${{ needs.path-check.outputs.test_packages }}
@@ -1112,7 +1125,8 @@ jobs:
   test-seed:
     needs:
     - path-check
-    if: needs.path-check.outputs.should_run == 'true' && github.event.pull_request.draft == false && needs.path-check.outputs.test_packages != 'none' && needs.path-check.outputs.skip_tests != 'true'
+    - decide-arm
+    if: needs.decide-arm.outputs.arm == 'seed' && needs.path-check.outputs.should_run == 'true' && github.event.pull_request.draft == false && needs.path-check.outputs.test_packages != 'none' && needs.path-check.outputs.skip_tests != 'true'
     runs-on: namespace-profile-linux-large-build;overrides.cache-tag=ci-seed-arm-s-test-${{ github.run_id }}-${{ github.run_attempt }}
     env:
       RUST_PACKAGES: ${{ needs.path-check.outputs.test_packages }}
