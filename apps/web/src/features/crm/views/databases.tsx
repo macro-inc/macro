@@ -1,5 +1,6 @@
 import { ListHeader } from '@app/components/view-shell/ListHeader';
 import { useFeatureFlag } from '@app/lib/analytics/posthog';
+import { t } from '@app/lib/i18n';
 import { enableDatabases } from '@core/constant/featureFlags';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import EmptyStateDatabaseGraphic from '@design/empty-state-folder.svg';
@@ -23,7 +24,7 @@ export function CrmDatabasesView(props: {
       fallback={
         <div class="flex min-h-0 min-w-0 flex-1 flex-col">
           <Show when={!props.scope && !isTouchDevice()}>
-            <ListHeader title={props.title ?? 'Sales Databases'} />
+            <ListHeader title={props.title ?? t('crm.salesDatabases')} />
           </Show>
           <Show
             when={flag().loading}
@@ -74,7 +75,7 @@ function DatabasesList(props: { scope?: CrmRecordScope; title?: JSX.Element }) {
       when={props.scope}
       fallback={
         <ActivitySection
-          label="Sales Databases"
+          label={t('crm.salesDatabases')}
           title={props.title}
           search={search()}
           onSearchChange={setSearch}

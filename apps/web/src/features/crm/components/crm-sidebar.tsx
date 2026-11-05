@@ -176,10 +176,10 @@ export function CrmSidebar(props: {
                 <Show when={!props.lists.length}>
                   <p class="px-3 pb-2 text-xs leading-5 text-ink-extra-muted">
                     {props.listsLoading
-                      ? t('crm.loadingLists')
+                      ? 'Loading lists…'
                       : props.listsError
-                        ? t('crm.listsLoadFailed')
-                        : t('crm.listsEmpty')}
+                        ? 'Could not load lists.'
+                        : 'Your own collections of companies.'}
                   </p>
                 </Show>
                 <ViewSidebar.Item

@@ -11,6 +11,7 @@ import {
   TasksViewProvider,
   useTasksView,
 } from '@app/features/tasks-view/tasks-view-context';
+import { t } from '@app/lib/i18n';
 import { useSplitLayout } from '@components/app/split-layout/layout';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import EmptyStateTasksGraphic from '@design/empty-state-tasks.svg';
@@ -111,8 +112,8 @@ function ActivityTasksBody(props: {
             <div class="flex min-w-0 items-center gap-2 px-4 py-2">
               {controls()}
               <SearchBar
-                label="Search sales tasks"
-                placeholder="Search sales tasks"
+                label={t('crm.searchSalesTasks')}
+                placeholder={t('crm.searchSalesTasks')}
                 value={state.search}
                 onValueChange={(search) => setState('search', search)}
                 class="min-w-0 flex-1"
@@ -121,10 +122,10 @@ function ActivityTasksBody(props: {
           </ViewShell.Header>
         }
       >
-        <ListHeader title={props.title ?? 'Sales Tasks'}>
+        <ListHeader title={props.title ?? t('crm.salesTasks')}>
           {controls()}
           <ListHeaderSearch
-            label="Search sales tasks"
+            label={t('crm.searchSalesTasks')}
             value={state.search}
             onValueChange={(search) => setState('search', search)}
             onEscape={() => listElement?.focus()}

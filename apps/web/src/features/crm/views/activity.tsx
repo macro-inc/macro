@@ -1,3 +1,4 @@
+import { t } from '@app/lib/i18n';
 import EmptyStateCallsGraphic from '@design/empty-state-calls.svg';
 import EmptyStateDocGraphic from '@design/empty-state-doc.svg';
 import EmptyStateEmailGraphic from '@design/empty-state-email.svg';
@@ -14,21 +15,27 @@ import { RecordItemList } from './record-item-list';
 
 const CONTENT = {
   email: {
-    title: 'Sales Email',
+    get title() {
+      return t('crm.salesEmail');
+    },
     graphic: EmptyStateEmailGraphic,
     action: 'New email',
     description:
       'Email your CRM companies and people to see those conversations here.',
   },
   notes: {
-    title: 'Sales Notes',
+    get title() {
+      return t('crm.salesNotes');
+    },
     graphic: EmptyStateDocGraphic,
     action: 'New note',
     description:
       'Create a note and link a company or person through its Companies or Contacts property.',
   },
   calls: {
-    title: 'Sales Calls',
+    get title() {
+      return t('crm.salesCalls');
+    },
     graphic: EmptyStateCallsGraphic,
     action: 'New call',
     description:
