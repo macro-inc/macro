@@ -1,5 +1,5 @@
 common --lockfile_mode=off
-build --@rules_rust//rust/settings:pipelined_compilation=True
+build --@rules_rust//rust/settings:pipelined_compilation=False
 build --action_env=PATH
 build --action_env=CODE_MODE_ASSETS_DIR
 build --action_env=AWS_LC_SYS_CMAKE_BUILDER
