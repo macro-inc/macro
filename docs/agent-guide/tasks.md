@@ -851,15 +851,19 @@ Without a preset, the standard property row and draft are used. The shared
 composer is not feature-flagged. Create-menu actions, shortcuts, and pane buttons
 capture the provider during setup and read the preset when invoked.
 
-Customers supplies its preset when PostHog `enable-crm-activity` is enabled:
-the standard row gains one **Customer / Contact** pill, a single-choice picker of
-companies and contacts that writes the Companies and Contacts properties. Picking
-a company leaves the contact unset; picking a contact also sets its company, and
-the pill shows the contact with both named on hover. Neither property is offered
-separately under **Add property** there. Record-level task creation prefills the
-company or contact, including the contact's company when already loaded. With the
-CRM flag off or loading, record-level creation uses the standard property row
-while retaining its record-scoped draft and associations. **Add property** opens the same property
+With PostHog `enable-crm` and `enable-crm-activity` both on, every opening of the
+composer shows one **Customer / Contact** pill, a single-choice picker of companies
+and contacts that writes the Companies and Contacts properties. Picking a company
+leaves the contact unset; picking a contact also sets its company, and the pill
+shows the contact with both named on hover. A team with no CRM records sees the
+pill with "No customers or contacts found". Neither property is offered separately
+under **Add property** while the pill shows. With either flag off, there is no pill
+and both stay under **Add property**.
+
+Customers supplies its preset when `enable-crm-activity` is on. Record-level task
+creation prefills the company or contact, including the contact's company when
+already loaded. With the CRM flag off or loading, record-level creation uses the
+standard property row while retaining its record-scoped draft and associations. **Add property** opens the same property
 editor as the document/task side panel: search by name or type, select a property
 and enter its value, or create a property from an unmatched search. Assignments
 and values stay in the task draft until creation; opening or closing the editor

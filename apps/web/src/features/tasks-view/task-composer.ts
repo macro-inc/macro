@@ -70,7 +70,6 @@ export function taskBoardComposerContext(options: {
     visiblePropertyIds: context?.visiblePropertyIds
       ? [...new Set([...context.visiblePropertyIds, propertyId])]
       : undefined,
-    showCustomerContact: context?.showCustomerContact,
     initialPropertyValues: {
       ...context?.initialPropertyValues,
       [propertyId]: value,

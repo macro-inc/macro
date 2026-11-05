@@ -311,7 +311,7 @@ function Properties(props: { class?: string }) {
               />
             )}
           </For>
-          <Show when={composer.props.composerContext?.showCustomerContact}>
+          <Show when={composer.showCustomerContact}>
             <CustomerContactPill
               values={composer.propertyValues}
               onChange={composer.setPropertyValues}

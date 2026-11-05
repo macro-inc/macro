@@ -35,7 +35,6 @@ export function crmTaskComposerContext(
   }
   return {
     key: record ? `crm:${record.type}:${record.id}` : 'crm',
-    showCustomerContact: true,
     initialPropertyValues,
   };
 }

@@ -53,9 +53,8 @@ threads with CRM company domains or contact addresses. Lists page as you scroll.
 Empty CRM scope never falls back to all content. Activity loads directly with a
 server-resolved scope; it does not fetch every company and contact first. Hidden
 companies and contacts stay excluded even for admins. A loading failure offers
-**Try again**. Tasks has **New task**, with the standard property row plus one
-**Customer / Contact** pill. Choose a CRM association there when creating a task
-from this feed.
+**Try again**. Tasks has **New task**, which opens the task composer. Choose a CRM
+association with its **Customer / Contact** pill when creating a task from this feed.
 Opening Task through the global Create menu while Customers is focused uses the
 same preset. With an embedded company or contact detail open, global Create
 prefills the current breadcrumb record; a contact also includes its company.

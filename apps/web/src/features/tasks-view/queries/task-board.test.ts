@@ -245,20 +245,6 @@ describe('board task drafts', () => {
     }
   });
 
-  it('keeps the host Customer / Contact pill on a board column', () => {
-    const draft = taskBoardComposerContext({
-      grouping: 'status',
-      columnId: 'not-started',
-      calendar: createDateBucketBoundaries(
-        new Date('2025-03-09T12:00:00Z'),
-        'America/New_York'
-      ),
-      context: { key: 'crm', showCustomerContact: true },
-    });
-    expect(draft.showCustomerContact).toBe(true);
-    expect(draft.visiblePropertyIds).toBeUndefined();
-  });
-
   it('scopes dated drafts to their local day and timezone', () => {
     const before = createDateBucketBoundaries(
       new Date('2025-03-09T04:59:59Z'),

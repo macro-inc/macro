@@ -27,6 +27,11 @@ import type { MentionLinkResolver } from '@core/component/LexicalMarkdown/plugin
 import { initializeEditorEmpty } from '@core/component/LexicalMarkdown/utils';
 import type { PortalScope } from '@core/component/ScopedPortal';
 import { toast } from '@core/component/Toast/Toast';
+import {
+  enableCrm,
+  enableCrmActivity,
+  isFeatureEnabled,
+} from '@core/constant/featureFlags';
 import { registerHotkey, useHotkeyDOMScope } from '@core/hotkey/hotkeys';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import { fireAndForget } from '@core/util/fireAndForget';
@@ -220,6 +225,10 @@ export function createTaskComposer(
     }
   };
 
+  // Read once per opening, so a flag change leaves an open draft's row alone.
+  const showCustomerContact =
+    isFeatureEnabled(enableCrm) && isFeatureEnabled(enableCrmActivity);
+
   const {
     propertyValues,
     setPropertyValues,
@@ -235,7 +244,7 @@ export function createTaskComposer(
   } = createTaskComposerProperties({
     initialValues: initialState.propertyValues,
     initialVisiblePropertyIds: initialState.visiblePropertyIds,
-    hiddenPropertyIds: props.composerContext?.showCustomerContact
+    hiddenPropertyIds: showCustomerContact
       ? CUSTOMER_CONTACT_PROPERTY_IDS
       : undefined,
     allDefinitions: true,
@@ -635,6 +644,7 @@ export function createTaskComposer(
     handleTitleTagPickerActive,
     deleteTitleTagsAtStart,
     properties,
+    showCustomerContact,
     propertyValues,
     setPropertyValues,
     availableProperties,
