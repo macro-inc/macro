@@ -497,7 +497,7 @@ export function KanbanCard(props: {
       <article
         ref={draggable.ref}
         class={cn(
-          'group relative rounded-lg border border-edge-muted bg-surface-3 shadow-sm transition-shadow hover:border-edge hover:shadow-md',
+          'group relative rounded-lg border border-transparent bg-control-raised shadow-sm transition-shadow not-touch:hover:shadow-md',
           draggable.isActiveDraggable && 'opacity-35',
           props.pending && 'ring-1 ring-ink/20'
         )}
