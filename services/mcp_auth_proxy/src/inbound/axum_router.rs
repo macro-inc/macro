@@ -11,7 +11,7 @@ use axum::{
     extract::{Query, RawQuery, State},
     http::{HeaderMap, HeaderName, Method, header},
     middleware as axum_mw,
-    response::{Html, IntoResponse, Json, Redirect, Response},
+    response::{IntoResponse, Json, Redirect, Response},
     routing,
 };
 use axum_extra::extract::cookie::{Cookie, CookieJar, SameSite};
@@ -22,12 +22,15 @@ use tower_http::cors::{AllowOrigin, CorsLayer};
 use crate::domain::{
     browser_binding::BrowserBinding,
     models::{
-        AuthorizationStart, AuthorizeRequest, CallbackRequest, ClientRegistrationRequest,
-        ConsentPrompt, RevocationRequest, TokenRequest, UserConsent,
+        AuthorizationStart, AuthorizeRequest, CallbackRequest, ClientDelivery,
+        ClientRegistrationRequest, CodeDelivery, ConsentPrompt, EmailSignInStep, RevocationRequest,
+        TokenRequest, UserConsent,
     },
+    ports::EmailCodeError,
     service::{
-        CompleteCallbackError, InflightAuthStore, McpAuthProxyService, McpAuthProxyServiceImpl,
-        RegisterClientError, RevokeTokenError, StartAuthorizationError, TokenExchangeError,
+        CompleteCallbackError, EmailSignInError, InflightAuthStore, McpAuthProxyService,
+        McpAuthProxyServiceImpl, RegisterClientError, RevokeTokenError, StartAuthorizationError,
+        TokenExchangeError,
     },
 };
 
@@ -91,6 +94,9 @@ async fn register<I: InflightAuthStore + 'static>(
     }
 }
 
+/// The broker's email sign-in page, relative to `/authorize`.
+const EMAIL_SIGN_IN_PATH: &str = "email-sign-in";
+
 /// Cookie carrying the browser's `BrowserBinding`. The `__Host-` prefix makes
 /// browsers refuse it unless it is `Secure`, host-only and on `/`, so no
 /// sibling domain can plant one.
@@ -110,6 +116,29 @@ struct ConsentPage<'a> {
     redirect_host: &'a str,
     request: &'a AuthorizeRequest,
     consent_token: &'a str,
+    manual_delivery: bool,
+}
+
+#[derive(Template)]
+#[template(path = "sign_in_choice.html")]
+struct SignInChoicePage {
+    params: Vec<(String, String)>,
+    offers_manual_delivery: bool,
+}
+
+#[derive(Template)]
+#[template(path = "email_sign_in.html")]
+struct EmailSignInPage<'a> {
+    session: &'a str,
+    form_token: &'a str,
+    code_sent_to: Option<&'a str>,
+    error: Option<&'a str>,
+}
+
+#[derive(Template)]
+#[template(path = "manual_delivery.html")]
+struct ManualDeliveryPage<'a> {
+    url: &'a str,
 }
 
 /// What the user chose on the consent screen.
@@ -146,6 +175,21 @@ fn browser_binding_cookie(browser: &BrowserBinding) -> Cookie<'static> {
         .build()
 }
 
+/// Renders a template as a broker page, naming it in the log if it cannot be.
+fn render_page(page: &impl Template, name: &'static str) -> Response {
+    match page.render() {
+        Ok(body) => html_page(body),
+        Err(error) => {
+            tracing::error!(error=?error, page = name, "failed to render a broker page");
+            (
+                axum::http::StatusCode::INTERNAL_SERVER_ERROR,
+                "failed to render the page",
+            )
+                .into_response()
+        }
+    }
+}
+
 /// A broker-rendered page with the headers that keep it from being framed,
 /// cached, or leaking its URL.
 fn html_page(body: String) -> Response {
@@ -163,49 +207,20 @@ fn html_page(body: String) -> Response {
         .into_response()
 }
 
-/// Hosts whose users pick how to sign in, rather than going straight to
-/// Google. OpenAI's reviewers sign in with a password, and can't get through
-/// Google's challenges on a shared account.
-const SIGN_IN_CHOICE_HOSTS: [&str; 2] = ["chatgpt.com", "chat.openai.com"];
+/// The sign-in chooser, shown before any flow starts so it stores nothing.
+/// Its form repeats the authorize request with the choices added.
+fn sign_in_choice(query: Option<&str>, offers_manual_delivery: bool) -> Response {
+    let params = url::form_urlencoded::parse(query.unwrap_or_default().as_bytes())
+        .into_owned()
+        .collect();
 
-fn offers_sign_in_choice(redirect_uri: &str) -> bool {
-    url::Url::parse(redirect_uri).is_ok_and(|uri| {
-        uri.scheme() == "https"
-            && uri
-                .host_str()
-                .is_some_and(|host| SIGN_IN_CHOICE_HOSTS.contains(&host))
-    })
-}
-
-/// The sign-in chooser. Each link repeats the authorize request with the
-/// choice added; the query is re-encoded, so nothing from it reaches the page
-/// unescaped. Nothing is stored until a link is followed.
-fn sign_in_choice(query: Option<String>) -> Response {
-    let link = |choice: &str| {
-        let query = query.as_deref().unwrap_or_default();
-        let mut params = url::form_urlencoded::Serializer::new(String::new());
-        params.extend_pairs(url::form_urlencoded::parse(query.as_bytes()));
-        params.append_pair("sign_in", choice);
-        format!("/authorize?{}", params.finish()).replace('&', "&amp;")
-    };
-    let page = format!(
-        include_str!("sign_in_choice.html"),
-        google = link("google"),
-        login = link("login"),
-    );
-    (
-        [
-            (header::CACHE_CONTROL, "no-store"),
-            (header::REFERRER_POLICY, "no-referrer"),
-            (header::X_FRAME_OPTIONS, "DENY"),
-            (
-                header::CONTENT_SECURITY_POLICY,
-                "default-src 'none'; style-src 'unsafe-inline'; frame-ancestors 'none'",
-            ),
-        ],
-        Html(page),
+    render_page(
+        &SignInChoicePage {
+            params,
+            offers_manual_delivery,
+        },
+        "sign_in_choice",
     )
-        .into_response()
 }
 
 fn consent_page(
@@ -213,23 +228,27 @@ fn consent_page(
     request: &AuthorizeRequest,
     browser: &BrowserBinding,
 ) -> Response {
-    let page = ConsentPage {
-        client_name: &prompt.client_name,
-        redirect_host: &prompt.redirect_host,
-        request,
-        consent_token: &browser.consent_token(),
-    };
+    render_page(
+        &ConsentPage {
+            client_name: &prompt.client_name,
+            redirect_host: &prompt.redirect_host,
+            request,
+            consent_token: &browser.form_token(),
+            manual_delivery: prompt.delivery == CodeDelivery::Manual,
+        },
+        "consent",
+    )
+}
 
-    match page.render() {
-        Ok(body) => html_page(body),
-        Err(error) => {
-            tracing::error!(error=?error, "failed to render the consent page");
-            (
-                axum::http::StatusCode::INTERNAL_SERVER_ERROR,
-                "failed to render the consent page",
-            )
-                .into_response()
-        }
+/// Sends a finished flow's callback URL to the client: by `redirect`, or by
+/// showing it when the user is carrying it to another machine.
+fn delivery_response(delivery: &ClientDelivery, redirect: fn(&str) -> Redirect) -> Response {
+    match delivery.method {
+        CodeDelivery::Redirect => redirect(&delivery.url).into_response(),
+        CodeDelivery::Manual => render_page(
+            &ManualDeliveryPage { url: &delivery.url },
+            "manual_delivery",
+        ),
     }
 }
 
@@ -254,6 +273,10 @@ async fn authorization_response<I: InflightAuthStore + 'static>(
         Ok(AuthorizationStart::SignIn(url)) => {
             ([(header::REFERRER_POLICY, "no-referrer")], redirect(&url)).into_response()
         }
+        // Relative, so it stays under the prefix the gateway mounted this on.
+        Ok(AuthorizationStart::EmailSignIn { session_id }) => {
+            redirect(&format!("{EMAIL_SIGN_IN_PATH}?session={session_id}")).into_response()
+        }
         Ok(AuthorizationStart::ConsentRequired(prompt)) => {
             consent_page(&prompt, &request, &browser)
         }
@@ -267,8 +290,9 @@ async fn authorize<I: InflightAuthStore + 'static>(
     RawQuery(query): RawQuery,
     Query(params): Query<AuthorizeRequest>,
 ) -> Response {
-    if params.sign_in.is_none() && offers_sign_in_choice(&params.redirect_uri) {
-        return sign_in_choice(query);
+    if params.sign_in.is_none() {
+        let offers_manual_delivery = auth_proxy.allows_manual_delivery(&params.redirect_uri);
+        return sign_in_choice(query.as_deref(), offers_manual_delivery);
     }
 
     let browser = browser_binding(&jar).unwrap_or_else(BrowserBinding::generate);
@@ -285,28 +309,31 @@ async fn authorize<I: InflightAuthStore + 'static>(
     (jar, response).into_response()
 }
 
+/// The browser submitting one of the broker's forms, provided it is the one
+/// that was shown the form: the browser binding cookie must be present (a
+/// cross-site post does not carry a `SameSite=Lax` cookie) and the form's token
+/// must be the one derived from it, which a page on another origin cannot read.
+fn form_browser(jar: &CookieJar, headers: &HeaderMap, form_token: &str) -> Option<BrowserBinding> {
+    let cross_site = headers
+        .get(SEC_FETCH_SITE)
+        .is_some_and(|site| site.as_bytes() != b"same-origin");
+    if cross_site {
+        return None;
+    }
+
+    browser_binding(jar).filter(|browser| browser.accepts_form_token(form_token))
+}
+
 /// Receives the consent screen's form.
-///
-/// The form only counts when it was posted by the browser that was shown it:
-/// the browser binding cookie must be present (a cross-site post does not
-/// carry a `SameSite=Lax` cookie) and the form's token must be the one derived
-/// from it, which a page on another origin cannot read.
 async fn submit_consent<I: InflightAuthStore + 'static>(
     State(auth_proxy): State<McpAuthProxyServiceImpl<I>>,
     jar: CookieJar,
     headers: HeaderMap,
     axum::Form(submission): axum::Form<ConsentSubmission>,
 ) -> Response {
-    let cross_site = headers
-        .get(SEC_FETCH_SITE)
-        .is_some_and(|site| site.as_bytes() != b"same-origin");
-    let browser = browser_binding(&jar)
-        .filter(|browser| browser.accepts_consent_token(&submission.consent_token));
-
-    let Some(browser) = browser.filter(|_| !cross_site) else {
+    let Some(browser) = form_browser(&jar, &headers, &submission.consent_token) else {
         tracing::warn!(
             client_id = %submission.request.client_id,
-            cross_site,
             "consent form submission could not be verified"
         );
         return (
@@ -335,8 +362,183 @@ async fn submit_consent<I: InflightAuthStore + 'static>(
     }
 }
 
+/// The session an email sign-in page belongs to.
+#[derive(Deserialize)]
+struct EmailSignInQuery {
+    session: String,
+}
+
+/// The email sign-in form: an address alone asks for a code, and an address
+/// with a code redeems it.
+#[derive(Deserialize)]
+struct EmailSignInSubmission {
+    session: String,
+    form_token: String,
+    email: String,
+    #[serde(default)]
+    code: Option<String>,
+}
+
+fn email_sign_in_page(
+    session: &str,
+    browser: &BrowserBinding,
+    code_sent_to: Option<&str>,
+    error: Option<&str>,
+) -> Response {
+    render_page(
+        &EmailSignInPage {
+            session,
+            form_token: &browser.form_token(),
+            code_sent_to,
+            error,
+        },
+        "email_sign_in",
+    )
+}
+
+/// What the user is told about a refused step, or `None` when the page cannot
+/// help and the flow has to be answered as an error.
+fn email_code_refusal(error: &EmailSignInError) -> Option<&'static str> {
+    let EmailSignInError::EmailCode(error) = error else {
+        return None;
+    };
+
+    match error {
+        EmailCodeError::InvalidEmail => Some("Enter a valid email address."),
+        EmailCodeError::NotAllowed => Some("That email address can't sign in to Macro."),
+        EmailCodeError::InvalidCode => Some("That code isn't right, or it has expired."),
+        EmailCodeError::RateLimited => Some("Too many attempts. Wait a minute and try again."),
+        EmailCodeError::Unavailable(_) => None,
+    }
+}
+
+fn email_sign_in_error_response(error: EmailSignInError) -> Response {
+    match error {
+        EmailSignInError::UnknownOrExpiredSession => (
+            axum::http::StatusCode::BAD_REQUEST,
+            "This sign-in has expired. Start connecting again from the app you are connecting.",
+        )
+            .into_response(),
+        EmailSignInError::DifferentBrowser => (
+            axum::http::StatusCode::BAD_REQUEST,
+            "This sign-in was started in a different browser. Start connecting again from the \
+             app you are connecting, and finish signing in in the browser it opens.",
+        )
+            .into_response(),
+        EmailSignInError::EmailCode(error) => {
+            tracing::error!(error=?error, "email sign-in step failed");
+            (
+                axum::http::StatusCode::BAD_GATEWAY,
+                "Email sign-in is unavailable right now. Try again shortly.",
+            )
+                .into_response()
+        }
+        EmailSignInError::InflightStore(error) => {
+            tracing::error!(error=?error, "failed to access inflight auth state");
+            (
+                axum::http::StatusCode::INTERNAL_SERVER_ERROR,
+                "failed to access inflight auth state",
+            )
+                .into_response()
+        }
+        EmailSignInError::ConstructAuthorizeUrl(error) => {
+            tracing::error!(error=?error, "failed to construct upstream authorize URL");
+            (
+                axum::http::StatusCode::INTERNAL_SERVER_ERROR,
+                "failed to construct authorize URL",
+            )
+                .into_response()
+        }
+    }
+}
+
+/// Shows the email form for a session this browser started.
+async fn show_email_sign_in<I: InflightAuthStore + 'static>(
+    State(auth_proxy): State<McpAuthProxyServiceImpl<I>>,
+    jar: CookieJar,
+    Query(query): Query<EmailSignInQuery>,
+) -> Response {
+    let Some(browser) = browser_binding(&jar) else {
+        return email_sign_in_error_response(EmailSignInError::DifferentBrowser);
+    };
+
+    match auth_proxy
+        .check_email_sign_in(&query.session, &browser)
+        .await
+    {
+        Ok(()) => email_sign_in_page(&query.session, &browser, None, None),
+        Err(error) => email_sign_in_error_response(error),
+    }
+}
+
+/// Receives the email form: asks for a code, or redeems one.
+async fn submit_email_sign_in<I: InflightAuthStore + 'static>(
+    State(auth_proxy): State<McpAuthProxyServiceImpl<I>>,
+    jar: CookieJar,
+    headers: HeaderMap,
+    axum::Form(submission): axum::Form<EmailSignInSubmission>,
+) -> Response {
+    let Some(browser) = form_browser(&jar, &headers, &submission.form_token) else {
+        tracing::warn!(
+            session_id = %submission.session,
+            "email sign-in submission could not be verified"
+        );
+        return (
+            axum::http::StatusCode::FORBIDDEN,
+            "This sign-in could not be verified. Start connecting again from the app you are \
+             connecting.",
+        )
+            .into_response();
+    };
+    let EmailSignInSubmission {
+        session,
+        email,
+        code,
+        ..
+    } = submission;
+
+    match code {
+        Some(code) => {
+            match auth_proxy
+                .verify_email_code(&session, &email, &code, &browser)
+                .await
+            {
+                Ok(delivery) => delivery_response(&delivery, Redirect::to),
+                Err(error) => match email_code_refusal(&error) {
+                    Some(refusal) => {
+                        email_sign_in_page(&session, &browser, Some(&email), Some(refusal))
+                    }
+                    None => email_sign_in_error_response(error),
+                },
+            }
+        }
+        None => match auth_proxy
+            .request_email_code(&session, &email, &browser)
+            .await
+        {
+            Ok(EmailSignInStep::EnterCode) => {
+                email_sign_in_page(&session, &browser, Some(&email), None)
+            }
+            Ok(EmailSignInStep::Sso(url)) => (
+                [(header::REFERRER_POLICY, "no-referrer")],
+                Redirect::to(&url),
+            )
+                .into_response(),
+            Err(error) => match email_code_refusal(&error) {
+                Some(refusal) => email_sign_in_page(&session, &browser, None, Some(refusal)),
+                None => email_sign_in_error_response(error),
+            },
+        },
+    }
+}
+
 fn start_authorization_error_response(error: StartAuthorizationError) -> Response {
     match error {
+        StartAuthorizationError::ManualDeliveryUnavailable => (
+            axum::http::StatusCode::BAD_REQUEST,
+            "This app can't finish signing in on another machine.",
+        )
+            .into_response(),
         StartAuthorizationError::UnsupportedResponseType => (
             axum::http::StatusCode::BAD_REQUEST,
             "unsupported response_type",
@@ -398,7 +600,7 @@ async fn oauth_callback<I: InflightAuthStore + 'static>(
         .complete_callback(params, browser_binding(&jar))
         .await
     {
-        Ok(url) => Redirect::temporary(&url).into_response(),
+        Ok(delivery) => delivery_response(&delivery, Redirect::temporary),
         Err(CompleteCallbackError::MissingState) => {
             tracing::warn!("no state parameter in upstream OAuth callback");
             (
@@ -611,6 +813,10 @@ fn oauth_routes<I: InflightAuthStore + 'static>(auth_proxy: McpAuthProxyServiceI
             routing::get(authorization_server_metadata),
         )
         .route("/authorize", routing::get(authorize).post(submit_consent))
+        .route(
+            &format!("/{EMAIL_SIGN_IN_PATH}"),
+            routing::get(show_email_sign_in).post(submit_email_sign_in),
+        )
         .route("/register", routing::post(register))
         .route("/oauth/callback", routing::get(oauth_callback))
         .route("/token", routing::post(token))

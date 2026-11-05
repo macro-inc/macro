@@ -14,11 +14,12 @@ use crate::domain::{
     browser_binding::BrowserBinding,
     models::{
         AccessToken, AuthorizeRequest, CallbackRequest, ClientRegistrationRequest,
-        IssuedAuthorizationCode, PendingAuthorization, RefreshToken, RefreshTokenBinding,
-        RegisteredClient, SignInMethod, UpstreamTokens, UserConsent,
+        EmailCodeRequest, IssuedAuthorizationCode, PendingAuthorization, RefreshToken,
+        RefreshTokenBinding, RegisteredClient, UpstreamLogin, UpstreamTokens, UserConsent,
     },
     ports::{
-        ClientRegistrationStore, GrantRevokedFuture, OAuthProvider, RefreshTokenBindingFuture,
+        ClientRegistrationStore, EmailCodeError, EmailCodeProvider, EmailCodeRequestFuture,
+        EmailCodeTokensFuture, GrantRevokedFuture, OAuthProvider, RefreshTokenBindingFuture,
         RefreshTokenBindingStore, RegisteredClientFuture, StoreWriteFuture,
         UpstreamRevocationFuture, UpstreamTokensFuture,
     },
@@ -50,6 +51,12 @@ pub const REFRESHED_ACCESS_TOKEN: &str = "refreshed-access-token";
 /// Upstream access token lifetime the fake provider reports, matching the one
 /// hour JWT FusionAuth issues.
 pub const UPSTREAM_EXPIRES_IN: u64 = 3600;
+/// An address the fake email provider sends codes to.
+pub const EMAIL_ADDRESS: &str = "user@example.com";
+/// An address whose domain the fake email provider routes to single sign-on.
+pub const SSO_EMAIL_ADDRESS: &str = "user@sso.example";
+/// The only code the fake email provider accepts.
+pub const EMAIL_CODE: &str = "123456";
 
 /// Computes the S256 challenge for a PKCE verifier.
 pub fn code_challenge_for(verifier: &str) -> String {
@@ -111,6 +118,15 @@ impl InflightAuthStore for FakeInflightAuth {
             .expect("pending lock")
             .insert(session_id.to_owned(), pending);
         Ok(())
+    }
+
+    async fn find_pending(&self, session_id: &str) -> anyhow::Result<Option<PendingAuthorization>> {
+        Ok(self
+            .pending
+            .lock()
+            .expect("pending lock")
+            .get(session_id)
+            .cloned())
     }
 
     async fn take_pending(&self, session_id: &str) -> anyhow::Result<Option<PendingAuthorization>> {
@@ -267,11 +283,12 @@ impl OAuthProvider for FakeOAuthProvider {
     fn construct_authorize_url(
         &self,
         state: &str,
-        sign_in: SignInMethod,
+        login: UpstreamLogin<'_>,
     ) -> anyhow::Result<String> {
-        let page = match sign_in {
-            SignInMethod::Google => "authorize",
-            SignInMethod::Login => "login",
+        let page = match login {
+            UpstreamLogin::Google => "authorize",
+            UpstreamLogin::LoginPage => "login",
+            UpstreamLogin::Sso { .. } => "sso",
         };
         Ok(format!("https://upstream.example/{page}?state={state}"))
     }
@@ -325,6 +342,51 @@ impl OAuthProvider for FakeOAuthProvider {
     }
 }
 
+/// Email provider that sends codes to one address and accepts one code,
+/// standing in for the authentication service.
+#[derive(Default)]
+pub struct FakeEmailCodes {
+    requested: Mutex<Vec<String>>,
+}
+
+impl FakeEmailCodes {
+    /// The addresses a code was requested for.
+    pub fn requested(&self) -> Vec<String> {
+        self.requested.lock().expect("requested lock").clone()
+    }
+}
+
+impl EmailCodeProvider for FakeEmailCodes {
+    fn request_code<'a>(&'a self, email: &'a str) -> EmailCodeRequestFuture<'a> {
+        Box::pin(async move {
+            self.requested
+                .lock()
+                .expect("requested lock")
+                .push(email.to_owned());
+            match email {
+                EMAIL_ADDRESS => Ok(EmailCodeRequest::Sent),
+                SSO_EMAIL_ADDRESS => Ok(EmailCodeRequest::SsoRequired {
+                    idp_id: "idp-1".to_owned(),
+                }),
+                _ => Err(EmailCodeError::NotAllowed),
+            }
+        })
+    }
+
+    fn redeem_code<'a>(&'a self, _email: &'a str, code: &'a str) -> EmailCodeTokensFuture<'a> {
+        Box::pin(async move {
+            if code != EMAIL_CODE {
+                return Err(EmailCodeError::InvalidCode);
+            }
+            Ok(UpstreamTokens {
+                access_token: AccessToken::from(UPSTREAM_ACCESS_TOKEN),
+                refresh_token: RefreshToken::from(UPSTREAM_REFRESH_TOKEN),
+                expires_in: UPSTREAM_EXPIRES_IN,
+            })
+        })
+    }
+}
+
 /// A broker service wired to in-memory stores, trusting only `claude.ai` for
 /// `https` redirect URIs.
 pub struct Harness {
@@ -336,6 +398,8 @@ pub struct Harness {
     pub registry: Arc<FakeClientRegistry>,
     /// The upstream provider the service was built with.
     pub provider: Arc<FakeOAuthProvider>,
+    /// The email code provider the service was built with.
+    pub email_codes: Arc<FakeEmailCodes>,
     /// The secret cookie of the browser the tests drive flows from.
     pub browser: BrowserBinding,
 }
@@ -351,6 +415,7 @@ impl Harness {
         let inflight = Arc::new(FakeInflightAuth::default());
         let registry = Arc::new(FakeClientRegistry::default());
         let provider = Arc::new(provider);
+        let email_codes = Arc::new(FakeEmailCodes::default());
         let service = McpAuthProxyServiceImpl::new(McpAuthProxyServiceDeps {
             public_url: "https://mcp.macro.com".to_owned(),
             redirect_uri_policy: RedirectUriPolicy::new(["claude.ai", "chatgpt.com"]),
@@ -358,6 +423,7 @@ impl Harness {
             client_registrations: Arc::clone(&registry) as Arc<dyn ClientRegistrationStore>,
             refresh_token_bindings: Arc::clone(&registry) as Arc<dyn RefreshTokenBindingStore>,
             oauth_provider: Arc::clone(&provider) as Arc<dyn OAuthProvider>,
+            email_codes: Arc::clone(&email_codes) as Arc<dyn EmailCodeProvider>,
         });
 
         Self {
@@ -365,6 +431,7 @@ impl Harness {
             inflight,
             registry,
             provider,
+            email_codes,
             browser: BrowserBinding::generate(),
         }
     }
@@ -396,6 +463,7 @@ impl Harness {
             code_challenge: code_challenge.to_owned(),
             code_challenge_method: "S256".to_owned(),
             sign_in: None,
+            delivery: None,
             scope: None,
         }
     }
@@ -418,7 +486,7 @@ impl Harness {
             .expect("authorize should succeed");
 
         let session_id = self.inflight.only_pending_session_id();
-        let redirect = self
+        let delivery = self
             .service
             .complete_callback(
                 CallbackRequest {
@@ -432,7 +500,7 @@ impl Harness {
             .await
             .expect("callback should succeed");
 
-        query_param(&redirect, "code").expect("redirect carries a code")
+        query_param(&delivery.url, "code").expect("redirect carries a code")
     }
 }
 

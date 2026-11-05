@@ -13,17 +13,17 @@ use subtle::ConstantTimeEq;
 const SECRET_LEN: usize = 32;
 /// Domain separator for the digest stored with a pending authorization.
 const PENDING_DIGEST_PREFIX: &[u8] = b"mcp-oauth-browser-binding:";
-/// Domain separator for the token embedded in the consent form.
-const CONSENT_TOKEN_PREFIX: &[u8] = b"mcp-oauth-consent:";
+/// Domain separator for the token embedded in the broker's forms.
+const FORM_TOKEN_PREFIX: &[u8] = b"mcp-oauth-consent:";
 
 /// A random secret held in a cookie by the browser that started an
 /// authorization.
 ///
 /// `/authorize` stores its digest with the pending authorization and the
 /// upstream callback must present the same cookie, so a sign-in link started
-/// by someone else cannot be completed in a victim's browser. The consent form
-/// carries a token derived from it, so a cross-site form post cannot approve a
-/// client on the user's behalf.
+/// by someone else cannot be completed in a victim's browser. The broker's forms
+/// carry a token derived from it, so a cross-site form post cannot approve a
+/// client or submit a sign-in on the user's behalf.
 #[derive(Clone, Eq, PartialEq)]
 pub struct BrowserBinding(String);
 
@@ -57,18 +57,14 @@ impl BrowserBinding {
         self.digest().as_bytes().ct_eq(digest.as_bytes()).into()
     }
 
-    /// The anti-forgery token the consent form carries.
-    pub fn consent_token(&self) -> String {
-        self.derive(CONSENT_TOKEN_PREFIX)
+    /// The anti-forgery token the broker's forms carry.
+    pub fn form_token(&self) -> String {
+        self.derive(FORM_TOKEN_PREFIX)
     }
 
-    /// Returns whether `token` is this secret's consent token, in constant
-    /// time.
-    pub fn accepts_consent_token(&self, token: &str) -> bool {
-        self.consent_token()
-            .as_bytes()
-            .ct_eq(token.as_bytes())
-            .into()
+    /// Returns whether `token` is this secret's form token, in constant time.
+    pub fn accepts_form_token(&self, token: &str) -> bool {
+        self.form_token().as_bytes().ct_eq(token.as_bytes()).into()
     }
 
     fn derive(&self, prefix: &[u8]) -> String {

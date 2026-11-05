@@ -166,6 +166,30 @@ pub struct PendingAuthorization {
     /// by a build that predates the binding, which could only have used a
     /// trusted redirect URI.
     pub browser_binding_digest: Option<String>,
+    /// How the authorization code reaches the client once the user signs in.
+    pub delivery: CodeDelivery,
+}
+
+/// How an authorization code reaches the client.
+#[derive(Clone, Copy, Debug, Default, Deserialize, PartialEq, Eq, strum::Display)]
+#[serde(rename_all = "lowercase")]
+#[strum(serialize_all = "lowercase")]
+pub enum CodeDelivery {
+    /// Redirect the browser to the client's redirect URI.
+    #[default]
+    Redirect,
+    /// Show the user the callback URL to carry over themselves, because the
+    /// client's loopback listener is on another machine than the browser.
+    Manual,
+}
+
+/// The client callback URL a finished flow produced, and how it gets there.
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct ClientDelivery {
+    /// The client's redirect URI with the code, or error, appended.
+    pub url: String,
+    /// How the URL reaches the client.
+    pub method: CodeDelivery,
 }
 
 /// Whether the user has approved the client on the consent screen.
@@ -186,6 +210,8 @@ pub struct ConsentPrompt {
     /// The host the authorization code will be sent to: the identity the user
     /// is actually approving.
     pub redirect_host: String,
+    /// How the code will leave the browser.
+    pub delivery: CodeDelivery,
 }
 
 /// How an authorize request proceeds.
@@ -193,6 +219,11 @@ pub struct ConsentPrompt {
 pub enum AuthorizationStart {
     /// Send the browser to the upstream sign-in at this URL.
     SignIn(String),
+    /// Send the browser to the broker's email sign-in for this session.
+    EmailSignIn {
+        /// The broker session the sign-in completes.
+        session_id: String,
+    },
     /// Ask the user to approve the client before signing in.
     ConsentRequired(ConsentPrompt),
 }
@@ -221,11 +252,50 @@ pub struct IssuedAuthorizationCode {
 #[serde(rename_all = "lowercase")]
 #[strum(serialize_all = "lowercase")]
 pub enum SignInMethod {
-    /// Straight to Google, the default for every client.
+    /// Straight to Google.
     #[default]
     Google,
+    /// A one-time code sent by email, the way the Macro app signs users in.
+    Email,
     /// FusionAuth's login page: password and every other provider.
     Login,
+}
+
+/// The upstream page a browser is sent to.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum UpstreamLogin<'a> {
+    /// Straight to Google.
+    Google,
+    /// FusionAuth's login page.
+    LoginPage,
+    /// The single sign-on provider an email address's domain requires.
+    Sso {
+        /// The upstream identity provider.
+        idp_id: &'a str,
+        /// The address the user entered, so the provider need not ask again.
+        email: &'a str,
+    },
+}
+
+/// The upstream's answer to a request to email a sign-in code.
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub enum EmailCodeRequest {
+    /// The code was emailed.
+    Sent,
+    /// The address's domain signs in through this identity provider instead.
+    SsoRequired {
+        /// The upstream identity provider.
+        idp_id: String,
+    },
+}
+
+/// What the email sign-in form does next.
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub enum EmailSignInStep {
+    /// Ask the user for the code that was emailed.
+    EnterCode,
+    /// Send the browser to the single sign-on provider at this URL.
+    Sso(String),
 }
 
 /// OAuth authorize request from the MCP client.
@@ -246,6 +316,10 @@ pub struct AuthorizeRequest {
     /// The sign-in the user picked on the chooser, when it was shown.
     #[serde(default)]
     pub sign_in: Option<SignInMethod>,
+    /// How the user asked for the code to reach the client, when they picked
+    /// on the chooser.
+    #[serde(default)]
+    pub delivery: Option<CodeDelivery>,
     /// Optional requested scopes.
     #[serde(default)]
     pub scope: Option<String>,

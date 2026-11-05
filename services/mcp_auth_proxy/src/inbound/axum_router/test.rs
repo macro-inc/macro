@@ -10,9 +10,9 @@ use tower::ServiceExt;
 use super::{health, mcp_router, mount_at_root_and_prefix, oauth_router};
 use crate::domain::browser_binding::BrowserBinding;
 use crate::test_support::{
-    ATTACKER_CODE_VERIFIER, ATTACKER_REDIRECT_URI, GATEWAY_REDIRECT_URI, Harness,
-    TRUSTED_REDIRECT_URI, UPSTREAM_ACCESS_TOKEN, UPSTREAM_REFRESH_TOKEN, VICTIM_CODE_VERIFIER,
-    code_challenge_for, query_param,
+    ATTACKER_CODE_VERIFIER, ATTACKER_REDIRECT_URI, EMAIL_ADDRESS, EMAIL_CODE, GATEWAY_REDIRECT_URI,
+    Harness, LOOPBACK_REDIRECT_URI, SSO_EMAIL_ADDRESS, TRUSTED_REDIRECT_URI, UPSTREAM_ACCESS_TOKEN,
+    UPSTREAM_REFRESH_TOKEN, VICTIM_CODE_VERIFIER, code_challenge_for, query_param,
 };
 use axum::{Router, routing::get};
 use macro_auth::middleware::decode_jwt::JwtValidationArgs;
@@ -86,7 +86,8 @@ fn authorize_request(client_id: &str, redirect_uri: &str, code_verifier: &str) -
         .method("GET")
         .uri(format!(
             "/authorize?response_type=code&client_id={client_id}&redirect_uri={redirect_uri}\
-             &state=client-state&code_challenge={code_challenge}&code_challenge_method=S256"
+             &state=client-state&code_challenge={code_challenge}&code_challenge_method=S256\
+             &sign_in=google"
         ))
         .body(Body::empty())
         .expect("request should build")
@@ -285,7 +286,10 @@ async fn approving_keeps_the_requested_sign_in_method() {
     let client_id = register_client(&harness, GATEWAY_REDIRECT_URI).await;
 
     let mut authorize = authorize_request(&client_id, GATEWAY_REDIRECT_URI, VICTIM_CODE_VERIFIER);
-    *authorize.uri_mut() = format!("{}&sign_in=login", authorize.uri())
+    *authorize.uri_mut() = authorize
+        .uri()
+        .to_string()
+        .replace("sign_in=google", "sign_in=login")
         .parse()
         .expect("uri should parse");
     let page = send(&harness, authorize).await;
@@ -455,7 +459,7 @@ async fn a_sign_in_started_in_another_browser_issues_no_code() {
 }
 
 #[tokio::test]
-async fn authorize_explains_how_to_reconnect_an_unregistered_client() {
+async fn authorize_explains_how_to_reconnect_an_unregister_client() {
     let harness = Harness::new();
 
     let response = send(
@@ -515,66 +519,79 @@ async fn authorize_withholds_the_client_origin_from_the_identity_provider() {
     }
 }
 
-/// ChatGPT's reviewers sign in with a password, so its users pick; the choice
-/// carries the whole request, escaped, and only then does the flow start.
-#[tokio::test]
-async fn authorize_offers_chatgpt_a_sign_in_choice() {
-    let harness = Harness::new();
-    let redirect_uri = "https://chatgpt.com/connector/oauth/abc";
-    let registration = send(&harness, register_request(redirect_uri)).await;
-    assert_eq!(registration.status, StatusCode::OK);
-    let client_id = registration.json()["client_id"]
-        .as_str()
-        .expect("registration returns a client_id")
-        .to_owned();
-
-    let choice = send(
-        &harness,
-        authorize_request(&client_id, redirect_uri, VICTIM_CODE_VERIFIER),
+/// An authorize request as a client first sends it, before the user has picked
+/// how to sign in, with `extra` appended.
+fn unchosen_authorize_uri(client_id: &str, redirect_uri: &str, extra: &str) -> String {
+    format!(
+        "/authorize?response_type=code&client_id={client_id}&redirect_uri={}\
+         &state=client-state&code_challenge={}&code_challenge_method=S256{extra}",
+        urlencoding::encode(redirect_uri),
+        code_challenge_for(VICTIM_CODE_VERIFIER),
     )
-    .await;
-    assert_eq!(choice.status, StatusCode::OK);
-    let page = choice.body;
-    assert!(page.contains("&amp;sign_in=google"), "{page}");
-    assert!(page.contains("&amp;sign_in=login"), "{page}");
-    assert!(page.contains(&format!("client_id={client_id}")), "{page}");
-
-    let code_challenge = code_challenge_for(VICTIM_CODE_VERIFIER);
-    let chosen = |choice: &str| {
-        Request::builder()
-            .method("GET")
-            .uri(format!(
-                "/authorize?response_type=code&client_id={client_id}\
-                 &redirect_uri={}&state=x&code_challenge={code_challenge}\
-                 &code_challenge_method=S256&sign_in={choice}",
-                urlencoding::encode(redirect_uri),
-            ))
-            .body(Body::empty())
-            .expect("request should build")
-    };
-    let login = send(&harness, chosen("login")).await;
-    assert_eq!(login.status, StatusCode::TEMPORARY_REDIRECT);
-    assert!(
-        login.set_cookie.is_some(),
-        "the flow needs its binding cookie"
-    );
-    let location = login.location.expect("redirect has a location");
-    assert!(
-        location.starts_with("https://upstream.example/login"),
-        "{location}"
-    );
-    let google = send(&harness, chosen("google")).await;
-    let location = google.location.expect("redirect has a location");
-    assert!(
-        location.starts_with("https://upstream.example/authorize"),
-        "{location}"
-    );
 }
 
-/// Whatever the query holds is re-encoded before it reaches the page.
+fn get_page(uri: &str, cookie: Option<&str>) -> Request<Body> {
+    let mut request = Request::builder().method("GET").uri(uri);
+    if let Some(cookie) = cookie {
+        request = request.header(header::COOKIE, cookie);
+    }
+    request.body(Body::empty()).expect("request should build")
+}
+
+fn post_form(uri: &str, cookie: &str, form: String) -> Request<Body> {
+    Request::builder()
+        .method("POST")
+        .uri(uri)
+        .header(header::CONTENT_TYPE, "application/x-www-form-urlencoded")
+        .header(header::COOKIE, cookie)
+        .body(Body::from(form))
+        .expect("request should build")
+}
+
+/// Every client's users pick how to sign in, whichever method their account
+/// uses, and each choice leads to its own sign-in.
+#[tokio::test]
+async fn every_client_gets_the_sign_in_choice() {
+    for redirect_uri in [
+        LOOPBACK_REDIRECT_URI,
+        TRUSTED_REDIRECT_URI,
+        GATEWAY_REDIRECT_URI,
+    ] {
+        let harness = Harness::new();
+        let client_id = register_client(&harness, redirect_uri).await;
+
+        let choice = send(
+            &harness,
+            get_page(&unchosen_authorize_uri(&client_id, redirect_uri, ""), None),
+        )
+        .await;
+
+        assert_eq!(choice.status, StatusCode::OK);
+        assert!(
+            !harness.inflight.has_pending(),
+            "the chooser stores nothing"
+        );
+        for method in ["google", "email", "login"] {
+            assert!(
+                choice
+                    .body
+                    .contains(&format!(r#"name="sign_in" value="{method}""#)),
+                "{}",
+                choice.body
+            );
+        }
+        assert!(
+            choice.body.contains(&format!(r#"value="{client_id}""#)),
+            "{}",
+            choice.body
+        );
+    }
+}
+
+/// Whatever the query holds is escaped before it reaches the page.
 #[tokio::test]
 async fn the_sign_in_choice_escapes_the_query() {
-    let response = super::sign_in_choice(Some("state=%22%3E%3Cscript%3E&a=1".to_owned()));
+    let response = super::sign_in_choice(Some("state=%22%3E%3Cscript%3E&a=1"), false);
     let csp = response.headers()[axum::http::header::CONTENT_SECURITY_POLICY]
         .to_str()
         .expect("the policy is ascii")
@@ -585,7 +602,344 @@ async fn the_sign_in_choice_escapes_the_query() {
         .expect("page should read");
     let page = String::from_utf8(body.to_vec()).expect("page is utf-8");
     assert!(!page.contains("<script"), "{page}");
-    assert!(page.contains("state=%22%3E%3Cscript%3E&amp;a=1"), "{page}");
+}
+
+/// A browser partway through an email sign-in: the cookie that started it, and
+/// the session and token its forms carry.
+struct EmailSignIn {
+    harness: Harness,
+    client_id: String,
+    cookie: String,
+    session: String,
+    form_token: String,
+}
+
+impl EmailSignIn {
+    async fn start(redirect_uri: &str) -> Self {
+        let harness = Harness::new();
+        let client_id = register_client(&harness, redirect_uri).await;
+        let authorize = send(
+            &harness,
+            get_page(
+                &unchosen_authorize_uri(&client_id, redirect_uri, "&sign_in=email"),
+                None,
+            ),
+        )
+        .await;
+        assert_eq!(authorize.status, StatusCode::TEMPORARY_REDIRECT);
+        let session = harness.inflight.only_pending_session_id();
+        assert_eq!(
+            authorize.location.as_deref(),
+            Some(format!("email-sign-in?session={session}").as_str()),
+        );
+        let cookie = cookie_pair(
+            &authorize
+                .set_cookie
+                .expect("the flow sets its binding cookie"),
+        );
+        let secret = cookie
+            .split_once('=')
+            .expect("cookie has a name and value")
+            .1;
+        let form_token = BrowserBinding::parse(secret)
+            .expect("cookie holds a binding")
+            .form_token();
+
+        Self {
+            harness,
+            client_id,
+            cookie,
+            session,
+            form_token,
+        }
+    }
+
+    fn form(&self, email: &str, code: Option<&str>) -> String {
+        let mut form = format!(
+            "session={}&form_token={}&email={}",
+            self.session,
+            self.form_token,
+            urlencoding::encode(email),
+        );
+        if let Some(code) = code {
+            form.push_str(&format!("&code={code}"));
+        }
+        form
+    }
+
+    async fn submit(&self, email: &str, code: Option<&str>) -> Response {
+        send(
+            &self.harness,
+            post_form("/email-sign-in", &self.cookie, self.form(email, code)),
+        )
+        .await
+    }
+}
+
+/// The whole email flow over HTTP: the page, a mistyped code that costs
+/// nothing, then a code that delivers a broker code the client can redeem.
+#[tokio::test]
+async fn email_sign_in_delivers_a_code_the_client_can_redeem() {
+    let flow = EmailSignIn::start(LOOPBACK_REDIRECT_URI).await;
+
+    let page = send(
+        &flow.harness,
+        get_page(
+            &format!("/email-sign-in?session={}", flow.session),
+            Some(&flow.cookie),
+        ),
+    )
+    .await;
+    assert_eq!(page.status, StatusCode::OK);
+    assert!(page.csp.is_some());
+
+    let sent = flow.submit(EMAIL_ADDRESS, None).await;
+    assert_eq!(sent.status, StatusCode::OK);
+    assert_eq!(flow.harness.email_codes.requested(), [EMAIL_ADDRESS]);
+
+    let wrong = flow.submit(EMAIL_ADDRESS, Some("000000")).await;
+    assert_eq!(wrong.status, StatusCode::OK);
+    assert!(
+        flow.harness.inflight.has_pending(),
+        "a mistyped code must not end the sign-in"
+    );
+
+    let signed_in = flow.submit(EMAIL_ADDRESS, Some(EMAIL_CODE)).await;
+    assert_eq!(signed_in.status, StatusCode::SEE_OTHER);
+    assert!(!flow.harness.inflight.has_pending());
+    let location = signed_in.location.expect("redirect has a location");
+    assert!(location.starts_with(LOOPBACK_REDIRECT_URI), "{location}");
+    let code = query_param(&location, "code").expect("redirect carries a code");
+
+    let token = send(
+        &flow.harness,
+        token_request(&format!(
+            "grant_type=authorization_code&code={code}&client_id={}&redirect_uri={}\
+             &code_verifier={VICTIM_CODE_VERIFIER}",
+            flow.client_id,
+            urlencoding::encode(LOOPBACK_REDIRECT_URI),
+        )),
+    )
+    .await;
+    assert_eq!(token.status, StatusCode::OK, "{}", token.body);
+    assert_eq!(token.json()["access_token"], UPSTREAM_ACCESS_TOKEN);
+    assert_eq!(token.json()["refresh_token"], UPSTREAM_REFRESH_TOKEN);
+}
+
+/// An address on a single sign-on domain goes to its provider, on the same
+/// session, so the upstream callback still finishes the flow.
+#[tokio::test]
+async fn email_sign_in_sends_a_single_sign_on_address_to_its_provider() {
+    let flow = EmailSignIn::start(LOOPBACK_REDIRECT_URI).await;
+
+    let redirect = flow.submit(SSO_EMAIL_ADDRESS, None).await;
+
+    assert_eq!(redirect.status, StatusCode::SEE_OTHER);
+    let location = redirect.location.expect("redirect has a location");
+    assert!(
+        location.starts_with("https://upstream.example/sso"),
+        "{location}"
+    );
+    assert!(flow.harness.inflight.has_pending());
+}
+
+/// Someone else's sign-in link does nothing in a browser that did not start
+/// it, whether the form is shown or submitted.
+#[tokio::test]
+async fn email_sign_in_refuses_a_browser_that_did_not_start_it() {
+    let flow = EmailSignIn::start(LOOPBACK_REDIRECT_URI).await;
+    let other = BrowserBinding::generate();
+    let other_cookie = format!("__Host-macro_mcp_oauth={}", other.as_str());
+
+    let page = send(
+        &flow.harness,
+        get_page(
+            &format!("/email-sign-in?session={}", flow.session),
+            Some(&other_cookie),
+        ),
+    )
+    .await;
+    assert_eq!(page.status, StatusCode::BAD_REQUEST);
+
+    // The other browser's own valid token gets it no further.
+    let submitted = send(
+        &flow.harness,
+        post_form(
+            "/email-sign-in",
+            &other_cookie,
+            format!(
+                "session={}&form_token={}&email={EMAIL_ADDRESS}&code={EMAIL_CODE}",
+                flow.session,
+                other.form_token(),
+            ),
+        ),
+    )
+    .await;
+    assert_eq!(submitted.status, StatusCode::BAD_REQUEST);
+    assert!(flow.harness.email_codes.requested().is_empty());
+    assert!(flow.harness.inflight.has_pending());
+    assert!(!flow.harness.inflight.holds_any_issued_code());
+}
+
+/// A form posted from another site is refused even with the right cookie.
+#[tokio::test]
+async fn email_sign_in_refuses_a_cross_site_post() {
+    let flow = EmailSignIn::start(LOOPBACK_REDIRECT_URI).await;
+    let mut request = post_form(
+        "/email-sign-in",
+        &flow.cookie,
+        flow.form(EMAIL_ADDRESS, None),
+    );
+    request.headers_mut().insert(
+        "sec-fetch-site",
+        "cross-site".parse().expect("header value"),
+    );
+
+    let response = send(&flow.harness, request).await;
+
+    assert_eq!(response.status, StatusCode::FORBIDDEN);
+    assert!(flow.harness.email_codes.requested().is_empty());
+}
+
+/// Only a loopback client's users are offered the link, since a browser-based
+/// client has no listener on another machine to reach.
+#[tokio::test]
+async fn only_loopback_clients_are_offered_manual_delivery() {
+    for (redirect_uri, offered) in [
+        (LOOPBACK_REDIRECT_URI, true),
+        (TRUSTED_REDIRECT_URI, false),
+        (GATEWAY_REDIRECT_URI, false),
+    ] {
+        let harness = Harness::new();
+        let client_id = register_client(&harness, redirect_uri).await;
+
+        let choice = send(
+            &harness,
+            get_page(&unchosen_authorize_uri(&client_id, redirect_uri, ""), None),
+        )
+        .await;
+
+        assert_eq!(
+            choice.body.contains(r#"name="delivery""#),
+            offered,
+            "{redirect_uri}"
+        );
+    }
+}
+
+/// A browser on another machine than the client: the user approves carrying
+/// the code, signs in, and is shown the callback URL instead of a redirect to a
+/// loopback address that is not theirs. The client can redeem what it carries.
+#[tokio::test]
+async fn manual_delivery_shows_the_callback_url_after_consent() {
+    let harness = Harness::new();
+    let client_id = register_client(&harness, LOOPBACK_REDIRECT_URI).await;
+
+    let consent = send(
+        &harness,
+        get_page(
+            &unchosen_authorize_uri(
+                &client_id,
+                LOOPBACK_REDIRECT_URI,
+                "&sign_in=google&delivery=manual",
+            ),
+            None,
+        ),
+    )
+    .await;
+    assert_eq!(consent.status, StatusCode::OK);
+    assert!(
+        !harness.inflight.has_pending(),
+        "nothing starts until the user approves"
+    );
+    assert!(
+        consent
+            .body
+            .contains(r#"<input type="hidden" name="delivery" value="manual" />"#),
+        "{}",
+        consent.body
+    );
+    let cookie = cookie_pair(
+        &consent
+            .set_cookie
+            .expect("the flow sets its binding cookie"),
+    );
+    let binding = BrowserBinding::parse(cookie.split_once('=').expect("cookie value").1)
+        .expect("cookie holds a binding");
+
+    let approved = send(
+        &harness,
+        post_form(
+            "/authorize",
+            &cookie,
+            format!(
+                "response_type=code&client_id={client_id}&redirect_uri={}&state=client-state\
+                 &code_challenge={}&code_challenge_method=S256&sign_in=google&delivery=manual\
+                 &consent_token={}&decision=approve",
+                urlencoding::encode(LOOPBACK_REDIRECT_URI),
+                code_challenge_for(VICTIM_CODE_VERIFIER),
+                binding.form_token(),
+            ),
+        ),
+    )
+    .await;
+    assert_eq!(approved.status, StatusCode::SEE_OTHER);
+
+    let session_id = harness.inflight.only_pending_session_id();
+    let page = send(&harness, callback_request(&session_id, Some(&cookie))).await;
+
+    assert_eq!(page.status, StatusCode::OK);
+    assert_eq!(page.location, None, "there is no redirect to follow");
+    assert!(page.csp.is_some());
+    let page_text = page.body.replace("&#38;", "&");
+    let shown = page_text
+        .split("curl '")
+        .nth(1)
+        .and_then(|command| command.split('\'').next())
+        .expect("the page shows a curl command");
+    assert!(shown.starts_with(LOOPBACK_REDIRECT_URI), "{shown}");
+    let code = query_param(shown, "code").expect("the command carries a code");
+    assert!(harness.inflight.holds_issued_code(&code), "{code}");
+}
+
+/// Manual delivery is refused where it makes no sense or is not safe to show:
+/// on an `https` client, and on a loopback URI that could break out of the
+/// quotes of the command the page tells the user to run.
+#[tokio::test]
+async fn manual_delivery_is_refused_outside_clean_loopback_uris() {
+    for redirect_uri in [
+        TRUSTED_REDIRECT_URI,
+        "http://127.0.0.1:51000/a';touch${IFS}x;'",
+    ] {
+        let harness = Harness::new();
+        let client_id = register_client(&harness, redirect_uri).await;
+
+        let refused = send(
+            &harness,
+            get_page(
+                &unchosen_authorize_uri(
+                    &client_id,
+                    redirect_uri,
+                    "&sign_in=google&delivery=manual",
+                ),
+                None,
+            ),
+        )
+        .await;
+
+        assert_eq!(refused.status, StatusCode::BAD_REQUEST, "{redirect_uri}");
+        assert!(!harness.inflight.has_pending());
+
+        let choice = send(
+            &harness,
+            get_page(&unchosen_authorize_uri(&client_id, redirect_uri, ""), None),
+        )
+        .await;
+        assert!(
+            !choice.body.contains(r#"name="delivery""#),
+            "{redirect_uri}"
+        );
+    }
 }
 
 /// Loopback hosts are interchangeable for the policy but not for the

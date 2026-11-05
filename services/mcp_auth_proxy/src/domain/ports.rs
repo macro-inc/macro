@@ -3,7 +3,8 @@
 use std::{future::Future, pin::Pin};
 
 use super::models::{
-    RefreshToken, RefreshTokenBinding, RegisteredClient, SignInMethod, UpstreamTokens,
+    EmailCodeRequest, RefreshToken, RefreshTokenBinding, RegisteredClient, UpstreamLogin,
+    UpstreamTokens,
 };
 
 /// Boxed future returning a token grant from the upstream provider.
@@ -76,8 +77,11 @@ pub trait RefreshTokenBindingStore: Send + Sync {
 /// Upstream OAuth provider used by the broker.
 pub trait OAuthProvider: Send + Sync {
     /// Builds the upstream authorize URL for a broker session.
-    fn construct_authorize_url(&self, state: &str, sign_in: SignInMethod)
-    -> anyhow::Result<String>;
+    fn construct_authorize_url(
+        &self,
+        state: &str,
+        login: UpstreamLogin<'_>,
+    ) -> anyhow::Result<String>;
 
     /// Exchanges an upstream authorization code for tokens.
     fn exchange_authorization_code<'a>(&'a self, code: &'a str) -> UpstreamTokensFuture<'a>;
@@ -94,4 +98,44 @@ pub trait OAuthProvider: Send + Sync {
         &'a self,
         refresh_token: &'a RefreshToken,
     ) -> UpstreamRevocationFuture<'a>;
+}
+
+/// Boxed future returning the upstream's answer to an emailed code request.
+pub type EmailCodeRequestFuture<'a> =
+    Pin<Box<dyn Future<Output = Result<EmailCodeRequest, EmailCodeError>> + Send + 'a>>;
+
+/// Boxed future returning the tokens an emailed code redeems for.
+pub type EmailCodeTokensFuture<'a> =
+    Pin<Box<dyn Future<Output = Result<UpstreamTokens, EmailCodeError>> + Send + 'a>>;
+
+/// Why the upstream refused or failed an emailed code step.
+#[derive(Debug, thiserror::Error)]
+pub enum EmailCodeError {
+    /// The address is malformed.
+    #[error("invalid email address")]
+    InvalidEmail,
+    /// The address may not sign in.
+    #[error("email address may not sign in")]
+    NotAllowed,
+    /// The code is wrong or has expired.
+    #[error("invalid or expired code")]
+    InvalidCode,
+    /// Too many attempts for this address.
+    #[error("too many attempts")]
+    RateLimited,
+    /// The upstream could not be reached or answered unexpectedly.
+    #[error("email sign-in is unavailable")]
+    Unavailable(#[source] anyhow::Error),
+}
+
+/// Signs a user in with a one-time code sent to their email address.
+///
+/// Object-safe, like the other ports here, so the service holds it as a
+/// trait object.
+pub trait EmailCodeProvider: Send + Sync {
+    /// Emails a sign-in code, or reports the single sign-on the address needs.
+    fn request_code<'a>(&'a self, email: &'a str) -> EmailCodeRequestFuture<'a>;
+
+    /// Redeems an emailed code for tokens.
+    fn redeem_code<'a>(&'a self, email: &'a str, code: &'a str) -> EmailCodeTokensFuture<'a>;
 }
