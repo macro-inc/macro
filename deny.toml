@@ -91,6 +91,7 @@ ignore = [
   { id = "RUSTSEC-2026-0258", reason = "h2 0.3 (via Stripe 0.41's hyper-0.14 client) has no patched release; the hyper 1.x line is bumped to the patched 0.4.16" },
   { id = "RUSTSEC-2026-0346", reason = "Temporarily accepted for rustls 0.21 pinned by Stripe 0.41; other consumers use patched rustls 0.23.46" },
   { id = "RUSTSEC-2026-0349", reason = "Temporarily accepted for rustls 0.21 pinned by Stripe 0.41; other consumers use patched rustls 0.23.46" },
+  { id = "RUSTSEC-2026-0441", reason = "pin-utils is unmaintained, not unsound; transitive via aws-smithy-http, -runtime and -types, no release without it yet" },
   # 0.26.11 only re-exports webpki-roots 1.x; the bans below require patched roots.
   # Remove this exception when SQLx and the remaining callers stop using the wrapper.
   { id = "RUSTSEC-2026-0381", reason = "webpki-roots 0.26.11 contains no certificates and re-exports patched 1.0.10; bans reject every other version below 1.0.10" },
