@@ -6,7 +6,7 @@ import {
   DragDropProvider,
   DragOverlay,
 } from '@thisbeyond/solid-dnd';
-import { cn } from '@ui';
+import { cn, Layer } from '@ui';
 import {
   createContext,
   createSignal,
@@ -257,7 +257,7 @@ export function Kanban(props: KanbanProps) {
           },
         }}
       >
-        {props.children}
+        <Layer offset={1}>{props.children}</Layer>
       </DragContext.Provider>
       <DragOverlay
         class="pointer-events-none select-none"
@@ -497,7 +497,7 @@ export function KanbanCard(props: {
       <article
         ref={draggable.ref}
         class={cn(
-          'group relative rounded-lg border border-transparent bg-control-raised shadow-sm transition-shadow not-touch:hover:shadow-md',
+          'group relative rounded-lg border border-transparent bg-surface shadow-sm transition-shadow not-touch:hover:shadow-md',
           draggable.isActiveDraggable && 'opacity-35',
           props.pending && 'ring-1 ring-ink/20'
         )}
