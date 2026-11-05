@@ -6,7 +6,8 @@ API on loopback, feeds it events from the handler's trigger, and acknowledges
 them from its responses, so handlers run on any cluster with no code change.
 
 LAMBDA_TRIGGER selects the event source:
-  schedule:<seconds>  an EventBridge scheduled event on an interval
+  schedule:<seconds>  an EventBridge scheduled event on an interval, or LAMBDA_SCHEDULE_INPUT
+                      (JSON) in its place, as a rule's target `input` replaces the event
   sqs:<queue>         SQS batches; deleted once handled (partial failures honored)
   s3:<queue>          S3 events a bucket webhook enqueued; each body is the event
 """
@@ -167,9 +168,15 @@ def runtime_handler(invocations):
     return Handler
 
 
+def schedule_payload(fixed_input):
+    """What one schedule tick delivers: the rule's fixed input, or else its event."""
+    return json.loads(fixed_input) if fixed_input else scheduled_event()
+
+
 def run_schedule(invocations, seconds):
+    fixed_input = os.environ.get("LAMBDA_SCHEDULE_INPUT")
     while True:
-        invocations.invoke(scheduled_event())
+        invocations.invoke(schedule_payload(fixed_input))
         time.sleep(seconds)
 
 

@@ -263,3 +263,18 @@ fn bare_queue_names_become_queue_urls() {
     assert_eq!(out["GMAIL_GCP_QUEUE"], "projects/p/topics/t");
     assert_eq!(out["ENABLE_GMAIL_OPS_QUEUE"], "true");
 }
+
+#[test]
+fn a_google_provider_exists_without_a_real_client() {
+    let placeholder = google_idp(&BTreeMap::new());
+    assert_eq!(placeholder.client_id, "unconfigured");
+
+    let real = google_idp(&BTreeMap::from([
+        ("GOOGLE_CLIENT_ID".to_owned(), "abc".to_owned()),
+        (
+            "GOOGLE_CLIENT_SECRET_KEY".to_owned(),
+            "GOCSPX-real".to_owned(),
+        ),
+    ]));
+    assert_eq!(real.client_id, "abc");
+}

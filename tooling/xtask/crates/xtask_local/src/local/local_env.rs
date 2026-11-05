@@ -703,6 +703,8 @@ impl BootStubEnv {
             "MACRO_DB_URL".into(),
             "postgres://user:password@postgres:5432/macrodb".into(),
         );
+        // email_service requires an Apollo key even when enrichment is unused.
+        env.insert("APOLLO_API_KEY".into(), "local-apollo-key".into());
         // The harness requires Pipedream credentials even when integrations
         // are unused. Real credentials can override these boot placeholders.
         env.insert(

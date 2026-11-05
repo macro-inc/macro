@@ -107,6 +107,10 @@ pub struct SecretsArgs {
     /// The namespace the release installs into.
     #[arg(long)]
     pub namespace: String,
+    /// Env file of real integration values, such as `GOOGLE_CLIENT_ID`. They replace
+    /// the placeholders a release otherwise boots with.
+    #[arg(long)]
+    pub env_file: Option<PathBuf>,
     /// Where to write the manifest. It holds credentials: keep it out of git.
     #[arg(long)]
     pub out: PathBuf,
@@ -524,12 +528,12 @@ fn up(args: &UpArgs) -> Result<()> {
         .iter()
         .map(|(k, v)| (k.clone(), rewrite(v, &rewrites)))
         .collect();
-    let google = kickstart::GoogleIdp::from_env(&env.merged);
+    let google = google_idp(&env.merged);
     let github = kickstart::GithubIdp::from_env(&env.merged);
     fusionauth::write_kickstart_for_origins(
         &instance,
         &[name.origin()],
-        google.as_ref(),
+        Some(&google),
         github.as_ref(),
     )?;
     let kickstart_json =
@@ -681,6 +685,16 @@ fn dev(args: &DevArgs) -> Result<()> {
 }
 
 /// The steps every instance's shared environment gets, wherever it runs.
+/// The Google client an instance registers with FusionAuth. The MCP auth proxy resolves
+/// the provider at startup, so without a real client a placeholder keeps the harness up,
+/// and only signing in with Google fails.
+fn google_idp(env: &BTreeMap<String, String>) -> kickstart::GoogleIdp {
+    kickstart::GoogleIdp::from_env(env).unwrap_or_else(|| kickstart::GoogleIdp {
+        client_id: "unconfigured".to_owned(),
+        client_secret: "unconfigured".to_owned(),
+    })
+}
+
 fn finish_shared_env(
     env: BTreeMap<String, String>,
     credentials: &Credentials,
@@ -848,7 +862,7 @@ fn selfhost_secrets(args: &SecretsArgs) -> Result<()> {
         Mode::Local,
         &instance,
         true,
-        None,
+        args.env_file.as_deref(),
         true,
         Tunnels::default(),
         false,
@@ -859,7 +873,14 @@ fn selfhost_secrets(args: &SecretsArgs) -> Result<()> {
         .iter()
         .map(|(k, v)| (k.clone(), rewrite(v, &rewrites)))
         .collect();
-    fusionauth::write_kickstart_for_origins(&instance, std::slice::from_ref(&origin), None, None)?;
+    let google = google_idp(&env.merged);
+    let github = kickstart::GithubIdp::from_env(&env.merged);
+    fusionauth::write_kickstart_for_origins(
+        &instance,
+        std::slice::from_ref(&origin),
+        Some(&google),
+        github.as_ref(),
+    )?;
     let kickstart_json =
         std::fs::read_to_string(gen_compose::kickstart_dir(&instance).join("kickstart.json"))?;
     let credentials = Credentials::generate()?;

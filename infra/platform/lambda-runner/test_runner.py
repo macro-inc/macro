@@ -13,6 +13,10 @@ class Events(unittest.TestCase):
         self.assertEqual(event["detail-type"], "Scheduled Event")
         self.assertEqual(event["time"], "1970-01-01T00:00:00Z")
 
+    def test_a_fixed_input_replaces_the_scheduled_event(self):
+        self.assertEqual(runner.schedule_payload('{"dry_run": true}'), {"dry_run": True})
+        self.assertEqual(runner.schedule_payload(None)["detail-type"], "Scheduled Event")
+
     def test_sqs_event_names_the_source_queue(self):
         event = runner.sqs_event(
             [{"MessageId": "1", "ReceiptHandle": "r", "Body": "b"}], "q"

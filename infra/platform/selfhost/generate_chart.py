@@ -239,7 +239,10 @@ def main():
         "    kubectl apply -f macro-secrets.json\n\n"
         "Keep that file safe and out of git. Databases keep the passwords they are first\n"
         "created with, so it cannot be regenerated for a release that has data.\n"
-        "Third-party integrations are stubbed in `macro-env` until you fill them in.\n\n"
+        "Third-party integrations are placeholders in `macro-env` until you fill them in.\n"
+        "Pass real ones with `--env-file` when generating. Google and GitHub sign-in must\n"
+        "be there before the first install, because FusionAuth applies them only once;\n"
+        "without them those sign-in buttons fail and email codes still work.\n\n"
         "Components that can be disabled through `disabledComponents`:\n\n"
         + "".join(f"- `{c}`\n" for c in sorted(components))
     )

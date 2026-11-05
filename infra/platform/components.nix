@@ -282,6 +282,8 @@ let
     notification-retention = {
       bin = "notification_retention_handler";
       trigger = "schedule:3600";
+      # Its stack passes this as the rule's input, defaulting to a dry run.
+      env.LAMBDA_SCHEDULE_INPUT = builtins.toJSON { dry_run = true; };
     };
     organization-retention-trigger = {
       bin = "organization_retention_trigger";
