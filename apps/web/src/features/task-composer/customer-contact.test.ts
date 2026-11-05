@@ -1,5 +1,8 @@
 import { SYSTEM_PROPERTY_IDS } from '@property/identifiers';
-import { describe, expect, it } from 'vitest';
+import type { PropertyApiValues } from '@property/types';
+import { createMemo, createRoot } from 'solid-js';
+import { createStore, reconcile } from 'solid-js/store';
+import { describe, expect, it, vi } from 'vitest';
 import {
   customerContactSelection,
   customerContactValues,
@@ -57,5 +60,31 @@ describe('customerContactSelection', () => {
         [CONTACTS]: { valueType: 'ENTITY', refs: null },
       })
     ).toEqual([company]);
+  });
+
+  it('re-evaluates when a reset rewrites the same-length list in place', () => {
+    const picked: Record<string, PropertyApiValues> = {
+      [COMPANIES]: { valueType: 'ENTITY', refs: [company] },
+      [CONTACTS]: { valueType: 'ENTITY', refs: [contact] },
+    };
+    const other = { entity_id: 'contact-2', entity_type: 'CONTACT' as const };
+    const [values, setValues] = createStore(picked);
+
+    createRoot((dispose) => {
+      const evaluate = vi.fn(() => customerContactSelection(values));
+      const selection = createMemo(evaluate);
+      expect(selection()).toEqual([contact]);
+
+      setValues(
+        reconcile({
+          [COMPANIES]: { valueType: 'ENTITY', refs: [company] },
+          [CONTACTS]: { valueType: 'ENTITY', refs: [other] },
+        })
+      );
+
+      expect(evaluate).toHaveBeenCalledTimes(2);
+      expect(selection()).toEqual([other]);
+      dispose();
+    });
   });
 });

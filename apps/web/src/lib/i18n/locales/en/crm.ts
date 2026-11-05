@@ -1,4 +1,5 @@
 export default {
+  customerContact: 'Customer / Contact',
   stageRequirements: 'Stage requirements',
   stageRequirementsDescription:
     'Choose fields that must be filled before a deal enters a stage.',

@@ -22,14 +22,20 @@ export function customerContactReferences(
   ];
 }
 
-/** The one reference the pill selects: the contact when there is one. */
+/**
+ * The one reference the pill selects: the contact when there is one. Returns
+ * copies so a caller tracks the IDs: `reconcile` rewrites a same-length list in
+ * place, which a caller holding only the list would never see.
+ */
 export function customerContactSelection(
   values: Record<string, PropertyApiValues>
 ): EntityReference[] {
   const contacts = entityReferences(values[SYSTEM_PROPERTY_IDS.CONTACTS]);
-  return contacts.length > 0
-    ? contacts
-    : entityReferences(values[SYSTEM_PROPERTY_IDS.COMPANIES]);
+  const selected =
+    contacts.length > 0
+      ? contacts
+      : entityReferences(values[SYSTEM_PROPERTY_IDS.COMPANIES]);
+  return selected.map((reference) => ({ ...reference }));
 }
 
 /**

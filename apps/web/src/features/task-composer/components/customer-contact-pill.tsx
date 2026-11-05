@@ -1,3 +1,4 @@
+import { t } from '@app/lib/i18n';
 import { useQuickAccess } from '@core/context/quickAccess';
 import { Property } from '@property';
 import type { EntityProperty, PropertyApiValues } from '@property/types';
@@ -8,7 +9,7 @@ import {
   customerContactReferences,
   customerContactSelection,
   customerContactValues,
-} from '../core/customer-contact';
+} from '../customer-contact';
 
 const ENTITY_TYPES: EntityType[] = ['COMPANY', 'CONTACT'];
 
@@ -28,7 +29,7 @@ export function CustomerContactPill(props: {
     (): EntityProperty => ({
       propertyId: 'compose-customer-contact',
       propertyDefinitionId: 'customer-contact',
-      displayName: 'Customer / Contact',
+      displayName: t('crm.customerContact'),
       isMultiSelect: false,
       owner: { scope: 'system' },
       updatedAt: new Date(0),

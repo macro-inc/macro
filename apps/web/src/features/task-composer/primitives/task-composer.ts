@@ -48,8 +48,8 @@ import {
 } from 'solid-js';
 import { reconcile, unwrap } from 'solid-js/store';
 import { tabbable } from 'tabbable';
-import { CUSTOMER_CONTACT_PROPERTY_IDS } from '../core/customer-contact';
 import type { ComposeTaskProps, ComposeTaskSuccess } from '../core/types';
+import { CUSTOMER_CONTACT_PROPERTY_IDS } from '../customer-contact';
 import { showTaskCreatedToast } from './taskCreatedToast';
 
 type ComposerTagLayoutMode = 'bottom' | 'title';
