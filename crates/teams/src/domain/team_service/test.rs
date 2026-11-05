@@ -56,11 +56,11 @@ use super::*;
 use crate::domain::{
     customer_repo::CustomerRepository,
     model::{
-        AcceptedTeamInvite, BillingInterval, SeatQuote, CustomerError, DueInviteReminder, ItemQuantityChange,
+        AcceptedTeamInvite, BillingInterval, CustomerError, DueInviteReminder, ItemQuantityChange,
         JoinTeamDirectlyError, PatchTeamRequest, PatchTeamUserRole, RemoveTeamInviteError,
-        RemoveUserFromAllTeamsError, RemoveUserFromTeamError, SeatPlan, SetTeamMemberPlanError,
-        Team, TeamError, TeamInvite, TeamInviteDetails, TeamInviteLinkTeam, TeamInviteLinkToken,
-        TeamInviteSnapshot, TeamMember, TeamPlan, TeamRole, TeamWithMembers,
+        RemoveUserFromAllTeamsError, RemoveUserFromTeamError, SeatPlan, SeatQuote,
+        SetTeamMemberPlanError, Team, TeamError, TeamInvite, TeamInviteDetails, TeamInviteLinkTeam,
+        TeamInviteLinkToken, TeamInviteSnapshot, TeamMember, TeamPlan, TeamRole, TeamWithMembers,
         ToggleAutoJoinDomainError,
     },
     owned_entity_cleanup::ClearedTeam,

@@ -14,8 +14,8 @@ use stripe::{UpdateSubscription, UpdateSubscriptionItems};
 use crate::domain::{
     customer_repo::CustomerRepository,
     model::{
-        BillingCadence, BillingInterval, SeatQuote, CustomerError, ItemQuantityChange, PriceInfo, ScheduledSeatPlan, SeatPlan,
-        SeatPrices, SubscriptionTerms,
+        BillingCadence, BillingInterval, CustomerError, ItemQuantityChange, PriceInfo,
+        ScheduledSeatPlan, SeatPlan, SeatPrices, SeatQuote, SubscriptionTerms,
     },
 };
 

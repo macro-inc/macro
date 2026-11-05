@@ -5,7 +5,8 @@ use std::collections::HashMap;
 use macro_user_id::user_id::MacroUserIdStr;
 
 use crate::domain::model::{
-    CustomerError, ItemQuantityChange, PriceInfo, ScheduledSeatPlan, SeatPlan, SubscriptionTerms, SeatQuote,
+    CustomerError, ItemQuantityChange, PriceInfo, ScheduledSeatPlan, SeatPlan, SeatQuote,
+    SubscriptionTerms,
 };
 
 /// The CustomerRepository defines a set of actions to perform on customer data
