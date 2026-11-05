@@ -147,15 +147,19 @@ impl OutlookCalendarRepository for PgCalendarRepository {
                     sqlx::query!("DELETE FROM calendar_outlook_members WHERE work_id=$1 AND(provider_id=ANY($2::text[]) OR master_id=ANY($2::text[]))",lease.id,&page.removed).execute(&mut *tx).await.map_err(report)?;
                     // A full scan reads every listed event anyway. A delta
                     // round lists only changes, so it also reads the events
-                    // an older reader skipped, once per reader revision.
+                    // an older reader skipped, once per reader revision. One
+                    // with a stored copy was read, so it is stamped instead
+                    // and later pages do not check it again.
                     let skipped_before = if state.full_scan {
                         vec![]
                     } else {
                         sqlx::query_scalar!(
-                            r#"SELECT DISTINCT m.master_id FROM calendar_outlook_members m
-                            WHERE m.work_id=$1 AND(m.reader_revision IS NULL OR m.reader_revision<$2)
-                            AND NOT EXISTS(SELECT 1 FROM calendar_event_sources s WHERE s.source_kind='outlook'
-                                AND s.account_id=$3 AND s.calendar_id=$4 AND s.provider_event_id=m.master_id)"#,
+                            r#"WITH unchecked AS(SELECT m.provider_id,m.master_id,EXISTS(SELECT 1 FROM calendar_event_sources s
+                                WHERE s.source_kind='outlook' AND s.account_id=$3 AND s.calendar_id=$4 AND s.provider_event_id=m.master_id) AS stored
+                                FROM calendar_outlook_members m WHERE m.work_id=$1 AND(m.reader_revision IS NULL OR m.reader_revision<$2)),
+                            stamped AS(UPDATE calendar_outlook_members m SET reader_revision=$2 FROM unchecked u
+                                WHERE m.work_id=$1 AND m.provider_id=u.provider_id AND u.stored)
+                            SELECT DISTINCT master_id AS "master_id!" FROM unchecked WHERE NOT stored"#,
                             lease.id,
                             lease.reader_revision,
                             lease.account_id,

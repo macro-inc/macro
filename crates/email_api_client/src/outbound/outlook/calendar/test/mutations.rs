@@ -657,8 +657,9 @@ impl Respond for GraphSeries {
             ("PATCH", ["events", id]) => {
                 let patch: serde_json::Map<String, Value> =
                     serde_json::from_slice(&request.body).unwrap();
-                let event = if is_master(id) {
-                    master
+                let series_patch = is_master(id);
+                let event = if series_patch {
+                    &mut *master
                 } else {
                     let Some(instance) = instances.iter_mut().find(|i| i["id"] == *id) else {
                         return ResponseTemplate::new(404);
@@ -670,7 +671,21 @@ impl Respond for GraphSeries {
                     event[key.as_str()] = value;
                 }
                 event["@odata.etag"] = json!("W/\"2\"");
-                ResponseTemplate::new(200).set_body_json(event.clone())
+                let patched = event.clone();
+                // A series given an end date no longer lists the meetings after it.
+                if series_patch && master["recurrence"]["range"]["type"] == "endDate" {
+                    let end: chrono::NaiveDate = master["recurrence"]["range"]["endDate"]
+                        .as_str()
+                        .unwrap()
+                        .parse()
+                        .unwrap();
+                    instances.retain(|instance| {
+                        let start: chrono::DateTime<Utc> =
+                            instance["originalStart"].as_str().unwrap().parse().unwrap();
+                        start.with_timezone(&Los_Angeles).date_naive() <= end
+                    });
+                }
+                ResponseTemplate::new(200).set_body_json(patched)
             }
             ("DELETE", ["events", id]) => {
                 instances.retain(|instance| instance["id"] != *id);
@@ -883,6 +898,14 @@ async fn deleting_one_meeting_of_an_outlook_series_deletes_only_that_meeting(poo
 #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
 async fn ending_an_outlook_series_at_one_meeting_ends_it_the_day_before(pool: PgPool) {
     let (server, api, repo, event_id, key) = synced_series(&pool, true).await;
+    let reads = CalendarService::new(repo.clone());
+    let first = reads
+        .list_occurrences(OWNER, two_weeks(), None, 100)
+        .await
+        .unwrap()[0]
+        .occurrence
+        .occurrence_key
+        .clone();
     mutations(repo, api)
         .delete_event(
             OWNER,
@@ -906,6 +929,14 @@ async fn ending_an_outlook_series_at_one_meeting_ends_it_the_day_before(pool: Pg
         body["recurrence"]["range"]["endDate"],
         (start.with_timezone(&Los_Angeles).date_naive() - Days::new(1)).to_string()
     );
+    let left: Vec<_> = reads
+        .list_occurrences(OWNER, two_weeks(), None, 100)
+        .await
+        .unwrap()
+        .into_iter()
+        .map(|listed| listed.occurrence.occurrence_key)
+        .collect();
+    assert_eq!(left, [first], "only the meeting before it is left");
 }
 
 #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]

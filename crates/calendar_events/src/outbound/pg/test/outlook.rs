@@ -770,6 +770,17 @@ async fn a_delta_round_reads_again_only_events_an_older_reader_skipped(pool: PgP
         ["provider-unstamped"],
         "a stored event and one this revision skipped are not read again"
     );
+    let kept = sqlx::query_scalar!(
+        "SELECT reader_revision FROM calendar_outlook_members WHERE master_id='provider-kept'"
+    )
+    .fetch_one(&pool)
+    .await
+    .unwrap();
+    assert_eq!(
+        kept,
+        Some(READER_REVISION),
+        "a stored event is stamped as it is checked, so later pages skip it"
+    );
     repo.checkpoint_outlook_calendar(
         &reread,
         OutlookCalendarProgress::Unreadable {

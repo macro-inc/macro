@@ -384,7 +384,7 @@ reminder dispatch, team availability, and provider/Postgres persistence.
   event again. A delta round lists only changes, so it also reads again the
   members with no stored copy that an older `READER_REVISION` read (stamped
   in `calendar_outlook_members.reader_revision`, NULL from builds before
-  it): a parser fix brings skipped events back without anyone touching
+  it; a member found with a stored copy is stamped instead): a parser fix brings skipped events back without anyone touching
   them, and a skip costs no read until the event changes or the revision
   rises. Discovery does not fail on a
   mailbox time zone Macro cannot map to IANA either: `OutlookDiscovery`
