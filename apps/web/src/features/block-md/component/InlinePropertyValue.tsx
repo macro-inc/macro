@@ -1,10 +1,12 @@
+import { t } from '@app/lib/i18n';
+import LinkBreakIcon from '@icon/system/regular/link-break.svg';
 import PushPinSlashIcon from '@icon/system/regular/push-pin-slash.svg';
-import TrashIcon from '@icon/system/regular/trash.svg';
 import { PropertyValuePill } from '@property/component/PropertyValuePill';
 import { SYSTEM_PROPERTY_IDS } from '@property/constants';
 import { usePropertiesContext } from '@property/context/PropertiesContext';
 import { openPropertyEditor } from '@property/editor/state/propertyEditor';
 import type { Property as PropertyT } from '@property/types';
+import { hasValue, toPropertyApiValue } from '@property/utils';
 import { Button } from '@ui';
 import {
   type Component,
@@ -24,7 +26,6 @@ type InlinePropertyValueProps = {
   iconClass?: string;
   showLabel?: boolean;
   canManage?: boolean;
-  canRemove?: boolean;
   /** The editor the pill opens; see `PropertyValuePill`. */
   editor?: ComponentProps<typeof PropertyValuePill>['editor'];
 };
@@ -43,21 +44,22 @@ export const InlinePropertyValue: Component<InlinePropertyValueProps> = (
     ['STRING', 'NUMBER', 'BOOLEAN', 'LINK'].includes(props.property.valueType);
   const canManage = () =>
     props.canManage && ctx.canEdit && !props.property.isMetadata;
-  const [removing, setRemoving] = createSignal(false);
-  const remove = async () => {
-    if (!ctx.removeProperty || removing()) return;
-    setRemoving(true);
+  const canUnlink = () =>
+    canManage() &&
+    !props.property.propertyId.startsWith('pending:') &&
+    hasValue(props.property);
+  const [unlinking, setUnlinking] = createSignal(false);
+  const unlink = async () => {
+    if (unlinking()) return;
+    const cleared = toPropertyApiValue(props.property, null);
+    if (!cleared) return;
+    setUnlinking(true);
     try {
-      await ctx.removeProperty(props.property.propertyId);
-      ctx.onPropertyUnpinned?.(
-        props.property.propertyId,
-        props.property.propertyDefinitionId
-      );
-      ctx.onPropertyDeleted();
+      await ctx.saveHandler.saveProperty(props.property, cleared);
     } catch {
-      // The shared removal mutation reports the failure and keeps the property.
+      // The save handler reports the failure and keeps the value.
     } finally {
-      setRemoving(false);
+      setUnlinking(false);
     }
   };
 
@@ -111,8 +113,8 @@ export const InlinePropertyValue: Component<InlinePropertyValueProps> = (
           <Button
             variant="ghost"
             size="icon-sm"
-            aria-label="Unpin"
-            disabled={removing()}
+            aria-label={t('entityActions.unpinProperty')}
+            disabled={unlinking()}
             onClick={() =>
               ctx.onPropertyUnpinned?.(
                 props.property.propertyId,
@@ -125,15 +127,17 @@ export const InlinePropertyValue: Component<InlinePropertyValueProps> = (
         </Show>
       }
       hoverActions={
-        <Show when={canManage() && props.canRemove !== false}>
+        <Show when={canUnlink()}>
           <button
             type="button"
-            class="flex w-full min-w-0 items-center gap-2 whitespace-nowrap rounded-md px-2 py-1.5 text-left text-failure-ink hover:bg-hover disabled:opacity-50"
-            disabled={removing()}
-            onClick={remove}
+            class="flex w-full min-w-0 items-center gap-2 whitespace-nowrap rounded-md px-2 py-1.5 text-left hover:bg-hover disabled:opacity-50"
+            disabled={unlinking()}
+            onClick={unlink}
           >
-            <TrashIcon class="size-3.5 shrink-0" />
-            {removing() ? 'Deleting…' : 'Delete from item'}
+            <LinkBreakIcon class="size-3.5 shrink-0" />
+            {unlinking()
+              ? t('entityActions.unlinking')
+              : t('entityActions.unlinkValue')}
           </button>
         </Show>
       }
