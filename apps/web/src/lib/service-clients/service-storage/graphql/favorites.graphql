@@ -20,7 +20,6 @@ query Favorites($filter: FavoritesFilterInput) {
   }
 }
 
-
 mutation SetFavorite($entity: EntityRefInput!, $favorite: Boolean!) {
   setFavorite(entity: $entity, favorite: $favorite) {
     __typename

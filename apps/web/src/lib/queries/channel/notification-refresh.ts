@@ -1,7 +1,6 @@
 import { fireAndForget } from '@core/util/fireAndForget';
 import { isTransientRequestError } from '@core/util/request-error';
 import type { QueryRevalidation } from '@graphql-cache/exchange/optimistic';
-import type { SoupEntityInput } from '@service-storage/graphql/generated/graphql';
 import type { GraphqlNotificationPatch } from '@service-storage/graphql-soup-websocket';
 import { type Client, createRequest } from '@urql/core';
 
@@ -13,8 +12,6 @@ export type ChannelNotificationReader = {
   scope?: 'all-entities';
   /** Omitted for channel lists, which can gain previously absent channels. */
   channelId?: string;
-  /** Exact Soup entity for an entity-specific notification reader. */
-  entity?: SoupEntityInput;
   filtered: boolean;
   notificationIds: readonly string[];
 };
@@ -220,12 +217,7 @@ export class ChannelNotificationRefresh {
         for (const job of this.jobs.values()) {
           if (
             [...job.readers].some(
-              (reader) =>
-                reader.enabled &&
-                (reader.scope === 'all-entities' ||
-                  (reader.entity?.entityType ===
-                    patch.notification.entityType &&
-                    reader.entity.entityId === patch.notification.entityId))
+              (reader) => reader.enabled && reader.scope === 'all-entities'
             )
           )
             this.invalidate(job);
@@ -262,10 +254,7 @@ export class ChannelNotificationRefresh {
         [...job.readers].some(
           (reader) =>
             reader.enabled &&
-            (reader.entity
-              ? reader.entity.entityType === 'CHANNEL' &&
-                reader.entity.entityId === channelId
-              : !reader.channelId || reader.channelId === channelId) &&
+            (!reader.channelId || reader.channelId === channelId) &&
             // Updating a normalized record cannot add it to an older edge.
             (normalizedUpdateId === undefined ||
               reader.filtered ||
