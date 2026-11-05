@@ -43,4 +43,8 @@ export default {
   homeSnippet:
     'One inbox for everything, built for speed, with everything linked together',
   homeLength: '1:00',
+  whatsappTitle: 'Learn how to use WhatsApp in Macro',
+  whatsappSnippet:
+    'Link WhatsApp, bring your chats in, reply, share and mention them in channels',
+  whatsappLength: '0:45',
 };

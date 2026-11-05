@@ -19,6 +19,8 @@ import schedulingVideo from './assets/scheduling.mp4';
 import schedulingPoster from './assets/scheduling-poster.jpg';
 import tasksVideo from './assets/tasks.mp4';
 import tasksPoster from './assets/tasks-poster.jpg';
+import whatsappVideo from './assets/whatsapp.mp4';
+import whatsappPoster from './assets/whatsapp-poster.jpg';
 import type { TutorialId } from './core/tutorial-id';
 
 export type Tutorial = {
@@ -178,5 +180,19 @@ export const TUTORIALS: Partial<Record<TutorialId, Tutorial>> = {
     },
     videoUrl: homeVideo,
     posterUrl: homePoster,
+  },
+  whatsapp: {
+    id: 'whatsapp',
+    get title() {
+      return t('tutorials.whatsappTitle');
+    },
+    get snippet() {
+      return t('tutorials.whatsappSnippet');
+    },
+    get length() {
+      return t('tutorials.whatsappLength');
+    },
+    videoUrl: whatsappVideo,
+    posterUrl: whatsappPoster,
   },
 };
