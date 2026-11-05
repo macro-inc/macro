@@ -12,12 +12,14 @@ use crate::domain::approval::{
 use crate::domain::error::EgressError;
 use crate::domain::model::{
     EgressTarget, MAX_MCP_REQUEST_BYTES, McpDestination, McpResolution, ProxyRequest,
-    ProxyResponse, SessionToken, TOOLS_CALL_METHOD, UpstreamCall, disconnected_tool_result,
-    ensure_method_allowed, not_connected_tool_result, peek_json_rpc, sanitize_request_headers,
-    sanitize_response_headers,
+    ProxyResponse, SessionToken, TOOLS_CALL_METHOD, TurnPrompter, UpstreamCall,
+    disconnected_tool_result, ensure_method_allowed, not_connected_tool_result, peek_json_rpc,
+    sanitize_request_headers, sanitize_response_headers,
 };
 use crate::domain::observed_body::{ObservedBody, StreamIdentity};
-use crate::domain::ports::{Forwarder, GithubTokens, McpCredentials, SessionAuthority};
+use crate::domain::ports::{
+    ArtifactCalls, Forwarder, GithubTokens, McpCredentials, SessionAuthority,
+};
 
 #[cfg(test)]
 mod test;
@@ -47,6 +49,7 @@ pub struct EgressServiceImpl<Sessions, Credentials, Tokens, Forward, Approvals =
     preview_mcp: Option<(url::Url, bool)>,
     approvals: Approvals,
     actor_mcp: Option<Arc<dyn crate::domain::ports::ActorMcpTransport>>,
+    artifacts: Option<Arc<dyn ArtifactCalls>>,
 }
 
 impl<Sessions, Credentials, Tokens, Forward>
@@ -88,6 +91,7 @@ where
             preview_mcp: None,
             approvals: RefuseHeldCalls,
             actor_mcp: None,
+            artifacts: None,
         }
     }
 }
@@ -101,6 +105,13 @@ impl<Sessions, Credentials, Tokens, Forward, Approvals>
         transport: Arc<dyn crate::domain::ports::ActorMcpTransport>,
     ) -> Self {
         self.actor_mcp = Some(transport);
+        self
+    }
+
+    /// Serve the `/artifacts` route through `artifacts`. Without it the
+    /// route answers not found.
+    pub fn with_artifacts(mut self, artifacts: Arc<dyn ArtifactCalls>) -> Self {
+        self.artifacts = Some(artifacts);
         self
     }
 
@@ -118,6 +129,7 @@ impl<Sessions, Credentials, Tokens, Forward, Approvals>
             preview_mcp: self.preview_mcp,
             approvals,
             actor_mcp: self.actor_mcp,
+            artifacts: self.artifacts,
         }
     }
 }
@@ -319,6 +331,21 @@ where
                         ))
                     })?;
                 base.redirected_to(url)?
+            }
+            EgressTarget::Artifacts(endpoint) => {
+                let artifacts = self.artifacts.as_ref().ok_or_else(|| {
+                    EgressError::Unroutable("artifacts are not configured".into())
+                })?;
+                // Whoever prompted the turn publishes, as themselves: a
+                // teammate's turn writes to the teammate's account, which is
+                // why it needs nobody's approval. A turn nobody prompted acts
+                // for nobody.
+                let user = grant
+                    .prompter
+                    .as_ref()
+                    .and_then(TurnPrompter::acting_user)
+                    .ok_or(EgressError::NoActingUser)?;
+                artifacts.resolve(user, grant.agent, *endpoint).await?
             }
         };
 
