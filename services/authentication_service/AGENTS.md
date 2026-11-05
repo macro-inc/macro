@@ -123,6 +123,12 @@ inputs cannot select an agent, and ordinary user credentials remain unattributed
   failures remain server errors.
   Deploy grant-refresh support before releasing clients that omit the pre-OAuth
   disconnect; older callbacks leave an existing grant unchanged.
+- `/internal/google_access_token` answers 403 for every grant Google refuses
+  for this user (`InvalidGrant`, and `GrantBlocked` for policy codes such as
+  `access_not_configured`); email and calendar callers then mark the link for
+  reauthorization instead of retrying. Keep it 4xx: a 500 makes callers retry
+  and trips the HTTP server-errors monitor. Macro's own OAuth client failing
+  (`invalid_client`) stays a 500.
 - FusionAuth reports a link owner that was deleted as `UserDoesNotExist`. That
   user has no links or grants left, so answer the route's "not linked" outcome
   (404 no grant, 200 for an idempotent removal), not a 500.

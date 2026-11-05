@@ -4547,17 +4547,15 @@ export type CreatePairingRequest = {
 };
 
 /**
- * Request to create an empty pipeline with the standard CRM columns.
+ * Request to create an empty pipeline: the standard CRM columns for a tracked
+ * record, or one Name column, like a new database, for a generic pipeline.
  */
 export type CreatePipeline = {
     /**
      * Pipeline name.
      */
     name: string;
-    /**
-     * Company or contact entries.
-     */
-    recordType: PipelineRecordType;
+    recordType?: null | PipelineRecordType;
     /**
      * Defaults to private.
      */
@@ -11668,13 +11666,11 @@ export type Pipeline = {
      */
     name: string;
     /**
-     * Protected primary column.
+     * A tracked pipeline's protected record reference. A generic pipeline's
+     * Name, which names no column once someone deletes it.
      */
     primaryColumnId: string;
-    /**
-     * Kind of the primary reference.
-     */
-    recordType: PipelineRecordType;
+    recordType: null | PipelineRecordType;
     /**
      * Whether the pipeline has a team grant.
      */
@@ -16365,6 +16361,20 @@ export type UploadExtractFolderRequest = {
     name?: string | null;
     parentId?: string | null;
     sha: string;
+};
+
+/**
+ * The document created from the uploaded bytes.
+ */
+export type UploadFileResponse = {
+    /**
+     * The new document.
+     */
+    documentId: string;
+    /**
+     * Number of bytes stored.
+     */
+    sizeBytes: number;
 };
 
 export type UploadFolderRequest = {
@@ -21825,6 +21835,58 @@ export type GetSystemSkillsHandlerResponses = {
 };
 
 export type GetSystemSkillsHandlerResponse = GetSystemSkillsHandlerResponses[keyof GetSystemSkillsHandlerResponses];
+
+export type UploadFileData = {
+    /**
+     * The file's bytes, at most 25 MiB.
+     */
+    body: Blob | File;
+    path?: never;
+    query: {
+        /**
+         * Filename including its extension, such as `report.pdf`; the extension
+         * sets the file type. No directory components.
+         */
+        fileName: string;
+        /**
+         * Destination project. Requires edit access; omit for top-level files.
+         */
+        projectId?: string;
+    };
+    url: '/documents/upload';
+};
+
+export type UploadFileErrors = {
+    /**
+     * Invalid filename or content
+     */
+    400: ErrorResponse;
+    /**
+     * No edit access to the destination project
+     */
+    401: ErrorResponse;
+    /**
+     * The caller cannot create documents
+     */
+    403: unknown;
+    /**
+     * The file exceeds 25 MiB
+     */
+    413: unknown;
+    /**
+     * Document name exceeds the maximum length
+     */
+    422: ErrorResponse;
+    500: ErrorResponse;
+};
+
+export type UploadFileError = UploadFileErrors[keyof UploadFileErrors];
+
+export type UploadFileResponses = {
+    200: UploadFileResponse;
+};
+
+export type UploadFileResponse2 = UploadFileResponses[keyof UploadFileResponses];
 
 export type DeleteDocumentData = {
     body?: never;

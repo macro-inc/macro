@@ -7,9 +7,8 @@ import { type JSX, Show } from 'solid-js';
 import { ActivityControls } from '../components/activity-controls';
 import { CrmListEmpty } from '../components/list-state';
 import { useCrmContext } from '../context/crm-context';
-import type { CrmActivityTab, CrmSoupActivityTab } from '../core/navigation';
+import type { CrmActivityTab } from '../core/navigation';
 import { ActivitySection } from './activity-section';
-import { CrmDatabasesView } from './databases';
 import { RecordItemList } from './record-item-list';
 
 const CONTENT = {
@@ -42,32 +41,23 @@ export function CrmActivityView(props: {
   title?: JSX.Element;
 }) {
   const crm = useCrmContext();
-  const tab = () => (props.tab === 'databases' ? undefined : props.tab);
   return (
     <Show
-      when={tab()}
+      when={props.tab !== 'tasks' ? props.tab : undefined}
       keyed
-      fallback={<CrmDatabasesView title={props.title} />}
+      fallback={<crm.ActivityTasks title={props.title} />}
     >
-      {(current) => (
-        <Show
-          when={current !== 'tasks' ? current : undefined}
-          keyed
-          fallback={<crm.ActivityTasks title={props.title} />}
-        >
-          {(activity) => (
-            <TagSetsQueryProvider>
-              <ActivityList tab={activity} title={props.title} />
-            </TagSetsQueryProvider>
-          )}
-        </Show>
+      {(activity) => (
+        <TagSetsQueryProvider>
+          <ActivityList tab={activity} title={props.title} />
+        </TagSetsQueryProvider>
       )}
     </Show>
   );
 }
 
 function ActivityList(props: {
-  tab: Exclude<CrmSoupActivityTab, 'tasks'>;
+  tab: Exclude<CrmActivityTab, 'tasks'>;
   title?: JSX.Element;
 }) {
   const crm = useCrmContext();

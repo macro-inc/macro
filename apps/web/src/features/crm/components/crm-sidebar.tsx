@@ -1,10 +1,7 @@
 import { CollapsibleSection, ViewSidebar } from '@app/components/view-shell';
 import { useFeatureFlag } from '@app/lib/analytics/posthog';
 import { getIconConfig } from '@core/component/EntityIcon';
-import {
-  enableCrmActivity,
-  enableDatabases,
-} from '@core/constant/featureFlags';
+import { enableCrmActivity } from '@core/constant/featureFlags';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import BuildingsIcon from '@icon/system/regular/buildings.svg';
 import ExportIcon from '@icon/system/regular/download-simple.svg';
@@ -29,7 +26,6 @@ const RECORD_ICONS = {
   email: getIconConfig('email').icon,
   notes: getIconConfig('md').icon,
   calls: getIconConfig('call').icon,
-  databases: getIconConfig('database').icon,
 };
 
 export function CrmSidebar(props: {
@@ -58,7 +54,6 @@ export function CrmSidebar(props: {
   searchLabel?: string;
 }) {
   const activityFlag = useFeatureFlag(enableCrmActivity);
-  const databasesFlag = useFeatureFlag(enableDatabases);
   const [recordsOpen, setRecordsOpen] = createSignal(true);
   const [listsOpen, setListsOpen] = createSignal(true);
   return (
@@ -117,12 +112,7 @@ export function CrmSidebar(props: {
               <For
                 each={[
                   ...CRM_RECORDS,
-                  ...(activityFlag().enabled
-                    ? CRM_ACTIVITY_TABS.filter(
-                        (tab) =>
-                          tab.id !== 'databases' || databasesFlag().enabled
-                      )
-                    : []),
+                  ...(activityFlag().enabled ? CRM_ACTIVITY_TABS : []),
                 ]}
               >
                 {(record) => (

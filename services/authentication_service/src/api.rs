@@ -55,7 +55,7 @@ mod test;
 /// alongside `/` so the dedicated ALB keeps working during cutover.
 const GATEWAY_PATH_PREFIX: &str = "/auth";
 
-pub async fn setup_and_serve(state: ApiContext, port: usize) -> anyhow::Result<()> {
+pub(crate) async fn setup_and_serve(state: ApiContext, port: usize) -> anyhow::Result<()> {
     let cors = macro_cors::cors_layer_with_headers(vec![HeaderName::from_static(
         MACRO_REFRESH_TOKEN_HEADER,
     )]);
