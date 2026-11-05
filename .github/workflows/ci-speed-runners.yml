@@ -18,117 +18,44 @@ jobs:
       fail-fast: false
       matrix:
         include:
-        - leg: small-8cpu-j2-t32
-          shape: small
-          runner: namespace-profile-linux-rust-ci;overrides.cache-tag=ci-speed-runners-8
-          jobs: 2
-          threads: 32
-          timeout: 75
-          salt_file: services/notification_service/src/main.rs
-        - leg: small-8cpu-j8-t32
-          shape: small
-          runner: namespace-profile-linux-rust-ci;overrides.cache-tag=ci-speed-runners-8
-          jobs: 8
-          threads: 32
-          timeout: 75
-          salt_file: services/notification_service/src/main.rs
-        - leg: small-16cpu-j16-t32
-          shape: small
-          runner: namespace-profile-linux-mid;overrides.cache-tag=ci-speed-runners-16
-          jobs: 16
-          threads: 32
-          timeout: 75
-          salt_file: services/notification_service/src/main.rs
-        - leg: small-32cpu-j32-t32
+        - leg: small-32cpu-j32-t32-d0dn
           shape: small
           runner: namespace-profile-linux-large-build;overrides.cache-tag=ci-speed-runners-32
           jobs: 32
           threads: 32
           timeout: 75
           salt_file: services/notification_service/src/main.rs
-        - leg: medium-8cpu-j2-t32
-          shape: medium
-          runner: namespace-profile-linux-rust-ci;overrides.cache-tag=ci-speed-runners-8
-          jobs: 2
-          threads: 32
-          timeout: 75
-          salt_file: crates/email/src/lib.rs
-        - leg: medium-8cpu-j8-t32
-          shape: medium
-          runner: namespace-profile-linux-rust-ci;overrides.cache-tag=ci-speed-runners-8
-          jobs: 8
-          threads: 32
-          timeout: 75
-          salt_file: crates/email/src/lib.rs
-        - leg: medium-16cpu-j16-t32
-          shape: medium
-          runner: namespace-profile-linux-mid;overrides.cache-tag=ci-speed-runners-16
-          jobs: 16
-          threads: 32
-          timeout: 75
-          salt_file: crates/email/src/lib.rs
-        - leg: medium-32cpu-j32-t32
+          debug: '0'
+          deno_nextest: true
+          sccache: ci-speed-runners-d0
+        - leg: medium-32cpu-j32-t32-d0dn
           shape: medium
           runner: namespace-profile-linux-large-build;overrides.cache-tag=ci-speed-runners-32
           jobs: 32
           threads: 32
           timeout: 75
           salt_file: crates/email/src/lib.rs
-        - leg: large-8cpu-j2-t32
-          shape: large
-          runner: namespace-profile-linux-rust-ci;overrides.cache-tag=ci-speed-runners-8
-          jobs: 2
-          threads: 32
-          timeout: 75
-          salt_file: crates/macro_user_id/src/lib.rs
-        - leg: large-8cpu-j8-t32
-          shape: large
-          runner: namespace-profile-linux-rust-ci;overrides.cache-tag=ci-speed-runners-8
-          jobs: 8
-          threads: 32
-          timeout: 40
-          salt_file: crates/macro_user_id/src/lib.rs
-        - leg: large-16cpu-j16-t32
-          shape: large
-          runner: namespace-profile-linux-mid;overrides.cache-tag=ci-speed-runners-16
-          jobs: 16
-          threads: 32
-          timeout: 75
-          salt_file: crates/macro_user_id/src/lib.rs
-        - leg: large-32cpu-j32-t32
+          debug: '0'
+          deno_nextest: true
+          sccache: ci-speed-runners-d0
+        - leg: large-32cpu-j32-t32-d0dn
           shape: large
           runner: namespace-profile-linux-large-build;overrides.cache-tag=ci-speed-runners-32
           jobs: 32
           threads: 32
           timeout: 75
           salt_file: crates/macro_user_id/src/lib.rs
-        - leg: medium-8cpu-j4-t32
-          shape: medium
-          runner: namespace-profile-linux-rust-ci;overrides.cache-tag=ci-speed-runners-8
-          jobs: 4
-          threads: 32
-          timeout: 75
-          salt_file: crates/email/src/lib.rs
-        - leg: large-8cpu-j4-t32
-          shape: large
-          runner: namespace-profile-linux-rust-ci;overrides.cache-tag=ci-speed-runners-8
-          jobs: 4
-          threads: 32
-          timeout: 75
-          salt_file: crates/macro_user_id/src/lib.rs
-        - leg: large-16cpu-j16-t16
-          shape: large
-          runner: namespace-profile-linux-mid;overrides.cache-tag=ci-speed-runners-16
-          jobs: 16
-          threads: 16
-          timeout: 75
-          salt_file: crates/macro_user_id/src/lib.rs
+          debug: '0'
+          deno_nextest: true
+          sccache: ci-speed-runners-d0
     runs-on: ${{ matrix.runner }}
     env:
       NEXTEST_TEST_THREADS: ${{ matrix.threads }}
       CARGO_BUILD_JOBS: ${{ matrix.jobs }}
       RUSTFLAGS: '-Dwarnings -C link-arg=-fuse-ld=mold'
       SCCACHE_IDLE_TIMEOUT: '0'
+      CARGO_PROFILE_DEV_DEBUG: ${{ matrix.debug }}
+      CARGO_PROFILE_TEST_DEBUG: ${{ matrix.debug }}
     services:
       postgres:
         image: pgvector/pgvector:pg14
@@ -165,7 +92,7 @@ jobs:
         set -euo pipefail
         env_file="$(mktemp "$RUNNER_TEMP/namespace-sccache.XXXXXX")"
         trap 'rm -f "$env_file"' EXIT
-        nsc cache sccache setup --cache_name ci-speed-runners > "$env_file"
+        nsc cache sccache setup --cache_name ${{ matrix.sccache }} > "$env_file"
         while IFS= read -r line; do
           k="${line%%=*}"
           v="${line#*=}"
@@ -261,8 +188,21 @@ jobs:
       if: matrix.shape != 'small'
       continue-on-error: true
       run: |-
-        cargo test --locked -p code_execution -- --ignored --test-threads=2
-        cargo test --locked -p agent_harness_service authenticated_mcp_runs_javascript_and_persists_source_and_result -- --ignored
+        set -euo pipefail
+        if [ "${{ matrix.deno_nextest }}" = "true" ]; then
+          pkg_args=()
+          for package in $(cat .github/ci-speed/${{ matrix.shape }}.pkgs); do
+            [ "$package" = "sync_service" ] || pkg_args+=(-p "$package")
+          done
+          cargo nextest run \
+            --config 'profile.dev.package."*".debug=false' \
+            --all-features --no-tests=pass --run-ignored only --test-threads 2 \
+            -E 'package(code_execution) or (package(agent_harness_service) and test(authenticated_mcp_runs_javascript_and_persists_source_and_result))' \
+            "${pkg_args[@]}"
+        else
+          cargo test --locked -p code_execution -- --ignored --test-threads=2
+          cargo test --locked -p agent_harness_service authenticated_mcp_runs_javascript_and_persists_source_and_result -- --ignored
+        fi
     - name: bench summary
       if: always()
       run: |
