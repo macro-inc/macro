@@ -182,6 +182,19 @@ describe('native database mention adapter', () => {
     expect(databaseMentionScope('CALENDAR_EVENT').sources).toEqual([]);
   });
 
+  it('creates from the search and closes the cell without restoring focus', () => {
+    const onCreate = vi.fn();
+    const { menu, close } = setup({
+      onCreate,
+      createLabel: 'Create contact',
+    });
+    expect(menu.createLabel).toBe('Create contact');
+    menu.onCreate?.('Ada Lovelace');
+    expect(onCreate).toHaveBeenCalledExactlyOnceWith('Ada Lovelace');
+    menu.menu.setIsOpen(false);
+    expect(close).toHaveBeenCalledExactlyOnceWith(false);
+  });
+
   it('delegates native search and dismissal back to the cell', () => {
     const { menu, searchChange, close } = setup();
     expect(menu.menu.searchTerm()).toBe('Ada');

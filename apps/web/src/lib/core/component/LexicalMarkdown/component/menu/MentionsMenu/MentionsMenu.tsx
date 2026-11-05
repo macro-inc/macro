@@ -26,6 +26,7 @@ import { debouncedDependent } from '@core/util/debounce';
 import { fireAndForget } from '@core/util/fireAndForget';
 import { useIsKeyPressActive } from '@core/util/useIsKeyPressActive';
 import type { EmailEntity } from '@entity';
+import PlusIcon from '@icon/system/regular/plus.svg';
 import { Telemetry } from '@macro-inc/observability';
 import { useExternalChatsQuery } from '@queries/external-chats';
 import { queryReadyGate } from '@queries/gate';
@@ -127,6 +128,10 @@ type MentionsMenuProps = {
   includeContacts?: boolean;
   /** Repeated cell editing opens immediately instead of animating each picker. */
   animate?: boolean;
+  /** Offer to create the typed search, including when nothing matches. */
+  onCreate?: (search: string) => void;
+  /** Words before the quoted search, such as "Create contact". */
+  createLabel?: string;
 } & (
   | { editor: LexicalEditor; onPick?: never }
   | { editor?: never; anchor: HTMLElement; onPick: (item: MentionItem) => void }
@@ -624,6 +629,23 @@ function MentionsMenuInner(props: MentionsMenuProps) {
   // Phones only show the full list, so there is no grouped view to go back to.
   const canExitViewAll = () => controller.isViewAllMode() && !isMobile();
 
+  /** A typed search can become a new record, whether or not anything matched. */
+  const createChoice = ():
+    | { label: string; choose: () => void }
+    | undefined => {
+    const query = props.onCreate ? props.menu.searchTerm().trim() : '';
+    const onCreate = props.onCreate;
+    if (!query || !onCreate) return undefined;
+    return {
+      label: `${props.createLabel ?? 'Create'} “${query}”`,
+      choose: () => {
+        onCreate(query);
+        props.menu.setSearchTerm('');
+        setMenuOpen(false);
+      },
+    };
+  };
+
   useMenuKeyboardNavigation({
     isActive: menuOpen,
     onUp: () => {
@@ -661,6 +683,12 @@ function MentionsMenuInner(props: MentionsMenuProps) {
           })
         );
       } else {
+        const choice =
+          controller.combinedItems().length === 0 ? createChoice() : undefined;
+        if (choice) {
+          choice.choose();
+          return;
+        }
         closeMenu();
       }
       props.menu.setSearchTerm('');
@@ -837,7 +865,20 @@ function MentionsMenuInner(props: MentionsMenuProps) {
                 <Show
                   when={controller.combinedItems().length > 0}
                   fallback={
-                    <div class="px-2 text-ink-extra-muted">No results</div>
+                    <Show
+                      when={createChoice()}
+                      fallback={
+                        <div class="px-2 text-ink-extra-muted">No results</div>
+                      }
+                    >
+                      {(choice) => (
+                        <CreateMentionChoice
+                          label={choice().label}
+                          selected
+                          onChoose={choice().choose}
+                        />
+                      )}
+                    </Show>
                   }
                 >
                   <div>
@@ -880,6 +921,16 @@ function MentionsMenuInner(props: MentionsMenuProps) {
                         </>
                       )}
                     </Key>
+                    <Show when={createChoice()}>
+                      {(choice) => (
+                        <div class="mt-1 border-t border-edge-muted pt-1">
+                          <CreateMentionChoice
+                            label={choice().label}
+                            onChoose={choice().choose}
+                          />
+                        </div>
+                      )}
+                    </Show>
                   </div>
                 </Show>
               }
@@ -912,7 +963,20 @@ function MentionsMenuInner(props: MentionsMenuProps) {
                 </div>
               </Show>
               <Show when={controller.combinedItems().length === 0}>
-                <div class="px-2 text-ink-extra-muted">No results</div>
+                <Show
+                  when={createChoice()}
+                  fallback={
+                    <div class="px-2 text-ink-extra-muted">No results</div>
+                  }
+                >
+                  {(choice) => (
+                    <CreateMentionChoice
+                      label={choice().label}
+                      selected
+                      onChoose={choice().choose}
+                    />
+                  )}
+                </Show>
               </Show>
               <VirtualizedItemList
                 items={controller.combinedItems()}
@@ -932,11 +996,54 @@ function MentionsMenuInner(props: MentionsMenuProps) {
                   );
                 }}
               />
+              <Show
+                when={
+                  controller.combinedItems().length > 0
+                    ? createChoice()
+                    : undefined
+                }
+              >
+                {(choice) => (
+                  <div class="mt-1 border-t border-edge-muted pt-1">
+                    <CreateMentionChoice
+                      label={choice().label}
+                      onChoose={choice().choose}
+                    />
+                  </div>
+                )}
+              </Show>
             </Show>
           </Surface>
         </div>
       </ScopedPortal>
     </Show>
+  );
+}
+
+function CreateMentionChoice(props: {
+  label: string;
+  /** Enter chooses this row when the search matched nothing. */
+  selected?: boolean;
+  onChoose: () => void;
+}) {
+  return (
+    <button
+      type="button"
+      class="flex w-full cursor-default items-center gap-2 rounded-lg px-2 py-1.5 text-left text-sm text-ink hover:bg-ink/5"
+      classList={{ 'bg-ink/5': props.selected }}
+      onMouseDown={(event) => {
+        event.preventDefault();
+        event.stopPropagation();
+      }}
+      onClick={(event) => {
+        event.preventDefault();
+        event.stopPropagation();
+        props.onChoose();
+      }}
+    >
+      <PlusIcon class="size-3.5 shrink-0 text-ink-muted" />
+      <span class="min-w-0 truncate">{props.label}</span>
+    </button>
   );
 }
 

@@ -383,7 +383,11 @@ works the same way, and a new contact's email must use a company's domain.
 **Add deal** stays disabled until a record is chosen, and Command-Enter submits.
 The form makes one row with every value set. A board lane's **New record** opens
 the same dialog with the lane's stage filled in. The table's blank row at the
-bottom still adds a row inline. On mobile the dialog is a bottom drawer. To verify
+bottom still adds a row inline. A contact cell whose search matches nothing
+offers **Create contact “…”**; Enter chooses it, and the same choice sits under
+partial matches. The new-contact dialog opens with that name, and the created
+contact is written into the cell. Record pipeline cards use the same contact
+cell. On mobile the dialog is a bottom drawer. To verify
 the person picker, choose an **Owner** in the dialog: its menu must accept the
 click.
 Stored views are everyone's and are written through the pipeline, so changing one

@@ -53,6 +53,7 @@ import {
   usePipelineTableQuery,
 } from './queries/pipeline-views';
 import { AddPipelineRecordDialog } from './views/add-pipeline-record';
+import { usePipelineContactCellCreate } from './views/pipeline-contact-create';
 
 /** Pipelines supply their own identity and owner to the existing share dialog. */
 export function PipelineShare(props: {
@@ -165,6 +166,7 @@ function PipelineRecords(props: {
   const api = createPipelineApi(storageServiceClient, props.pipeline);
   const [composing, setComposing] =
     createSignal<Record<string, DatabaseCellValue>>();
+  const contactCreate = usePipelineContactCellCreate();
   return (
     <StaticMarkdownContext>
       <DatabaseProvider
@@ -187,7 +189,14 @@ function PipelineRecords(props: {
           renderTextEditor={(editor) => <DatabaseTextEditor {...editor} />}
           renderTextValue={(value) => <DatabaseTextValue value={value} />}
           renderMentionPicker={(picker) => (
-            <DatabaseMentionPicker {...picker} />
+            <DatabaseMentionPicker
+              {...picker}
+              createLabel="Create contact"
+              onCreate={contactCreate.forCell(
+                picker.specificEntityType,
+                picker.onSelect
+              )}
+            />
           )}
           renderMentionValue={(id, entityType) => (
             <DatabaseMentionValue id={id} entityType={entityType} />
@@ -206,6 +215,7 @@ function PipelineRecords(props: {
               selectedViewId={selectedView()?.id}
               canEdit={canEdit()}
               pipeline={props.pipeline}
+              contactCreate={contactCreate}
               composing={composing()}
               onCompose={setComposing}
               onSelectView={setSelectedViewId}
@@ -215,6 +225,7 @@ function PipelineRecords(props: {
             />
           )}
         />
+        {contactCreate.dialog()}
       </DatabaseProvider>
     </StaticMarkdownContext>
   );
@@ -228,6 +239,7 @@ function PipelineToolbar(props: {
   selectedViewId: string | undefined;
   canEdit: boolean;
   pipeline: Pipeline;
+  contactCreate: ReturnType<typeof usePipelineContactCellCreate>;
   /** The new record's starting values while its form is open. */
   composing: Record<string, DatabaseCellValue> | undefined;
   onCompose: (values: Record<string, DatabaseCellValue> | undefined) => void;
@@ -320,7 +332,14 @@ function PipelineToolbar(props: {
                 )}
                 renderTextValue={(value) => <DatabaseTextValue value={value} />}
                 renderMentionPicker={(picker) => (
-                  <DatabaseMentionPicker {...picker} />
+                  <DatabaseMentionPicker
+                    {...picker}
+                    createLabel="Create contact"
+                    onCreate={props.contactCreate.forCell(
+                      picker.specificEntityType,
+                      picker.onSelect
+                    )}
+                  />
                 )}
                 renderMentionValue={(id, entityType) => (
                   <DatabaseMentionValue id={id} entityType={entityType} />

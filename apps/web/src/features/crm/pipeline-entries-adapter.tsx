@@ -18,6 +18,7 @@ import {
   type PipelineEntriesDependencies,
   savePipelineEntryCell,
 } from './queries/pipeline-entries';
+import { usePipelineContactCellCreate } from './views/pipeline-contact-create';
 
 const cellKey = (entry: PipelineEntry, cell: PipelineEntryCell) =>
   `${entry.rowId}:${cell.column.id}`;
@@ -28,6 +29,7 @@ export function createCrmPipelineEntries(
 ): PipelineEntriesView {
   return (props) => {
     const query = createPipelineEntriesQuery(deps.graphql, () => props.record);
+    const contactCreate = usePipelineContactCellCreate();
     // A saved value shows until the refetched row replaces it.
     const [pending, setPending] = createSignal<
       Record<string, DatabaseCellValue>
@@ -68,6 +70,7 @@ export function createCrmPipelineEntries(
     }
     return (
       <StaticMarkdownContext>
+        {contactCreate.dialog()}
         <PipelineEntryCards
           entries={query.entries()}
           onOpenPipeline={props.onOpenPipeline}
@@ -80,7 +83,14 @@ export function createCrmPipelineEntries(
               renderTextEditor={(editor) => <DatabaseTextEditor {...editor} />}
               renderTextValue={(value) => <DatabaseTextValue value={value} />}
               renderMentionPicker={(picker) => (
-                <DatabaseMentionPicker {...picker} />
+                <DatabaseMentionPicker
+                  {...picker}
+                  createLabel="Create contact"
+                  onCreate={contactCreate.forCell(
+                    picker.specificEntityType,
+                    picker.onSelect
+                  )}
+                />
               )}
               renderMentionValue={(id, entityType) => (
                 <DatabaseMentionValue id={id} entityType={entityType} />

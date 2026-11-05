@@ -31,6 +31,10 @@ import {
 export function DatabaseMentionPicker(props: DatabaseMentionPickerProps) {
   const menu = createMenuOperations();
   menu.openMenu();
+  // Creating from the search opens another dialog. The first close wins, and
+  // it must not pull focus back into the cell underneath that dialog.
+  let closed = false;
+  let createdFromSearch = false;
   const operations: MenuOperations = {
     ...menu,
     searchTerm: () => props.search,
@@ -38,7 +42,12 @@ export function DatabaseMentionPicker(props: DatabaseMentionPickerProps) {
     setIsOpen: (value) => {
       const next = typeof value === 'function' ? value(menu.isOpen()) : value;
       menu.setIsOpen(() => next);
-      if (!next) props.onClose();
+      if (!next && !closed) {
+        closed = true;
+        if (createdFromSearch) props.onClose(false);
+        else props.onClose();
+        createdFromSearch = false;
+      }
       return next;
     },
   };
@@ -54,6 +63,15 @@ export function DatabaseMentionPicker(props: DatabaseMentionPickerProps) {
           includeContacts={false}
           showOpenTabs={false}
           includeGroups={false}
+          createLabel={props.createLabel}
+          onCreate={
+            props.onCreate
+              ? (search) => {
+                  createdFromSearch = true;
+                  props.onCreate?.(search);
+                }
+              : undefined
+          }
           onPick={(item) => {
             const mention = databaseMentionFromItem(item);
             if (

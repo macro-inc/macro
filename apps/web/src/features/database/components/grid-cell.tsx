@@ -58,6 +58,10 @@ export type DatabaseMentionPickerProps = {
   onClose: (restoreFocus?: boolean) => void;
   /** Where the picker mounts in place of the page body. */
   mount?: HTMLElement;
+  /** Offer to create the typed search, such as a CRM contact. */
+  onCreate?: (search: string) => void;
+  /** Words before the quoted search, such as "Create contact". */
+  createLabel?: string;
 };
 
 export type DatabaseTextEditorProps = CellTextEditorProps & {

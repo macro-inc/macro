@@ -447,6 +447,74 @@ it('offers calendar events and picks one', () => {
   expect(onPick).toHaveBeenCalledWith(mocks.calendarEvents[0]);
 });
 
+it('creates from a search that matches nothing', () => {
+  const menu = createMenuOperations();
+  menu.setSearchTerm('New Person');
+  menu.openMenu();
+  const onCreate = vi.fn();
+  render(() => (
+    <MentionsMenu
+      menu={menu}
+      entities={() => []}
+      users={() => []}
+      sources={['users']}
+      anchor={document.createElement('div')}
+      onPick={vi.fn()}
+      onCreate={onCreate}
+      createLabel="Create contact"
+    />
+  ));
+  expect(screen.queryByText('No results')).toBeNull();
+  fireEvent.click(
+    screen.getByRole('button', { name: 'Create contact “New Person”' })
+  );
+  expect(onCreate).toHaveBeenCalledExactlyOnceWith('New Person');
+  expect(menu.isOpen()).toBe(false);
+});
+
+it('creates with Enter when nothing matches, and keeps Enter on a match', async () => {
+  vi.useFakeTimers();
+  Element.prototype.scrollIntoView = vi.fn();
+  const menu = createMenuOperations();
+  menu.setSearchTerm('New Person');
+  menu.openMenu();
+  const onCreate = vi.fn();
+  const onPick = vi.fn();
+  const person: IUser = {
+    id: 'macro|person@example.com',
+    name: 'Person Example',
+    email: 'person@example.com',
+  };
+  const [users, setUsers] = createSignal<IUser[]>([]);
+  render(() => (
+    <MentionsMenu
+      menu={menu}
+      entities={() => []}
+      users={users}
+      sources={['users']}
+      anchor={document.createElement('div')}
+      onPick={onPick}
+      onCreate={onCreate}
+      createLabel="Create contact"
+    />
+  ));
+  fireEvent.keyDown(document, { key: 'Enter' });
+  expect(onCreate).toHaveBeenCalledExactlyOnceWith('New Person');
+  expect(onPick).not.toHaveBeenCalled();
+
+  onCreate.mockClear();
+  menu.openMenu();
+  menu.setSearchTerm('Person');
+  setUsers([person]);
+  await vi.advanceTimersByTimeAsync(100);
+  expect(
+    screen.getByRole('button', { name: 'Create contact “Person”' })
+  ).toBeTruthy();
+  fireEvent.keyDown(document, { key: 'Enter' });
+  expect(onPick).toHaveBeenCalledOnce();
+  expect(onCreate).not.toHaveBeenCalled();
+});
+
 it('opens cell pickers without replaying the menu entrance animation', () => {
   const menu = createMenuOperations();
   menu.openMenu();

@@ -63,11 +63,13 @@ function ContactCompanySelect(props: {
 export function CreateContactModal(props: {
   /** Opens the dialog; without a company, the dialog asks for one. */
   target?: { company?: { companyId: string; domain: string } };
+  /** A name typed somewhere else, such as a pipeline cell that had no match. */
+  initialName?: string;
   onClose(): void;
-  onCreated(id: string): void;
+  onCreated(id: string, name: string): void;
 }) {
   const createContactMutation = useCreateContactMutation();
-  const [name, setName] = createSignal('');
+  const [name, setName] = createSignal(props.initialName ?? '');
   const [localPart, setLocalPart] = createSignal('');
   const [pickedCompany, setPickedCompany] = createSignal<CompanyOption>();
   // The panel clips overflow, so the company menu mounts on the dialog itself.
@@ -143,8 +145,9 @@ export function CreateContactModal(props: {
         name: contactName(),
         email: `${emailLocalPart()}@${target.domain}`,
       });
+      const createdName = contactName();
       resetAndClose();
-      props.onCreated(id);
+      props.onCreated(id, createdName);
     } catch (cause) {
       console.error('Failed to create contact', cause);
       setError(contactCreationError(cause));
