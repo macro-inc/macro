@@ -717,9 +717,15 @@ fn wait_for_job(instance: &Instance, timeout: Option<Duration>, json: bool) -> R
     let mut stdout = std::io::stdout();
     loop {
         // Read the record first, so a finished job's last output is still streamed.
-        let record = read_job(instance).context("the job record disappeared")?;
+        let mut record = read_job(instance).context("the job record disappeared")?;
+        let mut died = false;
+        if record.status == JobStatus::Running && record.pid.is_some() && !job_alive(instance) {
+            // finish() saves the record before it unlocks, so a fresh read tells
+            // a job that just finished from one that died.
+            record = read_job(instance).context("the job record disappeared")?;
+            died = record.status == JobStatus::Running;
+        }
         let finished = record.status != JobStatus::Running;
-        let died = !finished && record.pid.is_some() && !job_alive(instance);
         if let Some(stream) = stream.as_mut() {
             stream.copy_new(&mut stdout)?;
         }

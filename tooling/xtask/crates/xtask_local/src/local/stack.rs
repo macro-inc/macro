@@ -221,6 +221,9 @@ pub fn up(mode: Mode, args: &UpArgs) -> Result<Instance> {
     ));
     if !stage.is_dry_run() {
         supervisor::stop_processes(&instance);
+        // A failed run_local's record would otherwise outrank this bring-up in
+        // the phase.
+        supervisor::clear_job(&instance);
     }
 
     let static_bundle = !args.run.no_frontend && !args.infra_only;
@@ -715,11 +718,7 @@ fn mode_from_label(label: &str) -> Result<Mode> {
 
 /// The `--instance <name>` suffix for copy-pasteable hints ("" for the default).
 fn instance_suffix(instance: &Instance) -> String {
-    if instance.is_default() {
-        String::new()
-    } else {
-        format!(" --instance {}", instance.name())
-    }
+    super::summary::instance_flags(instance)
 }
 
 #[cfg(test)]

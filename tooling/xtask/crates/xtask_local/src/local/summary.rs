@@ -73,22 +73,29 @@ pub fn logs_command(instance: &Instance, generated_env: &Path) -> String {
     )
 }
 
+/// The flags that name the instance on a printed command: `--instance`, plus
+/// `--port-base` when the instance runs on one other than its name derives, or
+/// the command would reach the wrong ports.
+pub(super) fn instance_flags(instance: &Instance) -> String {
+    if instance.is_default() {
+        return String::new();
+    }
+    let mut flags = format!(" --instance {}", instance.name());
+    let derived = Instance::derive(Some(instance.name()), None).map(|i| i.port_base());
+    if derived.ok() != Some(instance.port_base()) {
+        flags.push_str(&format!(" --port-base {}", instance.port_base()));
+    }
+    flags
+}
+
 /// The `just stop_local` invocation for the instance.
 pub fn stop_command(instance: &Instance) -> String {
-    if instance.is_default() {
-        "just stop_local".to_string()
-    } else {
-        format!("just stop_local --instance {}", instance.name())
-    }
+    format!("just stop_local{}", instance_flags(instance))
 }
 
 /// The `just run_local rebuild` invocation for the instance.
 fn rebuild_command(instance: &Instance) -> String {
-    if instance.is_default() {
-        "just run_local rebuild".to_string()
-    } else {
-        format!("just run_local rebuild --instance {}", instance.name())
-    }
+    format!("just run_local rebuild{}", instance_flags(instance))
 }
 
 /// Print the mode/instance/endpoints block after a successful startup.
@@ -252,3 +259,6 @@ pub(super) fn port_open(port: u16) -> bool {
     )
     .is_ok()
 }
+
+#[cfg(test)]
+mod test;
