@@ -4,86 +4,26 @@ import type { ResultError } from '@core/util/result';
 import { type BaseFetchErrorCode, statusError } from '@core/util/safeFetch';
 import { match } from 'ts-pattern';
 
-/*
- * Hand-written mirrors of the auth service's Macro computer routes
- * (`crates/hosted_runtimes`, `ComputerStatus` / `SizeOffer`). Replace with the
- * orval-generated schemas on the next client regeneration
- * (`bun run gen-api auth-service`).
- */
+import type {
+  ComputerSize,
+  ComputerStatus,
+  NotifyBody,
+  PowerBody,
+  PurchaseBody,
+  Purchased,
+  ReleaseBody,
+  SizeOffer,
+} from './generated/schemas';
 
-export type ComputerSize = 'standard' | 'large' | 'xl';
-
-export type ComputerStatusKind =
-  | 'setting_up'
-  | 'ready'
-  | 'asleep'
-  | 'waking'
-  | 'stopping'
-  | 'stopped'
-  | 'failed'
-  | 'released';
-
-export type SetupStep =
-  | 'paying'
-  | 'creating'
-  | 'booting'
-  | 'connecting'
-  | 'ready';
-
-interface SetupProgress {
-  step: SetupStep;
-  /** 1-based position of `step`. */
-  position: number;
-  total: number;
-}
-
-export interface ComputerStatus {
-  id: string;
-  name: string;
-  size: ComputerSize;
-  status: ComputerStatusKind;
-  /** Present until the computer first connects. */
-  setup: SetupProgress | null;
-  poweredOn: boolean;
-  /** When billing stops, for a computer canceled at period end. */
-  cancelsAt: string | null;
-  /** When the disk is destroyed, for a canceled computer. */
-  retainedUntil: string | null;
-  harnessId: string | null;
-  personaName: string | null;
-  createdAt: string;
-}
-
-type BillingInterval = 'month' | 'year';
-
-export interface Quote {
-  size: ComputerSize;
-  priceId: string;
-  /** In the currency's smallest unit. */
-  amount: number;
-  currency: string;
-  interval: BillingInterval;
-}
-
-export interface SizeOffer {
-  size: ComputerSize;
-  vcpus: number;
-  memoryGb: number;
-  diskGb: number;
-  quote: Quote;
-  soldOut: boolean;
-  /** The caller asked to hear when this size is back. */
-  notifyRequested: boolean;
-}
-
-export interface PurchaseComputerRequest {
-  size: ComputerSize;
-  name?: string;
-}
-
-interface Purchased {
-  computerId: string;
-}
+export type {
+  ComputerSize,
+  ComputerStatus,
+  ComputerStatusKind,
+  PurchaseBody as PurchaseComputerRequest,
+  Quote,
+  SetupStep,
+  SizeOffer,
+} from './generated/schemas';
 
 type PurchaseComputerErrorCode =
   | 'SOLD_OUT'
@@ -135,7 +75,7 @@ async function releaseError(
 export const computersClient = {
   list: () => fetchWithToken<ComputerStatus[]>(base),
   offers: () => fetchWithToken<SizeOffer[]>(`${base}/offers`),
-  purchase: (request: PurchaseComputerRequest) =>
+  purchase: (request: PurchaseBody) =>
     fetchWithToken<Purchased, PurchaseComputerErrorCode>(base, {
       method: 'POST',
       body: JSON.stringify(request),
@@ -144,7 +84,7 @@ export const computersClient = {
   setPower: (id: string, on: boolean) =>
     fetchWithToken<ComputerStatus>(computerUrl(id, 'power'), {
       method: 'POST',
-      body: JSON.stringify({ on }),
+      body: JSON.stringify({ on } satisfies PowerBody),
     }),
   cancel: (id: string) =>
     fetchWithToken<ComputerStatus>(computerUrl(id, 'cancel'), {
@@ -159,13 +99,13 @@ export const computersClient = {
       computerUrl(id, 'release'),
       {
         method: 'POST',
-        body: JSON.stringify({ confirmName }),
+        body: JSON.stringify({ confirmName } satisfies ReleaseBody),
         errorResponseHandler: releaseError,
       }
     ),
   notify: (size: ComputerSize) =>
     fetchWithToken(`${base}/notify`, {
       method: 'POST',
-      body: JSON.stringify({ size }),
+      body: JSON.stringify({ size } satisfies NotifyBody),
     }),
 };
