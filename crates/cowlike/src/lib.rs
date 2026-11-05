@@ -92,4 +92,6 @@ where
         }
     }
 }
-// ci-speed gen-persist 1
+
+/// Timing probe.
+pub const CI_SPEED_GEN_PERSIST: u32 = 1;
