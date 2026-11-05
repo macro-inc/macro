@@ -1,8 +1,10 @@
 import type {
   LexicalEditor,
   LexicalNode,
+  NodeKey,
   SerializedEditorState,
   SerializedLexicalNode,
+  StateConfig,
 } from 'lexical';
 import type {
   DocumentLexicalConflict,
@@ -17,7 +19,24 @@ import { diffBlocks } from './lexical-diff';
 import { requestLexicalCommit, requestLexicalState } from './lexical-requests';
 
 type LexicalCore = typeof import('lexical');
-type LexicalEntry = typeof import('@macro-inc/sdk/lexical');
+
+/** What the handle uses of `@macro-inc/sdk/lexical`. */
+interface LexicalEntry {
+  createDocumentEditor(): LexicalEditor;
+  $getId(node: LexicalNode): string | null;
+  $updateAllNodeIds(mappings: {
+    idToNodeKeyMap: Map<string, NodeKey>;
+    nodeKeyToIdMap: Map<NodeKey, string>;
+  }): void;
+  idState: StateConfig<'id', string | null>;
+}
+
+/**
+ * Imported by name, not path, so bundlers keep it a separate module that a
+ * program's own `@macro-inc/sdk/lexical` import shares; a variable keeps type
+ * checkers of the main entry out of the vendored sources.
+ */
+const lexicalEntrySpecifier = '@macro-inc/sdk/lexical';
 
 interface LexicalModules {
   core: LexicalCore;
@@ -93,9 +112,9 @@ const lexicalPackages =
 
 async function loadLexical(): Promise<LexicalModules> {
   try {
-    const [core, entry] = await Promise.all([
+    const [core, entry]: [LexicalCore, LexicalEntry] = await Promise.all([
       import('lexical'),
-      import('@macro-inc/sdk/lexical'),
+      import(lexicalEntrySpecifier),
     ]);
     return { core, entry };
   } catch (cause) {

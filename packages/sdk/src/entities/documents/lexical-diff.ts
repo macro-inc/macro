@@ -1,6 +1,6 @@
 import type { SerializedEditorState, SerializedLexicalNode } from 'lexical';
 
-/** A top-level block to write: new, changed or moved. */
+/** @internal A top-level block to write: new, changed or moved. */
 export interface LexicalBlockChange {
   id: string;
   /** The id of the block before it in the edited document, or null when first. */
@@ -8,7 +8,7 @@ export interface LexicalBlockChange {
   node: SerializedLexicalNode;
 }
 
-/** The change between two states, at the level of top-level blocks. */
+/** @internal The change between two states, at the level of top-level blocks. */
 export interface LexicalBlockDiff {
   /** Every new, changed or moved block, in document order. */
   blocks: LexicalBlockChange[];
@@ -16,7 +16,7 @@ export interface LexicalBlockDiff {
   removed: string[];
 }
 
-/** The durable id Macro stores on a serialized node (`$.id`). */
+/** @internal The durable id Macro stores on a serialized node (`$.id`). */
 export function serializedNodeId(node: SerializedLexicalNode): string {
   const id = node.$?.id;
   if (typeof id !== 'string' || id === '')
@@ -25,7 +25,7 @@ export function serializedNodeId(node: SerializedLexicalNode): string {
 }
 
 /**
- * Diff two serialized states by top-level block id. A block is changed when
+ * @internal Diff two serialized states by top-level block id. A block is changed when
  * its JSON differs anywhere inside it, so a nested edit sends the whole block;
  * moved when it is outside the longest common subsequence of the two orders.
  */
@@ -44,17 +44,19 @@ export function diffBlocks(
   );
 
   const blocks: LexicalBlockChange[] = [];
-  edited.root.children.forEach((node, index) => {
-    const id = editedIds[index];
+  let after: string | null = null;
+  for (const node of edited.root.children) {
+    const id = serializedNodeId(node);
     const before = baseBlocks.get(id);
-    if (before !== undefined && kept.has(id) && jsonEqual(before, node)) return;
-    blocks.push({ id, after: editedIds[index - 1] ?? null, node });
-  });
+    if (before === undefined || !kept.has(id) || !jsonEqual(before, node))
+      blocks.push({ id, after, node });
+    after = id;
+  }
   const removed = [...baseBlocks.keys()].filter((id) => !editedSet.has(id));
   return { blocks, removed };
 }
 
-/** Structural equality of JSON values; object key order is irrelevant. */
+/** @internal Structural equality of JSON values; object key order is irrelevant. */
 export function jsonEqual(left: unknown, right: unknown): boolean {
   if (left === right) return true;
   if (Array.isArray(left))
@@ -88,24 +90,26 @@ function longestCommonSubsequence(
   first: string[],
   second: string[],
 ): Set<string> {
-  const lengths = Array.from({ length: first.length + 1 }, () =>
-    new Array<number>(second.length + 1).fill(0),
-  );
+  // lengths[i * width + j]: the LCS length of first[i..] and second[j..].
+  const width = second.length + 1;
+  const lengths = new Uint32Array((first.length + 1) * width);
+  const at = (i: number, j: number) => lengths[i * width + j] ?? 0;
   for (let i = first.length - 1; i >= 0; i--)
     for (let j = second.length - 1; j >= 0; j--)
-      lengths[i][j] =
+      lengths[i * width + j] =
         first[i] === second[j]
-          ? lengths[i + 1][j + 1] + 1
-          : Math.max(lengths[i + 1][j], lengths[i][j + 1]);
+          ? at(i + 1, j + 1) + 1
+          : Math.max(at(i + 1, j), at(i, j + 1));
   const common = new Set<string>();
   let i = 0;
   let j = 0;
   while (i < first.length && j < second.length) {
-    if (first[i] === second[j]) {
-      common.add(first[i]);
+    const left = first[i];
+    if (left !== undefined && left === second[j]) {
+      common.add(left);
       i++;
       j++;
-    } else if (lengths[i + 1][j] >= lengths[i][j + 1]) i++;
+    } else if (at(i + 1, j) >= at(i, j + 1)) i++;
     else j++;
   }
   return common;
