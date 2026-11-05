@@ -41,6 +41,16 @@ beforeEach(() => {
   track.mockClear();
   play.mockClear();
   pause.mockClear();
+  // jsdom has no layout observers (the shelf measures its row) or scrolling.
+  vi.stubGlobal(
+    'ResizeObserver',
+    class {
+      observe() {}
+      unobserve() {}
+      disconnect() {}
+    }
+  );
+  vi.stubGlobal('scrollTo', vi.fn());
   // jsdom has no media playback.
   Object.defineProperty(HTMLMediaElement.prototype, 'play', {
     configurable: true,
@@ -52,7 +62,10 @@ beforeEach(() => {
   });
 });
 
-afterEach(cleanup);
+afterEach(() => {
+  cleanup();
+  vi.unstubAllGlobals();
+});
 
 const row = () =>
   screen.queryByRole('button', { name: /Learn how to use Macro Mail/ });
@@ -112,6 +125,64 @@ describe('block tutorial row', () => {
 
     render(() => <TutorialRow tutorial="mail" />);
     expect(row()).toBeNull();
+  });
+});
+
+describe('shelf after a video ends', () => {
+  it('offers the other tutorials and switches to one, paused', async () => {
+    render(() => <TutorialRow tutorial="mail" />);
+    fireEvent.click(row()!);
+    const dialog = await screen.findByRole('dialog');
+    fireEvent.click(screen.getByRole('button', { name: 'Play video' }));
+    fireEvent.play(video()!);
+    expect(screen.queryByText('More videos from Macro')).toBeNull();
+
+    fireEvent.ended(video()!);
+
+    screen.getByText('More videos from Macro');
+    expect(
+      screen.queryByRole('button', { name: /^Learn how to use Macro Mail,/ })
+    ).toBeNull();
+    expect(video()?.controls).toBe(false);
+
+    fireEvent.click(
+      screen.getByRole('button', { name: /^Learn how to use Macro CRM,/ })
+    );
+
+    expect(screen.queryByText('More videos from Macro')).toBeNull();
+    expect(dialog.textContent).toContain('Learn how to use Macro CRM');
+    expect(video()?.getAttribute('src')).toBe(TUTORIALS.crm?.videoUrl);
+    expect(document.activeElement).toBe(
+      screen.getByRole('button', { name: 'Play video' })
+    );
+    expect(track).toHaveBeenLastCalledWith('tutorial_video', {
+      tutorial: 'macro-crm',
+      action: 'opened',
+    });
+
+    // Plays of the new video count for it.
+    fireEvent.click(screen.getByRole('button', { name: 'Play video' }));
+    fireEvent.play(video()!);
+    expect(track).toHaveBeenLastCalledWith('tutorial_video', {
+      tutorial: 'macro-crm',
+      action: 'played',
+    });
+  });
+
+  it('replays the video from the start', async () => {
+    render(() => <TutorialRow tutorial="mail" />);
+    fireEvent.click(row()!);
+    await screen.findByRole('dialog');
+    fireEvent.click(screen.getByRole('button', { name: 'Play video' }));
+    fireEvent.ended(video()!);
+    video()!.currentTime = 80;
+    play.mockClear();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Replay' }));
+
+    expect(play).toHaveBeenCalledTimes(1);
+    expect(video()?.currentTime).toBe(0);
+    expect(screen.queryByText('More videos from Macro')).toBeNull();
   });
 });
 

@@ -7,9 +7,9 @@ import { type TutorialId, tutorialDismissedKey } from '../core/tutorial-id';
 const DISMISSED_VALUE = z.literal('true');
 
 /**
- * One tutorial entry's state: whether its video dialog is open, and whether
- * the person dismissed the entry on this device (remembered until they clear
- * site data).
+ * One tutorial entry's state: whether its video dialog is open, which video
+ * it shows, and whether the person dismissed the entry on this device
+ * (remembered until they clear site data).
  */
 export function createTutorialState(id: TutorialId) {
   const key = tutorialDismissedKey(id);
@@ -26,24 +26,40 @@ export function createTutorialState(id: TutorialId) {
     },
   });
 
+  // The video the dialog shows: the entry's own, or another one picked from
+  // the shelf after a video ends.
+  const [shown, setShown] = createSignal<TutorialId>(id);
+
   const track = (
+    tutorial: TutorialId,
     action: 'opened' | 'played' | 'dismissed' | 'support_clicked'
-  ) => analytics.track('tutorial_video', { tutorial: `macro-${id}`, action });
+  ) =>
+    analytics.track('tutorial_video', {
+      tutorial: `macro-${tutorial}`,
+      action,
+    });
 
   return {
     open,
     setOpen,
     dismissed,
+    shown,
     openVideo: () => {
-      track('opened');
+      setShown(id);
+      track(id, 'opened');
       setOpen(true);
     },
+    /** Switch the open dialog to another tutorial. */
+    show: (next: TutorialId) => {
+      setShown(next);
+      track(next, 'opened');
+    },
     dismiss: () => {
-      track('dismissed');
+      track(id, 'dismissed');
       setDismissed(true);
     },
-    recordPlay: () => track('played'),
-    recordSupportClick: () => track('support_clicked'),
+    recordPlay: () => track(shown(), 'played'),
+    recordSupportClick: () => track(shown(), 'support_clicked'),
   };
 }
 

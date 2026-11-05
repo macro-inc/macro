@@ -3,6 +3,8 @@ import { fireAndForget } from '@core/util/fireAndForget';
 import XIcon from '@icon/system/regular/x.svg';
 import { Button, Dialog } from '@ui';
 import { createSignal, type JSX, Show } from 'solid-js';
+import type { TutorialId } from '../core/tutorial-id';
+import { type ShelfTutorial, TutorialShelf } from './TutorialShelf';
 
 /**
  * The big play button: a solid black disc with a filled white triangle. The
@@ -47,6 +49,10 @@ export function TutorialVideoDialog(props: {
   posterUrl: string;
   /** Called once per opening, when playback really starts. */
   onPlayStarted: () => void;
+  /** The other tutorials, offered on the shelf once this video ends. */
+  more: readonly ShelfTutorial[];
+  /** Switch the dialog to another tutorial, paused at its play button. */
+  onSelectTutorial: (id: TutorialId) => void;
   /**
    * The strip under the video. It gets the dialog's close, so a link in it
    * can leave the video paused and closed behind it.
@@ -54,11 +60,14 @@ export function TutorialVideoDialog(props: {
   footer?: (close: () => void) => JSX.Element;
 }) {
   const [started, setStarted] = createSignal(false);
+  const [ended, setEnded] = createSignal(false);
   let video: HTMLVideoElement | undefined;
+  let playButton: HTMLButtonElement | undefined;
   let playRecorded = false;
 
   const recordPlay = () => {
     setStarted(true);
+    setEnded(false);
     if (playRecorded) return;
     playRecorded = true;
     props.onPlayStarted();
@@ -72,12 +81,31 @@ export function TutorialVideoDialog(props: {
     fireAndForget(video.play(), 'video-tutorials');
   };
 
+  const replay = () => {
+    if (!video) return;
+    setEnded(false);
+    video.currentTime = 0;
+    video.focus();
+    fireAndForget(video.play(), 'video-tutorials');
+  };
+
+  const reset = () => {
+    video?.pause();
+    setStarted(false);
+    setEnded(false);
+    playRecorded = false;
+  };
+
+  const selectTutorial = (id: TutorialId) => {
+    reset();
+    props.onSelectTutorial(id);
+    // The card that was pressed unmounts with the shelf; the next video's play
+    // button takes focus, so Enter or Space starts it.
+    playButton?.focus();
+  };
+
   const changeOpen = (open: boolean) => {
-    if (!open) {
-      video?.pause();
-      setStarted(false);
-      playRecorded = false;
-    }
+    if (!open) reset();
     props.onOpenChange(open);
   };
 
@@ -111,8 +139,9 @@ export function TutorialVideoDialog(props: {
             preload="metadata"
             playsinline
             tabIndex={-1}
-            controls={started()}
+            controls={started() && !ended()}
             onPlay={recordPlay}
+            onEnded={() => setEnded(true)}
             onKeyDown={(event) => {
               if (event.key === 'Escape') changeOpen(false);
             }}
@@ -120,6 +149,7 @@ export function TutorialVideoDialog(props: {
           />
           <Show when={!started()}>
             <button
+              ref={playButton}
               type="button"
               onClick={play}
               aria-label={t('tutorials.playVideo')}
@@ -127,6 +157,23 @@ export function TutorialVideoDialog(props: {
             >
               <PlayButtonGlyph />
             </button>
+          </Show>
+          <Show when={ended()}>
+            {/* The last frame stays faintly visible under a dark wash; a
+                click on it replays (the shelf's Replay is the keyboard path). */}
+            <button
+              type="button"
+              tabIndex={-1}
+              aria-hidden="true"
+              onClick={replay}
+              class="absolute inset-0 bg-linear-to-t from-[black]/90 via-[black]/65 to-[black]/40 transition-opacity duration-500 starting:opacity-0"
+            />
+            <TutorialShelf
+              tutorials={props.more}
+              onSelect={selectTutorial}
+              onReplay={replay}
+              class="absolute inset-x-0 bottom-0 transition-[opacity,translate] duration-500 starting:translate-y-2 starting:opacity-0"
+            />
           </Show>
         </div>
         <Show when={props.footer}>

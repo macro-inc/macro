@@ -7,7 +7,7 @@ import {
 } from '../components/TutorialEntries';
 import { TutorialSupportLip } from '../components/TutorialSupportLip';
 import { TutorialVideoDialog } from '../components/TutorialVideoDialog';
-import type { TutorialId } from '../core/tutorial-id';
+import { TUTORIAL_IDS, type TutorialId } from '../core/tutorial-id';
 import { createSupportLink } from '../primitives/create-support-link';
 import {
   createTutorialState,
@@ -43,6 +43,13 @@ function Entry(props: {
   class?: string;
 }) {
   const state: TutorialState = createTutorialState(props.tutorial.id);
+  const shown = () => TUTORIALS[state.shown()] ?? props.tutorial;
+  // The shelf after a video ends: every other tutorial, in the blocks' order.
+  const more = () =>
+    TUTORIAL_IDS.flatMap((id) => {
+      const tutorial = TUTORIALS[id];
+      return tutorial && id !== state.shown() ? [tutorial] : [];
+    });
   const entry = () => ({
     title: props.tutorial.title,
     snippet: props.tutorial.snippet,
@@ -66,13 +73,15 @@ function Entry(props: {
       <TutorialVideoDialog
         open={state.open()}
         onOpenChange={state.setOpen}
-        title={props.tutorial.title}
-        videoUrl={props.tutorial.videoUrl}
-        posterUrl={props.tutorial.posterUrl}
+        title={shown().title}
+        videoUrl={shown().videoUrl}
+        posterUrl={shown().posterUrl}
         onPlayStarted={state.recordPlay}
+        more={more()}
+        onSelectTutorial={state.show}
         footer={(close) => (
           <SupportLip
-            block={props.tutorial.block}
+            block={shown().block}
             onFollow={() => {
               state.recordSupportClick();
               close();

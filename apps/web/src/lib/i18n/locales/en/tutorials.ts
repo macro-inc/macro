@@ -5,6 +5,10 @@ export default {
   closeVideo: 'Close video',
   supportQuestion: 'Have questions about {{block}}?',
   supportChannel: 'Talk to us in your support channel.',
+  moreVideos: 'More videos from Macro',
+  replay: 'Replay',
+  previousVideos: 'Previous videos',
+  nextVideos: 'More videos',
   mailTitle: 'Learn how to use Macro Mail',
   mailBlock: 'Macro Mail',
   mailSnippet:
@@ -39,12 +43,12 @@ export default {
   callsBlock: 'Macro Calls',
   callsSnippet:
     'Calls with transcripts and summaries, shared with your team and its agents',
-  callsLength: '1:10',
+  callsLength: '1:11',
   schedulingTitle: 'Learn how to use Macro Scheduling',
   schedulingBlock: 'Macro Scheduling',
   schedulingSnippet:
     'Booking links built into your calendar, created by an agent',
-  schedulingLength: '0:44',
+  schedulingLength: '0:45',
   calendarTitle: 'Learn how to use Macro Calendar',
   calendarBlock: 'Macro Calendar',
   calendarSnippet:
