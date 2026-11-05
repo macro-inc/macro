@@ -151,13 +151,10 @@ impl EmailCodeProvider for AuthServiceEmailCodes {
         let span = tracing::debug_span!("mcp_oauth.email_code.redeem");
         Box::pin(
             async move {
-                // The service files a code under the lowercased address when it
-                // sends it, but looks it up with the casing it is given here.
-                let email = email.to_lowercase();
                 let response = self
                     .client
                     .get(self.endpoint(&["oauth", "passwordless", code])?)
-                    .query(&[("email", email.as_str()), ("disable_redirect", "true")])
+                    .query(&[("email", email), ("disable_redirect", "true")])
                     .headers(trace_headers())
                     .send()
                     .await
