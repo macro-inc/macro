@@ -1,3 +1,4 @@
+import { ListSkeleton } from '@app/components/view-shell/ListSkeleton';
 import CheckIcon from '@icon/system/regular/check.svg';
 import SpinnerIcon from '@icon/system/regular/spinner-gap.svg';
 import { Badge } from '@ui';
@@ -90,12 +91,12 @@ export function SuggestionRow(props: {
 export function SuggestionRowSkeleton() {
   return (
     <li aria-hidden="true" class="flex items-center gap-4 py-4">
-      <span class="size-11 shrink-0 animate-pulse rounded-xl bg-ink/5" />
+      <ListSkeleton.Bar class="size-10 shrink-0 rounded-xl sm:size-11" />
       <div class="flex flex-1 flex-col gap-2">
-        <span class="h-3.5 w-28 animate-pulse rounded bg-ink/5" />
-        <span class="h-3 w-3/4 animate-pulse rounded bg-ink/5" />
+        <ListSkeleton.Bar class="h-3.5 w-28" />
+        <ListSkeleton.Bar class="h-3 w-3/4" />
       </div>
-      <span class="h-9 w-20 shrink-0 animate-pulse rounded-full bg-ink/5" />
+      <ListSkeleton.Bar class="h-9 w-20 shrink-0" />
     </li>
   );
 }
