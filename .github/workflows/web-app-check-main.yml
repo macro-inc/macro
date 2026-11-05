@@ -15,7 +15,7 @@ jobs:
     runs-on: namespace-profile-linux-tiny-no-cache
     outputs:
       should_run: ${{ steps.filter.outputs.should_run }}
-      codegen_changed: ${{ steps.filter.outputs.codegen_changed }}
+      codegen_changed: ${{ steps.codegen.outputs.codegen_changed }}
       i18n_changed: ${{ steps.filter.outputs.i18n_changed }}
       database_grid_changed: ${{ steps.filter.outputs.database_grid_changed }}
       calendar_details_changed: ${{ steps.filter.outputs.calendar_details_changed }}
@@ -26,6 +26,7 @@ jobs:
       name: Filter changed paths
       uses: dorny/paths-filter@d1c1ffe0248fe513906c8e24db8ea791d46f8590
       with:
+        list-files: shell
         filters: |
           should_run:
             - 'package.json'
@@ -52,11 +53,10 @@ jobs:
             - 'packages/code-mode-sdk/**'
             - 'crates/agent_code_mode/SKILL.md'
             - '.github/actions/setup-reqs-web/**'
-          codegen_changed:
+          rust_sources:
             - 'crates/**/*.rs'
             - 'services/**/*.rs'
-            - 'Cargo.toml'
-            - 'Cargo.lock'
+          codegen_inputs:
             - 'apps/web/scripts/generate-api-schema.ts'
             - 'apps/web/scripts/services.ts'
             - 'packages/sdk/**'
@@ -74,6 +74,36 @@ jobs:
             - 'apps/web/src/features/calendar-view/**'
             - 'apps/web/src/features/calendar/**'
             - 'apps/web/src/lib/queries/calendar/**'
+    - id: codegen
+      name: Detect schema changes
+      run: |
+        set -euo pipefail
+        result() {
+          echo "$1"
+          echo "codegen_changed=$2" >> "$GITHUB_OUTPUT"
+          exit 0
+        }
+        [ "$CODEGEN_INPUTS" = true ] && result "A generator input changed." true
+        base=$(git cat-file -p HEAD | sed -n 's/^parent //p' | head -1)
+        git fetch -q --depth=1 origin "$base"
+        names='utoipa|ToSchema|IntoParams|specta|schemars|JsonSchema'
+        if git diff "$base" HEAD -- Cargo.toml Cargo.lock | grep -E "^[-+].*($names)" ; then
+          result "A schema crate's version changed." true
+        fi
+        [ "$RUST_SOURCES" = true ] || result "No Rust source changed." false
+        read -ra files <<< "$RUST_FILES"
+        for file in "${files[@]}"; do
+          for revision in HEAD "$base"; do
+            if git show "$revision:$file" 2>/dev/null | grep -qE "$names"; then
+              result "$file names a schema item." true
+            fi
+          done
+        done
+        result "No changed Rust file names a schema item." false
+      env:
+        CODEGEN_INPUTS: ${{ steps.filter.outputs.codegen_inputs }}
+        RUST_SOURCES: ${{ steps.filter.outputs.rust_sources }}
+        RUST_FILES: ${{ steps.filter.outputs.rust_sources_files }}
   android-native-check:
     name: Android Native Check
     runs-on: namespace-profile-linux-tiny-no-cache

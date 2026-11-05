@@ -72,8 +72,8 @@ fn filters(yaml: &str) -> (&str, &str) {
         .and_then(|rest| rest.split("id: filter").next())
         .expect("path-check filters");
     filters
-        .split_once("codegen_changed:")
-        .expect("should_run block, then codegen_changed block")
+        .split_once("rust_sources:")
+        .expect("should_run block, then the code generation inputs")
 }
 
 /// A job's rendered YAML, from its id up to the next job's id. Slicing by id
@@ -270,8 +270,6 @@ fn codegen_filter_covers_every_input_of_the_generated_code_job() {
     for path in [
         "'crates/**/*.rs'",
         "'services/**/*.rs'",
-        "'Cargo.toml'",
-        "'Cargo.lock'",
         "'apps/web/scripts/generate-api-schema.ts'",
         "'apps/web/scripts/services.ts'",
         "'packages/sdk/**'",
@@ -279,8 +277,16 @@ fn codegen_filter_covers_every_input_of_the_generated_code_job() {
     ] {
         assert!(
             codegen.contains(path),
-            "codegen_changed must include {path}: {codegen}"
+            "the code generation filters must include {path}: {codegen}"
         );
+    }
+    let path_check = job(&yaml, "path-check", "android-native-check");
+    for needle in [
+        "utoipa|ToSchema|IntoParams|specta|schemars|JsonSchema",
+        "-- Cargo.toml Cargo.lock",
+        "for revision in HEAD \"$base\"",
+    ] {
+        assert!(path_check.contains(needle), "{needle}: {path_check}");
     }
     let generated = job(&yaml, "generated-code", "biome-check");
     assert!(generated.contains("needs.path-check.outputs.codegen_changed == 'true'"));

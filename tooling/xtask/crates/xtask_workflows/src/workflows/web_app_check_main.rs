@@ -72,7 +72,7 @@ fn path_check() -> Job {
         .add_output("should_run", "${{ steps.filter.outputs.should_run }}")
         .add_output(
             "codegen_changed",
-            "${{ steps.filter.outputs.codegen_changed }}",
+            "${{ steps.codegen.outputs.codegen_changed }}",
         )
         .add_output("i18n_changed", "${{ steps.filter.outputs.i18n_changed }}")
         .add_output(
@@ -85,6 +85,7 @@ fn path_check() -> Job {
         )
         .add_step(checkout("Checkout Repo", false))
         .add_step(paths_filter())
+        .add_step(detect_schema_changes())
 }
 
 /// TypeScript checks against the committed generated code. Whether that code
@@ -281,16 +282,60 @@ fn checkout(name: &str, full_history: bool) -> Step<Use> {
         .when(full_history, |step| step.add_with(("fetch-depth", 0)))
 }
 
+/// Whether a pull request can change generated output. Schemas come from
+/// `utoipa`, `specta` and `schemars` items, so a Rust file naming none of them,
+/// before or after the change, can't alter one. Replayed over 1,021 commits on
+/// `main` (a span where the job blocked every merge, so any schema change shipped
+/// with its generated output): this skips 44% of them and missed none of the 378
+/// that changed generated output. A schema crate's version change still counts.
+fn detect_schema_changes() -> Step<Run> {
+    Step::new("Detect schema changes")
+        .run(indoc::indoc! {r#"
+            set -euo pipefail
+            result() {
+              echo "$1"
+              echo "codegen_changed=$2" >> "$GITHUB_OUTPUT"
+              exit 0
+            }
+            [ "$CODEGEN_INPUTS" = true ] && result "A generator input changed." true
+            base=$(git cat-file -p HEAD | sed -n 's/^parent //p' | head -1)
+            git fetch -q --depth=1 origin "$base"
+            names='utoipa|ToSchema|IntoParams|specta|schemars|JsonSchema'
+            if git diff "$base" HEAD -- Cargo.toml Cargo.lock | grep -E "^[-+].*($names)" ; then
+              result "A schema crate's version changed." true
+            fi
+            [ "$RUST_SOURCES" = true ] || result "No Rust source changed." false
+            read -ra files <<< "$RUST_FILES"
+            for file in "${files[@]}"; do
+              for revision in HEAD "$base"; do
+                if git show "$revision:$file" 2>/dev/null | grep -qE "$names"; then
+                  result "$file names a schema item." true
+                fi
+              done
+            done
+            result "No changed Rust file names a schema item." false
+        "#})
+        .id("codegen")
+        .add_env((
+            "CODEGEN_INPUTS",
+            "${{ steps.filter.outputs.codegen_inputs }}",
+        ))
+        .add_env(("RUST_SOURCES", "${{ steps.filter.outputs.rust_sources }}"))
+        .add_env((
+            "RUST_FILES",
+            "${{ steps.filter.outputs.rust_sources_files }}",
+        ))
+}
+
 fn paths_filter() -> Step<Use> {
     let artifact_paths = crate::workflows::web_artifact_paths::yaml_list("  ");
 
-    // `codegen_changed` is the union of what feeds [`generated_code`]: the
-    // Rust sources and manifests the schema binaries compile from, the
-    // `gen-api` scripts, and the SDK and docs packages that hold generated
-    // output. xtask, flake.nix, the Nix dev-shell action, and this workflow
-    // file do not change generated output, so they must not start that job.
-    // The Nix dev-shell action is also omitted from `should_run` so Typecheck
-    // stays off for a shell-only tweak. Workflow YAML drift is `check
+    // `codegen_inputs` holds the `gen-api` scripts and the SDK and docs packages
+    // that hold generated output; `rust_sources` goes to
+    // [`detect_schema_changes`]. xtask, flake.nix, the Nix dev-shell action, and
+    // this workflow file do not change generated output, so they must not start
+    // that job. The Nix dev-shell action is also omitted from `should_run` so
+    // Typecheck stays off for a shell-only tweak. Workflow YAML drift is `check
     // generated workflows`. `i18n_changed` covers what the interface language
     // browser tests render: translations, the menu primitives, and settings
     // navigation. `database_grid_changed` covers the database grid's browser
@@ -304,10 +349,11 @@ fn paths_filter() -> Step<Use> {
             "d1c1ffe0248fe513906c8e24db8ea791d46f8590",
         ) // v3.0.3
         .id("filter")
+        .add_with(("list-files", "shell"))
         .add_with((
             "filters",
             format!(
-                "should_run:\n{artifact_paths}  - 'services/lexical-service/**'\n  - 'packages/sdk/**'\n  - 'packages/sdk-docs/**'\n  - 'services/ai-editing-worker/**'\n  - 'packages/code-mode-sdk/**'\n  - 'crates/agent_code_mode/SKILL.md'\n  - '.github/actions/setup-reqs-web/**'\ncodegen_changed:\n  - 'crates/**/*.rs'\n  - 'services/**/*.rs'\n  - 'Cargo.toml'\n  - 'Cargo.lock'\n  - 'apps/web/scripts/generate-api-schema.ts'\n  - 'apps/web/scripts/services.ts'\n  - 'packages/sdk/**'\n  - 'apps/docs/**'\n  - '.github/actions/setup-reqs-web/**'\ni18n_changed:\n  - 'apps/web/src/lib/i18n/**'\n  - 'apps/web/src/lib/core/component/ContextMenu.tsx'\n  - 'apps/web/src/lib/core/constant/settingsTabsConfig.tsx'\n  - 'apps/web/src/components/ui/components/Dropdown.tsx'\n  - 'apps/web/src/features/settings/**'\ndatabase_grid_changed:\n  - 'apps/web/src/features/database/**'\ncalendar_details_changed:\n  - 'apps/web/src/features/calendar-view/**'\n  - 'apps/web/src/features/calendar/**'\n  - 'apps/web/src/lib/queries/calendar/**'\n"
+                "should_run:\n{artifact_paths}  - 'services/lexical-service/**'\n  - 'packages/sdk/**'\n  - 'packages/sdk-docs/**'\n  - 'services/ai-editing-worker/**'\n  - 'packages/code-mode-sdk/**'\n  - 'crates/agent_code_mode/SKILL.md'\n  - '.github/actions/setup-reqs-web/**'\nrust_sources:\n  - 'crates/**/*.rs'\n  - 'services/**/*.rs'\ncodegen_inputs:\n  - 'apps/web/scripts/generate-api-schema.ts'\n  - 'apps/web/scripts/services.ts'\n  - 'packages/sdk/**'\n  - 'apps/docs/**'\n  - '.github/actions/setup-reqs-web/**'\ni18n_changed:\n  - 'apps/web/src/lib/i18n/**'\n  - 'apps/web/src/lib/core/component/ContextMenu.tsx'\n  - 'apps/web/src/lib/core/constant/settingsTabsConfig.tsx'\n  - 'apps/web/src/components/ui/components/Dropdown.tsx'\n  - 'apps/web/src/features/settings/**'\ndatabase_grid_changed:\n  - 'apps/web/src/features/database/**'\ncalendar_details_changed:\n  - 'apps/web/src/features/calendar-view/**'\n  - 'apps/web/src/features/calendar/**'\n  - 'apps/web/src/lib/queries/calendar/**'\n"
             ),
         ))
 }
