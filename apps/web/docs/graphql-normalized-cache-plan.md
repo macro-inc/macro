@@ -1331,9 +1331,11 @@ commit notification wakes pending queries after the page acknowledgement. Scope,
 compiler metadata and input ownership fence answers, and each observer retains one
 physical operation plus one replaceable input. The unnecessary `/databases/read`
 endpoint/client is removed. Fresh queries work offline once synchronization is
-complete; unsupported/incomplete reads stay explicit. Frontend query correctness
-and whole-app acceptance remain open. PostgreSQL SQL feature parity and arbitrary
-join expansion are not requirements of the contacts-memory plan.
+complete; unsupported/incomplete reads stay explicit. The frontend correctness
+pass covers real compiler/controller/local-cache composition, including explicit
+refusal of non-ID join hints rather than misleading empty results. Current whole-app
+memory/latency and physical-device acceptance remain open. PostgreSQL SQL feature
+parity and arbitrary join expansion are not requirements of the contacts-memory plan.
 Calendar create/edit, event-detail guest actions and AI-draft
 composers now use bounded property windows with event-owned guest extras. Chosen
 names stay in selection metadata rather than a directory map, and person pages
