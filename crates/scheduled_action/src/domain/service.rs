@@ -1,5 +1,6 @@
 use std::sync::Arc;
 
+use ai_billing::PlanTier;
 use anyhow::{Result, bail};
 use chrono::{DateTime, Utc};
 use entity_access::domain::{
@@ -23,8 +24,10 @@ use super::models::{
     DispatchEvent, InProgressExecution, ListedAction, OwnerNotUserError, ScheduledAction,
 };
 use super::ports::{
-    ScheduledActionExecutor, ScheduledActionRepo, ScheduledActionService, TaskTargetValidator,
+    RoutinePlans, ScheduledActionExecutor, ScheduledActionRepo, ScheduledActionService,
+    TaskTargetValidator,
 };
+use super::routine_limit::RoutineLimit;
 use super::target_validation::{ModelOnlyTargets, require_explicit_selection};
 
 #[cfg(test)]
@@ -36,6 +39,7 @@ pub struct ScheduledActionServiceImpl<
     Grants,
     Targets = ModelOnlyTargets,
     Github = NoGithubLinks,
+    Plans = FreePlans,
 > {
     repo: Arc<Rpo>,
     executor: Arc<Exe>,
@@ -45,6 +49,17 @@ pub struct ScheduledActionServiceImpl<
     conditions_enabled: bool,
     targets: Targets,
     github: Github,
+    plans: Plans,
+}
+
+/// Composition without plan lookups: every owner gets the Free routine
+/// limit, so a host that forgets to wire plans fails closed.
+pub struct FreePlans;
+
+impl RoutinePlans for FreePlans {
+    async fn plan(&self, _owner: &MacroUserIdStr<'static>) -> Result<PlanTier> {
+        Ok(PlanTier::Free)
+    }
 }
 
 /// Composition without GitHub: no owner counts as linked, so GitHub triggers
@@ -82,17 +97,18 @@ impl<Rpo: ScheduledActionRepo, Exe, Grants> ScheduledActionServiceImpl<Rpo, Exe,
             conditions_enabled: false,
             targets: ModelOnlyTargets,
             github: NoGithubLinks,
+            plans: FreePlans,
         }
     }
 }
 
-impl<Rpo: ScheduledActionRepo, Exe, Grants, Targets, Github>
-    ScheduledActionServiceImpl<Rpo, Exe, Grants, Targets, Github>
+impl<Rpo: ScheduledActionRepo, Exe, Grants, Targets, Github, Plans>
+    ScheduledActionServiceImpl<Rpo, Exe, Grants, Targets, Github, Plans>
 {
     pub fn with_target_validation<T: TaskTargetValidator>(
         self,
         targets: T,
-    ) -> ScheduledActionServiceImpl<Rpo, Exe, Grants, T, Github> {
+    ) -> ScheduledActionServiceImpl<Rpo, Exe, Grants, T, Github, Plans> {
         ScheduledActionServiceImpl {
             repo: self.repo,
             executor: self.executor,
@@ -102,6 +118,7 @@ impl<Rpo: ScheduledActionRepo, Exe, Grants, Targets, Github>
             conditions_enabled: self.conditions_enabled,
             targets,
             github: self.github,
+            plans: self.plans,
         }
     }
 
@@ -109,7 +126,7 @@ impl<Rpo: ScheduledActionRepo, Exe, Grants, Targets, Github>
     pub fn with_github_links<G: GithubInstallationClaims>(
         self,
         github: G,
-    ) -> ScheduledActionServiceImpl<Rpo, Exe, Grants, Targets, G> {
+    ) -> ScheduledActionServiceImpl<Rpo, Exe, Grants, Targets, G, Plans> {
         ScheduledActionServiceImpl {
             repo: self.repo,
             executor: self.executor,
@@ -119,6 +136,25 @@ impl<Rpo: ScheduledActionRepo, Exe, Grants, Targets, Github>
             conditions_enabled: self.conditions_enabled,
             targets: self.targets,
             github,
+            plans: self.plans,
+        }
+    }
+
+    /// Limits each owner's active routines by their plan.
+    pub fn with_routine_plans<P: RoutinePlans>(
+        self,
+        plans: P,
+    ) -> ScheduledActionServiceImpl<Rpo, Exe, Grants, Targets, Github, P> {
+        ScheduledActionServiceImpl {
+            repo: self.repo,
+            executor: self.executor,
+            grants: self.grants,
+            dispatcher_tx: self.dispatcher_tx,
+            event_management_enabled: self.event_management_enabled,
+            conditions_enabled: self.conditions_enabled,
+            targets: self.targets,
+            github: self.github,
+            plans,
         }
     }
 
@@ -168,6 +204,33 @@ impl<Rpo: ScheduledActionRepo, Exe, Grants, Targets, Github>
         Ok(())
     }
 
+    /// The limit a write must respect when it leaves `action` active and it
+    /// wasn't before. `None` when the write adds no active routine, so pausing,
+    /// deleting, and editing an active routine never depend on plan lookups.
+    #[tracing::instrument(
+        name = "routine.activation_limit",
+        err,
+        skip_all,
+        fields(plan = tracing::field::Empty, limit = tracing::field::Empty)
+    )]
+    async fn activation_limit(
+        &self,
+        was_active: bool,
+        action: &ScheduledAction,
+    ) -> Result<Option<RoutineLimit>>
+    where
+        Plans: RoutinePlans,
+    {
+        if was_active || !action.is_active() {
+            return Ok(None);
+        }
+        let limit = RoutineLimit::for_plan(self.plans.plan(action.owner_user()?).await?);
+        let span = tracing::Span::current();
+        span.record("plan", tracing::field::display(limit.plan()));
+        span.record("limit", limit.max_active());
+        Ok(Some(limit))
+    }
+
     async fn create(
         &self,
         principal: &CreationPrincipal,
@@ -177,6 +240,7 @@ impl<Rpo: ScheduledActionRepo, Exe, Grants, Targets, Github>
     where
         Targets: TaskTargetValidator,
         Github: GithubInstallationClaims,
+        Plans: RoutinePlans,
     {
         let owner = principal.owner();
         let owner_user = owner.as_user().ok_or(OwnerNotUserError {
@@ -191,26 +255,25 @@ impl<Rpo: ScheduledActionRepo, Exe, Grants, Targets, Github>
         let now = Utc::now();
         let next_run_at = next_run(&input.trigger, now, |_| false)?;
         let event_activated_at = input.trigger.event_filters().is_some().then_some(now);
-        let created = self
-            .repo
-            .create_action(ScheduledAction {
-                id: None,
-                owner,
-                name: input.name,
-                trigger: input.trigger,
-                kind: input.kind,
-                task: input.task,
-                enabled: input.enabled,
-                run_visibility: input.run_visibility,
-                created_at: now,
-                updated_at: now,
-                configuration_revision: ConfigurationRevision::INITIAL,
-                event_activated_at,
-                next_run_at,
-                claimed: None,
-                template_id,
-            })
-            .await?;
+        let action = ScheduledAction {
+            id: None,
+            owner,
+            name: input.name,
+            trigger: input.trigger,
+            kind: input.kind,
+            task: input.task,
+            enabled: input.enabled,
+            run_visibility: input.run_visibility,
+            created_at: now,
+            updated_at: now,
+            configuration_revision: ConfigurationRevision::INITIAL,
+            event_activated_at,
+            next_run_at,
+            claimed: None,
+            template_id,
+        };
+        let activation = self.activation_limit(false, &action).await?;
+        let created = self.repo.create_action(action, activation).await?;
         self.dispatcher_tx
             .send(DispatchEvent::Create(created.clone()))
             .await
@@ -241,8 +304,10 @@ impl<Rpo: ScheduledActionRepo, Exe, Grants, Targets, Github>
     where
         Targets: TaskTargetValidator,
         Github: GithubInstallationClaims,
+        Plans: RoutinePlans,
     {
         require_explicit_selection(&action.task, &input.task)?;
+        let was_active = action.is_active();
         let trigger_changed = !same_trigger(&action.trigger, &input.trigger);
         let configuration_changed = trigger_changed
             || action.name != input.name
@@ -292,7 +357,8 @@ impl<Rpo: ScheduledActionRepo, Exe, Grants, Targets, Github>
         action.run_visibility = input.run_visibility;
         action.updated_at = now;
 
-        let updated = self.repo.update_action(action).await?;
+        let activation = self.activation_limit(was_active, &action).await?;
+        let updated = self.repo.update_action(action, activation).await?;
         self.dispatcher_tx
             .send(DispatchEvent::Update(updated.clone()))
             .await
@@ -379,10 +445,11 @@ fn same_trigger(left: &ActionTrigger, right: &ActionTrigger) -> bool {
     left == right
 }
 
-impl<Rpo, Exe, Grants, Targets, Github> ScheduledActionService
-    for ScheduledActionServiceImpl<Rpo, Exe, Grants, Targets, Github>
+impl<Rpo, Exe, Grants, Targets, Github, Plans> ScheduledActionService
+    for ScheduledActionServiceImpl<Rpo, Exe, Grants, Targets, Github, Plans>
 where
     Github: GithubInstallationClaims,
+    Plans: RoutinePlans,
     Rpo: ScheduledActionRepo,
     Grants: ScheduledActionGrants,
     Targets: TaskTargetValidator,

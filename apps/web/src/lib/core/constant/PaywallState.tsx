@@ -13,6 +13,7 @@ export enum PaywallKey {
   REMOVE_SIGNATURE = 'REMOVE_SIGNATURE',
   MULTI_INBOX = 'MULTI_INBOX',
   TEAMS = 'TEAMS',
+  ROUTINE_LIMIT = 'ROUTINE_LIMIT',
 }
 
 export type PaywallMessageMetadata = {
@@ -84,6 +85,11 @@ export const PaywallMessages: Record<PaywallKey, PaywallMessageMetadata> = {
       'Upgrade to create a team, invite members, and manage access together.',
     learnMoreUrl: 'https://docs.macro.com/account/teams',
     learnMoreSubject: 'teams',
+  },
+  [PaywallKey.ROUTINE_LIMIT]: {
+    title: 'Routine limit reached',
+    description:
+      'Upgrade to keep more routines active at once, or pause one you no longer need.',
   },
 };
 

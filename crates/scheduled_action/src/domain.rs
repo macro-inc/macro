@@ -5,6 +5,7 @@ pub mod lambda;
 pub mod models;
 pub mod ports;
 pub mod read_service;
+pub mod routine_limit;
 pub mod service;
 pub mod target_runner;
 pub mod target_validation;

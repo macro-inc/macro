@@ -45,6 +45,7 @@ use scheduled_action::outbound::pg_polling_dispatcher::{
 };
 use scheduled_action::outbound::pg_routine_template_repo::PgRoutineTemplateRepo;
 use scheduled_action::outbound::pg_scheduled_action_repo::PgScheduledActionRepo;
+use scheduled_action::outbound::routine_plans::EntitlementRoutinePlans;
 use scheduled_action::swagger::ApiDoc;
 use tokio_util::{sync::CancellationToken, task::TaskTracker};
 use utoipa::OpenApi;
@@ -273,7 +274,10 @@ pub async fn build<Ingress: notification::domain::service::NotificationIngress>(
         .with_event_management_enabled(config.event_routines_enabled)
         .with_conditions_enabled(conditions_enabled)
         .with_target_validation(TargetValidation::new(sessions))
-        .with_github_links(PgGithubInstallationClaims::new(db.clone())),
+        .with_github_links(PgGithubInstallationClaims::new(db.clone()))
+        .with_routine_plans(EntitlementRoutinePlans::new(
+            ai_billing::composition::pg_entitlement_source(db.clone()),
+        )),
     );
     let template_flags = config
         .posthog_api_key

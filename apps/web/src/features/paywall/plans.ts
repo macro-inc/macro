@@ -92,12 +92,20 @@ export const PLAN_USAGE_LABELS: Record<PlanTier, string> = {
   max: '10× usage',
 };
 
+/** Routines each plan keeps active at once; mirrors `RoutineLimit::for_plan` in `crates/scheduled_action`. */
+export const PLAN_ACTIVE_ROUTINES: Record<PlanTier, string> = {
+  free: '10',
+  premium: '1,000',
+  max: '10,000',
+};
+
 const PLAN_BENEFITS: Record<PlanTier, (usage: string | undefined) => string[]> =
   {
     free: (usage) => [
       'Access to Haiku',
       ...(usage ? [usage] : []),
       'MCP access',
+      `${PLAN_ACTIVE_ROUTINES.free} active routines`,
       '2 connected email accounts',
       '5 GB storage',
     ],
@@ -106,12 +114,14 @@ const PLAN_BENEFITS: Record<PlanTier, (usage: string | undefined) => string[]> =
       'All models',
       ...(usage ? [usage] : []),
       'No email watermark',
+      `${PLAN_ACTIVE_ROUTINES.premium} active routines`,
       'Unlimited connected email accounts',
       '100 GB storage',
     ],
     max: () => [
       'Everything in Pro',
       '10x more AI usage than Pro',
+      `${PLAN_ACTIVE_ROUTINES.max} active routines`,
       '1 TB storage',
       'Priority support',
     ],
@@ -145,6 +155,7 @@ const PLAN_FEATURE_ROWS: PlanFeature[] = [
       max: 'Credits or usage billing',
     },
   },
+  { label: 'Active routines', values: PLAN_ACTIVE_ROUTINES },
   {
     label: 'Storage',
     values: {

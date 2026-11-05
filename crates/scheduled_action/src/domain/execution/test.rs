@@ -4,6 +4,7 @@ use crate::domain::event_runs::{
 };
 use crate::domain::event_trigger::{EventName, EventReference};
 use crate::domain::models::{ActionKind, ExecutionResourceType, RunVisibility};
+use crate::domain::routine_limit::RoutineLimit;
 use entity_access::domain::models::{EntityAccessReceipt, ViewAccessLevel};
 use macro_user_id::user_id::MacroUserIdStr;
 use macro_uuid::{Uuid, generate_uuid_v7};
@@ -197,7 +198,11 @@ impl ScheduledActionRepo for Repo {
     async fn update_last_executed(&self, _: &Uuid, _: DateTime<Utc>) -> Result<()> {
         Ok(())
     }
-    async fn create_action(&self, _: ScheduledAction) -> Result<ScheduledAction> {
+    async fn create_action(
+        &self,
+        _: ScheduledAction,
+        _: Option<RoutineLimit>,
+    ) -> Result<ScheduledAction> {
         unimplemented!()
     }
     async fn get_owned_actions(&self, _: &MacroUserIdStr<'static>) -> Result<Vec<ScheduledAction>> {
@@ -212,7 +217,11 @@ impl ScheduledActionRepo for Repo {
     async fn get_next_unclaimed_actions(&self, _: i64) -> Result<Vec<ScheduledAction>> {
         unimplemented!()
     }
-    async fn update_action(&self, _: ScheduledAction) -> Result<ScheduledAction> {
+    async fn update_action(
+        &self,
+        _: ScheduledAction,
+        _: Option<RoutineLimit>,
+    ) -> Result<ScheduledAction> {
         unimplemented!()
     }
     async fn delete_action(&self, _: &Uuid) -> Result<()> {

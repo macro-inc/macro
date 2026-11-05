@@ -248,6 +248,12 @@ const comparisonGroups: Array<{
         pro: true,
         max: true,
       },
+      {
+        label: 'Active routines',
+        free: '10',
+        pro: '1,000',
+        max: '10,000',
+      },
     ],
   },
   {
