@@ -479,14 +479,18 @@ export async function collectPush(
           ).jobs
     );
   }
-  const number = run.pull_requests?.[0]?.number;
+  // GitHub leaves `pull_requests` empty on some runs, so ask the group when this is one.
+  const head = run.pull_requests?.length
+    ? run
+    : (runs.find((candidate) => candidate.pull_requests?.length) ?? run);
+  const number = head.pull_requests?.[0]?.number;
   const pullRequest: PullRequest | null = number ? await github.get(`pulls/${number}`) : null;
   const files = number ? await changedFiles(github, number) : null;
   const pushedAt =
     !run.head_repository?.fork && run.head_branch
       ? await pushedTime(github, run.head_branch, run.head_sha)
       : null;
-  return pushEvent(repo, run, runs, jobsByRun, pushedAt, pullRequest, files, repeat);
+  return pushEvent(repo, head, runs, jobsByRun, pushedAt, pullRequest, files, repeat);
 }
 
 function otlpValue(value: string | number | boolean) {

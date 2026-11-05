@@ -341,6 +341,14 @@ describe('collectPush', () => {
     assert.equal(event?.attributes.wall_start, 'push');
   });
 
+  test('a run without its PR still finds the PR through its group', async () => {
+    const last = run({ id: 2, pull_requests: [] });
+    const github = new FakeGithub(responses(run(), last));
+    const event = await collectPush(github, REPO, last);
+    assert.equal(event?.attributes.pr_type, 'web');
+    assert.equal(event?.attributes.pr_number, 7);
+  });
+
   test('a later edit does not hold up the push', async () => {
     const github = new FakeGithub(
       responses(run(), run({ id: 2, created_at: at(40), status: 'in_progress' }))
