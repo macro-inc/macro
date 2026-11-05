@@ -83,7 +83,7 @@ pub struct ChannelLabel {
     pub channel_count: i64,
     /// When the label was created.
     pub created_at: DateTime<Utc>,
-    /// When the label was last renamed or reordered.
+    /// When the label's name, rule, scope, or order last changed.
     pub updated_at: DateTime<Utc>,
 }
 

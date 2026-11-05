@@ -20,7 +20,8 @@ From `infra/`:
 - `bun run check`
 - Biome on changed files.
 - An authenticated `pulumi preview` may change adopted monitors only in
-  `message` and `renotifyInterval`; README.md lists the expected counts.
+  `message` and `renotifyInterval`, apart from the exceptions README.md lists
+  with the expected counts.
 
 ## Gotchas
 
@@ -35,9 +36,11 @@ From `infra/`:
   at oncall.macro-internal.com.
 - A prod monitor's graph on its file's dashboard repeats its metric and
   thresholds by hand; change both. `routing.test.ts` matches them by title.
-  The long-running transaction monitor is a Database Monitoring alert so the
-  notification can include the SQL; its graph still plots
-  `postgresql.activity.xact_start_age`.
+  The long-running transaction monitor takes the lowest
+  `postgresql.activity.xact_start_age` over 5 minutes, and its graph plots the
+  same `moving_rollup(..., 300, 'min')`. A single-sample spike from
+  notification-service's `LISTEN` connection fires hourly otherwise
+  (docs/runbooks/macrodb.md#locks).
 - End every monitor message with `notify({ pages })`, which routes only to
   GoAlert, and pass `dependsOn: goalertWebhooks`. Never mention a channel
   webhook, Slack handle or email address: GoAlert posts to the channel. Only

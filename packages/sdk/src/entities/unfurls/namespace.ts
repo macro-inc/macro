@@ -2,9 +2,7 @@ import { unwrap } from '../../utils';
 import type { MacroClient } from '../../utils/client';
 
 /**
- * URL metadata lookup.
- *
- * @routing Use when reading a URL's preview metadata; not fetching or searching the web.
+ * URL metadata lookup. Discovered with `macro.web`.
  */
 export class UnfurlNamespace {
   constructor(private readonly client: MacroClient) {}

@@ -32,9 +32,8 @@ export async function renderSdkDocs(
   const plugin = createRequire(import.meta.url).resolve(
     'typedoc-plugin-markdown'
   );
-  const { Application, Comment, OptionDefaults, ReflectionKind } = (await import(
-    createRequire(plugin).resolve('typedoc')
-  )) as typeof TypeDoc;
+  const { Application, Comment, OptionDefaults, ReflectionKind } =
+    (await import(createRequire(plugin).resolve('typedoc'))) as typeof TypeDoc;
 
   const sdk = join(root, 'packages/sdk');
   const entryPoints = [

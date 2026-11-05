@@ -363,6 +363,14 @@ async fn run() -> anyhow::Result<()> {
         ),
         admission.clone(),
     ));
+    let thread_due_dates = Arc::new(
+        universal_input::domain::temporal::thread_due_date::ThreadDueDateService::new(
+            universal_input::outbound::thread_due_date::AgentThreadFactExtractor::new(
+                recorder.clone(),
+            ),
+            admission.clone(),
+        ),
+    );
     let lifecycle_publisher = Arc::new(BrokerLifecyclePublisher::new(broker.clone()));
     // Shared with every replica: runtime command forwarding, model probes,
     // and the agent session log stream.
@@ -830,12 +838,17 @@ async fn run() -> anyhow::Result<()> {
     if let Some(selector) = &code_mode_selector {
         inmem_engine = inmem_engine.with_tool_mode(Arc::clone(selector));
     }
-    // `auto-skills` decides, per user, whether code-mode turns load the SDK
-    // areas a request needs instead of carrying every area's guidance.
+    // `auto-skills` decides, per user, whether a turn loads the user's skills
+    // its request needs, and whether code-mode turns load the SDK areas a
+    // request needs instead of carrying every area's guidance.
     if let Some(flags) = &feature_flags {
-        inmem_engine = inmem_engine.with_entity_routing(Arc::new(
-            agent_inmem::domain::entity_routing::FlaggedEntityRouting::new(flags.clone()),
-        ));
+        inmem_engine = inmem_engine
+            .with_skill_routing(Arc::new(
+                agent_inmem::domain::skill_routing::FlaggedSkillRouting::new(flags.clone()),
+            ))
+            .with_entity_routing(Arc::new(
+                agent_inmem::domain::entity_routing::FlaggedEntityRouting::new(flags.clone()),
+            ));
     }
     let inmem_model_engine: Arc<dyn TurnEngine> = Arc::new(inmem_engine);
     // Normalize uploaded images before any provider sees them. In addition to
@@ -1264,6 +1277,8 @@ async fn run() -> anyhow::Result<()> {
     // to speak through: it is the same service instance the harness routes
     // commands with, and a clone shares its replica identity.
     let draining_sessions = sessions.clone();
+    // Reviews announce each save in their session's log.
+    let review_log = sessions.clone();
     let conversation_turns = Arc::new(
         agent_harness::outbound::conversation_turns::PgConversationTurnStore::new(pool.clone()),
     );
@@ -1337,6 +1352,7 @@ async fn run() -> anyhow::Result<()> {
         )),
         Arc::new(code_mode::reviews::Actions {
             sessions: session_repo.clone(),
+            log: review_log,
             harness: harness.clone(),
             context: tool_context.clone(),
             tools: ai_tools::code_mode_tools(),
@@ -1742,12 +1758,22 @@ async fn run() -> anyhow::Result<()> {
             .with_code_executions(code_executions)
             .with_notifications(notification_ingress)
             .with_cognition(cognition_router)
-            .with_universal_input(universal_input::inbound::axum_router::axum_router(
-                universal_input::inbound::axum_router::UniversalInputRouterState::new(
-                    input_service,
-                    MacroAuthorizationState::new(Arc::new(authorization_service.clone())),
+            .with_universal_input(
+                universal_input::inbound::axum_router::axum_router(
+                    universal_input::inbound::axum_router::UniversalInputRouterState::new(
+                        input_service,
+                        MacroAuthorizationState::new(Arc::new(authorization_service.clone())),
+                    ),
+                )
+                .merge(
+                    universal_input::inbound::axum_router::thread_due_date_router(
+                        universal_input::inbound::axum_router::ThreadDueDateRouterState::new(
+                            thread_due_dates,
+                            MacroAuthorizationState::new(Arc::new(authorization_service.clone())),
+                        ),
+                    ),
                 ),
-            ))
+            )
             .with_scheduling(scheduling_router)
             .with_preview(preview_router)
             .with_public_mcp(public_mcp_router)

@@ -129,6 +129,8 @@ export type DatabaseRecordsViewProps = {
   renderTextValue?: GridCellProps['renderTextValue'];
   renderMentionPicker?: GridCellProps['renderMentionPicker'];
   renderMentionValue?: GridCellProps['renderMentionValue'];
+  /** Opens a record someone clicks somewhere else, in place of the record panel, as a view in a document opens its database; returns whether it did, else the panel opens. */
+  onOpenRecord?: (rowId: string) => boolean;
   /** Opens document/file references in any column, including record panel fields. */
   onOpenDocumentMention?: (id: string) => void;
   /** Opens what a record's title mentions, such as a pipeline row's company, in place of editing it. */
@@ -225,6 +227,12 @@ export function DatabaseRecordsView(props: DatabaseRecordsViewProps) {
     constrained: filtered,
     editCell,
   });
+  // Records the view itself opens, such as one just created, stay in its panel.
+  function openRecord(rowId: string) {
+    const savedId = draftRows.savedRowId(rowId);
+    if (savedId && props.onOpenRecord?.(savedId)) return;
+    records.open(rowId);
+  }
   const gridRows = createHeldGridRows({
     rows: () =>
       props.canEdit && visibleColumns().some(canEditCell)
@@ -485,7 +493,7 @@ export function DatabaseRecordsView(props: DatabaseRecordsViewProps) {
                     ? 'Open the record to view or edit it.'
                     : `“${rowTitle(row(), columns())}” doesn’t match your filters.`
               }
-              onOpen={() => records.open(row().rowId)}
+              onOpen={() => openRecord(row().rowId)}
               onDismiss={records.dismissHiddenRecord}
             />
           )}
@@ -550,7 +558,7 @@ export function DatabaseRecordsView(props: DatabaseRecordsViewProps) {
               rowPending={controller.rowPending}
               createPending={controller.createPending}
               createComplete={controller.createComplete}
-              onOpen={records.open}
+              onOpen={openRecord}
               onCreate={records.createRow}
               onCompose={props.onComposeRecord}
               controlsRef={(controls) => {
@@ -570,9 +578,10 @@ export function DatabaseRecordsView(props: DatabaseRecordsViewProps) {
                 !props.stored || props.canEdit ? props.onViewChange : undefined
               }
               rowPending={controller.rowPending}
-              onOpen={records.open}
+              onOpen={openRecord}
               onCreate={records.createRow}
               onWrite={writeRowCell}
+              onCompose={props.onComposeRecord}
               onDuplicate={records.duplicateRow}
               onRequestDelete={records.requestDelete}
               renderMentionValue={props.renderMentionValue}
@@ -655,7 +664,7 @@ export function DatabaseRecordsView(props: DatabaseRecordsViewProps) {
               controlsRef={tableReady}
               titleColumnId={titleColumn(columns())?.id}
               getRowTitle={(row) => rowTitle(row, columns())}
-              onOpen={records.open}
+              onOpen={openRecord}
               onDuplicate={records.duplicateRow}
               onRequestDelete={records.requestDelete}
               relationTables={props.relationTables}

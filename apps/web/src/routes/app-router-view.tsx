@@ -59,6 +59,7 @@ import {
   MailRouteView,
   MeetingRouter,
   NotFound,
+  NotificationsRouteView,
   PrDetailRouteView,
   ProjectDetailRouteView,
   ProjectTaskRouteView,
@@ -110,10 +111,14 @@ import {
   crmPipelineRecordFileItemRoute,
   crmPipelineRecordItemRoute,
   crmPipelineRecordRoute,
+  crmPipelineRetiredDatabaseRoute,
+  crmPipelineRetiredRecordDatabasesRoute,
   crmPipelineRoute,
   crmRecordFileItemRoute,
   crmRecordItemRoute,
   crmRecordRoute,
+  crmRetiredDatabaseRoute,
+  crmRetiredRecordDatabasesRoute,
   debugRoutes,
   driveCallRoute,
   driveFolderDocumentRoute,
@@ -145,6 +150,7 @@ import {
   meetRoute,
   mobileEmailSignupRoute,
   notFoundRoute,
+  notificationsRoute,
   onboardingRoute,
   prDetailRoute,
   projectDetailRoute,
@@ -382,6 +388,10 @@ export function AppRouterView() {
         <Route definition={recentRoute} component={RecentRouteView} />
         <Route definition={activityRoute} component={ActivityRouteView} />
         <Route
+          definition={notificationsRoute}
+          component={NotificationsRouteView}
+        />
+        <Route
           definition={agentsViewRoute}
           component={AgentsRouteView}
           loading={AgentsViewSkeleton}
@@ -470,11 +480,15 @@ export function AppRouterView() {
             <Route definition={crmPipelineRecordRoute} />
             <Route definition={crmPipelineRecordItemRoute} />
             <Route definition={crmPipelineRecordFileItemRoute} />
+            <Route definition={crmPipelineRetiredDatabaseRoute} />
+            <Route definition={crmPipelineRetiredRecordDatabasesRoute} />
           </Route>
           <Route definition={crmItemRoute} />
           <Route definition={crmRecordRoute} />
           <Route definition={crmRecordItemRoute} />
           <Route definition={crmRecordFileItemRoute} />
+          <Route definition={crmRetiredDatabaseRoute} />
+          <Route definition={crmRetiredRecordDatabasesRoute} />
         </Route>
         <Route definition={foldersRoute} component={FoldersRouteView} />
         <Route definition={searchRoute} component={SearchRouteView} />

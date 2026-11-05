@@ -47,6 +47,10 @@ use graphql_notification::{
     NoOpNotificationMutationService, NoOpSoupNotificationEdgeReader, NotificationMutationRoot,
     NotificationMutationService, NotificationSubscriptionRoot, SoupNotificationEdgeReader,
 };
+use graphql_notification_inbox::{
+    GraphqlNotificationInboxPage, NotificationInboxInput, NotificationInboxMutationRoot,
+    NotificationInboxSubscriptionRoot, resolve_notification_inbox,
+};
 use graphql_permission::{EntityPermissionEdgeReader, NoOpEntityPermissionEdgeReader};
 use graphql_properties::{
     EntityPropertyReader, EntityPropertyWriter, GraphqlPropertyDefinition,
@@ -107,6 +111,7 @@ pub struct CompleteMutationRoot<
     InitiativeMutationRoot<E>,
     CalendarMutationRoot,
     WorkFeedMutationRoot<E>,
+    NotificationInboxMutationRoot<E>,
     SavedViewMutationRoot,
 );
 
@@ -134,19 +139,21 @@ impl<
             InitiativeMutationRoot::<E>::default(),
             CalendarMutationRoot,
             WorkFeedMutationRoot::<E>::default(),
+            NotificationInboxMutationRoot::<E>::default(),
             SavedViewMutationRoot,
         )
     }
 }
 
 /// Root subscription object combining realtime Soup, notification,
-/// activity, and work feed adapters.
+/// activity, work feed and notification inbox adapters.
 #[derive(MergedSubscription)]
 pub struct CompleteSubscriptionRoot<R, NS, AS, Auth, St, NR, PR, ER, FR, AR, AcR>(
     SoupSubscriptionRoot<R, Auth, St, NR, PR, ER, FR, AR, AcR>,
     NotificationSubscriptionRoot<NS>,
     ActivitySubscriptionRoot<AS>,
     WorkFeedSubscriptionRoot<SoupEdges<NR, PR, ER, FR, AR, AcR>>,
+    NotificationInboxSubscriptionRoot<SoupEdges<NR, PR, ER, FR, AR, AcR>>,
 )
 where
     R: SoupRealtimeSubscriptionService,
@@ -461,6 +468,7 @@ where
             NotificationSubscriptionRoot::new(notification_subscription_service),
             ActivitySubscriptionRoot::new(activity_subscription_service),
             WorkFeedSubscriptionRoot::default(),
+            NotificationInboxSubscriptionRoot::default(),
         ),
     )
     .finish()
@@ -675,6 +683,11 @@ where
                     .collect::<Result<Vec<_>, _>>()
                     .map_err(|error| async_graphql::Error::new(error.to_string()));
             }
+            // The viewer reopens and refetches; this is how often it has to.
+            tracing::warn!(
+                agent.session.id = %session_id,
+                "closing an agent session log subscription that fell behind"
+            );
             yield Err(async_graphql::Error::new(
                 "agent session log subscription closed after falling behind",
             ));
@@ -876,6 +889,24 @@ where
         input: Option<WorkFeedInput>,
     ) -> async_graphql::Result<GraphqlWorkFeedPage<SoupEdges<NR, PR, ER, FR, AR, AcR>>> {
         resolve_work_feed::<SoupEdges<NR, PR, ER, FR, AR, AcR>>(
+            ctx,
+            self.user_id.clone(),
+            input.unwrap_or_default(),
+        )
+        .await
+    }
+
+    /// A page of the authenticated user's notifications inbox, newest group
+    /// first: their pending notifications grouped by the entity they are
+    /// filed under and cut into rows, one per conversation thread, channel
+    /// top level, email thread, task, request or agent session.
+    async fn notification_inbox(
+        &self,
+        ctx: &Context<'_>,
+        input: Option<NotificationInboxInput>,
+    ) -> async_graphql::Result<GraphqlNotificationInboxPage<SoupEdges<NR, PR, ER, FR, AR, AcR>>>
+    {
+        resolve_notification_inbox::<SoupEdges<NR, PR, ER, FR, AR, AcR>>(
             ctx,
             self.user_id.clone(),
             input.unwrap_or_default(),

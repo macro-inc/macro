@@ -26,11 +26,10 @@ decides who may respond.
 - In a channel composer, `/form` creates a form and opens the builder beside
   the channel; its card joins the draft once the builder saves a question.
   `/poll` opens the poll dialog (question, at least two options, **Multiple
-  answers**, **Show results to respondents**, **Share responses with team**,
-  **Anonymous**); **Post poll** puts the poll's card in the message and sends
-  it. Closing the dialog while it posts sends nothing and trashes the poll.
-  With results hidden, respondents answer without counts and editors review
-  votes in the Responses tab. **Share responses with team** lets everyone who
+  answers**, **Share responses with team**, **Anonymous**); **Post poll** puts
+  the poll's card in the message and sends it. Closing the dialog while it
+  posts sends nothing and trashes the poll. Everyone who can vote sees the
+  counts. **Share responses with team** lets everyone who
   can vote open that table. **Anonymous** makes votes anonymous to everyone
   in Macro, the poll's owner included: the server keeps who voted apart from
   what they chose, so each person still votes once, but no vote can be
@@ -38,7 +37,10 @@ decides who may respond.
   vote times keep only the day, and a vote can't be changed.
 - Asked for a poll, or for a form for a channel, the Macro agent makes a poll
   and posts it as its card in one message (its channel reply), the same card
-  `/poll` posts.
+  `/poll` posts. A form the agent made for the request and presented as a card
+  in its reply's steps is shared with the channel the same way, so everyone in
+  the channel, people outside the team included, can respond to a
+  members-only form.
 
 ## The form page
 
@@ -95,8 +97,8 @@ keeps the meeting link last. Start an empty form by adding a section, then its q
   Selecting the question puts its Required switch at the bottom right, with
   duplicate, remove, and more actions on the left.
 - Drag by the six-dot handle (mouse: move 4 px; touch: hold 200 ms). A line
-  shows where it lands; a red line with a note means a gate checks that
-  question and it must stay above the gate. Escape cancels; nothing saves
+  shows where it lands; a red line with a note means a gate or a section's
+  condition checks that question and it must stay above it. Escape cancels; nothing saves
   until the drop. Keyboard: focus a handle, **Space**, **↑/↓**, **Space** to
   drop, **Escape** to cancel, **Tab** leaves (cancelling).
 - Sections drag by their own handle. A gate section's **Add rule / Edit rules**
@@ -105,6 +107,14 @@ keeps the meeting link last. Start an empty form by adding a section, then its q
   Rules are sent to respondents' browsers, so keep confidential criteria out.
   A gate whose rule tests a question that is gone shows **Remove broken
   rules**.
+- A questions section after another one has **Show only when…** in its
+  **⋯** menu. It opens the same condition editor, over questions of earlier
+  sections, in a **Show this section only** row under the section header; the
+  row then reads the rule (`IF Team is Contractor`) with **Edit** and
+  **Remove**, and the routing footer above it says where a skipped section
+  leads ("Continue to section 2, or skip to section 3"). Removing the last
+  question a condition tests removes the condition, and a condition naming a
+  question that went in the grid shows **Remove broken rules**.
 - "N columns not on this form" at the bottom lists table columns that are not
   questions; **Add** puts one on the form.
 - Layout edits collaborate live through Loro. Other editors' selections appear
@@ -143,8 +153,8 @@ submitting are not recorded; answers stay in the browser until Submit.
 
 **Who can respond**: Invited people (sign in, one response each, editable
 while open) or Anyone with the link (anonymous; no file questions). The
-respond link with Copy, Accepting responses, Close automatically, Show results
-to respondents, Share responses with team, Anonymous (locked, with a tooltip
+respond link with Copy, Accepting responses, Close automatically, Share
+responses with team, Anonymous (locked, with a tooltip
 saying why, once anyone has responded), Confirmation message, **Branding**, and **Manage access** (the
 share dialog, which also shows the audience panel). Branding (editors) sets a
 logo (**Upload**/**Replace**/**Remove**, shown above the title), a cover image
@@ -185,7 +195,13 @@ it uses the builder’s centered 768px content column, the form's cover image an
 logo when set, plain title and description,
 and questions grouped within a single section card. Public sign-in guidance
 sits below the form. One section per screen with
-**Back / Next**, **Submit** on the last. Required fields keep their asterisks;
+**Back / Next**, **Submit** on the last. A section with a condition is shown
+only when the answers of the sections shown before it pass it, and skipped
+otherwise: Back and Next skip it, "Section N of M" counts only the sections
+shown, its required questions are not required, and its answers are not
+sent (an edited response clears them). Answers typed into a section that a
+changed earlier answer later skips stay on screen if the respondent goes back
+and chooses it again. Required fields keep their asterisks;
 the legend and response-editing guidance sit below the questions. Next checks required answers and any
 gate locally; a failing gate shows "This form can't take your response" with
 the gate's message (never its rules), **Check my answers** and, signed in,
@@ -280,7 +296,11 @@ Required means an answer must be present; it does not mean the answer qualifies.
 Use nonempty AND/OR gates for qualification. Rules must refer to questions in
 earlier sections and options belonging to those questions. Empty answers pass
 only an `isEmpty` presence check, including for negative comparisons. Zero and
-false are answers. Put at most one booking section last. Select a saved accessible
+false are answers. To branch, give a questions section `showWhen` rules
+(`CreateForm`) or change them with `setShowWhen` (`EditForm`, `null` clears);
+they follow the same rules as a gate but name only questions of earlier
+sections, never the section's own. A skipped section's questions are not
+required and their answers are not saved. Put at most one booking section last. Select a saved accessible
 profile/event identity from the scheduling UI or available booking tools. Booking
 gates reveal a link after an accepted response; the independent booking URL
 remains usable. Requests for strict booking enforcement are refused.

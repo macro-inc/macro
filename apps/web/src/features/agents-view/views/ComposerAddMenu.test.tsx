@@ -60,6 +60,9 @@ vi.mock('../../settings/connections/integrations-view', () => ({
     </p>
   ),
 }));
+vi.mock('@core/pipedream/ConnectedAppIcon', () => ({
+  ConnectedAppIcon: () => <svg aria-hidden="true" />,
+}));
 vi.mock('../../settings/connections/leftover-row', () => ({
   LeftoverRow: (props: { leftover: Leftover }) => (
     <p>

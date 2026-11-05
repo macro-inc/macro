@@ -82,10 +82,15 @@ a persona, effort, or speed keeps the control request. Either way the prompt
 shows as one bubble that the logged row confirms in place.
 
 Switching a disconnected session's model wakes its runtime first; the
-selector re-enables with the new model's options once the runtime answers. If
-the live feed misses that answer, the client reads the log after 10 seconds,
-and after a minute it takes back an unconfirmed change, so the selector shows
-the runtime's model again and stays usable.
+selector re-enables with the new model's options once the runtime answers.
+The wake replays the session, and a viewer whose live log subscription falls
+behind that burst is closed by the server; the client reopens it at once and
+refetches the log, so the answer still arrives live. If it is missed anyway,
+the client reads the log after 10 seconds, and after a minute it takes back an
+unconfirmed change, so the selector shows the runtime's model again and stays
+usable. `agent.session.confirm_control` records whether the live feed or the
+reread settled it, and `agent.session.log.follow_resumed` each reopened
+subscription.
 
 Macro's in-process agent opens each reply with a line from a fast model
 (`gpt-5.4-mini`), usually within half a second of Enter. Small talk
@@ -262,6 +267,13 @@ decoded. An optional project ID places the file in a folder the caller can edit.
 Use `CreateDocument` for generated text and native Macro spreadsheets. Agents with
 code execution should construct the base64 argument from the original bytes;
 the tool cannot access an agent's local path or download a URL.
+
+Code mode hides `UploadFile`. Its programs call `macro.documents.upload({ name,
+content, project })`, which sends the raw bytes to the storage host's
+`POST /documents/upload` under the same limit and folder rule, read a stored
+file (including an email attachment's `toDocument()`) with `Document.bytes()`,
+and attach documents to messages with `channel.send(text, { documents })`. The
+sandbox reaches only Macro hosts, so presigned upload URLs fail there.
 
 The tool row displays the filename and, on success, **Uploaded**. Expand it to
 open the created document and see the uploaded byte count. Success means the
@@ -461,12 +473,14 @@ the shimmer.
   tagging the workspace and row nodes and checking they survive the click.
   Right-click (or long-press on mobile) opens the same entity menu as Home:
   Rename, Favorite, Copy link, Share, Archive, Delete, and the other session
-  actions. Archived sessions are grouped at the bottom under **Archived**.
-  Runs of routines set to **Hide runs** (the default) are left out until the
-  clock button beside the search control (**Show hidden routine runs**) is
-  pressed; runs of routines set to **Show runs** are always listed. Every
-  routine run carries the same clock icon after its age. The list starts
-  without hidden runs each time the Agents view opens.
+  actions. Archived sessions are grouped at the bottom under **Archived**, a
+  section that starts collapsed; click its header (count and caret) to expand it.
+  Runs of routines set to **Hide runs** (the default) are left out until
+  **Show hidden routine runs** is checked in the **Filter conversations** menu,
+  which counts it on the filter badge and unchecks it with **Clear filters**;
+  runs of routines set to **Show runs** are always listed. Every routine run
+  carries a clock icon after its age. The list starts without hidden runs each
+  time the Agents view opens.
 - The agent composer's **+ (Add)** menu offers **Add photos**, **Add files**,
   **Add from library** (`@` references), and **Use a skill** (`/`; sessions show
   **Skills & commands**). Desktop uses a scrollable menu; phones use a bottom
@@ -476,6 +490,13 @@ the shimmer.
   **Add connections** opens Discover; **Manage connections** opens Connected.
   Disabled connections remain available to manage. A partial loading failure
   offers Retry without hiding uploads, references, or skills.
+- Skills have a one-line **When to use** description ("Use when …; not …"),
+  required in the skill composer (`C K`) under the name and editable under
+  the title of an open skill (saves on blur or Enter; an invalid line shows
+  an error below it). Owners with the `auto-skills` flag get up to two of
+  their skills loaded on their own when a session request matches a
+  description; the session view shows nothing for it, and the
+  `agent.skill_selection` span says what loaded.
 - Empty conversation greetings use Roboto Slab with the Macro mark to the left,
   at weight 390 with softened ink in light mode and 315 in dark mode, including the Chat and Code
   starting headings, legacy Home, and the conversation preview empty state.
@@ -2083,20 +2104,19 @@ must stay hidden; subsequent live messages must still appear.
   Several permissions may be pending alongside one question; answering one leaves
   the others available. Controls disappear when their turn ends, is stopped, or
   disconnects, and old transcript requests cannot answer a later turn's request.
-- **Runtime bypass consent.** Settings → Agents → Runtimes → New runtime offers
-  `Allow bypassing permission requests`, off by default. Enabling it warns that
-  agents may run commands and edit files on the machine without approval.
-  Macrod Quickstart and Config also offer `Full Access`, off by
-  default. Quickstart and Config give Full Access a bordered, three-line control
-  labeled `Suggested`, without enabling it. On short terminals, Config scrolls to
-  the selected setting and keeps consent warnings below it; Quickstart keeps its
-  submit button visible. The choice applies at the next pairing:
-  off disables bypass in the pairing page; on preselects bypass with a warning,
-  and the approving user can turn it off. Older daemons leave this choice to the pairing page.
+- **Runtime bypass setting.** Bypass is a setting on the runtime, decided only
+  on the web. Settings → Agents → Runtimes → New runtime offers
+  `Allow bypassing permission requests`, off by default; enabling it warns that
+  agents may run commands and edit files on the machine without approval. Each
+  paired runtime then shows the same switch (enabling asks for confirmation) and
+  a `Rename` action; a change reaches live sessions from their next turn, with
+  no re-pairing. macrod has no Full Access or scope setting; its Config tab shows
+  these values read-only and links to Runtimes.
 - **Agent permission policy.** Settings → Agents → Runtime shows `Always prompt`
   and `Always bypass` only for local macrod harnesses. The larger `Always bypass`
   choice is labeled `Suggested`; the label does not select it. Macrod defaults to
-  prompts; bypass requires both harness consent and the agent's explicit choice.
+  prompts; bypass requires both the runtime's setting and the agent's explicit
+  choice; otherwise the form says to allow bypass in the runtime's settings.
   Built-in Macro, in-memory, Cursor, and Codex runtimes always bypass and have no
   permission policy selector. The backend enforces these policies.
 
@@ -2401,6 +2421,13 @@ draft before starting any sends/creates, and waits for attachments still
 uploading in the active email.
 Invalid drafts remain editable; navigation opens the first draft needing attention.
 
+Each saved change to a review (presentation, edits, decisions, finished sends)
+logs a `_macro/review_updated` frame in its session, so in the session view the
+card refetches only when a newer revision is announced and statuses set by the
+agent or another editor appear in place. Cards shown outside the session view
+(DM and channel activity) still poll while the review is preparing or has
+pending drafts. A fetch that returns the card's own in-flight save is not a
+conflict and leaves the editor focused.
 A revision conflict or uncertain request shows **Reload saved review**. Reload
 reads the saved version and discards the local edit; it never retries an external
 send automatically. If the outcome is unknown, check the inbox/calendar before
@@ -2424,6 +2451,9 @@ navigation and page reload,
 that a single draft has no stack controls, that a batch's picker finds drafts,
 that chat remains usable, and that another account cannot submit. Sending an email or
 creating an event is a real action, including from a local app connected to dev.
+The backend-free browser regression for polling, announced revisions,
+presentation, and typing during a save is `bunx playwright test --config src/features/email-compose/browser-test/playwright.app.config.ts agent-review`
+(from `apps/web`).
 ## Agent reasoning effort
 
 Open the model selector and hover a model to choose its reasoning effort in the

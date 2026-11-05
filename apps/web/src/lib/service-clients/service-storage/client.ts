@@ -52,6 +52,9 @@ import type { CalendarMentionPreviewResponse } from './generated/schemas/calenda
 import type { CalendarOccurrenceResponse } from './generated/schemas/calendarOccurrenceResponse';
 import type { CallRecordPreview } from './generated/schemas/callRecordPreview';
 import type { CardPosition } from './generated/schemas/cardPosition';
+import type { ChannelAccessDecision } from './generated/schemas/channelAccessDecision';
+import type { ChannelAccessRequest } from './generated/schemas/channelAccessRequest';
+import type { ChannelAccessRequestState } from './generated/schemas/channelAccessRequestState';
 import type { ChannelJoinCodeResponse } from './generated/schemas/channelJoinCodeResponse';
 import type { ChannelLabel } from './generated/schemas/channelLabel';
 import type { ChannelLabelRule } from './generated/schemas/channelLabelRule';
@@ -144,6 +147,7 @@ import type { ListTeamOutOfOfficeParams } from './generated/schemas/listTeamOutO
 import type { LocationResponseV3 } from './generated/schemas/locationResponseV3';
 import type { PairingDetails } from './generated/schemas/pairingDetails';
 import type { PatchChannelRequest } from './generated/schemas/patchChannelRequest';
+import type { PatchHarnessRequest } from './generated/schemas/patchHarnessRequest';
 import type { PinRequest } from './generated/schemas/pinRequest';
 import type { PostActivityRequest } from './generated/schemas/postActivityRequest';
 import type { PostGroupedSoupAstGroupPageRequest } from './generated/schemas/postGroupedSoupAstGroupPageRequest';
@@ -165,11 +169,13 @@ import type { SetChannelPictureRequest } from './generated/schemas/setChannelPic
 import type { SetCompanyNameRequest } from './generated/schemas/setCompanyNameRequest';
 import type { SetContactNameRequest } from './generated/schemas/setContactNameRequest';
 import type { SharePermissionV2 } from './generated/schemas/sharePermissionV2';
+import type { SkillDescriptionBody } from './generated/schemas/skillDescriptionBody';
 import type { SlackCompleteRequest } from './generated/schemas/slackCompleteRequest';
 import type { SlackCreateRequest } from './generated/schemas/slackCreateRequest';
 import type { SlackRegisterRequest } from './generated/schemas/slackRegisterRequest';
 import type { SmartTagPreview } from './generated/schemas/smartTagPreview';
 import type { SoupPage } from './generated/schemas/soupPage';
+import type { StageRequirement } from './generated/schemas/stageRequirement';
 import type { StorageRows } from './generated/schemas/storageRows';
 import type { StorageRowsQuery } from './generated/schemas/storageRowsQuery';
 import type { StoredGithubPullRequest } from './generated/schemas/storedGithubPullRequest';
@@ -437,6 +443,15 @@ export const storageServiceClient = {
     dssFetch<PipelineResponse[]>('/crm/pipelines', { method: 'GET' }),
   getCrmPipeline: (id: string) =>
     dssFetch<PipelineResponse>(`/crm/pipelines/${id}`, { method: 'GET' }),
+  getCrmPipelineStageRequirements: (id: string) =>
+    dssFetch<StageRequirement[]>(`/crm/pipelines/${id}/stage-requirements`, {
+      method: 'GET',
+    }),
+  setCrmPipelineStageRequirement: (id: string, rule: StageRequirement) =>
+    dssFetch(`/crm/pipelines/${id}/stage-requirements`, {
+      method: 'PUT',
+      body: JSON.stringify(rule),
+    }),
   getCrmPipelineTable: (id: string) =>
     dssFetch<TableDetail>(`/crm/pipelines/${id}/table`, { method: 'GET' }),
   getCrmPipelineViewPositions: (id: string, viewId: string) =>
@@ -864,6 +879,16 @@ export const storageServiceClient = {
     ).map((result) => result);
   },
 
+  async patchHarness(args: { harness_id: string } & PatchHarnessRequest) {
+    const { harness_id, ...request } = args;
+    return (
+      await dssFetch<Harness>(`/harnesses/${harness_id}`, {
+        method: 'PATCH',
+        body: JSON.stringify(request),
+      })
+    ).map((result) => result);
+  },
+
   async deleteHarness(args: { harness_id: string }) {
     return await dssFetch(`/harnesses/${args.harness_id}`, {
       method: 'DELETE',
@@ -1114,6 +1139,46 @@ export const storageServiceClient = {
     return await dssFetch(`/channels/join/${args.join_code}`, {
       method: 'POST',
     });
+  },
+
+  async getMyChannelAccessRequest(args: WithChannelId) {
+    return await dssFetch<ChannelAccessRequestState>(
+      `/channels/${args.channel_id}/access-requests/mine`
+    );
+  },
+
+  async requestChannelAccess(args: WithChannelId) {
+    return await dssFetch<ChannelAccessRequest>(
+      `/channels/${args.channel_id}/access-requests/mine`,
+      { method: 'PUT' }
+    );
+  },
+
+  async cancelChannelAccessRequest(args: WithChannelId) {
+    return await dssFetch(`/channels/${args.channel_id}/access-requests/mine`, {
+      method: 'DELETE',
+    });
+  },
+
+  async getChannelAccessRequest(args: WithChannelId & { request_id: string }) {
+    return await dssFetch<ChannelAccessRequest>(
+      `/channels/${args.channel_id}/access-requests/${args.request_id}`
+    );
+  },
+
+  async resolveChannelAccessRequest(
+    args: WithChannelId & {
+      request_id: string;
+      decision: ChannelAccessDecision;
+    }
+  ) {
+    return await dssFetch<ChannelAccessRequest>(
+      `/channels/${args.channel_id}/access-requests/${args.request_id}/resolve`,
+      {
+        method: 'POST',
+        body: JSON.stringify({ decision: args.decision }),
+      }
+    );
   },
 
   async leaveChannel(args: WithChannelId) {
@@ -1657,6 +1722,24 @@ export const storageServiceClient = {
   /**
    * Gets the team-share state of a document (resolved against the owner's team).
    */
+  /** When to use a skill; `description` is absent for older skills. */
+  async getSkillDescription(args: { documentId: string }) {
+    return await dssFetch<SkillDescriptionBody>(
+      `/documents/${args.documentId}/skill_description`
+    );
+  },
+
+  /** Sets when to use a skill: one line starting "Use when". */
+  async setSkillDescription(args: { documentId: string; description: string }) {
+    return await dssFetch<SkillDescriptionBody>(
+      `/documents/${args.documentId}/skill_description`,
+      {
+        method: 'PUT',
+        body: JSON.stringify({ description: args.description }),
+      }
+    );
+  },
+
   async getDocumentTeamShare(args: { documentId: string }) {
     return await dssFetch<DocumentTeamShareResponse>(
       `/documents/${args.documentId}/team_share`

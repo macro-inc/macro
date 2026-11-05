@@ -44,6 +44,17 @@ pub struct OutlookCalendar {
     pub online_meeting_providers: Vec<String>,
 }
 
+/// Every calendar one Outlook account can see.
+pub struct OutlookDiscovery {
+    /// The account's calendars, each in the mailbox's time zone.
+    pub calendars: Vec<OutlookCalendar>,
+    /// The mailbox time zone Microsoft named when Macro cannot map it to an
+    /// IANA zone. The calendars then carry no time zone rather than failing
+    /// discovery, and every reader treats it as unknown, as it does a Google
+    /// calendar zone it cannot read.
+    pub unmapped_time_zone: Option<String>,
+}
+
 /// One page of event identities. Its cursor is staged with its child work.
 pub struct OutlookCalendarPage {
     /// (Provider occurrence/single ID, normalized master/single ID).
@@ -66,10 +77,33 @@ pub enum OutlookCalendarProgress {
         /// Whether the current provider event still exists.
         exists: bool,
     },
+    /// The event exists but Macro cannot read it. Retire any copy stored
+    /// before, which would show a version Microsoft no longer has, but keep
+    /// the event's page membership so later tombstones still resolve.
+    Unreadable {
+        /// Master/single ID from this lease's pending work.
+        id: String,
+    },
     /// Finish a page, or atomically prune and commit the terminal cursor.
     Finish,
     /// Restart an expired or unresolvable delta with a new full snapshot.
     Reset,
+}
+
+/// One provider event read back for synchronization.
+pub enum OutlookEventRefresh {
+    /// The current event or complete series, normalized.
+    Refreshed(Box<CalendarEventUpsert>),
+    /// Microsoft no longer has the event on this calendar.
+    Gone,
+    /// Microsoft has the event, but Macro cannot represent it. The sync skips
+    /// it and retires any copy stored before, so the calendar never shows an
+    /// event Macro could not read, as Google sync never shows one.
+    Unreadable {
+        /// Path of the Graph property Macro rejected, such as
+        /// `recurrence.range.endDate` or `instances.start.dateTime`.
+        field: String,
+    },
 }
 
 /// Provider reads with normalized results and no persistence policy.
@@ -79,7 +113,7 @@ pub trait OutlookCalendarReader: Send + Sync + 'static {
         &self,
         token: &str,
         binding: CalendarGrantBinding,
-    ) -> impl Future<Output = Result<Vec<OutlookCalendar>, CalendarProviderError>> + Send;
+    ) -> impl Future<Output = Result<OutlookDiscovery, CalendarProviderError>> + Send;
     /// Fetch one provider page without advancing any checkpoint.
     fn calendar_page(
         &self,
@@ -94,7 +128,7 @@ pub trait OutlookCalendarReader: Send + Sync + 'static {
         token: &str,
         target: &ProviderCalendarTarget,
         id: &str,
-    ) -> impl Future<Output = Result<Option<CalendarEventUpsert>, CalendarProviderError>> + Send;
+    ) -> impl Future<Output = Result<OutlookEventRefresh, CalendarProviderError>> + Send;
 }
 
 /// Calendar-owned persistence and exact-generation leases.
@@ -195,7 +229,24 @@ impl<
         }
         Ok(true)
     }
+    #[tracing::instrument(
+        name = "calendar.outlook_sync",
+        skip_all,
+        fields(
+            work_id = %lease.id,
+            account_id = %lease.account_id,
+            calendar_id = lease.target.as_ref().map(|target| tracing::field::display(target.calendar_id)),
+            step = tracing::field::Empty,
+            provider_event_id = tracing::field::Empty,
+            outcome = tracing::field::Empty,
+            rejected_field = tracing::field::Empty,
+            unmapped_time_zone = tracing::field::Empty,
+            error_kind = tracing::field::Empty,
+        ),
+        err(level = tracing::Level::DEBUG)
+    )]
     async fn run_claim(&self, lease: &OutlookCalendarLease) -> Result<(), CalendarProviderError> {
+        let span = tracing::Span::current();
         let token = self
             .tokens
             .fetch_access_token(&lease.token_identity)
@@ -210,29 +261,48 @@ impl<
                     },
                     "Microsoft calendar credential acquisition failed",
                 )
-            })?;
+            })
+            .inspect_err(|error| record_failure(&span, error))?;
         let work = async {
             if let Some(target) = &lease.target {
                 let progress = if let Some(id) = lease.pending_ids.first() {
-                    let upsert = self
+                    span.record("step", "event");
+                    span.record("provider_event_id", id.as_str());
+                    let id = id.clone();
+                    match self
                         .provider
-                        .refresh_calendar_event(&token, target, id)
-                        .await?;
-                    let exists = upsert.is_some();
-                    if let Some(upsert) = upsert {
-                        self.repository
-                            .upsert_event(CalendarEventWrite::OutlookSync {
-                                lease: Box::new(lease.clone()),
-                                upsert,
-                            })
-                            .await
-                            .map_err(storage_error)?;
-                    }
-                    OutlookCalendarProgress::Event {
-                        id: id.clone(),
-                        exists,
+                        .refresh_calendar_event(&token, target, &id)
+                        .await?
+                    {
+                        OutlookEventRefresh::Refreshed(upsert) => {
+                            span.record("outcome", "refreshed");
+                            self.repository
+                                .upsert_event(CalendarEventWrite::OutlookSync {
+                                    lease: Box::new(lease.clone()),
+                                    upsert: *upsert,
+                                })
+                                .await
+                                .map_err(storage_error)?;
+                            OutlookCalendarProgress::Event { id, exists: true }
+                        }
+                        OutlookEventRefresh::Gone => {
+                            span.record("outcome", "gone");
+                            OutlookCalendarProgress::Event { id, exists: false }
+                        }
+                        OutlookEventRefresh::Unreadable { field } => {
+                            span.record("outcome", "unreadable");
+                            span.record("rejected_field", field.as_str());
+                            tracing::warn!(
+                                calendar_id = %target.calendar_id,
+                                provider_event_id = %id,
+                                rejected_field = %field,
+                                "skipping an Outlook event Macro cannot read"
+                            );
+                            OutlookCalendarProgress::Unreadable { id }
+                        }
                     }
                 } else if lease.page_loaded {
+                    span.record("step", "finish");
                     automatic_decline::run(
                         &self.repository,
                         &self.provider,
@@ -243,6 +313,7 @@ impl<
                     .await?;
                     OutlookCalendarProgress::Finish
                 } else {
+                    span.record("step", "page");
                     match self
                         .provider
                         .calendar_page(
@@ -267,9 +338,18 @@ impl<
                     .await
                     .map_err(storage_error)?;
             } else {
-                let calendars = self.provider.calendars(&token, lease.binding).await?;
+                span.record("step", "discover");
+                let discovery = self.provider.calendars(&token, lease.binding).await?;
+                if let Some(zone) = &discovery.unmapped_time_zone {
+                    span.record("unmapped_time_zone", zone.as_str());
+                    tracing::warn!(
+                        account_id = %lease.account_id,
+                        unmapped_time_zone = %zone,
+                        "ignoring an Outlook mailbox time zone Macro cannot map"
+                    );
+                }
                 self.repository
-                    .commit_outlook_calendars(lease, calendars)
+                    .commit_outlook_calendars(lease, discovery.calendars)
                     .await
                     .map_err(storage_error)?;
             }
@@ -291,7 +371,13 @@ impl<
             futures::future::Either::Left((result, _))
             | futures::future::Either::Right((result, _)) => result,
         }
+        .inspect_err(|error| record_failure(&span, error))
     }
+}
+
+fn record_failure(span: &tracing::Span, error: &CalendarProviderError) {
+    span.record("outcome", "failed");
+    span.record("error_kind", tracing::field::debug(error.kind()));
 }
 
 fn storage_error(_error: Report) -> CalendarProviderError {

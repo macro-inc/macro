@@ -383,6 +383,8 @@ struct StoredPendingAuthorization {
     code_challenge: String,
     client_state: String,
     client_redirect_uri: String,
+    #[serde(default)]
+    browser_binding_digest: Option<String>,
 }
 
 impl From<PendingAuthorization> for StoredPendingAuthorization {
@@ -392,6 +394,7 @@ impl From<PendingAuthorization> for StoredPendingAuthorization {
             code_challenge: value.code_challenge,
             client_state: value.client_state,
             client_redirect_uri: value.client_redirect_uri,
+            browser_binding_digest: value.browser_binding_digest,
         }
     }
 }
@@ -403,6 +406,7 @@ impl From<StoredPendingAuthorization> for PendingAuthorization {
             code_challenge: value.code_challenge,
             client_state: value.client_state,
             client_redirect_uri: value.client_redirect_uri,
+            browser_binding_digest: value.browser_binding_digest,
         }
     }
 }

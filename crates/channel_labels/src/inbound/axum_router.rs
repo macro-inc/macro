@@ -86,7 +86,7 @@ impl<S, Eas, Auth> FromRef<ChannelLabelsRouterState<S, Eas, Auth>>
 /// Routes:
 /// - `GET /` — list the caller's shared or private labels.
 /// - `POST /` — create a label, optionally moving channels into it.
-/// - `PATCH /{label_id}` — rename a label.
+/// - `PATCH /{label_id}` — rename or transfer a label.
 /// - `DELETE /{label_id}` — delete a label.
 /// - `PUT /channels/{channel_id}` — move a channel into or out of a label.
 pub fn channel_labels_router<S, Eas, Auth, T>(
@@ -139,7 +139,7 @@ pub struct CreateChannelLabelRequest {
     pub channel_ids: Vec<Uuid>,
 }
 
-/// Request body for renaming a label.
+/// Request body for updating a label's name, smart rule, or sharing scope.
 #[derive(Debug, Deserialize, utoipa::ToSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct RenameChannelLabelRequest {
@@ -148,6 +148,9 @@ pub struct RenameChannelLabelRequest {
     /// Automatic name-matching rule; omitted for manual labels or a name-only rename.
     #[serde(default)]
     pub rule: Option<ChannelLabelRule>,
+    /// Destination namespace; omitted to preserve the current scope.
+    #[serde(default)]
+    pub target_scope: Option<ChannelLabelScopeSelection>,
 }
 
 /// Request body for moving a channel between labels.
@@ -264,7 +267,7 @@ where
     Ok(Json(label))
 }
 
-/// Rename a label of the caller's authorized scope.
+/// Update a label, optionally moving it to another authorized scope.
 #[utoipa::path(
     patch,
     tag = "channel_labels",
@@ -296,14 +299,28 @@ where
     Eas: EntityAccessService,
     Auth: MacroAuthorizationService,
 {
-    let receipt = ChannelLabelsReceipt::from_access(
-        user.authorization.macro_user_id,
-        access.entity_access_receipt,
-        scope.scope,
-    )?;
+    let actor = user.authorization.macro_user_id;
+    let target = req
+        .target_scope
+        .map(|selection| {
+            ChannelLabelsReceipt::from_access(
+                actor.clone(),
+                access.entity_access_receipt.clone(),
+                Some(selection),
+            )
+        })
+        .transpose()?;
+    let receipt =
+        ChannelLabelsReceipt::from_access(actor, access.entity_access_receipt, scope.scope)?;
     let label = state
         .service
-        .rename_label(&receipt, params.label_id, req.name, req.rule)
+        .update_label(
+            &receipt,
+            target.as_ref(),
+            params.label_id,
+            req.name,
+            req.rule,
+        )
         .await?;
     Ok(Json(label))
 }
