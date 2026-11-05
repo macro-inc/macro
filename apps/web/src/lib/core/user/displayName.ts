@@ -198,6 +198,12 @@ export function isAgentAccount(id: MacroId | undefined | null): boolean {
   return getUserNameItem(id).isAgent === true;
 }
 
+/** Known human identity; unresolved metadata cannot enable member management. */
+export function isHumanAccount(id: MacroId | undefined | null): boolean {
+  if (!id) return false;
+  return getUserNameItem(id).isAgent === false;
+}
+
 /** Resolves structured display name parts from the shared reactive cache. */
 export function getDisplayNameParts(
   id: MacroId | undefined | null,
@@ -315,7 +321,12 @@ export function useDisplayName(
  * Useful for debug views and testing.
  */
 export function seedMockDisplayNames(
-  users: Array<{ id: string; firstName?: string; lastName?: string }>
+  users: Array<{
+    id: string;
+    firstName?: string;
+    lastName?: string;
+    isAgent?: boolean;
+  }>
 ) {
   for (const user of users) {
     setUserDisplayNames(user.id, {
@@ -323,6 +334,7 @@ export function seedMockDisplayNames(
       id: user.id,
       firstName: user.firstName,
       lastName: user.lastName,
+      isAgent: user.isAgent ?? false,
       loading: false,
     });
   }
