@@ -118,7 +118,10 @@ Outlook (Microsoft Graph) outbound adapters.
   reported as `OutlookDiscovery::unmapped_time_zone` rather than failing the
   account. `zones.rs` is CLDR's `windowsZones.xml` (territory `001`, in file
   order) with its `LICENSE` beside it; regenerate both from a new CLDR
-  release when Windows adds zones.
+  release when Windows adds zones. Keep out a zone whose IANA rules the
+  bundled chrono-tz lacks: Outlook writes send local times computed with
+  them, so stale rules move an event. British Columbia, Alberta and Manitoba
+  Standard Time are held out that way until current tz data ships.
 - Same-mailbox Outlook replies use `createReply`. When Graph refuses it with
   400 `ErrorInvalidOperation`, `create_draft` creates a standalone draft that
   carries the same correlation and RFC reply headers.

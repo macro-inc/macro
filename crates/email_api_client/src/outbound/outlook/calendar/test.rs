@@ -191,8 +191,6 @@ async fn discover(time_zone: Option<&str>) -> OutlookDiscovery {
 async fn calendars_carry_the_iana_zone_of_the_mailbox() {
     for (named, iana) in [
         (Some("Pacific Standard Time"), "America/Los_Angeles"),
-        // Added to Windows after CLDR 48.
-        (Some("British Columbia Standard Time"), "America/Vancouver"),
         (Some("America/Los_Angeles"), "America/Los_Angeles"),
         (None, "Etc/UTC"),
     ] {
@@ -208,7 +206,13 @@ async fn calendars_carry_the_iana_zone_of_the_mailbox() {
 
 #[tokio::test]
 async fn a_mailbox_time_zone_macro_cannot_map_leaves_its_calendars_without_one() {
-    for named in ["tzone://Microsoft/Custom", "Atlantis Standard Time", ""] {
+    for named in [
+        "tzone://Microsoft/Custom",
+        "Atlantis Standard Time",
+        "",
+        // In CLDR 49, but held out until Macro's tz data has its 2026 rules.
+        "British Columbia Standard Time",
+    ] {
         let discovery = discover(Some(named)).await;
         assert_eq!(discovery.calendars.len(), 1, "{named:?}");
         assert_eq!(
