@@ -256,7 +256,6 @@ where
                     bot_id: session.bot_id,
                     is_coding: false,
                     message_id: target.message_id,
-                    session_name: crate::domain::model::reply_link_label(&session.name),
                     origin_parent: target.origin.parent,
                     triggered_by: target.actor,
                     outcome: completion.outcome,

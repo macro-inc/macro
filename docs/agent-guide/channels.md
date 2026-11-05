@@ -51,6 +51,26 @@ Home previews remain display-only as described above. The backend-free browser
 check is in
 `apps/web/src/lib/core/component/LexicalMarkdown/component/core/browser-test/README.md`.
 
+A web link in a channel message also shows a preview card beneath the text,
+inside `[data-message-link-previews]`: the site's favicon and domain, the page
+title, up to two lines of description, and the page's preview image as a
+thumbnail. Clicking or tapping the card opens the link like the link itself.
+The server reads the pages after a message is posted or edited, whoever sent it
+(a person, an agent, the API), and stores the previews with the message, so a
+message loads with its cards and the list never grows under the reader; a
+message just sent gets its cards a moment later. Only the first three linked
+pages can get cards, each once, in the order the text links them. Email
+addresses, removed links, URLs in code, and links into the Macro app never do,
+and a page that can't be read or has no title, description, or image gets none.
+An edit keeps the cards of the links it kept and fetches only new ones; a card
+of a link the edit removed disappears once the previews are recomputed.
+Document comments and GitHub PR comments show no cards.
+
+Verify by sending a public article link on desktop and phone: its card appears
+within a few seconds and is there, at the same height, when the channel is
+reopened. The backend-free browser check is in
+`apps/web/src/features/channel/Message/browser-test/README.md`.
+
 ## Block formatting
 
 Selecting several paragraphs and choosing Quote or a heading in the floating

@@ -94,7 +94,6 @@ const chatReplyRequest = z.object({
 	chatReply: z.object({
 		sessionId: z.string().min(1),
 		link: z.boolean().optional(),
-		label: z.string().optional(),
 		body: z.discriminatedUnion("kind", [
 			z.object({ kind: z.literal("pending") }),
 			z.object({ kind: z.literal("markdown"), markdown: z.string() }),
@@ -164,7 +163,7 @@ export class AgentAnnouncementEndpoint extends OpenAPIRoute {
 				});
 			}
 			if ("chatReply" in body) {
-				const { sessionId, link, label, body: replyBody } = body.chatReply;
+				const { sessionId, link, body: replyBody } = body.chatReply;
 				// The schema requires a body, but the discriminated union does not
 				// survive chanfana's OpenAPI round-trip as required, so it arrives
 				// typed as optional. Refuse rather than invent a state: a reply with
@@ -176,7 +175,6 @@ export class AgentAnnouncementEndpoint extends OpenAPIRoute {
 					markdown: composeAgentChatReply({
 						sessionId,
 						link,
-						label,
 						body:
 							replyBody.kind === "segments"
 								? {

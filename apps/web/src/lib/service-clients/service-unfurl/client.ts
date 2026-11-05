@@ -7,7 +7,7 @@ import type { GetUnfurlParams } from './generated/schemas/getUnfurlParams';
 import type { GetUnfurlResponse } from './generated/schemas/getUnfurlResponse';
 
 export function proxyResource(url: string) {
-  return `${SERVER_HOSTS['unfurl-service']}/proxy?url=${url}`;
+  return `${SERVER_HOSTS['unfurl-service']}/proxy?url=${encodeURIComponent(url)}`;
 }
 
 export const UnfurlServiceClient = {

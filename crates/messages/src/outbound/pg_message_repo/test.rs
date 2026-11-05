@@ -4,6 +4,7 @@ use macro_db_migrator::MACRO_DB_MIGRATIONS;
 const USER: &str = "macro|message-test@example.com";
 
 mod initiative;
+mod link_previews;
 mod schema_drop;
 
 async fn setup(pool: &PgPool) {

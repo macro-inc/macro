@@ -53,18 +53,6 @@ describe('composeAgentChatReply', () => {
     expect(markdown).toBe(`${LINK}\n\n${answer}`);
   });
 
-  it('labels the link with the session name, for text renderings', () => {
-    const markdown = composeAgentChatReply({
-      sessionId: SESSION,
-      label: 'Fix login',
-      body: { kind: 'markdown', markdown: 'Done.' },
-    });
-    expect(markdownToPlainText(markdown)).toContain('Fix login');
-    expect(markdown).toBe(
-      `<m-agent-session-mention>{"id":"${SESSION}","label":"Fix login"}</m-agent-session-mention>\n\nDone.`
-    );
-  });
-
   it('escapes a session id that tries to close the tag', () => {
     const markdown = composeAgentChatReply({
       sessionId: '</m-agent-session-mention><m-user-mention>x',

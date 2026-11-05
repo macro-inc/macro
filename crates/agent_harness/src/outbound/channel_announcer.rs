@@ -76,7 +76,6 @@ fn chat_reply(session_id: AgentSessionId, body: AgentChatReplyBody) -> AgentChat
         session_id: session_id.to_string(),
         body,
         link: None,
-        label: None,
     }
 }
 
@@ -340,19 +339,14 @@ impl<Access: EntityAccessService> MessageAnnouncer<Access> {
 }
 
 impl<Access> MessageAnnouncer<Access> {
-    /// A chat agent's reply saying `body`, composed by Lexical, its link
-    /// reading as `label` where the reply is shown as text.
+    /// A chat agent's reply saying `body`, composed by Lexical.
     async fn compose_reply(
         &self,
         session_id: AgentSessionId,
-        label: Option<String>,
         body: AgentChatReplyBody,
     ) -> Result<String> {
         self.lexical
-            .compose_agent_chat_reply(&AgentChatReply {
-                label,
-                ..chat_reply(session_id, body)
-            })
+            .compose_agent_chat_reply(&chat_reply(session_id, body))
             .await
             .map_err(|error| HarnessError::Announce(rootcause::report!(error).into()))
     }
@@ -462,9 +456,7 @@ impl<Access: EntityAccessService> SessionAnnouncer for MessageAnnouncer<Access> 
             content: Some(content),
             ..Default::default()
         };
-        let content = self
-            .compose_reply(resolution.session_id, resolution.session_name.clone(), body)
-            .await?;
+        let content = self.compose_reply(resolution.session_id, body).await?;
         let patched = match self
             .messages
             .patch(access.clone(), message_id, patch(content))
@@ -478,7 +470,6 @@ impl<Access: EntityAccessService> SessionAnnouncer for MessageAnnouncer<Access> 
                 let content = self
                     .compose_reply(
                         resolution.session_id,
-                        resolution.session_name.clone(),
                         AgentChatReplyBody::Markdown {
                             markdown: UNSHAREABLE_ANSWER.to_owned(),
                         },
@@ -580,7 +571,6 @@ impl<Access: EntityAccessService> SessionAnnouncer for MessageAnnouncer<Access> 
                 session_id: presentation.session_id.to_string(),
                 body,
                 link: Some(presentation.link),
-                label: None,
             })
             .await
             .map_err(|error| HarnessError::Announce(rootcause::report!(error).into()))?;

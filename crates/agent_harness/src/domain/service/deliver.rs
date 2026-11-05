@@ -648,7 +648,6 @@ where
                 bot_id: session.bot_id,
                 is_coding,
                 message_id,
-                session_name: crate::domain::model::reply_link_label(&session.name),
                 origin_parent: origin.parent.clone(),
                 triggered_by: triggered_by.clone(),
                 outcome: outcome.clone(),

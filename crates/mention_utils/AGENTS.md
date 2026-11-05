@@ -12,8 +12,6 @@ AI editors, lexical, and notification text.
 - `src/parse.rs`: `nom` parsers for each mention chip XML tag.
 - `src/serialize.rs`: renders mentions back to chip XML or plain text.
 - `src/tests.rs`: round-trip parse/serialize cases.
-- `<m-agent-activity>` (an agent reply's steps) is parsed for its row labels only, so
-  notification text says what the agent did; its cards are ignored.
 
 ## Scope
 

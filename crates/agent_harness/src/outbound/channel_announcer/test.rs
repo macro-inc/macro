@@ -132,7 +132,6 @@ fn every_reply_names_its_session() {
             session_id: "00000000-0000-0000-0000-00000000000a".to_owned(),
             body: AgentChatReplyBody::Pending,
             link: None,
-            label: None,
         }
     );
 }
@@ -361,10 +360,7 @@ async fn an_answer_the_thread_may_not_carry_points_at_the_session() {
         wiremock::Mock::given(wiremock::matchers::method("POST"))
             .and(wiremock::matchers::path("/agent-announcement"))
             .and(wiremock::matchers::body_partial_json(serde_json::json!({
-                "chatReply": {
-                    "label": "Fix login",
-                    "body": { "kind": "markdown", "markdown": markdown }
-                }
+                "chatReply": { "body": { "kind": "markdown", "markdown": markdown } }
             })))
             .respond_with(
                 wiremock::ResponseTemplate::new(200)
@@ -399,6 +395,7 @@ async fn an_answer_the_thread_may_not_carry_points_at_the_session() {
         deleted_at: None,
         attachments: vec![],
         reactions: vec![],
+        link_previews: vec![],
     };
     messages
         .expect_patch()
@@ -425,7 +422,6 @@ async fn an_answer_the_thread_may_not_carry_points_at_the_session() {
             bot_id: BotId::TEST_A,
             is_coding: false,
             message_id: reply_id,
-            session_name: Some("Fix login".to_owned()),
             origin_parent: parent,
             triggered_by: MacroUserIdStr::try_from_email("user@example.com").unwrap(),
             outcome: ReplyOutcome::Answered("Your emails: <m-document-mention/>".to_owned()),
@@ -519,6 +515,7 @@ async fn shared_thread_and_dm_snapshots_omit_raw_tool_details() {
                     deleted_at: None,
                     attachments: vec![],
                     reactions: vec![],
+                    link_previews: vec![],
                 })
             });
         let announcer = MessageAnnouncer::new(

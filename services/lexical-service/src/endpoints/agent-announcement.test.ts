@@ -109,19 +109,6 @@ describe('agent announcements', () => {
       markdown: `${link}\n\nSure.\n\n- done`,
     });
   });
-  it('labels the session link with the session name it is given', async () => {
-    const response = await request({
-      chatReply: {
-        sessionId: 'session',
-        label: 'Centralize read-on-open',
-        body: { kind: 'markdown', markdown: 'Done.' },
-      },
-    });
-    expect(await response.json()).toEqual({
-      markdown:
-        '<m-agent-session-mention>{"id":"session","label":"Centralize read-on-open"}</m-agent-session-mention>\n\nDone.',
-    });
-  });
   it('composes a private reply from segments, with steps as a live node', async () => {
     const response = await request({
       chatReply: {

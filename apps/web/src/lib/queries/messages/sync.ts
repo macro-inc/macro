@@ -110,6 +110,21 @@ export function onThreadStateUpdated(listener: ThreadStateListener) {
   return () => threadStateListeners.delete(listener);
 }
 
+/**
+ * Previews are computed after the write that produced a message, so a copy
+ * of the same text without them (a send or edit response landing after the
+ * previews did) predates them: keep the ones already shown.
+ */
+function withShownLinkPreviews<T extends Message>(
+  message: T,
+  existing: Message | undefined
+): T {
+  const shown = existing?.link_previews;
+  if (!shown?.length || message.link_previews?.length) return message;
+  if (message.content !== existing?.content) return message;
+  return { ...message, link_previews: shown };
+}
+
 /** Preserve the event kind: only posts insert messages, and only deletes remove them. */
 export function applyMessage(
   message: Message,
@@ -127,6 +142,11 @@ export function applyMessage(
     patchTargetMessage(parent, target, {
       reactions: message.reactions,
       updated_at: message.updated_at,
+    });
+  } else if (change === 'link_previews_updated') {
+    // Only the previews: a newer edit's text may already be showing.
+    patchTargetMessage(parent, target, {
+      link_previews: message.link_previews,
     });
   } else if (change === 'message_deleted') {
     patchTargetMessage(parent, target, normalized);
@@ -166,7 +186,11 @@ export function applyMessage(
       insertMessageIntoTargetCaches(parent, target, item);
     }
   } else {
-    patchTargetMessage(parent, target, normalized);
+    patchTargetMessage(
+      parent,
+      target,
+      withShownLinkPreviews(normalized, existing)
+    );
   }
   softInvalidateTargetCaches(parent, target);
   fireAndForget(restartPendingChannelTimeline(parent), 'messages-sync');

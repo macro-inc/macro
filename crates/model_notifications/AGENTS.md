@@ -12,8 +12,6 @@ types.
   metadata types — the fastest way to see every notification kind that exists.
 - `src/metadata.rs` + `src/metadata/`: one metadata struct per notification
   kind (channel, CRM discussion, initiative discussion, GitHub PR, reminder, …).
-- `src/metadata/agent_session.rs`: agent-session kinds; alert titles say how a turn
-  ended (from the ACP stop reason) and name the session.
 - `src/metadata/channel_push.rs`: channel push destinations, including the known
   thread root so clients can open directly without fetching notification metadata.
 - `src/digest_state.rs`: the digest batching state machine.

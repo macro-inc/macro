@@ -586,6 +586,7 @@ impl messages::domain::api::MessageCommands for TestChannelPoster {
                 deleted_at: None,
                 attachments: Vec::new(),
                 reactions: Vec::new(),
+                link_previews: vec![],
             }),
         }
     }

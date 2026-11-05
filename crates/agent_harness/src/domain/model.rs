@@ -881,10 +881,6 @@ pub struct ResolvedReply {
     pub is_coding: bool,
     /// The pending reply posted when the turn was announced.
     pub message_id: Uuid,
-    /// The session's name, which the reply's link reads as wherever the
-    /// reply is shown as text - a notification, search. `None` while the
-    /// session has only its default name.
-    pub session_name: Option<String>,
     /// Channel or document the mention was posted in.
     pub origin_parent: messages::domain::models::MessageParent,
     /// Who prompted the turn.
@@ -897,13 +893,6 @@ pub struct ResolvedReply {
     /// passages and steps the reply shows. Empty when it did not, and the
     /// reply is then told from `outcome` alone.
     pub segments: Vec<agent_fold::domain::model::ProjectedSegment>,
-}
-
-/// What a reply's session link reads as: the session's name, once it has
-/// one of its own.
-pub fn reply_link_label(session_name: &str) -> Option<String> {
-    (session_name != agent_session::domain::model::DEFAULT_AGENT_SESSION_NAME)
-        .then(|| session_name.to_owned())
 }
 
 /// Values required to provision a new session container.
