@@ -369,3 +369,7 @@ pub async fn main() -> anyhow::Result<()> {
 
     Ok(())
 }
+
+/// CI proof salt.
+#[allow(dead_code)]
+pub const CI_PROOF_SALT: &str = "small-7";
