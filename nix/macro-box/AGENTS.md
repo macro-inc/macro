@@ -81,6 +81,8 @@ Smoke test: `incus launch macro-box t --vm --profile macro-box`, then
 ## Gotchas
 
 - import-tree imports every `.nix` file under `nix/`; helpers start with `_`.
+- Keep `files/etc/macro/enroll.env` tracked despite the global `*.env` ignore;
+  it contains the non-secret Incus enrollment source required at VM boot.
 - The `macro-box` profile turns Secure Boot off, so the shim path is built
   but untested; the ESP grub.cfg boots `/boot/vmlinuz` + `/boot/initrd.img`
   (the kernel's symlinks), so apt kernel upgrades need no update-grub.
