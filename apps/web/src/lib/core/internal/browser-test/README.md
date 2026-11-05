@@ -53,6 +53,12 @@ SQL fallback. The fixture account is reactive; there is no read-only HTTP endpoi
 with one synthetic ordinary row. It verifies successful ID joins, explicit refusal
 of email/name/virtual-row joins without issuing identity lookups, and recovery
 back to a supported query.
+`/?sql-people&policy` composes the production context publisher, bounded directory
+windows and recipient picker with the real cache host. Offline desktop/phone cases
+verify 50-result command windows with inbox exclusions and DM dedup before limiting,
+no duplicate DM on the next page, rejection of context-only membership, recency
+updates and custom-chip preservation across asynchronous searches. Context inputs
+are synthetic; this does not replace connected channel/inbox authorization checks.
 
 `/?contact-removal` runs the existing two-phase backfill and exact-verification
 adapter over the real worker/WASM/OPFS cache. Only authority data is synthetic,

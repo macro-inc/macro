@@ -91,7 +91,9 @@ can advance empty windows. Main email To/Cc/Bcc inputs receive the factory throu
 `EmailComposeContext.createRecipientSource`; scoped hosts opt out explicitly with
 `undefined`. Thread extras and personal hits deduplicate by canonical email while
 preserving the selected representation. Keep selection/outside dismissal synchronous;
-a delayed combobox close must not cancel a new query after refocus. Pass supplied
+a delayed combobox close must not cancel a new query after refocus. Keep nonmatching
+selected custom addresses out of visible suggestions during async search, so Enter
+cannot toggle an old chip while a new result window arrives. Pass supplied
 names to option/chip avatars instead of duplicating resolved names in the shared name cache. The internal
 recipient and email app-browser fixtures cover desktop/touch. Channel invitation
 and participant pickers use the same source with explicit roster exclusions; keep
