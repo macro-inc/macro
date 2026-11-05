@@ -6,4 +6,5 @@
  */
 import type { ConnectorOrgSetupResponse } from './connectorOrgSetupResponse';
 
-export type PipedreamCatalogEntryResponseOrgSetup = null | ConnectorOrgSetupResponse;
+export type PipedreamCatalogEntryResponseOrgSetup =
+  null | ConnectorOrgSetupResponse;
