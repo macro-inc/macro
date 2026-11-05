@@ -70,3 +70,7 @@ gha-creds-*.json
 # Python bytecode from tooling/pii and other scripts.
 **/__pycache__/
 **/*.pyc
+BUILD.bazel
+MODULE.bazel
+!tooling/bazel-proto/BUILD.bazel
+bazel-*

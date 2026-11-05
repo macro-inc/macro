@@ -22,6 +22,15 @@ SKIP_TARGETS = {"sync_service", "bazel_all_features", "workspace-hack"}
 MIGRATIONS = "//crates/macro_db_client:migrations"
 SQLX = "//:sqlx_offline_data"
 
+# Run-time reads the literal scan can't see, because the path is built up in code.
+RUNTIME_DATA = {
+    "databases_sql": ["//crates/database_sql:all_files"],
+    "local_e2e_test_support": ["//tooling/seed_cli:all_files"],
+}
+ROOT_RUNTIME_DATA = {
+    "whatsapp_session_service": ["infra/stacks/whatsapp-session-service"],
+}
+
 
 def rel(path, root):
     return os.path.relpath(path, root)
@@ -94,7 +103,32 @@ def starlark_list(items, indent="        "):
     return "[\n" + body + indent[:-4] + "]"
 
 
+def write_all_features(meta, root):
+    """A member enabling every feature, because crate_universe resolves default features only."""
+    members = set(meta["workspace_members"])
+    packages = {p["id"]: p for p in meta["packages"]}
+    directory = "tooling/bazel-proto/all_features"
+    lines = ["[package]", 'name = "bazel_all_features"', 'version = "0.0.0"', 'edition = "2024"', "publish = false", "", "[dependencies]"]
+    for pid in sorted(members, key=lambda i: packages[i]["name"]):
+        pkg = packages[pid]
+        if pkg["name"] in SKIP_TARGETS:
+            continue
+        if not any(set(t["kind"]) & {"lib", "rlib", "proc-macro", "cdylib", "staticlib", "dylib"} for t in pkg["targets"]):
+            continue
+        path = os.path.relpath(os.path.dirname(pkg["manifest_path"]), os.path.join(root, directory))
+        features = [f for f in pkg["features"] if f != "default"]
+        lines.append(f'{json.dumps(pkg["name"])} = {{ path = {json.dumps(path)}, features = {json.dumps(features)} }}')
+    os.makedirs(os.path.join(root, directory, "src"), exist_ok=True)
+    open(os.path.join(root, directory, "src/lib.rs"), "w").close()
+    with open(os.path.join(root, directory, "Cargo.toml"), "w") as f:
+        f.write("\n".join(lines) + "\n")
+
+
 def main():
+    if sys.argv[1] == "--all-features-crate":
+        meta = json.load(open(sys.argv[2]))
+        write_all_features(meta, meta["workspace_root"])
+        return
     meta = json.load(open(sys.argv[1]))
     root = meta["workspace_root"]
     members = set(meta["workspace_members"])
@@ -173,6 +207,10 @@ def main():
         escape_count += bool(escapes)
         if uses_sqlx and MIGRATIONS not in escapes and pkg["name"] != "macro_db_client":
             escapes.append(MIGRATIONS)
+        escapes += RUNTIME_DATA.get(pkg["name"], [])
+        for path_in_root in ROOT_RUNTIME_DATA.get(pkg["name"], []):
+            ROOT_PATHS.add(path_in_root)
+            escapes.append("//:" + root_target(path_in_root))
         extra_labels = list(escapes)
         if uses_sqlx:
             extra_labels += [SQLX, "//tooling/bazel-proto:fake_cargo.sh"]
@@ -257,7 +295,7 @@ def main():
                     f"    proc_macro_deps = {starlark_list(sorted(set(dev_macros) - set(normal_macros)))},\n"
                     f"    aliases = {json.dumps(dev_alias, sort_keys=True)},\n"
                     f"    data = {test_data},\n"
-                    f'    env = {{"CARGO_MANIFEST_DIR": "/proc/self/cwd/{directory}"}},\n'
+                    f'    env = {{"CARGO_MANIFEST_DIR": "/proc/self/cwd/{directory}", "INSTA_WORKSPACE_ROOT": "/proc/self/cwd", "INSTA_UPDATE": "no"}},\n'
                     ")\n"
                 )
         own = [f":{crate_ident(lib)}"] if lib and "proc-macro" not in lib["kind"] else []
@@ -297,7 +335,7 @@ def main():
                     f"    proc_macro_deps = {starlark_list(dev_macros + own_macros)},\n"
                     f"    aliases = {json.dumps(dev_alias, sort_keys=True)},\n"
                     f"    data = {test_data} + {json.dumps(bin_labels(bins, os.path.join(root, directory, path)))},\n"
-                    f'    env = {{"CARGO_MANIFEST_DIR": "/proc/self/cwd/{directory}"}},\n'
+                    f'    env = {{"CARGO_MANIFEST_DIR": "/proc/self/cwd/{directory}", "INSTA_WORKSPACE_ROOT": "/proc/self/cwd", "INSTA_UPDATE": "no"}},\n'
                     ")\n"
                 )
         write(root, directory, out)
