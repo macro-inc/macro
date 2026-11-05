@@ -18,10 +18,11 @@ test('rescue sends only unresolved PCM on a fresh finalized inference session', 
       const event: {
         type: string;
         audio?: string;
-        settings?: { extra?: { keyterm?: string } };
+        settings?: { extra?: { keyterm?: string; utterance_end?: boolean } };
       } = JSON.parse(data.toString());
       if (event.type === 'session.create') {
         assert.equal(event.settings?.extra?.keyterm, 'Agent');
+        assert.equal(event.settings?.extra?.utterance_end, true);
         peer.send(
           JSON.stringify({ type: 'session.created', session_id: 'rescue' })
         );

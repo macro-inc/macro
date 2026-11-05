@@ -45,6 +45,8 @@ export class GatewayStt extends inference.STT<'deepgram/nova-3'> {
             interim_results: true,
             smart_format: true,
             keyterm: this.gateway.name,
+            // Documented Inference option missing from the pinned SDK's option type.
+            utterance_end: true,
           },
         },
       },

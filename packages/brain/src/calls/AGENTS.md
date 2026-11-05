@@ -24,3 +24,7 @@ proxy; retain local turn-taking and never give the VM LiveKit project secrets.
 Rescue finalizes a fresh stream for unresolved PCM because the SDK has no batch
 recognition. Barge-in terminates the turn's TTS sockets because Inference has no
 Clear command. Keep these capability differences in the package README.
+
+Enable the documented utterance_end flag in the transport handshake. Keep
+provider vad_events off until its Cloud protocol error 2006 is fixed and tested;
+local onset detection remains active. The pinned SDK omits these option types.

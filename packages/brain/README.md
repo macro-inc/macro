@@ -192,12 +192,15 @@ its upstream connection; project credentials and Cloud tokens never reach the VM
 STT seconds and Aura-2 characters are metered to team credits.
 
 Inference preserves keyterms, interim transcripts, smart formatting and 300 ms
-endpointing. It exposes speech-start and finalized speech-end events rather
-than Deepgram's separate `utterance_end_ms` and `vad_events` options; the local
-segmenter still detects quiet speech and sustained barge-in. No batch recognition
+endpointing, plus Inference's `utterance_end` boolean. It does not expose the
+separate `utterance_end_ms` control. The advertised `vad_events: true` option
+failed live Cloud checks with protocol error 2006 (numeric channel decoding),
+so it stays off. SDK speech-start/finalized speech-end events and the unchanged
+local segmenter detect quiet speech and sustained barge-in. No batch recognition
 API is available in the pinned SDK: rescue sends only the unresolved PCM span
 through a fresh finalized Inference stream, with trailing silence. This costs an
-extra connection and loses Deepgram's distinct prerecorded recognition path.
+extra connection plus the SDK's three-second final-transcript settlement window,
+and loses Deepgram's distinct prerecorded recognition path.
 There is no provider Clear command: barge-in clears local playback and terminates
 the turn's TTS sockets, then starts a fresh stream for the next reply. The voice
 catalog filters provider metadata to Inference-supported Aura-2 selectors; fixed
