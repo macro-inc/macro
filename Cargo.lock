@@ -12843,6 +12843,7 @@ dependencies = [
  "doppleganger",
  "nom 8.0.0",
  "serde",
+ "sha2 0.10.9",
  "sqlx",
  "thiserror 2.0.18",
  "tracing",

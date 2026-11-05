@@ -562,3 +562,7 @@ per surface and check that the text reached the intended editor. Keep short
 Command-K queries below universal-compose promotion. For large documents use
 the collaborative editor fixture described in
 [documents](documents.md) and also type in a real app document.
+
+HTTP server `url.path` uses the matched route template (or `unmatched`), so
+personal identities in dynamic segments never become span fields. Use opaque
+entity attributes to locate a request rather than its literal path.

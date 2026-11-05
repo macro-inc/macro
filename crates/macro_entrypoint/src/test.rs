@@ -56,6 +56,7 @@ async fn force_flush_exports_short_invocations_and_preserves_warm_provider() {
     let entrypoint = InitializedEntrypoint {
         tracer_provider: Some(provider),
         logger_provider: None,
+        meter_provider: None,
     };
 
     tracer.in_span("first-invocation", |_| {});
@@ -108,6 +109,7 @@ async fn force_flush_reports_export_failure_instead_of_success() {
     let entrypoint = InitializedEntrypoint {
         tracer_provider: Some(provider),
         logger_provider: None,
+        meter_provider: None,
     };
     assert!(matches!(
         entrypoint.force_flush().await,
@@ -121,6 +123,7 @@ async fn force_flush_without_exporters_is_a_noop() {
     InitializedEntrypoint {
         tracer_provider: None,
         logger_provider: None,
+        meter_provider: None,
     }
     .force_flush()
     .await

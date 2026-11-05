@@ -55,3 +55,6 @@ nearly every Rust service's `main.rs` calls.
 ## Related
 
 - Skill: `new-service` · Docs: `docs/guides/new-service.md`
+
+OTLP-enabled entrypoints also install a global meter provider on the same
+collector endpoint; `shutdown` flushes it with the trace and log providers.
