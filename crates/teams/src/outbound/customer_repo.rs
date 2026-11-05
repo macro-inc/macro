@@ -590,9 +590,7 @@ impl CustomerRepository for CustomerRepositoryImpl {
         let amount = price
             .unit_amount
             .context("the seat price has no unit amount")?;
-        let recurring = price
-            .recurring
-            .context("the seat price is not recurring")?;
+        let recurring = price.recurring.context("the seat price is not recurring")?;
         if recurring.interval_count != 1 {
             return Err(anyhow::anyhow!(
                 "the seat price bills every {} intervals",
@@ -604,11 +602,7 @@ impl CustomerRepository for CustomerRepositoryImpl {
             stripe::RecurringInterval::Month => BillingInterval::Month,
             stripe::RecurringInterval::Year => BillingInterval::Year,
             other => {
-                return Err(anyhow::anyhow!(
-                    "the seat price bills per {}",
-                    other.as_str()
-                )
-                .into());
+                return Err(anyhow::anyhow!("the seat price bills per {}", other.as_str()).into());
             }
         };
 

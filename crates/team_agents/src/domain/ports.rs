@@ -9,8 +9,8 @@ use uuid::Uuid;
 use super::models::{
     AgentRepo, ComputerPurchase, ComputerQuote, ComputerSize, ComputerStatus, CreateTeamAgent,
     Credential, EmailMessage, EmailMessages, Mailbox, NewAgentAccount, PersonaSeed, SeatQuote,
-    SendEmail, SentEmail, SubscriptionItem, TeamAgent, TeamAgentError, TeamAgentQuote, TeamAgents,
-    TeamAgentStatus,
+    SendEmail, SentEmail, SubscriptionItem, TeamAgent, TeamAgentError, TeamAgentQuote,
+    TeamAgentStatus, TeamAgents,
 };
 
 /// Storage for agent accounts and their provisioning status.

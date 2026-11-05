@@ -32,7 +32,10 @@ impl AgentSecretRepository for FakeRepository {
         encrypted: &EncryptedSecret,
     ) -> Result<AgentSecretSummary, AgentSecretError> {
         self.rows.lock().expect("lock").insert(
-            (agent_user_id.as_ref().to_string(), name.as_str().to_string()),
+            (
+                agent_user_id.as_ref().to_string(),
+                name.as_str().to_string(),
+            ),
             encrypted.clone(),
         );
 
@@ -52,7 +55,10 @@ impl AgentSecretRepository for FakeRepository {
             .rows
             .lock()
             .expect("lock")
-            .get(&(agent_user_id.as_ref().to_string(), name.as_str().to_string()))
+            .get(&(
+                agent_user_id.as_ref().to_string(),
+                name.as_str().to_string(),
+            ))
             .map(|encrypted| StoredSecret {
                 name: name.as_str().to_string(),
                 encrypted: encrypted.clone(),
@@ -94,7 +100,10 @@ impl AgentSecretRepository for FakeRepository {
             .rows
             .lock()
             .expect("lock")
-            .remove(&(agent_user_id.as_ref().to_string(), name.as_str().to_string()))
+            .remove(&(
+                agent_user_id.as_ref().to_string(),
+                name.as_str().to_string(),
+            ))
             .is_some())
     }
 }
@@ -110,7 +119,8 @@ impl SecretCipher for FakeCipher {
         value: &SecretValue,
     ) -> Result<EncryptedSecret, AgentSecretError> {
         Ok(EncryptedSecret {
-            ciphertext: format!("{agent_user_id}/{}:{}", name.as_str(), value.expose()).into_bytes(),
+            ciphertext: format!("{agent_user_id}/{}:{}", name.as_str(), value.expose())
+                .into_bytes(),
             encryption_version: 1,
             kms_key_id: "key".to_string(),
         })

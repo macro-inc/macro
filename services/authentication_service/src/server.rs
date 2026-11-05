@@ -724,13 +724,14 @@ pub async fn run() -> anyhow::Result<()> {
         // public gateway, never this container's in-network addresses.
         macro_service_urls::ApiGatewayUrl::new()?.to_string(),
     ));
-    let agent_secrets_service = Arc::new(agent_secrets::domain::service::AgentSecretServiceImpl::new(
-        agent_secrets::outbound::pg_agent_secrets_repo::PgAgentSecretsRepo::new(db.clone()),
-        agent_secrets::outbound::kms_secret_cipher::KmsSecretCipher::new(cursor_kms.clone()),
-        team_agents::outbound::agent_secrets_directory::TeamAgentsDirectory::new(
-            team_agents_repository,
-        ),
-    ));
+    let agent_secrets_service =
+        Arc::new(agent_secrets::domain::service::AgentSecretServiceImpl::new(
+            agent_secrets::outbound::pg_agent_secrets_repo::PgAgentSecretsRepo::new(db.clone()),
+            agent_secrets::outbound::kms_secret_cipher::KmsSecretCipher::new(cursor_kms.clone()),
+            team_agents::outbound::agent_secrets_directory::TeamAgentsDirectory::new(
+                team_agents_repository,
+            ),
+        ));
     let domain_notice_service =
         Arc::new(teams::domain::domain_notice::DomainNoticeServiceImpl::new(
             teams::outbound::colleague_directory::ContactsColleagueDirectory::new(

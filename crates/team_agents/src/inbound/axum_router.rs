@@ -290,7 +290,9 @@ where
 {
     let agent_user_id = MacroUserIdStr::parse_from_str(&path.agent_user_id)
         .map(MacroUserIdStr::into_owned)
-        .map_err(|_| TeamAgentError::BadRequest(format!("{} is not a user id", path.agent_user_id)))?;
+        .map_err(|_| {
+            TeamAgentError::BadRequest(format!("{} is not a user id", path.agent_user_id))
+        })?;
 
     state
         .service

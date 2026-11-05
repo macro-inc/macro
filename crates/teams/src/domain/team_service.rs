@@ -51,9 +51,9 @@ use crate::domain::{
         JoinTeamDirectlyError, JoinTeamError, PatchTeamCrmSettingsResponse, PatchTeamRequest,
         RemoveTeamInviteError, RemoveUserFromAllTeamsError, RemoveUserFromTeamError,
         RestorePermissionsForTeamMembersError, RevokePermissionsForTeamMembersError, SeatPlan,
-        SeatQuote, SeatSubscriptionItem, SetTeamMemberPlanError, Team, TeamError, TeamInvite, TeamInviteDetails, TeamMember,
-        TeamMembers, TeamRole, TeamWithMembers, ToggleAutoJoinDomainError, is_generic_email_domain,
-        team_slug_from_name,
+        SeatQuote, SeatSubscriptionItem, SetTeamMemberPlanError, Team, TeamError, TeamInvite,
+        TeamInviteDetails, TeamMember, TeamMembers, TeamRole, TeamWithMembers,
+        ToggleAutoJoinDomainError, is_generic_email_domain, team_slug_from_name,
     },
     open_seat_release::{NoOpOpenSeatRelease, OpenSeatRelease, SeatPlanChange, SubscriptionStart},
     owned_entity_cleanup::{OwnedEntityCleanup, UnwiredOwnedEntityCleanup, clear_team},
@@ -469,12 +469,8 @@ where
                     match seat {
                         Ok(seat) => deferred_seat = seat,
                         Err(e) => {
-                            self.rollback_add_user_to_team(
-                                &team_id,
-                                user_id,
-                                "billing the seat",
-                            )
-                            .await;
+                            self.rollback_add_user_to_team(&team_id, user_id, "billing the seat")
+                                .await;
                             return Err(JoinTeamError::CustomerError(e).into());
                         }
                     }
@@ -2774,12 +2770,13 @@ where
     ) -> Result<Option<SeatSubscriptionItem>, JoinTeamDirectlyError> {
         let team_id = macro_uuid::string_to_uuid(&entity_access_receipt.entity().entity_id)
             .map_err(|_| TeamError::TeamDoesNotExist)?;
-        let added_by = entity_access_receipt
-            .acting_user_id()
-            .cloned()
-            .ok_or(TeamError::AccessError(
-                entity_access::domain::models::AccessError::Unauthorized,
-            ))?;
+        let added_by =
+            entity_access_receipt
+                .acting_user_id()
+                .cloned()
+                .ok_or(TeamError::AccessError(
+                    entity_access::domain::models::AccessError::Unauthorized,
+                ))?;
 
         let joined = self
             .join_team_directly_billed(

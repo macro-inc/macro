@@ -66,7 +66,11 @@ impl AgentSecretService for FakeService {
         })
     }
 
-    async fn delete(&self, caller: &MacroUserIdStr<'_>, name: &str) -> Result<(), AgentSecretError> {
+    async fn delete(
+        &self,
+        caller: &MacroUserIdStr<'_>,
+        name: &str,
+    ) -> Result<(), AgentSecretError> {
         self.record(format!("delete {caller} {name}"));
         Ok(())
     }
@@ -178,7 +182,10 @@ impl EntityAccessService for FakeEntityAccessService {
         panic!("unexpected get_users_by_entity call")
     }
 
-    async fn get_call_channel(&self, _call_id: &Uuid) -> Result<Option<CallChannelInfo>, AccessError> {
+    async fn get_call_channel(
+        &self,
+        _call_id: &Uuid,
+    ) -> Result<Option<CallChannelInfo>, AccessError> {
         panic!("unexpected get_call_channel call")
     }
 

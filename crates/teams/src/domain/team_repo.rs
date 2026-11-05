@@ -12,10 +12,10 @@ use crate::domain::model::{
     InviteUsersToTeamError, JoinTeamByInviteLinkError, JoinTeamByInviteLinkOutcome,
     JoinTeamDirectlyError, JoinTeamError, ManageTeamInviteLinkError, PatchTeamCrmSettingsResponse,
     PatchTeamRequest, RemoveTeamInviteError, RemoveUserFromAllTeamsError, RemoveUserFromTeamError,
-    RestorePermissionsForTeamMembersError, RevokePermissionsForTeamMembersError, SeatPlan, SeatQuote, SeatSubscriptionItem,
-    SetTeamMemberPlanError, Team, TeamError, TeamInvite, TeamInviteDetails, TeamInviteLinkTeam,
-    TeamInviteLinkToken, TeamMember, TeamMembers, TeamPlan, TeamRole, TeamWithMembers,
-    ToggleAutoJoinDomainError,
+    RestorePermissionsForTeamMembersError, RevokePermissionsForTeamMembersError, SeatPlan,
+    SeatQuote, SeatSubscriptionItem, SetTeamMemberPlanError, Team, TeamError, TeamInvite,
+    TeamInviteDetails, TeamInviteLinkTeam, TeamInviteLinkToken, TeamMember, TeamMembers, TeamPlan,
+    TeamRole, TeamWithMembers, ToggleAutoJoinDomainError,
 };
 use crate::domain::owned_entity_cleanup::ClearedTeam;
 

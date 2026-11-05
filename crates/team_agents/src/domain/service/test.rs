@@ -219,7 +219,10 @@ struct FakeApiKeys {
 }
 
 impl AgentApiKeys for FakeApiKeys {
-    async fn mint(&self, _agent_user_id: &MacroUserIdStr<'_>) -> Result<Credential, TeamAgentError> {
+    async fn mint(
+        &self,
+        _agent_user_id: &MacroUserIdStr<'_>,
+    ) -> Result<Credential, TeamAgentError> {
         self.journal.record("api_key.mint")?;
         Ok(Credential::new("mak_secret".to_string()))
     }
@@ -231,7 +234,11 @@ struct FakeMailboxes {
 }
 
 impl Mailboxes for FakeMailboxes {
-    async fn create(&self, _username: &str, _display_name: &str) -> Result<Mailbox, TeamAgentError> {
+    async fn create(
+        &self,
+        _username: &str,
+        _display_name: &str,
+    ) -> Result<Mailbox, TeamAgentError> {
         self.journal.record("mailbox.create")?;
         Ok(Mailbox {
             mailbox_id: Some("inbox-1".to_string()),
@@ -412,7 +419,11 @@ fn build(setup: Setup) -> (Service, Arc<Journal>) {
 }
 
 fn receipt(team_id: &str) -> EntityAccessReceipt<AdminTeamRole> {
-    EntityAccessReceipt::dangerously_assert_authenticated_user(user(ADMIN), team_id, EntityType::Team)
+    EntityAccessReceipt::dangerously_assert_authenticated_user(
+        user(ADMIN),
+        team_id,
+        EntityType::Team,
+    )
 }
 
 fn request() -> CreateTeamAgent {
@@ -659,7 +670,9 @@ async fn create_and_quote_need_the_flag_on_for_the_admin() {
         Err(TeamAgentError::NotEnabled)
     ));
     assert!(matches!(
-        service.quote(receipt(TEAM_ID), ComputerSize::Standard).await,
+        service
+            .quote(receipt(TEAM_ID), ComputerSize::Standard)
+            .await,
         Err(TeamAgentError::NotEnabled)
     ));
     assert_eq!(journal.steps(), Vec::<&str>::new());
@@ -816,7 +829,11 @@ async fn listing_takes_a_failure_from_the_computer() {
     let stored = service.me(&user(AGENT)).await.expect("me");
     assert_eq!(stored.status, TeamAgentStatus::Failed);
     assert_eq!(
-        service.list(receipt(OTHER_TEAM_ID)).await.expect("listed").agents,
+        service
+            .list(receipt(OTHER_TEAM_ID))
+            .await
+            .expect("listed")
+            .agents,
         vec![]
     );
 }
@@ -876,10 +893,7 @@ async fn only_agents_can_send_email() {
         .create(receipt(TEAM_ID), request())
         .await
         .expect("create succeeds");
-    let sent = service
-        .send_email(&user(AGENT), email)
-        .await
-        .expect("sent");
+    let sent = service.send_email(&user(AGENT), email).await.expect("sent");
 
     assert_eq!(sent.message_id, "sent-1");
     assert_eq!(service.mailboxes.sent.lock().expect("lock")[0].0, "inbox-1");
@@ -891,5 +905,8 @@ fn slug_is_a_valid_os_user_name() {
     assert_eq!(slug("  Ünïcode!! Bot 2 "), "n-code-bot-2");
     assert_eq!(slug("✨"), "agent");
     assert_eq!(slug("42 Things"), "agent-42-things");
-    assert_eq!(slug("Bartholomew Maximilian Montgomery"), "bartholomew-maximilian-m");
+    assert_eq!(
+        slug("Bartholomew Maximilian Montgomery"),
+        "bartholomew-maximilian-m"
+    );
 }

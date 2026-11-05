@@ -466,7 +466,9 @@ where
         let computer = self.computers.quote(team_id, size).await?;
 
         let seat_amount = match seat {
-            Some(seat) if seat.interval != computer.interval || seat.currency != computer.currency => {
+            Some(seat)
+                if seat.interval != computer.interval || seat.currency != computer.currency =>
+            {
                 return Err(TeamAgentError::internal_message(format!(
                     "the seat bills {} per {:?} but the computer {} per {:?}",
                     seat.currency, seat.interval, computer.currency, computer.interval

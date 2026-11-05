@@ -21,12 +21,14 @@ async fn seed_agent(pool: &PgPool) {
     .execute(pool)
     .await
     .expect("macro_user should insert");
-    sqlx::query(r#"INSERT INTO "User" (id, email, macro_user_id, "isAgent") VALUES ($1, $1, $2, TRUE)"#)
-        .bind(AGENT)
-        .bind(macro_user_id)
-        .execute(pool)
-        .await
-        .expect("user should insert");
+    sqlx::query(
+        r#"INSERT INTO "User" (id, email, macro_user_id, "isAgent") VALUES ($1, $1, $2, TRUE)"#,
+    )
+    .bind(AGENT)
+    .bind(macro_user_id)
+    .execute(pool)
+    .await
+    .expect("user should insert");
 }
 
 #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
@@ -77,7 +79,10 @@ async fn a_secret_is_stored_replaced_listed_and_deleted(pool: PgPool) {
 
     let listed = repo.list(&agent).await.expect("listed");
     assert_eq!(
-        listed.iter().map(|secret| secret.name.as_str()).collect::<Vec<_>>(),
+        listed
+            .iter()
+            .map(|secret| secret.name.as_str())
+            .collect::<Vec<_>>(),
         vec!["github-token"]
     );
 

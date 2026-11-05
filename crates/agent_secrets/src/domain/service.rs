@@ -96,7 +96,10 @@ where
             .get(caller, &name)
             .await?
             .ok_or(AgentSecretError::NotFound)?;
-        let value = self.cipher.decrypt(caller, &name, &stored.encrypted).await?;
+        let value = self
+            .cipher
+            .decrypt(caller, &name, &stored.encrypted)
+            .await?;
 
         Ok(AgentSecret {
             name: stored.name,
@@ -106,7 +109,11 @@ where
     }
 
     #[tracing::instrument(skip(self), err)]
-    async fn delete(&self, caller: &MacroUserIdStr<'_>, name: &str) -> Result<(), AgentSecretError> {
+    async fn delete(
+        &self,
+        caller: &MacroUserIdStr<'_>,
+        name: &str,
+    ) -> Result<(), AgentSecretError> {
         let name = SecretName::parse(name)?;
         self.ensure_agent(caller).await?;
 

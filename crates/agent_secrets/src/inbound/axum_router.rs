@@ -184,7 +184,11 @@ where
 {
     let summary = state
         .service
-        .put(&user.authorization.user.macro_user_id, &path.name, body.value)
+        .put(
+            &user.authorization.user.macro_user_id,
+            &path.name,
+            body.value,
+        )
         .await?;
 
     Ok(Json(summary))
