@@ -108,8 +108,8 @@ describe('block tutorial row', () => {
       track.mock.calls.filter(([, payload]) => payload.action === 'played');
     expect(played()).toHaveLength(0);
 
-    fireEvent.play(video()!);
-    fireEvent.play(video()!);
+    fireEvent.playing(video()!);
+    fireEvent.playing(video()!);
     expect(played()).toHaveLength(1);
   });
 
@@ -142,7 +142,7 @@ describe('shelf after a video ends', () => {
     fireEvent.click(row()!);
     const dialog = await screen.findByRole('dialog');
     fireEvent.click(playButton());
-    fireEvent.play(video()!);
+    fireEvent.playing(video()!);
     expect(screen.queryByText('More videos from Macro')).toBeNull();
 
     fireEvent.ended(video()!);
@@ -168,7 +168,7 @@ describe('shelf after a video ends', () => {
 
     // Plays of the new video count for it.
     fireEvent.click(playButton());
-    fireEvent.play(video()!);
+    fireEvent.playing(video()!);
     expect(track).toHaveBeenLastCalledWith('tutorial_video', {
       tutorial: 'macro-crm',
       action: 'played',

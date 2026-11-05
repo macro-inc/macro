@@ -139,7 +139,7 @@ export function TutorialVideoDialog(props: {
             playsinline
             tabIndex={-1}
             controls={started() && !ended()}
-            onPlay={recordPlay}
+            onPlaying={recordPlay}
             onEnded={() => setEnded(true)}
             onKeyDown={(event) => {
               if (event.key === 'Escape') changeOpen(false);
