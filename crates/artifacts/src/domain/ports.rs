@@ -206,7 +206,6 @@ pub trait ArtifactService: Send + Sync + 'static {
     fn get(
         &self,
         receipt: EntityAccessReceipt<ViewAccessLevel>,
-        document: &DocumentBasic,
     ) -> impl Future<Output = Result<Artifact, ArtifactError>> + Send;
 
     /// Version history, newest first.

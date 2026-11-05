@@ -27,7 +27,7 @@ use macro_authorization::{
     AnyPrincipal, MacroAuthorization, MacroAuthorizationExtractor, MacroAuthorizationService,
     MacroAuthorizationState, OptionalMacroAuthorizationExtractor,
 };
-use model::document::DocumentBasic;
+
 use model_error_response::ErrorResponse;
 use serde::{Deserialize, Serialize};
 use utoipa::{OpenApi, ToSchema};
@@ -769,17 +769,13 @@ where
 pub async fn get_artifact_handler<Service, EntityAccess, Authorization>(
     State(state): State<ArtifactsRouterState<Service, EntityAccess, Authorization>>,
     access: DocumentAccessExtractor<ViewAccessLevel, EntityAccess, Authorization>,
-    axum::Extension(document): axum::Extension<DocumentBasic>,
 ) -> Result<Json<ArtifactResponse>, ArtifactError>
 where
     Service: ArtifactService,
     EntityAccess: EntityAccessService,
     Authorization: MacroAuthorizationService,
 {
-    let artifact = state
-        .service
-        .get(access.entity_access_receipt, &document)
-        .await?;
+    let artifact = state.service.get(access.entity_access_receipt).await?;
     Ok(Json(artifact.into()))
 }
 

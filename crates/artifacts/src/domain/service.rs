@@ -396,9 +396,9 @@ where
     async fn get(
         &self,
         receipt: EntityAccessReceipt<ViewAccessLevel>,
-        document: &DocumentBasic,
     ) -> Result<Artifact, ArtifactError> {
         let document_id = document_id_of(&receipt);
+        let document = self.load_document(&document_id).await?;
         let current = self.repository.current_version(&document_id).await?;
 
         Ok(Artifact {
