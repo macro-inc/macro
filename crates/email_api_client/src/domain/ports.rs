@@ -5,6 +5,7 @@ pub use mailbox::*;
 
 use std::future::Future;
 
+use chrono::{DateTime, Utc};
 use models_email::email::service::label::Label;
 use models_email::service::contact::Contact;
 use models_email::service::link::Link;
@@ -13,7 +14,7 @@ use uuid::Uuid;
 use super::models::{
     AccessToken, ApiOperationKind, CalendarPart, ChangePage, ContactPage, EmailApiError,
     MessageWithCalendarParts, ProviderSubscription, RateLimitRefusal, RequestPermit, SendRequest,
-    SentIds, SyncCursor, ThreadListPage, TokenError, TokenFreshness,
+    SenderDomain, SentIds, SyncCursor, ThreadListPage, TokenError, TokenFreshness,
 };
 
 #[cfg(test)]
@@ -216,6 +217,19 @@ pub trait MailboxRawMessageClient: Send + Sync + 'static {
         access_token: &AccessToken,
         provider_message_id: &str,
     ) -> impl Future<Output = Result<Vec<u8>, EmailApiError>> + Send;
+}
+
+/// How much mail a mailbox has received from a sender domain.
+pub trait MailboxSenderActivityClient: Send + Sync + 'static {
+    /// Counts messages from any address at `domain` or its subdomains received
+    /// since `since`. Providers may estimate or cap the count, so it ranks
+    /// senders rather than reporting an exact total.
+    fn count_messages_from_domain(
+        &self,
+        access_token: &AccessToken,
+        domain: &SenderDomain,
+        since: DateTime<Utc>,
+    ) -> impl Future<Output = Result<u32, EmailApiError>> + Send;
 }
 
 /// Mailbox contact synchronization capabilities.
@@ -542,6 +556,17 @@ impl MailboxAttachmentClient for NoOpMailboxClient {
 
 impl MailboxRawMessageClient for NoOpMailboxClient {
     async fn get_raw_message(&self, _: &AccessToken, _: &str) -> Result<Vec<u8>, EmailApiError> {
+        Err(unavailable())
+    }
+}
+
+impl MailboxSenderActivityClient for NoOpMailboxClient {
+    async fn count_messages_from_domain(
+        &self,
+        _: &AccessToken,
+        _: &SenderDomain,
+        _: DateTime<Utc>,
+    ) -> Result<u32, EmailApiError> {
         Err(unavailable())
     }
 }

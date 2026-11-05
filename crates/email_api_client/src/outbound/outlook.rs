@@ -8,6 +8,7 @@ mod invitations;
 mod messages;
 mod route;
 mod rules;
+mod sender_activity;
 mod sync;
 mod transport;
 mod wire;

@@ -18,6 +18,7 @@ mod messages;
 pub use messages::SEPARATE_LABEL_WRITES_BELOW;
 mod raw_message;
 mod send;
+mod sender_activity;
 mod subscription;
 mod sync;
 

@@ -290,3 +290,57 @@ async fn raw_message_decodes_and_maps_missing_to_not_found() {
         Err(EmailApiError::NotFound)
     ));
 }
+
+#[tokio::test]
+async fn sender_domain_count_searches_the_domain_since_the_window_start() {
+    use crate::domain::models::SenderDomain;
+    use crate::domain::ports::MailboxSenderActivityClient;
+
+    let (server, repository) = repository().await;
+    Mock::given(method("GET"))
+        .and(path("/users/me/messages"))
+        .and(query_param("q", "from:linear.app after:1762300800"))
+        .and(query_param("maxResults", "1"))
+        .respond_with(
+            ResponseTemplate::new(200)
+                .set_body_json(serde_json::json!({ "resultSizeEstimate": 12 })),
+        )
+        .expect(1)
+        .mount(&server)
+        .await;
+
+    let since = chrono::DateTime::from_timestamp(1_762_300_800, 0).unwrap();
+    let count = repository
+        .count_messages_from_domain(
+            &AccessToken::new("token"),
+            &SenderDomain::new("linear.app").unwrap(),
+            since,
+        )
+        .await
+        .unwrap();
+
+    assert_eq!(count, 12);
+}
+
+#[tokio::test]
+async fn sender_domain_count_maps_gmail_rate_limits() {
+    use crate::domain::models::SenderDomain;
+    use crate::domain::ports::MailboxSenderActivityClient;
+
+    let (server, repository) = repository().await;
+    Mock::given(method("GET"))
+        .and(path("/users/me/messages"))
+        .respond_with(ResponseTemplate::new(429))
+        .mount(&server)
+        .await;
+
+    let result = repository
+        .count_messages_from_domain(
+            &AccessToken::new("token"),
+            &SenderDomain::new("slack.com").unwrap(),
+            chrono::DateTime::from_timestamp(0, 0).unwrap(),
+        )
+        .await;
+
+    assert!(matches!(result, Err(EmailApiError::RateLimited { .. })));
+}

@@ -10,10 +10,16 @@ use models_email::email::service::thread::ThreadSummary;
 use models_email::gmail::MessagePart;
 use uuid::Uuid;
 
+use chrono::{DateTime, Utc};
+
 use crate::domain::models::{
-    AccessToken, CalendarPart, EmailApiError, MessageWithCalendarParts, ThreadListPage,
+    AccessToken, CalendarPart, EmailApiError, MessageWithCalendarParts, SenderDomain,
+    ThreadListPage,
 };
-use crate::domain::ports::{MailboxCalendarClient, MailboxMessageClient, MailboxRawMessageClient};
+use crate::domain::ports::{
+    MailboxCalendarClient, MailboxMessageClient, MailboxRawMessageClient,
+    MailboxSenderActivityClient,
+};
 
 use super::convert::{map_message_resource_to_service, map_thread_resource_to_service};
 use super::{GmailApiClientRepository, map_gmail_error};
@@ -49,6 +55,29 @@ impl MailboxRawMessageClient for GmailApiClientRepository {
             .map_err(map_gmail_error)?
             .ok_or(EmailApiError::NotFound)
     }
+}
+
+impl MailboxSenderActivityClient for GmailApiClientRepository {
+    async fn count_messages_from_domain(
+        &self,
+        access_token: &AccessToken,
+        domain: &SenderDomain,
+        since: DateTime<Utc>,
+    ) -> Result<u32, EmailApiError> {
+        self.client
+            .estimate_message_count(
+                access_token.expose_secret(),
+                &sender_domain_query(domain, since),
+            )
+            .await
+            .map_err(map_gmail_error)
+    }
+}
+
+/// Gmail search for mail from `domain` (and its subdomains) received after
+/// `since`, as epoch seconds so the window doesn't depend on Gmail's time zone.
+fn sender_domain_query(domain: &SenderDomain, since: DateTime<Utc>) -> String {
+    format!("from:{domain} after:{}", since.timestamp())
 }
 
 fn collect_calendar_parts(root: &MessagePart) -> Result<Vec<CalendarPart>, EmailApiError> {

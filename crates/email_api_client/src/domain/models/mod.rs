@@ -11,6 +11,7 @@ mod operation;
 mod permit;
 mod provider;
 mod send;
+mod sender_domain;
 
 pub use address_book::*;
 pub use auth::{AccessToken, TokenError, TokenFreshness};
@@ -29,3 +30,4 @@ pub use send::PreparedSendMessage;
 #[cfg(feature = "ports")]
 pub(crate) use send::validate_message_id;
 pub use send::{SendRequest, SentIds};
+pub use sender_domain::{InvalidSenderDomain, SenderDomain};
