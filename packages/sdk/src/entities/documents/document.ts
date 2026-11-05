@@ -29,6 +29,10 @@ import {
 import { Project } from '../projects/project';
 import { entitySearch } from '../search';
 import { EntityAccess } from '../sharing/access';
+import {
+  type SharePermissionOptions,
+  sharePermissionBody,
+} from '../sharing/permissions';
 import { User } from '../users/user';
 import {
   type DocumentEditOptions,
@@ -97,6 +101,20 @@ export class Document
         path: { document_id: this.id },
       }),
     ).documentPermissions;
+  }
+
+  /**
+   * Change who can open the document: the link share and its access level,
+   * the owner's team, and channel grants. Omitted fields are left as they are;
+   * requires edit access.
+   */
+  async updateSharePermissions(options: SharePermissionOptions): Promise<void> {
+    await this.mutate((c) =>
+      c.storage.editDocument({
+        path: { document_id: this.id },
+        body: { sharePermission: sharePermissionBody(options) },
+      }),
+    );
   }
 
   /** Mint a scoped permissions token. */
