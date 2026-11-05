@@ -202,8 +202,17 @@ jobs:
             await removeLabel(pr);
           }
 
-          // A label added right after a push can see a merge commit GitHub has not
-          // rebuilt yet, which would test the previous head.
+          // A label added right after a push can carry the previous head, or a merge
+          // commit GitHub has not rebuilt yet. Either would test an old commit.
+          const pull = await github('GET', `/repos/${repo()}/pulls/${pr}`);
+          if (pull.head.sha !== head) {
+            const description = `The PR moved on from ${head.slice(0, 7)} to ${pull.head.sha.slice(0, 7)}. Run again: ${runCommand(repo(), pr, label())}`;
+            if (sameRepo) {
+              await setStatus(head, 'failure', description, runUrl);
+            }
+            throw new Error(description);
+          }
+
           const merge = await github('GET', `/repos/${repo()}/commits/${env('MERGE_SHA')}`);
           const parents: string[] = merge.parents.map((parent: { sha: string }) => parent.sha);
 
@@ -635,8 +644,17 @@ jobs:
             await removeLabel(pr);
           }
 
-          // A label added right after a push can see a merge commit GitHub has not
-          // rebuilt yet, which would test the previous head.
+          // A label added right after a push can carry the previous head, or a merge
+          // commit GitHub has not rebuilt yet. Either would test an old commit.
+          const pull = await github('GET', `/repos/${repo()}/pulls/${pr}`);
+          if (pull.head.sha !== head) {
+            const description = `The PR moved on from ${head.slice(0, 7)} to ${pull.head.sha.slice(0, 7)}. Run again: ${runCommand(repo(), pr, label())}`;
+            if (sameRepo) {
+              await setStatus(head, 'failure', description, runUrl);
+            }
+            throw new Error(description);
+          }
+
           const merge = await github('GET', `/repos/${repo()}/commits/${env('MERGE_SHA')}`);
           const parents: string[] = merge.parents.map((parent: { sha: string }) => parent.sha);
 
