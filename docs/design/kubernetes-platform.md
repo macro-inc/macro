@@ -381,12 +381,12 @@ Built and exercised on the local cluster (`infra/platform`, `cargo x platform`):
   `scoped_bot_resolves_document_access_through_dss` fails, and fails the same way
   on a plain compose stack, so the platform does not cause it.
 
-**CI status (forge, 2026-11-05).** The ported checks run on Gitea: dependency, generated
-code, conventions, infra, parity, and AWS validation checks pass, as do web typecheck,
-build, 61 Playwright functional tests, and the web unit tests. Web tests under
-`apps/web/scripts` time out when the host is heavily loaded. What remains: cargo-deny
-reports a new advisory that `pin-utils` is unmaintained, which is not specific to the
-forge.
+**CI status (forge, 2026-11-05).** The ported checks run on Gitea, including the whole
+Rust test suite against Postgres, dependency, generated code, conventions, infra, parity,
+and AWS validation checks, web typecheck and build, and 61 Playwright functional tests.
+Two remain: web `Test` is intermittent, with tests under `apps/web/scripts` timing out
+when the host is heavily loaded, and cargo-deny reports a new advisory that `pin-utils`
+is unmaintained, which is not specific to the forge.
 
 **Playwright has not run against an instance.** Its downloaded browser cannot start on
 the NixOS host, and a forge job would need network access to the instance.
