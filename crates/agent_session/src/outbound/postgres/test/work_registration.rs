@@ -103,7 +103,7 @@ async fn unregistering_twice_ends_once_and_keeps_the_row(pool: PgPool) {
         vec![Some("unregistered".to_owned())]
     );
     let active = repo
-        .active_registrations(&[account.clone()], 10)
+        .active_registrations(std::slice::from_ref(&account), 10)
         .await
         .unwrap();
     assert!(active.is_empty());
