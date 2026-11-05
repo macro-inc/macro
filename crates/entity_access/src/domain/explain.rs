@@ -67,3 +67,4 @@ fn supports_explain(entity_type: EntityType) -> bool {
             | EntityType::ScheduledAction
     )
 }
+// ci-speed filter round 3
