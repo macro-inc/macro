@@ -34,6 +34,9 @@ double-click passes pointer input to it, and **Done** or a click elsewhere retur
 to the canvas. With the flag off, an artifact shows only its title and no script runs.
 The inspector also adds and edits styles and components shared across the canvas;
 HTML uses them with `<macro-style name="…">` and `<macro-component name="…">`.
+**Present** on a node opens the artifacts full screen in presentation order, which
+**Earlier** and **Later** in the inspector change. Check arrow keys and Esc both
+before and after clicking inside the frame.
 
 ## Multiplayer canvas
 

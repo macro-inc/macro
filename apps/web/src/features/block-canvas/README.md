@@ -85,6 +85,15 @@ the component's `<slot>`. They expand when the document is composed, so a librar
 edit updates every artifact using it. JSON export carries only the scene, so a
 downloaded canvas loses its library.
 
+**Present** on a node opens `views/artifact-presentation.tsx`, full screen where the
+browser allows and otherwise covering the window. It steps through artifacts only,
+in `presentOrder`, stopping at each end; new artifacts go last, and the inspector
+reorders them. Arrow keys, Space and Page Up/Down step, and Esc exits. Focus inside
+a frame keeps keys from the host, so `composeArtifactDocument` adds a small script
+that forwards these keys unless the artifact handled them or the user is typing.
+The host treats those messages only as navigation. Touch devices use the on-screen
+buttons.
+
 ## Controls
 
 The floating top toolbar uses the shared `Toolbar` and Phosphor icons for drawing
