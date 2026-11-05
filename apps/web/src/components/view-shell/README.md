@@ -24,7 +24,9 @@ align trailing controls by their outer edges or offset an individual icon.
   narrow navigation overlays. Its visibility follows the split controller, not
   the sidebar breakpoint; the last remaining list split still has no close action.
 - `ViewShell.Root`'s `asidePreferenceKey` scopes saved visibility and width per view.
-  `ViewShell.Aside` saves user-completed resizes, not automatic layout changes.
+  `ViewShell.Aside` saves the sidebar width and Main's reduced soft width after
+  user-completed resizes, not automatic layout changes, so constrained layouts
+  restore the user's sizing choice after remounting.
   Supplying `onWidthChangeEnd` leaves width persistence to the caller, preserving
   Chat's account-scoped preference without a competing shared width setting.
 - `ViewSidebar.Toolbar` aligns its final `Control` with the right rail.

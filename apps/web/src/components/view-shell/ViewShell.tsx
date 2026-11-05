@@ -448,15 +448,20 @@ function Root(props: ViewShellRootProps) {
   );
 }
 
-/**
- * Sizing region for navigation. Renders a div, not aside.
- * ViewSidebar.Root inside keeps the landmark.
- */
+type AsideResizePreference = {
+  width: number;
+  mainWidth?: number;
+};
+
 type ViewShellAsideProps = JSX.HTMLAttributes<HTMLDivElement> & {
   /** Called after resizing. When supplied, the caller owns width persistence. */
   onWidthChangeEnd?: (width: number) => void;
 };
 
+/**
+ * Sizing region for navigation. Renders a div, not aside.
+ * ViewSidebar.Root inside keeps the landmark.
+ */
 function Aside(props: ViewShellAsideProps) {
   const [local, rest] = splitProps(props, [
     'children',
@@ -465,18 +470,16 @@ function Aside(props: ViewShellAsideProps) {
   ]);
   const ws = useViewShellInternal();
   const asideTarget = tourTarget(VIEW_SHELL_TOUR.aside);
-  const [savedWidth, setSavedWidth] =
+  const [savedResize, setSavedResize] =
     ws.asidePreferenceKey && !local.onWidthChangeEnd
-      ? usePreference<number | null>(
+      ? usePreference<AsideResizePreference | null>(
           `macro:pref:view-sidebar:width:${ws.asidePreferenceKey}`,
           { default: null }
         )
-      : createSignal<number | null>(null);
-  const [resizedWidth, setResizedWidth] = createSignal<{
-    configuredWidth: number;
-    width: number;
-    mainWidth?: number;
-  }>();
+      : createSignal<AsideResizePreference | null>(null);
+  const [resizedWidth, setResizedWidth] = createSignal<
+    AsideResizePreference & { configuredWidth: number }
+  >();
   const resizePreference = () => {
     const resized = resizedWidth();
     return resized?.configuredWidth === ws.aside.layout().width
@@ -485,8 +488,8 @@ function Aside(props: ViewShellAsideProps) {
   };
   const preferredWidth = () => {
     const layout = ws.aside.layout();
-    const saved = savedWidth();
-    const width = resizePreference()?.width ?? saved ?? layout.width;
+    const width =
+      resizePreference()?.width ?? savedResize()?.width ?? layout.width;
     if (typeof width !== 'number' || !Number.isFinite(width))
       return layout.width;
     return Math.min(layout.max, Math.max(layout.min, width));
@@ -502,7 +505,7 @@ function Aside(props: ViewShellAsideProps) {
     batch(() => {
       local.onWidthChangeEnd?.(width);
       if (ws.asidePreferenceKey && !local.onWidthChangeEnd)
-        setSavedWidth(width);
+        setSavedResize({ width, mainWidth });
       // A consumer may persist the width back into the layout in this callback.
       setResizedWidth({
         configuredWidth: ws.aside.layout().width,
@@ -532,7 +535,7 @@ function Aside(props: ViewShellAsideProps) {
       Math.max(
         Math.min(
           mainLayout.preferredWidth,
-          resizePreference()?.mainWidth ?? Infinity
+          resizePreference()?.mainWidth ?? savedResize()?.mainWidth ?? Infinity
         ),
         mainLayout.min
       );

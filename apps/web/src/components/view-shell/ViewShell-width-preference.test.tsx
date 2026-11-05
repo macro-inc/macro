@@ -146,6 +146,43 @@ describe('ViewShell persisted sidebar width', () => {
     ).toBe('276px');
   });
 
+  it('restores a resize made in a constrained split without restoring the old main preference', () => {
+    const [width, setWidth] = createSignal(800);
+    measurement.width = width;
+    const first = render(() => <Workspace app="tasks" />);
+    fireEvent(
+      first.getByRole('separator'),
+      new MouseEvent('pointerdown', {
+        bubbles: true,
+        button: 0,
+        clientX: 224,
+      })
+    );
+    fireEvent(window, new MouseEvent('pointermove', { clientX: 300 }));
+    fireEvent(window, new MouseEvent('pointerup', { clientX: 300 }));
+    expect(
+      first.container.querySelector('[data-view-shell-aside]')?.parentElement
+        ?.style.width
+    ).toBe('300px');
+    first.unmount();
+
+    const second = render(() => <Workspace app="tasks" />);
+    expect(
+      second.container.querySelector('[data-view-shell-aside]')?.parentElement
+        ?.style.width
+    ).toBe('300px');
+    setWidth(760);
+    expect(
+      second.container.querySelector('[data-view-shell-aside]')?.parentElement
+        ?.style.width
+    ).toBe('260px');
+    setWidth(800);
+    expect(
+      second.container.querySelector('[data-view-shell-aside]')?.parentElement
+        ?.style.width
+    ).toBe('300px');
+  });
+
   it('leaves caller-owned width persistence authoritative', async () => {
     const onWidthChangeEnd = vi.fn();
     const first = render(() => (
