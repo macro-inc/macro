@@ -257,6 +257,30 @@ pub(crate) fn bring_up(
         }
     }
 
+    // The frontend lane starts first, in the background: wasm packages and the
+    // static bundle are host-side work that needs nothing from the service
+    // build, so on a cold checkout they overlap cargo instead of following it.
+    // The static bundle is joined just before `bring_up_app` creates the proxy
+    // container that mounts it; Vite's dependencies before this returns. The
+    // bundle is a snapshot: rebuilding service binaries leaves it alone, and
+    // live frontend edits show on the dev server, not on it. Dry run:
+    // synchronously, so the command preview prints in order.
+    if plan.static_bundle && stage.is_dry_run() {
+        frontend::build_static(stage, instance, mode)?;
+    }
+    let frontend_lane = (!stage.is_dry_run() && (plan.static_bundle || plan.vite)).then(|| {
+        let instance = instance.clone();
+        let stage = stage.background();
+        let static_bundle = plan.static_bundle;
+        std::thread::spawn(move || {
+            if static_bundle {
+                frontend::build_static(&stage, &instance, mode)
+            } else {
+                frontend::prepare(&stage)
+            }
+        })
+    });
+
     // Run the teardown in the BACKGROUND: tearing the old stack down is
     // independent of the host-side build, so the two overlap instead of summing
     // (stopping ~20 containers is otherwise the slow part of a re-run).
@@ -375,20 +399,6 @@ pub(crate) fn bring_up(
         pinned_base,
     )?;
 
-    // Build + stage the bundle in the background (pure host-side work), joined
-    // just before `bring_up_app` creates the proxy container that mounts the
-    // staged dir. The bundle is a snapshot: rebuilding service binaries leaves
-    // it alone, and live frontend edits show on the dev server, not on it. Dry
-    // run: synchronously, so the command preview prints in order.
-    if plan.static_bundle && stage.is_dry_run() {
-        frontend::build_static(stage, instance, mode)?;
-    }
-    let fe_build = (plan.static_bundle && !stage.is_dry_run()).then(|| {
-        let instance = instance.clone();
-        let stage = stage.background();
-        std::thread::spawn(move || frontend::build_static(&stage, &instance, mode))
-    });
-
     // The init snapshot decision: hash the init-defining inputs — possible only
     // after `prepare` wrote the kickstart — and check for a stored snapshot. A hit
     // skips migrate + Kafka topics + the ~1min FusionAuth kickstart + index
@@ -429,13 +439,20 @@ pub(crate) fn bring_up(
         }
         None => bring_up_infra(stage, mode, instance, &env, InfraInit::Full)?,
     }
-    if let Some(handle) = fe_build {
-        stage.run_step("Building frontend (static bundle)", move || {
+    let join_frontend = |label: &str, handle: std::thread::JoinHandle<Result<()>>| {
+        stage.run_step(label, move || {
             handle
                 .join()
                 .map_err(|_| anyhow::anyhow!("frontend build panicked"))?
-        })?;
-    }
+        })
+    };
+    let frontend_lane = match frontend_lane {
+        Some(handle) if plan.static_bundle => {
+            join_frontend("Building frontend (static bundle)", handle)?;
+            None
+        }
+        other => other,
+    };
 
     let shared_app_url = app_tunnel
         .as_ref()
@@ -489,6 +506,9 @@ pub(crate) fn bring_up(
     // an agent) acts on the URL the moment this returns.
     if mode.spec().wait_backend_before_frontend {
         frontend::wait_backend_ready(stage, instance)?;
+    }
+    if let Some(handle) = frontend_lane {
+        join_frontend("Preparing frontend dependencies (background)", handle)?;
     }
 
     if !stage.is_dry_run() {
