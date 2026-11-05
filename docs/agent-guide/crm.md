@@ -91,10 +91,10 @@ Verify these interactions at desktop and phone widths.
 Sales Tasks use the normal Tasks filters (status, priority, assignee, creator,
 and tags), sorting and grouping, with list/board/Gantt layouts when enabled. Touch
 uses the normal list and filter drawer. The default is open tasks grouped by date.
-Email exposes the normal read/done, attachment, calendar and tag filters. Notes has
-creator/tag filters and Calls has audience/tag filters. Email, Notes and Calls support
+Sales Email exposes the normal read/done, attachment, calendar and tag filters. Sales
+Notes has creator/tag filters and Sales Calls has audience/tag filters. All three support
 last-updated/created/viewed sorting, newest/oldest direction, and date/none grouping.
-Email defaults to last-update date groups; Notes and Calls start ungrouped. Date
+Sales Email defaults to last-update date groups; Sales Notes and Sales Calls start ungrouped. Date
 headings use the selected sort field and viewer-local time. Filter controls share one
 desktop header; touch puts filters, sorting and grouping in a drawer beside search.
 Each activity keeps its own settings, independent of the normal app views.
@@ -146,7 +146,7 @@ and expand into the shared Email/Tasks search bar. Command-F expands and focuses
 the field; Close or Escape clears the query and returns to the icon.
 
 On touch devices, CRM uses the same scrollable pill tabs as Tasks in the top
-header: Companies, People, Tasks, Email, Notes, Calls, Databases, available pipelines, and
+header: Companies, People, Sales Tasks, Sales Email, Sales Notes, Sales Calls, Sales Databases, available pipelines, and
 enabled lists. Swipe the
 strip horizontally to reach every destination; the selected tab stays visible.
 The tabs remain available inside pipelines, with no hamburger button. Company
