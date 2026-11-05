@@ -22,7 +22,6 @@ runs:
             exit 1
             ;;
         esac
-        echo "simulating a stalled store download"; sleep 600
         dev_env="$RUNNER_TEMP/nix-dev-env"
         nix print-dev-env --accept-flake-config ".#$DEV_SHELL" > "$dev_env"
         echo "BASH_ENV=$dev_env" >> "$GITHUB_ENV"

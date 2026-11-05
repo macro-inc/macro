@@ -175,7 +175,7 @@ fn graphql_schema_compat() -> Job {
 /// when `skip_tests` is set (`.sqlx`-only diffs still clippy the snapshot).
 fn test() -> Job {
     steps::gated_job()
-        .timeout_minutes(90u32)
+        .timeout_minutes(2u32)
         .cond(Expression::new(
             "needs.path-check.outputs.should_run == 'true' && github.event.pull_request.draft == false && needs.path-check.outputs.rust_packages != 'none' && needs.path-check.outputs.skip_tests != 'true'",
         ))

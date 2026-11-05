@@ -53,7 +53,7 @@ pub const RUST_TEST_BUILD_JOBS: u32 = 2;
 /// Limit on entering the Nix dev shell. Healthy runs take under 9 minutes even
 /// from an empty cache volume, while a stalled store download has run for over
 /// an hour with no other limit to stop it.
-pub const DEV_SHELL_TIMEOUT_MINUTES: u32 = 1;
+pub const DEV_SHELL_TIMEOUT_MINUTES: u32 = 15;
 
 /// Nextest thread count for the test job. Tuned for the previous
 /// `linux-extra-beefy` runner; revisit if `namespace-profile-linux-mid` is
