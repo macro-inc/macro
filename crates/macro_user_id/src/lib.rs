@@ -9,7 +9,3 @@ pub mod lowercased;
 pub mod user_id;
 
 pub use cowlike;
-
-/// CI proof salt.
-#[allow(dead_code)]
-pub const CI_PROOF_SALT: &str = "large-9";
