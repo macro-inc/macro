@@ -1,0 +1,319 @@
+# Experiment only: benchmarks the `test` job on different runner sizes and job limits.
+name: ci-speed shards bench
+env:
+  CARGO_INCREMENTAL: '0'
+  CARGO_TERM_COLOR: always
+  CARGO_PROFILE_DEV_DEBUG: limited
+  CARGO_PROFILE_TEST_DEBUG: limited
+  RUST_BACKTRACE: '1'
+'on':
+  pull_request:
+    types: [opened, synchronize, reopened]
+    branches: [main]
+jobs:
+  bench:
+    name: ${{ matrix.leg }}
+    timeout-minutes: ${{ matrix.timeout }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+        - leg: large-8cpu-j8-t32-s6i0
+          arm: large-8cpu-j8-t32-s6
+          runner: namespace-profile-linux-rust-ci;overrides.cache-tag=ci-speed-runners-8
+          jobs: 8
+          threads: 32
+          timeout: 60
+          salt_file: crates/macro_user_id/src/lib.rs
+          pkgs_file: .github/ci-speed/shards/large.6.0.pkgs
+          deno: true
+        - leg: large-8cpu-j8-t32-s6i1
+          arm: large-8cpu-j8-t32-s6
+          runner: namespace-profile-linux-rust-ci;overrides.cache-tag=ci-speed-runners-8
+          jobs: 8
+          threads: 32
+          timeout: 60
+          salt_file: crates/macro_user_id/src/lib.rs
+          pkgs_file: .github/ci-speed/shards/large.6.1.pkgs
+          deno: false
+        - leg: large-8cpu-j8-t32-s6i2
+          arm: large-8cpu-j8-t32-s6
+          runner: namespace-profile-linux-rust-ci;overrides.cache-tag=ci-speed-runners-8
+          jobs: 8
+          threads: 32
+          timeout: 60
+          salt_file: crates/macro_user_id/src/lib.rs
+          pkgs_file: .github/ci-speed/shards/large.6.2.pkgs
+          deno: true
+        - leg: large-8cpu-j8-t32-s6i3
+          arm: large-8cpu-j8-t32-s6
+          runner: namespace-profile-linux-rust-ci;overrides.cache-tag=ci-speed-runners-8
+          jobs: 8
+          threads: 32
+          timeout: 60
+          salt_file: crates/macro_user_id/src/lib.rs
+          pkgs_file: .github/ci-speed/shards/large.6.3.pkgs
+          deno: false
+        - leg: large-8cpu-j8-t32-s6i4
+          arm: large-8cpu-j8-t32-s6
+          runner: namespace-profile-linux-rust-ci;overrides.cache-tag=ci-speed-runners-8
+          jobs: 8
+          threads: 32
+          timeout: 60
+          salt_file: crates/macro_user_id/src/lib.rs
+          pkgs_file: .github/ci-speed/shards/large.6.4.pkgs
+          deno: false
+        - leg: large-8cpu-j8-t32-s6i5
+          arm: large-8cpu-j8-t32-s6
+          runner: namespace-profile-linux-rust-ci;overrides.cache-tag=ci-speed-runners-8
+          jobs: 8
+          threads: 32
+          timeout: 60
+          salt_file: crates/macro_user_id/src/lib.rs
+          pkgs_file: .github/ci-speed/shards/large.6.5.pkgs
+          deno: false
+        - leg: large-16cpu-j16-t32-s3i0
+          arm: large-16cpu-j16-t32-s3
+          runner: namespace-profile-linux-mid;overrides.cache-tag=ci-speed-runners-16
+          jobs: 16
+          threads: 32
+          timeout: 60
+          salt_file: crates/macro_user_id/src/lib.rs
+          pkgs_file: .github/ci-speed/shards/large.3.0.pkgs
+          deno: true
+        - leg: large-16cpu-j16-t32-s3i1
+          arm: large-16cpu-j16-t32-s3
+          runner: namespace-profile-linux-mid;overrides.cache-tag=ci-speed-runners-16
+          jobs: 16
+          threads: 32
+          timeout: 60
+          salt_file: crates/macro_user_id/src/lib.rs
+          pkgs_file: .github/ci-speed/shards/large.3.1.pkgs
+          deno: false
+        - leg: large-16cpu-j16-t32-s3i2
+          arm: large-16cpu-j16-t32-s3
+          runner: namespace-profile-linux-mid;overrides.cache-tag=ci-speed-runners-16
+          jobs: 16
+          threads: 32
+          timeout: 60
+          salt_file: crates/macro_user_id/src/lib.rs
+          pkgs_file: .github/ci-speed/shards/large.3.2.pkgs
+          deno: true
+        - leg: medium-8cpu-j8-t32-s3i0
+          arm: medium-8cpu-j8-t32-s3
+          runner: namespace-profile-linux-rust-ci;overrides.cache-tag=ci-speed-runners-8
+          jobs: 8
+          threads: 32
+          timeout: 60
+          salt_file: crates/email/src/lib.rs
+          pkgs_file: .github/ci-speed/shards/medium.3.0.pkgs
+          deno: true
+        - leg: medium-8cpu-j8-t32-s3i1
+          arm: medium-8cpu-j8-t32-s3
+          runner: namespace-profile-linux-rust-ci;overrides.cache-tag=ci-speed-runners-8
+          jobs: 8
+          threads: 32
+          timeout: 60
+          salt_file: crates/email/src/lib.rs
+          pkgs_file: .github/ci-speed/shards/medium.3.1.pkgs
+          deno: false
+        - leg: medium-8cpu-j8-t32-s3i2
+          arm: medium-8cpu-j8-t32-s3
+          runner: namespace-profile-linux-rust-ci;overrides.cache-tag=ci-speed-runners-8
+          jobs: 8
+          threads: 32
+          timeout: 60
+          salt_file: crates/email/src/lib.rs
+          pkgs_file: .github/ci-speed/shards/medium.3.2.pkgs
+          deno: true
+    runs-on: ${{ matrix.runner }}
+    env:
+      NEXTEST_TEST_THREADS: ${{ matrix.threads }}
+      CARGO_BUILD_JOBS: ${{ matrix.jobs }}
+      RUSTFLAGS: '-Dwarnings -C link-arg=-fuse-ld=mold'
+      SCCACHE_IDLE_TIMEOUT: '0'
+    services:
+      postgres:
+        image: pgvector/pgvector:pg14
+        env:
+          POSTGRES_USER: user
+          POSTGRES_PASSWORD: password
+          POSTGRES_DB: macrodb
+        ports:
+        - '5432:5432'
+        options: '--health-cmd pg_isready --health-interval 10s --health-timeout 5s --health-retries 5 --shm-size 1g'
+      redis:
+        image: redis:7
+        ports:
+        - '6379:6379'
+        options: '--health-cmd "redis-cli ping" --health-interval 10s --health-timeout 5s --health-retries 5'
+    steps:
+    - name: Checkout
+      uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
+      with:
+        clean: 'false'
+        persist-credentials: 'false'
+    - name: Mount Namespace cache volume
+      uses: namespacelabs/nscloud-cache-action@15799a6b54e5765f85b2aac25b3f0df43ed571c0
+      with:
+        cache: rust
+        path: /nix
+      continue-on-error: true
+    - name: Setup Nix
+      uses: './.github/actions/setup-nix'
+    - name: Setup Nix dev shell
+      uses: './.github/actions/setup-nix-dev-shell'
+    - name: Configure Namespace remote sccache
+      run: |-
+        set -euo pipefail
+        env_file="$(mktemp "$RUNNER_TEMP/namespace-sccache.XXXXXX")"
+        trap 'rm -f "$env_file"' EXIT
+        nsc cache sccache setup --cache_name ci-speed-runners > "$env_file"
+        while IFS= read -r line; do
+          k="${line%%=*}"
+          v="${line#*=}"
+          [ -n "$v" ] && [ "$k" != "$line" ] || continue
+          case "$k" in
+            *TOKEN*|*SECRET*|*PASSWORD*) echo "::add-mask::$v" ;;
+          esac
+        done < "$env_file"
+        cat "$env_file" >> "$GITHUB_ENV"
+        sccache --stop-server >/dev/null 2>&1 || true
+    - name: Start sccache server
+      run: |
+        for i in 1 2 3 4 5; do
+          sccache --start-server && exit 0
+          echo "sccache start attempt $i failed"
+        done
+        exit 1
+    - name: Build code-mode assets
+      run: |
+        assets="$(nix build --no-link --print-out-paths --print-build-logs .#code-mode-assets)"
+        echo "CODE_MODE_ASSETS_DIR=$assets" >> "$GITHUB_ENV"
+    - name: configure postgres for concurrent tests
+      run: |
+        postgres_container="$(docker ps --format '{{.ID}} {{.Image}}' | awk '$2 == "pgvector/pgvector:pg14" { print $1; exit }')"
+        docker exec -i "$postgres_container" psql -U user -d macrodb <<'SQL'
+        ALTER SYSTEM SET fsync = off;
+        ALTER SYSTEM SET synchronous_commit = off;
+        ALTER SYSTEM SET full_page_writes = off;
+        ALTER SYSTEM SET max_wal_size = '4GB';
+        ALTER SYSTEM SET checkpoint_timeout = '30min';
+        ALTER SYSTEM SET max_locks_per_transaction = 8192;
+        SQL
+        docker restart "$postgres_container"
+        until docker exec "$postgres_container" pg_isready -U user -d macrodb; do
+          sleep 1
+        done
+    - name: prepare tests
+      run: just setup_test_envs && just initialize_dbs && just setup_test_template
+    - name: Salt the changed crate and start sampling
+      run: |
+        # A real first push: the changed crate and everything depending on it miss the cache.
+        printf '\n/// CI bench salt.\n#[allow(dead_code)]\npub const CI_SPEED_SALT: &str = "%s-%s-%s";\n' \
+          "$GITHUB_RUN_ID" "$GITHUB_RUN_ATTEMPT" "${{ matrix.arm }}" >> "${{ matrix.salt_file }}"
+        cat > "$RUNNER_TEMP/sample.sh" <<'SH'
+        #!/usr/bin/env bash
+        # time mem_available_kb load1 busy_jiffies total_jiffies
+        while true; do
+          read -r _ u n s i w q sq st _ < /proc/stat
+          a=$(awk '/MemAvailable/ {print $2}' /proc/meminfo)
+          read -r l _ < /proc/loadavg
+          echo "$(date +%s) $a $l $((u+n+s+q+sq+st)) $((u+n+s+q+sq+st+i+w)) $w"
+          sleep 5
+        done
+        SH
+        nohup bash "$RUNNER_TEMP/sample.sh" > "$RUNNER_TEMP/samples.txt" 2>/dev/null &
+        date +%s > "$RUNNER_TEMP/t0"
+    - name: build tests
+      id: build
+      run: |
+        set -euo pipefail
+        pkg_args=()
+        for package in $(cat ${{ matrix.pkgs_file }}); do
+          [ "$package" = "sync_service" ] || pkg_args+=(-p "$package")
+        done
+        cargo nextest run --no-run --timings \
+          --config 'profile.dev.package."*".debug=false' \
+          --all-features "${pkg_args[@]}"
+        date +%s > "$RUNNER_TEMP/t1"
+        sccache --show-stats --stats-format json > "$RUNNER_TEMP/stats_build.json" || true
+    - name: run tests
+      id: run
+      continue-on-error: true
+      run: |
+        set -euo pipefail
+        pkg_args=()
+        for package in $(cat ${{ matrix.pkgs_file }}); do
+          [ "$package" = "sync_service" ] || pkg_args+=(-p "$package")
+        done
+        date +%s > "$RUNNER_TEMP/t2"
+        cargo nextest run \
+          --config 'profile.dev.package."*".debug=false' \
+          --all-features --no-tests=pass --no-fail-fast --test-threads "$NEXTEST_TEST_THREADS" \
+          "${pkg_args[@]}"
+    - name: mark end of tests
+      if: always()
+      run: date +%s > "$RUNNER_TEMP/t3"
+    - name: Set up code execution runtime
+      if: matrix.deno
+      uses: denoland/setup-deno@22d081ff2d3a40755e97629de92e3bcbfa7cf2ed
+      with:
+        deno-version: '2.9.6'
+    - name: Test Deno sandbox and authenticated SDK execution
+      if: matrix.deno
+      continue-on-error: true
+      run: |-
+        cargo test --locked -p code_execution -- --ignored --test-threads=2
+        cargo test --locked -p agent_harness_service authenticated_mcp_runs_javascript_and_persists_source_and_result -- --ignored
+    - name: bench summary
+      if: always()
+      run: |
+        date +%s > "$RUNNER_TEMP/t4"
+        python3 - <<'PY'
+        import json, os
+        T = os.environ["RUNNER_TEMP"]
+        def t(n):
+            try: return int(open(f"{T}/t{n}").read())
+            except Exception: return None
+        rows = [l.split() for l in open(f"{T}/samples.txt") if len(l.split()) == 6]
+        rows = [(int(a), int(b), float(c), int(d), int(e), int(f)) for a, b, c, d, e, f in rows]
+        total = int(next(l for l in open("/proc/meminfo") if l.startswith("MemTotal")).split()[1])
+        def phase(a, b):
+            xs = [r for r in rows if a is not None and b is not None and a <= r[0] <= b]
+            if len(xs) < 2: return {}
+            dt = xs[-1][4] - xs[0][4]
+            return {
+                "secs": b - a,
+                "peak_mem_gb": round((total - min(r[1] for r in xs)) / 1048576, 1),
+                "cpu_pct": round(100 * (xs[-1][3] - xs[0][3]) / max(dt, 1), 1),
+                "iowait_pct": round(100 * (xs[-1][5] - xs[0][5]) / max(dt, 1), 1),
+                "peak_load": max(r[2] for r in xs),
+            }
+        stats = {}
+        try:
+            s = json.load(open(f"{T}/stats_build.json")).get("stats", {})
+            hits = sum(s.get("cache_hits", {}).get("counts", {}).values())
+            misses = sum(s.get("cache_misses", {}).get("counts", {}).values())
+            stats = {"hits": hits, "misses": misses, "requests": s.get("compile_requests"), "not_cacheable": sum(s.get("not_cached", {}).values())}
+        except Exception as e:
+            stats = {"err": str(e)}
+        print("BENCH " + json.dumps({
+            "leg": "${{ matrix.leg }}", "vcpu": os.cpu_count(), "mem_gb": round(total / 1048576),
+            "build": phase(t(0), t(1)), "test": phase(t(2), t(3)), "deno": phase(t(3), t(4)),
+            "sccache_build": stats,
+            "build_outcome": "${{ steps.build.outcome }}", "run_outcome": "${{ steps.run.outcome }}",
+        }))
+        PY
+        sccache --show-stats || true
+    - name: upload cargo timings
+      if: always()
+      uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+      with:
+        name: timings-${{ matrix.leg }}-${{ github.run_id }}-${{ github.run_attempt }}
+        path: target/cargo-timings/cargo-timing.html
+        if-no-files-found: ignore
+        retention-days: 14
+    - name: Teardown Nix
+      if: always()
+      uses: './.github/actions/teardown-nix'
