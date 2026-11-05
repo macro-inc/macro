@@ -337,29 +337,29 @@ export default {
   taskTemplateSelected: 'Template: {{name}}',
   taskTemplateEditingNamed: 'Editing {{name}}',
   taskTemplateComposerHint:
-    'Use the properties and description below. Add a task title to create a task too, or leave it blank to save only the template.',
+    'Save these properties and description. A task title also creates a task.',
   taskTemplateEditComposerHint:
-    'Edit the template properties and description below. Saving updates the template without creating a task.',
+    'Save changes to this template’s properties and description.',
   taskTemplateReplaceDraftTitle: 'Edit template in this composer?',
   taskTemplateReplaceDraftBody:
     'This replaces the current draft with the template’s properties and description. Unsaved draft changes will be discarded.',
+  taskTemplateSwitchTitle: 'Switch template?',
+  taskTemplateSwitchBody:
+    'Replace your unsaved template changes? Your task title and launch context will stay.',
+  taskTemplateSwitch: 'Switch template',
+  taskTemplateInfo: 'About task templates',
+  taskTemplateVisibility: 'Template visibility',
   taskTemplateEdit: 'Edit template',
   taskCreate: 'Create task',
   taskCreateMore: 'Create & add another',
   taskTemplateCreateBoth: 'Create task & template',
   taskTemplateCreateBothMore: 'Create task & template, then another',
   taskTemplatePickerTitle: 'Task templates',
-  taskTemplatePickerDescription:
-    'Add template properties and fill blank values without replacing your current draft.',
   taskTemplateSearch: 'Search templates',
   taskTemplatePersonal: 'Personal',
   taskTemplateTeam: 'Team',
   taskTemplateEmpty: 'No templates yet',
-  taskTemplateEmptyDescription:
-    'Choose New template to reuse this composer’s properties and description next time.',
   taskTemplateNoMatches: 'No templates found',
-  taskTemplateNoMatchesDescription:
-    'Try another search, or choose New template to use this draft.',
   taskTemplateLoadError: 'Could not load task templates.',
   taskTemplateRetry: 'Try again',
   taskTemplateCreate: 'Create template',
@@ -373,8 +373,8 @@ export default {
     'Supports Markdown, including headings and checklists.',
   taskTemplateShareWithTeam: 'Share template with {{name}}',
   taskTemplateTeamPermissions:
-    'Team members can use this template. You and team admins can edit or delete it.',
-  taskTemplateNamePlaceholder: 'e.g. Bug report',
+    'Team members can use this template. You and team admins can edit it.',
+  taskTemplateNamePlaceholder: 'Template name',
   taskTemplateSave: 'Save template',
   taskTemplateSaving: 'Saving…',
   taskTemplateCancel: 'Cancel',

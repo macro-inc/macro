@@ -84,6 +84,7 @@ const templateSelection = z.discriminatedUnion('kind', [
 export const taskComposerDraftSchema = z.object({
   title: z.string(),
   templateSelection: templateSelection.optional(),
+  templateBaseline: templateContents.optional(),
   templateRequest: z
     .object({
       creationId: z.string().uuid(),

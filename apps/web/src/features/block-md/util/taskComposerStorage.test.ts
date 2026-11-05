@@ -2,6 +2,7 @@
  * @vitest-environment jsdom
  */
 
+import { isTemplateStateDirty } from '@app/features/task-composer/core/template-state';
 import { createRoot } from 'solid-js';
 import { beforeEach, describe, expect, it } from 'vitest';
 import {
@@ -225,4 +226,62 @@ it('retains the admitted template request beside later composer edits', () => {
   );
   expect(loadTaskComposerDraft(storage)?.templateRequest).toEqual(request);
   expect(loadTaskComposerDraft(storage)?.content).toBe('Edited');
+});
+
+it('restores the template baseline independently of edited draft values', () => {
+  localStorage.clear();
+  const baseline = {
+    propertyIds: ['priority'],
+    propertyDefaults: {
+      priority: {
+        valueType: 'DATE' as const,
+        value: new Date('2026-10-22T00:00:00Z'),
+      },
+    },
+    descriptionMarkdown: 'Preset',
+  };
+  saveTaskComposerDraft({
+    ...draft,
+    content: '',
+    visiblePropertyIds: [],
+    propertyValues: { priority: { valueType: 'DATE', value: null } },
+    templateBaseline: baseline,
+  });
+  const restored = loadTaskComposerDraft();
+  if (!restored) throw new Error('Draft was not restored');
+  expect(
+    isTemplateStateDirty(
+      {
+        propertyIds: restored.visiblePropertyIds ?? [],
+        propertyDefaults: restored.propertyValues,
+        descriptionMarkdown: restored.content,
+      },
+      restored.templateBaseline
+    )
+  ).toBe(true);
+  expect(restored.content).toBe('');
+  expect(restored?.visiblePropertyIds).toEqual([]);
+  expect(restored?.propertyValues.priority).toEqual({
+    valueType: 'DATE',
+    value: null,
+  });
+  expect(restored?.templateBaseline).toEqual(baseline);
+  expect(restored?.templateBaseline?.propertyDefaults.priority).toEqual({
+    valueType: 'DATE',
+    value: new Date('2026-10-22T00:00:00Z'),
+  });
+  saveTaskComposerDraft(draft);
+  const olderDraft = loadTaskComposerDraft();
+  expect(olderDraft?.templateBaseline).toBeUndefined();
+  if (!olderDraft) throw new Error('Older draft was not restored');
+  expect(
+    isTemplateStateDirty(
+      {
+        propertyIds: olderDraft.visiblePropertyIds ?? [],
+        propertyDefaults: olderDraft.propertyValues,
+        descriptionMarkdown: olderDraft.content,
+      },
+      olderDraft.templateBaseline
+    )
+  ).toBe(true);
 });

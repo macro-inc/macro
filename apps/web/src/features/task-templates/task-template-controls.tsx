@@ -103,15 +103,29 @@ function DeleteTemplateDialog(
   );
 }
 
-function ReplaceDraftDialog(props: DialogScope & { onConfirm(): void }) {
+function ReplaceDraftDialog(
+  props: DialogScope & { action: 'edit' | 'switch'; onConfirm(): void }
+) {
   const lifetime = dialogLifetime(props);
   return (
     <ConfirmDialog
       open={props.open}
       onOpenChange={props.onOpenChange}
-      title={t('create.taskTemplateReplaceDraftTitle')}
-      body={t('create.taskTemplateReplaceDraftBody')}
-      confirmLabel={t('create.taskTemplateEdit')}
+      title={
+        props.action === 'edit'
+          ? t('create.taskTemplateReplaceDraftTitle')
+          : t('create.taskTemplateSwitchTitle')
+      }
+      body={
+        props.action === 'edit'
+          ? t('create.taskTemplateReplaceDraftBody')
+          : t('create.taskTemplateSwitchBody')
+      }
+      confirmLabel={
+        props.action === 'edit'
+          ? t('create.taskTemplateEdit')
+          : t('create.taskTemplateSwitch')
+      }
       onConfirm={() => {
         if (!lifetime.current()) return;
         props.onOpenChange(false);
@@ -185,11 +199,23 @@ export function TaskTemplateControls(props: {
     if (props.composer.hasDraftChanges()) {
       openDialog(
         ReplaceDraftDialog,
-        { viewerId, isCurrent, onConfirm: edit },
+        { viewerId, isCurrent, action: 'edit', onConfirm: edit },
         { owner }
       );
     } else {
       edit();
+    }
+  };
+  const switchTemplate = (replace: () => void) => {
+    if (!isCurrent()) return;
+    if (props.composer.isTemplateDirty()) {
+      openDialog(
+        ReplaceDraftDialog,
+        { viewerId, isCurrent, action: 'switch', onConfirm: replace },
+        { owner }
+      );
+    } else {
+      replace();
     }
   };
   const pickerProps = () => ({
@@ -202,15 +228,26 @@ export function TaskTemplateControls(props: {
       label: template.name,
       shared: Boolean(template.teamId),
       select: () => {
-        if (!isCurrent()) return;
-        props.composer.selectTemplate(editableTemplate(template));
-        const available = new Set(
-          props.composer
-            .availableProperties()
-            .map((definition) => definition.id)
-        );
-        if (template.configuration.propertyIds.some((id) => !available.has(id)))
-          toast.alert(t('create.taskTemplateUnavailableProperties'));
+        const selection = props.composer.templateSelection();
+        if (
+          selection.kind === 'saved' &&
+          selection.template.id === template.id &&
+          selection.template.revision === template.revision
+        )
+          return;
+        switchTemplate(() => {
+          if (!isCurrent()) return;
+          props.composer.selectTemplate(editableTemplate(template));
+          const available = new Set(
+            props.composer
+              .availableProperties()
+              .map((definition) => definition.id)
+          );
+          if (
+            template.configuration.propertyIds.some((id) => !available.has(id))
+          )
+            toast.alert(t('create.taskTemplateUnavailableProperties'));
+        });
       },
       edit: template.canManage ? () => editTemplate(template) : undefined,
       remove: template.canManage
@@ -224,7 +261,7 @@ export function TaskTemplateControls(props: {
                 isCurrent,
                 onDeleted: () => {
                   if (selectedKey() === template.id)
-                    props.composer.selectNoTemplate();
+                    props.composer.detachTemplate();
                 },
               },
               { owner }
@@ -234,10 +271,23 @@ export function TaskTemplateControls(props: {
     })),
     onRetry: () => fireAndForget(query.refetch(), 'task-templates'),
     onSelectNone: () => {
-      if (isCurrent()) props.composer.selectNoTemplate();
+      if (props.composer.templateSelection().kind === 'none') return;
+      switchTemplate(() => {
+        if (isCurrent()) props.composer.selectNoTemplate();
+      });
     },
     onNew: () => {
-      if (isCurrent()) props.composer.startNewTemplate();
+      const selection = props.composer.templateSelection();
+      if (!isCurrent() || selection.kind === 'new') return;
+      const start = () => {
+        if (isCurrent()) props.composer.startNewTemplate();
+      };
+      if (
+        selection.kind === 'editing' &&
+        selection.name !== selection.template.name
+      )
+        switchTemplate(start);
+      else start();
     },
   });
   const openPicker = () => {

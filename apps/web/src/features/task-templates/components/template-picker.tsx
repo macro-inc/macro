@@ -209,11 +209,6 @@ function TemplateChoices(
                   ? t('create.taskTemplateEmpty')
                   : t('create.taskTemplateNoMatches')}
               </p>
-              <p class="text-xs text-ink-muted">
-                {props.items.length === 0
-                  ? t('create.taskTemplateEmptyDescription')
-                  : t('create.taskTemplateNoMatchesDescription')}
-              </p>
             </div>
           </Match>
         </Switch>
@@ -329,9 +324,6 @@ export function TemplatePicker(
           <Dialog.Title class="text-base font-medium">
             {t('create.taskTemplatePickerTitle')}
           </Dialog.Title>
-          <Dialog.Description class="text-sm text-ink-muted">
-            {t('create.taskTemplatePickerDescription')}
-          </Dialog.Description>
         </div>
         <TemplateChoices
           {...props}

@@ -1,6 +1,5 @@
 import {
   captureTaskTemplate,
-  fillTaskTemplate,
   type TaskTemplateContents,
 } from '@app/features/task-templates/core/template';
 import {
@@ -31,10 +30,7 @@ import { COMPOSER_STORAGE_CLEARED } from '@core/auth/clear-composer-storage';
 import { buildConfig } from '@core/component/LexicalMarkdown/builder/MarkdownConfigBuilder';
 import { addMediaFromFile } from '@core/component/LexicalMarkdown/plugins/media';
 import type { MentionLinkResolver } from '@core/component/LexicalMarkdown/plugins/text-paste/textPastePlugin';
-import {
-  initializeEditorEmpty,
-  setEditorStateFromMarkdown,
-} from '@core/component/LexicalMarkdown/utils';
+import { initializeEditorEmpty } from '@core/component/LexicalMarkdown/utils';
 import type { PortalScope } from '@core/component/ScopedPortal';
 import { toast } from '@core/component/Toast/Toast';
 import { registerHotkey, useHotkeyDOMScope } from '@core/hotkey/hotkeys';
@@ -72,8 +68,13 @@ import {
   type TemplateCreationRequest,
   templateSubmitKind,
 } from '../core/template-selection';
+import {
+  isTemplateStateDirty,
+  templateContextualIds,
+} from '../core/template-state';
 import type { ComposeTaskProps, ComposeTaskSuccess } from '../core/types';
 import { showTaskCreatedToast } from './taskCreatedToast';
+import { applyTemplateToEditor } from './template-editor';
 
 type ComposerTagLayoutMode = 'bottom' | 'title';
 
@@ -192,6 +193,7 @@ export function createTaskComposer(
           title: draft.title,
           templateSelection: draft.templateSelection,
           templateRequest: draft.templateRequest,
+          templateBaseline: draft.templateBaseline,
           content: draft.content,
           editorState: draft.editorState,
           propertyValues: withInitialProperties(draft.propertyValues),
@@ -206,6 +208,7 @@ export function createTaskComposer(
       title: props.initialTitle ?? '',
       templateSelection: undefined,
       templateRequest: undefined,
+      templateBaseline: undefined,
       content: props.initialContent ?? '',
       editorState: undefined,
       propertyValues: withInitialProperties(getDefaultPropertyValues()),
@@ -301,6 +304,32 @@ export function createTaskComposer(
     initialVisiblePropertyIds: initialState.visiblePropertyIds,
     allDefinitions: true,
   });
+  const originalTemplateContents: TaskTemplateContents = {
+    propertyIds:
+      props.composerContext?.visiblePropertyIds ??
+      DEFAULT_TASK_COMPOSER_PROPERTY_IDS,
+    propertyDefaults: withInitialProperties(getDefaultPropertyValues()),
+    descriptionMarkdown: props.initialContent ?? '',
+  };
+  const contextualPropertyIds = templateContextualIds(props);
+  const currentTemplateState = (): TaskTemplateContents => ({
+    propertyIds: [...visiblePropertyIds()],
+    propertyDefaults: structuredClone(unwrap(propertyValues)),
+    descriptionMarkdown: content(),
+  });
+  const [templateBaseline, setTemplateBaseline] = createSignal<
+    TaskTemplateContents | undefined
+  >(
+    initialState.isDraftLoaded
+      ? initialState.templateBaseline
+      : currentTemplateState()
+  );
+  const isTemplateDirty = () =>
+    isTemplateStateDirty(
+      currentTemplateState(),
+      templateBaseline(),
+      templateSelection()
+    );
   let baselinePropertyValues = JSON.stringify(initialState.propertyValues);
   let baselineVisiblePropertyIds = JSON.stringify(visiblePropertyIds());
   const hasDraftChanges = () =>
@@ -338,6 +367,7 @@ export function createTaskComposer(
     title: title(),
     templateSelection: structuredClone(templateSelection()),
     templateRequest: templateRequest && structuredClone(templateRequest),
+    templateBaseline: templateBaseline() && structuredClone(templateBaseline()),
     content: content(),
     editorState: bodyEditor()?.getEditorState().toJSON(),
     propertyValues: structuredClone(unwrap(propertyValues)),
@@ -361,15 +391,11 @@ export function createTaskComposer(
   };
 
   createEffect(() => {
-    const currentTitle = title();
-    const currentSelection = structuredClone(templateSelection());
-    const currentContent = content();
     // Deeply read propertyValues so this effect subscribes to any property
     // change (e.g. setting a due date). unwrap()'d access doesn't subscribe,
     // so without this the draft only saved when title/content changed.
     JSON.stringify(propertyValues);
-    visiblePropertyIds();
-    const currentProperties = structuredClone(unwrap(propertyValues));
+    const snapshot = draftSnapshot();
 
     if (skipNextDraftSave) {
       skipNextDraftSave = false;
@@ -380,15 +406,7 @@ export function createTaskComposer(
       return;
     }
 
-    debouncedSave({
-      title: currentTitle,
-      templateSelection: currentSelection,
-      templateRequest: templateRequest && structuredClone(templateRequest),
-      content: currentContent,
-      editorState: bodyEditor()?.getEditorState().toJSON(),
-      propertyValues: currentProperties,
-      visiblePropertyIds: [...visiblePropertyIds()],
-    });
+    debouncedSave(snapshot);
   });
 
   // A title-mode pill that ends a picker session with no tags left has nothing
@@ -423,34 +441,17 @@ export function createTaskComposer(
     const selected = templateSelection();
     if (selected.kind === 'saved') {
       const fresh = freshTaskFromTemplate(
-        {
-          propertyIds:
-            props.composerContext?.visiblePropertyIds ??
-            DEFAULT_TASK_COMPOSER_PROPERTY_IDS,
-          propertyDefaults: withInitialProperties(getDefaultPropertyValues()),
-          descriptionMarkdown: '',
-        },
+        { ...originalTemplateContents, descriptionMarkdown: '' },
         selected.template.contents,
         new Set(available.map((definition) => definition.id)),
-        new Set([
-          SYSTEM_PROPERTY_IDS.SOURCE,
-          ...Object.keys(props.composerContext?.initialPropertyValues ?? {}),
-          ...(props.initialAssigneeIds?.length
-            ? [SYSTEM_PROPERTY_IDS.ASSIGNEES]
-            : []),
-          ...(props.initialProjectId ? [SYSTEM_PROPERTY_IDS.PROJECT] : []),
-          ...(props.initialDueDate ? [SYSTEM_PROPERTY_IDS.DUE_DATE] : []),
-        ])
+        contextualPropertyIds
       );
-      setPropertyValues(reconcile(fresh.propertyDefaults));
-      setVisiblePropertyIds(fresh.propertyIds);
-      setContent(fresh.descriptionMarkdown);
-      const editor = bodyEditor();
-      if (editor) setEditorStateFromMarkdown(editor, fresh.descriptionMarkdown);
+      replaceTemplateState(fresh);
     } else {
       setContent('');
       const editor = bodyEditor();
       if (editor) initializeEditorEmpty(editor);
+      setTemplateBaseline(currentTemplateState());
     }
     setIsDraftLoaded(false);
     requestAnimationFrame(() => titleEditorRoot?.focus());
@@ -746,6 +747,7 @@ export function createTaskComposer(
     setIsDraftLoaded(false);
     baselinePropertyValues = JSON.stringify(unwrap(propertyValues));
     baselineVisiblePropertyIds = JSON.stringify(visiblePropertyIds());
+    setTemplateBaseline(currentTemplateState());
     const ed = bodyEditor();
     ed && initializeEditorEmpty(ed);
   };
@@ -794,15 +796,30 @@ export function createTaskComposer(
     runWithInputFocused: true,
   });
 
-  const templateContents = (): TaskTemplateContents => ({
-    propertyIds: properties().map((property) => property.propertyDefinitionId),
-    propertyDefaults: structuredClone(unwrap(propertyValues)),
-    descriptionMarkdown: content(),
-  });
+  const replaceTemplateState = (template: TaskTemplateContents) => {
+    const next = applyTemplateToEditor(template, bodyEditor());
+    setVisiblePropertyIds([...next.propertyIds]);
+    setPropertyValues(reconcile(structuredClone(next.propertyDefaults)));
+    setContent(next.descriptionMarkdown);
+    setTemplateBaseline(currentTemplateState());
+  };
   const canChangeTemplate = () =>
     draftSessionActive && currentUserId() === draftOwner && !isCreating();
-  const selectNoTemplate = () => {
+  const detachTemplate = () => {
     if (canChangeTemplate()) setTemplateSelection({ kind: 'none' });
+  };
+  const selectNoTemplate = () => {
+    if (!canChangeTemplate()) return;
+    replaceTemplateState(
+      freshTaskFromTemplate(
+        originalTemplateContents,
+        { propertyIds: [], propertyDefaults: {}, descriptionMarkdown: '' },
+        new Set(availableProperties().map((definition) => definition.id)),
+        contextualPropertyIds,
+        unwrap(propertyValues)
+      )
+    );
+    detachTemplate();
   };
   const startNewTemplate = () => {
     if (canChangeTemplate())
@@ -834,25 +851,16 @@ export function createTaskComposer(
         selection.kind === 'new' ? { ...selection, teamId } : selection
       );
   };
-  const applyTemplate = (template: TaskTemplateContents) => {
-    if (!canChangeTemplate()) return;
-    const current = templateContents();
-    const next = fillTaskTemplate(
-      current,
-      template,
-      new Set(availableProperties().map((definition) => definition.id))
-    );
-    setVisiblePropertyIds((ids) => [...new Set([...ids, ...next.propertyIds])]);
-    setPropertyValues(reconcile(next.propertyDefaults));
-    if (next.descriptionMarkdown !== current.descriptionMarkdown) {
-      const editor = bodyEditor();
-      if (editor) setEditorStateFromMarkdown(editor, next.descriptionMarkdown);
-      else setContent(next.descriptionMarkdown);
-    }
-  };
   const selectTemplate = (template: SavedTaskTemplate) => {
     if (!canChangeTemplate() || !definitionsReady()) return;
-    applyTemplate(template.contents);
+    const next = freshTaskFromTemplate(
+      { ...originalTemplateContents, descriptionMarkdown: '' },
+      template.contents,
+      new Set(availableProperties().map((definition) => definition.id)),
+      contextualPropertyIds,
+      unwrap(propertyValues)
+    );
+    replaceTemplateState(next);
     setTemplateSelection({
       kind: 'saved',
       template: structuredClone(template),
@@ -863,11 +871,7 @@ export function createTaskComposer(
     if (!canChangeTemplate() || !definitionsReady()) return;
     const next = structuredClone(template.contents);
     setTitle('');
-    setVisiblePropertyIds(next.propertyIds);
-    setPropertyValues(reconcile(next.propertyDefaults));
-    setContent(next.descriptionMarkdown);
-    const editor = bodyEditor();
-    if (editor) setEditorStateFromMarkdown(editor, next.descriptionMarkdown);
+    replaceTemplateState(next);
     setTemplateSelection({
       kind: 'editing',
       template: structuredClone(template),
@@ -938,6 +942,7 @@ export function createTaskComposer(
     errorMessage,
     setErrorMessage,
     hasDraftChanges,
+    isTemplateDirty,
     createMore,
     setCreateMore,
     team,
@@ -952,10 +957,9 @@ export function createTaskComposer(
     deleteTitleTagsAtStart,
     properties,
     setPropertyValues,
-    templateContents,
-    applyTemplate,
     templateSelection,
     selectNoTemplate,
+    detachTemplate,
     startNewTemplate,
     setTemplateName,
     setTemplateTeamId,

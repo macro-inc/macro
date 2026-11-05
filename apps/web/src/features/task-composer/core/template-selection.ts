@@ -2,6 +2,7 @@ import {
   fillTaskTemplate,
   type TaskTemplateContents,
 } from '@app/features/task-templates/core/template';
+import type { PropertyApiValues } from '@property/types';
 
 export type SavedTaskTemplate = {
   id: string;
@@ -33,20 +34,30 @@ export function templateSubmitKind(
   return title.trim() ? 'task-and-template' : 'template';
 }
 
-/** Build another task from the preset, not from the task just submitted. */
+/** Build from the original task defaults, preserving only current contextual values when supplied. */
 export function freshTaskFromTemplate(
   initial: TaskTemplateContents,
   template: TaskTemplateContents,
   available: ReadonlySet<string>,
-  contextualIds: ReadonlySet<string>
+  contextualIds: ReadonlySet<string>,
+  currentValues?: Record<string, PropertyApiValues>
 ): TaskTemplateContents {
   const defaults = structuredClone(initial.propertyDefaults);
+  if (currentValues) {
+    for (const id of contextualIds) {
+      if (id in currentValues)
+        defaults[id] = structuredClone(currentValues[id]);
+      else delete defaults[id];
+    }
+  }
+  const templateDefaults = structuredClone(template.propertyDefaults);
   for (const id of template.propertyIds) {
-    if (!contextualIds.has(id)) delete defaults[id];
+    if (contextualIds.has(id)) delete templateDefaults[id];
+    else delete defaults[id];
   }
   return fillTaskTemplate(
     { ...initial, propertyDefaults: defaults },
-    template,
+    { ...template, propertyDefaults: templateDefaults },
     available
   );
 }

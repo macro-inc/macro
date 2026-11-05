@@ -821,13 +821,21 @@ Desktop places the secondary template selector at the left of the header and
 `No template` and opens an anchored searchable dropdown, not another dialog.
 `No template` and `New template` appear first above a divider, followed by saved
 personal and team templates. The trigger and selection check show the active choice.
-Empty collections and unmatched searches explain the next action. ArrowDown from
+Empty collections and unmatched searches show a short empty state. ArrowDown from
 search enters the menu; Escape dismisses it. On touch, keep the picker sheet.
-Selecting a saved template fills blank fields and description without replacing
-existing draft or contextual values. Selecting No template preserves the draft.
+Browse saved templates without edits: each selection replaces the previous
+fields, defaults, and description instead of combining templates. No template
+restores the starting fields and defaults. Task titles, contextual Source values,
+and explicit launch presets stay intact. After editing properties or description,
+switching asks for confirmation; Cancel preserves the current draft. Existing
+prefilled task text also requires confirmation before a template replaces it;
+No template restores that text. Clearing a field or removing a property also
+counts as an edit. Reopening a saved draft preserves this distinction.
 
-New template adds only template name and personal/team ownership controls to the
-same composer. Use its existing property picker and description editor. With no
+New template adds one compact row for template name and personal/team ownership.
+Necessary explanations live behind an info icon: hover or focus on desktop, tap
+on touch. Unsaved name or visibility changes also require confirmation before
+switching. Use the existing property picker and description editor. With no
 task title, `Create template` saves the selected fields, even when their values
 are empty, without creating a task. Adding a task title offers `Create task &
 template`. Source links are not copied into reusable defaults. `Create More`
@@ -841,7 +849,8 @@ saves, task recovery keeps the saved template identity rather than saving it aga
 Edit also uses the same composer. Confirm before replacing an unsaved draft,
 show the existing name, fields, defaults, and description, and keep ownership
 fixed. `Save template` updates the template without creating a task. Deleting a
-template requires confirmation and leaves existing tasks unchanged. Verify
+template requires confirmation and leaves existing tasks and the current draft
+unchanged; deleting the selected template only detaches its selection. Verify
 personal/team creation, template-only creation, combined creation, no-template
 selection, repeated Create More, editing, cancellation, conflicts, and deletion.
 On touch, entering New template or Edit leaves name-field focus to an explicit
