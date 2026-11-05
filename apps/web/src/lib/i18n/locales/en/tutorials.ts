@@ -49,7 +49,7 @@ export default {
   calendarBlock: 'Macro Calendar',
   calendarSnippet:
     'Agents that schedule for you, and meetings right in your channels',
-  calendarLength: '0:55',
+  calendarLength: '0:54',
   homeTitle: 'Learn how to use Macro Home',
   homeBlock: 'Macro Home',
   homeSnippet:
