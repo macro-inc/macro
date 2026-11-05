@@ -65,6 +65,9 @@ before touching the edit flow.
 - `bunx vitest run` for most unit tests (co-located `*.test.ts`); spreadsheet
   has its own configs: `bun run test:spreadsheet` and
   `bun run test:spreadsheet:integration`.
+- CI runs only the forms and Lexical-commit tests, through the
+  `forms-editing-worker` and `lexical-commit-editing-worker` projects in
+  `apps/web/vitest.config.ts`; add a project there for tests CI must run.
 - `just dev` for `wrangler dev --env local`. (`just dev-local` points at a
   `src/server.ts` that no longer exists.)
 
