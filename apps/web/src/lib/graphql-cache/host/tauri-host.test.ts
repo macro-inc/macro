@@ -1174,6 +1174,135 @@ describe('createTauriCacheHost', () => {
     }
   });
 
+  it('delivers the outcome of durable commands that outlast the read timeout', async () => {
+    vi.useFakeTimers();
+    try {
+      const answers = new Map<string, (value: unknown) => void>();
+      invokeMock.mockImplementation((command: string) =>
+        command === 'graphql_cache_init_with_schema' ||
+        command === 'graphql_cache_inspect_mutations'
+          ? Promise.resolve(null)
+          : new Promise((resolve) => answers.set(command, resolve))
+      );
+      const host = createTauriCacheHost({
+        scope: 'scope-1',
+        requestTimeoutMs: 50,
+      });
+
+      const write = host.writeQuery({ query: '{ x }', data: { x: 1 } });
+      const hydrate = host.hydrateQuery({ query: '{ x }', data: { x: 1 } });
+      const commit = host.commitOptimisticWrite(
+        '7',
+        { owner: 'runner', generation: '2' },
+        { query: 'mutation { m }', data: { m: 1 } }
+      );
+      const deletion = host.deleteRecords(['A:1']);
+      await vi.dynamicImportSettled();
+      // The engine is still applying earlier work long after a read would
+      // have given up; these commands commit regardless of who is waiting.
+      await vi.advanceTimersByTimeAsync(5_000);
+      answers.get('graphql_cache_write')?.({
+        changed: ['A:1'],
+        affectedOps: [],
+        reset: false,
+        revision: '3',
+      });
+      answers.get('graphql_cache_hydrate')?.({
+        kind: 'void',
+        revision: '4',
+        revisionAdvanced: false,
+      });
+      answers.get('graphql_cache_commit_optimistic_write')?.({
+        kind: 'committed',
+        changed: [],
+        affectedOps: [],
+        reset: false,
+        revision: '5',
+      });
+      answers.get('graphql_cache_delete_records')?.({
+        revision: '6',
+        affectedOps: [],
+      });
+
+      await expect(write).resolves.toEqual({
+        changed: ['A:1'],
+        affectedOps: [],
+        reset: false,
+        revision: '3',
+      });
+      await expect(hydrate).resolves.toEqual({
+        kind: 'void',
+        revision: '4',
+        revisionAdvanced: false,
+      });
+      await expect(commit).resolves.toEqual({
+        kind: 'committed',
+        changed: [],
+        affectedOps: [],
+        reset: false,
+        revision: '5',
+      });
+      await expect(deletion).resolves.toEqual({
+        revision: '6',
+        affectedOps: [],
+      });
+      host.dispose();
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('does not time out reads whose deadline passed while the page was stalled', async () => {
+    vi.useFakeTimers();
+    try {
+      let now = 0;
+      vi.spyOn(performance, 'now').mockImplementation(() => now);
+      let answerWatch: (value: unknown) => void = () => {};
+      invokeMock.mockImplementation((command: string) => {
+        if (command === 'graphql_cache_watch')
+          return new Promise((resolve) => {
+            answerWatch = resolve;
+          });
+        if (command === 'graphql_cache_read') return new Promise(() => {});
+        return Promise.resolve(null);
+      });
+      const host = createTauriCacheHost({
+        scope: 'scope-1',
+        requestTimeoutMs: 50,
+      });
+
+      const watch = host.watchQuery?.({ opKey: 1, query: '{ x }' });
+      const read = host.readQuery({ query: '{ y }' });
+      const readTimedOut = expect(read).rejects.toThrow(
+        'graphql cache ipc timeout: graphql_cache_read'
+      );
+      await vi.dynamicImportSettled();
+      // The page stops running for 20 s. The engine answered meanwhile, but
+      // that answer is queued behind the overdue deadline timer.
+      now = 20_000;
+      await vi.advanceTimersByTimeAsync(50);
+      answerWatch({ kind: 'hit', data: { x: 1 }, revision: '2' });
+
+      await expect(watch).resolves.toEqual({
+        kind: 'hit',
+        data: { x: 1 },
+        revision: '2',
+      });
+      const stillWaiting = Symbol('still waiting');
+      await expect(Promise.race([read, stillWaiting])).resolves.toBe(
+        stillWaiting
+      );
+      // An engine that still does not answer once the page runs on time
+      // fails the read as before.
+      now += 50;
+      await vi.advanceTimersByTimeAsync(50);
+      await readTimedOut;
+      host.dispose();
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
   it('tolerates a failed listener setup (no unhandled rejection)', async () => {
     const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
     try {

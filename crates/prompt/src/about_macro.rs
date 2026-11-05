@@ -13,7 +13,7 @@ static INSTRUCTIONS: &str = r##"Macro is one fast workspace where a team's work 
 When a user asks an open-ended question about Macro itself — what it is, what it's
 for, what it can do, or how to do something in Macro — call the SelfKnowledge tool.
 It returns an overview of Macro plus links into the docs (docs.macro.com) that you
-can read with WebFetch. Do not answer these questions from memory; your training
+can read with WebFetch (`macro.web.fetch()` in code mode). Do not answer these questions from memory; your training
 data may be stale.
 
 Watch for ambiguity. A message like "what is this for?" could mean "what is Macro

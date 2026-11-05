@@ -36,7 +36,7 @@ Keys must be unique among siblings; different parents may reuse keys. Comparison
 uses code-unit ordering, never locale-sensitive sorting. Rendering and reverse
 hit testing consume the same depth-first scene order.
 Flat scenes are ordinary trees with shapes directly under the surface. Additional
-typed kinds are text, connector, image, video and document; their feature contracts
+typed kinds are text, connector, image, video, document and artifact; their feature contracts
 are documented below. Shape labels are owned by rectangle, ellipse or connector
 geometry.
 
@@ -477,6 +477,16 @@ in the same transform, selection, connector, clipboard, grouping and Loro paths 
 other shapes. `insertShapesCommand` inserts an ordered batch in one undo step.
 Default Solid renderers show placeholders; hosts provide asset and preview views.
 No upload, storage-service, player or application preview dependency enters core.
+
+### Artifacts
+
+`artifact` stores box dimensions, a title, a self-contained HTML document, its
+design size and a presentation sort key. The HTML lays out at the design size and
+scales to fit the box. Core treats the HTML as opaque content: it never parses or
+executes it, and the default Solid renderer shows a placeholder. Hosts own
+sandboxed rendering. `setArtifactCommand` edits content fields in one undo step;
+box size and pose stay with transform commands. `presentationOrder` lists artifacts
+for presenting, and `setPresentationOrderCommand` reorders them in one undo step.
 
 
 ### Host-measured text fitting

@@ -62,36 +62,53 @@ CRM supplies row/header/empty state slots, filter choices, grouping policy, and
 its own collection state to the shared collection renderer. Shared collection code must not acquire CRM hooks or
 CRM-specific state again.
 
-Company Overview and contact headers expose `RecordVisibilityAction` for removal
-and restoration through the existing hidden mutations. Keep admin/owner checks,
-confirmation of the company-wide contact cascade, and the restore action on the
-open record. Do not duplicate visibility controls in the information panel: contacts
-have no Sharing section, and company Sharing contains only Sync Emails.
-Company Team lists filter hidden contacts for every role without changing the
-underlying response or admin detail access. Contact visibility mutations invalidate
-the company query family because those responses embed contacts: mounted lists
-refetch before completion, and inactive lists reload when revisited. No company ID
-is required, so unfiled contacts use the same mutation safely. Contact visibility
-also awaits explicit refresh of mounted GraphQL contact lists; normalized-record
-eviction and TanStack invalidation alone cannot refresh their membership.
+Visible contact and company toolbars put the archive-system icon beside Copy link.
+Archived identities group one Archived chip with a flat secondary Restore button;
+on phones the group wraps beneath the name. Keep identity actions and metadata at
+the compact property scale: 24px visible height, 12px text and 12px icons.
+Interactive controls reserve 10px above and below their touch faces for separate
+44px targets; transparent extensions receive those taps without enlarging the paint.
+Use flat controls here because the glass finish owns its own press pseudo-elements.
+Top-toolbar controls retain their separate navigation scale.
+The chip owns hover/focus/tap explanation; Restore does not trigger that explanation.
+`RecordVisibilityAction` handles confirmation, pending, cancellation and retry.
+Only admins/owners can change visibility. Company archive cascades to all people
+and disables email syncing; company restore explicitly confirms restoring every
+person, including individually archived people, while email syncing stays off.
+A person under an archived company routes to that company before restoration.
+Both information panels start with Record details and References; company-only
+Properties, Lists and Email sharing follow, with no duplicate visibility toggle.
 
-People display options offer **Show removed people** only for current-team
-admins/owners. `people-visibility` owns a local explicit choice, resets it on
-account/team/role/list changes, and sanitizes shared or persisted filters.
-Retained team data preserves the choice through a background refetch error;
-current-user membership and admin/owner checks still apply.
-Removed mode queries `crmf` with hidden=true and the administered team ID, using
-the existing server search, deduplication and cursor pagination. The client
-predicate also checks that team scope so retained rows cannot cross the display
-boundary. Normal People remains viewer-wide and hidden=false. Removed mode
-includes effective hidden state from a hidden parent company; restoring a
-contact does not restore its company. No-company contacts remain supported.
-`browser-test/people` uses the production filter compiler, predicates, GraphQL
-live page source, display controls and eye confirmation with a synthetic API;
-cache-host persistence and full app routing remain outside that fixture.
-`browser-test/team` exercises the real Team component, visibility action and query
-adapters with a synthetic storage client on desktop and phone; entity row metadata
-and app navigation are isolated. Run its `playwright.config.ts` from `apps/web`.
+People, Companies and company Team use an exclusive Visible/Archived filter.
+`people-visibility` keeps the workspace choice local to the account/team/role/view,
+preserves search and other display choices, and sanitizes shared/persisted contact
+filters. Archived People is current-administered-team scoped, server filtered
+before pagination; visible People remains viewer-wide. Team applies the same
+exclusive choice to its embedded contact response, including effective parent state.
+
+Successful REST mutations write confirmed flags through the normalized Soup update
+path and patch paginated suggestions, company search pages, REST Soup and embedded
+detail snapshots. Confirmed detail snapshots become stale without an immediate
+refetch; active initial reads that were cancelled are restarted.
+Pre-write REST reads are cancelled; the normalized exchange fences older responses
+containing or declaring the affected CRM types before publication, hydration or
+persistence. Flat and grouped Soup pages retain their initial filter dependencies
+on continuations, so old empty pages cannot briefly hide a restored record.
+Imperative and durable revalidations recover these dependencies at dispatch, before
+urql can share them with a later mounted reader. Unknown opaque continuation scopes
+conservatively fence both CRM types; known initial scopes retain explicit exclusions.
+Refreshes target CRM-capable readers, leaving unrelated lists alone. A refresh
+failure is logged separately and never misreports a committed save as rejected.
+Session identity is captured before dispatch so a late response cannot populate a
+replacement session. Ordinary Cmd-K continues to exclude archived companies and
+people through its existing feeds and normalized projections; it has no recovery UI.
+
+`browser-test/archive` uses production record headers, toolbar actions, tabs,
+SidePanel, Team filtering and confirmations with synthetic storage and isolated
+shell services/entity-row metadata. It does not verify authenticated persistence.
+`browser-test/people` additionally exercises the production AST compiler and live
+GraphQL page source. Exchange tests cover the normalized-cache race boundary.
+Run the fixture's `playwright.config.ts` from `apps/web`.
 Both hidden mutations emit `crm.visibility_change` through request and cache
 refresh completion, with the opaque record ID, record type, requested hidden
 state, and outcome. `crm.visibility_change.refresh` times cache invalidation and
@@ -214,3 +231,15 @@ When changing behavior, test the responsible primitive or pure function. When
 moving behavior, retain query keys, persistence keys, mutation ordering, loading
 boundaries, routes, and markup. Run CRM tests plus affected shared collection and
 user-card tests, TypeScript checking, `just check`, and the real CRM browser flows.
+
+Pipeline stage requirements are CRM policy over the shared database editor.
+Remove a required field's rules before deleting its options, since option
+deletion clears values even on rows outside the submitted operation batch.
+`queries/stage-requirements.ts` adapts the pipeline-authorized rules; the toolbar
+opens the shared-control dialog, and Add deal derives its required fields from
+stable option/column IDs. Keep drafts on a refused save. The server is authoritative
+for table, board, timeline, agent and import writes. Board and timeline creation
+use the host composer so stage and date-range defaults reach Add deal. CSV writes split refused batches,
+commit valid entries, and show record-specific failures; option labels enter the
+local cache only after their batch commits. The backend-free regression is
+`bunx playwright test --config src/features/crm/browser-test/playwright.config.ts stage-requirements.browser.e2e.ts`.

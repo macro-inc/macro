@@ -27,6 +27,7 @@ import {
   parseCacheRevision,
 } from '../../../graphql-cache/protocol';
 import type {
+  GraphqlEntityFilterAst,
   GroupedSoupInput,
   GroupSoupQuery,
   GroupSoupQueryVariables,
@@ -47,9 +48,10 @@ afterEach(() => {
   cleanups.splice(0).forEach((dispose) => dispose());
 });
 
-function setup() {
+function setup(filters: GraphqlEntityFilterAst = {}) {
   type Execution = {
     variables: GroupSoupQueryVariables;
+    context: Partial<OperationContext>;
     publish(
       data: GroupSoupQuery,
       persistence?: Promise<string | undefined>,
@@ -76,6 +78,7 @@ function setup() {
       });
       const execution: Execution = {
         variables: request.variables,
+        context,
         publish: (data, persistence, source = 'live-network') =>
           subject.next({
             operation,
@@ -146,7 +149,7 @@ function setup() {
           propertyDefinitionId: 'status-definition',
         },
         limit: 2,
-        filters: {},
+        filters,
       },
     });
     const query = createGroupedSoupLiveQuery(
@@ -222,6 +225,27 @@ const ids = (data: GroupSoupQuery | undefined) =>
   }));
 
 describe('grouped Soup live ownership', () => {
+  it('retains CRM membership dependencies on group continuations', async () => {
+    const state = setup({
+      crmCompanyFilter: {
+        literal: { id: '00000000-0000-0000-0000-000000000000' },
+      },
+      crmContactFilter: { literal: { hidden: false } },
+    });
+    const initial = await state.execution(0);
+    expect(initial.context.externalCacheWriteTypes).toEqual([
+      'GraphqlSoupCrmContact',
+    ]);
+    initial.publish(page([], 'next'));
+    const more = state.query.paging.fetchNextPage('todo');
+    const continuation = await state.execution(1);
+    expect(continuation.context.externalCacheWriteTypes).toEqual([
+      'GraphqlSoupCrmContact',
+    ]);
+    continuation.publish(page([], null));
+    await more;
+  });
+
   it('does not refetch a continuation started automatically during the initial result', async () => {
     const state = setup();
     createRoot((dispose) => {

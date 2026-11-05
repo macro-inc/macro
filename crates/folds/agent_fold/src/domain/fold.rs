@@ -77,6 +77,8 @@ mod permission;
 mod plan;
 /// Transactional generic ACP history replacement.
 mod replay;
+/// Saved reviews announcing their new revisions.
+mod review;
 /// The fold's state and the per-frame dispatch.
 mod state;
 /// Delegated agents and the calls nested under them.

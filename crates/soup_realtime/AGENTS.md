@@ -35,7 +35,7 @@ tasks itself.
   `call`, `github_pull_requests`, `initiative`, `properties`, `projects`,
   `system_properties`, `rdkafka` (`consumer`), `agent_session`/`entity_access`
   (`outbound`).
-- Used by: `complete_graph`, `graphql_soup`, `work_feed`.
+- Used by: `complete_graph`, `graphql_soup`, `attention_feed`.
 
 ## Recipes
 

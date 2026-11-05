@@ -1,7 +1,7 @@
 use std::sync::Arc;
 use std::time::{Duration, Instant};
 
-use chrono::Utc;
+use chrono::{DateTime, Utc};
 use tokio::sync::mpsc::{Receiver, Sender};
 use tokio_util::sync::CancellationToken;
 use tokio_util::task::TaskTracker;
@@ -26,18 +26,20 @@ const BATCH_MIN_DURATION: Duration = Duration::from_secs(30);
 /// A [`ScheduledActionDispatcher`] that polls Postgres for due actions rather
 /// than holding an in-memory cron schedule. Safe to run in multiple instances:
 /// coordination is done via [`ScheduledActionRepo::claim_action`], which is an
-/// atomic conditional UPDATE. The first instance to claim an action wins; peers
-/// see the stale-or-unclaimed filter exclude it on subsequent polls.
+/// atomic conditional UPDATE fenced to `next_run_at`. The first instance to
+/// claim an action wins; peers see the stale-or-unclaimed filter exclude it on
+/// subsequent polls.
 ///
 /// Polling cadence: each batch of up to [`BATCH_SIZE`] actions is processed,
 /// then the loop sleeps until [`BATCH_MIN_DURATION`] has elapsed from the batch
-/// start. This gives other dispatcher instances a chance to pick up work, and
-/// bounds DB load when there is nothing to do.
+/// start, or until an earlier firing comes due. This gives other dispatcher
+/// instances a chance to pick up work, and bounds DB load when there is nothing
+/// to do.
 ///
-/// [`DispatchEvent`]s on the returned [`Sender`] are drained and dropped —
-/// polling reads state directly from the DB each tick, so create/update/delete
-/// events are redundant. The sender is only accepted to satisfy the trait
-/// contract shared with the in-memory dispatcher.
+/// An earlier firing is the first not-yet-due action the poll returned, or the
+/// `next_run_at` of an enabled action created or updated through the returned
+/// [`Sender`]. Either wakes the loop when it comes due, so a routine due in two
+/// seconds runs in about two seconds rather than at the next batch.
 pub struct PgPollingDispatcher<Rpo: ScheduledActionRepo, Exe: ScheduledActionExecutor> {
     repo: Arc<Rpo>,
     executor: Exe,
@@ -118,21 +120,32 @@ where
         } = self;
         let cancellation_token = lifecycle.cancellation_token;
 
-        // Drain dispatch events — the polling loop pulls fresh state from the
-        // DB each tick, so create/update/delete notifications are not needed.
-        // We still must drain so service-side sends don't block on a full
-        // channel.
+        // The earliest firing a create or update asked for. The poll loop
+        // clears it when it polls, since that poll reads the saved row.
+        let (wake_tx, mut wake_rx) = tokio::sync::watch::channel(None::<DateTime<Utc>>);
+        let wake_tx = Arc::new(wake_tx);
+        let poll_wake_tx = Arc::clone(&wake_tx);
+
+        // Always drain so service-side sends never block on a full channel.
         let drain_cancellation_token = cancellation_token.clone();
         lifecycle.task_tracker.spawn(async move {
             loop {
-                tokio::select! {
+                let event = tokio::select! {
                     biased;
                     _ = drain_cancellation_token.cancelled() => break,
-                    event = rx.recv() => {
-                        if event.is_none() {
-                            break;
+                    event = rx.recv() => event,
+                };
+                let Some(event) = event else {
+                    break;
+                };
+                if let Some(at) = requested_wake(&event) {
+                    wake_tx.send_if_modified(|earliest| {
+                        let earlier = earliest.is_none_or(|earliest| at < earliest);
+                        if earlier {
+                            *earliest = Some(at);
                         }
-                    }
+                        earlier
+                    });
                 }
             }
         });
@@ -147,12 +160,15 @@ where
                 }
 
                 let batch_start = Instant::now();
+                poll_wake_tx.send_replace(None);
+                wake_rx.mark_unchanged();
                 let poll_result = tokio::select! {
                     biased;
                     _ = cancellation_token.cancelled() => return,
                     result = repo.get_next_unclaimed_actions(BATCH_SIZE) => result,
                 };
 
+                let mut next_due = None;
                 match poll_result {
                     Ok(candidates) => {
                         let now = Utc::now();
@@ -167,6 +183,7 @@ where
                             // The first non-due one ends the batch — anything
                             // after it is also not yet due.
                             if next_run_at > now {
+                                next_due = Some(next_run_at);
                                 break;
                             }
 
@@ -200,12 +217,19 @@ where
                     }
                 }
 
-                let elapsed = batch_start.elapsed();
-                if elapsed < BATCH_MIN_DURATION {
+                let batch_end = batch_start + BATCH_MIN_DURATION;
+                loop {
+                    let requested = *wake_rx.borrow_and_update();
+                    let wake_at = [next_due, requested]
+                        .into_iter()
+                        .flatten()
+                        .map(instant_at)
+                        .fold(batch_end, Instant::min);
                     tokio::select! {
                         biased;
                         _ = cancellation_token.cancelled() => return,
-                        _ = tokio::time::sleep(BATCH_MIN_DURATION - elapsed) => {}
+                        _ = tokio::time::sleep_until(wake_at.into()) => break,
+                        _ = wake_rx.changed() => {}
                     }
                 }
             }
@@ -213,6 +237,22 @@ where
 
         (tx, exrx)
     }
+}
+
+/// When a saved action next needs the dispatcher, if it is enabled to run.
+fn requested_wake(event: &DispatchEvent) -> Option<DateTime<Utc>> {
+    match event {
+        DispatchEvent::Create(action) | DispatchEvent::Update(action) if action.enabled => {
+            action.next_run_at
+        }
+        DispatchEvent::Create(_) | DispatchEvent::Update(_) | DispatchEvent::Delete(_) => None,
+    }
+}
+
+/// The monotonic instant of a wall-clock time; past times are now.
+fn instant_at(at: DateTime<Utc>) -> Instant {
+    let wait = (at - Utc::now()).to_std().unwrap_or_default();
+    Instant::now() + wait
 }
 
 async fn wait_until_ready(

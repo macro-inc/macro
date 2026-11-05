@@ -27,7 +27,9 @@ They share no HTTP: only MacroDB rows and `NOTIFY` (`external_chat`'s
   quarantine, deferral and the standalone message write. Senders are resolved
   first (`resolve_sender_in`): WhatsApp's from-me flag means the account's own
   identity; a LID-only sender takes its phone number from the account's roster
-  pair. Only what is still LID-only is quarantined.
+  pair. Only what is still LID-only is quarantined. Each stored sender
+  records a `whatsapp.ingest.person` span (chat kind, LID or not, paired,
+  `message_named`, `person_created`, `person_named`; no names or addresses).
 - Structured content (`external_chat::domain::rich::RichContent`: poll, poll
   vote, location, contact cards, event, system line) is stored in
   `external_chat_message.rich`; `kind = 'system'` rows never notify or count

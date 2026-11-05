@@ -2,6 +2,7 @@ import {
   Company,
   type CompanySection,
   CompanyTabs,
+  CompanyVisibilityButton,
 } from '@app/features/crm/crm-company';
 import { CrmCopyLinkButton } from '@app/features/crm/crm-link';
 import { CollapsibleHeaderItem } from '@components/app/split-layout/components/CollapsibleItem';
@@ -59,6 +60,7 @@ export function CompanyBlockAdapter() {
       <SplitHeaderRight>
         <HeaderIsland class="p-0">
           <CrmCopyLinkButton type="company" id={companyId} />
+          <CompanyVisibilityButton companyId={companyId} />
         </HeaderIsland>
       </SplitHeaderRight>
       <ParamsProvider state={params}>
