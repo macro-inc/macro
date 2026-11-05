@@ -14,9 +14,7 @@ and kept in sync via the connection gateway.
 - `src/outbound/names.rs`: `directory-names` feature, reusing the existing user-name owner's profile-over-address-book query without duplicating SQL.
 - `src/domain/models/page.rs`: page sizes (default 100, maximum 500) and original per-row positions, distinct from canonicalized user IDs. Short/empty pages may still have continuations.
 - `src/domain/models/query.rs`: 512-byte normalized subsequence searches (including the local-part label fallback plus email), exact/first-name reference predicates applied before limiting and at most 500 raw lookup IDs, deduplicated without reordering; empty lookup never means all contacts.
-- `src/outbound/repository/page.rs`: indexed paging of both graph directions and self, plus exact lookups through `lookup.sql`. Membership is bounded per input key before name reads; keep its LATERAL limit and the 100k-row plan regressions.
-- `src/domain/models/read.rs`, `src/domain/service/read.rs`: validated relational reads for the SQL migration; predicates, ordering and counts execute in storage, with at most 500 result rows. DISTINCT names and grouped counts deduplicate before the output window. There is no raw SQL input or directory-vector fallback. Native SQL consumes this capability; browser people statements delegate to its read-only endpoint. Wider join planning remains pending.
-- `src/outbound/repository/read.rs`: allowlisted dynamic SQL over authorized neighbors/self. Scope membership before profile/address-book enrichment, bind every value, and apply filters/grouping/order before the output window. Counts are exact over matching membership, not a capped input page. Both name-read paths use the name owner's `public.user_name_for_viewer` function; no profile/address-book joins live in the contact adapter. Pass the viewer as a relation column, not a scalar subquery, so PostgreSQL can inline the name function. Keep production-plan, SQL/Rust display-formatting and ID-parser parity regressions.
+- `src/outbound/repository/page.rs`: indexed paging of both graph directions and self, plus exact lookups through `lookup.sql`. Match peers with `lower(... COLLATE "C")` and the strict `macro|` prefix predicate using the two scoped expression indexes; keep raw viewer equality and raw page cursors unchanged. Membership is bounded per input key before names; preserve the LATERAL limit and both custom/generic 100k-row plan regressions. Deploy migrations `20261105044718` and `20261105044750` before the lookup query.
 - `src/domain/ports.rs`: the traits `inbound`/`outbound` implement.
 - `src/inbound/http.rs`: HTTP handlers, router, DTOs, swagger.
 - `src/inbound/worker.rs`: SQS worker that ingests contact-affecting events.
@@ -52,7 +50,7 @@ and kept in sync via the connection gateway.
 - `cargo test -p contacts --all-features -- --test-threads=2` (`SQLX_OFFLINE` unset; `directory-names` covers name precedence/account isolation; the `outbound`/`default`
   features need a local MacroDB — see `.agents/rules/rust/guardrails.md`).
 
-- `cargo test -p contacts --all-features '::read::' -- --test-threads=2`: relational query validation, private-name/membership isolation, parser/name parity, grouping/escaping and a real 100k-contact PostgreSQL regression. Apply the additive `20261104180444` shared-name-function migration before running readers; it creates no contact storage.
+- `cargo test -p contacts --all-features '::case_lookup::' -- --test-threads=2 --nocapture`: canonical point lookup matches legacy-case IDs exposed by paging, rejects invalid marker/Unicode aliases and other viewers, and seeks the new expression indexes at 100k under custom/generic plans. Directory-name tests also preserve viewer-private labels and normalized identities.
 
 ## Related
 

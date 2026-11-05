@@ -139,6 +139,79 @@ async fn enriched_pages_preserve_profile_precedence_and_private_address_book_nam
     assert_eq!(renamed.contacts[2].id, first.contacts[2].id);
 }
 
+#[sqlx::test(
+    migrator = "MACRO_DB_MIGRATIONS",
+    fixtures(path = "fixtures", scripts("directory_names"))
+)]
+async fn canonical_lookup_keeps_paged_identity_and_viewer_private_names_for_legacy_edges(
+    pool: PgPool,
+) {
+    sqlx::query!(
+        "DELETE FROM contacts_connections
+         WHERE user1 IN ('macro|external@example.com', 'macro|first@example.com', 'macro|profile@example.com')
+           AND user2 IN ('macro|first@example.com', 'macro|second@example.com', 'macro|profile@example.com')"
+    ).execute(&pool).await.unwrap();
+    sqlx::query!(
+        "INSERT INTO contacts_connections(user1, user2) VALUES
+         ('macro|EXTERNAL@example.com', 'macro|first@example.com'),
+         ('macro|EXTERNAL@example.com', 'macro|second@example.com'),
+         ('macro|first@example.com', 'macro|profile@EXAMPLE.COM'),
+         ('macro|profile@EXAMPLE.COM', 'macro|second@example.com')"
+    )
+    .execute(&pool)
+    .await
+    .unwrap();
+    let service = ContactsDirectoryService::new(
+        Arc::new(ContactsDomainService {
+            repository: DbContactsRepository::new(pool.clone()),
+            notifier: None::<ConnectionGatewayNotifier>,
+        }),
+        DbContactNames::new(pool),
+    );
+    let lookup = ContactLookup::new(
+        ["external@example.com", "profile@example.com"]
+            .map(|email| MacroUserIdStr::try_from_email(email).unwrap())
+            .to_vec(),
+    )
+    .unwrap();
+    let mut contact_ids = Vec::new();
+    for (email, expected_name) in [
+        ("first@example.com", "First Private"),
+        ("second@example.com", "Second Private"),
+    ] {
+        let viewer = MacroUserIdStr::try_from_email(email).unwrap();
+        let page = service
+            .contact_page(viewer.clone(), None, ContactPageSize::DEFAULT)
+            .await
+            .unwrap();
+        let resolved = service.lookup_contacts(viewer, &lookup).await.unwrap();
+        assert_eq!(resolved.len(), 2);
+        assert_eq!(resolved[0].name.as_deref(), Some(expected_name));
+        assert_eq!(resolved[1].name.as_deref(), Some("Profile"));
+        for contact in &resolved {
+            let paged = page
+                .contacts
+                .iter()
+                .find(|row| row.user_id == contact.user_id)
+                .unwrap();
+            assert_eq!(contact.id, paged.id);
+            assert_eq!(contact.name, paged.name);
+        }
+        contact_ids.push(resolved[0].id);
+    }
+    assert_ne!(contact_ids[0], contact_ids[1]);
+    assert!(
+        service
+            .lookup_contacts(
+                MacroUserIdStr::try_from_email("stranger@example.com").unwrap(),
+                &lookup
+            )
+            .await
+            .unwrap()
+            .is_empty()
+    );
+}
+
 #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
 async fn name_reads_are_bounded_and_empty_batches_are_valid(pool: PgPool) {
     let reader = DbContactNames::new(pool);
