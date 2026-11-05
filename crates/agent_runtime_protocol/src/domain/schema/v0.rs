@@ -138,6 +138,68 @@ pub enum ToRuntimeMessage {
     /// configured harness what it advertises. Answers are therefore
     /// interchangeable, so nothing correlates a response to a request.
     ModelProbeRequest,
+    /// A command for a Macro computer's runtime itself, not its agent,
+    /// answered by one [`ToServerMessage::ComputerControlResponse`] with the
+    /// same `requestId`.
+    ComputerControl {
+        /// Correlates the answer.
+        #[serde(rename = "requestId")]
+        request_id: String,
+        /// What to do.
+        command: ComputerCommand,
+        /// W3C trace context for the runtime-side operation.
+        #[serde(
+            default,
+            rename = "_meta",
+            skip_serializing_if = "serde_json::Map::is_empty"
+        )]
+        #[specta(type = std::collections::HashMap<String, Unknown>)]
+        meta: serde_json::Map<String, serde_json::Value>,
+    },
+}
+
+/// A command for a Macro computer's runtime.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Type)]
+#[serde(tag = "command", rename_all = "snake_case")]
+pub enum ComputerCommand {
+    /// Start `claude setup-token` and answer with its sign-in URL.
+    ClaudeSignInStart,
+    /// Finish the sign-in with the code the user pasted, or the localhost
+    /// callback URL their browser could not reach.
+    ClaudeSignInComplete {
+        /// The pasted code or callback URL.
+        code: String,
+    },
+    /// Forget the Claude account and return to Macro credits.
+    ClaudeSignOut,
+    /// Open a screen stream: dial the service's screen socket for `stream_id`
+    /// and relay it to the display.
+    ScreenOpen {
+        /// The stream the service is waiting to pair.
+        stream_id: String,
+    },
+}
+
+/// A Macro computer runtime's answer to a [`ComputerCommand`].
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Type)]
+#[serde(tag = "status", rename_all = "snake_case")]
+pub enum ComputerControlResult {
+    /// The sign-in is waiting for the user at `url`.
+    SignInStarted {
+        /// Where the user signs in to Claude.
+        url: String,
+    },
+    /// Claude Code now runs on the user's own account.
+    SignedIn,
+    /// Claude Code is back on Macro credits.
+    SignedOut,
+    /// The runtime is dialing the screen socket.
+    ScreenOpening,
+    /// The command failed; the message is safe to show.
+    Failed {
+        /// What went wrong.
+        message: String,
+    },
 }
 
 /// Agent Runtime to Agent Service traffic on the logical protocol stream.
@@ -157,5 +219,13 @@ pub enum ToServerMessage {
     ModelProbeResponse {
         /// Raw options or a safe failure.
         result: ModelProbeResult,
+    },
+    /// The answer to a [`ToRuntimeMessage::ComputerControl`].
+    ComputerControlResponse {
+        /// The request it answers.
+        #[serde(rename = "requestId")]
+        request_id: String,
+        /// The outcome.
+        result: ComputerControlResult,
     },
 }

@@ -139,3 +139,56 @@ fn model_probe_messages_carry_no_session_id_and_no_correlation() {
         })
     );
 }
+
+#[test]
+fn computer_control_round_trips_on_the_wire() {
+    let request = ToRuntimeMessage::ComputerControl {
+        request_id: "r1".to_owned(),
+        command: ComputerCommand::ClaudeSignInComplete {
+            code: "abc#def".to_owned(),
+        },
+        meta: Default::default(),
+    };
+    let wire = json!({
+        "type": "computerControl",
+        "requestId": "r1",
+        "command": { "command": "claude_sign_in_complete", "code": "abc#def" }
+    });
+    assert_eq!(serde_json::to_value(&request).unwrap(), wire);
+    let ToRuntimeMessage::ComputerControl { command, .. } =
+        serde_json::from_value::<ToRuntimeMessage>(wire).unwrap()
+    else {
+        panic!("not a computer control message");
+    };
+    assert_eq!(
+        command,
+        ComputerCommand::ClaudeSignInComplete {
+            code: "abc#def".to_owned()
+        }
+    );
+
+    let response = ToServerMessage::ComputerControlResponse {
+        request_id: "r1".to_owned(),
+        result: ComputerControlResult::SignInStarted {
+            url: "https://claude.ai/oauth/authorize?code=true".to_owned(),
+        },
+    };
+    assert_eq!(
+        serde_json::to_value(&response).unwrap(),
+        json!({
+            "type": "computerControlResponse",
+            "requestId": "r1",
+            "result": {
+                "status": "sign_in_started",
+                "url": "https://claude.ai/oauth/authorize?code=true"
+            }
+        })
+    );
+    assert_eq!(
+        serde_json::to_value(ComputerCommand::ScreenOpen {
+            stream_id: "s1".to_owned()
+        })
+        .unwrap(),
+        json!({ "command": "screen_open", "stream_id": "s1" })
+    );
+}

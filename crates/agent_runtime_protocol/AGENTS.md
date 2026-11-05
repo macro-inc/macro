@@ -54,6 +54,11 @@ ExecuteCode stale-turn fencing; mark that block with `INVOCATION_CONTEXT_META`
 so the transcript fold omits it. Preserve existing prompt content and notification
 metadata; compaction must remain the single `/compact` block.
 
+Computer control uses `computerControl { requestId, command, _meta? }` and
+`computerControlResponse { requestId, result }`, independent of ACP sessions.
+The command is tagged by `command` in snake_case; results by `status`.
+Only enrolled computers implement it; other runtimes return `failed`.
+
 ## Checks
 
 - `cargo test -p agent_runtime_protocol` (`SQLX_OFFLINE` unset).

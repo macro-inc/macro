@@ -718,3 +718,38 @@ async fn a_closed_connection_ends_the_listing() {
         Err(ListSessionsError::Closed)
     ));
 }
+
+#[tokio::test]
+async fn computer_commands_are_correlated_outside_session_traffic() {
+    let (carrier, mut runtime) = Channel::duplex();
+    let connection = RuntimeConnection::connect(carrier);
+    let command = connection.computer_control(ComputerCommand::ClaudeSignOut);
+    tokio::pin!(command);
+    tokio::select! {
+        result = &mut command => panic!("answered before sending: {result:?}"),
+        request = runtime.rx.recv() => {
+            let ToRuntimeMessage::ComputerControl { request_id, command, .. } = request.unwrap() else {
+                panic!("expected computer control");
+            };
+            assert_eq!(command, ComputerCommand::ClaudeSignOut);
+            runtime.tx.send(ToServerMessage::ComputerControlResponse {
+                request_id,
+                result: ComputerControlResult::SignedOut,
+            }).unwrap();
+        }
+    }
+    assert_eq!(command.await.unwrap(), ComputerControlResult::SignedOut);
+    assert!(connection.computer_answers.is_empty());
+}
+
+#[tokio::test(start_paused = true)]
+async fn timed_out_computer_commands_remove_their_waiters() {
+    let connection = RuntimeConnection::connect(SilentSocket);
+    let result = tokio::time::timeout(
+        Duration::from_secs(1),
+        connection.computer_control(ComputerCommand::ClaudeSignInStart),
+    )
+    .await;
+    assert!(result.is_err());
+    assert!(connection.computer_answers.is_empty());
+}

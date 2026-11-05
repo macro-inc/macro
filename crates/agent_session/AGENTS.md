@@ -110,6 +110,10 @@ whether the name stopped fitting (threshold 0.8) before Haiku proposes a new
 one. Only names with `agent_session.name_is_generated` are retitled; a rename
 through `set_name` clears it, so a name a person chose is never replaced.
 
+`RuntimeConnection::computer_control` correlates computer commands separately
+from ACP/session traffic, propagates trace context, and removes response waiters
+on completion, disconnect, cancellation, or a caller-owned deadline.
+
 ## Checks
 
 - `cargo test -p agent_session` (`SQLX_OFFLINE` unset).

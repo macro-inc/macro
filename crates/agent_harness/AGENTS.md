@@ -93,6 +93,10 @@ Reconcile active leases against terminal log evidence too: an observer can miss 
 completion during takeover. Previously bound quiet attempts reconcile before new
 wakes; interrupted quiet batches return to the next real prompt.
 
+`RuntimeRegistry::computer_control` forwards typed computer commands to the
+local live connection, returning `None` when another replica owns it. The
+service composition owns cross-replica carriage and request deadlines.
+
 ## Checks
 
 - `cargo nextest run -p agent_harness --lib --test-threads=2` (`SQLX_OFFLINE`
