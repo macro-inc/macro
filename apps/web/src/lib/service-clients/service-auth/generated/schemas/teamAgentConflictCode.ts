@@ -13,6 +13,7 @@ export type TeamAgentConflictCode =
 
 // eslint-disable-next-line @typescript-eslint/no-redeclare
 export const TeamAgentConflictCode = {
+  quote_changed: 'quote_changed',
   no_subscription: 'no_subscription',
   computer_unavailable: 'computer_unavailable',
   retry_unavailable: 'retry_unavailable',

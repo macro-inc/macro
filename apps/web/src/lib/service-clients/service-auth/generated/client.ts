@@ -133,6 +133,7 @@ import type {
   Team,
   TeamAgent,
   TeamAgentConflict,
+  TeamAgentFailure,
   TeamAgentQuote,
   TeamAgentSizes,
   TeamAgents,
@@ -6748,7 +6749,7 @@ export type createTeamAgentResponse500 = {
 };
 
 export type createTeamAgentResponse502 = {
-  data: ErrorResponse;
+  data: TeamAgentFailure;
   status: 502;
 };
 

@@ -14,6 +14,8 @@ import type { CreateTeamAgentAvatarUrl } from './createTeamAgentAvatarUrl';
 export interface CreateTeamAgent {
   /** Profile picture URL (a static file the caller uploaded). */
   avatarUrl?: CreateTeamAgentAvatarUrl;
+  /** Whether the reviewed quote included the seat and computer for free. */
+  expectedIncluded: boolean;
   /** What the agent is responsible for. Seeds the persona repo. */
   jobDescription: string;
   /** Display name. */

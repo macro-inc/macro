@@ -15,5 +15,6 @@ export type ComputerPayment =
 export const ComputerPayment = {
   pending: 'pending',
   paid: 'paid',
+  comped: 'comped',
   unbilled: 'unbilled',
 } as const;

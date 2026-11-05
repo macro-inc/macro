@@ -99,7 +99,10 @@ import type { UserName } from './generated/schemas/userName';
 import type { UserNames } from './generated/schemas/userNames';
 import type { UserOrganizationResponse } from './generated/schemas/userOrganizationResponse';
 import type { UserTokensResponse } from './generated/schemas/userTokensResponse';
-import { teamAgentQuoteErrorResponseHandler } from './team-agent-errors';
+import {
+  teamAgentCreateErrorResponseHandler,
+  teamAgentQuoteErrorResponseHandler,
+} from './team-agent-errors';
 
 const authHost = SERVER_HOSTS['auth-service'];
 
@@ -1396,9 +1399,13 @@ export const authServiceClient = {
   },
 
   createTeamAgent(request: CreateTeamAgent) {
-    return fetchWithAuth<TeamAgent>(`${authHost}/team_agents`, {
+    return fetchWithAuth<
+      TeamAgent,
+      'repository_creation_failed' | 'quote_changed'
+    >(`${authHost}/team_agents`, {
       method: 'POST',
       body: JSON.stringify(request),
+      errorResponseHandler: teamAgentCreateErrorResponseHandler,
     });
   },
 

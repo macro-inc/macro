@@ -292,6 +292,8 @@ export * from './teamAgentComputerId';
 export * from './teamAgentConflict';
 export * from './teamAgentConflictCode';
 export * from './teamAgentCreatedBy';
+export * from './teamAgentFailure';
+export * from './teamAgentFailureCode';
 export * from './teamAgentLastTurnAt';
 export * from './teamAgentPayment';
 export * from './teamAgentQuote';

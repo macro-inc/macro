@@ -330,7 +330,7 @@ export type CodexLoginState = 'pending' | 'connected' | 'expired' | 'failed';
 /**
  * Durable payment outcome supplied by hosted runtimes.
  */
-export type ComputerPayment = 'pending' | 'paid' | 'unbilled';
+export type ComputerPayment = 'pending' | 'paid' | 'comped' | 'unbilled';
 
 /**
  * The size of a Macro computer, from the computers catalog.
@@ -476,6 +476,10 @@ export type CreateTeamAgent = {
      * Profile picture URL (a static file the caller uploaded).
      */
     avatarUrl?: string | null;
+    /**
+     * Whether the reviewed quote included the seat and computer for free.
+     */
+    expectedIncluded: boolean;
     /**
      * What the agent is responsible for. Seeds the persona repo.
      */
@@ -2368,7 +2372,26 @@ export type TeamAgentConflict = {
 /**
  * Stable conflict codes for invitation and provisioning failures.
  */
-export type TeamAgentConflictCode = 'no_subscription' | 'computer_unavailable' | 'retry_unavailable';
+export type TeamAgentConflictCode = 'quote_changed' | 'no_subscription' | 'computer_unavailable' | 'retry_unavailable';
+
+/**
+ * Public provider failure details. Never contains raw upstream response bodies.
+ */
+export type TeamAgentFailure = {
+    /**
+     * Machine-readable failure stage.
+     */
+    code: TeamAgentFailureCode;
+    /**
+     * Safe, actionable reason.
+     */
+    message: string;
+};
+
+/**
+ * Stable provider failure reason safe for invitation error presentation.
+ */
+export type TeamAgentFailureCode = 'repository_creation_failed' | 'provider_failed';
 
 /**
  * What inviting an agent adds to the team's bill, in cents per interval.
@@ -2386,6 +2409,10 @@ export type TeamAgentQuote = {
      * Disk capacity in GB, from the computer size catalog.
      */
     diskGb: number;
+    /**
+     * Both seat and computer are included, with no Stripe change.
+     */
+    included: boolean;
     /**
      * How often both bill.
      */
@@ -5227,7 +5254,7 @@ export type CreateTeamAgentErrors = {
     403: ErrorResponse;
     409: TeamAgentConflict;
     500: ErrorResponse;
-    502: ErrorResponse;
+    502: TeamAgentFailure;
 };
 
 export type CreateTeamAgentError = CreateTeamAgentErrors[keyof CreateTeamAgentErrors];

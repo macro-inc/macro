@@ -19,6 +19,8 @@ export interface TeamAgentQuote {
    * @minimum 0
    */
   diskGb: number;
+  /** Both seat and computer are included, with no Stripe change. */
+  included: boolean;
   /** How often both bill. */
   interval: BillingInterval;
   /**
