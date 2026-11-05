@@ -2,12 +2,15 @@
 
 ## Header
 
-`header.png` is a 2400×1100 transparent PNG. Two crops from one real Macro
-split view show a team-channel agent request and its linked code changes.
-The panes are offset vertically with thin borders and soft shadows. The supplied
-Frame 10 full logo is unchanged, downscaled to 402 pixels wide, and placed on a
-small dark backing so it remains visible in both GitHub themes. The native README
-heading introduces Macro as the unified workspace for your team.
+`logo.png` centers the supplied Frame 10 full lockup above the native README
+heading. The original white logo is downscaled to 480 pixels wide, with a dark
+backing for both GitHub themes; the complete asset displays at 280×59.
+
+`header.png` is a 2400×856 transparent PNG containing only the two product panes.
+Two crops from one real Macro split view show a team-channel agent request and
+its linked code changes, offset vertically with thin borders and soft shadows.
+The heading uses h3 to avoid GitHub’s horizontal divider. Keep the order logo,
+heading, then product view, with compact spacing.
 
 ## Feature screenshots
 
