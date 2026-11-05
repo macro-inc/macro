@@ -44,8 +44,14 @@ already authorized the team admin, never for an HTTP route.
 - `patch_harness` lets managers change the name and permission bypass while
   preserving computer identity, capabilities, and Claude billing mode.
 - Harness rows carry `capabilities` (jsonb, `HarnessCapabilities`, e.g.
-  `screen`), which macrod reports through `PUT /harnesses/me/capabilities`,
+  `screen` and `personas`), which macrod reports through `PUT /harnesses/me/capabilities`,
   and `computer_id` (set only for Macro computers; unique among live rows).
+  `personas` maps OS username to a tagged `PersonaHealth` observation:
+  healthy/unhealthy/missing, `checked_at`, `last_turn_at`, and a bounded last
+  error for unhealthy/missing. Old reports and rows default to an empty map.
+  The authenticated harness may replace only its own report; the existing JSON
+  repository path stores it without a schema migration. Treat observations as
+  live only while harness connection presence is live and `checked_at` is recent.
 
 ## Recipes
 

@@ -638,7 +638,13 @@ async fn hosted_pairing_is_born_approved_rotates_on_retry_and_claims_once(pool: 
     let row = repo.get_harness(harness_id).await.unwrap().unwrap();
     assert_eq!(row.owner, HarnessOwner::Team { team_id });
     assert_eq!(row.computer_id, Some(computer_id));
-    assert_eq!(row.capabilities, HarnessCapabilities { screen: false });
+    assert_eq!(
+        row.capabilities,
+        HarnessCapabilities {
+            screen: false,
+            ..Default::default()
+        }
+    );
     assert_eq!(
         repo.computer_harness(computer_id).await.unwrap(),
         Some(harness_id)
@@ -870,16 +876,34 @@ async fn capabilities_replace_the_previous_report(pool: PgPool) {
     .unwrap();
 
     let fresh = repo.get_harness(harness_id).await.unwrap().unwrap();
-    assert_eq!(fresh.capabilities, HarnessCapabilities { screen: false });
+    assert_eq!(
+        fresh.capabilities,
+        HarnessCapabilities {
+            screen: false,
+            ..Default::default()
+        }
+    );
     assert_eq!(fresh.computer_id, None);
 
+    let checked_at = chrono::Utc::now();
+    let capabilities = HarnessCapabilities {
+        screen: true,
+        personas: std::collections::BTreeMap::from([(
+            "persona".to_owned(),
+            crate::domain::models::PersonaHealth::Unhealthy {
+                checked_at,
+                last_error: "event stream disconnected".to_owned(),
+                last_turn_at: Some(checked_at),
+            },
+        )]),
+    };
     assert!(
-        repo.set_capabilities(harness_id, HarnessCapabilities { screen: true })
+        repo.set_capabilities(harness_id, capabilities.clone())
             .await
             .unwrap()
     );
     let reported = repo.get_harness(harness_id).await.unwrap().unwrap();
-    assert_eq!(reported.capabilities, HarnessCapabilities { screen: true });
+    assert_eq!(reported.capabilities, capabilities);
     assert_eq!(reported.claude_mode, ClaudeMode::MacroCredits);
     assert!(
         repo.set_claude_mode(harness_id, ClaudeMode::OwnAccount)
@@ -898,7 +922,13 @@ async fn capabilities_replace_the_previous_report(pool: PgPool) {
     assert!(repo.delete_harness(harness_id).await.unwrap());
     assert!(
         !repo
-            .set_capabilities(harness_id, HarnessCapabilities { screen: false })
+            .set_capabilities(
+                harness_id,
+                HarnessCapabilities {
+                    screen: false,
+                    ..Default::default()
+                }
+            )
             .await
             .unwrap()
     );

@@ -1023,16 +1023,34 @@ async fn capability_reports_reach_the_repo_and_unknown_harnesses_are_not_found()
         ..FakeRepo::default()
     };
     service(repo.clone())
-        .report_capabilities(HarnessId::TEST_A, HarnessCapabilities { screen: true })
+        .report_capabilities(
+            HarnessId::TEST_A,
+            HarnessCapabilities {
+                screen: true,
+                ..Default::default()
+            },
+        )
         .await
         .unwrap();
     assert_eq!(
         repo.calls.lock().unwrap().capability_reports,
-        [(HarnessId::TEST_A, HarnessCapabilities { screen: true })]
+        [(
+            HarnessId::TEST_A,
+            HarnessCapabilities {
+                screen: true,
+                ..Default::default()
+            }
+        )]
     );
 
     let result = service(FakeRepo::default())
-        .report_capabilities(HarnessId::TEST_A, HarnessCapabilities { screen: true })
+        .report_capabilities(
+            HarnessId::TEST_A,
+            HarnessCapabilities {
+                screen: true,
+                ..Default::default()
+            },
+        )
         .await;
     assert!(matches!(result, Err(HarnessError::NotFound(_))));
 }

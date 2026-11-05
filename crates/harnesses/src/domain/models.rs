@@ -5,6 +5,7 @@ use chrono::{DateTime, Utc};
 use harness_id::HarnessId;
 use macro_user_id::user_id::MacroUserIdStr;
 use serde::{Deserialize, Serialize};
+use std::collections::BTreeMap;
 use uuid::Uuid;
 
 /// Harness owner.
@@ -114,12 +115,48 @@ pub enum HarnessAccess {
 ///
 /// macrod reports this after it connects; every field defaults to off, so
 /// harnesses that never report stay plain.
-#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
 #[cfg_attr(feature = "inbound", derive(utoipa::ToSchema))]
 #[serde(default)]
 pub struct HarnessCapabilities {
     /// A display Macro can stream (Xvnc on `127.0.0.1:5900`).
     pub screen: bool,
+    /// Latest brain health, keyed by the enrolled persona's OS username.
+    #[serde(skip_serializing_if = "BTreeMap::is_empty")]
+    pub personas: BTreeMap<String, PersonaHealth>,
+}
+
+/// A brain observation. Consumers combine harness connection presence with
+/// `checked_at` freshness when deciding whether the observation is still live.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "inbound", derive(utoipa::ToSchema))]
+#[serde(tag = "status", rename_all = "snake_case")]
+pub enum PersonaHealth {
+    /// The brain is serving health and reports no problems.
+    Healthy {
+        /// Time of this observation.
+        checked_at: DateTime<Utc>,
+        /// Most recent completed turn, retained across unavailable probes.
+        last_turn_at: Option<DateTime<Utc>>,
+    },
+    /// The unit, its configuration or its health response has a problem.
+    Unhealthy {
+        /// Time of this observation.
+        checked_at: DateTime<Utc>,
+        /// A bounded diagnostic, never an environment file or response body.
+        last_error: String,
+        /// Most recent completed turn, retained across unavailable probes.
+        last_turn_at: Option<DateTime<Utc>>,
+    },
+    /// The unit or brain health listener is absent.
+    Missing {
+        /// Time of this observation.
+        checked_at: DateTime<Utc>,
+        /// Why the brain could not be found.
+        last_error: String,
+        /// Most recent completed turn, retained across unavailable probes.
+        last_turn_at: Option<DateTime<Utc>>,
+    },
 }
 
 /// A pre-approved pairing for a Macro computer, minted by the control plane.

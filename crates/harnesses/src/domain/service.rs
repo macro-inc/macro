@@ -401,7 +401,7 @@ where
             .map_err(Into::into)?)
     }
 
-    #[tracing::instrument(skip(self, capabilities), fields(screen = capabilities.screen), err)]
+    #[tracing::instrument(skip(self, capabilities), fields(screen = capabilities.screen, persona_count = capabilities.personas.len()), err)]
     async fn report_capabilities(
         &self,
         harness_id: HarnessId,
