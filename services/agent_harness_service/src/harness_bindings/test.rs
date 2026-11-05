@@ -227,3 +227,24 @@ async fn renewal_extends_a_lease_and_restores_a_missing_row(pool: PgPool) {
 
     assert!(reads_connected(&pool, harness).await);
 }
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn simultaneous_final_closes_leave_a_harness_offline(pool: PgPool) {
+    // Racing writes interleave differently each time, so give them many chances.
+    for _ in 0..25 {
+        let harness = insert_harness(&pool).await;
+        let replica_a = presence_on_a_replica(&pool);
+        let replica_b = presence_on_a_replica(&pool);
+        let first = RuntimeConnectionId::generate();
+        let second = RuntimeConnectionId::generate();
+        Arc::clone(&replica_a).connected(harness, first).await;
+        Arc::clone(&replica_b).connected(harness, second).await;
+
+        tokio::join!(
+            replica_a.disconnected(harness, first),
+            replica_b.disconnected(harness, second),
+        );
+
+        assert!(!reads_connected(&pool, harness).await);
+    }
+}

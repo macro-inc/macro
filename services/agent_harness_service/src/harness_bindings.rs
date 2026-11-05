@@ -90,6 +90,24 @@ impl HarnessBindings for PgHarnessBindings {
     }
 }
 
+/// Take a harness's presence lock until the transaction ends.
+///
+/// Closing decides whether it was the last live connection by reading its peers'
+/// rows. Without this, two simultaneous closes each count the other as live and
+/// neither stamps the harness. `NO KEY` leaves renewals' foreign key checks free.
+async fn lock_presence(
+    transaction: &mut sqlx::Transaction<'_, sqlx::Postgres>,
+    harness: HarnessId,
+) -> sqlx::Result<()> {
+    sqlx::query_scalar!(
+        r#"SELECT id FROM harnesses WHERE id = $1 FOR NO KEY UPDATE"#,
+        harness.as_uuid(),
+    )
+    .fetch_optional(&mut **transaction)
+    .await?;
+    Ok(())
+}
+
 /// [`HarnessPresence`] over the `harness_runtime_connection` table, kept in step
 /// with the `harnesses` presence timestamps.
 pub struct PgHarnessPresence {
@@ -120,28 +138,34 @@ impl HarnessPresence for PgHarnessPresence {
             async move {
                 // Lapsed rows go here rather than on a timer: until a harness
                 // dials again they are what says its last replica died.
-                let result = sqlx::query!(
-                    r#"
-                    WITH reaped AS (
-                        DELETE FROM harness_runtime_connection
-                        WHERE harness_id = $1 AND lease_expires_at <= now()
-                    ), added AS (
-                        INSERT INTO harness_runtime_connection
-                            (harness_id, id, replica_id, lease_expires_at)
-                        VALUES ($1, $2, $3, now() + make_interval(secs => $4))
-                        ON CONFLICT (harness_id, id) DO NOTHING
+                let result = async {
+                    let mut transaction = self.pool.begin().await?;
+                    lock_presence(&mut transaction, harness).await?;
+                    sqlx::query!(
+                        r#"
+                        WITH reaped AS (
+                            DELETE FROM harness_runtime_connection
+                            WHERE harness_id = $1 AND lease_expires_at <= now()
+                        ), added AS (
+                            INSERT INTO harness_runtime_connection
+                                (harness_id, id, replica_id, lease_expires_at)
+                            VALUES ($1, $2, $3, now() + make_interval(secs => $4))
+                            ON CONFLICT (harness_id, id) DO NOTHING
+                        )
+                        UPDATE harnesses SET last_connected_at = now() WHERE id = $1
+                        "#,
+                        harness.as_uuid(),
+                        connection.as_uuid(),
+                        self.replica.as_uuid(),
+                        RUNTIME_CONNECTION_LEASE.as_secs_f64(),
                     )
-                    UPDATE harnesses SET last_connected_at = now() WHERE id = $1
-                    "#,
-                    harness.as_uuid(),
-                    connection.as_uuid(),
-                    self.replica.as_uuid(),
-                    RUNTIME_CONNECTION_LEASE.as_secs_f64(),
-                )
-                .execute(&self.pool)
+                    .execute(&mut *transaction)
+                    .await?;
+                    transaction.commit().await
+                }
                 .await;
                 match result {
-                    Ok(_) => tracing::info!(
+                    Ok(()) => tracing::info!(
                         telemetry_event = "harness_runtime_connected",
                         %harness,
                         %connection,
@@ -172,32 +196,39 @@ impl HarnessPresence for PgHarnessPresence {
             async move {
                 // The stamp is what a reader without these rows goes by, so it
                 // moves only when this was the harness's last live connection.
-                let result = sqlx::query!(
-                    r#"
-                    WITH removed AS (
-                        DELETE FROM harness_runtime_connection
-                        WHERE harness_id = $1 AND (id = $2 OR lease_expires_at <= now())
-                        RETURNING id, connected_at
-                    ), others AS (
-                        SELECT count(*) AS live
-                        FROM harness_runtime_connection
-                        WHERE harness_id = $1 AND id <> $2 AND lease_expires_at > now()
-                    ), stamped AS (
-                        UPDATE harnesses SET last_disconnected_at = now()
-                        WHERE id = $1 AND (SELECT live FROM others) = 0
+                let result = async {
+                    let mut transaction = self.pool.begin().await?;
+                    lock_presence(&mut transaction, harness).await?;
+                    let closed = sqlx::query!(
+                        r#"
+                        WITH removed AS (
+                            DELETE FROM harness_runtime_connection
+                            WHERE harness_id = $1 AND (id = $2 OR lease_expires_at <= now())
+                            RETURNING id, connected_at
+                        ), others AS (
+                            SELECT count(*) AS live
+                            FROM harness_runtime_connection
+                            WHERE harness_id = $1 AND id <> $2 AND lease_expires_at > now()
+                        ), stamped AS (
+                            UPDATE harnesses SET last_disconnected_at = now()
+                            WHERE id = $1 AND (SELECT live FROM others) = 0
+                        )
+                        SELECT
+                            (SELECT live FROM others) AS "other_live_connections!",
+                            (
+                                SELECT (extract(epoch FROM now() - connected_at) * 1000)::bigint
+                                FROM removed
+                                WHERE id = $2
+                            ) AS connected_for_ms
+                        "#,
+                        harness.as_uuid(),
+                        connection.as_uuid(),
                     )
-                    SELECT
-                        (SELECT live FROM others) AS "other_live_connections!",
-                        (
-                            SELECT (extract(epoch FROM now() - connected_at) * 1000)::bigint
-                            FROM removed
-                            WHERE id = $2
-                        ) AS connected_for_ms
-                    "#,
-                    harness.as_uuid(),
-                    connection.as_uuid(),
-                )
-                .fetch_one(&self.pool)
+                    .fetch_one(&mut *transaction)
+                    .await?;
+                    transaction.commit().await?;
+                    Ok::<_, sqlx::Error>(closed)
+                }
                 .await;
                 match result {
                     Ok(closed) => tracing::info!(

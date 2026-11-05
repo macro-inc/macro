@@ -10,6 +10,7 @@
 use std::collections::BTreeSet;
 use std::marker::PhantomData;
 use std::pin::Pin;
+use std::time::Duration;
 
 use eventsource_stream::{Event, EventStreamError, Eventsource as _};
 use futures::{Stream, StreamExt as _};
@@ -24,6 +25,10 @@ use crate::config::{HarnessCredentials, MacroApi};
 mod test;
 
 const HARNESS_TOKEN_HEADER: &str = "x-macro-harness-token";
+
+/// Set on the presence request alone: a timeout on the client would also end the
+/// long-lived event stream.
+const PRESENCE_CHECK_TIMEOUT: Duration = Duration::from_secs(10);
 
 /// Map the harness's ownership onto the stream query's workspace scope.
 pub fn stream_scope(owner: &HarnessOwner) -> WebhookScope {
@@ -102,7 +107,8 @@ impl EventStreamClient {
                 "check this harness's presence",
                 self.http
                     .get(format!("{}/harnesses/me", self.base))
-                    .header(RUNTIME_CONNECTED_HEADER, "true"),
+                    .header(RUNTIME_CONNECTED_HEADER, "true")
+                    .timeout(PRESENCE_CHECK_TIMEOUT),
             )
             .await?;
         Ok(harness.connected)
