@@ -19,21 +19,23 @@ export function toastMovedToFolder(count: number, folderId: string) {
       ? t('entityActions.toastMovedCount', { count })
       : t('entityActions.toastMovedToFolder'),
     {
+      dismissStyle: 'icon',
       actions: [
+        ...(canOpenNewSplit
+          ? [
+              {
+                label: t('entityActions.toastOpenSplit'),
+                icon: SplitIcon,
+                variant: 'secondary' as const,
+                onClick: () => open(true),
+              },
+            ]
+          : []),
         {
           label: t('entityActions.open'),
           icon: ArrowSquareOutIcon,
           onClick: () => open(false),
         },
-        ...(canOpenNewSplit
-          ? [
-              {
-                label: t('entityActions.openInNewSplit'),
-                icon: SplitIcon,
-                onClick: () => open(true),
-              },
-            ]
-          : []),
       ],
     }
   );

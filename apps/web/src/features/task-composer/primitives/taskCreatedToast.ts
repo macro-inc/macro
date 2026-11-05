@@ -1,3 +1,4 @@
+import { t } from '@app/lib/i18n';
 import { toast } from '@core/component/Toast/Toast';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import { fireAndForget } from '@core/util/fireAndForget';
@@ -17,21 +18,23 @@ export function showTaskCreatedToast(
     openTask(task, { newSplit, referredFrom: null });
   };
   const toastId = toast.success('Task created', {
+    dismissStyle: 'icon',
     actions: [
-      {
-        label: 'Open',
-        icon: ArrowSquareOutIcon,
-        onClick: () => open(false),
-      },
       ...(!isTouchDevice()
         ? [
             {
-              label: 'Open (New Split)',
+              label: t('entityActions.toastOpenSplit'),
               icon: SplitIcon,
+              variant: 'secondary' as const,
               onClick: () => open(true),
             },
           ]
         : []),
+      {
+        label: t('entityActions.open'),
+        icon: ArrowSquareOutIcon,
+        onClick: () => open(false),
+      },
     ],
   });
 

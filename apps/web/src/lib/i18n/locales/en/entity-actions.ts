@@ -101,6 +101,7 @@ export default {
   undo: 'Undo',
 
   // Toasts.
+  toastOpenSplit: 'Open split',
   toastChannelAccessRequestFailed: 'Could not send your request to join',
   toastChannelAccessWithdrawalFailed: 'Could not withdraw your request',
   toastChannelAccessResolveFailed: 'Could not answer this request',

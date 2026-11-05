@@ -41,6 +41,7 @@ export function useHandleFileUpload(options: { projectId?: string } = {}) {
           fireAndForget(refetchHistory(), 'file-upload');
 
           toast.success(`Uploaded ${upload.name}`, {
+            dismissStyle: 'icon',
             actions: [
               {
                 label: 'Open folder',

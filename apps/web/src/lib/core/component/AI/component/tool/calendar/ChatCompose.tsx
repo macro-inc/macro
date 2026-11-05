@@ -8,6 +8,7 @@
  * message so the card re-renders as the finished tool.
  */
 
+import { t } from '@app/lib/i18n';
 import { useChatContext } from '@core/component/AI/context';
 import type { AssistantMessagePart } from '@core/component/AI/types';
 import { toast } from '@core/component/Toast/Toast';
@@ -203,8 +204,12 @@ export function CalendarChatCompose(props: CalendarChatComposeProps) {
       updateLocalResponse(result.value as CreateCalendarEventResponse, args);
       fireAndForget(invalidateCalendarOccurrences(), 'ai-calendar-compose');
       toast.success('Calendar event created', {
+        dismissStyle: 'icon',
         actions: [
-          { label: 'Open', onClick: () => openToolCalendarEvent(event) },
+          {
+            label: t('entityActions.open'),
+            onClick: () => openToolCalendarEvent(event),
+          },
         ],
       });
       return true;

@@ -44,6 +44,7 @@ const TOAST_STYLES: Record<
 interface ToastAction {
   label: string;
   icon?: Component<{ class?: string }>;
+  variant?: 'primary' | 'secondary';
   onClick: () => void;
 }
 
@@ -239,7 +240,7 @@ function ActionButtons(props: {
           <Button
             size="sm"
             onClick={action.onClick}
-            variant="primary"
+            variant={action.variant ?? 'primary'}
             class="max-w-full"
           >
             <Show when={action.icon}>
@@ -327,7 +328,7 @@ export function ToastContent(props: {
         <div
           class={cn(
             'macro-toast-content min-w-0',
-            showCloseButton() && (hasActions() ? 'pr-7' : 'pr-10')
+            showCloseButton() && (hasActions() ? 'pr-8' : 'pr-10')
           )}
         >
           <Show
@@ -416,7 +417,7 @@ export function ToastContent(props: {
           <Show when={showCloseButton()}>
             <Toast.CloseButton
               as={Button}
-              variant={hasActions() ? 'secondary' : 'ghost'}
+              variant="ghost"
               size="icon-sm"
               aria-label={t('common.close')}
               class={cn(

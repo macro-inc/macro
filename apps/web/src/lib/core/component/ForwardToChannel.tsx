@@ -521,6 +521,7 @@ export function ForwardToChannel(props: ForwardToChannelProps) {
         const result = results[0];
         if (result) {
           toast.success('Message sent successfully', {
+            dismissStyle: 'icon',
             actions: [
               {
                 label: 'View in channel',

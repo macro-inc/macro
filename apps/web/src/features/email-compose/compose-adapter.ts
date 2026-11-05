@@ -181,9 +181,10 @@ export function createEmailComposeContext(
   const { users } = useCombinedRecipients();
   const notice = (options?: ComposeNoticeOptions) => {
     const hasUndo = options?.actions?.some(({ kind }) => kind === 'undo');
+    const hasNavigation = options?.actions?.some(({ kind }) => kind === 'open');
     return {
       ...options,
-      dismissStyle: hasUndo ? ('icon' as const) : undefined,
+      dismissStyle: hasUndo || hasNavigation ? ('icon' as const) : undefined,
       actionLayout: hasUndo ? ('inline' as const) : undefined,
       actions: options?.actions?.map(({ kind, ...action }) => ({
         ...action,

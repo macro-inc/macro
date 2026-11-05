@@ -1,3 +1,4 @@
+import { t } from '@app/lib/i18n';
 import { useSplitLayout } from '@components/app/split-layout/layout';
 import { useSplitPanelOrThrow } from '@components/app/split-layout/layoutUtils';
 import { SplitPanel } from '@components/app/split-panel';
@@ -46,9 +47,10 @@ async function settleFolderSubmission(
     return;
   }
   toast.success(`Created “${outcome.name}”`, {
+    dismissStyle: 'icon',
     actions: [
       {
-        label: 'Open',
+        label: t('entityActions.open'),
         onClick: () => {
           layout.openWithSplit({ type: 'project', id: outcome.id });
         },

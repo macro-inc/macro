@@ -643,7 +643,7 @@ export default defineDoc({
   wide: true,
   category: 'Feedback',
   description:
-    'Standalone status icons, title-aligned content, primary actions, desktop close icons for undo notices, and compact mobile notices. Preview them inline or at the device-specific app position without triggering real operations or publishing into the app notification regions.',
+    'Standalone status icons, title-aligned content, primary and secondary actions, desktop close icons for undo and navigation notices, and compact mobile notices. Preview them inline or at the device-specific app position without triggering real operations or publishing into the app notification regions.',
   import: "import { toast } from '@core/component/Toast/Toast';",
   demos: [
     {
@@ -695,6 +695,7 @@ export default defineDoc({
       'Reserve persistent prompts for notices that need a response.',
       'Keep action labels short and retain meaningful content on mobile.',
       'Keep Undo beside the title with a desktop close icon instead of Dismiss.',
+      'Use a desktop close icon on navigation notices and put secondary Open split before primary Open.',
       'Use Not now for optional setup prompts; keep Dismiss for recovery prompts.',
       'Omit the close icon on mobile; retain swipe dismissal in either direction.',
       'Set actionLayout to inline for brief notices; keep stacked actions for longer prompts.',

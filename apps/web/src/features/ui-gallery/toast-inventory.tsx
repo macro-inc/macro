@@ -308,6 +308,236 @@ export const TOAST_INVENTORY: ToastInventoryEntry[] = [
     }),
   },
   {
+    name: 'Database row deleted',
+    category: 'Undo',
+    source: 'features/block-database/component/Block.tsx',
+    trigger: 'A destructive database change deletes a row, column, or option.',
+    behavior: '4.5 seconds · also used by embedded document databases',
+    create: (dismiss) => ({
+      toastType: ToastType.SUCCESS,
+      message: 'Row deleted',
+      dismissStyle: 'icon',
+      actionLayout: 'inline',
+      actions: [{ label: 'Undo', onClick: dismiss }],
+    }),
+  },
+  {
+    name: 'Email moved to Trash',
+    category: 'Undo',
+    source: 'features/block-email/component/useEmailThreadTools.tsx',
+    trigger: 'The open email conversation is moved to Trash.',
+    behavior: '10 seconds',
+    create: (dismiss) => ({
+      toastType: ToastType.SUCCESS,
+      message: 'Moved to Trash',
+      dismissStyle: 'icon',
+      actionLayout: 'inline',
+      actions: [
+        { label: 'Undo', icon: ArrowCounterClockwise, onClick: dismiss },
+      ],
+    }),
+  },
+  {
+    name: 'Sender blocked',
+    category: 'Undo',
+    source: 'lib/queries/email/thread.ts',
+    trigger: 'A sender block is queued.',
+    behavior: '4.5 seconds',
+    create: (dismiss) => ({
+      toastType: ToastType.SUCCESS,
+      message: 'Sender block queued',
+      subtext: 'Applying the rule for user@example.com',
+      dismissStyle: 'icon',
+      actionLayout: 'inline',
+      actions: [
+        { label: 'Undo', icon: ArrowCounterClockwise, onClick: dismiss },
+      ],
+    }),
+  },
+  {
+    name: 'Sender moved to Signal',
+    category: 'Undo',
+    source: 'lib/queries/email/thread.ts',
+    trigger: 'A sender is classified as Signal or Noise.',
+    behavior: '4.5 seconds',
+    create: (dismiss) => ({
+      toastType: ToastType.SUCCESS,
+      message: 'Sender marked as Signal',
+      subtext: 'Messages from user@example.com will appear in Signal',
+      dismissStyle: 'icon',
+      actionLayout: 'inline',
+      actions: [
+        { label: 'Undo', icon: ArrowCounterClockwise, onClick: dismiss },
+      ],
+    }),
+  },
+  {
+    name: 'Scheduled email',
+    category: 'Undo / Navigation',
+    source: 'features/email-compose/primitives/email-send-schedule.ts',
+    trigger: 'An email is scheduled with a link back to the message.',
+    behavior: '8 seconds · Undo is available after the initial schedule',
+    create: (dismiss) => ({
+      toastType: ToastType.SUCCESS,
+      message: 'Email scheduled',
+      subtext: 'Sends Mon, Nov 9 at 9:00 AM',
+      dismissStyle: 'icon',
+      actionLayout: 'inline',
+      actions: [
+        { label: 'Undo', icon: ArrowCounterClockwise, onClick: dismiss },
+        { label: 'View message', icon: ArrowSquareOutIcon, onClick: dismiss },
+      ],
+    }),
+  },
+  {
+    name: 'Rescheduled email',
+    category: 'Navigation',
+    source: 'features/email-compose/primitives/email-send-schedule.ts',
+    trigger: 'The scheduled send time is changed.',
+    behavior: '8 seconds · no Undo action on reschedule',
+    create: (dismiss) => ({
+      toastType: ToastType.SUCCESS,
+      message: 'Email rescheduled',
+      subtext: 'Sends Mon, Nov 9 at 10:00 AM',
+      dismissStyle: 'icon',
+      actions: [
+        { label: 'View message', icon: ArrowSquareOutIcon, onClick: dismiss },
+      ],
+    }),
+  },
+  {
+    name: 'Task created',
+    category: 'Navigation',
+    source: 'features/task-composer/primitives/taskCreatedToast.ts',
+    trigger: 'A task is created without navigating away from the current view.',
+    behavior: '4.5 seconds · Open split is omitted on touch devices',
+    create: (dismiss) => ({
+      toastType: ToastType.SUCCESS,
+      message: 'Task created',
+      dismissStyle: 'icon',
+      actions: [
+        ...(!isTouchDevice()
+          ? [
+              {
+                label: t('entityActions.toastOpenSplit'),
+                icon: SplitIcon,
+                variant: 'secondary' as const,
+                onClick: dismiss,
+              },
+            ]
+          : []),
+        {
+          label: t('entityActions.open'),
+          icon: ArrowSquareOutIcon,
+          onClick: dismiss,
+        },
+      ],
+    }),
+  },
+  {
+    name: 'Project created',
+    category: 'Navigation',
+    source: 'features/projects/project-view.tsx',
+    trigger: 'A task project finishes being created after its composer closes.',
+    behavior: '4.5 seconds',
+    create: (dismiss) => ({
+      toastType: ToastType.SUCCESS,
+      message: 'Project created',
+      dismissStyle: 'icon',
+      actions: [
+        {
+          label: t('entityActions.toastOpenSplit'),
+          icon: SplitIcon,
+          variant: 'secondary',
+          onClick: dismiss,
+        },
+        {
+          label: t('entityActions.open'),
+          icon: ArrowSquareOutIcon,
+          onClick: dismiss,
+        },
+      ],
+    }),
+  },
+  {
+    name: 'Skill created',
+    category: 'Navigation',
+    source: 'features/block-md/component/ComposeSkill.tsx',
+    trigger: 'A skill is created and its link is copied successfully.',
+    behavior: '4.5 seconds · Link copied is omitted if clipboard access fails',
+    create: (dismiss) => ({
+      toastType: ToastType.SUCCESS,
+      message: 'Skill created',
+      subtext: 'Link copied',
+      dismissStyle: 'icon',
+      actions: [
+        {
+          label: t('entityActions.toastOpenSplit'),
+          icon: SplitIcon,
+          variant: 'secondary',
+          onClick: dismiss,
+        },
+        {
+          label: t('entityActions.open'),
+          icon: ArrowSquareOutIcon,
+          onClick: dismiss,
+        },
+      ],
+    }),
+  },
+  {
+    name: 'Folder created',
+    category: 'Navigation',
+    source: 'features/drive-view/folder-compose-view.tsx',
+    trigger: 'A Drive folder finishes being created after its composer closes.',
+    behavior: '4.5 seconds',
+    create: (dismiss) => ({
+      toastType: ToastType.SUCCESS,
+      message: 'Created “Example folder”',
+      dismissStyle: 'icon',
+      actions: [{ label: t('entityActions.open'), onClick: dismiss }],
+    }),
+  },
+  {
+    name: 'Folder uploaded',
+    category: 'Navigation',
+    source: 'lib/utils/handleFileUpload.ts',
+    trigger: 'A background folder upload finishes.',
+    behavior: '4.5 seconds',
+    create: (dismiss) => ({
+      toastType: ToastType.SUCCESS,
+      message: 'Uploaded Example folder',
+      dismissStyle: 'icon',
+      actions: [{ label: 'Open folder', onClick: dismiss }],
+    }),
+  },
+  {
+    name: 'Forwarded message',
+    category: 'Navigation',
+    source: 'lib/core/component/ForwardToChannel.tsx',
+    trigger: 'A message is successfully forwarded to one channel.',
+    behavior: '4.5 seconds · multi-channel sends have no navigation action',
+    create: (dismiss) => ({
+      toastType: ToastType.SUCCESS,
+      message: 'Message sent successfully',
+      dismissStyle: 'icon',
+      actions: [{ label: 'View in channel', onClick: dismiss }],
+    }),
+  },
+  {
+    name: 'Calendar event created',
+    category: 'Navigation',
+    source: 'lib/core/component/AI/component/tool/calendar/ChatCompose.tsx',
+    trigger: 'An AI-created calendar event is confirmed.',
+    behavior: '4.5 seconds',
+    create: (dismiss) => ({
+      toastType: ToastType.SUCCESS,
+      message: 'Calendar event created',
+      dismissStyle: 'icon',
+      actions: [{ label: t('entityActions.open'), onClick: dismiss }],
+    }),
+  },
+  {
     desktopOnly: true,
     name: 'Move to folder',
     category: 'Navigation',
@@ -317,21 +547,23 @@ export const TOAST_INVENTORY: ToastInventoryEntry[] = [
     create: (dismiss) => ({
       toastType: ToastType.SUCCESS,
       message: t('entityActions.toastMovedToFolder'),
+      dismissStyle: 'icon',
       actions: [
+        ...(!isTouchDevice()
+          ? [
+              {
+                label: t('entityActions.toastOpenSplit'),
+                icon: SplitIcon,
+                variant: 'secondary' as const,
+                onClick: dismiss,
+              },
+            ]
+          : []),
         {
           label: t('entityActions.open'),
           icon: ArrowSquareOutIcon,
           onClick: dismiss,
         },
-        ...(!isTouchDevice()
-          ? [
-              {
-                label: t('entityActions.openInNewSplit'),
-                icon: SplitIcon,
-                onClick: dismiss,
-              },
-            ]
-          : []),
       ],
     }),
   },
@@ -344,6 +576,7 @@ export const TOAST_INVENTORY: ToastInventoryEntry[] = [
     create: (dismiss) => ({
       toastType: ToastType.SUCCESS,
       message: t('entityActions.toastMovedToFolder'),
+      dismissStyle: 'icon',
       actions: [
         {
           label: t('entityActions.open'),
