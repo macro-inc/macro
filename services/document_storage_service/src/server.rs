@@ -1445,6 +1445,16 @@ pub async fn run() -> anyhow::Result<()> {
         admission.clone(),
         ai_usage::pg_recorder_with_enforcement(db.clone(), config.enable_ai_usage_enforcement),
     ));
+    // The spreadsheet tools' engine, for SDK spreadsheet reads and edits.
+    let document_spreadsheet = Arc::new(documents_hex::domain::spreadsheet::SpreadsheetService::new(
+        document_service.clone(),
+        Arc::new(
+            documents_hex::outbound::editing_worker_client::ReqwestEditingWorkerClient::from_url(
+                AiEditingWorkerUrl::new()?.to_string(),
+            ),
+        ),
+        config.document_permission_jwt.as_ref().to_string(),
+    ));
     let bot_trigger_router = channel_bots::inbound::BotTriggerRouter::new_with_admission(
         message_service.clone(),
         conversation_access.clone(),
@@ -2390,6 +2400,7 @@ pub async fn run() -> anyhow::Result<()> {
             lexical_client: lexical_client.clone(),
             creator: document_creator,
             ai_editing: document_ai_editing,
+            spreadsheet: document_spreadsheet,
             document_permission_jwt_secret: config.document_permission_jwt.as_ref().to_string(),
             non_user_owners,
         },

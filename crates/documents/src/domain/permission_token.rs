@@ -5,6 +5,7 @@
 mod test;
 
 use crate::domain::models::DocumentError;
+use entity_access::domain::models::{EntityAccessAuth, EntityAccessReceipt, RequiredPermission};
 use macro_sync_service_jwt::{DocumentPermissionToken, ISSUER, TOKEN_TTL_SECS};
 use macro_user_id::user_id::MacroUserIdStr;
 use model_owner::CreationPrincipal;
@@ -54,6 +55,33 @@ pub fn encode_permission_token(
         },
         jwt_secret,
     )?)
+}
+
+/// Sign a document permission token for the holder of an access receipt: its
+/// acting user, with its bot, if any, as the actor.
+pub fn encode_receipt_permission_token<Permission: RequiredPermission>(
+    access: &EntityAccessReceipt<Permission>,
+    access_level: AccessLevel,
+    jwt_secret: &str,
+) -> Result<DocumentPermissionToken, DocumentError> {
+    let bot = match access.auth() {
+        EntityAccessAuth::Bot(bot) => Some(bot.bot_id()),
+        EntityAccessAuth::Authenticated(_)
+        | EntityAccessAuth::Unauthenticated
+        | EntityAccessAuth::Internal => None,
+    };
+    let user = access.acting_user_id();
+    if user.is_none() && bot.is_none() {
+        return Err(DocumentError::Unauthorized);
+    }
+
+    encode_permission_token(
+        user.map(ToString::to_string),
+        access.entity().entity_id.clone(),
+        access_level,
+        jwt_secret,
+        bot.map(|bot| bot.into_storage_id().to_string()),
+    )
 }
 
 /// Sign a document permission token for `principal`.
