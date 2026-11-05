@@ -214,6 +214,22 @@ nonempty means a read hit the row cap and aggregates may be partial. SQL schemas
 are dynamic, so result cells use a generated tagged union rather than an inferred
 TypeScript interface for each table. The HTTP route is `POST /databases/query`.
 
+To show a live answer in a document, save the `SELECT` as a question. The
+server refuses anything but one `SELECT` that compiles, and chart columns the
+`SELECT` does not return (`POST /databases/queries`). `toBlock()` is the
+`<m-db-query>` block to put in a document's Markdown; it re-runs for whoever
+views it. `withView()` restyles the answer without saving a new question.
+
+```ts
+const question = await database.saveQuery({
+  sql: 'SELECT "Party", COUNT(*) AS invites FROM "Guests" GROUP BY "Party"',
+  title: 'Invites per party',
+  display: { mode: 'bar', chart: { x: 'Party', y: ['invites'] } },
+});
+await macro.documents.create({ name: 'Invites', markdown: question.toBlock() });
+const pie = question.withView({ displayMode: 'pie' }).toBlock();
+```
+
 The SDK's schema methods write typed ops through one endpoint,
 `POST /databases/{id}/ops`. The methods below each send a one-op batch: the
 SDK mints the new table, column, and option ids (UUIDv7) itself and builds the
