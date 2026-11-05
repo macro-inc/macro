@@ -1,13 +1,7 @@
 # DO NOT EDIT — regenerate with `cargo x workflows` (from the repository root).
 # Source: tooling/xtask/crates/xtask_workflows/src/workflows/ios_preview.rs
 name: iOS Preview
-'on':
-  pull_request:
-    types:
-    - labeled
-    - synchronize
-    - reopened
-    - closed
+on:
   workflow_dispatch: {}
 jobs:
   preview:

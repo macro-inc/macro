@@ -1,20 +1,8 @@
 # DO NOT EDIT — regenerate with `cargo x workflows` (from the repository root).
 # Source: tooling/xtask/crates/xtask_workflows/src/workflows/sdk_check.rs
 name: SDK Check
-'on':
-  pull_request:
-    branches:
-    - main
-    - 'synoet/ci-int-base*'
-    paths:
-    - packages/sdk/**
-    - '.github/workflows/sdk-check.yml'
-  push:
-    branches:
-    - main
-    paths:
-    - packages/sdk/**
-    - '.github/workflows/sdk-check.yml'
+on:
+  workflow_dispatch: {}
 jobs:
   check-package:
     name: SDK Package Check

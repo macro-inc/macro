@@ -1,0 +1,199 @@
+# Experiment only. Measures Generated Code Check with a restored incremental snapshot.
+name: gen-exp
+on:
+  pull_request:
+    branches: [synoet/ci-int-base-ron]
+concurrency:
+  group: gen-exp-${{ github.ref }}
+  cancel-in-progress: true
+jobs:
+  generated-code:
+    name: Generated Code Check (exp)
+    runs-on: namespace-profile-linux-mid;overrides.cache-tag=web-ci
+    env:
+      CARGO_PROFILE_DEV_DEBUG: '0'
+      RUSTFLAGS: '-C link-arg=-fuse-ld=mold'
+    steps:
+    - name: Checkout Repo
+      uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10
+    - name: Mount Namespace cache volume
+      uses: namespacelabs/nscloud-cache-action@15799a6b54e5765f85b2aac25b3f0df43ed571c0
+      with:
+        cache: nix
+        path: |-
+          /home/runner/.bun/install/cache
+          /home/runner/.cargo/registry
+          /home/runner/.cargo/git
+      continue-on-error: true
+    - name: Setup Nix
+      uses: './.github/actions/setup-nix'
+    - name: Setup Prereqs
+      uses: './.github/actions/setup-reqs-web'
+    - name: Configure Namespace remote sccache
+      if: (github.event_name != 'pull_request' && github.event_name != 'pull_request_target') || github.event.pull_request.head.repo.full_name == github.repository
+      run: |-
+        set -euo pipefail
+        env_file="$(mktemp "$RUNNER_TEMP/namespace-sccache.XXXXXX")"
+        trap 'rm -f "$env_file"' EXIT
+        if nsc cache sccache setup --cache_name web-ci > "$env_file"; then
+          # Register credential values as masked BEFORE exporting: GitHub only
+          # masks `secrets.*`, so without this SCCACHE_WEBDAV_TOKEN — a broad,
+          # ~24h Namespace workspace token (registry + cache write) — printed
+          # verbatim in every subsequent step's env dump. Masking is selective by
+          # key name: masking non-secrets like the endpoint URL or key prefix
+          # would redact those strings everywhere in the logs.
+          while IFS= read -r line; do
+            k="${line%%=*}"
+            v="${line#*=}"
+            [ -n "$v" ] && [ "$k" != "$line" ] || continue
+            case "$k" in
+              *TOKEN*|*SECRET*|*PASSWORD*) echo "::add-mask::$v" ;;
+            esac
+          done < "$env_file"
+          cat "$env_file" >> "$GITHUB_ENV"
+          # Force the next compiler invocation to start a server with the new remote
+          # backend even if a setup hook happened to launch one already.
+          sccache --stop-server >/dev/null 2>&1 || true
+        else
+          echo "::warning::Namespace remote sccache setup failed; using local cache fallback"
+        fi
+    - name: Build code-mode assets
+      run: |
+        set -euo pipefail
+
+        # Build the code-mode assets once per SDK state, not once per job. Cache volumes
+        # are forks of past jobs, so most jobs miss the store path another job just built.
+        # The key is the store path, which covers every input of the build.
+        assets="$(nix eval --raw .#code-mode-assets.outPath)"
+        echo "CODE_MODE_ASSETS_DIR=$assets" >> "$GITHUB_ENV"
+
+        if nix-store --check-validity "$assets" 2>/dev/null; then
+          echo "Code-mode assets already in the store"
+          exit 0
+        fi
+
+        # Forks have no remote cache credentials.
+        if [ -z "${SCCACHE_WEBDAV_ENDPOINT:-}" ]; then
+          nix build --no-link --print-build-logs .#code-mode-assets
+          exit 0
+        fi
+
+        cache_url="$SCCACHE_WEBDAV_ENDPOINT/code-mode-assets/$(basename "$assets").closure.gz"
+
+        # The token goes through a config descriptor so it stays out of curl's arguments.
+        cache_request() {
+          curl --fail --silent --show-error --max-time 30 --retry 2 \
+            -K <(printf 'header = "Authorization: Bearer %s"\n' "$SCCACHE_WEBDAV_TOKEN") "$@"
+        }
+
+        if cache_request "$cache_url" | gunzip | nix-store --import; then
+          echo "Code-mode assets restored from the remote cache"
+          exit 0
+        fi
+
+        nix build --no-link --print-build-logs .#code-mode-assets
+
+        # Losing the upload costs the next job a rebuild, not a failure.
+        if nix-store --export "$assets" | gzip | cache_request --upload-file - "$cache_url"; then
+          echo "Code-mode assets saved to the remote cache"
+        else
+          echo "::warning::Could not save code-mode assets to the remote cache"
+        fi
+    - name: Restore incremental snapshot
+      continue-on-error: true
+      run: |
+        set -uo pipefail
+        mode=$(cat .ci-gen-exp-mode); echo "mode=$mode"
+        echo "CARGO_INCREMENTAL=1" >> "$GITHUB_ENV"
+        env | grep -E '^(CARGO_INCREMENTAL|RUSTC_WRAPPER|SCCACHE_C)' | cut -d= -f1,2 | cut -c 1-60 || true
+        case "$mode" in seed|cold) exit 0;; esac
+        s=$(date +%s)
+        if [ "$mode" = restore-gh ]; then
+          GH_TOKEN="${{ github.token }}" LD_LIBRARY_PATH= gh run download "$(cat .ci-gen-exp-seed-run)" -R "${{ github.repository }}" -n gen-snapshot -D "$RUNNER_TEMP/snap" || exit 0
+          mv "$RUNNER_TEMP/snap/snap.tar.zst" "$RUNNER_TEMP/snap.tar.zst"
+        else
+          nsc artifact download ci-speed/gen-incremental/snapshot.tar.zst "$RUNNER_TEMP/snap.tar.zst" || exit 0
+        fi
+        d=$(date +%s); echo "download_s=$((d-s)) gb=$(( $(stat -c %s "$RUNNER_TEMP/snap.tar.zst")/1000000000 ))"
+        mkdir -p target
+        zstd -d -T0 -c "$RUNNER_TEMP/snap.tar.zst" | tar -xf - -C target
+        rm -f "$RUNNER_TEMP/snap.tar.zst"
+        echo "extract_s=$(( $(date +%s)-d )) total_s=$(( $(date +%s)-s ))"
+        du -sh target | cut -c 1-20
+        echo "snapshot files newer than checkout: $(find target/debug/.fingerprint -type f -newer .git/HEAD | wc -l)"
+    - name: Build schema binaries
+      run: |
+        set -euo pipefail
+        read -ra openapi_bins <<< "$(cd apps/web && bun scripts/generate-api-schema.ts --print-cargo-bins)"
+        SQLX_OFFLINE=true cargo build "${openapi_bins[@]}" --bin gen_tool_schemas
+    - name: Generate API Types
+      run: bun run gen-api -- --check
+      working-directory: apps/web
+    - name: Regenerate SDK code
+      run: |
+        bun install --frozen-lockfile
+        bun run sync-specs
+        bun run generate
+      working-directory: packages/sdk
+    - name: Verify SDK generated code is fresh
+      run: |
+        if [ -n "$(git status --porcelain -- packages/sdk)" ]; then
+          echo "packages/sdk generated code is stale. Run 'just update-generated' in packages/sdk and commit the result."
+          git status --porcelain -- packages/sdk
+          git diff -- packages/sdk | head -200
+          exit 1
+        fi
+    - name: Regenerate MCP tool pages
+      run: bun run generate:tools
+      working-directory: apps/docs
+    - name: Verify docs tool reference is fresh
+      run: |
+        if [ -n "$(git status --porcelain -- apps/docs)" ]; then
+          echo "apps/docs tool reference is stale. Run 'bun run generate:tools' in apps/docs and commit the result."
+          git status --porcelain -- apps/docs
+          git diff -- apps/docs | head -200
+          exit 1
+        fi
+    - name: Check Specta Types
+      run: |
+        just gen-agent-fold-types
+        just gen-database-sql-types
+        just gen-dynamic-ui-types
+        just gen-agent-review-types
+        if ! git diff --exit-code -- src/lib/service-clients/service-agent-fold/generated src/lib/core/database-sql/generated src/features/dynamic-ui/generated ../../packages/lexical-core/generated src/lib/service-clients/service-agent-reviews/generated ../../packages/sdk/generated/agent-reviews; then
+          echo "Generated specta types are stale. Run 'just gen-agent-fold-types', 'just gen-database-sql-types', 'just gen-dynamic-ui-types' and 'just gen-agent-review-types' in apps/web and commit the result."
+          exit 1
+        fi
+      working-directory: apps/web
+    - name: Pack and upload snapshot
+      id: pack
+      if: success()
+      run: |
+        set -euo pipefail
+        [ "$(cat .ci-gen-exp-mode)" = seed ] || exit 0
+        find target/debug -maxdepth 1 -type f -delete
+        find target/debug/deps -maxdepth 1 -type f -executable ! -name '*.so' -delete
+        du -sh target/debug target/debug/incremental target/debug/deps | cut -c 1-50
+        s=$(date +%s)
+        mkdir -p "$RUNNER_TEMP/out"
+        tar -C target -cf - .rustc_info.json debug | zstd -T0 -3 -q -o "$RUNNER_TEMP/out/snap.tar.zst"
+        p=$(date +%s); echo "pack_s=$((p-s)) gb=$(( $(stat -c %s "$RUNNER_TEMP/out/snap.tar.zst")/1000000000 ))"
+        nsc artifact upload "$RUNNER_TEMP/out/snap.tar.zst" ci-speed/gen-incremental/snapshot.tar.zst --expires_in=24h
+        echo "nsc_upload_s=$(( $(date +%s)-p ))"
+        echo "probe" > "$RUNNER_TEMP/probe.txt"
+        nsc artifact upload "$RUNNER_TEMP/probe.txt" ci-speed/gen-incremental/main-path-write-probe.txt --expires_in=24h && echo "pr_can_write_any_artifact_path=yes" || echo "pr_can_write_any_artifact_path=no"
+    - name: Upload snapshot as a GitHub artifact
+      if: success()
+      uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+      with:
+        name: gen-snapshot
+        path: ${{ runner.temp }}/out/snap.tar.zst
+        compression-level: 0
+        retention-days: 1
+        if-no-files-found: ignore
+    - name: show sccache stats
+      if: always()
+      run: sccache --show-stats || true
+    - name: Teardown Nix
+      if: always()
+      uses: './.github/actions/teardown-nix'

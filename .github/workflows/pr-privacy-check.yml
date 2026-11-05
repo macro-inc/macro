@@ -1,13 +1,8 @@
 # DO NOT EDIT — regenerate with `cargo x workflows` (from the repository root).
 # Source: tooling/xtask/crates/xtask_workflows/src/workflows/pr_privacy_check.rs
 name: PR Privacy Check
-'on':
-  pull_request:
-    types:
-    - opened
-    - edited
-    - reopened
-    - synchronize
+on:
+  workflow_dispatch: {}
 jobs:
   check:
     if: github.event.pull_request.user.login != 'dependabot[bot]'

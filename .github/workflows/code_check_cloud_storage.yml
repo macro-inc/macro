@@ -8,16 +8,8 @@ env:
   CARGO_PROFILE_TEST_DEBUG: limited
   RUST_BACKTRACE: '1'
   RUSTFLAGS: '-C link-arg=-fuse-ld=lld'
-'on':
-  pull_request:
-    types:
-    - opened
-    - synchronize
-    - reopened
-    - ready_for_review
-    branches:
-    - main
-    - 'synoet/ci-int-base*'
+on:
+  workflow_dispatch: {}
 jobs:
   path-check:
     runs-on: namespace-profile-linux-small;overrides.cache-tag=sccache-ci

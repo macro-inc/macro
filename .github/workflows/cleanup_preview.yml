@@ -3,10 +3,8 @@
 name: Cleanup Preview
 env:
   PREVIEW_BUCKET: macro-preview-assets-dev
-'on':
-  pull_request:
-    types:
-    - closed
+on:
+  workflow_dispatch: {}
 jobs:
   cleanup:
     runs-on: namespace-profile-linux-tiny-no-cache
