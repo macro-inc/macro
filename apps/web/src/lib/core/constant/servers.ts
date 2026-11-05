@@ -298,3 +298,5 @@ export function staticFileSizedUrl(url: string, size: StaticFileSize): string {
   if (url.startsWith('data:') || url.startsWith('blob:')) return url;
   return `${url}?size=${staticFileSizes[size]}`;
 }
+
+export const CI_SEL2_NONCE = '41caec2ae3574eb092b68724481a4df7';
