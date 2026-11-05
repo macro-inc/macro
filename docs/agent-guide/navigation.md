@@ -1132,7 +1132,8 @@ fields hide their keyboard hint on touch devices.
 Open the routine and use its **Run History** tab to see past runs. Each run is its
 own agent session. The routine's **Runs hidden** / **Runs shown** chip decides
 where its runs appear. **Hide runs** (the default) keeps them off Home and out of
-the Agents sidebar until **Show hidden routine runs** is pressed. **Show runs**
+the Agents sidebar until **Show hidden routine runs** is checked in its filter
+menu. **Show runs**
 lists them on Home and in Agents like the owner's own sessions. The setting
 applies to runs that start after it changes. A run that finishes normally sends
 no notification; a failed or cut-short run, a question the agent asks, a held tool
