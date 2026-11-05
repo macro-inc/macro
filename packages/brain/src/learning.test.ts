@@ -336,3 +336,209 @@ test('the template daily onSchedule tune creates a worktree maintenance turn wit
     await fs.rm(root, { recursive: true });
   }
 });
+
+test('permissive intake triages non-routine session events and document comments', async () => {
+  const root = await fs.mkdtemp(join(tmpdir(), 'brain-every-event-'));
+  const turns: Turn[] = [];
+  try {
+    await fs.cp(new URL('../template/', import.meta.url), root, {
+      recursive: true,
+    });
+    await dryRun(
+      (deps) =>
+        new Brain(
+          {
+            ...deps,
+            runner: {
+              start(turn) {
+                turns.push(turn);
+                return deps.runner.start(turn);
+              },
+            },
+          },
+          {
+            learning: { wakesPerTune: 100, triageModel: 'cheap-model' },
+          }
+        ),
+      root,
+      [
+        {
+          event_id: 'session',
+          event_type: 'agent_session.opened',
+          metadata: {
+            identity: {
+              session_id: 'session',
+              session_name: 'ordinary session',
+              owner_id: 'another-owner',
+              source: 'user',
+            },
+          },
+        },
+        {
+          event_id: 'comment',
+          event_type: 'message.posted',
+          metadata: {
+            message_id: 'comment',
+            content: 'review this document',
+            created_at: '2026-11-04T10:00:00Z',
+            parent: { type: 'document', id: 'document' },
+            root_id: 'comment',
+            sender: 'sender',
+          },
+        },
+      ]
+    );
+    const classified = turns.filter((turn) => turn.tier === 'triage');
+    assert.equal(classified.length, 2);
+    assert.ok(
+      classified.some((turn) => turn.prompt.includes('agent_session.opened'))
+    );
+    assert.ok(
+      classified.some((turn) => turn.prompt.includes('review this document'))
+    );
+  } finally {
+    await fs.rm(root, { recursive: true });
+  }
+});
+
+test('creator document comments bypass cheap rejection and become must-wake fixtures', async () => {
+  const root = await fs.mkdtemp(join(tmpdir(), 'brain-creator-comment-'));
+  const turns: Turn[] = [];
+  try {
+    await fs.cp(new URL('../template/', import.meta.url), root, {
+      recursive: true,
+    });
+    const charter = await fs.readFile(join(root, 'OPERATING.md'), 'utf8');
+    await fs.writeFile(
+      join(root, 'OPERATING.md'),
+      charter.replaceAll('{{creator}}', 'creator')
+    );
+    await dryRun(
+      (deps) =>
+        new Brain(
+          {
+            ...deps,
+            runner: {
+              start(turn) {
+                turns.push(turn);
+                return deps.runner.start(turn);
+              },
+            },
+          },
+          {
+            learning: { wakesPerTune: 100, triageModel: 'cheap-model' },
+          }
+        ),
+      root,
+      [
+        {
+          event_id: 'comment-event',
+          event_type: 'message.posted',
+          metadata: {
+            message_id: 'creator-comment',
+            content: 'please look here',
+            created_at: '2026-11-04T10:00:00Z',
+            parent: { type: 'document', id: 'document' },
+            root_id: 'creator-comment',
+            sender: 'creator',
+          },
+        },
+      ]
+    );
+    assert.equal(turns.filter((turn) => turn.tier === 'triage').length, 0);
+    assert.equal(turns.filter((turn) => turn.tier === 'respond').length, 2);
+    assert.ok(
+      (await fixtures(root)).some(
+        (fixture) =>
+          fixture.candidate.messageId === 'creator-comment' &&
+          fixture.candidate.fromCreator
+      )
+    );
+  } finally {
+    await fs.rm(root, { recursive: true });
+  }
+});
+
+test('messages from other bots are judged instead of silently prefiltered', async () => {
+  const root = await fs.mkdtemp(join(tmpdir(), 'brain-bot-admission-'));
+  try {
+    await fs.cp(new URL('../template/', import.meta.url), root, {
+      recursive: true,
+    });
+    await dryRun(
+      (deps) =>
+        new Brain(deps, {
+          async onEvent(event, brain) {
+            if (event.type === 'message.posted')
+              await brain.onMessage({
+                ...event.metadata,
+                message_id: 'bot-message',
+                sender: 'bot|service',
+                content: 'automated update',
+              });
+          },
+        }),
+      root
+    );
+    assert.ok(
+      (await fixtures(root)).some(
+        (fixture) =>
+          fixture.candidate.messageId === 'bot-message' &&
+          fixture.candidate.directMessage
+      )
+    );
+  } finally {
+    await fs.rm(root, { recursive: true });
+  }
+});
+
+test('creator reports protect a referenced cached message outside the recent context', async () => {
+  const root = await fs.mkdtemp(join(tmpdir(), 'brain-missed-context-'));
+  try {
+    await fs.cp(new URL('../template/', import.meta.url), root, {
+      recursive: true,
+    });
+    await fs.writeFile(
+      join(root, 'OPERATING.md'),
+      (await fs.readFile(join(root, 'OPERATING.md'), 'utf8')).replaceAll(
+        '{{creator}}',
+        'creator'
+      )
+    );
+    const workspace = new Workspace(root);
+    const writer = new GitWriter(workspace, async () => ({
+      code: 0,
+      stdout: '',
+      stderr: '',
+    }));
+    await new Learning(workspace, writer).decided(candidate, {
+      relevant: false,
+      reason: 'deterministic',
+      probabilities: {},
+    });
+    await dryRun((deps) => new Brain(deps), root, [
+      {
+        event_id: 'missed-report',
+        event_type: 'message.posted',
+        metadata: {
+          message_id: 'report',
+          content: 'you missed this',
+          created_at: '2026-11-04T10:00:00Z',
+          parent: { type: 'channel', id: 'check' },
+          root_id: candidate.messageId,
+          thread_id: candidate.messageId,
+          sender: 'creator',
+        },
+      },
+    ]);
+    assert.ok(
+      (await fixtures(root)).some(
+        (fixture) =>
+          fixture.candidate.messageId === candidate.messageId &&
+          fixture.reason === 'missed'
+      )
+    );
+  } finally {
+    await fs.rm(root, { recursive: true });
+  }
+});

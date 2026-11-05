@@ -17,10 +17,13 @@ export async function dryRun(
   verifyDelivery = true,
   regressionRoot = workspace
 ): Promise<void> {
+  const fakeId = `brain-check-${crypto.randomUUID()}`;
   const stop = new AbortController();
   let received = false;
   let turns = 0;
   let posts = 0;
+  let fault: Error | undefined;
+  const failed = Promise.withResolvers<never>();
   let runtime: BrainRuntime;
   const admitted = Promise.withResolvers<Turn>();
   const completed = Promise.withResolvers<Outcome>();
@@ -53,14 +56,14 @@ export async function dryRun(
               controller.enqueue(
                 new TextEncoder().encode(
                   `data: ${JSON.stringify({
-                    event_id: 'brain-check',
+                    event_id: fakeId,
                     event_type: 'message.posted',
                     metadata: {
-                      message_id: 'check',
+                      message_id: fakeId,
                       content: 'brain check',
                       created_at: new Date().toISOString(),
                       parent: { type: 'channel', id: 'check' },
-                      root_id: 'check',
+                      root_id: fakeId,
                       sender: 'check-sender',
                     },
                   })}\n\n`
@@ -135,7 +138,18 @@ export async function dryRun(
     presence: () => () => {},
     exe: 'brain',
     baseEnv: {},
-    log: (line) => console.error(JSON.stringify(line)),
+    log: (line) => {
+      console.error(JSON.stringify(line));
+      if (
+        verifyDelivery &&
+        ('batch_failed' in line ||
+          'handle_failed' in line ||
+          'heartbeat_failed' in line)
+      ) {
+        fault ??= new Error('fake boot handler failed');
+        failed.reject(fault);
+      }
+    },
   };
   runtime = await compose(deps);
   if (
@@ -157,6 +171,7 @@ export async function dryRun(
   try {
     const turn = await Promise.race([
       admitted.promise,
+      failed.promise,
       running.then(() => {
         throw new Error('boot ended before answering the fake DM');
       }),
@@ -191,6 +206,7 @@ export async function dryRun(
       sessionId: null,
     });
     await running;
+    if (fault) throw fault;
     if (
       !received ||
       turns === 0 ||

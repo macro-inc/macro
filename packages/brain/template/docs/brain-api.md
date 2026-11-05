@@ -53,7 +53,10 @@ A full replacement composition may build these primitives directly. It must keep
 `/health` compatible (status, startedAt, connected, lastEventAt, lastTurnAt, turns,
 work, spentTodayUsd, problems), drain on abort and pass a fake direct-message boot
 that completes a turn. `brain check` supplies fake HTTP, git, runner and schedules;
-no real API credentials or model calls reach checks.
+no real API credentials or model calls reach checks. The fake boot imports a
+disposable copy of my wiring and workspace, preserving live queues, receipts and
+memory. Hook or turn failures reject activation; checks replay the original
+protected regression set.
 
 Node 24 runs my TypeScript directly with type stripping. All npm dependencies
 are vendored in the image; there is no runtime npm install or library download.
@@ -66,6 +69,15 @@ are cleared and credentials stay in library adapters; they do not enter prompts.
 All hooks are optional. Their return values may be promises. Hooks run under
 my persona OS user and errors fail the affected operation. Turn hooks apply to respond,
 heartbeat and work. Budgets remain bounded by the tier's cap and the daily cap.
+
+```ts
+// Replace semantic relevance for ordinary messages; protected messages still wake.
+async relevance(candidate, services) {
+  if (candidate.message.text.includes('release rollback'))
+    return { relevant: true, reason: 'decided', probabilities: {} };
+  return judge(candidate, services); // Import judge from @macro-inc/brain.
+}
+```
 
 ```ts
 // Rewrite any part of a turn before concurrency and budget admission.
