@@ -64,18 +64,30 @@ export function GoogleAccountsStep(props: GoogleAccountsStepProps) {
           tabindex="-1"
           class="font-[Roboto_Slab_Variable] text-[clamp(22px,6.6vw,30px)] font-[315] leading-[1.2] tracking-[-.025em] [text-wrap:balance] sm:text-[36px]"
         >
-          {personal() ? 'Add your personal' : 'Connect your work'} <br />
-          {withMicrosoft()
-            ? 'email and calendar.'
-            : 'Google email and calendar.'}
-        </h1>
-        <p class="mt-7 max-w-[440px] font-[Inter_Variable] text-sm font-normal leading-6 text-ink-muted sm:text-[15px] [text-wrap:balance]">
           {withMicrosoft() ? (
-            // Line 2 stays 60–80% of line 1; the break hides where line 1 can't fit.
             <>
-              Connect your Google or Microsoft account
-              <br class="max-[359px]:hidden" /> to bring email/calendar to
-              Macro.
+              Continue with your work <br />
+              email and calendar.
+            </>
+          ) : (
+            <>
+              {personal() ? 'Add your personal' : 'Connect your work'} <br />
+              Google email and calendar.
+            </>
+          )}
+        </h1>
+        <p
+          class="mt-7 font-[Inter_Variable] text-sm font-normal leading-6 text-ink-muted sm:text-[15px] [text-wrap:balance]"
+          classList={{ 'max-w-[440px]': !withMicrosoft() }}
+        >
+          {withMicrosoft() ? (
+            // Fixed breaks keep each last line 60–80% of the one above: two
+            // lines from 640px, four on phones.
+            <>
+              Connect your account to bring your
+              <br class="sm:hidden" /> inbox and calendar into Macro.
+              <br /> Your password stays private.
+              <br class="sm:hidden" /> Disconnect anytime.
             </>
           ) : personal() ? (
             'Add a personal account for email and calendar in Macro. This is optional; your Macro sign-in stays the same. Agents ask for approval before sending email, and you can disconnect anytime.'

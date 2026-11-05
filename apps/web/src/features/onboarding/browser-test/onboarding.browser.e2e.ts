@@ -371,7 +371,7 @@ test.describe('with motion', () => {
     const steps: [string, string | RegExp][] = [
       ['Get started', 'Which features do you want to try first?'],
       ['Continue', 'A workspace built to earn your trust.'],
-      ['Continue', /Connect your work/],
+      ['Continue', /Continue with your work/],
     ];
     await expect(heading(page, 'Create your workspace')).toBeVisible();
     for (const [button, next] of steps) {
