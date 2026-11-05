@@ -691,6 +691,7 @@ dependencies = [
  "rmcp",
  "roles_and_permissions",
  "rootcause",
+ "routine_program",
  "scheduled_action",
  "schemars 1.2.1",
  "search_service_client",
@@ -699,6 +700,7 @@ dependencies = [
  "serde_json",
  "share_permission_db_utils",
  "soup",
+ "soup_realtime",
  "sqlx",
  "sqs_client",
  "sqs_worker",
@@ -880,6 +882,7 @@ dependencies = [
  "entity_access_db_utils",
  "entity_registry",
  "entity_registry_db_utils",
+ "futures",
  "genai_telemetry",
  "harness_id",
  "jev",
@@ -4596,6 +4599,7 @@ dependencies = [
  "code_mode_assets",
  "futures",
  "rootcause",
+ "rustix 1.1.4",
  "serde",
  "serde_json",
  "tempfile",
@@ -4897,6 +4901,7 @@ dependencies = [
  "graphql_notification_inbox",
  "graphql_permission",
  "graphql_properties",
+ "graphql_registered_work",
  "graphql_scheduled_action",
  "graphql_soup",
  "graphql_work_feed",
@@ -5302,6 +5307,8 @@ dependencies = [
  "macro_uuid",
  "model",
  "nix 0.29.0",
+ "opentelemetry",
+ "opentelemetry_sdk",
  "pptx_engine",
  "remote_env_var",
  "rs-libreoffice-bindings",
@@ -5318,6 +5325,8 @@ dependencies = [
  "tower 0.5.3",
  "tower-http",
  "tracing",
+ "tracing-opentelemetry",
+ "tracing-subscriber",
  "utoipa",
  "utoipa-swagger-ui",
  "workspace-hack",
@@ -8638,6 +8647,7 @@ dependencies = [
  "thiserror 2.0.18",
  "tokio",
  "tracing",
+ "tracing-subscriber",
  "upstream_error",
  "urlencoding",
  "uuid",
@@ -9520,6 +9530,27 @@ dependencies = [
 ]
 
 [[package]]
+name = "graphql_registered_work"
+version = "0.1.0"
+dependencies = [
+ "agent_session",
+ "async-graphql",
+ "async-stream",
+ "attention_feed",
+ "chrono",
+ "futures",
+ "graphql_common",
+ "graphql_soup",
+ "macro_user_id",
+ "model-entity",
+ "soup_realtime",
+ "tokio",
+ "tracing",
+ "uuid",
+ "workspace-hack",
+]
+
+[[package]]
 name = "graphql_scheduled_action"
 version = "0.1.0"
 dependencies = [
@@ -9529,6 +9560,7 @@ dependencies = [
  "macro_uuid",
  "model_owner",
  "rootcause",
+ "routine_program",
  "scheduled_action",
  "serde_json",
  "tokio",
@@ -12880,9 +12912,12 @@ dependencies = [
  "fusionauth",
  "macro_auth",
  "macro_db_migrator",
+ "macro_tower_layers",
  "macro_user_id",
+ "model",
  "rand 0.9.4",
  "redis",
+ "reqwest 0.13.4",
  "serde",
  "serde_json",
  "sha2 0.10.9",
@@ -12894,9 +12929,11 @@ dependencies = [
  "tower 0.5.3",
  "tower-http",
  "tracing",
+ "upstream_error",
  "url",
  "urlencoding",
  "uuid",
+ "wiremock",
  "workspace-hack",
  "zeroize",
 ]
@@ -17214,6 +17251,20 @@ dependencies = [
 ]
 
 [[package]]
+name = "routine_program"
+version = "0.1.0"
+dependencies = [
+ "bots",
+ "serde",
+ "serde_json",
+ "sha2 0.10.9",
+ "thiserror 2.0.18",
+ "utoipa",
+ "uuid",
+ "workspace-hack",
+]
+
+[[package]]
 name = "routines"
 version = "0.1.0"
 dependencies = [
@@ -17227,6 +17278,7 @@ dependencies = [
  "macro_tower_layers",
  "macro_user_id",
  "reqwest 0.13.4",
+ "routine_program",
  "schemars 1.2.1",
  "serde",
  "serde_json",
@@ -17682,6 +17734,7 @@ dependencies = [
  "macro_event_broker",
  "macro_event_topics",
  "macro_service_urls",
+ "macro_tower_layers",
  "macro_user_id",
  "macro_uuid",
  "mention_utils",
@@ -17696,6 +17749,7 @@ dependencies = [
  "reqwest 0.13.4",
  "roles_and_permissions",
  "rootcause",
+ "routine_program",
  "serde",
  "serde_json",
  "share_permission_db_utils",

@@ -61,6 +61,14 @@ path = "src/openapi.rs"
 name = "email_service_doppler_config"
 path = "src/doppler_config.rs"
 
+
+# Built only by the `build-service-bins` CI job, which needs the real binaries;
+# `test = false` keeps it out of the test job.
+[[test]]
+name = "service_binary_builds"
+path = "tests/service_binary_builds.rs"
+test = false
+
 [features]
 attachment_upload = []
 connection_gateway = []

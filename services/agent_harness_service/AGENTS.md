@@ -23,7 +23,9 @@ Pulumi stacks; they do not host extra agent processes.
 - `src/trigger.rs`: turns channel/webhook triggers into sessions.
 - `src/pull_request_archive.rs`: consumes `macro.github_pull_requests` (group
   `agent-harness-pull-request-archive`) and auto-archives sessions whose
-  linked pull requests finished (`agent_session::domain::auto_archive`).
+  linked pull requests finished (`agent_session::domain::auto_archive`), and
+  ends their work registrations first
+  (`agent_session::domain::work_registration`).
 - `src/internal_mcp.rs`: the internal MCP server exposed to running sessions.
 - `src/public_mcp.rs` + `src/public_mcp/`: public workspace MCP and OAuth;
   reuses the harness tool context and retains bearer authentication. Users with
@@ -63,7 +65,22 @@ Pulumi stacks; they do not host extra agent processes.
   domain/adapters live in `crates/scheduled_action`. Its run observers send
   `routine_run_finished` analytics and, for every run, an inbox-only
   `routine_run_finished` notification to the owner
-  (`src/scheduling/routine_run_notifications.rs`).
+  (`src/scheduling/routine_run_notifications.rs`). AI drafts routines
+  (`POST /scheduled-actions/drafts`) through `src/routine_drafts.rs`: the
+  free tier's model, thinking briefly, billed as automation usage. The
+  SDK reference a draft reads (entity indexes, then the symbols the model
+  names with the types they name, breadth first within 48 KB) comes from
+  `src/routine_code.rs`. Routine code steps run through `src/routine_code.rs`,
+  on routines' own Deno executor (own slots, CPU limit, lower priority) and
+  type checker, with a token for the owner's access attributed to Macro
+  acting for them, so a step's writes don't start routines.
+  A routine's code steps are checked together, one file each; the owner's
+  time zone for `run.timezone` comes from their primary calendar
+  (`CalendarTimeZones`).
+  A step waits up to five minutes for one of `ROUTINE_CODE_SLOTS` before its
+  credential is minted, so its token and 30-second limit start when it runs;
+  a step that never gets one fails with "Macro was busy running other
+  routines".
 - `src/preview.rs` + `src/preview/`: preview control routes, public HTTP and SSH listeners;
   lease/ticket and authorization logic lives in `crates/agent_preview`. The shared
   pool stores replica ownership and credential hashes; startup and ten-second
@@ -115,7 +132,9 @@ produce events, independently of public session control.
 
 ## Checks
 
-- `cargo test -p agent_harness_service` (`SQLX_OFFLINE` unset).
+- `cargo test -p agent_harness_service` (`SQLX_OFFLINE` unset). Add
+  `-- --include-ignored` with Deno 2.9.6 on `PATH` for the real-runtime
+  routine code tests.
 - `just check` (`SQLX_OFFLINE=true cargo check`).
 - `just run-local` — needs `DAYTONA_API_KEY`, `DAYTONA_SNAPSHOT`,
   `GITHUB_TOKEN` in the environment or a local `.env`.

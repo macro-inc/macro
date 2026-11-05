@@ -32,6 +32,7 @@ use agent_session::inbound::axum_router::pull_requests::{
     PullRequestSessionsResponse, PullRequestUrl, PullRequestUrls, PullRequestsSessionsResponse,
     SessionPullRequestsResponse,
 };
+use agent_session::inbound::axum_router::work_registration::WorkRegistrationResponse;
 use agent_session::inbound::axum_router::{
     self, AgentSessionFoldedLogResponse, AgentSessionLogEntryDto, AgentSessionLogResponse,
     AgentSessionPreviewData, AgentSessionPreviewDto, AgentSessionQueueResponse,
@@ -109,6 +110,9 @@ impl Modify for SecurityAddon {
         axum_router::auto_archive::put_auto_archive_preferences,
         axum_router::auto_archive::get_session_auto_archive,
         axum_router::auto_archive::put_session_auto_archive,
+        axum_router::work_registration::register_work,
+        axum_router::work_registration::unregister_work,
+        axum_router::work_registration::list_own_work,
         model_load::load_agent_models_handler,
         capability_discovery::discover_agent_capabilities_handler,
         agent_harness::inbound::conversations::list_agent_conversations,
@@ -167,6 +171,7 @@ impl Modify for SecurityAddon {
         AutoArchiveOverridesBody,
         ArchiveCause,
         SessionAutoArchiveResponse,
+        WorkRegistrationResponse,
         LoadAgentModelsRequest,
         LoadAgentModelsResponse,
         AgentModelDto,

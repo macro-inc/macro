@@ -159,6 +159,13 @@ above the event whenever a late section changes its height. Keep the guest
 editors' `overlap`: without it their height follows the room below the button,
 so they never overflow, never flip, and squeeze the chosen people to nothing.
 
+Email invitation cards have a backend-free desktop/phone regression for long
+descriptions wrapping inside the card, collapsed and expanded, the guest row
+lining up with its icon, and `+N more` keeping a 44px tap target on touch:
+`bunx playwright test --config src/features/email-message/browser-test/playwright.config.ts`.
+Use `wrap-anywhere` alone on wrapping text: `break-words` is emitted later and
+overrides `[overflow-wrap:anywhere]`, which then no longer shrinks min-content.
+
 The desktop app's local runtime setup (find an agent, connect, create the
 agent, retry, open a session) has a backend-free browser regression over a
 scripted runtime:
@@ -210,7 +217,8 @@ ranking and insertion on desktop and phone.
 Channel composer draft persistence has a backend-free browser regression:
 `bunx playwright test --config src/features/channel/Input/browser-test/playwright.config.ts`.
 It checks draft blank lines across remounts, that a sent message renders its
-lines with the spacing the draft showed, and pending sends on desktop and phone: clear immediately, restore failed sends, and preserve a new draft typed during delivery.
+lines with the spacing the draft showed, that the one-line composer centers its
+buttons on the text line, and pending sends on desktop and phone: clear immediately, restore failed sends, and preserve a new draft typed during delivery.
 It also pastes a Macro link and Markdown into a code block, which must keep both as literal text.
 Its phone formatting regression opens the ribbon from the add drawer in the
 production message editor, removes selected strikethrough, and saves; keep
@@ -502,6 +510,11 @@ resolved session ID; keep the existing `AgentSessionProvider` subscription to
   [reload diagnostics](tauri/src-tauri/README.md#diagnosing-unexpected-webview-reloads).
 - Disable GraphQL cache sessions and clear login hints on confirmed auth 401s,
   even with retained user data; preserve session state on transient failures.
+- Bound shared cookie-auth refresh (`core/auth/session-refresh.ts`), including
+  proactive socket setup, to 12 seconds and native network availability; let
+  each caller cancel its wait independently, and keep refresh timeouts retryable.
+  On foregrounding, expire a pending refresh older than that deadline by wall
+  clock; suspension can pause its timer.
 - Treat a repeated worker-ready frame as a coordinator restart: retire the old
   engine and re-register in place, preserving durable storage and never replaying
   uncertain enqueues. Space failed coordinator registrations with bounded,

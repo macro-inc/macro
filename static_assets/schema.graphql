@@ -508,6 +508,16 @@ type CompleteSubscriptionRoot {
 	refetches.
 	"""
 	notificationInboxUpdates(scope: NotificationInboxScopeInput): [NotificationInboxPatch!]!
+	"""
+	Changes to the registered work of `accountIds` that the authenticated
+	user can see: entries to show, entries to stop showing, and an
+	invalidation when changes may have been missed or sharing changed.
+	Each payload is one batch to apply together. Start it before fetching
+	`registeredWork` and refetch after an invalidation; the stream ends
+	with an error when its source ends, after which the client resubscribes
+	and refetches.
+	"""
+	registeredWorkUpdates(accountIds: [ID!]!): [GraphqlRegisteredWorkPatch!]!
 }
 
 """
@@ -7157,6 +7167,63 @@ A property value represented by a type-safe GraphQL union.
 union GraphqlPropertyValue = GraphqlBooleanPropertyValue | GraphqlNumberPropertyValue | GraphqlStringPropertyValue | GraphqlDatePropertyValue | GraphqlDateRangePropertyValue | GraphqlSelectOptionPropertyValue | GraphqlEntityReferencePropertyValue | GraphqlLinkPropertyValue
 
 """
+An agent session an account registered as its work.
+"""
+type GraphqlRegisteredWork {
+	"""
+	The registration.
+	"""
+	id: ID!
+	"""
+	The account whose work this is.
+	"""
+	accountId: ID!
+	"""
+	When the account registered it, in RFC 3339.
+	"""
+	registeredAt: String!
+	"""
+	The session registered.
+	"""
+	session: GraphqlSoupAgentSession!
+}
+
+"""
+Changes may have been missed or sharing changed: refetch the list.
+"""
+type GraphqlRegisteredWorkInvalidate {
+	"""
+	Always true.
+	"""
+	refresh: Boolean!
+}
+
+"""
+One change to the registered work of the subscribed accounts.
+"""
+union GraphqlRegisteredWorkPatch = GraphqlRegisteredWorkUpsert | GraphqlRegisteredWorkRemove | GraphqlRegisteredWorkInvalidate
+
+"""
+A registration that ended or whose session was archived.
+"""
+type GraphqlRegisteredWorkRemove {
+	"""
+	The registration to stop showing.
+	"""
+	id: ID!
+}
+
+"""
+A registration to show, new or with its session's list fields changed.
+"""
+type GraphqlRegisteredWorkUpsert {
+	"""
+	The registration.
+	"""
+	entry: GraphqlRegisteredWork!
+}
+
+"""
 The two operands of a recursive reminder filter expression. Ignored.
 Remove after 2026-11-30.
 """
@@ -7390,7 +7457,8 @@ type GraphqlScheduledAction {
 	"""
 	trigger: GraphqlScheduledActionTrigger!
 	"""
-	Agent task for this routine. Null when the stored task is not an agent task.
+	The agent step this routine hands off to: its only one, or the first of
+	several in different branches. Null when no step runs an agent.
 	"""
 	agentTask: GraphqlScheduledActionAgentTask
 	"""
@@ -7431,11 +7499,11 @@ type GraphqlScheduledActionAgentTask {
 	"""
 	agent: GraphqlScheduledActionAgent
 	"""
-	System prompt for the agent.
+	Always empty: the agent step's instructions are in `userPrompt`.
 	"""
 	prompt: String!
 	"""
-	User prompt for the agent.
+	The agent step's instructions.
 	"""
 	userPrompt: String!
 }
@@ -10335,6 +10403,12 @@ type GraphqlUser {
 	item carries its notifications stacked for presentation.
 	"""
 	workFeed(input: WorkFeedInput): WorkFeedPage!
+	"""
+	The agent sessions `accountIds` registered as their work that the
+	authenticated user can view, newest first, at most 50 accounts.
+	Registrations of sessions the user cannot view are completely hidden.
+	"""
+	registeredWork(accountIds: [ID!]!): [GraphqlRegisteredWork!]!
 	"""
 	A page of the authenticated user's notifications inbox, newest group
 	first: their pending notifications grouped by the entity they are

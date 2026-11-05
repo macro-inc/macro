@@ -220,6 +220,47 @@ describe('AgentSession', () => {
     await expect(requests[1]?.json()).resolves.toEqual({ archived: false });
   });
 
+  test('registers, unregisters, and lists work as entity handles', async () => {
+    const registration = {
+      id: '0198a4cc-e138-7670-a308-a6b766602702',
+      accountId: 'macro|agent@example.com',
+      agentSessionId: sessionId,
+      registeredAt: '2026-08-24T12:00:00Z',
+    };
+    const requests: Request[] = [];
+    globalThis.fetch = (async (input) => {
+      const request = input instanceof Request ? input : new Request(input);
+      requests.push(request);
+      if (request.method === 'DELETE') {
+        return new Response(null, { status: 204 });
+      }
+      return Response.json(
+        request.method === 'PUT' ? registration : [registration],
+      );
+    }) as typeof fetch;
+    const macro = new Macro({
+      token: 'user-token',
+      hosts: { 'agent-harness': 'https://agent.example.test' },
+    });
+    const agentSession = macro.agentSessions.byId(sessionId);
+
+    const registered = await agentSession.registerAsWork();
+    await agentSession.unregisterAsWork();
+    const [listed] = await macro.agentSessions.registeredWork();
+
+    expect(registered.session.id).toBe(sessionId);
+    expect(registered.account.id).toBe('macro|agent@example.com');
+    expect(registered.registeredAt).toBe('2026-08-24T12:00:00Z');
+    expect(listed?.session.id).toBe(sessionId);
+    expect(
+      requests.map((request) => `${request.method} ${request.url}`),
+    ).toEqual([
+      `PUT https://agent.example.test/agent-sessions/${sessionId}/work-registration`,
+      `DELETE https://agent.example.test/agent-sessions/${sessionId}/work-registration`,
+      'GET https://agent.example.test/agent-work-registrations',
+    ]);
+  });
+
   test('resizes a session sandbox through the agent-harness service', async () => {
     let request: Request | undefined;
     globalThis.fetch = (async (input) => {
