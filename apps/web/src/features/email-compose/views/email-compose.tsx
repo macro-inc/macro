@@ -177,6 +177,7 @@ function LoadedEmailComposeView(
     },
     isMobile: composeContext.presentation.isMobile,
     scheduleEnabled: composeContext.presentation.scheduleEnabled,
+    calendarEvents: composeContext.calendarEvents,
     onUpgrade: composeContext.presentation.onUpgrade,
     viewerLoading: composeContext.presentation.viewerLoading,
     signaturePreview: () => (

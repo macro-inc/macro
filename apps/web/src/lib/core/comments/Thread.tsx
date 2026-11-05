@@ -300,7 +300,7 @@ export function ThreadCard(props: {
   return (
     <Layer depth={2}>
       <div
-        data-comment-thread
+        data-comment-thread={String(props.comment.threadId)}
         // note: pdf-pointer-event-reset is a strange one-off class that mostly normalizes
         // pointer-events: none vs. all inside the .pdfOverlayInner div.
         class="shrink-0 border border-edge bg-surface p-2 shadow-md rounded-xl shadow-drop-shadow portal-scope pointer-events-auto pdf-pointer-event-reset"

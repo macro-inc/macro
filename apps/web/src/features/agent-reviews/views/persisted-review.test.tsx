@@ -1,21 +1,24 @@
 /** @vitest-environment jsdom */
 import { cleanup, fireEvent, render, screen } from '@solidjs/testing-library';
+import { createSignal } from 'solid-js';
 import { afterEach, describe, expect, it, type Mock, vi } from 'vitest';
 import type { Review, ReviewActions } from '../core/review';
 import { PersistedReview } from './persisted-review';
 
 const reviews = vi.hoisted(() => {
   const state: {
-    record: Review | undefined;
+    record: () => Review | undefined;
     decide: Mock<ReviewActions['decide']>;
-  } = { record: undefined, decide: vi.fn() };
+  } = { record: () => undefined, decide: vi.fn() };
   return state;
 });
 vi.mock('../queries/reviews', () => ({
   useReview: () => ({
     isError: false,
     isSuccess: true,
-    data: reviews.record,
+    get data() {
+      return reviews.record();
+    },
     refetch: vi.fn(),
   }),
   useReviewActions: () => ({ reload: vi.fn(), decide: reviews.decide }),
@@ -26,6 +29,9 @@ vi.mock('@core/context/user', () => ({
 function Card(props: { review: Review; actions: ReviewActions }) {
   return (
     <>
+      <output>
+        {props.review.revision}:{props.review.items[0].status}
+      </output>
       <button
         type="button"
         onClick={() =>
@@ -112,7 +118,7 @@ afterEach(() => {
 
 describe('PersistedReview', () => {
   it('expects no answer until an approved import settles', () => {
-    reviews.record = importReview;
+    reviews.record = () => importReview;
     reviews.decide.mockResolvedValue(importReview);
     const onDecision = vi.fn();
     render(() => (
@@ -120,6 +126,7 @@ describe('PersistedReview', () => {
         sessionId="session"
         reviewId="review"
         canAct
+        updates={{ kind: 'polled' }}
         onDecision={onDecision}
       />
     ));
@@ -133,7 +140,7 @@ describe('PersistedReview', () => {
   });
 
   it('expects the agent to answer an approved email stack at once', () => {
-    reviews.record = emailReview;
+    reviews.record = () => emailReview;
     reviews.decide.mockResolvedValue(emailReview);
     const onDecision = vi.fn();
     render(() => (
@@ -141,11 +148,36 @@ describe('PersistedReview', () => {
         sessionId="session"
         reviewId="review"
         canAct
+        updates={{ kind: 'polled' }}
         onDecision={onDecision}
       />
     ));
 
     fireEvent.click(screen.getByRole('button', { name: 'Approve' }));
     expect(onDecision).toHaveBeenCalledTimes(1);
+  });
+
+  it('passes each polled revision to the open card', () => {
+    const [record, setRecord] = createSignal<Review>(emailReview);
+    reviews.record = record;
+    render(() => (
+      <PersistedReview
+        sessionId="session"
+        reviewId="review"
+        canAct
+        updates={{ kind: 'polled' }}
+      />
+    ));
+    expect(screen.getByRole('status').textContent).toBe('1:pending');
+
+    setRecord({
+      ...emailReview,
+      revision: 2,
+      items: emailReview.items.map((item) => ({
+        ...item,
+        status: 'dismissed',
+      })),
+    });
+    expect(screen.getByRole('status').textContent).toBe('2:dismissed');
   });
 });

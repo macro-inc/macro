@@ -1,3 +1,4 @@
+import { t } from '@app/lib/i18n';
 import { FormatButtons } from '@channel/Input/FormatButtons';
 import { HeaderIsland } from '@components/app/split-layout/components/HeaderIsland';
 import {
@@ -11,6 +12,8 @@ import {
   type NodeTransformType,
 } from '@core/component/LexicalMarkdown/plugins/node-transform/nodeTransformPlugin';
 import { fileSelector } from '@core/directive/fileSelector';
+import { registerHotkey } from '@core/hotkey/hotkeys';
+import { TOKENS } from '@core/hotkey/tokens';
 import ImageIcon from '@icon/system/regular/image.svg';
 import PaperclipIcon from '@icon/system/regular/paperclip.svg?component-solid';
 import TextAa from '@icon/system/regular/text-aa.svg';
@@ -18,10 +21,14 @@ import Trash from '@icon/system/regular/trash.svg';
 import { Button, SendButton } from '@ui';
 import { FORMAT_TEXT_COMMAND, type LexicalEditor } from 'lexical';
 import { createSignal, Show } from 'solid-js';
+import { CreateEventButton } from '../components/create-event-button';
 import { EmailDateSelector } from '../components/email-date-selector';
 import { EmailScheduleSummary } from '../components/email-schedule-summary';
 import { MobileComposeActions } from '../components/mobile-compose-actions';
 import { useCompose } from '../context/compose-context';
+import { useComposeHotkeyScope } from '../context/compose-hotkey-scope';
+import { proposesMeeting } from '../core/meeting-intent';
+import { createWrittenText } from '../primitives/written-text';
 
 export function EmailComposeToolbar(props: {
   editor?: () => LexicalEditor | undefined;
@@ -30,6 +37,30 @@ export function EmailComposeToolbar(props: {
 }) {
   const ctx = useCompose();
   const [showFormatRibbon, setShowFormatRibbon] = createSignal(false);
+  const writtenText = createWrittenText(() => props.editor?.());
+  const createEvent = () => {
+    const recipients = ctx.recipients();
+    return (
+      ctx.calendarEvents?.open({
+        subject: ctx.subject(),
+        guests: [...recipients.to, ...recipients.cc].map(
+          (recipient) => recipient.data.email
+        ),
+        text: writtenText(),
+      }) ?? false
+    );
+  };
+  const hotkeyScope = useComposeHotkeyScope();
+  if (hotkeyScope && ctx.calendarEvents) {
+    registerHotkey({
+      hotkey: 'b',
+      scopeId: hotkeyScope,
+      description: () => t('commands.createEventFromEmail'),
+      keyDownHandler: createEvent,
+      hotkeyToken: TOKENS.email.createEvent,
+      condition: () => !!ctx.calendarEvents?.enabled() && !ctx.disabled(),
+    });
+  }
 
   return (
     <Show when={props.inline || !ctx.isMobile()} fallback={<MobileToolbar />}>
@@ -78,6 +109,7 @@ export function EmailComposeToolbar(props: {
           {/* Inline drafts send without waiting for inline media uploads. */}
           <Show when={props.editor && !props.inline}>
             <Button
+              variant="ghost"
               onClick={() =>
                 props
                   .editor?.()
@@ -86,9 +118,8 @@ export function EmailComposeToolbar(props: {
                     constrainedMediaDimensions: { width: 542, height: 542 },
                   })
               }
-              variant="ghost"
-              tooltip="Insert image"
               aria-label="Insert image"
+              tooltip="Insert image"
               size="icon-md"
               disabled={ctx.disabled()}
             >
@@ -104,6 +135,14 @@ export function EmailComposeToolbar(props: {
           >
             <TextAa class="size-4 touch:size-6 shrink-0 pointer-events-none" />
           </Button>
+          <Show when={ctx.calendarEvents?.enabled()}>
+            <CreateEventButton
+              suggested={proposesMeeting(writtenText())}
+              shortcut={hotkeyScope ? 'b' : undefined}
+              disabled={ctx.disabled()}
+              onClick={createEvent}
+            />
+          </Show>
           <Show when={ctx.scheduleEnabled}>
             <div class="shrink-0">
               <EmailDateSelector

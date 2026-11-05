@@ -77,6 +77,10 @@ Parsed message responses expose the draft generation captured in the same SQL sn
   reads into the DELETE; it was benchmarked and rejected. A restarted purge
   rescans the dead index entries the earlier run left until vacuum can remove
   them.
+- SQLx can't see that a column read through a `LEFT JOIN` inside a `LATERAL`
+  subquery can be NULL and types it non-null from the table. Alias such
+  columns `"name?"`, and never force `"name!"` on one; `from_contact_id` is
+  nullable and `ON DELETE SET NULL`, so contact columns are often NULL.
 - Quote and alias camelCase columns to Rust field names; check
   `crates/macro_db_client/migrations/` for real column spelling, don't guess.
 - A Macro draft (no provider id, or a live `email_mailbox_drafts` row) puts its

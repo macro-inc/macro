@@ -11,6 +11,7 @@ import { CALENDAR_VIEW_ID } from '@app/features/calendar-view/types';
 import { changesSearch } from '@app/features/changes/changes-search';
 import { mobileSearchRouteStateSchema } from '@app/features/command/mobile/mobile-search-route-state';
 import {
+  CRM_RETIRED_DATABASES_ROUTE_IDS,
   crmItemBlockType,
   crmItemParams,
   crmItemStateSchema,
@@ -22,6 +23,8 @@ import {
   crmRecordParams,
   crmRecordReference,
   crmRecordTrailSchema,
+  crmRetiredDatabaseParams,
+  crmRetiredRecordDatabasesParams,
   crmViewReference,
 } from '@app/features/crm/crm-route';
 import { driveDetailTrailSchema } from '@app/features/drive-view/primitives/drive-detail-trail';
@@ -108,6 +111,27 @@ export const taskSlugRoute = defineRoute({
 export const signupRoute = defineRoute({
   id: 'signup',
   path: 'signup',
+  externalSearch: '*',
+});
+
+/** Signup for an AI agent: Google or email only, then its SDK token. */
+export const agentSignupRoute = defineRoute({
+  id: 'agent-signup',
+  path: 'signup/agent',
+  externalSearch: '*',
+});
+
+/** A new agent's SDK token and first steps, as a markdown page. */
+export const agentSetupRoute = defineRoute({
+  id: 'agent-setup',
+  path: 'agent-setup',
+  externalSearch: '*',
+});
+
+/** Confirms an agent saved its token, then opens the app. */
+export const agentSetupDoneRoute = defineRoute({
+  id: 'agent-setup-done',
+  path: 'agent-setup/done',
   externalSearch: '*',
 });
 
@@ -476,6 +500,13 @@ export const activityRoute = defineRoute({
   claim: () => ({ namespace: 'component', id: 'activity' }),
 });
 
+export const notificationsRoute = defineRoute({
+  id: 'view-notifications',
+  path: 'notifications',
+  search: '*' as const,
+  claim: () => ({ namespace: 'component', id: 'notifications' }),
+});
+
 export const routinesRoute = defineRoute({
   id: ROUTINES_ROUTE_ID,
   path: 'routines',
@@ -737,6 +768,35 @@ export const crmRecordFileItemRoute = defineRoute({
 export const crmPipelineRecordFileItemRoute = defineRoute({
   ...crmRecordFileItemRoute,
   id: 'companies-pipeline-record-file-item',
+});
+
+/** A database opened from the retired Customers Databases view; redirects to it. */
+export const crmRetiredDatabaseRoute = defineRoute({
+  id: CRM_RETIRED_DATABASES_ROUTE_IDS.database,
+  path: 'database/:databaseId',
+  params: crmRetiredDatabaseParams,
+  toReference: ({ databaseId }) => uuidRouteReference(databaseId, 'database'),
+});
+
+export const crmPipelineRetiredDatabaseRoute = defineRoute({
+  ...crmRetiredDatabaseRoute,
+  id: CRM_RETIRED_DATABASES_ROUTE_IDS.pipelineDatabase,
+});
+
+/** A record's retired Databases section, or a database opened from it; redirects. */
+export const crmRetiredRecordDatabasesRoute = defineRoute({
+  id: CRM_RETIRED_DATABASES_ROUTE_IDS.record,
+  path: ':recordType/:recordId/databases/:databaseId?',
+  params: crmRetiredRecordDatabasesParams,
+  toReference: ({ recordType, recordId, databaseId }) =>
+    databaseId
+      ? uuidRouteReference(databaseId, 'database')
+      : uuidRouteReference(recordId, recordType),
+});
+
+export const crmPipelineRetiredRecordDatabasesRoute = defineRoute({
+  ...crmRetiredRecordDatabasesRoute,
+  id: CRM_RETIRED_DATABASES_ROUTE_IDS.pipelineRecord,
 });
 
 export const crmPipelineRoute = defineRoute({

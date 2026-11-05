@@ -10,7 +10,7 @@ import { mkdir, mkdtemp, rm } from 'node:fs/promises';
 import { join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { renderSdkDocs } from '@macro-inc/sdk-docs/render';
-import { descriptions } from './catalog';
+import { entityDirectories } from './catalog';
 import { packageEntityDocs, readMarkdownPages } from './typedoc';
 
 const root = fileURLToPath(new URL('../../../', import.meta.url));
@@ -69,13 +69,10 @@ for (const [entry, name] of [
 
 const rendered = await mkdtemp(join(outputDirectory, '.docs-'));
 try {
-  await renderSdkDocs(root, rendered);
+  const notes = await renderSdkDocs(root, rendered);
   const pages = await readMarkdownPages(join(rendered, 'markdown'));
-  const docs = packageEntityDocs(pages, descriptions);
-  await artifact(
-    'documentation.json',
-    `${JSON.stringify(docs, null, 2)}\n`
-  );
+  const docs = packageEntityDocs(pages, entityDirectories, notes);
+  await artifact('documentation.json', `${JSON.stringify(docs, null, 2)}\n`);
 } finally {
   await rm(rendered, { recursive: true, force: true });
 }
@@ -120,7 +117,4 @@ for (const [service, directory] of Object.entries({
         .trim();
   }
 }
-await artifact(
-  'operations.json',
-  `${JSON.stringify(operations, null, 2)}\n`
-);
+await artifact('operations.json', `${JSON.stringify(operations, null, 2)}\n`);

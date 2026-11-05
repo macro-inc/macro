@@ -1,10 +1,11 @@
 use async_graphql::{Enum, ID, Object, SimpleObject, Union};
+use attention_feed::domain::models::counts_as_unseen;
 use graphql_notification::GraphqlNotification;
 use graphql_soup::{GraphqlSoupEntity, SoupEntityEdges};
 use soup::domain::models::SoupProjectionHydration;
 use work_feed::domain::models::{
     WorkFeedChange, WorkFeedEntry, WorkFeedItemState, WorkFeedPage, WorkFeedPrimaryReason,
-    WorkFeedStack, WorkFeedStackKind, counts_as_unseen,
+    WorkFeedStack, WorkFeedStackKind,
 };
 
 /// Most notifications one stack returns when no limit is given.

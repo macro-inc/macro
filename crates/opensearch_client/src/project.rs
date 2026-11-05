@@ -1,5 +1,6 @@
 use crate::{
     OpensearchClient, Result, delete,
+    retry::resend_on_lost_connection,
     upsert::{self, project::UpsertProjectArgs, properties::IndexedProperty},
 };
 
@@ -10,7 +11,10 @@ impl OpensearchClient {
         upsert_project_args: &UpsertProjectArgs,
         index_override: Option<&str>,
     ) -> Result<()> {
-        upsert::project::upsert_project(&self.inner, upsert_project_args, index_override).await
+        resend_on_lost_connection(|| {
+            upsert::project::upsert_project(&self.inner, upsert_project_args, index_override)
+        })
+        .await
     }
 
     /// Deletes a project from the opensearch projects index
@@ -20,7 +24,10 @@ impl OpensearchClient {
         project_id: &str,
         index_override: Option<&str>,
     ) -> Result<()> {
-        delete::project::delete_project_by_id(&self.inner, project_id, index_override).await
+        resend_on_lost_connection(|| {
+            delete::project::delete_project_by_id(&self.inner, project_id, index_override)
+        })
+        .await
     }
 
     /// Updates only the denormalized `properties` on an indexed project
@@ -30,6 +37,9 @@ impl OpensearchClient {
         project_id: &str,
         properties: &[IndexedProperty],
     ) -> Result<()> {
-        upsert::project::update_project_properties(&self.inner, project_id, properties, None).await
+        resend_on_lost_connection(|| {
+            upsert::project::update_project_properties(&self.inner, project_id, properties, None)
+        })
+        .await
     }
 }

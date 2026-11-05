@@ -1,11 +1,13 @@
 //! Pipeline metadata and grants, composed with the database domain's writer.
 
+use crate::domain::pipelines::requirements::StageRequirement;
 use crate::domain::pipelines::{
     Pipeline, PipelineBlueprint, PipelineRecordType, PipelineReference, PipelineRepo,
     PipelineSharing,
 };
 use databases::domain::provisioning::DatabaseStorageProvisioner;
 use entity_access_db_utils::{AccessLevel, EntityAccessSourceType, EntityType};
+use models_databases::OptionId;
 use models_databases::{ColumnId, DatabaseId, RowId, TableId};
 use models_permissions::share_permission::channel_share_permission::{
     ChannelSharePermission, UpdateChannelSharePermission,
@@ -53,7 +55,7 @@ where
         sqlx::query!(
             "INSERT INTO crm_pipeline_entities (id, team_id, database_id, table_id, record_type, name, user_id, primary_column_id) VALUES ($1, $2, $3, $4, $5, $6, $7, $8)",
             blueprint.id, blueprint.team_id, blueprint.database.id.into_uuid(),
-            blueprint.database.table_id.into_uuid(), blueprint.record_type.as_str(), &blueprint.name, blueprint.creator.as_ref(), blueprint.primary_column_id.into_uuid(),
+            blueprint.database.table_id.into_uuid(), blueprint.record_type.map(PipelineRecordType::as_str), &blueprint.name, blueprint.creator.as_ref(), blueprint.primary_column_id.into_uuid(),
         ).execute(&mut **transaction).await?;
         entity_access_db_utils::insert_entity_access_row(
             transaction,
@@ -109,10 +111,11 @@ where
         .await?;
         rows.into_iter()
             .map(|row| {
-                let record_type = match row.record_type.as_str() {
-                    "company" => PipelineRecordType::Company,
-                    "contact" => PipelineRecordType::Contact,
-                    _ => {
+                let record_type = match row.record_type.as_deref() {
+                    None => None,
+                    Some("company") => Some(PipelineRecordType::Company),
+                    Some("contact") => Some(PipelineRecordType::Contact),
+                    Some(_) => {
                         return Err(
                             sqlx::Error::Decode("Invalid pipeline record type".into()).into()
                         );
@@ -183,6 +186,10 @@ where
 
     async fn lock_live(&self, id: Uuid) -> Result<Option<Self::Guard>, Self::Error> {
         let mut tx = self.pool.begin().await?;
+        // Readers queued behind a writer also need to release pool connections.
+        sqlx::query!("SET LOCAL lock_timeout = '5s'")
+            .execute(&mut *tx)
+            .await?;
         let row = sqlx::query!(
             "SELECT id FROM crm_pipeline_entities WHERE id = $1 AND trashed_at IS NULL FOR SHARE",
             id
@@ -190,6 +197,53 @@ where
         .fetch_optional(&mut *tx)
         .await?;
         Ok(row.map(|_| tx))
+    }
+
+    async fn lock_write(&self, id: Uuid) -> Result<Option<Self::Guard>, Self::Error> {
+        let mut tx = self.pool.begin().await?;
+        // Queued writers must release connections so the holder can use storage.
+        sqlx::query!("SET LOCAL lock_timeout = '5s'")
+            .execute(&mut *tx)
+            .await?;
+        // Allows foreign-key checks from the storage transaction while serializing
+        // all pipeline writers and holding the pipeline against trash/deletion.
+        let row = sqlx::query!("SELECT id FROM crm_pipeline_entities WHERE id = $1 AND trashed_at IS NULL FOR NO KEY UPDATE", id).fetch_optional(&mut *tx).await?;
+        Ok(row.map(|_| tx))
+    }
+
+    async fn stage_requirements(&self, id: Uuid) -> Result<Vec<StageRequirement>, Self::Error> {
+        let rows = sqlx::query!("SELECT stage_column_id, stage_id, required_column_id FROM crm_pipeline_stage_requirements WHERE pipeline_id = $1 ORDER BY stage_column_id, stage_id, required_column_id", id).fetch_all(&self.pool).await?;
+        let mut rules = Vec::new();
+        for group in
+            rows.chunk_by(|a, b| a.stage_column_id == b.stage_column_id && a.stage_id == b.stage_id)
+        {
+            rules.push(StageRequirement {
+                stage_column_id: ColumnId::from_uuid(group[0].stage_column_id),
+                stage_id: OptionId::from_uuid(group[0].stage_id),
+                required_column_ids: group
+                    .iter()
+                    .map(|row| ColumnId::from_uuid(row.required_column_id))
+                    .collect(),
+            });
+        }
+        Ok(rules)
+    }
+
+    async fn set_stage_requirement(
+        &self,
+        id: Uuid,
+        rule: &StageRequirement,
+    ) -> Result<(), Self::Error> {
+        let mut tx = self.pool.begin().await?;
+        sqlx::query!("DELETE FROM crm_pipeline_stage_requirements WHERE pipeline_id = $1 AND stage_column_id = $2 AND stage_id = $3", id, rule.stage_column_id.into_uuid(), rule.stage_id.into_uuid()).execute(&mut *tx).await?;
+        let fields: Vec<_> = rule
+            .required_column_ids
+            .iter()
+            .map(|id| id.into_uuid())
+            .collect();
+        sqlx::query!("INSERT INTO crm_pipeline_stage_requirements (pipeline_id, stage_column_id, stage_id, required_column_id) SELECT $1, $2, $3, unnest($4::uuid[]) ON CONFLICT DO NOTHING", id, rule.stage_column_id.into_uuid(), rule.stage_id.into_uuid(), &fields).execute(&mut *tx).await?;
+        tx.commit().await?;
+        Ok(())
     }
 
     async fn rename(&self, id: Uuid, name: &str) -> Result<(), Self::Error> {

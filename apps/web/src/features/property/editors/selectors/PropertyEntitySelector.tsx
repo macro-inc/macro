@@ -58,9 +58,9 @@ type EntityInputProps = {
 };
 
 function getEntityTypePluralLabel(
-  entityType: EntityType | null | undefined
+  entityType: EntityType | EntityType[] | null | undefined
 ): string {
-  if (!entityType) return 'entities';
+  if (!entityType || Array.isArray(entityType)) return 'entities';
   switch (entityType) {
     case 'USER':
       return 'users';
@@ -229,10 +229,12 @@ export function PropertyEntitySelector(props: EntityInputProps) {
       } else {
         const entity = quickAccessItemToEntity(item);
         const entityType = getEntityType(entity);
-        if (
-          entityType &&
-          (!specificEntityType || entityType === specificEntityType)
-        ) {
+        const matches =
+          !specificEntityType ||
+          (Array.isArray(specificEntityType)
+            ? entityType && specificEntityType.includes(entityType)
+            : entityType === specificEntityType);
+        if (entityType && matches) {
           converted.push(entity);
         }
       }
@@ -548,7 +550,9 @@ export function PropertyEntitySelector(props: EntityInputProps) {
                                     <>
                                       {parts().name}
                                       <Show when={parts().email}>
-                                        <span class="ml-[0.5em] opacity-50">
+                                        {/* An en space is the 0.5em gap; unlike a margin, Safari's truncated-text tooltip keeps it. */}
+                                        {' '}
+                                        <span class="opacity-50">
                                           {parts().email}
                                         </span>
                                       </Show>
@@ -624,7 +628,8 @@ export function PropertyEntitySelector(props: EntityInputProps) {
       <Show when={totalCount() === 0}>
         <div class="text-center py-4 text-ink-muted text-sm">
           <Show when={!isLoadingEntities()} fallback={<span>Loading...</span>}>
-            No {getEntityTypePluralLabel(props.config.specificEntityType)} found
+            {props.config.emptyMessage ??
+              `No ${getEntityTypePluralLabel(props.config.specificEntityType)} found`}
           </Show>
         </div>
       </Show>

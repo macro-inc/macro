@@ -24,6 +24,9 @@ pub(super) fn service(
         sender_provider: std::sync::Arc::new(
             crate::domain::senders::UnavailableEmailSenderProvider,
         ),
+        shared_thread_replies: std::sync::Arc::new(
+            crate::domain::shared_thread_replies::NoSharedThreadReplies,
+        ),
     }
 }
 

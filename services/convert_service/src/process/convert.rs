@@ -3,7 +3,7 @@ use nix::{
     unistd::{ForkResult, fork},
 };
 use rs_libreoffice_bindings::Office;
-use std::{borrow::Cow, fs::File, io::Write, thread, time::Duration};
+use std::{borrow::Cow, fs::File, io::Write, path::Path, thread, time::Duration};
 
 use anyhow::Context;
 use model::convert::ConvertQueueMessage;
@@ -71,63 +71,67 @@ pub async fn process_message(
         tracing::error!(error=?e, job_id=%job_id, "unable to cleanup folder");
     }
 
-    match result {
-        Ok(_) => {
-            if is_docx_key(&req.from_key) {
-                tracing::trace!("sending success message to lambda");
-                lambda_client
-                    .invoke_event(
-                        &WEB_SOCKET_RESPONSE_LAMBDA,
-                        &DocxUploadJobResult {
-                            job_id: Cow::Borrowed(&job_id),
-                            status: "Completed".into(),
-                            job_type: "docx_upload".into(), // TODO: will need to pass in job type to the convert message eventually
-                            data: DocxUploadJobData {
-                                error: false,
-                                message: None,
-                                data: Some(DocxUploadJobSuccessDataInner {
-                                    converted: true,
-                                    bom_parts: vec![BomPart {
-                                        sha: "bogus".to_string(),
-                                        path: "bogus".to_string(),
-                                        id: "bogus".to_string(),
-                                        document_bom_id: 1,
-                                    }],
-                                }),
-                            },
-                        },
-                    )
-                    .await?;
-            }
-        }
-        Err(e) => {
-            if is_docx_key(&req.from_key) {
-                tracing::trace!("sending failure message to lambda");
-                lambda_client
-                    .invoke_event(
-                        &WEB_SOCKET_RESPONSE_LAMBDA,
-                        &DocxUploadJobResult {
-                            job_id: Cow::Borrowed(&job_id),
-                            status: "Failed".into(),
-                            job_type: "docx_upload".into(), // TODO: will need to pass in job type to the convert message eventually
-                            data: DocxUploadJobData {
-                                error: true,
-                                message: Some("error converting document".to_string()),
-                                data: None,
-                            },
-                        },
-                    )
-                    .await?;
-            }
-            return Err(e);
-        }
+    if let Some(update) = job_update(&job_id, &req, result.is_ok()) {
+        tracing::trace!(status=%update.status, "sending job update to lambda");
+        lambda_client
+            .invoke_event(&WEB_SOCKET_RESPONSE_LAMBDA, &update)
+            .await?;
     }
+
+    result?;
 
     if let Err(e) = worker.cleanup_message(message).await {
         tracing::error!(error=?e, job_id=&job_id, "failed to cleanup message");
     }
 
     Ok(())
+}
+
+/// The job update to send for a finished conversion, if a client job is
+/// waiting on it.
+pub(super) fn job_update<'a>(
+    job_id: &'a str,
+    req: &ConvertQueueMessage,
+    converted: bool,
+) -> Option<DocxUploadJobResult<'a>> {
+    if !req.notify_job || !is_docx_key(&req.from_key) {
+        return None;
+    }
+
+    // TODO: will need to pass in job type to the convert message eventually
+    let job_type = "docx_upload".into();
+
+    if !converted {
+        return Some(DocxUploadJobResult {
+            job_id: Cow::Borrowed(job_id),
+            status: "Failed".into(),
+            job_type,
+            data: DocxUploadJobData {
+                error: true,
+                message: Some("error converting document".to_string()),
+                data: None,
+            },
+        });
+    }
+
+    Some(DocxUploadJobResult {
+        job_id: Cow::Borrowed(job_id),
+        status: "Completed".into(),
+        job_type,
+        data: DocxUploadJobData {
+            error: false,
+            message: None,
+            data: Some(DocxUploadJobSuccessDataInner {
+                converted: true,
+                bom_parts: vec![BomPart {
+                    sha: "bogus".to_string(),
+                    path: "bogus".to_string(),
+                    id: "bogus".to_string(),
+                    document_bom_id: 1,
+                }],
+            }),
+        },
+    })
 }
 
 pub async fn convert(
@@ -184,7 +188,8 @@ pub async fn convert(
 /// child process, killing it after `max_wait`.
 ///
 /// The child process keeps a LibreOffice crash or hang from taking down the
-/// worker.
+/// worker. LibreOffice writes its scratch files into the input file's folder,
+/// so removing that folder cleans up after the child however it ended.
 pub(crate) fn run_lok_conversion(
     job_id: &str,
     office_path: &str,
@@ -194,6 +199,12 @@ pub(crate) fn run_lok_conversion(
     filter: &str,
     max_wait: Duration,
 ) -> anyhow::Result<()> {
+    let job_folder = Path::new(in_file_path)
+        .parent()
+        .map(std::path::absolute)
+        .context("input file should be inside a job folder")?
+        .context("unable to resolve job folder")?;
+
     let mut child_pids = vec![];
     match unsafe { fork() } {
         Ok(ForkResult::Parent { child }) => {
@@ -204,6 +215,10 @@ pub(crate) fn run_lok_conversion(
             tracing::info!(job_id=%job_id, "child process: initializing lok");
             let result: anyhow::Result<()> = (|| {
                 std::env::set_var("SAL_LOG", "");
+                // LibreOffice deletes its TMPDIR scratch files only in its own
+                // teardown, which a child killed at its timeout, crashed, or
+                // ended with `_exit` below never runs.
+                std::env::set_var("TMPDIR", &job_folder);
                 let office = Office::new(office_path)
                     .map_err(|e| anyhow::anyhow!(e))
                     .context("unable to initialize lok")?;

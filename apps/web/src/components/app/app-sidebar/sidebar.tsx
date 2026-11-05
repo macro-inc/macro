@@ -1,4 +1,4 @@
-import { GO_TO_COMMAND_SCOPE, GO_TO_LEADER_KEY } from '@app/constants/hotkeys';
+import { GO_TO_COMMAND_SCOPE } from '@app/constants/hotkeys';
 import {
   EXTERNAL_VIEW_PATH,
   LIST_VIEW_PATHS,
@@ -10,6 +10,7 @@ import { calendarPath } from '@app/features/calendar-view/calendar-url';
 import { CALENDAR_VIEW_ID } from '@app/features/calendar-view/types';
 import { requestSearchFocus } from '@app/features/next-soup/soup-view/search-controllers';
 import { useRecentViewFlag } from '@app/features/next-soup/use-recent-view-flag';
+import { useUnifiedNotificationsFlag } from '@app/features/notifications-inbox/use-unified-notifications-flag';
 import {
   InviteModal,
   setInviteModalOpen,
@@ -17,8 +18,8 @@ import {
 import { useAnalytics } from '@app/lib/analytics/analytics-context';
 import { useFeatureFlag } from '@app/lib/analytics/posthog';
 import { t } from '@app/lib/i18n';
-import { useHotkeyInterceptor } from '@app/signal/hotkeyRoot';
 import { globalSplitManager } from '@app/signal/splitLayout';
+import { useGoToLeader } from '@components/app/app-sidebar/go-to-leader';
 import { useSplitLayout } from '@components/app/split-layout/layout';
 import type {
   ReferredFrom,
@@ -34,12 +35,9 @@ import {
   enableTasksReviews,
   enableWhatsappLinked,
 } from '@core/constant/featureFlags';
-import { getRunnableHotkeys } from '@core/hotkey/getCommands';
 import { registerHotkey } from '@core/hotkey/hotkeys';
-import { activeScope, clearPressedKeys } from '@core/hotkey/state';
 import { type HotkeyToken, TOKENS } from '@core/hotkey/tokens';
 import type { ValidHotkey } from '@core/hotkey/types';
-import { activateClosestDOMScope } from '@core/hotkey/utils';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import BellIcon from '@icon/system/regular/bell.svg';
 import HomeIcon from '@icon/system/regular/house.svg';
@@ -47,13 +45,11 @@ import SearchIcon from '@icon/system/regular/magnifying-glass.svg';
 import PlugIcon from '@icon/system/regular/plug.svg';
 import ActivityIcon from '@icon/system/regular/pulse.svg';
 import { ContextMenu } from '@kobalte/core/context-menu';
-import { debounce } from '@solid-primitives/scheduled';
 import { cn } from '@ui';
 import {
   type Component,
   createEffect,
   createMemo,
-  createSignal,
   type JSX,
   onCleanup,
   Show,
@@ -71,19 +67,25 @@ export interface SidebarItem {
   standaloneHotkey?: boolean;
 }
 
-const SIDEBAR_LINKS = [
-  {
-    id: 'home',
-    get label() {
-      return isTouchDevice() ? t('nav.notifications') : t('nav.home');
-    },
-    href: LIST_VIEW_PATHS.home,
-    get icon() {
-      return isTouchDevice() ? BellIcon : HomeIcon;
-    },
-    hotkey: ['h', 'i'],
-    hotkeyToken: TOKENS.sidebar.goTo.home,
+/**
+ * Home answers `g i` too, unless the Notifications link is on the rail: two
+ * links on one key run only the first, so `i` belongs to Notifications then.
+ */
+const homeLink = (hotkey: ValidHotkey | ValidHotkey[]): SidebarItem => ({
+  id: 'home',
+  get label() {
+    return isTouchDevice() ? t('nav.notifications') : t('nav.home');
   },
+  href: LIST_VIEW_PATHS.home,
+  get icon() {
+    return isTouchDevice() ? BellIcon : HomeIcon;
+  },
+  hotkey,
+  hotkeyToken: TOKENS.sidebar.goTo.home,
+});
+
+const SIDEBAR_LINKS = [
+  homeLink(['h', 'i']),
   {
     id: 'search',
     get label() {
@@ -209,25 +211,6 @@ export function navigateToSidebarView(args: {
   }).split;
 }
 
-/** Whether the "g" leader key is currently awaiting a destination key. */
-const [goToHotkeyVisible, setGoToHotkeyVisible] = createSignal(false);
-
-/**
- * True while the "g" leader awaits a destination, so nav buttons can show
- * their destination key. Any key in the GoTo scope leaves it, including a
- * view's own GoTo command (Email's g s), so the hints clear with it.
- */
-export const isGoToLeaderActive = () =>
-  goToHotkeyVisible() && activeScope() === GO_TO_COMMAND_SCOPE;
-
-const resetGoToHotkeysState = () => {
-  setGoToHotkeyVisible(false);
-  // To prevent the next key from triggering the hotkey handler,
-  // we reset the pressed keys state and exit the command scope
-  clearPressedKeys();
-  activateClosestDOMScope();
-};
-
 /**
  * Hosts the always-on global shortcuts that must keep working even on
  * full-cover routes like solo settings: the "g" leader key with its per-link
@@ -253,6 +236,7 @@ export const GoToHotkeys = () => {
   const activityFeedEnabled = useActivityFeedFlag();
   const recentViewEnabled = useRecentViewFlag();
   const reviews = useFeatureFlag(enableTasksReviews);
+  const notificationsEnabled = useUnifiedNotificationsFlag();
   const external = useFeatureFlag(enableWhatsappLinked);
   const crm = useFeatureFlag(enableCrm);
   const links = createMemo((): SidebarItem[] =>
@@ -261,73 +245,18 @@ export const GoToHotkeys = () => {
       activityFeedEnabled(),
       recentViewEnabled(),
       reviews().enabled,
+      notificationsEnabled(),
       external().enabled,
       crm().enabled
     )
   );
 
-  const debounceResetHotkeysState = debounce(resetGoToHotkeysState, 2000);
-  const debounceSetHotkeyVisible = debounce(
-    () => setGoToHotkeyVisible(true),
-    200
-  );
+  const goToLeader = useGoToLeader();
 
-  // Register 'g' as a leader key that activates the global GO_TO command scope
-  const leaderHotkey = registerHotkey({
-    hotkey: GO_TO_LEADER_KEY,
-    scopeId: 'global',
-    hotkeyToken: TOKENS.sidebar.goToLeader,
-    description: () => t('nav.goToPage'),
-    keyDownHandler: () => {
-      // We debounce the time till the hot keys are visible to allow other commands
-      // like g+g to fire
-      debounceSetHotkeyVisible();
-      debounceResetHotkeysState();
-      return true;
-    },
-    activateCommandScopeId: GO_TO_COMMAND_SCOPE,
-    hide: true,
-    registrationType: 'add',
-  });
-
-  // These two register in the 'global' scope, which outlives this component, so
-  // dispose them on unmount. Otherwise a remount (e.g. crossing the mobile
-  // breakpoint) leaks: the 'add' leader stacks duplicate handlers and the
-  // token-only invite command accumulates in the registry. The per-link nav
-  // hotkeys below are disposed by their own effect cleanup.
-  onCleanup(() => {
-    inviteHotkey.dispose();
-    leaderHotkey.dispose();
-  });
-
-  // When the go to command scope is active, we want to prevent
-  // other default hotkeys from running. So doing "g" + some key
-  // not part of the sidebar hotkeys, won't fire the command
-  // for the key
-  useHotkeyInterceptor((context) => {
-    // If a hotkey is going to be fired, but the hotkeys are not
-    // visible, then it's not a sidebar nav hotkey and we can
-    // ignore it and reset our visible state
-    if (!goToHotkeyVisible()) {
-      debounceSetHotkeyVisible.clear();
-      return false;
-    }
-
-    if (context.eventType !== 'keydown') return false;
-
-    if (
-      context.activeScopeId !== GO_TO_COMMAND_SCOPE ||
-      // The sidebar's letters and those a focused view adds (Email's g s).
-      getRunnableHotkeys(GO_TO_COMMAND_SCOPE).has(context.pressedKeysString)
-    ) {
-      return false;
-    }
-
-    resetGoToHotkeysState();
-    debounceResetHotkeysState.clear();
-
-    return true;
-  });
+  // Send Invites registers in the 'global' scope, which outlives this
+  // component, so dispose it on unmount. The per-link nav hotkeys below are
+  // disposed by their own effect cleanup.
+  onCleanup(() => inviteHotkey.dispose());
 
   // Register navigation shortcuts in the global GO_TO command scope.
   // This must be reactive because prod feature flags can add links after the
@@ -336,10 +265,7 @@ export const GoToHotkeys = () => {
     const disposers = links().map((link) => {
       const openSidebarView = (e?: KeyboardEvent) => {
         e?.preventDefault();
-        if (goToHotkeyVisible()) {
-          resetGoToHotkeysState();
-          debounceResetHotkeysState.clear();
-        }
+        goToLeader.leave();
 
         if (link.id === 'search' && !e?.shiftKey) {
           const activeSplit = globalSplitManager()?.activeSplit();
@@ -419,6 +345,17 @@ const COMPANIES_LINK: SidebarItem = {
   hotkeyToken: TOKENS.sidebar.goTo.companies,
 };
 
+const NOTIFICATIONS_LINK: SidebarItem = {
+  id: 'notifications',
+  get label() {
+    return t('nav.notifications');
+  },
+  href: '/notifications',
+  icon: BellIcon,
+  hotkey: 'i',
+  hotkeyToken: TOKENS.sidebar.goTo.notifications,
+};
+
 const ACTIVITY_LINK: SidebarItem = {
   id: 'activity',
   get label() {
@@ -468,15 +405,17 @@ const EXTERNAL_LINK: SidebarItem = {
 
 /**
  * Assemble the ordered sidebar link list: the static links plus the
- * flag-gated Recent, Activity, Calendar, Calls, Reviews, CRM, and External
- * entries in their correct positions. Callers subscribe to the flags and pass
- * them in, so a flag that resolves after mount still rebuilds the list.
+ * flag-gated Notifications, Recent, Activity, Calendar, Calls, Reviews, CRM,
+ * and External entries in their correct positions. Callers subscribe to the
+ * flags and pass them in, so a flag that resolves after mount still rebuilds
+ * the list.
  */
-const buildSidebarLinks = (
+export const buildSidebarLinks = (
   showCalendar: boolean,
   showActivity: boolean,
   showRecent: boolean,
   showReviews: boolean,
+  showNotifications: boolean,
   showExternal: boolean,
   showCustomers: boolean
 ): SidebarItem[] => {
@@ -489,8 +428,13 @@ const buildSidebarLinks = (
     links = [...links.slice(0, idx + 1), link, ...links.slice(idx + 1)];
   };
 
-  // Home leads; Recent and Activity follow it in that order.
+  // Home leads; Notifications, Recent and Activity follow it in that order.
   let anchorId = 'home';
+  if (showNotifications) {
+    links = links.map((link) => (link.id === 'home' ? homeLink('h') : link));
+    insertAfter(anchorId, NOTIFICATIONS_LINK);
+    anchorId = 'notifications';
+  }
   if (showRecent) {
     insertAfter(anchorId, RECENT_LINK);
     anchorId = 'recent';

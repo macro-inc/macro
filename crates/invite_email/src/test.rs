@@ -539,6 +539,19 @@ fn team_invite_links_the_button_and_a_pasteable_fallback() {
 }
 
 #[test]
+fn agent_team_invite_links_to_the_agent_signup_page() {
+    let invite = InviteToTeamMetadata {
+        is_agent: true,
+        ..make_team_invite(InviteePlan::Free)
+    };
+    let url = invite.invite_url().to_string();
+    let body = invite.format_email().body;
+
+    assert!(url.ends_with("/app/signup/agent?team_invite=00000000-0000-0000-0000-00000000000a"));
+    assert_eq!(body.matches(&url).count(), 3);
+}
+
+#[test]
 fn team_invite_escapes_the_team_name() {
     let invite = InviteToTeamMetadata {
         team_name: "<script>alert(1)</script>".to_string(),

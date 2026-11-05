@@ -88,8 +88,17 @@ Connections blocked on locks, or a transaction open for a long time.
   its query. Advisory locks (`pg_advisory_xact_lock`) and tuple locks from
   concurrent updates of the same rows have caused past overloads.
 - A long open transaction holds its locks and stops vacuum. The long-running
-  transaction alert includes the normalized SQL. Confirm it in
-  `pg_stat_activity` (`xact_start`, `state = 'idle in transaction'`).
+  transaction alert fires once the oldest transaction has stayed old for five
+  minutes. Find it and its SQL in `pg_stat_activity` (`xact_start`,
+  `state = 'idle in transaction'`) or Database Monitoring.
+- A single sample of `postgresql.activity.xact_start_age` as old as the
+  newest `notification-service` task, at about :09 past the hour, is not a
+  transaction. notification-service's `LISTEN` connection (no
+  `application_name`) briefly runs a server-side transaction while it delivers
+  the `NOTIFY` burst from the hourly notification retention sweep. That
+  transaction's `xact_start` is the connection's last statement, its `LISTEN`
+  at task start. A fresh `backend_xmin` (thousands of transaction IDs old,
+  not millions) shows it is not holding back vacuum.
 - Levers: cancel (`pg_cancel_backend`) or terminate (`pg_terminate_backend`)
   the blocking session once you know what it is; stop the job that keeps
   starting new ones.

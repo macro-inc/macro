@@ -12,15 +12,23 @@ HTML worker belong to `packages/sdk-docs`.
   the directory it is given; `crates/code_mode_assets` runs it at build time.
 - `scripts/typedoc.ts`: index each entity and split linked Markdown into
   per-symbol references (classes, methods, types).
-- `scripts/catalog.ts`: compact entity descriptions; agent and harness docs share
-  a topic, as do native channels, external chats and WhatsApp, so discovery stays
-  within its 32-question classifier limit.
+- `scripts/catalog.ts`: the entity directories agents discover; agent and
+  harness docs share a topic, as do native channels, external chats and
+  WhatsApp, and cross-type search, workspace browsing and AI chats
+  (`search`, whose guide is the `search` topic), and the web and URL previews
+  (`web`). Keep the catalog at 32
+  entities or fewer: Jev ranks them in one 32-question call.
+- Each entity's description is its one `@routing` sentence ("Use when …; not
+  …") and its `guide` every `@agent` block, both from the SDK's TSDoc and
+  collected by `packages/sdk-docs/src/render.ts`. Generation fails for an
+  entity without exactly one `@routing` sentence, or a tag outside every
+  entity. Agents route on the sentence; the guide is how that area works,
+  inlined into unrouted prompts and loaded with the entity on routed turns.
 - `src/index.ts`: public SDK exports used by programs.
 
 ## Tool contracts
 
 - External chat sends/uploads use only the credential owner's connection and accept their session or own API token (including signed agent attribution); bots never send. Pairing and account/access controls require the person's session.
-- Agent documentation excludes the legacy chats/workspace namespaces and their Macro properties; public SDK APIs remain compatible for existing callers.
 
 ## Checks
 

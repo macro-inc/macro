@@ -11,6 +11,9 @@ export type NotificationType = NotifEvent['tag'];
 
 type NotificationTypePreferences = GetNotificationTypePreferencesResponses[200];
 
+/**
+ * @routing Use when reading the user's notifications or marking them seen, such as catching up on what they missed; not sending messages.
+ */
 export class NotificationNamespace {
   constructor(private readonly client: MacroClient) {}
 

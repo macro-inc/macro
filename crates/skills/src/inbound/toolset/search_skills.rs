@@ -61,6 +61,9 @@ pub struct SkillSearchResult {
     pub document_id: Uuid,
     /// The name of the skill.
     pub name: String,
+    /// When to use the skill, when it says.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub description: Option<String>,
     /// When the skill was last updated, when known.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub updated_at: Option<DateTime<Utc>>,
@@ -109,6 +112,7 @@ impl<Svc: SkillService> AsyncTool<SkillToolContext<Svc>> for SearchSkills {
                 .map(|skill| SkillSearchResult {
                     document_id: skill.document_id,
                     name: skill.name,
+                    description: skill.description,
                     updated_at: skill.updated_at,
                 })
                 .collect(),

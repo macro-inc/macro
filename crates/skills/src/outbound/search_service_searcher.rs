@@ -74,6 +74,7 @@ impl SkillSearcher for SearchServiceSkillSearcher {
                 UnifiedSearchResponseItem::Document(doc) => Some(SkillSummary {
                     document_id: doc.extra.id,
                     name: doc.extra.document_name,
+                    description: None,
                     updated_at: doc.metadata.as_ref().map(|m| m.updated_at),
                 }),
                 _ => None,
