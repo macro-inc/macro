@@ -7,6 +7,7 @@ mod recovery;
 mod search;
 mod session_task;
 mod user_cleanup;
+mod work_registration;
 mod working_branch;
 use crate::domain::model::{
     AgentMcpServer, DEFAULT_AGENT_SESSION_NAME, SessionSource, SessionVisibility,

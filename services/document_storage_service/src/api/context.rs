@@ -948,6 +948,7 @@ pub(crate) struct ApiContext {
     pub graphql_calendar_context: graphql_calendar::CalendarGraphqlContext,
     pub graphql_calendar_mutation_context: graphql_calendar::CalendarGraphqlMutationContext,
     pub graphql_work_feed_context: complete_graph::WorkFeedGraphqlContext,
+    pub graphql_registered_work_context: complete_graph::RegisteredWorkGraphqlContext,
     pub graphql_notification_inbox_context: complete_graph::NotificationInboxGraphqlContext,
     pub graphql_initiative_entity_loader: graphql_initiative::InitiativeEntityLoader,
     pub graphql_agent_session_entity_loader: graphql_soup::AgentSessionEntityLoader,

@@ -30520,6 +30520,11 @@
             "type": "string",
             "description": "User or bot that performed the edit."
           },
+          "agent_correlation_id": {
+            "type": ["string", "null"],
+            "format": "uuid",
+            "description": "Invocation from the editor's signed document grant."
+          },
           "on_behalf_of": {
             "oneOf": [
               {

@@ -4,8 +4,6 @@ import { type Accessor, createContext, useContext } from 'solid-js';
 export type NotificationsCalendarPaneContext = {
   /** Bumped when the open event is chosen again, to re-aim at it in place. */
   refocus: Accessor<number>;
-  /** Close the Calendar and return to the notifications list. */
-  onReturn: () => void;
 };
 
 const Context = createContext<NotificationsCalendarPaneContext>();

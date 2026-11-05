@@ -53,3 +53,5 @@ worker that sends email/mobile-push/websocket notifications.
 ## Related
 
 - Skill: `new-service`
+
+- The HTTP boundary validates optional signed agent correlation without changing existing authorization.

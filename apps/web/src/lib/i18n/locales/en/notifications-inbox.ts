@@ -69,7 +69,6 @@ export default {
   clearFailed: 'Couldn’t clear notifications',
 
   // List states
-  location: 'Notifications location',
   loading: 'Loading notifications',
   loadFailed: 'Notifications couldn’t be loaded.',
   tryAgain: 'Try again',

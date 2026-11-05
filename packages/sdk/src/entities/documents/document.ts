@@ -117,7 +117,7 @@ export class Document
     ).token;
   }
 
-  /** Prepare multipart content saving and return the service's upload instructions. */
+  /** Prepare a multipart file upload; to change a markdown document's text, use `edit`. */
   async prepareSave(parts: PreSaveDocumentRequest['newBom']) {
     return unwrap(
       await this.client.storage.presaveDocumentHandler({
@@ -127,7 +127,7 @@ export class Document
     ).data;
   }
 
-  /** Commit uploaded content. Does not retry uncertain writes. */
+  /** Commit an uploaded file; to change a markdown document's text, use `edit`. Does not retry uncertain writes. */
   async save(options: SaveDocumentRequest) {
     return (
       await this.mutate((c) =>
@@ -139,7 +139,7 @@ export class Document
     ).data;
   }
 
-  /** Commit a simple document save. */
+  /** Commit a simple file save; to change a markdown document's text, use `edit`. */
   async simpleSave() {
     return (
       await this.mutate((c) =>
@@ -379,9 +379,9 @@ export class Document
   }
 
   /**
-   * Edit a markdown document or task body by natural-language instructions,
-   * which an AI editor carries out, merging with anyone editing at the same
-   * time.
+   * Change a markdown document's or task body's text in place: pass
+   * natural-language instructions and an AI editor applies them, merging with
+   * concurrent edits.
    *
    * Write instructions like a precise request to a careful editor:
    * - Say where: name the section or heading, or quote the text to change.

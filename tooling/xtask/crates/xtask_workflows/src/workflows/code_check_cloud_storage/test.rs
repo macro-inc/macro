@@ -74,6 +74,7 @@ fn status_check_covers_every_job() {
         "check",
         "doppler-config",
         "test",
+        "build-service-bins",
         "graphql-schema-compat",
     ] {
         let check = format!(r#""${{{{ needs.{needed}.result }}}}""#);
@@ -351,4 +352,23 @@ fn test_postgres_keeps_its_data_in_shared_memory_across_a_restart() {
         "{options}"
     );
     assert!(!options.contains("--tmpfs"), "{options}");
+}
+
+/// The gate may run the job with nothing to build, but it must never hide a
+/// service the script builds, or a real-build failure in it passes the PR.
+#[test]
+fn service_bins_gate_covers_every_service_the_script_builds() {
+    let script = include_str!("../scripts/build_service_bins.sh");
+    let services = script
+        .split("for service in ")
+        .nth(1)
+        .and_then(|rest| rest.split("; do").next())
+        .expect("service list");
+
+    for service in services.split_whitespace() {
+        assert!(
+            BUILD_SERVICE_BINS_CONDITION.contains(&format!("'{service}'")),
+            "{service} is built by the script but missing from the job's gate"
+        );
+    }
 }

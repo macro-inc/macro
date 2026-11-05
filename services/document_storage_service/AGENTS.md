@@ -108,3 +108,5 @@ threads, pins, recents, notifications, folders, activity.
 - Rules: `.agents/rules/rust/db.md`, `.agents/rules/observability.md`
 
 - Negotiate Mail cache profiles through `x-macro-mail-cache-profile` (CORS-enabled HTTP) and `mailCacheProfile` (WebSocket connection init); preserve authenticated connection data and default unknown capabilities to v2.
+
+- The HTTP boundary validates agent correlation; activity consumption restores Kafka envelope attribution before materialization.

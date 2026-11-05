@@ -41,6 +41,7 @@ dependencies = [
 name = "activity"
 version = "0.1.0"
 dependencies = [
+ "agent_correlation",
  "ai_toolset",
  "async-trait",
  "bot_id",
@@ -353,6 +354,26 @@ dependencies = [
 ]
 
 [[package]]
+name = "agent_correlation"
+version = "0.1.0"
+dependencies = [
+ "async-trait",
+ "axum",
+ "macro_auth",
+ "macro_db_migrator",
+ "rootcause",
+ "serde",
+ "serde_json",
+ "serde_urlencoded",
+ "sqlx",
+ "thiserror 2.0.18",
+ "tokio",
+ "tracing",
+ "uuid",
+ "workspace-hack",
+]
+
+[[package]]
 name = "agent_egress"
 version = "0.1.0"
 dependencies = [
@@ -529,6 +550,7 @@ dependencies = [
  "agent_api_keys",
  "agent_changes",
  "agent_code_mode",
+ "agent_correlation",
  "agent_egress",
  "agent_fold",
  "agent_harness",
@@ -678,6 +700,7 @@ dependencies = [
  "serde_json",
  "share_permission_db_utils",
  "soup",
+ "soup_realtime",
  "sqlx",
  "sqs_client",
  "sqs_worker",
@@ -838,6 +861,7 @@ dependencies = [
 name = "agent_session"
 version = "0.1.0"
 dependencies = [
+ "activity",
  "agent",
  "agent-client-protocol",
  "agent_fold",
@@ -858,6 +882,7 @@ dependencies = [
  "entity_access_db_utils",
  "entity_registry",
  "entity_registry_db_utils",
+ "futures",
  "genai_telemetry",
  "harness_id",
  "jev",
@@ -2194,6 +2219,7 @@ version = "0.1.0"
 dependencies = [
  "aes-gcm 0.10.3",
  "agent_api_keys",
+ "agent_correlation",
  "ai_billing",
  "ai_usage",
  "analytics_client",
@@ -3937,6 +3963,7 @@ dependencies = [
 name = "calendar_service"
 version = "0.1.0"
 dependencies = [
+ "agent_correlation",
  "anyhow",
  "authentication_service_client",
  "aws-sdk-secretsmanager",
@@ -4290,6 +4317,7 @@ name = "channels"
 version = "0.1.0"
 dependencies = [
  "activity",
+ "agent_correlation",
  "ai_toolset",
  "anyhow",
  "async-trait",
@@ -4873,6 +4901,7 @@ dependencies = [
  "graphql_notification_inbox",
  "graphql_permission",
  "graphql_properties",
+ "graphql_registered_work",
  "graphql_scheduled_action",
  "graphql_soup",
  "graphql_work_feed",
@@ -4994,6 +5023,7 @@ dependencies = [
 name = "connection_gateway"
 version = "0.1.0"
 dependencies = [
+ "agent_correlation",
  "anyhow",
  "async-trait",
  "aws-sdk-dynamodb",
@@ -5193,6 +5223,7 @@ dependencies = [
 name = "contacts_service"
 version = "0.1.0"
 dependencies = [
+ "agent_correlation",
  "anyhow",
  "aws-sdk-secretsmanager",
  "aws-sdk-sqs",
@@ -5276,6 +5307,8 @@ dependencies = [
  "macro_uuid",
  "model",
  "nix 0.29.0",
+ "opentelemetry",
+ "opentelemetry_sdk",
  "pptx_engine",
  "remote_env_var",
  "rs-libreoffice-bindings",
@@ -5292,6 +5325,8 @@ dependencies = [
  "tower 0.5.3",
  "tower-http",
  "tracing",
+ "tracing-opentelemetry",
+ "tracing-subscriber",
  "utoipa",
  "utoipa-swagger-ui",
  "workspace-hack",
@@ -6600,6 +6635,7 @@ dependencies = [
  "access_requests",
  "activity",
  "agent_changes",
+ "agent_correlation",
  "agent_session",
  "agent_session_realtime",
  "ai_billing",
@@ -6896,6 +6932,7 @@ name = "documents"
 version = "0.1.0"
 dependencies = [
  "activity",
+ "agent_correlation",
  "ai_billing",
  "ai_engine",
  "ai_toolset",
@@ -7319,6 +7356,7 @@ name = "email"
 version = "0.1.0"
 dependencies = [
  "activity",
+ "agent_correlation",
  "ai_toolset",
  "anyhow",
  "async-trait",
@@ -7582,6 +7620,7 @@ dependencies = [
 name = "email_service"
 version = "0.1.0"
 dependencies = [
+ "agent_correlation",
  "ammonia",
  "anyhow",
  "authentication_service_client",
@@ -8608,6 +8647,7 @@ dependencies = [
  "thiserror 2.0.18",
  "tokio",
  "tracing",
+ "tracing-subscriber",
  "upstream_error",
  "urlencoding",
  "uuid",
@@ -9485,6 +9525,27 @@ dependencies = [
  "models_properties",
  "properties",
  "rootcause",
+ "tokio",
+ "tracing",
+ "uuid",
+ "workspace-hack",
+]
+
+[[package]]
+name = "graphql_registered_work"
+version = "0.1.0"
+dependencies = [
+ "agent_session",
+ "async-graphql",
+ "async-stream",
+ "attention_feed",
+ "chrono",
+ "futures",
+ "graphql_common",
+ "graphql_soup",
+ "macro_user_id",
+ "model-entity",
+ "soup_realtime",
  "tokio",
  "tracing",
  "uuid",
@@ -12560,6 +12621,7 @@ dependencies = [
 name = "macro_event_broker"
 version = "0.1.0"
 dependencies = [
+ "agent_correlation",
  "kafka_util",
  "macro_event_topics",
  "rdkafka",
@@ -12852,9 +12914,12 @@ dependencies = [
  "fusionauth",
  "macro_auth",
  "macro_db_migrator",
+ "macro_tower_layers",
  "macro_user_id",
+ "model",
  "rand 0.9.4",
  "redis",
+ "reqwest 0.13.4",
  "serde",
  "serde_json",
  "sha2 0.10.9",
@@ -12866,9 +12931,11 @@ dependencies = [
  "tower 0.5.3",
  "tower-http",
  "tracing",
+ "upstream_error",
  "url",
  "urlencoding",
  "uuid",
+ "wiremock",
  "workspace-hack",
  "zeroize",
 ]
@@ -14073,6 +14140,7 @@ dependencies = [
 name = "notification_service"
 version = "0.1.0"
 dependencies = [
+ "agent_correlation",
  "anyhow",
  "aws-sdk-secretsmanager",
  "aws-sdk-sesv2",

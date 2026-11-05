@@ -75,7 +75,13 @@ pub mod pull_requests;
 /// Auto-archive defaults and per-session choices.
 pub mod auto_archive;
 
+/// Registering sessions as an account's work.
+pub mod work_registration;
+
 mod owned_purge;
+
+/// Session-correlated activity read surface.
+pub mod activity;
 
 /// Shared state for the agent session router: the agent session service plus
 /// the authorization state the request extractors authenticate against.
@@ -373,9 +379,10 @@ impl IntoResponse for AgentSessionApiError {
             Self::Domain(AgentSessionError::Forbidden) => {
                 (StatusCode::FORBIDDEN, "forbidden").into_response()
             }
-            Self::Domain(AgentSessionError::InvalidSharing(message)) => {
-                (StatusCode::BAD_REQUEST, message).into_response()
-            }
+            Self::Domain(
+                AgentSessionError::InvalidSharing(message)
+                | AgentSessionError::InvalidActivityQuery(message),
+            ) => (StatusCode::BAD_REQUEST, message).into_response(),
             Self::Domain(AgentSessionError::SharingChanged) => (
                 StatusCode::CONFLICT,
                 "sharing changed; reload and try again",
