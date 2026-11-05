@@ -5,6 +5,7 @@ name: Test macrod update
   pull_request:
     branches:
     - main
+    - 'synoet/ci-int-base*'
     paths:
     - crates/coding_agent_worker/**
     - '.github/workflows/test_macrod_update.yml'
