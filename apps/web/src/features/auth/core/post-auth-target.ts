@@ -46,6 +46,11 @@ export function postAuthTarget(input: {
  * returns through a pinned `macro:///login` deep link rather than the page
  * sign-in started on, so the deep link would otherwise be lost; the auth
  * service keeps the query and appends the session code.
+ *
+ * The auth service URL-decodes `original_url` once more after reading it from
+ * the query (`UrlEncoded<Url>`), so the redirect is encoded twice here: a
+ * redirect with its own `&` would otherwise split into separate parameters.
+ * {@link readRedirectParam} accepts it whether or not that extra decode runs.
  */
 export function desktopAuthCallbackUrl(
   callbackUrl: string,
@@ -53,7 +58,18 @@ export function desktopAuthCallbackUrl(
 ): string {
   const next = sanitizeNext(redirect);
   if (!next) return callbackUrl;
-  const url = new URL(callbackUrl);
-  url.searchParams.set('redirect', next);
-  return url.toString();
+  return `${callbackUrl}?redirect=${encodeURIComponent(encodeURIComponent(next))}`;
+}
+
+/**
+ * The login page's `redirect` parameter, decoded once more when it arrives
+ * still encoded (a desktop callback the auth service did not decode twice).
+ */
+export function readRedirectParam(value: unknown): unknown {
+  if (typeof value !== 'string' || !value.startsWith('%2F')) return value;
+  try {
+    return decodeURIComponent(value);
+  } catch {
+    return undefined;
+  }
 }

@@ -16,7 +16,11 @@ import { createMemo, onMount } from 'solid-js';
 import { match } from 'ts-pattern';
 import { AuthProvider, type AuthUser } from './context/auth-context';
 import { sessionTokenParam } from './core/email-code';
-import { AGENT_SETUP_PATH, postAuthTarget } from './core/post-auth-target';
+import {
+  AGENT_SETUP_PATH,
+  postAuthTarget,
+  readRedirectParam,
+} from './core/post-auth-target';
 import { createAppAuthContext } from './create-app-auth-context';
 import { AuthView } from './views/auth-view';
 import { MobileWebSignupView } from './views/mobile-web-signup-view';
@@ -57,7 +61,10 @@ export function Login(props: { signupMode?: boolean }) {
         // Desktop sign-up resolves into onboarding's frame either way.
         pending={desktopSignup() ? () => <OnboardingPending /> : undefined}
         signedIn={(user) => (
-          <PostAuthGate user={user()} redirect={params.redirect} />
+          <PostAuthGate
+            user={user()}
+            redirect={readRedirectParam(params.redirect)}
+          />
         )}
       />
     </AuthProvider>

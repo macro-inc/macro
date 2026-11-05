@@ -3,6 +3,7 @@ import {
   AGENT_SETUP_PATH,
   desktopAuthCallbackUrl,
   postAuthTarget,
+  readRedirectParam,
 } from './post-auth-target';
 
 const newUser = {
@@ -92,15 +93,24 @@ describe('postAuthTarget', () => {
   });
 });
 
+/** What the app sees after the auth service reads `original_url` from its
+ * query and, when `doubleDecode`, decodes it once more (`UrlEncoded<Url>`). */
+function redirectAfterAuthService(callback: string, doubleDecode: boolean) {
+  const returned = doubleDecode ? decodeURIComponent(callback) : callback;
+  const url = new URL(`${returned}&token=code`);
+  return readRedirectParam(url.searchParams.get('redirect'));
+}
+
 describe('desktopAuthCallbackUrl', () => {
-  it('carries a safe redirect on the desktop callback', () => {
-    const url = new URL(
-      desktopAuthCallbackUrl('macro:///login', '/team-invite?id=abc')
-    );
-    expect(url.protocol).toBe('macro:');
-    expect(url.pathname).toBe('/login');
-    expect(url.searchParams.get('redirect')).toBe('/team-invite?id=abc');
-  });
+  it.each([true, false])(
+    'carries a redirect through the auth service (double decode: %o)',
+    (doubleDecode) => {
+      const redirect = '/team-invite?id=abc&source=email';
+      const callback = desktopAuthCallbackUrl('macro:///login', redirect);
+      expect(callback.startsWith('macro:///login?redirect=')).toBe(true);
+      expect(redirectAfterAuthService(callback, doubleDecode)).toBe(redirect);
+    }
+  );
 
   it.each<[unknown]>([[null], ['https://evil.example'], ['//evil.example']])(
     'leaves the callback alone for %o',
@@ -110,4 +120,22 @@ describe('desktopAuthCallbackUrl', () => {
       );
     }
   );
+});
+
+describe('readRedirectParam', () => {
+  it('passes a decoded redirect through', () => {
+    expect(readRedirectParam('/team-invite?id=abc')).toBe(
+      '/team-invite?id=abc'
+    );
+  });
+
+  it('decodes a redirect that arrives still encoded', () => {
+    expect(readRedirectParam('%2Fteam-invite%3Fid%3Dabc')).toBe(
+      '/team-invite?id=abc'
+    );
+  });
+
+  it('drops a malformed encoding', () => {
+    expect(readRedirectParam('%2F%E0%A4%A')).toBeUndefined();
+  });
 });
