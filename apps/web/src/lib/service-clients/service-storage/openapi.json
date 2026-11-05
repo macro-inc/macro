@@ -10991,6 +10991,105 @@
         }
       }
     },
+    "/documents/upload": {
+      "post": {
+        "tags": ["document"],
+        "summary": "Upload a file's bytes as a new document, up to 25 MiB.",
+        "description": "The body is the raw file content. Preview generation and indexing may\nfinish after the response.",
+        "operationId": "upload_file",
+        "parameters": [
+          {
+            "name": "fileName",
+            "in": "query",
+            "description": "Filename including its extension, such as `report.pdf`; the extension\nsets the file type. No directory components.",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "projectId",
+            "in": "query",
+            "description": "Destination project. Requires edit access; omit for top-level files.",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "requestBody": {
+          "description": "The file's bytes, at most 25 MiB.",
+          "content": {
+            "application/octet-stream": {
+              "schema": {
+                "type": "string",
+                "format": "binary"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UploadFileResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid filename or content",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "No edit access to the destination project",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "The caller cannot create documents"
+          },
+          "413": {
+            "description": "The file exceeds 25 MiB"
+          },
+          "422": {
+            "description": "Document name exceeds the maximum length",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/documents/{document_id}": {
       "get": {
         "tags": ["document"],
@@ -46361,6 +46460,22 @@
           },
           "sha": {
             "type": "string"
+          }
+        }
+      },
+      "UploadFileResponse": {
+        "type": "object",
+        "description": "The document created from the uploaded bytes.",
+        "required": ["documentId", "sizeBytes"],
+        "properties": {
+          "documentId": {
+            "type": "string",
+            "description": "The new document."
+          },
+          "sizeBytes": {
+            "type": "integer",
+            "description": "Number of bytes stored.",
+            "minimum": 0
           }
         }
       },
