@@ -47,6 +47,8 @@ deploy repo, which Argo CD syncs.
   it to `xtask_workflows/src/workflows/forge.rs`; never add one that deploys.
 - See what is deployed: `https://argocd.localhost:9443/` (user `admin`; password
   in `argocd-initial-admin-secret`). The forge login is in `forge/forge-admin`.
+- Build the self-host chart: `cargo x platform chart`, then `helm install`. It needs
+  the `macro-env` and `fusionauth-kickstart` Secrets first (see its README).
 - Add a workload: add it to `components.nix`, using a Service name that matches
   what `local_env.rs` dials. Mark data-plane pieces `infra = true` so they
   sync before provisioning (`wave` overrides the default).
@@ -58,6 +60,7 @@ deploy repo, which Argo CD syncs.
 
 - `cargo test -p xtask_local --features local-stack platform`
 - `cargo x workflows --check`, for `.gitea/workflows`.
+- `python3 -m unittest test_generate_chart` in `selfhost/`.
 - Render an environment: `nix build --impure --expr '... f.platform.cluster.manifests'`
   (see `nix_build` in `platform.rs`). The flake reads only git-tracked files, so
   `git add` new files first.

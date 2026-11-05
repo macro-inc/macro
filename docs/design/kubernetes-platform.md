@@ -362,6 +362,11 @@ Built and exercised on the local cluster (`infra/platform`, `cargo x platform`):
   unmodified, behind `lambda-runner`. The handlers start and stay up, but no
   handler has been driven end to end, and neither have uploads or search indexing.
 - **Phase 5, in part:** Gitea, its runners, and CI checks. See CI status below.
+- **Phase 7, in part:** `cargo x platform chart` builds the Helm chart from an
+  instance's manifests. A plain `helm install` into an empty namespace on this
+  cluster, with no Argo CD or forge in the path, provisioned itself and reached a
+  browser sign-up in about two minutes. It reused this cluster's ingress and
+  registry, and dev-sized images.
 - **Rust E2E suite:** 16 pass. One assertion in
   `scoped_bot_resolves_document_access_through_dss` fails, and fails the same way
   on a plain compose stack, so the platform does not cause it.
@@ -384,10 +389,11 @@ Not built yet:
 - Queues on Kafka (services still use the SQS API, on ElasticMQ), OpenBao for
   KMS, the email and push ports, and KEDA.
 - The bots, and deploys on the forge.
-- Phases 6 to 9: AWS (the terranix module exists; nothing is wired or applied),
-  self-hosting (the chart generator's tests pass, but it is not wired to nixidy's
-  output and has never been installed), gRPC and service splits, and the prod
-  cutover.
+- Phases 6, 8, and 9: AWS (the terranix module exists; nothing is wired or applied),
+  gRPC and service splits, and the prod cutover.
+- The rest of phase 7: publishing the images and chart per release, a generator for
+  the Secrets a self-hoster must supply, a production-sized install, and a run on a
+  stock cluster such as kind.
 - The parity check, and release images from crane. Every image today wraps a
   host-built debug binary with debug info stripped.
 - Mirroring from GitHub automatically, which needs a credential decision.
