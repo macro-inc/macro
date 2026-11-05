@@ -1,0 +1,171 @@
+# Experiment only, never merged. Same setup as the `test` job, compile only.
+# Each arm has its own cache volume and sccache namespace, so it cannot change
+# what other pull requests see. Each attempt edits one crate, the way a real PR
+# does, so re-runs of a run measure a warm cache with one crate changed.
+name: ci speed compile arms
+env:
+  CARGO_INCREMENTAL: '0'
+  CARGO_TERM_COLOR: always
+  CARGO_PROFILE_DEV_DEBUG: limited
+  CARGO_PROFILE_TEST_DEBUG: limited
+  RUST_BACKTRACE: '1'
+  RUSTFLAGS: '-Dwarnings -C link-arg=-fuse-ld=mold'
+on:
+  pull_request:
+    types: [opened, synchronize, reopened]
+    branches: [main]
+jobs:
+  compile:
+    strategy:
+      fail-fast: false
+      matrix:
+        arm: [ctl, lt, dbg0, split, macro3, mtime, profile]
+    name: compile (${{ matrix.arm }})
+    runs-on: namespace-profile-linux-rust-ci;overrides.cache-tag=ci-speed-ct-${{ matrix.arm }}
+    env:
+      ARM: ${{ matrix.arm }}
+      CARGO_BUILD_JOBS: '8'
+      SCCACHE_IDLE_TIMEOUT: '0'
+      SCCACHE_LOG: debug
+      SCCACHE_ERROR_LOG: /tmp/sccache-server.log
+      RUST_PACKAGES: agent_code_mode agent_egress agent_harness agent_harness_service agent_inmem ai_projections ai_tools authentication_service calendar_events calendar_scheduling calendar_service channel_bots collab_surface complete_graph convert_service deleted_item_poller document_storage_service documents docx_unzip_handler email email_api_client email_focus_worker email_service email_suppression_handler graphql_calendar graphql_scheduled_action macro_db_client macro_middleware memory reminders scheduled_action search_processing_service search_service seed_cli soup user_link_cleanup_handler
+    services:
+      postgres:
+        image: pgvector/pgvector:pg14
+        env:
+          POSTGRES_USER: user
+          POSTGRES_PASSWORD: password
+          POSTGRES_DB: macrodb
+        ports: ['5432:5432']
+        options: '--health-cmd pg_isready --health-interval 10s --health-timeout 5s --health-retries 5 --shm-size 1g'
+      redis:
+        image: redis:7
+        ports: ['6379:6379']
+        options: '--health-cmd "redis-cli ping" --health-interval 10s --health-timeout 5s --health-retries 5'
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
+        with:
+          clean: 'false'
+          persist-credentials: 'false'
+      - name: Mount Namespace cache volume
+        uses: namespacelabs/nscloud-cache-action@15799a6b54e5765f85b2aac25b3f0df43ed571c0
+        with:
+          cache: rust
+          path: /nix
+        continue-on-error: true
+      - uses: './.github/actions/setup-nix'
+      - uses: './.github/actions/setup-nix-dev-shell'
+      - name: Configure Namespace remote sccache
+        run: |-
+          set -euo pipefail
+          env_file="$(mktemp "$RUNNER_TEMP/namespace-sccache.XXXXXX")"
+          trap 'rm -f "$env_file"' EXIT
+          nsc cache sccache setup --cache_name "ci-speed-ct-$ARM" > "$env_file"
+          while IFS= read -r line; do
+            k="${line%%=*}"; v="${line#*=}"
+            [ -n "$v" ] && [ "$k" != "$line" ] || continue
+            case "$k" in *TOKEN*|*SECRET*|*PASSWORD*) echo "::add-mask::$v" ;; esac
+          done < "$env_file"
+          cat "$env_file" >> "$GITHUB_ENV"
+          sccache --stop-server >/dev/null 2>&1 || true
+      - name: Start sccache server
+        run: sccache --start-server
+      - name: Build code-mode assets
+        run: |
+          assets="$(nix build --no-link --print-out-paths --print-build-logs .#code-mode-assets)"
+          echo "CODE_MODE_ASSETS_DIR=$assets" >> "$GITHUB_ENV"
+      - name: configure postgres
+        run: |
+          postgres_container="$(docker ps --format '{{.ID}} {{.Image}}' | awk '$2 == "pgvector/pgvector:pg14" { print $1; exit }')"
+          docker exec -i "$postgres_container" psql -U user -d macrodb <<'SQL'
+          ALTER SYSTEM SET fsync = off;
+          ALTER SYSTEM SET synchronous_commit = off;
+          ALTER SYSTEM SET full_page_writes = off;
+          ALTER SYSTEM SET max_locks_per_transaction = 8192;
+          SQL
+          docker restart "$postgres_container"
+          until docker exec "$postgres_container" pg_isready -U user -d macrodb; do sleep 1; done
+      - name: prepare tests
+        run: just setup_test_envs && just initialize_dbs && just setup_test_template
+      - name: change one crate, as a PR does
+        run: |
+          printf '\n// ci speed %s.%s\n' "$GITHUB_RUN_ID" "$GITHUB_RUN_ATTEMPT" >> crates/calendar_events/src/lib.rs
+          git add crates/calendar_events/src/lib.rs
+      - name: set arm options
+        run: |
+          set -euo pipefail
+          case "$ARM" in
+            lt)
+              echo 'CARGO_PROFILE_DEV_DEBUG=line-tables-only' >> "$GITHUB_ENV"
+              echo 'CARGO_PROFILE_TEST_DEBUG=line-tables-only' >> "$GITHUB_ENV"
+              ;;
+            dbg0)
+              echo 'CARGO_PROFILE_DEV_DEBUG=0' >> "$GITHUB_ENV"
+              echo 'CARGO_PROFILE_TEST_DEBUG=0' >> "$GITHUB_ENV"
+              ;;
+            split)
+              echo 'CARGO_PROFILE_DEV_SPLIT_DEBUGINFO=unpacked' >> "$GITHUB_ENV"
+              echo 'CARGO_PROFILE_TEST_SPLIT_DEBUGINFO=unpacked' >> "$GITHUB_ENV"
+              ;;
+            macro3)
+              echo 'CARGO_PROFILE_DEV_BUILD_OVERRIDE_OPT_LEVEL=3' >> "$GITHUB_ENV"
+              ;;
+            mtime)
+              # Old mtime for every tracked file and directory, then "now" only
+              # for files whose blob differs from what target/ was built from.
+              git ls-files -s | sort > /tmp/source-manifest
+              git ls-files -z | xargs -0 -r touch -h -d @1577836800
+              git ls-files | sed -E 's#/[^/]*$##' | sort -u | xargs -d '\n' -r touch -h -d @1577836800 || true
+              touch -h -d @1577836800 .
+              if [ -f target/.source-manifest ]; then
+                comm -13 target/.source-manifest /tmp/source-manifest | cut -f2 | tee /tmp/changed-since-target | xargs -d '\n' -r touch
+                echo "CISPEED changed_since_target=$(wc -l < /tmp/changed-since-target)"
+              fi
+              echo 'CARGO_LOG=cargo::core::compiler::fingerprint=info' >> "$GITHUB_ENV"
+              ;;
+          esac
+      - name: compile tests
+        run: |
+          set -euo pipefail
+          mkdir -p /tmp/exp
+          pkg_args=()
+          for p in $RUST_PACKAGES; do pkg_args+=(-p "$p"); done
+          start=$(date +%s)
+          # What `cargo nextest run` runs for its build phase.
+          cargo test --no-run --timings --config 'profile.dev.package."*".debug=false' --all-features "${pkg_args[@]}" 2>&1 | tee /tmp/exp/cargo.log | grep -v 'cargo::core::compiler::fingerprint' || { echo "CISPEED compile_failed=1"; exit 1; }
+          echo "CISPEED compile_s=$(( $(date +%s) - start ))"
+          [ ! -f /tmp/source-manifest ] || cp /tmp/source-manifest target/.source-manifest
+      - name: time passes for the biggest units
+        if: matrix.arm == 'profile'
+        run: |
+          set -uo pipefail
+          for spec in 'document_storage_service --lib' 'document_storage_service --lib --profile test' 'macro_db_client --lib --profile test' 'email --lib --profile test' 'agent_harness --lib --profile test'; do
+            echo "=== $spec"
+            start=$(date +%s)
+            # shellcheck disable=SC2086
+            RUSTC_BOOTSTRAP=1 cargo rustc -p $spec --config 'profile.dev.package."*".debug=false' --all-features -- -Ztime-passes > /tmp/exp/tp.log 2>&1 || echo failed
+            echo "wall=$(( $(date +%s) - start ))"
+            sed 's/\x1b\[[0-9;]*m//g' /tmp/exp/tp.log | grep -E '^time: +[0-9]+\.[0-9]+' | awk '$2+0 >= 0.5' | cut -c1-110
+            mv /tmp/exp/tp.log "/tmp/exp/tp-$(echo "$spec" | tr ' ' '_').log"
+          done
+      - name: summarize
+        if: always()
+        run: |
+          sccache --show-stats || true
+          du -sh target target/debug/deps 2>/dev/null || true
+          find target/debug/deps -maxdepth 1 -type f -executable -printf '%s\n' | awk '{s+=$1;n++} END {print "CISPEED executables="n" exe_gb="s/1e9}'
+          echo "CISPEED target_gb=$(du -s --block-size=1G target | cut -f1)"
+          grep -E 'Cache (hit|miss)|Compiled in|parse_arguments: CannotCache' /tmp/sccache-server.log | sed -E 's/^\[[^]]*\] *//' > /tmp/exp/sccache-outcomes.log || true
+          cp target/cargo-timings/cargo-timing.html /tmp/exp/ || true
+          gzip -f /tmp/exp/cargo.log || true
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        if: always()
+        with:
+          name: arm-${{ matrix.arm }}-${{ github.run_attempt }}
+          path: /tmp/exp
+          retention-days: 7
+      - uses: './.github/actions/teardown-nix'
+        if: always()
+concurrency:
+  group: ci-speed-compile-arms-${{ github.ref }}
+  cancel-in-progress: false
