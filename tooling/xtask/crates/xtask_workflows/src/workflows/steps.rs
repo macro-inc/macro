@@ -382,9 +382,11 @@ pub fn mount_web_test_cache_volume() -> Step<Use> {
         .add_with((
             "path",
             format!(
-                "{}\n{}",
+                "{}\n/home/runner/.cargo/registry\n/home/runner/.cargo/git\n{}\n{}\n{}",
                 vars::BUN_CACHE_VOLUME_DIR,
+                xtask_paths::runtime_path!("/home/runner/.cache/.wasm-pack").as_str(),
                 vars::VITEST_MODULE_CACHE_VOLUME_DIR,
+                vars::WASM_PKG_CACHE_DIR,
             ),
         ))
 }

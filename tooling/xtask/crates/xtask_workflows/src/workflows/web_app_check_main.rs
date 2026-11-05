@@ -2,7 +2,8 @@
 //! Generated into `web-app-check-main.yml`.
 
 use gh_workflow::{
-    Concurrency, Event, Expression, Job, PullRequest, PullRequestType, Run, Step, Use, Workflow,
+    Concurrency, Event, Expression, Job, Level, Permissions, PullRequest, PullRequestType, Run,
+    Step, Strategy, Use, Workflow,
 };
 
 use crate::workflows::{
@@ -13,6 +14,7 @@ use crate::workflows::{
 
 mod android_native_check;
 mod ios_native_check;
+mod preview;
 #[cfg(test)]
 mod test;
 
@@ -56,6 +58,8 @@ pub fn web_app_check_main() -> Workflow {
         .add_job("generated-code", generated_code())
         .add_job("biome-check", biome_check())
         .add_job("test", test())
+        .add_job("functional", functional())
+        .add_job("browser", browser())
         .add_job("cycles", cycles())
         .add_job("build", build())
         .add_job(
@@ -78,6 +82,10 @@ fn path_check() -> Job {
         .add_output(
             "codegen_changed",
             "${{ steps.filter.outputs.codegen_changed }}",
+        )
+        .add_output(
+            "web_artifact_changed",
+            "${{ steps.filter.outputs.web_artifact_changed }}",
         )
         .add_output("i18n_changed", "${{ steps.filter.outputs.i18n_changed }}")
         .add_output(
@@ -204,14 +212,52 @@ fn biome_check() -> Job {
 }
 
 fn test() -> Job {
-    gated_web_job("Test")
+    gated_web_job("Test (${{ matrix.shard }}/3)")
+        .runs_on(mid_web_runner())
+        .strategy(
+            Strategy::default()
+                .fail_fast(false)
+                .matrix(serde_json::json!({ "shard": [1, 2, 3] })),
+        )
+        .add_step(checkout("Checkout Repo", false))
+        .add_step(steps::mount_web_test_cache_volume())
+        .add_step(steps::setup_nix())
+        .add_step(steps::setup_reqs_web("Setup", false))
+        .add_step(steps::configure_namespace_sccache(vars::WEB_SCCACHE_NAME))
+        .add_step(build_agent_fold_for_tests())
+        .add_step(run_tests())
+        .add_step(steps::teardown_nix())
+}
+
+/// The functional suite bundles fixtures that import every wasm package, so this
+/// job restores or builds them; unchanged packages come from the shared cache.
+fn functional() -> Job {
+    gated_web_job("Functional Tests")
+        .runs_on(mid_web_runner())
+        .add_step(checkout("Checkout Repo", false))
+        .add_step(steps::mount_web_build_check_cache_volume())
+        .add_step(steps::setup_nix())
+        .add_step(steps::setup_reqs_web("Setup", true))
+        .add_step(steps::configure_namespace_sccache(vars::WEB_SCCACHE_NAME))
+        .add_step(steps::start_sccache_server())
+        .add_step(build_wasm_for_functional_tests())
+        .add_step(run_functional_tests())
+        .add_step(steps::show_sccache_stats())
+        .add_step(steps::teardown_nix())
+}
+
+/// Browser suites that only need the agent-fold package, including the ones that
+/// run only when their paths change. Apart from vitest and the app build so
+/// neither waits for them.
+fn browser() -> Job {
+    gated_web_job("Browser Tests")
         .runs_on(mid_web_runner())
         .add_step(checkout("Checkout Repo", false))
         .add_step(steps::mount_web_test_cache_volume())
         .add_step(steps::setup_nix())
         .add_step(steps::setup_reqs_web("Setup", true))
+        .add_step(steps::configure_namespace_sccache(vars::WEB_SCCACHE_NAME))
         .add_step(build_agent_fold_for_tests())
-        .add_step(run_tests())
         .add_step(run_signup_browser_tests())
         .add_step(run_i18n_browser_tests())
         .add_step(run_database_browser_tests())
@@ -231,19 +277,27 @@ fn cycles() -> Job {
 }
 
 fn build() -> Job {
-    gated_web_job("Build")
+    let (preview_credentials, preview_steps) = preview::steps();
+    let job = gated_web_job("Build")
         // Match preview/deploy capacity for Vite's chunk-rendering memory peak.
-        .runs_on(runners::Runner::Mid.with_cache_tag(vars::WEB_CI_CACHE_TAG))
+        .runs_on(mid_web_runner())
+        .permissions(
+            Permissions::default()
+                .contents(Level::Read)
+                .pull_requests(Level::Write),
+        )
         .add_step(checkout("Checkout Repo", false))
         .add_step(steps::mount_web_build_check_cache_volume())
         .add_step(steps::setup_nix())
-        .add_step(steps::setup_reqs_web("Setup", true))
+        .add_step(steps::setup_reqs_web("Setup", false))
         .add_step(steps::configure_namespace_sccache(vars::WEB_SCCACHE_NAME))
         .add_step(steps::start_sccache_server())
         .add_step(run_build())
-        // Exercise this revision's cache engine, already compiled by build-dev.
-        .add_step(run_functional_tests())
         .add_step(steps::show_sccache_stats())
+        .add_step(preview_credentials);
+    preview_steps
+        .into_iter()
+        .fold(job, Job::add_step)
         .add_step(steps::teardown_nix())
 }
 
@@ -262,6 +316,8 @@ fn status_check() -> Job {
             "generated-code".to_string(),
             "biome-check".to_string(),
             "test".to_string(),
+            "functional".to_string(),
+            "browser".to_string(),
             "cycles".to_string(),
             "build".to_string(),
             ios_native_check::JOB_ID.to_string(),
@@ -317,7 +373,7 @@ fn paths_filter() -> Step<Use> {
         .add_with((
             "filters",
             format!(
-                "should_run:\n{artifact_paths}  - 'services/lexical-service/**'\n  - 'packages/sdk/**'\n  - 'packages/sdk-docs/**'\n  - 'services/ai-editing-worker/**'\n  - 'packages/code-mode-sdk/**'\n  - 'crates/agent_code_mode/SKILL.md'\n  - '.github/actions/setup-reqs-web/**'\ncodegen_changed:\n  - 'crates/**/*.rs'\n  - 'services/**/*.rs'\n  - 'Cargo.toml'\n  - 'Cargo.lock'\n  - 'apps/web/scripts/generate-api-schema.ts'\n  - 'apps/web/scripts/services.ts'\n  - 'packages/sdk/**'\n  - 'apps/docs/**'\n  - '.github/actions/setup-reqs-web/**'\ni18n_changed:\n  - 'apps/web/src/lib/i18n/**'\n  - 'apps/web/src/lib/core/component/ContextMenu.tsx'\n  - 'apps/web/src/lib/core/constant/settingsTabsConfig.tsx'\n  - 'apps/web/src/components/ui/components/Dropdown.tsx'\n  - 'apps/web/src/features/settings/**'\ndatabase_grid_changed:\n  - 'apps/web/src/features/database/**'\ncalendar_details_changed:\n  - 'apps/web/src/features/calendar-view/**'\n  - 'apps/web/src/features/calendar/**'\n  - 'apps/web/src/lib/queries/calendar/**'\n"
+                "should_run:\n{artifact_paths}  - 'services/lexical-service/**'\n  - 'packages/sdk/**'\n  - 'packages/sdk-docs/**'\n  - 'services/ai-editing-worker/**'\n  - 'packages/code-mode-sdk/**'\n  - 'crates/agent_code_mode/SKILL.md'\n  - '.github/actions/setup-reqs-web/**'\nweb_artifact_changed:\n{artifact_paths}codegen_changed:\n  - 'crates/**/*.rs'\n  - 'services/**/*.rs'\n  - 'Cargo.toml'\n  - 'Cargo.lock'\n  - 'apps/web/scripts/generate-api-schema.ts'\n  - 'apps/web/scripts/services.ts'\n  - 'packages/sdk/**'\n  - 'apps/docs/**'\n  - '.github/actions/setup-reqs-web/**'\ni18n_changed:\n  - 'apps/web/src/lib/i18n/**'\n  - 'apps/web/src/lib/core/component/ContextMenu.tsx'\n  - 'apps/web/src/lib/core/constant/settingsTabsConfig.tsx'\n  - 'apps/web/src/components/ui/components/Dropdown.tsx'\n  - 'apps/web/src/features/settings/**'\ndatabase_grid_changed:\n  - 'apps/web/src/features/database/**'\ncalendar_details_changed:\n  - 'apps/web/src/features/calendar-view/**'\n  - 'apps/web/src/features/calendar/**'\n  - 'apps/web/src/lib/queries/calendar/**'\n"
             ),
         ))
     )
@@ -409,7 +465,7 @@ fn check_floating_promises() -> Step<Run> {
 
 fn check_functional_test_types() -> Step<Run> {
     Step::new("Check Functional Test Types")
-        .run("bun run --bun --silent tsc --project tests/functional/tsconfig.json")
+        .run("bun ../../node_modules/typescript-native/bin/tsc --noEmit --skipLibCheck --project tests/functional/tsconfig.json")
         .working_directory(xtask_paths::repo_dir!("apps/web"))
 }
 
@@ -455,6 +511,7 @@ fn run_collaboration_biome() -> Step<Run> {
 fn build_agent_fold_for_tests() -> Step<Run> {
     Step::new("Build agent-fold WASM for tests")
         .run("just build-agent-fold-wasm")
+        .add_env(("WASM_PKG_CACHE_DIR", vars::WASM_PKG_CACHE_DIR))
         .working_directory(xtask_paths::repo_dir!("apps/web"))
         .timeout_minutes(15u32)
 }
@@ -463,7 +520,7 @@ fn build_agent_fold_for_tests() -> Step<Run> {
 /// keeps it warm across jobs.
 fn run_tests() -> Step<Run> {
     Step::new("Test")
-        .run("bun run test")
+        .run("bun run test --shard=${{ matrix.shard }}/3")
         .add_env((
             "VITEST_MODULE_CACHE_DIR",
             vars::VITEST_MODULE_CACHE_VOLUME_DIR,
@@ -471,9 +528,18 @@ fn run_tests() -> Step<Run> {
         .working_directory(xtask_paths::repo_dir!("apps/web"))
 }
 
+fn build_wasm_for_functional_tests() -> Step<Run> {
+    with_pr_wasm_env(
+        Step::new("Build wasm packages")
+            .run("just build-wasm")
+            .working_directory(xtask_paths::repo_dir!("apps/web")),
+    )
+}
+
 fn run_functional_tests() -> Step<Run> {
-    Step::new("Test Optimistic Mutations in Chromium")
+    Step::new("Functional Browser Tests")
         .run("bun run test:functional")
+        .add_env(("FUNCTIONAL_TEST_WORKERS", "8"))
         .working_directory(xtask_paths::repo_dir!("apps/web"))
 }
 
@@ -533,11 +599,35 @@ fn collaboration_cycles_import_check() -> Step<Run> {
         .working_directory(xtask_paths::repo_dir!("packages/collaboration"))
 }
 
-fn run_build() -> Step<Run> {
-    Step::new("Build")
-        .run("just build-dev")
+/// Whole-program LTO costs the fig, psd and ai engines about 40 s each and only
+/// makes them faster to run, which a PR's tests and preview don't need. Deploys
+/// keep it. The wasm package cache doesn't key on these, so only PR jobs, which
+/// all set them, may read it.
+const PR_WASM_ENV: [(&str, &str); 6] = [
+    ("CARGO_PROFILE_FIG_ENGINE_WASM_LTO", "off"),
+    ("CARGO_PROFILE_FIG_ENGINE_WASM_CODEGEN_UNITS", "16"),
+    ("CARGO_PROFILE_PSD_ENGINE_WASM_LTO", "off"),
+    ("CARGO_PROFILE_PSD_ENGINE_WASM_CODEGEN_UNITS", "16"),
+    ("CARGO_PROFILE_AI_ENGINE_WASM_LTO", "off"),
+    ("CARGO_PROFILE_AI_ENGINE_WASM_CODEGEN_UNITS", "16"),
+];
+
+fn with_pr_wasm_env(step: Step<Run>) -> Step<Run> {
+    PR_WASM_ENV
+        .into_iter()
+        .fold(step, Step::add_env)
         .add_env(("WASM_PKG_CACHE_DIR", vars::WASM_PKG_CACHE_DIR))
-        .working_directory(xtask_paths::repo_dir!("apps/web"))
+}
+
+fn run_build() -> Step<Run> {
+    preview::build_env().into_iter().fold(
+        with_pr_wasm_env(
+            Step::new("Build")
+                .run("just build-dev")
+                .working_directory(xtask_paths::repo_dir!("apps/web")),
+        ),
+        Step::add_env,
+    )
 }
 
 fn check_job_results() -> Step<Run> {
@@ -548,6 +638,8 @@ fn check_job_results() -> Step<Run> {
         echo "generated-code: ${{ needs.generated-code.result }}"
         echo "biome-check: ${{ needs.biome-check.result }}"
         echo "test: ${{ needs.test.result }}"
+        echo "functional: ${{ needs.functional.result }}"
+        echo "browser: ${{ needs.browser.result }}"
         echo "cycles: ${{ needs.cycles.result }}"
         echo "build: ${{ needs.build.result }}"
         echo "ios-native-check: ${{ needs.ios-native-check.result }}"
@@ -560,6 +652,8 @@ fn check_job_results() -> Step<Run> {
           "${{ needs.generated-code.result }}" \
           "${{ needs.biome-check.result }}" \
           "${{ needs.test.result }}" \
+          "${{ needs.functional.result }}" \
+          "${{ needs.browser.result }}" \
           "${{ needs.cycles.result }}" \
           "${{ needs.build.result }}" \
           "${{ needs.ios-native-check.result }}"; do
@@ -577,6 +671,8 @@ fn check_job_results() -> Step<Run> {
               "${{ needs.typescript.result }}" \
               "${{ needs.biome-check.result }}" \
               "${{ needs.test.result }}" \
+              "${{ needs.functional.result }}" \
+              "${{ needs.browser.result }}" \
               "${{ needs.cycles.result }}" \
               "${{ needs.build.result }}"; do
               if [[ "$result" != "success" ]]; then

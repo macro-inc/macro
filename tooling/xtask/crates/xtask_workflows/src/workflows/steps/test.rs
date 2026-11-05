@@ -304,6 +304,8 @@ fn queue_collectors_pass_when_everything_passes() {
                 "generated-code",
                 "biome-check",
                 "test",
+                "functional",
+                "browser",
                 "cycles",
                 "build",
             ],
@@ -412,4 +414,28 @@ fn queue_runs_generated_code_check_for_any_rust_change() {
             "{id} must not narrow Generated Code Check in the merge queue"
         );
     }
+}
+
+/// A queue entry has no PR to preview, so its build must not deploy one. With no
+/// `pull_request` payload this comparison is false.
+#[test]
+fn queue_builds_never_deploy_a_preview() {
+    let workflow = workflow_by_check("Web App Status Check");
+    let steps = workflow["jobs"]["build"]["steps"]
+        .as_sequence()
+        .expect("steps");
+    let mut previews = 0;
+    for step in steps {
+        let run = step["run"].as_str().unwrap_or_default();
+        if run.contains("scripts/preview/") {
+            previews += 1;
+            let condition = step["if"].as_str().expect("condition");
+            assert!(
+                condition
+                    .contains("github.event.pull_request.head.repo.full_name == github.repository"),
+                "{condition}"
+            );
+        }
+    }
+    assert!(previews > 0, "the preview steps moved");
 }
