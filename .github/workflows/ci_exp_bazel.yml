@@ -10,10 +10,10 @@ env:
   BAZEL_PROTO_DB_URL: postgres://user:password@localhost:5432/macrodb
   DATABASE_URL: postgres://user:password@localhost:5432/macrodb
   REDIS_URL: redis://localhost:6379
-  BZ_ROOT: /home/runner/.cache/bazel/root
+  BZ_ROOT: /home/runner/bazel-root
 jobs:
   test:
-    runs-on: namespace-profile-linux-rust-ci;overrides.cache-tag=ci-exp-bazel
+    runs-on: namespace-profile-linux-large-build;overrides.cache-tag=ci-exp-bazel
     services:
       postgres:
         image: pgvector/pgvector:pg14
@@ -37,9 +37,7 @@ jobs:
       uses: namespacelabs/nscloud-cache-action@15799a6b54e5765f85b2aac25b3f0df43ed571c0
       with:
         cache: rust
-        path: |
-          /nix
-          /home/runner/.cache/bazel
+        path: /nix
       continue-on-error: true
     - name: Setup Nix
       uses: './.github/actions/setup-nix'
@@ -73,26 +71,29 @@ jobs:
       run: just setup_test_envs && just initialize_dbs && just setup_test_template
     - name: generate Bazel files
       run: time tooling/bazel-proto/generate.sh
-    - name: probe Namespace Bazel cache
-      continue-on-error: true
-      run: nsc bazel setup --remote=false --bazelrc /tmp/namespace.bazelrc 2>&1 | tail -5 | cut -c1-300
+    - name: Configure Namespace Bazel cache
+      run: |
+        nsc bazel setup --remote=false --bazelrc /tmp/namespace.bazelrc 2>&1 | tail -2 | cut -c1-200
+        sed -E 's/(=).*/\1<hidden>/' /tmp/namespace.bazelrc | cut -c1-100
+        echo "build --remote_download_minimal" >> generated.bazelrc
+        echo "BZ_RC=--bazelrc=/tmp/namespace.bazelrc" >> "$GITHUB_ENV"
     - name: bazel analysis
       run: |
-        time bazel --output_user_root=$BZ_ROOT --host_jvm_args=-Xmx3g build --nobuild //crates/... //services/... //tooling/... > /tmp/analysis.log 2>&1 || { grep -E '^(ERROR|FATAL)' /tmp/analysis.log | head -30 | cut -c1-400; exit 1; }
+        time bazel --output_user_root=$BZ_ROOT --host_jvm_args=-Xmx3g $BZ_RC build --nobuild //crates/... //services/... //tooling/... > /tmp/analysis.log 2>&1 || { grep -E '^(ERROR|FATAL)' /tmp/analysis.log | head -30 | cut -c1-400; exit 1; }
         tail -2 /tmp/analysis.log | cut -c1-200
     - name: bazel compile
       run: |
         code=0
-        time bazel --output_user_root=$BZ_ROOT --host_jvm_args=-Xmx3g build --keep_going --jobs=8 --profile=/tmp/compile.profile.gz //crates/... //services/... //tooling/... > /tmp/compile.log 2>&1 || code=$?
+        time bazel --output_user_root=$BZ_ROOT --host_jvm_args=-Xmx3g $BZ_RC build --keep_going --jobs=$(nproc) --profile=/tmp/compile.profile.gz //crates/... //services/... //tooling/... > /tmp/compile.log 2>&1 || code=$?
         grep -E '^(ERROR|FATAL)' /tmp/compile.log | head -40 | cut -c1-300
         grep -E '^INFO: (Elapsed|[0-9,]+ processes|Build)' /tmp/compile.log | cut -c1-200
-        bazel --output_user_root=$BZ_ROOT analyze-profile /tmp/compile.profile.gz 2>&1 | tail -12 | cut -c1-140 || true
+        bazel --output_user_root=$BZ_ROOT $BZ_RC analyze-profile /tmp/compile.profile.gz 2>&1 | tail -12 | cut -c1-140 || true
         exit $code
     - name: bazel test
       if: always()
       run: |
         code=0
-        time bazel --output_user_root=$BZ_ROOT --host_jvm_args=-Xmx3g test --keep_going --jobs=8 --local_test_jobs=4 --test_timeout=900 --test_env=RUST_TEST_THREADS=8 --test_env=PER_TEST_TIMEOUT=300 --run_under=$PWD/tooling/bazel-proto/per_test_runner.py --test_output=summary --test_summary=short --build_tests_only -- //crates/... //services/... //tooling/... -//tooling/xtask/crates/xtask_workflows:xtask_workflows_bin_test > /tmp/test.log 2>&1 || code=$?
+        time bazel --output_user_root=$BZ_ROOT --host_jvm_args=-Xmx3g $BZ_RC test --keep_going --jobs=$(nproc) --local_test_jobs=$(( $(nproc) / 2 )) --test_timeout=900 --test_env=RUST_TEST_THREADS=8 --test_env=PER_TEST_TIMEOUT=300 --run_under=$PWD/tooling/bazel-proto/per_test_runner.py --test_output=summary --test_summary=short --build_tests_only -- //crates/... //services/... //tooling/... -//tooling/xtask/crates/xtask_workflows:xtask_workflows_bin_test > /tmp/test.log 2>&1 || code=$?
         grep -E '^(ERROR|FATAL|FAIL:)|TIMEOUT' /tmp/test.log | head -40 | cut -c1-200
         grep -E '^INFO: (Elapsed|[0-9,]+ processes)|^Executed' /tmp/test.log | cut -c1-200
         echo "cached test targets: $(grep -cE '\(cached\) PASSED' /tmp/test.log || true)"

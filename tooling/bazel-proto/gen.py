@@ -18,8 +18,8 @@ import sys
 # --all-features, and CI's suite already excludes it.
 SKIP_TARGETS = {"sync_service", "bazel_all_features", "workspace-hack"}
 
-# What CI's cargo jobs set for workspace crates: warnings fail, and backtraces have lines.
-FLAGS = json.dumps(["-Dwarnings", "-Cdebuginfo=limited"])
+# Warnings fail, as in CI's cargo jobs. No debug info: `limited` doesn't fit a 16 GB runner.
+FLAGS = json.dumps(["-Dwarnings"])
 
 # Files a crate reads from outside its own package at compile or test time.
 MIGRATIONS = "//crates/macro_db_client:migrations"
