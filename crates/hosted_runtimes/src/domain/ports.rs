@@ -10,6 +10,12 @@ use crate::domain::models::{
 };
 use crate::domain::size::ComputerSize;
 
+/// Classifies a fleet failure that requires replacing a lost guest.
+pub trait FleetError: std::error::Error + Send + Sync + 'static {
+    /// True only when the addressed instance no longer exists.
+    fn is_missing(&self) -> bool;
+}
+
 /// An effect waiting in the outbox.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct PendingEffect {
@@ -222,8 +228,10 @@ pub trait Billing: Send + Sync + 'static {
 }
 
 /// The VMs (or dev containers) computers run in.
+/// Instance operations classify a lost guest with [`FleetError::is_missing`].
+/// Stop and destroy succeed when the instance is already absent.
 pub trait Fleet: Send + Sync + 'static {
-    type Err: std::error::Error + Send + Sync + 'static;
+    type Err: FleetError;
 
     /// Create the instance from the base image, carrying `enrollment`, and
     /// start it when `start`. An instance that already exists is reused.
@@ -283,7 +291,7 @@ pub struct HostedPairing {
 pub trait Harnesses: Send + Sync + 'static {
     type Err: std::error::Error + Send + Sync + 'static;
 
-    /// Create, or re-key while unclaimed, the team harness for a computer.
+    /// Create, or re-key, the team harness for a computer.
     fn create_hosted_pairing(
         &self,
         computer: &Computer,

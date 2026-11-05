@@ -4,6 +4,8 @@ use uuid::Uuid;
 
 use super::*;
 
+mod instance_lost;
+
 const HOST: HostId = Uuid::from_u128(0x0000_0000_0000_4000_8000_0000_0000_0001);
 
 fn now() -> DateTime<Utc> {
@@ -912,6 +914,7 @@ fn any_event() -> impl Strategy<Value = Event> {
         Just(Event::SuspendDue),
         Just(Event::SnapshotSaved),
         Just(Event::VmCrashed),
+        Just(Event::InstanceLost),
         Just(Event::RestartDue),
         Just(Event::HostLost),
         Just(Event::PowerOn),

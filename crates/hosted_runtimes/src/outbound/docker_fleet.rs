@@ -22,7 +22,7 @@ use uuid::Uuid;
 
 use crate::domain::enrollment::Enrollment;
 use crate::domain::models::{Computer, HostRegistration};
-use crate::domain::ports::{Fleet, InstanceStatus};
+use crate::domain::ports::{Fleet, FleetError, InstanceStatus};
 
 #[cfg(test)]
 mod test;
@@ -52,6 +52,8 @@ pub struct DockerFleetConfig {
 
 #[derive(Debug, thiserror::Error)]
 pub enum DockerFleetError {
+    #[error("instance {computer_id} is missing")]
+    Missing { computer_id: Uuid },
     #[error("DockerFleet only runs in the local environment, not {0:?}")]
     NotLocal(Environment),
     #[error("could not run docker: {0}")]
@@ -139,6 +141,13 @@ impl DockerFleet {
     }
 }
 
+impl FleetError for DockerFleetError {
+    fn is_missing(&self) -> bool {
+        matches!(self, Self::Missing { .. })
+            || matches!(self, Self::Command { stderr, .. } if stderr.contains("No such container"))
+    }
+}
+
 impl Fleet for DockerFleet {
     type Err = DockerFleetError;
 
@@ -183,10 +192,26 @@ impl Fleet for DockerFleet {
 
     #[tracing::instrument(name = "docker_fleet.stop", skip(self), err)]
     async fn stop(&self, computer_id: Uuid) -> Result<(), DockerFleetError> {
-        if self.state(computer_id).await? == Some(ContainerState::Paused) {
-            docker("unpause", &verb_args("unpause", computer_id)).await?;
+        match self.state(computer_id).await? {
+            None => return Ok(()),
+            Some(ContainerState::Paused) => {
+                if let Err(error) = docker("unpause", &verb_args("unpause", computer_id)).await {
+                    return if error.is_missing() {
+                        Ok(())
+                    } else {
+                        Err(error)
+                    };
+                }
+            }
+            _ => {}
         }
-        docker("stop", &verb_args("stop", computer_id)).await?;
+        if let Err(error) = docker("stop", &verb_args("stop", computer_id)).await {
+            return if error.is_missing() {
+                Ok(())
+            } else {
+                Err(error)
+            };
+        }
         Ok(())
     }
 
@@ -209,15 +234,28 @@ impl Fleet for DockerFleet {
 
     #[tracing::instrument(name = "docker_fleet.unfreeze", skip(self), err)]
     async fn unfreeze(&self, computer_id: Uuid) -> Result<(), DockerFleetError> {
-        if self.state(computer_id).await? == Some(ContainerState::Paused) {
-            docker("unpause", &verb_args("unpause", computer_id)).await?;
+        match self.state(computer_id).await? {
+            None => return Err(DockerFleetError::Missing { computer_id }),
+            Some(ContainerState::Paused) => {
+                docker("unpause", &verb_args("unpause", computer_id)).await?;
+            }
+            _ => {}
         }
         Ok(())
     }
 
     /// A cold stop: Docker cannot save RAM.
     async fn suspend(&self, computer_id: Uuid) -> Result<(), DockerFleetError> {
-        self.stop(computer_id).await
+        match self.state(computer_id).await? {
+            None => return Err(DockerFleetError::Missing { computer_id }),
+            Some(ContainerState::Paused) => {
+                docker("unpause", &verb_args("unpause", computer_id)).await?;
+            }
+            _ => {}
+        }
+        // Unlike stop, suspend must report a guest lost during the operation.
+        docker("stop", &verb_args("stop", computer_id)).await?;
+        Ok(())
     }
 
     /// A cold boot, after [`Self::suspend`]'s cold stop.
@@ -227,7 +265,11 @@ impl Fleet for DockerFleet {
 
     #[tracing::instrument(name = "docker_fleet.destroy", skip(self), err)]
     async fn destroy(&self, computer_id: Uuid) -> Result<(), DockerFleetError> {
-        docker("rm", &remove_args(computer_id)).await?;
+        if let Err(error) = docker("rm", &remove_args(computer_id)).await
+            && !error.is_missing()
+        {
+            return Err(error);
+        }
         let dir = self.enrollment_dir(computer_id);
         match tokio::fs::remove_dir_all(&dir).await {
             Err(source) if source.kind() != std::io::ErrorKind::NotFound => {

@@ -16,7 +16,7 @@ use uuid::Uuid;
 
 use crate::domain::enrollment::{Enrollment, INCUS_ENROLLMENT_KEY};
 use crate::domain::models::{Computer, HostRegistration};
-use crate::domain::ports::{Fleet, InstanceStatus};
+use crate::domain::ports::{Fleet, FleetError, InstanceStatus};
 use crate::domain::size::ComputerSize;
 
 #[cfg(test)]
@@ -71,6 +71,8 @@ impl IncusFleetConfig {
 
 #[derive(Debug, thiserror::Error)]
 pub enum IncusFleetError {
+    #[error("instance {computer_id} is missing")]
+    Missing { computer_id: Uuid },
     #[error(transparent)]
     Incus(#[from] IncusError),
     #[error("could not encode the enrollment: {0}")]
@@ -114,8 +116,19 @@ impl IncusFleet {
     }
 
     async fn force_stop(&self, name: &str) -> Result<(), IncusFleetError> {
-        self.client.stop(name, false, true).await?;
-        Ok(())
+        match self.client.stop(name, false, true).await {
+            Ok(()) | Err(IncusError::NotFound { .. }) => Ok(()),
+            Err(error) => Err(error.into()),
+        }
+    }
+}
+
+impl FleetError for IncusFleetError {
+    fn is_missing(&self) -> bool {
+        matches!(
+            self,
+            Self::Missing { .. } | Self::Incus(IncusError::NotFound { .. })
+        )
     }
 }
 
@@ -170,20 +183,28 @@ impl Fleet for IncusFleet {
     /// A clean shutdown, killed after [`SHUTDOWN_GRACE`].
     #[tracing::instrument(name = "incus_fleet.stop", skip(self), err)]
     async fn stop(&self, computer_id: Uuid) -> Result<(), IncusFleetError> {
-        let name = instance_name(computer_id);
-        match self.status(computer_id).await? {
-            Some(InstanceStatus::Stopped) => return Ok(()),
-            Some(InstanceStatus::Frozen) => self.client.unfreeze(&name).await?,
-            _ => {}
-        }
-        match tokio::time::timeout(SHUTDOWN_GRACE, self.client.stop(&name, false, false)).await {
-            Ok(result) => result?,
-            Err(_) => {
-                tracing::warn!(computer_id = %computer_id, "clean shutdown timed out, forcing");
-                self.force_stop(&name).await?;
+        let result: Result<(), IncusFleetError> = async {
+            let name = instance_name(computer_id);
+            match self.status(computer_id).await? {
+                None | Some(InstanceStatus::Stopped) => return Ok(()),
+                Some(InstanceStatus::Frozen) => self.client.unfreeze(&name).await?,
+                _ => {}
             }
+            match tokio::time::timeout(SHUTDOWN_GRACE, self.client.stop(&name, false, false)).await
+            {
+                Ok(result) => result?,
+                Err(_) => {
+                    tracing::warn!(computer_id = %computer_id, "clean shutdown timed out, forcing");
+                    self.force_stop(&name).await?;
+                }
+            }
+            Ok(())
         }
-        Ok(())
+        .await;
+        match result {
+            Err(error) if error.is_missing() => Ok(()),
+            result => result,
+        }
     }
 
     #[tracing::instrument(name = "incus_fleet.restart", skip(self), err)]
@@ -210,8 +231,12 @@ impl Fleet for IncusFleet {
 
     #[tracing::instrument(name = "incus_fleet.unfreeze", skip(self), err)]
     async fn unfreeze(&self, computer_id: Uuid) -> Result<(), IncusFleetError> {
-        if self.status(computer_id).await? == Some(InstanceStatus::Frozen) {
-            self.client.unfreeze(&instance_name(computer_id)).await?;
+        match self.status(computer_id).await? {
+            None => return Err(IncusFleetError::Missing { computer_id }),
+            Some(InstanceStatus::Frozen) => {
+                self.client.unfreeze(&instance_name(computer_id)).await?
+            }
+            _ => {}
         }
         Ok(())
     }

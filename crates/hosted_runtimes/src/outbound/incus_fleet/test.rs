@@ -182,3 +182,20 @@ fn an_unknown_incus_status_is_an_error() {
         Err(IncusFleetError::UnknownStatus { .. })
     ));
 }
+
+#[test]
+fn not_found_is_lost_but_a_host_failure_is_not() {
+    assert!(
+        IncusFleetError::Incus(IncusError::NotFound {
+            message: "Instance not found".to_owned(),
+        })
+        .is_missing()
+    );
+    assert!(
+        !IncusFleetError::Incus(IncusError::Rejected {
+            status: 503,
+            message: "Unavailable".to_owned(),
+        })
+        .is_missing()
+    );
+}

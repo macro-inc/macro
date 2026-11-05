@@ -234,3 +234,28 @@ async fn the_host_registers_with_its_configured_capacity() {
         }
     );
 }
+
+#[test]
+fn only_a_missing_container_is_classified_as_lost() {
+    for command in ["start", "restart", "unpause", "pause", "stop"] {
+        assert!(
+            DockerFleetError::Command {
+                command: command.to_owned(),
+                status: 1,
+                stderr: format!(
+                    "Error response from daemon: No such container: {}",
+                    container_name(COMPUTER_ID)
+                ),
+            }
+            .is_missing()
+        );
+        assert!(
+            !DockerFleetError::Command {
+                command: command.to_owned(),
+                status: 1,
+                stderr: "Cannot connect to the Docker daemon".to_owned(),
+            }
+            .is_missing()
+        );
+    }
+}

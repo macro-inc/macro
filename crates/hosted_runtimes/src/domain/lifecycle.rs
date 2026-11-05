@@ -189,6 +189,8 @@ pub enum Event {
     SuspendDue,
     SnapshotSaved,
     VmCrashed,
+    /// The guest no longer exists; recreate it on its assigned host.
+    InstanceLost,
     /// Timer: the backoff after a crash elapsed.
     RestartDue,
     HostLost,
@@ -383,6 +385,20 @@ pub fn transition(
 
     match event {
         Event::PaymentConfirmed | Event::PurchaseFailed => {}
+
+        Event::InstanceLost => {
+            next.macrod_connected = false;
+            if matches!(state.billing, Billing::Canceled { .. }) {
+                next.phase = Phase::Destroyed;
+                next.wake_requested = false;
+                effects.push(Effect::RevokeHarness);
+            } else {
+                let start = state.power == Power::On && context.host_has_room;
+                next.phase = Phase::Provisioning { host, start };
+                next.wake_requested = state.power == Power::On && !start;
+                effects.push(Effect::Create { host, start });
+            }
+        }
 
         Event::InstanceStarted => {
             if let Phase::Provisioning { start: true, .. } = state.phase {

@@ -6,7 +6,7 @@ use uuid::Uuid;
 
 use crate::domain::enrollment::Enrollment;
 use crate::domain::models::{Computer, HostRegistration};
-use crate::domain::ports::{Fleet, InstanceStatus};
+use crate::domain::ports::{Fleet, FleetError, InstanceStatus};
 use crate::outbound::docker_fleet::{DockerFleet, DockerFleetError};
 use crate::outbound::incus_fleet::{IncusFleet, IncusFleetError};
 
@@ -22,6 +22,15 @@ pub enum ConfiguredFleetError {
     Incus(#[from] IncusFleetError),
     #[error(transparent)]
     Docker(#[from] DockerFleetError),
+}
+
+impl FleetError for ConfiguredFleetError {
+    fn is_missing(&self) -> bool {
+        match self {
+            Self::Incus(error) => error.is_missing(),
+            Self::Docker(error) => error.is_missing(),
+        }
+    }
 }
 
 impl Fleet for ConfiguredFleet {

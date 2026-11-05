@@ -12,28 +12,43 @@ use crate::domain::size::ComputerSize;
 
 const HARNESS: Uuid = Uuid::from_u128(0x0000_0000_0000_7000_8000_0000_0000_0c0c);
 
+#[derive(Debug, thiserror::Error)]
+enum FakeFleetError {
+    #[error("fleet unavailable")]
+    Unavailable,
+    #[error("instance missing")]
+    Missing,
+}
+
+impl FleetError for FakeFleetError {
+    fn is_missing(&self) -> bool {
+        matches!(self, Self::Missing)
+    }
+}
+
 /// Records fleet calls; `create` fails `failures` times first.
 #[derive(Default)]
 struct FakeFleet {
     failures: Mutex<u32>,
+    missing: bool,
     calls: Mutex<Vec<String>>,
     enrollments: Mutex<Vec<(Enrollment, bool)>>,
     instances: Mutex<Vec<(Uuid, InstanceStatus)>>,
 }
 
 impl Fleet for FakeFleet {
-    type Err = FakeError;
+    type Err = FakeFleetError;
 
     async fn create(
         &self,
         _computer: &Computer,
         enrollment: &Enrollment,
         start: bool,
-    ) -> Result<(), FakeError> {
+    ) -> Result<(), FakeFleetError> {
         let mut failures = self.failures.lock().unwrap();
         if *failures > 0 {
             *failures -= 1;
-            return Err(FakeError);
+            return Err(FakeFleetError::Unavailable);
         }
         self.enrollments
             .lock()
@@ -42,47 +57,50 @@ impl Fleet for FakeFleet {
         Ok(())
     }
 
-    async fn start(&self, id: Uuid) -> Result<(), FakeError> {
+    async fn start(&self, id: Uuid) -> Result<(), FakeFleetError> {
         self.calls.lock().unwrap().push(format!("start {id}"));
         Ok(())
     }
 
-    async fn stop(&self, id: Uuid) -> Result<(), FakeError> {
+    async fn stop(&self, id: Uuid) -> Result<(), FakeFleetError> {
         self.calls.lock().unwrap().push(format!("stop {id}"));
         Ok(())
     }
 
-    async fn restart(&self, id: Uuid) -> Result<(), FakeError> {
+    async fn restart(&self, id: Uuid) -> Result<(), FakeFleetError> {
         self.calls.lock().unwrap().push(format!("restart {id}"));
+        if self.missing {
+            return Err(FakeFleetError::Missing);
+        }
         Ok(())
     }
 
-    async fn freeze(&self, id: Uuid) -> Result<(), FakeError> {
+    async fn freeze(&self, id: Uuid) -> Result<(), FakeFleetError> {
         self.calls.lock().unwrap().push(format!("freeze {id}"));
         Ok(())
     }
 
-    async fn unfreeze(&self, id: Uuid) -> Result<(), FakeError> {
+    async fn unfreeze(&self, id: Uuid) -> Result<(), FakeFleetError> {
         self.calls.lock().unwrap().push(format!("unfreeze {id}"));
         Ok(())
     }
 
-    async fn suspend(&self, id: Uuid) -> Result<(), FakeError> {
+    async fn suspend(&self, id: Uuid) -> Result<(), FakeFleetError> {
         self.calls.lock().unwrap().push(format!("suspend {id}"));
         Ok(())
     }
 
-    async fn resume(&self, id: Uuid) -> Result<(), FakeError> {
+    async fn resume(&self, id: Uuid) -> Result<(), FakeFleetError> {
         self.calls.lock().unwrap().push(format!("resume {id}"));
         Ok(())
     }
 
-    async fn destroy(&self, id: Uuid) -> Result<(), FakeError> {
+    async fn destroy(&self, id: Uuid) -> Result<(), FakeFleetError> {
         self.calls.lock().unwrap().push(format!("destroy {id}"));
         Ok(())
     }
 
-    async fn clear_enrollment(&self, id: Uuid) -> Result<(), FakeError> {
+    async fn clear_enrollment(&self, id: Uuid) -> Result<(), FakeFleetError> {
         self.calls
             .lock()
             .unwrap()
@@ -90,11 +108,11 @@ impl Fleet for FakeFleet {
         Ok(())
     }
 
-    async fn instances(&self) -> Result<Vec<(Uuid, InstanceStatus)>, FakeError> {
+    async fn instances(&self) -> Result<Vec<(Uuid, InstanceStatus)>, FakeFleetError> {
         Ok(self.instances.lock().unwrap().clone())
     }
 
-    async fn host(&self) -> Result<HostRegistration, FakeError> {
+    async fn host(&self) -> Result<HostRegistration, FakeFleetError> {
         Ok(HostRegistration {
             name: "runtime-dev-1".to_owned(),
             memory_gb: 31,
@@ -104,18 +122,28 @@ impl Fleet for FakeFleet {
     }
 }
 
-struct FakeHarnesses;
+#[derive(Default)]
+struct FakeHarnesses {
+    enrollments: Mutex<Vec<Option<Uuid>>>,
+}
 
 impl Harnesses for FakeHarnesses {
     type Err = FakeError;
 
-    async fn create_hosted_pairing(
-        &self,
-        _computer: &Computer,
-    ) -> Result<HostedPairing, FakeError> {
+    async fn create_hosted_pairing(&self, computer: &Computer) -> Result<HostedPairing, FakeError> {
+        if let Some(harness_id) = computer.harness_id {
+            assert_eq!(harness_id, HARNESS);
+        }
+        let mut enrollments = self.enrollments.lock().unwrap();
+        let generation = enrollments.len() as u128;
+        enrollments.push(computer.harness_id);
         Ok(HostedPairing {
-            pairing_id: Uuid::from_u128(0x0000_0000_0000_7000_8000_0000_0000_0909),
-            device_secret: "secret".to_owned(),
+            pairing_id: Uuid::from_u128(0x0000_0000_0000_7000_8000_0000_0000_0909 + generation),
+            device_secret: if generation == 0 {
+                "secret".to_owned()
+            } else {
+                format!("secret-{generation}")
+            },
         })
     }
 
@@ -137,7 +165,7 @@ async fn operator(
             ..FakeRepo::default()
         },
         fleet,
-        FakeHarnesses,
+        FakeHarnesses::default(),
         FixedClock,
         EnrollmentDefaults {
             service_url_overrides: BTreeMap::from([(
@@ -264,4 +292,112 @@ async fn reconcile_turns_a_missing_instance_into_a_crash_and_removes_orphans() {
         *operator.fleet.calls.lock().unwrap(),
         vec![format!("destroy {orphan}")]
     );
+}
+
+#[tokio::test]
+async fn retry_of_a_lost_guest_reprovisions_the_same_computer_and_harness() {
+    let operator = operator(FakeFleet {
+        missing: true,
+        ..FakeFleet::default()
+    })
+    .await;
+    let id = paid_computer(&operator).await;
+    operator.run_fleet_effects().await.unwrap();
+    operator.macrod_connected(HARNESS).await.unwrap();
+    operator
+        .repo
+        .apply(
+            id,
+            Event::EffectFailed {
+                reason: "guest lost".to_owned(),
+            },
+            now(),
+        )
+        .await
+        .unwrap();
+    operator.run_fleet_effects().await.unwrap(); // PageOperator
+    operator
+        .repo
+        .apply(id, Event::OperatorRetry, now())
+        .await
+        .unwrap();
+
+    assert_eq!(operator.run_fleet_effects().await.unwrap(), 1);
+    let lost = operator.repo.get(id).await.unwrap().unwrap();
+    assert_eq!(
+        lost.state.phase,
+        Phase::Provisioning {
+            host: HOST,
+            start: true
+        }
+    );
+    assert!(!lost.state.macrod_connected);
+    assert_eq!(lost.harness_id, Some(HARNESS));
+    assert_eq!(operator.run_fleet_effects().await.unwrap(), 1);
+    let recreated = operator.repo.get(id).await.unwrap().unwrap();
+    assert_eq!(recreated.id, id);
+    assert_eq!(recreated.harness_id, Some(HARNESS));
+    assert_eq!(recreated.state.phase, Phase::Booting { host: HOST });
+    {
+        let enrollments = operator.fleet.enrollments.lock().unwrap();
+        assert_eq!(enrollments.len(), 2);
+        assert_ne!(enrollments[0].0.pairing_id, enrollments[1].0.pairing_id);
+        assert_ne!(
+            enrollments[0].0.device_secret,
+            enrollments[1].0.device_secret
+        );
+        assert_eq!(
+            *operator.harnesses.enrollments.lock().unwrap(),
+            vec![None, Some(HARNESS)]
+        );
+    }
+    assert_eq!(operator.run_fleet_effects().await.unwrap(), 0);
+}
+
+#[tokio::test]
+async fn reconcile_recreates_missing_cold_or_failed_guests_but_keeps_existing_guests() {
+    for phase in [
+        Phase::Failed { host: HOST },
+        Phase::Stopped { host: HOST },
+        Phase::Suspended {
+            host: HOST,
+            saved_state: true,
+        },
+    ] {
+        for present in [false, true] {
+            let operator = operator(FakeFleet::default()).await;
+            let id = paid_computer(&operator).await;
+            operator.run_fleet_effects().await.unwrap();
+            operator
+                .repo
+                .computers
+                .lock()
+                .unwrap()
+                .get_mut(&id)
+                .unwrap()
+                .state
+                .phase = phase.clone();
+            if present {
+                operator
+                    .fleet
+                    .instances
+                    .lock()
+                    .unwrap()
+                    .push((id, InstanceStatus::Stopped));
+            }
+            operator.reconcile().await.unwrap();
+            let computer = operator.repo.get(id).await.unwrap().unwrap();
+            assert_eq!(
+                computer.state.phase,
+                if present {
+                    phase.clone()
+                } else {
+                    Phase::Provisioning {
+                        host: HOST,
+                        start: true,
+                    }
+                }
+            );
+        }
+    }
 }

@@ -47,10 +47,16 @@ lifecycle, capacity, purchase/billing orchestration and the fleet ports.
 - **Status**: `ComputerService::status(team_id, computer_id)` / `list(team_id)` →
   `ComputerStatus` with `setup: Option<SetupProgress>` (Paying → Creating → Booting →
   Connecting → Ready) until macrod first connects. Readable by any team member.
-- **Retry**: `ComputerService::retry(team_id, computer_id)` → `ComputerStatus`,
+- **Retry/reprovision**: `ComputerService::retry(team_id, computer_id)` → `ComputerStatus`,
   exposed to team admins at `POST /team/computers/{computer_id}/retry`. Only
   `Failed` computers can be retried; other phases return `NotFailed` (409).
-  Applies `OperatorRetry` and never touches billing or purchases.
+  Applies `OperatorRetry` and never touches billing or purchases. A typed missing
+  fleet instance completes its effect and applies `InstanceLost`: recreate on the
+  same host, computer row and harness id, starting only with power On and room.
+  Reconcile also detects missing Failed/Stopped/Suspended guests; awake guests
+  first follow crash/restart. Re-enrollment re-keys the harness. A canceled
+  computer with no guest becomes Destroyed and revokes its harness without
+  removing billing again. Missing stop/destroy are idempotent successes.
 - **Persona**: `Persona { name, os_user, extra_service: { unit_name, exec, env }, config }`.
   `macrod enroll` creates `os_user`, writes `config` to `/etc/macro/personas/<os_user>.env`
   (the unit's `EnvironmentFile`), and installs + starts `/etc/systemd/system/<unit_name>.service`

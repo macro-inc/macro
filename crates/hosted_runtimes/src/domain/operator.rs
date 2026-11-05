@@ -10,7 +10,9 @@ use uuid::Uuid;
 use crate::domain::enrollment::Enrollment;
 use crate::domain::lifecycle::{Effect, EffectWorker, Event, HostId, Phase};
 use crate::domain::models::{Computer, EnrollmentDefaults, Host};
-use crate::domain::ports::{ComputerRepo, Fleet, Harnesses, InstanceStatus, PendingEffect};
+use crate::domain::ports::{
+    ComputerRepo, Fleet, FleetError, Harnesses, InstanceStatus, PendingEffect,
+};
 use crate::domain::service::{Clock, ComputerError};
 
 #[cfg(test)]
@@ -194,34 +196,21 @@ where
                     Event::InstanceStopped
                 }))
             }
-            Effect::Start { .. } => {
-                self.fleet.start(computer_id).await.map_err(internal)?;
-                Ok(None)
-            }
-            Effect::Resume { .. } => {
-                self.fleet.resume(computer_id).await.map_err(internal)?;
-                Ok(None)
-            }
-            Effect::Restart { .. } => {
-                self.fleet.restart(computer_id).await.map_err(internal)?;
-                Ok(None)
-            }
-            Effect::Freeze { .. } => {
-                self.fleet.freeze(computer_id).await.map_err(internal)?;
-                Ok(None)
-            }
+            Effect::Start { .. } => fleet_completion(self.fleet.start(computer_id).await, None),
+            Effect::Resume { .. } => fleet_completion(self.fleet.resume(computer_id).await, None),
+            Effect::Restart { .. } => fleet_completion(self.fleet.restart(computer_id).await, None),
+            Effect::Freeze { .. } => fleet_completion(self.fleet.freeze(computer_id).await, None),
             Effect::Unfreeze { .. } => {
-                self.fleet.unfreeze(computer_id).await.map_err(internal)?;
-                Ok(None)
+                fleet_completion(self.fleet.unfreeze(computer_id).await, None)
             }
-            Effect::Suspend { .. } => {
-                self.fleet.suspend(computer_id).await.map_err(internal)?;
-                Ok(Some(Event::SnapshotSaved))
-            }
-            Effect::Stop { .. } => {
-                self.fleet.stop(computer_id).await.map_err(internal)?;
-                Ok(Some(Event::InstanceStopped))
-            }
+            Effect::Suspend { .. } => fleet_completion(
+                self.fleet.suspend(computer_id).await,
+                Some(Event::SnapshotSaved),
+            ),
+            Effect::Stop { .. } => fleet_completion(
+                self.fleet.stop(computer_id).await,
+                Some(Event::InstanceStopped),
+            ),
             Effect::Destroy { .. } => {
                 self.fleet.destroy(computer_id).await.map_err(internal)?;
                 Ok(None)
@@ -279,7 +268,8 @@ where
     }
 
     /// Compare the fleet with the rows: a missing or stopped instance of an
-    /// awake computer is a crash, and an instance without a computer is removed.
+    /// awake computer is a crash; a missing cold or failed guest is recreated.
+    /// An instance without a computer is removed.
     #[tracing::instrument(skip(self), err)]
     pub async fn reconcile(&self) -> Result<(), ComputerError> {
         let instances: HashMap<Uuid, InstanceStatus> = self
@@ -304,10 +294,23 @@ where
                 Phase::Frozen { .. } => observed.is_none(),
                 _ => false,
             };
-            if crashed {
+            let lost = observed.is_none()
+                && matches!(
+                    computer.state.phase,
+                    Phase::Failed { .. } | Phase::Stopped { .. } | Phase::Suspended { .. }
+                );
+            if crashed || lost {
                 tracing::warn!(computer_id = %computer.id, observed = ?observed, "computer instance drifted");
                 self.repo
-                    .apply(computer.id, Event::VmCrashed, self.clock.now())
+                    .apply(
+                        computer.id,
+                        if lost {
+                            Event::InstanceLost
+                        } else {
+                            Event::VmCrashed
+                        },
+                        self.clock.now(),
+                    )
                     .await
                     .map_err(internal)?;
             }
@@ -426,6 +429,20 @@ where
             .await
             .map_err(internal)?
             .ok_or(ComputerError::NotFound)
+    }
+}
+
+fn fleet_completion(
+    result: Result<(), impl FleetError>,
+    completion: Option<Event>,
+) -> Result<Option<Event>, ComputerError> {
+    match result {
+        Ok(()) => Ok(completion),
+        Err(error) if error.is_missing() => {
+            tracing::warn!("computer instance lost; reprovisioning");
+            Ok(Some(Event::InstanceLost))
+        }
+        Err(error) => Err(internal(error)),
     }
 }
 
