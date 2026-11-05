@@ -1,6 +1,11 @@
 import '@app/index.css';
 import { AnalyticsContextProvider } from '@app/lib/analytics/analytics-context';
 import { PosthogProvider } from '@app/lib/analytics/posthog';
+import { setGlobalSplitManager } from '@app/signal/splitLayout';
+import type {
+  SplitContent,
+  SplitManager,
+} from '@components/app/split-layout/layoutManager';
 import { DecoratorRenderer } from '@core/component/LexicalMarkdown/component/core/DecoratorRenderer';
 import { DatabaseCard } from '@core/component/LexicalMarkdown/component/decorator/DatabaseCard';
 import { DatabaseQuery } from '@core/component/LexicalMarkdown/component/decorator/DatabaseQuery';
@@ -46,6 +51,13 @@ queryClient.setQueryData(
   databasesKeys.detail(databaseId).queryKey,
   documentDatabaseDetail()
 );
+// Stands in for the app's splits: shows where the card asked to navigate.
+setGlobalSplitManager({
+  openWithSplit(content: SplitContent) {
+    document.getElementById('opened')!.textContent = JSON.stringify(content);
+    return { status: 'unavailable' };
+  },
+} as SplitManager);
 queryClient.setQueryData(contactsKeys.all.queryKey, { contacts: [] });
 queryClient.setQueryData(authKeys.userInfo.queryKey, {
   id: 'macro|fixture@example.com',
@@ -138,6 +150,7 @@ function DocumentFixture() {
             actionContext={{ disableMentionTracking: true }}
           />
         </div>
+        <output id="opened" aria-label="Opened split" class="sr-only" />
         <output aria-label="Document state" class="sr-only">
           {state()}
         </output>

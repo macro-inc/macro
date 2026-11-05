@@ -281,6 +281,15 @@ export function DocumentDatabase(props: {
                         })
                       }
                       onOpenRelated={openRelated}
+                      // The card is too small for the record panel: a clicked row opens in the full table.
+                      onOpenRecord={(rowId) =>
+                        open({
+                          databaseId,
+                          tableId: shown().table.id,
+                          viewId: currentView().id,
+                          rowId,
+                        })
+                      }
                       actionsRef={setRecordActions}
                     />
                   </div>

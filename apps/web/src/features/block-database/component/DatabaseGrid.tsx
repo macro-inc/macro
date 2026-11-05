@@ -89,6 +89,8 @@ export type DatabaseGridProps = {
   actionsRef?: (actions: DatabaseRecordsActions) => void;
   renderToolbar?: (actions: DatabaseRecordsActions) => JSX.Element;
   onOpenRelated?: (destination: DatabaseRelatedDestination) => void;
+  /** Opens a clicked record somewhere else in place of the record panel. */
+  onOpenRecord?: (rowId: string) => void;
 };
 
 /** Production composition. A table switch owns a new query/controller lifetime. */
@@ -342,6 +344,7 @@ function TableAdapter(props: DatabaseGridProps & { tableId: string }) {
                 renderMentionPicker={renderMentionPicker}
                 renderMentionValue={renderMentionValue}
                 onOpenDocumentMention={openDocumentMention}
+                onOpenRecord={props.onOpenRecord}
                 renderRelationCell={(cell) => (
                   <DatabaseRelationCell
                     {...cell}

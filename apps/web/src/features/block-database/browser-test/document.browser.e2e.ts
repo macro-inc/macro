@@ -258,6 +258,45 @@ test('the shared toolbar changes inline filters and sorting without writing the 
   expect(saved.errors).toEqual([]);
 });
 
+for (const viewport of [
+  { name: 'desktop', width: 1280, height: 800 },
+  { name: 'phone', width: 390, height: 844 },
+]) {
+  test(`a clicked row opens the underlying table at that row on ${viewport.name}`, async ({
+    page,
+  }) => {
+    const saved = await fixture(page);
+    await page.setViewportSize(viewport);
+    await page
+      .getByRole('button', { name: 'Mention existing database' })
+      .click();
+    await page.getByRole('button', { name: 'Expand database' }).click();
+    await expect(page.getByRole('grid', { name: 'Tasks' })).toBeVisible();
+    await page.getByRole('row', { name: /Finish onboarding/ }).hover();
+    await page
+      .getByRole('button', { name: 'Open Finish onboarding', exact: true })
+      .click();
+    await expect
+      .poll(async () =>
+        JSON.parse(
+          (await page.getByLabel('Opened split').textContent()) || 'null'
+        )
+      )
+      .toEqual({
+        type: 'database',
+        id: databaseId,
+        params: {
+          databaseId,
+          tableId,
+          viewId: tableId,
+          rowId,
+        },
+      });
+    await expect(page.getByRole('dialog')).toHaveCount(0);
+    expect(saved.errors).toEqual([]);
+  });
+}
+
 test('the app table picker switches tables with the keyboard and restores focus when dismissed', async ({
   page,
 }) => {

@@ -830,6 +830,72 @@ describe('database table view', () => {
     expect(await screen.findByRole('dialog')).toBeTruthy();
   });
 
+  it.each([
+    ['a table row', allRecords],
+    ['a board card', statusBoard],
+  ])(
+    'hands %s to the host that opens records elsewhere',
+    async (_layout, view) => {
+      const fixture = createFakeRowsSource({
+        columns,
+        table: {
+          version: 1,
+          rows: [
+            { rowId: 'row', cells: { title: 'Plan launch', status: 'To do' } },
+          ],
+        },
+        view: allRecords,
+      });
+      const onOpenRecord = vi.fn();
+      render(() => (
+        <DatabaseRecordsView
+          name="Projects"
+          source={fixture.source}
+          canEdit
+          view={view}
+          stored={false}
+          addColumn={() => null}
+          boardPositions={unplacedCards}
+          onOpenRecord={onOpenRecord}
+        />
+      ));
+      fireEvent.click(
+        await screen.findByRole('button', { name: 'Open Plan launch' })
+      );
+      expect(onOpenRecord).toHaveBeenCalledWith('row');
+      expect(screen.queryByRole('dialog')).toBeNull();
+    }
+  );
+
+  it('keeps a record created on a board in place when the host opens records elsewhere', async () => {
+    const fixture = createFakeRowsSource({
+      columns,
+      table: { version: 1, rows: [] },
+      view: allRecords,
+    });
+    fixture.persistWrites();
+    const onOpenRecord = vi.fn();
+    let actions!: DatabaseRecordsActions;
+    render(() => (
+      <DatabaseRecordsView
+        name="Projects"
+        source={fixture.source}
+        canEdit
+        view={statusBoard}
+        stored={false}
+        addColumn={() => null}
+        boardPositions={unplacedCards}
+        onOpenRecord={onOpenRecord}
+        actionsRef={(ready) => {
+          actions = ready;
+        }}
+      />
+    ));
+    await actions.createRow({ values: {}, open: true });
+    expect(await screen.findByRole('dialog')).toBeTruthy();
+    expect(onOpenRecord).not.toHaveBeenCalled();
+  });
+
   it('cancels pending initial cell focus when the table is unmounted', async () => {
     const fixture = createFakeRowsSource({
       columns,
