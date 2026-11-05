@@ -323,6 +323,8 @@ jobs:
       continue-on-error: true
     - name: Setup Nix
       uses: './.github/actions/setup-nix'
+      with:
+        seed-cache: sccache-ci
     - name: Setup Nix dev shell
       uses: './.github/actions/setup-nix-dev-shell'
     - name: Configure Namespace remote sccache
@@ -534,6 +536,8 @@ jobs:
       continue-on-error: true
     - name: Setup Nix
       uses: './.github/actions/setup-nix'
+      with:
+        seed-cache: sccache-ci
     - name: Setup Nix dev shell
       uses: './.github/actions/setup-nix-dev-shell'
     - name: Configure Namespace remote sccache
@@ -712,6 +716,8 @@ jobs:
       continue-on-error: true
     - name: Setup Nix
       uses: './.github/actions/setup-nix'
+      with:
+        seed-cache: sccache-ci
     - name: Setup Nix dev shell
       uses: './.github/actions/setup-nix-dev-shell'
     - name: Configure Namespace remote sccache

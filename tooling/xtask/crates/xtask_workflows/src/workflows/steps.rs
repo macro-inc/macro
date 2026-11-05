@@ -192,6 +192,13 @@ pub fn setup_nix_with_cache() -> Step<Use> {
         .add_with(("aws-secret-access-key", vars::AWS_SECRET_ACCESS_KEY))
 }
 
+/// [`setup_nix`] restoring `/nix` from Namespace's HTTP cache when the volume is
+/// empty. PR jobs write that copy, so this is only for PR check jobs: never a job
+/// that deploys or holds deploy secrets.
+pub fn setup_nix_with_seed() -> Step<Use> {
+    setup_nix().add_with(("seed-cache", vars::CI_SCCACHE_NAME))
+}
+
 /// Push built store paths to the private S3 binary cache, signing on upload —
 /// the `cachix watch-store` role. `targets` lands in the step's `TARGETS` env
 /// (space-separated flake refs or store paths; GH expressions fine) and is
