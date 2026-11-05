@@ -32,6 +32,13 @@ Artifacts are behind the `enable-canvas-artifacts` flag. **Insert** offers
 title and HTML. The document runs in a sandboxed frame; **Interact** or a
 double-click passes pointer input to it, and **Done** or a click elsewhere returns
 to the canvas. With the flag off, an artifact shows only its title and no script runs.
+The inspector also adds and edits styles and components shared across the canvas;
+HTML uses them with `<macro-style name="…">` and `<macro-component name="…">`.
+**Present** on a node opens the artifacts full screen in presentation order, which
+**Earlier** and **Later** in the inspector change. Check arrow keys and Esc both
+before and after clicking inside the frame. For an agent, `ReadCanvas` returns
+`artifactGuide` when the flag is on for the user, and artifact SDK operations in
+`ApplyCanvasEdits` fail without changing anything when it is off.
 
 ## Multiplayer canvas
 

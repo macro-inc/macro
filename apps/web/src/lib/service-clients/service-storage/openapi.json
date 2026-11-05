@@ -10991,6 +10991,105 @@
         }
       }
     },
+    "/documents/upload": {
+      "post": {
+        "tags": ["document"],
+        "summary": "Upload a file's bytes as a new document, up to 25 MiB.",
+        "description": "The body is the raw file content. Preview generation and indexing may\nfinish after the response.",
+        "operationId": "upload_file",
+        "parameters": [
+          {
+            "name": "fileName",
+            "in": "query",
+            "description": "Filename including its extension, such as `report.pdf`; the extension\nsets the file type. No directory components.",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "projectId",
+            "in": "query",
+            "description": "Destination project. Requires edit access; omit for top-level files.",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "requestBody": {
+          "description": "The file's bytes, at most 25 MiB.",
+          "content": {
+            "application/octet-stream": {
+              "schema": {
+                "type": "string",
+                "format": "binary"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UploadFileResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid filename or content",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "No edit access to the destination project",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "The caller cannot create documents"
+          },
+          "413": {
+            "description": "The file exceeds 25 MiB"
+          },
+          "422": {
+            "description": "Document name exceeds the maximum length",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/documents/{document_id}": {
       "get": {
         "tags": ["document"],
@@ -16125,6 +16224,84 @@
         "responses": {
           "204": {
             "description": ""
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      },
+      "patch": {
+        "tags": ["harnesses"],
+        "summary": "Handler for `PATCH /harnesses/{harness_id}`.",
+        "operationId": "patch_harness",
+        "parameters": [
+          {
+            "name": "harness_id",
+            "in": "path",
+            "description": "Harness ID",
+            "required": true,
+            "schema": {
+              "$ref": "#/components/schemas/HarnessId"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PatchHarnessRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Harness"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
           },
           "401": {
             "description": "",
@@ -22854,7 +23031,7 @@
           },
           "has_agent": {
             "type": "boolean",
-            "description": "Whether mentioning this bot opens a sandboxed coding-agent session."
+            "description": "Whether this bot runs as an AI agent: mentions and DMs start an agent session."
           },
           "id": {
             "$ref": "#/components/schemas/BotId",
@@ -26769,7 +26946,7 @@
           },
           "has_agent": {
             "type": ["boolean", "null"],
-            "description": "Whether mentioning this bot opens a sandboxed coding-agent session. Defaults to false."
+            "description": "Whether this bot runs as an AI agent: mentions and DMs start an agent session. Defaults to false."
           },
           "name": {
             "type": "string",
@@ -26959,7 +27136,7 @@
           },
           "has_agent": {
             "type": ["boolean", "null"],
-            "description": "Whether mentioning this bot opens a sandboxed coding-agent session. Defaults to false."
+            "description": "Whether this bot runs as an AI agent: mentions and DMs start an agent session. Defaults to false."
           },
           "name": {
             "type": "string",
@@ -27396,10 +27573,6 @@
         "description": "Request to open a pairing: the daemon asks for a code the user approves.\n\nThe daemon serializes this, so both derives are used.",
         "required": ["name"],
         "properties": {
-          "allow_permission_bypass": {
-            "type": ["boolean", "null"],
-            "description": "Daemon operator consent ceiling. Omitted by older clients; web approval decides."
-          },
           "host": {
             "type": ["string", "null"],
             "description": "Display-only description of the machine, e.g. `eric@macbook / darwin`."
@@ -27407,17 +27580,6 @@
           "name": {
             "type": "string",
             "description": "Requested harness display name (typically the machine's hostname)."
-          },
-          "scope": {
-            "oneOf": [
-              {
-                "type": "null"
-              },
-              {
-                "$ref": "#/components/schemas/RequestedHarnessScope",
-                "description": "The scope the daemon's config asks for; the approval dialog arrives\npreselected to it."
-              }
-            ]
           }
         }
       },
@@ -38263,24 +38425,9 @@
             "type": ["string", "null"],
             "description": "Display-only description of the machine."
           },
-          "requested_allow_permission_bypass": {
-            "type": ["boolean", "null"],
-            "description": "Daemon operator consent ceiling; false forbids bypass at approval."
-          },
           "requested_name": {
             "type": "string",
             "description": "Harness display name the daemon asked for."
-          },
-          "requested_scope": {
-            "oneOf": [
-              {
-                "type": "null"
-              },
-              {
-                "$ref": "#/components/schemas/RequestedHarnessScope",
-                "description": "The scope the daemon's config asked for, when it named one."
-              }
-            ]
           }
         }
       },
@@ -38350,7 +38497,7 @@
           },
           "has_agent": {
             "type": ["boolean", "null"],
-            "description": "Whether mentioning this bot opens a sandboxed coding-agent session. Omit to leave unchanged."
+            "description": "Whether this bot runs as an AI agent: mentions and DMs start an agent session. Omit to leave unchanged."
           },
           "name": {
             "type": ["string", "null"],
@@ -38373,6 +38520,20 @@
           "convert_to_team_channel": {
             "type": ["boolean", "null"],
             "description": "Sets whether the channel is a team channel.\n\n`true` converts a non-team channel to a team channel, while `false`\nconverts a team channel to a private channel."
+          }
+        }
+      },
+      "PatchHarnessRequest": {
+        "type": "object",
+        "description": "Request to change a registered harness. Omitted fields stay as they are.",
+        "properties": {
+          "allow_permission_bypass": {
+            "type": ["boolean", "null"],
+            "description": "Whether agents may bypass ACP permission requests on this harness.\nLive sessions pick the change up at their next turn."
+          },
+          "name": {
+            "type": ["string", "null"],
+            "description": "New display name."
           }
         }
       },
@@ -40118,11 +40279,6 @@
         "type": "string",
         "description": "Durable outcome; reading a notification never changes it.",
         "enum": ["pending", "granted", "denied", "cancelled"]
-      },
-      "RequestedHarnessScope": {
-        "type": "string",
-        "description": "The ownership scope a daemon's config asks for.\n\nAdvisory, not binding: the approving user confirms it in the dialog, which\narrives preselected to this. Approval is what actually sets ownership.",
-        "enum": ["private", "team"]
       },
       "RequestedLayout": {
         "oneOf": [
@@ -46290,6 +46446,22 @@
           },
           "sha": {
             "type": "string"
+          }
+        }
+      },
+      "UploadFileResponse": {
+        "type": "object",
+        "description": "The document created from the uploaded bytes.",
+        "required": ["documentId", "sizeBytes"],
+        "properties": {
+          "documentId": {
+            "type": "string",
+            "description": "The new document."
+          },
+          "sizeBytes": {
+            "type": "integer",
+            "description": "Number of bytes stored.",
+            "minimum": 0
           }
         }
       },

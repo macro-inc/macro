@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { createScene, translation } from '../src/core';
 import {
+  movedInPresentation,
   nextPresentOrder,
   presentationOrder,
 } from '../src/core/artifact-order';
@@ -41,5 +42,13 @@ describe('presentation order', () => {
     const scene = createScene([artifact('1', 'a5'), artifact('2', 'a2')]);
 
     expect(nextPresentOrder(scene) > 'a5').toBe(true);
+  });
+
+  it('moves an artifact within the presentation and stops at the ends', () => {
+    const scene = createScene([artifact('1', 'a0'), artifact('2', 'a1')]);
+
+    expect(movedInPresentation(scene, '1', 1)).toEqual(['2', '1']);
+    expect(movedInPresentation(scene, '1', -1)).toBeUndefined();
+    expect(movedInPresentation(scene, '2', 1)).toBeUndefined();
   });
 });

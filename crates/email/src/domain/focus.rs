@@ -10,6 +10,7 @@
 //! on past a threshold joins Focus when it is read, a calendar change leaves it
 //! when its event is over, and importance moves at a rate judged per thread until
 //! newer mail arrives, since nothing reclassifies a thread as it ages.
+//! A thread that can be in Focus also gets the day its mail says it is due.
 //! Threads holding only the owner's own sent mail stay out:
 //! they are not inbox threads, and nothing marks one Done. Only inboxes on the
 //! worker's allowlist are classified.
@@ -28,11 +29,14 @@ pub use calendar::change_subject_pattern;
 pub use importance::importance_at;
 pub use input::{is_dismissive_reply, new_text};
 pub use models::{
-    CalendarNotice, CalendarPart, FocusAnswers, FocusCategory, FocusInbox, FocusMail, FocusMessage,
-    FocusRecord, FocusSignals, FocusThread, FocusVerdict, ImportanceTrend, SentNote, StaleThread,
-    StoredClassification, ThreadFocus,
+    CalendarNotice, CalendarPart, DueDateInput, DueDateMessage, FocusAnswers, FocusCategory,
+    FocusInbox, FocusMail, FocusMessage, FocusRecord, FocusSignals, FocusThread, FocusVerdict,
+    ImportanceTrend, SentNote, StaleThread, StoredClassification, ThreadFocus,
 };
-pub use ports::{FocusClassifier, FocusClassifierError, FocusNotifier, FocusStore, ProfileSource};
+pub use ports::{
+    DueDateExtractor, FocusClassifier, FocusClassifierError, FocusNotifier, FocusStore,
+    ProfileSource,
+};
 pub use questions::{FOCUS_QUESTIONS, FocusQuestion};
 pub use rule::{FOCUS_RULE_VERSION, decide};
 pub use service::{ClassifyOutcome, FocusQueries, FocusService, SweepReport};

@@ -167,19 +167,6 @@ export function ShareTabView(props: {
           </label>
           <ToggleSwitch
             size="md"
-            label="Show results to respondents"
-            labelClass="text-sm text-ink"
-            checked={form().tallyVisible}
-            disabled={!isOwner() || pending()}
-            onChange={(tallyVisible) =>
-              fireAndForget(
-                update({ tallyVisible }, 'Showing results'),
-                'form-share'
-              )
-            }
-          />
-          <ToggleSwitch
-            size="md"
             label="Share responses with team"
             labelClass="text-sm text-ink"
             checked={form().responsesVisible}

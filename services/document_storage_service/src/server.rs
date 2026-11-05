@@ -209,7 +209,14 @@ maybe_env_vars! {
 }
 
 /// Build the service from the environment and serve until shutdown.
-pub async fn run() -> anyhow::Result<()> {
+// Not a `pub async fn`: rustc compiles the body of every non-generic `pub async fn`
+// in every build, tests included, even when nothing calls it. This one reaches the
+// whole router, so the lib test would compile the entire service.
+pub fn run() -> impl Future<Output = anyhow::Result<()>> {
+    run_server()
+}
+
+async fn run_server() -> anyhow::Result<()> {
     let env = Environment::new_or_prod();
 
     let aws_config = macro_aws_config::get_macro_aws_config().await;
@@ -408,6 +415,12 @@ pub async fn run() -> anyhow::Result<()> {
         crm::outbound::companies_repo::CompaniesRepositoryImpl::new(db.clone()),
         crm::outbound::no_op_resolver::NoOpCompanyMetadataResolver,
     );
+    let entity_access_service = Arc::new(
+        entity_access::domain::service::EntityAccessServiceImpl::new(
+            entity_access::outbound::PgAccessRepository::new(db.clone()),
+        ),
+    );
+
     let email_service = EmailServiceImpl::new(
         EmailPgRepo::new(db.clone()),
         frecency_service.clone(),
@@ -430,6 +443,10 @@ pub async fn run() -> anyhow::Result<()> {
                 macro_service_urls::AuthServiceUrl::new()?.to_string(),
             )),
         ),
+    ))
+    .with_shared_thread_replies(email::outbound::EntityAccessSharedThreadReplies::new(
+        db.clone(),
+        (*entity_access_service).clone(),
     ))
     .with_macro_event_broker(macro_event_broker.clone());
     let readonly_email_service = ReadonlyEmailPreviewAdapter(
@@ -469,12 +486,6 @@ pub async fn run() -> anyhow::Result<()> {
             realtime: notification::domain::ports::NoopNotificationRealtimePublisher,
         });
     tracing::trace!("initialized notification ingress service");
-
-    let entity_access_service = Arc::new(
-        entity_access::domain::service::EntityAccessServiceImpl::new(
-            entity_access::outbound::PgAccessRepository::new(db.clone()),
-        ),
-    );
 
     let permission_checker = PermissionServiceImpl::new(db.clone(), entity_access_service.clone());
     let notification_service = NotificationServiceImpl::new(

@@ -19,6 +19,8 @@ word docs, Illustrator/Photoshop files).
 - Native Canvas creation follows markdown: metadata → canonical shared snapshot →
   ready SyncService content, with compensation on failure. `create_canvas` and
   CreateDocument with empty Canvas content need no browser initialization.
+- `DocumentToolContext::canvas_artifacts` is the per-user `enable-canvas-artifacts`
+  rollout, off unless a host wires it; the Canvas tools pass it to the worker.
 - `src/domain/canvas.rs`: permission-scoped Canvas read/render/edit workflows, native
   type checks, actor-bearing tokens, AI admission and per-model metering.
   `ReadCanvas`/`RenderCanvas` are view-scoped; `ApplyCanvasEdits` applies
@@ -42,6 +44,10 @@ word docs, Illustrator/Photoshop files).
   `edit_refused` is the worker's clarification, 502 `edit_failed` may have
   partly applied, and a client disconnect drops the worker call (never spawn
   it).
+- `axum_router/upload_file.rs`: `POST /upload` takes a file's raw bytes (25 MiB)
+  and runs UploadFile's `DocumentCreator::upload_file`, minting the project
+  receipt from the caller like the tool. It exists for clients that cannot PUT
+  to presigned storage URLs, such as code mode's sandbox.
 
 ## Scope
 

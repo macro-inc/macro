@@ -20,7 +20,8 @@ From `infra/`:
 - `bun run check`
 - Biome on changed files.
 - An authenticated `pulumi preview` may change adopted monitors only in
-  `message` and `renotifyInterval`; README.md lists the expected counts.
+  `message` and `renotifyInterval`, apart from the exceptions README.md lists
+  with the expected counts.
 
 ## Gotchas
 
