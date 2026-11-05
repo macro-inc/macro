@@ -5,6 +5,7 @@ name: SDK Check
   pull_request:
     branches:
     - main
+    - 'synoet/ci-int-base*'
     paths:
     - packages/sdk/**
     - '.github/workflows/sdk-check.yml'
