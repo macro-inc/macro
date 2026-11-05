@@ -20,6 +20,7 @@ class BrainTest(unittest.TestCase):
             remote = root / 'repo.git'
             subprocess.run(['git', 'init', '--bare', str(remote)], check=True)
             requests = []
+            traceparents = []
             authorization = 'Basic ' + base64.b64encode(b'brain:test-token').decode()
 
             class Handler(http.server.BaseHTTPRequestHandler):
@@ -39,6 +40,7 @@ class BrainTest(unittest.TestCase):
                         self.end_headers()
                         return
                     requests.append(self.path)
+                    traceparents.append(self.headers.get('traceparent'))
                     path, _, query = self.path.partition('?')
                     env = {
                         **os.environ,
@@ -83,6 +85,7 @@ class BrainTest(unittest.TestCase):
                     'MACRO_REPO_TOKEN': 'test-token',
                     'MACRO_AGENT_USER_ID': 'macro|agent@example.com',
                     'GIT_CONFIG_NOSYSTEM': '1',
+                    'BRAIN_PROVISION_TRACEPARENT': '00-11111111111111111111111111111111-2222222222222222-01',
                 }
                 # A failed clone must leave no workspace and be retryable.
                 failed = {**env, 'MACRO_REPO_TOKEN': 'wrong-token'}
@@ -91,10 +94,13 @@ class BrainTest(unittest.TestCase):
                 self.assertFalse((home / 'workspace').exists())
                 self.assertEqual(list(home.glob('.workspace-clone.*')), [])
                 subprocess.run(['bash', str(start)], env=env, check=True)
+                self.assertTrue(traceparents)
+                self.assertTrue(all(parent == env['BRAIN_PROVISION_TRACEPARENT'] for parent in traceparents))
                 workspace = home / 'workspace'
                 self.assertTrue((home / 'started').exists())
                 config = (workspace / '.git/config').read_text()
                 self.assertNotIn('test-token', config)
+                self.assertNotIn('traceparent', config)
                 self.assertIn(subprocess.check_output(['id', '-un'], text=True).strip(), config)
                 self.assertIn('agent@example.com', config)
                 (workspace / 'memory').write_text('remember this')

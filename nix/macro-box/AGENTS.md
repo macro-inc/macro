@@ -155,3 +155,7 @@ After any included source, lockfile, compile-wrapper or Deno version change:
 Recompiling the binary FOD from scratch can require a new hash even with
 unchanged source. Regenerate it using step 2; never disable hash verification,
 the sandbox or the frozen lock. The source includes the SDK's generated clients.
+
+The first clone forwards `BRAIN_PROVISION_TRACEPARENT` as an ephemeral git HTTP
+header; later brain git calls inject their active turn context through process
+configuration. Never persist trace headers in the workspace's git config.

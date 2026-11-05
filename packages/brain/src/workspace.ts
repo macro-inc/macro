@@ -6,7 +6,7 @@ import { SpanStatusCode } from '@opentelemetry/api';
 import { type Budget, parseBudget } from './budget.ts';
 import { type EventsConfig, parseEventsConfig } from './events-config.ts';
 import { type JevConfig, parseJevConfig } from './jev.ts';
-import { withSpan } from './telemetry.ts';
+import { traceHeaders, withSpan } from './telemetry.ts';
 
 /** Paths the repo must never commit: raw history, logs, caches, secrets. */
 export const IGNORED = [
@@ -120,12 +120,20 @@ export function gitCli(cwd: string): Git {
     if (value) env[name] = value;
   }
   return async (args) => {
+    const parent = traceHeaders().traceparent;
+    const traceEnv: Record<string, string> = parent
+      ? {
+          GIT_CONFIG_COUNT: '1',
+          GIT_CONFIG_KEY_0: 'http.extraHeader',
+          GIT_CONFIG_VALUE_0: `traceparent: ${parent}`,
+        }
+      : {};
     const output = await new Deno.Command('git', {
       args: ['-C', cwd, ...args],
       stdout: 'piped',
       stderr: 'piped',
       clearEnv: true,
-      env,
+      env: { ...env, ...traceEnv },
     }).output();
     const decoder = new TextDecoder();
     return {

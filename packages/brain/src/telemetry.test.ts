@@ -15,7 +15,13 @@ import { assertEquals, assertRejects, assertThrows } from '@std/assert';
 import { ConfigError } from './config.ts';
 import { judge } from './jev.ts';
 import { AgentSdkRunner } from './runner.ts';
-import { telemetryConfig, tracedFetch, withSpan } from './telemetry.ts';
+import {
+  telemetryConfig,
+  tracedFetch,
+  traceHeaders,
+  withSpan,
+} from './telemetry.ts';
+import { gitCli } from './workspace.ts';
 
 const exporter = new InMemorySpanExporter();
 const provider = new BasicTracerProvider({
@@ -163,4 +169,17 @@ Deno.test('a synchronous SDK startup failure closes its span without error text'
     'brain.lane': 'opaque-lane',
   });
   assertEquals(span.events, []);
+});
+
+Deno.test('git subprocess config carries its active trace without persisting it', async () => {
+  await withSpan('git.parent', {}, async () => {
+    const expected = `traceparent: ${traceHeaders().traceparent}`;
+    const result = await gitCli('/tmp')([
+      'config',
+      '--get-all',
+      'http.extraHeader',
+    ]);
+    assertEquals(result.code, 0);
+    assertEquals(result.stdout.trim().split('\n').includes(expected), true);
+  });
 });

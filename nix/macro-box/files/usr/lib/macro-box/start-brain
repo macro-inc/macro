@@ -18,11 +18,21 @@ if [[ ! "$MACRO_REPO_URL" =~ ^https?://[^/@]+/ ]] || [[ "$MACRO_REPO_URL" == *$'
 fi
 export GIT_TERMINAL_PROMPT=0
 helper=/usr/lib/macro-box/git-credential-brain
+trace_args=()
+if [[ -n "${BRAIN_PROVISION_TRACEPARENT:-}" ]]; then
+  if [[ ! "$BRAIN_PROVISION_TRACEPARENT" =~ ^00-[0-9a-f]{32}-[0-9a-f]{16}-0[01]$ ]] ||
+     [[ "$BRAIN_PROVISION_TRACEPARENT" =~ ^00-0{32}- ]] ||
+     [[ "$BRAIN_PROVISION_TRACEPARENT" =~ -0{16}- ]]; then
+    echo 'BRAIN_PROVISION_TRACEPARENT must be a valid W3C traceparent' >&2
+    exit 1
+  fi
+  trace_args=(-c "http.extraHeader=traceparent: $BRAIN_PROVISION_TRACEPARENT")
+fi
 if [[ ! -e "$BRAIN_WORKSPACE" ]]; then
   # Clone into a temporary sibling: a failed clone never poisons first start.
   staging=$(mktemp -d "$HOME/.workspace-clone.XXXXXX")
   trap 'rm -rf "$staging"' EXIT
-  git -c credential.useHttpPath=true -c credential.helper= -c credential.helper="$helper" clone -- "$MACRO_REPO_URL" "$staging"
+  git "${trace_args[@]}" -c credential.useHttpPath=true -c credential.helper= -c credential.helper="$helper" clone -- "$MACRO_REPO_URL" "$staging"
   mv -T "$staging" "$BRAIN_WORKSPACE"
   trap - EXIT
 fi

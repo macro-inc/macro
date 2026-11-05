@@ -24,7 +24,7 @@ let
     dontFixup = true;
     outputHashMode = "recursive";
     outputHashAlgo = "sha256";
-    outputHash = "sha256-utzVBDqJcGvdPrGNpNadJi34eqwpQzK9fKWHD5GejKE=";
+    outputHash = "sha256-w6V0acnmv5hkM0I1WG+ozImAU3T/b1uApiLkbPnAeiE=";
     buildPhase = ''
       export HOME=$TMPDIR/home DENO_DIR=$out/cache
       mkdir -p "$HOME" "$DENO_DIR"
@@ -47,7 +47,7 @@ let
     dontFixup = true;
     outputHashMode = "recursive";
     outputHashAlgo = "sha256";
-    outputHash = "sha256-PFzgAzXefYs13E+t4D5yTxv8ndfW7TLSuSMppbVQ5Cs=";
+    outputHash = "sha256-sUFL3nHgasJrnokIgo44yfJq/1U3m1srQguGhRdTLiY=";
     # FODs cannot retain store references. The final package below rediscovers
     # the denort runtime closure after copying the hash-verified binary.
     unsafeDiscardReferences.out = true;
