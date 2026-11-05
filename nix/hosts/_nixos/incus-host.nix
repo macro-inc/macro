@@ -176,6 +176,8 @@ in
         }
 
         chain box_to_host {
+          meta nfproto ipv6 counter drop
+          ip daddr 100.64.0.0/10 counter drop
           ct state established,related accept
           ip protocol icmp accept
           udp dport { 53, 67 } accept
