@@ -155,6 +155,18 @@ await doc.setTeamShare(true);
 await doc.delete(); // soft delete; doc.restore() brings it back
 ```
 
+Documents, projects, calls and chats change their link and channel sharing with
+`updateSharePermissions`; omitted fields are left as they are. A calendar event
+is shared with a channel's members through `shareWithChannel`:
+
+```ts
+await project.updateSharePermissions({
+  linkShareAccessLevel: 'view',
+  channelSharePermissions: [{ channel, accessLevel: 'comment', operation: 'add' }],
+});
+await event.shareWithChannel(channel);
+```
+
 ### Listing and searching
 
 List/search methods that can page return a genreator that auto-paginates:
