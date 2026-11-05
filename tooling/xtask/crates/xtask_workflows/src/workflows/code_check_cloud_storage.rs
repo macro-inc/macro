@@ -97,7 +97,7 @@ fn path_check() -> Job {
         .add_step(compute_nextest_filter())
 }
 
-/// fmt + clippy.
+/// fmt + unused dependencies + clippy.
 fn check() -> Job {
     steps::gated_job()
         .timeout_minutes(45u32)
@@ -110,6 +110,7 @@ fn check() -> Job {
         .add_step(steps::configure_namespace_sccache(vars::CI_SCCACHE_NAME))
         .add_step(steps::code_mode_assets())
         .add_step(cargo_fmt())
+        .add_step(cargo_shear())
         .add_step(cargo_clippy())
         .add_step(steps::show_sccache_stats())
         .add_step(steps::teardown_nix())
@@ -367,6 +368,13 @@ fn validate_doppler_configs() -> Step<Run> {
 /// `cargo fmt --check`.
 fn cargo_fmt() -> Step<Run> {
     Step::new("fmt").run("cargo fmt --check")
+}
+
+/// `cargo shear`: rejects unused dependencies from the sources alone, without
+/// compiling. A dependency needed only for a side effect goes in its
+/// manifest's `[package.metadata.cargo-shear] ignored`.
+fn cargo_shear() -> Step<Run> {
+    Step::new("unused dependencies").run("cargo shear --format github")
 }
 
 /// `cargo clippy`, scoped to the same package set as nextest.
