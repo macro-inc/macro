@@ -42,8 +42,10 @@ Read first: [`crates/complete_graph/AGENTS.md`](../../crates/complete_graph/AGEN
   Add the replacement, move clients, deprecate the old field with a removal
   date, and remove it after that date. CI enforces this; see step 8.
 - **Lists take `filter` and `limit` arguments, applied in the domain query before
-  the limit.** Unbounded edges made the web fetch whole notification histories to
-  draw unread dots; the fix added a server-side filter and a one-row limit.
+  the limit.** Every filter, scope and sort a client offers (tabs, toggles,
+  chips) is an argument; the web never filters fetched rows ([FE-70](../../.agents/rules/web/data.md)).
+  Unbounded edges made the web fetch whole notification histories to draw unread
+  dots; the fix added a server-side filter and a one-row limit.
 - **Document every type, field, and argument.** `#![deny(missing_docs)]` and the
   `schema_types_and_fields_have_descriptions` test in
   `crates/complete_graph/src/sdl_test.rs` both enforce it. Doc comments become
