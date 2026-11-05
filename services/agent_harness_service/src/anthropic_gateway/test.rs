@@ -271,7 +271,7 @@ async fn a_model_off_the_allowlist_is_refused_before_anthropic_is_called() {
             "type": "error",
             "error": {
                 "type": "invalid_request_error",
-                "message": "model `claude-3-opus-20240229` is not available on Macro credits; use one of: claude-opus-5-5, claude-sonnet-5, claude-haiku-4-5-20251001, claude-fable-5-1",
+                "message": "model `claude-3-opus-20240229` is not available on Macro credits; use one of: claude-opus-4-8, claude-sonnet-4-6, claude-opus-5-5, claude-sonnet-5, claude-haiku-4-5-20251001, claude-fable-5-1",
             },
         })
     );
@@ -299,4 +299,31 @@ async fn an_unknown_token_is_refused() {
         serde_json::from_slice(&to_bytes(response.into_body(), usize::MAX).await.unwrap()).unwrap();
     assert_eq!(body["error"]["type"], "authentication_error");
     assert!(seen.lock().unwrap().is_empty());
+}
+
+#[tokio::test]
+async fn bundled_claude_models_reach_upstream_and_keep_their_billing_model() {
+    for model in ["claude-opus-4-8", "claude-sonnet-4-6"] {
+        let (upstream_url, seen) = fake_anthropic().await;
+        let (app, _, usage) = gateway(&upstream_url).await;
+        let body = serde_json::json!({"model": model, "max_tokens": 16, "messages": [{"role": "user", "content": "hi"}]}).to_string();
+        let response = app
+            .oneshot(
+                HttpRequest::post("/anthropic/v1/messages")
+                    .header("authorization", "Bearer session-secret")
+                    .header("content-type", "application/json")
+                    .body(Body::from(body.clone()))
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+        assert_eq!(response.status(), StatusCode::OK);
+        to_bytes(response.into_body(), usize::MAX).await.unwrap();
+        let requests = seen.lock().unwrap();
+        assert_eq!(requests.len(), 1);
+        assert_eq!(requests[0].body, body);
+        let events = usage.0.lock().unwrap();
+        assert_eq!(events.len(), 1);
+        assert_eq!(events[0].model, model);
+    }
 }
