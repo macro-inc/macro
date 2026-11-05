@@ -705,7 +705,10 @@ pub async fn run() -> anyhow::Result<()> {
     )?;
     let team_agents_service = Arc::new(team_agents::domain::service::TeamAgentServiceImpl::new(
         team_agents_repository.clone(),
-        team_agents::outbound::team_membership::TeamsMembership::new(teams_service.clone()),
+        team_agents::outbound::team_membership::TeamsMembership::new(
+            teams_service.clone(),
+            teams_repo_impl.clone(),
+        ),
         team_agents::outbound::agent_api_keys::UserApiKeys::new(Arc::new(
             user_api_key::domain::service::UserApiKeyServiceImpl::new(
                 user_api_key::outbound::pg_user_api_keys_repo::PgUserApiKeysRepo::new(db.clone()),
@@ -735,6 +738,7 @@ pub async fn run() -> anyhow::Result<()> {
         // computer-facing gateway, never this container's in-network addresses.
         computer_urls.gateway,
         format!("{}/brain/anthropic", computer_urls.egress),
+        config.team_agents_included_email_domain.clone(),
     ));
     let agent_secrets_service =
         Arc::new(agent_secrets::domain::service::AgentSecretServiceImpl::new(

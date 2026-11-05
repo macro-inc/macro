@@ -110,6 +110,8 @@ pub enum ComputerSize {
 #[cfg_attr(feature = "inbound", derive(utoipa::ToSchema))]
 #[serde(rename_all = "camelCase")]
 pub struct CreateTeamAgent {
+    /// Whether the reviewed quote included the seat and computer for free.
+    pub expected_included: bool,
     /// Display name.
     pub name: String,
     /// What the agent is responsible for. Seeds the persona repo.
@@ -138,6 +140,8 @@ pub enum BillingInterval {
 #[cfg_attr(feature = "inbound", derive(utoipa::ToSchema))]
 #[serde(rename_all = "camelCase")]
 pub struct TeamAgentQuote {
+    /// Both seat and computer are included, with no Stripe change.
+    pub included: bool,
     /// Virtual CPUs in the quoted computer size.
     pub vcpus: u32,
     /// RAM in GB, from the computer size catalog.
@@ -262,6 +266,8 @@ pub enum ComputerPayment {
     Pending,
     /// The bundled computer and seat purchase succeeded.
     Paid,
+    /// Included without a subscription charge.
+    Comped,
     /// Billing definitely refused the purchase; no item was billed.
     Unbilled,
 }
@@ -527,6 +533,9 @@ pub enum TeamAgentError {
     /// The team must start or renew its subscription before purchasing.
     #[error("the team needs an active subscription")]
     NoSubscription,
+    /// Eligibility changed since the administrator reviewed the quote.
+    #[error("The invitation price changed. Review the updated quote before confirming.")]
+    QuoteChanged,
     /// The computer can't be bought right now (sold out or unavailable price).
     #[error("the computer can't be bought: {0}")]
     ComputerUnavailable(String),

@@ -216,6 +216,22 @@ impl TeamMembersService for TeamRepositoryImpl {
 
 impl TeamRepository for TeamRepositoryImpl {
     #[tracing::instrument(skip(self), err)]
+    async fn is_seat_included(
+        &self,
+        team_id: &uuid::Uuid,
+        user_id: &MacroUserIdStr<'_>,
+    ) -> Result<bool, TeamError> {
+        Ok(sqlx::query_scalar!(
+            r#"SELECT seat_included FROM team_user WHERE team_id = $1 AND user_id = $2"#,
+            team_id,
+            user_id.as_ref()
+        )
+        .fetch_optional(&self.pool)
+        .await?
+        .unwrap_or(false))
+    }
+
+    #[tracing::instrument(skip(self), err)]
     async fn get_stripe_customer_id(
         &self,
         user_id: &MacroUserIdStr<'_>,
@@ -1035,24 +1051,25 @@ impl TeamRepository for TeamRepositoryImpl {
     }
 
     #[tracing::instrument(skip(self), err)]
-    #[allow(clippy::disallowed_methods, reason = "legacy code. fix later")]
     async fn rollback_remove_user_from_team(
         &self,
         removed_member: &TeamMember<'_>,
+        seat_included: bool,
     ) -> Result<(), TeamError> {
         let mut transaction = self.pool.begin().await?;
 
-        let inserted = sqlx::query(
+        let inserted = sqlx::query!(
             r#"
-            INSERT INTO team_user (team_id, user_id, team_role, plan)
-            VALUES ($1, $2, $3, $4)
+            INSERT INTO team_user (team_id, user_id, team_role, plan, seat_included)
+            VALUES ($1, $2, $3, $4, $5)
             ON CONFLICT DO NOTHING
             "#,
+            removed_member.team_id,
+            removed_member.user_id.as_ref(),
+            removed_member.role as _,
+            removed_member.plan as _,
+            seat_included,
         )
-        .bind(removed_member.team_id)
-        .bind(removed_member.user_id.as_ref())
-        .bind(removed_member.role)
-        .bind(removed_member.plan)
         .execute(&mut *transaction)
         .await?;
 
@@ -1726,17 +1743,19 @@ impl TeamRepository for TeamRepositoryImpl {
         &self,
         team_id: &uuid::Uuid,
         user_id: &MacroUserIdStr<'_>,
+        seat_included: bool,
     ) -> Result<Option<TeamMember<'static>>, TeamError> {
         let mut transaction = self.pool.begin().await?;
 
         let inserted = sqlx::query!(
             r#"
-            INSERT INTO team_user (team_id, user_id, team_role)
-            VALUES ($1, $2, 'member')
+            INSERT INTO team_user (team_id, user_id, team_role, seat_included)
+            VALUES ($1, $2, 'member', $3)
             ON CONFLICT DO NOTHING
             "#,
             team_id,
             user_id.as_ref(),
+            seat_included,
         )
         .execute(&mut *transaction)
         .await?;

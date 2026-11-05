@@ -21,6 +21,13 @@ use crate::domain::owned_entity_cleanup::ClearedTeam;
 
 /// The TeamRepository defines a set of actions to perform on teams data
 pub trait TeamRepository: Clone + Send + Sync + 'static {
+    /// Durable membership billing provenance, independent of current team eligibility.
+    fn is_seat_included(
+        &self,
+        team_id: &uuid::Uuid,
+        user_id: &MacroUserIdStr<'_>,
+    ) -> impl Future<Output = Result<bool, TeamError>> + Send;
+
     /// Gets the stripe customer id for a user
     fn get_stripe_customer_id(
         &self,
@@ -178,6 +185,7 @@ pub trait TeamRepository: Clone + Send + Sync + 'static {
     fn rollback_remove_user_from_team(
         &self,
         removed_member: &TeamMember<'_>,
+        seat_included: bool,
     ) -> impl Future<Output = Result<(), TeamError>> + Send;
 
     /// Checks if a user is a member (not owner) of any team
@@ -336,6 +344,7 @@ pub trait TeamRepository: Clone + Send + Sync + 'static {
         &self,
         team_id: &uuid::Uuid,
         user_id: &MacroUserIdStr<'_>,
+        seat_included: bool,
     ) -> impl Future<Output = Result<Option<TeamMember<'static>>, TeamError>> + Send;
 
     /// Return team ids after `after_team_id`, ordered by id, limited to `limit`.
@@ -616,11 +625,13 @@ pub trait TeamService: Clone + Send + Sync + 'static {
     /// Adds a team agent's new account to the receipt's team with the same
     /// roles and channels as any member joining, but leaves the team
     /// subscription alone: the returned seat, when the team bills per seat,
-    /// belongs in the caller's own subscription update.
+    /// belongs in the caller's own subscription update. With `bill_seat` false,
+    /// membership is included and never reads or modifies subscription billing.
     fn add_team_agent(
         &self,
         entity_access_receipt: EntityAccessReceipt<AdminTeamRole>,
         agent_user_id: &MacroUserIdStr<'_>,
+        bill_seat: bool,
     ) -> impl Future<Output = Result<Option<SeatSubscriptionItem>, JoinTeamDirectlyError>> + Send;
 
     /// Takes back an [`Self::add_team_agent`] membership whose seat was never

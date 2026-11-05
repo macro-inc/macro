@@ -122,7 +122,10 @@ pub(crate) type DomainNoticeServiceType = teams::domain::domain_notice::DomainNo
 
 pub(crate) type TeamAgentsServiceType = team_agents::domain::service::TeamAgentServiceImpl<
     team_agents::outbound::pg_team_agents_repo::PgTeamAgentsRepo,
-    team_agents::outbound::team_membership::TeamsMembership<TeamsServiceType>,
+    team_agents::outbound::team_membership::TeamsMembership<
+        TeamsServiceType,
+        teams::outbound::team_repo::TeamRepositoryImpl,
+    >,
     team_agents::outbound::agent_api_keys::UserApiKeys<
         user_api_key::domain::service::UserApiKeyServiceImpl<
             user_api_key::outbound::pg_user_api_keys_repo::PgUserApiKeysRepo,

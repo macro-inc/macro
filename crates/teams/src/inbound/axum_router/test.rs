@@ -528,6 +528,7 @@ impl TeamService for FakeTeamService {
         &self,
         _entity_access_receipt: EntityAccessReceipt<AdminTeamRole>,
         _agent_user_id: &MacroUserIdStr<'_>,
+        _bill_seat: bool,
     ) -> Result<Option<crate::domain::model::SeatSubscriptionItem>, JoinTeamDirectlyError> {
         panic!("unexpected add_team_agent call")
     }

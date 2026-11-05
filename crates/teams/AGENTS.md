@@ -102,3 +102,11 @@ event contract (schema, sanitization, delivery semantics).
 ## Related
 
 - Docs: `crates/teams/README.md` · Rules: `.agents/rules/rust/db.md`
+
+- `add_team_agent(..., bill_seat: false)` joins an included agent without
+  subscription lookup, legacy backfill or Stripe mutation. The calling domain
+  verifies eligibility; deferred billed joins still return their seat item.
+
+- Persist `team_user.seat_included` when joining an included agent. Ordinary
+  removal and account cleanup skip seat billing for that membership, removal
+  rollback preserves it, and paid plan changes are rejected for included seats.

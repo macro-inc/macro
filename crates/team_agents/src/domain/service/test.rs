@@ -58,6 +58,7 @@ struct StoredAgent {
 }
 
 struct FakeRepository {
+    owner_verified_email: Option<String>,
     journal: Arc<Journal>,
     agents: Mutex<Vec<StoredAgent>>,
 }
@@ -72,6 +73,13 @@ impl FakeRepository {
 
 impl TeamAgentRepository for FakeRepository {
     type Err = FakeRepositoryError;
+
+    async fn verified_email(
+        &self,
+        _user_id: &MacroUserIdStr<'_>,
+    ) -> Result<Option<String>, Self::Err> {
+        Ok(self.owner_verified_email.clone())
+    }
 
     async fn create_account(&self, account: &NewAgentAccount) -> Result<(), Self::Err> {
         self.fail("account.create")?;
@@ -194,12 +202,20 @@ struct FakeMembership {
 }
 
 impl TeamMembership for FakeMembership {
+    async fn team_owner(&self, _team_id: Uuid) -> Result<MacroUserIdStr<'static>, TeamAgentError> {
+        Ok(user("macro|owner@example.com"))
+    }
+
     async fn add_agent(
         &self,
         _receipt: EntityAccessReceipt<AdminTeamRole>,
         _agent_user_id: &MacroUserIdStr<'_>,
+        included: bool,
     ) -> Result<Option<SubscriptionItem>, TeamAgentError> {
         self.journal.record("team.add")?;
+        if included {
+            return Ok(None);
+        }
         Ok(self.seat.as_ref().map(|_| SubscriptionItem {
             price_id: "price_seat".to_string(),
             quantity: 1,
@@ -226,6 +242,7 @@ impl TeamMembership for FakeMembership {
         &self,
         _receipt: EntityAccessReceipt<AdminTeamRole>,
     ) -> Result<Option<SeatQuote>, TeamAgentError> {
+        self.journal.record("seat.quote")?;
         Ok(self.seat.clone())
     }
 }
@@ -298,7 +315,12 @@ struct FakeComputers {
 
 impl Computers for FakeComputers {
     fn sizes(&self) -> Vec<crate::domain::models::ComputerSizeSpec> {
-        vec![]
+        vec![crate::domain::models::ComputerSizeSpec {
+            size: ComputerSize::Large,
+            vcpus: 8,
+            memory_gb: 16,
+            disk_gb: 200,
+        }]
     }
 
     async fn quote(
@@ -306,6 +328,7 @@ impl Computers for FakeComputers {
         _team_id: Uuid,
         _size: ComputerSize,
     ) -> Result<ComputerQuote, TeamAgentError> {
+        self.journal.record("computer.quote")?;
         Ok(ComputerQuote {
             vcpus: 8,
             memory_gb: 16,
@@ -324,6 +347,13 @@ impl Computers for FakeComputers {
             return Err(TeamAgentError::ComputerIdentityUnavailable);
         }
         Ok(Uuid::parse_str(COMPUTER_ID).expect("uuid"))
+    }
+
+    async fn provision_comped(&self, purchase: ComputerPurchase) -> Result<Uuid, TeamAgentError> {
+        self.journal.record("computer.comped")?;
+        assert!(purchase.extra_items.is_empty());
+        self.purchases.lock().unwrap().push(purchase);
+        Ok(Uuid::parse_str(COMPUTER_ID).unwrap())
     }
 
     async fn status(
@@ -354,7 +384,7 @@ impl Computers for FakeComputers {
     ) -> Result<ComputerStatus, TeamAgentError> {
         self.journal.record("computer.retry")?;
         Ok(ComputerStatus {
-            payment: ComputerPayment::Paid,
+            payment: self.status.payment,
             brain: None,
             status: ComputerStatusKind::SettingUp,
             setup: Some(SetupProgress {
@@ -419,6 +449,7 @@ type Service = TeamAgentServiceImpl<
 >;
 
 struct Setup {
+    owner_verified_email: Option<String>,
     fail_at: Option<&'static str>,
     flags: Option<FakeFeatureFlags>,
     seat: Option<SeatQuote>,
@@ -429,6 +460,7 @@ struct Setup {
 impl Default for Setup {
     fn default() -> Self {
         Self {
+            owner_verified_email: None,
             fail_at: None,
             flags: None,
             seat: Some(SeatQuote {
@@ -459,6 +491,7 @@ fn build(setup: Setup) -> (Service, Arc<Journal>) {
 
     let service = TeamAgentServiceImpl::new(
         FakeRepository {
+            owner_verified_email: setup.owner_verified_email,
             journal: journal.clone(),
             agents: Mutex::new(vec![]),
         },
@@ -486,6 +519,7 @@ fn build(setup: Setup) -> (Service, Arc<Journal>) {
         setup.flags,
         "https://dev-gateway.macro.com/".to_string(),
         "https://dev-gateway.macro.com/agent-harness-egress/brain/anthropic".to_string(),
+        "staff.example.com".to_string(),
     );
 
     (service, journal)
@@ -501,6 +535,7 @@ fn receipt(team_id: &str) -> EntityAccessReceipt<AdminTeamRole> {
 
 fn request() -> CreateTeamAgent {
     CreateTeamAgent {
+        expected_included: false,
         name: "  Sam Rivera ".to_string(),
         job_description: "Runs vendor relations.".to_string(),
         personality: "Dry, direct, kind.".to_string(),
@@ -836,6 +871,7 @@ async fn quote_adds_the_seat_and_the_computer() {
     assert_eq!(
         quote,
         TeamAgentQuote {
+            included: false,
             vcpus: 8,
             memory_gb: 16,
             disk_gb: 200,
@@ -1546,4 +1582,107 @@ async fn health_failure_diagnostics_are_updated_and_recovery_clears_them() {
     assert_eq!(recovered.status, TeamAgentStatus::Running);
     assert_eq!(recovered.status_reason, None);
     assert!(recovered.last_turn_at.is_some());
+}
+
+#[tokio::test]
+async fn verified_owner_domain_includes_both_seat_and_computer_without_billing() {
+    let (service, journal) = build(Setup {
+        owner_verified_email: Some("owner@STAFF.EXAMPLE.COM".to_string()),
+        computer_status: ComputerStatus {
+            payment: ComputerPayment::Comped,
+            brain: None,
+            status: ComputerStatusKind::SettingUp,
+            setup: None,
+        },
+        ..Setup::default()
+    });
+    let quote = service
+        .quote(receipt(TEAM_ID), ComputerSize::Large)
+        .await
+        .unwrap();
+    assert!(quote.included);
+    assert_eq!((quote.seat, quote.computer, quote.total), (0, 0, 0));
+    assert_eq!((quote.vcpus, quote.memory_gb, quote.disk_gb), (8, 16, 200));
+    let mut request = request();
+    request.expected_included = true;
+    let agent = service.create(receipt(TEAM_ID), request).await.unwrap();
+    assert_eq!(agent.payment, Some(ComputerPayment::Comped));
+    assert!(journal.steps().contains(&"computer.comped"));
+    assert!(!journal.steps().contains(&"computer.purchase"));
+    assert!(!journal.steps().contains(&"seat.quote"));
+    assert!(!journal.steps().contains(&"computer.quote"));
+    service
+        .delete(receipt(TEAM_ID), &agent.user_id)
+        .await
+        .unwrap();
+    assert!(journal.steps().contains(&"team.undo"));
+    assert!(!journal.steps().contains(&"team.remove"));
+}
+
+#[tokio::test]
+async fn actor_or_similar_domains_do_not_comp_a_teams_agents() {
+    for email in [
+        None,
+        Some("owner@not-staff.example.com"),
+        Some("owner@staff.example.com.evil.test"),
+        Some("owner@sub.staff.example.com"),
+    ] {
+        let (service, _) = build(Setup {
+            owner_verified_email: email.map(str::to_string),
+            ..Setup::default()
+        });
+        assert!(
+            !service
+                .quote(receipt(TEAM_ID), ComputerSize::Large)
+                .await
+                .unwrap()
+                .included
+        );
+    }
+}
+
+#[tokio::test]
+async fn a_reviewed_free_invitation_cannot_turn_into_a_paid_purchase() {
+    for (owner, expected_included) in [
+        (None, true),
+        (Some("owner@staff.example.com".to_string()), false),
+    ] {
+        let (service, journal) = build(Setup {
+            owner_verified_email: owner,
+            ..Setup::default()
+        });
+        let mut request = request();
+        request.expected_included = expected_included;
+        assert!(matches!(
+            service.create(receipt(TEAM_ID), request).await,
+            Err(TeamAgentError::QuoteChanged)
+        ));
+        assert!(journal.steps().is_empty());
+    }
+}
+
+#[tokio::test]
+async fn a_failed_comped_agent_retries_without_a_billed_purchase() {
+    let (service, journal) = build(Setup {
+        owner_verified_email: Some("owner@staff.example.com".to_string()),
+        computer_status: ComputerStatus {
+            payment: ComputerPayment::Comped,
+            brain: None,
+            status: ComputerStatusKind::Failed,
+            setup: None,
+        },
+        ..Setup::default()
+    });
+    let mut request = request();
+    request.expected_included = true;
+    let agent = service.create(receipt(TEAM_ID), request).await.unwrap();
+    assert!(agent.retryable);
+    let retried = service
+        .retry(receipt(TEAM_ID), &agent.user_id)
+        .await
+        .unwrap();
+    assert_eq!(retried.computer_id, agent.computer_id);
+    assert_eq!(retried.payment, Some(ComputerPayment::Comped));
+    assert!(journal.steps().contains(&"computer.retry"));
+    assert!(!journal.steps().contains(&"computer.purchase"));
 }

@@ -173,6 +173,14 @@ impl<Repo: ComputerRepo, Bill: Billing, Time: Clock, Harness: HarnessRepo> Compu
         }
     }
 
+    async fn provision_comped(&self, _purchase: ComputerPurchase) -> Result<Uuid, TeamAgentError> {
+        // TODO(PR A): call ComputerService::provision_comped once it lands, with
+        // durable PaymentOutcome::Comped and no billing or extra seat items.
+        Err(TeamAgentError::ComputerUnavailable(
+            "included computer provisioning is not available yet; nothing was charged".to_string(),
+        ))
+    }
+
     #[tracing::instrument(skip_all, fields(%team_id, %computer_id), err)]
     async fn status(
         &self,

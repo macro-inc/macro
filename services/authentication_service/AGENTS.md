@@ -54,6 +54,12 @@ key issuance, and account merge/link flows.
   `env -u DATABASE_URL cargo test -p authentication_service --bin authentication_service config::test`
   and `cargo run -p authentication_service --bin authentication_service_doppler_config`.
 
+`TEAM_AGENTS_INCLUDED_EMAIL_DOMAIN` defaults to `macro.com`; override per
+environment or set empty to disable. Only a team owner's verified current
+primary email qualifies its agent seat and computer as included; this does not
+change metered AI usage policy. Comped provisioning depends on PR A's dedicated
+no-billing API, and never falls back to Stripe purchase.
+
 ## Macro computers billing
 
 - `src/outbound/computer_billing.rs`: `TeamComputerBilling`, the

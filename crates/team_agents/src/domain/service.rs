@@ -73,6 +73,7 @@ pub struct TeamAgentServiceImpl<Repository, Membership, ApiKeys, Inboxes, Comput
     /// Public API gateway origin the brain reaches Macro through.
     gateway_url: String,
     anthropic_base_url: String,
+    included_email_domain: String,
 }
 
 impl<Repository, Membership, ApiKeys, Inboxes, Computer, Repos, Flags>
@@ -90,6 +91,7 @@ impl<Repository, Membership, ApiKeys, Inboxes, Computer, Repos, Flags>
         flags: Option<Flags>,
         gateway_url: String,
         anthropic_base_url: String,
+        included_email_domain: String,
     ) -> Self {
         Self {
             repository,
@@ -101,6 +103,7 @@ impl<Repository, Membership, ApiKeys, Inboxes, Computer, Repos, Flags>
             flags,
             gateway_url,
             anthropic_base_url,
+            included_email_domain,
         }
     }
 }
@@ -161,6 +164,7 @@ fn validate(request: CreateTeamAgent) -> Result<CreateTeamAgent, TeamAgentError>
     }
 
     Ok(CreateTeamAgent {
+        expected_included: request.expected_included,
         name,
         job_description,
         personality,
@@ -274,6 +278,22 @@ where
         }
     }
 
+    /// An exact verified owner-domain match qualifies the team, never the actor.
+    async fn is_included(&self, team_id: Uuid) -> Result<bool, TeamAgentError> {
+        if self.included_email_domain.is_empty() {
+            return Ok(false);
+        }
+        let owner = self.membership.team_owner(team_id).await?;
+        let email = self
+            .repository
+            .verified_email(&owner)
+            .await
+            .map_err(TeamAgentError::internal)?;
+        Ok(email
+            .and_then(|email| email.rsplit_once('@').map(|(_, domain)| domain.to_owned()))
+            .is_some_and(|domain| domain.eq_ignore_ascii_case(&self.included_email_domain)))
+    }
+
     /// Takes back what a failed create made, newest first. Each step logs
     /// its own failure so the rest still run.
     async fn undo(&self, receipt: EntityAccessReceipt<AdminTeamRole>, undo: Undo) {
@@ -320,6 +340,10 @@ where
         undo: &mut Undo,
     ) -> Result<(MacroUserIdStr<'static>, Uuid), TeamAgentError> {
         let team_id = team_id(receipt)?;
+        let included = self.is_included(team_id).await?;
+        if included != request.expected_included {
+            return Err(TeamAgentError::QuoteChanged);
+        }
         let os_user = slug(&request.name);
 
         // A short suffix keeps two agents with the same name apart.
@@ -362,7 +386,10 @@ where
             .map_err(TeamAgentError::internal)?;
         undo.account = Some(user_id.clone());
 
-        let seat = self.membership.add_agent(receipt.clone(), &user_id).await?;
+        let seat = self
+            .membership
+            .add_agent(receipt.clone(), &user_id, included)
+            .await?;
         undo.joined_team = true;
 
         let api_key = self.api_keys.mint(&user_id).await?;
@@ -370,25 +397,27 @@ where
         let repo = self.repos.create(&user_id, team_id, &seed).await?;
         undo.repo = true;
 
-        let computer_id = self
-            .computers
-            .purchase(ComputerPurchase {
-                team_id,
-                created_by: created_by.as_ref().to_string(),
-                size: request.size,
-                name: Some(request.name.clone()),
-                persona: Some(persona(
-                    &request.name,
-                    &os_user,
-                    &user_id,
-                    &self.gateway_url,
-                    &self.anthropic_base_url,
-                    &repo,
-                    &api_key,
-                )),
-                extra_items: seat.into_iter().collect(),
-            })
-            .await?;
+        let purchase = ComputerPurchase {
+            team_id,
+            created_by: created_by.as_ref().to_string(),
+            size: request.size,
+            name: Some(request.name.clone()),
+            persona: Some(persona(
+                &request.name,
+                &os_user,
+                &user_id,
+                &self.gateway_url,
+                &self.anthropic_base_url,
+                &repo,
+                &api_key,
+            )),
+            extra_items: seat.into_iter().collect(),
+        };
+        let computer_id = if included {
+            self.computers.provision_comped(purchase).await?
+        } else {
+            self.computers.purchase(purchase).await?
+        };
 
         Ok((user_id, computer_id))
     }
@@ -497,8 +526,10 @@ where
         Ok(TeamAgent {
             status,
             status_reason: reason,
-            retryable: computer.payment == ComputerPayment::Paid
-                && computer.status == ComputerStatusKind::Failed,
+            retryable: matches!(
+                computer.payment,
+                ComputerPayment::Paid | ComputerPayment::Comped
+            ) && computer.status == ComputerStatusKind::Failed,
             payment: Some(computer.payment),
             setup: computer.setup,
             last_turn_at: computer.brain.and_then(|brain| brain.last_turn_at),
@@ -560,6 +591,27 @@ where
         self.ensure_enabled(&caller).await?;
         let team_id = team_id(&receipt)?;
 
+        if self.is_included(team_id).await? {
+            let spec = self
+                .computers
+                .sizes()
+                .into_iter()
+                .find(|spec| spec.size == size)
+                .ok_or_else(|| {
+                    TeamAgentError::ComputerUnavailable("size is unavailable".to_string())
+                })?;
+            return Ok(TeamAgentQuote {
+                included: true,
+                vcpus: spec.vcpus,
+                memory_gb: spec.memory_gb,
+                disk_gb: spec.disk_gb,
+                seat: 0,
+                computer: 0,
+                total: 0,
+                currency: "usd".to_string(),
+                interval: super::models::BillingInterval::Month,
+            });
+        }
         let seat = self.membership.quote_seat(receipt).await?;
         let computer = self.computers.quote(team_id, size).await?;
 
@@ -577,6 +629,7 @@ where
         };
 
         Ok(TeamAgentQuote {
+            included: false,
             vcpus: computer.vcpus,
             memory_gb: computer.memory_gb,
             disk_gb: computer.disk_gb,
@@ -786,7 +839,10 @@ where
                 "payment is still being confirmed".to_string(),
             ));
         }
-        let unbilled = computer.payment == ComputerPayment::Unbilled;
+        let unbilled = matches!(
+            computer.payment,
+            ComputerPayment::Unbilled | ComputerPayment::Comped
+        );
         let agent = self.apply_computer_status(agent, computer).await?;
 
         // The account goes last, so a failed step leaves the row for a retry

@@ -91,6 +91,25 @@ impl TryFrom<AgentRow> for TeamAgent {
 impl TeamAgentRepository for PgTeamAgentsRepo {
     type Err = PgTeamAgentsError;
 
+    #[tracing::instrument(skip(self), err)]
+    async fn verified_email(
+        &self,
+        user_id: &MacroUserIdStr<'_>,
+    ) -> Result<Option<String>, Self::Err> {
+        Ok(sqlx::query_scalar!(
+            r#"
+            SELECT u.email
+            FROM "User" u
+            JOIN macro_user_email_verification v
+              ON v.macro_user_id = u.macro_user_id AND v.email = u.email
+            WHERE u.id = $1 AND v.is_verified = TRUE
+        "#,
+            user_id.as_ref()
+        )
+        .fetch_optional(&self.pool)
+        .await?)
+    }
+
     #[tracing::instrument(skip_all, fields(user_id = %account.user_id), err)]
     async fn create_account(&self, account: &NewAgentAccount) -> Result<(), Self::Err> {
         let macro_user_id = Uuid::now_v7();

@@ -85,6 +85,7 @@ impl TeamAgentService for FakeService {
             return Err(error);
         }
         Ok(TeamAgentQuote {
+            included: false,
             vcpus: 8,
             memory_gb: 16,
             disk_gb: 200,
@@ -350,7 +351,7 @@ async fn an_admin_invites_an_agent() {
                 .header(header::AUTHORIZATION, "Bearer admin")
                 .header(header::CONTENT_TYPE, "application/json")
                 .body(Body::from(
-                    r#"{"name":"Sam","jobDescription":"Books venues.","personality":"Warm.","size":"large","avatarUrl":null}"#,
+                    r#"{"name":"Sam","jobDescription":"Books venues.","personality":"Warm.","expectedIncluded":false,"size":"large","avatarUrl":null}"#,
                 ))
                 .expect("request should be valid"),
         )
@@ -378,7 +379,7 @@ async fn a_member_who_is_not_an_admin_cannot_invite_or_quote() {
                 .header(header::AUTHORIZATION, "Bearer admin")
                 .header(header::CONTENT_TYPE, "application/json")
                 .body(Body::from(
-                    r#"{"name":"Sam","jobDescription":"Books venues.","personality":"Warm.","size":"large"}"#,
+                    r#"{"name":"Sam","jobDescription":"Books venues.","personality":"Warm.","expectedIncluded":false,"size":"large"}"#,
                 ))
                 .expect("request should be valid"),
         )
@@ -416,7 +417,7 @@ async fn quote_reads_the_size_from_the_query() {
     assert_eq!(response.status(), StatusCode::OK);
     assert_eq!(
         body_text(response).await,
-        r#"{"vcpus":8,"memoryGb":16,"diskGb":200,"seat":4000,"computer":5000,"total":9000,"currency":"usd","interval":"month"}"#
+        r#"{"included":false,"vcpus":8,"memoryGb":16,"diskGb":200,"seat":4000,"computer":5000,"total":9000,"currency":"usd","interval":"month"}"#
     );
     assert_eq!(
         *service.calls.lock().expect("lock"),
@@ -491,7 +492,7 @@ async fn a_computer_that_cannot_be_bought_answers_conflict() {
                 .header(header::AUTHORIZATION, "Bearer admin")
                 .header(header::CONTENT_TYPE, "application/json")
                 .body(Body::from(
-                    r#"{"name":"Sam","jobDescription":"Books venues.","personality":"Warm.","size":"standard"}"#,
+                    r#"{"name":"Sam","jobDescription":"Books venues.","personality":"Warm.","expectedIncluded":false,"size":"standard"}"#,
                 ))
                 .expect("request should be valid"),
         )
@@ -515,7 +516,7 @@ async fn a_billing_provider_failure_answers_bad_gateway_without_provider_details
         Request::post("/")
             .header(header::AUTHORIZATION, "Bearer admin")
             .header(header::CONTENT_TYPE, "application/json")
-            .body(Body::from(r#"{"name":"Agent","jobDescription":"Handle tasks","personality":"Direct","size":"standard"}"#))
+            .body(Body::from(r#"{"name":"Agent","jobDescription":"Handle tasks","personality":"Direct","expectedIncluded":false,"size":"standard"}"#))
             .expect("request"),
     ).await.expect("response");
     assert_eq!(response.status(), StatusCode::BAD_GATEWAY);
@@ -609,5 +610,25 @@ async fn sizes_require_admin_but_no_quote_or_subscription() {
     assert_eq!(
         body_text(response).await,
         r#"{"code":"no_subscription","message":"the team needs an active subscription"}"#
+    );
+}
+
+#[tokio::test]
+async fn repository_creation_failure_preserves_its_safe_pre_purchase_reason() {
+    let service = Arc::new(FakeService::default());
+    *service.create_error.lock().unwrap() = Some(TeamAgentError::InvitationFailed(
+        "The workspace repository service is missing git. Nothing was charged.".to_string(),
+    ));
+    let response = router(service, TeamRole::Admin).oneshot(
+        Request::post("/")
+            .header(header::AUTHORIZATION, "Bearer admin")
+            .header(header::CONTENT_TYPE, "application/json")
+            .body(Body::from(r#"{"name":"Agent","jobDescription":"Handle tasks","personality":"Direct","expectedIncluded":false,"size":"standard"}"#))
+            .unwrap(),
+    ).await.unwrap();
+    assert_eq!(response.status(), StatusCode::BAD_GATEWAY);
+    assert_eq!(
+        body_text(response).await,
+        r#"{"code":"repository_creation_failed","message":"The workspace repository service is missing git. Nothing was charged."}"#
     );
 }

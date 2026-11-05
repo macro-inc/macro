@@ -80,6 +80,8 @@ enum SeatBilling {
     Charge,
     /// The caller adds it in its own subscription update.
     Defer,
+    /// Included membership with no subscription lookup or seat item.
+    Included,
 }
 
 /// A user who joined directly, and the seat left for the caller to bill.
@@ -372,14 +374,14 @@ where
         // the membership back if any of them fail.
         let Some(team_member) = self
             .team_repository
-            .add_user_to_team(&team_id, user_id)
+            .add_user_to_team(&team_id, user_id, seat_billing == SeatBilling::Included)
             .await?
         else {
             tracing::info!(%team_id, %user_id, "skipping direct team join: user is already a member");
             return Ok(None);
         };
 
-        let subscription_id = if enterprise {
+        let subscription_id = if enterprise || seat_billing == SeatBilling::Included {
             None
         } else {
             let team_payment_status =
@@ -455,6 +457,7 @@ where
                             .increment_seat_count(&subscription_id, team_member.plan, 1)
                             .await
                             .map(|()| None),
+                        SeatBilling::Included => Ok(None),
                         SeatBilling::Defer => self
                             .customer_repository
                             .seat_price_id(team_member.plan)
@@ -828,6 +831,7 @@ where
     async fn restore_after_channels_left(
         &self,
         removed_member: &TeamMember<'_>,
+        seat_included: bool,
         subscription_id: Option<&stripe::SubscriptionId>,
         user_id: &MacroUserIdStr<'_>,
         left_channel_ids: &[uuid::Uuid],
@@ -858,7 +862,7 @@ where
                 .ok();
         }
         self.team_repository
-            .rollback_remove_user_from_team(removed_member)
+            .rollback_remove_user_from_team(removed_member, seat_included)
             .await
             .inspect_err(|rollback_err| {
                 tracing::error!(
@@ -977,7 +981,11 @@ where
             .await?;
 
         let _billing = self.customer_repository.lock_team_billing(&team_id).await?;
-        let subscription_id = if enterprise {
+        let seat_included = self
+            .team_repository
+            .is_seat_included(&team_id, user_id)
+            .await?;
+        let subscription_id = if enterprise || seat_included {
             None
         } else {
             self.team_repository
@@ -1049,7 +1057,7 @@ where
             .await
         {
             self.team_repository
-                .rollback_remove_user_from_team(&removed_member)
+                .rollback_remove_user_from_team(&removed_member, seat_included)
                 .await
                 .inspect_err(|rollback_err| {
                     tracing::error!(
@@ -1083,7 +1091,7 @@ where
                         .ok();
                 }
                 self.team_repository
-                    .rollback_remove_user_from_team(&removed_member)
+                    .rollback_remove_user_from_team(&removed_member, seat_included)
                     .await
                     .inspect_err(|rollback_err| {
                         tracing::error!(
@@ -1109,6 +1117,7 @@ where
         {
             self.restore_after_channels_left(
                 &removed_member,
+                seat_included,
                 subscription_id.as_ref(),
                 user_id,
                 &left_channel_ids,
@@ -1135,6 +1144,7 @@ where
             }
             self.restore_after_channels_left(
                 &removed_member,
+                seat_included,
                 subscription_id.as_ref(),
                 user_id,
                 &left_channel_ids,
@@ -2250,6 +2260,16 @@ where
             .get_team_member(&team_id, user_id)
             .await?
             .into_owned();
+        if self
+            .team_repository
+            .is_seat_included(&team_id, user_id)
+            .await?
+        {
+            return Err(TeamError::BadRequest(
+                "included agent seats do not have a paid plan".to_string(),
+            )
+            .into());
+        }
         if !SeatPlan::PURCHASABLE.contains(&plan) {
             return Err(CustomerError::PlanUnavailable(plan).into());
         }
@@ -2767,6 +2787,7 @@ where
         &self,
         entity_access_receipt: EntityAccessReceipt<AdminTeamRole>,
         agent_user_id: &MacroUserIdStr<'_>,
+        bill_seat: bool,
     ) -> Result<Option<SeatSubscriptionItem>, JoinTeamDirectlyError> {
         let team_id = macro_uuid::string_to_uuid(&entity_access_receipt.entity().entity_id)
             .map_err(|_| TeamError::TeamDoesNotExist)?;
@@ -2783,7 +2804,11 @@ where
                 &team_id,
                 agent_user_id,
                 TeamJoinMethod::TeamAgent { added_by },
-                SeatBilling::Defer,
+                if bill_seat {
+                    SeatBilling::Defer
+                } else {
+                    SeatBilling::Included
+                },
             )
             .await?
             .ok_or_else(|| {

@@ -182,3 +182,45 @@ async fn legacy_agents_have_no_recovery_seed(pool: PgPool) {
     assert_eq!(repo.persona_seed(&user(AGENT)).await.unwrap(), None);
     assert!(repo.get(&user(AGENT)).await.unwrap().is_some());
 }
+
+#[sqlx::test(migrations = "../macro_db_client/migrations")]
+async fn included_policy_reads_only_the_current_owners_verified_primary_email(pool: PgPool) {
+    let _team_id = seed(&pool).await;
+    let repo = PgTeamAgentsRepo::new(pool.clone());
+    assert_eq!(repo.verified_email(&user(ADMIN)).await.unwrap(), None);
+    sqlx::query!(
+        r#"UPDATE "User" SET email = 'owner@staff.example.com' WHERE id = $1"#,
+        ADMIN
+    )
+    .execute(&pool)
+    .await
+    .unwrap();
+    sqlx::query!(
+        r#"INSERT INTO macro_user_email_verification (macro_user_id, email, is_verified)
+        SELECT macro_user_id, email, false FROM "User" WHERE id = $1"#,
+        ADMIN
+    )
+    .execute(&pool)
+    .await
+    .unwrap();
+    assert_eq!(repo.verified_email(&user(ADMIN)).await.unwrap(), None);
+    sqlx::query!(r#"UPDATE macro_user_email_verification SET is_verified = true WHERE email = 'owner@staff.example.com'"#).execute(&pool).await.unwrap();
+    assert_eq!(
+        repo.verified_email(&user(ADMIN)).await.unwrap().as_deref(),
+        Some("owner@staff.example.com")
+    );
+    sqlx::query!(
+        r#"UPDATE "User" SET email = 'new@example.com' WHERE id = $1"#,
+        ADMIN
+    )
+    .execute(&pool)
+    .await
+    .unwrap();
+    assert_eq!(repo.verified_email(&user(ADMIN)).await.unwrap(), None);
+    assert_eq!(
+        repo.verified_email(&user("macro|missing@example.com"))
+            .await
+            .unwrap(),
+        None
+    );
+}

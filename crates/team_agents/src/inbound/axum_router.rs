@@ -119,6 +119,8 @@ where
 #[derive(serde::Serialize, utoipa::ToSchema)]
 #[serde(rename_all = "snake_case")]
 pub enum TeamAgentConflictCode {
+    /// The quote must be reviewed again before any purchase.
+    QuoteChanged,
     /// The team has no active plan.
     NoSubscription,
     /// This computer cannot currently be purchased.
@@ -136,9 +138,29 @@ pub struct TeamAgentConflict {
     pub message: String,
 }
 
+/// Stable provider failure reason safe for invitation error presentation.
+#[derive(serde::Serialize, utoipa::ToSchema)]
+#[serde(rename_all = "snake_case")]
+pub enum TeamAgentFailureCode {
+    /// Repository creation failed before purchase; no charge was attempted.
+    RepositoryCreationFailed,
+    /// Other provider failures keep their generic presentation.
+    ProviderFailed,
+}
+
+/// Public provider failure details. Never contains raw upstream response bodies.
+#[derive(serde::Serialize, utoipa::ToSchema)]
+pub struct TeamAgentFailure {
+    /// Machine-readable failure stage.
+    pub code: TeamAgentFailureCode,
+    /// Safe, actionable reason.
+    pub message: String,
+}
+
 impl IntoResponse for TeamAgentError {
     fn into_response(self) -> Response {
         let conflict = match &self {
+            Self::QuoteChanged => Some(TeamAgentConflictCode::QuoteChanged),
             Self::NoSubscription => Some(TeamAgentConflictCode::NoSubscription),
             Self::ComputerUnavailable(_) => Some(TeamAgentConflictCode::ComputerUnavailable),
             Self::RetryUnavailable(_) => Some(TeamAgentConflictCode::RetryUnavailable),
@@ -159,7 +181,8 @@ impl IntoResponse for TeamAgentError {
             TeamAgentError::NotAnAgent | TeamAgentError::NotFound => StatusCode::NOT_FOUND,
             TeamAgentError::EmailUnavailable => StatusCode::SERVICE_UNAVAILABLE,
             TeamAgentError::Forbidden | TeamAgentError::NotEnabled => StatusCode::FORBIDDEN,
-            TeamAgentError::NoSubscription
+            TeamAgentError::QuoteChanged
+            | TeamAgentError::NoSubscription
             | TeamAgentError::ComputerUnavailable(_)
             | TeamAgentError::RetryUnavailable(_) => StatusCode::CONFLICT,
             TeamAgentError::EmailProvider(_)
@@ -191,6 +214,14 @@ impl IntoResponse for TeamAgentError {
             other => other.to_string(),
         };
 
+        if status == StatusCode::BAD_GATEWAY {
+            let code = if matches!(self, TeamAgentError::InvitationFailed(_)) {
+                TeamAgentFailureCode::RepositoryCreationFailed
+            } else {
+                TeamAgentFailureCode::ProviderFailed
+            };
+            return (status, Json(TeamAgentFailure { code, message })).into_response();
+        }
         (
             status,
             Json(ErrorResponse {
@@ -287,7 +318,7 @@ where
         (status = 403, body = ErrorResponse),
         (status = 409, body = TeamAgentConflict),
         (status = 500, body = ErrorResponse),
-        (status = 502, body = ErrorResponse),
+        (status = 502, body = TeamAgentFailure),
     )
 )]
 #[tracing::instrument(err, skip_all)]

@@ -18,6 +18,12 @@ pub trait TeamAgentRepository: Send + Sync + 'static {
     /// The error type returned by repository operations.
     type Err: std::error::Error + Send + Sync + 'static;
 
+    /// The account's current verified primary email, if available.
+    fn verified_email(
+        &self,
+        user_id: &MacroUserIdStr<'_>,
+    ) -> impl Future<Output = Result<Option<String>, Self::Err>> + Send;
+
     /// Creates the agent's Macro account (verified, no sign-in) and its
     /// `team_agents` row, atomically.
     fn create_account(
@@ -73,6 +79,12 @@ pub trait TeamAgentRepository: Send + Sync + 'static {
 
 /// The agent's membership and seat on its team.
 pub trait TeamMembership: Send + Sync + 'static {
+    /// Current owner, read through the teams domain boundary.
+    fn team_owner(
+        &self,
+        team_id: Uuid,
+    ) -> impl Future<Output = Result<MacroUserIdStr<'static>, TeamAgentError>> + Send;
+
     /// Adds the account to the receipt's team without touching the team
     /// subscription. Returns the seat to add in the computer purchase's
     /// Stripe update, or `None` when the team does not bill seats.
@@ -80,6 +92,7 @@ pub trait TeamMembership: Send + Sync + 'static {
         &self,
         receipt: EntityAccessReceipt<AdminTeamRole>,
         agent_user_id: &MacroUserIdStr<'_>,
+        included: bool,
     ) -> impl Future<Output = Result<Option<SubscriptionItem>, TeamAgentError>> + Send;
 
     /// Takes back an [`Self::add_agent`] membership whose seat was never billed.
@@ -165,6 +178,12 @@ pub trait Computers: Send + Sync + 'static {
     /// errors so its durable payment status can resolve normally. If identity
     /// recovery fails, return `ComputerIdentityUnavailable` to retain the agent.
     fn purchase(
+        &self,
+        purchase: ComputerPurchase,
+    ) -> impl Future<Output = Result<Uuid, TeamAgentError>> + Send;
+
+    /// Provision an included computer without subscription lookup or Stripe.
+    fn provision_comped(
         &self,
         purchase: ComputerPurchase,
     ) -> impl Future<Output = Result<Uuid, TeamAgentError>> + Send;

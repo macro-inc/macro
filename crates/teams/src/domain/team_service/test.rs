@@ -127,6 +127,7 @@ struct MockTeamRepository {
     team_id_for_domain: Option<uuid::Uuid>,
     team_plan: Option<TeamPlan>,
     seat_count: i32,
+    seat_included: bool,
     add_user_to_team_result: Option<TeamMember<'static>>,
     add_user_to_team_calls: Arc<Mutex<usize>>,
     remove_user_calls: Arc<Mutex<usize>>,
@@ -216,6 +217,7 @@ impl MockTeamRepository {
             team_id_for_domain: None,
             team_plan: None,
             seat_count: 0,
+            seat_included: false,
             add_user_to_team_result: None,
             add_user_to_team_calls: Arc::new(Mutex::new(0)),
             remove_user_calls: Arc::new(Mutex::new(0)),
@@ -268,6 +270,14 @@ impl MockTeamRepository {
 }
 
 impl TeamRepository for MockTeamRepository {
+    async fn is_seat_included(
+        &self,
+        _team_id: &uuid::Uuid,
+        _user_id: &MacroUserIdStr<'_>,
+    ) -> Result<bool, TeamError> {
+        Ok(self.seat_included)
+    }
+
     fn get_stripe_customer_id(
         &self,
         _: &MacroUserIdStr<'_>,
@@ -629,6 +639,7 @@ impl TeamRepository for MockTeamRepository {
     fn rollback_remove_user_from_team(
         &self,
         _: &TeamMember<'_>,
+        _: bool,
     ) -> impl Future<Output = Result<(), TeamError>> + Send {
         *self.rollback_remove_calls.lock().unwrap() += 1;
         let fail = self.fail_rollback_remove;
@@ -904,6 +915,7 @@ impl TeamRepository for MockTeamRepository {
         &self,
         _: &uuid::Uuid,
         _: &MacroUserIdStr<'_>,
+        _: bool,
     ) -> impl Future<Output = Result<Option<TeamMember<'static>>, TeamError>> + Send {
         *self.add_user_to_team_calls.lock().unwrap() += 1;
         let member = self.add_user_to_team_result.clone();
@@ -9093,4 +9105,115 @@ async fn subscription_item_changes_need_a_team_subscription() {
         Err(TeamSubscriptionItemsError::NoSubscription)
     ));
     assert!(customer_repo.item_change_calls.lock().unwrap().is_empty());
+}
+
+#[tokio::test]
+async fn included_agent_joins_a_nonpaying_team_without_subscription_or_seat_billing() {
+    let team_id = uuid::Uuid::from_u128(7120);
+    let agent = MacroUserIdStr::parse_from_str("macro|agent@example.com").unwrap();
+    let owner = MacroUserIdStr::parse_from_str("macro|owner@example.com").unwrap();
+    let mut repository =
+        MockTeamRepository::new(Vec::new(), "Acme", Arc::new(Mutex::new(Vec::new())));
+    repository.team_payment_status = false;
+    repository.team_subscription_id = Some("sub_inactive".parse().unwrap());
+    repository.add_user_to_team_result = Some(TeamMember {
+        team_id,
+        user_id: agent.clone().into_owned(),
+        role: TeamRole::Member,
+        plan: SeatPlan::Premium,
+    });
+    let customer = MockCustomerRepository::default();
+    let increment_calls = customer.increment_calls.clone();
+    let channels = RecordingChannelService::default();
+    let service = TeamServiceImpl::new_with_analytics(
+        repository,
+        customer,
+        channels.clone(),
+        MockUserRolesAndPermissionsService::default(),
+        Arc::new(MockNotificationIngress::new(HashSet::new())),
+        NoOpCrmEnqueuer,
+        NoOpTeamCrmSettingsRepository,
+        MockTeamAnalytics::new(Arc::new(Mutex::new(Vec::new()))),
+    );
+    let seat = service
+        .add_team_agent(
+            test_team_receipt::<AdminTeamRole>(team_id, &owner),
+            &agent,
+            false,
+        )
+        .await
+        .unwrap();
+    assert!(seat.is_none());
+    assert!(increment_calls.lock().unwrap().is_empty());
+    assert_eq!(
+        *channels.auto_join_calls.lock().unwrap(),
+        vec![(team_id, agent.as_ref().to_string())]
+    );
+}
+
+#[tokio::test]
+async fn ordinary_removal_of_an_included_agent_does_not_remove_a_paid_seat() {
+    let team_id = uuid::Uuid::from_u128(7121);
+    let agent = MacroUserIdStr::parse_from_str("macro|agent@example.com").unwrap();
+    let owner = MacroUserIdStr::parse_from_str("macro|owner@example.com").unwrap();
+    let mut repository = make_enterprise_remove_user_repository(team_id, &agent, TeamRole::Member)
+        .with_enterprise(false);
+    repository.team_subscription_id = Some("sub_paid".parse().unwrap());
+    repository.seat_included = true;
+    let customer = MockCustomerRepository::default();
+    let decrement_calls = customer.decrement_calls.clone();
+    let service = TeamServiceImpl::new(
+        repository,
+        customer,
+        RecordingChannelService::default(),
+        MockUserRolesAndPermissionsService::default(),
+        Arc::new(MockNotificationIngress::new(HashSet::new())),
+        NoOpCrmEnqueuer,
+        NoOpTeamCrmSettingsRepository,
+    );
+    service
+        .remove_user_from_team(test_team_receipt::<AdminTeamRole>(team_id, &owner), &agent)
+        .await
+        .unwrap();
+    assert!(decrement_calls.lock().unwrap().is_empty());
+}
+
+#[tokio::test]
+async fn an_included_agent_cannot_be_moved_to_a_paid_seat_plan() {
+    let team_id = uuid::Uuid::from_u128(7122);
+    let agent = MacroUserIdStr::parse_from_str("macro|agent@example.com").unwrap();
+    let owner = MacroUserIdStr::parse_from_str("macro|owner@example.com").unwrap();
+    let mut repository = make_enterprise_remove_user_repository(team_id, &agent, TeamRole::Member)
+        .with_enterprise(false);
+    repository.seat_included = true;
+    repository.team_members = vec![TeamMember {
+        team_id,
+        user_id: agent.clone().into_owned(),
+        role: TeamRole::Member,
+        plan: SeatPlan::Premium,
+    }];
+    let customer = MockCustomerRepository::default();
+    let move_calls = customer.move_seat_calls.clone();
+    let schedule_calls = customer.schedule_calls.clone();
+    let service = TeamServiceImpl::new(
+        repository,
+        customer,
+        RecordingChannelService::default(),
+        MockUserRolesAndPermissionsService::default(),
+        Arc::new(MockNotificationIngress::new(HashSet::new())),
+        NoOpCrmEnqueuer,
+        NoOpTeamCrmSettingsRepository,
+    );
+    assert!(matches!(
+        service
+            .set_team_member_plan(
+                test_team_receipt::<AdminTeamRole>(team_id, &owner),
+                &agent,
+                SeatPlan::Max
+            )
+            .await,
+        Err(SetTeamMemberPlanError::TeamError(TeamError::BadRequest(_)))
+    ));
+    assert!(move_calls.lock().unwrap().is_empty());
+    assert!(schedule_calls.lock().unwrap().is_empty());
 }

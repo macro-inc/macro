@@ -5,32 +5,44 @@ use std::sync::Arc;
 use entity_access::domain::models::{AdminTeamRole, EntityAccessReceipt};
 use macro_user_id::user_id::MacroUserIdStr;
 use teams::domain::model::RemoveUserFromTeamError;
-use teams::domain::team_repo::TeamService;
+use teams::domain::team_repo::{TeamRepository, TeamService};
+use uuid::Uuid;
 
 use crate::domain::models::{BillingInterval, SeatQuote, SubscriptionItem, TeamAgentError};
 use crate::domain::ports::TeamMembership;
 
 /// Adds agents to teams with the teams service.
-pub struct TeamsMembership<Teams> {
+pub struct TeamsMembership<Teams, Repository> {
     teams: Arc<Teams>,
+    repository: Repository,
 }
 
-impl<Teams> TeamsMembership<Teams> {
+impl<Teams, Repository> TeamsMembership<Teams, Repository> {
     /// Wraps the teams service.
-    pub fn new(teams: Arc<Teams>) -> Self {
-        Self { teams }
+    pub fn new(teams: Arc<Teams>, repository: Repository) -> Self {
+        Self { teams, repository }
     }
 }
 
-impl<Teams: TeamService> TeamMembership for TeamsMembership<Teams> {
+impl<Teams: TeamService, Repository: TeamRepository> TeamMembership
+    for TeamsMembership<Teams, Repository>
+{
+    async fn team_owner(&self, team_id: Uuid) -> Result<MacroUserIdStr<'static>, TeamAgentError> {
+        self.repository
+            .get_team_owner(&team_id)
+            .await
+            .map_err(TeamAgentError::internal)
+    }
+
     async fn add_agent(
         &self,
         receipt: EntityAccessReceipt<AdminTeamRole>,
         agent_user_id: &MacroUserIdStr<'_>,
+        included: bool,
     ) -> Result<Option<SubscriptionItem>, TeamAgentError> {
         let seat = self
             .teams
-            .add_team_agent(receipt, agent_user_id)
+            .add_team_agent(receipt, agent_user_id, !included)
             .await
             .map_err(TeamAgentError::internal)?;
 

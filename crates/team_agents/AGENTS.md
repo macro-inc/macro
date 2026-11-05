@@ -43,6 +43,18 @@ when the team lacks an active subscription; other conflicts have their own
 `computer_unavailable` or `retry_unavailable` codes. The quote includes `vcpus`, `memoryGb`, and `diskGb`
 from the hosted-runtimes size catalog alongside the seat and computer price.
 
+The team owner’s current verified primary email is checked against the configured
+`TEAM_AGENTS_INCLUDED_EMAIL_DOMAIN` (default `macro.com`, empty disables; exact,
+case-insensitive domain match). Matching teams get an `included: true` quote with
+zero seat and computer totals, without a subscription lookup. Create joins the
+agent without a seat item and uses `Computers::provision_comped`; deletion uses
+the computer’s durable Comped payment outcome to remove membership without a
+Stripe decrement. Eligibility never uses the actor’s address or team name. The required create field
+`expectedIncluded` carries the reviewed quote’s mode; a changed mode returns
+409 `quote_changed` before any resource or charge is attempted.
+The hosted adapter currently fails closed pending PR A’s comped provisioning API;
+it must never substitute a normal billed purchase for this port.
+
 ## Start here
 
 - `src/domain/service.rs`: the create flow, undo, delete, and the persona
