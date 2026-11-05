@@ -86,6 +86,9 @@ export interface InboxCardLayoutProps {
  * mobile, matching the narrow rows' icon factor (see InboxCard.Icon). */
 const AVATAR_GLYPH_CLASS = 'size-4 mobile:size-6';
 
+/** Action glyphs keep the same type color as the shared entity icon. */
+const avatarGlyph = (tone: string) => cn(AVATAR_GLYPH_CLASS, tone);
+
 type NotificationTag = ReturnType<typeof getNotificationTag>;
 
 /** The notification driving the row's action/sender (most recent first). */
@@ -219,12 +222,7 @@ function InboxAvatar(props: {
 const tagBubbleIcon = (tag: NotificationTag) =>
   match(tag)
     .with('new_email', () => () => (
-      <EntityIcon
-        class={AVATAR_GLYPH_CLASS}
-        targetType="email"
-        theme="monochrome"
-        size="fill"
-      />
+      <EntityIcon class={AVATAR_GLYPH_CLASS} targetType="email" size="fill" />
     ))
     .with('task_assigned', () => () => (
       <EntityIcon class={AVATAR_GLYPH_CLASS} targetType="task" size="fill" />
@@ -232,24 +230,26 @@ const tagBubbleIcon = (tag: NotificationTag) =>
     .with('ai_response', () => () => (
       <EntityIcon class={AVATAR_GLYPH_CLASS} targetType="chat" size="fill" />
     ))
-    .with('channel_mention', () => () => <AtIcon class={AVATAR_GLYPH_CLASS} />)
+    .with('channel_mention', () => () => (
+      <AtIcon class={avatarGlyph('text-communication')} />
+    ))
     .with(
       'mentioned_in_document_comment',
       'replied_to_document_comment_thread',
       'commented_on_document',
-      () => () => <ChatTeardropIcon class={AVATAR_GLYPH_CLASS} />
+      () => () => <ChatTeardropIcon class={avatarGlyph('text-comment')} />
     )
     .with('document_mention', () => () => (
-      <FilesIcon class={AVATAR_GLYPH_CLASS} />
+      <FilesIcon class={avatarGlyph('text-note')} />
     ))
     .with('channel_message_reaction', () => () => (
-      <SmileyIcon class={AVATAR_GLYPH_CLASS} />
+      <SmileyIcon class={avatarGlyph('text-communication')} />
     ))
     .with('channel_message_reply', () => () => (
-      <ArrowBendUpLeftIcon class={AVATAR_GLYPH_CLASS} />
+      <ArrowBendUpLeftIcon class={avatarGlyph('text-communication')} />
     ))
     .with('channel_message_send', () => () => (
-      <ChatTextIcon class={AVATAR_GLYPH_CLASS} />
+      <ChatTextIcon class={avatarGlyph('text-communication')} />
     ))
     .with(
       'entity_access_requested',
@@ -257,27 +257,31 @@ const tagBubbleIcon = (tag: NotificationTag) =>
       'channel_invite',
       'channel_access_requested',
       'invite_to_team',
-      () => () => <UserPlusIcon class={AVATAR_GLYPH_CLASS} />
+      () => () => <UserPlusIcon class={avatarGlyph('text-communication')} />
     )
-    .with('call_started', () => () => <PhoneIcon class={AVATAR_GLYPH_CLASS} />)
+    .with('call_started', () => () => (
+      <PhoneIcon class={avatarGlyph('text-communication')} />
+    ))
     .with('agent_session_settled', () => () => (
-      <AgentIcon class={AVATAR_GLYPH_CLASS} />
+      <AgentIcon class={avatarGlyph('text-chat')} />
     ))
     .with('agent_session_waiting_for_input', () => () => (
-      <QuestionIcon class={AVATAR_GLYPH_CLASS} />
+      <QuestionIcon class={avatarGlyph('text-chat')} />
     ))
     .with('agent_session_mentioned', () => () => (
-      <AtIcon class={AVATAR_GLYPH_CLASS} />
+      <AtIcon class={avatarGlyph('text-chat')} />
+    ))
+    .with('reminder', () => () => (
+      <BellSimpleIcon class={avatarGlyph('text-default')} />
     ))
     .with('routine_run_finished', () => () => (
-      <ClockIcon class={AVATAR_GLYPH_CLASS} />
+      <ClockIcon class={avatarGlyph('text-chat')} />
     ))
-    .with('reminder', () => () => <BellSimpleIcon class={AVATAR_GLYPH_CLASS} />)
     .with('calendar_event_reminder', () => () => (
-      <CalendarBlankIcon class={AVATAR_GLYPH_CLASS} />
+      <CalendarBlankIcon class={avatarGlyph('text-calendar')} />
     ))
     .with('calendar_event_join_request', () => () => (
-      <UserPlusIcon class={AVATAR_GLYPH_CLASS} />
+      <UserPlusIcon class={avatarGlyph('text-calendar')} />
     ))
     .with(
       'github_pr_status_changed',
@@ -712,7 +716,6 @@ export function ChannelCardLayout(props: InboxCardLayoutProps) {
             class={AVATAR_GLYPH_CLASS}
             targetType={getEntityIconType(entity())}
             size="fill"
-            theme="monochrome"
           />
         </Show>
       }
@@ -1457,12 +1460,7 @@ export function CallCardLayout(props: InboxCardLayoutProps) {
     <BaseCard
       {...props}
       icon={
-        <EntityIcon
-          class={AVATAR_GLYPH_CLASS}
-          targetType="call"
-          size="fill"
-          theme="monochrome"
-        />
+        <EntityIcon class={AVATAR_GLYPH_CLASS} targetType="call" size="fill" />
       }
       title={text().title}
     >
@@ -1535,7 +1533,7 @@ export function CalendarEventCardLayout(props: InboxCardLayoutProps) {
   return (
     <BaseCard
       {...props}
-      icon={<CalendarBlankIcon class={AVATAR_GLYPH_CLASS} />}
+      icon={<CalendarBlankIcon class={avatarGlyph('text-calendar')} />}
       title={props.item.entity.name || '(No title)'}
     >
       <Show when={joinRequest()}>
@@ -1575,7 +1573,6 @@ export function GenericCardLayout(props: InboxCardLayoutProps) {
           class={AVATAR_GLYPH_CLASS}
           targetType={getEntityIconType(props.item.entity)}
           size="fill"
-          theme="monochrome"
         />
       }
       title={text().title}

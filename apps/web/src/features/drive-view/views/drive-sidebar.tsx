@@ -205,7 +205,7 @@ export function DriveSidebarContent(props: { onNavigate?: () => void }) {
                 onClick={() => selectFolder(null)}
               >
                 <ViewSidebar.Icon>
-                  <FolderIcon class="size-4" />
+                  <FolderIcon class="size-4 text-folder" />
                 </ViewSidebar.Icon>
                 <span>Drive</span>
               </ViewSidebar.Item>

@@ -42,7 +42,7 @@ export function FolderTree(props: {
                     onClick={() => props.onSelect(node.id)}
                   >
                     <ViewSidebar.Icon>
-                      <FolderIcon class="size-4" />
+                      <FolderIcon class="size-4 text-folder" />
                     </ViewSidebar.Icon>
                     <span class="truncate">{node.name}</span>
                   </ViewSidebar.TreeItem>

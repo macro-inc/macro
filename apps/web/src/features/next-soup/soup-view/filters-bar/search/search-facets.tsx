@@ -39,41 +39,37 @@ export const SEARCH_INDEX_OPTIONS: {
   {
     value: 'channels',
     label: 'Channels',
-    icon: () => (
-      <EntityIcon targetType="channel" size="xs" theme="monochrome" />
-    ),
+    icon: () => <EntityIcon targetType="channel" size="xs" />,
   },
   {
     value: 'document-or-file',
     label: 'Documents',
-    icon: () => <EntityIcon targetType="md" size="xs" theme="monochrome" />,
+    icon: () => <EntityIcon targetType="md" size="xs" />,
   },
   {
     value: 'task',
     label: 'Tasks',
-    icon: () => <EntityIcon targetType="task" size="xs" theme="monochrome" />,
+    icon: () => <EntityIcon targetType="task" size="xs" />,
   },
   {
     value: 'email',
     label: 'Email',
-    icon: () => <EntityIcon targetType="email" size="xs" theme="monochrome" />,
+    icon: () => <EntityIcon targetType="email" size="xs" />,
   },
   {
     value: 'calls',
     label: 'Calls',
-    icon: () => <EntityIcon targetType="call" size="xs" theme="monochrome" />,
+    icon: () => <EntityIcon targetType="call" size="xs" />,
   },
   {
     value: 'folders',
     label: 'Folders',
-    icon: () => (
-      <EntityIcon targetType="project" size="xs" theme="monochrome" />
-    ),
+    icon: () => <EntityIcon targetType="project" size="xs" />,
   },
   {
     value: 'agent',
     label: 'Agents',
-    icon: () => <EntityIcon targetType="chat" size="xs" theme="monochrome" />,
+    icon: () => <EntityIcon targetType="chat" size="xs" />,
   },
 ];
 
@@ -85,7 +81,7 @@ export const SEARCH_INDEX_OPTIONS: {
 const CALENDAR_TYPE_OPTION: (typeof SEARCH_INDEX_OPTIONS)[number] = {
   value: 'calendar',
   label: 'Calendar',
-  icon: () => <EntityIcon targetType="calendar" size="xs" theme="monochrome" />,
+  icon: () => <EntityIcon targetType="calendar" size="xs" />,
 };
 
 const CALL_STATUS_LABELS: Record<CallStatus, string> = {

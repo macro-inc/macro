@@ -1,6 +1,6 @@
 import { ViewSidebar } from '@app/components/view-shell';
 import { EntityIcon } from '@entity/extractors/entity-icon';
-import { type EntityData, isGithubPrEntity } from '@entity/types/entity';
+import type { EntityData } from '@entity/types/entity';
 
 /** Shared entity icons sized for compact Home rows. */
 export function HomeEntityIcon(props: { entity: EntityData }) {
@@ -14,12 +14,7 @@ export function HomeEntityIcon(props: { entity: EntityData }) {
             : 'size-4'
         }
       >
-        <EntityIcon
-          entity={props.entity}
-          class={isGithubPrEntity(props.entity) ? undefined : 'text-current'}
-          suppressClick
-          showTooltip={false}
-        />
+        <EntityIcon entity={props.entity} suppressClick showTooltip={false} />
       </span>
     </ViewSidebar.Icon>
   );

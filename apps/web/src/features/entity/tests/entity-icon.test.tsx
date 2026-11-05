@@ -451,4 +451,23 @@ describe('Entity.Icon', () => {
     expect(classes?.contains('text-note')).toBe(true);
     expect(classes?.contains('text-current')).toBe(false);
   });
+
+  it('keeps shared entity colors on compact Home rows', () => {
+    const entity: EmailEntity = {
+      type: 'email',
+      id: 'email-id',
+      name: 'Email',
+      ownerId: 'user',
+      isRead: false,
+      hasIcsAttachment: false,
+      isDraft: false,
+      isImportant: false,
+      done: false,
+    };
+    const { container } = render(() => <HomeEntityIcon entity={entity} />);
+    expectGlyph(container, EnvelopeIcon);
+    const classes = container.querySelector('svg')?.parentElement?.classList;
+    expect(classes?.contains('text-email')).toBe(true);
+    expect(classes?.contains('text-current')).toBe(false);
+  });
 });

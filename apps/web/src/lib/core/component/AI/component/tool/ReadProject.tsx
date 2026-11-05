@@ -22,13 +22,12 @@ const ReadProjectToolResponse = (props: { items: ReadProjectItem[] }) => {
           <EntityIcon
             targetType={fileTypeToBlockName(item.fileType, true)}
             size="xs"
-            theme="monochrome"
           />
         );
       case 'chat':
-        return <EntityIcon targetType="chat" size="xs" theme="monochrome" />;
+        return <EntityIcon targetType="chat" size="xs" />;
       case 'project':
-        return <EntityIcon targetType="project" size="xs" theme="monochrome" />;
+        return <EntityIcon targetType="project" size="xs" />;
       default:
         return undefined;
     }
