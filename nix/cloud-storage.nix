@@ -848,13 +848,14 @@
       );
       expLambda =
         arm: lambdaName:
-        (deployLambdaPackageWith (if arm == "fix" then stableZigArgs else lambdaCommonArgs)
-          (if arm == "fix" then lambdaDepsStable else lambdaDeployCargoArtifacts)
+        (deployLambdaPackageWith (if arm == "fix" || arm == "fixexplain" then stableZigArgs else lambdaCommonArgs)
+          (if arm == "fix" || arm == "fixexplain" then lambdaDepsStable else lambdaDeployCargoArtifacts)
+          (if arm == "fix" || arm == "fixexplain" then "--package ${lambdaName}" else "")
           lambdaName
         ).overrideAttrs
           (_: {
             EXP_NONCE = expNonce;
-            CARGO_LOG = if arm == "explain" then "cargo::core::compiler::fingerprint=info" else "";
+            CARGO_LOG = if arm == "explain" || arm == "fixexplain" then "cargo::core::compiler::fingerprint=info" else "";
           });
       expLambdaPackages = pkgs.lib.listToAttrs (
         pkgs.lib.concatMap (
@@ -863,13 +864,13 @@
             name = "exp-lam-${arm}-${n}";
             value = expLambda arm n;
           }) lambdaNames
-        ) [ "ctl" "fix" "explain" ]
+        ) [ "ctl" "fix" "explain" "fixexplain" ]
       );
 
       # bin name == crate name == handler dir name (see per-lambda justfiles).
-      deployLambdaPackage = deployLambdaPackageWith lambdaCommonArgs lambdaDeployCargoArtifacts;
+      deployLambdaPackage = deployLambdaPackageWith lambdaCommonArgs lambdaDeployCargoArtifacts "";
       deployLambdaPackageWith =
-        commonLambdaArgs: lambdaArtifacts: lambdaName:
+        commonLambdaArgs: lambdaArtifacts: selectPackage: lambdaName:
         craneLib.buildPackage (
           commonLambdaArgs
           // {
@@ -882,7 +883,7 @@
             # cargo-zigbuild links the final binary against the pinned Lambda
             # glibc, selected via the `.2.26` target suffix.
             cargoBuildCommand = "cargo zigbuild --release";
-            cargoExtraArgs = "--locked --target ${lambdaZigTarget} --bin ${lambdaName}";
+            cargoExtraArgs = "--locked --target ${lambdaZigTarget} ${selectPackage} --bin ${lambdaName}";
             # Emit the Lambda custom-runtime artifact: a zip whose single entry
             # is named `bootstrap`, mirroring cargo-lambda's
             # target/lambda/<name>/bootstrap.zip layout. zigbuild writes to
