@@ -16,6 +16,8 @@ pub mod read_receipts_pg;
 mod s3_draft_attachment_storage;
 #[cfg(feature = "outbound")]
 mod shared_thread_replies;
+#[cfg(feature = "sqs")]
+mod sqs_enqueuer;
 
 #[cfg(feature = "outbound")]
 pub use email_pg_repo::EmailPgRepo;

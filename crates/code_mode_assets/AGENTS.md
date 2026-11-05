@@ -11,7 +11,9 @@ built from `packages/sdk` when this crate compiles and are never committed.
 `build.rs` takes the assets from exactly one place:
 
 - `CODE_MODE_ASSETS_DIR` set (Nix builds and Rust CI): that directory, built by
-  the `code-mode-assets` flake package from the Nix `node_modules`.
+  the `code-mode-assets` flake package from the Nix `node_modules`. Rust CI
+  restores it from Namespace's remote cache, keyed by its store path, and builds
+  it only on a miss (`steps::code_mode_assets`).
 - Unset (local cargo): it runs `packages/code-mode-sdk/scripts/generate.ts` with
   `bun` into `OUT_DIR`, rerunning when SDK, generator or lockfile sources change.
 

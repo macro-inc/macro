@@ -229,7 +229,7 @@ async fn candidates_exact_recheck_activation_and_keyset_pages(pool: PgPool) {
         expected
     );
     assert!(
-        repo.candidate_actions(&event, Some(exact), page(1))
+        repo.candidate_actions(&event, Some(expected[1]), page(1))
             .await
             .unwrap()
             .next_after

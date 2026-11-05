@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "SELECT id FROM whatsapp_linked_account WHERE id = $1 AND user_id = $2 AND generation = $3 AND state = 'connected' FOR SHARE",
+  "query": "SELECT id FROM whatsapp_linked_account WHERE id = $1 AND user_id = $2 AND generation = $3 AND state = 'connected' FOR NO KEY UPDATE",
   "describe": {
     "columns": [
       {
@@ -20,5 +20,5 @@
       false
     ]
   },
-  "hash": "be636082977712afac114f862262656b8fb5911bce2a3a21a1f03fa40b02ef19"
+  "hash": "990ea172a3128ea9d1903fca9f4ca7b492e3258523a9dc3a9477a49c8c3cc463"
 }
