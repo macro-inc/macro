@@ -9,4 +9,4 @@ pub(crate) mod telemetry_capture;
 
 #[doc(hidden)]
 #[allow(dead_code)]
-const CI_INTEGRATE_NONCE: &str = "616e3bc73a714aabb2f146521f199e67";
+const CI_INTEGRATE_NONCE: &str = "c0219ecc3f8a4940807e8f5741c4f8ed";
