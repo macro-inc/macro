@@ -7405,6 +7405,7 @@
           "stopping",
           "stopped",
           "failed",
+          "payment_failed",
           "released"
         ]
       },
