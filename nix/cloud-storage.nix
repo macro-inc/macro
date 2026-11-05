@@ -426,6 +426,11 @@
 
       deployServiceBinaryDefinitions = [
         {
+          serviceName = "agent-git-service";
+          packageName = "agent_git_service";
+          binaries = [ "agent_git_service" ];
+        }
+        {
           serviceName = "agent-harness-service";
           packageName = "agent_harness_service";
           binaries = [ "agent_harness_service" ];
@@ -651,6 +656,7 @@
       );
 
       localStackDeployServiceNames = [
+        "agent-git-service"
         "agent-harness-service"
         "calendar-service"
         "connection-gateway"

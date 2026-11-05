@@ -11,6 +11,7 @@ export const AGENT_PUBLIC_URLS = {
  */
 export enum ServiceUrl {
   APP_SERVICE_URL = 'APP_SERVICE_URL',
+  API_GATEWAY_URL = 'API_GATEWAY_URL',
   PREVIEW_GATEWAY_URL = 'PREVIEW_GATEWAY_URL',
   SYNC_SERVICE_URL = 'SYNC_SERVICE_URL',
   EMAIL_SERVICE_URL = 'EMAIL_SERVICE_URL',
@@ -24,6 +25,7 @@ export enum ServiceUrl {
   UNFURL_SERVICE_URL = 'UNFURL_SERVICE_URL',
   AGENT_HARNESS_SERVICE_URL = 'AGENT_HARNESS_SERVICE_URL',
   AGENT_HARNESS_EGRESS_URL = 'AGENT_HARNESS_EGRESS_URL',
+  AGENT_GIT_SERVICE_URL = 'AGENT_GIT_SERVICE_URL',
   MCP_SERVER_URL = 'MCP_SERVER_URL',
   CONNECT_API_URL = 'CONNECT_API_URL',
 }
@@ -40,6 +42,7 @@ type ServiceUrlMap = {
  */
 const DEV_SERVICE_URLS: ServiceUrlMap = {
   [ServiceUrl.APP_SERVICE_URL]: 'https://dev.macro.com',
+  [ServiceUrl.API_GATEWAY_URL]: 'https://dev-gateway.macro.com',
   [ServiceUrl.PREVIEW_GATEWAY_URL]: 'https://dev-gateway.macro.com/preview',
   [ServiceUrl.SYNC_SERVICE_URL]:
     'https://sync-service-dev3.macroverse.workers.dev',
@@ -61,6 +64,7 @@ const DEV_SERVICE_URLS: ServiceUrlMap = {
     'https://dev-gateway.macro.com/agent-harness',
   [ServiceUrl.AGENT_HARNESS_EGRESS_URL]:
     'https://dev-gateway.macro.com/agent-harness-egress',
+  [ServiceUrl.AGENT_GIT_SERVICE_URL]: 'https://dev-gateway.macro.com/agent-git',
   [ServiceUrl.MCP_SERVER_URL]: 'https://dev-gateway.macro.com/mcp',
   [ServiceUrl.CONNECT_API_URL]: 'https://connect-dev.macro.com',
 };
@@ -70,6 +74,7 @@ const DEV_SERVICE_URLS: ServiceUrlMap = {
  */
 const PROD_SERVICE_URLS: ServiceUrlMap = {
   [ServiceUrl.APP_SERVICE_URL]: 'https://macro.com',
+  [ServiceUrl.API_GATEWAY_URL]: 'https://gateway.macro.com',
   [ServiceUrl.PREVIEW_GATEWAY_URL]: 'https://gateway.macro.com/preview',
   [ServiceUrl.SYNC_SERVICE_URL]:
     'https://sync-service-prod2.macroverse.workers.dev',
@@ -89,6 +94,7 @@ const PROD_SERVICE_URLS: ServiceUrlMap = {
     'https://gateway.macro.com/agent-harness',
   [ServiceUrl.AGENT_HARNESS_EGRESS_URL]:
     'https://gateway.macro.com/agent-harness-egress',
+  [ServiceUrl.AGENT_GIT_SERVICE_URL]: 'https://gateway.macro.com/agent-git',
   [ServiceUrl.MCP_SERVER_URL]: 'https://gateway.macro.com/mcp',
   [ServiceUrl.CONNECT_API_URL]: 'https://connect.macro.com',
 };

@@ -199,6 +199,10 @@ impl LocalEnv {
             "OVERRIDE_APP_SERVICE_URL".into(),
             self.frontend_origin.clone(),
         );
+        env.insert(
+            "OVERRIDE_API_GATEWAY_URL".into(),
+            self.frontend_origin.clone(),
+        );
         self.infra.write(&mut env);
         self.storage.write(&mut env);
         self.queues.write(&mut env);
@@ -350,6 +354,12 @@ impl InfraEnv {
         env.insert(
             "OVERRIDE_CALENDAR_SERVICE_URL".into(),
             "http://calendar-service:8080".into(),
+        );
+        // `AgentGitServiceUrl`'s Local default is the host port 8111, which
+        // inside a container is the caller itself.
+        env.insert(
+            "OVERRIDE_AGENT_GIT_SERVICE_URL".into(),
+            "http://agent-git-service:8080".into(),
         );
         env.insert(
             "OVERRIDE_AUTH_SERVICE_URL".into(),
@@ -697,6 +707,9 @@ impl BootStubEnv {
         // connection_gateway config reads `REDIS_HOST` (a Redis URL, not a
         // hostname — see `redis::Client::open`).
         env.insert("REDIS_HOST".into(), "redis://redis:6379".into());
+        // agent-git-service's bare repositories, on the compose volume mounted
+        // at the same path as the ECS EFS mount.
+        env.insert("REPO_STORAGE_ROOT".into(), "/data/agent-git".into());
         // email_service / connection_gateway open their own Postgres pool.
         env.insert(
             "MACRO_DB_URL".into(),

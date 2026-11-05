@@ -45,6 +45,14 @@ RUN --mount=from=deno,source=/usr/bin/deno,target=/tmp/deno,ro \
     install -m 755 /tmp/deno /usr/local/bin/deno; \
   fi
 
+# agent-git-service spawns `git http-backend` for smart-HTTP pushes and clones.
+RUN if [ "$SERVICE_NAME" = "agent_git_service" ]; then \
+    apt-get update \
+    && apt-get install -y --no-install-recommends git \
+    && apt-get clean \
+    && rm -rf /var/lib/apt/lists/*; \
+  fi
+
 ENV PORT=8080
 EXPOSE ${PORT}
 

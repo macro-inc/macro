@@ -216,6 +216,22 @@ pub const RUST_SERVICES: &[RustService] = &[
         no_default_features: false,
     },
     RustService {
+        compose_name: "agent-git-service",
+        cargo_bin: "agent_git_service",
+        package: "agent_git_service",
+        host_port: Some(Port::AgentGit),
+        // Git clients reach it on the host port or in-network; no frontend
+        // client exists yet. Setting `/agent-git` here adds the proxy route and
+        // requires the matching `proxyServers()` entry in servers.ts.
+        path_prefix: None,
+        is_websocket: false,
+        // Local-only: under `run-dev` it would write repositories to a local
+        // volume while dev's database rows point at the deployed service's EFS.
+        modes: &[Mode::Local],
+        opt_in: false,
+        no_default_features: false,
+    },
+    RustService {
         compose_name: "notification_service",
         cargo_bin: "notification_service",
         package: "notification_service",

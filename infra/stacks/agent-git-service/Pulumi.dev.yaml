@@ -1,0 +1,6 @@
+config:
+  aws-native:region: us-east-1
+  aws:region: us-east-1
+  agent-git-service:jwt_secret_key: fusionauth-jwt-secret-dev
+  agent-git-service:internal_auth_key: document-storage-service-auth-key-dev
+  agent-git-service:macro_db_secret_key: macro-db-dev

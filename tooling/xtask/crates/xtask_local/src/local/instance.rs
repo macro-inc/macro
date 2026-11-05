@@ -120,6 +120,9 @@ pub enum Port {
     PreviewSsh = 2222,
     /// Local wildcard preview TLS listener.
     PreviewHttps = 8443,
+    /// Agent git remotes (`agent-git-service`). Appended at the end so existing
+    /// per-instance port offsets stay stable.
+    AgentGit = 8111,
 }
 
 impl Port {
