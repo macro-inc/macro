@@ -13,10 +13,12 @@ const NEW_TOKEN_SNIPPET = `const { secret } = await macro.apiKeys.create('my tok
 const MACROD_INSTALL = `curl -fsSL https://raw.githubusercontent.com/macro-inc/macro/main/crates/coding_agent_worker/install/install.sh | sh
 ~/.local/bin/macrod detect-agents`;
 
-const MACROD_START = `mkdir -p ~/.macrod
-tmux new-session -d -s macrod '~/.local/bin/macrod service --agent <agent id> --workspace <absolute path> >> ~/.macrod/service.log 2>&1'`;
+const MACROD_START = `mkdir -p ~/.macrod && chmod 700 ~/.macrod
+tmux kill-session -t macrod-agent 2>/dev/null
+: > ~/.macrod/agent.log
+tmux new-session -d -s macrod-agent '~/.local/bin/macrod service --config ~/.macrod/agent.toml --agent <agent id> --workspace "<absolute path>" >> ~/.macrod/agent.log 2>&1'`;
 
-const MACROD_PAIRING_CODE = `grep '"event":"pairing"' ~/.macrod/service.log | tail -n 1`;
+const MACROD_PAIRING_CODE = `grep '"event":"pairing"' ~/.macrod/agent.log`;
 
 const MACROD_APPROVE = `await macro.harnesses.pairing('<code>').approve();`;
 

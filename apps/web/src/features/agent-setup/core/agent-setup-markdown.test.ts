@@ -18,7 +18,9 @@ describe('agentSetupMarkdown', () => {
       openAppUrl: 'https://app.test/done',
     });
 
-    expect(markdown).toContain('macrod service --agent <agent id>');
+    expect(markdown).toContain(
+      '--config ~/.macrod/agent.toml --agent <agent id>'
+    );
     expect(markdown).toContain("harnesses.pairing('<code>').approve()");
     expect(
       markdownParts(markdown).flatMap((part) =>
