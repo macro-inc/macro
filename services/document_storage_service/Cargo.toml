@@ -5,8 +5,8 @@ name = "document_storage_service"
 publish = false
 version = "0.1.0"
 
-# The bins hold no tests and the library no doctests. Neither target builds under
-# `cargo test`, so the test job compiles the library once, as its test binary.
+# The bins hold no tests and the library no doctests, so neither target builds under
+# `cargo test`. `tests/service_binary_builds.rs` builds the real binaries instead.
 [lib]
 doctest = false
 
