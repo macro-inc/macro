@@ -1252,8 +1252,13 @@ server-supplied complete contact records can rank. Context snapshots use scoped,
 compare-and-set begin/patch/commit epochs; patches cap at 500 and incomplete
 snapshots report pending, not an empty directory. Search streams matching records
 into at most `limit + 1` unique winners, applying exclusions and DM deduplication
-before that limit. This joined-record path costs more than ordinary covering-only
-search; it does not change storage schema 12. `CacheHost.people` now exposes state,
+before that limit. This joined-record path explicitly uses the partial covering
+contact-payload index included in the unpublished schema-12 cutover. It still costs
+more than ordinary covering-only title search, but avoids a second record-table
+lookup; no final SQL candidate limit, new database or format/version bump is added.
+The core hoists viewer namespace hashing and keeps exact key validation with a
+stack buffer. Shared automated-mailbox eligibility retains all existing semantics
+while fast-rejecting nonmatching local parts. `CacheHost.people` now exposes state,
 update, search, bounded reference resolution and local SQL through coordinator
 protocol 17 and dedicated native commands. Local SQL uses the existing predicate
 index, not another database or a directory-sized Rust/JS relation; its adapter

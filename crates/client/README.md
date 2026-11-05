@@ -275,6 +275,15 @@ restarts against the new storage generation. That index cutover kept the GraphQL
 schema epoch and record format unchanged. Native binaries
 must be rebuilt to gain the new index; an OTA frontend update alone cannot add it.
 
+The same unpublished schema-12 cutover now includes `records_contacts_cover_idx`,
+a partial covering index on `records(__typename, id, value)` for `GraphqlContact`.
+Ranked reads explicitly seek this index after the text prefilter instead of also
+fetching the record table. They still decode one row at a time and apply membership,
+exclusions, ranking and DM dedup before limiting. Exact schema validation protects
+the predicate/collation; older local schema-12 shapes without it are incompatible,
+not silently upgraded. No additional format/version cutover or contacts store was
+introduced.
+
 `cargo test -p cache-turso --test search` checks matching/ranking parity, including
 Unicode, escapes, NUL, and late high-ranking matches. Run the ignored 100k-row
 measurement with `cargo test -p cache-turso --test search -- --ignored --nocapture`.
@@ -299,7 +308,7 @@ preserves normalized data, mutations, and storage generation.
 
 Hydration omits contact page and exact-lookup wrappers from the viewer while
 retaining normalized contacts. Foreground contact variants share Soup's bounded
-64-page / 512 KiB snapshot budget. `cache-turso/tests/contacts.rs` and the OPFS
+64-page / 2 MiB snapshot budget shared with Soup and database view pages. `cache-turso/tests/contacts.rs` and the OPFS
 suite hydrate the real client operation, reopen, search, materialize bounded
 fragments with target `userId` intact, and reset account identity. The background
 runner now shares Soup's leadership and commits pages through `HydrationScope`:
@@ -321,24 +330,24 @@ explicit selections and shared name labels do not establish membership. See the
 search policy. Begin compares the previous epoch, patches cap at 500 and never
 write public contact identity/name fields, and commit publishes readiness. Full
 snapshot epochs expire omitted old facts without deleting membership records.
-Search joins the existing person projection to normalized records one row at a
-time, applying secondary-inbox/explicit exclusions, per-surface scores and DM
-deduplication before a bounded heap. Generic title search remains covering-only.
+Search uses indexed exact-name/word-prefix/contains stages over the existing
+owned facts, with recent-first ordering and canonical identity ties. Core applies
+membership, secondary-inbox/explicit exclusions and DM deduplication before the
+bounded result window. Generic title search keeps its separate scoring path.
 This uses schema 12 without adding a database or physical table; native/browser
 hosts now expose state/update/search through dedicated commands. Rust-derived
 transport schemas are checked in `src/people/schema.json` and regenerated from
 `apps/web` with `bun run gen-cache-people-schema --rust`. The frontend now publishes
 channel/inbox context under Soup's leader in bounded snapshot/delta batches;
-Quick Access and migrated recipient controls now use bounded person windows;
-remaining planner/full-list callers are pending. Native policy version 4 retains
-mention-menu tiers and property-picker self/domain boosts, and excludes automated
-recipient mailboxes before limiting unless their full address was typed. The
-policy floor is generated with the transport contract. Ranked person windows
-now continue with opaque scope/policy/epoch-bound cursors and a pinned scoring
-clock. Continuing command searches may make a second streamed pass to omit DM
-aliases already emitted on previous pages, without retaining page history or a
-corpus-sized seen set. Such pages can be short/empty with a continuation; ordinary
-record updates have keyset semantics, not transactional snapshot guarantees.
+Quick Access and all migrated personal pickers now preserve policy-5 windows
+instead of applying the old fuzzy/brevity scores. Empty property browsing pins self;
+recipient mode excludes automated addresses unless explicitly addressed. Interactive
+reads stay local, including partial hydration; unsupported hosts remain unavailable.
+Refresh requests the existing sync lane. Continuations bind scope/policy/layout,
+epoch and live contact/context tokens. Same-epoch patches invalidate them; unrelated
+cache writes do not. Prior DM aliases use bounded target lookups without a history
+catalog; a short/empty page may still continue. Frontend contact invalidations also
+fence pending replies and restart paging.
 
 `CacheHost.people.resolveReferences` exposes a separate read for inferred labels.
 It scans the existing contact projection while retaining at most two distinct
@@ -361,6 +370,17 @@ or execute SQL on a server. Browser queries now use this capability directly;
 ordinary joins request only bounded identity keys. Completion notifications and
 cache changes refresh visible queries, with one physical read and one replaceable
 pending input per observer.
+
+The owned people fact layout now also supplies the approved name-first search
+foundation: bounded name-word postings, explicit overflow, stable recent-first
+keys and sparse epoch-scoped context overrides. Derived layout version 2 rebuilds
+older facts in bounded batches without resetting records, queues or generation.
+Fact deltas preserve name postings during activity updates, and rank facts during
+name edits. `search_people` executes the indexed reader under the same scope
+admission, using core's name/recency collector and one storage snapshot. Native/OPFS
+tests compare it with a complete streaming reference, including continuations and
+reset fencing. Suggestion policy is 5; reference inference keeps its independent
+policy-4 floor and exact/first-name evidence. No server suggestion fallback remains.
 
 ## Browser OPFS writes
 
