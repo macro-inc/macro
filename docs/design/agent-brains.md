@@ -55,7 +55,7 @@ workspace/
   brain.lock          pinned brain version
   prompts/            respond.md heartbeat.md work.md
   config/             jev.json events.json budget.json
-  memory/             self.md people/<id>.md commitments.md notes/
+  memory/             self.json people/<id>.md commitments.md notes/
   work/<task>/        worktrees for running work jobs (not committed)
   .gitignore          history/, log/, cache/, secrets
 ```
