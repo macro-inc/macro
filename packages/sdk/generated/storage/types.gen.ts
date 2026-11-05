@@ -1409,7 +1409,7 @@ export type Bot = {
      */
     handle: string;
     /**
-     * Whether mentioning this bot opens a sandboxed coding-agent session.
+     * Whether this bot runs as an AI agent: mentions and DMs start an agent session.
      */
     has_agent: boolean;
     /**
@@ -4025,7 +4025,7 @@ export type CreateBotRequest = {
      */
     handle: string;
     /**
-     * Whether mentioning this bot opens a sandboxed coding-agent session. Defaults to false.
+     * Whether this bot runs as an AI agent: mentions and DMs start an agent session. Defaults to false.
      */
     has_agent?: boolean | null;
     /**
@@ -4158,7 +4158,7 @@ export type CreateChannelScopedBotRequest = {
      */
     handle: string;
     /**
-     * Whether mentioning this bot opens a sandboxed coding-agent session. Defaults to false.
+     * Whether this bot runs as an AI agent: mentions and DMs start an agent session. Defaults to false.
      */
     has_agent?: boolean | null;
     /**
@@ -11445,7 +11445,7 @@ export type PatchBotRequest = {
      */
     handle?: string | null;
     /**
-     * Whether mentioning this bot opens a sandboxed coding-agent session. Omit to leave unchanged.
+     * Whether this bot runs as an AI agent: mentions and DMs start an agent session. Omit to leave unchanged.
      */
     has_agent?: boolean | null;
     /**

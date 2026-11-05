@@ -37,7 +37,6 @@ const draft = {
   question: 'Lunch?',
   options: ['Pizza', 'Salad'],
   multi: false,
-  showResults: true,
   shareResponses: false,
   anonymous: false,
 };
@@ -97,7 +96,6 @@ it('creates an anonymous poll anonymous and patches tally and shared responses a
       question: 'Lunch?',
       options: ['Pizza', 'Salad'],
       multi: false,
-      showResults: false,
       shareResponses: true,
       anonymous: true,
     },
@@ -112,7 +110,7 @@ it('creates an anonymous poll anonymous and patches tally and shared responses a
     'poll'
   );
   expect(storage.updateForm).toHaveBeenCalledWith('form-1', {
-    tallyVisible: false,
+    tallyVisible: true,
     responsesVisible: true,
   });
 });
@@ -123,7 +121,6 @@ it('rejects duplicate options without creating a form or silently dropping a cho
       question: 'Lunch?',
       options: ['Pizza', ' pizza ', 'Salad'],
       multi: false,
-      showResults: true,
       shareResponses: false,
       anonymous: false,
     },
