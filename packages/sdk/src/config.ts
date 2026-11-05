@@ -138,4 +138,4 @@ export interface MacroOpts {
   requestedAs?: string;
 }
 
-export const CI_GEN_NONCE = '8fc2077ca3134956b673f401718c7759';
+export const CI_GEN_NONCE = 'c4ac2e8ea5924a08bd17c1838084d4b6';
