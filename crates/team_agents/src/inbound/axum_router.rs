@@ -540,7 +540,8 @@ where
 #[into_params(parameter_in = Path)]
 pub struct EmailPath {
     /// Provider message id.
-    pub message_id: String,
+    #[param(value_type = String)]
+    pub message_id: crate::domain::mail::MailMessageId,
 }
 
 /// One of the calling team agent's emails, with its body.

@@ -28,7 +28,7 @@ use tracing::{Instrument, Span, field::Empty};
 
 use team_agents::domain::{
     gateway::{BrainGatewayAccess, BrainGatewayError},
-    models::Credential,
+    models::AgentApiKey,
 };
 use usage::{SseUsage, TokenUsage};
 
@@ -43,15 +43,53 @@ mod test;
 /// Where requests go in deployed environments.
 pub(super) const ANTHROPIC_API_URL: &str = "https://api.anthropic.com";
 
-/// Models a session may call, each with the id `ai_pricing` prices it under.
-const ALLOWED_MODELS: &[(&str, &str)] = &[
-    ("claude-opus-4-8", "claude-opus-4-8"),
-    ("claude-sonnet-4-6", "claude-sonnet-4-6"),
-    ("claude-opus-5-5", "claude-opus-5-5"),
-    ("claude-sonnet-5", "claude-sonnet-5"),
-    ("claude-haiku-4-5-20251001", "claude-haiku-4-5"),
-    ("claude-fable-5-1", "claude-fable-5-1"),
+/// The gateway's closed model allowlist, shared by session and brain requests.
+#[derive(Clone, Copy)]
+enum GatewayModel {
+    Opus48,
+    Sonnet46,
+    Opus55,
+    Sonnet5,
+    Haiku45,
+    Fable51,
+}
+
+const ALLOWED_MODELS: &[GatewayModel] = &[
+    GatewayModel::Opus48,
+    GatewayModel::Sonnet46,
+    GatewayModel::Opus55,
+    GatewayModel::Sonnet5,
+    GatewayModel::Haiku45,
+    GatewayModel::Fable51,
 ];
+
+impl GatewayModel {
+    fn parse(requested: &str) -> Result<Self, Rejection> {
+        ALLOWED_MODELS
+            .iter()
+            .copied()
+            .find(|model| model.request_id() == requested)
+            .ok_or_else(|| Rejection::model_not_allowed(requested))
+    }
+
+    fn request_id(self) -> &'static str {
+        match self {
+            Self::Opus48 => "claude-opus-4-8",
+            Self::Sonnet46 => "claude-sonnet-4-6",
+            Self::Opus55 => "claude-opus-5-5",
+            Self::Sonnet5 => "claude-sonnet-5",
+            Self::Haiku45 => "claude-haiku-4-5-20251001",
+            Self::Fable51 => "claude-fable-5-1",
+        }
+    }
+
+    fn pricing_id(self) -> &'static str {
+        match self {
+            Self::Haiku45 => "claude-haiku-4-5",
+            _ => self.request_id(),
+        }
+    }
+}
 
 /// Anthropic's own request size limit for the Messages API.
 const MAX_REQUEST_BYTES: usize = 32 * 1024 * 1024;
@@ -263,8 +301,10 @@ async fn forward<Sessions: AgentSessionRepo>(
             .brains
             .as_ref()
             .ok_or_else(|| Rejection::from_brain(BrainGatewayError::Unavailable))?;
+        let key = AgentApiKey::parse(bearer.token().to_owned())
+            .map_err(|_| Rejection::from_brain(BrainGatewayError::Unauthorized))?;
         let identity = access
-            .authorize(&Credential::new(bearer.token().to_string()))
+            .authorize(&key)
             .await
             .map_err(Rejection::from_brain)?;
         span.record(
@@ -291,9 +331,8 @@ async fn forward<Sessions: AgentSessionRepo>(
     let shape: RequestShape = serde_json::from_slice(&body).map_err(|_| {
         Rejection::invalid_request("request body must be a JSON object with a `model`")
     })?;
-    let priced_model =
-        priced_model(&shape.model).ok_or_else(|| Rejection::model_not_allowed(&shape.model))?;
-    span.record("gen_ai.request.model", shape.model.as_str());
+    let model = GatewayModel::parse(&shape.model)?;
+    span.record("gen_ai.request.model", model.request_id());
 
     let api_key = state.api_key.as_ref().ok_or(Rejection::NOT_CONFIGURED)?;
     let (owner, entity) = match brain {
@@ -353,7 +392,7 @@ async fn forward<Sessions: AgentSessionRepo>(
     let meter = (endpoint == Endpoint::Messages).then(|| UsageMeter {
         recorder: state.recorder.clone(),
         context: UsageContext::new(AiFeature::AgentSession, owner).with_entity(entity),
-        model: priced_model,
+        model: model.pricing_id(),
         usage: TokenUsage::default(),
         span: span.clone(),
     });
@@ -406,13 +445,6 @@ async fn authenticate<Sessions: AgentSessionRepo>(
     authenticate_session(sessions, &SessionToken::new(bearer.token()).hash())
         .await
         .map_err(|_| Rejection::UNAUTHENTICATED)
-}
-
-fn priced_model(requested: &str) -> Option<&'static str> {
-    ALLOWED_MODELS
-        .iter()
-        .find(|(allowed, _)| *allowed == requested)
-        .map(|(_, priced)| *priced)
 }
 
 fn upstream_headers(caller: &HeaderMap, api_key: &HeaderValue) -> HeaderMap {
@@ -557,7 +589,10 @@ impl Rejection {
     }
 
     fn model_not_allowed(model: &str) -> Self {
-        let allowed: Vec<&str> = ALLOWED_MODELS.iter().map(|(allowed, _)| *allowed).collect();
+        let allowed: Vec<&str> = ALLOWED_MODELS
+            .iter()
+            .map(|model| model.request_id())
+            .collect();
         Self {
             status: StatusCode::BAD_REQUEST,
             kind: "invalid_request_error",

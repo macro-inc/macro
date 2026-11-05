@@ -5,7 +5,7 @@ use std::sync::Arc;
 use macro_user_id::user_id::MacroUserIdStr;
 use user_api_key::domain::ports::UserApiKeyService;
 
-use crate::domain::models::{Credential, TeamAgentError};
+use crate::domain::models::{AgentApiKey, TeamAgentError};
 use crate::domain::ports::AgentApiKeys;
 
 /// Name the key shows under in the agent's Settings → API Keys.
@@ -24,13 +24,16 @@ impl<S> UserApiKeys<S> {
 }
 
 impl<S: UserApiKeyService> AgentApiKeys for UserApiKeys<S> {
-    async fn mint(&self, agent_user_id: &MacroUserIdStr<'_>) -> Result<Credential, TeamAgentError> {
+    async fn mint(
+        &self,
+        agent_user_id: &MacroUserIdStr<'_>,
+    ) -> Result<AgentApiKey, TeamAgentError> {
         let created = self
             .service
             .create_key(agent_user_id, BRAIN_KEY_NAME)
             .await
             .map_err(TeamAgentError::internal)?;
 
-        Ok(Credential::new(created.key))
+        AgentApiKey::parse(created.key).map_err(TeamAgentError::internal)
     }
 }

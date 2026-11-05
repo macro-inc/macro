@@ -1,5 +1,8 @@
 //! Team agent service implementation.
 
+use agent_credentials::RepoToken;
+
+use crate::domain::mail::{MailMessageId, MailboxId};
 use std::collections::BTreeMap;
 
 use entity_access::domain::models::{AdminTeamRole, EntityAccessReceipt};
@@ -9,10 +12,10 @@ use macro_user_id::user_id::MacroUserIdStr;
 use uuid::Uuid;
 
 use super::models::{
-    AgentRepo, ComputerPayment, ComputerPurchase, ComputerSize, ComputerStatus, ComputerStatusKind,
-    CreateTeamAgent, Credential, EmailMessage, EmailMessages, MAX_NAME_CHARS, MAX_PROFILE_CHARS,
-    NewAgentAccount, Persona, PersonaSeed, PersonaService, SendEmail, SentEmail, TeamAgent,
-    TeamAgentError, TeamAgentQuote, TeamAgentSizes, TeamAgentStatus, TeamAgents,
+    AgentApiKey, AgentRepo, ComputerPayment, ComputerPurchase, ComputerSize, ComputerStatus,
+    ComputerStatusKind, CreateTeamAgent, EmailMessage, EmailMessages, MAX_NAME_CHARS,
+    MAX_PROFILE_CHARS, NewAgentAccount, Persona, PersonaSeed, PersonaService, SendEmail, SentEmail,
+    TeamAgent, TeamAgentError, TeamAgentQuote, TeamAgentSizes, TeamAgentStatus, TeamAgents,
 };
 use super::ports::{
     AgentApiKeys, AgentRepos, Computers, Mailboxes, TeamAgentRepository, TeamAgentService,
@@ -182,7 +185,7 @@ fn persona(
     gateway_url: &str,
     anthropic_base_url: &str,
     repo: &AgentRepo,
-    api_key: &Credential,
+    api_key: &AgentApiKey,
 ) -> Persona {
     let config = BTreeMap::from([
         (
@@ -240,7 +243,7 @@ fn team_id(receipt: &EntityAccessReceipt<AdminTeamRole>) -> Result<Uuid, TeamAge
 /// What a create made before the purchase, so a failure can take it back.
 #[derive(Default)]
 struct Undo {
-    mailbox_id: Option<String>,
+    mailbox_id: Option<MailboxId>,
     account: Option<MacroUserIdStr<'static>>,
     joined_team: bool,
     repo: bool,
@@ -339,7 +342,8 @@ where
         if included != request.expected_included {
             return Err(TeamAgentError::QuoteChanged);
         }
-        let os_user = slug(&request.name);
+        let name_slug = slug(&request.name);
+        let os_user = format!("agent-{name_slug}");
 
         // A short suffix keeps two agents with the same name apart.
         let suffix: String = Uuid::now_v7()
@@ -349,7 +353,7 @@ where
             .rev()
             .take(6)
             .collect();
-        let username = format!("{os_user}-{suffix}");
+        let username = format!("{name_slug}-{suffix}");
         let mailbox = self.mailboxes.create(&username, &request.name).await?;
         undo.mailbox_id = mailbox.mailbox_id.clone();
         let email = mailbox.email.to_lowercase();
@@ -363,7 +367,7 @@ where
         );
 
         let seed = PersonaSeed {
-            creator_id: Some(created_by.as_ref().to_string()),
+            creator_id: Some(created_by.clone()),
             name: request.name.clone(),
             job_description: request.job_description,
             personality: request.personality,
@@ -397,7 +401,7 @@ where
 
         let purchase = ComputerPurchase {
             team_id,
-            created_by: created_by.as_ref().to_string(),
+            created_by: created_by.clone(),
             size: request.size,
             name: Some(request.name.clone()),
             persona: Some(persona(
@@ -550,7 +554,7 @@ where
             .ok_or(TeamAgentError::NotAnAgent)
     }
 
-    async fn mailbox(&self, caller: &MacroUserIdStr<'_>) -> Result<String, TeamAgentError> {
+    async fn mailbox(&self, caller: &MacroUserIdStr<'_>) -> Result<MailboxId, TeamAgentError> {
         self.agent(caller).await?;
 
         self.repository
@@ -791,10 +795,7 @@ where
                 )
             })?;
         if seed.creator_id.is_none() {
-            seed.creator_id = agent
-                .created_by
-                .as_ref()
-                .map(|creator| creator.as_ref().to_string());
+            seed.creator_id = agent.created_by.clone();
         }
         let persona = self.computers.persona(agent.team_id, computer_id).await?;
         if persona
@@ -815,7 +816,11 @@ where
                 agent_user_id,
                 agent.team_id,
                 &seed,
-                &Credential::new(token.clone()),
+                &RepoToken::parse(token.clone()).map_err(|_| {
+                    TeamAgentError::RetryUnavailable(
+                        "the saved repo credential is invalid".to_string(),
+                    )
+                })?,
             )
             .await?;
         let computer = self.computers.retry(agent.team_id, computer_id).await?;
@@ -899,7 +904,7 @@ where
     async fn get_email(
         &self,
         caller: &MacroUserIdStr<'_>,
-        message_id: &str,
+        message_id: &MailMessageId,
     ) -> Result<EmailMessage, TeamAgentError> {
         let mailbox_id = self.mailbox(caller).await?;
         self.mailboxes.get(&mailbox_id, message_id).await

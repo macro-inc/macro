@@ -82,10 +82,16 @@ team computer purchases through `MacroStaffCompPolicy`.
 
 ## Gotchas
 
+- API keys and repository credentials use distinct validated `AgentApiKey` and
+  `RepoToken` types from `agent_credentials`; never wrap arbitrary strings or
+  log their contents. Saved credentials are parsed again before recovery.
 - The config file `/etc/macro/personas/<os_user>.env` holds the bootstrap
   credentials: `MACRO_API_KEY` (also `ANTHROPIC_AUTH_TOKEN`) and the repo-scoped
   `MACRO_REPO_TOKEN`. Write it with mode 600, owned by `os_user`. Every other
   secret goes through `agent_secrets`, fetched per use.
+- Require the `agent-` prefix on every persona OS user, including stored enrollment
+  input. Local preview agents created with old names must be re-invited; no legacy
+  persona-name type or implicit OS-user migration is supported.
 - Run `/opt/macro/brain run` as the name-derived OS user, with `MACRO_GATEWAY`,
   `BRAIN_WORKSPACE=/home/<os_user>/workspace`, `BRAIN_HEALTH_PORT=7801`,
   `MACRO_REPO_URL`, `MACRO_REPO_TOKEN`, `MACRO_AGENT_USER_ID`, `MACRO_API_KEY`,
@@ -104,6 +110,8 @@ team computer purchases through `MacroStaffCompPolicy`.
   are never exposed in the agent's failure reason.
 - Delete runs computer → repo → seat → mailbox → account; the row goes last
   so a retry after a partial failure still finds the agent.
+- Keep mailbox, message and thread IDs validated before storage or provider URL
+  construction; email-provider IDs remain strings in JSON.
 - Without `DEAD_SIMPLE_MAIL_API_KEY` agents get an `@agents.macro.invalid`
   placeholder address and the email routes answer 503.
 - The brain reaches Macro through the typed public gateway and git URLs in

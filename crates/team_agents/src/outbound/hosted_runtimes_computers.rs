@@ -338,7 +338,7 @@ impl<Repo: ComputerRepo, Bill: Billing, Time: Clock, Harness: HarnessRepo, Polic
             .purchase(models::PurchaseRequest {
                 billing,
                 team_id: purchase.team_id,
-                created_by: purchase.created_by,
+                created_by: purchase.created_by.as_ref().to_owned(),
                 size: computer_size(purchase.size),
                 name: purchase.name,
                 persona: purchase.persona.map(|persona| enrollment::Persona {

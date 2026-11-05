@@ -45,10 +45,12 @@ fn billing() -> SubscriptionBillingFacts {
         computers: vec![
             BillingComputer {
                 id: Uuid::from_u128(1),
-                agent_user_id: Some("macro|agent@example.com".to_owned()),
+                agent_user_id: Some(
+                    MacroUserIdStr::parse_from_str("macro|agent@example.com").expect("agent id"),
+                ),
                 size: ComputerSize::Large,
                 name: "Agent".to_owned(),
-                status: "ready".to_owned(),
+                status: ComputerStatusKind::Ready,
                 included: false,
             },
             BillingComputer {
@@ -56,7 +58,7 @@ fn billing() -> SubscriptionBillingFacts {
                 agent_user_id: None,
                 size: ComputerSize::Standard,
                 name: "Included agent".to_owned(),
-                status: "setting_up".to_owned(),
+                status: ComputerStatusKind::SettingUp,
                 included: true,
             },
         ],
@@ -94,7 +96,7 @@ fn real_amounts_reconcile_without_inventing_prices_or_invoice_adjustments() {
         .unwrap();
     assert_eq!(paid.amount, 10000);
     assert_eq!(
-        paid.agent_user_id.as_deref(),
+        paid.agent_user_id.as_ref().map(|id| id.as_ref()),
         Some("macro|agent@example.com")
     );
 }
@@ -155,4 +157,21 @@ fn quantities_that_overflow_wire_amounts_are_unavailable() {
     let mut facts = billing();
     facts.items[0].quantity = u64::MAX;
     assert!(facts.render().is_none());
+}
+
+#[test]
+fn typed_computer_billing_fields_keep_the_existing_json_schema() {
+    use utoipa::PartialSchema;
+    let billing = billing().render().expect("billing facts");
+    let value = serde_json::to_value(&billing).expect("serialize");
+    let computer = value["lineItems"]
+        .as_array()
+        .expect("items")
+        .iter()
+        .find(|item| item["agentUserId"] == "macro|agent@example.com")
+        .expect("agent computer");
+    assert_eq!(computer["status"], "ready");
+    let schema = serde_json::to_value(SubscriptionBillingLineItem::schema()).expect("schema");
+    assert!(schema["properties"]["agentUserId"]["$ref"].is_null());
+    assert!(schema["properties"]["status"]["$ref"].is_null());
 }

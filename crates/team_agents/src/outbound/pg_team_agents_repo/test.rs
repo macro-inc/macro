@@ -49,7 +49,7 @@ async fn seed(pool: &PgPool) -> Uuid {
 fn account(team_id: Uuid) -> NewAgentAccount {
     NewAgentAccount {
         persona_seed: PersonaSeed {
-            creator_id: Some(ADMIN.to_string()),
+            creator_id: Some(user(ADMIN)),
             name: "Sam".to_string(),
             job_description: "Help the team".to_string(),
             personality: "Direct".to_string(),
@@ -60,7 +60,9 @@ fn account(team_id: Uuid) -> NewAgentAccount {
         created_by: user(ADMIN),
         name: "Sam".to_string(),
         avatar_url: None,
-        mailbox_id: Some("inbox-1".to_string()),
+        mailbox_id: Some(
+            crate::domain::mail::MailboxId::parse("inbox-1".to_string()).expect("mailbox id"),
+        ),
     }
 }
 
@@ -111,7 +113,7 @@ async fn a_created_agent_reads_back_and_tracks_its_computer(pool: PgPool) {
     assert_eq!(listed[0].status_reason.as_deref(), Some("no capacity"));
     assert_eq!(
         repo.mailbox_id(&user(AGENT)).await.expect("mailbox read"),
-        Some("inbox-1".to_string())
+        Some(crate::domain::mail::MailboxId::parse("inbox-1".to_string()).expect("mailbox id"))
     );
     assert_eq!(repo.get(&user(ADMIN)).await.expect("get admin"), None);
     assert_eq!(

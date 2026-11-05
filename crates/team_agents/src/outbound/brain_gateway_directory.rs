@@ -6,7 +6,7 @@ use teams::domain::team_repo::TeamRepository;
 
 use crate::domain::{
     gateway::{BrainGatewayAccount, BrainGatewayDirectory, BrainGatewayError},
-    models::Credential,
+    models::AgentApiKey,
     ports::TeamAgentRepository,
 };
 
@@ -34,7 +34,7 @@ impl<Keys: UserApiKeyAuthorizer, Agents: TeamAgentRepository, Teams: TeamReposit
     #[tracing::instrument(skip_all, err)]
     async fn lookup(
         &self,
-        key: &Credential,
+        key: &AgentApiKey,
     ) -> Result<Option<BrainGatewayAccount>, BrainGatewayError> {
         let Ok(owner) = self.keys.authorize_user_api_key(key.expose()).await else {
             return Ok(None);

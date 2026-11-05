@@ -28,11 +28,13 @@ outbound = [
 ]
 
 [dependencies]
+agent_credentials = { path = "../agent_credentials" }
 agent_git = { path = "../agent_git", optional = true, default-features = false, features = ["client"] }
 agent_secrets = { path = "../agent_secrets", optional = true }
 axum = { workspace = true, optional = true }
 chrono = { workspace = true, features = ["serde"] }
 entity_access = { path = "../entity_access", default-features = false, features = ["ports"] }
+lazy-regex = { workspace = true }
 feature_flags = { path = "../feature_flags" }
 hosted_runtimes = { path = "../hosted_runtimes", optional = true, default-features = false, features = ["ports"] }
 harnesses = { path = "../harnesses", optional = true, default-features = false, features = ["ports"] }
@@ -54,6 +56,7 @@ uuid = { workspace = true, features = ["serde", "v7"] }
 workspace-hack = { version = "0.1", path = "../workspace-hack" }
 
 [dev-dependencies]
+serde_json = { workspace = true }
 harnesses = { path = "../harnesses", default-features = false, features = ["test-utils"] }
 axum = { workspace = true }
 macro_db_migrator = { path = "../macro_db_migrator" }

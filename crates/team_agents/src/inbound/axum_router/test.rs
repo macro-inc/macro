@@ -168,7 +168,7 @@ impl TeamAgentService for FakeService {
     async fn get_email(
         &self,
         _caller: &MacroUserIdStr<'_>,
-        _message_id: &str,
+        _message_id: &crate::domain::mail::MailMessageId,
     ) -> Result<EmailMessage, TeamAgentError> {
         panic!("unexpected get_email call")
     }

@@ -252,17 +252,13 @@ impl<Teams: TeamRepository, Computers: ComputerRepo, Agents: TeamAgentRepository
                     let agent = agents
                         .iter()
                         .find(|agent| agent.computer_id == Some(computer.id));
-                    let status = serde_json::to_value(computer.status().status)
-                        .map_err(anyhow::Error::from)?;
+                    let status = computer.status().status;
                     computers.push(BillingComputer {
                         id: computer.id,
-                        agent_user_id: agent.map(|agent| agent.user_id.as_ref().to_owned()),
+                        agent_user_id: agent.map(|agent| agent.user_id.clone()),
                         size: agent_size(computer.size),
                         name: computer.name,
-                        status: status
-                            .as_str()
-                            .ok_or_else(|| anyhow::anyhow!("invalid computer status"))?
-                            .to_owned(),
+                        status,
                         included: computer.state.payment == PaymentOutcome::Comped,
                     });
                 }
