@@ -57,11 +57,19 @@ set predates this stack, so it needs adopting into state once, after the code is
 older `main` plan a delete of the whole set; the default `protect` on the import
 blocks that, and the first deploy clears it.
 
+From the repo root:
+
 ```sh
+cd infra/stacks/website
 pulumi import --stack macro-inc/prod --generate-code=false --yes --file <(echo '{"resources":[{
   "type": "aws:route53/record:Record", "name": "apex-txt",
   "id": "Z0766278GIHB3CVV9CIL_macro.com_TXT", "version": "6.83.4"}]}')
+pulumi preview --stack macro-inc/prod --diff
 ```
+
+Read that diff before any prod deploy, and stop unless the TXT change only adds the
+new value: a list in `index.ts` that went stale would delete a live SPF or
+verification value.
 
 ## Deploy
 
