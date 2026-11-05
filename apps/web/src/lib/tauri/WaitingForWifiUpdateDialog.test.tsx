@@ -12,7 +12,10 @@ import type { BundleUpdateStatus } from './TauriProvider';
 import {
   createWaitingForWifiPrompt,
   nextWaitingForWifiPromptPhase,
+  WAITING_FOR_WIFI_PHASES,
+  type WaitingForWifiPrompt,
   WaitingForWifiUpdateDialog,
+  WIFI_OFFER_SNOOZE_MS,
 } from './WaitingForWifiUpdateDialog';
 
 vi.mock('@tauri-apps/api/core', () => ({ invoke: vi.fn() }));
@@ -50,16 +53,34 @@ afterEach(() => {
   cleanup();
   vi.unstubAllGlobals();
   vi.mocked(invoke).mockReset();
+  vi.useRealTimers();
+  localStorage.clear();
 });
 
 describe('nextWaitingForWifiPromptPhase', () => {
-  it('offers only the first Wi-Fi wait', () => {
-    expect(nextWaitingForWifiPromptPhase('closed', WAITING, false)).toBe(
+  it('offers a Wi-Fi wait only when allowed', () => {
+    expect(nextWaitingForWifiPromptPhase('closed', WAITING, true)).toBe(
       'offer'
     );
-    expect(nextWaitingForWifiPromptPhase('closed', WAITING, true)).toBe(
+    expect(nextWaitingForWifiPromptPhase('closed', WAITING, false)).toBe(
       'closed'
     );
+  });
+
+  it('gives way to a required native update or a revoked bundle', () => {
+    for (const phase of WAITING_FOR_WIFI_PHASES) {
+      for (const status of [
+        {
+          status: 'NativeUpdateRequired',
+          data: { bundleBuild: 2, minNativeBuild: 199 },
+        },
+        { status: 'ClearRequired', data: { reason: 'bundle_revoked' } },
+      ] satisfies BundleUpdateStatus[]) {
+        expect(nextWaitingForWifiPromptPhase(phase, status, true)).toBe(
+          'closed'
+        );
+      }
+    }
   });
 
   it('withdraws the offer when the download starts on its own', () => {
@@ -118,24 +139,34 @@ function promptOpen() {
   return dialog !== null && !dialog.hasAttribute('data-closed');
 }
 
+/** Mount the prompt as a fresh page load would. */
 function renderPrompt() {
   const [status, setStatus] = createSignal<BundleUpdateStatus>({
     status: 'Idle',
   });
-  let report: (next: BundleUpdateStatus) => void = () => {};
+  let prompt: WaitingForWifiPrompt | undefined;
   render(() => {
-    const prompt = createWaitingForWifiPrompt(status);
-    report = (next) => {
-      setStatus(next);
-      prompt.observe(next);
-    };
+    prompt = createWaitingForWifiPrompt(status);
     return <WaitingForWifiUpdateDialog prompt={prompt} status={status()} />;
   });
-  return (next: BundleUpdateStatus) => report(next);
+  if (!prompt) throw new Error('prompt did not mount');
+  const mounted = prompt;
+  return {
+    prompt: mounted,
+    report(next: BundleUpdateStatus) {
+      setStatus(next);
+      mounted.observe(next);
+    },
+  };
+}
+
+function relaunch() {
+  cleanup();
+  return renderPrompt();
 }
 
 it('downloads off Wi-Fi and restarts into the update', async () => {
-  const report = renderPrompt();
+  const { report } = renderPrompt();
   report(WAITING);
 
   await fireEvent.click(
@@ -155,7 +186,7 @@ it('downloads off Wi-Fi and restarts into the update', async () => {
 });
 
 it('leaves the Wi-Fi wait running and does not ask again', async () => {
-  const report = renderPrompt();
+  const { report } = renderPrompt();
   report(WAITING);
 
   await fireEvent.click(await screen.findByRole('button', { name: 'Not now' }));
@@ -169,11 +200,42 @@ it('leaves the Wi-Fi wait running and does not ask again', async () => {
 
 it('reports a grant the updater refused while still waiting', async () => {
   vi.mocked(invoke).mockRejectedValue('No pending bundle update to approve');
-  const report = renderPrompt();
+  const { report } = renderPrompt();
   report(WAITING);
 
   await fireEvent.click(
     await screen.findByRole('button', { name: 'Download' })
   );
   expect(await screen.findByText("Couldn't download the update")).toBeTruthy();
+});
+
+it('holds off the offer for a day after Not now, across relaunches', async () => {
+  vi.useFakeTimers({ toFake: ['Date'] });
+  vi.setSystemTime(new Date('2026-11-05T12:00:00Z'));
+  renderPrompt().report(WAITING);
+  await fireEvent.click(await screen.findByRole('button', { name: 'Not now' }));
+
+  relaunch().report(WAITING);
+  expect(promptOpen()).toBe(false);
+
+  vi.setSystemTime(Date.now() + WIFI_OFFER_SNOOZE_MS);
+  relaunch().report(WAITING);
+  expect(await screen.findByRole('button', { name: 'Not now' })).toBeTruthy();
+});
+
+it('gives way to the App Store prompt for the rest of the page', async () => {
+  const { prompt, report } = renderPrompt();
+  report(WAITING);
+  await screen.findByRole('button', { name: 'Download' });
+
+  prompt.yieldToNativeUpdate();
+  await waitFor(() => expect(promptOpen()).toBe(false));
+
+  report({ status: 'Idle' });
+  report(WAITING);
+  expect(promptOpen()).toBe(false);
+
+  // Giving way is not turning the offer down: the next launch asks again.
+  relaunch().report(WAITING);
+  expect(await screen.findByRole('button', { name: 'Download' })).toBeTruthy();
 });

@@ -123,6 +123,8 @@ function TauriProvider(props: { children: JSX.Element }) {
 
     hasShownNativeAppUpdateRequiredDialog = true;
     if (reason !== undefined) hasShownNativeUpdateReason = true;
+    // The App Store prompt wins over the offer to download a bundle off Wi-Fi.
+    waitingForWifiPrompt.yieldToNativeUpdate();
     setNativeAppUpdateRequiredDialogOpen(true);
   });
 
