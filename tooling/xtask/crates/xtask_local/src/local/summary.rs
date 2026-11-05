@@ -82,6 +82,15 @@ pub fn stop_command(instance: &Instance) -> String {
     }
 }
 
+/// The `just run_local rebuild` invocation for the instance.
+fn rebuild_command(instance: &Instance) -> String {
+    if instance.is_default() {
+        "just run_local rebuild".to_string()
+    } else {
+        format!("just run_local rebuild --instance {}", instance.name())
+    }
+}
+
 /// Print the mode/instance/endpoints block after a successful startup.
 /// `frontend_url` is the HTTPS app URL; `mailpit_url` differs between attached
 /// and headless flows. `shared_app_url` is the public
@@ -188,6 +197,7 @@ pub fn print(
     }
 
     row("logs", logs_command(instance, &env.generated_path));
+    row("rebuild", rebuild_command(instance));
     row("stop", stop_command(instance));
     println!();
 }

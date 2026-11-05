@@ -1,12 +1,14 @@
-//! Headless stack orchestration: `cargo x stack up|update|status|down`.
+//! Lower-level stack control: `cargo x stack up|update|status|down`, and the state
+//! every flow records.
 //!
-//! Same bring-up as `run_local`, but no TTY hotkey loop and no attached dev
-//! server. The frontend is a static bundle served by Caddy. A finished `up`
-//! leaves only Docker containers running behind one proxy origin.
+//! Same bring-up as `run_local` ([`super::bring_up`]), with a static frontend served
+//! by Caddy and no background process: a finished `up` leaves only Docker containers
+//! running behind one proxy origin. Cursor Cloud and environment bakes use this.
+//! Everyone else should use `run_local`, which also runs without a terminal.
 //!
-//! `up` is full-delete/full-create. `update` adopts a new binary directory
-//! without touching volumes. If nothing is recorded yet, `update` bootstraps
-//! through `up`. `status` is machine-readable state. `down` reclaims everything.
+//! `up` is full-delete/full-create. `update` adopts a new binary directory without
+//! touching volumes, and only bootstraps through `up` on an instance with no data.
+//! `status` is machine-readable state. `down` reclaims everything.
 
 use std::path::PathBuf;
 use std::process::Command;
@@ -20,7 +22,8 @@ use super::cli::{EnvArgs, InstanceArgs, RunArgs};
 use super::instance::{Instance, Port};
 use super::local_env::Tunnels;
 use super::stage::Stage;
-use super::{Mode, arch, env_layer, frontend, mailpit, proxy, sdk_webhook, snapshot, summary};
+use super::supervisor::{self, JobKind, JobStatus};
+use super::{BringUp, Mode, Start, arch, env_layer, frontend, mailpit, proxy};
 
 #[derive(Args, Clone, Default)]
 pub struct UpArgs {
@@ -59,6 +62,10 @@ pub struct UpdateArgs {
     /// Print a machine-readable summary as the final line.
     #[arg(long)]
     pub json: bool,
+    /// On an instance with data but no recorded stack, wipe it and start over
+    /// instead of refusing.
+    #[arg(long)]
+    pub wipe_if_unrecorded: bool,
 }
 
 #[derive(Args, Clone, Default)]
@@ -74,23 +81,59 @@ pub struct StatusArgs {
 pub struct DownArgs {
     #[command(flatten)]
     pub instance: InstanceArgs,
-    /// Stop containers but keep volumes (data survives the next `stack up`...
-    /// which wipes them anyway — use `just run_local`/`stop_local` semantics).
+    /// Stop containers but keep volumes. `just run_local` resumes them; `stack up`
+    /// wipes them.
     #[arg(long)]
     pub keep_data: bool,
 }
 
-/// Durable per-instance record of what `up` brought up, so `update`/`status`
-/// don't need the flags repeated. Lives in the instance artifact dir.
+/// Durable per-instance record of what a bring-up brought up, so later commands
+/// don't need the flags repeated. Lives in the instance artifact dir. Written by
+/// every flow once its backend is healthy; its absence means no stack to adopt.
 #[derive(Serialize, Deserialize)]
 struct StackState {
     /// `local` / `dev` — mirrors [`Mode::label`].
     mode: String,
-    /// `static` (Caddy serves the bundle) or `none` (`--no-frontend`).
+    /// `vite` (a dev server behind the proxy), `static` (Caddy serves the bundle),
+    /// or `none` (`--no-frontend`).
     frontend: String,
     /// Host directory currently bind-mounted at `/app/out`.
     #[serde(default)]
     binaries_dir: Option<PathBuf>,
+    /// The proxy also serves a static bundle alongside Vite (`--with-cf-tunnel`).
+    #[serde(default)]
+    shares_bundle: bool,
+    #[serde(default)]
+    no_doppler: bool,
+    #[serde(default)]
+    env_file: Option<PathBuf>,
+    /// The minted tunnel addresses, so regenerating the env keeps them.
+    #[serde(default)]
+    egress_url: Option<String>,
+    #[serde(default)]
+    preview_ssh_host: Option<String>,
+    /// `--traces off` must survive a rebuild regenerating the env.
+    #[serde(default = "traces_on")]
+    traces_enabled: bool,
+}
+
+fn traces_on() -> bool {
+    true
+}
+
+impl StackState {
+    /// Whether the proxy serves a built bundle, which also moves Mailpit under it.
+    fn serves_bundle(&self) -> bool {
+        self.frontend == "static" || self.shares_bundle
+    }
+
+    fn frontend_url(&self, instance: &Instance) -> Option<String> {
+        match self.frontend.as_str() {
+            "vite" => frontend::https_url(instance).ok(),
+            "static" => Some(frontend::static_url(instance)),
+            _ => None,
+        }
+    }
 }
 
 fn state_path(instance: &Instance) -> PathBuf {
@@ -104,6 +147,43 @@ fn write_state(instance: &Instance, state: &StackState) -> Result<()> {
         .with_context(|| format!("writing {}", path.display()))
 }
 
+/// Record a stack whose backend just passed its health gate.
+pub(super) fn record(
+    instance: &Instance,
+    mode: Mode,
+    args: &RunArgs,
+    plan: &BringUp,
+    binaries_dir: Option<PathBuf>,
+    egress_url: Option<String>,
+    preview_ssh_host: Option<String>,
+) -> Result<()> {
+    let frontend = if plan.vite {
+        "vite"
+    } else if plan.static_bundle {
+        "static"
+    } else {
+        "none"
+    };
+    write_state(
+        instance,
+        &StackState {
+            mode: mode.label().to_string(),
+            frontend: frontend.to_string(),
+            binaries_dir,
+            shares_bundle: plan.vite && plan.static_bundle,
+            no_doppler: args.env.no_doppler,
+            env_file: args.env.env_file.clone(),
+            egress_url,
+            preview_ssh_host,
+            traces_enabled: args.traces.enabled(),
+        },
+    )
+}
+
+pub(super) fn is_recorded(instance: &Instance) -> bool {
+    read_state(instance).is_some()
+}
+
 /// Whether the recorded stack serves a headless bundle from the proxy.
 pub(super) fn frontend_is_static(instance: &Instance) -> bool {
     read_state(instance).is_some_and(|state| state.frontend == "static")
@@ -114,9 +194,9 @@ fn read_state(instance: &Instance) -> Option<StackState> {
     serde_json::from_str(&raw).ok()
 }
 
-/// Invalidate headless ownership before another flow replaces this instance.
-/// State is written again only after a full headless stack passes its health
-/// gate, so failed, infra-only, and interactive replacements cannot inherit it.
+/// Invalidate the record before a flow replaces this instance. State is written
+/// again only after a full stack passes its health gate, so failed and infra-only
+/// replacements cannot inherit it.
 pub(super) fn clear_state(instance: &Instance) -> Result<()> {
     let path = state_path(instance);
     match std::fs::remove_file(&path) {
@@ -126,11 +206,11 @@ pub(super) fn clear_state(instance: &Instance) -> Result<()> {
     }
 }
 
-/// `cargo x stack up` — bring the whole stack up and return, leaving only
-/// Docker containers running.
+/// `cargo x stack up` — wipe the instance, bring the whole stack up and return,
+/// leaving only Docker containers running.
 pub fn up(mode: Mode, args: &UpArgs) -> Result<Instance> {
     let stage = Stage::from_env_cli(args.run.verbose);
-    let instance = Instance::derive(
+    let mut instance = Instance::derive(
         args.run.instance.instance.as_deref(),
         args.run.instance.port_base,
     )?;
@@ -140,176 +220,66 @@ pub fn up(mode: Mode, args: &UpArgs) -> Result<Instance> {
         instance.name()
     ));
     if !stage.is_dry_run() {
-        clear_state(&instance)?;
+        supervisor::stop_processes(&instance);
     }
 
-    // Same collector/browser bring-up as `run_stack`, and for the same reason:
-    // before `prepare` so the env probe wires `OTEL_EXPORTER_OTLP_ENDPOINT`.
-    // A CI bake (`--infra-only`) has no services to trace and no one driving
-    // a browser, so it skips both.
+    let static_bundle = !args.run.no_frontend && !args.infra_only;
+    let plan = BringUp {
+        vite: false,
+        static_bundle,
+        // Headless stacks serve agents on Cursor Cloud dev boxes, which have no
+        // cloudflared and no @cursor sessions to feed; the egress stays in-network
+        // and previews stay reachable on that box only.
+        share_app: false,
+        infra_only: args.infra_only,
+        start: Start::Fresh,
+    };
+    let stack_up = super::bring_up(&stage, mode, &mut instance, &args.run, &plan)?;
     if !args.infra_only {
-        super::ensure_tracing_backend(&stage, args.run.traces)?;
-        if args.run.with_chrome {
-            super::ensure_headless_chrome(&stage);
-        }
+        stage.print_timings("bring-up");
+        super::print_stack_summary(mode, &instance, &stack_up, &plan)?;
+        stage.note(&format!(
+            "  headless: `just stack status`, `just stack update`, `just stack down`{}",
+            instance_suffix(&instance)
+        ));
     }
-
-    // Same full-delete/full-create overlap as `run_stack`: tear the previous
-    // stack down in the background while the host-side build runs.
-    let teardown = (!stage.is_dry_run()).then(|| {
-        let instance = instance.clone();
-        std::thread::spawn(move || super::teardown_commands(&instance))
-    });
-
-    let static_frontend = !args.run.no_frontend && !args.infra_only;
-    let infra_only = args.infra_only;
-    let (env, target) = super::prepare(
-        &stage,
-        mode,
-        &instance,
-        &args.run,
-        static_frontend,
-        infra_only,
-        infra_only,
-        // Headless stacks serve agents on Cursor Cloud dev boxes, which have
-        // no cloudflared and no @cursor sessions to feed; the egress stays
-        // in-network and previews stay reachable on that box only.
-        Tunnels::default(),
-    )?;
-
-    // Build + stage the frontend bundle in the background: it's pure host-side
-    // work, independent of Docker until the proxy container mounts the staged
-    // dir — so it overlaps the teardown join and the infra bring-up, and is
-    // joined just before `bring_up_app` creates that container. (Dry run:
-    // synchronously, so the command preview prints in order.)
-    if static_frontend && stage.is_dry_run() {
-        frontend::build_static(&stage, &instance, mode)?;
-    }
-    let fe_build = (static_frontend && !stage.is_dry_run()).then(|| {
-        let instance = instance.clone();
-        let stage = stage.background();
-        std::thread::spawn(move || frontend::build_static(&stage, &instance, mode))
-    });
-
-    // The init snapshot decision: hash the init-defining inputs (possible only
-    // after `prepare` wrote the kickstart) and check for a stored snapshot.
-    // Restores skip migrate/kickstart/index-init; a cold init saves one for
-    // next time — that's how the cache seeds itself.
-    let snapshot_plan = (!args.run.no_snapshot && !stage.is_dry_run())
-        .then(|| snapshot::Plan::compute(&instance))
-        .transpose()?;
-
-    if let Some(handle) = teardown {
-        stage.run_step("Tearing down previous stack", move || {
-            let _ = handle.join();
-            Ok(())
-        })?;
-    }
-    super::ensure_external_resources(&stage, &instance)?;
-    match &snapshot_plan {
-        Some(plan) if plan.exists() => {
-            snapshot::restore(&stage, &instance, plan)?;
-            super::bring_up_infra(
-                &stage,
-                mode,
-                &instance,
-                &env,
-                super::InfraInit::FromSnapshot,
-            )?;
-        }
-        Some(plan) => {
-            super::bring_up_infra(&stage, mode, &instance, &env, super::InfraInit::Full)?;
-            snapshot::save(&stage, &instance, &env, plan)?;
-        }
-        None => {
-            super::bring_up_infra(&stage, mode, &instance, &env, super::InfraInit::Full)?;
-        }
-    }
-    if let Some(handle) = fe_build {
-        stage.run_step("Building frontend (static bundle)", move || {
-            handle
-                .join()
-                .map_err(|_| anyhow::anyhow!("frontend build panicked"))?
-        })?;
-    }
-    if args.infra_only {
-        // No app stack, no proxy: nothing to summarize or gate on, and no
-        // stack.json — `update`/`status` on an infra-only bake should say
-        // "bring the stack up first" rather than assume a running app.
-        stage.note("  infra-only: app services, proxy, and frontend skipped");
-        if args.json {
-            println!(
-                "{}",
-                serde_json::to_string(&summary_json(mode, &instance, false))?
-            );
-        }
-        return Ok(instance);
-    }
-    let configured_binaries = args
-        .run
-        .build
-        .binaries_dir
-        .clone()
-        .unwrap_or_else(|| super::workspace_root().join(target.debug_dir()));
-    let binaries = super::build::BinariesDir::classify(&configured_binaries)?;
-    binaries.pin_gc_root(&instance.artifact_dir())?;
-    let active_binaries = binaries.host_dir().to_path_buf();
-    super::bring_up_app(&stage, mode, &instance, &env)?;
-    let _sdk_webhook_tunnel = (mode == Mode::Local && !stage.is_dry_run())
-        .then(|| sdk_webhook::start(&instance))
-        .transpose()?;
-
-    // Headless "ready" means the backend answers through the proxy — the caller
-    // (a CI step, an agent) acts on the URL the moment we return.
-    if mode.spec().wait_backend_before_frontend {
-        frontend::wait_backend_ready(&stage, &instance)?;
-    }
-
-    if !stage.is_dry_run() {
-        write_state(
-            &instance,
-            &StackState {
-                mode: mode.label().to_string(),
-                frontend: if static_frontend { "static" } else { "none" }.to_string(),
-                binaries_dir: Some(active_binaries),
-            },
-        )?;
-        super::build::BinariesDir::release_previous_gc_root(&instance.artifact_dir());
-    }
-
-    let frontend_url = if static_frontend {
-        frontend::static_url(&instance)
-    } else {
-        "(disabled — --no-frontend)".to_string()
-    };
-    let mailpit_url = if static_frontend {
-        mailpit::proxy_ui_url(&instance)
-    } else {
-        mailpit::direct_ui_url(&instance)
-    };
-    stage.print_timings("bring-up");
-    summary::print(mode, &instance, &env, &frontend_url, &mailpit_url, None);
-    stage.note(&format!(
-        "  headless: `just stack status`, `just stack update`, `just stack down`{}",
-        instance_suffix(&instance)
-    ));
     if args.json {
         println!(
             "{}",
-            serde_json::to_string(&summary_json(mode, &instance, static_frontend))?
+            serde_json::to_string(&summary_json(
+                mode,
+                &instance,
+                static_bundle.then(|| frontend::static_url(&instance)),
+                static_bundle,
+            ))?
         );
     }
     Ok(instance)
 }
 
-/// `cargo x stack update` — adopt a new build into the running stack.
-/// Volumes stay. With no recorded stack, this bootstraps through [`up`].
+/// `cargo x stack update` — adopt a new build into the running stack. Volumes
+/// stay. With no recorded stack this bootstraps through [`up`], but only on an
+/// instance with nothing to lose: `up` deletes volumes.
 pub fn update(args: &UpdateArgs) -> Result<()> {
     let instance = Instance::derive(args.instance.instance.as_deref(), args.instance.port_base)?;
-    if read_state(&instance).is_none() {
-        return bootstrap_from_update(args);
+    if read_state(&instance).is_some() {
+        let stage = Stage::from_env_cli(args.verbose);
+        return update_running(&stage, args).map(|_| ());
     }
-    update_running(args)
+    if !args.wipe_if_unrecorded && super::instance_has_volumes(&instance)? {
+        bail!(
+            "instance {0} has data but no recorded stack, and bootstrapping would wipe it. \
+             `just run_local --instance {0}` brings it up keeping its data; \
+             `just stack update --wipe-if-unrecorded` wipes it",
+            instance.name()
+        );
+    }
+    bootstrap_from_update(args)
+}
+
+/// The rebuild behind `run_local rebuild`, on an instance known to be recorded.
+pub(super) fn rebuild_recorded(stage: &Stage, args: &UpdateArgs) -> Result<Vec<String>> {
+    update_running(stage, args)
 }
 
 fn bootstrap_from_update(args: &UpdateArgs) -> Result<()> {
@@ -335,10 +305,9 @@ fn bootstrap_from_update(args: &UpdateArgs) -> Result<()> {
     up(Mode::Local, &up_args).map(|_| ())
 }
 
-fn update_running(args: &UpdateArgs) -> Result<()> {
-    let stage = Stage::from_env_cli(args.verbose);
+fn update_running(stage: &Stage, args: &UpdateArgs) -> Result<Vec<String>> {
     let instance = Instance::derive(args.instance.instance.as_deref(), args.instance.port_base)?;
-    let state = read_state(&instance).expect("update_running requires stack state");
+    let state = read_state(&instance).context("no recorded stack to update")?;
     let mode = mode_from_label(&state.mode)?;
     stage.section(&format!(
         "macro {} stack update — instance {}",
@@ -349,14 +318,16 @@ fn update_running(args: &UpdateArgs) -> Result<()> {
     let env = env_layer::resolve(
         mode,
         &instance,
-        args.env.no_doppler,
-        args.env.env_file.as_deref(),
-        state.frontend == "static",
-        Tunnels::default(),
-        // `update` doesn't know the original `--traces` choice; keep the
-        // running stack's wiring keyed on the port probe as before.
-        true,
+        args.env.no_doppler || state.no_doppler,
+        args.env.env_file.as_deref().or(state.env_file.as_deref()),
+        state.serves_bundle(),
+        Tunnels {
+            egress: state.egress_url.as_deref(),
+            preview_ssh: state.preview_ssh_host.as_deref(),
+        },
+        state.traces_enabled,
     )?;
+    let mut reloaded = Vec::new();
     let remounted = if let Some(source) = args.binaries_dir.as_deref() {
         let new = super::build::BinariesDir::classify(source)?;
         new.validate(&super::inventory::local_binaries())?;
@@ -367,14 +338,14 @@ fn update_running(args: &UpdateArgs) -> Result<()> {
                 false
             }
             super::build::Adoption::Remount => {
-                remount(&stage, mode, &instance, &env, &new, &state)?;
+                remount(stage, mode, &instance, &env, &new, &state)?;
                 true
             }
         }
     } else {
         let target = arch::detect()?;
-        super::rebuild_and_reload(
-            &stage,
+        reloaded = super::rebuild_and_reload(
+            stage,
             mode,
             &instance,
             &env,
@@ -385,15 +356,15 @@ fn update_running(args: &UpdateArgs) -> Result<()> {
     };
 
     if args.binaries_dir.is_some() && args.build_aux_services {
-        super::build_aux_service_images(&stage, &instance, &env)?;
-        super::recreate_aux_service_containers(&stage, &instance, &env)?;
+        super::build_aux_service_images(stage, &instance, &env)?;
+        super::recreate_aux_service_containers(stage, &instance, &env)?;
     }
 
     if args.frontend {
-        reload_static_frontend(&stage, &instance, mode, &env, &state)?;
+        reload_static_frontend(stage, &instance, mode, &env, &state)?;
     }
     if mode.spec().wait_backend_before_frontend {
-        frontend::wait_backend_ready(&stage, &instance)?;
+        frontend::wait_backend_ready(stage, &instance)?;
     }
     if args.json {
         println!(
@@ -402,10 +373,11 @@ fn update_running(args: &UpdateArgs) -> Result<()> {
                 "remounted": remounted,
                 "frontend_updated": args.frontend,
                 "aux_services_rebuilt": args.build_aux_services,
+                "reloaded": reloaded,
             }))?
         );
     }
-    Ok(())
+    Ok(reloaded)
 }
 
 fn remount(
@@ -420,13 +392,7 @@ fn remount(
         .merged
         .get("GMAIL_FORWARDER_SA_KEY")
         .is_some_and(|key| !key.trim().is_empty());
-    super::gen_compose::generate(
-        mode,
-        instance,
-        new,
-        state.frontend == "static",
-        gmail_forwarder,
-    )?;
+    super::gen_compose::generate(mode, instance, new, state.serves_bundle(), gmail_forwarder)?;
     let mut up = super::compose_cmd(instance, env);
     up.args([
         "up",
@@ -448,6 +414,12 @@ fn remount(
             mode: state.mode.clone(),
             frontend: state.frontend.clone(),
             binaries_dir: Some(new.host_dir().to_path_buf()),
+            shares_bundle: state.shares_bundle,
+            no_doppler: state.no_doppler,
+            env_file: state.env_file.clone(),
+            egress_url: state.egress_url.clone(),
+            preview_ssh_host: state.preview_ssh_host.clone(),
+            traces_enabled: state.traces_enabled,
         },
     )?;
     super::build::BinariesDir::release_previous_gc_root(&instance.artifact_dir());
@@ -461,10 +433,16 @@ fn reload_static_frontend(
     env: &env_layer::ResolvedEnv,
     state: &StackState,
 ) -> Result<()> {
-    if state.frontend != "static" {
+    if !state.serves_bundle() {
+        if state.frontend == "vite" {
+            // Vite already serves the edits; there is no bundle to rebuild.
+            stage.note("this stack runs Vite, which picks up frontend edits itself");
+            return Ok(());
+        }
         bail!(
-            "this stack was brought up without a static frontend (--no-frontend); \
-             re-run `just stack up` to serve one"
+            "instance {0} has no frontend to rebuild. `just run_local --fresh --instance {0}` \
+             starts one, and wipes the instance's data",
+            instance.name()
         );
     }
     frontend::build_static(stage, instance, mode)?;
@@ -475,82 +453,171 @@ fn reload_static_frontend(
     stage.run("Recreating proxy (frontend bundle)", &mut up)
 }
 
-/// `cargo x stack status` — container states + health through the proxy, as a
-/// human summary or `--json` for machines.
+/// What state an instance is in, as `status` reports it.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "snake_case")]
+pub enum Phase {
+    /// A bring-up is running.
+    Starting,
+    /// Backend and frontend answer.
+    Ready,
+    /// Containers run, but the backend or frontend does not answer.
+    Degraded,
+    /// The last bring-up failed, or died. Containers may still be up to inspect.
+    Failed,
+    /// No container is running. Data is kept until something wipes it.
+    Stopped,
+    /// Containers run, but no flow has recorded a stack: an older instance, or one
+    /// started by hand. `run_local` adopts it, keeping its data.
+    Unrecorded,
+}
+
+/// What decides an instance's [`Phase`].
+#[derive(Clone, Copy, Debug)]
+pub(super) struct PhaseInputs {
+    /// The latest job's kind and status, and whether a process is still running it.
+    pub job: Option<(JobKind, JobStatus, bool)>,
+    pub recorded: bool,
+    pub any_container_running: bool,
+    pub backend_healthy: bool,
+    /// Whether the frontend the stack should have is answering.
+    pub frontend_healthy: bool,
+}
+
+pub(super) fn derive_phase(inputs: PhaseInputs) -> Phase {
+    if let Some((JobKind::Up, status, alive)) = inputs.job {
+        match status {
+            JobStatus::Running if alive => return Phase::Starting,
+            JobStatus::Running | JobStatus::Failed => return Phase::Failed,
+            JobStatus::Succeeded => {}
+        }
+    }
+    if !inputs.any_container_running {
+        return Phase::Stopped;
+    }
+    if !inputs.recorded {
+        return Phase::Unrecorded;
+    }
+    if inputs.backend_healthy && inputs.frontend_healthy {
+        Phase::Ready
+    } else {
+        Phase::Degraded
+    }
+}
+
+struct Observed {
+    state: Option<StackState>,
+    services: Vec<ServiceStatus>,
+    backend_healthy: bool,
+    frontend_healthy: bool,
+    phase: Phase,
+}
+
+fn observe(instance: &Instance) -> Result<Observed> {
+    let state = read_state(instance);
+    let services = compose_ps(instance)?;
+    let any_container_running = services.iter().any(|s| s.state == "running");
+    let backend_healthy =
+        any_container_running && probe(&format!("{}/auth/health", proxy::url(instance)));
+    let frontend_healthy = match state.as_ref().map(|s| s.frontend.as_str()) {
+        Some("vite") => {
+            supervisor::supervisor_alive(instance)
+                && super::summary::port_open(instance.port(Port::Frontend))
+        }
+        Some("static") => probe(&frontend::static_url(instance)),
+        _ => true,
+    };
+    let phase = derive_phase(PhaseInputs {
+        job: supervisor::job_state(instance),
+        recorded: state.is_some(),
+        any_container_running,
+        backend_healthy,
+        frontend_healthy,
+    });
+    Ok(Observed {
+        state,
+        services,
+        backend_healthy,
+        frontend_healthy,
+        phase,
+    })
+}
+
+pub(super) fn current_phase(instance: &Instance) -> Result<Phase> {
+    Ok(observe(instance)?.phase)
+}
+
+/// The instance's whole state as JSON: what `status --json` prints, and the final
+/// line of `run_local --json`, `wait --json`, and `rebuild --json`.
+pub(super) fn status_json(instance: &Instance) -> Result<serde_json::Value> {
+    let observed = observe(instance)?;
+    let state = observed.state.as_ref();
+    let mut out = summary_json(
+        state.map_or(Mode::Local, |s| {
+            mode_from_label(&s.mode).unwrap_or(Mode::Local)
+        }),
+        instance,
+        state.and_then(|s| s.frontend_url(instance)),
+        state.is_some_and(StackState::serves_bundle),
+    );
+    out["phase"] = json!(observed.phase);
+    out["running"] = json!(observed.services.iter().any(|s| s.state == "running"));
+    out["recorded"] = json!(state.is_some());
+    out["backend_healthy"] = json!(observed.backend_healthy);
+    out["frontend"] = json!(state.map(|s| s.frontend.clone()));
+    out["frontend_healthy"] = json!(observed.frontend_healthy);
+    out["supervisor_alive"] = json!(supervisor::supervisor_alive(instance));
+    out["job"] = supervisor::job_json(instance);
+    out["services"] = json!(observed.services);
+    Ok(out)
+}
+
+/// `run_local status` and `cargo x stack status` — phase, endpoints, and container
+/// states, as a human summary or `--json` for machines.
 pub fn status(args: &StatusArgs) -> Result<()> {
     let instance = Instance::derive(args.instance.instance.as_deref(), args.instance.port_base)?;
-    let state = read_state(&instance);
-    let services = compose_ps(&instance)?;
-    let running = services.iter().any(|s| s.state == "running");
-    let backend_healthy = running && probe(&format!("{}/auth/health", proxy::url(&instance)));
-    let static_frontend = state.as_ref().is_some_and(|s| s.frontend == "static");
-    let frontend_url = static_frontend.then(|| frontend::static_url(&instance));
     if args.json {
-        let mut out = summary_json(
-            state.as_ref().map_or(Mode::Local, |s| {
-                mode_from_label(&s.mode).unwrap_or(Mode::Local)
-            }),
-            &instance,
-            static_frontend,
-        );
-        out["running"] = json!(running);
-        out["backend_healthy"] = json!(backend_healthy);
-        out["services"] = json!(services);
-        println!("{}", serde_json::to_string(&out)?);
+        println!("{}", serde_json::to_string(&status_json(&instance)?)?);
         return Ok(());
     }
 
-    println!(
-        "instance {} (project {}): {}",
-        instance.name(),
-        instance.project_name(),
-        if running { "running" } else { "not running" }
-    );
-    if running {
+    let observed = observe(&instance)?;
+    println!("instance {}: {:?}", instance.name(), observed.phase);
+    if let Some(job) = supervisor::read_job(&instance) {
         println!(
-            "  backend   {} ({})",
-            proxy::url(&instance),
-            if backend_healthy {
-                "healthy"
-            } else {
-                "UNHEALTHY"
-            }
+            "  last job  {:?} {:?}, at {}",
+            job.kind,
+            job.status,
+            job.failed_step
+                .or(job.step)
+                .as_deref()
+                .unwrap_or("its first step")
         );
-        if let Some(url) = frontend_url {
-            println!("  frontend  {url}");
+        if let Some(log) = job.log {
+            println!("  job log   {}", log.display());
         }
     }
-    for svc in &services {
-        let health = svc
-            .health
-            .as_deref()
-            .filter(|h| !h.is_empty())
-            .map(|h| format!(" ({h})"))
-            .unwrap_or_default();
-        println!("  {:<32} {}{health}", svc.service, svc.state);
-    }
-    if services.is_empty() {
-        println!("  (no containers)");
-    }
-    Ok(())
+    super::status::run(&instance)
 }
 
 /// `cargo x stack down` — reclaim the instance: containers, volumes, networks,
 /// and state. `--keep-data` only stops containers.
 pub fn down(args: &DownArgs) -> Result<()> {
-    let instance = Instance::derive(args.instance.instance.as_deref(), args.instance.port_base)?;
     if args.keep_data {
         return super::stop(&args.instance);
     }
-    super::destroy(&args.instance)?;
-    clear_state(&instance)?;
-    Ok(())
+    super::destroy(&args.instance)
 }
 
-/// The machine-readable endpoint block `up --json` and `status --json` share.
-fn summary_json(mode: Mode, instance: &Instance, static_frontend: bool) -> serde_json::Value {
+/// The machine-readable endpoint block `stack up --json` and `status --json` share.
+fn summary_json(
+    mode: Mode,
+    instance: &Instance,
+    frontend_url: Option<String>,
+    serves_bundle: bool,
+) -> serde_json::Value {
     let mailpit_url = mode.spec().runs_local_infra.then(|| {
-        if static_frontend {
+        if serves_bundle {
             mailpit::proxy_ui_url(instance)
         } else {
             mailpit::direct_ui_url(instance)
@@ -561,7 +628,7 @@ fn summary_json(mode: Mode, instance: &Instance, static_frontend: bool) -> serde
         "project": instance.project_name(),
         "mode": mode.label(),
         "proxy_url": proxy::url(instance),
-        "frontend_url": static_frontend.then(|| frontend::static_url(instance)),
+        "frontend_url": frontend_url,
         "fusionauth_url": format!("http://localhost:{}", instance.port(Port::FusionAuth)),
         "mailpit_url": mailpit_url,
         "localstack_url": format!("http://localhost:{}", instance.port(Port::LocalStack)),
