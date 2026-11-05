@@ -114,7 +114,7 @@ jobs:
         git switch -C "$branch"
         git add -- "${paths[@]}"
         git commit -m "chore(generated): regenerate from main at ${GITHUB_SHA:0:10}"
-        git push --force origin "$branch"
+        LD_LIBRARY_PATH= git push --force origin "$branch"
         if [ -z "$open_pr" ]; then
           gh pr create --base synoet/ci-regen-exp --head "$branch"     --title "[ci-speed] [no preview] bot pull request from the regeneration experiment"     --body "Generated code on main differs from what its Rust sources produce. Created by the Regenerate Generated Code workflow, which keeps this branch current as main moves and closes the pull request once main matches."
         fi
