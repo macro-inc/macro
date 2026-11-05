@@ -67,6 +67,7 @@ lifecycle, capacity, purchase/billing orchestration and the fleet ports.
 
 ## Gotchas
 
+- Lifecycle state stores the phase tag at `state.phase.phase`; SQL selectors must read that nested tag.
 - V1 runs one fleet (one host) per control plane; an effect for another host fails.
 - Scope Docker fleet listing to its configured network so reconciliation never
   treats another local stack's computers as orphans.

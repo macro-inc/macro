@@ -416,7 +416,7 @@ impl ComputerRepo for PgComputerRepo {
             SELECT id, team_id, name, size, state, harness_id, persona, created_by,
                    created_at, enrolled_at
             FROM hosted_runtime
-            WHERE awake AND state->>'phase' = 'running'
+            WHERE awake AND state->'phase'->>'phase' = 'running'
             "#,
         )
         .fetch_all(&self.pool)
@@ -428,7 +428,7 @@ impl ComputerRepo for PgComputerRepo {
         Ok(sqlx::query_scalar!(
             r#"
             SELECT id FROM hosted_runtime
-            WHERE host_id = $1 AND awake AND state->>'phase' = 'frozen'
+            WHERE host_id = $1 AND awake AND state->'phase'->>'phase' = 'frozen'
             ORDER BY updated_at
             LIMIT 1
             "#,
@@ -445,7 +445,7 @@ impl ComputerRepo for PgComputerRepo {
             SELECT id, team_id, name, size, state, harness_id, persona, created_by,
                    created_at, enrolled_at
             FROM hosted_runtime
-            WHERE host_id = $1 AND holds_units AND state->>'phase' <> 'reserved'
+            WHERE host_id = $1 AND holds_units AND state->'phase'->>'phase' <> 'reserved'
             "#,
             host,
         )

@@ -232,3 +232,40 @@ async fn a_replaced_timer_does_not_fire(pool: PgPool) {
     assert_eq!(repo.list_for_team(TEAM).await.unwrap(), vec![]);
     assert_eq!(repo.sold_out_sizes().await.unwrap(), vec![]);
 }
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn lifecycle_selectors_read_the_nested_phase_tag(pool: PgPool) {
+    insert_team(&pool).await;
+    let repo = PgComputerRepo::new(pool);
+    let host = repo
+        .register_host(HostRegistration {
+            name: "selector-host".into(),
+            memory_gb: 31,
+            reserve_gb: 7,
+            oversell_factor: 3,
+        })
+        .await
+        .unwrap();
+    let id = Uuid::from_u128(1);
+    repo.reserve(standard(1), now()).await.unwrap();
+    assert!(repo.instances_expected(host.id).await.unwrap().is_empty());
+    repo.apply(id, Event::PaymentConfirmed, now())
+        .await
+        .unwrap();
+    assert_eq!(repo.instances_expected(host.id).await.unwrap().len(), 1);
+    repo.apply(id, Event::InstanceStarted, now()).await.unwrap();
+    repo.apply(id, Event::MacrodConnected, now()).await.unwrap();
+    assert_eq!(
+        repo.running()
+            .await
+            .unwrap()
+            .iter()
+            .map(|c| c.id)
+            .collect::<Vec<_>>(),
+        vec![id]
+    );
+    assert_eq!(repo.coldest_frozen(host.id).await.unwrap(), None);
+    repo.apply(id, Event::SessionsIdle, now()).await.unwrap();
+    assert!(repo.running().await.unwrap().is_empty());
+    assert_eq!(repo.coldest_frozen(host.id).await.unwrap(), Some(id));
+}
