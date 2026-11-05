@@ -273,7 +273,7 @@ fn config_path(options: &ServiceOptions) -> rootcause::Result<PathBuf> {
 
 /// Create or edit the config from setup flags, comment-preservingly.
 /// `agent` is the resolved launch for `options.agent`, when one was named.
-fn configure(
+pub(crate) fn configure(
     path: &Path,
     options: &ServiceOptions,
     agent: Option<DetectedAgent>,
@@ -326,7 +326,7 @@ fn configure(
     form.save()
 }
 
-fn installed_agent(id: &str) -> rootcause::Result<DetectedAgent> {
+pub(crate) fn installed_agent(id: &str) -> rootcause::Result<DetectedAgent> {
     let commands = PathCommands::discover();
     agent_catalog::discover(&commands)
         .into_iter()

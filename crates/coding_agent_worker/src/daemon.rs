@@ -120,6 +120,15 @@ impl Daemon {
             "daemon listening for agent triggers over SSE"
         );
 
+        if crate::capabilities::is_macro_computer() {
+            // Ends with the daemon's cancellation.
+            drop(crate::capabilities::spawn_reporter(
+                &config.macro_api,
+                &credentials,
+                cancel.clone(),
+            )?);
+        }
+
         let shutdown = cancel.clone();
         let task = tokio::spawn(async move {
             let mut failures = 0u32;

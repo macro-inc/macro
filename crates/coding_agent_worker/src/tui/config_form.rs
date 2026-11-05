@@ -375,6 +375,13 @@ impl ConfigForm {
         identity["allow_permission_bypass"] = value(allowed);
     }
 
+    /// Point the daemon at a deployment's agent-harness, storage, and web URLs.
+    pub fn set_deployment_urls(&mut self, api_url: &str, storage_url: &str, web_url: &str) {
+        self.set_string("macro", "api_url", api_url);
+        self.set_string("macro", "storage_url", storage_url);
+        self.set_string("macro", "web_url", web_url);
+    }
+
     /// Persist the credential minted by pairing in this config document.
     pub fn persist_credentials(
         &mut self,

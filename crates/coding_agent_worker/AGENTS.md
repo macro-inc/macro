@@ -18,6 +18,22 @@ the local ACP process (Claude Code, Codex, ...), and drives native
   (`src/harness.rs`) prefixes to each new session's first prompt — macrod
   version, workspace, forwarded MCP servers, permission bypass, listing only
   what the session has. General Macro guidance stays in the `SelfKnowledge` tool.
+- `src/enroll.rs`: `macrod enroll --from incus|file:<path> --config <path>`,
+  run as root by the box image's `macrod-enroll.service` on a Macro computer.
+  Reads the `hosted_runtimes` `Enrollment` (Incus guest API
+  `/dev/incus/sock`, key `user.macro.enrollment`, or a file), writes
+  `macrod.toml` with the deployment URLs resolved from its
+  `macro_service_urls` `OVERRIDE_*` values (the three macrod calls, all or
+  none; macrod.toml stays the one URL source at runtime), claims the
+  pre-approved pairing, chowns the config to its directory's owner, installs
+  the persona (useradd, `/etc/macro/personas/<os_user>.env` 0600,
+  `/etc/systemd/system/<unit>.service`, `enable --now`), then writes
+  `/var/lib/macrod/enrolled`. A stored credential skips the claim, so retries
+  are safe. `--root` (hidden) prefixes system paths for tests.
+- `src/capabilities.rs`: on an enrolled Macro computer only (the marker
+  exists), reports `HarnessCapabilities` (`screen` = Xvnc on
+  `127.0.0.1:5900`) to `PUT /harnesses/me/capabilities` when the serving core
+  starts and on change (probed every minute).
 - `src/trigger.rs` + `src/dispatch.rs`: agent-trigger broker events → session
   create/dial/prompt against the live harness service.
 - `src/tui.rs` (`src/tui/`): the control panel itself (registration, agents,

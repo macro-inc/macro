@@ -15,9 +15,12 @@
 //! `agent_trigger.new` delivery opens a session and forwards the first prompt;
 //! `agent_trigger.existing` deliveries forward follow-up messages.
 
+mod capabilities;
 mod config;
 mod daemon;
 mod dispatch;
+#[cfg(unix)]
+mod enroll;
 mod executable;
 #[cfg(unix)]
 mod handoff;
@@ -116,6 +119,27 @@ enum Command {
         #[arg(long)]
         allow_permission_bypass: Option<bool>,
     },
+    /// Join this Macro computer to Macro at first boot: write the config,
+    /// claim the pre-approved pairing, and install the agent persona.
+    #[cfg(unix)]
+    Enroll {
+        /// `incus` (the instance's `user.macro.enrollment` key) or
+        /// `file:<path>`.
+        #[arg(long)]
+        from: enroll::EnrollmentSource,
+        /// The config `macrod service` runs from; takes its directory's owner.
+        #[arg(long)]
+        config: std::path::PathBuf,
+        /// Workspace for a newly created config.
+        #[arg(long, default_value = "/home/macro/work")]
+        workspace: std::path::PathBuf,
+        /// Agent preset id for a newly created config.
+        #[arg(long, default_value = "claude-code")]
+        agent: String,
+        /// Prefix for system paths (`/dev/incus`, `/etc`, `/var/lib`).
+        #[arg(long, default_value = "/", hide = true)]
+        root: std::path::PathBuf,
+    },
     /// List the ACP agents installed on this machine as JSON.
     DetectAgents,
     /// Report the service config's state as JSON without running anything.
@@ -176,6 +200,33 @@ async fn main() -> ExitCode {
                 Err(error) => {
                     service::emit_fatal(&format!("{error}"));
                     eprintln!("macrod service: {error:?}");
+                    ExitCode::FAILURE
+                }
+            };
+        }
+        #[cfg(unix)]
+        Some(Command::Enroll {
+            from,
+            config,
+            workspace,
+            agent,
+            root,
+        }) => {
+            tracing_subscriber::fmt()
+                .with_writer(std::io::stderr)
+                .init();
+            return match enroll::run_enroll(enroll::EnrollOptions {
+                from,
+                config,
+                workspace,
+                agent,
+                root,
+            })
+            .await
+            {
+                Ok(()) => ExitCode::SUCCESS,
+                Err(error) => {
+                    eprintln!("macrod enroll: {error:?}");
                     ExitCode::FAILURE
                 }
             };
