@@ -58,6 +58,7 @@ members = [
   "crates/models_forms",
   "crates/embedding",
   "crates/image_generation",
+  "crates/web_search",
   "crates/dictation",
   "crates/email_api_client",
   "crates/entity_mutation",

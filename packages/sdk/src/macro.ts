@@ -34,6 +34,7 @@ import { TeamNamespace } from './entities/teams/namespace';
 import { UnfurlNamespace } from './entities/unfurls/namespace';
 import { UserNamespace } from './entities/users/namespace';
 import type { User } from './entities/users/user';
+import { WebNamespace } from './entities/web/namespace';
 import { WebhooksNamespace } from './entities/webhooks/namespace';
 import { WhatsAppNamespace } from './entities/whatsapp/namespace';
 import { WorkspaceNamespace } from './entities/workspace/namespace';
@@ -158,6 +159,8 @@ export class Macro<T extends MacroOpts = MacroOpts> {
 
   /** Generate images with AI and attach them to messages. */
   readonly images: ImagesNamespace;
+  /** Search the public web and read web pages. */
+  readonly web: WebNamespace;
   /** Your own profile: set your name and profile picture. */
   readonly me: MeNamespace;
 
@@ -224,6 +227,7 @@ export class Macro<T extends MacroOpts = MacroOpts> {
     this.foreignEntities = new ForeignEntityNamespace(client);
     this.forms = new FormNamespace(client);
     this.images = new ImagesNamespace(client);
+    this.web = new WebNamespace(client);
     this.notifications = new NotificationNamespace(client);
     this.pins = new PinsNamespace(client);
     this.projects = new ProjectNamespace(client);
@@ -359,6 +363,13 @@ export { AccessRequest, EntityAccess } from './entities/sharing/access';
 export type { SharePermissionOptions } from './entities/sharing/permissions';
 export type { TaskSummary } from './entities/tasks/task';
 export { TeamInvite } from './entities/teams/invite';
+export type {
+  WebFetchOptions,
+  WebFetchResponse,
+  WebSearchOptions,
+  WebSearchResult,
+  WebSearchTopic,
+} from './entities/web/namespace';
 export { WhatsAppAccount } from './entities/whatsapp/account';
 export {
   WhatsAppChat,

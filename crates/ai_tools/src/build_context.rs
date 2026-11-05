@@ -762,22 +762,26 @@ pub async fn build_tool_service_context_from_env(
         skill_tool_context,
         schedule_tool_context: crate::build_routine_tool_context()?,
         anthropic_tool_context,
+        web_search_provider: build_web_search_provider_from_env(),
         admission,
         recorder,
         usage_context: ai_usage::UsageContext::system(ai_usage::AiFeature::Chat),
     })
 }
 
+/// The vendor behind `WebSearch` and `WebFetch`: Tavily, keyed by
+/// `TAVILY_API_KEY`. Without the key the host still boots, logs an error, and
+/// every web call fails with a "not configured" error.
+pub fn build_web_search_provider_from_env() -> Arc<dyn web_search::domain::ports::SearchProvider> {
+    Arc::new(web_search::outbound::tavily::TavilyClient::from_env())
+}
+
 /// Build an [`AnthropicToolContext`] from environment variables.
 ///
-/// Reads `ANTHROPIC_API_KEY` and configures the client with the beta headers
-/// required for web fetch and code execution server tools.
+/// Reads `ANTHROPIC_API_KEY` and configures the client with the beta header
+/// required for the code execution server tools.
 pub fn build_anthropic_tool_context() -> AnthropicToolContext {
     let mut config = anthropic::config::Config::dangrously_try_from_env();
-    config.headers.append(
-        anthropic::prelude::WEB_FETCH_TOOL_HEADER.0.clone(),
-        anthropic::prelude::WEB_FETCH_TOOL_HEADER.1.clone(),
-    );
     config.headers.append(
         anthropic::prelude::CODE_EXECUTION_TOOL_HEADER.0.clone(),
         anthropic::prelude::CODE_EXECUTION_TOOL_HEADER.1.clone(),

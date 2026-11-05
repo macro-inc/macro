@@ -2201,7 +2201,7 @@ pub async fn run() -> anyhow::Result<()> {
             document_creator.clone(),
             document_service.clone(),
         ),
-        crate::outbound::artifacts::PermissionTokenViewTokens::new(
+        crate::outbound::artifacts::ArtifactContentViewTokens::new(
             config.document_permission_jwt.as_ref(),
         ),
         crate::outbound::artifacts::ConnectionGatewayArtifactNotifier::new(

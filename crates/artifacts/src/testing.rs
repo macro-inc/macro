@@ -4,7 +4,7 @@ use std::collections::{HashMap, HashSet};
 use std::sync::Mutex;
 
 use chrono::{DateTime, Utc};
-use entity_access::domain::models::AccessLevel;
+
 use model::document::DocumentBasic;
 use model_owner::{CreationPrincipal, Owner};
 
@@ -217,23 +217,18 @@ impl ArtifactDocuments for MemoryDocuments {
 }
 
 /// Tokens of the form `token-for-<document id>`; anything else fails to
-/// verify. Minted tokens are recorded with their access level.
+/// verify. Minted tokens are recorded.
 #[derive(Default)]
 pub(crate) struct FakeTokens {
-    pub(crate) minted: Mutex<Vec<(Viewer, String, AccessLevel)>>,
+    pub(crate) minted: Mutex<Vec<(Viewer, String)>>,
 }
 
 impl ViewTokens for FakeTokens {
-    fn mint(
-        &self,
-        viewer: &Viewer,
-        document_id: &str,
-        access_level: AccessLevel,
-    ) -> Result<MintedToken, ArtifactError> {
+    fn mint(&self, viewer: &Viewer, document_id: &str) -> Result<MintedToken, ArtifactError> {
         self.minted
             .lock()
             .unwrap()
-            .push((viewer.clone(), document_id.to_string(), access_level));
+            .push((viewer.clone(), document_id.to_string()));
         Ok(MintedToken {
             token: format!("token-for-{document_id}"),
             expires_at: "2026-11-04T13:00:00Z".parse().unwrap(),

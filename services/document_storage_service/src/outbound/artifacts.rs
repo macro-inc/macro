@@ -13,11 +13,12 @@ use artifacts::domain::ports::{
 use connection_gateway_client::client::ConnectionGatewayClient;
 use documents_hex::domain::create::NewDocumentMetadata;
 use documents_hex::domain::models::DocumentError;
-use documents_hex::domain::permission_token::{decode_permission_token, encode_permission_token};
+
 use documents_hex::domain::ports::DocumentService as _;
 use documents_hex::inbound::axum_router::DefaultDocumentCreator;
-use entity_access::domain::models::AccessLevel;
-use macro_sync_service_jwt::{DocumentPermissionToken, TOKEN_TTL_SECS};
+use macro_sync_service_jwt::artifact_content::{
+    ArtifactContentClaims, decode_artifact_content, encode_artifact_content,
+};
 use model::document::DocumentBasic;
 use model_entity::EntityType;
 use model_owner::CreationPrincipal;
@@ -103,13 +104,15 @@ impl ArtifactDocuments for DocumentsForArtifacts {
     }
 }
 
-/// View tokens are document permission tokens, signed with the secret that
-/// signs every other one.
-pub struct PermissionTokenViewTokens {
+/// View tokens are artifact content tokens, signed with the document
+/// permission secret but with an issuer and audience no document grant
+/// consumer accepts, so a page that reads its URL holds nothing usable
+/// elsewhere.
+pub struct ArtifactContentViewTokens {
     secret: String,
 }
 
-impl PermissionTokenViewTokens {
+impl ArtifactContentViewTokens {
     /// Tokens signed with `secret`.
     pub fn new(secret: impl Into<String>) -> Self {
         Self {
@@ -118,35 +121,32 @@ impl PermissionTokenViewTokens {
     }
 }
 
-impl ViewTokens for PermissionTokenViewTokens {
-    fn mint(
-        &self,
-        viewer: &Viewer,
-        document_id: &str,
-        access_level: AccessLevel,
-    ) -> Result<MintedToken, ArtifactError> {
-        let expires_at = chrono::Utc::now() + chrono::Duration::seconds(TOKEN_TTL_SECS as i64);
-        let token = encode_permission_token(
-            viewer.user_id.clone(),
+impl ViewTokens for ArtifactContentViewTokens {
+    fn mint(&self, viewer: &Viewer, document_id: &str) -> Result<MintedToken, ArtifactError> {
+        let now = chrono::Utc::now();
+        let now_secs = u64::try_from(now.timestamp())
+            .map_err(|error| ArtifactError::Internal(anyhow::Error::new(error)))?;
+        let claims = ArtifactContentClaims::new(
             document_id.to_string(),
-            access_level,
-            &self.secret,
+            viewer.user_id.clone(),
             viewer.actor.clone(),
-        )
-        .map_err(|error| ArtifactError::Internal(anyhow::Error::new(error)))?;
+            now_secs,
+        );
+        let expires_at = i64::try_from(claims.exp)
+            .ok()
+            .and_then(|exp| chrono::DateTime::from_timestamp(exp, 0))
+            .ok_or_else(|| ArtifactError::Internal(anyhow::anyhow!("token expiry out of range")))?;
+        let token = encode_artifact_content(&claims, &self.secret)
+            .map_err(|error| ArtifactError::Internal(anyhow::Error::new(error)))?;
 
-        Ok(MintedToken {
-            token: token.into_inner(),
-            expires_at,
-        })
+        Ok(MintedToken { token, expires_at })
     }
 
     fn verify(&self, token: &str) -> Option<VerifiedToken> {
-        let token = DocumentPermissionToken::from(token.to_string());
-        decode_permission_token(&token, &self.secret)
+        decode_artifact_content(token, &self.secret)
             .ok()
             .map(|claims| VerifiedToken {
-                document_id: claims.document_id().to_string(),
+                document_id: claims.document_id,
             })
     }
 }

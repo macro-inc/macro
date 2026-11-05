@@ -105,9 +105,15 @@ versions.
 
 URLs are `<origin>/t/<token>/v/<number>/<path>`; an empty path is
 `index.html`, a scene's `view_url` points at its page, and `?theme=light|dark`
-passes the theme. The token is the document permission token
-(`documents_hex::domain::permission_token`, HS256 with DSS's existing secret,
-one hour), minted after the normal access check. Putting it in the path keeps
+passes the theme. The token is an artifact content token
+(`macro_sync_service_jwt::artifact_content`), minted after the normal view
+access check. The page can read its own URL, so the token is useless anywhere
+but the content router: it is signed with DSS's existing permission secret
+(HS256, one hour; the web app refreshes from `expires_at`) but names its own
+issuer and the audience `artifact-content`, which every document grant
+decoder (sync-service, DSS `permissions_token/validate`, surface grants)
+rejects, and it carries no access level, so it can't pose as a document
+grant either. A document grant is likewise refused by the content router. Putting it in the path keeps
 every relative URL in a page working without the author knowing about it, and
 needs no cookie, which browsers block in third-party frames.
 

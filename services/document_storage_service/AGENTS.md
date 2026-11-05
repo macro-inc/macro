@@ -16,7 +16,7 @@ threads, pins, recents, notifications, folders, activity.
   `folders_query`, `graphql_soup`, `threads`, `annotations`, `history`,
   `pins`, `recents`, `notification`, `instructions`, `internal`.
 - `/artifacts` mounts `crates/artifacts`' API; `src/outbound/artifacts.rs`
-  adapts the documents creator and the document permission token to its ports.
+  adapts the documents creator and artifact content tokens to its ports.
   `api.rs` dispatches by `Host` first: `<document_id>.<ArtifactContentUrl host>`
   goes only to the artifact content router, every other host to the API.
   See [artifacts](../../docs/architecture/artifacts.md).

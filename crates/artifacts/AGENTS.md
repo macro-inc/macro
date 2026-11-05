@@ -18,7 +18,7 @@ origin pages are served from. How it works: [architecture](../../docs/architectu
   `/artifacts` API, the content router.
 - Not here: the artifact document itself (creation, sharing, deletion) →
   `crates/documents`; deleting its objects → DSS's delete document worker,
-  which removes the `s3_key::build_artifact_document_prefix` prefix; the token encoding → `documents_hex::domain::permission_token`;
+  which removes the `s3_key::build_artifact_document_prefix` prefix; the token encoding → `macro_sync_service_jwt::artifact_content`;
   canvas placement and web/SDK surfaces → later layers.
 
 ## Boundaries
