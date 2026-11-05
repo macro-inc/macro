@@ -155,6 +155,9 @@ async fn service_authorizes_actor_and_validates_future_time(
         sender_provider: std::sync::Arc::new(
             crate::domain::senders::UnavailableEmailSenderProvider,
         ),
+        shared_thread_replies: std::sync::Arc::new(
+            crate::domain::shared_thread_replies::NoSharedThreadReplies,
+        ),
         email_repo: EmailPgRepo::new(pool),
         frecency_service: (),
         enqueuer: (),
@@ -210,6 +213,9 @@ async fn scheduled_source_rejects_delete_and_migration_into_existing_reply(
     let service = EmailServiceImpl {
         sender_provider: std::sync::Arc::new(
             crate::domain::senders::UnavailableEmailSenderProvider,
+        ),
+        shared_thread_replies: std::sync::Arc::new(
+            crate::domain::shared_thread_replies::NoSharedThreadReplies,
         ),
         email_repo: EmailPgRepo::new(pool.clone()),
         frecency_service: FrecencyQueryServiceImpl::new(FrecencyPgStorage::new(pool.clone())),
@@ -514,6 +520,9 @@ async fn initial_schedule_prepares_signature_but_time_updates_preserve_content(
     let service = EmailServiceImpl {
         sender_provider: std::sync::Arc::new(
             crate::domain::senders::UnavailableEmailSenderProvider,
+        ),
+        shared_thread_replies: std::sync::Arc::new(
+            crate::domain::shared_thread_replies::NoSharedThreadReplies,
         ),
         email_repo: EmailPgRepo::new(pool.clone()),
         frecency_service: (),

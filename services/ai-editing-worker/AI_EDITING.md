@@ -327,6 +327,14 @@ No authoring snapshots or execution records are retained separately. Each tool
 invocation is independent; after a timeout, inspect the current form before
 issuing another mutation.
 
+### Canvas artifacts
+
+The optional `artifacts` body field says the user has the `enable-canvas-artifacts`
+rollout. It adds `artifact-prompt.md` to the system prompt and to ReadCanvas as
+`artifactGuide`, shows artifact source when items are named, and allows the artifact
+SDK operations. Without it those operations fail before committing, and renders show
+artifact titles only. See [Canvas architecture](../../docs/architecture/canvas.md#artifacts).
+
 ### Canvas direct path and performance
 
 For exact known edits the main agent calls ApplyCanvasEdits with the immutable
