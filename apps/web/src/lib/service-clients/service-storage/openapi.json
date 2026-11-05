@@ -3419,7 +3419,7 @@
       },
       "patch": {
         "tags": ["channel_labels"],
-        "summary": "Rename a label of the caller's authorized scope.",
+        "summary": "Update a label, optionally moving it to another authorized scope.",
         "operationId": "rename_channel_label",
         "parameters": [
           {
@@ -4401,6 +4401,360 @@
             }
           },
           "404": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/channels/{channel_id}/access-requests/mine": {
+      "get": {
+        "tags": ["channels"],
+        "summary": "Handler for `GET /channels/{channel_id}/access-requests/mine`.",
+        "operationId": "get_my_channel_access_request",
+        "parameters": [
+          {
+            "name": "channel_id",
+            "in": "path",
+            "description": "Channel ID",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ChannelAccessRequestState"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      },
+      "put": {
+        "tags": ["channels"],
+        "summary": "Handler for `PUT /channels/{channel_id}/access-requests/mine`.",
+        "operationId": "request_channel_access",
+        "parameters": [
+          {
+            "name": "channel_id",
+            "in": "path",
+            "description": "Channel ID",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ChannelAccessRequest"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      },
+      "delete": {
+        "tags": ["channels"],
+        "summary": "Handler for `DELETE /channels/{channel_id}/access-requests/mine`.",
+        "operationId": "cancel_channel_access_request",
+        "parameters": [
+          {
+            "name": "channel_id",
+            "in": "path",
+            "description": "Channel ID",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/channels/{channel_id}/access-requests/{request_id}": {
+      "get": {
+        "tags": ["channels"],
+        "summary": "Handler for `GET /channels/{channel_id}/access-requests/{request_id}`.",
+        "operationId": "get_channel_access_request",
+        "parameters": [
+          {
+            "name": "channel_id",
+            "in": "path",
+            "description": "Channel ID",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "request_id",
+            "in": "path",
+            "description": "Access request ID",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ChannelAccessRequest"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/channels/{channel_id}/access-requests/{request_id}/resolve": {
+      "post": {
+        "tags": ["channels"],
+        "summary": "Handler for `POST /channels/{channel_id}/access-requests/{request_id}/resolve`.",
+        "operationId": "resolve_channel_access_request",
+        "parameters": [
+          {
+            "name": "channel_id",
+            "in": "path",
+            "description": "Channel ID",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "request_id",
+            "in": "path",
+            "description": "Access request ID",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ResolveChannelAccessRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ChannelAccessRequest"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "409": {
             "description": "",
             "content": {
               "application/json": {
@@ -7040,6 +7394,70 @@
             "application/json": {
               "schema": {
                 "$ref": "#/components/schemas/SharePipeline"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "204": {
+            "description": ""
+          }
+        }
+      }
+    },
+    "/crm/pipelines/{id}/stage-requirements": {
+      "get": {
+        "tags": ["crm::inbound::pipelines"],
+        "summary": "Read requirements by stable stage and field identities.",
+        "operationId": "get_crm_pipeline_stage_requirements",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/StageRequirement"
+                  }
+                }
+              }
+            }
+          }
+        }
+      },
+      "put": {
+        "tags": ["crm::inbound::pipelines"],
+        "summary": "Replace the required fields for one stage. An empty list removes its rule.",
+        "operationId": "set_crm_pipeline_stage_requirement",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/StageRequirement"
               }
             }
           },
@@ -9742,7 +10160,7 @@
     "/documents/create_skill": {
       "post": {
         "tags": ["document"],
-        "summary": "Creates a skill document with initialized markdown content in one\nbackend-owned lifecycle. Skills are markdown documents containing\ninstructions that AI reads and follows when the skill is referenced in an\nAI input.",
+        "summary": "Creates a skill document with initialized markdown content and its\nrouting description in one backend-owned lifecycle. Skills are markdown documents containing\ninstructions that AI reads and follows when the skill is referenced in an\nAI input.",
         "operationId": "create_skill_handler",
         "requestBody": {
           "content": {
@@ -9774,7 +10192,7 @@
             }
           },
           "400": {
-            "description": "",
+            "description": "The description is blank, longer than one line or 300 characters, or does not start \"Use when\"",
             "content": {
               "application/json": {
                 "schema": {
@@ -11815,6 +12233,144 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/GenericErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/documents/{document_id}/skill_description": {
+      "get": {
+        "tags": ["document"],
+        "summary": "Gets when to use a skill. `description` is absent for a skill created\nbefore descriptions existed.",
+        "operationId": "get_skill_description",
+        "parameters": [
+          {
+            "name": "document_id",
+            "in": "path",
+            "description": "Skill document ID",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SkillDescriptionBody"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      },
+      "put": {
+        "tags": ["document"],
+        "summary": "Sets when to use a skill: one line starting \"Use when\", at most 300\ncharacters. Agents choose skills for a request by it.",
+        "operationId": "set_skill_description",
+        "parameters": [
+          {
+            "name": "document_id",
+            "in": "path",
+            "description": "Skill document ID",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SetSkillDescriptionRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SkillDescriptionBody"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "The document is not a skill, or the description is invalid",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
                 }
               }
             }
@@ -15569,6 +16125,84 @@
         "responses": {
           "204": {
             "description": ""
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      },
+      "patch": {
+        "tags": ["harnesses"],
+        "summary": "Handler for `PATCH /harnesses/{harness_id}`.",
+        "operationId": "patch_harness",
+        "parameters": [
+          {
+            "name": "harness_id",
+            "in": "path",
+            "description": "Harness ID",
+            "required": true,
+            "schema": {
+              "$ref": "#/components/schemas/HarnessId"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PatchHarnessRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Harness"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
           },
           "401": {
             "description": "",
@@ -24018,6 +24652,116 @@
           }
         }
       },
+      "ChannelAccessDecision": {
+        "type": "string",
+        "description": "A participant's answer to a pending request.",
+        "enum": ["approve", "deny"]
+      },
+      "ChannelAccessRequest": {
+        "type": "object",
+        "description": "One attempt to join a channel. Attempts are never reused, so each timeline\nentry keeps showing the outcome of the attempt it announced.",
+        "required": [
+          "id",
+          "channel_id",
+          "requester_id",
+          "status",
+          "created_at"
+        ],
+        "properties": {
+          "channel_id": {
+            "type": "string",
+            "format": "uuid",
+            "description": "Channel the requester asked to join."
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time",
+            "description": "When the requester asked."
+          },
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "description": "Attempt id."
+          },
+          "requester_id": {
+            "$ref": "#/components/schemas/MacroUserIdStr",
+            "description": "Person asking to join."
+          },
+          "resolved_at": {
+            "type": ["string", "null"],
+            "format": "date-time",
+            "description": "When the attempt stopped being pending."
+          },
+          "resolved_by": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/MacroUserIdStr",
+                "description": "Participant who approved or denied it."
+              }
+            ]
+          },
+          "status": {
+            "$ref": "#/components/schemas/ChannelAccessRequestStatus",
+            "description": "Current outcome."
+          }
+        }
+      },
+      "ChannelAccessRequestState": {
+        "type": "object",
+        "description": "A requester's view of their access to a channel they cannot read.",
+        "required": ["can_request"],
+        "properties": {
+          "can_request": {
+            "type": "boolean",
+            "description": "Whether this channel accepts requests."
+          },
+          "request": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/ChannelAccessRequest",
+                "description": "The caller's latest attempt, if any."
+              }
+            ]
+          },
+          "retry_after": {
+            "type": ["string", "null"],
+            "format": "date-time",
+            "description": "Earliest time the caller may ask again, while they must wait."
+          }
+        }
+      },
+      "ChannelAccessRequestStatus": {
+        "type": "string",
+        "description": "Outcome of one attempt to join.",
+        "enum": ["pending", "approved", "denied", "cancelled"]
+      },
+      "ChannelAccessRequestedMetadata": {
+        "type": "object",
+        "description": "Metadata for [`ChannelTopicEvent::AccessRequested`].",
+        "required": ["channel_id", "request_id", "requester_id"],
+        "properties": {
+          "channel_id": {
+            "type": "string",
+            "format": "uuid",
+            "description": "Channel the requester asked to join."
+          },
+          "request_id": {
+            "type": "string",
+            "format": "uuid",
+            "description": "The attempt; channel participants read its current outcome by id."
+          },
+          "requester_id": {
+            "$ref": "#/components/schemas/MacroUserIdStr",
+            "description": "Person asking to join."
+          }
+        }
+      },
       "ChannelCreatedMetadata": {
         "type": "object",
         "description": "Metadata for [`ChannelTopicEvent::Created`].",
@@ -24219,7 +24963,7 @@
           "updatedAt": {
             "type": "string",
             "format": "date-time",
-            "description": "When the label was last renamed or reordered."
+            "description": "When the label's name, rule, scope, or order last changed."
           }
         }
       },
@@ -24662,6 +25406,21 @@
               "metadata": {
                 "$ref": "#/components/schemas/ChannelParticipantRemovedMetadata",
                 "description": "Participants were removed from a channel (admin removal or self-leave)."
+              }
+            }
+          },
+          {
+            "type": "object",
+            "description": "Someone outside a channel asked to join it.",
+            "required": ["metadata", "event_type"],
+            "properties": {
+              "event_type": {
+                "type": "string",
+                "enum": ["channel.access_requested"]
+              },
+              "metadata": {
+                "$ref": "#/components/schemas/ChannelAccessRequestedMetadata",
+                "description": "Someone outside a channel asked to join it."
               }
             }
           }
@@ -26715,10 +27474,6 @@
         "description": "Request to open a pairing: the daemon asks for a code the user approves.\n\nThe daemon serializes this, so both derives are used.",
         "required": ["name"],
         "properties": {
-          "allow_permission_bypass": {
-            "type": ["boolean", "null"],
-            "description": "Daemon operator consent ceiling. Omitted by older clients; web approval decides."
-          },
           "host": {
             "type": ["string", "null"],
             "description": "Display-only description of the machine, e.g. `eric@macbook / darwin`."
@@ -26726,17 +27481,6 @@
           "name": {
             "type": "string",
             "description": "Requested harness display name (typically the machine's hostname)."
-          },
-          "scope": {
-            "oneOf": [
-              {
-                "type": "null"
-              },
-              {
-                "$ref": "#/components/schemas/RequestedHarnessScope",
-                "description": "The scope the daemon's config asks for; the approval dialog arrives\npreselected to it."
-              }
-            ]
           }
         }
       },
@@ -26792,8 +27536,12 @@
       "CreateSkillRequest": {
         "type": "object",
         "description": "Request body for creating a skill — a markdown document containing\ninstructions that AI reads and follows when the skill is referenced in an\nAI input.",
-        "required": ["skillName"],
+        "required": ["skillName", "description"],
         "properties": {
+          "description": {
+            "type": "string",
+            "description": "When to use the skill, in one line starting \"Use when\", e.g. \"Use when\ndrafting release notes; not changelog entries\". Agents choose skills\nfor a request by it."
+          },
           "markdown": {
             "type": ["string", "null"],
             "description": "Markdown source text. Defaults to an empty skill document."
@@ -32821,6 +33569,10 @@
                 },
                 "description": "Its questions, in order."
               },
+              "showWhen": {
+                "$ref": "#/components/schemas/FilterGroup",
+                "description": "When to show it: the rules answers of earlier shown sections must\npass, naming only their columns. A section whose rules fail is\nskipped: its questions are not required and their answers are\nnot written. Absent, it is always shown."
+              },
               "title": {
                 "type": "string",
                 "description": "Its title; may be empty."
@@ -32923,6 +33675,10 @@
                   "$ref": "#/components/schemas/FormQuestionDetail"
                 },
                 "description": "Its questions, in order."
+              },
+              "showWhen": {
+                "$ref": "#/components/schemas/FilterGroup",
+                "description": "When to show it, from earlier shown sections' answers; absent,\nit is always shown. Sent to every caller so a respondent's page\ncan skip it."
               },
               "title": {
                 "type": "string",
@@ -35498,6 +36254,37 @@
           },
           {
             "type": "object",
+            "description": "A section's show-when rules test a column no earlier section asks.",
+            "required": ["column", "kind"],
+            "properties": {
+              "column": {
+                "type": "string",
+                "format": "uuid",
+                "description": "The column."
+              },
+              "kind": {
+                "type": "string",
+                "enum": ["conditionNamesLaterColumn"]
+              }
+            }
+          },
+          {
+            "type": "object",
+            "description": "A section's show-when rule does not fit its column.",
+            "required": ["reason", "kind"],
+            "properties": {
+              "kind": {
+                "type": "string",
+                "enum": ["conditionRule"]
+              },
+              "reason": {
+                "type": "string",
+                "description": "Why."
+              }
+            }
+          },
+          {
+            "type": "object",
             "description": "A text is longer than allowed.",
             "required": ["max", "kind"],
             "properties": {
@@ -37539,24 +38326,9 @@
             "type": ["string", "null"],
             "description": "Display-only description of the machine."
           },
-          "requested_allow_permission_bypass": {
-            "type": ["boolean", "null"],
-            "description": "Daemon operator consent ceiling; false forbids bypass at approval."
-          },
           "requested_name": {
             "type": "string",
             "description": "Harness display name the daemon asked for."
-          },
-          "requested_scope": {
-            "oneOf": [
-              {
-                "type": "null"
-              },
-              {
-                "$ref": "#/components/schemas/RequestedHarnessScope",
-                "description": "The scope the daemon's config asked for, when it named one."
-              }
-            ]
           }
         }
       },
@@ -37649,6 +38421,20 @@
           "convert_to_team_channel": {
             "type": ["boolean", "null"],
             "description": "Sets whether the channel is a team channel.\n\n`true` converts a non-team channel to a team channel, while `false`\nconverts a team channel to a private channel."
+          }
+        }
+      },
+      "PatchHarnessRequest": {
+        "type": "object",
+        "description": "Request to change a registered harness. Omitted fields stay as they are.",
+        "properties": {
+          "allow_permission_bypass": {
+            "type": ["boolean", "null"],
+            "description": "Whether agents may bypass ACP permission requests on this harness.\nLive sessions pick the change up at their next turn."
+          },
+          "name": {
+            "type": ["string", "null"],
+            "description": "New display name."
           }
         }
       },
@@ -39284,7 +40070,7 @@
       },
       "RenameChannelLabelRequest": {
         "type": "object",
-        "description": "Request body for renaming a label.",
+        "description": "Request body for updating a label's name, smart rule, or sharing scope.",
         "required": ["name"],
         "properties": {
           "name": {
@@ -39299,6 +40085,17 @@
               {
                 "$ref": "#/components/schemas/ChannelLabelRule",
                 "description": "Automatic name-matching rule; omitted for manual labels or a name-only rename."
+              }
+            ]
+          },
+          "targetScope": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/ChannelLabelScopeSelection",
+                "description": "Destination namespace; omitted to preserve the current scope."
               }
             ]
           }
@@ -39383,11 +40180,6 @@
         "type": "string",
         "description": "Durable outcome; reading a notification never changes it.",
         "enum": ["pending", "granted", "denied", "cancelled"]
-      },
-      "RequestedHarnessScope": {
-        "type": "string",
-        "description": "The ownership scope a daemon's config asks for.\n\nAdvisory, not binding: the approving user confirms it in the dialog, which\narrives preselected to this. Approval is what actually sets ownership.",
-        "enum": ["private", "team"]
       },
       "RequestedLayout": {
         "oneOf": [
@@ -39496,6 +40288,17 @@
           }
         ],
         "description": "A layout as an op asks for it: a board or timeline may leave its title\nout."
+      },
+      "ResolveChannelAccessRequest": {
+        "type": "object",
+        "description": "Body of a participant's answer.",
+        "required": ["decision"],
+        "properties": {
+          "decision": {
+            "$ref": "#/components/schemas/ChannelAccessDecision",
+            "description": "The answer."
+          }
+        }
       },
       "ResolveRequest": {
         "type": "object",
@@ -40640,6 +41443,17 @@
         ],
         "description": "Type-safe enum for setting entity property values - provides compile-time validation."
       },
+      "SetSkillDescriptionRequest": {
+        "type": "object",
+        "description": "Request body for setting a skill's routing description.",
+        "required": ["description"],
+        "properties": {
+          "description": {
+            "type": "string",
+            "description": "When to use the skill, in one line starting \"Use when\", at most 300\ncharacters."
+          }
+        }
+      },
       "Sha256Digest": {
         "type": "string",
         "description": "SHA-256 encoded as exactly 64 lowercase hexadecimal characters."
@@ -40789,6 +41603,16 @@
           "entity_type": {
             "type": "string",
             "description": "Mentioned entity type."
+          }
+        }
+      },
+      "SkillDescriptionBody": {
+        "type": "object",
+        "description": "A skill's routing description.",
+        "properties": {
+          "description": {
+            "type": ["string", "null"],
+            "description": "When to use the skill, in one line starting \"Use when\". Absent for a\nskill created before descriptions existed."
           }
         }
       },
@@ -43362,6 +44186,32 @@
           }
         ],
         "description": "The statement that ran: a read, or the table (and for a type change, the\ncolumn) it wrote."
+      },
+      "StageRequirement": {
+        "type": "object",
+        "description": "Fields required when a deal enters a particular option of a stage column.",
+        "required": ["stageColumnId", "stageId", "requiredColumnIds"],
+        "properties": {
+          "requiredColumnIds": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "description": "Fields that must be present. Empty removes the rule for this stage."
+          },
+          "stageColumnId": {
+            "type": "string",
+            "format": "uuid",
+            "description": "Single-select column identifying the stage, independent of its name."
+          },
+          "stageId": {
+            "type": "string",
+            "format": "uuid",
+            "description": "Stable option identity; renaming the stage preserves the rule."
+          }
+        },
+        "additionalProperties": false
       },
       "StarterDatabase": {
         "type": "object",

@@ -1,0 +1,19 @@
+[package]
+edition = "2024"
+name = "graphql_notification_inbox"
+publish = false
+version = "0.1.0"
+
+[dependencies]
+async-graphql = { workspace = true }
+async-stream = { workspace = true }
+attention_feed = { path = "../attention_feed", features = ["inbound"] }
+futures = { workspace = true }
+graphql_common = { path = "../graphql_common" }
+graphql_notification = { path = "../graphql_notification" }
+graphql_soup = { path = "../graphql_soup" }
+macro_user_id = { path = "../macro_user_id" }
+notification_inbox = { path = "../notification_inbox" }
+soup = { path = "../soup", default-features = false, features = ["ports"] }
+tracing = { workspace = true }
+workspace-hack = { version = "0.1", path = "../workspace-hack" }

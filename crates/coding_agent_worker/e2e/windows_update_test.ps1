@@ -102,6 +102,11 @@ try {
     $launcher = Join-Path $installDir 'macrod.exe'
     Check ((& $launcher --version) -eq "macrod $V1") "install.ps1 installed $V1 from the HTTP mirror"
 
+    # macrod keeps ~/.macrod (its config and update log) under HOME when it
+    # is set.
+    $env:HOME = Join-Path $work 'home'
+    $config = Join-Path $env:HOME '.macrod\macrod.toml'
+    New-Item -ItemType Directory -Force (Split-Path $config) | Out-Null
     # A paired-looking config against an unreachable deployment: the panel
     # serves nothing, but it runs, and its update check runs.
     @"
@@ -109,9 +114,6 @@ try {
 api_url = "http://127.0.0.1:9"
 storage_url = "http://127.0.0.1:9"
 web_url = "http://127.0.0.1:9"
-
-[identity]
-scope = "private"
 
 [harness]
 command = "cmd"
@@ -122,11 +124,8 @@ path = "."
 [credentials]
 harness_id = "00000000-0000-0000-0000-0000004a125a"
 token = "mhns_windows_update_test"
-scope = "user"
-"@ | Set-Content (Join-Path $runDir 'macrod.toml')
+"@ | Set-Content $config
     $env:MACROD_UPDATE_CHECK_SECONDS = '2'
-    # macrod keeps ~/.macrod (and its update log) under HOME when it is set.
-    $env:HOME = Join-Path $work 'home'
 
     # Its own console, as a user starts it from a terminal. (PowerShell
     # names are case-insensitive: $v1 would overwrite the $V1 tag.)

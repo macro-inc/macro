@@ -1,12 +1,19 @@
 import { match } from 'ts-pattern';
 import type { UnifiedNotification } from './types';
 
-/** Notifications on messages outside threads, eligible for channel-view read marking. */
+/**
+ * Notifications on messages outside threads, and requests to join shown in the
+ * channel's timeline, eligible for channel-view read marking.
+ */
 export function isTopLevelChannelNotification(
   notification: Pick<UnifiedNotification, 'notification_metadata'>
 ): boolean {
   return match(notification.notification_metadata)
-    .with({ tag: 'channel_message_send' }, () => true)
+    .with(
+      { tag: 'channel_message_send' },
+      { tag: 'channel_access_requested' },
+      () => true
+    )
     .with(
       { tag: 'channel_mention' },
       { tag: 'channel_message_reaction' },

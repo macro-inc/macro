@@ -105,6 +105,7 @@ import {
 } from './context/compose-capabilities';
 import { localDraftReadyForDelivery } from './core/local-draft';
 import { readDroppedEmailFiles, withVideoAttachments } from './editor-adapter';
+import { useCreateEmailEvent } from './email-event';
 import { makeAttachmentPublic } from './make-attachment-public';
 import {
   emailDraftLifecycleSource,
@@ -170,6 +171,7 @@ export function createEmailComposeContext(
     getDisplayName(tryMacroId(`macro|${email}`))
   );
   const signatures = useFeatureFlag(enableEmailSignatures);
+  const calendarEvents = useCreateEmailEvent();
   const remove = useDeleteDraftMutation();
   const upload = useUploadDraftAttachmentsMutation();
   const forward = useAddForwardedAttachmentsMutation();
@@ -239,6 +241,7 @@ export function createEmailComposeContext(
   };
 
   return {
+    calendarEvents,
     draftLifecycle: emailDraftLifecycleSource,
     operations: createMessageOperationSource,
     recipientName: (id) => getDisplayName(tryMacroId(id)),

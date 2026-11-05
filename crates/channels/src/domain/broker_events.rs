@@ -146,6 +146,18 @@ pub struct ChannelParticipantRemovedMetadata {
     pub removed_user_ids: Vec<MacroUserIdStr<'static>>,
 }
 
+/// Metadata for [`ChannelTopicEvent::AccessRequested`].
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "schema", derive(utoipa::ToSchema))]
+pub struct ChannelAccessRequestedMetadata {
+    /// Channel the requester asked to join.
+    pub channel_id: Uuid,
+    /// The attempt; channel participants read its current outcome by id.
+    pub request_id: Uuid,
+    /// Person asking to join.
+    pub requester_id: MacroUserIdStr<'static>,
+}
+
 /// Events that can be published to [`MacroChannelsTopic`].
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(tag = "event_type", content = "metadata")]
@@ -169,6 +181,9 @@ pub enum ChannelTopicEvent {
     /// Participants were removed from a channel (admin removal or self-leave).
     #[serde(rename = "channel.participant_removed")]
     ParticipantRemoved(ChannelParticipantRemovedMetadata),
+    /// Someone outside a channel asked to join it.
+    #[serde(rename = "channel.access_requested")]
+    AccessRequested(ChannelAccessRequestedMetadata),
 }
 
 impl TopicEvent for ChannelTopicEvent {
@@ -219,6 +234,14 @@ impl ChannelMacroEvent {
         Self::new(
             metadata.channel_id,
             ChannelTopicEvent::ParticipantRemoved(metadata),
+        )
+    }
+
+    /// Build an access requested event keyed by the channel id.
+    pub fn access_requested(metadata: ChannelAccessRequestedMetadata) -> Self {
+        Self::new(
+            metadata.channel_id,
+            ChannelTopicEvent::AccessRequested(metadata),
         )
     }
 

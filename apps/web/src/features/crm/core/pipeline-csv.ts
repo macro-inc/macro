@@ -310,3 +310,6 @@ export function companyPipelineCsv(
     fields: fields.map((index) => csv.columns[index].trim()),
   };
 }
+
+/** An import write was refused and the user can correct its values. */
+export class PipelineImportRefusal extends Error {}

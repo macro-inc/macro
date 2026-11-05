@@ -2755,6 +2755,9 @@ survives, and cancelling lets another comment open without changing document tex
 Document typing briefly pauses during anchor publication so pending text is
 flushed before the highlight is saved. Repeat posting and starting another comment
 with both edit and comment-only access; creating a document tests the owner path.
+For comment-only access, use a document no editor has opened since it was
+created: a commenter's session writes nothing to the document, so its comments
+still post.
 Also withhold a collaborator's update before posting: catch up its missing history
 before publishing the highlight, preserving both the remote text and the comment.
 Confirm the posted comment appears in a separate browser, since reopening the
@@ -2864,9 +2867,13 @@ Discussion's timeline or expanding it. Existing highlights locate threads by
 their stable mark IDs. Replies, attachments, reactions, and editing use the same
 message controls as channels. In every floating comment card (the Markdown,
 PDF, and Word margins and expanded minimized threads), a long comment folds to
-a faded preview with **Show more**; **Show less** folds it again. Short
-comments, the phone drawer, the bottom Discussion, and channels always show the
-full text. Markdown and Word margin cards stack without overlapping: a tall or expanded card
+a faded preview with **Show more**; **Show less** folds it again. A press
+outside the card does the same, including the press that closes an expanded
+minimized card. Presses on the card, its margin badge, and menus or dialogs
+the card opened leave the body expanded. In that card, Open session is the
+icon-only button from a narrow agent card, so the label does not take a line
+of its own. Channels keep the labeled chip. Short comments, the phone drawer,
+the bottom Discussion, and channels always show the full text. Markdown and Word margin cards stack without overlapping: a tall or expanded card
 pushes the cards below it down (past the end of a short document if needed),
 and no card starts above the top of the document. Check this with a long
 thread active near the bottom of a short document that has another thread

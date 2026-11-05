@@ -392,11 +392,7 @@ describe('one-off routines', () => {
     const created = draftToCreateBody(draft);
     expect(
       created && 'trigger' in created ? created.trigger : undefined
-    ).toEqual({
-      type: 'cron',
-      schedule: '12 0 13 3 10 * 2030',
-      timezone: 'UTC',
-    });
+    ).toEqual({ type: 'once', at: '2030-10-03T13:00:12.000Z' });
   });
   it('rejects past one-off creation but permits editing a completed routine', () => {
     const once = {
