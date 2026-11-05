@@ -39,6 +39,7 @@ struct FakeError;
 #[derive(Clone, Default)]
 struct FakeRepo {
     sold_units: u32,
+    fail_payment_confirmation: bool,
     computers: Arc<Mutex<HashMap<Uuid, Computer>>>,
     effects: Arc<Mutex<Vec<PendingEffect>>>,
     events: Arc<Mutex<Vec<(Uuid, Event)>>>,
@@ -83,6 +84,9 @@ impl ComputerRepo for FakeRepo {
         event: Event,
         now: DateTime<Utc>,
     ) -> Result<Option<Computer>, FakeError> {
+        if self.fail_payment_confirmation && matches!(event, Event::PaymentConfirmed) {
+            return Err(FakeError);
+        }
         self.events
             .lock()
             .unwrap()
@@ -493,4 +497,59 @@ async fn billing_provider_failures_remain_upstream_errors() {
         service.quote(TEAM, agent::ComputerSize::Standard).await,
         Err(agent::TeamAgentError::ComputerProvider(_))
     ));
+}
+
+#[tokio::test]
+async fn a_storage_failure_after_billing_recovers_the_reserved_computer_identity() {
+    let repo = FakeRepo {
+        sold_units: 4,
+        fail_payment_confirmation: true,
+        ..Default::default()
+    };
+    let billing = FakeBilling::default();
+    let updates = billing.updates.clone();
+    let computers = HostedRuntimesComputers::new(
+        Arc::new(ComputerService::new(repo.clone(), billing, FixedClock)),
+        repo.clone(),
+    );
+    let result = computers
+        .purchase(agent::ComputerPurchase {
+            team_id: TEAM,
+            created_by: "macro|admin@example.com".to_string(),
+            size: agent::ComputerSize::Standard,
+            name: Some("Agent".to_string()),
+            persona: Some(agent::Persona {
+                name: "Agent".to_string(),
+                os_user: "agent".to_string(),
+                extra_service: agent::PersonaService {
+                    unit_name: "brain@agent".to_string(),
+                    exec: "/opt/macro/brain run".to_string(),
+                    env: Default::default(),
+                },
+                config: std::collections::BTreeMap::from([(
+                    "MACRO_AGENT_USER_ID".to_string(),
+                    "macro|agent@example.com".to_string(),
+                )]),
+            }),
+            extra_items: vec![agent::SubscriptionItem {
+                price_id: "price_seat".to_string(),
+                quantity: 1,
+            }],
+        })
+        .await;
+    let agent::TeamAgentError::ComputerPurchaseUncertain {
+        computer_id: Some(id),
+    } = result.unwrap_err()
+    else {
+        panic!("purchase should preserve the reservation");
+    };
+    assert_eq!(updates.lock().unwrap().len(), 1);
+    let saved = repo.get(id).await.unwrap().unwrap();
+    assert_eq!(saved.team_id, TEAM);
+    assert!(matches!(saved.state.phase, Phase::Reserved { .. }));
+    assert!(matches!(
+        computers.retry(TEAM, id).await,
+        Err(agent::TeamAgentError::RetryUnavailable(_))
+    ));
+    assert_eq!(updates.lock().unwrap().len(), 1);
 }

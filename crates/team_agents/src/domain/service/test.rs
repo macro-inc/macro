@@ -313,6 +313,11 @@ impl Computers for FakeComputers {
     async fn purchase(&self, purchase: ComputerPurchase) -> Result<Uuid, TeamAgentError> {
         self.journal.record("computer.purchase")?;
         self.purchases.lock().expect("lock").push(purchase);
+        if self.journal.fail_at == Some("computer.purchase.uncertain") {
+            return Err(TeamAgentError::ComputerPurchaseUncertain {
+                computer_id: Some(Uuid::parse_str(COMPUTER_ID).expect("uuid")),
+            });
+        }
         Ok(Uuid::parse_str(COMPUTER_ID).expect("uuid"))
     }
 
@@ -680,9 +685,19 @@ async fn a_failure_after_the_purchase_keeps_the_paid_agent() {
             "repo.create",
             "computer.purchase",
             "account.set_computer",
+            "account.set_status",
         ]
     );
     assert_eq!(service.repository.agents.lock().expect("lock").len(), 1);
+    let agent = service.agent(&user(AGENT)).await.unwrap();
+    assert_eq!(agent.status, TeamAgentStatus::Failed);
+    assert!(agent.status_reason.is_some());
+    let before = journal.steps();
+    assert!(matches!(
+        service.delete(receipt(TEAM_ID), &agent.user_id).await,
+        Err(TeamAgentError::RetryUnavailable(_))
+    ));
+    assert_eq!(journal.steps(), before);
 }
 
 #[tokio::test]
@@ -1151,4 +1166,63 @@ async fn retry_rejects_released_computers_before_repo_recovery() {
         Err(TeamAgentError::RetryUnavailable(_))
     ));
     assert!(journal.steps().is_empty());
+}
+
+#[tokio::test]
+async fn uncertain_purchase_keeps_a_failed_agent_and_blocks_another_purchase() {
+    let (service, journal) = build(Setup {
+        fail_at: Some("computer.purchase.uncertain"),
+        ..Setup::default()
+    });
+    let agent = service.create(receipt(TEAM_ID), request()).await.unwrap();
+    assert_eq!(agent.status, TeamAgentStatus::Failed);
+    assert_eq!(
+        agent.status_reason.as_deref(),
+        Some(PURCHASE_UNCERTAIN_REASON)
+    );
+    assert_eq!(
+        agent.computer_id,
+        Some(Uuid::parse_str(COMPUTER_ID).unwrap())
+    );
+    assert!(
+        !journal
+            .steps()
+            .iter()
+            .any(|step| step.ends_with("delete") || *step == "team.undo")
+    );
+    let listed = service.list(receipt(TEAM_ID)).await.unwrap();
+    assert_eq!(listed.agents[0].status, TeamAgentStatus::Failed);
+    assert_eq!(listed.agents[0].status_reason, agent.status_reason);
+    assert!(matches!(
+        service.retry(receipt(TEAM_ID), &agent.user_id).await,
+        Err(TeamAgentError::RetryUnavailable(_))
+    ));
+    assert_eq!(service.computers.purchases.lock().unwrap().len(), 1);
+    assert_eq!(service.repository.agents.lock().unwrap().len(), 1);
+}
+
+#[tokio::test]
+async fn released_uncertain_purchase_keeps_its_reason_and_cannot_be_deleted() {
+    let (service, journal) = build(Setup {
+        fail_at: Some("computer.purchase.uncertain"),
+        computer_status: ComputerStatus {
+            status: ComputerStatusKind::Released,
+            setup: None,
+        },
+        ..Setup::default()
+    });
+    let agent = service.create(receipt(TEAM_ID), request()).await.unwrap();
+    let listed = service.list(receipt(TEAM_ID)).await.unwrap();
+    assert_eq!(listed.agents[0].status, TeamAgentStatus::Failed);
+    assert_eq!(
+        listed.agents[0].status_reason.as_deref(),
+        Some(PURCHASE_UNCERTAIN_REASON)
+    );
+    let before = journal.steps();
+    assert!(matches!(
+        service.delete(receipt(TEAM_ID), &agent.user_id).await,
+        Err(TeamAgentError::RetryUnavailable(_))
+    ));
+    assert_eq!(journal.steps(), before);
+    assert_eq!(service.repository.agents.lock().unwrap().len(), 1);
 }

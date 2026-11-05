@@ -14,8 +14,11 @@ email over `/team_agents` in the auth service.
 `TeamService::add_team_agent` (joins without a Stripe call; returns the seat
 item) → user API key → workspace repo (`agent_git`) → `Computers::purchase`
 with the persona and the seat item, so seat and computer share one Stripe
-update. The purchase is the commit point: any earlier failure undoes the
-repo, membership, account and mailbox; after it the agent exists and its
+update. Failures known to precede billing undo the repo, membership, account
+and mailbox. An ambiguous purchase outcome retains those resources and records
+the agent as `failed` with a billing-reconciliation reason; the adapter recovers
+the reserved computer ID from the team's saved agent persona when storage allows.
+After a confirmed purchase the agent exists and its
 `status` (`provisioning` → `running` | `failed`) is refreshed from the
 computer on `GET /team_agents` and `GET /team_agents/me`.
 
@@ -54,8 +57,8 @@ from the hosted-runtimes size catalog alongside the seat and computer price.
   its purchase forwards the persona and seat in `extra_items` for one Stripe
   update. Tests keep the fake `Computers` port. The persona (name, job,
   personality) is written into the repo's `OPERATING.md` by `agent_git`.
-- Quote and purchase report billing-provider outages as 502, without exposing
-  provider details in the response.
+- Quote reports billing-provider outages as 502. An ambiguous purchase returns
+  the retained failed agent, without exposing provider details in its reason.
 - Delete runs computer → repo → seat → mailbox → account; the row goes last
   so a retry after a partial failure still finds the agent.
 - Without `DEAD_SIMPLE_MAIL_API_KEY` agents get an `@agents.macro.invalid`
@@ -83,3 +86,13 @@ in process, maps `NotFailed` to 409 and other-team computers to 404, and returns
 fresh computer status and setup progress on the agent. Bootstrap credentials remain
 in the existing computer persona; the seed column contains only the original name,
 job and personality.
+
+An uncertain purchase may leave the computer `Reserved` (setup step `Paying`)
+even after Stripe succeeded. Status refresh preserves the agent's failure reason
+then and through reservation expiry/release, and retry and delete return 409
+pending billing reconciliation. Only confirmed provisioning progress clears the
+uncertainty. No second purchase,
+payment-confirmation event, or Stripe update is attempted. If recovering the
+computer ID also fails, the retained failed agent has no computer link and retry
+returns 409 until that link is reconciled. If saving the agent-computer link fails
+after a successful purchase, the retained account is also marked failed.

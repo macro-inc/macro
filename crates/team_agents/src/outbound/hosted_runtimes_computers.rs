@@ -64,7 +64,15 @@ impl<Repo: ComputerRepo, Bill: Billing, Time: Clock> Computers
 
     #[tracing::instrument(skip_all, fields(team_id = %purchase.team_id), err)]
     async fn purchase(&self, purchase: ComputerPurchase) -> Result<Uuid, TeamAgentError> {
-        self.service
+        let team_id = purchase.team_id;
+        let agent_user_id = purchase.persona.as_ref().and_then(|persona| {
+            persona
+                .config
+                .get(crate::domain::service::config_keys::AGENT_USER_ID)
+                .cloned()
+        });
+        let result = self
+            .service
             .purchase(models::PurchaseRequest {
                 team_id: purchase.team_id,
                 created_by: purchase.created_by,
@@ -89,8 +97,38 @@ impl<Repo: ComputerRepo, Bill: Billing, Time: Clock> Computers
                     })
                     .collect(),
             })
-            .await
-            .map_err(error)
+            .await;
+        match result {
+            Err(
+                source @ (ComputerError::Internal(_)
+                | ComputerError::Billing(BillingError::Provider(_))),
+            ) => {
+                tracing::error!(error = ?source, %team_id, "computer purchase outcome is uncertain");
+                // purchase() does not return its reserved ID on an apply failure.
+                // Recover it only through this team's saved agent persona.
+                let computer_id = match self.repo.list_for_team(team_id).await {
+                    Ok(computers) => computers
+                        .into_iter()
+                        .find(|computer| {
+                            computer.team_id == team_id
+                                && agent_user_id.as_ref().is_some_and(|agent| {
+                                    computer.persona.as_ref().and_then(|persona| {
+                                        persona
+                                            .config
+                                            .get(crate::domain::service::config_keys::AGENT_USER_ID)
+                                    }) == Some(agent)
+                                })
+                        })
+                        .map(|computer| computer.id),
+                    Err(source) => {
+                        tracing::error!(error = ?source, %team_id, "could not recover the reserved computer identity");
+                        None
+                    }
+                };
+                Err(TeamAgentError::ComputerPurchaseUncertain { computer_id })
+            }
+            other => other.map_err(error),
+        }
     }
 
     #[tracing::instrument(skip_all, fields(%team_id, %computer_id), err)]

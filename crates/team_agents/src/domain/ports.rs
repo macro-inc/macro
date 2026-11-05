@@ -158,8 +158,8 @@ pub trait Computers: Send + Sync + 'static {
     ) -> impl Future<Output = Result<ComputerQuote, TeamAgentError>> + Send;
 
     /// Buys a computer with one Stripe update that also adds
-    /// `extra_items`. This is the commit point: an error means
-    /// nothing was charged or created.
+    /// `extra_items`. Ambiguous billing/storage failures must return
+    /// `ComputerPurchaseUncertain`; callers must preserve the agent then.
     fn purchase(
         &self,
         purchase: ComputerPurchase,

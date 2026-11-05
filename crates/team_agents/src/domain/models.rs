@@ -463,6 +463,12 @@ pub enum TeamAgentError {
     /// The computer can't be bought right now (sold out, no subscription).
     #[error("the computer can't be bought: {0}")]
     ComputerUnavailable(String),
+    /// A purchase may have charged; keep the agent for reconciliation.
+    #[error("the computer purchase needs billing reconciliation")]
+    ComputerPurchaseUncertain {
+        /// Reserved computer, if storage was available to recover its identity.
+        computer_id: Option<Uuid>,
+    },
     /// Saved provisioning state cannot be retried.
     #[error("the agent can't be retried: {0}")]
     RetryUnavailable(String),

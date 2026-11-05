@@ -126,7 +126,9 @@ impl IntoResponse for TeamAgentError {
             TeamAgentError::EmailProvider(_)
             | TeamAgentError::ComputerProvider(_)
             | TeamAgentError::RepoProvider(_) => StatusCode::BAD_GATEWAY,
-            TeamAgentError::Internal(_) => StatusCode::INTERNAL_SERVER_ERROR,
+            TeamAgentError::Internal(_) | TeamAgentError::ComputerPurchaseUncertain { .. } => {
+                StatusCode::INTERNAL_SERVER_ERROR
+            }
         };
 
         let message = match &self {

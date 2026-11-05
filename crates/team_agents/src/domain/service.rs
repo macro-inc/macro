@@ -34,6 +34,10 @@ const BRAIN_EXEC: &str = "/opt/macro/brain run";
 /// Loopback health endpoint, shared with the macrod persona supervisor.
 const BRAIN_HEALTH_PORT: &str = "7801";
 
+const PURCHASE_UNCERTAIN_REASON: &str = "computer purchase outcome is uncertain; billing reconciliation is required before provisioning can be retried";
+const COMPUTER_LINK_FAILED_REASON: &str =
+    "computer was purchased but its agent link could not be saved; reconciliation is required";
+
 /// Config drive keys the brain reads from its environment file.
 pub mod config_keys {
     /// The agent's Macro user id.
@@ -405,6 +409,25 @@ where
         agent: TeamAgent,
         computer: ComputerStatus,
     ) -> Result<TeamAgent, TeamAgentError> {
+        if agent.status_reason.as_deref() == Some(PURCHASE_UNCERTAIN_REASON) {
+            // A reservation can expire, or PurchaseFailed can release it,
+            // without establishing whether the subscription update committed.
+            let payment_confirmed = match computer.status {
+                ComputerStatusKind::SettingUp => computer
+                    .setup
+                    .as_ref()
+                    .is_some_and(|setup| setup.step != super::models::SetupStep::Paying),
+                ComputerStatusKind::Ready
+                | ComputerStatusKind::Asleep
+                | ComputerStatusKind::Waking
+                | ComputerStatusKind::Stopping
+                | ComputerStatusKind::Stopped => true,
+                ComputerStatusKind::Failed | ComputerStatusKind::Released => false,
+            };
+            if !payment_confirmed {
+                return Ok(agent);
+            }
+        }
         let (status, reason) = match computer.status {
             _ if computer.status != ComputerStatusKind::Failed
                 && computer.status != ComputerStatusKind::Released
@@ -537,6 +560,29 @@ where
             .await
         {
             Ok(provisioned) => provisioned,
+            Err(TeamAgentError::ComputerPurchaseUncertain { computer_id }) => {
+                let user_id = undo.account.ok_or_else(|| {
+                    TeamAgentError::internal_message("purchase attempted without an agent account")
+                })?;
+                // Preserve every resource: billing may already have committed.
+                // Record failure before linking, so a link error cannot leave
+                // the retained agent looking like normal provisioning.
+                self.repository
+                    .set_status(
+                        &user_id,
+                        TeamAgentStatus::Failed,
+                        Some(PURCHASE_UNCERTAIN_REASON),
+                    )
+                    .await
+                    .map_err(TeamAgentError::internal)?;
+                if let Some(computer_id) = computer_id {
+                    self.repository
+                        .set_computer(&user_id, computer_id)
+                        .await
+                        .map_err(TeamAgentError::internal)?;
+                }
+                return self.agent(&user_id).await;
+            }
             Err(error) => {
                 self.undo(receipt, undo).await;
                 return Err(error);
@@ -545,10 +591,17 @@ where
 
         // Past the purchase nothing is undone: the agent exists and is paid
         // for, and its status reports how its computer comes up.
-        self.repository
-            .set_computer(&user_id, computer_id)
-            .await
-            .map_err(TeamAgentError::internal)?;
+        if let Err(error) = self.repository.set_computer(&user_id, computer_id).await {
+            self.repository
+                .set_status(
+                    &user_id,
+                    TeamAgentStatus::Failed,
+                    Some(COMPUTER_LINK_FAILED_REASON),
+                )
+                .await
+                .map_err(TeamAgentError::internal)?;
+            return Err(TeamAgentError::internal(error));
+        }
 
         self.agent(&user_id).await
     }
@@ -598,6 +651,11 @@ where
             ));
         }
         let agent = self.apply_computer_status(agent, computer).await?;
+        if agent.status_reason.as_deref() == Some(PURCHASE_UNCERTAIN_REASON) {
+            return Err(TeamAgentError::RetryUnavailable(
+                PURCHASE_UNCERTAIN_REASON.to_string(),
+            ));
+        }
         if agent.status != TeamAgentStatus::Failed {
             return Ok(agent);
         }
@@ -644,6 +702,11 @@ where
         agent_user_id: &MacroUserIdStr<'_>,
     ) -> Result<(), TeamAgentError> {
         let agent = self.team_agent(&receipt, agent_user_id).await?;
+        if let Some(reason @ (PURCHASE_UNCERTAIN_REASON | COMPUTER_LINK_FAILED_REASON)) =
+            agent.status_reason.as_deref()
+        {
+            return Err(TeamAgentError::RetryUnavailable(reason.to_string()));
+        }
 
         // The account goes last, so a failed step leaves the row for a retry
         // to find; every earlier step tolerates having already run.
