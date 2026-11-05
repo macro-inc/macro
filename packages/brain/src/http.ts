@@ -44,6 +44,7 @@ export async function serveHttp(
         outgoing.end();
         return;
       }
+      outgoing.flushHeaders();
       const source = Readable.from(response.body);
       outgoing.on('close', () => source.destroy());
       source.on('error', () => outgoing.destroy());

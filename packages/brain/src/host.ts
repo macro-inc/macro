@@ -36,8 +36,21 @@ if (mode === 'check') {
   try {
     if (!deps) throw new Error('missing runtime adapters');
     const brain = await module.default(deps);
-    await brain.run(stop.signal);
+    await brain.prepare(stop.signal);
+    if (process.send) {
+      const activated = Promise.withResolvers<void>();
+      process.on('message', (message) => {
+        if (message === 'activate') activated.resolve();
+      });
+      stop.signal.addEventListener('abort', () => activated.resolve(), {
+        once: true,
+      });
+      process.send('ready');
+      await activated.promise;
+    }
+    if (!stop.signal.aborted) await brain.run(stop.signal);
   } finally {
     await shutdownTelemetry();
+    if (process.connected) process.disconnect();
   }
 }

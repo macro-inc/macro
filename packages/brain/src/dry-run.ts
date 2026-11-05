@@ -2,7 +2,8 @@
 import type { BrainDeps } from './brain.ts';
 import { gatewayHosts } from './config.ts';
 import { MacroHttp } from './macro.ts';
-import type { Composition } from './mod.ts';
+import type { BrainRuntime, Composition } from './mod.ts';
+import type { Outcome, Turn } from './runner.ts';
 import { gitCli } from './workspace.ts';
 export async function dryRun(
   compose: Composition,
@@ -11,11 +12,16 @@ export async function dryRun(
     event_id: string;
     event_type: string;
     metadata: unknown;
-  }[] = []
+  }[] = [],
+  verifyDelivery = true
 ): Promise<void> {
   const stop = new AbortController();
   let received = false;
   let turns = 0;
+  let posts = 0;
+  let runtime: BrainRuntime;
+  const admitted = Promise.withResolvers<Turn>();
+  const completed = Promise.withResolvers<Outcome>();
   const routines: {
     id: string;
     name: string;
@@ -67,8 +73,10 @@ export async function dryRun(
           })
         );
       }
-      if (path === '/dss/messages/channel/check')
+      if (path === '/dss/messages/channel/check') {
+        posts++;
         return Response.json({ id: 'check-post' });
+      }
       if (path.endsWith('/typing')) return new Response(null, { status: 204 });
       throw new Error(`dry boot made an unexpected request: ${path}`);
     }
@@ -83,21 +91,14 @@ export async function dryRun(
     },
     http,
     runner: {
-      start() {
+      start(turn) {
         turns++;
+        admitted.resolve(turn);
         return {
           events: (async function* () {})(),
           inject() {},
           abort() {},
-          done: Promise.resolve({
-            status: 'success' as const,
-            result: 'checked',
-            costUsd: 0,
-            sessionId: null,
-          }).then((outcome) => {
-            stop.abort();
-            return outcome;
-          }),
+          done: completed.promise,
         };
       },
     },
@@ -126,10 +127,66 @@ export async function dryRun(
     baseEnv: {},
     log: (line) => console.error(JSON.stringify(line)),
   };
-  const runtime = await compose(deps);
-  await runtime.run(stop.signal);
-  if (!received || turns === 0)
-    throw new Error(
-      'dry boot must consume the fake message and complete a turn'
-    );
+  runtime = await compose(deps);
+  if (
+    typeof runtime.prepare !== 'function' ||
+    typeof runtime.health !== 'function'
+  )
+    throw new Error('composition must implement prepare, run, health and post');
+  await runtime.prepare(stop.signal);
+  const running = runtime.run(stop.signal);
+  try {
+    const turn = await Promise.race([
+      admitted.promise,
+      running.then(() => {
+        throw new Error('boot ended before answering the fake DM');
+      }),
+    ]);
+    const health = await runtime.health();
+    if (
+      health.status !== 'ok' ||
+      !health.connected ||
+      typeof health.startedAt !== 'string' ||
+      !Array.isArray(health.turns) ||
+      !Array.isArray(health.work) ||
+      !Array.isArray(health.problems) ||
+      !Number.isFinite(health.spentTodayUsd) ||
+      !(
+        health.lastEventAt === null || typeof health.lastEventAt === 'string'
+      ) ||
+      !(health.lastTurnAt === null || typeof health.lastTurnAt === 'string')
+    )
+      throw new Error('composition does not satisfy the health contract');
+    if (verifyDelivery)
+      await runtime.post(turn.id, 'check', 'fake DM response');
+    stop.abort();
+    // An aborted intake must leave the admitted turn alive until its outcome arrives.
+    if (!(await runtime.health()).turns.some((active) => active.id === turn.id))
+      throw new Error(
+        'composition aborted its in-flight turn instead of draining'
+      );
+    completed.resolve({
+      status: 'success',
+      result: 'checked',
+      costUsd: 0,
+      sessionId: null,
+    });
+    await running;
+    if (
+      !received ||
+      turns === 0 ||
+      (verifyDelivery && posts === 0) ||
+      (await runtime.health()).turns.length !== 0
+    )
+      throw new Error('dry boot must consume, answer, and drain the fake DM');
+  } finally {
+    stop.abort();
+    completed.resolve({
+      status: 'success',
+      result: 'checked',
+      costUsd: 0,
+      sessionId: null,
+    });
+    await running;
+  }
 }

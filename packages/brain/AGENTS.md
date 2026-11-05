@@ -65,3 +65,12 @@ opt-in through the persona env file; README documents its endpoint and parent.
 
 Voice calls live in `src/calls/`; its guide covers the media interfaces and
 quiet-mic regression fixtures. Speech uses agent-key gateway auth.
+
+The runtime contract is `prepare(signal)`, `run(signal)`, `health()` and
+`post(turn, channel, text)`. `prepare` connects and buffers events without
+mutating workspace queues. The supervisor starts replacement intake alongside
+the old process, then stops old intake and drains its turns before activating
+replacement queue processing. Receipt IDs persist across the handoff to avoid
+duplicate delivery. Every activation independently verifies a fake DM answer,
+the health shape, and draining an admitted turn on abort; workspace tests cannot
+replace these conformance checks.

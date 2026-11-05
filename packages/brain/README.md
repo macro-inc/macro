@@ -161,3 +161,12 @@ back to the authenticated control server. Shutdown flushes the exporter.
 Supervised children relay spans through stdout to the trusted supervisor, which
 exports to the configured collector. This preserves trace IDs without giving
 workspace code collector configuration or collector credentials.
+
+The runtime contract is `prepare(signal)`, `run(signal)`, `health()` and
+`post(turn, channel, text)`. `prepare` connects and buffers events without
+mutating workspace queues. The supervisor starts replacement intake alongside
+the old process, then stops old intake and drains its turns before activating
+replacement queue processing. Receipt IDs persist across the handoff to avoid
+duplicate delivery. Every activation independently verifies a fake DM answer,
+the health shape, and draining an admitted turn on abort; workspace tests cannot
+replace these conformance checks.

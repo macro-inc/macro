@@ -45,6 +45,7 @@ test('a broken main composition is restored in real git and remembered for the n
     const supervisor = await workspaceSupervisor(root, async (snapshot) => {
       started.push(snapshot);
       return {
+        activate: async () => {},
         healthy: async () => true,
         exited: () => false,
         stop: async () => {},
@@ -112,6 +113,9 @@ test('real Node reload drains an in-flight turn while its control server stays a
   });
   const restarted = Promise.withResolvers<void>();
   let generations = 0;
+  let intakeCount = 0;
+  const lateTurn = Promise.withResolvers<void>();
+  let turnsStarted = 0;
   const streams = new Set<ReadableStreamDefaultController<Uint8Array>>();
   const server = await serveHttp(
     { hostname: '127.0.0.1', port: 0 },
@@ -123,6 +127,8 @@ test('real Node reload drains an in-flight turn while its control server stays a
         return Response.json({ user_id: 'brain-test' });
       }
       if (path === '/hold') {
+        turnsStarted++;
+        if (turnsStarted === 2) lateTurn.resolve();
         beginTurn();
         await finished;
         return new Response('finished');
@@ -143,7 +149,8 @@ test('real Node reload drains an in-flight turn while its control server stays a
           new ReadableStream<Uint8Array>({
             start(controller) {
               streams.add(controller);
-              if (generations === 1)
+              intakeCount++;
+              if (streams.size === 1)
                 controller.enqueue(
                   new TextEncoder().encode(
                     `data: ${JSON.stringify({ event_id: 'event', event_type: 'message.posted', metadata: { message_id: 'message', content: 'hold this turn', created_at: new Date().toISOString(), parent: { type: 'channel', id: 'check' }, root_id: 'message', sender: 'sender' } })}\n\n`
@@ -195,7 +202,7 @@ const compose: Composition = (deps) => {
     return { events: (async function* () {})(), inject() {}, abort() { throw new Error('turn was aborted'); },
       done: fetch(deps.config.gateway + '/hold').then(() => ({ status: 'success' as const, result: 'finished', costUsd: 0, sessionId: null })) };
   } } });
-  return { async run(signal) {
+  return { prepare: (signal) => brain.prepare(signal), health: () => brain.health(), post: (turn, channel, text) => brain.post(turn, channel, text), async run(signal) {
     signal.addEventListener('abort', () => { void fetch(deps.config.gateway + '/draining'); }, { once: true });
     await brain.run(signal);
   } };
@@ -224,12 +231,32 @@ export default compose;
     const reload = supervisor.tick();
     await draining;
     assert.deepEqual(generations, 1);
+    assert.equal(intakeCount, 2, 'new intake connects before old turns drain');
+    const replacement = [...streams].at(-1);
+    assert.ok(replacement);
+    replacement.enqueue(
+      new TextEncoder().encode(
+        `data: ${JSON.stringify({
+          event_id: 'during-drain',
+          event_type: 'message.posted',
+          metadata: {
+            message_id: 'late-message',
+            content: 'arrived during reload',
+            created_at: new Date().toISOString(),
+            parent: { type: 'channel', id: 'check' },
+            root_id: 'late-message',
+            sender: 'sender',
+          },
+        })}\n\n`
+      )
+    );
     const health = await fetch(`http://127.0.0.1:${healthPort}/health`);
     assert.deepEqual(health.ok, true);
     assert.deepEqual((await health.json()).turns.length, 1);
     finishTurn();
     await reload;
     await restarted.promise;
+    await lateTurn.promise;
     assert.ok(
       (await nodeFs.readFile(`${root}/brain.ts`, 'utf8')).includes(
         'A new composition revision'
@@ -237,11 +264,15 @@ export default compose;
     );
     await supervisor.stop();
     supervisor = undefined;
-    assert.ok(
-      (await nodeFs.readFile(`${root}/log/handled.jsonl`, 'utf8')).includes(
-        '"status":"success"'
-      )
+    const handled = await nodeFs.readFile(`${root}/log/handled.jsonl`, 'utf8');
+    assert.ok(handled.includes('late-message'));
+    assert.equal(
+      handled
+        .split('\n')
+        .filter((line) => line.includes('"message_id":"message"')).length,
+      1
     );
+    assert.ok(handled.includes('"status":"success"'));
   } finally {
     finishTurn();
     await supervisor?.stop();
