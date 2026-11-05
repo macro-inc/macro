@@ -130,7 +130,7 @@ jobs:
           find target/debug/deps -maxdepth 1 -type f -executable ! -name '*.so' -delete
           python3 .ci-gen-exp-split.py
           cache_put() { curl --fail --silent --show-error --max-time 300 -K <(printf 'header = "Authorization: Bearer %s"\n' "$SCCACHE_WEBDAV_TOKEN") --upload-file "$1" "$2"; }
-          for i in 0 1 2 3 4 5 6 7; do ( tar -C target -cf - -T "shard$i.list" | zstd -T2 -3 -q -o "$RUNNER_TEMP/shard$i.tar.zst"; cache_put "$RUNNER_TEMP/shard$i.tar.zst" "$url.shard$i"; rm -f "$RUNNER_TEMP/shard$i.tar.zst" ) & done; wait
+          for i in $(seq 0 31); do while [ "$(jobs -rp | wc -l)" -ge 16 ]; do wait -n; done; ( tar -C target -cf - -T "shard$i.list" | zstd -T1 -3 -q -o "$RUNNER_TEMP/shard$i.tar.zst"; cache_put "$RUNNER_TEMP/shard$i.tar.zst" "$url.shard$i"; rm -f "$RUNNER_TEMP/shard$i.tar.zst" ) & done; wait
           rm -f shard*.list; rm -rf target; mkdir target
           mode=restore-shards
         fi
@@ -157,7 +157,7 @@ jobs:
             python3 .ci-gen-exp-split.py
             mkdir -p "$RUNNER_TEMP/out"
             u=$(date +%s)
-            for i in 0 1 2 3 4 5 6 7; do ( tar -C target -cf - -T "shard$i.list" | zstd -T2 -3 -q -o "$RUNNER_TEMP/shard$i.tar.zst"; cache_request --upload-file "$RUNNER_TEMP/shard$i.tar.zst" "$url.shard$i"; echo "shard$i bytes=$(stat -c %s "$RUNNER_TEMP/shard$i.tar.zst")"; echo "shard$i $(sha256sum "$RUNNER_TEMP/shard$i.tar.zst" | cut -d' ' -f1)" >> "$RUNNER_TEMP/out/manifest.part$i"; rm -f "$RUNNER_TEMP/shard$i.tar.zst" ) & done; wait
+            for i in $(seq 0 31); do while [ "$(jobs -rp | wc -l)" -ge 16 ]; do wait -n; done; ( tar -C target -cf - -T "shard$i.list" | zstd -T1 -3 -q -o "$RUNNER_TEMP/shard$i.tar.zst"; cache_request --upload-file "$RUNNER_TEMP/shard$i.tar.zst" "$url.shard$i"; echo "shard$i bytes=$(stat -c %s "$RUNNER_TEMP/shard$i.tar.zst")"; echo "shard$i $(sha256sum "$RUNNER_TEMP/shard$i.tar.zst" | cut -d' ' -f1)" >> "$RUNNER_TEMP/out/manifest.part$i"; rm -f "$RUNNER_TEMP/shard$i.tar.zst" ) & done; wait
             cat "$RUNNER_TEMP"/out/manifest.part* > "$RUNNER_TEMP/out/manifest.txt"; rm -f "$RUNNER_TEMP"/out/manifest.part*
             rm -f shard*.list
             echo "reshard_upload_s=$(( $(date +%s)-u ))"
@@ -173,14 +173,14 @@ jobs:
               fi
             fi
             if [ "$mode" = restore-shards ]; then
-              for i in 0 1 2 3 4 5 6 7; do ( cache_request "$url.shard$i" | zstd -d -T2 | tar -xf - -C target; echo "shard$i rc=${PIPESTATUS[*]} s=$(( $(date +%s)-s ))" ) & done; wait
+              for i in $(seq 0 31); do while [ "$(jobs -rp | wc -l)" -ge 16 ]; do wait -n; done; ( cache_request "$url.shard$i" | zstd -d -T2 | tar -xf - -C target; echo "shard$i rc=${PIPESTATUS[*]} s=$(( $(date +%s)-s ))" ) & done; wait
             else
               # Nothing reaches tar until every shard matches the manifest from the main-only store.
               dir="$RUNNER_TEMP/shards"; mkdir -p "$dir"; rm -f "$dir"/bad
-              for i in 0 1 2 3 4 5 6 7; do (
+              for i in $(seq 0 31); do while [ "$(jobs -rp | wc -l)" -ge 16 ]; do wait -n; done; (
                 src="$url.shard$i"
                 [ "$mode" = poison ] && [ "$i" = 3 ] && src="$SCCACHE_WEBDAV_ENDPOINT/gen-incremental/poison.shard3"
-                d0=$(date +%s%N); cache_request "$src" --speed-limit 40000000 --speed-time 5 --retry 8 --retry-delay 0 --retry-all-errors -C - -w "shard$i http=%{http_code} ip=%{remote_ip} ver=%{http_version} retries=%{num_retries} last_attempt=%{time_total} mbps=%{speed_download}\n" -o "$dir/$i" || : > "$dir/bad"
+                d0=$(date +%s%N); cache_request "$src" -w "shard$i http=%{http_code} ip=%{remote_ip} ver=%{http_version} retries=%{num_retries} last_attempt=%{time_total} mbps=%{speed_download}\n" -o "$dir/$i" || : > "$dir/bad"
                 echo "shard$i wall_s=$(( ($(date +%s%N)-d0)/1000000000 ))"
                 want=$(sed -n "s/^shard$i //p" "$RUNNER_TEMP/manifest/manifest.txt"); have=$(sha256sum "$dir/$i" 2>/dev/null | cut -d' ' -f1)
                 [ -n "$want" ] && [ "$want" = "$have" ] || { echo "shard$i hash mismatch"; : > "$dir/bad"; }
@@ -191,7 +191,7 @@ jobs:
                 echo "target files after rejection: $(find target -type f | wc -l)"
               else
                 echo "verified bad=0"
-                for i in 0 1 2 3 4 5 6 7; do ( zstd -d -T2 -c "$dir/$i" | tar -xf - -C target; echo "shard$i rc=${PIPESTATUS[*]}"; rm -f "$dir/$i" ) & done; wait
+                for i in $(seq 0 31); do while [ "$(jobs -rp | wc -l)" -ge 16 ]; do wait -n; done; ( zstd -d -T1 -c "$dir/$i" | tar -xf - -C target; echo "shard$i rc=${PIPESTATUS[*]}"; rm -f "$dir/$i" ) & done; wait
                 echo "extract_s=$(( $(date +%s)-v ))"
               fi
               rm -rf "$dir"

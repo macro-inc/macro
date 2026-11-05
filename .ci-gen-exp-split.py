@@ -15,7 +15,7 @@ for d in ('debug/incremental','debug/build','debug/.fingerprint'):
 for e in os.listdir('debug/deps'):
     items.append((f'debug/deps/{e}',tree(f'debug/deps/{e}') if os.path.isdir(f'debug/deps/{e}') else os.path.getsize(f'debug/deps/{e}')))
 items.sort(key=lambda x:-x[1])
-bins=[[0,[]] for _ in range(8)]
+bins=[[0,[]] for _ in range(32)]
 for path,size in items:
     b=min(bins,key=lambda x:x[0]); b[0]+=size; b[1].append(path)
 for i,(n,paths) in enumerate(bins):

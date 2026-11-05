@@ -24,4 +24,4 @@ pub mod outbound;
 
 #[doc(hidden)]
 #[allow(dead_code)]
-const CI_INTEGRATE_NONCE: &str = "00e75d7122ec497198768eac4ae3f3f3";
+const CI_INTEGRATE_NONCE: &str = "8edf06a213fb40a195a0e1ae5890ed73";
