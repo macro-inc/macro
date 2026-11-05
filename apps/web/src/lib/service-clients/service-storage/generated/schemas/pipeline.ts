@@ -20,7 +20,8 @@ export interface Pipeline {
   id: string;
   /** Pipeline display name. */
   name: string;
-  /** Protected primary column. */
+  /** A tracked pipeline's protected record reference. A generic pipeline's
+Name, which names no column once someone deletes it. */
   primaryColumnId: string;
   recordType: PipelineRecordTypeProperty;
   /** Whether the pipeline has a team grant. */

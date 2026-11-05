@@ -38900,7 +38900,7 @@
           "primaryColumnId": {
             "type": "string",
             "format": "uuid",
-            "description": "Protected primary column."
+            "description": "A tracked pipeline's protected record reference. A generic pipeline's\nName, which names no column once someone deletes it."
           },
           "recordType": {
             "oneOf": [

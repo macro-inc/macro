@@ -5351,7 +5351,11 @@ export const listCrmPipelinesResponseItem = zod
       .uuid()
       .describe('Entity identity, used with `CrmPipeline` access receipts.'),
     name: zod.string().describe('Pipeline display name.'),
-    primaryColumnId: zod.uuid().describe('Protected primary column.'),
+    primaryColumnId: zod
+      .uuid()
+      .describe(
+        "A tracked pipeline's protected record reference. A generic pipeline's\nName, which names no column once someone deletes it."
+      ),
     recordType: zod.union([
       zod.null(),
       zod
@@ -5427,7 +5431,11 @@ export const createCrmPipelineResponse = zod
       .uuid()
       .describe('Entity identity, used with `CrmPipeline` access receipts.'),
     name: zod.string().describe('Pipeline display name.'),
-    primaryColumnId: zod.uuid().describe('Protected primary column.'),
+    primaryColumnId: zod
+      .uuid()
+      .describe(
+        "A tracked pipeline's protected record reference. A generic pipeline's\nName, which names no column once someone deletes it."
+      ),
     recordType: zod.union([
       zod.null(),
       zod
@@ -5482,7 +5490,11 @@ export const getCrmPipelineResponse = zod
       .uuid()
       .describe('Entity identity, used with `CrmPipeline` access receipts.'),
     name: zod.string().describe('Pipeline display name.'),
-    primaryColumnId: zod.uuid().describe('Protected primary column.'),
+    primaryColumnId: zod
+      .uuid()
+      .describe(
+        "A tracked pipeline's protected record reference. A generic pipeline's\nName, which names no column once someone deletes it."
+      ),
     recordType: zod.union([
       zod.null(),
       zod

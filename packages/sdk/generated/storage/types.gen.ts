@@ -11661,7 +11661,8 @@ export type Pipeline = {
      */
     name: string;
     /**
-     * Protected primary column.
+     * A tracked pipeline's protected record reference. A generic pipeline's
+     * Name, which names no column once someone deletes it.
      */
     primaryColumnId: string;
     recordType: null | PipelineRecordType;

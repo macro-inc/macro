@@ -114,6 +114,17 @@ fn email_domain(email: &str) -> Option<&str> {
     email.split_once('@').map(|(_, domain)| domain)
 }
 
+/// What an import resolves its rows to; a generic pipeline tracks nothing.
+fn tracked_record_type(overview: &PipelineOverview) -> Result<PipelineRecordType, TransferError> {
+    let pipeline = &overview.pipeline.pipeline;
+    pipeline.record_type.ok_or_else(|| {
+        TransferError::Invalid(format!(
+            "\"{}\" tracks no companies or contacts, so it takes no CSV import. Add its entries with AddToPipeline.",
+            pipeline.name
+        ))
+    })
+}
+
 /// The headers that name a record, so are never matched to a field.
 fn record_headers(record_type: PipelineRecordType) -> [&'static str; 2] {
     match record_type {
@@ -423,13 +434,13 @@ where
         &self,
         viewer: &Viewer,
         overview: &PipelineOverview,
-        record_type: PipelineRecordType,
         rows: &[RecordRow],
         other_headers: &[String],
         skipped_rows: usize,
         domains: &SharedDomains,
     ) -> Result<PipelineImportOutcome, TransferError> {
         let pipeline = &overview.pipeline.pipeline;
+        let record_type = tracked_record_type(overview)?;
         let reserved = record_headers(record_type);
         let mut fields: Vec<(String, &PipelineField)> = Vec::new();
         let mut ignored_columns = Vec::new();
@@ -654,16 +665,8 @@ where
                 .cloned()
                 .collect();
             Some(
-                self.fill(
-                    viewer,
-                    &overview,
-                    PipelineRecordType::Company,
-                    &pipeline_rows,
-                    &headers,
-                    0,
-                    &domains,
-                )
-                .await?,
+                self.fill(viewer, &overview, &pipeline_rows, &headers, 0, &domains)
+                    .await?,
             )
         };
         Ok(CompanyImportOutcome {
@@ -683,12 +686,7 @@ where
         csv: CsvInput,
     ) -> Result<PipelineImportOutcome, TransferError> {
         let overview = self.pipeline(viewer, pipeline).await?;
-        let Some(record_type) = overview.pipeline.pipeline.record_type else {
-            return Err(TransferError::Invalid(format!(
-                "\"{}\" tracks no companies or contacts, so it takes no CSV import. Add its entries with AddToPipeline.",
-                overview.pipeline.pipeline.name
-            )));
-        };
+        let record_type = tracked_record_type(&overview)?;
         let (table, _) = self.read(viewer, csv).await?;
         let parsed = record_rows(&table, record_type)?;
         if parsed.rows.is_empty() {
@@ -701,7 +699,6 @@ where
         self.fill(
             viewer,
             &overview,
-            record_type,
             &parsed.rows,
             &parsed.other_headers,
             parsed.skipped,
