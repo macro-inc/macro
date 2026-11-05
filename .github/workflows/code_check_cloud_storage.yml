@@ -1108,9 +1108,19 @@ jobs:
           exit 0
         fi
 
-        # The same flags as run_tests.sh, so both jobs share sccache entries.
+        # The same features as run_tests.sh, which unify across the selected packages, so
+        # both jobs share sccache entries. Only the bins above get built.
+        if [ "$RUST_PACKAGES" = "all" ]; then
+          package_args=(--workspace --exclude sync_service)
+        else
+          package_args=()
+          for package in $RUST_PACKAGES; do
+            [ "$package" = "sync_service" ] || package_args+=(-p "$package")
+          done
+        fi
+
         cargo build --locked --all-features \
-          --config 'profile.dev.package."*".debug=false' "${bin_args[@]}"
+          --config 'profile.dev.package."*".debug=false' "${package_args[@]}" "${bin_args[@]}"
     - name: show sccache stats
       if: always()
       run: sccache --show-stats || true
