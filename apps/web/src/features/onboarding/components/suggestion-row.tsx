@@ -64,7 +64,7 @@ export function SuggestionRow(props: {
         aria-busy={props.state === 'busy'}
         disabled={props.disabled || props.state !== 'available'}
         onClick={() => props.onConnect()}
-        class="flex min-h-9 shrink-0 items-center gap-1.5 self-center rounded-full px-4 text-sm font-medium focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ink"
+        class="flex min-h-9 shrink-0 items-center gap-1.5 self-center rounded-full px-4 pt-[3px] text-sm font-medium focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ink"
         classList={{
           'border border-edge bg-surface text-ink shadow-[0_2px_10px_-3px_rgb(0_0_0/0.07)] transition-colors hover:bg-ink/5 disabled:opacity-40':
             props.state !== 'connected',
