@@ -222,6 +222,7 @@ describe('TypeDoc documentation packaging', () => {
     );
     expect(guide('routines')).toContain('never sees this conversation');
     expect(guide('documents')).toContain('<m-document-mention>');
+    expect(guide('documents')).toContain('document.edit(instructions)');
     expect(guide('search')).toContain('macro.search.all');
     expect(guide('search')).toContain('macro.documents.search');
     expect(guide('search')).toContain('macro.workspace.page');
