@@ -91,6 +91,7 @@ fn path_check() -> Job {
                 format!("steps.filter.outputs.should_run == 'true' && ({TRUSTED_CONTEXT})"),
             )),
         )
+        .add_step(steps::configure_namespace_sccache(vars::CI_SCCACHE_NAME))
         .add_step(compute_nextest_filter())
 }
 

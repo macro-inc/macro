@@ -132,13 +132,40 @@ jobs:
           /home/runner/.cargo/registry
           /home/runner/.cargo/git
       continue-on-error: true
+    - name: Configure Namespace remote sccache
+      if: (github.event_name != 'pull_request' && github.event_name != 'pull_request_target') || github.event.pull_request.head.repo.full_name == github.repository
+      run: |-
+        set -euo pipefail
+        env_file="$(mktemp "$RUNNER_TEMP/namespace-sccache.XXXXXX")"
+        trap 'rm -f "$env_file"' EXIT
+        if nsc cache sccache setup --cache_name sccache-ci > "$env_file"; then
+          # Register credential values as masked BEFORE exporting: GitHub only
+          # masks `secrets.*`, so without this SCCACHE_WEBDAV_TOKEN — a broad,
+          # ~24h Namespace workspace token (registry + cache write) — printed
+          # verbatim in every subsequent step's env dump. Masking is selective by
+          # key name: masking non-secrets like the endpoint URL or key prefix
+          # would redact those strings everywhere in the logs.
+          while IFS= read -r line; do
+            k="${line%%=*}"
+            v="${line#*=}"
+            [ -n "$v" ] && [ "$k" != "$line" ] || continue
+            case "$k" in
+              *TOKEN*|*SECRET*|*PASSWORD*) echo "::add-mask::$v" ;;
+            esac
+          done < "$env_file"
+          cat "$env_file" >> "$GITHUB_ENV"
+          # Force the next compiler invocation to start a server with the new remote
+          # backend even if a setup hook happened to launch one already.
+          sccache --stop-server >/dev/null 2>&1 || true
+        else
+          echo "::warning::Namespace remote sccache setup failed; using local cache fallback"
+        fi
     - id: nextest-filter
       name: compute nextest package filter
       if: steps.filter.outputs.should_run == 'true'
       run: |
         set -euo pipefail
 
-        command -v nsc || true; ls /nsc/powertoys /nsc/bin 2>/dev/null || true; nsc version 2>&1 | head -2 || true
         # Writes for the check/test jobs:
         #   rust_packages — all | none | space-separated packages (changed + reverse deps)
         #   skip_tests    — true keeps clippy on rust_packages while the live-Postgres
@@ -154,40 +181,48 @@ jobs:
         # full-suite list and turned every dev-shell tweak into a full-suite rebuild.
 
         # The filter runs as a release binary cached per source tree: a debug build
-        # spends ~20 s in guppy on this runner, and compiling it took ~40 s more. The
-        # key covers every input of the build, so a hit is exactly what `cargo build`
-        # would produce. FILTER_CACHE_DIR is a Namespace cache volume for same-repo
-        # PRs and a plain scratch directory for forks.
+        # spends ~20 s in guppy on this runner, and compiling it took ~25 s more. The
+        # key covers every input of the build. It lives in Namespace's remote cache, which
+        # every runner sees, because a cache volume holds it on only some jobs. Forks have
+        # no credentials for that cache and always build, in a plain scratch directory.
         filter_bin=""
+
+        filter_cache_request() {
+          curl --fail --silent --show-error --max-time 30 --retry 2 \
+            --header "Authorization: Bearer $SCCACHE_WEBDAV_TOKEN" "$@"
+        }
+
         ensure_filter_bin() {
           [ -n "$filter_bin" ] && return 0
-          local key bin_dir staging
+          local key cache_url=""
           key="$(git rev-parse \
             HEAD:tooling/xtask/crates/xtask_nextest_filter \
             HEAD:tooling/xtask/crates/xtask_graph \
             HEAD:tooling/xtask/crates/xtask_paths \
             HEAD:Cargo.lock \
             HEAD:rust-toolchain.toml | sha256sum | cut -c1-16)"
-          bin_dir="$FILTER_CACHE_DIR/bin/$key"
-          filter_bin="$bin_dir/xtask_nextest_filter"
-          if [ -x "$filter_bin" ]; then
-            echo "Using cached nextest-filter build $key"
-            touch "$bin_dir"
-            return 0
+          filter_bin="$RUNNER_TEMP/xtask_nextest_filter-$key"
+
+          if [ -n "${SCCACHE_WEBDAV_ENDPOINT:-}" ]; then
+            cache_url="$SCCACHE_WEBDAV_ENDPOINT/nextest-filter/$key"
+            if filter_cache_request --output "$filter_bin" "$cache_url"; then
+              chmod +x "$filter_bin"
+              echo "Using cached nextest-filter build $key"
+              return 0
+            fi
           fi
 
           echo "Building nextest-filter $key"
           CARGO_TARGET_DIR="$FILTER_CACHE_DIR/target" \
             cargo build --release --locked --quiet -p xtask_nextest_filter
-          staging="$(mktemp -d "$FILTER_CACHE_DIR/bin/.staging.XXXXXX")"
-          cp "$FILTER_CACHE_DIR/target/release/xtask_nextest_filter" "$staging/"
-          # Another job may have published the same key meanwhile; either copy works.
-          mv -T "$staging" "$bin_dir" 2>/dev/null || rm -rf "$staging"
-          # Drop builds no PR has used for a week (every Cargo.lock change adds one).
-          find "$FILTER_CACHE_DIR/bin" -mindepth 1 -maxdepth 1 -type d -mtime +7 \
-            -exec rm -rf {} + || true
+          cp "$FILTER_CACHE_DIR/target/release/xtask_nextest_filter" "$filter_bin"
+
+          # Losing the upload costs the next job a rebuild, not a failure.
+          if [ -n "$cache_url" ]; then
+            filter_cache_request --upload-file "$filter_bin" "$cache_url" \
+              || echo "::warning::Could not save the nextest filter to the remote cache"
+          fi
         }
-        mkdir -p "$FILTER_CACHE_DIR/bin"
 
         emit() {
           echo "rust_packages=$1" >> "$GITHUB_OUTPUT"
