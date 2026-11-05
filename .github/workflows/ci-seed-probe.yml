@@ -1,0 +1,141 @@
+# Experiment only: how fast can an empty cache volume get the dev shell from the
+# Namespace HTTP cache, against installing it the way CI does today.
+name: CI Seed Probe
+
+on:
+  pull_request:
+
+concurrency:
+  group: ci-seed-probe-${{ github.event.pull_request.number }}
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+env:
+  SEED_CACHE: ci-seed-probe
+  SEED_KEY: nix-seed/${{ github.sha }}.tar.zst
+
+jobs:
+  make-seed:
+    runs-on: namespace-profile-linux-large-build;overrides.cache-tag=ci-seed-probe-make-${{ github.run_id }}-${{ github.run_attempt }}
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
+        with:
+          persist-credentials: 'false'
+      - name: Mount empty volume
+        uses: namespacelabs/nscloud-cache-action@15799a6b54e5765f85b2aac25b3f0df43ed571c0
+        with:
+          path: |-
+            /nix
+        continue-on-error: true
+      - name: Volume state
+        run: df -h /nix; sudo du -sh /nix; ls -la /nix | head; command -v zstd curl nsc tar; nproc
+      - name: Setup Nix
+        uses: './.github/actions/setup-nix'
+      - name: Setup Nix dev shell
+        uses: './.github/actions/setup-nix-dev-shell'
+      - name: Check the shell
+        run: rustc --version; cargo nextest --version; sccache --version; mold --version
+      - name: Stop Nix
+        uses: './.github/actions/teardown-nix'
+      - name: Pack and upload
+        run: |
+          set -euo pipefail
+          sudo du -sh /nix /nix/store /nix/var
+          sudo find /nix | wc -l
+          creds="$(mktemp "$RUNNER_TEMP/creds.XXXXXX")"
+          nsc cache sccache setup --cache_name "$SEED_CACHE" > "$creds"
+          endpoint="$(sed -n 's/^SCCACHE_WEBDAV_ENDPOINT=//p' "$creds")"
+          token="$(sed -n 's/^SCCACHE_WEBDAV_TOKEN=//p' "$creds")"
+          echo "::add-mask::$token"
+          rm -f "$creds"
+
+          start=$(date +%s)
+          sudo tar -C / -cf - nix | zstd -T0 -3 -o "$RUNNER_TEMP/seed.tar.zst"
+          echo "pack_seconds=$(( $(date +%s) - start ))"
+          ls -la "$RUNNER_TEMP/seed.tar.zst"
+
+          start=$(date +%s)
+          curl --fail --silent --show-error --max-time 300 \
+            -K <(printf 'header = "Authorization: Bearer %s"\n' "$token") \
+            --upload-file "$RUNNER_TEMP/seed.tar.zst" "$endpoint/$SEED_KEY"
+          echo "upload_seconds=$(( $(date +%s) - start ))"
+
+  # Today's cold path on an empty volume, as the arm to beat.
+  cold-control:
+    needs: make-seed
+    strategy:
+      fail-fast: false
+      max-parallel: 3
+      matrix:
+        run: [1, 2, 3, 4, 5]
+    runs-on: namespace-profile-linux-large-build;overrides.cache-tag=ci-seed-probe-c-${{ github.run_id }}-${{ github.run_attempt }}-${{ matrix.run }}
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
+        with:
+          persist-credentials: 'false'
+      - name: Mount empty volume
+        uses: namespacelabs/nscloud-cache-action@15799a6b54e5765f85b2aac25b3f0df43ed571c0
+        with:
+          path: |-
+            /nix
+        continue-on-error: true
+      - name: Volume state
+        run: df -h /nix; sudo du -sh /nix
+      - name: Setup Nix
+        uses: './.github/actions/setup-nix'
+      - name: Setup Nix dev shell
+        uses: './.github/actions/setup-nix-dev-shell'
+      - name: Check the shell
+        run: rustc --version; cargo nextest --version; sccache --version; mold --version
+      - name: Stop Nix
+        if: always()
+        uses: './.github/actions/teardown-nix'
+
+  # The same with the store restored from the HTTP cache first.
+  cold-seed:
+    needs: make-seed
+    strategy:
+      fail-fast: false
+      max-parallel: 3
+      matrix:
+        run: [1, 2, 3, 4, 5]
+    runs-on: namespace-profile-linux-large-build;overrides.cache-tag=ci-seed-probe-s-${{ github.run_id }}-${{ github.run_attempt }}-${{ matrix.run }}
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
+        with:
+          persist-credentials: 'false'
+      - name: Mount empty volume
+        uses: namespacelabs/nscloud-cache-action@15799a6b54e5765f85b2aac25b3f0df43ed571c0
+        with:
+          path: |-
+            /nix
+        continue-on-error: true
+      - name: Volume state
+        run: df -h /nix; sudo du -sh /nix
+      - name: Restore seed
+        run: |
+          set -euo pipefail
+          creds="$(mktemp "$RUNNER_TEMP/creds.XXXXXX")"
+          nsc cache sccache setup --cache_name "$SEED_CACHE" > "$creds"
+          endpoint="$(sed -n 's/^SCCACHE_WEBDAV_ENDPOINT=//p' "$creds")"
+          token="$(sed -n 's/^SCCACHE_WEBDAV_TOKEN=//p' "$creds")"
+          echo "::add-mask::$token"
+          rm -f "$creds"
+
+          start=$(date +%s)
+          curl --fail --silent --show-error --max-time 300 \
+            -K <(printf 'header = "Authorization: Bearer %s"\n' "$token") "$endpoint/$SEED_KEY" \
+            | zstd -d -T0 | sudo tar -xf - -C /
+          echo "restore_seconds=$(( $(date +%s) - start ))"
+          sudo du -sh /nix
+      - name: Setup Nix
+        uses: './.github/actions/setup-nix'
+      - name: Setup Nix dev shell
+        uses: './.github/actions/setup-nix-dev-shell'
+      - name: Check the shell
+        run: rustc --version; cargo nextest --version; sccache --version; mold --version
+      - name: Stop Nix
+        if: always()
+        uses: './.github/actions/teardown-nix'
