@@ -32,6 +32,8 @@ export const descriptions: Record<string, string> = {
   properties: 'Read and update entity properties.',
   referrals:
     "Share the caller's referral link and email people invites to join Macro.",
+  'saved-views':
+    'Create, edit, reorder and remove saved views: named filters shown in the Email or Tasks sidebar.',
   tasks: 'Search, create, and update tasks.',
   teams:
     'Manage teams and membership: invite people to the team by email, list and revoke pending invites.',

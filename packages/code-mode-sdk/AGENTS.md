@@ -13,7 +13,8 @@ HTML worker belong to `packages/sdk-docs`.
   per-symbol references (classes, methods, types).
 - `scripts/catalog.ts`: compact entity descriptions; agent and harness docs share
   a topic, as do native channels, external chats and WhatsApp, so discovery stays
-  within its 32-question classifier limit.
+  within its 32-question classifier limit. With core, the catalog is at that
+  limit: a new entity area joins an existing topic's prefixes.
 - `src/index.ts`: public SDK exports used by programs.
 
 ## Tool contracts
