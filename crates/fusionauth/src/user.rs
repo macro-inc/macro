@@ -22,7 +22,7 @@ impl FusionAuthClient {
     /// Creates a new user in FusionAuth.
     /// This will automatically trigger the api::webhooks::user::create_user_webhook to be called
     /// from within FusionAuth as well.
-    #[tracing::instrument(skip(self), fields(application_id=%self.client_id, fusion_auth_base_url=%self.fusion_auth_base_url))]
+    #[tracing::instrument(skip(self, user), fields(application_id=%self.client_id, fusion_auth_base_url=%self.fusion_auth_base_url))]
     pub async fn create_user(
         &self,
         user: create::User<'_>,
@@ -42,7 +42,7 @@ impl FusionAuthClient {
     /// Creates a new user in FusionAuth with a caller-specified id, so the FusionAuth id
     /// can match an externally minted identifier. Triggers the create-user webhook like
     /// [`Self::create_user`].
-    #[tracing::instrument(skip(self), fields(application_id=%self.client_id, fusion_auth_base_url=%self.fusion_auth_base_url))]
+    #[tracing::instrument(skip(self, user), fields(application_id=%self.client_id, fusion_auth_base_url=%self.fusion_auth_base_url))]
     pub async fn create_user_with_id(
         &self,
         user_id: &str,

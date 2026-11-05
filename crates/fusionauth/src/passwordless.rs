@@ -133,7 +133,7 @@ async fn send(
 /// Returns the access token, refresh token, and redirect uri
 /// https://fusionauth.io/docs/apis/passwordless#complete-a-passwordless-login
 /// Valid respones: 200, 202, 203, 212, 213, 242, 400, 404, 409, 410, 423, 500, 503, 504
-#[tracing::instrument(ret, err, level = tracing::Level::TRACE)]
+#[tracing::instrument(skip_all, err, level = tracing::Level::TRACE)]
 async fn complete(
     client: &AuthedClient,
     base_url: &str,
