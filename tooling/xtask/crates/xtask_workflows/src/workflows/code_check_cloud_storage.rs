@@ -181,6 +181,10 @@ fn test() -> Job {
         ))
         .add_env(("NEXTEST_TEST_THREADS", vars::NEXTEST_TEST_THREADS))
         .add_env(("CARGO_BUILD_JOBS", vars::RUST_TEST_BUILD_JOBS))
+        // Debug info is most of what test builds write and link. Panic locations
+        // don't depend on it; only backtrace frames lose their file and line.
+        .add_env(("CARGO_PROFILE_DEV_DEBUG", "0"))
+        .add_env(("CARGO_PROFILE_TEST_DEBUG", "0"))
         .add_env(("RUSTFLAGS", "-Dwarnings -C link-arg=-fuse-ld=mold"))
         // The default 10-minute idle timeout can stop the server during long
         // link or test phases, which resets the stats reported at the end.
