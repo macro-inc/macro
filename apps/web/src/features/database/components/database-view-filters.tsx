@@ -70,8 +70,8 @@ export function FilterPanel(props: {
           root={draft()}
         />
       </div>
-      <div class="mt-3 flex items-center justify-between">
-        <div class="flex items-center gap-1">
+      <div class="mt-3 flex flex-wrap items-center justify-between gap-y-1">
+        <div class="flex flex-wrap items-center gap-1">
           <Button
             variant="ghost"
             size="sm"

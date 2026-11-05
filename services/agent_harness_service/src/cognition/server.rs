@@ -385,6 +385,13 @@ pub async fn build(
     .with_design_files(Arc::new(document_files.clone()))
     .with_photoshop_files(Arc::new(document_files.clone()))
     .with_illustrator_files(Arc::new(document_files));
+    let document_tool_context = match ai_tools::canvas_artifacts_rollout(
+        config.posthog_api_key.value(),
+        config.posthog_host.value(),
+    )? {
+        Some(rollout) => document_tool_context.with_canvas_artifacts(rollout),
+        None => document_tool_context,
+    };
 
     tracing::info!("initialized document tool context");
 

@@ -1,8 +1,10 @@
 //! Compose persistent reviews with existing tool actions and the session queue.
 use agent_code_mode::domain::{CodeModeError, reviews::*};
+use agent_runtime_protocol::domain::review::ReviewUpdatedNotification;
 use agent_session::domain::{
     model::AgentSessionId,
     ports::{AgentSessionNotificationRecipient, AgentSessionRepo},
+    service::AgentSessionService,
 };
 use ai_toolset::RequestContext;
 use async_trait::async_trait;
@@ -27,14 +29,21 @@ fn import_source(
     }
 }
 
-pub struct Actions<S, H> {
+pub struct Actions<S, L, H> {
     pub sessions: S,
+    /// Where each save is announced to the session's viewers.
+    pub log: L,
     pub harness: Arc<H>,
     pub context: ai_tools::ToolServiceContext,
     pub tools: Arc<ai_tools::AiToolSet>,
 }
 #[async_trait]
-impl<S: AgentSessionRepo, H: AgentSessionNotificationRecipient> ReviewActions for Actions<S, H> {
+impl<S, L, H> ReviewActions for Actions<S, L, H>
+where
+    S: AgentSessionRepo,
+    L: AgentSessionService + Send + Sync + 'static,
+    H: AgentSessionNotificationRecipient,
+{
     async fn session(&self, session: AgentSessionId) -> Result<ReviewSession, CodeModeError> {
         let row = self
             .sessions
@@ -138,6 +147,16 @@ impl<S: AgentSessionRepo, H: AgentSessionNotificationRecipient> ReviewActions fo
             },
         ).await.map_err(|_| CodeModeError::Invalid(format!("Review {} was saved, but presentation is pending. Read this review to retry presentation without creating another draft.", record.id.0)))
     }
+    async fn announce_update(&self, record: &ReviewRecord) -> Result<(), CodeModeError> {
+        let update = ReviewUpdatedNotification {
+            review_id: record.id.0,
+            revision: record.revision,
+        };
+        self.log
+            .record_unprojected_frame(record.session_id, update.to_server_message())
+            .await
+            .map_err(|error| CodeModeError::Storage(rootcause::report!(error).into()))
+    }
     async fn present_view(
         &self,
         owner: &MacroUserIdStr<'static>,
@@ -167,7 +186,7 @@ impl<S: AgentSessionRepo, H: AgentSessionNotificationRecipient> ReviewActions fo
     }
 }
 
-impl<S, H> Actions<S, H> {
+impl<S, L, H> Actions<S, L, H> {
     fn import_service(&self) -> Result<&ai_tools::ToolImportService, CodeModeError> {
         self.context
             .import_tool_context

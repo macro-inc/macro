@@ -88,7 +88,11 @@ export function useFormsAskingColumns(
           .filter((form) =>
             form.sections.some(
               (section) =>
-                section.kind === 'gate' && rulesName(section.rules, columnId)
+                (section.kind === 'gate' &&
+                  rulesName(section.rules, columnId)) ||
+                (section.kind === 'questions' &&
+                  !!section.showWhen &&
+                  rulesName(section.showWhen, columnId))
             )
           )
           .map((form) => form.form.name),

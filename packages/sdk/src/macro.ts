@@ -276,6 +276,7 @@ export { ToolApproval } from './entities/agent-sessions/tool-approval';
 export type { SessionView } from './entities/agent-sessions/view';
 export { Agent, type AgentOptions } from './entities/agents/agent';
 export { UserApiKey } from './entities/api-keys/api-key';
+export { ChannelAccessRequest } from './entities/channels/access-request';
 export { ChannelActivity } from './entities/channels/activity';
 export { ChannelPicture } from './entities/channels/picture';
 export { ChatGeneration, ChatMessage } from './entities/chats/generation';
@@ -283,6 +284,7 @@ export {
   CrmPipeline,
   PipelineColumn,
   PipelineRow,
+  type PipelineStageRequirement,
   PipelineTable,
   PipelineView,
 } from './entities/crm/pipeline';
@@ -294,6 +296,12 @@ export type {
   QueryStatement,
   QueryTableVersion,
 } from './entities/databases/query';
+export {
+  type DocumentEditOptions,
+  DocumentEditRefusedError,
+  type DocumentEditResult,
+  EditOutcomeUnknownError,
+} from './entities/documents/ai-edit';
 export { DocumentAnchor } from './entities/documents/anchor';
 export { DocumentVersion } from './entities/documents/version';
 export {

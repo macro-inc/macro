@@ -28,6 +28,7 @@ vi.mock('../../../meetings/use-quick-calls-flag', () => ({
 }));
 vi.mock('@ui', async () => ({
   ...(await import('../../../../components/ui/components/Button')),
+  ...(await import('../../../../components/ui/components/CopyButton')),
   Tooltip: (props: { children: JSX.Element }) => props.children,
 }));
 

@@ -2816,6 +2816,12 @@ async fn test_import_email_attachment_same_attachment_id_reuses_document(pool: P
 
     assert!(matches!(first, EmailImportRepoOutcome::Created(_)));
     assert!(matches!(second, EmailImportRepoOutcome::Reused(_)));
+    // A pending document's upload is signed again from this checksum and version.
+    assert_eq!(second.metadata().sha.as_deref(), Some(sha));
+    assert_eq!(
+        second.metadata().document_version_id,
+        first.metadata().document_version_id
+    );
     assert_eq!(first.metadata().document_id, second.metadata().document_id);
     assert_eq!(
         document_email_rows(&pool, &first.metadata().document_id).await,
@@ -3507,5 +3513,39 @@ async fn test_get_github_pull_request_task_links_returns_requested_keys_oldest_f
             ("macro/macro/pull/2".to_string(), task_short_id),
             ("macro/macro/pull/1".to_string(), other_task_short_id),
         ]
+    );
+}
+
+#[sqlx::test(
+    migrator = "MACRO_DB_MIGRATIONS",
+    fixtures(path = "../../../fixtures", scripts("documents_test_data"))
+)]
+async fn skill_descriptions_are_stored_replaced_and_read_by_id(pool: Pool<Postgres>) {
+    use crate::domain::skill_description::SkillDescription;
+    let repo = test_repo(pool);
+    let described = "d0000000-0000-0000-0000-000000000003";
+    let undescribed = "d0000000-0000-0000-0000-000000000004";
+
+    repo.set_skill_description(
+        described,
+        &SkillDescription::parse("Use when drafting notes").unwrap(),
+    )
+    .await
+    .unwrap();
+    repo.set_skill_description(
+        described,
+        &SkillDescription::parse("Use when drafting release notes; not changelogs").unwrap(),
+    )
+    .await
+    .unwrap();
+
+    let descriptions = repo
+        .get_skill_descriptions(&[described.to_owned(), undescribed.to_owned()])
+        .await
+        .unwrap();
+    assert_eq!(descriptions.len(), 1);
+    assert_eq!(
+        descriptions[described].as_str(),
+        "Use when drafting release notes; not changelogs"
     );
 }

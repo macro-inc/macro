@@ -1,6 +1,5 @@
 import ArrowLeft from '@icon/system/regular/arrow-left.svg';
 import ArrowRight from '@icon/system/regular/arrow-right.svg';
-import { ToggleSwitch } from '@ui';
 import { Show } from 'solid-js';
 import { AuthButton, FormError, FormInput } from './form-fields';
 
@@ -8,9 +7,6 @@ export function EmailForm(props: {
   email: string;
   password: string;
   passwordRequired: boolean;
-  showAgentToggle: boolean;
-  isAgent: boolean;
-  onIsAgentChange: (isAgent: boolean) => void;
   sending: boolean;
   error?: string;
   onEmailInput: (value: string) => void;
@@ -43,15 +39,6 @@ export function EmailForm(props: {
           placeholder="Password"
           value={props.password}
           onInput={props.onPasswordInput}
-        />
-      </Show>
-      <Show when={props.showAgentToggle}>
-        <ToggleSwitch
-          size="sm"
-          label="I'm an agent"
-          labelClass="text-xs text-ink-muted"
-          checked={props.isAgent}
-          onChange={props.onIsAgentChange}
         />
       </Show>
       <FormError message={props.error} />

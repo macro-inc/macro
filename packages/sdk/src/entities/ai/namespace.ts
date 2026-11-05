@@ -16,7 +16,11 @@ export type {
   StructuredCompletionResponse,
 };
 
-/** Shared cognition endpoints, charged to the authenticated acting user. */
+/**
+ * Shared cognition endpoints, charged to the authenticated acting user.
+ *
+ * @routing Use when generating structured objects or images, or classifying supplied content with Jev; not answering the user yourself.
+ */
 export class AiNamespace {
   /** Read AI usage over a time range, optionally restricting it to users. */
   async usage(

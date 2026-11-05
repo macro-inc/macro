@@ -56,6 +56,7 @@ export function OnboardingSignup(props: {
   onGoogle: () => Promise<void>;
   onBackFromEmail: () => void;
   onSignIn: () => void;
+  onAgentSignup: () => void;
   emailForm?: JSX.Element;
   showingEmail: boolean;
 }) {

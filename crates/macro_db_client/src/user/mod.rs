@@ -11,6 +11,7 @@ pub mod get_permissions;
 pub mod get_user_email;
 pub mod get_user_name;
 pub mod get_user_organization;
+pub mod mark_agent;
 pub mod onboarding_status;
 pub mod organization;
 pub mod patch;

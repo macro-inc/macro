@@ -63,6 +63,7 @@ fn message(subject: &str, calendar_part: Option<CalendarPart>) -> FocusMessage {
         calendar_part,
         body: None,
         snippet: None,
+        date_header: None,
     }
 }
 

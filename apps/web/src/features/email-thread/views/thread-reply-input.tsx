@@ -119,6 +119,7 @@ function ThreadReplyInputSession(props: ThreadReplyInputProps) {
               session={{
                 thread: ctx.thread,
                 recipientOptions: ctx.recipientOptions,
+                ownsThreadInbox: () => ctx.permissions().isOwner,
                 isPersonalReply: () => {
                   const message = props.replyingTo();
                   return (

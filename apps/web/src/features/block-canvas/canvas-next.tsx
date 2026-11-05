@@ -20,9 +20,13 @@ import {
 } from '@macro-inc/graphics/loro';
 import { fetchDocumentMetadata } from '@queries/storage/document-metadata';
 import type { LoroDoc } from 'loro-crdt';
-import { onCleanup, Show } from 'solid-js';
+import { createSignal, onCleanup, Show } from 'solid-js';
 import { CanvasBlockEmbed } from './block-embed-adapter';
 import { createCanvasClipboard } from './clipboard';
+import {
+  ArtifactLibraryContext,
+  NO_ARTIFACT_LIBRARY,
+} from './context/artifact-library';
 import { readSharedCanvas } from './core/collaboration';
 import type { CanvasFile } from './core/document-format';
 import { registerCanvasNextHotkeys } from './hotkeys';
@@ -82,31 +86,52 @@ export function CanvasNextEditor(props: {
       : undefined;
   let finishText = () => {};
   props.onReady?.(editor, () => finishText());
+  const [artifactLibrary, setArtifactLibrary] = createSignal(
+    backend?.artifactLibrary.read() ?? NO_ARTIFACT_LIBRARY
+  );
+  if (backend)
+    onCleanup(
+      backend.artifactLibrary.subscribe(() =>
+        setArtifactLibrary(backend.artifactLibrary.read())
+      )
+    );
   return (
-    <StaticMarkdownContext>
-      <Show
-        when={props.canEdit && !props.isEmbedded}
-        fallback={
-          <CanvasReadOnlyView
+    <ArtifactLibraryContext.Provider
+      value={{
+        library: artifactLibrary,
+        // Read when used, so a change of access while open takes effect.
+        get edit() {
+          return backend && props.canEdit && !props.isEmbedded
+            ? backend.artifactLibrary.edit
+            : undefined;
+        },
+      }}
+    >
+      <StaticMarkdownContext>
+        <Show
+          when={props.canEdit && !props.isEmbedded}
+          fallback={
+            <CanvasReadOnlyView
+              editor={editor}
+              fitOnLoad={props.fitOnLoad}
+              presence={presence}
+            />
+          }
+        >
+          <EditableCanvasNext
+            documentId={props.documentId}
             editor={editor}
-            fitOnLoad={props.fitOnLoad}
             presence={presence}
+            measureText={measurement.measure}
+            fitOnLoad={props.fitOnLoad}
+            canEdit={() => props.canEdit}
+            onFinishReady={(finish) => {
+              finishText = finish;
+            }}
           />
-        }
-      >
-        <EditableCanvasNext
-          documentId={props.documentId}
-          editor={editor}
-          presence={presence}
-          measureText={measurement.measure}
-          fitOnLoad={props.fitOnLoad}
-          canEdit={() => props.canEdit}
-          onFinishReady={(finish) => {
-            finishText = finish;
-          }}
-        />
-      </Show>
-    </StaticMarkdownContext>
+        </Show>
+      </StaticMarkdownContext>
+    </ArtifactLibraryContext.Provider>
   );
 }
 

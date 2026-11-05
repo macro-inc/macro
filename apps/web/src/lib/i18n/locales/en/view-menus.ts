@@ -1,4 +1,9 @@
 export default {
+  crmVisibility: 'Visibility',
+  crmVisible: 'Visible',
+  crmArchived: 'Archived',
+  crmArchive: 'Archive',
+  crmRestore: 'Restore',
   // View tabs
   favorites: 'Favorites',
   scheduled: 'Scheduled',
