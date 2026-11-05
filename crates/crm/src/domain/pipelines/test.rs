@@ -36,6 +36,7 @@ fn a_pipeline_without_a_record_type_starts_like_a_new_database() {
     assert_eq!(name.data_type, DataType::String);
     assert_eq!(name.entity_type, None);
     assert!(name.nullable);
+    assert!(name.protections.is_empty());
 }
 
 #[test]

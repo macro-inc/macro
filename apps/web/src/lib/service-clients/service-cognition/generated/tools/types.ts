@@ -5196,7 +5196,7 @@ export interface ToolNewEntry {
    */
   email?: string | null;
   /**
-   * Fields to fill in on the new entry, e.g. [{"field": "Stage", "value": "Lead"}, {"field": "Owner", "value": "me"}]. Required in a generic pipeline, e.g. [{"field": "Name", "value": "Launch site"}].
+   * Fields to fill in on the new entry, e.g. [{"field": "Stage", "value": "Lead"}, {"field": "Owner", "value": "me"}]. In a generic pipeline, e.g. [{"field": "Name", "value": "Launch site"}].
    */
   set?: ToolFieldValue[];
 }

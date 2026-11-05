@@ -126,7 +126,8 @@ pub struct Pipeline {
     /// Table of entries.
     #[schema(value_type = Uuid)]
     pub table_id: TableId,
-    /// Protected primary column.
+    /// A tracked pipeline's protected record reference. A generic pipeline's
+    /// Name, which names no column once someone deletes it.
     #[schema(value_type = Uuid)]
     pub primary_column_id: ColumnId,
     /// Whether the pipeline has a team grant.

@@ -68,7 +68,7 @@ pub(super) fn tracked_columns(
 }
 
 /// A generic pipeline starts like a new database: one Name column, optional in
-/// every row. Only the pipeline's reference to it is protected.
+/// every row and as open to change as any other.
 pub(super) fn generic_columns(primary_column_id: ColumnId) -> Vec<ProvisionedColumn> {
     vec![ProvisionedColumn {
         id: primary_column_id,
@@ -77,6 +77,6 @@ pub(super) fn generic_columns(primary_column_id: ColumnId) -> Vec<ProvisionedCol
         entity_type: None,
         options: vec![],
         nullable: true,
-        protections: vec![ColumnProtection::Delete, ColumnProtection::ChangeType],
+        protections: vec![],
     }]
 }

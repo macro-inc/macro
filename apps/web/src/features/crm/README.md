@@ -152,7 +152,8 @@ team-scope widening or requiring a property link on the email.
 
 Customers has no Databases view or record section. A database that holds work
 outside companies and contacts is a generic pipeline: `recordType` is null, the
-primary column is an optional Name text column, and rows are added directly in
+primary column starts as an optional Name text column anyone can retype or delete
+(the first column then titles rows), and rows are added directly in
 the shared editor with no record picker or stage requirements. CSV import needs
 a record to resolve, so it is hidden for generic pipelines; export includes Name.
 Retired routes keep old links working: middleware sends a record's `databases`

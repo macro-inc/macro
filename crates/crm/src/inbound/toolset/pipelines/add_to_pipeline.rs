@@ -31,7 +31,7 @@ pub struct ToolNewEntry {
     pub email: Option<String>,
     /// Fields to fill in.
     #[schemars(
-        description = "Fields to fill in on the new entry, e.g. [{\"field\": \"Stage\", \"value\": \"Lead\"}, {\"field\": \"Owner\", \"value\": \"me\"}]. Required in a generic pipeline, e.g. [{\"field\": \"Name\", \"value\": \"Launch site\"}]."
+        description = "Fields to fill in on the new entry, e.g. [{\"field\": \"Stage\", \"value\": \"Lead\"}, {\"field\": \"Owner\", \"value\": \"me\"}]. In a generic pipeline, e.g. [{\"field\": \"Name\", \"value\": \"Launch site\"}]."
     )]
     #[serde(default)]
     pub set: Vec<ToolFieldValue>,

@@ -409,8 +409,9 @@ pasted into an editor it becomes a pipeline mention (see
 access is in the **Team** tab.
 
 A **Generic** pipeline needs no company or contact. It starts like a new database,
-with one optional **Name** text column and no Stage, Owner or Revenue; add any
-columns and views from there. **Add entry** starts a row in place, with no record
+with one optional **Name** text column and no Stage, Owner or Revenue. Name is an
+ordinary column, so it can be renamed, retyped or deleted; add any columns and
+views from there. **Add entry** starts a row in place, with no record
 form or stage requirements. **Import CSV** is not offered; **Export CSV** is.
 
 In a company or contact pipeline, the first column is a required company/contact reference. Clicking a filled

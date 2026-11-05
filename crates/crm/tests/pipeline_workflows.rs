@@ -743,21 +743,37 @@ async fn a_generic_pipeline_takes_entries_by_their_fields(pool: PgPool) {
         ("Name".to_owned(), FieldValue::Text("Site".into()))
     );
 
-    for refused in [
-        EntryAddition {
-            record: Some(RecordTarget::Id(Uuid::now_v7())),
-            set: site("Site").set,
-        },
-        EntryAddition {
-            record: None,
-            set: Vec::new(),
-        },
-    ] {
-        assert!(matches!(
-            workflows.add(&owner, id, vec![refused], false).await,
-            Err(WorkflowError::Invalid(_))
-        ));
-    }
+    assert!(matches!(
+        workflows
+            .add(
+                &owner,
+                id,
+                vec![EntryAddition {
+                    record: Some(RecordTarget::Id(Uuid::now_v7())),
+                    set: site("Site").set,
+                }],
+                false,
+            )
+            .await,
+        Err(WorkflowError::Invalid(_))
+    ));
+    let blank = workflows
+        .add(
+            &owner,
+            id,
+            vec![EntryAddition {
+                record: None,
+                set: Vec::new(),
+            }],
+            false,
+        )
+        .await
+        .unwrap();
+    assert_eq!(
+        blank.added.len(),
+        1,
+        "a row may start empty, as in the editor"
+    );
 
     let found = workflows
         .find(
@@ -796,19 +812,18 @@ async fn a_generic_pipeline_takes_entries_by_their_fields(pool: PgPool) {
 
     let listed = workflows.pipelines(&owner).await.unwrap();
     assert!(listed.iter().any(|o| o.pipeline.pipeline.id == id));
-    assert!(matches!(
-        workflows
-            .edit(
-                &owner,
-                id,
-                PipelineEdit {
-                    remove_fields: vec!["Name".into()],
-                    ..Default::default()
-                },
-            )
-            .await,
-        Err(WorkflowError::Invalid(_) | WorkflowError::Pipeline(_))
-    ));
+    let edited = workflows
+        .edit(
+            &owner,
+            id,
+            PipelineEdit {
+                remove_fields: vec!["Name".into()],
+                ..Default::default()
+            },
+        )
+        .await
+        .unwrap();
+    assert!(edited.field("Name").is_err());
 }
 
 #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]

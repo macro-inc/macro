@@ -466,12 +466,6 @@ fn generic_inserts(
                      email, and fill in its fields with `set`."
                 )));
             }
-            if addition.set.is_empty() {
-                return Err(WorkflowError::Invalid(format!(
-                    "Pipeline \"{name}\" tracks no companies or contacts, so name at least one \
-                     field to set on each new entry."
-                )));
-            }
             cells(overview, &addition.set, viewer)
         })
         .collect()

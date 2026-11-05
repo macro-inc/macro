@@ -494,13 +494,6 @@ async fn generic_pipeline_holds_free_form_rows_without_record_references(pool: P
         [blank_row, named_row]
     );
 
-    // The pipeline's reference to its Name column stays intact.
-    let delete_name = serde_json::from_value(json!({"kind":"column","table":p.table_id,"column":p.primary_column_id,"change":{"kind":"delete"}})).unwrap();
-    assert!(matches!(
-        write(&s, &a, &p, vec![delete_name]).await,
-        Err(PipelineError::Database(DatabaseError::InvalidOp(_)))
-    ));
-
     // It shows in navigation, and never as a place a CRM record is tracked.
     let listed = s.list(team_receipt(team, OWNER)).await.unwrap();
     assert!(listed.iter().any(|entry| entry.pipeline.id == p.id));
@@ -511,7 +504,40 @@ async fn generic_pipeline_holds_free_form_rows_without_record_references(pool: P
             .unwrap()
             .is_empty()
     );
-    assert!(s.record_rows(view, &[company]).await.unwrap().is_empty());
+    assert!(
+        s.record_rows(view.clone(), &[company])
+            .await
+            .unwrap()
+            .is_empty()
+    );
+
+    // Name is an ordinary column: it can change type and be deleted.
+    let empty = s
+        .create(
+            team_receipt(team, OWNER),
+            CreatePipeline {
+                name: "Numbers".into(),
+                record_type: None,
+                sharing: PipelineSharing::Private,
+            },
+        )
+        .await
+        .unwrap()
+        .pipeline;
+    let retype = serde_json::from_value(json!({"kind":"column","table":empty.table_id,"column":empty.primary_column_id,"change":{"kind":"change_type","to":{"type":"number"}}})).unwrap();
+    write(&s, &a, &empty, vec![retype]).await.unwrap();
+    let delete_name = serde_json::from_value(
+        json!({"kind":"column","table":p.table_id,"column":p.primary_column_id,"change":{"kind":"delete"}}),
+    )
+    .unwrap();
+    write(&s, &a, &p, vec![delete_name]).await.unwrap();
+    assert_eq!(s.get(view.clone()).await.unwrap().pipeline.id, p.id);
+    assert!(s.table(view.clone()).await.unwrap().columns.is_empty());
+    let row = serde_json::from_value(
+        json!({"kind":"rows","table":p.table_id,"change":{"kind":"insert","rows":[[]]}}),
+    )
+    .unwrap();
+    write(&s, &a, &p, vec![row]).await.unwrap();
 }
 
 #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
