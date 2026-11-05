@@ -105,25 +105,11 @@ impl GithubIdp {
     }
 }
 
-/// Build the kickstart document. `lambda_body` is the JS source of
-/// `populate_jwt_local.js`; `reconcile_lambda_body` is the reconcile lambda
-/// attached to `google_gmail` (only used when `google` is configured); redirect
-/// URLs are templated from the instance ports.
-pub fn build(
-    frontend_port: u16,
-    auth_port: u16,
-    proxy_origins: &[String],
-    lambda_body: &str,
-    reconcile_lambda_body: &str,
-    google: Option<&GoogleIdp>,
-    github: Option<&GithubIdp>,
-) -> Value {
-    let app_id = identity::APPLICATION_ID;
-    let tenant_id = identity::TENANT_ID;
-    let key_id = identity::JWT_SIGNING_KEY_ID;
-    let lambda_id = identity::POPULATE_JWT_LAMBDA_ID;
-    let template_id = identity::PASSWORDLESS_EMAIL_TEMPLATE_ID;
-
+/// The application's OAuth redirect URLs: the only part of the kickstart that
+/// depends on the instance's ports. The init snapshot key leaves them out (see
+/// [`without_redirect_urls`]), and every bring-up writes the instance's own
+/// list into FusionAuth, so one snapshot serves every port window.
+pub fn redirect_urls(frontend_port: u16, auth_port: u16, proxy_origins: &[String]) -> Vec<String> {
     let mut redirect_urls = vec![
         format!("http://localhost:{frontend_port}/app"),
         identity::oauth_redirect_uri(auth_port),
@@ -142,6 +128,45 @@ pub fn build(
             }
         }
     }
+    redirect_urls
+}
+
+/// The kickstart document without the application's redirect URLs, so that
+/// instances that differ only in their ports produce the same snapshot key.
+pub fn without_redirect_urls(mut doc: Value) -> Value {
+    let requests = doc
+        .get_mut("requests")
+        .and_then(Value::as_array_mut)
+        .into_iter()
+        .flatten();
+    for request in requests {
+        let oauth = request
+            .pointer_mut("/body/application/oauthConfiguration")
+            .and_then(Value::as_object_mut);
+        if let Some(oauth) = oauth {
+            oauth.remove("authorizedRedirectURLs");
+        }
+    }
+    doc
+}
+
+/// Build the kickstart document. `lambda_body` is the JS source of
+/// `populate_jwt_local.js`; `reconcile_lambda_body` is the reconcile lambda
+/// attached to `google_gmail` (only used when `google` is configured);
+/// `redirect_urls` comes from [`redirect_urls`].
+pub fn build(
+    redirect_urls: Vec<String>,
+    lambda_body: &str,
+    reconcile_lambda_body: &str,
+    google: Option<&GoogleIdp>,
+    github: Option<&GithubIdp>,
+) -> Value {
+    let app_id = identity::APPLICATION_ID;
+    let tenant_id = identity::TENANT_ID;
+    let key_id = identity::JWT_SIGNING_KEY_ID;
+    let lambda_id = identity::POPULATE_JWT_LAMBDA_ID;
+    let template_id = identity::PASSWORDLESS_EMAIL_TEMPLATE_ID;
+
 
     // Kickstart executes these in order, so each request must come after the
     // entities it references. Dependency chain:

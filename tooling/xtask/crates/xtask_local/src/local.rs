@@ -1088,6 +1088,7 @@ fn bring_up_infra(
         fa.arg("up").arg("-d").arg("fusionauth");
         stage.run("Starting FusionAuth", &mut fa)?;
         fusionauth::wait_ready(stage, instance)?;
+        fusionauth::apply_redirect_urls(stage, instance)?;
 
         // OpenSearch is up (`--wait`) but empty. Create the search indices +
         // aliases (idempotent) so the unified search path works out of the box

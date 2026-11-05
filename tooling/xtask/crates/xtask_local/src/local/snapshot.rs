@@ -13,8 +13,11 @@
 //! then saves the new snapshot).
 //!
 //! Snapshots are tarballs of the Docker volumes, written by a throwaway helper
-//! container, stored under `infra/local/generated/.snapshots/<key>/` (override
-//! with `MACRO_STACK_SNAPSHOT_DIR` — CI and Cloud install can bake this dir).
+//! container, stored machine-wide under `~/.cache/macro-local/stack-snapshots/<key>/`
+//! (override with `MACRO_STACK_SNAPSHOT_DIR` — CI and Cloud install can bake
+//! this dir). The key leaves out the instance's ports, so every worktree and
+//! instance on a machine shares one snapshot per schema; FusionAuth's redirect
+//! URLs are rewritten for the instance after each start instead.
 
 use std::path::PathBuf;
 use std::process::Command;
@@ -25,7 +28,7 @@ use sha2::{Digest, Sha256};
 
 use super::instance::Instance;
 use super::stage::Stage;
-use super::{env_layer, fusionauth, gen_compose, repo_root, workspace_root};
+use super::{env_layer, fusionauth, gen_compose, kickstart, repo_root, workspace_root};
 
 /// Bump when the snapshot mechanism itself changes shape (archive layout,
 /// volume set) so old snapshots can't be restored into a new scheme.
@@ -35,7 +38,13 @@ use super::{env_layer, fusionauth, gen_compose, repo_root, workspace_root};
 /// be mid-flight (the readiness gate only checked `/api/status`, so a save
 /// could freeze a tenant-less FusionAuth DB — and the key never changed, so
 /// the bad snapshot was sticky).
-const FORMAT: u32 = 3;
+/// 4: the key no longer includes the kickstart's port-bearing redirect URLs.
+const FORMAT: u32 = 4;
+
+/// Snapshots no bring-up has restored or saved for this long are deleted
+/// when a new one is saved. Each is about 25MB, and every schema change on
+/// any branch adds one.
+const UNUSED_DAYS: u64 = 14;
 
 /// The throwaway container image used to tar/untar volumes. Alpine for its
 /// size; only needs `tar` + `sh`.
@@ -62,14 +71,16 @@ fn archives(instance: &Instance) -> [(&'static str, String); 5] {
 const STATEFUL_SERVICES: &[&str] = &["postgres", "search", "kafka", "fusionauth", "db"];
 
 /// Where snapshots live. `MACRO_STACK_SNAPSHOT_DIR` overrides for CI and Cloud
-/// install bakes; the default sits inside the gitignored generated dir.
+/// install bakes; the default is shared by every checkout on the machine.
 // xtask is host tooling, not a service reading APP_SECRETS_JSON, so reading the
 // process environment directly is correct here.
 #[allow(clippy::disallowed_methods)]
-pub fn root_dir() -> PathBuf {
-    std::env::var_os("MACRO_STACK_SNAPSHOT_DIR")
-        .map(PathBuf::from)
-        .unwrap_or_else(|| repo_root().join("infra/local/generated/.snapshots"))
+pub fn root_dir() -> Result<PathBuf> {
+    if let Some(dir) = std::env::var_os("MACRO_STACK_SNAPSHOT_DIR") {
+        return Ok(PathBuf::from(dir));
+    }
+    let home = std::env::var_os("HOME").context("HOME is not set")?;
+    Ok(PathBuf::from(home).join(".cache/macro-local/stack-snapshots"))
 }
 
 /// What a snapshot directory contains, recorded alongside the archives.
@@ -90,9 +101,10 @@ pub struct Plan {
 
 impl Plan {
     /// Hash the init-defining inputs. Must be called after `prepare` (the
-    /// generated kickstart is one of the inputs — it encodes the instance's
-    /// ports, so a snapshot can never be restored into an instance whose
-    /// FusionAuth config wouldn't match).
+    /// generated kickstart is one of the inputs). The kickstart's redirect
+    /// URLs are left out: they are the only part that depends on the
+    /// instance's ports, and [`fusionauth::apply_redirect_urls`] rewrites them
+    /// after every start.
     pub fn compute(instance: &Instance) -> Result<Plan> {
         let mut h = Sha256::new();
         h.update(FORMAT.to_le_bytes());
@@ -129,14 +141,17 @@ impl Plan {
             &repo_root().join("infra/stacks/opensearch/helpers"),
             &["node_modules"],
         )?;
-        // The generated FusionAuth kickstart (identity + this instance's ports).
-        hash_file(
-            &mut h,
-            &gen_compose::kickstart_dir(instance).join("kickstart.json"),
-        )?;
+        // The generated FusionAuth kickstart, minus its port-bearing redirect URLs.
+        let kickstart = gen_compose::kickstart_dir(instance).join("kickstart.json");
+        let raw = std::fs::read(&kickstart)
+            .with_context(|| format!("reading snapshot input {}", kickstart.display()))?;
+        let doc = serde_json::from_slice(&raw)
+            .with_context(|| format!("parsing {}", kickstart.display()))?;
+        h.update(b"kickstart.json");
+        h.update(serde_json::to_vec(&kickstart::without_redirect_urls(doc))?);
 
         let key = hex(&h.finalize());
-        let dir = root_dir().join(&key);
+        let dir = root_dir()?.join(&key);
         Ok(Plan { key, dir })
     }
 
@@ -173,6 +188,7 @@ pub fn restore(stage: &Stage, instance: &Instance, plan: &Plan) -> Result<()> {
                     &format!("tar xzf /snap/{archive} -C /vol"),
                 )?;
             }
+            mark_used(&dir);
             Ok(())
         },
     )
@@ -193,7 +209,9 @@ pub fn save(
     stop.args(["stop", "-t", "30"]).args(STATEFUL_SERVICES);
     stage.run("Quiescing infra for snapshot", &mut stop)?;
 
-    let tmp = root_dir().join(format!(".tmp-{}", plan.key));
+    let root = root_dir()?;
+    // Per process: another checkout may be saving the same key right now.
+    let tmp = root.join(format!(".tmp-{}-{}", plan.key, std::process::id()));
     let pairs = archives(instance);
     let write = || -> Result<()> {
         if tmp.exists() {
@@ -220,10 +238,17 @@ pub fn save(
             tmp.join("manifest.json"),
             serde_json::to_string_pretty(&manifest)?,
         )?;
-        if plan.dir.exists() {
-            std::fs::remove_dir_all(&plan.dir)?;
+        // A complete snapshot under this key may have landed meanwhile, and
+        // another bring-up may be restoring from it: keep it, drop ours.
+        if plan.exists() {
+            std::fs::remove_dir_all(&tmp)?;
+        } else {
+            if plan.dir.exists() {
+                std::fs::remove_dir_all(&plan.dir)?;
+            }
+            std::fs::rename(&tmp, &plan.dir).context("moving snapshot into place")?;
         }
-        std::fs::rename(&tmp, &plan.dir).context("moving snapshot into place")?;
+        prune_unused(&root, &plan.key);
         Ok(())
     };
     stage.run_step(
@@ -239,6 +264,40 @@ pub fn save(
     fa.args(["up", "-d", "fusionauth"]);
     stage.run("Restarting FusionAuth", &mut fa)?;
     fusionauth::wait_ready(stage, instance)
+}
+
+/// Record that a snapshot was used, for [`prune_unused`].
+fn mark_used(dir: &std::path::Path) {
+    let _ = std::fs::File::options()
+        .append(true)
+        .open(dir.join("manifest.json"))
+        .and_then(|file| file.set_modified(std::time::SystemTime::now()));
+}
+
+/// Delete snapshots unused for [`UNUSED_DAYS`], and temp dirs that old (left by
+/// a save that crashed). Best effort: a failure only leaves disk in use.
+fn prune_unused(root: &std::path::Path, keep: &str) {
+    let max_age = std::time::Duration::from_secs(UNUSED_DAYS * 24 * 60 * 60);
+    let Ok(entries) = std::fs::read_dir(root) else {
+        return;
+    };
+    for entry in entries.flatten() {
+        let path = entry.path();
+        if entry.file_name() == keep {
+            continue;
+        }
+        let manifest = path.join("manifest.json");
+        let used = std::fs::metadata(&manifest)
+            .or_else(|_| entry.metadata())
+            .and_then(|meta| meta.modified());
+        let unused = used
+            .ok()
+            .and_then(|used| used.elapsed().ok())
+            .is_some_and(|age| age > max_age);
+        if unused {
+            let _ = std::fs::remove_dir_all(&path);
+        }
+    }
 }
 
 /// Run `tar` in the helper container with two mounts. The stack's own stage
