@@ -8,7 +8,6 @@ mod test;
 pub mod channel_share;
 pub mod direct_share;
 pub mod project_grants;
-pub mod project_modified;
 pub mod source_grants;
 pub mod team_share;
 

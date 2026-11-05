@@ -1,7 +1,6 @@
 //! Filing a database in a folder, with the grants the folder passes down.
 
 use entity_access_db_utils::project_grants::{drop_project_grants, inherit_project_grants};
-use entity_access_db_utils::project_modified::bump_projects_modified;
 use entity_access_db_utils::team_share;
 use model_entity::EntityType;
 use sqlx::PgPool;
@@ -11,8 +10,8 @@ use super::PgDatabasesRepoError;
 use crate::domain::models::DatabaseId;
 
 /// File a live database in `project_id`, or at the root, swapping the grants
-/// it inherited from its old folder for the new folder's and marking both
-/// folders edited; `false` when it is trashed or gone.
+/// it inherited from its old folder for the new folder's; `false` when it
+/// is trashed or gone.
 pub(super) async fn move_database(
     pool: &PgPool,
     id: DatabaseId,
@@ -37,12 +36,12 @@ pub(super) async fn move_database(
     )
     .execute(&mut *transaction)
     .await?;
-    if let Some(previous) = &previous {
+    if let Some(previous) = previous {
         drop_project_grants(
             &mut transaction,
             id.as_uuid(),
             EntityType::Database,
-            &Uuid::parse_str(previous)?,
+            &Uuid::parse_str(&previous)?,
         )
         .await?;
     }
@@ -55,8 +54,6 @@ pub(super) async fn move_database(
         )
         .await?;
     }
-    let left_and_joined: Vec<&str> = previous.as_deref().into_iter().chain(project_id).collect();
-    bump_projects_modified(&mut transaction, &left_and_joined).await?;
     transaction.commit().await?;
     Ok(true)
 }

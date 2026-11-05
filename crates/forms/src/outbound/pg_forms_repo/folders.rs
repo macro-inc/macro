@@ -1,7 +1,6 @@
 //! Filing a form in a folder, with the grants the folder passes down.
 
 use entity_access_db_utils::project_grants::{drop_project_grants, inherit_project_grants};
-use entity_access_db_utils::project_modified::bump_projects_modified;
 use entity_access_db_utils::team_share;
 use model_entity::EntityType;
 use sqlx::PgPool;
@@ -11,8 +10,8 @@ use super::PgFormsRepoError;
 use crate::domain::models::FormId;
 
 /// File a live form in `project_id`, or at the root, swapping the grants it
-/// inherited from its old folder for the new folder's and marking both
-/// folders edited; `false` when it is trashed or gone.
+/// inherited from its old folder for the new folder's; `false` when it is
+/// trashed or gone.
 pub(super) async fn move_form(
     pool: &PgPool,
     id: FormId,
@@ -37,12 +36,12 @@ pub(super) async fn move_form(
     )
     .execute(&mut *transaction)
     .await?;
-    if let Some(previous) = &previous {
+    if let Some(previous) = previous {
         drop_project_grants(
             &mut transaction,
             id.as_uuid(),
             EntityType::Form,
-            &Uuid::parse_str(previous)?,
+            &Uuid::parse_str(&previous)?,
         )
         .await?;
     }
@@ -55,8 +54,6 @@ pub(super) async fn move_form(
         )
         .await?;
     }
-    let left_and_joined: Vec<&str> = previous.as_deref().into_iter().chain(project_id).collect();
-    bump_projects_modified(&mut transaction, &left_and_joined).await?;
     transaction.commit().await?;
     Ok(true)
 }
