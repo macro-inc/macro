@@ -1,11 +1,13 @@
 /**
  * The engine's browser row source: tables are read as Soup database rows through the
- * normalized cache, newest first. People queries must use the database read boundary.
+ * normalized cache, newest first. People joins accept only bounded explicit keys
+ * and read them from local Turso; an unbounded directory request is refused.
  */
 
 import { readRecordsByKeys, selectRecords } from '@app/lib/graphql-cache';
 import type {
   DatabaseSqlFetchFailure,
+  DatabaseSqlSourceFailure,
   RowSource,
 } from '@core/database-sql/driver';
 import type {
@@ -68,6 +70,8 @@ interface GraphqlRowSourceCapabilities {
    * index instead, so rows the cache learned about since show up.
    */
   membership?: LocalMembership;
+  /** Bounded keys only; this capability must never enumerate the directory. */
+  people?: (ids: string[]) => ResultAsync<Row[], DatabaseSqlSourceFailure>;
 }
 
 /** Local reconciliation for first pages, shared across runs of a statement. */
@@ -164,26 +168,68 @@ function graphqlQuery<Data, Variables extends AnyVariables>(
   return network();
 }
 
+function peoplePage(
+  ids: string[] | null,
+  cursor: string | null,
+  limit: number,
+  read: GraphqlRowSourceCapabilities['people']
+): ResultAsync<Page, DatabaseSqlSourceFailure> {
+  if (!ids || ids.length > MAX_KEY_HINT_VALUES)
+    return errAsync({
+      kind: 'rejected',
+      message:
+        'A people join requires bounded identity keys; narrow the preceding relation',
+    });
+  if (!Number.isSafeInteger(limit) || limit < 1 || limit > 500)
+    return errAsync({
+      kind: 'rejected',
+      message: 'Invalid people lookup limit',
+    });
+  const keys = [...new Set(ids)];
+  const offset = cursor === null ? 0 : Number(cursor);
+  if (
+    !Number.isSafeInteger(offset) ||
+    offset < 0 ||
+    offset > keys.length ||
+    (cursor !== null && cursor !== String(offset))
+  )
+    return errAsync({
+      kind: 'rejected',
+      message: 'Invalid people lookup cursor',
+    });
+  if (offset === keys.length) return okAsync({ rows: [], next: null });
+  if (!read)
+    return errAsync({
+      kind: 'rejected',
+      message: 'Local people SQL is unavailable on this client',
+    });
+  const page = keys.slice(offset, offset + limit);
+  return read(page).map((rows) => ({
+    rows,
+    next:
+      offset + page.length < keys.length ? String(offset + page.length) : null,
+  }));
+}
+
 export function createGraphqlRowSource({
   client,
   catalog,
   requestPolicy,
   cache,
   membership,
+  people,
 }: GraphqlRowSourceCapabilities): RowSource {
   return {
     page: (query, _needs, cursor, limit, step) =>
       match(query)
-        .returnType<ResultAsync<Page, DatabaseSqlFetchFailure>>()
+        .returnType<ResultAsync<Page, DatabaseSqlSourceFailure>>()
         .with({ type: 'soup' }, (soup) =>
           soupInput(soup, cursor, limit).asyncAndThen((input) =>
             soupPage(client, requestPolicy, input, membership, step, cache)
           )
         )
-        .with({ type: 'people' }, () =>
-          errAsync(
-            fetchFailure('People queries require database-side execution')
-          )
+        .with({ type: 'people' }, (query) =>
+          peoplePage(query.ids, cursor, limit, people)
         )
         .with({ type: 'groupSoup' }, () =>
           errAsync(fetchFailure('a grouped query is read as bins, not pages'))

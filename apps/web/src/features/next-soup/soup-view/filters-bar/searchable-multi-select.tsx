@@ -415,7 +415,9 @@ export const SearchableMultiSelect = (props: SearchableMultiSelectProps) => {
   });
   const localMatches = useHasMatches(displayOptions, searchQuery);
   const hasMatches = () =>
-    props.source ? visibleIds().size > 0 || sourceAction() : !!props.action || localMatches();
+    props.source
+      ? visibleIds().size > 0 || sourceAction()
+      : !!props.action || localMatches();
 
   const onSourceInput: JSX.EventHandler<HTMLInputElement, InputEvent> = (
     event
@@ -486,7 +488,9 @@ export const SearchableMultiSelect = (props: SearchableMultiSelectProps) => {
       defaultFilter={
         props.source
           ? (option) => option.id === ACTION_ID || visibleIds().has(option.id)
-          : undefined
+          : props.action
+            ? filterWithAction
+            : undefined
       }
       value={activeOptions()}
       onChange={handleChange}
@@ -500,7 +504,6 @@ export const SearchableMultiSelect = (props: SearchableMultiSelectProps) => {
       optionValue="id"
       optionTextValue="label"
       optionLabel="label"
-      defaultFilter={props.action ? filterWithAction : undefined}
       optionDisabled="disabled"
       allowsEmptyCollection
       virtualized

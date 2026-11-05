@@ -3,6 +3,7 @@ import { contactRecordKey } from '@queries/contacts/contact-key';
 import { createRetirableCacheHost } from '../../host/retirable-host';
 import { createWorkerCacheHost } from '../../host/worker-host';
 import type { PeopleReferenceRequest } from '../../people/protocol';
+import { isStaleHydrationScopeError } from '../../protocol';
 
 const output = document.querySelector<HTMLPreElement>('#result');
 if (!output) throw new Error('Missing reference result element');
@@ -63,7 +64,8 @@ try {
       ...request,
       scope: { ...scope, identity: 'macro|other@example.com' },
     });
-  } catch {
+  } catch (error) {
+    if (!isStaleHydrationScopeError(error)) throw error;
     foreignRejected = true;
   }
   if (!foreignRejected) throw new Error('Foreign viewer was admitted');
@@ -71,7 +73,8 @@ try {
   let staleRejected = false;
   try {
     await people.resolveReferences(request);
-  } catch {
+  } catch (error) {
+    if (!isStaleHydrationScopeError(error)) throw error;
     staleRejected = true;
   }
   if (!staleRejected) throw new Error('Stale generation was admitted');

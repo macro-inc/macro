@@ -3325,7 +3325,8 @@ fn cursor_allows(cursor: Option<&SearchCursor>, document: SearchDocumentRef<'_>)
     cursor.is_none_or(|cursor| {
         document.timestamp_ms < cursor.timestamp_ms
             || (document.timestamp_ms == cursor.timestamp_ms
-                && document.record_key > &cursor.record_key)
+                && crate::search::compare_record_keys(document.record_key, &cursor.record_key)
+                    .is_gt())
     })
 }
 

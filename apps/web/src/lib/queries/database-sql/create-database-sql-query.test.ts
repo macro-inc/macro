@@ -20,7 +20,7 @@ import {
   type Exchange,
   type Operation,
 } from '@urql/core';
-import { ok, okAsync } from 'neverthrow';
+import { ok } from 'neverthrow';
 import { createEffect, createRoot, createSignal } from 'solid-js';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { empty, fromPromise, fromValue, mergeMap, pipe } from 'wonka';
@@ -162,7 +162,11 @@ describe('createDatabaseSqlQuery', () => {
           client: () =>
             createClient({ url: 'http://test.invalid', exchanges: [] }),
           cacheHost: () => undefined,
-          people: async () => [],
+          account: () => ({ userId: 'macro|viewer@example.com', session: 0 }),
+          describe: async (catalog) => ({
+            readTables: catalog.tables.map((table) => table.id),
+            columns: [],
+          }),
           catalog: build,
           open,
         }
@@ -809,16 +813,15 @@ describe('readDatabaseSql over macro.people', () => {
           readTables: [PEOPLE],
           columns: [{ name: 'name', column: PERSON_NAME, kind: 'text' }],
         }),
-        serverRead: () =>
-          okAsync({
-            columns: [{ name: 'name', column: PERSON_NAME, kind: 'text' }],
-            rows: [[{ type: 'text', value: 'Ada' }]],
-            rowIds: [],
-            readTables: [PEOPLE],
-            truncated: false,
-            insertedRowIds: [],
-            changesApplied: 0,
-          }),
+        localRead: async () => ({
+          columns: [{ name: 'name', column: PERSON_NAME, kind: 'text' }],
+          rows: [[{ type: 'text', value: 'Ada' }]],
+          rowIds: [],
+          readTables: [PEOPLE],
+          truncated: false,
+          insertedRowIds: [],
+          changesApplied: 0,
+        }),
         catalog: catalogOf,
         open: peopleNames,
       }

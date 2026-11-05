@@ -349,7 +349,10 @@ public profiles and context stubs do not. Counts, grouping, DISTINCT and orderin
 run in Turso before the 500-row/64-column/512-KiB result window is materialized.
 The host checks account/generation under its engine lock. Callers still require a
 complete backfill checkpoint; unsupported/incomplete reads never fetch a directory
-or execute SQL on a server. Browser query composition is still being cut over.
+or execute SQL on a server. Browser queries now use this capability directly;
+ordinary joins request only bounded identity keys. Completion notifications and
+cache changes refresh visible queries, with one physical read and one replaceable
+pending input per observer.
 
 ## Browser OPFS writes
 

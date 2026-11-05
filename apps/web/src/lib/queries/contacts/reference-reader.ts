@@ -1,4 +1,4 @@
-import { fireAndForget } from '@core/util/fireAndForget';
+import { createReplaceableReader } from '@core/util/create-replaceable-reader';
 import {
   assertContactReferenceInput,
   type ContactReferenceHost,
@@ -14,83 +14,27 @@ export type ContactReferenceReader = (
   signal: AbortSignal
 ) => Promise<ContactReferenceResolution>;
 
-type Job = {
+type Input = {
   viewer: string;
   host: ContactReferenceHost | undefined;
   request: ContactReferenceRequest;
-  signal: AbortSignal;
-  resolve: (value: ContactReferenceResolution) => void;
-  reject: (error: unknown) => void;
-  detach: () => void;
 };
 
-/** Native scans cannot be interrupted once dispatched. Keep one running read
- * and one replaceable pending input instead of queueing a history of scans. */
+/** Native scans cannot be interrupted once dispatched. Retain no input history. */
 export function createContactReferenceReader(
   reader: ContactReferenceReader = resolveContactReferences
 ) {
-  const lifetime = new AbortController();
-  let running = false;
-  let pending: Job | undefined;
-
-  async function run(job: Job) {
-    running = true;
-    try {
-      job.signal.throwIfAborted();
-      const result = await reader(
-        job.viewer,
-        job.host,
-        job.request,
-        job.signal
-      );
-      job.signal.throwIfAborted();
-      job.resolve(result);
-    } catch (error) {
-      job.reject(error);
-    } finally {
-      job.detach();
-      running = false;
-      const next = pending;
-      pending = undefined;
-      if (next && !lifetime.signal.aborted)
-        fireAndForget(run(next), 'contact-references');
-    }
-  }
-
-  const read: ContactReferenceReader = (
+  const queue = createReplaceableReader((input: Input, signal: AbortSignal) =>
+    reader(input.viewer, input.host, input.request, signal)
+  );
+  const read: ContactReferenceReader = async (
     viewer,
     host,
     request,
-    callerSignal
+    signal
   ) => {
-    const signal = AbortSignal.any([callerSignal, lifetime.signal]);
-    return new Promise<ContactReferenceResolution>((resolve, reject) => {
-      signal.throwIfAborted();
-      assertContactReferenceInput(request);
-      const abort = () => {
-        if (pending === job) pending = undefined;
-        job.detach();
-        reject(signal.reason);
-      };
-      const job: Job = {
-        viewer,
-        host,
-        request,
-        signal,
-        resolve,
-        reject,
-        detach: () => signal.removeEventListener('abort', abort),
-      };
-      signal.addEventListener('abort', abort, { once: true });
-      if (running) {
-        const previous = pending;
-        pending = job;
-        previous?.detach();
-        previous?.reject(
-          new DOMException('Contact reference input superseded', 'AbortError')
-        );
-      } else fireAndForget(run(job), 'contact-references');
-    });
+    assertContactReferenceInput(request);
+    return queue.read({ viewer, host, request }, signal);
   };
-  return { read, dispose: () => lifetime.abort() };
+  return { read, dispose: queue.dispose };
 }

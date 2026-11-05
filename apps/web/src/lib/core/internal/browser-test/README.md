@@ -109,8 +109,14 @@ selection preservation and input focus. The source unit regression additionally
 checks twenty replacements, close/reopen reset and query-history collection.
 New message/channel, call, routine-template and sharing pickers use this source;
 main email fields also use it, with composition coverage in
-`features/email-compose/browser-test/recipient-directory.app.e2e.ts`. People SQL
-now uses the read-only boundary rather than the browser contacts source.
+`features/email-compose/browser-test/recipient-directory.app.e2e.ts`.
 
-This is UI/adapter coverage, not a WASM memory measurement or live-backend trace.
-Real Turso/OPFS hydration/search coverage lives in `crates/client/cache-turso`.
+`/?sql-people` mounts the real SQL compiler/controller over the production worker
+host and Turso/WASM/OPFS, with 1,001 synthetically hydrated contacts. Desktop/phone
+tests run fresh queries offline, reject writes/missing local capability, and fence
+replacement sessions while a native reply is held. Neither SQL server endpoint is
+used. Storage tests separately exercise 100k contacts plus self and persisted reopen.
+
+This is synthetic UI/storage coverage, not whole-app memory acceptance, physical
+mobile hardware or a live-backend trace. Further Turso/OPFS coverage lives in
+`crates/client/cache-turso`.

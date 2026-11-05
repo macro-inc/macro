@@ -1243,7 +1243,9 @@ search; it does not change storage schema 12. `CacheHost.people` now exposes sta
 update, search, bounded reference resolution and local SQL through coordinator
 protocol 16 and dedicated native commands. Local SQL uses the existing predicate
 index, not another database or a directory-sized Rust/JS relation; its adapter
-returns only bounded final results. Browser SQL composition is not yet cut over. Reference results retain at most two witnesses per
+returns only bounded final results. Browser SQL now consumes this capability,
+including offline; it never sends statements to a new server read endpoint.
+Reference results retain at most two witnesses per
 requested label, not a directory catalog. The reference read requires a bound viewer
 without binding one itself, and publication is required only for inbox exclusions.
 Missing reference support is independently unsupported on older hosts; scope/storage
@@ -1304,11 +1306,16 @@ domain and retains at most six non-self emails, with zero-history scoped queries
 Linear import resolves only uploaded assignee labels in serial bounded exact batches;
 manual mapping uses personal property windows and keeps explicit choices separate.
 Its retained names scale with the uploaded file, not the personal directory.
-Browser SQL compiles dependency metadata and routes people-containing statements to
-`/databases/read`; the local row source no longer accepts a personal-directory array.
-The server rejects writes and bounds output, and its viewer witness plus column IDs
-fence foreign/stale results. Fresh people SQL is network-dependent; no cache/full-list
-or read/write fallback is permitted. Wider query parity and legacy cleanup remain open.
+Browser SQL compiles dependency metadata and executes direct people reads through
+`CacheHost.people.readSql` in existing local Turso. The ordinary row source accepts
+only bounded explicit people keys for joins, never a directory array. A complete
+same-generation backfill checkpoint is required before and after a read; its final
+commit notification wakes pending queries after the page acknowledgement. Scope,
+compiler metadata and input ownership fence answers, and each observer retains one
+physical operation plus one replaceable input. The unnecessary `/databases/read`
+endpoint/client is removed. Fresh queries work offline once synchronization is
+complete; unsupported/incomplete reads stay explicit. Wider join parity, removal
+reconciliation and legacy cleanup remain open.
 Calendar create/edit, event-detail guest actions and AI-draft
 composers now use bounded property windows with event-owned guest extras. Chosen
 names stay in selection metadata rather than a directory map, and person pages

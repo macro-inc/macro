@@ -1,12 +1,12 @@
 ## Development Commands
 
 - Use `bun` as the package manager and script runner (`bun run build`, `bunx tsc`).
-- `bun run test`: run tests 
+- `bun run test`: run tests
 - `bun run check`: check typescript changes
 - Forward `CacheHost.people` through the app's retiring host, resolving the current host on each call even for captured methods; retired reads return unsupported and context writes reject rather than acknowledge discarded publication.
-- `CacheHost.people` contracts come from cache-core models: `bun run gen-cache-people-schema --rust` regenerates Rust JSON plus Zod/types; `--check --rust` verifies both. `bun run check` verifies JSON-to-frontend generation, while cache-core tests verify Rust-to-JSON drift. Missing native person commands mean unsupported, never permission to issue an unscoped write. 
-- `bun run lint`: lint with biome 
-- `bun run format`: format changes with biome 
+- `CacheHost.people` contracts come from cache-core models: `bun run gen-cache-people-schema --rust` regenerates Rust JSON plus Zod/types; `--check --rust` verifies both. `bun run check` verifies JSON-to-frontend generation, while cache-core tests verify Rust-to-JSON drift. Missing native person commands mean unsupported, never permission to issue an unscoped write.
+- `bun run lint`: lint with biome
+- `bun run format`: format changes with biome
 - `bun run knip`: to check for dead code
 - Run Linux native cache-plugin tests from the repository root with `nix develop .#tauri-linux --command cargo test --manifest-path apps/web/tauri/Cargo.toml -p graphql_cache_plugin`; the [Tauri platform shell](../../docs/development/running-locally.md) supplies the required desktop libraries.
 - Refresh `nix-support/node_modules-hashes.json` for Linux and Darwin when dependency manifests, the lockfile, or dependency patches change.
@@ -152,7 +152,9 @@ Execute browser `macro.people` SQL in the existing local Turso cache, including
 offline; authorized synchronization supplies records, not a server query endpoint.
 Use actual wasm compiler metadata to distinguish the built-in relation from ordinary
 tables named people. `CacheHost.people.readSql` exposes the scoped local capability;
-missing native support must not disable other person methods or trigger remote SQL. Filter, aggregate and limit before materializing results; never
+missing native support must not disable other person methods or trigger remote SQL.
+Serialize uninterruptible reads with one replaceable pending input. Wake incomplete
+queries on the committed contact checkpoint, not only the preceding hydration hint. Filter, aggregate and limit before materializing results; never
 enumerate contacts or fall back to remote SQL execution. Validate result metadata and
 fence account/session, storage generation, input transitions and disposal. Require
 complete synchronization before treating local results as directory-wide evidence;
