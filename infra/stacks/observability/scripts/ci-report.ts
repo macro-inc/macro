@@ -217,7 +217,10 @@ export async function main(args: string[]) {
     for (let day = days - 1; day >= 0; day -= 1) {
       const start = today - day * DAY_SECONDS;
       const end = Math.min(start + DAY_SECONDS, now);
-      const [row] = await loki.table(spec, summary, `${end - start}s`, end);
+      // A day Loki refuses stays blank rather than costing the tables above.
+      const [row] = await loki
+        .table(spec, summary, `${end - start}s`, end)
+        .catch(() => []);
       rows.push({
         labels: [
           utc(start).slice(0, 10) +
