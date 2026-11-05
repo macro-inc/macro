@@ -1255,3 +1255,6 @@ quotes as **Included for Macro**. Freeze review terms and submit the reviewed
 fresh review before retrying. Show only typed `repository_creation_failed`
 server reasons as pre-purchase failures; other create failures keep the
 roster-check warning.
+
+Team-agent telemetry uses opaque team/computer IDs. The API's `userId` may
+contain an email address; do not attach it to browser spans.

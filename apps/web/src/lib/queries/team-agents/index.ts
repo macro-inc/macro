@@ -149,7 +149,6 @@ export function useDeleteTeamAgentMutation() {
     mutationFn: ({ teamId, userId }: { teamId: string; userId: string }) =>
       Telemetry.span('team-agent.remove', (span) => {
         span.setAttr('team.id', teamId);
-        span.setAttr('agent.id', userId);
         return throwOnErr(() => authServiceClient.deleteTeamAgent(userId));
       }),
     onSettled: (_data, _error, { teamId }) => invalidateTeamAgents(teamId),
@@ -162,7 +161,6 @@ export function useRetryTeamAgentMutation() {
     mutationFn: ({ teamId, userId }: { teamId: string; userId: string }) =>
       Telemetry.span('team-agent.retry', (span) => {
         span.setAttr('team.id', teamId);
-        span.setAttr('agent.id', userId);
         return throwOnErr(() => authServiceClient.retryTeamAgent(userId));
       }),
     onSuccess: (agent, { teamId }) => {
