@@ -87,7 +87,7 @@ fn path_check() -> Job {
                 .if_condition(Expression::new("steps.filter.outputs.should_run == 'true'")),
         )
         .add_step(
-            steps::mount_path_cache_volume("Mount nextest-filter binary cache", FILTER_CACHE_DIR)
+            steps::mount_nextest_filter_cache(FILTER_CACHE_DIR)
                 .if_condition(Expression::new(format!(
                     "steps.filter.outputs.should_run == 'true' && ({TRUSTED_CONTEXT})"
                 ))),
