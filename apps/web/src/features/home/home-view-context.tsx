@@ -48,6 +48,10 @@ import {
 } from './home-preview-navigation';
 import { homeDetailParamsFromRoute, homePreviewTarget } from './home-route';
 import { homeProjectSearch, isHomeDocumentType } from './home-route-schema';
+import {
+  createHomeStartedSessions,
+  type HomeStartedSessions,
+} from './home-started-sessions';
 import { homeTabSearch, homeTabSearchCodec } from './home-tab-search';
 import { createHomeViewPersistence, normalizeHomeFacets } from './persistence';
 import type {
@@ -79,6 +83,8 @@ export type HomeViewContext = {
   closePreview: () => void;
   setTab: (tab: HomeTab) => void;
   setFacets: (facets: FacetSelection) => void;
+  /** Sessions the composer started that the list may not have yet. */
+  startedSessions: HomeStartedSessions;
 };
 
 function defaultGroupBy(): HomeGroupBy {
@@ -251,5 +257,6 @@ export const [HomeViewProvider, useHomeView] = createAssertedContextProvider<
     closePreview,
     setTab,
     setFacets,
+    startedSessions: createHomeStartedSessions(),
   };
 });

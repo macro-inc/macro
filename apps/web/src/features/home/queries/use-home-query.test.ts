@@ -8,6 +8,7 @@ import { soupPageTimestamp } from '@queries/soup/page-timestamp';
 import { createRoot, createSignal } from 'solid-js';
 import { createStore } from 'solid-js/store';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { createHomeStartedSessions } from '../home-started-sessions';
 import type { HomeViewState } from '../types';
 import { type HomeDataSource, useHomeDataSource } from './use-home-query';
 
@@ -171,8 +172,9 @@ function mount(
       groupBy: 'none',
       facets: {},
     });
-    const source = useHomeDataSource(state);
-    return { source, setState };
+    const started = createHomeStartedSessions();
+    const source = useHomeDataSource(state, started);
+    return { source, setState, started };
   });
 }
 const rows = (source: HomeDataSource) =>
@@ -253,6 +255,38 @@ describe('Home data source', () => {
     const [refreshed] = rows(source);
     expect(refreshed.sortTs).toBe(fresh.created_at);
     expect(getDocumentCommentNotification(refreshed)).toEqual(fresh);
+  });
+
+  it('lists a session started from Home first until recent activity lists it', () => {
+    const notifications = makeQuery([email('older', 9)], false);
+    const activity = makeQuery([], false);
+    const { source, started } = mount(notifications, activity);
+    const [sessionId, setSessionId] = createSignal<string>();
+
+    started.record({
+      id: 'session',
+      pending: { sessionId, failed: () => false },
+      prompt: 'Draft the launch plan',
+      userId: 'alice',
+      startedAt: '2026-09-10T12:00:00Z',
+    });
+    expect(ids(source)).toEqual(['session', 'older']);
+    expect(rows(source)[0].name).toBe('Draft the launch plan');
+
+    setSessionId('session');
+    activity.setEntities([
+      {
+        type: 'agent_session',
+        id: 'session',
+        name: 'Launch plan',
+        ownerId: 'alice',
+        botId: '',
+        status: 'running',
+        touchedAt: '2026-09-10T12:00:01Z',
+      },
+    ]);
+    expect(ids(source)).toEqual(['session', 'older']);
+    expect(rows(source)[0].name).toBe('Launch plan');
   });
 
   it('excludes Noise and unclassified emails from recent activity, even when important or drafted', () => {
