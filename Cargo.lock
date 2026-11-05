@@ -23241,15 +23241,6 @@ name = "xtask"
 version = "0.1.0"
 
 [[package]]
-name = "xtask_cache_wasm"
-version = "0.1.0"
-dependencies = [
- "anyhow",
- "serde_json",
- "xtask_paths",
-]
-
-[[package]]
 name = "xtask_deps"
 version = "0.1.0"
 dependencies = [
