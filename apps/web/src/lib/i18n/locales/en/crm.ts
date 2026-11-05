@@ -22,7 +22,7 @@ export default {
   contactEditUnavailable:
     'This contact or company is no longer available to edit.',
   contactEditInvalid:
-    'This change is unavailable. Reload the contact and try again.',
+    'This change is unavailable. Check the value and try again.',
 
   stageRequirements: 'Stage requirements',
   stageRequirementsDescription:
