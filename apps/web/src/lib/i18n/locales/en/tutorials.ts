@@ -64,7 +64,7 @@ export default {
   whatsappBlock: 'WhatsApp in Macro',
   whatsappSnippet:
     'Link WhatsApp, bring your chats in, reply, share and mention them in channels',
-  whatsappLength: '0:45',
+  whatsappLength: '0:43',
   agentsTitle: 'Learn how to use Macro Agents',
   agentsBlock: 'Macro Agents',
   agentsSnippet:
