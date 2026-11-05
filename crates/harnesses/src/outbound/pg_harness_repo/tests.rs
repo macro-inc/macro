@@ -654,9 +654,15 @@ async fn hosted_pairing_is_born_approved_rotates_on_retry_and_claims_once(pool: 
         Some(computer_id)
     );
 
-    repo.set_capabilities(harness_id, HarnessCapabilities { screen: true })
-        .await
-        .unwrap();
+    repo.set_capabilities(
+        harness_id,
+        HarnessCapabilities {
+            screen: true,
+            ..Default::default()
+        },
+    )
+    .await
+    .unwrap();
     repo.set_claude_mode(harness_id, ClaudeMode::OwnAccount)
         .await
         .unwrap();
@@ -675,7 +681,13 @@ async fn hosted_pairing_is_born_approved_rotates_on_retry_and_claims_once(pool: 
     assert!(renamed.allow_permission_bypass);
     assert_eq!(renamed.owner, HarnessOwner::Team { team_id });
     assert_eq!(renamed.computer_id, Some(computer_id));
-    assert_eq!(renamed.capabilities, HarnessCapabilities { screen: true });
+    assert_eq!(
+        renamed.capabilities,
+        HarnessCapabilities {
+            screen: true,
+            ..Default::default()
+        }
+    );
     assert_eq!(renamed.claude_mode, ClaudeMode::OwnAccount);
 
     // A retry keeps the pairing and harness and takes the new secret.
