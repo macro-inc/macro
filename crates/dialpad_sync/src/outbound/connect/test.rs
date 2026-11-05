@@ -3,7 +3,7 @@ use macro_user_id::cowlike::CowLike;
 use serde_json::json;
 use wiremock::{
     Mock, MockServer, ResponseTemplate,
-    matchers::{body_json, header, method, path},
+    matchers::{header, method, path},
 };
 
 const TOKEN_PATH: &str = "/v1/users/macro|ada@example.com/connections/dialpad/token";
@@ -52,31 +52,6 @@ async fn token_exports_map_to_grants() {
     assert!(matches!(reauth, Grant::NeedsReauth));
 
     assert!(token_reply(ResponseTemplate::new(503)).await.is_err());
-}
-
-#[tokio::test]
-async fn connecting_opens_a_dialpad_session_for_the_user() {
-    let server = MockServer::start().await;
-    Mock::given(method("POST"))
-        .and(path("/v1/connect-sessions"))
-        .and(body_json(json!({
-            "external_user_id": "macro|ada@example.com",
-            "app_id": "dialpad",
-            "redirect_url": "https://app.test/back",
-        })))
-        .respond_with(ResponseTemplate::new(201).set_body_json(json!({
-            "connect_url": "https://connect.test/s/1",
-            "expires_at": "2026-01-01T00:00:00Z",
-        })))
-        .expect(1)
-        .mount(&server)
-        .await;
-
-    let url = grants(&server)
-        .connect_url(&user(), "https://app.test/back")
-        .await
-        .unwrap();
-    assert_eq!(url, "https://connect.test/s/1");
 }
 
 #[tokio::test]

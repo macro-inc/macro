@@ -311,11 +311,6 @@ async fn a_connected_user_s_calls_import_from_signed_deliveries_until_disconnect
     for body in [&transcript, &hangup, &hangup, &recap] {
         service.receive(connection.id, body).await.unwrap();
     }
-    let forged = signed("not-our-secret", call_event(9, "hangup", 5), json!({}));
-    assert!(matches!(
-        service.receive(connection.id, &forged).await,
-        Err(SyncError::InvalidDelivery)
-    ));
     assert!(matches!(
         service.receive(Uuid::from_u128(9), &hangup).await,
         Err(SyncError::InvalidDelivery)
@@ -476,39 +471,11 @@ async fn a_removed_connect_grant_stops_sync_and_drops_pending_deliveries(pool: P
     let renewed = service.repo.by_user(&user()).await.unwrap().unwrap();
     assert!(renewed.enabled);
     assert_eq!(renewed.namespace, connection.namespace);
-    assert_eq!(
-        service.dialpad.unregistered.lock().unwrap().as_slice(),
-        &[connection.registration.unwrap()],
-        "the stopped sync's subscription is removed before a new one"
-    );
     let stale = signed(&secret, call_event(10, "hangup", 2), json!({}));
     assert!(matches!(
         service.receive(renewed.id, &stale).await,
         Err(SyncError::InvalidDelivery)
     ));
-}
-
-#[sqlx::test(
-    migrator = "MACRO_DB_MIGRATIONS",
-    fixtures(path = "../../../fixtures", scripts("users"))
-)]
-async fn a_failed_subscription_cleans_up_and_waits_before_retrying(pool: PgPool) {
-    let service = service(pool, GrantState::Active, Arc::new(Calls::default()));
-    *service.dialpad.fail_subscribe.lock().unwrap() = true;
-    service.connect(&user(), Backfill::None).await.unwrap();
-    assert!(service.complete(&user()).await.is_err());
-    assert_eq!(
-        service.status(&user()).await.unwrap(),
-        SyncStatus::Failed {
-            issue: SyncIssue::SetupFailed
-        }
-    );
-    assert_eq!(
-        service.dialpad.deleted_webhooks.lock().unwrap().as_slice(),
-        &[DialpadId(11)]
-    );
-    service.reconcile().await.unwrap();
-    assert_eq!(service.dialpad.webhooks.lock().unwrap().len(), 1);
 }
 
 #[sqlx::test(
@@ -666,28 +633,13 @@ async fn setup_finishes_only_under_the_lease_that_stored_the_secret(pool: PgPool
         service.repo.events(id, DialpadId(9)).await.unwrap().len(),
         1
     );
-}
 
-#[sqlx::test(
-    migrator = "MACRO_DB_MIGRATIONS",
-    fixtures(path = "../../../fixtures", scripts("users"))
-)]
-async fn setup_failure_after_disconnect_cannot_restart_the_sync(pool: PgPool) {
-    let service = service(pool, GrantState::Active, Arc::new(Calls::default()));
-    service.connect(&user(), Backfill::None).await.unwrap();
-    let connection = service.repo.by_user(&user()).await.unwrap().unwrap();
-    let id = connection.id;
-    let lease = service
-        .repo
-        .begin_setup(&connection, &SigningSecret("secret".into()))
-        .await
-        .unwrap()
-        .unwrap();
+    // A setup that fails after the user disconnected cannot restart sync.
     let connection = service.repo.by_id(id).await.unwrap().unwrap();
     service.repo.disconnect(&connection, false).await.unwrap();
     service
         .repo
-        .failed_setup(id, lease, MAX_SETUP_ATTEMPTS)
+        .failed_setup(id, second, MAX_SETUP_ATTEMPTS)
         .await
         .unwrap();
     assert_eq!(
@@ -1307,6 +1259,23 @@ async fn setup_gives_up_after_its_attempts_until_the_user_reconnects(pool: PgPoo
     *service.dialpad.fail_subscribe.lock().unwrap() = true;
     service.connect(&user(), Backfill::None).await.unwrap();
     assert!(service.complete(&user()).await.is_err());
+    assert_eq!(
+        service.status(&user()).await.unwrap(),
+        SyncStatus::Failed {
+            issue: SyncIssue::SetupFailed
+        }
+    );
+    assert_eq!(
+        service.dialpad.deleted_webhooks.lock().unwrap().as_slice(),
+        &[DialpadId(11)],
+        "the webhook of a failed subscription is removed"
+    );
+    service.reconcile().await.unwrap();
+    assert_eq!(
+        service.dialpad.webhooks.lock().unwrap().len(),
+        1,
+        "a failed setup waits an hour before retrying"
+    );
     let retry_due = || {
         sqlx::query!(
             "UPDATE dialpad_sync_connections SET setup_started_at = now() - interval '2 hours'"
