@@ -1013,6 +1013,50 @@ export type CodingPreferencesBody = {
 };
 
 /**
+ * Add a custom MCP server to the user's connections.
+ */
+export type ConnectMcpServer = {
+    /**
+     * Display name for the server.
+     */
+    serverName: string;
+    /**
+     * The server's URL.
+     */
+    url: string;
+};
+
+/**
+ * Response from [`ConnectMcpServer`].
+ */
+export type ConnectMcpServerResponse = {
+    /**
+     * Whether the user already had this server before the call.
+     */
+    alreadyConnected: boolean;
+    /**
+     * Whether the server holds the user's sign-in.
+     */
+    authenticated: boolean;
+    /**
+     * Whether the server's tools are turned on.
+     */
+    enabled: boolean;
+    /**
+     * The server's display name.
+     */
+    serverName: string;
+    /**
+     * What happened and what the user still has to do.
+     */
+    summary: string;
+    /**
+     * The server's URL.
+     */
+    url: string;
+};
+
+/**
  * A connected app the session's agent may use.
  */
 export type ConnectedApp = {
@@ -1056,6 +1100,20 @@ export type ConnectedTool = {
 };
 
 /**
+ * One tool found by a search across the agent's connected apps.
+ */
+export type ConnectedToolMatch = {
+    /**
+     * The app serving the tool.
+     */
+    app: ConnectedApp;
+    /**
+     * The tool.
+     */
+    tool: ConnectedTool;
+};
+
+/**
  * A connected tool's answer: MCP's `CallToolResult`.
  */
 export type ConnectedToolResult = {
@@ -1075,6 +1133,35 @@ export type ConnectedToolResult = {
     structuredContent?: {
         [key: string]: unknown;
     } | null;
+};
+
+/**
+ * The best matches across the agent's connected apps, and the apps whose
+ * tools could not be listed, which the search did not cover.
+ */
+export type ConnectedToolSearch = {
+    /**
+     * At most [`MAX_TOOL_MATCHES`] tools, best first.
+     */
+    matches: Array<ConnectedToolMatch>;
+    /**
+     * Apps whose tools could not be listed.
+     */
+    unsearched: Array<ConnectedApp>;
+};
+
+/**
+ * An advertised action, not a tool loaded into the current turn.
+ */
+export type ConnectorTool = {
+    /**
+     * What the action supports.
+     */
+    description: string;
+    /**
+     * Upstream tool name.
+     */
+    name: string;
 };
 
 /**
@@ -1312,6 +1399,90 @@ export type DiscoverAgentCapabilitiesResponse = {
      * Complete ordered ACP session configuration advertised by the agent.
      */
     configOptions: Array<AgentConfigOptionDto>;
+};
+
+/**
+ * Discovery metadata and optional markup for a user-controlled auth flow.
+ */
+export type DiscoverConnectorsResponse = {
+    /**
+     * Include verbatim only if an advertised tool supports the requested task.
+     */
+    connect_markup?: string | null;
+    /**
+     * Catalog or capability results.
+     */
+    result: DiscoveryResult;
+};
+
+/**
+ * A verified app identity from the directory.
+ */
+export type DiscoveredApp = {
+    /**
+     * Exact identity to inspect or connect.
+     */
+    app_slug: string;
+    /**
+     * Directory description; inspect tools to verify specific capabilities.
+     */
+    description?: string | null;
+    /**
+     * Human-readable app name.
+     */
+    name: string;
+};
+
+/**
+ * Search by app name, then inspect a returned slug before recommending auth.
+ */
+export type DiscoveryRequest = {
+    operation: 'search';
+    /**
+     * App name, e.g. "Notion" or "Linear", not a task description.
+     */
+    query: string;
+} | {
+    /**
+     * Exact app slug from search results.
+     */
+    app_slug: string;
+    operation: 'inspect';
+};
+
+/**
+ * Discovery results never execute tools or change connections.
+ */
+export type DiscoveryResult = {
+    /**
+     * Matching apps.
+     */
+    apps: Array<DiscoveredApp>;
+    /**
+     * Narrow the app name if this is true.
+     */
+    more_results: boolean;
+    operation: 'search';
+} | {
+    /**
+     * App from the directory.
+     */
+    app: DiscoveredApp;
+    /**
+     * Whether this caller has an enabled connection. For an app that
+     * connects through its own MCP server, that connection is checked
+     * there, not in Pipedream.
+     */
+    connected: boolean;
+    operation: 'inspect';
+    /**
+     * Advertised tools. Use SearchTools after connecting to load them.
+     */
+    tools: Array<ConnectorTool>;
+    /**
+     * True when some advertised tools were omitted.
+     */
+    tools_truncated: boolean;
 };
 
 /**
@@ -3367,6 +3538,76 @@ export type ListExecutionConnectedAppsResponses = {
 };
 
 export type ListExecutionConnectedAppsResponse = ListExecutionConnectedAppsResponses[keyof ListExecutionConnectedAppsResponses];
+
+export type DiscoverConnectedAppsData = {
+    body: DiscoveryRequest;
+    path: {
+        session_id: string;
+        execution_id: string;
+    };
+    query?: never;
+    url: '/agent-sessions/{session_id}/code-executions/{execution_id}/connected-apps/discover';
+};
+
+export type DiscoverConnectedAppsErrors = {
+    400: unknown;
+    403: unknown;
+    404: unknown;
+};
+
+export type DiscoverConnectedAppsResponses = {
+    200: DiscoverConnectorsResponse;
+};
+
+export type DiscoverConnectedAppsResponse = DiscoverConnectedAppsResponses[keyof DiscoverConnectedAppsResponses];
+
+export type AddConnectedMcpServerData = {
+    body: ConnectMcpServer;
+    path: {
+        session_id: string;
+        execution_id: string;
+    };
+    query?: never;
+    url: '/agent-sessions/{session_id}/code-executions/{execution_id}/connected-apps/servers';
+};
+
+export type AddConnectedMcpServerErrors = {
+    400: unknown;
+    403: unknown;
+    404: unknown;
+};
+
+export type AddConnectedMcpServerResponses = {
+    200: ConnectMcpServerResponse;
+};
+
+export type AddConnectedMcpServerResponse = AddConnectedMcpServerResponses[keyof AddConnectedMcpServerResponses];
+
+export type SearchConnectedAppToolsData = {
+    body?: never;
+    path: {
+        session_id: string;
+        execution_id: string;
+    };
+    query: {
+        /**
+         * Keywords matched against tool names and descriptions, e.g. `linear issue`.
+         */
+        query: string;
+    };
+    url: '/agent-sessions/{session_id}/code-executions/{execution_id}/connected-apps/tools';
+};
+
+export type SearchConnectedAppToolsErrors = {
+    403: unknown;
+    404: unknown;
+};
+
+export type SearchConnectedAppToolsResponses = {
+    200: ConnectedToolSearch;
+};
+
+export type SearchConnectedAppToolsResponse = SearchConnectedAppToolsResponses[keyof SearchConnectedAppToolsResponses];
 
 export type CallConnectedAppToolData = {
     body: CallConnectedTool;

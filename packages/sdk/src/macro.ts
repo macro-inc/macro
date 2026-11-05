@@ -54,6 +54,7 @@ export {
   ConnectedApp,
   ConnectedTool,
 } from './entities/connected-apps/connected-app';
+export { Connector } from './entities/connected-apps/connector';
 export { ConnectedAppNamespace } from './entities/connected-apps/namespace';
 export {
   type AddColumnOptions,
@@ -293,6 +294,11 @@ export type {
   ConnectedAppKind,
   ConnectedToolResult,
 } from './entities/connected-apps/connected-app';
+export type {
+  ConnectorAction,
+  ConnectorInspection,
+} from './entities/connected-apps/connector';
+export type { ConnectMcpServerResponse } from './entities/connected-apps/namespace';
 export {
   CrmPipeline,
   PipelineColumn,

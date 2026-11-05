@@ -1675,6 +1675,176 @@
         }
       }
     },
+    "/agent-sessions/{session_id}/code-executions/{execution_id}/connected-apps/discover": {
+      "post": {
+        "tags": ["agent-sessions"],
+        "summary": "Search the connectable app catalog, or inspect one app's tools and connection status.",
+        "operationId": "discover_connected_apps",
+        "parameters": [
+          {
+            "name": "session_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "execution_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/DiscoveryRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DiscoverConnectorsResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": ""
+          },
+          "403": {
+            "description": ""
+          },
+          "404": {
+            "description": ""
+          }
+        }
+      }
+    },
+    "/agent-sessions/{session_id}/code-executions/{execution_id}/connected-apps/servers": {
+      "post": {
+        "tags": ["agent-sessions"],
+        "summary": "Add a custom MCP server to the execution account's connections.",
+        "operationId": "add_connected_mcp_server",
+        "parameters": [
+          {
+            "name": "session_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "execution_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ConnectMcpServer"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ConnectMcpServerResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": ""
+          },
+          "403": {
+            "description": ""
+          },
+          "404": {
+            "description": ""
+          }
+        }
+      }
+    },
+    "/agent-sessions/{session_id}/code-executions/{execution_id}/connected-apps/tools": {
+      "get": {
+        "tags": ["agent-sessions"],
+        "summary": "Find tools across the agent's connected apps by keywords.",
+        "operationId": "search_connected_app_tools",
+        "parameters": [
+          {
+            "name": "session_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "execution_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "query",
+            "in": "query",
+            "description": "Keywords matched against tool names and descriptions, e.g. `linear issue`.",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ConnectedToolSearch"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": ""
+          },
+          "404": {
+            "description": ""
+          }
+        }
+      }
+    },
     "/agent-sessions/{session_id}/code-executions/{execution_id}/connected-apps/{kind}/{key}/calls": {
       "post": {
         "tags": ["agent-sessions"],
@@ -4647,6 +4817,59 @@
           }
         }
       },
+      "ConnectMcpServer": {
+        "type": "object",
+        "description": "Add a custom MCP server to the user's connections.",
+        "required": ["url", "serverName"],
+        "properties": {
+          "serverName": {
+            "type": "string",
+            "description": "Display name for the server."
+          },
+          "url": {
+            "type": "string",
+            "description": "The server's URL."
+          }
+        }
+      },
+      "ConnectMcpServerResponse": {
+        "type": "object",
+        "description": "Response from [`ConnectMcpServer`].",
+        "required": [
+          "url",
+          "serverName",
+          "alreadyConnected",
+          "authenticated",
+          "enabled",
+          "summary"
+        ],
+        "properties": {
+          "alreadyConnected": {
+            "type": "boolean",
+            "description": "Whether the user already had this server before the call."
+          },
+          "authenticated": {
+            "type": "boolean",
+            "description": "Whether the server holds the user's sign-in."
+          },
+          "enabled": {
+            "type": "boolean",
+            "description": "Whether the server's tools are turned on."
+          },
+          "serverName": {
+            "type": "string",
+            "description": "The server's display name."
+          },
+          "summary": {
+            "type": "string",
+            "description": "What happened and what the user still has to do."
+          },
+          "url": {
+            "type": "string",
+            "description": "The server's URL."
+          }
+        }
+      },
       "ConnectedApp": {
         "type": "object",
         "description": "A connected app the session's agent may use.",
@@ -4690,6 +4913,21 @@
           }
         }
       },
+      "ConnectedToolMatch": {
+        "type": "object",
+        "description": "One tool found by a search across the agent's connected apps.",
+        "required": ["app", "tool"],
+        "properties": {
+          "app": {
+            "$ref": "#/components/schemas/ConnectedApp",
+            "description": "The app serving the tool."
+          },
+          "tool": {
+            "$ref": "#/components/schemas/ConnectedTool",
+            "description": "The tool."
+          }
+        }
+      },
       "ConnectedToolResult": {
         "type": "object",
         "description": "A connected tool's answer: MCP's `CallToolResult`.",
@@ -4709,6 +4947,42 @@
           "structuredContent": {
             "type": ["object", "null"],
             "description": "Structured output, for tools that declare an output schema."
+          }
+        }
+      },
+      "ConnectedToolSearch": {
+        "type": "object",
+        "description": "The best matches across the agent's connected apps, and the apps whose\ntools could not be listed, which the search did not cover.",
+        "required": ["matches", "unsearched"],
+        "properties": {
+          "matches": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ConnectedToolMatch"
+            },
+            "description": "At most [`MAX_TOOL_MATCHES`] tools, best first."
+          },
+          "unsearched": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ConnectedApp"
+            },
+            "description": "Apps whose tools could not be listed."
+          }
+        }
+      },
+      "ConnectorTool": {
+        "type": "object",
+        "description": "An advertised action, not a tool loaded into the current turn.",
+        "required": ["name", "description"],
+        "properties": {
+          "description": {
+            "type": "string",
+            "description": "What the action supports."
+          },
+          "name": {
+            "type": "string",
+            "description": "Upstream tool name."
           }
         }
       },
@@ -4966,6 +5240,138 @@
             "description": "Complete ordered ACP session configuration advertised by the agent."
           }
         }
+      },
+      "DiscoverConnectorsResponse": {
+        "type": "object",
+        "description": "Discovery metadata and optional markup for a user-controlled auth flow.",
+        "required": ["result"],
+        "properties": {
+          "connect_markup": {
+            "type": ["string", "null"],
+            "description": "Include verbatim only if an advertised tool supports the requested task."
+          },
+          "result": {
+            "$ref": "#/components/schemas/DiscoveryResult",
+            "description": "Catalog or capability results."
+          }
+        }
+      },
+      "DiscoveredApp": {
+        "type": "object",
+        "description": "A verified app identity from the directory.",
+        "required": ["app_slug", "name"],
+        "properties": {
+          "app_slug": {
+            "type": "string",
+            "description": "Exact identity to inspect or connect."
+          },
+          "description": {
+            "type": ["string", "null"],
+            "description": "Directory description; inspect tools to verify specific capabilities."
+          },
+          "name": {
+            "type": "string",
+            "description": "Human-readable app name."
+          }
+        }
+      },
+      "DiscoveryRequest": {
+        "oneOf": [
+          {
+            "type": "object",
+            "description": "Find connectable apps by name.",
+            "required": ["query", "operation"],
+            "properties": {
+              "operation": {
+                "type": "string",
+                "enum": ["search"]
+              },
+              "query": {
+                "type": "string",
+                "description": "App name, e.g. \"Notion\" or \"Linear\", not a task description."
+              }
+            }
+          },
+          {
+            "type": "object",
+            "description": "Verify capabilities and connection status for one catalog app.",
+            "required": ["app_slug", "operation"],
+            "properties": {
+              "app_slug": {
+                "type": "string",
+                "description": "Exact app slug from search results."
+              },
+              "operation": {
+                "type": "string",
+                "enum": ["inspect"]
+              }
+            }
+          }
+        ],
+        "description": "Search by app name, then inspect a returned slug before recommending auth."
+      },
+      "DiscoveryResult": {
+        "oneOf": [
+          {
+            "type": "object",
+            "description": "Candidate apps; none has had its capabilities verified yet.",
+            "required": ["apps", "more_results", "operation"],
+            "properties": {
+              "apps": {
+                "type": "array",
+                "items": {
+                  "$ref": "#/components/schemas/DiscoveredApp"
+                },
+                "description": "Matching apps."
+              },
+              "more_results": {
+                "type": "boolean",
+                "description": "Narrow the app name if this is true."
+              },
+              "operation": {
+                "type": "string",
+                "enum": ["search"]
+              }
+            }
+          },
+          {
+            "type": "object",
+            "description": "Verified identity, capabilities and this caller's connection status.",
+            "required": [
+              "app",
+              "connected",
+              "tools",
+              "tools_truncated",
+              "operation"
+            ],
+            "properties": {
+              "app": {
+                "$ref": "#/components/schemas/DiscoveredApp",
+                "description": "App from the directory."
+              },
+              "connected": {
+                "type": "boolean",
+                "description": "Whether this caller has an enabled connection. For an app that\nconnects through its own MCP server, that connection is checked\nthere, not in Pipedream."
+              },
+              "operation": {
+                "type": "string",
+                "enum": ["inspect"]
+              },
+              "tools": {
+                "type": "array",
+                "items": {
+                  "$ref": "#/components/schemas/ConnectorTool"
+                },
+                "description": "Advertised tools. Use SearchTools after connecting to load them."
+              },
+              "tools_truncated": {
+                "type": "boolean",
+                "description": "True when some advertised tools were omitted."
+              }
+            }
+          }
+        ],
+        "description": "Discovery results never execute tools or change connections."
       },
       "DocumentId": {
         "type": "string",

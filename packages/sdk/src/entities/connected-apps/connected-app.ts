@@ -51,16 +51,57 @@ export class ConnectedApp {
         },
       }),
     );
-    return records.map(
-      (record: ConnectedAppRecord) =>
-        new ConnectedApp(
-          client,
-          execution,
-          record.kind,
-          record.key,
-          record.name,
-        ),
+    return records.map((record: ConnectedAppRecord) =>
+      ConnectedApp.fromRecord(client, execution, record),
     );
+  }
+
+  /** @internal A handle for an app record the harness answered. */
+  static fromRecord(
+    client: MacroClient,
+    execution: CodeExecution,
+    record: ConnectedAppRecord,
+  ): ConnectedApp {
+    return new ConnectedApp(
+      client,
+      execution,
+      record.kind,
+      record.key,
+      record.name,
+    );
+  }
+
+  /**
+   * Find tools across every app the execution's agent was given, by
+   * keywords matched against tool names and descriptions, best first (at
+   * most 20). `unsearched` lists apps whose tools could not be read.
+   */
+  static async searchTools(
+    client: MacroClient,
+    execution: CodeExecution,
+    query: string,
+  ): Promise<{ matches: ConnectedTool[]; unsearched: ConnectedApp[] }> {
+    const found = unwrap(
+      await client.agentHarness.searchConnectedAppTools({
+        path: {
+          session_id: execution.session().id,
+          execution_id: execution.id,
+        },
+        query: { query },
+      }),
+    );
+    return {
+      matches: found.matches.map((match) =>
+        ConnectedTool.fromRecord(
+          client,
+          ConnectedApp.fromRecord(client, execution, match.app),
+          match.tool,
+        ),
+      ),
+      unsearched: found.unsearched.map((record) =>
+        ConnectedApp.fromRecord(client, execution, record),
+      ),
+    };
   }
 
   /**
@@ -73,15 +114,8 @@ export class ConnectedApp {
         path: this.path(),
       }),
     );
-    return records.map(
-      (record: ConnectedToolRecord) =>
-        new ConnectedTool(
-          this.client,
-          this,
-          record.name,
-          record.description ?? undefined,
-          record.inputSchema,
-        ),
+    return records.map((record: ConnectedToolRecord) =>
+      ConnectedTool.fromRecord(this.client, this, record),
     );
   }
 
@@ -116,10 +150,27 @@ export class ConnectedTool {
     readonly inputSchema: Record<string, unknown>,
   ) {}
 
+  /** @internal A handle for a tool record the harness answered. */
+  static fromRecord(
+    client: MacroClient,
+    app: ConnectedApp,
+    record: ConnectedToolRecord,
+  ): ConnectedTool {
+    return new ConnectedTool(
+      client,
+      app,
+      record.name,
+      record.description ?? undefined,
+      record.inputSchema,
+    );
+  }
+
   /**
    * Call the tool as the execution's account, with arguments matching
    * `inputSchema`. Writes take effect immediately, in the user's real
-   * account. Check `isError` on the result: an app that is not connected,
+   * account. In a turn someone other than the session's owner prompted, a
+   * call as the owner waits for the owner to approve it, and a declined or
+   * unanswered call comes back with `isError`. Check `isError` on the result: an app that is not connected,
    * or whose connection expired, answers with `isError` and text telling you
    * what to say to the user, including any connect markup to put in your
    * reply verbatim.

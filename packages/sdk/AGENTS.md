@@ -26,7 +26,10 @@ enforced by the ordinary backend APIs.
 - `src/entities/connected-apps/`: `macro.connectedApps.list(execution)` returns the
   connected apps and custom MCP servers a running code execution's session
   agent was given; `app.tools()` and `tool.call(args)` go through the harness,
-  which stamps the credential. Only works inside a running execution.
+  which stamps the credential and holds each owner-account call in a turn
+  someone else prompted for the owner's approval. `discover(execution, name)`
+  and `Connector.inspect()` mirror `DiscoverConnectors`; `addServer` mirrors
+  `ConnectMcpServer`. Only works inside a running execution.
 - `src/entities/whatsapp/`: the owner's WhatsApp account and chat list; `WhatsAppChat.add()`
   returns an `ExternalChat`.
 - `src/entities/me/`: `macro.me.update()` sets the caller's name and profile
