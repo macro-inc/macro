@@ -56,10 +56,14 @@ export function VersionMenu(props: {
                           })
                         : t('artifacts.version', { number: version.number })}
                     </Dropdown.ItemLabel>
+                    <Show when={version.message}>
+                      {(message) => (
+                        <Dropdown.ItemDescription class="truncate text-xs">
+                          {message()}
+                        </Dropdown.ItemDescription>
+                      )}
+                    </Show>
                     <Dropdown.ItemDescription class="truncate text-xs text-ink-muted">
-                      <Show when={version.message}>
-                        {(message) => <>{message()} · </>}
-                      </Show>
                       {version.author} · {formatVersionTime(version.createdAt)}
                     </Dropdown.ItemDescription>
                   </span>
