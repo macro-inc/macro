@@ -105,6 +105,44 @@ describe('createRegisteredWork', () => {
     dispose.run();
   });
 
+  it('follows the new client when the transport changes', async () => {
+    const plain = {
+      subscription: vi.fn(() => makeSubject<unknown>().source),
+      query: () => ({
+        toPromise: async () => ({
+          data: { user: { registeredWork: [entry('1', 'a')] } },
+        }),
+      }),
+    } as unknown as Client;
+    const realtime = {
+      subscription: vi.fn(() => makeSubject<unknown>().source),
+      query: () => ({
+        toPromise: async () => ({
+          data: { user: { registeredWork: [entry('1', 'a')] } },
+        }),
+      }),
+    } as unknown as Client;
+    const [client, setClient] = createSignal(plain);
+    const dispose = { run: () => {} };
+    const work = createRoot((disposer) => {
+      dispose.run = disposer;
+      return createRegisteredWork({
+        client,
+        accountIds: () => ['a'],
+        enabled: () => true,
+        onReconnected: () => () => {},
+      });
+    });
+    await vi.waitFor(() => expect(work.loaded()).toBe(true));
+
+    setClient(() => realtime);
+    await vi.waitFor(() =>
+      expect(realtime.subscription).toHaveBeenCalledTimes(1)
+    );
+    expect(work.accountsWithWork()).toEqual(['a']);
+    dispose.run();
+  });
+
   it('reads again when told changes may have been missed', async () => {
     const { work, patch, reconnectListeners, dispose } = setup([
       [entry('1', 'a')],

@@ -2,7 +2,14 @@
  * @vitest-environment jsdom
  */
 
-import { fireEvent, render, screen, within } from '@solidjs/testing-library';
+import type { WorkItem } from '@app/features/agent-work/core/work-item';
+import {
+  fireEvent,
+  render,
+  screen,
+  waitFor,
+  within,
+} from '@solidjs/testing-library';
 import type { RemoteParticipant, Track } from 'livekit-client';
 import { createSignal, type JSX, type Setter } from 'solid-js';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
@@ -24,6 +31,28 @@ vi.mock('@app/lib/analytics/posthog', () => ({
   useFeatureFlag: () => () => ({ enabled: false }),
 }));
 
+const registeredWork = vi.hoisted(() => ({
+  accounts: undefined as undefined | (() => readonly string[]),
+  items: undefined as
+    | undefined
+    | (() => ReadonlyMap<string, readonly WorkItem[]>),
+  loaded: undefined as undefined | (() => boolean),
+}));
+
+vi.mock('@core/component/UserGroup', () => ({ UserGroup: () => null }));
+
+vi.mock('@app/features/agent-work/views/use-work-client', () => ({
+  useWorkClient: () => () => undefined,
+}));
+
+vi.mock('@app/features/agent-work/primitives/create-registered-work', () => ({
+  createRegisteredWork: () => ({
+    loaded: () => registeredWork.loaded?.() ?? false,
+    byAccount: () => registeredWork.items?.() ?? new Map(),
+    accountsWithWork: () => registeredWork.accounts?.() ?? [],
+  }),
+}));
+
 vi.mock('@core/mobile/isMobile', () => ({
   isMobile: () => mocks.mobile,
 }));
@@ -42,6 +71,7 @@ vi.mock('@core/signal/profilePicture', () => ({
 }));
 
 vi.mock('@core/user', () => ({
+  isAgentAccount: () => true,
   tryMacroId: (identity: string) => identity,
   getDisplayName: (identity: string) =>
     mocks.displayNames.get(identity) ?? identity,
@@ -524,6 +554,73 @@ describe('CallOverlay muted microphone badges', () => {
       expect(screen.getByTestId('track-remote-camera')).toBe(remoteVideo);
     }
   );
+});
+
+describe('CallOverlay Work', () => {
+  const account = 'macro|agent@example.com';
+  const row: WorkItem = {
+    registrationId: 'registration-1',
+    accountId: account,
+    registeredAt: '2026-11-05T10:00:00Z',
+    sessionId: 'session-1',
+    title: 'Tavily web search',
+    state: 'needs_input',
+  };
+
+  function setUpWork() {
+    const [accounts, setAccounts] = createSignal<readonly string[]>([]);
+    registeredWork.accounts = accounts;
+    registeredWork.items = () => new Map(accounts().map((id) => [id, [row]]));
+    registeredWork.loaded = () => true;
+    setUpCallState([createRemoteParticipant(account, {}, 'Agent teammate')]);
+    return setAccounts;
+  }
+
+  afterEach(() => {
+    registeredWork.accounts = undefined;
+    registeredWork.items = undefined;
+    registeredWork.loaded = undefined;
+  });
+
+  it('prompts when work appears and opens it in the Work tab', async () => {
+    const setAccounts = setUpWork();
+    render(() => <CallOverlay onLeave={() => undefined} />);
+    expect(screen.queryByText('View active work')).toBeNull();
+
+    setAccounts([account]);
+    fireEvent.click(await screen.findByText('View active work'));
+
+    expect(await screen.findByText('Tavily web search')).toBeTruthy();
+    expect(screen.getByText('Needs input')).toBeTruthy();
+    expect(screen.queryByText('View active work')).toBeNull();
+  });
+
+  it('dismisses the prompt without opening the panel', async () => {
+    const setAccounts = setUpWork();
+    render(() => <CallOverlay onLeave={() => undefined} />);
+
+    setAccounts([account]);
+    await screen.findByText('View active work');
+    fireEvent.click(screen.getByRole('button', { name: 'Dismiss' }));
+
+    expect(screen.queryByText('View active work')).toBeNull();
+    expect(screen.queryByText('Tavily web search')).toBeNull();
+  });
+
+  it('returns to Chat when the last work ends', async () => {
+    const setAccounts = setUpWork();
+    render(() => <CallOverlay onLeave={() => undefined} />);
+
+    setAccounts([account]);
+    fireEvent.click(await screen.findByText('View active work'));
+    await screen.findByText('Tavily web search');
+
+    setAccounts([]);
+    await waitFor(() =>
+      expect(screen.queryByRole('radio', { name: 'Work' })).toBeNull()
+    );
+    expect(screen.queryByText('Tavily web search')).toBeNull();
+  });
 });
 
 describe('CallParticipantsList live roster', () => {

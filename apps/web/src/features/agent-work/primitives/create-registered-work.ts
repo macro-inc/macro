@@ -122,12 +122,14 @@ export function createRegisteredWork(options: {
   };
 
   createEffect(
-    on(key, (current) => {
-      setItems(new Map());
-      setLoaded(false);
+    on([key, options.client], ([current, client], previous) => {
+      if (current !== previous?.[0]) {
+        setItems(new Map());
+        setLoaded(false);
+      }
       if (!current) return;
 
-      onCleanup(follow(current.split(','), options.client()));
+      onCleanup(follow(current.split(','), client));
     })
   );
 
