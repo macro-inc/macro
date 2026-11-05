@@ -49,6 +49,8 @@ impl BrainGatewayDirectory for Directory {
             computer_id: Some(COMPUTER),
             status: TeamAgentStatus::Running,
             status_reason: None,
+            retryable: false,
+            payment: None,
             setup: None,
             last_turn_at: None,
             created_at: Utc.timestamp_opt(1_700_000_000, 0).unwrap(),
