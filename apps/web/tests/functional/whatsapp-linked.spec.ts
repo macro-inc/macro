@@ -1097,8 +1097,15 @@ test('an independent group reads, replies, reacts and pages through channel rows
       text: '👍',
     },
   });
-  await page.getByRole('button', { name: 'Load earlier messages' }).click();
-  await expect(page.getByText('Previous day discussion')).toBeVisible();
+  // The send just above is still settling, and the timeline refetch it starts
+  // can drop a page load already in flight, so this retries the click.
+  const earlierMessage = page.getByText('Previous day discussion');
+  await expect(async () => {
+    if (!(await earlierMessage.isVisible())) {
+      await page.getByRole('button', { name: 'Load earlier messages' }).click();
+    }
+    await expect(earlierMessage).toBeVisible({ timeout: 3_000 });
+  }).toPass();
   expect(state.requests.some((request) => request.includes('channels/'))).toBe(
     false
   );
