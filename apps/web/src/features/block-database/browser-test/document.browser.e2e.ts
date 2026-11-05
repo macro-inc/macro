@@ -64,40 +64,42 @@ async function fixture(page: Page, multipleTables = false) {
     const request = route.request();
     const url = new URL(request.url());
     if (url.pathname.endsWith('/items/soup/graphql')) {
-      await route.fulfill({
-        json: {
-          data: {
-            user: {
-              soup: {
-                nextCursor: null,
-                items: [storedName, ...externalRows].map((name, index) => ({
-                  __typename: 'GraphqlSoupDatabaseRow',
-                  id: index
-                    ? `${rowId.slice(0, -4)}${String(index + 1).padStart(4, '0')}`
-                    : rowId,
-                  tableId,
-                  position: '80',
-                  ownerId: detail.database.owner_id,
-                  createdAt: detail.database.created_at,
-                  updatedAt: detail.database.created_at,
-                  cacheProjection: null,
-                  notifications: [],
-                  properties: [
-                    {
-                      id: definitionId,
-                      propertyDefinitionId: definitionId,
-                      value: {
-                        __typename: 'GraphqlStringPropertyValue',
-                        stringValue: name,
-                      },
-                    },
-                  ],
-                })),
-              },
+      const items = [storedName, ...externalRows].map((name, index) => ({
+        __typename: 'GraphqlSoupDatabaseRow',
+        id: index
+          ? `${rowId.slice(0, -4)}${String(index + 1).padStart(4, '0')}`
+          : rowId,
+        tableId,
+        position: '80',
+        ownerId: detail.database.owner_id,
+        createdAt: detail.database.created_at,
+        updatedAt: detail.database.created_at,
+        cacheProjection: null,
+        notifications: [],
+        properties: [
+          {
+            id: definitionId,
+            propertyDefinitionId: definitionId,
+            value: {
+              __typename: 'GraphqlStringPropertyValue',
+              stringValue: name,
             },
           },
-        },
-      });
+        ],
+      }));
+      // Rows are read through the view's own page; other queries read soup.
+      const user =
+        request.postDataJSON()?.operationName === 'DatabaseViewRows'
+          ? {
+              id: detail.database.owner_id,
+              databaseViewRows: {
+                items,
+                nextCursor: null,
+                version: detail.tables[0].table.version,
+              },
+            }
+          : { soup: { nextCursor: null, items } };
+      await route.fulfill({ json: { data: { user } } });
       return;
     }
     if (url.pathname.endsWith('/databases') && request.method() === 'POST') {
