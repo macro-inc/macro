@@ -1,16 +1,13 @@
-//! Tell Macro what a Macro computer can do beyond running agents, e.g. that
-//! it has a display to stream.
-//!
-//! Only enrolled Macro computers report: a display on a user's own machine
-//! is never offered to Macro. Probed when the serving core starts and
-//! re-probed periodically, since the display can come up after macrod; a
-//! report goes out only on a change or after a failed one.
+//! Capability and persona-health reports, only for enrolled Macro computers.
 
-use std::time::Duration;
+use std::time::{Duration, Instant};
 
 use harnesses::domain::models::HarnessCapabilities;
+#[cfg(unix)]
+use harnesses::domain::models::PersonaHealth;
 use rootcause::prelude::ResultExt as _;
 use tokio_util::sync::CancellationToken;
+use tokio_util::task::TaskTracker;
 
 use crate::config::{HarnessCredentials, MacroApi};
 
@@ -21,15 +18,9 @@ const HARNESS_TOKEN_HEADER: &str = "x-macro-harness-token";
 /// The box image's Xvnc display.
 pub const SCREEN_ADDRESS: &str = "127.0.0.1:5900";
 const PROBE_TIMEOUT: Duration = Duration::from_secs(1);
-const PROBE_INTERVAL: Duration = Duration::from_secs(60);
+const PROBE_INTERVAL: Duration = Duration::from_secs(15);
+const SCREEN_INTERVAL: Duration = Duration::from_secs(60);
 const REPORT_TIMEOUT: Duration = Duration::from_secs(10);
-
-/// What this machine can do right now.
-async fn probe() -> HarnessCapabilities {
-    HarnessCapabilities {
-        screen: listening(SCREEN_ADDRESS).await,
-    }
-}
 
 async fn listening(address: &str) -> bool {
     matches!(
@@ -38,8 +29,7 @@ async fn listening(address: &str) -> bool {
     )
 }
 
-/// Written last by `macrod enroll`; its presence means this machine is an
-/// enrolled Macro computer.
+/// Written last by enrollment; only computers bearing this marker report.
 pub const ENROLLED_MARKER: &str = "/var/lib/macrod/enrolled";
 
 /// Whether this machine is an enrolled Macro computer.
@@ -47,12 +37,15 @@ pub fn is_macro_computer() -> bool {
     cfg!(unix) && std::path::Path::new(ENROLLED_MARKER).exists()
 }
 
-/// Report capabilities until `cancel` fires.
+/// Track the reporter with the daemon so cancellation interrupts probes and
+/// reports. Privileged commands use nonblocking systemd jobs and kill their
+/// direct child on cancellation; systemd owns the resulting brain process.
 pub fn spawn_reporter(
     config: &MacroApi,
     credentials: &HarnessCredentials,
     cancel: CancellationToken,
-) -> rootcause::Result<tokio::task::JoinHandle<()>> {
+    tasks: &TaskTracker,
+) -> rootcause::Result<()> {
     let http = reqwest::Client::builder()
         .timeout(REPORT_TIMEOUT)
         .build()
@@ -62,42 +55,90 @@ pub fn spawn_reporter(
         config.storage_url.trim_end_matches('/')
     );
     let token = credentials.token.clone();
-    Ok(tokio::spawn(async move {
+    #[cfg(unix)]
+    let mut personas = crate::domain::personas::Supervisor::new(
+        crate::outbound::personas::Systemd,
+        crate::outbound::personas::HttpHealth::new()
+            .context("could not build the brain health client")?,
+    );
+    track_reporter(tasks, cancel, async move {
         let mut reported = None;
+        let mut current = HarnessCapabilities::default();
+        let mut screen_at = Instant::now();
+        let mut interval = tokio::time::interval(PROBE_INTERVAL);
+        interval.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Skip);
         loop {
-            let current = probe().await;
-            if reported != Some(current) {
-                match report(&http, &url, &token, current).await {
-                    Ok(()) => reported = Some(current),
+            interval.tick().await;
+            let now = Instant::now();
+            if now >= screen_at {
+                current.screen = listening(SCREEN_ADDRESS).await;
+                screen_at = now + SCREEN_INTERVAL;
+            }
+            #[cfg(unix)]
+            match crate::outbound::personas::discover().await {
+                Ok(config) => {
+                    current.personas = personas.snapshot(&config, now, chrono::Utc::now()).await;
+                }
+                Err(error) => {
+                    tracing::warn!(error = ?error, "persona discovery failed");
+                    for health in current.personas.values_mut() {
+                        let last_turn_at = match health {
+                            PersonaHealth::Healthy { last_turn_at, .. }
+                            | PersonaHealth::Unhealthy { last_turn_at, .. }
+                            | PersonaHealth::Missing { last_turn_at, .. } => *last_turn_at,
+                        };
+                        *health = PersonaHealth::Unhealthy {
+                            checked_at: chrono::Utc::now(),
+                            last_error: "could not discover enrolled personas".to_owned(),
+                            last_turn_at,
+                        };
+                    }
+                }
+            }
+            if reported.as_ref() != Some(&current) {
+                match report(&http, &url, &token, &current).await {
+                    Ok(()) => reported = Some(current.clone()),
                     Err(error) => tracing::warn!(error = ?error, "capability report failed"),
                 }
             }
-            tokio::select! {
-                () = cancel.cancelled() => return,
-                () = tokio::time::sleep(PROBE_INTERVAL) => {}
-            }
         }
-    }))
+    });
+    Ok(())
 }
 
-#[tracing::instrument(name = "macrod.capabilities.report", skip(http, url, token), err)]
+fn track_reporter(
+    tasks: &TaskTracker,
+    cancel: CancellationToken,
+    work: impl Future<Output = ()> + Send + 'static,
+) {
+    tasks.spawn(async move {
+        tokio::select! {
+            () = cancel.cancelled() => {},
+            () = work => {},
+        }
+    });
+}
+
+#[tracing::instrument(name = "macrod.capabilities.report", skip_all, fields(screen = capabilities.screen, persona_count = capabilities.personas.len()), err)]
 async fn report(
     http: &reqwest::Client,
     url: &str,
     token: &str,
-    capabilities: HarnessCapabilities,
+    capabilities: &HarnessCapabilities,
 ) -> rootcause::Result<()> {
-    let response = http
+    let mut headers = reqwest::header::HeaderMap::new();
+    macro_tower_layers::inject_trace_headers(&mut headers);
+    let status = http
         .put(url)
+        .headers(headers)
         .header(HARNESS_TOKEN_HEADER, token)
-        .json(&capabilities)
+        .json(capabilities)
         .send()
         .await
-        .context("could not reach the service to report capabilities")?;
-    let status = response.status();
-    if status.is_success() {
-        return Ok(());
+        .context("could not reach the service to report capabilities")?
+        .status();
+    if !status.is_success() {
+        rootcause::bail!("capability report returned HTTP {status}");
     }
-    let message = response.text().await.unwrap_or_default();
-    rootcause::bail!("the service answered {status} to the capability report: {message}")
+    Ok(())
 }

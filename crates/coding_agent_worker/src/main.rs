@@ -20,6 +20,7 @@ mod computer;
 mod config;
 mod daemon;
 mod dispatch;
+mod domain;
 #[cfg(unix)]
 mod enroll;
 mod executable;
@@ -147,6 +148,10 @@ enum Command {
         #[arg(long)]
         owner: u32,
     },
+    /// Read only persona names and health ports for the unprivileged daemon.
+    #[cfg(unix)]
+    #[command(hide = true)]
+    PersonaConfig,
     /// List the ACP agents installed on this machine as JSON.
     DetectAgents,
     /// Report the service config's state as JSON without running anything.
@@ -250,6 +255,19 @@ async fn main() -> ExitCode {
                 Ok(()) => ExitCode::SUCCESS,
                 Err(error) => {
                     eprintln!("computer token store: {error:?}");
+                    ExitCode::FAILURE
+                }
+            };
+        }
+        #[cfg(unix)]
+        Some(Command::PersonaConfig) => {
+            return match outbound::personas::discovery_json() {
+                Ok(config) => {
+                    println!("{config}");
+                    ExitCode::SUCCESS
+                }
+                Err(error) => {
+                    eprintln!("persona discovery: {error}");
                     ExitCode::FAILURE
                 }
             };

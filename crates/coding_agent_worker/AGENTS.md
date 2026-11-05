@@ -41,7 +41,26 @@ the local ACP process (Claude Code, Codex, ...), and drives native
 - `src/capabilities.rs`: on an enrolled Macro computer only (the marker
   exists), reports `HarnessCapabilities` (`screen` = Xvnc on
   `127.0.0.1:5900`) to `PUT /harnesses/me/capabilities` when the serving core
-  starts and on change (probed every minute).
+  starts and on change. Display probing stays once a minute; enrolled persona
+  health is sampled every 15 seconds and stored in the same JSON report.
+- `src/domain/personas.rs`: unit recovery/backoff policy, independent of I/O.
+  A stopped unit is started; a failed unit is reset and restarted. Attempts
+  back off from 5 seconds to 5 minutes until health recovers. Units already
+  activating/restarting are left to systemd's own `Restart=always` policy.
+  Running but degraded brains are reported, not restarted for an upstream outage.
+- `src/outbound/personas.rs`: discovery, systemctl and loopback HTTP adapters.
+  macrod stays the image's unprivileged `macro` user. Its existing passwordless
+  sudo permits noninteractive, validated `brain@<os_user>` control and the hidden
+  root-only `macrod persona-config` command. That command reads
+  `/etc/macro/personas/*.env` and returns only OS usernames and health ports;
+  no persona token enters the reporter or its logs. Polls use independent
+  timeouts, no redirects/proxies, bounded bodies and bounded diagnostics.
+  Keep the typed health problem categories synchronized with the brain; unknown
+  response text becomes a fixed diagnostic and is never persisted.
+  Reports carry healthy/unhealthy/missing, `checked_at`, last error when
+  applicable, and `last_turn_at`; the previous turn survives unavailable probes.
+  The capability reporter is cancellation-aware and tracked by the daemon's
+  `TaskTracker`, including across re-pair and shutdown.
 - `src/computer.rs` (`src/computer/`): on an enrolled Macro computer only,
   the `computerControl` runtime messages and each Claude Code session's env.
   Credits mode (no token) adds `ANTHROPIC_BASE_URL` (the session's

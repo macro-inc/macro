@@ -2,8 +2,11 @@ use super::*;
 
 #[tokio::test]
 async fn stop_does_not_wait_for_in_flight_work() {
+    let cancel = CancellationToken::new();
     let daemon = Daemon {
-        cancel: CancellationToken::new(),
+        _cancel_on_drop: cancel.clone().drop_guard(),
+        cancel,
+        background: TaskTracker::new(),
         task: tokio::spawn(std::future::pending()),
         turns: ActiveTurns::default(),
         handoff: crate::harness::Handoffs::channel().1,

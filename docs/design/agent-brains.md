@@ -30,7 +30,7 @@ the commit point. After it, failures surface as the agent's status (`provisionin
 Macro computer (PR A image)
   macrod.service              (runtime for the team's coding bots; persona mode supervises the brain)
   brain@<persona>.service     (OS user <persona>, /home/<persona>/workspace)
-    @macro-inc/brain binary  (deno compile; pinned by workspace/brain.lock)
+    @macro-inc/brain binary  (deno compile; hash pinned in the Nix image build)
 ```
 
 The shared Incus/Docker rootfs installs the Nix-built binary at
@@ -43,9 +43,20 @@ Git identity uses the OS username and the email in `MACRO_AGENT_USER_ID`.
 The exact-repo git credential helper reads `MACRO_REPO_TOKEN` from the git
 process environment; no token is stored in `.git/config` or sent to Claude.
 
-macrod persona mode starts the brain unit, watches its health endpoint
-(`127.0.0.1:<port>/health`), restarts it, and reports health with the harness
-presence so the agent's status reflects it.
+macrod stays unprivileged. On an enrolled computer it uses the image's
+existing noninteractive sudo access to discover only persona names/ports and
+control `brain@<os_user>` units. It starts stopped units and recovers failed
+units with a 5-second to 5-minute backoff; systemd handles ordinary crash
+restarts. Every 15 seconds it polls `127.0.0.1:<port>/health`, independently per
+persona. Running but degraded brains are reported rather than restarted.
+
+The existing authenticated capability report persists a `personas` map in
+harness JSON: healthy/unhealthy/missing, observation time, last error when
+applicable, and last completed turn. The brain supplies `lastTurnAt`; macrod
+retains it across unavailable probes. Consumers combine harness connection
+presence with `checked_at` freshness when deciding whether an observation is
+live. No persona credential enters this report; older harnesses keep an empty
+persona map.
 
 ## The workspace repo (Macro-hosted git, 1:1)
 

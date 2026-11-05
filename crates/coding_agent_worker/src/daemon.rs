@@ -7,7 +7,8 @@
 use std::path::Path;
 use std::time::Duration;
 
-use tokio_util::sync::CancellationToken;
+use tokio_util::sync::{CancellationToken, DropGuard};
+use tokio_util::task::TaskTracker;
 
 use crate::config::{Config, HarnessCredentials};
 use crate::dispatch::Dispatcher;
@@ -31,6 +32,8 @@ const BOUND_AGENT_REFRESH: Duration = Duration::from_secs(10);
 /// A running serving core: SSE listener, harness bridge.
 pub struct Daemon {
     cancel: CancellationToken,
+    _cancel_on_drop: DropGuard,
+    background: TaskTracker,
     task: tokio::task::JoinHandle<rootcause::Result<()>>,
     turns: ActiveTurns,
     #[cfg_attr(
@@ -62,6 +65,7 @@ impl Daemon {
         inherited: Option<InheritedAgent>,
     ) -> rootcause::Result<Self> {
         let cancel = CancellationToken::new();
+        let background = TaskTracker::new();
         let client = EventStreamClient::new(&config.macro_api, &credentials);
         let api = HarnessApi::new(&config.macro_api, &credentials);
 
@@ -137,11 +141,12 @@ impl Daemon {
 
         if crate::capabilities::is_macro_computer() {
             // Ends with the daemon's cancellation.
-            drop(crate::capabilities::spawn_reporter(
+            crate::capabilities::spawn_reporter(
                 &config.macro_api,
                 &credentials,
                 cancel.clone(),
-            )?);
+                &background,
+            )?;
         }
 
         let shutdown = cancel.clone();
@@ -170,6 +175,8 @@ impl Daemon {
         });
 
         Ok(Self {
+            _cancel_on_drop: cancel.clone().drop_guard(),
+            background,
             cancel,
             task,
             turns,
@@ -215,6 +222,8 @@ impl Daemon {
         self.cancel.cancel();
         self.task.abort();
         let _ = self.task.await;
+        self.background.close();
+        self.background.wait().await;
         tracing::info!("daemon stopped");
     }
 }
