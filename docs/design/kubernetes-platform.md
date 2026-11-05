@@ -366,12 +366,14 @@ Built and exercised on the local cluster (`infra/platform`, `cargo x platform`):
   `scoped_bot_resolves_document_access_through_dss` fails, and fails the same way
   on a plain compose stack, so the platform does not cause it.
 
-**CI status (forge, 2026-11-04).** Passing: cargo-deny, workspace dependency and
-hakari checks, generated workflows, Linux `node_modules`, Tauri lockfiles, ast-grep
-conventions, infra Biome and checks, every path filter, and web typecheck, Biome,
-and import cycles. Failing: web Build and Test, both at `playwright install
---with-deps`, which runs `apt-get` under the Nix dev shell's libraries. Not yet
-confirmed: Rust `check` and `test`, and generated code.
+**CI status (forge, 2026-11-04).** 22 of 26 jobs pass, including the Rust `check`
+job, web typecheck and generated code, cargo-deny, conventions, and infra. Four
+fail, from two portability gaps in the job image rather than in the code:
+
+- Rust `test` and its status job dial their Postgres service at `localhost`. Hosted
+  runners publish it there; on a container job it is reachable by service name.
+- Web `Build` and `Test` run `playwright install --with-deps`, whose `apt-get` breaks
+  under the Nix dev shell's libraries.
 
 **Playwright has not run against an instance.** Its downloaded browser cannot start
 on the NixOS host, and it belongs in a forge job once the failure above is fixed.
