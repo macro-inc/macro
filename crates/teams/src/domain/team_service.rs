@@ -1,9 +1,9 @@
 //! Contains the service logic for teams
 
 mod invite_link;
-mod subscription_items;
 #[cfg(feature = "ports")]
 pub mod invite_reminders;
+mod subscription_items;
 #[cfg(test)]
 mod test;
 
