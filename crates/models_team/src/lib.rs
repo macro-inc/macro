@@ -103,3 +103,7 @@ pub struct PatchTeamRequest {
     /// The new name of the team
     pub name: Option<String>,
 }
+
+/// Experiment marker, changed each round so dependents recompile.
+#[doc(hidden)]
+pub const CI_SPEED_NONCE: u32 = 2001;
