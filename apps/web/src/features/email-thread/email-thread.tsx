@@ -85,6 +85,7 @@ export function EmailThread(props: EmailThreadProps) {
     createCommands: (snapshot) =>
       createThreadActionAdapter(source.id, snapshot),
   };
+  const personProfiles = createThreadPersonProfiles(() => props.threadId());
   const viewContext = {
     copySubject: async (subject: string) => {
       try {
@@ -147,7 +148,7 @@ export function EmailThread(props: EmailThreadProps) {
         <EmailSenderIcon message={message} />
       ),
       readReceipt: createThreadReadReceipts(() => props.threadId()),
-      personProfile: createThreadPersonProfiles(() => props.threadId()),
+      personProfile: personProfiles.lookup,
       showReadReceiptPixel: (message: EmailMessage) =>
         showsReadReceiptPixel(message, compose.accounts.inboxes()),
     },
@@ -161,8 +162,10 @@ export function EmailThread(props: EmailThreadProps) {
       if (
         meta.tag === 'new_email' &&
         meta.content.threadId === source.thread()?.db_id
-      )
+      ) {
         void source.refresh().catch(compose.notices.reportError);
+        fireAndForget(personProfiles.refresh(), 'email-person-profiles');
+      }
     }
   );
   createEffect(() => {

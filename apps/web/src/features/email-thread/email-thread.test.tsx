@@ -85,7 +85,10 @@ vi.mock('./read-receipts', () => ({
   createThreadReadReceipts: () => () => undefined,
 }));
 vi.mock('./person-profiles', () => ({
-  createThreadPersonProfiles: () => () => undefined,
+  createThreadPersonProfiles: () => ({
+    lookup: () => undefined,
+    refresh: () => Promise.resolve(),
+  }),
 }));
 vi.mock('./thread-action-adapter', () => ({
   createThreadActionAdapter: vi.fn(),

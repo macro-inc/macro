@@ -941,10 +941,13 @@ own inboxes never get a profile. Profiles come from
 `GET /email/threads/{thread_id}/person-profiles`, which looks unknown
 participants up with Apollo.io only when the email service runs with
 `USE_APOLLO_PERSON_ENRICHMENT=true` and an Apollo key; otherwise it serves only
-stored profiles, so a card shows no profile section. Each address is looked up
-at most once per 90 days, misses included, and one thread open looks up at most
-ten new people. Verify on a thread from someone with a public LinkedIn profile:
-the first open fills the card, and reopening the thread makes no new lookup.
+stored profiles, and a card without one shows no profile section. A stored
+result, a miss included, is served for 90 days before the address is looked up
+again; concurrent first opens or a failed write can repeat a lookup. One thread
+open looks up at most ten new people, and a new message in the open thread
+refetches its profiles. Verify on a thread from someone with a public LinkedIn
+profile: the first open fills the card, and reopening the thread makes no new
+lookup.
 
 Sending a reply from an inbox thread marks that thread done but stays on it.
 Send and mark done (Shift+Cmd+Enter) and Mark done open the next email, counted

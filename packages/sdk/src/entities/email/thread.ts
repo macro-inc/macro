@@ -166,8 +166,10 @@ export class EmailThread extends PropertiedEntity<ThreadDetail> {
   /**
    * Public professional profiles of the thread's senders and recipients, in
    * order of first appearance, excluding the caller's own inboxes and people
-   * with no known profile. Profiles come from a people-data provider and are
-   * cached per address, so they can be months old.
+   * with no known profile. The result can be partial: it covers the first 100
+   * participants, and each read looks up at most ten people not yet known, so
+   * a later read may return more. Profiles come from a people-data provider
+   * and are cached per address, so they can be months old.
    */
   async personProfiles(): Promise<EmailPersonProfile[]> {
     const { profiles } = unwrap(
