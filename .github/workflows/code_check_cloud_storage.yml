@@ -687,6 +687,7 @@ jobs:
           POSTGRES_USER: user
           POSTGRES_PASSWORD: password
           POSTGRES_DB: macrodb
+          POSTGRES_HOST_AUTH_METHOD: trust
         ports:
         - '5432:5432'
         options: '--health-cmd pg_isready --health-interval 1s --health-start-period 30s --health-timeout 5s --health-retries 5 --shm-size 1g -v /dev/shm/pgdata:/var/lib/postgresql/data'
