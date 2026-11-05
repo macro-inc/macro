@@ -82,6 +82,8 @@ pub struct ApiStates<T, R, Opener, Bots, Requests, Access, Auth, Models, Changes
     mode_choice: Router,
     conversations: Router,
     pull_requests: Router,
+    session_tasks: Router,
+    updates: Router,
     auto_archive: Router,
     tool_approvals: Router,
     app_connections: Router,
@@ -123,6 +125,8 @@ impl<T, R, Opener, Bots, Requests, Access, Auth, Models, Changes>
             mode_choice: Router::new(),
             conversations: Router::new(),
             pull_requests: Router::new(),
+            session_tasks: Router::new(),
+            updates: Router::new(),
             auto_archive: Router::new(),
             tool_approvals: Router::new(),
             app_connections: Router::new(),
@@ -219,6 +223,18 @@ impl<T, R, Opener, Bots, Requests, Access, Auth, Models, Changes>
     /// Attach the routes associating pull requests with sessions.
     pub fn with_pull_requests(mut self, router: Router) -> Self {
         self.pull_requests = router;
+        self
+    }
+
+    /// Attach the route linking a session to the Macro task it works on.
+    pub fn with_session_tasks(mut self, router: Router) -> Self {
+        self.session_tasks = router;
+        self
+    }
+
+    /// Attach the route listing the caller's sessions waiting for them or stalled.
+    pub fn with_updates(mut self, router: Router) -> Self {
+        self.updates = router;
         self
     }
 
@@ -356,6 +372,8 @@ where
         .merge(agent_session_create_router(states.create))
         .merge(states.sharing)
         .merge(states.pull_requests)
+        .merge(states.session_tasks)
+        .merge(states.updates)
         .merge(states.tool_approvals)
         .merge(states.app_connections)
         .merge(states.code_executions)

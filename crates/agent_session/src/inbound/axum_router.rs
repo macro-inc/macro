@@ -75,6 +75,12 @@ pub mod pull_requests;
 /// Auto-archive defaults and per-session choices.
 pub mod auto_archive;
 
+/// Linking a session to the Macro task it works on.
+pub mod task;
+
+/// The caller's coding sessions waiting for them or stalled.
+pub mod updates;
+
 mod owned_purge;
 
 /// Shared state for the agent session router: the agent session service plus
