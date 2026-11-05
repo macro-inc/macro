@@ -70,6 +70,9 @@ fn linux_job() -> Job {
 fn macos_job() -> Job {
     Job::default()
         .name("macrod update (macos)")
+        // These runners have no compiler cache, and the test only needs a working
+        // binary, so debug info is pure cost.
+        .add_env(("CARGO_PROFILE_DEV_DEBUG", "0"))
         .runs_on(runners::Runner::MacOsArm.to_string())
         .add_step(steps::checkout(false, false))
         .add_step(steps::setup_rust_light())
@@ -91,6 +94,9 @@ fn macos_job() -> Job {
 fn windows_job() -> Job {
     Job::default()
         .name("macrod update (windows)")
+        // These runners have no compiler cache, and the test only needs a working
+        // binary, so debug info is pure cost.
+        .add_env(("CARGO_PROFILE_DEV_DEBUG", "0"))
         .runs_on(runners::Runner::Windows.to_string())
         .add_step(steps::checkout(false, false))
         .add_step(steps::setup_rust_light())

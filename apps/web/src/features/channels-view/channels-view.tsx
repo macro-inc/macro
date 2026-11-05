@@ -146,14 +146,8 @@ function DesktopChannelThreads(props: { sources: ChannelsSources }) {
 }
 function ChannelsViewRoot() {
   const panel = useSplitPanelOrThrow();
-  const {
-    state,
-    tab,
-    mobileLayout,
-    sectionsLoading,
-    selectedChannel,
-    setAsideWidth,
-  } = useChannelsView();
+  const { state, tab, mobileLayout, sectionsLoading, selectedChannel } =
+    useChannelsView();
   const threadsTab = () => !mobileLayout() && tab() === 'threads';
   const [railSearchOpen, setRailSearchOpen] = createSignal(false);
 
@@ -198,14 +192,11 @@ function ChannelsViewRoot() {
                       asideRequired={selectedChannel() === undefined}
                       // Keep tab changes from resetting a narrow navigation overlay.
                       asidePinned={threadsTab()}
-                      aside={{
-                        width: state.asideWidth,
-                        preserveDuringResize: false,
-                      }}
+                      aside={{ preserveDuringResize: false }}
                       main={{ preferredWidth: 640 }}
                       resizable
                     >
-                      <ViewShell.Aside onWidthChangeEnd={setAsideWidth}>
+                      <ViewShell.Aside>
                         <DebugSuspense
                           name="ChannelsView.rail"
                           fallback={
