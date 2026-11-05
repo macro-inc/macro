@@ -431,4 +431,4 @@ impl NotificationTitle for NotifEvent {
     }
 }
 #[doc(hidden)]
-pub const CI_INTEGRATE_NONCE: &str = "1793887834-6";
+pub const CI_INTEGRATE_NONCE: &str = "1793888053-1";
