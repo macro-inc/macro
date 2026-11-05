@@ -6,4 +6,4 @@ pub mod outbound;
 #[cfg(test)]
 pub(crate) mod telemetry_capture;
 #[doc(hidden)]
-pub const CI_INTEGRATE_NONCE: &str = "1793889421-1";
+pub const CI_INTEGRATE_NONCE: &str = "1793890086-2";
