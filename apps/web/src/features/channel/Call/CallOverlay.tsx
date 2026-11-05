@@ -15,6 +15,8 @@ import { virtualKeyboardVisible } from '@core/mobile/virtualKeyboard';
 import { getDisplayName, tryMacroId } from '@core/user';
 import { fireAndForget } from '@core/util/fireAndForget';
 import ChatIcon from '@icon/system/regular/chat-circle.svg';
+import CornersInIcon from '@icon/system/regular/corners-in.svg';
+import CornersOutIcon from '@icon/system/regular/corners-out.svg';
 import UsersIcon from '@icon/system/regular/users.svg';
 import { Button, cn } from '@ui';
 import type { RemoteParticipant, Track } from 'livekit-client';
@@ -488,6 +490,13 @@ export function CallOverlay(props: {
   const hasAnyScreenShare = () =>
     callCtx.isScreenSharing() || remoteScreenShares().length > 0;
 
+  const [screenShareMaximized, setScreenShareMaximized] = createSignal(false);
+  const showScreenShare = () => hasAnyScreenShare() && !focusedParticipant();
+  const maximizeLabel = () =>
+    screenShareMaximized()
+      ? t('calls.restoreScreenShare')
+      : t('calls.maximizeScreenShare');
+
   const gridCols = () => {
     if (focusedParticipant() && focusedParticipant() !== 'local')
       return 'grid-cols-1';
@@ -556,7 +565,22 @@ export function CallOverlay(props: {
                   class="flex-1 min-h-0 pt-2"
                   classList={{ hidden: !!focusedParticipant() }}
                 >
-                  <div class="h-full rounded-lg overflow-hidden bg-surface-2 flex items-center justify-center">
+                  <div class="relative h-full rounded-lg overflow-hidden bg-surface-2 flex items-center justify-center">
+                    <Button
+                      class="absolute right-2 top-2 z-10"
+                      variant="secondary"
+                      size="icon-sm"
+                      aria-label={maximizeLabel()}
+                      tooltip={{ content: maximizeLabel(), placement: 'left' }}
+                      onClick={() => setScreenShareMaximized((value) => !value)}
+                    >
+                      <Show
+                        when={screenShareMaximized()}
+                        fallback={<CornersOutIcon class="size-4" />}
+                      >
+                        <CornersInIcon class="size-4" />
+                      </Show>
+                    </Button>
                     <Show when={callCtx.isScreenSharing()}>
                       <div class="relative size-full">
                         <TrackView track={localScreenTrack()} fit="contain" />
@@ -573,9 +597,10 @@ export function CallOverlay(props: {
                 </div>
               </Show>
 
-              {/* Participants area */}
+              {/* Participants area; stays mounted while the screen share is maximized. */}
               <div
-                class={`${hasAnyScreenShare() && !focusedParticipant() ? 'h-45 shrink-0' : 'flex-1 min-h-0'} relative pt-2 mobile:pt-0`}
+                hidden={showScreenShare() && screenShareMaximized()}
+                class={`${showScreenShare() ? 'h-45 shrink-0' : 'flex-1 min-h-0'} relative pt-2 mobile:pt-0`}
               >
                 <Show
                   when={participants().length > 0}
