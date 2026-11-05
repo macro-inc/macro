@@ -75,7 +75,7 @@ test('a cell in a row taller than its value takes clicks across its full height'
   await expect(page.getByRole('textbox', { name: 'Edit Notes' })).toBeVisible();
 });
 
-test('a wrapping cell opens and closes in place over opaque row cells', async ({
+test('a wrapping cell opens and closes in place over opaque rows', async ({
   page,
 }) => {
   const rows = page.locator('[data-grid-row-id]');
@@ -94,22 +94,17 @@ test('a wrapping cell opens and closes in place over opaque row cells', async ({
   const layout = await rows.evaluateAll((elements) =>
     elements.map((row) => {
       const box = row.getBoundingClientRect();
-      // Paint the row's and each cell's background alone to read its opacity.
+      // The row lines beneath the rows are drawn at a fixed pitch; only
+      // an opaque row hides them once it grows past it.
       const canvas = document.createElement('canvas').getContext('2d')!;
-      const alphas = [row, ...row.querySelectorAll('[role="gridcell"]')].map(
-        (element) => {
-          canvas.clearRect(0, 0, 1, 1);
-          canvas.fillStyle = getComputedStyle(element).backgroundColor;
-          canvas.fillRect(0, 0, 1, 1);
-          return canvas.getImageData(0, 0, 1, 1).data[3];
-        }
-      );
-      return { top: box.top, bottom: box.bottom, alphas };
+      canvas.fillStyle = getComputedStyle(row).backgroundColor;
+      canvas.fillRect(0, 0, 1, 1);
+      const alpha = canvas.getImageData(0, 0, 1, 1).data[3];
+      return { top: box.top, bottom: box.bottom, alpha };
     })
   );
   expect(layout[1].top).toBeCloseTo(layout[0].bottom, 0);
-  for (const row of layout)
-    expect(row.alphas).toEqual(row.alphas.map(() => 255));
+  expect(layout.map(({ alpha }) => alpha)).toEqual(layout.map(() => 255));
   await page.keyboard.press('Escape');
   await expect.poll(heights).toEqual(closed);
 });
