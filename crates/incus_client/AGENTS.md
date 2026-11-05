@@ -44,7 +44,9 @@ and operation waiting.
 ## Gotchas
 
 - Never edit `src/generated.rs` or `spec/openapi.json` by hand; change
-  `spec/patch.py`.
+  `spec/patch.py` for spec changes or `regen.sh` for generator formatting.
+- Emit generated docs as line comments in `regen.sh`; indented multiline block
+  comments turn prose into Rust doctests.
 - Incus's `?recursion=1` variants are separate path strings upstream; the patch
   folds them into the plain path with a required `recursion` parameter, so
   generated list methods return full objects and always get `1`.

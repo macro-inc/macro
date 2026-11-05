@@ -22,9 +22,9 @@ pub mod types {
         )]
         pub type_: ::std::option::Option<::std::string::String>,
     }
-    /**ConfigMap type is used to hold incus config. In contrast to plain
-    map[string]string it provides unmarshal methods for JSON and YAML, which
-    gracefully handle numbers and bools.*/
+    ///ConfigMap type is used to hold incus config. In contrast to plain
+    ///map[string]string it provides unmarshal methods for JSON and YAML, which
+    ///gracefully handle numbers and bools.
     #[derive(::serde::Deserialize, ::serde::Serialize, Clone, Debug)]
     #[serde(transparent)]
     pub struct ConfigMap(
@@ -56,9 +56,9 @@ pub mod types {
             Self(value)
         }
     }
-    /**DevicesMap type is used to hold incus devices configurations. In contrast to
-    plain map[string]map[string]string it provides unmarshal methods for JSON and
-    YAML, which gracefully handle numbers and bools.*/
+    ///DevicesMap type is used to hold incus devices configurations. In contrast to
+    ///plain map[string]map[string]string it provides unmarshal methods for JSON and
+    ///YAML, which gracefully handle numbers and bools.
     #[derive(::serde::Deserialize, ::serde::Serialize, Clone, Debug)]
     #[serde(transparent)]
     pub struct DevicesMap(
@@ -152,9 +152,9 @@ pub mod types {
         ///When the image was originally created
         #[serde(skip_serializing_if = "::std::option::Option::is_none")]
         pub created_at: ::std::option::Option<::chrono::DateTime<::chrono::offset::Utc>>,
-        /**When the image becomes obsolete
-
-        API extension: images_expiry*/
+        ///When the image becomes obsolete
+        ///
+        ///API extension: images_expiry
         #[serde(skip_serializing_if = "::std::option::Option::is_none")]
         pub expires_at: ::std::option::Option<::chrono::DateTime<::chrono::offset::Utc>>,
         ///Original filename
@@ -166,14 +166,14 @@ pub mod types {
         ///Last time the image was used
         #[serde(skip_serializing_if = "::std::option::Option::is_none")]
         pub last_used_at: ::std::option::Option<::chrono::DateTime<::chrono::offset::Utc>>,
-        /**List of profiles to use when creating from this image (if none provided by user)
-
-        API extension: image_profiles*/
+        ///List of profiles to use when creating from this image (if none provided by user)
+        ///
+        ///API extension: image_profiles
         #[serde(skip_serializing_if = "::std::option::Option::is_none")]
         pub profiles: ::std::option::Option<::std::vec::Vec<::std::string::String>>,
-        /**Project name
-
-        API extension: images_all_projects*/
+        ///Project name
+        ///
+        ///API extension: images_all_projects
         #[serde(skip_serializing_if = "::std::option::Option::is_none")]
         pub project: ::std::option::Option<::std::string::String>,
         ///Descriptive properties
@@ -187,9 +187,9 @@ pub mod types {
         ///Size of the image in bytes
         #[serde(skip_serializing_if = "::std::option::Option::is_none")]
         pub size: ::std::option::Option<i64>,
-        /**Type of image (container or virtual-machine)
-
-        API extension: image_types*/
+        ///Type of image (container or virtual-machine)
+        ///
+        ///API extension: image_types
         #[serde(
             rename = "type",
             skip_serializing_if = "::std::option::Option::is_none"
@@ -241,9 +241,9 @@ pub mod types {
         ///Target fingerprint for the alias
         #[serde(skip_serializing_if = "::std::option::Option::is_none")]
         pub target: ::std::option::Option<::std::string::String>,
-        /**Alias type (container or virtual-machine)
-
-        API extension: image_types*/
+        ///Alias type (container or virtual-machine)
+        ///
+        ///API extension: image_types
         #[serde(
             rename = "type",
             skip_serializing_if = "::std::option::Option::is_none"
@@ -259,9 +259,9 @@ pub mod types {
         ///Source server certificate (if not trusted by system CA)
         #[serde(skip_serializing_if = "::std::option::Option::is_none")]
         pub certificate: ::std::option::Option<::std::string::String>,
-        /**Type of image (container or virtual-machine)
-
-        API extension: image_types*/
+        ///Type of image (container or virtual-machine)
+        ///
+        ///API extension: image_types
         #[serde(skip_serializing_if = "::std::option::Option::is_none")]
         pub image_type: ::std::option::Option<::std::string::String>,
         ///Source server protocol
@@ -328,9 +328,9 @@ pub mod types {
         ///List of profiles applied to the instance
         #[serde(skip_serializing_if = "::std::option::Option::is_none")]
         pub profiles: ::std::option::Option<::std::vec::Vec<::std::string::String>>,
-        /**Instance project name
-
-        API extension: instance_all_projects*/
+        ///Instance project name
+        ///
+        ///API extension: instance_all_projects
         #[serde(skip_serializing_if = "::std::option::Option::is_none")]
         pub project: ::std::option::Option<::std::string::String>,
         ///If set, instance will be restored to the provided snapshot name
@@ -404,9 +404,9 @@ pub mod types {
         ///Image alias name (for image source)
         #[serde(skip_serializing_if = "::std::option::Option::is_none")]
         pub alias: ::std::option::Option<::std::string::String>,
-        /**Whether to ignore errors when copying (e.g. for volatile files)
-
-        API extension: instance_allow_inconsistent_copy*/
+        ///Whether to ignore errors when copying (e.g. for volatile files)
+        ///
+        ///API extension: instance_allow_inconsistent_copy
         #[serde(skip_serializing_if = "::std::option::Option::is_none")]
         pub allow_inconsistent: ::std::option::Option<bool>,
         ///Base image fingerprint (for faster migration)
@@ -447,9 +447,9 @@ pub mod types {
         ///Whether this is refreshing an existing instance (for migration and copy)
         #[serde(skip_serializing_if = "::std::option::Option::is_none")]
         pub refresh: ::std::option::Option<bool>,
-        /**Whether to exclude source snapshots earlier than latest target snapshot
-
-        API extension: custom_volume_refresh_exclude_older_snapshots*/
+        ///Whether to exclude source snapshots earlier than latest target snapshot
+        ///
+        ///API extension: custom_volume_refresh_exclude_older_snapshots
         #[serde(skip_serializing_if = "::std::option::Option::is_none")]
         pub refresh_exclude_older: ::std::option::Option<bool>,
         ///Remote server secret (for remote private images)
@@ -498,9 +498,9 @@ pub mod types {
         ///Number of processes in the instance
         #[serde(skip_serializing_if = "::std::option::Option::is_none")]
         pub processes: ::std::option::Option<i64>,
-        /**The time that the instance started at
-
-        API extension: instance_state_started_at.*/
+        ///The time that the instance started at
+        ///
+        ///API extension: instance_state_started_at.
         #[serde(skip_serializing_if = "::std::option::Option::is_none")]
         pub started_at: ::std::option::Option<::chrono::DateTime<::chrono::offset::Utc>>,
         ///Current status (Running, Stopped, Frozen or Error)
@@ -512,9 +512,9 @@ pub mod types {
     ///`InstanceStateCpu`
     #[derive(::serde::Deserialize, ::serde::Serialize, Clone, Debug, Default)]
     pub struct InstanceStateCpu {
-        /**CPU time available per second, in nanoseconds
-
-        API extension: instance_state_cpu_time*/
+        ///CPU time available per second, in nanoseconds
+        ///
+        ///API extension: instance_state_cpu_time
         #[serde(skip_serializing_if = "::std::option::Option::is_none")]
         pub allocated_time: ::std::option::Option<i64>,
         ///CPU usage in nanoseconds
@@ -524,9 +524,9 @@ pub mod types {
     ///`InstanceStateDisk`
     #[derive(::serde::Deserialize, ::serde::Serialize, Clone, Debug, Default)]
     pub struct InstanceStateDisk {
-        /**Total size in bytes
-
-        API extension: instances_state_total*/
+        ///Total size in bytes
+        ///
+        ///API extension: instances_state_total
         #[serde(skip_serializing_if = "::std::option::Option::is_none")]
         pub total: ::std::option::Option<i64>,
         ///Disk usage in bytes
@@ -560,9 +560,9 @@ pub mod types {
         ///Peak SWAP usage in bytes
         #[serde(skip_serializing_if = "::std::option::Option::is_none")]
         pub swap_usage_peak: ::std::option::Option<i64>,
-        /**Total memory size in bytes
-
-        API extension: instances_state_total*/
+        ///Total memory size in bytes
+        ///
+        ///API extension: instances_state_total
         #[serde(skip_serializing_if = "::std::option::Option::is_none")]
         pub total: ::std::option::Option<i64>,
         ///Memory usage in bytes
@@ -599,8 +599,8 @@ pub mod types {
         )]
         pub type_: ::std::option::Option<::std::string::String>,
     }
-    /**InstanceStateNetworkAddress represents a network address as part of the network section of an
-    instance's state.*/
+    ///InstanceStateNetworkAddress represents a network address as part of the network section of an
+    ///instance's state.
     #[derive(::serde::Deserialize, ::serde::Serialize, Clone, Debug, Default)]
     pub struct InstanceStateNetworkAddress {
         ///IP address
@@ -616,8 +616,8 @@ pub mod types {
         #[serde(skip_serializing_if = "::std::option::Option::is_none")]
         pub scope: ::std::option::Option<::std::string::String>,
     }
-    /**InstanceStateNetworkCounters represents packet counters as part of the network section of an
-    instance's state.*/
+    ///InstanceStateNetworkCounters represents packet counters as part of the network section of an
+    ///instance's state.
     #[derive(::serde::Deserialize, ::serde::Serialize, Clone, Debug, Default)]
     pub struct InstanceStateNetworkCounters {
         ///Number of bytes received
@@ -765,9 +765,9 @@ pub mod types {
         pub restore: ::std::option::Option<::std::string::String>,
         #[serde(skip_serializing_if = "::std::option::Option::is_none")]
         pub source: ::std::option::Option<InstanceSource>,
-        /**Whether to start the instance after creation
-
-        API extension: instance_create_start*/
+        ///Whether to start the instance after creation
+        ///
+        ///API extension: instance_create_start
         #[serde(skip_serializing_if = "::std::option::Option::is_none")]
         pub start: ::std::option::Option<bool>,
         ///Whether the instance currently has saved state on disk
@@ -797,9 +797,9 @@ pub mod types {
         ///UUID of the operation
         #[serde(skip_serializing_if = "::std::option::Option::is_none")]
         pub id: ::std::option::Option<::std::string::String>,
-        /**What cluster member this record was found on
-
-        API extension: operation_location*/
+        ///What cluster member this record was found on
+        ///
+        ///API extension: operation_location
         #[serde(skip_serializing_if = "::std::option::Option::is_none")]
         pub location: ::std::option::Option<::std::string::String>,
         ///Whether the operation can be canceled
@@ -873,9 +873,9 @@ pub mod types {
     ///ResourcesCPU represents the cpu resources available on the system
     #[derive(::serde::Deserialize, ::serde::Serialize, Clone, Debug, Default)]
     pub struct ResourcesCpu {
-        /**Architecture name
-
-        API extension: resources_v2*/
+        ///Architecture name
+        ///
+        ///API extension: resources_v2
         #[serde(skip_serializing_if = "::std::option::Option::is_none")]
         pub architecture: ::std::option::Option<::std::string::String>,
         ///Total number of CPU threads (from all sockets and cores)
@@ -925,19 +925,19 @@ pub mod types {
         ///Whether the client is trusted (one of "trusted" or "untrusted")
         #[serde(skip_serializing_if = "::std::option::Option::is_none")]
         pub auth: ::std::option::Option<::std::string::String>,
-        /**List of supported authentication methods
-
-        API extension: macaroon_authentication*/
+        ///List of supported authentication methods
+        ///
+        ///API extension: macaroon_authentication
         #[serde(skip_serializing_if = "::std::option::Option::is_none")]
         pub auth_methods: ::std::option::Option<::std::vec::Vec<::std::string::String>>,
-        /**The current API user login method
-
-        API extension: auth_user*/
+        ///The current API user login method
+        ///
+        ///API extension: auth_user
         #[serde(skip_serializing_if = "::std::option::Option::is_none")]
         pub auth_user_method: ::std::option::Option<::std::string::String>,
-        /**The current API user identifier
-
-        API extension: auth_user*/
+        ///The current API user identifier
+        ///
+        ///API extension: auth_user
         #[serde(skip_serializing_if = "::std::option::Option::is_none")]
         pub auth_user_name: ::std::option::Option<::std::string::String>,
         #[serde(skip_serializing_if = "::std::option::Option::is_none")]
@@ -969,9 +969,9 @@ pub mod types {
         ///List of supported instance driver versions (separate by " | ")
         #[serde(skip_serializing_if = "::std::option::Option::is_none")]
         pub driver_version: ::std::option::Option<::std::string::String>,
-        /**Current firewall driver
-
-        API extension: firewall_driver*/
+        ///Current firewall driver
+        ///
+        ///API extension: firewall_driver
         #[serde(skip_serializing_if = "::std::option::Option::is_none")]
         pub firewall: ::std::option::Option<::std::string::String>,
         ///OS kernel name
@@ -980,9 +980,9 @@ pub mod types {
         ///OS kernel architecture
         #[serde(skip_serializing_if = "::std::option::Option::is_none")]
         pub kernel_architecture: ::std::option::Option<::std::string::String>,
-        /**Map of kernel features that were tested on startup
-
-        API extension: kernel_features*/
+        ///Map of kernel features that were tested on startup
+        ///
+        ///API extension: kernel_features
         #[serde(skip_serializing_if = "::std::option::Option::is_none")]
         pub kernel_features: ::std::option::Option<
             ::std::collections::BTreeMap<::std::string::String, ::std::string::String>,
@@ -990,45 +990,45 @@ pub mod types {
         ///Kernel version
         #[serde(skip_serializing_if = "::std::option::Option::is_none")]
         pub kernel_version: ::std::option::Option<::std::string::String>,
-        /**Map of LXC features that were tested on startup
-
-        API extension: lxc_features*/
+        ///Map of LXC features that were tested on startup
+        ///
+        ///API extension: lxc_features
         #[serde(skip_serializing_if = "::std::option::Option::is_none")]
         pub lxc_features: ::std::option::Option<
             ::std::collections::BTreeMap<::std::string::String, ::std::string::String>,
         >,
-        /**Name of the operating system (Linux distribution)
-
-        API extension: api_os*/
+        ///Name of the operating system (Linux distribution)
+        ///
+        ///API extension: api_os
         #[serde(skip_serializing_if = "::std::option::Option::is_none")]
         pub os_name: ::std::option::Option<::std::string::String>,
-        /**Version of the operating system (Linux distribution)
-
-        API extension: api_os*/
+        ///Version of the operating system (Linux distribution)
+        ///
+        ///API extension: api_os
         #[serde(skip_serializing_if = "::std::option::Option::is_none")]
         pub os_version: ::std::option::Option<::std::string::String>,
-        /**Current project name
-
-        API extension: projects*/
+        ///Current project name
+        ///
+        ///API extension: projects
         #[serde(skip_serializing_if = "::std::option::Option::is_none")]
         pub project: ::std::option::Option<::std::string::String>,
         ///Server implementation name
         #[serde(skip_serializing_if = "::std::option::Option::is_none")]
         pub server: ::std::option::Option<::std::string::String>,
-        /**Whether the server is part of a cluster
-
-        API extension: clustering*/
+        ///Whether the server is part of a cluster
+        ///
+        ///API extension: clustering
         #[serde(skip_serializing_if = "::std::option::Option::is_none")]
         pub server_clustered: ::std::option::Option<bool>,
-        /**Mode that the event distribution subsystem is operating in on this server.
-        Either "full-mesh", "hub-server" or "hub-client".
-
-        API extension: event_hub*/
+        ///Mode that the event distribution subsystem is operating in on this server.
+        ///Either "full-mesh", "hub-server" or "hub-client".
+        ///
+        ///API extension: event_hub
         #[serde(skip_serializing_if = "::std::option::Option::is_none")]
         pub server_event_mode: ::std::option::Option<::std::string::String>,
-        /**Server hostname
-
-        API extension: clustering*/
+        ///Server hostname
+        ///
+        ///API extension: clustering
         #[serde(skip_serializing_if = "::std::option::Option::is_none")]
         pub server_name: ::std::option::Option<::std::string::String>,
         ///PID of the daemon
@@ -1069,25 +1069,25 @@ pub mod types {
     ///ServerStorageDriverInfo represents the read-only info about a storage driver
     #[derive(::serde::Deserialize, ::serde::Serialize, Clone, Debug, Default)]
     pub struct ServerStorageDriverInfo {
-        /**Name of the driver
-
-        API extension: server_supported_storage_drivers*/
+        ///Name of the driver
+        ///
+        ///API extension: server_supported_storage_drivers
         #[serde(
             rename = "Name",
             skip_serializing_if = "::std::option::Option::is_none"
         )]
         pub name: ::std::option::Option<::std::string::String>,
-        /**Whether the driver has remote volumes
-
-        API extension: server_supported_storage_drivers*/
+        ///Whether the driver has remote volumes
+        ///
+        ///API extension: server_supported_storage_drivers
         #[serde(
             rename = "Remote",
             skip_serializing_if = "::std::option::Option::is_none"
         )]
         pub remote: ::std::option::Option<bool>,
-        /**Version of the driver
-
-        API extension: server_supported_storage_drivers*/
+        ///Version of the driver
+        ///
+        ///API extension: server_supported_storage_drivers
         #[serde(
             rename = "Version",
             skip_serializing_if = "::std::option::Option::is_none"
@@ -1165,24 +1165,23 @@ pub mod types {
     }
 }
 #[derive(Clone, Debug)]
-/**Client for Incus external REST API
-
-This is the REST API used by all Incus clients.
-Internal endpoints aren't included in this documentation.
-
-The Incus API is available over both a local unix+http and remote https API.
-Authentication for local users relies on group membership and access to the unix socket.
-For remote users, the default authentication method is TLS client
-certificates.
-
-Version: 1.0*/
+///Client for Incus external REST API
+///
+///This is the REST API used by all Incus clients.
+///Internal endpoints aren't included in this documentation.
+///
+///The Incus API is available over both a local unix+http and remote https API.
+///Authentication for local users relies on group membership and access to the unix socket.
+///For remote users, the default authentication method is TLS client
+///certificates.
+///
+///Version: 1.0
 pub struct Client {
     pub(crate) baseurl: String,
     pub(crate) client: reqwest::Client,
 }
 impl Client {
     /// Create a new client.
-    ///
     /// `baseurl` is the base URL provided to the internal
     /// `reqwest::Client`, and should include a scheme and hostname,
     /// as well as port and a path stem if applicable.
@@ -1200,7 +1199,6 @@ impl Client {
     }
     /// Construct a new client with an existing `reqwest::Client`,
     /// allowing more control over its configuration.
-    ///
     /// `baseurl` is the base URL provided to the internal
     /// `reqwest::Client`, and should include a scheme and hostname,
     /// as well as port and a path stem if applicable.
@@ -1228,16 +1226,15 @@ impl ClientInfo<()> for Client {
 impl ClientHooks<()> for &Client {}
 #[allow(clippy::all)]
 impl Client {
-    /**Get the server environment and configuration
-
-    Shows the full server environment and configuration.
-
-    Sends a `GET` request to `/1.0`
-
-    Arguments:
-    - `project`: Project name
-    - `target`: Cluster member name
-    */
+    ///Get the server environment and configuration
+    ///
+    ///Shows the full server environment and configuration.
+    ///
+    ///Sends a `GET` request to `/1.0`
+    ///
+    ///Arguments:
+    ///- `project`: Project name
+    ///- `target`: Cluster member name
     pub async fn server_get<'a>(
         &'a self,
         project: Option<&'a str>,
@@ -1279,18 +1276,17 @@ impl Client {
             _ => Err(Error::UnexpectedResponse(response)),
         }
     }
-    /**Get the images
-
-    Returns a list of images (structs).
-
-    Sends a `GET` request to `/1.0/images`
-
-    Arguments:
-    - `all_projects`: Retrieve images from all projects
-    - `filter`: Collection filter
-    - `project`: Project name
-    - `recursion`: Recursion level; this client always sends 1
-    */
+    ///Get the images
+    ///
+    ///Returns a list of images (structs).
+    ///
+    ///Sends a `GET` request to `/1.0/images`
+    ///
+    ///Arguments:
+    ///- `all_projects`: Retrieve images from all projects
+    ///- `filter`: Collection filter
+    ///- `project`: Project name
+    ///- `recursion`: Recursion level; this client always sends 1
     pub async fn images_get_recursion1<'a>(
         &'a self,
         all_projects: Option<bool>,
@@ -1340,16 +1336,15 @@ impl Client {
             _ => Err(Error::UnexpectedResponse(response)),
         }
     }
-    /**Get the image alias
-
-    Gets a specific image alias.
-
-    Sends a `GET` request to `/1.0/images/aliases/{name}`
-
-    Arguments:
-    - `name`: Alias name
-    - `project`: Project name
-    */
+    ///Get the image alias
+    ///
+    ///Gets a specific image alias.
+    ///
+    ///Sends a `GET` request to `/1.0/images/aliases/{name}`
+    ///
+    ///Arguments:
+    ///- `name`: Alias name
+    ///- `project`: Project name
     pub async fn image_alias_get<'a>(
         &'a self,
         name: &'a str,
@@ -1394,18 +1389,17 @@ impl Client {
             _ => Err(Error::UnexpectedResponse(response)),
         }
     }
-    /**Get the instances
-
-    Returns a list of instances (basic structs).
-
-    Sends a `GET` request to `/1.0/instances`
-
-    Arguments:
-    - `all_projects`: Retrieve instances from all projects
-    - `filter`: Collection filter
-    - `project`: Project name
-    - `recursion`: Recursion level; this client always sends 1
-    */
+    ///Get the instances
+    ///
+    ///Returns a list of instances (basic structs).
+    ///
+    ///Sends a `GET` request to `/1.0/instances`
+    ///
+    ///Arguments:
+    ///- `all_projects`: Retrieve instances from all projects
+    ///- `filter`: Collection filter
+    ///- `project`: Project name
+    ///- `recursion`: Recursion level; this client always sends 1
     pub async fn instances_get_recursion1<'a>(
         &'a self,
         all_projects: Option<bool>,
@@ -1455,20 +1449,19 @@ impl Client {
             _ => Err(Error::UnexpectedResponse(response)),
         }
     }
-    /**Create a new instance
-
-    Creates a new instance.
-    Depending on the source, this can create an instance from an existing
-    local image, remote image, existing local instance or snapshot, remote
-    migration stream or backup file.
-
-    Sends a `POST` request to `/1.0/instances`
-
-    Arguments:
-    - `project`: Project name
-    - `target`: Cluster member
-    - `body`: Instance request
-    */
+    ///Create a new instance
+    ///
+    ///Creates a new instance.
+    ///Depending on the source, this can create an instance from an existing
+    ///local image, remote image, existing local instance or snapshot, remote
+    ///migration stream or backup file.
+    ///
+    ///Sends a `POST` request to `/1.0/instances`
+    ///
+    ///Arguments:
+    ///- `project`: Project name
+    ///- `target`: Cluster member
+    ///- `body`: Instance request
     pub async fn instances_post<'a>(
         &'a self,
         project: Option<&'a str>,
@@ -1512,16 +1505,15 @@ impl Client {
             _ => Err(Error::UnexpectedResponse(response)),
         }
     }
-    /**Get the instance
-
-    Gets a specific instance (basic struct).
-
-    Sends a `GET` request to `/1.0/instances/{name}`
-
-    Arguments:
-    - `name`: Instance name
-    - `project`: Project name
-    */
+    ///Get the instance
+    ///
+    ///Gets a specific instance (basic struct).
+    ///
+    ///Sends a `GET` request to `/1.0/instances/{name}`
+    ///
+    ///Arguments:
+    ///- `name`: Instance name
+    ///- `project`: Project name
     pub async fn instance_get<'a>(
         &'a self,
         name: &'a str,
@@ -1566,18 +1558,17 @@ impl Client {
             _ => Err(Error::UnexpectedResponse(response)),
         }
     }
-    /**Update the instance
-
-    Updates the instance configuration or trigger a snapshot restore.
-
-    Sends a `PUT` request to `/1.0/instances/{name}`
-
-    Arguments:
-    - `name`: Instance name
-    - `project`: Project name
-    - `if_match`: ETag of the instance read before this update
-    - `body`: Update request
-    */
+    ///Update the instance
+    ///
+    ///Updates the instance configuration or trigger a snapshot restore.
+    ///
+    ///Sends a `PUT` request to `/1.0/instances/{name}`
+    ///
+    ///Arguments:
+    ///- `name`: Instance name
+    ///- `project`: Project name
+    ///- `if_match`: ETag of the instance read before this update
+    ///- `body`: Update request
     pub async fn instance_put<'a>(
         &'a self,
         name: &'a str,
@@ -1626,18 +1617,17 @@ impl Client {
             _ => Err(Error::UnexpectedResponse(response)),
         }
     }
-    /**Delete an instance
-
-    Deletes a specific instance.
-
-    This also deletes anything owned by the instance such as snapshots and backups.
-
-    Sends a `DELETE` request to `/1.0/instances/{name}`
-
-    Arguments:
-    - `name`: Instance name
-    - `project`: Project name
-    */
+    ///Delete an instance
+    ///
+    ///Deletes a specific instance.
+    ///
+    ///This also deletes anything owned by the instance such as snapshots and backups.
+    ///
+    ///Sends a `DELETE` request to `/1.0/instances/{name}`
+    ///
+    ///Arguments:
+    ///- `name`: Instance name
+    ///- `project`: Project name
     pub async fn instance_delete<'a>(
         &'a self,
         name: &'a str,
@@ -1682,17 +1672,16 @@ impl Client {
             _ => Err(Error::UnexpectedResponse(response)),
         }
     }
-    /**Partially update the instance
-
-    Updates a subset of the instance configuration
-
-    Sends a `PATCH` request to `/1.0/instances/{name}`
-
-    Arguments:
-    - `name`: Instance name
-    - `project`: Project name
-    - `body`: Update request
-    */
+    ///Partially update the instance
+    ///
+    ///Updates a subset of the instance configuration
+    ///
+    ///Sends a `PATCH` request to `/1.0/instances/{name}`
+    ///
+    ///Arguments:
+    ///- `name`: Instance name
+    ///- `project`: Project name
+    ///- `body`: Update request
     pub async fn instance_patch<'a>(
         &'a self,
         name: &'a str,
@@ -1739,20 +1728,19 @@ impl Client {
             _ => Err(Error::UnexpectedResponse(response)),
         }
     }
-    /**Get the runtime state
-
-    Gets the runtime state of the instance.
-
-    This is a reasonably expensive call as it causes code to be run
-    inside of the instance to retrieve the resource usage and network
-    information.
-
-    Sends a `GET` request to `/1.0/instances/{name}/state`
-
-    Arguments:
-    - `name`: Instance name
-    - `project`: Project name
-    */
+    ///Get the runtime state
+    ///
+    ///Gets the runtime state of the instance.
+    ///
+    ///This is a reasonably expensive call as it causes code to be run
+    ///inside of the instance to retrieve the resource usage and network
+    ///information.
+    ///
+    ///Sends a `GET` request to `/1.0/instances/{name}/state`
+    ///
+    ///Arguments:
+    ///- `name`: Instance name
+    ///- `project`: Project name
     pub async fn instance_state_get<'a>(
         &'a self,
         name: &'a str,
@@ -1797,17 +1785,16 @@ impl Client {
             _ => Err(Error::UnexpectedResponse(response)),
         }
     }
-    /**Change the state
-
-    Changes the running state of the instance.
-
-    Sends a `PUT` request to `/1.0/instances/{name}/state`
-
-    Arguments:
-    - `name`: Instance name
-    - `project`: Project name
-    - `body`: State
-    */
+    ///Change the state
+    ///
+    ///Changes the running state of the instance.
+    ///
+    ///Sends a `PUT` request to `/1.0/instances/{name}/state`
+    ///
+    ///Arguments:
+    ///- `name`: Instance name
+    ///- `project`: Project name
+    ///- `body`: State
     pub async fn instance_state_put<'a>(
         &'a self,
         name: &'a str,
@@ -1854,15 +1841,14 @@ impl Client {
             _ => Err(Error::UnexpectedResponse(response)),
         }
     }
-    /**Get the operation state
-
-    Gets the operation state.
-
-    Sends a `GET` request to `/1.0/operations/{id}`
-
-    Arguments:
-    - `id`: Operation ID
-    */
+    ///Get the operation state
+    ///
+    ///Gets the operation state.
+    ///
+    ///Sends a `GET` request to `/1.0/operations/{id}`
+    ///
+    ///Arguments:
+    ///- `id`: Operation ID
     pub async fn operation_get<'a>(
         &'a self,
         id: &'a str,
@@ -1905,16 +1891,15 @@ impl Client {
             _ => Err(Error::UnexpectedResponse(response)),
         }
     }
-    /**Wait for the operation
-
-    Waits for the operation to reach a final state (or timeout) and retrieve its final state.
-
-    Sends a `GET` request to `/1.0/operations/{id}/wait`
-
-    Arguments:
-    - `id`: Operation ID
-    - `timeout`: Timeout in seconds (-1 means never)
-    */
+    ///Wait for the operation
+    ///
+    ///Waits for the operation to reach a final state (or timeout) and retrieve its final state.
+    ///
+    ///Sends a `GET` request to `/1.0/operations/{id}/wait`
+    ///
+    ///Arguments:
+    ///- `id`: Operation ID
+    ///- `timeout`: Timeout in seconds (-1 means never)
     pub async fn operation_wait_get<'a>(
         &'a self,
         id: &'a str,
@@ -1959,15 +1944,14 @@ impl Client {
             _ => Err(Error::UnexpectedResponse(response)),
         }
     }
-    /**Get system resources information
-
-    Gets the hardware information profile of the server.
-
-    Sends a `GET` request to `/1.0/resources`
-
-    Arguments:
-    - `target`: Cluster member name
-    */
+    ///Get system resources information
+    ///
+    ///Gets the hardware information profile of the server.
+    ///
+    ///Sends a `GET` request to `/1.0/resources`
+    ///
+    ///Arguments:
+    ///- `target`: Cluster member name
     pub async fn resources_get<'a>(
         &'a self,
         target: Option<&'a str>,
