@@ -25,6 +25,9 @@ jobs:
           threads: 32
           timeout: 60
           salt_file: crates/macro_user_id/src/lib.rs
+          debug: 'limited'
+          deno_nextest: false
+          sccache: ci-speed-runners
           pkgs_file: .github/ci-speed/shards/large.6.0.pkgs
           deno: true
         - leg: large-8cpu-j8-t32-s6i1
@@ -34,6 +37,9 @@ jobs:
           threads: 32
           timeout: 60
           salt_file: crates/macro_user_id/src/lib.rs
+          debug: 'limited'
+          deno_nextest: false
+          sccache: ci-speed-runners
           pkgs_file: .github/ci-speed/shards/large.6.1.pkgs
           deno: false
         - leg: large-8cpu-j8-t32-s6i2
@@ -43,6 +49,9 @@ jobs:
           threads: 32
           timeout: 60
           salt_file: crates/macro_user_id/src/lib.rs
+          debug: 'limited'
+          deno_nextest: false
+          sccache: ci-speed-runners
           pkgs_file: .github/ci-speed/shards/large.6.2.pkgs
           deno: true
         - leg: large-8cpu-j8-t32-s6i3
@@ -52,6 +61,9 @@ jobs:
           threads: 32
           timeout: 60
           salt_file: crates/macro_user_id/src/lib.rs
+          debug: 'limited'
+          deno_nextest: false
+          sccache: ci-speed-runners
           pkgs_file: .github/ci-speed/shards/large.6.3.pkgs
           deno: false
         - leg: large-8cpu-j8-t32-s6i4
@@ -61,6 +73,9 @@ jobs:
           threads: 32
           timeout: 60
           salt_file: crates/macro_user_id/src/lib.rs
+          debug: 'limited'
+          deno_nextest: false
+          sccache: ci-speed-runners
           pkgs_file: .github/ci-speed/shards/large.6.4.pkgs
           deno: false
         - leg: large-8cpu-j8-t32-s6i5
@@ -70,6 +85,9 @@ jobs:
           threads: 32
           timeout: 60
           salt_file: crates/macro_user_id/src/lib.rs
+          debug: 'limited'
+          deno_nextest: false
+          sccache: ci-speed-runners
           pkgs_file: .github/ci-speed/shards/large.6.5.pkgs
           deno: false
         - leg: large-16cpu-j16-t32-s3i0
@@ -79,6 +97,9 @@ jobs:
           threads: 32
           timeout: 60
           salt_file: crates/macro_user_id/src/lib.rs
+          debug: 'limited'
+          deno_nextest: false
+          sccache: ci-speed-runners
           pkgs_file: .github/ci-speed/shards/large.3.0.pkgs
           deno: true
         - leg: large-16cpu-j16-t32-s3i1
@@ -88,6 +109,9 @@ jobs:
           threads: 32
           timeout: 60
           salt_file: crates/macro_user_id/src/lib.rs
+          debug: 'limited'
+          deno_nextest: false
+          sccache: ci-speed-runners
           pkgs_file: .github/ci-speed/shards/large.3.1.pkgs
           deno: false
         - leg: large-16cpu-j16-t32-s3i2
@@ -97,6 +121,9 @@ jobs:
           threads: 32
           timeout: 60
           salt_file: crates/macro_user_id/src/lib.rs
+          debug: 'limited'
+          deno_nextest: false
+          sccache: ci-speed-runners
           pkgs_file: .github/ci-speed/shards/large.3.2.pkgs
           deno: true
         - leg: medium-8cpu-j8-t32-s3i0
@@ -106,6 +133,9 @@ jobs:
           threads: 32
           timeout: 60
           salt_file: crates/email/src/lib.rs
+          debug: 'limited'
+          deno_nextest: false
+          sccache: ci-speed-runners
           pkgs_file: .github/ci-speed/shards/medium.3.0.pkgs
           deno: true
         - leg: medium-8cpu-j8-t32-s3i1
@@ -115,6 +145,9 @@ jobs:
           threads: 32
           timeout: 60
           salt_file: crates/email/src/lib.rs
+          debug: 'limited'
+          deno_nextest: false
+          sccache: ci-speed-runners
           pkgs_file: .github/ci-speed/shards/medium.3.1.pkgs
           deno: false
         - leg: medium-8cpu-j8-t32-s3i2
@@ -124,6 +157,9 @@ jobs:
           threads: 32
           timeout: 60
           salt_file: crates/email/src/lib.rs
+          debug: 'limited'
+          deno_nextest: false
+          sccache: ci-speed-runners
           pkgs_file: .github/ci-speed/shards/medium.3.2.pkgs
           deno: true
     runs-on: ${{ matrix.runner }}
@@ -132,6 +168,8 @@ jobs:
       CARGO_BUILD_JOBS: ${{ matrix.jobs }}
       RUSTFLAGS: '-Dwarnings -C link-arg=-fuse-ld=mold'
       SCCACHE_IDLE_TIMEOUT: '0'
+      CARGO_PROFILE_DEV_DEBUG: ${{ matrix.debug }}
+      CARGO_PROFILE_TEST_DEBUG: ${{ matrix.debug }}
     services:
       postgres:
         image: pgvector/pgvector:pg14
@@ -168,7 +206,7 @@ jobs:
         set -euo pipefail
         env_file="$(mktemp "$RUNNER_TEMP/namespace-sccache.XXXXXX")"
         trap 'rm -f "$env_file"' EXIT
-        nsc cache sccache setup --cache_name ci-speed-runners > "$env_file"
+        nsc cache sccache setup --cache_name ${{ matrix.sccache }} > "$env_file"
         while IFS= read -r line; do
           k="${line%%=*}"
           v="${line#*=}"
@@ -264,8 +302,21 @@ jobs:
       if: matrix.deno
       continue-on-error: true
       run: |-
-        cargo test --locked -p code_execution -- --ignored --test-threads=2
-        cargo test --locked -p agent_harness_service authenticated_mcp_runs_javascript_and_persists_source_and_result -- --ignored
+        set -euo pipefail
+        if [ "${{ matrix.deno_nextest }}" = "true" ]; then
+          pkg_args=()
+          for package in $(cat ${{ matrix.pkgs_file }}); do
+            [ "$package" = "sync_service" ] || pkg_args+=(-p "$package")
+          done
+          cargo nextest run \
+            --config 'profile.dev.package."*".debug=false' \
+            --all-features --no-tests=pass --run-ignored only --test-threads 2 \
+            -E 'package(code_execution) or (package(agent_harness_service) and test(authenticated_mcp_runs_javascript_and_persists_source_and_result))' \
+            "${pkg_args[@]}"
+        else
+          cargo test --locked -p code_execution -- --ignored --test-threads=2
+          cargo test --locked -p agent_harness_service authenticated_mcp_runs_javascript_and_persists_source_and_result -- --ignored
+        fi
     - name: bench summary
       if: always()
       run: |
