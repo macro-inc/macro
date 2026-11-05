@@ -1,5 +1,8 @@
 set -euo pipefail
 
+# Experiment only: stream memory samples so a lost runner still leaves a trail.
+tail -n0 -f "$RUNNER_TEMP/mem.log" &
+
 # --no-tests=pass: a package filter can legitimately select a crate with no
 # tests; treat that as success, not nextest's default error.
 # sync-service is not part of this suite, and its storage backends are mutually

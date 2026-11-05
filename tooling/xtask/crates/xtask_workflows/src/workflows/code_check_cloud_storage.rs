@@ -196,11 +196,43 @@ fn test() -> Job {
         .add_step(steps::code_mode_assets())
         .add_step(configure_postgres())
         .add_step(prepare_tests())
+        .add_step(start_memory_sampler())
         .add_step(run_tests())
         .add_step(setup_execution_runtime())
         .add_step(test_execution_runtime())
+        .add_step(report_memory())
         .add_step(steps::show_sccache_stats())
         .add_step(steps::teardown_nix())
+}
+
+/// Experiment only: sample memory for the rest of the job.
+fn start_memory_sampler() -> Step<Run> {
+    Step::new("Start memory sampler").run(indoc::indoc! {r#"
+        cat > "$RUNNER_TEMP/memsample.sh" <<'SAMPLER'
+        while :; do
+          avail=$(awk '/MemAvailable/{print int($2/1024)}' /proc/meminfo)
+          total=$(awk '/MemTotal/{print int($2/1024)}' /proc/meminfo)
+          psi=$(awk '/^full/{print $2}' /proc/pressure/memory 2>/dev/null)
+          echo "MEMSAMPLE $(date -u +%H:%M:%S) avail=$avail total=$total load=$(cut -d' ' -f1 /proc/loadavg) rustc=$(pgrep -c rustc) ld=$(pgrep -c mold) psi_full=$psi"
+          sleep 2
+        done
+        SAMPLER
+        nohup bash "$RUNNER_TEMP/memsample.sh" > "$RUNNER_TEMP/mem.log" 2>&1 &
+        nproc; free -m
+    "#})
+}
+
+/// Experiment only: summarise the sampler and any OOM evidence.
+fn report_memory() -> Step<Run> {
+    Step::new("Report memory")
+        .run(indoc::indoc! {r#"
+            awk '/MEMSAMPLE/{split($3,a,"=");if(min==""||a[2]+0<min+0){min=a[2];at=$2}}END{print "MEMREPORT min_avail_mb="min" at="at}' "$RUNNER_TEMP/mem.log" || true
+            grep -E '^(oom|oom_kill) ' /sys/fs/cgroup/memory.events 2>/dev/null | sed 's/^/MEMREPORT cgroup /' || true
+            cat /proc/pressure/memory 2>/dev/null | sed 's/^/MEMREPORT psi /' || true
+            sudo -n dmesg 2>/dev/null | grep -ciE 'out of memory|oom-kill' | sed 's/^/MEMREPORT dmesg_oom_lines=/' || true
+            docker stats --no-stream --format 'MEMREPORT docker {{.Name}} {{.MemUsage}}' 2>/dev/null || true
+        "#})
+        .if_condition(Expression::new("always()"))
 }
 
 /// Install the same pinned runtime shipped in the agent harness container.
