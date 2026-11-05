@@ -131,8 +131,10 @@ uses a fixed-output hash, rather than claiming reproducible compilation.
 The FOD name includes the source store-path digest so source changes cannot
 silently reuse the old binary. The final package restores the denort runtime
 closure references, which FODs discard. Both image formats copy that closure.
+SDK endpoint coverage tooling is excluded from the build inputs because the
+brain does not import it.
 
-After any brain/SDK source, lockfile, compile-wrapper or Deno version change:
+After any brain/SDK runtime source, lockfile, compile-wrapper or Deno version change:
 
 1. Set `compiled.outputHash` to `lib.fakeHash`. If the dependency graph changed,
    also set `dependencies.outputHash` to `lib.fakeHash`.

@@ -8,7 +8,8 @@ let
       ../../packages/brain/deno.lock
       ../../packages/brain/compile.sh
       ../../packages/brain/src
-      ../../packages/sdk/src
+      # Endpoint coverage bookkeeping is not imported by the brain.
+      (lib.fileset.difference ../../packages/sdk/src ../../packages/sdk/src/coverage)
       ../../packages/sdk/generated
     ];
   };
@@ -46,7 +47,7 @@ let
     dontFixup = true;
     outputHashMode = "recursive";
     outputHashAlgo = "sha256";
-    outputHash = "sha256-6TE6SxWD31Fwvq4TJa1WMUqEXfuj/36Q1JIeMSt6okI=";
+    outputHash = "sha256-KRbdDaV/JRE0mEwee/9G4qYCZ+Zl4ln8qeyeDfSqrHE=";
     # FODs cannot retain store references. The final package below rediscovers
     # the denort runtime closure after copying the hash-verified binary.
     unsafeDiscardReferences.out = true;
