@@ -201,11 +201,13 @@ describe('artifact SDK in the sandbox', () => {
   });
 
   it('does not let code choose a new artifact id', async () => {
-    await expect(
+    const quickJS = await getQuickJS();
+
+    expect(() =>
       runCanvasCode(
-        await getQuickJS(),
+        quickJS,
         `editor.add({ kind: 'createArtifact', id: 'chosen', x: 0, y: 0, title: '', html: '' });`
       )
-    ).rejects.toThrow('host-generated');
+    ).toThrow('host-generated');
   });
 });
