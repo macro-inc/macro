@@ -123,11 +123,14 @@ jobs:
         printf '%s\n' "$compare_rev" > /tmp/base-revision
         git diff --name-only --no-renames "$compare_rev" "$GITHUB_SHA" > /tmp/changed-files
       shell: bash
-    - name: Mount nextest-filter binary cache
+    - name: Mount nextest-filter and cargo registry cache
       if: steps.filter.outputs.should_run == 'true' && ((github.event_name != 'pull_request' && github.event_name != 'pull_request_target') || github.event.pull_request.head.repo.full_name == github.repository)
       uses: namespacelabs/nscloud-cache-action@15799a6b54e5765f85b2aac25b3f0df43ed571c0
       with:
-        path: /home/runner/.cache/macro-nextest-filter
+        path: |-
+          /home/runner/.cache/macro-nextest-filter
+          /home/runner/.cargo/registry
+          /home/runner/.cargo/git
       continue-on-error: true
     - id: nextest-filter
       name: compute nextest package filter
