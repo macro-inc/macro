@@ -272,7 +272,31 @@ jobs:
         fi
 
         ensure_filter_bin
-        packages="$("$filter_bin" /tmp/changed-files "$(< /tmp/base-revision)")"
+
+        # cargo metadata takes ~15 s on its first run on this runner and ~1 s after, so its
+        # output is saved per manifest state. The key covers every input of that output; the
+        # filter ignores the file when the change set can alter the graph.
+        metadata_file="$RUNNER_TEMP/cargo-metadata.json"
+        metadata_url=""
+        metadata_restored=false
+        if [ -n "${SCCACHE_WEBDAV_ENDPOINT:-}" ]; then
+          metadata_key="$( { pwd; git ls-files --stage -- Cargo.lock rust-toolchain.toml ':(glob)**/Cargo.toml'; } | sha256sum | cut -c1-16)"
+          metadata_url="$SCCACHE_WEBDAV_ENDPOINT/nextest-filter/metadata-$metadata_key.json.gz"
+          if filter_cache_request "$metadata_url" 2>/dev/null | gunzip > "$metadata_file"; then
+            metadata_restored=true
+            echo "Using saved cargo metadata $metadata_key"
+          else
+            rm -f "$metadata_file"
+          fi
+        fi
+
+        packages="$("$filter_bin" /tmp/changed-files "$(< /tmp/base-revision)" "$metadata_file")"
+
+        # Losing the upload costs the next job about 15 s, not a failure.
+        if [ -n "$metadata_url" ] && [ "$metadata_restored" = false ] && [ -f "$metadata_file" ]; then
+          gzip < "$metadata_file" | filter_cache_request --upload-file - "$metadata_url" \
+            || echo "::warning::Could not save cargo metadata to the remote cache"
+        fi
 
         # One package list drives both clippy and tests, so a clippy.toml edit can
         # only skip tests when nothing else selected a package.
