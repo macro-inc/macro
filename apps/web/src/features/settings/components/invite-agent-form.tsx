@@ -2,6 +2,7 @@ import { MobileDrawer } from '@components/app/mobile/MobileDrawer';
 import { isMobile } from '@core/mobile/isMobile';
 import type {
   ComputerSize,
+  ComputerSizeSpec,
   CreateTeamAgent,
   TeamAgentQuote,
 } from '@service-auth/generated/schemas';
@@ -10,7 +11,8 @@ import { type Accessor, createSignal, For, type JSX, Show } from 'solid-js';
 
 export type AgentInviteSource = {
   quote: Accessor<TeamAgentQuote | undefined>;
-  quoteForSize(size: ComputerSize): TeamAgentQuote | undefined;
+  specsForSize(size: ComputerSize): ComputerSizeSpec | undefined;
+  needsSubscription: Accessor<boolean>;
   quoteLoading: Accessor<boolean>;
   quoteError: Accessor<boolean>;
   reloadQuote(): void;
@@ -116,6 +118,7 @@ export function InviteAgentForm(props: {
   };
   const confirm = async () => {
     if (
+      props.source.needsSubscription() ||
       createFailed() ||
       busy() ||
       submitted() ||
@@ -168,7 +171,7 @@ export function InviteAgentForm(props: {
             fallback={
               <Button
                 variant="primary"
-                disabled={!valid()}
+                disabled={!valid() || props.source.needsSubscription()}
                 onClick={() => setReview(true)}
               >
                 Review price
@@ -178,6 +181,7 @@ export function InviteAgentForm(props: {
             <Button
               variant="primary"
               disabled={
+                props.source.needsSubscription() ||
                 busy() ||
                 createFailed() ||
                 submitted() ||
@@ -193,6 +197,17 @@ export function InviteAgentForm(props: {
         </>
       }
     >
+      <Show when={props.source.needsSubscription()}>
+        <div role="alert" class="space-y-2 mb-4 text-sm">
+          <p>
+            Your team needs an active plan before you can invite an agent. Ask
+            the team owner to activate a plan in Billing.
+          </p>
+          <Button as="a" variant="secondary" href="/app/settings/billing">
+            Go to billing
+          </Button>
+        </div>
+      </Show>
       <Show
         when={!review()}
         fallback={
@@ -204,7 +219,11 @@ export function InviteAgentForm(props: {
             <Show when={props.source.quoteLoading()}>
               <p role="status">Loading price…</p>
             </Show>
-            <Show when={props.source.quoteError()}>
+            <Show
+              when={
+                props.source.quoteError() && !props.source.needsSubscription()
+              }
+            >
               <div role="alert">
                 Couldn't load the price.{' '}
                 <Button variant="secondary" onClick={props.source.reloadQuote}>
@@ -274,7 +293,7 @@ export function InviteAgentForm(props: {
                   </RadioGroup.ItemLabel>
                   <RadioGroup.ItemDescription class="text-xs text-ink-muted">
                     <Show
-                      when={props.source.quoteForSize(size)}
+                      when={props.source.specsForSize(size)}
                       fallback="Specifications unavailable"
                     >
                       {(quote) => (

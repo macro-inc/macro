@@ -228,9 +228,15 @@ With the `enable-team-agents` rollout enabled, team admins and owners see
 **Invite agent** in **Team → Members**. This creates an agent account and buys
 its computer together. The existing email invitation flow remains available.
 
+If the team has no active subscription, the dialog keeps specifications visible
+and explains that an active team plan is required. **Go to billing** opens
+`/app/settings/billing`; the team owner can activate a plan there. An invitation
+cannot be confirmed until the team has an active subscription.
+
 1. Choose **Invite agent**. Enter a **Name**, **Role / job description**, and
    **Personality**. Choose **Standard**, **Large**, or **XL** using the quoted
-   vCPU, RAM, and disk specifications beside each size, and optionally enter
+   vCPU, RAM, and disk specifications beside each size (available even without
+   a paid plan), and optionally enter
    an HTTPS **Avatar URL**.
 2. Choose **Review price**. Review the server's **Agent seat**, **Computer**,
    and **Total per month/year**, in its quoted currency. **Back** preserves

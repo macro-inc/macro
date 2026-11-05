@@ -35,6 +35,9 @@ const quote = (value: ComputerSize = size()): TeamAgentQuote => ({
   diskGb: 100,
   interval: 'month',
 });
+const noSubscription = new URLSearchParams(location.search).has(
+  'no-subscription'
+);
 const showPayments = new URLSearchParams(location.search).has('payments');
 const initialAgent: TeamAgent = {
   userId: 'agent-1',
@@ -109,10 +112,11 @@ render(
           size={size()}
           setSize={setSize}
           source={{
-            quoteForSize: (value) => (failed() ? undefined : quote(value)),
-            quote: () => (failed() ? undefined : quote()),
+            specsForSize: (value) => ({ ...quote(value), size: value }),
+            needsSubscription: () => noSubscription,
+            quote: () => (failed() || noSubscription ? undefined : quote()),
             quoteLoading: () => false,
-            quoteError: failed,
+            quoteError: () => failed() || noSubscription,
             reloadQuote: () => setFailed(false),
             pending: () => false,
             error: () => false,

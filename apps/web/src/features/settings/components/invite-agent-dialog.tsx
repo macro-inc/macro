@@ -1,41 +1,26 @@
 import { usePending } from '@app/observability/flow';
 import { fireAndForget } from '@core/util/fireAndForget';
+import { thrownResultErrorHasCode } from '@core/util/result';
 import { queryReadyGate } from '@queries/gate';
 import {
   useCreateTeamAgentMutation,
   useTeamAgentQuoteQuery,
+  useTeamAgentSizesQuery,
 } from '@queries/team-agents';
 import type { ComputerSize } from '@service-auth/generated/schemas';
 import { createSignal, Show, Suspense } from 'solid-js';
-import { match } from 'ts-pattern';
 import { InviteAgentForm } from './invite-agent-form';
 
 function ConnectedInviteAgentForm(props: { teamId: string; onClose(): void }) {
   const [size, setSize] = createSignal<ComputerSize>('standard');
-  const standard = useTeamAgentQuoteQuery(
+  const sizes = useTeamAgentSizesQuery(() => props.teamId);
+  const quote = useTeamAgentQuoteQuery(
     () => props.teamId,
-    () => 'standard',
+    size,
     () => true
   );
-  const large = useTeamAgentQuoteQuery(
-    () => props.teamId,
-    () => 'large',
-    () => true
-  );
-  const xl = useTeamAgentQuoteQuery(
-    () => props.teamId,
-    () => 'xl',
-    () => true
-  );
-  const quoteForSize = (value: ComputerSize) =>
-    match(value)
-      .with('standard', () => standard)
-      .with('large', () => large)
-      .with('xl', () => xl)
-      .exhaustive();
-  const quote = () => quoteForSize(size());
   const create = useCreateTeamAgentMutation();
-  usePending('team-agent.quote', () => quote().isLoading);
+  usePending('team-agent.quote', () => quote.isLoading);
   return (
     <InviteAgentForm
       open
@@ -43,15 +28,15 @@ function ConnectedInviteAgentForm(props: { teamId: string; onClose(): void }) {
       size={size()}
       setSize={setSize}
       source={{
-        quoteForSize: (value) => {
-          const result = quoteForSize(value);
-          return queryReadyGate(result) ? result.data : undefined;
-        },
-        quote: () => (queryReadyGate(quote()) ? quote().data : undefined),
-        quoteLoading: () => quote().isFetching,
-        quoteError: () => quote().isError,
+        specsForSize: (value) =>
+          sizes.data?.sizes.find((spec) => spec.size === value),
+        needsSubscription: () =>
+          thrownResultErrorHasCode(quote.error, 'no_subscription'),
+        quote: () => (queryReadyGate(quote) ? quote.data : undefined),
+        quoteLoading: () => quote.isFetching,
+        quoteError: () => quote.isError,
         reloadQuote: () => {
-          fireAndForget(quote().refetch(), 'team-agent.quote.retry');
+          fireAndForget(quote.refetch(), 'team-agent.quote.retry');
         },
         pending: () => create.isPending,
         error: () => create.isError,

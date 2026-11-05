@@ -4,12 +4,20 @@ import { ok } from 'neverthrow';
 import { describe, expect, it, vi } from 'vitest';
 
 vi.mock('@service-auth/client', () => ({
-  authServiceClient: { quoteTeamAgent: vi.fn(), listTeamAgents: vi.fn() },
+  authServiceClient: {
+    getTeamAgentSizes: vi.fn(),
+    quoteTeamAgent: vi.fn(),
+    listTeamAgents: vi.fn(),
+  },
 }));
 
 import { authServiceClient } from '@service-auth/client';
 import { QueryClient } from '@tanstack/solid-query';
-import { teamAgentQuoteQueryOptions, teamAgentsQueryOptions } from './index';
+import {
+  teamAgentQuoteQueryOptions,
+  teamAgentSizesQueryOptions,
+  teamAgentsQueryOptions,
+} from './index';
 
 describe('team agents queries', () => {
   it('scopes quotes by team and size and reads the server total', async () => {
@@ -109,5 +117,33 @@ it('refreshes visible agent health after provisioning, recovers failure, and sto
     client.clear();
     focusManager.setFocused(undefined);
     vi.useRealTimers();
+  }
+});
+
+it('loads the independent catalog even when quoting rejects an inactive subscription', async () => {
+  const { err } = await import('neverthrow');
+  const { thrownResultErrorHasCode } = await import('@core/util/result');
+  const catalog = {
+    sizes: [{ size: 'standard' as const, vcpus: 4, memoryGb: 8, diskGb: 100 }],
+  };
+  vi.mocked(authServiceClient.getTeamAgentSizes).mockResolvedValue(ok(catalog));
+  vi.mocked(authServiceClient.quoteTeamAgent).mockResolvedValue(
+    err([{ code: 'no_subscription', message: 'Active plan required' }])
+  );
+  const client = new QueryClient();
+  try {
+    expect(
+      await client.fetchQuery(teamAgentSizesQueryOptions('team-free'))
+    ).toEqual(catalog);
+    try {
+      await client.fetchQuery(
+        teamAgentQuoteQueryOptions('team-free', 'standard')
+      );
+      throw new Error('quote should fail');
+    } catch (error) {
+      expect(thrownResultErrorHasCode(error, 'no_subscription')).toBe(true);
+    }
+  } finally {
+    client.clear();
   }
 });

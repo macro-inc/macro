@@ -49,6 +49,7 @@ import type {
   SetGithubPullRequestStateResponse,
   TeamAgent,
   TeamAgentQuote,
+  TeamAgentSizes,
   TeamAgents,
   TrialEligibility,
   UserQuota,
@@ -98,6 +99,7 @@ import type { UserName } from './generated/schemas/userName';
 import type { UserNames } from './generated/schemas/userNames';
 import type { UserOrganizationResponse } from './generated/schemas/userOrganizationResponse';
 import type { UserTokensResponse } from './generated/schemas/userTokensResponse';
+import { teamAgentQuoteErrorResponseHandler } from './team-agent-errors';
 
 const authHost = SERVER_HOSTS['auth-service'];
 
@@ -1377,10 +1379,19 @@ export const authServiceClient = {
     });
   },
 
+  getTeamAgentSizes() {
+    return fetchWithAuth<TeamAgentSizes>(`${authHost}/team_agents/sizes`, {
+      method: 'GET',
+    });
+  },
+
   quoteTeamAgent(size: ComputerSize) {
-    return fetchWithAuth<TeamAgentQuote>(
+    return fetchWithAuth<TeamAgentQuote, 'no_subscription'>(
       `${authHost}/team_agents/quote?size=${size}`,
-      { method: 'GET' }
+      {
+        method: 'GET',
+        errorResponseHandler: teamAgentQuoteErrorResponseHandler,
+      }
     );
   },
 

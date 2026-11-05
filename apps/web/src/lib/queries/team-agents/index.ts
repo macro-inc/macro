@@ -32,11 +32,24 @@ export function teamAgentsQueryOptions(teamId: string) {
   });
 }
 
+export function teamAgentSizesQueryOptions(teamId: string) {
+  return queryOptions({
+    queryKey: teamAgentKeys.sizes(teamId).queryKey,
+    queryFn: () => throwOnErr(() => authServiceClient.getTeamAgentSizes()),
+    staleTime: Infinity,
+  });
+}
+
+export function useTeamAgentSizesQuery(teamId: Accessor<string>) {
+  return useQuery(() => teamAgentSizesQueryOptions(teamId()));
+}
+
 export function teamAgentQuoteQueryOptions(teamId: string, size: ComputerSize) {
   return queryOptions({
     queryKey: teamAgentKeys.quote(teamId, size).queryKey,
     queryFn: () => throwOnErr(() => authServiceClient.quoteTeamAgent(size)),
     staleTime: 0,
+    retry: false,
   });
 }
 

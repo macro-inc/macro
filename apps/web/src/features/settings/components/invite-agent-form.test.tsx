@@ -40,7 +40,8 @@ function fill() {
 function source(overrides: Partial<AgentInviteSource> = {}): AgentInviteSource {
   return {
     quote: () => quote,
-    quoteForSize: () => quote,
+    specsForSize: (size) => ({ ...quote, size }),
+    needsSubscription: () => false,
     quoteLoading: () => false,
     quoteError: () => false,
     pending: () => false,
@@ -68,7 +69,7 @@ describe('agent invite purchase', () => {
         size={size()}
         setSize={setSize}
         source={source({
-          quoteForSize: (value) => sizes[value],
+          specsForSize: (value) => ({ ...sizes[value], size: value }),
           quote: () => sizes[size()],
         })}
       />
@@ -309,4 +310,37 @@ it('blocks removal during pending payment and permits clean removal after an unb
   enabledItem.focus();
   fireEvent.keyDown(enabledItem, { key: 'Enter' });
   await waitFor(() => expect(remove).toHaveBeenCalledTimes(1));
+});
+
+it('keeps catalog specs visible without a subscription and directs admins to billing', () => {
+  const create = vi.fn();
+  render(() => (
+    <InviteAgentForm
+      open
+      onClose={() => {}}
+      size="standard"
+      setSize={() => {}}
+      source={source({
+        quote: () => undefined,
+        quoteError: () => true,
+        needsSubscription: () => true,
+        create,
+      })}
+    />
+  ));
+  expect(screen.getAllByText('4 vCPUs · 16 GB RAM · 100 GB disk')).toHaveLength(
+    3
+  );
+  expect(screen.getByText(/Your team needs an active plan/)).toBeTruthy();
+  expect(
+    screen.getByRole('link', { name: 'Go to billing' }).getAttribute('href')
+  ).toBe('/app/settings/billing');
+  fill();
+  expect(
+    screen
+      .getByRole('button', { name: 'Review price' })
+      .hasAttribute('disabled')
+  ).toBe(true);
+  expect(screen.queryByText(/Couldn't load the price/)).toBeNull();
+  expect(create).not.toHaveBeenCalled();
 });

@@ -1225,3 +1225,7 @@ of posting, multi-paragraph anchors, saved ranges, and cancellation during posti
   dynamic object spread); a spread makes a selection change revisit every
   unrelated layout input. Profile with the
   [entity collection fixture](src/features/entity/browser-test/README.md).
+
+Fetch agent invitation specifications from `/team_agents/sizes` independently of
+pricing. Handle quote `no_subscription` conflicts with an active-plan explanation
+and a button to `/app/settings/billing`; keep purchase disabled.

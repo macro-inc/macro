@@ -114,3 +114,28 @@ test('blocks pending payment actions and permits unbilled removal and paid provi
     page.getByRole('button', { name: 'Retry', exact: true })
   ).toHaveCount(0);
 });
+
+test('shows catalog specs and billing action without an active plan', async ({
+  page,
+}) => {
+  await page.goto('/?no-subscription');
+  await page.getByRole('button', { name: 'Invite agent', exact: true }).click();
+  await expect(
+    page.getByText('2 vCPUs · 8 GB RAM · 100 GB disk')
+  ).toBeVisible();
+  await expect(page.getByText('4 vCPUs · 16 GB RAM · 100 GB disk')).toHaveCount(
+    2
+  );
+  await expect(page.getByText('Specifications unavailable')).toHaveCount(0);
+  await expect(page.getByText(/Your team needs an active plan/)).toBeVisible();
+  await expect(
+    page.getByRole('link', { name: 'Go to billing' })
+  ).toHaveAttribute('href', '/app/settings/billing');
+  await page.getByLabel('Name', { exact: true }).fill('Assistant');
+  await page.getByLabel('Role / job description').fill('Maintain projects');
+  await page.getByLabel('Personality').fill('Concise');
+  await expect(
+    page.getByRole('button', { name: 'Review price' })
+  ).toBeDisabled();
+  await expect(page.getByText('Purchases: 0')).toBeVisible();
+});
