@@ -246,4 +246,4 @@ impl<T> GmailTokenState<T> {
 
 #[doc(hidden)]
 #[allow(dead_code)]
-const CI_INTEGRATE_NONCE: &str = "896b00f551e24f0bb4ef79e1cb6beb87";
+const CI_INTEGRATE_NONCE: &str = "616e3bc73a714aabb2f146521f199e67";
