@@ -1,7 +1,7 @@
 {
   "description": "Loki queries over the CI exporter's push, job, step and export events, read by both ci-dashboard.nix and scripts/ci-report.ts. $NAME expands to filters.NAME and $RANGE to the window.",
   "filters": {
-    "PUSH": "{service_name=\"ci-telemetry\"} | event=\"push\" | experiment=\"false\" | rerun=\"false\" | pr_draft=\"false\" | conclusion=\"success\"",
+    "PUSH": "{service_name=\"ci-telemetry\"} | event=\"push\" | experiment=\"false\" | rerun=\"false\" | pr_draft=\"false\" | conclusion=\"success\" | workflows > 1",
     "PR_JOB": "{service_name=\"ci-telemetry\"} | event=\"job\" | event_name=~\"pull_request|pull_request_target\" | experiment=\"false\"",
     "PR_STEP": "{service_name=\"ci-telemetry\"} | event=\"step\" | event_name=~\"pull_request|pull_request_target\" | experiment=\"false\"",
     "JOB": "{service_name=\"ci-telemetry\"} | event=\"job\"",
@@ -11,118 +11,278 @@
     {
       "id": "summary",
       "title": "Real PR pushes: are we under 5 minutes?",
-      "description": "Successful pushes on PRs that aren't drafts, experiments or reruns. Wall time runs from the push, or opening the PR, to the last check finishing. PR CI hours sum every PR job's run time.",
+      "description": "Successful pushes on PRs that aren't drafts, experiments or reruns, where more than one workflow ran: a lone CLA run means CI didn't run, as on a PR into another branch. Wall time runs from the push, or opening the PR, to the last check finishing. PR CI hours sum every PR job's run time.",
       "by": [],
       "columns": [
-        { "name": "Pushes", "unit": "short", "expr": "sum(count_over_time($PUSH [$RANGE]))" },
-        { "name": "p50", "unit": "s", "expr": "quantile_over_time(0.5, $PUSH | unwrap wall_seconds | __error__=\"\" [$RANGE]) by ()" },
-        { "name": "p90", "unit": "s", "expr": "quantile_over_time(0.9, $PUSH | unwrap wall_seconds | __error__=\"\" [$RANGE]) by ()" },
-        { "name": "Under 5 min", "unit": "percentunit", "expr": "sum(count_over_time($PUSH | wall_seconds <= 300 [$RANGE])) / sum(count_over_time($PUSH [$RANGE]))" },
-        { "name": "Under 3 min", "unit": "percentunit", "expr": "sum(count_over_time($PUSH | wall_seconds <= 180 [$RANGE])) / sum(count_over_time($PUSH [$RANGE]))" },
-        { "name": "PR CI hours", "unit": "h", "expr": "sum(sum_over_time($PR_JOB | unwrap run_seconds | __error__=\"\" [$RANGE])) / 3600" }
+        {
+          "name": "Pushes",
+          "unit": "short",
+          "expr": "sum(count_over_time($PUSH [$RANGE]))"
+        },
+        {
+          "name": "p50",
+          "unit": "s",
+          "expr": "quantile_over_time(0.5, $PUSH | unwrap wall_seconds | __error__=\"\" [$RANGE]) by ()"
+        },
+        {
+          "name": "p90",
+          "unit": "s",
+          "expr": "quantile_over_time(0.9, $PUSH | unwrap wall_seconds | __error__=\"\" [$RANGE]) by ()"
+        },
+        {
+          "name": "Under 5 min",
+          "unit": "percentunit",
+          "expr": "(sum(count_over_time($PUSH | wall_seconds <= 300 [$RANGE])) or 0 * sum(count_over_time($PUSH [$RANGE]))) / sum(count_over_time($PUSH [$RANGE]))"
+        },
+        {
+          "name": "Under 3 min",
+          "unit": "percentunit",
+          "expr": "(sum(count_over_time($PUSH | wall_seconds <= 180 [$RANGE])) or 0 * sum(count_over_time($PUSH [$RANGE]))) / sum(count_over_time($PUSH [$RANGE]))"
+        },
+        {
+          "name": "PR CI hours",
+          "unit": "h",
+          "expr": "sum(sum_over_time($PR_JOB | unwrap run_seconds | __error__=\"\" [$RANGE])) / 3600"
+        }
       ]
     },
     {
       "id": "wall",
       "title": "Wall time by PR type",
       "description": "Real PR pushes as above, by what the PR changed. Rust size counts changed crates: small is up to 2, medium up to 9, large more or a root manifest.",
-      "by": ["pr_type"],
+      "by": [
+        "pr_type"
+      ],
       "sort": "p90",
       "columns": [
-        { "name": "Pushes", "unit": "short", "expr": "sum by (pr_type) (count_over_time($PUSH [$RANGE]))" },
-        { "name": "p50", "unit": "s", "expr": "quantile_over_time(0.5, $PUSH | unwrap wall_seconds | __error__=\"\" [$RANGE]) by (pr_type)" },
-        { "name": "p90", "unit": "s", "expr": "quantile_over_time(0.9, $PUSH | unwrap wall_seconds | __error__=\"\" [$RANGE]) by (pr_type)" },
-        { "name": "Max", "unit": "s", "expr": "max_over_time($PUSH | unwrap wall_seconds | __error__=\"\" [$RANGE]) by (pr_type)" },
-        { "name": "Under 5 min", "unit": "percentunit", "expr": "sum by (pr_type) (count_over_time($PUSH | wall_seconds <= 300 [$RANGE])) / sum by (pr_type) (count_over_time($PUSH [$RANGE]))" }
+        {
+          "name": "Pushes",
+          "unit": "short",
+          "expr": "sum by (pr_type) (count_over_time($PUSH [$RANGE]))"
+        },
+        {
+          "name": "p50",
+          "unit": "s",
+          "expr": "quantile_over_time(0.5, $PUSH | unwrap wall_seconds | __error__=\"\" [$RANGE]) by (pr_type)"
+        },
+        {
+          "name": "p90",
+          "unit": "s",
+          "expr": "quantile_over_time(0.9, $PUSH | unwrap wall_seconds | __error__=\"\" [$RANGE]) by (pr_type)"
+        },
+        {
+          "name": "Max",
+          "unit": "s",
+          "expr": "max_over_time($PUSH | unwrap wall_seconds | __error__=\"\" [$RANGE]) by (pr_type)"
+        },
+        {
+          "name": "Under 5 min",
+          "unit": "percentunit",
+          "expr": "(sum by (pr_type) (count_over_time($PUSH | wall_seconds <= 300 [$RANGE])) or 0 * sum by (pr_type) (count_over_time($PUSH [$RANGE]))) / sum by (pr_type) (count_over_time($PUSH [$RANGE]))"
+        }
       ]
     },
     {
       "id": "last",
       "title": "What finished last on real pushes",
       "description": "The job each push waited for, leaving out roll-up status checks. Its p50 run time is the job's own; queue and earlier jobs come on top.",
-      "by": ["last_workflow", "last_job"],
+      "by": [
+        "last_workflow",
+        "last_job"
+      ],
       "sort": "Pushes",
       "limit": 15,
       "columns": [
-        { "name": "Pushes", "unit": "short", "expr": "sum by (last_workflow, last_job) (count_over_time($PUSH [$RANGE]))" },
-        { "name": "Push p50", "unit": "s", "expr": "quantile_over_time(0.5, $PUSH | unwrap wall_seconds | __error__=\"\" [$RANGE]) by (last_workflow, last_job)" },
-        { "name": "Job p50", "unit": "s", "expr": "quantile_over_time(0.5, $PUSH | unwrap last_job_seconds | __error__=\"\" [$RANGE]) by (last_workflow, last_job)" }
+        {
+          "name": "Pushes",
+          "unit": "short",
+          "expr": "sum by (last_workflow, last_job) (count_over_time($PUSH [$RANGE]))"
+        },
+        {
+          "name": "Push p50",
+          "unit": "s",
+          "expr": "quantile_over_time(0.5, $PUSH | unwrap wall_seconds | __error__=\"\" [$RANGE]) by (last_workflow, last_job)"
+        },
+        {
+          "name": "Job p50",
+          "unit": "s",
+          "expr": "quantile_over_time(0.5, $PUSH | unwrap last_job_seconds | __error__=\"\" [$RANGE]) by (last_workflow, last_job)"
+        }
       ]
     },
     {
       "id": "jobs",
-      "title": "Slowest PR jobs",
-      "description": "Run time of each job on PRs, experiments left out, excluding queue time.",
-      "by": ["workflow", "job"],
-      "sort": "p90",
+      "title": "PR jobs by CI time",
+      "description": "Run time of each job on PRs, experiments left out, excluding queue time. Sorted by total hours, so a rare slow job doesn't crowd out a common one.",
+      "by": [
+        "workflow",
+        "job"
+      ],
+      "sort": "Hours",
       "limit": 20,
       "columns": [
-        { "name": "Runs", "unit": "short", "expr": "sum by (workflow, job) (count_over_time($PR_JOB [$RANGE]))" },
-        { "name": "p50", "unit": "s", "expr": "quantile_over_time(0.5, $PR_JOB | unwrap run_seconds | __error__=\"\" [$RANGE]) by (workflow, job)" },
-        { "name": "p90", "unit": "s", "expr": "quantile_over_time(0.9, $PR_JOB | unwrap run_seconds | __error__=\"\" [$RANGE]) by (workflow, job)" },
-        { "name": "Hours", "unit": "h", "expr": "sum by (workflow, job) (sum_over_time($PR_JOB | unwrap run_seconds | __error__=\"\" [$RANGE])) / 3600" }
+        {
+          "name": "Runs",
+          "unit": "short",
+          "expr": "sum by (workflow, job) (count_over_time($PR_JOB [$RANGE]))"
+        },
+        {
+          "name": "p50",
+          "unit": "s",
+          "expr": "quantile_over_time(0.5, $PR_JOB | unwrap run_seconds | __error__=\"\" [$RANGE]) by (workflow, job)"
+        },
+        {
+          "name": "p90",
+          "unit": "s",
+          "expr": "quantile_over_time(0.9, $PR_JOB | unwrap run_seconds | __error__=\"\" [$RANGE]) by (workflow, job)"
+        },
+        {
+          "name": "Hours",
+          "unit": "h",
+          "expr": "sum by (workflow, job) (sum_over_time($PR_JOB | unwrap run_seconds | __error__=\"\" [$RANGE])) / 3600"
+        }
       ]
     },
     {
       "id": "steps",
-      "title": "Slowest PR steps",
-      "description": "Steps of a second or more in PR jobs. Open a run's trace from Tempo below for the full waterfall.",
-      "by": ["workflow", "job", "step"],
-      "sort": "p90",
+      "title": "PR steps by CI time",
+      "description": "Steps of a second or more in PR jobs, sorted by total hours. Open a run's trace from Tempo below for the full waterfall.",
+      "by": [
+        "workflow",
+        "job",
+        "step"
+      ],
+      "sort": "Hours",
       "limit": 20,
       "columns": [
-        { "name": "Runs", "unit": "short", "expr": "sum by (workflow, job, step) (count_over_time($PR_STEP [$RANGE]))" },
-        { "name": "p50", "unit": "s", "expr": "quantile_over_time(0.5, $PR_STEP | unwrap run_seconds | __error__=\"\" [$RANGE]) by (workflow, job, step)" },
-        { "name": "p90", "unit": "s", "expr": "quantile_over_time(0.9, $PR_STEP | unwrap run_seconds | __error__=\"\" [$RANGE]) by (workflow, job, step)" }
+        {
+          "name": "Runs",
+          "unit": "short",
+          "expr": "sum by (workflow, job, step) (count_over_time($PR_STEP [$RANGE]))"
+        },
+        {
+          "name": "p50",
+          "unit": "s",
+          "expr": "quantile_over_time(0.5, $PR_STEP | unwrap run_seconds | __error__=\"\" [$RANGE]) by (workflow, job, step)"
+        },
+        {
+          "name": "p90",
+          "unit": "s",
+          "expr": "quantile_over_time(0.9, $PR_STEP | unwrap run_seconds | __error__=\"\" [$RANGE]) by (workflow, job, step)"
+        },
+        {
+          "name": "Hours",
+          "unit": "h",
+          "expr": "sum by (workflow, job, step) (sum_over_time($PR_STEP | unwrap run_seconds | __error__=\"\" [$RANGE])) / 3600"
+        }
       ]
     },
     {
       "id": "queue_runner",
       "title": "Queue by runner",
       "description": "From a job's creation to a runner picking it up, on PRs. Copied jobs of a partial rerun have no queue time.",
-      "by": ["runner_profile"],
+      "by": [
+        "runner_profile"
+      ],
       "sort": "p90",
       "columns": [
-        { "name": "Jobs", "unit": "short", "expr": "sum by (runner_profile) (count_over_time($PR_JOB | queue_seconds != \"\" [$RANGE]))" },
-        { "name": "p50", "unit": "s", "expr": "quantile_over_time(0.5, $PR_JOB | unwrap queue_seconds | __error__=\"\" [$RANGE]) by (runner_profile)" },
-        { "name": "p90", "unit": "s", "expr": "quantile_over_time(0.9, $PR_JOB | unwrap queue_seconds | __error__=\"\" [$RANGE]) by (runner_profile)" },
-        { "name": "Max", "unit": "s", "expr": "max_over_time($PR_JOB | unwrap queue_seconds | __error__=\"\" [$RANGE]) by (runner_profile)" }
+        {
+          "name": "Jobs",
+          "unit": "short",
+          "expr": "sum by (runner_profile) (count_over_time($PR_JOB | queue_seconds != \"\" [$RANGE]))"
+        },
+        {
+          "name": "p50",
+          "unit": "s",
+          "expr": "quantile_over_time(0.5, $PR_JOB | unwrap queue_seconds | __error__=\"\" [$RANGE]) by (runner_profile)"
+        },
+        {
+          "name": "p90",
+          "unit": "s",
+          "expr": "quantile_over_time(0.9, $PR_JOB | unwrap queue_seconds | __error__=\"\" [$RANGE]) by (runner_profile)"
+        },
+        {
+          "name": "Max",
+          "unit": "s",
+          "expr": "max_over_time($PR_JOB | unwrap queue_seconds | __error__=\"\" [$RANGE]) by (runner_profile)"
+        }
       ]
     },
     {
       "id": "queue_job",
       "title": "Longest-queued PR jobs",
       "description": "Queue time per job, on PRs.",
-      "by": ["workflow", "job"],
+      "by": [
+        "workflow",
+        "job"
+      ],
       "sort": "p90",
       "limit": 15,
       "columns": [
-        { "name": "p50", "unit": "s", "expr": "quantile_over_time(0.5, $PR_JOB | unwrap queue_seconds | __error__=\"\" [$RANGE]) by (workflow, job)" },
-        { "name": "p90", "unit": "s", "expr": "quantile_over_time(0.9, $PR_JOB | unwrap queue_seconds | __error__=\"\" [$RANGE]) by (workflow, job)" },
-        { "name": "Max", "unit": "s", "expr": "max_over_time($PR_JOB | unwrap queue_seconds | __error__=\"\" [$RANGE]) by (workflow, job)" }
+        {
+          "name": "p50",
+          "unit": "s",
+          "expr": "quantile_over_time(0.5, $PR_JOB | unwrap queue_seconds | __error__=\"\" [$RANGE]) by (workflow, job)"
+        },
+        {
+          "name": "p90",
+          "unit": "s",
+          "expr": "quantile_over_time(0.9, $PR_JOB | unwrap queue_seconds | __error__=\"\" [$RANGE]) by (workflow, job)"
+        },
+        {
+          "name": "Max",
+          "unit": "s",
+          "expr": "max_over_time($PR_JOB | unwrap queue_seconds | __error__=\"\" [$RANGE]) by (workflow, job)"
+        }
       ]
     },
     {
       "id": "volumes",
       "title": "Warm and cold cache volumes",
       "description": "Jobs that set up the Nix dev shell, on PRs. Cold means the step took 30 s or more, which an empty cache volume causes.",
-      "by": ["runner_profile", "volume_state"],
+      "by": [
+        "runner_profile",
+        "volume_state"
+      ],
       "sort": "Jobs",
       "columns": [
-        { "name": "Jobs", "unit": "short", "expr": "sum by (runner_profile, volume_state) (count_over_time($PR_JOB | volume_state != \"\" [$RANGE]))" },
-        { "name": "Dev shell p50", "unit": "s", "expr": "quantile_over_time(0.5, $PR_JOB | unwrap dev_shell_seconds | __error__=\"\" [$RANGE]) by (runner_profile, volume_state)" },
-        { "name": "Dev shell p90", "unit": "s", "expr": "quantile_over_time(0.9, $PR_JOB | unwrap dev_shell_seconds | __error__=\"\" [$RANGE]) by (runner_profile, volume_state)" }
+        {
+          "name": "Jobs",
+          "unit": "short",
+          "expr": "sum by (runner_profile, volume_state) (count_over_time($PR_JOB | volume_state != \"\" [$RANGE]))"
+        },
+        {
+          "name": "Dev shell p50",
+          "unit": "s",
+          "expr": "quantile_over_time(0.5, $PR_JOB | unwrap dev_shell_seconds | __error__=\"\" [$RANGE]) by (runner_profile, volume_state)"
+        },
+        {
+          "name": "Dev shell p90",
+          "unit": "s",
+          "expr": "quantile_over_time(0.9, $PR_JOB | unwrap dev_shell_seconds | __error__=\"\" [$RANGE]) by (runner_profile, volume_state)"
+        }
       ]
     },
     {
       "id": "hours",
       "title": "CI hours by trigger",
       "description": "Run time summed over every observed job, queue excluded. Experiment branches are counted separately.",
-      "by": ["event_name", "experiment"],
+      "by": [
+        "event_name",
+        "experiment"
+      ],
       "sort": "Hours",
       "columns": [
-        { "name": "Jobs", "unit": "short", "expr": "sum by (event_name, experiment) (count_over_time($JOB [$RANGE]))" },
-        { "name": "Hours", "unit": "h", "expr": "sum by (event_name, experiment) (sum_over_time($JOB | unwrap run_seconds | __error__=\"\" [$RANGE])) / 3600" }
+        {
+          "name": "Jobs",
+          "unit": "short",
+          "expr": "sum by (event_name, experiment) (count_over_time($JOB [$RANGE]))"
+        },
+        {
+          "name": "Hours",
+          "unit": "h",
+          "expr": "sum by (event_name, experiment) (sum_over_time($JOB | unwrap run_seconds | __error__=\"\" [$RANGE])) / 3600"
+        }
       ]
     },
     {
@@ -131,11 +291,31 @@
       "description": "The exporter's own collection time and GitHub API use per completed run. The token's limit is shared with the trace export.",
       "by": [],
       "columns": [
-        { "name": "Exports", "unit": "short", "expr": "sum(count_over_time($EXPORT [$RANGE]))" },
-        { "name": "Collect p50", "unit": "s", "expr": "quantile_over_time(0.5, $EXPORT | unwrap collect_seconds | __error__=\"\" [$RANGE]) by ()" },
-        { "name": "Collect max", "unit": "s", "expr": "max_over_time($EXPORT | unwrap collect_seconds | __error__=\"\" [$RANGE]) by ()" },
-        { "name": "API calls", "unit": "short", "expr": "sum(sum_over_time($EXPORT | unwrap api_calls | __error__=\"\" [$RANGE]))" },
-        { "name": "Lowest rate remaining", "unit": "short", "expr": "min_over_time($EXPORT | unwrap rate_remaining | __error__=\"\" [$RANGE]) by ()" }
+        {
+          "name": "Exports",
+          "unit": "short",
+          "expr": "sum(count_over_time($EXPORT [$RANGE]))"
+        },
+        {
+          "name": "Collect p50",
+          "unit": "s",
+          "expr": "quantile_over_time(0.5, $EXPORT | unwrap collect_seconds | __error__=\"\" [$RANGE]) by ()"
+        },
+        {
+          "name": "Collect max",
+          "unit": "s",
+          "expr": "max_over_time($EXPORT | unwrap collect_seconds | __error__=\"\" [$RANGE]) by ()"
+        },
+        {
+          "name": "API calls",
+          "unit": "short",
+          "expr": "sum(sum_over_time($EXPORT | unwrap api_calls | __error__=\"\" [$RANGE]))"
+        },
+        {
+          "name": "Lowest rate remaining",
+          "unit": "short",
+          "expr": "min_over_time($EXPORT | unwrap rate_remaining | __error__=\"\" [$RANGE]) by ()"
+        }
       ]
     }
   ]

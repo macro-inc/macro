@@ -43,7 +43,7 @@ describe('the shared spec', () => {
       for (const column of entry.columns) {
         const grouping = entry.by.length
           ? `by (${entry.by.join(', ')})`
-          : /by \(\)|^sum\(/;
+          : /by \(\)|^\(?sum\(/;
         if (typeof grouping === 'string')
           expect(column.expr).toContain(grouping);
         else expect(column.expr).toMatch(grouping);

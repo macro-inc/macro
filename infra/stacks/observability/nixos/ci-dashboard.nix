@@ -30,6 +30,8 @@ let
       h
       ;
   };
+  # Grafana's "h" unit rolls over into days; CI hours should stay hours.
+  grafanaUnit = unit: if unit == "h" then "suffix: h" else unit;
   unitOverride = name: unit: {
     matcher = {
       id = "byName";
@@ -38,11 +40,11 @@ let
     properties = [
       {
         id = "unit";
-        value = unit;
+        value = grafanaUnit unit;
       }
     ];
   };
-  # Green under three minutes, red from five: the CI target.
+  # Green under three minutes, red from five: the CI target for a push's wall time.
   wallThresholds = {
     mode = "absolute";
     steps = [
@@ -112,7 +114,8 @@ let
         options.limitField = entry.limit;
       };
       fieldConfig = {
-        defaults = { };
+        # The default minimum column width hides the last columns of a half-width panel.
+        defaults.custom.minWidth = 60;
         overrides = map (column: unitOverride column.name column.unit) entry.columns;
       };
       options = {
@@ -139,16 +142,29 @@ let
             fixedColor = "text";
           };
         };
-        overrides = map (
-          column:
-          let
-            override = unitOverride column.name column.unit;
-          in
-          override
-          // {
-            properties =
-              override.properties
-              ++ lib.optionals (column.unit == "s") [
+        # Instant results carry no series name, so match each query by its refId.
+        overrides = lib.imap0 (index: column: {
+          matcher = {
+            id = "byFrameRefID";
+            options = refId index;
+          };
+          properties = [
+            {
+              id = "displayName";
+              value = column.name;
+            }
+            {
+              id = "unit";
+              value = grafanaUnit column.unit;
+            }
+          ]
+          ++
+            lib.optionals
+              (lib.elem column.name [
+                "p50"
+                "p90"
+              ])
+              [
                 {
                   id = "thresholds";
                   value = wallThresholds;
@@ -158,8 +174,7 @@ let
                   value.mode = "thresholds";
                 }
               ];
-          }
-        ) entry.columns;
+        }) entry.columns;
       };
       options = {
         reduceOptions = {
@@ -171,7 +186,8 @@ let
         graphMode = "none";
         textMode = "value_and_name";
         justifyMode = "center";
-        orientation = "vertical";
+        # A narrow panel lists its values instead of squeezing them side by side.
+        orientation = if gridPos.w < 12 then "horizontal" else "vertical";
       };
     };
 
@@ -331,7 +347,7 @@ let
       (lokiTable 14 "volumes" (grid 16 31 8 8))
       (lokiSeries 15 (grid 0 39 12 8) "CI hours by trigger"
         "Job run time summed per interval, queue excluded. Compare days to measure a change such as running CI only on labelled PRs."
-        "h"
+        "short"
         "1h"
         [
           {
@@ -341,6 +357,7 @@ let
         ]
         {
           fieldConfig.defaults.custom = {
+            axisLabel = "CI hours";
             drawStyle = "bars";
             fillOpacity = 80;
             stacking.mode = "normal";

@@ -199,7 +199,16 @@ export async function main(args: string[]) {
   ];
   for (const table of spec.tables) {
     output.push(`\n## ${table.title}\n\n${table.description}\n`);
-    output.push(renderTable(table, await loki.table(spec, table, range, now)));
+    try {
+      output.push(
+        renderTable(table, await loki.table(spec, table, range, now))
+      );
+    } catch (error) {
+      // One refused query, such as a series cap, shouldn't cost the rest of the report.
+      output.push(
+        `Not available: ${error instanceof Error ? error.message : String(error)}`
+      );
+    }
   }
   const summary = spec.tables.find((table) => table.id === 'summary');
   if (summary && days > 0) {

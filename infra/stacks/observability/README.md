@@ -44,13 +44,14 @@ that starts after everything on its head has finished came from something else, 
 as a PR edit, a label or leaving draft. It forms its own line with `rerun=true`,
 which also leaves a commit's first full run after draft out of the real PR numbers.
 
-Real PR numbers exclude experiments, reruns and drafts. Metadata makes an ungrouped
-query return one series per combination, so always group:
+Real PR numbers exclude experiments, reruns and drafts, and pushes where only one
+workflow ran: a lone CLA run means CI didn't run, as on a PR into another branch.
+Metadata makes an ungrouped query return one series per combination, so always group:
 
 ```logql
 quantile_over_time(0.9, {service_name="ci-telemetry"} | event="push"
   | experiment="false" | rerun="false" | pr_draft="false" | conclusion="success"
-  | unwrap wall_seconds [1d]) by (pr_type)
+  | workflows > 1 | unwrap wall_seconds [1d]) by (pr_type)
 ```
 
 Lines never carry branch names, actors, titles or file paths. A line's time and
@@ -74,7 +75,9 @@ GRAFANA_TOKEN=$(cat <token file>) bun infra/stacks/observability/scripts/ci-repo
 ```
 
 The token needs only Viewer access. `--loki <url>` points it at another Loki API
-root, such as a local one. Change a query in the JSON and both follow.
+root, such as a local one. Change a query in the JSON and both follow. PR steps
+grouped by workflow, job and step pass Loki's default cap of 500 series in a day,
+so `backend-config.nix` raises `max_query_series` to 2000.
 
 Below them, `/d/macro-ci` provides workflow traces, failed/cancelled jobs and steps, and jobs
 running longer than five minutes. Open a trace for its execution waterfall and
