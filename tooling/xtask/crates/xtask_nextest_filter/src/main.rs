@@ -97,13 +97,26 @@ fn main() -> Result<()> {
             let base_revision = base_revision
                 .to_str()
                 .context("base revision is not valid UTF-8")?;
-            run(Path::new(changed_files_path), base_revision)
+            run(Path::new(changed_files_path), base_revision, None)
         }
-        _ => bail!("usage: cargo x nextest-filter <changed-files-path> <base-revision>"),
+        [changed_files_path, base_revision, max_depth] => {
+            let base_revision = base_revision
+                .to_str()
+                .context("base revision is not valid UTF-8")?;
+            let max_depth: usize = max_depth
+                .to_str()
+                .context("max depth is not valid UTF-8")?
+                .parse()
+                .context("max depth is not a number")?;
+            run(Path::new(changed_files_path), base_revision, Some(max_depth))
+        }
+        _ => bail!(
+            "usage: cargo x nextest-filter <changed-files-path> <base-revision> [max-depth]"
+        ),
     }
 }
 
-fn run(changed_files_path: &Path, base_revision: &str) -> Result<()> {
+fn run(changed_files_path: &Path, base_revision: &str, max_depth: Option<usize>) -> Result<()> {
     let changed_files = std::fs::read_to_string(changed_files_path).with_context(|| {
         format!(
             "reading changed files from {}",
@@ -121,7 +134,7 @@ fn run(changed_files_path: &Path, base_revision: &str) -> Result<()> {
         let graph = build_graph_at(&workspace_dir, true)?;
         println!(
             "{}",
-            select_by_paths(&graph, &changed_files, &repository_rules()?)?
+            select_by_paths(&graph, &changed_files, &repository_rules()?, max_depth)?
         );
         return Ok(());
     }
@@ -218,6 +231,7 @@ fn select_by_paths(
     graph: &PackageGraph,
     changed_files: &[PathBuf],
     rules: &DeterminatorRules,
+    max_depth: Option<usize>,
 ) -> Result<PackageSelection> {
     let mut determinator = Determinator::new(graph, graph);
     determinator
@@ -243,12 +257,18 @@ fn select_by_paths(
         .query_reverse(changed.iter().copied())
         .context("querying reverse dependencies")?
         .resolve();
+    let within_depth = max_depth.map(|depth| dependents_within(graph, &changed, depth));
     let cargo_options = Determinator::default_cargo_options();
     let features_only = graph.feature_graph().resolve_none();
     let mut selected = BTreeSet::new();
     for package in candidates
         .packages(DependencyDirection::Forward)
         .filter(|package| package.in_workspace())
+        .filter(|package| {
+            within_depth
+                .as_ref()
+                .is_none_or(|within| within.contains(package.id()))
+        })
     {
         if changed.contains(package.id())
             || builds_any(package, &changed, &cargo_options, &features_only)?
@@ -257,6 +277,32 @@ fn select_by_paths(
         }
     }
     workspace_selection(graph, selected)
+}
+
+/// `changed` plus workspace packages at most `depth` dependency edges away.
+fn dependents_within<'g>(
+    graph: &'g PackageGraph,
+    changed: &BTreeSet<&'g PackageId>,
+    depth: usize,
+) -> BTreeSet<&'g PackageId> {
+    let mut seen = changed.clone();
+    let mut frontier: Vec<&'g PackageId> = changed.iter().copied().collect();
+    for _ in 0..depth {
+        let mut next = Vec::new();
+        for id in frontier {
+            let Ok(package) = graph.metadata(id) else {
+                continue;
+            };
+            for link in package.reverse_direct_links() {
+                let from = link.from().id();
+                if link.from().in_workspace() && seen.insert(from) {
+                    next.push(from);
+                }
+            }
+        }
+        frontier = next;
+    }
+    seen
 }
 
 /// Whether `package`'s own test build with all its features (dev-dependencies
