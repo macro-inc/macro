@@ -63,6 +63,42 @@ it('uses source-order interaction but viewed-first one-to-one command activity, 
   });
 });
 
+it('excludes the viewer case-insensitively from peers and command targets', () => {
+  const result = buildContactContextFacts({
+    viewer: 'MACRO|SELF@example.com',
+    activity: [],
+    links: [],
+    channels: [
+      {
+        id: '00000000-0000-4000-8000-000000000001',
+        channel_type: ChannelType.direct_message,
+        name: 'Peer',
+        updated_at: '2026-01-02T00:00:00Z',
+        viewed_at: '2026-01-03T00:00:00Z',
+        participants: [
+          { user_id: 'macro|SELF@example.com' },
+          { user_id: 'MACRO|PEER@example.com' },
+        ],
+      },
+    ],
+    cachedChannels: [
+      {
+        id: '00000000-0000-4000-8000-000000000001',
+        name: 'Peer',
+        channelType: 'direct_message',
+        participantIds: ['MACRO|SELF@example.com', 'MACRO|PEER@example.com'],
+        ownerId: 'macro|self@example.com',
+        createdAt: '2026-01-01T00:00:00Z',
+        updatedAt: '2026-01-04T00:00:00Z',
+      },
+    ],
+  });
+  expect([...result.keys()]).toEqual(['macro|peer@example.com']);
+  expect(result.get('macro|peer@example.com')?.directMessage?.id).toBe(
+    '00000000-0000-4000-8000-000000000001'
+  );
+});
+
 it('ignores malformed peers and oversized labels without losing valid activity or other rows', () => {
   const result = buildContactContextFacts({
     viewer: 'macro|self@example.com',

@@ -85,7 +85,9 @@ export function useListChannelsQuery(enabled: Accessor<boolean> = () => true) {
 export async function loadChannelList(): Promise<ApiChannelWithLatest[]> {
   const account = currentQueryAccount();
   assertQueryAccount(account);
-  const channels = await queryClient.ensureQueryData(listChannelsQueryOptions(account, true));
+  const channels = await queryClient.ensureQueryData(
+    listChannelsQueryOptions(account, true)
+  );
   assertQueryAccount(account);
   return channels;
 }

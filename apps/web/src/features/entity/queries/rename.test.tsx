@@ -38,6 +38,7 @@ vi.mock('@core/component/Toast/Toast', () => ({
   toast: { failure: mocks.toast },
 }));
 vi.mock('@core/constant/featureFlags', () => ({
+  ENABLE_BEARER_TOKEN_AUTH: false,
   enableGraphqlSoup: {},
   isFeatureEnabled: mocks.graphqlEnabled,
 }));

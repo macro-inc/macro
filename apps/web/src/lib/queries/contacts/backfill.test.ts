@@ -279,6 +279,21 @@ it('interrupts an uncancellable fetch without saving its late cursor', async () 
   });
 });
 
+it('reports unsupported admission without starting hydration or verification', async () => {
+  const onProgress = vi.fn();
+  const fetchPage = vi.fn<typeof hydrateGraphqlContacts>();
+  const result = await Effect.runPromise(
+    runContactBackfill(
+      viewer,
+      { ...host(), people: undefined },
+      { fetchPage, onProgress }
+    )
+  );
+  expect(result).toEqual({ kind: 'unsupported' });
+  expect(onProgress).toHaveBeenCalledExactlyOnceWith({ kind: 'unsupported' });
+  expect(fetchPage).not.toHaveBeenCalled();
+});
+
 it('does not complete at hydration end, and resumes failed verification without rehydrating', async () => {
   const cache = host();
   const fetchPage = vi

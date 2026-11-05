@@ -181,7 +181,11 @@ export const runContactBackfill = Effect.fn('runContactBackfill')(function* (
   const supported = yield* Effect.tryPromise((signal) =>
     captureContactWriteScope(host, scope, signal)
   );
-  if (!supported) return { kind: 'unsupported' } satisfies ContactSyncProgress;
+  if (!supported) {
+    const progress = { kind: 'unsupported' } satisfies ContactSyncProgress;
+    options.onProgress?.(progress);
+    return progress;
+  }
   let checkpoint = loadContactCheckpoint(userId, generation);
   if (checkpoint.completedAt !== null) {
     const refreshAge = options.refresh ? REFRESH_INTERVAL_MS : NAME_REFRESH_MS;
@@ -306,8 +310,10 @@ export function useContactBackfill(
               refresh: requested !== processedInvalidation,
               onProgress: (progress) => {
                 span.setAttr('contacts.sync_state', progress.kind);
-                if (progress.kind !== 'unsupported')
+                if (progress.kind !== 'unsupported') {
                   span.setAttr('contacts.pages', progress.checkpoint.pages);
+                  span.setAttr('contacts.phase', progress.checkpoint.phase);
+                }
               },
             }).pipe(
               Effect.retry({
