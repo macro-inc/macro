@@ -5,3 +5,7 @@ pub mod inbound;
 pub mod outbound;
 #[cfg(test)]
 pub(crate) mod telemetry_capture;
+
+#[doc(hidden)]
+#[allow(dead_code)]
+const CI_INTEGRATE_NONCE: &str = "185c1385751b42f48e3236247aa55a18";

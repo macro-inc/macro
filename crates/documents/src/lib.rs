@@ -22,3 +22,7 @@ pub mod inbound;
     feature = "document_create_adapters"
 ))]
 pub mod outbound;
+
+#[doc(hidden)]
+#[allow(dead_code)]
+const CI_INTEGRATE_NONCE: &str = "185c1385751b42f48e3236247aa55a18";
