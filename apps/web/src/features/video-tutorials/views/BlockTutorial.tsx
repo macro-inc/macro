@@ -1,8 +1,9 @@
-import { Show } from 'solid-js';
+import { Match, Show, Switch } from 'solid-js';
 import { TUTORIALS, type Tutorial } from '../catalog';
 import {
   TutorialPillView,
   TutorialRowView,
+  TutorialSidebarItemView,
 } from '../components/TutorialEntries';
 import { TutorialVideoDialog } from '../components/TutorialVideoDialog';
 import type { TutorialId } from '../core/tutorial-id';
@@ -13,7 +14,7 @@ import {
 
 function Entry(props: {
   tutorial: Tutorial;
-  variant: 'row' | 'pill';
+  variant: 'row' | 'pill' | 'sidebar';
   class?: string;
 }) {
   const state: TutorialState = createTutorialState(props.tutorial.id);
@@ -26,12 +27,17 @@ function Entry(props: {
   });
   return (
     <Show when={!state.dismissed()}>
-      <Show
-        when={props.variant === 'row'}
-        fallback={<TutorialPillView {...entry()} class={props.class} />}
-      >
-        <TutorialRowView {...entry()} />
-      </Show>
+      <Switch>
+        <Match when={props.variant === 'row'}>
+          <TutorialRowView {...entry()} />
+        </Match>
+        <Match when={props.variant === 'pill'}>
+          <TutorialPillView {...entry()} class={props.class} />
+        </Match>
+        <Match when={props.variant === 'sidebar'}>
+          <TutorialSidebarItemView {...entry()} />
+        </Match>
+      </Switch>
       <TutorialVideoDialog
         open={state.open()}
         onOpenChange={state.setOpen}
@@ -56,13 +62,22 @@ export function TutorialRow(props: { tutorial: TutorialId }) {
   );
 }
 
-/** The same entry as a compact pill, for an empty state or a sidebar's top. */
+/** The entry as a button, centered in a block's empty state. */
 export function TutorialPill(props: { tutorial: TutorialId; class?: string }) {
   return (
     <Show when={TUTORIALS[props.tutorial]}>
       {(tutorial) => (
         <Entry tutorial={tutorial()} variant="pill" class={props.class} />
       )}
+    </Show>
+  );
+}
+
+/** The entry as a sidebar item, at the top of a block's sidebar. */
+export function TutorialSidebarItem(props: { tutorial: TutorialId }) {
+  return (
+    <Show when={TUTORIALS[props.tutorial]}>
+      {(tutorial) => <Entry tutorial={tutorial()} variant="sidebar" />}
     </Show>
   );
 }

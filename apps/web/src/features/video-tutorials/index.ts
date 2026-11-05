@@ -1,2 +1,7 @@
 export { TUTORIAL_IDS, type TutorialId } from './core/tutorial-id';
-export { hasTutorial, TutorialPill, TutorialRow } from './views/BlockTutorial';
+export {
+  hasTutorial,
+  TutorialPill,
+  TutorialRow,
+  TutorialSidebarItem,
+} from './views/BlockTutorial';
