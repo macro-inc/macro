@@ -137,3 +137,5 @@ export interface MacroOpts {
    * than directly. */
   requestedAs?: string;
 }
+
+export const CI_SEL2_NONCE = 'd452072367ad4a7ab32dd5f8efcd832e';
