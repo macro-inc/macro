@@ -52,6 +52,9 @@ vi.mock('@queries/auth', () => ({
   }),
 }));
 vi.mock('@service-stripe/client', () => ({ stripeServiceClient: {} }));
+vi.mock('./computers/views/BillingComputers', () => ({
+  BillingComputers: () => null,
+}));
 vi.mock('@core/component/Toast/Toast', () => ({ toast: { failure: vi.fn() } }));
 
 beforeEach(() => {

@@ -22,6 +22,8 @@ export function BillingSettingsView(props: {
   onManage: () => void;
   onSelectPlan: (plan: PaidPlanTier) => void;
   onTeamSettings?: JSX.EventHandler<HTMLAnchorElement, MouseEvent>;
+  /** The team's Macro computers, listed under the subscription. */
+  computers?: JSX.Element;
 }) {
   const formatDate = (value: string | undefined) => {
     if (!value) return;
@@ -211,6 +213,8 @@ export function BillingSettingsView(props: {
           )}
         </Show>
       </section>
+
+      {props.computers}
 
       <Show
         when={

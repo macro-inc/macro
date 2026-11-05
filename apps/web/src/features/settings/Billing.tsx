@@ -24,6 +24,7 @@ import type { PaidPlan } from '@service-auth/ai-billing-types';
 import { stripeServiceClient } from '@service-stripe/client';
 import { createMemo, type JSX, Suspense } from 'solid-js';
 import { BillingSettingsView } from './components/billing-settings-view';
+import { BillingComputers } from './computers/views/BillingComputers';
 import {
   getBillingState,
   getFreePlanCheckoutRequest,
@@ -184,6 +185,7 @@ function LiveBilling(props: { controls?: JSX.Element }) {
           ? (subscriptionStatus.data.scheduledChange ?? undefined)
           : undefined
       }
+      computers={<BillingComputers />}
       subscriptionStatusFailed={subscriptionStatus.isError}
       onRefreshStatus={() =>
         fireAndForget(subscriptionStatus.refetch(), 'billing-settings')
