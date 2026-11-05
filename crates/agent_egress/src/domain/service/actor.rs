@@ -1,6 +1,7 @@
 //! Resolve each call's explicit actor before credentials or approvals.
 
 use super::*;
+use crate::domain::approval::{InProcessCall, refusal};
 use crate::domain::model::{
     AgentSessionId, SessionGrant, disconnected_text, not_connected_text, tool_error_result,
     tool_result_response,
@@ -185,6 +186,13 @@ where
             Ok(upstream) => upstream,
             Err(text) => return Ok(tool_error_result(text)),
         };
+        if !listing
+            && let Some(text) = self
+                .hold_owner_call(grant, user, destination, &request)
+                .await?
+        {
+            return Ok(tool_error_result(text));
+        }
         let transport = self
             .actor_mcp
             .clone()
@@ -200,6 +208,63 @@ where
             }
             Err(error) => Err(error),
         }
+    }
+}
+
+impl<Sessions, Credentials, Tokens, Forward, Approvals>
+    EgressServiceImpl<Sessions, Credentials, Tokens, Forward, Approvals>
+where
+    Sessions: SessionAuthority,
+    Approvals: OwnerApprovals,
+{
+    /// A call spending the owner's access in a turn somebody else prompted
+    /// waits for the owner, one call at a time, the same as a sandbox's
+    /// held call: the same approval record, announcement and standing
+    /// approvals. `Some` with what to tell the model when it may not run.
+    async fn hold_owner_call(
+        &self,
+        grant: &SessionGrant,
+        user: &MacroUserIdStr<'static>,
+        destination: &McpDestination,
+        request: &Value,
+    ) -> Result<Option<String>, EgressError> {
+        let Some(prompter) = grant.held_prompter().filter(|_| *user == grant.owner) else {
+            return Ok(None);
+        };
+        let (server_slug, server_name) = match destination {
+            McpDestination::Connected(slug) => (slug.as_str().to_owned(), grant.display_name(slug)),
+            McpDestination::Custom(key) => {
+                (format!("custom-{key}"), "custom MCP server".to_owned())
+            }
+            McpDestination::Macro | McpDestination::Preview => {
+                return Err(EgressError::Unroutable(
+                    "only connected apps and custom servers are exchanged here".into(),
+                ));
+            }
+        };
+        let tool = request["params"]["name"]
+            .as_str()
+            .unwrap_or_default()
+            .to_owned();
+        let status = self
+            .approvals
+            .hold_in_process(InProcessCall {
+                session: grant.session,
+                owner: grant.owner.clone(),
+                prompter: prompter.clone(),
+                server_slug,
+                server_name,
+                tool_name: tool.clone(),
+                arguments: request["params"]["arguments"].clone(),
+            })
+            .await?;
+        let current = self.sessions.authorize_session(grant.session).await?;
+        if current.prompter != grant.prompter {
+            return Ok(Some(
+                "The original turn ended; this tool did not run.".into(),
+            ));
+        }
+        Ok(refusal(status, grant.owner.email_str(), &tool))
     }
 }
 

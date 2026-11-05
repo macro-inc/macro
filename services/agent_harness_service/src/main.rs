@@ -755,6 +755,9 @@ async fn run() -> anyhow::Result<()> {
                 egress_base_url.clone(),
             ),
             sessions: session_repo.clone(),
+            gate: owner_tool_gate.clone(),
+            connectors: tool_context.connector_tool_context.clone(),
+            mcp_servers: tool_context.mcp_server_tool_context.clone(),
         }),
     );
     let code_mode: Arc<dyn agent_code_mode::domain::SessionCodeMode> =

@@ -65,19 +65,40 @@ impl ConnectedAppTools for Apps {
             .lock()
             .unwrap()
             .push((usage.session, usage.user.to_string()));
-        Ok(vec![ConnectedApp {
-            kind: ConnectedAppKind::App,
-            key: "slack".into(),
-            name: "Slack".into(),
-        }])
+        Ok(vec![
+            ConnectedApp {
+                kind: ConnectedAppKind::App,
+                key: "slack".into(),
+                name: "Slack".into(),
+            },
+            ConnectedApp {
+                kind: ConnectedAppKind::Custom,
+                key: "0123456789abcdef".into(),
+                name: "Internal wiki".into(),
+            },
+        ])
     }
 
     async fn tools(
         &self,
         _: &ConnectedAppUse,
-        _: &ConnectedAppRef,
+        app: &ConnectedAppRef,
     ) -> Result<Vec<ConnectedTool>, CodeModeError> {
-        Ok(Vec::new())
+        if app.key != "slack" {
+            return Err(CodeModeError::Unavailable);
+        }
+        Ok(vec![
+            ConnectedTool {
+                name: "list_channels".into(),
+                description: Some("List Slack channels".into()),
+                input_schema: serde_json::json!({"type": "object"}),
+            },
+            ConnectedTool {
+                name: "send_message".into(),
+                description: Some("Send a message to a Slack channel".into()),
+                input_schema: serde_json::json!({"type": "object"}),
+            },
+        ])
     }
 
     async fn call(
@@ -98,6 +119,22 @@ impl ConnectedAppTools for Apps {
             })],
             structured_content: None,
         })
+    }
+
+    async fn discover(
+        &self,
+        _: &ConnectedAppUse,
+        _: DiscoveryRequest,
+    ) -> Result<DiscoverConnectorsResponse, CodeModeError> {
+        unreachable!("these tests never discover")
+    }
+
+    async fn add_server(
+        &self,
+        _: &ConnectedAppUse,
+        _: ConnectMcpServer,
+    ) -> Result<ConnectMcpServerResponse, CodeModeError> {
+        unreachable!("these tests never add servers")
     }
 }
 
@@ -244,4 +281,57 @@ async fn a_caller_holding_another_account_than_the_execution_spends_nothing() {
 
     assert!(matches!(refused, Err(CodeModeError::Forbidden)));
     assert!(apps.0.lock().unwrap().is_empty());
+}
+
+#[tokio::test]
+async fn a_search_ranks_tools_across_apps_and_reports_apps_it_could_not_read() {
+    let session = AgentSessionId::new_from_uuid(macro_uuid::Uuid::from_u128(7));
+    let execution = ExecutionId::mint();
+    let caller = MacroUserIdStr::parse_from_str("macro|owner@example.com")
+        .unwrap()
+        .into_owned();
+    let service = ConnectedAppService::new(
+        Arc::new(Store(Mutex::new(Some(ExecutionRecord {
+            execution_id: execution,
+            acting_as: Some(ToolActor::Owner),
+            turn_id: Some(macro_uuid::Uuid::from_u128(1)),
+            source: "export async function main() {}".into(),
+            status: ExecutionStatus::Running,
+            result: None,
+            error: None,
+            calls: Vec::new(),
+            activity: Vec::new(),
+            activity_truncated: false,
+        })))),
+        Arc::new(Turns(Some(macro_uuid::Uuid::from_u128(1)))),
+        Arc::new(Apps::default()),
+    );
+    let access = EntityAccessReceipt::<EditAccessLevel>::dangerously_assert_authenticated_user(
+        caller.clone(),
+        &session.to_string(),
+        EntityType::AgentSession,
+    );
+
+    let found = service
+        .search_tools(&access, &caller, execution, "send slack message")
+        .await
+        .unwrap();
+
+    assert_eq!(
+        found
+            .matches
+            .iter()
+            .map(|found| found.tool.name.as_str())
+            .collect::<Vec<_>>(),
+        vec!["send_message", "list_channels"]
+    );
+    assert_eq!(found.matches[0].app.key, "slack");
+    assert_eq!(
+        found
+            .unsearched
+            .iter()
+            .map(|app| app.name.as_str())
+            .collect::<Vec<_>>(),
+        vec!["Internal wiki"]
+    );
 }

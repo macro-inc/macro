@@ -49,8 +49,11 @@ stacks. Process isolation belongs to
   (`agent_harness_service/src/code_mode/connected_apps.rs`) lists the apps the
   session's agent was given (`EgressProvisioner::advertised_all`) and calls
   them through `agent_egress`'s `SessionMcpExchange`, so credentials never
-  reach the sandbox. The execution's mint-time approval covers its calls;
-  they are not held again per call.
+  reach the sandbox. In a turn someone other than the owner prompted, each
+  call spending the owner's access is held for the owner's approval
+  (`OwnerApprovals::hold_in_process`), like a direct MCP call. `discover`
+  and `servers` serve `DiscoverConnectors` and `ConnectMcpServer` through
+  the native tool gate, so both tools are in `covered_by_code_sdk`.
 - `src/domain/documentation.rs`: the build-time SDK catalog (per entity a
   `@routing` description, an `@agent` guide and an index; a reference per
   symbol). Jev ranks entities on their descriptions (32 per call, at most 8

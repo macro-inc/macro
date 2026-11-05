@@ -104,6 +104,18 @@ where
             get(list_connected_apps::<Access, Auth>),
         )
         .route(
+            "/{session_id}/code-executions/{execution_id}/connected-apps/tools",
+            get(search_connected_app_tools::<Access, Auth>),
+        )
+        .route(
+            "/{session_id}/code-executions/{execution_id}/connected-apps/discover",
+            post(discover_connected_apps::<Access, Auth>),
+        )
+        .route(
+            "/{session_id}/code-executions/{execution_id}/connected-apps/servers",
+            post(add_connected_mcp_server::<Access, Auth>),
+        )
+        .route(
             "/{session_id}/code-executions/{execution_id}/connected-apps/{kind}/{key}/tools",
             get(list_connected_app_tools::<Access, Auth>),
         )
@@ -322,6 +334,99 @@ pub async fn call_connected_app_tool<
             ExecutionId::from_uuid(execution),
             ConnectedAppRef { kind, key },
             call,
+        )
+        .await
+        .map(Json)
+        .map_err(CodeExecutionApiError)
+}
+
+#[utoipa::path(post, path = "/agent-sessions/{session_id}/code-executions/{execution_id}/connected-apps/discover", tag = "agent-sessions", operation_id = "discover_connected_apps",
+    params(("session_id" = Uuid, Path), ("execution_id" = Uuid, Path)),
+    request_body = pipedream_mcp::domain::service::discovery::DiscoveryRequest,
+    responses((status = 200, body = pipedream_mcp::inbound::toolset::DiscoverConnectorsResponse), (status = 400), (status = 403), (status = 404)))]
+/// Search the connectable app catalog, or inspect one app's tools and connection status.
+pub async fn discover_connected_apps<
+    Access: EntityAccessService,
+    Auth: MacroAuthorizationService,
+>(
+    access: AgentSessionAccessLevelExtractor<EditAccessLevel, Access, Auth>,
+    caller: MacroAuthorizationExtractor<Auth, ActingUser>,
+    State(state): State<CodeExecutionRouterState<Access, Auth>>,
+    Path((_session, execution)): Path<(Uuid, Uuid)>,
+    body: Bytes,
+) -> Result<Json<pipedream_mcp::inbound::toolset::DiscoverConnectorsResponse>, CodeExecutionApiError>
+{
+    let request = decode(&body).map_err(CodeExecutionApiError)?;
+    state
+        .connected_apps
+        .discover(
+            &access.entity_access_receipt,
+            &caller.authorization.user.macro_user_id,
+            ExecutionId::from_uuid(execution),
+            request,
+        )
+        .await
+        .map(Json)
+        .map_err(CodeExecutionApiError)
+}
+
+#[utoipa::path(post, path = "/agent-sessions/{session_id}/code-executions/{execution_id}/connected-apps/servers", tag = "agent-sessions", operation_id = "add_connected_mcp_server",
+    params(("session_id" = Uuid, Path), ("execution_id" = Uuid, Path)),
+    request_body = mcp_client::inbound::toolset::ConnectMcpServer,
+    responses((status = 200, body = mcp_client::inbound::toolset::ConnectMcpServerResponse), (status = 400), (status = 403), (status = 404)))]
+/// Add a custom MCP server to the execution account's connections.
+pub async fn add_connected_mcp_server<
+    Access: EntityAccessService,
+    Auth: MacroAuthorizationService,
+>(
+    access: AgentSessionAccessLevelExtractor<EditAccessLevel, Access, Auth>,
+    caller: MacroAuthorizationExtractor<Auth, ActingUser>,
+    State(state): State<CodeExecutionRouterState<Access, Auth>>,
+    Path((_session, execution)): Path<(Uuid, Uuid)>,
+    body: Bytes,
+) -> Result<Json<mcp_client::inbound::toolset::ConnectMcpServerResponse>, CodeExecutionApiError> {
+    let server = decode(&body).map_err(CodeExecutionApiError)?;
+    state
+        .connected_apps
+        .add_server(
+            &access.entity_access_receipt,
+            &caller.authorization.user.macro_user_id,
+            ExecutionId::from_uuid(execution),
+            server,
+        )
+        .await
+        .map(Json)
+        .map_err(CodeExecutionApiError)
+}
+
+/// Keywords to find connected-app tools by.
+#[derive(Debug, serde::Deserialize, utoipa::IntoParams)]
+pub struct ConnectedToolQuery {
+    /// Keywords matched against tool names and descriptions, e.g. `linear issue`.
+    pub query: String,
+}
+
+#[utoipa::path(get, path = "/agent-sessions/{session_id}/code-executions/{execution_id}/connected-apps/tools", tag = "agent-sessions", operation_id = "search_connected_app_tools",
+    params(("session_id" = Uuid, Path), ("execution_id" = Uuid, Path), ConnectedToolQuery),
+    responses((status = 200, body = ConnectedToolSearch), (status = 403), (status = 404)))]
+/// Find tools across the agent's connected apps by keywords.
+pub async fn search_connected_app_tools<
+    Access: EntityAccessService,
+    Auth: MacroAuthorizationService,
+>(
+    access: AgentSessionAccessLevelExtractor<EditAccessLevel, Access, Auth>,
+    caller: MacroAuthorizationExtractor<Auth, ActingUser>,
+    State(state): State<CodeExecutionRouterState<Access, Auth>>,
+    Path((_session, execution)): Path<(Uuid, Uuid)>,
+    axum::extract::Query(query): axum::extract::Query<ConnectedToolQuery>,
+) -> Result<Json<ConnectedToolSearch>, CodeExecutionApiError> {
+    state
+        .connected_apps
+        .search_tools(
+            &access.entity_access_receipt,
+            &caller.authorization.user.macro_user_id,
+            ExecutionId::from_uuid(execution),
+            &query.query,
         )
         .await
         .map(Json)

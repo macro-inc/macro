@@ -18,12 +18,17 @@ use agent_egress::domain::model::{
 };
 use agent_egress::domain::service::SessionMcpExchange;
 use agent_harness::outbound::egress::EgressProvisioner;
+use agent_inmem::domain::tool_gate::{NativeToolGate, NativeToolVerdict};
 use agent_session::domain::model::{AgentSessionId, TurnPrompter};
 use agent_session::domain::ports::AgentSessionRepo;
 use async_trait::async_trait;
 use macro_user_id::user_id::MacroUserIdStr;
 use mcp_client::domain::ports::McpServerStore;
+use mcp_client::domain::service::{AddServerError, AddedBy};
+use mcp_client::inbound::toolset::{ConnectMcpServer, ConnectMcpServerResponse};
 use pipedream_mcp::domain::ports::{ConnectionStore, ConnectorOverlays};
+use pipedream_mcp::domain::service::discovery::DiscoveryRequest;
+use pipedream_mcp::inbound::toolset::DiscoverConnectorsResponse;
 use serde_json::{Value, json};
 use std::sync::Arc;
 
@@ -34,6 +39,11 @@ pub struct SessionConnectedApps<Egress, Connections, Servers, Sessions> {
     pub egress: Arc<Egress>,
     pub provisioner: EgressProvisioner<Connections, Servers>,
     pub sessions: Sessions,
+    /// The gate native tools pass, so discovery and adding a server wait for
+    /// the owner exactly as `DiscoverConnectors` and `ConnectMcpServer` do.
+    pub gate: Arc<dyn NativeToolGate>,
+    pub connectors: ai_tools::ToolConnectorToolContext,
+    pub mcp_servers: ai_tools::ToolMcpServerToolContext,
 }
 
 /// A use settled against the session: its grant, the account it spends and
@@ -110,6 +120,24 @@ where
             }
         };
         destination.ok_or(CodeModeError::NotFound)
+    }
+
+    /// Pass `tool`'s call through the native tool gate under the execution's
+    /// account choice: in a turn somebody else prompted, a call as the owner
+    /// waits for their approval.
+    async fn gate(
+        &self,
+        usage: &ConnectedAppUse,
+        tool: &str,
+        mut arguments: Value,
+    ) -> Result<(), CodeModeError> {
+        arguments[ai_toolset::actor::ACTING_AS] = json!(usage.acting_as);
+        match self.gate.check(usage.session, tool, &arguments).await {
+            NativeToolVerdict::Run => Ok(()),
+            NativeToolVerdict::RunAs(user) if user == usage.user => Ok(()),
+            NativeToolVerdict::RunAs(_) => Err(CodeModeError::Forbidden),
+            NativeToolVerdict::Refuse(reason) => Err(CodeModeError::Invalid(reason)),
+        }
     }
 }
 
@@ -206,6 +234,54 @@ where
                 .filter(|content| !content.is_null())
                 .cloned(),
         })
+    }
+
+    async fn discover(
+        &self,
+        usage: &ConnectedAppUse,
+        request: DiscoveryRequest,
+    ) -> Result<DiscoverConnectorsResponse, CodeModeError> {
+        let arguments = json!({ "request": &request });
+        self.gate(usage, "DiscoverConnectors", arguments).await?;
+        let result = self
+            .connectors
+            .service
+            .discover(&usage.user, &request)
+            .await
+            .map_err(|error| CodeModeError::Invalid(error.to_string()))?;
+        Ok(DiscoverConnectorsResponse::from(result))
+    }
+
+    async fn add_server(
+        &self,
+        usage: &ConnectedAppUse,
+        server: ConnectMcpServer,
+    ) -> Result<ConnectMcpServerResponse, CodeModeError> {
+        let arguments = json!({ "url": &server.url, "serverName": &server.server_name });
+        self.gate(usage, "ConnectMcpServer", arguments).await?;
+        let directory = self
+            .mcp_servers
+            .servers
+            .as_ref()
+            .ok_or(CodeModeError::Unavailable)?;
+        let added = directory
+            .add(
+                usage.user.clone(),
+                &server.url,
+                &server.server_name,
+                AddedBy::Agent,
+            )
+            .await
+            .map_err(|error| match error {
+                AddServerError::InvalidUrl(_)
+                | AddServerError::NonPublicDestination(_)
+                | AddServerError::EmptyName => CodeModeError::Invalid(error.to_string()),
+                AddServerError::Store(error) => {
+                    tracing::error!(?error, "could not save an MCP server");
+                    CodeModeError::Unavailable
+                }
+            })?;
+        Ok(ConnectMcpServerResponse::from(added))
     }
 }
 

@@ -257,6 +257,9 @@ pub fn covered_by_code_sdk(name: &str, user_tool: bool) -> bool {
                 // macro.agents.list() and macro.agentSessions.createManaged.
                 | "ListCodingAgents"
                 | "DispatchCodingAgent"
+                // macro.connectedApps.discover and .addServer.
+                | "DiscoverConnectors"
+                | "ConnectMcpServer"
         )
 }
 

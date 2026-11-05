@@ -203,6 +203,13 @@ impl OwnerApprovals for Approve {
     async fn withdraw(&self, _: AgentSessionId, _: &Value) -> Result<(), EgressError> {
         Ok(())
     }
+    async fn hold_in_process(
+        &self,
+        _: crate::domain::approval::InProcessCall,
+    ) -> Result<agent_runtime_protocol::domain::tool_approval::ToolApprovalStatus, EgressError>
+    {
+        Ok(agent_runtime_protocol::domain::tool_approval::ToolApprovalStatus::Approved)
+    }
 }
 
 #[tokio::test]
@@ -355,5 +362,89 @@ async fn an_in_process_exchange_never_reaches_macro_or_preview() {
         assert!(matches!(refused, Err(EgressError::Unroutable(_))));
     }
     assert!(service.credentials.asked.lock().unwrap().is_empty());
+    assert!(transport.0.lock().unwrap().is_empty());
+}
+
+#[tokio::test]
+async fn an_in_process_owner_call_in_the_owners_turn_is_not_held() {
+    let transport = Arc::new(ActorTransport::default());
+    let service = gated(prompted_by(Some(owner())), SpyCredentials::knowing())
+        .with_actor_mcp(transport.clone());
+    let grant = service.session_grant(AgentSessionId::new()).await.unwrap();
+
+    let result = service
+        .exchange_as(
+            &grant,
+            &owner(),
+            &McpDestination::Connected(McpServerSlug::parse("linear").unwrap()),
+            json!({"jsonrpc":"2.0","id":1,"method":"tools/call","params":{"name":"search","arguments":{"q":"x"}}}),
+        )
+        .await
+        .unwrap();
+
+    assert_eq!(result, json!({"content":[{"type":"text","text":"ok"}]}));
+    assert!(service.approvals.held_in_process.lock().unwrap().is_empty());
+    assert_eq!(transport.0.lock().unwrap().len(), 1);
+}
+
+#[tokio::test]
+async fn an_in_process_owner_call_in_someone_elses_turn_runs_once_the_owner_approves() {
+    let asker = MacroUserIdStr::try_from_email("asker@example.com").unwrap();
+    let transport = Arc::new(ActorTransport::default());
+    let service = gated(prompted_by(Some(asker.clone())), SpyCredentials::knowing())
+        .with_actor_mcp(transport.clone());
+    *service.approvals.answer.lock().unwrap() =
+        Some(agent_runtime_protocol::domain::tool_approval::ToolApprovalStatus::Approved);
+    let grant = service.session_grant(AgentSessionId::new()).await.unwrap();
+
+    let result = service
+        .exchange_as(
+            &grant,
+            &owner(),
+            &McpDestination::Connected(McpServerSlug::parse("linear").unwrap()),
+            json!({"jsonrpc":"2.0","id":1,"method":"tools/call","params":{"name":"search","arguments":{"q":"x"}}}),
+        )
+        .await
+        .unwrap();
+
+    assert_eq!(result, json!({"content":[{"type":"text","text":"ok"}]}));
+    let held = service.approvals.held_in_process.lock().unwrap();
+    assert_eq!(held.len(), 1);
+    assert_eq!(held[0].server_slug, "linear");
+    assert_eq!(held[0].tool_name, "search");
+    assert_eq!(held[0].arguments, json!({"q":"x"}));
+    assert_eq!(held[0].owner, owner());
+    assert_eq!(held[0].prompter.acting_user(), Some(&asker));
+    assert_eq!(transport.0.lock().unwrap().len(), 1);
+}
+
+#[tokio::test]
+async fn an_in_process_owner_call_the_owner_declines_never_runs() {
+    let asker = MacroUserIdStr::try_from_email("asker@example.com").unwrap();
+    let transport = Arc::new(ActorTransport::default());
+    let service = gated(prompted_by(Some(asker)), SpyCredentials::knowing())
+        .with_actor_mcp(transport.clone());
+    *service.approvals.answer.lock().unwrap() =
+        Some(agent_runtime_protocol::domain::tool_approval::ToolApprovalStatus::Denied);
+    let grant = service.session_grant(AgentSessionId::new()).await.unwrap();
+
+    let result = service
+        .exchange_as(
+            &grant,
+            &owner(),
+            &McpDestination::Connected(McpServerSlug::parse("linear").unwrap()),
+            json!({"jsonrpc":"2.0","id":1,"method":"tools/call","params":{"name":"search","arguments":{"q":"x"}}}),
+        )
+        .await
+        .unwrap();
+
+    assert_eq!(result["isError"], true);
+    assert!(
+        result["content"][0]["text"]
+            .as_str()
+            .unwrap()
+            .contains("declined this call")
+    );
+    assert_eq!(service.approvals.held_in_process.lock().unwrap().len(), 1);
     assert!(transport.0.lock().unwrap().is_empty());
 }

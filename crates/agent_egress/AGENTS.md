@@ -26,7 +26,9 @@ MCP app, a custom server, or a GitHub installation token) on each request.
   `macro.connectedApps`). It reads the grant by session id
   (`SessionAuthority::authorize_session`), never reaches Macro's own server or
   previews, and shares the actor path's credential resolution and
-  not-connected answers.
+  not-connected answers. A call as the owner in a turn someone else prompted
+  is held per call through `OwnerApprovals::hold_in_process`, the same
+  approval record as the native tool gate.
 
 ## Scope
 

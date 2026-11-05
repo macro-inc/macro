@@ -7,9 +7,13 @@
 //! turn it was started for.
 
 use agent_session::domain::model::AgentSessionId;
+use ai_toolset::actor::ToolActor;
 use async_trait::async_trait;
 use entity_access::domain::models::{EditAccessLevel, EntityAccessReceipt};
 use macro_user_id::user_id::MacroUserIdStr;
+use mcp_client::inbound::toolset::{ConnectMcpServer, ConnectMcpServerResponse};
+use pipedream_mcp::domain::service::discovery::DiscoveryRequest;
+use pipedream_mcp::inbound::toolset::DiscoverConnectorsResponse;
 use serde::{Deserialize, Serialize};
 use std::sync::Arc;
 use utoipa::ToSchema;
@@ -64,6 +68,30 @@ pub struct ConnectedTool {
     pub input_schema: serde_json::Value,
 }
 
+/// One tool found by a search across the agent's connected apps.
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize, ToSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct ConnectedToolMatch {
+    /// The app serving the tool.
+    pub app: ConnectedApp,
+    /// The tool.
+    pub tool: ConnectedTool,
+}
+
+/// The best matches across the agent's connected apps, and the apps whose
+/// tools could not be listed, which the search did not cover.
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize, ToSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct ConnectedToolSearch {
+    /// At most [`MAX_TOOL_MATCHES`] tools, best first.
+    pub matches: Vec<ConnectedToolMatch>,
+    /// Apps whose tools could not be listed.
+    pub unsearched: Vec<ConnectedApp>,
+}
+
+/// Most tools one search returns.
+pub const MAX_TOOL_MATCHES: usize = 20;
+
 /// Call one tool of a connected app.
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize, ToSchema)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
@@ -104,7 +132,9 @@ pub struct SessionAccounts {
 pub struct ConnectedAppUse {
     /// The execution's session.
     pub session: AgentSessionId,
-    /// The account the execution was approved to act as.
+    /// The account choice the execution was approved for.
+    pub acting_as: ToolActor,
+    /// That choice resolved against the current turn.
     pub user: MacroUserIdStr<'static>,
 }
 
@@ -121,13 +151,29 @@ pub trait ConnectedAppTools: Send + Sync + 'static {
         usage: &ConnectedAppUse,
         app: &ConnectedAppRef,
     ) -> Result<Vec<ConnectedTool>, CodeModeError>;
-    /// Call one of `app`'s tools as the execution's account.
+    /// Call one of `app`'s tools as the execution's account. In a turn
+    /// somebody other than the owner prompted, a call spending the owner's
+    /// access waits for the owner to approve it.
     async fn call(
         &self,
         usage: &ConnectedAppUse,
         app: &ConnectedAppRef,
         call: CallConnectedTool,
     ) -> Result<ConnectedToolResult, CodeModeError>;
+    /// Search the connectable app catalog, or inspect one app's tools and
+    /// connection status: what the `DiscoverConnectors` tool does.
+    async fn discover(
+        &self,
+        usage: &ConnectedAppUse,
+        request: DiscoveryRequest,
+    ) -> Result<DiscoverConnectorsResponse, CodeModeError>;
+    /// Add a custom MCP server to the account's connections: what the
+    /// `ConnectMcpServer` tool does.
+    async fn add_server(
+        &self,
+        usage: &ConnectedAppUse,
+        server: ConnectMcpServer,
+    ) -> Result<ConnectMcpServerResponse, CodeModeError>;
 }
 
 /// Admits a running execution's connected-app requests.
@@ -185,6 +231,7 @@ impl ConnectedAppService {
         }
         Ok(ConnectedAppUse {
             session,
+            acting_as,
             user: caller.clone(),
         })
     }
@@ -223,5 +270,82 @@ impl ConnectedAppService {
     ) -> Result<ConnectedToolResult, CodeModeError> {
         let usage = self.admit(access, caller, execution).await?;
         self.tools.call(&usage, &app, call).await
+    }
+
+    /// Search or inspect connectable apps.
+    pub async fn discover(
+        &self,
+        access: &EntityAccessReceipt<EditAccessLevel>,
+        caller: &MacroUserIdStr<'static>,
+        execution: ExecutionId,
+        request: DiscoveryRequest,
+    ) -> Result<DiscoverConnectorsResponse, CodeModeError> {
+        let usage = self.admit(access, caller, execution).await?;
+        self.tools.discover(&usage, request).await
+    }
+
+    /// Add a custom MCP server to the account's connections.
+    pub async fn add_server(
+        &self,
+        access: &EntityAccessReceipt<EditAccessLevel>,
+        caller: &MacroUserIdStr<'static>,
+        execution: ExecutionId,
+        server: ConnectMcpServer,
+    ) -> Result<ConnectMcpServerResponse, CodeModeError> {
+        let usage = self.admit(access, caller, execution).await?;
+        self.tools.add_server(&usage, server).await
+    }
+
+    /// Find tools across every app the agent was given by keywords matched
+    /// against tool names and descriptions, ranked the way `SearchTools`
+    /// ranks: by how many terms match. An app whose tools cannot be listed
+    /// is reported, not fatal.
+    pub async fn search_tools(
+        &self,
+        access: &EntityAccessReceipt<EditAccessLevel>,
+        caller: &MacroUserIdStr<'static>,
+        execution: ExecutionId,
+        query: &str,
+    ) -> Result<ConnectedToolSearch, CodeModeError> {
+        let usage = self.admit(access, caller, execution).await?;
+        let apps = self.tools.apps(&usage).await?;
+        let listings = futures::future::join_all(apps.iter().map(|app| {
+            let reference = ConnectedAppRef {
+                kind: app.kind,
+                key: app.key.clone(),
+            };
+            let usage = &usage;
+            async move { self.tools.tools(usage, &reference).await }
+        }))
+        .await;
+
+        let mut catalog = Vec::new();
+        let mut unsearched = Vec::new();
+        for (app, listing) in apps.into_iter().zip(listings) {
+            match listing {
+                Ok(tools) => catalog.extend(tools.into_iter().map(|tool| ConnectedToolMatch {
+                    app: app.clone(),
+                    tool,
+                })),
+                Err(error) => {
+                    tracing::warn!(?error, app = %app.key, "could not list a connected app's tools");
+                    unsearched.push(app);
+                }
+            }
+        }
+        let matches = ai_toolset::tool_search::rank(&catalog, query, |found| {
+            (
+                found.tool.name.as_str(),
+                found.tool.description.as_deref().unwrap_or_default(),
+            )
+        })
+        .into_iter()
+        .take(MAX_TOOL_MATCHES)
+        .cloned()
+        .collect();
+        Ok(ConnectedToolSearch {
+            matches,
+            unsearched,
+        })
     }
 }
