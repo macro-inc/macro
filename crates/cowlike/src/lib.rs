@@ -92,3 +92,6 @@ where
         }
     }
 }
+
+/// Timing probe.
+pub const CI_SPEED_GEN_THREADS: u32 = 1;
