@@ -844,6 +844,8 @@ fixed. `Save template` updates the template without creating a task. Deleting a
 template requires confirmation and leaves existing tasks unchanged. Verify
 personal/team creation, template-only creation, combined creation, no-template
 selection, repeated Create More, editing, cancellation, conflicts, and deletion.
+On touch, entering New template or Edit leaves name-field focus to an explicit
+tap. At narrow desktop widths, the dropdown stays within the viewport.
 
 After creation, the `Task created` toast shows an `Open` action. Touch devices
 omit `Open (New Split)`; desktop keeps both actions. Either action immediately dismisses the toast before opening

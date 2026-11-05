@@ -10,7 +10,7 @@ Task creation also preserves the composer's selected fields as per-task pins.
 
 - `core/template.ts`: fill-blank application and reusable-default capture.
 - `components/template-picker.tsx`: searchable desktop dropdown and touch picker sheet.
-- `components/template-details.tsx`: template name and immutable edit ownership beside the shared composer.
+- `components/template-details.tsx`: template name and immutable edit ownership beside the shared composer; name autofocus is desktop-only.
 
 ## Scope
 

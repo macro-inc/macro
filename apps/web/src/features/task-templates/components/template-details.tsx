@@ -1,4 +1,5 @@
 import { t } from '@app/lib/i18n';
+import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import { onElementConnect } from '@core/util/onElementConnect';
 import { Checkbox, TextField } from '@ui';
 import { Show } from 'solid-js';
@@ -23,7 +24,11 @@ export function TemplateDetails(props: {
       >
         <TextField.Label>{t('create.taskTemplateName')}</TextField.Label>
         <TextField.Input
-          ref={(element) => onElementConnect(element, () => element.focus())}
+          ref={(element) =>
+            onElementConnect(element, () => {
+              if (!isTouchDevice()) element.focus();
+            })
+          }
           placeholder={t('create.taskTemplateNamePlaceholder')}
           maxLength={120}
         />

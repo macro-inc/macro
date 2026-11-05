@@ -297,7 +297,7 @@ export function TemplateDropdown(
         <CaretDownIcon class="size-3 shrink-0" />
       </Dropdown.Trigger>
       <Dropdown.Content
-        class="min-w-88 max-w-[calc(100vw-2rem)] p-0"
+        class="min-w-[min(22rem,calc(100vw-2rem))] max-w-[calc(100vw-2rem)] p-0"
         aria-label={t('create.taskTemplatePickerTitle')}
         onOpenAutoFocus={(event) => event.preventDefault()}
       >
