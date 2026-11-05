@@ -66,11 +66,15 @@
         builtins.match ".*\\.(md|html|txt|json|jsonl|canvas|sql|sh|ttf|xml|graphql|mjs|proto)$" path != null;
       # Rust local HTTP clients embed only the public proxy CA, never its keys.
       localCaFilter = path: _type: pkgs.lib.hasSuffix "/infra/local/certs/ca.pem" (toString path);
+      # xtask_local embeds the local stack's development API-token keys.
+      devIdentityFilter =
+        path: _type: builtins.match ".*/xtask_local/src/local/identity/.*\\.pem$" path != null;
       binFilter = path: _type: builtins.match ".*\\.bin$" path != null;
       srcFilter =
         path: type:
         (sqlxFilter path type)
         || (localCaFilter path type)
+        || (devIdentityFilter path type)
         || (pdfiumFilter path type)
         || (assetFilter path type)
         || (binFilter path type)
@@ -527,6 +531,90 @@
             '';
           }
         );
+
+      # Release builds of everything a Kubernetes instance runs (infra/platform), as
+      # binary -> store path. `cargo x platform chart --release` packages these.
+      platformReleaseBinaries =
+        let
+          simple = bin: {
+            serviceName = "platform-${bin}";
+            packageName = bin;
+            binaries = [ bin ];
+          };
+          definitions = (
+            map simple [
+              "agent_harness_service"
+              "agent_trigger_service"
+              "authentication_service"
+              "calendar_service"
+              "contacts_service"
+              "delete_chat_handler"
+              "deleted_item_poller"
+              "document_storage_service"
+              "document_text_extractor"
+              "email_focus_worker"
+              "email_refresh_handler"
+              "email_scheduled_handler"
+              "email_sfs_delete_handler"
+              "image_proxy_service"
+              "notification_retention_handler"
+              "notification_service"
+              "organization_retention_handler"
+              "organization_retention_trigger"
+              "queue_gateway"
+              "slack_import_worker"
+              "static_file_service"
+              "unfurl_service"
+              "upload_extractor_lambda_handler"
+              "user_link_cleanup_handler"
+              "whatsapp_session_service"
+            ]
+            ++ [
+              {
+                serviceName = "platform-connection-gateway";
+                packageName = "connection_gateway";
+                binaries = [ "connection_gateway_service" ];
+              }
+              {
+                serviceName = "platform-document-upload-finalizer";
+                packageName = "document_upload_finalizer_handler";
+                binaries = [ "document_upload_finalizer_local_worker" ];
+              }
+              {
+                serviceName = "platform-email-service";
+                packageName = "email_service";
+                binaries = [
+                  "email_service"
+                  "pubsub_workers"
+                ];
+              }
+              {
+                # Without `pdf`, as the local stack builds it: it needs native libraries.
+                serviceName = "platform-search-processing";
+                packageName = "search_processing_service";
+                binaries = [ "search_processing_service" ];
+                featureArgs = "--no-default-features --features processing,service";
+              }
+              {
+                serviceName = "platform-xtask-local";
+                packageName = "xtask_local";
+                binaries = [ "xtask_local" ];
+                featureArgs = "--features local-stack";
+              }
+            ]
+          );
+          entries = pkgs.lib.concatMap (
+            definition:
+            let
+              package = deployServiceBinaryPackage definition;
+            in
+            map (name: {
+              inherit name;
+              value = "${package}";
+            }) definition.binaries
+          ) definitions;
+        in
+        pkgs.writeText "platform-release-binaries.json" (builtins.toJSON (builtins.listToAttrs entries));
 
       deployServiceBinaryPackages = pkgs.lib.listToAttrs (
         map (def: {
@@ -1121,6 +1209,9 @@
         deploy-service-binaries-email-service = emailServiceDeployBinaries;
       }
       // deployLambdaPackages
+      // {
+        platform-release-binaries = platformReleaseBinaries;
+      }
       // pkgs.lib.optionalAttrs isLinux {
         local-stack-binaries = localStackBinaries;
       };

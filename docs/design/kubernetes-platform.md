@@ -413,7 +413,8 @@ Not built yet:
   stock cluster such as kind. **The chart is a preview, not safe for real data**, and
   says so in its README: it ships `local-kms` despite the rule above (OpenBao needs a KMS
   adapter first), mail goes to Mailpit, Kafka and OpenSearch have no authentication
-  inside the namespace, and images are debug builds.
+  inside the namespace, and the API-token and CloudFront signing keys are still the
+  fixed development keys.
 - Release images from crane. Every image today wraps a host-built debug binary with
   debug info stripped.
 - Mirroring from GitHub automatically, which needs a credential decision.

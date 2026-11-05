@@ -102,6 +102,9 @@ pub struct ChartArgs {
     /// The instance whose recorded build the chart packages.
     #[arg(long, default_value = "demo")]
     pub from: String,
+    /// Package release builds of the services, rather than the instance's debug builds.
+    #[arg(long)]
+    pub release: bool,
     /// Where to link the built chart.
     #[arg(long, default_value = "infra/local/generated/platform-cluster/chart")]
     pub out: PathBuf,
@@ -739,13 +742,16 @@ fn instance_env(name: &InstanceName) -> String {
 fn chart(args: &ChartArgs) -> Result<()> {
     let stage = Stage::from_env_cli(false);
     let from = InstanceName::parse(&args.from)?;
-    let state = read_state(&from.local_instance()?);
+    let mut state = read_state(&from.local_instance()?);
     ensure!(
         !state.binaries.is_empty(),
         "instance {} has no recorded build; run `just platform up {}` first",
         from.as_str(),
         from.as_str()
     );
+    if args.release {
+        state.binaries = release_binaries(&stage)?;
+    }
     let selfhost = InstanceName::parse("selfhost")?;
     push_images(&stage, &selfhost, &state, None)?;
     let expr = format!(
@@ -764,6 +770,17 @@ fn chart(args: &ChartArgs) -> Result<()> {
     std::os::unix::fs::symlink(&built, &out)?;
     stage.note(&format!("chart: {}", out.display()));
     Ok(())
+}
+
+/// Builds every service for release; returns cargo bin -> store path.
+fn release_binaries(stage: &Stage) -> Result<BTreeMap<String, String>> {
+    let paths = nix_build(
+        stage,
+        "Building release binaries (nix)",
+        "f.packages.x86_64-linux.platform-release-binaries",
+    )?;
+    let listing = paths.first().context("nix build printed no path")?;
+    serde_json::from_str(&std::fs::read_to_string(listing)?).context("parsing release binaries")
 }
 
 /// Bring up the shared services, then hand them to Argo CD.
