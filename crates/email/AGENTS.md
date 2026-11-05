@@ -102,6 +102,11 @@ tools — hexagonal, heavily feature-gated.
 - `.eml` downloads go through `domain/message_source.rs`, which authorizes like
   attachment reads and fetches the provider's original RFC 822 bytes (Gmail
   `format=raw`, Graph `$value`); drafts and unsynced messages have no source.
+- An attachment links to its document before the bytes reach storage, and a link
+  stops sync from offering it again. `AttachmentReadService::document` stores the
+  bytes again when a linked document is still awaiting its upload, and DSS signs a
+  new upload for that reuse; DOCX is left out because it stays pending while it
+  converts.
 - Forwarded attachments register through `domain/draft_attachments.rs` and resolve
   bytes through `domain/attachment_access.rs`; scheduled delivery also rechecks
   source inbox access in `domain/forwarded_attachments.rs`, including legacy jobs.
