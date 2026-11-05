@@ -137,3 +137,5 @@ export interface MacroOpts {
    * than directly. */
   requestedAs?: string;
 }
+
+export const CI_INTEGRATE_NONCE = '1dee4aade91441d2a4df6733b8cc7064';
