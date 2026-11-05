@@ -10,7 +10,8 @@ tool.
 
 ## Opening one
 
-- Route: `/app/artifact/<id>`. Add `?scene=<scene id>` to open a scene; an
+- Route: `/app/artifact/<id>`. Add `?scene=<scene id>` to open a scene; on
+  entry it moves into the pane's search (`s<pane>.artifact.scene=`). An
   unknown scene falls back to the artifact's own page (`index.html`).
 - The page renders in a sandboxed iframe (`[data-artifact-frame]`) on the
   artifact's own origin (`https://<id>.artifacts.<domain>`), never on the app
@@ -31,8 +32,10 @@ tool.
   against entering private information). Share and the title menu (Rename,
   Move, Delete) work as for documents; artifacts can't be duplicated.
 - **Scenes:** tabs under the header (Overview plus one per scene), or a menu
-  when there are more than six. Choosing one updates `?scene=`. On phones
-  and tablets the tabs move into the title menu's **Scenes** group.
+  when there are more than six. Choosing one updates
+  `s<pane>.artifact.scene=`; copying the link from Share gives the plain
+  `?scene=` form. On phones and tablets the tabs move into the title menu's
+  **Scenes** group.
 - **Versions:** the **Version N** button in the header (on touch,
   **Versions** in the title menu) lists every version with its message,
   author and time. Choosing an older one shows a banner, *You're viewing version N*, with **Back to
@@ -50,8 +53,8 @@ picker (press `I`, then Reference). Choosing one with scenes asks for a scene
 (or Overview); one without scenes is placed right away. It lands as a live
 embed, 960 × 600, inert until **Interact** (or a double-click); **Done** or
 Escape returns input to the canvas. The inspector's scene menu switches the
-node's scene, **Use preview card** turns it into a card that names the scene,
-and **Open document** opens the artifact at that scene. Pasting an
+node's scene, **Use preview card** turns it into a card that names the scene
+(**Show page** turns it back into an embed), and **Open document** opens the artifact at that scene. Pasting an
 `/app/artifact/<id>?scene=<scene>` link or dropping the artifact from Drive
 places it too. Viewers of a canvas see artifact embeds live and can Interact
 with them.
@@ -59,6 +62,6 @@ with them.
 ## Verifying
 
 Publish a two-scene artifact with the SDK against your local stack, open it,
-switch scenes and check `?scene=` changes, republish from the SDK and watch
+switch scenes and check `s0.artifact.scene=` changes, republish from the SDK and watch
 the open view reload, then restore version 1 as an editor and confirm a new
 version 3 appears in the menu.

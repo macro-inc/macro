@@ -5,6 +5,7 @@
 
 import { useBlockEntityCommands } from '@app/features/next-soup/actions';
 import { t } from '@app/lib/i18n';
+import { createSearchParams } from '@app/lib/split-router';
 import {
   type BlockTool,
   ResponsiveBlockToolbar,
@@ -39,8 +40,8 @@ import AppWindow from '@icon/system/regular/app-window.svg';
 import ClockCounterClockwise from '@icon/system/regular/clock-counter-clockwise.svg';
 import FileIcon from '@icon/system/regular/file.svg';
 import { useCurrentTeamQuery } from '@queries/team/teams';
-import { useSearchParams } from '@solidjs/router';
 import { createSignal, Show } from 'solid-js';
+import { artifactSearch } from './artifact-route';
 import { PublisherNotice } from './components/publisher-notice';
 import { OVERVIEW_TAB } from './components/scene-switcher';
 import {
@@ -62,13 +63,11 @@ export default function ArtifactBlock() {
   const viewerId = useUserId();
   const team = useCurrentTeamQuery();
 
-  const [searchParams, setSearchParams] = useSearchParams();
-  const requestedScene = () => {
-    const scene = searchParams[SCENE_PARAM];
-    return typeof scene === 'string' && scene ? scene : undefined;
-  };
+  // The pane router owns the URL; the browser location isn't the pane's.
+  const [search, setSearch] = createSearchParams(artifactSearch);
+  const requestedScene = () => search.scene || undefined;
   const selectSceneParam = (scene: string | undefined) =>
-    setSearchParams({ [SCENE_PARAM]: scene }, { replace: true });
+    setSearch({ scene: scene ?? '' }, { history: 'replace' });
   createMethodRegistration(blockHandleSignal.get, {
     goToLocationFromParams: async (params: Record<string, unknown>) => {
       const scene = params[SCENE_PARAM];
