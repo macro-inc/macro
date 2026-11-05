@@ -1391,6 +1391,13 @@ export const authServiceClient = {
     });
   },
 
+  retryTeamAgent(userId: string) {
+    return fetchWithAuth<TeamAgent>(
+      `${authHost}/team_agents/${encodeURIComponent(userId)}/retry`,
+      { method: 'POST' }
+    );
+  },
+
   deleteTeamAgent(userId: string) {
     return fetchWithAuth<{}>(
       `${authHost}/team_agents/${encodeURIComponent(userId)}`,

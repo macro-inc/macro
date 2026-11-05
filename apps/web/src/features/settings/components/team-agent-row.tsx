@@ -10,6 +10,7 @@ import { match } from 'ts-pattern';
 export function AgentStatusPill(props: {
   agent: TeamAgent;
   retrying?: boolean;
+  retryError?: boolean;
   onRetry(): void;
 }) {
   const status = () =>
@@ -55,8 +56,14 @@ export function AgentStatusPill(props: {
           disabled={props.retrying}
           onClick={props.onRetry}
         >
-          Retry status
+          Retry
         </Button>
+        <Show when={props.retryError}>
+          <span role="alert" class="text-failure">
+            Couldn't retry setup. The status has been refreshed; try again if
+            the agent is still failed.
+          </span>
+        </Show>
       </Show>
     </div>
   );
@@ -65,6 +72,7 @@ export function AgentStatusPill(props: {
 export function TeamAgentRow(props: {
   agent: TeamAgent;
   retrying: boolean;
+  retryError?: boolean;
   onRetry(): void;
   onRemove(): void;
 }) {
@@ -82,6 +90,7 @@ export function TeamAgentRow(props: {
           <AgentStatusPill
             agent={props.agent}
             retrying={props.retrying}
+            retryError={props.retryError}
             onRetry={props.onRetry}
           />
         </div>

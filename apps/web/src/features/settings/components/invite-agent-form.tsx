@@ -10,6 +10,7 @@ import { type Accessor, createSignal, For, type JSX, Show } from 'solid-js';
 
 export type AgentInviteSource = {
   quote: Accessor<TeamAgentQuote | undefined>;
+  quoteForSize(size: ComputerSize): TeamAgentQuote | undefined;
   quoteLoading: Accessor<boolean>;
   quoteError: Accessor<boolean>;
   reloadQuote(): void;
@@ -264,20 +265,30 @@ export function InviteAgentForm(props: {
             aria-label="Computer size"
           >
             <RadioGroup.Label>Computer size</RadioGroup.Label>
-            <For each={['standard', 'large', 'xl']}>
+            <For each={['standard', 'large', 'xl'] as const}>
               {(size) => (
                 <RadioGroup.Item value={size} class="flex items-center gap-2">
                   <RadioGroup.ItemControl />
                   <RadioGroup.ItemLabel class="capitalize">
                     {size === 'xl' ? 'XL' : size}
                   </RadioGroup.ItemLabel>
+                  <RadioGroup.ItemDescription class="text-xs text-ink-muted">
+                    <Show
+                      when={props.source.quoteForSize(size)}
+                      fallback="Specifications unavailable"
+                    >
+                      {(quote) => (
+                        <>
+                          {quote().vcpus} vCPUs · {quote().memoryGb} GB RAM ·{' '}
+                          {quote().diskGb} GB disk
+                        </>
+                      )}
+                    </Show>
+                  </RadioGroup.ItemDescription>
                 </RadioGroup.Item>
               )}
             </For>
           </RadioGroup>
-          <p class="text-xs text-ink-muted">
-            Computer specifications are not available yet.
-          </p>
           <TextField
             value={avatar()}
             onChange={setAvatar}

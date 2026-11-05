@@ -229,8 +229,9 @@ With the `enable-team-agents` rollout enabled, team admins and owners see
 its computer together. The existing email invitation flow remains available.
 
 1. Choose **Invite agent**. Enter a **Name**, **Role / job description**, and
-   **Personality**. Choose **Standard**, **Large**, or **XL**, and optionally
-   enter an HTTPS **Avatar URL**.
+   **Personality**. Choose **Standard**, **Large**, or **XL** using the quoted
+   vCPU, RAM, and disk specifications beside each size, and optionally enter
+   an HTTPS **Avatar URL**.
 2. Choose **Review price**. Review the server's **Agent seat**, **Computer**,
    and **Total per month/year**, in its quoted currency. **Back** preserves
    the draft. A loading or failed quote disables confirmation; **Try again**
@@ -242,7 +243,11 @@ its computer together. The existing email invitation flow remains available.
 4. Under **Agent teammates**, the row shows an **Agent** chip and **Setting
    up…**, including the current setup step when supplied. The roster polls
    every three seconds while any agent is provisioning, then shows **Running**
-   or **Failed** with its reason. **Retry status** refreshes the current status.
+   or **Failed** with its reason. **Retry** re-drives provisioning on the same
+   computer, preserving the agent's workspace and billing. It is disabled while
+   the request runs; failures refresh the status and keep an inline error if
+   the agent is still failed. A stale retry rejected with 409 refreshes the row
+   rather than creating an agent or purchasing another computer.
 5. Open the row's **More** menu and choose **Remove agent**. Confirming releases
    its computer and seat and permanently deletes its repository. A failed
    removal keeps the confirmation open for another attempt.
@@ -253,10 +258,6 @@ keyboard open; cancelling and reopening starts a fresh draft. Verify loading,
 quote failure/recovery, duplicate confirmation, all status states, and removal
 cancellation on desktop, phone, and tablet.
 
-The current API does not expose computer specifications or an operation to
-retry provisioning. The size picker identifies the three sizes without invented
-specifications; **Retry status** does not restart a computer or buy another one.
-The computer adapter must be connected before live quotes and purchases work.
 The backend-free browser check exercises the real invitation form with scripted
 quotes and purchases:
 `bunx playwright test --config src/features/settings/browser-test/team-agents/playwright.config.ts`.

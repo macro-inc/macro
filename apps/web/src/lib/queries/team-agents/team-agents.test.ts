@@ -17,6 +17,9 @@ describe('team agents queries', () => {
       computer: 3000,
       total: 5000,
       currency: 'usd',
+      vcpus: 4,
+      memoryGb: 16,
+      diskGb: 100,
       interval: 'month' as const,
     };
     vi.mocked(authServiceClient.quoteTeamAgent).mockResolvedValue(ok(quote));

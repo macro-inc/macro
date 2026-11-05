@@ -65,10 +65,12 @@ test('keeps phone actions above the keyboard while long fields scroll', async ({
   );
   const review = page.getByRole('button', { name: 'Review price' });
   await expect(review).toBeInViewport();
-  const bounds = await review.boundingBox();
-  expect(bounds!.y + bounds!.height).toBeLessThan(
-    page.viewportSize()!.height - 280
-  );
+  await expect
+    .poll(async () => {
+      const bounds = await review.boundingBox();
+      return bounds ? bounds.y + bounds.height : Number.POSITIVE_INFINITY;
+    })
+    .toBeLessThan(page.viewportSize()!.height - 280);
   await review.click();
   await expect(
     page.getByRole('button', { name: 'Confirm and invite' })

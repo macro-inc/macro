@@ -111,3 +111,26 @@ export function useDeleteTeamAgentMutation() {
     onSettled: (_data, _error, { teamId }) => invalidateTeamAgents(teamId),
   }));
 }
+
+export function useRetryTeamAgentMutation() {
+  return useMutation(() => ({
+    retry: false,
+    mutationFn: ({ teamId, userId }: { teamId: string; userId: string }) =>
+      Telemetry.span('team-agent.retry', (span) => {
+        span.setAttr('team.id', teamId);
+        span.setAttr('agent.id', userId);
+        return throwOnErr(() => authServiceClient.retryTeamAgent(userId));
+      }),
+    onSuccess: (agent, { teamId }) => {
+      queryClient.setQueryData<TeamAgents>(
+        teamAgentKeys.list(teamId).queryKey,
+        (old) => ({
+          agents: (old?.agents ?? []).map((item) =>
+            item.userId === agent.userId ? agent : item
+          ),
+        })
+      );
+    },
+    onSettled: (_data, _error, { teamId }) => invalidateTeamAgents(teamId),
+  }));
+}

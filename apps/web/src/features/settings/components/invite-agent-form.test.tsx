@@ -20,6 +20,9 @@ const quote: TeamAgentQuote = {
   computer: 4000,
   total: 6000,
   currency: 'usd',
+  vcpus: 4,
+  memoryGb: 16,
+  diskGb: 100,
   interval: 'year',
 };
 function fill() {
@@ -37,6 +40,7 @@ function fill() {
 function source(overrides: Partial<AgentInviteSource> = {}): AgentInviteSource {
   return {
     quote: () => quote,
+    quoteForSize: () => quote,
     quoteLoading: () => false,
     quoteError: () => false,
     pending: () => false,
@@ -48,6 +52,34 @@ function source(overrides: Partial<AgentInviteSource> = {}): AgentInviteSource {
 }
 
 describe('agent invite purchase', () => {
+  it('shows each server specification and confirms the selected size quote', () => {
+    const [size, setSize] = createSignal<'standard' | 'large' | 'xl'>(
+      'standard'
+    );
+    const sizes = {
+      standard: { ...quote, vcpus: 2, memoryGb: 8, diskGb: 80, total: 5000 },
+      large: { ...quote, vcpus: 4, memoryGb: 16, diskGb: 160, total: 9000 },
+      xl: { ...quote, vcpus: 8, memoryGb: 32, diskGb: 320, total: 15000 },
+    };
+    render(() => (
+      <InviteAgentForm
+        open
+        onClose={() => {}}
+        size={size()}
+        setSize={setSize}
+        source={source({
+          quoteForSize: (value) => sizes[value],
+          quote: () => sizes[size()],
+        })}
+      />
+    ));
+    expect(screen.getByText('2 vCPUs · 8 GB RAM · 80 GB disk')).toBeTruthy();
+    expect(screen.getByText('8 vCPUs · 32 GB RAM · 320 GB disk')).toBeTruthy();
+    fireEvent.click(screen.getByLabelText('XL'));
+    fill();
+    expect(screen.getByText('$150.00')).toBeTruthy();
+  });
+
   it('requires review and a quote, preserves draft on Back, and submits once', async () => {
     let finish: (() => void) | undefined;
     const create = vi.fn(
@@ -184,6 +216,6 @@ it('updates setup to running and failed with the reason and retry action', () =>
   expect(screen.getByRole('status').textContent).toContain(
     'Computer disconnected'
   );
-  fireEvent.click(screen.getByRole('button', { name: 'Retry status' }));
+  fireEvent.click(screen.getByRole('button', { name: 'Retry' }));
   expect(retry).toHaveBeenCalledTimes(1);
 });

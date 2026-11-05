@@ -20,11 +20,14 @@ const [requests, setRequests] = createSignal(0);
 const [failed, setFailed] = createSignal(
   new URLSearchParams(location.search).has('quote-error')
 );
-const quote = (): TeamAgentQuote => ({
+const quote = (value: ComputerSize = size()): TeamAgentQuote => ({
   seat: 2000,
-  computer: size() === 'standard' ? 3000 : 6000,
-  total: size() === 'standard' ? 5000 : 8000,
+  computer: value === 'standard' ? 3000 : 6000,
+  total: value === 'standard' ? 5000 : 8000,
   currency: 'usd',
+  vcpus: value === 'standard' ? 2 : 4,
+  memoryGb: value === 'standard' ? 8 : 16,
+  diskGb: 100,
   interval: 'month',
 });
 render(
@@ -39,6 +42,7 @@ render(
           size={size()}
           setSize={setSize}
           source={{
+            quoteForSize: (value) => (failed() ? undefined : quote(value)),
             quote: () => (failed() ? undefined : quote()),
             quoteLoading: () => false,
             quoteError: failed,

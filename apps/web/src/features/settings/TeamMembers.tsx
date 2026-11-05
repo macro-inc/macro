@@ -42,6 +42,7 @@ import {
 } from '@queries/team/teams';
 import {
   useDeleteTeamAgentMutation,
+  useRetryTeamAgentMutation,
   useTeamAgentsQuery,
 } from '@queries/team-agents';
 import type { PaidPlan } from '@service-auth/ai-billing-types';
@@ -291,6 +292,7 @@ export function TeamMembers(props: { team: TeamSummary }) {
   const [inviteAgentOpen, setInviteAgentOpen] = createSignal(false);
   const [removeAgent, setRemoveAgent] = createSignal<TeamAgent>();
   const deleteAgent = useDeleteTeamAgentMutation();
+  const retryAgent = useRetryTeamAgentMutation();
 
   const deleteInviteMutation = useDeleteTeamInviteMutation();
   const resendInviteMutation = useResendTeamInviteMutation();
@@ -593,13 +595,23 @@ export function TeamMembers(props: { team: TeamSummary }) {
                   {(agent) => (
                     <TeamAgentRow
                       agent={agent}
-                      retrying={agentsQuery.isFetching}
-                      onRetry={() =>
-                        fireAndForget(
-                          agentsQuery.refetch(),
-                          'team-agents.retry'
-                        )
+                      retrying={retryAgent.isPending}
+                      retryError={
+                        retryAgent.isError &&
+                        retryAgent.variables?.userId === agent.userId
                       }
+                      onRetry={() => {
+                        if (
+                          !canManageAgents() ||
+                          retryAgent.isPending ||
+                          agent.status !== 'failed'
+                        )
+                          return;
+                        retryAgent.mutate({
+                          teamId: props.team.id,
+                          userId: agent.userId,
+                        });
+                      }}
                       onRemove={() => setRemoveAgent(agent)}
                     />
                   )}
