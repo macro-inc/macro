@@ -1,6 +1,8 @@
 import { createScene, presentationOrder } from '@macro-inc/graphics';
+import { getQuickJS } from 'quickjs-emscripten';
 import { describe, expect, it } from 'vitest';
 import { artifactLibraryEdits, prepareCanvasEdit } from './operations';
+import { runCanvasCode } from './sandbox';
 import { canvasOpSchema } from './schema';
 import { describeCanvas, withCanvasSession } from './session';
 import { liveScene } from './test-fixtures';
@@ -170,5 +172,40 @@ describe('artifact rollout', () => {
     );
     expect(scene.writes()).toBe(1);
     expect(scene.server.getMap('artifactStyles').get('brand')).toBe('h1{}');
+  });
+});
+
+describe('artifact SDK in the sandbox', () => {
+  it('runs the SDK and validates what it produces', async () => {
+    const ops = await runCanvasCode(
+      await getQuickJS(),
+      `const id = editor.createArtifact({ x: 1, y: 2, title: 'Deck', html: snippets.page });
+       editor.artifactEdit(id, 'Hi', 'Hello');
+       editor.defineStyle('brand', 'h1{}');
+       editor.defineComponent('card', null);
+       editor.presentOrder([id]);`,
+      { page: '<p>Hi</p>' }
+    );
+
+    expect(ops.map((op) => op.kind)).toEqual([
+      'createArtifact',
+      'artifactEdit',
+      'defineStyle',
+      'defineComponent',
+      'presentOrder',
+    ]);
+    const document = prepareCanvasEdit(createScene(), ops);
+    const created = ops[0];
+    if (created?.kind !== 'createArtifact') throw new Error('Not created');
+    expect(artifactHtml(document, created.id)).toBe('<p>Hello</p>');
+  });
+
+  it('does not let code choose a new artifact id', async () => {
+    await expect(
+      runCanvasCode(
+        await getQuickJS(),
+        `editor.add({ kind: 'createArtifact', id: 'chosen', x: 0, y: 0, title: '', html: '' });`
+      )
+    ).rejects.toThrow('host-generated');
   });
 });
