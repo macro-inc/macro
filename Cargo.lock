@@ -19759,6 +19759,7 @@ dependencies = [
 name = "stripe_price_id"
 version = "0.1.0"
 dependencies = [
+ "lazy-regex",
  "serde",
  "serde_json",
  "thiserror 2.0.18",

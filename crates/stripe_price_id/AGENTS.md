@@ -6,14 +6,14 @@ The shared validated Stripe price identifier for billing domain contracts.
 
 ## Scope
 
-- Owns: the `price_` prefix invariant, string conversion, optional serde and schema support.
+- Owns: the `^price_[A-Za-z0-9_]{1,64}$` shape invariant, string conversion, optional serde and schema support.
 - Not here: Stripe API calls, price lookup, or subscription policy.
 
 ## Boundaries
 
 - Used by: `hosted_runtimes` subscription items and quotes.
 - Serde is enabled by default; `schema` enables utoipa string schemas.
-- Keep parsing limited to non-empty strings beginning with `price_`.
+- Reject identifiers without a 1–64 character ASCII alphanumeric or underscore suffix after `price_`.
 
 ## Checks
 

@@ -10,6 +10,7 @@ serde = ["dep:serde"]
 schema = ["dep:utoipa"]
 
 [dependencies]
+lazy-regex = { workspace = true }
 serde = { workspace = true, optional = true }
 thiserror = { workspace = true }
 utoipa = { workspace = true, optional = true }

@@ -5,7 +5,7 @@
 #[cfg(test)]
 mod test;
 
-/// A non-empty Stripe price identifier starting with `price_`.
+/// A Stripe price identifier with a 1–64 character ASCII alphanumeric or underscore suffix.
 #[derive(Debug, Clone, PartialEq, Eq)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 #[cfg_attr(feature = "serde", serde(try_from = "String", into = "String"))]
@@ -14,9 +14,9 @@ mod test;
 pub struct StripePriceId(String);
 
 impl StripePriceId {
-    /// Parse a non-empty identifier starting with `price_`.
+    /// Parse an identifier matching `^price_[A-Za-z0-9_]{1,64}$`.
     pub fn parse(value: &str) -> Result<Self, StripePriceIdParseError> {
-        if !value.starts_with("price_") {
+        if !lazy_regex::regex_is_match!(r"^price_[A-Za-z0-9_]{1,64}$", value) {
             return Err(StripePriceIdParseError::InvalidPrefix);
         }
         Ok(Self(value.to_owned()))
@@ -53,10 +53,10 @@ impl std::fmt::Display for StripePriceId {
     }
 }
 
-/// An identifier that does not satisfy Stripe's price prefix rule.
+/// An identifier that does not satisfy the Stripe price identifier shape.
 #[derive(Debug, Clone, PartialEq, Eq, thiserror::Error)]
 pub enum StripePriceIdParseError {
-    /// A price id must be non-empty and start with `price_`.
-    #[error("Stripe price_id must be non-empty and start with price_")]
+    /// A price id must have the `price_` prefix and a 1–64 character safe suffix.
+    #[error("Stripe price_id must match ^price_[A-Za-z0-9_]{{1,64}}$")]
     InvalidPrefix,
 }

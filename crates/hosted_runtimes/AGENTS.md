@@ -100,6 +100,9 @@ lifecycle, capacity, purchase/billing orchestration and the fleet ports.
   (the unit's `EnvironmentFile`), and installs + starts `/etc/systemd/system/<unit_name>.service`
   as that user. `PersonaOsUser`, `SystemdUnitName`, and `PersonaConfigKey` in
   `domain::enrollment` validate names and keys on construction and JSON reads;
+  `PersonaOsUser` requires `^agent-[a-z0-9][a-z0-9_-]{0,24}$` with no legacy names;
+  `PersonaConfigKey` supports borrowed string map lookups. `Persona` and
+  `PersonaService` Debug redact config and env values.
   `service::validate_persona` checks commands and values.
 - Persona computers are never idle-frozen; they run until powered off or canceled.
 - Fleet host discovery must not abort harness startup: report unhealthy and retry

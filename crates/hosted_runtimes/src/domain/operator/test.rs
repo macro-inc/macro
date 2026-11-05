@@ -295,7 +295,7 @@ impl SessionActivity for IdleSessions {
 async fn idle_sleep_keeps_personas_running_and_freezes_session_only_computers() {
     let persona = Persona {
         name: "Agent".to_owned(),
-        os_user: PersonaOsUser::parse("agent").unwrap(),
+        os_user: PersonaOsUser::parse("agent-worker").unwrap(),
         extra_service: PersonaService {
             unit_name: SystemdUnitName::parse("macro-agent").unwrap(),
             exec: "/usr/local/bin/agent".to_owned(),
@@ -564,7 +564,7 @@ async fn a_lost_guest_is_recreated_with_the_saved_persona_and_fresh_pairing() {
     let id = paid_computer(&operator).await;
     let first_persona = Persona {
         name: "Agent".to_owned(),
-        os_user: PersonaOsUser::parse("agent").unwrap(),
+        os_user: PersonaOsUser::parse("agent-worker").unwrap(),
         extra_service: PersonaService {
             unit_name: SystemdUnitName::parse("macro-agent").unwrap(),
             exec: "/usr/local/bin/agent".to_owned(),

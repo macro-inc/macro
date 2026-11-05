@@ -98,7 +98,7 @@ impl Billing for FakeBilling {
 fn persona() -> Persona {
     Persona {
         name: "Ada".to_owned(),
-        os_user: PersonaOsUser::parse("ada").unwrap(),
+        os_user: PersonaOsUser::parse("agent-ada").unwrap(),
         extra_service: PersonaService {
             unit_name: SystemdUnitName::parse("ada-brain").unwrap(),
             exec: "/usr/local/bin/brain --persona ada".to_owned(),

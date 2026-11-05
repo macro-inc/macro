@@ -6,6 +6,7 @@
 //! These types are the contract between the control plane and
 //! `macrod enroll`; macrod depends on this crate with default features off.
 
+use std::borrow::Borrow;
 use std::collections::BTreeMap;
 
 use serde::{Deserialize, Serialize};
@@ -32,7 +33,7 @@ pub struct Enrollment {
 
 /// An agent identity that lives on the computer next to macrod: its own OS
 /// user and its own long-running systemd service.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[cfg_attr(feature = "inbound", derive(utoipa::ToSchema))]
 pub struct Persona {
     pub name: String,
@@ -47,7 +48,7 @@ pub struct Persona {
 
 /// The persona's systemd service, installed as
 /// `/etc/systemd/system/<unit_name>.service`.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[cfg_attr(feature = "inbound", derive(utoipa::ToSchema))]
 pub struct PersonaService {
     /// Unit name without the `.service` suffix.
@@ -59,16 +60,41 @@ pub struct PersonaService {
     pub env: BTreeMap<PersonaConfigKey, String>,
 }
 
+impl std::fmt::Debug for Persona {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        let config: BTreeMap<_, _> = self
+            .config
+            .keys()
+            .map(|key| (key, "**redacted**"))
+            .collect();
+        f.debug_struct("Persona")
+            .field("name", &self.name)
+            .field("os_user", &self.os_user)
+            .field("extra_service", &self.extra_service)
+            .field("config", &config)
+            .finish()
+    }
+}
+
+impl std::fmt::Debug for PersonaService {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        let env: BTreeMap<_, _> = self.env.keys().map(|key| (key, "**redacted**")).collect();
+        f.debug_struct("PersonaService")
+            .field("unit_name", &self.unit_name)
+            .field("exec", &self.exec)
+            .field("env", &env)
+            .finish()
+    }
+}
+
 #[cfg(test)]
 mod test;
 
 /// A persona field that violates its construction rule.
 #[derive(Debug, Clone, PartialEq, Eq, thiserror::Error)]
 pub enum PersonaFieldError {
-    /// The OS user must be a safe, non-reserved Linux user name.
-    #[error(
-        "persona os_user must match ^[a-z_][a-z0-9_-]{{0,30}}$ and must not be root, macro, or start with macrod"
-    )]
+    /// The OS user must be a safe Linux user name with the persona prefix.
+    #[error("persona users must start with `agent-` and match ^agent-[a-z0-9][a-z0-9_-]{{0,24}}$")]
     OsUser,
     /// The unit name must be safe and must not replace a macrod unit.
     #[error(
@@ -80,7 +106,7 @@ pub enum PersonaFieldError {
     ConfigKey,
 }
 
-/// A validated Linux user name for a persona.
+/// A validated Linux user name for a persona, starting with `agent-`.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(try_from = "String", into = "String")]
 #[cfg_attr(feature = "inbound", derive(utoipa::ToSchema))]
@@ -90,10 +116,7 @@ pub struct PersonaOsUser(String);
 impl PersonaOsUser {
     /// Parse a value, rejecting invalid persona fields.
     pub fn parse(value: &str) -> Result<Self, PersonaFieldError> {
-        if !lazy_regex::regex_is_match!(r"^[a-z_][a-z0-9_-]{0,30}$", value)
-            || matches!(value, "root" | "macro")
-            || value.starts_with("macrod")
-        {
+        if !lazy_regex::regex_is_match!(r"^agent-[a-z0-9][a-z0-9_-]{0,24}$", value) {
             return Err(PersonaFieldError::OsUser);
         }
         Ok(Self(value.to_owned()))
@@ -141,7 +164,7 @@ impl SystemdUnitName {
     /// Parse a value, rejecting invalid persona fields.
     pub fn parse(value: &str) -> Result<Self, PersonaFieldError> {
         if !lazy_regex::regex_is_match!(r"^[A-Za-z0-9_.@-]{1,64}$", value)
-            || value.starts_with("macrod")
+            || lazy_regex::regex_is_match!(r"^macrod", value)
         {
             return Err(PersonaFieldError::UnitName);
         }
@@ -223,5 +246,11 @@ impl From<PersonaConfigKey> for String {
 impl std::fmt::Display for PersonaConfigKey {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.write_str(self.as_str())
+    }
+}
+
+impl Borrow<str> for PersonaConfigKey {
+    fn borrow(&self) -> &str {
+        self.as_str()
     }
 }
