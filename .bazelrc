@@ -36,3 +36,11 @@ test --test_output=errors
 test --test_env=DATABASE_URL
 test --test_env=REDIS_URL
 test --test_env=PATH
+test --strategy=TestRunner=local
+test --test_env=HOME
+test --test_env=LD_LIBRARY_PATH
+test --test_env=CODE_MODE_ASSETS_DIR
+test --test_env=RUST_BACKTRACE=1
+
+# Written by generate.sh: machine paths such as the linker.
+try-import %workspace%/generated.bazelrc

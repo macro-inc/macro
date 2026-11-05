@@ -18,6 +18,9 @@ import sys
 # --all-features, and CI's suite already excludes it.
 SKIP_TARGETS = {"sync_service", "bazel_all_features", "workspace-hack"}
 
+# What CI's cargo jobs set for workspace crates: warnings fail, and backtraces have lines.
+FLAGS = json.dumps(["-Dwarnings", "-Cdebuginfo=limited"])
+
 # Files a crate reads from outside its own package at compile or test time.
 MIGRATIONS = "//crates/macro_db_client:migrations"
 SQLX = "//:sqlx_offline_data"
@@ -51,10 +54,10 @@ def bin_labels(bins, path):
     return [":" + b.replace("-", "_") + "_bin" for b in bin_refs(bins, path)]
 
 
-def itest_env(base, bins, path):
+def itest_env(base, bins, path, root, directory):
     env = dict(base)
     for b in bin_refs(bins, path):
-        env[f"CARGO_BIN_EXE_{b}"] = "$(rootpath :" + b.replace("-", "_") + "_bin)"
+        env[f"CARGO_BIN_EXE_{b}"] = f"{root}/bazel-bin/{directory}/" + b.replace("-", "_") + "_bin"
     return json.dumps(env, sort_keys=True)
 
 
@@ -216,14 +219,15 @@ def main():
         if uses_sqlx:
             extra_labels += [SQLX, "//tooling/bazel-proto:fake_cargo.sh"]
         extra = " + " + json.dumps(extra_labels) if extra_labels else ""
-        rustc_env = {"CARGO_MANIFEST_DIR": f"/proc/self/cwd/{directory}"}
+        # The real checkout path, as cargo gives: tests read it at run time, and macros at compile
+        # time. It's stable on CI runners, so it doesn't split the cache.
+        rustc_env = {"CARGO_MANIFEST_DIR": f"{root}/{directory}"}
         if uses_sqlx:
             rustc_env.update(
                 {
                     "SQLX_OFFLINE": "true",
-                    # sqlx runs CARGO with the manifest directory as its working directory.
-                    "CARGO": "/proc/self/cwd/" + "../" * (directory.count("/") + 1) + "tooling/bazel-proto/fake_cargo.sh",
-                    "BAZEL_WS_ROOT": "/proc/self/cwd",
+                    "CARGO": f"{root}/tooling/bazel-proto/fake_cargo.sh",
+                    "BAZEL_WS_ROOT": root,
                 }
             )
         env = json.dumps(rustc_env, sort_keys=True)
@@ -243,6 +247,7 @@ def main():
             f"    crate_features = {starlark_list(features)},\n"
             f'    compile_data = glob(["**"], exclude = ["BUILD.bazel", "target/**"]){extra},\n'
             f"    rustc_env = {env},\n"
+            f"    rustc_flags = {FLAGS},\n"
         )
         normal, normal_macros, normal_alias = deps_of(pid, {None})
         dev, dev_macros, dev_alias = deps_of(pid, {None, "dev"})
@@ -292,11 +297,12 @@ def main():
                     f'    crate = ":{crate_ident(lib)}",\n'
                     f"    crate_features = {starlark_list(features)},\n"
                     f"    rustc_env = {test_env},\n"
+                    f"    rustc_flags = {FLAGS},\n"
                     f"    deps = {starlark_list(sorted(set(dev) - set(normal)))},\n"
                     f"    proc_macro_deps = {starlark_list(sorted(set(dev_macros) - set(normal_macros)))},\n"
                     f"    aliases = {json.dumps(dev_alias, sort_keys=True)},\n"
                     f"    data = {test_data},\n"
-                    f'    env = {{"CARGO_MANIFEST_DIR": "/proc/self/cwd/{directory}", "INSTA_WORKSPACE_ROOT": "/proc/self/cwd", "INSTA_UPDATE": "no"}},\n'
+                    f'    env = {{"CARGO_MANIFEST_DIR": "{root}/{directory}", "INSTA_WORKSPACE_ROOT": "{root}", "INSTA_UPDATE": "no"}},\n'
                     ")\n"
                 )
         own = [f":{crate_ident(lib)}"] if lib and "proc-macro" not in lib["kind"] else []
@@ -319,6 +325,22 @@ def main():
                     f"    aliases = {json.dumps(normal_alias, sort_keys=True)},\n"
                     ")\n"
                 )
+                if t["test"]:
+                    stats["test"] += 1
+                    out.append(
+                        "rust_test(\n"
+                        f'    name = "{name}_test",\n'
+                        f'    crate = ":{name}",\n'
+                        f"    crate_features = {starlark_list(features)},\n"
+                        f"    rustc_env = {test_env},\n"
+                        f"    rustc_flags = {FLAGS},\n"
+                        f"    deps = {starlark_list(sorted(set(dev) - set(normal)))},\n"
+                        f"    proc_macro_deps = {starlark_list(sorted(set(dev_macros) - set(normal_macros)))},\n"
+                        f"    aliases = {json.dumps(dev_alias, sort_keys=True)},\n"
+                        f"    data = {test_data},\n"
+                        f'    env = {{"CARGO_MANIFEST_DIR": "{root}/{directory}", "INSTA_WORKSPACE_ROOT": "{root}", "INSTA_UPDATE": "no"}},\n'
+                        ")\n"
+                    )
             elif "test" in kind:
                 stats["test"] += 1
                 name = t["name"].replace("-", "_") + "_itest"
@@ -330,13 +352,13 @@ def main():
                     f'    crate_root = "{path}",\n'
                     + common.replace(
                         f"    rustc_env = {env},\n",
-                        "    rustc_env = " + itest_env(test_rustc, bins, os.path.join(root, directory, path)) + ",\n",
+                        "    rustc_env = " + itest_env(test_rustc, bins, os.path.join(root, directory, path), root, directory) + ",\n",
                     )
                     + f"    deps = {starlark_list(dev + own + script_deps)},\n"
                     f"    proc_macro_deps = {starlark_list(dev_macros + own_macros)},\n"
                     f"    aliases = {json.dumps(dev_alias, sort_keys=True)},\n"
                     f"    data = {test_data} + {json.dumps(bin_labels(bins, os.path.join(root, directory, path)))},\n"
-                    f'    env = {{"CARGO_MANIFEST_DIR": "/proc/self/cwd/{directory}", "INSTA_WORKSPACE_ROOT": "/proc/self/cwd", "INSTA_UPDATE": "no"}},\n'
+                    f'    env = {{"CARGO_MANIFEST_DIR": "{root}/{directory}", "INSTA_WORKSPACE_ROOT": "{root}", "INSTA_UPDATE": "no"}},\n'
                     ")\n"
                 )
         write(root, directory, out)

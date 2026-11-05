@@ -11,3 +11,9 @@ cargo metadata --format-version 1 --all-features --filter-platform x86_64-unknow
 python3 tooling/bazel-proto/gen.py --all-features-crate "$meta"
 cargo metadata --format-version 1 --all-features --filter-platform x86_64-unknown-linux-gnu > "$meta"
 python3 tooling/bazel-proto/gen.py "$meta"
+# gcc finds a linker named `ld` in -B directories; mold ships one there.
+mold_dir="$(dirname "$(dirname "$(readlink -f "$(command -v mold)")")")/libexec/mold"
+{
+  echo "build --@rules_rust//rust/settings:extra_rustc_flag=-Clink-arg=-B$mold_dir"
+  echo "build --@rules_rust//rust/settings:extra_exec_rustc_flag=-Clink-arg=-B$mold_dir"
+} > generated.bazelrc

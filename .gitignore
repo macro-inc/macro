@@ -74,3 +74,4 @@ BUILD.bazel
 MODULE.bazel
 !tooling/bazel-proto/BUILD.bazel
 /bazel-*
+generated.bazelrc

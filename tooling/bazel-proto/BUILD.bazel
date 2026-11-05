@@ -1,3 +1,4 @@
 package(default_visibility = ["//visibility:public"])
 
-exports_files(["fake_cargo.sh"])
+exports_files(["fake_cargo.sh", "per_test_runner.py"])
+
