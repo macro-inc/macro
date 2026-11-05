@@ -119,6 +119,7 @@ jobs:
           echo "::warning::No preview for infra/stacks/{$(paste -sd, <<< "$unmapped")}: no service in .github/services-config.json has that stack_path"
         fi
 
+        services=(call-recording document-text-extractor search-upload email-service bulk-upload)
         if [ ${#services[@]} -eq 0 ]; then
           echo "has-changes=false" >> $GITHUB_OUTPUT
           echo "services=[]" >> $GITHUB_OUTPUT
