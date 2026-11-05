@@ -158,10 +158,7 @@ pub fn up(mode: Mode, args: &UpArgs) -> Result<Instance> {
 
     // Same full-delete/full-create overlap as `run_stack`: tear the previous
     // stack down in the background while the host-side build runs.
-    let teardown = (!stage.is_dry_run()).then(|| {
-        let instance = instance.clone();
-        std::thread::spawn(move || super::teardown_commands(&instance))
-    });
+    let teardown = super::BackgroundTeardown::start(&stage, &instance);
 
     let static_frontend = !args.run.no_frontend && !args.infra_only;
     let infra_only = args.infra_only;
@@ -202,11 +199,8 @@ pub fn up(mode: Mode, args: &UpArgs) -> Result<Instance> {
         .then(|| snapshot::Plan::compute(&instance))
         .transpose()?;
 
-    if let Some(handle) = teardown {
-        stage.run_step("Tearing down previous stack", move || {
-            let _ = handle.join();
-            Ok(())
-        })?;
+    if let Some(teardown) = teardown {
+        teardown.finish(&stage)?;
     }
     super::ensure_external_resources(&stage, &instance)?;
     match &snapshot_plan {
