@@ -33,7 +33,7 @@ mockall = { workspace = true, optional = true }
 model-error-response = { path = "../model-error-response", optional = true }
 rand = { workspace = true }
 serde = { workspace = true }
-sqlx = { workspace = true, optional = true }
+sqlx = { workspace = true, optional = true, features = ["json"] }
 thiserror = { workspace = true }
 tokio = { workspace = true, optional = true }
 tracing = { workspace = true }

@@ -7,7 +7,7 @@ use axum::{
     extract::{FromRef, Path, State},
     http::StatusCode,
     response::{IntoResponse, Response},
-    routing::{delete, get, post},
+    routing::{delete, get, post, put},
 };
 use harness_id::HarnessId;
 use macro_authorization::{
@@ -21,8 +21,8 @@ use uuid::Uuid;
 use crate::domain::{
     models::{
         ApprovePairingRequest, ClaimOutcome, ClaimPairingRequest, ClaimedPairing,
-        CreatePairingRequest, CreatedPairing, Harness, HarnessAgent, HarnessSession,
-        PairingDetails,
+        CreatePairingRequest, CreatedPairing, Harness, HarnessAgent, HarnessCapabilities,
+        HarnessSession, PairingDetails,
     },
     ports::{HarnessError, HarnessService},
 };
@@ -113,6 +113,10 @@ where
         .route(
             "/harnesses/me/sessions",
             get(list_harness_sessions_handler::<S, Auth>),
+        )
+        .route(
+            "/harnesses/me/capabilities",
+            put(put_self_capabilities_handler::<S, Auth>),
         )
         .route(
             "/harnesses/{harness_id}",
@@ -398,6 +402,35 @@ pub async fn list_bound_agents_handler<S: HarnessService, Auth: MacroAuthorizati
             .list_bound_agents(authorization.authorization.harness_id)
             .await?,
     ))
+}
+
+/// Handler for `PUT /harnesses/me/capabilities`.
+///
+/// macrod reports what its machine can do after it connects; the body
+/// replaces the previous report.
+#[utoipa::path(
+    put,
+    tag = "harnesses",
+    operation_id = "put_self_harness_capabilities",
+    path = "/harnesses/me/capabilities",
+    request_body = HarnessCapabilities,
+    responses(
+        (status = 204),
+        (status = 401, body = ErrorResponse),
+        (status = 404, body = ErrorResponse),
+        (status = 500, body = ErrorResponse),
+    )
+)]
+pub async fn put_self_capabilities_handler<S: HarnessService, Auth: MacroAuthorizationService>(
+    State(state): State<HarnessesRouterState<S, Auth>>,
+    authorization: MacroAuthorizationExtractor<Auth, HarnessOnly>,
+    Json(capabilities): Json<HarnessCapabilities>,
+) -> Result<StatusCode, HarnessesHandlerErr> {
+    state
+        .service
+        .report_capabilities(authorization.authorization.harness_id, capabilities)
+        .await?;
+    Ok(StatusCode::NO_CONTENT)
 }
 
 /// Harnesses handler error.

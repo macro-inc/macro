@@ -351,6 +351,7 @@ use utoipa::OpenApi;
         harnesses::inbound::axum_router::get_self_harness_handler,
         harnesses::inbound::axum_router::delete_self_harness_handler,
         harnesses::inbound::axum_router::list_harness_sessions_handler,
+        harnesses::inbound::axum_router::put_self_capabilities_handler,
 
         // bots
         bots::inbound::axum_router::create_agent_handler,
@@ -924,6 +925,7 @@ use utoipa::OpenApi;
             // Harnesses
             harnesses::domain::models::Harness,
             harnesses::domain::models::HarnessOwner,
+            harnesses::domain::models::HarnessCapabilities,
             harnesses::domain::models::HarnessAgent,
             harnesses::domain::models::HarnessSession,
             harnesses::domain::models::RequestedHarnessScope,

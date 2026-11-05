@@ -9,9 +9,10 @@ use macro_user_id::user_id::MacroUserIdStr;
 use uuid::Uuid;
 
 use super::models::{
-    ApprovePairingRequest, ClaimOutcome, ClaimPairingRequest, CreatePairingRequest, CreatedPairing,
-    Harness, HarnessAgent, HarnessOwner, HarnessSession, PairingClaimFacts, PairingDetails,
-    PairingStatus, RequestedHarnessScope,
+    ApprovePairingRequest, ClaimOutcome, ClaimPairingRequest, CreateHostedPairing,
+    CreatePairingRequest, CreatedPairing, Harness, HarnessAgent, HarnessCapabilities, HarnessOwner,
+    HarnessSession, HostedPairing, PairingClaimFacts, PairingDetails, PairingStatus,
+    RequestedHarnessScope,
 };
 
 /// A pairing row to persist.
@@ -48,6 +49,8 @@ pub struct NewHarness {
     pub owner: HarnessOwner,
     /// The approving user.
     pub created_by: MacroUserIdStr<'static>,
+    /// The Macro computer this harness runs on, for hosted harnesses.
+    pub computer_id: Option<Uuid>,
 }
 
 /// A pairing row as the lookup and approval paths see it.
@@ -57,6 +60,20 @@ pub struct PairingRow {
     pub details: PairingDetails,
     /// Current status.
     pub status: PairingStatus,
+}
+
+/// What [`HarnessRepo::upsert_hosted_pairing`] did.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum HostedPairingUpsert {
+    /// Created the harness and its pairing with the given ids.
+    Created,
+    /// The computer already had an unclaimed pairing; its secret was rotated.
+    Rotated {
+        /// The existing pairing's id.
+        pairing_id: Uuid,
+    },
+    /// The computer's pairing was already claimed; nothing changed.
+    Claimed,
 }
 
 /// Open (pending, unexpired) pairing counts used to throttle creation.
@@ -104,6 +121,39 @@ pub trait HarnessRepo: Send + Sync + 'static {
         code: &str,
         harness: NewHarness,
     ) -> impl Future<Output = Result<Option<Harness>, Self::Err>> + Send;
+
+    /// Create a computer's harness with an already-approved pairing, or
+    /// rotate the device secret of the one that exists, atomically.
+    ///
+    /// Keyed by `harness.computer_id`. The pairing is never pending, so no
+    /// user sees or approves its code. An existing pairing keeps its id and
+    /// takes `pairing.device_secret_hash`; one already claimed is left alone.
+    fn upsert_hosted_pairing(
+        &self,
+        pairing: NewPairing,
+        harness: NewHarness,
+    ) -> impl Future<Output = Result<HostedPairingUpsert, Self::Err>> + Send;
+
+    /// The live harness running on a computer.
+    fn computer_harness(
+        &self,
+        computer_id: Uuid,
+    ) -> impl Future<Output = Result<Option<HarnessId>, Self::Err>> + Send;
+
+    /// The computer a live harness runs on; `None` for unknown harnesses and
+    /// machines users paired themselves.
+    fn harness_computer(
+        &self,
+        harness_id: HarnessId,
+    ) -> impl Future<Output = Result<Option<Uuid>, Self::Err>> + Send;
+
+    /// Replace an active harness's reported capabilities. Returns `false`
+    /// when the harness is unknown or deleted.
+    fn set_capabilities(
+        &self,
+        harness_id: HarnessId,
+        capabilities: HarnessCapabilities,
+    ) -> impl Future<Output = Result<bool, Self::Err>> + Send;
 
     /// Get the facts the claim path verifies.
     fn pairing_claim_facts(
@@ -237,6 +287,41 @@ pub trait HarnessService: Send + Sync + 'static {
         &self,
         harness_id: HarnessId,
     ) -> impl Future<Output = Result<Vec<HarnessSession>, HarnessError>> + Send;
+
+    /// Record what the authenticated harness's machine can do.
+    fn report_capabilities(
+        &self,
+        harness_id: HarnessId,
+        capabilities: HarnessCapabilities,
+    ) -> impl Future<Output = Result<(), HarnessError>> + Send;
+
+    /// Register a Macro computer's team harness, already approved, and return
+    /// the claim material its macrod enrolls with.
+    ///
+    /// Trusted in-process callers only (the hosted runtime control plane,
+    /// after it authorized the team admin): this takes no caller to check and
+    /// skips the open-pairing throttle. Idempotent per computer: a retry
+    /// before the claim rotates the secret and returns the same pairing id;
+    /// after the claim it is [`HarnessError::Gone`].
+    fn create_hosted_pairing(
+        &self,
+        req: CreateHostedPairing,
+    ) -> impl Future<Output = Result<HostedPairing, HarnessError>> + Send;
+
+    /// Soft-delete a computer's harness and revoke its tokens. Succeeds when
+    /// the computer has no live harness.
+    ///
+    /// Trusted in-process callers only, like [`Self::create_hosted_pairing`].
+    fn revoke_hosted_harness(
+        &self,
+        computer_id: Uuid,
+    ) -> impl Future<Output = Result<(), HarnessError>> + Send;
+
+    /// The computer a live harness runs on, if it is a Macro computer's.
+    fn harness_computer(
+        &self,
+        harness_id: HarnessId,
+    ) -> impl Future<Output = Result<Option<Uuid>, HarnessError>> + Send;
 }
 
 /// Harness service error.

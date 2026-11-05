@@ -63,6 +63,7 @@ fn new_harness() -> NewHarness {
             user_id: OWNER_ID.to_owned(),
         },
         created_by: caller(),
+        computer_id: None,
     }
 }
 
@@ -554,4 +555,169 @@ async fn pairing_permission_ceiling_roundtrips(pool: PgPool) {
         let stored = repo.get_pairing(code).await.unwrap().unwrap();
         assert_eq!(stored.details.requested_allow_permission_bypass, allowed);
     }
+}
+
+fn hosted_pairing(pairing_id: Uuid, secret: &str) -> NewPairing {
+    NewPairing {
+        requested_allow_permission_bypass: Some(false),
+        id: pairing_id,
+        code: format!("hosted:{pairing_id}"),
+        device_secret_hash: harness_token::hash_token(secret),
+        requested_name: "Standard computer".to_owned(),
+        host: None,
+        requested_scope: Some(RequestedHarnessScope::Team),
+        // Already past expiry: an approved pairing stays claimable.
+        expires_at: Utc::now() - Duration::minutes(1),
+    }
+}
+
+fn hosted_harness(team_id: Uuid, computer_id: Uuid) -> NewHarness {
+    NewHarness {
+        allow_permission_bypass: false,
+        id: HarnessId::new_from_uuid(Uuid::new_v4()),
+        name: "Standard computer".to_owned(),
+        owner: HarnessOwner::Team { team_id },
+        created_by: caller(),
+        computer_id: Some(computer_id),
+    }
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn hosted_pairing_is_born_approved_rotates_on_retry_and_claims_once(pool: PgPool) {
+    let repo = PgHarnessRepo::new(pool.clone());
+    insert_user(&pool, OWNER_ID).await;
+    let team_id = Uuid::new_v4();
+    sqlx::query!(
+        r#"INSERT INTO team (id, name, owner_id) VALUES ($1, 'Team', $2)"#,
+        team_id,
+        OWNER_ID,
+    )
+    .execute(&pool)
+    .await
+    .unwrap();
+    let computer_id = Uuid::new_v4();
+    let pairing_id = Uuid::new_v4();
+    let harness = hosted_harness(team_id, computer_id);
+    let harness_id = harness.id;
+
+    let created = repo
+        .upsert_hosted_pairing(hosted_pairing(pairing_id, "first-secret"), harness)
+        .await
+        .unwrap();
+    assert_eq!(created, HostedPairingUpsert::Created);
+    let row = repo.get_harness(harness_id).await.unwrap().unwrap();
+    assert_eq!(row.owner, HarnessOwner::Team { team_id });
+    assert_eq!(row.computer_id, Some(computer_id));
+    assert_eq!(row.capabilities, HarnessCapabilities { screen: false });
+    assert_eq!(
+        repo.computer_harness(computer_id).await.unwrap(),
+        Some(harness_id)
+    );
+    assert_eq!(
+        repo.harness_computer(harness_id).await.unwrap(),
+        Some(computer_id)
+    );
+
+    // A retry keeps the pairing and harness and takes the new secret.
+    let rotated = repo
+        .upsert_hosted_pairing(
+            hosted_pairing(Uuid::new_v4(), "second-secret"),
+            hosted_harness(team_id, computer_id),
+        )
+        .await
+        .unwrap();
+    assert_eq!(rotated, HostedPairingUpsert::Rotated { pairing_id });
+    let harness_count = sqlx::query_scalar!(r#"SELECT count(*) AS "count!" FROM harnesses"#)
+        .fetch_one(&pool)
+        .await
+        .unwrap();
+    assert_eq!(harness_count, 1);
+    let facts = repo.pairing_claim_facts(pairing_id).await.unwrap().unwrap();
+    assert_eq!(facts.status, PairingStatus::Approved);
+    assert_eq!(facts.harness_id, Some(harness_id));
+    assert_eq!(
+        facts.device_secret_hash,
+        harness_token::hash_token("second-secret")
+    );
+
+    // Expiry cleanup never touches an approved pairing.
+    repo.delete_expired_pairings().await.unwrap();
+    let token = tokens::generate_harness_token();
+    let claimed = repo
+        .claim_pairing(
+            pairing_id,
+            Uuid::new_v4(),
+            HashedHarnessToken::from_raw(&token),
+        )
+        .await
+        .unwrap()
+        .expect("hosted pairing claims");
+    assert_eq!(claimed.id, harness_id);
+
+    // After the claim a retry changes nothing.
+    let after_claim = repo
+        .upsert_hosted_pairing(
+            hosted_pairing(Uuid::new_v4(), "third-secret"),
+            hosted_harness(team_id, computer_id),
+        )
+        .await
+        .unwrap();
+    assert_eq!(after_claim, HostedPairingUpsert::Claimed);
+    let facts = repo.pairing_claim_facts(pairing_id).await.unwrap().unwrap();
+    assert_eq!(facts.status, PairingStatus::Claimed);
+    assert_eq!(
+        facts.device_secret_hash,
+        harness_token::hash_token("second-secret")
+    );
+
+    // Revoked, the computer has no live harness and may be paired afresh.
+    assert!(repo.delete_harness(harness_id).await.unwrap());
+    assert_eq!(repo.computer_harness(computer_id).await.unwrap(), None);
+    assert_eq!(repo.harness_computer(harness_id).await.unwrap(), None);
+    assert_eq!(
+        repo.upsert_hosted_pairing(
+            hosted_pairing(Uuid::new_v4(), "fresh-secret"),
+            hosted_harness(team_id, computer_id),
+        )
+        .await
+        .unwrap(),
+        HostedPairingUpsert::Created
+    );
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn capabilities_replace_the_previous_report(pool: PgPool) {
+    let repo = PgHarnessRepo::new(pool.clone());
+    let harness_id = HarnessId::new_from_uuid(Uuid::new_v4());
+    sqlx::query!(
+        r#"
+        INSERT INTO harnesses (id, name, owner_user_id, created_by)
+        VALUES ($1, 'mine', $2, $2)
+        "#,
+        harness_id.as_uuid(),
+        OWNER_ID,
+    )
+    .execute(&pool)
+    .await
+    .unwrap();
+
+    let fresh = repo.get_harness(harness_id).await.unwrap().unwrap();
+    assert_eq!(fresh.capabilities, HarnessCapabilities { screen: false });
+    assert_eq!(fresh.computer_id, None);
+
+    assert!(
+        repo.set_capabilities(harness_id, HarnessCapabilities { screen: true })
+            .await
+            .unwrap()
+    );
+    let reported = repo.get_harness(harness_id).await.unwrap().unwrap();
+    assert_eq!(reported.capabilities, HarnessCapabilities { screen: true });
+
+    assert!(repo.delete_harness(harness_id).await.unwrap());
+    assert!(
+        !repo
+            .set_capabilities(harness_id, HarnessCapabilities { screen: false })
+            .await
+            .unwrap()
+    );
 }

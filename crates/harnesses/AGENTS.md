@@ -5,7 +5,14 @@
 Belongs to agent sessions: registration for user-run agent harnesses
 (macrod). Owns device-code pairing (create, approve, claim), the harness
 list the settings UI renders, revocation, and the bound-agent listing the
-daemon reconciles its webhook feed from.
+daemon reconciles its webhook feed from. Also registers Macro computers'
+harnesses (hosted VMs, `crates/hosted_runtimes`): `create_hosted_pairing`
+mints a pairing born approved and owned by the team, idempotent per
+`computer_id` (a retry before the claim rotates the device secret and keeps
+the pairing id; after it, `Gone`); `revoke_hosted_harness(computer_id)` and
+`harness_computer(harness_id)` are the control plane's other entry points.
+These three take no caller: they are for trusted in-process callers that
+already authorized the team admin, never for an HTTP route.
 
 ## Start here
 
@@ -26,6 +33,10 @@ daemon reconciles its webhook feed from.
 
 - Depends on: `harness_id`, `harness_token`, `bot_id`, `macro_authorization`.
 - Used by: `coding_agent_worker`.
+
+- Harness rows carry `capabilities` (jsonb, `HarnessCapabilities`, e.g.
+  `screen`), which macrod reports through `PUT /harnesses/me/capabilities`,
+  and `computer_id` (set only for Macro computers; unique among live rows).
 
 ## Recipes
 

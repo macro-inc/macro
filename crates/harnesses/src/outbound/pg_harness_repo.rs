@@ -8,15 +8,17 @@ use chrono::{DateTime, Utc};
 use harness_id::HarnessId;
 use harness_token::HashedHarnessToken;
 use macro_user_id::user_id::MacroUserIdStr;
-use sqlx::PgPool;
+use sqlx::{PgPool, types::Json};
 use uuid::Uuid;
 
 use crate::domain::{
     models::{
-        Harness, HarnessAgent, HarnessOwner, HarnessSession, PairingClaimFacts, PairingDetails,
-        PairingStatus, RequestedHarnessScope,
+        Harness, HarnessAgent, HarnessCapabilities, HarnessOwner, HarnessSession,
+        PairingClaimFacts, PairingDetails, PairingStatus, RequestedHarnessScope,
     },
-    ports::{HarnessRepo, NewHarness, NewPairing, OpenPairingCounts, PairingRow},
+    ports::{
+        HarnessRepo, HostedPairingUpsert, NewHarness, NewPairing, OpenPairingCounts, PairingRow,
+    },
 };
 
 /// Postgres-backed harness repository.
@@ -44,6 +46,8 @@ struct HarnessRow {
     updated_at: DateTime<Utc>,
     last_connected_at: Option<DateTime<Utc>>,
     last_disconnected_at: Option<DateTime<Utc>>,
+    capabilities: Json<HarnessCapabilities>,
+    computer_id: Option<Uuid>,
 }
 
 impl TryFrom<HarnessRow> for Harness {
@@ -72,6 +76,8 @@ impl TryFrom<HarnessRow> for Harness {
             updated_at: row.updated_at,
             connected,
             last_connected_at: row.last_connected_at,
+            capabilities: row.capabilities.0,
+            computer_id: row.computer_id,
         })
     }
 }
@@ -94,7 +100,8 @@ async fn fetch_harness(
         r#"
         SELECT
             id, kind, name, owner_user_id, team_id, created_by, allow_permission_bypass,
-            created_at, updated_at, last_connected_at, last_disconnected_at
+            created_at, updated_at, last_connected_at, last_disconnected_at,
+            capabilities AS "capabilities: Json<HarnessCapabilities>", computer_id
         FROM harnesses
         WHERE id = $1 AND deleted_at IS NULL
         "#,
@@ -105,6 +112,34 @@ async fn fetch_harness(
     .context("failed to fetch harness")?;
 
     row.map(Harness::try_from).transpose()
+}
+
+async fn insert_harness(
+    tx: &mut sqlx::Transaction<'_, sqlx::Postgres>,
+    harness: &NewHarness,
+) -> anyhow::Result<()> {
+    let (owner_user_id, team_id) = match &harness.owner {
+        HarnessOwner::User { user_id } => (Some(user_id.as_str()), None),
+        HarnessOwner::Team { team_id } => (None, Some(*team_id)),
+    };
+    sqlx::query!(
+        r#"
+        INSERT INTO harnesses
+            (id, kind, name, owner_user_id, team_id, created_by, allow_permission_bypass, computer_id)
+        VALUES ($1, 'macrod', $2, $3, $4, $5, $6, $7)
+        "#,
+        harness.id.as_uuid(),
+        harness.name,
+        owner_user_id,
+        team_id,
+        harness.created_by.as_ref(),
+        harness.allow_permission_bypass,
+        harness.computer_id,
+    )
+    .execute(&mut **tx)
+    .await
+    .context("failed to insert harness")?;
+    Ok(())
 }
 
 impl HarnessRepo for PgHarnessRepo {
@@ -216,25 +251,7 @@ impl HarnessRepo for PgHarnessRepo {
     ) -> Result<Option<Harness>, Self::Err> {
         let mut tx = self.pool.begin().await.context("failed to begin tx")?;
 
-        let (owner_user_id, team_id) = match &harness.owner {
-            HarnessOwner::User { user_id } => (Some(user_id.as_str()), None),
-            HarnessOwner::Team { team_id } => (None, Some(*team_id)),
-        };
-        sqlx::query!(
-            r#"
-            INSERT INTO harnesses (id, kind, name, owner_user_id, team_id, created_by, allow_permission_bypass)
-            VALUES ($1, 'macrod', $2, $3, $4, $5, $6)
-            "#,
-            harness.id.as_uuid(),
-            harness.name,
-            owner_user_id,
-            team_id,
-            harness.created_by.as_ref(),
-            harness.allow_permission_bypass,
-        )
-        .execute(&mut *tx)
-        .await
-        .context("failed to insert harness")?;
+        insert_harness(&mut tx, &harness).await?;
 
         let approved = sqlx::query!(
             r#"
@@ -261,6 +278,138 @@ impl HarnessRepo for PgHarnessRepo {
             .context("approved harness row missing")?;
         tx.commit().await.context("failed to commit")?;
         Ok(Some(created))
+    }
+
+    async fn upsert_hosted_pairing(
+        &self,
+        pairing: NewPairing,
+        harness: NewHarness,
+    ) -> Result<HostedPairingUpsert, Self::Err> {
+        let computer_id = harness
+            .computer_id
+            .context("a hosted pairing needs the harness's computer id")?;
+        let mut tx = self.pool.begin().await.context("failed to begin tx")?;
+        // Serializes retries for one computer, including the first insert,
+        // which has no row to lock yet.
+        sqlx::query!(
+            "SELECT pg_advisory_xact_lock(hashtextextended($1::uuid::text, 0))",
+            computer_id,
+        )
+        .execute(&mut *tx)
+        .await
+        .context("failed to lock the computer's pairing")?;
+
+        let existing = sqlx::query!(
+            r#"
+            SELECT p.id AS "pairing_id?", p.status AS "status?"
+            FROM harnesses h
+            LEFT JOIN harness_pairing_requests p ON p.harness_id = h.id
+            WHERE h.computer_id = $1 AND h.deleted_at IS NULL
+            "#,
+            computer_id,
+        )
+        .fetch_optional(&mut *tx)
+        .await
+        .context("failed to look up the computer's harness")?;
+
+        let outcome = match existing {
+            None => {
+                insert_harness(&mut tx, &harness).await?;
+                sqlx::query!(
+                    r#"
+                    INSERT INTO harness_pairing_requests
+                        (id, code, device_secret_hash, requested_name, host_info,
+                         requested_scope, expires_at, requested_allow_permission_bypass,
+                         status, harness_id, approved_by)
+                    VALUES ($1, $2, $3, $4, $5, $6, $7, $8, 'approved', $9, $10)
+                    "#,
+                    pairing.id,
+                    pairing.code,
+                    &pairing.device_secret_hash[..],
+                    pairing.requested_name,
+                    pairing.host,
+                    pairing.requested_scope.map(RequestedHarnessScope::as_str),
+                    pairing.expires_at,
+                    pairing.requested_allow_permission_bypass,
+                    harness.id.as_uuid(),
+                    harness.created_by.as_ref(),
+                )
+                .execute(&mut *tx)
+                .await
+                .context("failed to insert approved pairing")?;
+                HostedPairingUpsert::Created
+            }
+            Some(row) => match (row.pairing_id, row.status.as_deref()) {
+                (Some(pairing_id), Some("approved")) => {
+                    sqlx::query!(
+                        r#"
+                        UPDATE harness_pairing_requests
+                        SET device_secret_hash = $2
+                        WHERE id = $1 AND status = 'approved'
+                        "#,
+                        pairing_id,
+                        &pairing.device_secret_hash[..],
+                    )
+                    .execute(&mut *tx)
+                    .await
+                    .context("failed to rotate the pairing's device secret")?;
+                    HostedPairingUpsert::Rotated { pairing_id }
+                }
+                // Claimed, or a harness whose pairing row is gone: either
+                // way its credential was already released.
+                _ => HostedPairingUpsert::Claimed,
+            },
+        };
+        tx.commit().await.context("failed to commit")?;
+        Ok(outcome)
+    }
+
+    async fn computer_harness(&self, computer_id: Uuid) -> Result<Option<HarnessId>, Self::Err> {
+        let harness_id = sqlx::query_scalar!(
+            r#"
+            SELECT id FROM harnesses
+            WHERE computer_id = $1 AND deleted_at IS NULL
+            "#,
+            computer_id,
+        )
+        .fetch_optional(&self.pool)
+        .await
+        .context("failed to look up the computer's harness")?;
+        Ok(harness_id.map(HarnessId::new_from_uuid))
+    }
+
+    async fn harness_computer(&self, harness_id: HarnessId) -> Result<Option<Uuid>, Self::Err> {
+        let computer_id = sqlx::query_scalar!(
+            r#"
+            SELECT computer_id FROM harnesses
+            WHERE id = $1 AND deleted_at IS NULL
+            "#,
+            harness_id.as_uuid(),
+        )
+        .fetch_optional(&self.pool)
+        .await
+        .context("failed to look up the harness's computer")?;
+        Ok(computer_id.flatten())
+    }
+
+    async fn set_capabilities(
+        &self,
+        harness_id: HarnessId,
+        capabilities: HarnessCapabilities,
+    ) -> Result<bool, Self::Err> {
+        let updated = sqlx::query!(
+            r#"
+            UPDATE harnesses
+            SET capabilities = $2, updated_at = now()
+            WHERE id = $1 AND deleted_at IS NULL
+            "#,
+            harness_id.as_uuid(),
+            Json(capabilities) as _,
+        )
+        .execute(&self.pool)
+        .await
+        .context("failed to set harness capabilities")?;
+        Ok(updated.rows_affected() == 1)
     }
 
     async fn pairing_claim_facts(
@@ -350,7 +499,8 @@ impl HarnessRepo for PgHarnessRepo {
             r#"
             SELECT
                 id, kind, name, owner_user_id, team_id, created_by, allow_permission_bypass,
-                created_at, updated_at, last_connected_at, last_disconnected_at
+                created_at, updated_at, last_connected_at, last_disconnected_at,
+                capabilities AS "capabilities: Json<HarnessCapabilities>", computer_id
             FROM harnesses
             WHERE deleted_at IS NULL
               AND (

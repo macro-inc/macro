@@ -13,10 +13,13 @@ use uuid::Uuid;
 use super::{
     models::{
         ApprovePairingRequest, ClaimOutcome, ClaimPairingRequest, ClaimedPairing,
-        CreatePairingRequest, CreatedPairing, Harness, HarnessAgent, HarnessOwner, HarnessSession,
-        PairingDetails, PairingStatus,
+        CreateHostedPairing, CreatePairingRequest, CreatedPairing, Harness, HarnessAgent,
+        HarnessCapabilities, HarnessOwner, HarnessSession, HostedPairing, PairingDetails,
+        PairingStatus, RequestedHarnessScope,
     },
-    ports::{HarnessError, HarnessRepo, HarnessService, NewHarness, NewPairing},
+    ports::{
+        HarnessError, HarnessRepo, HarnessService, HostedPairingUpsert, NewHarness, NewPairing,
+    },
     tokens,
 };
 
@@ -32,6 +35,16 @@ const MAX_OPEN_PAIRINGS_PER_NAME: i64 = 4;
 const CODE_ATTEMPTS: usize = 5;
 const MAX_NAME_CHARS: usize = 100;
 const MAX_HOST_CHARS: usize = 200;
+
+fn validated_name(name: &str) -> Result<&str, HarnessError> {
+    let name = name.trim();
+    if name.is_empty() || name.chars().count() > MAX_NAME_CHARS {
+        return Err(HarnessError::BadRequest(format!(
+            "name must be 1..={MAX_NAME_CHARS} characters"
+        )));
+    }
+    Ok(name)
+}
 
 /// Harness service backed by a repository.
 #[derive(Debug, Clone)]
@@ -83,12 +96,7 @@ where
         &self,
         req: CreatePairingRequest,
     ) -> Result<CreatedPairing, HarnessError> {
-        let name = req.name.trim();
-        if name.is_empty() || name.chars().count() > MAX_NAME_CHARS {
-            return Err(HarnessError::BadRequest(format!(
-                "name must be 1..={MAX_NAME_CHARS} characters"
-            )));
-        }
+        let name = validated_name(&req.name)?;
         let host = req
             .host
             .as_deref()
@@ -191,15 +199,7 @@ where
         let code = tokens::normalize_pairing_code(code).expect("get_pairing validated the code");
 
         let name = match &req.name {
-            Some(name) => {
-                let name = name.trim();
-                if name.is_empty() || name.chars().count() > MAX_NAME_CHARS {
-                    return Err(HarnessError::BadRequest(format!(
-                        "name must be 1..={MAX_NAME_CHARS} characters"
-                    )));
-                }
-                name.to_owned()
-            }
+            Some(name) => validated_name(name)?.to_owned(),
             None => details.requested_name,
         };
 
@@ -227,10 +227,11 @@ where
                 &code,
                 NewHarness {
                     allow_permission_bypass: req.allow_permission_bypass,
-                    id: HarnessId::new_from_uuid(Uuid::new_v4()),
+                    id: HarnessId::new_from_uuid(Uuid::now_v7()),
                     name,
                     owner,
                     created_by: caller,
+                    computer_id: None,
                 },
             )
             .await
@@ -371,6 +372,106 @@ where
         Ok(self
             .repo
             .list_sessions(harness_id)
+            .await
+            .map_err(Into::into)?)
+    }
+
+    #[tracing::instrument(skip(self, capabilities), fields(screen = capabilities.screen), err)]
+    async fn report_capabilities(
+        &self,
+        harness_id: HarnessId,
+        capabilities: HarnessCapabilities,
+    ) -> Result<(), HarnessError> {
+        if !self
+            .repo
+            .set_capabilities(harness_id, capabilities)
+            .await
+            .map_err(Into::into)?
+        {
+            return Err(HarnessError::NotFound("unknown harness".to_owned()));
+        }
+        Ok(())
+    }
+
+    #[tracing::instrument(
+        skip(self, req),
+        fields(team_id = %req.team_id, computer_id = %req.computer_id, created_by = %req.created_by),
+        err
+    )]
+    async fn create_hosted_pairing(
+        &self,
+        req: CreateHostedPairing,
+    ) -> Result<HostedPairing, HarnessError> {
+        let name = validated_name(&req.name)?.to_owned();
+        let device_secret = tokens::generate_device_secret();
+        let new_pairing_id = Uuid::now_v7();
+        let upserted = self
+            .repo
+            .upsert_hosted_pairing(
+                NewPairing {
+                    requested_allow_permission_bypass: Some(req.allow_permission_bypass),
+                    id: new_pairing_id,
+                    // Never shown or typed: the code only has to be unique,
+                    // and its shape keeps it out of code lookups entirely.
+                    code: format!("hosted:{new_pairing_id}"),
+                    device_secret_hash: harness_token::hash_token(&device_secret),
+                    requested_name: name.clone(),
+                    host: None,
+                    requested_scope: Some(RequestedHarnessScope::Team),
+                    expires_at: Utc::now() + Duration::minutes(PAIRING_TTL_MINUTES),
+                },
+                NewHarness {
+                    allow_permission_bypass: req.allow_permission_bypass,
+                    id: HarnessId::new_from_uuid(Uuid::now_v7()),
+                    name,
+                    owner: HarnessOwner::Team {
+                        team_id: req.team_id,
+                    },
+                    created_by: req.created_by,
+                    computer_id: Some(req.computer_id),
+                },
+            )
+            .await
+            .map_err(Into::into)?;
+        let pairing_id = match upserted {
+            HostedPairingUpsert::Created => new_pairing_id,
+            HostedPairingUpsert::Rotated { pairing_id } => pairing_id,
+            HostedPairingUpsert::Claimed => {
+                return Err(HarnessError::Gone(
+                    "this computer's pairing was already claimed".to_owned(),
+                ));
+            }
+        };
+        Ok(HostedPairing {
+            pairing_id,
+            device_secret,
+        })
+    }
+
+    #[tracing::instrument(skip(self), fields(harness_id = tracing::field::Empty), err)]
+    async fn revoke_hosted_harness(&self, computer_id: Uuid) -> Result<(), HarnessError> {
+        let Some(harness_id) = self
+            .repo
+            .computer_harness(computer_id)
+            .await
+            .map_err(Into::into)?
+        else {
+            return Ok(());
+        };
+        tracing::Span::current().record("harness_id", tracing::field::display(harness_id));
+        // A concurrent revoke deleting it first is the same outcome.
+        self.repo
+            .delete_harness(harness_id)
+            .await
+            .map_err(Into::into)?;
+        Ok(())
+    }
+
+    #[tracing::instrument(skip(self), err)]
+    async fn harness_computer(&self, harness_id: HarnessId) -> Result<Option<Uuid>, HarnessError> {
+        Ok(self
+            .repo
+            .harness_computer(harness_id)
             .await
             .map_err(Into::into)?)
     }

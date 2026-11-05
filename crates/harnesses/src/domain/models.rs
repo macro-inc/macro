@@ -3,6 +3,7 @@
 use bot_id::BotId;
 use chrono::{DateTime, Utc};
 use harness_id::HarnessId;
+use macro_user_id::user_id::MacroUserIdStr;
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
@@ -53,6 +54,49 @@ pub struct Harness {
     pub connected: bool,
     /// When the daemon last attached a runtime connection.
     pub last_connected_at: Option<DateTime<Utc>>,
+    /// What the harness's machine can do, as macrod last reported it.
+    #[serde(default)]
+    pub capabilities: HarnessCapabilities,
+    /// The Macro computer (hosted VM) this harness runs on; absent for a
+    /// machine the user paired themselves.
+    #[serde(default)]
+    pub computer_id: Option<Uuid>,
+}
+
+/// What a harness's machine can do beyond running agents.
+///
+/// macrod reports this after it connects; every field defaults to off, so
+/// harnesses that never report stay plain.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "inbound", derive(utoipa::ToSchema))]
+#[serde(default)]
+pub struct HarnessCapabilities {
+    /// A display Macro can stream (Xvnc on `127.0.0.1:5900`).
+    pub screen: bool,
+}
+
+/// A pre-approved pairing for a Macro computer, minted by the control plane.
+#[derive(Debug, Clone)]
+pub struct CreateHostedPairing {
+    /// Owning team.
+    pub team_id: Uuid,
+    /// Harness display name.
+    pub name: String,
+    /// The team admin who bought the computer.
+    pub created_by: MacroUserIdStr<'static>,
+    /// Whether agents may bypass ACP permission requests on this harness.
+    pub allow_permission_bypass: bool,
+    /// The computer the harness runs on.
+    pub computer_id: Uuid,
+}
+
+/// The claim material a Macro computer's macrod enrolls with.
+#[derive(Debug, Clone)]
+pub struct HostedPairing {
+    /// Pairing id the device secret claims.
+    pub pairing_id: Uuid,
+    /// Claim credential; returned only here and never stored raw.
+    pub device_secret: String,
 }
 
 /// The ownership scope a daemon's config asks for.

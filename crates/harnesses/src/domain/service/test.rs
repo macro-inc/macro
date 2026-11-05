@@ -6,7 +6,7 @@ use macro_user_id::user_id::MacroUserIdStr;
 use super::*;
 use crate::domain::{
     models::{PairingClaimFacts, RequestedHarnessScope},
-    ports::{OpenPairingCounts, PairingRow},
+    ports::{HostedPairingUpsert, OpenPairingCounts, PairingRow},
 };
 
 const OWNER_ID: &str = "macro|owner@example.com";
@@ -30,6 +30,8 @@ fn harness(owner: HarnessOwner) -> Harness {
         updated_at: Utc::now(),
         connected: false,
         last_connected_at: None,
+        capabilities: HarnessCapabilities::default(),
+        computer_id: None,
     }
 }
 
@@ -55,9 +57,11 @@ struct Calls {
     claimed: Vec<Uuid>,
     deleted: Vec<HarnessId>,
     team_lookups: Vec<(String, Uuid)>,
+    hosted_upserts: Vec<(NewPairing, NewHarness)>,
+    capability_reports: Vec<(HarnessId, HarnessCapabilities)>,
 }
 
-#[derive(Clone, Default)]
+#[derive(Clone)]
 struct FakeRepo {
     open_counts: OpenPairingCountsConfig,
     insert_conflicts: usize,
@@ -69,7 +73,29 @@ struct FakeRepo {
     delete_result: bool,
     user_has_team: bool,
     user_owns_team: bool,
+    set_capabilities_result: bool,
+    hosted_upsert: HostedPairingUpsert,
     calls: Arc<Mutex<Calls>>,
+}
+
+impl Default for FakeRepo {
+    fn default() -> Self {
+        Self {
+            open_counts: OpenPairingCountsConfig::default(),
+            insert_conflicts: 0,
+            pairing: None,
+            claim_facts: None,
+            approve_result: None,
+            claim_result: None,
+            harness: None,
+            delete_result: false,
+            user_has_team: false,
+            user_owns_team: false,
+            set_capabilities_result: false,
+            hosted_upsert: HostedPairingUpsert::Created,
+            calls: Arc::default(),
+        }
+    }
 }
 
 #[derive(Clone, Copy, Debug, Default)]
@@ -113,6 +139,43 @@ impl HarnessRepo for FakeRepo {
             .approved
             .push((code.to_owned(), harness));
         Ok(self.approve_result.clone())
+    }
+
+    async fn upsert_hosted_pairing(
+        &self,
+        pairing: NewPairing,
+        new_harness: NewHarness,
+    ) -> Result<HostedPairingUpsert, Self::Err> {
+        self.calls
+            .lock()
+            .unwrap()
+            .hosted_upserts
+            .push((pairing, new_harness));
+        Ok(self.hosted_upsert)
+    }
+
+    async fn computer_harness(&self, _computer_id: Uuid) -> Result<Option<HarnessId>, Self::Err> {
+        Ok(self.harness.as_ref().map(|harness| harness.id))
+    }
+
+    async fn harness_computer(&self, _harness_id: HarnessId) -> Result<Option<Uuid>, Self::Err> {
+        Ok(self
+            .harness
+            .as_ref()
+            .and_then(|harness| harness.computer_id))
+    }
+
+    async fn set_capabilities(
+        &self,
+        harness_id: HarnessId,
+        capabilities: HarnessCapabilities,
+    ) -> Result<bool, Self::Err> {
+        self.calls
+            .lock()
+            .unwrap()
+            .capability_reports
+            .push((harness_id, capabilities));
+        Ok(self.set_capabilities_result)
     }
 
     async fn pairing_claim_facts(
@@ -675,4 +738,167 @@ async fn approval_requires_daemon_consent_when_the_daemon_names_a_ceiling() {
             }
         }
     }
+}
+
+const COMPUTER_ID: Uuid = Uuid::from_u128(42);
+
+fn hosted_request() -> CreateHostedPairing {
+    CreateHostedPairing {
+        team_id: TEAM_ID,
+        name: "  Standard computer  ".to_owned(),
+        created_by: caller(OWNER_ID),
+        allow_permission_bypass: true,
+        computer_id: COMPUTER_ID,
+    }
+}
+
+#[tokio::test]
+async fn hosted_pairing_registers_an_approved_team_harness_past_the_throttle() {
+    // Far over both open-pairing caps: hosted pairings never consult them.
+    let repo = FakeRepo {
+        open_counts: OpenPairingCountsConfig {
+            total: 1_000,
+            with_same_name: 1_000,
+        },
+        ..FakeRepo::default()
+    };
+    let hosted = service(repo.clone())
+        .create_hosted_pairing(hosted_request())
+        .await
+        .unwrap();
+
+    assert!(!hosted.device_secret.is_empty());
+    let calls = repo.calls.lock().unwrap();
+    assert!(calls.inserted_pairings.is_empty());
+    assert_eq!(calls.hosted_upserts.len(), 1);
+    let (pairing, new_harness) = &calls.hosted_upserts[0];
+    assert_eq!(pairing.id, hosted.pairing_id);
+    assert_eq!(pairing.code, format!("hosted:{}", hosted.pairing_id));
+    assert_eq!(
+        pairing.device_secret_hash,
+        harness_token::hash_token(&hosted.device_secret)
+    );
+    assert_eq!(pairing.requested_name, "Standard computer");
+    assert_eq!(pairing.host, None);
+    assert_eq!(pairing.requested_scope, Some(RequestedHarnessScope::Team));
+    assert_eq!(pairing.requested_allow_permission_bypass, Some(true));
+    assert!(pairing.expires_at > Utc::now());
+    assert_eq!(new_harness.name, "Standard computer");
+    assert_eq!(new_harness.owner, HarnessOwner::Team { team_id: TEAM_ID });
+    assert_eq!(new_harness.created_by.as_ref(), OWNER_ID);
+    assert!(new_harness.allow_permission_bypass);
+    assert_eq!(new_harness.computer_id, Some(COMPUTER_ID));
+}
+
+#[tokio::test]
+async fn hosted_pairing_retries_return_the_existing_pairing_until_it_is_claimed() {
+    let existing = Uuid::from_u128(99);
+    let repo = FakeRepo {
+        hosted_upsert: HostedPairingUpsert::Rotated {
+            pairing_id: existing,
+        },
+        ..FakeRepo::default()
+    };
+    let hosted = service(repo.clone())
+        .create_hosted_pairing(hosted_request())
+        .await
+        .unwrap();
+    assert_eq!(hosted.pairing_id, existing);
+    let calls = repo.calls.lock().unwrap();
+    assert_eq!(
+        calls.hosted_upserts[0].0.device_secret_hash,
+        harness_token::hash_token(&hosted.device_secret)
+    );
+
+    let repo = FakeRepo {
+        hosted_upsert: HostedPairingUpsert::Claimed,
+        ..FakeRepo::default()
+    };
+    let result = service(repo).create_hosted_pairing(hosted_request()).await;
+    assert!(matches!(result, Err(HarnessError::Gone(_))));
+}
+
+#[tokio::test]
+async fn hosted_pairing_validates_the_name() {
+    let result = service(FakeRepo::default())
+        .create_hosted_pairing(CreateHostedPairing {
+            name: "   ".to_owned(),
+            ..hosted_request()
+        })
+        .await;
+    assert!(matches!(result, Err(HarnessError::BadRequest(_))));
+}
+
+#[tokio::test]
+async fn revoking_a_hosted_harness_deletes_it_and_is_idempotent() {
+    let repo = FakeRepo {
+        harness: Some(Harness {
+            computer_id: Some(COMPUTER_ID),
+            ..harness(HarnessOwner::Team { team_id: TEAM_ID })
+        }),
+        delete_result: true,
+        ..FakeRepo::default()
+    };
+    service(repo.clone())
+        .revoke_hosted_harness(COMPUTER_ID)
+        .await
+        .unwrap();
+    assert_eq!(repo.calls.lock().unwrap().deleted, [HarnessId::TEST_A]);
+
+    let repo = FakeRepo::default();
+    service(repo.clone())
+        .revoke_hosted_harness(COMPUTER_ID)
+        .await
+        .unwrap();
+    assert!(repo.calls.lock().unwrap().deleted.is_empty());
+}
+
+#[tokio::test]
+async fn harness_computer_maps_hosted_harnesses_only() {
+    let repo = FakeRepo {
+        harness: Some(Harness {
+            computer_id: Some(COMPUTER_ID),
+            ..harness(HarnessOwner::Team { team_id: TEAM_ID })
+        }),
+        ..FakeRepo::default()
+    };
+    assert_eq!(
+        service(repo)
+            .harness_computer(HarnessId::TEST_A)
+            .await
+            .unwrap(),
+        Some(COMPUTER_ID)
+    );
+    let repo = FakeRepo {
+        harness: Some(harness(HarnessOwner::Team { team_id: TEAM_ID })),
+        ..FakeRepo::default()
+    };
+    assert_eq!(
+        service(repo)
+            .harness_computer(HarnessId::TEST_A)
+            .await
+            .unwrap(),
+        None
+    );
+}
+
+#[tokio::test]
+async fn capability_reports_reach_the_repo_and_unknown_harnesses_are_not_found() {
+    let repo = FakeRepo {
+        set_capabilities_result: true,
+        ..FakeRepo::default()
+    };
+    service(repo.clone())
+        .report_capabilities(HarnessId::TEST_A, HarnessCapabilities { screen: true })
+        .await
+        .unwrap();
+    assert_eq!(
+        repo.calls.lock().unwrap().capability_reports,
+        [(HarnessId::TEST_A, HarnessCapabilities { screen: true })]
+    );
+
+    let result = service(FakeRepo::default())
+        .report_capabilities(HarnessId::TEST_A, HarnessCapabilities { screen: true })
+        .await;
+    assert!(matches!(result, Err(HarnessError::NotFound(_))));
 }
