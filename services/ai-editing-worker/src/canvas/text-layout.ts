@@ -6,13 +6,13 @@ import {
   type TextFitResult,
 } from '@macro-inc/graphics';
 import { match } from 'ts-pattern';
-import type { CanvasOp, TextFitMode } from './schema';
+import type { CanvasCommitOp, TextFitMode } from './schema';
 
 /** Measure changed content/font/wrapping and explicit fits; translations do not reflow text. */
 export function textFitRequests(
   before: GraphicsDocument,
   after: GraphicsDocument,
-  ops: CanvasOp[]
+  ops: readonly CanvasCommitOp[]
 ): TextFitRequest[] {
   const policies = new Map<string, TextFitMode>();
   const forced = new Set<string>();

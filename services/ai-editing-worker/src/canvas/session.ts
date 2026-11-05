@@ -21,6 +21,7 @@ import {
 import {
   type ArtifactLibrary,
   createLoroGraphicsBackendFromDoc,
+  GRAPHICS_METADATA_ORIGIN,
   type PeerPresence,
 } from '@macro-inc/graphics/loro';
 import {
@@ -41,7 +42,7 @@ import { canvasUserMentions } from './mentions';
 import { artifactLibraryEdits, prepareCanvasEdit } from './operations';
 import { canvasOverview } from './overview';
 import type { CanvasMeasurer, CanvasSnapshot } from './render';
-import { type CanvasOp, isArtifactOp } from './schema';
+import { type CanvasCommitOp, isArtifactOp } from './schema';
 import { applyTextMeasurements, textFitRequests } from './text-layout';
 
 export type CanvasSource = LiveSyncSource & {
@@ -57,6 +58,13 @@ export type CanvasApplyOptions = {
   animate?: boolean;
   sleep?: (ms: number) => Promise<void>;
   measure?: CanvasMeasurer;
+  /**
+   * Entity mentions the caller recorded for documents this batch embeds, by
+   * mention id. They are tracked in the Canvas's `canvasMentions` map right
+   * after the scene commit, as the Canvas UI tracks its own, so its reference
+   * reconciliation neither duplicates nor retires them.
+   */
+  references?: Readonly<Record<string, string>>;
 };
 export type CanvasSession = {
   read: (itemIds?: string[], format?: 'scene' | 'overview') => string;
@@ -64,7 +72,7 @@ export type CanvasSession = {
   present: (value: CanvasPresentation | undefined) => void;
   watching: () => boolean;
   apply: (
-    ops: CanvasOp[],
+    ops: readonly CanvasCommitOp[],
     options?: CanvasApplyOptions
   ) => Promise<{
     operationsApplied: number;
@@ -354,6 +362,15 @@ export async function withCanvasSession<T>(
                   ops.filter(isArtifactOp).length
                 );
                 backend.commit(next, artifactLibraryEdits(ops));
+                const references = Object.entries(options.references ?? {});
+                if (references.length) {
+                  const mentions = doc.getMap(
+                    `canvasMentions:${source.documentId}`
+                  );
+                  for (const [mentionId, targetId] of references)
+                    mentions.set(mentionId, targetId);
+                  doc.commit({ origin: GRAPHICS_METADATA_ORIGIN });
+                }
                 try {
                   await lastAppend;
                   await wal.flush();
