@@ -45,6 +45,10 @@ pub const CADDYFILE: &str = "infra/platform/generated/Caddyfile";
 const UPLOAD_NOTIFICATION_TARGET: &str = "arn:rustfs:sqs:us-east-1:finalizer:webhook";
 /// The binary the provisioning Jobs run (this one).
 const PROVISIONER_BIN: &str = "xtask_local";
+/// Where service binaries build. `cargo x` rebuilds this tool first, with other
+/// features, which in a shared target dir invalidates `ring` and everything above
+/// it, so every iteration would recompile most of the dependency tree.
+const SERVICE_TARGET_DIR: &str = "target/platform";
 /// Features the platform builds of Rust services enable (same as `run_local`).
 const AUTH_FEATURES: &str =
     "authentication_service/return_passwordless_code,authentication_service/no_rate_limit";
@@ -440,11 +444,11 @@ fn dev(args: &DevArgs) -> Result<()> {
         }
     }
     cargo_build(&stage, &bins)?;
-    state.binaries.extend(wrap_binaries(&stage, &bins)?);
+    let built = dev_build(&stage, &name, &state, &bins, &args.workloads)?;
+    state.binaries.extend(built.wrapped);
     write_state(&instance, &state)?;
-    push_images(&stage, &name, &state, Some(&args.workloads))?;
-    let rendered = build_manifests(&stage, &name, &state)?;
-    let revision = gitops::publish(&stage, &instance_env(&name), Path::new(&rendered))?;
+    run_push(&stage, name.as_str(), &built.push)?;
+    let revision = gitops::publish(&stage, &instance_env(&name), Path::new(&built.manifests))?;
     gitops::refresh(&name.namespace())?;
     gitops::wait_synced(&stage, &name.namespace(), &revision)
 }
@@ -558,16 +562,10 @@ fn push_images(
     workloads: Option<&[String]>,
 ) -> Result<()> {
     let names = match workloads {
-        Some(w) => format!(
-            "[ {} ]",
-            w.iter()
-                .map(|n| format!("\"{n}\""))
-                .collect::<Vec<_>>()
-                .join(" ")
-        ),
+        Some(w) => format!("[ {} ]", nix_strings(w)),
         None => "null".to_owned(),
     };
-    let expr = format!("(({}).push {names})", instance_expr(name, state)?);
+    let expr = format!("(({}).push {names})", instance_expr(name, state, "{ }")?);
     let paths = nix_build(stage, "Building images (nix)", &expr)?;
     run_push(
         stage,
@@ -618,7 +616,8 @@ fn cargo_build(stage: &Stage, bins: &[&str]) -> Result<()> {
         let mut cmd = Command::new("cargo");
         cmd.current_dir(repo_root())
             .env("SQLX_OFFLINE", "true")
-            .arg("build");
+            .arg("build")
+            .args(["--target-dir", SERVICE_TARGET_DIR]);
         for b in &unified {
             cmd.args(["--bin", b]);
         }
@@ -659,7 +658,7 @@ fn binary_path(bin: &str) -> PathBuf {
     let dir = if isolated {
         "target/no-default/debug"
     } else {
-        "target/debug"
+        "target/platform/debug"
     };
     repo_root().join(dir).join(bin)
 }
@@ -697,8 +696,8 @@ fn nix_build(stage: &Stage, label: &str, expr: &str) -> Result<Vec<String>> {
     Ok(out.unwrap_or_default().lines().map(str::to_owned).collect())
 }
 
-/// Wrap every binary in one Nix build: one flake evaluation, parallel builds.
-fn wrap_binaries(stage: &Stage, bins: &[&str]) -> Result<BTreeMap<String, String>> {
+/// The Nix expression wrapping `bins`: an attrset of bin name to store path.
+fn wrapped_binaries_expr(bins: &[&str]) -> Result<String> {
     let mut by_dir: BTreeMap<PathBuf, Vec<&str>> = BTreeMap::new();
     for bin in bins {
         let path = binary_path(bin);
@@ -706,25 +705,67 @@ fn wrap_binaries(stage: &Stage, bins: &[&str]) -> Result<BTreeMap<String, String
         let dir = path.parent().context("binary has no parent")?.to_path_buf();
         by_dir.entry(dir).or_default().push(bin);
     }
-    let wrapped = by_dir
+    Ok(by_dir
         .iter()
         .map(|(dir, names)| {
-            let names = names
-                .iter()
-                .map(|n| format!("\"{n}\""))
-                .collect::<Vec<_>>()
-                .join(" ");
-            format!("(p.wrapBinaries \"{}\" [ {names} ])", dir.display())
+            format!(
+                "(p.wrapBinaries \"{}\" [ {} ])",
+                dir.display(),
+                nix_strings(names)
+            )
         })
         .collect::<Vec<_>>()
-        .join(" // ");
+        .join(" // "))
+}
+
+fn nix_strings(items: &[impl AsRef<str>]) -> String {
+    items
+        .iter()
+        .map(|i| format!("\"{}\"", i.as_ref()))
+        .collect::<Vec<_>>()
+        .join(" ")
+}
+
+/// Wrap every binary in one Nix build: one flake evaluation, parallel builds.
+fn wrap_binaries(stage: &Stage, bins: &[&str]) -> Result<BTreeMap<String, String>> {
     let expr = format!(
         "(import f.inputs.nixpkgs {{ system = \"x86_64-linux\"; }}).writeText \
-         \"wrapped-binaries.json\" (builtins.toJSON ({wrapped}))"
+         \"wrapped-binaries.json\" (builtins.toJSON ({}))",
+        wrapped_binaries_expr(bins)?
     );
     let paths = nix_build(stage, "Wrapping binaries as store paths", &expr)?;
     let listing = paths.first().context("nix build printed no path")?;
     serde_json::from_str(&std::fs::read_to_string(listing)?).context("parsing wrapped binaries")
+}
+
+/// What one Nix build produces for the inner loop.
+#[derive(serde::Deserialize)]
+struct DevBuild {
+    wrapped: BTreeMap<String, String>,
+    push: String,
+    manifests: String,
+}
+
+/// Wrap, build images, and render in one Nix build. A flake evaluation is most
+/// of the cost of each, so sharing one is what keeps the inner loop fast.
+fn dev_build(
+    stage: &Stage,
+    name: &InstanceName,
+    state: &State,
+    bins: &[&str],
+    workloads: &[String],
+) -> Result<DevBuild> {
+    let wrapped = wrapped_binaries_expr(bins)?;
+    let instance = instance_expr(name, state, "wrapped")?;
+    let expr = format!(
+        "let wrapped = {wrapped}; i = {instance}; in \
+         (import f.inputs.nixpkgs {{ system = \"x86_64-linux\"; }}).writeText \"dev-build.json\" \
+         (builtins.toJSON {{ inherit wrapped; push = i.push [ {} ]; manifests = i.manifests; }})",
+        nix_strings(workloads)
+    );
+    let paths = nix_build(stage, "Building and rendering (nix)", &expr)?;
+    let listing = paths.first().context("nix build printed no path")?;
+    serde_json::from_str(&std::fs::read_to_string(listing)?).context("parsing the dev build")
 }
 
 fn store_dir(stage: &Stage, name: &str, dir: &Path) -> Result<String> {
@@ -792,8 +833,9 @@ fn build_node_services(stage: &Stage, instance: &Instance) -> Result<BTreeMap<St
 }
 
 /// Build the instance's images and manifests (one derivation) and read them.
-/// The Nix expression for one instance at its recorded build.
-fn instance_expr(name: &InstanceName, state: &State) -> Result<String> {
+/// The Nix expression for one instance at its recorded build, with `overrides`
+/// (a Nix expression) replacing recorded binaries.
+fn instance_expr(name: &InstanceName, state: &State, overrides: &str) -> Result<String> {
     let binaries = state
         .binaries
         .iter()
@@ -814,7 +856,7 @@ fn instance_expr(name: &InstanceName, state: &State) -> Result<String> {
     Ok(format!(
         "p.instance {{ name = \"{}\"; host = \"{}\"; envRevision = \"{}\"; \
          kafkaHostPort = {kafka_port}; \
-         binaries = {{ {binaries} }}; node = {{ {node} }}; \
+         binaries = {{ {binaries} }} // {overrides}; node = {{ {node} }}; \
          frontend = builtins.storePath \"{frontend}\"; }}",
         name.as_str(),
         name.host(),
@@ -824,7 +866,7 @@ fn instance_expr(name: &InstanceName, state: &State) -> Result<String> {
 
 /// Render the instance's manifests; returns nixidy's output directory.
 fn build_manifests(stage: &Stage, name: &InstanceName, state: &State) -> Result<String> {
-    let expr = format!("({}).manifests", instance_expr(name, state)?);
+    let expr = format!("({}).manifests", instance_expr(name, state, "{ }")?);
     nix_build(stage, "Rendering manifests (nix)", &expr)?
         .into_iter()
         .next()
