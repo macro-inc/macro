@@ -1,0 +1,129 @@
+name: ci-exp-kache
+"on":
+  pull_request:
+    types: [opened, synchronize, reopened]
+    branches: [main]
+concurrency:
+  group: ci-exp-kache-${{ github.ref }}
+  cancel-in-progress: false
+env:
+  CARGO_INCREMENTAL: '0'
+  CARGO_PROFILE_DEV_DEBUG: limited
+  CARGO_PROFILE_TEST_DEBUG: limited
+  RUST_BACKTRACE: '1'
+  RUSTFLAGS: '-Dwarnings -C link-arg=-fuse-ld=mold'
+  CARGO_BUILD_JOBS: '8'
+  NEXTEST_TEST_THREADS: '32'
+jobs:
+  test:
+    strategy:
+      fail-fast: false
+      matrix:
+        arm: [sccache, kache]
+    runs-on: namespace-profile-linux-rust-ci;overrides.cache-tag=ci-exp-kache-${{ matrix.arm }}
+    services:
+      postgres:
+        image: pgvector/pgvector:pg14
+        env:
+          POSTGRES_USER: user
+          POSTGRES_PASSWORD: password
+          POSTGRES_DB: macrodb
+        ports: ['5432:5432']
+        options: '--health-cmd pg_isready --health-interval 10s --health-timeout 5s --health-retries 5 --shm-size 1g'
+      redis:
+        image: redis:7
+        ports: ['6379:6379']
+        options: '--health-cmd "redis-cli ping" --health-interval 10s --health-timeout 5s --health-retries 5'
+    steps:
+    - name: Checkout
+      uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
+      with:
+        clean: 'false'
+        persist-credentials: 'false'
+    - name: Mount Namespace cache volume
+      uses: namespacelabs/nscloud-cache-action@15799a6b54e5765f85b2aac25b3f0df43ed571c0
+      with:
+        cache: rust
+        path: |
+          /nix
+          /home/runner/.cache/kache
+      continue-on-error: true
+    - name: Setup Nix
+      uses: './.github/actions/setup-nix'
+    - name: Setup Nix dev shell
+      uses: './.github/actions/setup-nix-dev-shell'
+    - name: Configure sccache arm
+      if: matrix.arm == 'sccache'
+      run: |
+        set -euo pipefail
+        env_file="$(mktemp "$RUNNER_TEMP/namespace-sccache.XXXXXX")"
+        nsc cache sccache setup --cache_name ci-exp-kache-control > "$env_file"
+        while IFS= read -r line; do
+          k="${line%%=*}"; v="${line#*=}"
+          [ -n "$v" ] && [ "$k" != "$line" ] || continue
+          case "$k" in *TOKEN*|*SECRET*|*PASSWORD*) echo "::add-mask::$v" ;; esac
+        done < "$env_file"
+        cat "$env_file" >> "$GITHUB_ENV"
+        echo "SCCACHE_IDLE_TIMEOUT=0" >> "$GITHUB_ENV"
+        sccache --stop-server >/dev/null 2>&1 || true
+    - name: Start sccache
+      if: matrix.arm == 'sccache'
+      run: sccache --start-server
+    - name: Configure kache arm
+      if: matrix.arm == 'kache'
+      env:
+        KACHE_VERSION: v2.0.0
+      run: |
+        set -euo pipefail
+        dir=/home/runner/.cache/kache/bin/$KACHE_VERSION
+        if [ ! -x "$dir/kache" ]; then
+          tmp="$(mktemp -d)"
+          base="https://github.com/kunobi-ninja/kache/releases/download/$KACHE_VERSION/kache-x86_64-unknown-linux-musl.tar.gz"
+          curl -fsSL "$base" -o "$tmp/kache.tgz"
+          expected="$(curl -fsSL "$base.sha256" | awk '{print $1}')"
+          echo "$expected  $tmp/kache.tgz" | sha256sum --check -
+          mkdir -p "$dir"
+          tar -xzf "$tmp/kache.tgz" -C "$tmp"
+          find "$tmp" -type f -name kache -exec install -m 755 {} "$dir/kache" \;
+        fi
+        {
+          echo "RUSTC_WRAPPER=$dir/kache"
+          echo "KACHE_CACHE_DIR=/home/runner/.cache/kache/store"
+          echo "KACHE_MAX_SIZE=30GiB"
+          echo "KACHE_RUNTIME_DIR=$RUNNER_TEMP/kache"
+          echo "KACHE_LOCAL_ONLY=1"
+        } >> "$GITHUB_ENV"
+        "$dir/kache" --version
+    - name: Build code-mode assets
+      run: |
+        assets="$(nix build --no-link --print-out-paths --print-build-logs .#code-mode-assets)"
+        echo "CODE_MODE_ASSETS_DIR=$assets" >> "$GITHUB_ENV"
+    - name: configure postgres for concurrent tests
+      run: |
+        postgres_container="$(docker ps --format '{{.ID}} {{.Image}}' | awk '$2 == "pgvector/pgvector:pg14" { print $1; exit }')"
+        docker exec -i "$postgres_container" psql -U user -d macrodb <<'SQL'
+        ALTER SYSTEM SET fsync = off;
+        ALTER SYSTEM SET synchronous_commit = off;
+        ALTER SYSTEM SET full_page_writes = off;
+        ALTER SYSTEM SET max_wal_size = '4GB';
+        ALTER SYSTEM SET checkpoint_timeout = '30min';
+        ALTER SYSTEM SET max_locks_per_transaction = 8192;
+        SQL
+        docker restart "$postgres_container"
+        until docker exec "$postgres_container" pg_isready -U user -d macrodb; do sleep 1; done
+    - name: prepare tests
+      run: just setup_test_envs && just initialize_dbs && just setup_test_template
+    - name: run tests
+      run: |
+        set -euo pipefail
+        args=(); for p in $(cat tooling/kache-proto/packages.txt); do args+=(-p "$p"); done
+        time cargo nextest run --config 'profile.dev.package."*".debug=false' --all-features --no-tests=pass --test-threads "$NEXTEST_TEST_THREADS" "${args[@]}" 2>&1 | grep -vE '^\s*(PASS|Compiling|Checking|Downloaded|Downloading)' | tail -30 | cut -c1-240
+        exit "${PIPESTATUS[0]}"
+    - name: cache stats
+      if: always()
+      run: |
+        if [ -n "${RUSTC_WRAPPER:-}" ]; then "$RUSTC_WRAPPER" --show-stats 2>/dev/null || "$RUSTC_WRAPPER" stats 2>/dev/null || true; fi
+        du -sh /home/runner/.cache/kache 2>/dev/null || true
+    - name: Teardown Nix
+      if: always()
+      uses: './.github/actions/teardown-nix'
