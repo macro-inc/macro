@@ -393,6 +393,11 @@ fn cargo_clippy(packages: &str) -> Step<Run> {
 }
 
 /// Match production's PostgreSQL major version so CI rejects incompatible migrations.
+///
+/// Its data lives in shared memory because `#[sqlx::test]` creates and drops a
+/// database per test, and those file operations are what limit the test run on
+/// the runner's disk. A bind mount, not `--tmpfs`: `configure_postgres` restarts
+/// the container, and a restart empties a `--tmpfs` mount.
 fn postgres_service() -> Container {
     Container::default()
         .image("pgvector/pgvector:pg14")
@@ -404,7 +409,8 @@ fn postgres_service() -> Container {
         .ports(vec![Port::Name("5432:5432".to_string())])
         .options(
             "--health-cmd pg_isready --health-interval 1s --health-start-period 30s \
-             --health-timeout 5s --health-retries 5 --shm-size 1g",
+             --health-timeout 5s --health-retries 5 --shm-size 1g \
+             -v /dev/shm/pgdata:/var/lib/postgresql/data",
         )
 }
 
