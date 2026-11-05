@@ -1104,6 +1104,12 @@
           curl
           git
           jq
+          openssh
+          openssl
+          python3
+          which
+          procps
+          hostname
         ]
         ++ pkgs.lib.optionals isLinux [ mold ];
 

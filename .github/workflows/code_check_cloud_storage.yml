@@ -656,7 +656,7 @@ jobs:
         # line numbers in our own code.
         common=(
           --config 'profile.dev.package."*".debug=false'
-          --all-features --no-tests=pass --test-threads "$NEXTEST_TEST_THREADS"
+          --all-features --no-fail-fast --no-tests=pass --test-threads "$NEXTEST_TEST_THREADS"
         )
 
         if [ "$RUST_PACKAGES" = "all" ]; then
