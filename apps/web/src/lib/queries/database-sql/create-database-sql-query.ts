@@ -241,6 +241,7 @@ export function createDatabaseSqlQuery(
                 requestPolicy,
                 cache: host,
                 people: capabilities.people,
+                signal: controller.signal,
                 membership: host ? { host, baselines, reconcile } : undefined,
               }),
               capabilities,
