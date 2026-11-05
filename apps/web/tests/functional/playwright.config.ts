@@ -8,7 +8,7 @@ export default defineConfig({
   testMatch: '*.spec.ts',
   timeout: 60_000,
   expect: { timeout: 10_000 },
-  workers: 1,
+  workers: Number(process.env.FUNCTIONAL_TEST_WORKERS ?? 1),
   forbidOnly: !!process.env.CI,
   reporter: 'list',
   use: {
