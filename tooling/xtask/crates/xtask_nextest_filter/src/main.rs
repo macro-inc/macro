@@ -179,8 +179,9 @@ const WORKSPACE_HACK: &str = "workspace-hack";
 
 /// Dependents whose tests pull requests skip unless the package itself changed.
 /// `document_storage_service` ends the longest compile chain and takes about a
-/// minute of the `test` job for a few seconds of tests. Clippy still builds it
-/// on every pull request that reaches it, and the run on `main` tests it.
+/// minute of the `test` job for a few seconds of tests. Clippy still type checks
+/// it on every pull request that reaches it, and the run on `main` builds and
+/// tests it.
 const TESTED_ONLY_WHEN_CHANGED: &[&str] = &["document_storage_service"];
 
 fn read_manifest(dir: &Path) -> Result<String> {
