@@ -771,6 +771,20 @@ impl<
         let mime_type = content_type.mime_type().to_string();
 
         let presigned_url = match file_type {
+            // Artifact bytes are content-addressed per version by the artifacts
+            // domain; the document itself has no upload.
+            Some(FileType::Artifact) => {
+                initial_content = DocumentContent::ready(DocumentContentLocation::ObjectStorage);
+                if let Err(error) = self
+                    .repo
+                    .set_document_content(&document_id, initial_content.clone())
+                    .await
+                {
+                    self.cleanup_document(&document_id).await;
+                    return Err(DocumentError::Internal(error.into()));
+                }
+                Ok(None)
+            }
             Some(FileType::Spreadsheet) => {
                 if let Err(error) = self
                     .sync_service_client
@@ -1095,6 +1109,12 @@ impl<
             .file_type
             .as_deref()
             .and_then(|f| FileType::from_str(f).ok());
+
+        if file_type == Some(FileType::Artifact) {
+            return Err(DocumentError::BadRequest(
+                "artifact content is served through /artifacts/{document_id}/view_url".to_string(),
+            ));
+        }
 
         let document_id = entity_access_receipt.entity().entity_id.clone();
         let content = self.content_for_document(&document_id, file_type).await?;
@@ -1896,6 +1916,14 @@ impl<
             .file_type
             .as_deref()
             .and_then(|f| FileType::from_str(f).ok());
+
+        // An artifact's body is its version history, which a document copy
+        // does not carry.
+        if file_type == Some(FileType::Artifact) {
+            return Err(DocumentError::BadRequest(
+                "artifacts cannot be copied".to_string(),
+            ));
+        }
 
         let native_canvas = if file_type == Some(FileType::Canvas) {
             self.repo

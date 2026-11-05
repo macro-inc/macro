@@ -411,6 +411,11 @@ impl NonMarkdownFileType {
                 "md documents must use NewMarkdownTextDocument".to_string(),
             ));
         }
+        if file_type == FileType::Artifact {
+            return Err(DocumentError::BadRequest(
+                "artifacts are published as file bundles through the artifacts API".to_string(),
+            ));
+        }
 
         Ok(Self(file_type))
     }
@@ -638,6 +643,33 @@ where
             DocumentContent::ready(DocumentContentLocation::SyncService);
         response.document_response.presigned_url = None;
         Ok(CreatedDocument::new(response))
+    }
+
+    /// Create the document row of an artifact. The artifacts domain stores its
+    /// files and versions; the document carries sharing, ownership and the
+    /// catalog like any other.
+    #[tracing::instrument(skip(self, metadata), err)]
+    pub async fn create_artifact(
+        &self,
+        principal: &CreationPrincipal,
+        metadata: NewDocumentMetadata,
+    ) -> Result<CreatedDocument, DocumentError> {
+        let document = metadata.into_new_document(RepoDocumentKind {
+            file_type: Some(FileType::Artifact),
+            sha: EMPTY_SHA256.to_string(),
+            subtype: RepoDocumentSubtype::Regular,
+            team_id: None,
+            share_with_team: false,
+        });
+        self.document_service
+            .create_document(principal, document, None)
+            .await
+            .map(CreatedDocument::new)
+    }
+
+    /// Delete a document whose creation could not be completed.
+    pub async fn discard_created_document(&self, document_id: &str) {
+        self.cleanup_created_document(document_id).await;
     }
 
     /// Create a markdown text document and initialize sync-service.
