@@ -88,6 +88,7 @@ fn event() -> MessageEvent {
         deleted_at: None,
         attachments: vec![],
         reactions: vec![],
+        link_previews: vec![],
     };
     MessageEvent {
         parent,

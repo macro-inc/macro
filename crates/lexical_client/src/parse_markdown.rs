@@ -131,6 +131,11 @@ struct MentionsResponse {
     mentions: Vec<ExtractedMention>,
 }
 
+#[derive(Debug, Clone, serde::Deserialize)]
+struct LinkPreviewsResponse {
+    urls: Vec<String>,
+}
+
 /// A static image to serialize through Lexical's image node and markdown transformer.
 #[derive(Debug, serde::Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -607,6 +612,23 @@ impl LexicalClient {
         .await?;
         let data: MentionsResponse = response.json().await.context("unexpected response")?;
         Ok(data.mentions)
+    }
+
+    /// Parses `markdown` via the lexical service and returns the web links a
+    /// rendered channel message shows preview cards for, in text order.
+    #[tracing::instrument(skip(self, markdown), err)]
+    pub async fn extract_link_preview_urls(&self, markdown: &str) -> Result<Vec<String>> {
+        let url = format!("{}/link-previews", self.url);
+        let response = check_response(
+            self.client
+                .post(&url)
+                .json(&MentionsRequest { markdown })
+                .send()
+                .await?,
+        )
+        .await?;
+        let data: LinkPreviewsResponse = response.json().await.context("unexpected response")?;
+        Ok(data.urls)
     }
 
     /// Compose dimension-preserving channel markup from a real Lexical image node.

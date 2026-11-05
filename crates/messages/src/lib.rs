@@ -4,8 +4,8 @@
 /// Transport-independent message models, policies, and services.
 pub mod domain;
 /// HTTP and AI tool adapters for the shared message use cases.
-#[cfg(any(feature = "inbound", feature = "ai_tools"))]
+#[cfg(any(feature = "inbound", feature = "ai_tools", feature = "kafka_consumer"))]
 pub mod inbound;
 /// Database and external delivery adapters.
-#[cfg(any(feature = "outbound", feature = "broker"))]
+#[cfg(any(feature = "outbound", feature = "broker", feature = "link_previews"))]
 pub mod outbound;

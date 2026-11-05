@@ -1,5 +1,6 @@
 import type {
   CountedReaction,
+  LinkPreview,
   MessageAttachment,
   MessageParent,
   MessageSender,
@@ -21,6 +22,8 @@ export type MessageData = {
   thread_id?: string | null;
   attachments: MessageAttachment[];
   reactions: CountedReaction[];
+  /** Previews of the pages a channel message links to, filled in shortly after it is sent. */
+  link_previews?: LinkPreview[];
 };
 
 export type MessageActionEvent = MouseEvent | KeyboardEvent;

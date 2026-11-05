@@ -76,6 +76,7 @@ fn message(id: Uuid, thread_id: Option<Uuid>, sender: ChannelSender<'static>) ->
         deleted_at: None,
         attachments: vec![],
         reactions: vec![],
+        link_previews: vec![],
     }
 }
 

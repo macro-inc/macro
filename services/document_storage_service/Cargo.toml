@@ -68,7 +68,14 @@ bzip2 = { workspace = true, default-features = false, features = [
 cal = { path = "../../crates/cal", features = ["axum", "outbound"] }
 call = { path = "../../crates/call" }
 channel_bots = { path = "../../crates/channel_bots" }
-messages = { path = "../../crates/messages", features = ["annotations", "broker", "delivery", "inbound"] }
+messages = { path = "../../crates/messages", features = [
+  "annotations",
+  "broker",
+  "delivery",
+  "inbound",
+  "kafka_consumer",
+  "link_previews",
+] }
 channels = { path = "../../crates/channels", features = [
   "entity_mutation",
   "inbound",
@@ -298,6 +305,7 @@ user_api_key = { path = "../../crates/user_api_key", features = [
 ] }
 utoipa = { workspace = true, features = ["axum_extras"] }
 utoipa-swagger-ui = { workspace = true, features = ["axum"] }
+unfurl = { path = "../../crates/unfurl", features = ["outbound"] }
 uuid = { workspace = true }
 webhook = { path = "../../crates/webhook", features = [
   "inbound",

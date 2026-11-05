@@ -433,6 +433,7 @@ where
             }
             MessageChange::Edited { .. }
             | MessageChange::MessageDeleted { .. }
+            | MessageChange::LinkPreviewsUpdated { .. }
             | MessageChange::Typing { .. }
             | MessageChange::ThreadUpdated { .. } => None,
         };

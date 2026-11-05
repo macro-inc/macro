@@ -30,6 +30,16 @@ inbound = [
   "schema",
 ]
 json-schema = ["dep:schemars"]
+kafka_consumer = [
+  "broker",
+  "dep:kafka_util",
+  "dep:rdkafka",
+  "dep:tokio",
+  "dep:tokio-retry",
+  "dep:tokio-util",
+  "macro_event_broker/outbound",
+]
+link_previews = ["dep:unfurl", "ports"]
 outbound = ["dep:initiative", "dep:macro_uuid", "dep:sqlx", "ports"]
 ports = ["dep:async-trait", "dep:entity_access", "dep:futures", "dep:rootcause", "entity_access/ports"]
 schema = ["channel_sender/schema", "dep:utoipa", "activity/schema"]
@@ -49,6 +59,7 @@ chrono = { workspace = true }
 connection_gateway_client = { path = "../connection_gateway_client", optional = true }
 entity_access = { path = "../entity_access", default-features = false, optional = true }
 initiative = { path = "../initiative", default-features = false, features = ["ports"], optional = true }
+kafka_util = { path = "../kafka_util", optional = true }
 macro_authorization = { path = "../macro_authorization", default-features = false, features = [
   "axum",
 ], optional = true }
@@ -65,6 +76,7 @@ models_pagination = { path = "../models_pagination" }
 models_properties = { path = "../models_properties", optional = true }
 properties = { path = "../properties", default-features = false, features = ["ports"], optional = true }
 notification = { path = "../notification", optional = true }
+rdkafka = { workspace = true, optional = true }
 rootcause = { workspace = true, optional = true }
 schemars = { workspace = true, optional = true }
 serde = { workspace = true }
@@ -72,7 +84,11 @@ serde_json = { workspace = true }
 sqlx = { workspace = true, optional = true }
 system_properties = { path = "../system_properties", optional = true }
 thiserror = { workspace = true }
+tokio = { workspace = true, optional = true }
+tokio-retry = { workspace = true, optional = true }
+tokio-util = { workspace = true, features = ["rt"], optional = true }
 tracing = { workspace = true }
+unfurl = { path = "../unfurl", features = ["ports"], optional = true }
 utoipa = { workspace = true, optional = true }
 uuid = { workspace = true }
 workspace-hack = { version = "0.1", path = "../workspace-hack" }

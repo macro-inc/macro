@@ -1,10 +1,13 @@
 #![deny(missing_docs)]
-//! Lexical-service adapter for extracting the mentions embedded in raw
-//! message content, implementing the `messages` domain's
-//! [`MessageMentionExtractor`] port.
+//! Lexical-service adapters for reading raw message content, implementing
+//! the `messages` domain's [`MessageMentionExtractor`] and
+//! [`MessageLinkExtractor`] ports.
 
 use lexical_client::LexicalClient;
-use messages::domain::{models::SimpleMention, ports::MessageMentionExtractor};
+use messages::domain::{
+    models::SimpleMention,
+    ports::{MessageError, MessageLinkExtractor, MessageMentionExtractor},
+};
 use std::sync::Arc;
 
 /// Mention extractor backed by the lexical service `/mentions` endpoint.
@@ -48,6 +51,35 @@ impl MessageMentionExtractor for LexicalMentionExtractor {
             self.mentions(content).await.map_err(|error| {
                 messages::domain::ports::MessageError::Repository(rootcause::report!(error).into())
             })
+        })
+    }
+}
+
+/// Link extractor backed by the lexical service `/link-previews` endpoint, so
+/// the server picks the links a rendered message shows cards for.
+#[derive(Clone)]
+pub struct LexicalLinkExtractor {
+    client: Arc<LexicalClient>,
+}
+
+impl LexicalLinkExtractor {
+    /// Create a new extractor backed by `client`.
+    pub fn new(client: Arc<LexicalClient>) -> Self {
+        Self { client }
+    }
+}
+
+impl MessageLinkExtractor for LexicalLinkExtractor {
+    fn extract<'a>(
+        &'a self,
+        content: &'a str,
+    ) -> std::pin::Pin<Box<dyn Future<Output = Result<Vec<String>, MessageError>> + Send + 'a>>
+    {
+        Box::pin(async move {
+            self.client
+                .extract_link_preview_urls(content)
+                .await
+                .map_err(|error| MessageError::Repository(rootcause::report!(error).into()))
         })
     }
 }

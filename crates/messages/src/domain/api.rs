@@ -132,6 +132,29 @@ pub trait MessageCommands: Send + Sync + 'static {
     ) -> Result<ThreadState, MessageError>;
 }
 
+/// Enrichment of committed messages, for trusted event consumers.
+#[async_trait::async_trait]
+pub trait MessageLinkPreviews: Send + Sync + 'static {
+    /// Recompute a message's link previews from its current content and tell
+    /// its viewers when they changed. Safe to repeat.
+    async fn refresh_link_previews(
+        &self,
+        parent: &MessageParent,
+        id: Uuid,
+    ) -> Result<(), MessageError>;
+}
+
+#[async_trait::async_trait]
+impl<R: MessageRepository, E: MessageEventPublisher> MessageLinkPreviews for MessageService<R, E> {
+    async fn refresh_link_previews(
+        &self,
+        parent: &MessageParent,
+        id: Uuid,
+    ) -> Result<(), MessageError> {
+        MessageService::refresh_link_previews(self, parent, id).await
+    }
+}
+
 /// Combined application boundary for adapters that need both reads and commands.
 pub trait MessageServiceApi: MessageReader + MessageCommands {}
 

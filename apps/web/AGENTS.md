@@ -74,6 +74,13 @@ It uses the real records view with a local source and picker to exercise opening
 replacement, cancellation, keyboard editing, and read-only references. Navigation
 adapter tests separately check file types, access failures, and split selection.
 
+Link preview cards in channel messages render from the previews stored with
+each message, never from a fetch after mount, so a row has its height when the
+channel list measures it. The backend-free desktop/phone regression (the real
+`ChannelMessage` over stored previews) checks the cards are there on first
+render, their content and order, their fit in the message column, and opening:
+`bunx playwright test --config src/features/channel/Message/browser-test/playwright.config.ts`.
+
 Poll cards in messages (the real `DocumentCard` around `FormCardView`) have a
 backend-free desktop/phone regression: the card reserves its height from
 `previewData.poll.optionCount` as a `min-height`, grows to wrapped text, and
