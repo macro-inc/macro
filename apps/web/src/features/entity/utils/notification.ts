@@ -1,6 +1,7 @@
 import { providerIdentity } from '@app/features/external-chat/providers/identity';
 import { ENABLE_DOCUMENT_MENTION_NOTIFICATIONS } from '@core/constant/featureFlags';
 import type { Entity, NotificationType } from '@core/types';
+import { manualText } from '@notifications/notification-metadata';
 import type { NotificationStack } from '@notifications/notification-stacking';
 import type { UnifiedNotification } from '@notifications/types';
 import type { ItemEntity } from '@queries/preview';
@@ -285,6 +286,7 @@ export function getNotificationActionText(n: Notification): string {
         ? 'failed'
         : 'finished';
     })
+    .with('manual', () => 'notified')
     .exhaustive(() => 'notified');
 }
 
@@ -371,6 +373,7 @@ export function extractMessageContent(notification: Notification): string {
     .with({ tag: 'agent_session_waiting_for_input' }, (m) => m.content.question)
     .with({ tag: 'agent_session_mentioned' }, (m) => m.content.sessionName)
     .with({ tag: 'routine_run_finished' }, (m) => m.content.routineName)
+    .with({ tag: 'manual' }, (m) => manualText(m.content))
     .exhaustive(() => '');
 }
 

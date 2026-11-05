@@ -3,6 +3,7 @@
 mod api;
 mod config;
 mod env;
+mod manual;
 mod model;
 mod notification;
 

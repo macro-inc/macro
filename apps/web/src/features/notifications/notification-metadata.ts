@@ -97,6 +97,7 @@ export function getNotificationAction(n: UnifiedNotification): string {
       .with('routine_run_finished', () =>
         routineRunFailed(n) ? 'failed' : 'finished'
       )
+      .with('manual', () => 'notified you')
       .exhaustive(() => 'notified you about')
   );
 }
@@ -160,6 +161,7 @@ export function getNotificationTargetName(
       )
       .with({ tag: 'inbox_reauth_required' }, () => undefined)
       .with({ tag: 'routine_run_finished' }, () => undefined)
+      .with({ tag: 'manual' }, () => undefined)
       .with(
         {
           tag: P.union(
@@ -252,6 +254,7 @@ export function getNotificationContent(
       .with({ tag: 'routine_run_finished' }, (m) =>
         m.content.outcome === 'failed' ? 'Its run failed.' : 'Its run finished.'
       )
+      .with({ tag: 'manual' }, (m) => manualText(m.content))
       .exhaustive(() => undefined)
   );
 }
@@ -320,6 +323,7 @@ export function shouldShowNotificationTarget(n: UnifiedNotification): boolean {
       .with({ tag: 'calendar_event_join_request' }, () => true)
       .with({ tag: 'inbox_reauth_required' }, () => false)
       .with({ tag: 'routine_run_finished' }, () => false)
+      .with({ tag: 'manual' }, () => false)
       .with(
         {
           tag: P.union(
@@ -332,6 +336,14 @@ export function shouldShowNotificationTarget(n: UnifiedNotification): boolean {
       )
       .exhaustive(() => true)
   );
+}
+
+/** A manual notification's words: its title, then its body when it has one. */
+export function manualText(content: {
+  title: string;
+  body?: string | null;
+}): string {
+  return content.body ? `${content.title} — ${content.body}` : content.title;
 }
 
 function routineRunFailed(n: UnifiedNotification): boolean {

@@ -319,6 +319,31 @@ Desktop and mobile share this scale, with accessibility text scaling preserved.
 
 Desktop channel and AI composers use an `Attach files` paperclip that opens the file picker directly, without a plus menu. Comment composers open the image picker directly. Channels and DMs always open in message mode; create tasks through the task creation dialog. Shift+Enter, including an empty new line, expands channel and AI inputs so text starts above the toolbar at the left inset. Sent AI message bubbles use the ink fill with a contrasting foreground in each theme.
 
+## Manual notifications
+
+Agent code (ExecuteCode) and SDK scripts send a notification they write with
+`macro.notifications.send({ title, body?, link, to? })`, which calls
+`POST /user_notifications/send` on the notification service. It becomes a
+`manual` notification: in-app, desktop/browser alert and phone push, all
+subject to the recipient's preferences (**Settings → Notifications → AI →
+Agent notes** turns them off). `to` defaults to the sender; anyone else must
+already see `link`, and the sender must see it too, so a notification never
+reveals an entity. Each sender may send 60 per hour (429 after).
+
+The alert's title and body are the sender's words. An agent's notification
+reads as from the agent (its name and avatar as they were when sent); without
+an agent it reads as from the sending user. Opening one opens the link:
+documents and tasks by their file type, plus chats, channels, projects, email
+threads, agent sessions, routines, databases and forms.
+In the unified Notifications view a manual notification is an agent row on its
+linked entity, from the agent (or the sending user when no agent sent it).
+
+Verify from an agent session: ask the agent to notify you about a task, and a
+teammate who can and one who cannot see it. You get an inbox row with the
+agent's avatar and a desktop alert titled as written; clicking opens the task.
+The teammate with access gets it; the one without makes the call fail with
+403 and receives nothing.
+
 ## Notification sounds
 
 **Settings → Notifications → Sounds** turns on an in-app sound for incoming

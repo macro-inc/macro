@@ -420,7 +420,8 @@ fn place_event(notification: &FeedNotification, now: DateTime<Utc>) -> Option<(S
         NotifEvent::AiResponse(_)
         | NotifEvent::AgentSessionSettled(_)
         | NotifEvent::AgentSessionWaitingForInput(_)
-        | NotifEvent::AgentSessionMentioned(_) => (Slot::Agent, true),
+        | NotifEvent::AgentSessionMentioned(_)
+        | NotifEvent::Manual(_) => (Slot::Agent, true),
         NotifEvent::GithubPrCheckRun(check) => (
             Slot::PullRequest,
             check.state != GithubPrCheckRunState::Completed,
@@ -472,8 +473,9 @@ fn row_type(slot: &Slot, channel: bool, mention: bool) -> InboxRowType {
     }
 }
 
-/// Who a notification is from: the agent for agent session events, Macro
-/// for reminders and AI chat responses, otherwise the user who sent it.
+/// Who a notification is from: the agent for agent session events and
+/// agent-sent manual notifications, Macro for reminders and AI chat
+/// responses, otherwise the user who sent it.
 fn actor(notification: &FeedNotification) -> Option<InboxActor> {
     let agent = |session: &AgentSessionNotificationRef| InboxActor::Agent {
         bot_id: session.bot_id,
@@ -492,6 +494,14 @@ fn actor(notification: &FeedNotification) -> Option<InboxActor> {
         | NotifEvent::Reminder(_)
         | NotifEvent::CalendarEventReminder(_) => Some(InboxActor::Macro),
         NotifEvent::TaskAssigned(task) => Some(InboxActor::User(task.assigned_by.clone())),
+        NotifEvent::Manual(manual) => manual
+            .agent
+            .as_ref()
+            .map(|agent| InboxActor::Agent {
+                bot_id: agent.id,
+                name: agent.name.clone(),
+            })
+            .or_else(|| notification.sender_id.clone().map(InboxActor::User)),
         _ => notification.sender_id.clone().map(InboxActor::User),
     }
 }

@@ -668,3 +668,43 @@ fn a_requested_review_offers_the_pull_request() {
         "GitHub users are not Macro principals"
     );
 }
+
+#[test]
+fn a_manual_notification_is_an_agent_row_from_its_agent_or_its_sender() {
+    let document = group(EntityType::Document, DOC);
+    let from_agent = notification(
+        1,
+        entity(EntityType::Document, DOC),
+        "manual",
+        json!({
+            "title": "Deploy finished",
+            "agent": { "id": uuid(0xB07), "name": "Scout" },
+        }),
+        1,
+        NotificationState::Unseen,
+    );
+    let listed = rows_of(&document, &[from_agent]);
+    assert_eq!(
+        shape(&listed),
+        vec![(InboxRowType::Agent, vec![uuid(1)], vec![])]
+    );
+    assert_eq!(listed[0].actor, agent());
+
+    let mut from_script = notification(
+        2,
+        entity(EntityType::Document, DOC),
+        "manual",
+        json!({ "title": "Invoice sent" }),
+        2,
+        NotificationState::Unseen,
+    );
+    std::sync::Arc::make_mut(&mut from_script).sender_id =
+        Some(MacroUserIdStr::parse_from_str("macro|sender@example.com").unwrap());
+    let listed = rows_of(&document, &[from_script]);
+    assert_eq!(
+        listed[0].actor,
+        Some(InboxActor::User(
+            MacroUserIdStr::parse_from_str("macro|sender@example.com").unwrap()
+        ))
+    );
+}
