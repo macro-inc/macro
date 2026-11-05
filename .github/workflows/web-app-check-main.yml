@@ -332,7 +332,9 @@ jobs:
     - path-check
     if: needs.path-check.outputs.codegen_changed == 'true'
     name: Generated Code Check
-    runs-on: namespace-profile-linux-mid;overrides.cache-tag=web-ci
+    runs-on:
+    - namespace-profile-linux-mid;overrides.cache-tag=web-ci
+    - nscloud-cache-exp-do-not-commit
     env:
       CARGO_PROFILE_DEV_DEBUG: '0'
       RUSTFLAGS: '-C link-arg=-fuse-ld=mold'
@@ -358,7 +360,7 @@ jobs:
         set -euo pipefail
         env_file="$(mktemp "$RUNNER_TEMP/namespace-sccache.XXXXXX")"
         trap 'rm -f "$env_file"' EXIT
-        if nsc cache sccache setup --cache_name web-ci > "$env_file"; then
+        if nsc cache sccache setup --cache_name gen-reuse > "$env_file"; then
           # Register credential values as masked BEFORE exporting: GitHub only
           # masks `secrets.*`, so without this SCCACHE_WEBDAV_TOKEN — a broad,
           # ~24h Namespace workspace token (registry + cache write) — printed
@@ -388,7 +390,12 @@ jobs:
       run: |
         set -euo pipefail
         read -ra openapi_bins <<< "$(cd apps/web && bun scripts/generate-api-schema.ts --print-cargo-bins)"
+        start=$SECONDS
+        SQLX_OFFLINE=true cargo check "${openapi_bins[@]}" --bin gen_tool_schemas
+        echo "::notice::cargo check $((SECONDS-start))s"
+        start=$SECONDS
         SQLX_OFFLINE=true cargo build --timings "${openapi_bins[@]}" --bin gen_tool_schemas
+        echo "::notice::cargo build after check $((SECONDS-start))s"
     - name: Generate API Types
       run: bun run gen-api -- --check
       working-directory: apps/web
