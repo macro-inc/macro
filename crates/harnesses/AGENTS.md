@@ -9,7 +9,10 @@ daemon reconciles its webhook feed from. Also registers Macro computers'
 harnesses (hosted VMs, `crates/hosted_runtimes`): `create_hosted_pairing`
 mints a pairing born approved and owned by the team, idempotent per
 `computer_id` (a retry before the claim rotates the device secret and keeps
-the pairing id; after it, `Gone`); `revoke_hosted_harness(computer_id)` and
+the pairing id; after it, revokes every old token and creates a fresh approved
+pairing for the same harness row and id, preserving agent bindings). Claim
+and re-key serialize on the harness row so retired credentials cannot be reissued.
+`revoke_hosted_harness(computer_id)` and
 `harness_computer(harness_id)` are the control plane's other entry points.
 These three take no caller: they are for trusted in-process callers that
 already authorized the team admin, never for an HTTP route.

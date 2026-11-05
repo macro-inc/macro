@@ -72,8 +72,8 @@ pub enum HostedPairingUpsert {
         /// The existing pairing's id.
         pairing_id: Uuid,
     },
-    /// The computer's pairing was already claimed; nothing changed.
-    Claimed,
+    /// Revoked the claimed harness's credentials and created a fresh approved pairing.
+    Rekeyed,
 }
 
 /// Open (pending, unexpired) pairing counts used to throttle creation.
@@ -127,7 +127,8 @@ pub trait HarnessRepo: Send + Sync + 'static {
     ///
     /// Keyed by `harness.computer_id`. The pairing is never pending, so no
     /// user sees or approves its code. An existing pairing keeps its id and
-    /// takes `pairing.device_secret_hash`; one already claimed is left alone.
+    /// takes `pairing.device_secret_hash`; a claimed harness keeps its id, revokes
+    /// its tokens and receives a fresh approved pairing.
     fn upsert_hosted_pairing(
         &self,
         pairing: NewPairing,
@@ -310,7 +311,8 @@ pub trait HarnessService: Send + Sync + 'static {
     /// after it authorized the team admin): this takes no caller to check and
     /// skips the open-pairing throttle. Idempotent per computer: a retry
     /// before the claim rotates the secret and returns the same pairing id;
-    /// after the claim it is [`HarnessError::Gone`].
+    /// after the claim it revokes the old tokens and creates a fresh approved
+    /// pairing for the same harness id.
     fn create_hosted_pairing(
         &self,
         req: CreateHostedPairing,

@@ -444,11 +444,13 @@ async fn team_approval_requires_membership_and_honors_the_name_override() {
         .await
         .unwrap();
 
-    let calls = repo.calls.lock().unwrap();
-    let (_, new_harness) = &calls.approved[0];
-    assert_eq!(new_harness.name, "team box");
-    assert_eq!(new_harness.owner, HarnessOwner::Team { team_id: TEAM_ID });
-    assert_eq!(calls.team_lookups[0], (MEMBER_ID.to_owned(), TEAM_ID));
+    {
+        let calls = repo.calls.lock().unwrap();
+        let (_, new_harness) = &calls.approved[0];
+        assert_eq!(new_harness.name, "team box");
+        assert_eq!(new_harness.owner, HarnessOwner::Team { team_id: TEAM_ID });
+        assert_eq!(calls.team_lookups[0], (MEMBER_ID.to_owned(), TEAM_ID));
+    }
 
     let repo = FakeRepo {
         pairing: Some(pending_pairing()),
@@ -806,7 +808,7 @@ async fn hosted_pairing_registers_an_approved_team_harness_past_the_throttle() {
 }
 
 #[tokio::test]
-async fn hosted_pairing_retries_return_the_existing_pairing_until_it_is_claimed() {
+async fn hosted_pairing_rotates_before_claim_and_returns_fresh_pairing_after_rekey() {
     let existing = Uuid::from_u128(99);
     let repo = FakeRepo {
         hosted_upsert: HostedPairingUpsert::Rotated {
@@ -819,18 +821,54 @@ async fn hosted_pairing_retries_return_the_existing_pairing_until_it_is_claimed(
         .await
         .unwrap();
     assert_eq!(hosted.pairing_id, existing);
-    let calls = repo.calls.lock().unwrap();
-    assert_eq!(
-        calls.hosted_upserts[0].0.device_secret_hash,
-        harness_token::hash_token(&hosted.device_secret)
-    );
+    {
+        let calls = repo.calls.lock().unwrap();
+        assert_eq!(
+            calls.hosted_upserts[0].0.device_secret_hash,
+            harness_token::hash_token(&hosted.device_secret)
+        );
+    }
 
-    let repo = FakeRepo {
-        hosted_upsert: HostedPairingUpsert::Claimed,
+    let mut repo = FakeRepo {
+        hosted_upsert: HostedPairingUpsert::Rekeyed,
         ..FakeRepo::default()
     };
-    let result = service(repo).create_hosted_pairing(hosted_request()).await;
-    assert!(matches!(result, Err(HarnessError::Gone(_))));
+    let hosted = service(repo.clone())
+        .create_hosted_pairing(hosted_request())
+        .await
+        .unwrap();
+    {
+        let calls = repo.calls.lock().unwrap();
+        assert_eq!(hosted.pairing_id, calls.hosted_upserts[0].0.id);
+        assert_eq!(
+            calls.hosted_upserts[0].0.device_secret_hash,
+            harness_token::hash_token(&hosted.device_secret)
+        );
+    }
+    let mut existing_harness = harness(HarnessOwner::Team { team_id: TEAM_ID });
+    existing_harness.computer_id = Some(COMPUTER_ID);
+    repo.claim_facts = Some(PairingClaimFacts {
+        device_secret_hash: harness_token::hash_token(&hosted.device_secret),
+        status: PairingStatus::Approved,
+        expires_at: Utc::now() + Duration::minutes(15),
+        harness_id: Some(existing_harness.id),
+    });
+    repo.claim_result = Some(existing_harness.clone());
+    let ClaimOutcome::Claimed(reclaimed) = service(repo)
+        .claim_pairing(
+            hosted.pairing_id,
+            ClaimPairingRequest {
+                device_secret: hosted.device_secret,
+            },
+        )
+        .await
+        .unwrap()
+    else {
+        panic!("expected re-enrollment credentials");
+    };
+    assert_eq!(reclaimed.harness.id, existing_harness.id);
+    assert_eq!(reclaimed.harness.computer_id, Some(COMPUTER_ID));
+    assert!(reclaimed.token.starts_with("mhns_"));
 }
 
 #[tokio::test]

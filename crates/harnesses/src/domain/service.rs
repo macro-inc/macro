@@ -436,11 +436,7 @@ where
         let pairing_id = match upserted {
             HostedPairingUpsert::Created => new_pairing_id,
             HostedPairingUpsert::Rotated { pairing_id } => pairing_id,
-            HostedPairingUpsert::Claimed => {
-                return Err(HarnessError::Gone(
-                    "this computer's pairing was already claimed".to_owned(),
-                ));
-            }
+            HostedPairingUpsert::Rekeyed => new_pairing_id,
         };
         Ok(HostedPairing {
             pairing_id,

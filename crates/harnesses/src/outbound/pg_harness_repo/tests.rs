@@ -654,20 +654,134 @@ async fn hosted_pairing_is_born_approved_rotates_on_retry_and_claims_once(pool: 
         .expect("hosted pairing claims");
     assert_eq!(claimed.id, harness_id);
 
-    // After the claim a retry changes nothing.
+    let bot_id = Uuid::now_v7();
+    sqlx::query!(
+        r#"INSERT INTO bots (id, kind, owner_user_id, name, handle, has_agent)
+           VALUES ($1, 'owned', $2, 'Bound agent', $3, true)"#,
+        bot_id,
+        OWNER_ID,
+        format!("bound-{bot_id}"),
+    )
+    .execute(&pool)
+    .await
+    .unwrap();
+    sqlx::query!(
+        r#"INSERT INTO agent_configs (bot_id, instructions, harness, default_model, channel_scope, harness_id, is_coding)
+           VALUES ($1, 'prompt', 'macrod', 'default', 'all', $2, true)"#,
+        bot_id, harness_id.as_uuid(),
+    ).execute(&pool).await.unwrap();
+    let second_token = HashedHarnessToken::from_raw(&tokens::generate_harness_token());
+    sqlx::query!(
+        "INSERT INTO harness_tokens (id, harness_id, token_hash, token_prefix) VALUES ($1, $2, $3, $4)",
+        Uuid::now_v7(), harness_id.as_uuid(), &second_token.hash[..], second_token.prefix,
+    ).execute(&pool).await.unwrap();
+
+    // Re-enrollment replaces credentials without replacing the harness.
+    let replacement_id = Uuid::now_v7();
     let after_claim = repo
         .upsert_hosted_pairing(
-            hosted_pairing(Uuid::new_v4(), "third-secret"),
+            hosted_pairing(replacement_id, "third-secret"),
             hosted_harness(team_id, computer_id),
         )
         .await
         .unwrap();
-    assert_eq!(after_claim, HostedPairingUpsert::Claimed);
-    let facts = repo.pairing_claim_facts(pairing_id).await.unwrap().unwrap();
-    assert_eq!(facts.status, PairingStatus::Claimed);
+    assert_eq!(after_claim, HostedPairingUpsert::Rekeyed);
+    assert!(
+        repo.pairing_claim_facts(pairing_id)
+            .await
+            .unwrap()
+            .is_none()
+    );
+    assert!(
+        repo.claim_pairing(
+            pairing_id,
+            Uuid::now_v7(),
+            HashedHarnessToken::from_raw(&token)
+        )
+        .await
+        .unwrap()
+        .is_none()
+    );
+    let revoked = sqlx::query_scalar!(
+        "SELECT bool_and(revoked_at IS NOT NULL) FROM harness_tokens WHERE harness_id = $1",
+        harness_id.as_uuid(),
+    )
+    .fetch_one(&pool)
+    .await
+    .unwrap();
+    assert_eq!(revoked, Some(true));
+    let facts = repo
+        .pairing_claim_facts(replacement_id)
+        .await
+        .unwrap()
+        .unwrap();
+    assert_eq!(facts.status, PairingStatus::Approved);
+    assert_eq!(facts.harness_id, Some(harness_id));
     assert_eq!(
         facts.device_secret_hash,
-        harness_token::hash_token("second-secret")
+        harness_token::hash_token("third-secret")
+    );
+    let new_token = tokens::generate_harness_token();
+    let reclaimed = repo
+        .claim_pairing(
+            replacement_id,
+            Uuid::now_v7(),
+            HashedHarnessToken::from_raw(&new_token),
+        )
+        .await
+        .unwrap()
+        .unwrap();
+    assert_eq!(reclaimed.id, harness_id);
+    assert_eq!(reclaimed.created_at, claimed.created_at);
+    assert_eq!(reclaimed.owner, claimed.owner);
+    assert_eq!(
+        reclaimed.allow_permission_bypass,
+        claimed.allow_permission_bypass
+    );
+    assert_eq!(
+        repo.computer_harness(computer_id).await.unwrap(),
+        Some(harness_id)
+    );
+    let active_tokens = sqlx::query_scalar!(
+        r#"SELECT count(*) AS "count!" FROM harness_tokens WHERE harness_id = $1 AND revoked_at IS NULL"#,
+        harness_id.as_uuid(),
+    ).fetch_one(&pool).await.unwrap();
+    assert_eq!(active_tokens, 1);
+
+    let bound_harness = sqlx::query_scalar!(
+        "SELECT harness_id FROM agent_configs WHERE bot_id = $1",
+        bot_id,
+    )
+    .fetch_one(&pool)
+    .await
+    .unwrap();
+    assert_eq!(bound_harness, Some(harness_id.as_uuid()));
+
+    // Re-key still works after cleanup removes a claimed pairing.
+    sqlx::query!(
+        "DELETE FROM harness_pairing_requests WHERE id = $1",
+        replacement_id
+    )
+    .execute(&pool)
+    .await
+    .unwrap();
+    let next_pairing = Uuid::now_v7();
+    assert_eq!(
+        repo.upsert_hosted_pairing(
+            hosted_pairing(next_pairing, "fourth-secret"),
+            hosted_harness(team_id, computer_id),
+        )
+        .await
+        .unwrap(),
+        HostedPairingUpsert::Rekeyed
+    );
+    assert_eq!(
+        repo.pairing_claim_facts(next_pairing)
+            .await
+            .unwrap()
+            .unwrap()
+            .harness_id,
+        Some(harness_id)
     );
 
     // Revoked, the computer has no live harness and may be paired afresh.
