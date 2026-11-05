@@ -105,11 +105,23 @@ fn check() -> Job {
         .add_step(steps::setup_nix())
         .add_step(steps::setup_dev_shell())
         .add_step(steps::configure_namespace_sccache(vars::CI_SCCACHE_NAME))
-        .add_step(steps::code_mode_assets())
+        .add_step(empty_code_mode_assets())
         .add_step(cargo_fmt())
         .add_step(cargo_clippy())
         .add_step(steps::show_sccache_stats())
         .add_step(steps::teardown_nix())
+}
+
+/// Lint never reads the embedded assets' contents, so `check` compiles against empty
+/// files at a fixed path. It builds nothing, and an SDK change doesn't re-lint every
+/// dependent of `code_mode_assets` when no Rust changed.
+fn empty_code_mode_assets() -> Step<Run> {
+    Step::new("Point at empty code-mode assets").run(indoc::indoc! {r#"
+        assets="$RUNNER_TEMP/empty-code-mode-assets"
+        mkdir -p "$assets"
+        touch "$assets/sdk.mjs" "$assets/handlebars.mjs" "$assets/documentation.json" "$assets/operations.json"
+        echo "CODE_MODE_ASSETS_DIR=$assets" >> "$GITHUB_ENV"
+    "#})
 }
 
 /// The env the clippy-side jobs share, so their sccache keys stay identical.
