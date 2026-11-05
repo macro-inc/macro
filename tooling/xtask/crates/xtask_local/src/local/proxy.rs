@@ -96,7 +96,7 @@ pub fn write_caddyfile(instance: &Instance, mode: Mode, static_frontend: bool) -
 /// the generated per-service routes (from the inventory), the special
 /// non-inventory routes, the mode's static-file block, the optional
 /// static-frontend block, then the tail.
-fn caddyfile(instance: &Instance, mode: Mode, static_frontend: bool) -> String {
+pub(super) fn caddyfile(instance: &Instance, mode: Mode, static_frontend: bool) -> String {
     let static_block = if mode.spec().static_files_via_localstack {
         STATIC_FILE_LOCAL
     } else {
