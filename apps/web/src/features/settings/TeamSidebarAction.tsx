@@ -100,12 +100,13 @@ function ActionItem(props: {
 
 /**
  * Rainbow stops pulled toward the ink color: darker on the light sidebar and
- * lighter on the dark one, so every part of the small label stays legible.
+ * lighter on the dark one, so every stop keeps the small label at 4.5:1 or
+ * better on both sidebars.
  */
 const RAINBOW_TEXT_STYLE: JSX.CSSProperties = {
   'background-image': `linear-gradient(90deg, ${[
     '#e5484d',
-    '#f5a524',
+    '#d97706',
     '#30a46c',
     '#0091ff',
     '#8e4ec6',
