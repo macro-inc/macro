@@ -39,13 +39,18 @@ computer on `GET /team_agents` and `GET /team_agents/me`.
 
 ## Gotchas
 
-- The config drive carries one Macro credential, `MACRO_API_KEY`, which
-  bootstraps auth, plus `MACRO_REPO_TOKEN`, scoped to the agent's own repo.
-  Every other secret goes through `agent_secrets`, fetched per use.
-- `outbound/hosted_runtimes_computers.rs` is a placeholder until PR A's
-  purchase API lands: every call answers 409, so creates stop before any
-  charge. The persona (name, job, personality) is written into the repo's
-  `OPERATING.md` by `agent_git`, not stored here.
+- The config file `/etc/macro/personas/<os_user>.env` holds the bootstrap
+  credentials: `MACRO_API_KEY` and the repo-scoped `MACRO_REPO_TOKEN`. Write
+  it with mode 600, owned by `os_user`. Every other secret goes through
+  `agent_secrets`, fetched per use.
+- Run `/opt/macro/brain run` as the name-derived OS user, with `MACRO_GATEWAY`,
+  `BRAIN_WORKSPACE=/home/<os_user>/workspace`, `BRAIN_HEALTH_PORT=7801`,
+  `MACRO_REPO_URL`, `MACRO_REPO_TOKEN`, `MACRO_AGENT_USER_ID`, and `MACRO_API_KEY`
+  in the persona config.
+- `outbound/hosted_runtimes_computers.rs` calls `ComputerService` in process;
+  its purchase forwards the persona and seat in `extra_items` for one Stripe
+  update. Tests keep the fake `Computers` port. The persona (name, job,
+  personality) is written into the repo's `OPERATING.md` by `agent_git`.
 - Delete runs computer → repo → seat → mailbox → account; the row goes last
   so a retry after a partial failure still finds the agent.
 - Without `DEAD_SIMPLE_MAIL_API_KEY` agents get an `@agents.macro.invalid`

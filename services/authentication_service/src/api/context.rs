@@ -129,7 +129,11 @@ pub(crate) type TeamAgentsServiceType = team_agents::domain::service::TeamAgentS
         >,
     >,
     team_agents::outbound::dead_simple_email::DeadSimpleEmail,
-    team_agents::outbound::hosted_runtimes_computers::HostedRuntimesComputers,
+    team_agents::outbound::hosted_runtimes_computers::HostedRuntimesComputers<
+        hosted_runtimes::outbound::pg::PgComputerRepo,
+        crate::outbound::computer_billing::TeamComputerBilling<TeamsServiceType>,
+        hosted_runtimes::domain::service::SystemClock,
+    >,
     team_agents::outbound::agent_git_repos::AgentGitRepos,
     feature_flags::outbound::posthog::PostHogFeatureFlags,
 >;

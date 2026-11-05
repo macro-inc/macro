@@ -27,7 +27,9 @@ key issuance, and account merge/link flows.
   relocation signup, Cursor/Codex API key endpoints, introductory trial
   eligibility and subscription checkout, and the `/team_agents` routes
   (`crates/team_agents` and `crates/agent_secrets`; optional
-  `DEAD_SIMPLE_MAIL_API_KEY`).
+  `DEAD_SIMPLE_MAIL_API_KEY`). The agents adapter shares the hosted
+  `ComputerService` used for computer billing, passing the seat as an extra
+  purchase item so both charges use one subscription update.
 - Not here: authorization/permission decisions on other entities →
   `crates/macro_authorization`; metered AI credits → `crates/ai_billing`;
   team lifecycle and seats → `crates/teams`; a person's interface language

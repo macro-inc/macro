@@ -709,7 +709,9 @@ pub async fn run() -> anyhow::Result<()> {
             config.dead_simple_mail_api_key.value().map(str::to_string),
         )
         .map_err(|error| anyhow::anyhow!("{error:?}"))?,
-        team_agents::outbound::hosted_runtimes_computers::HostedRuntimesComputers,
+        team_agents::outbound::hosted_runtimes_computers::HostedRuntimesComputers::new(
+            computer_service.clone(),
+        ),
         team_agents::outbound::agent_git_repos::AgentGitRepos::new(
             agent_git::client::AgentGitClient::new(
                 macro_service_urls::AgentGitServiceUrl::new()?.to_string(),

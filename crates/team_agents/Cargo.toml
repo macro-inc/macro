@@ -17,6 +17,7 @@ inbound = [
 outbound = [
   "dep:agent_git",
   "dep:agent_secrets",
+  "dep:hosted_runtimes",
   "dep:reqwest",
   "dep:sqlx",
   "dep:teams",
@@ -30,6 +31,7 @@ axum = { workspace = true, optional = true }
 chrono = { workspace = true, features = ["serde"] }
 entity_access = { path = "../entity_access", default-features = false, features = ["ports"] }
 feature_flags = { path = "../feature_flags" }
+hosted_runtimes = { path = "../hosted_runtimes", optional = true, default-features = false, features = ["ports"] }
 macro_authorization = { path = "../macro_authorization", optional = true, default-features = false, features = ["axum"] }
 macro_user_id = { path = "../macro_user_id" }
 model-error-response = { path = "../model-error-response", optional = true }

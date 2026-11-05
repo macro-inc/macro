@@ -20340,6 +20340,7 @@ dependencies = [
  "chrono",
  "entity_access",
  "feature_flags",
+ "hosted_runtimes",
  "macro_authorization",
  "macro_db_migrator",
  "macro_user_id",
