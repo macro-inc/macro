@@ -13,7 +13,7 @@ env:
   BZ_ROOT: /home/runner/bazel-root
 jobs:
   test:
-    runs-on: namespace-profile-linux-large-build;overrides.cache-tag=ci-exp-bazel
+    runs-on: namespace-profile-linux-rust-ci;overrides.cache-tag=ci-exp-bazel
     services:
       postgres:
         image: pgvector/pgvector:pg14
@@ -93,7 +93,7 @@ jobs:
       if: always()
       run: |
         code=0
-        time bazel --output_user_root=$BZ_ROOT --host_jvm_args=-Xmx3g $BZ_RC test --keep_going --jobs=$(nproc) --local_test_jobs=$(( $(nproc) / 2 )) --test_timeout=900 --test_env=RUST_TEST_THREADS=8 --test_env=PER_TEST_TIMEOUT=300 --run_under=$PWD/tooling/bazel-proto/per_test_runner.py --test_output=summary --test_summary=short --build_tests_only -- //crates/... //services/... //tooling/... -//tooling/xtask/crates/xtask_workflows:xtask_workflows_bin_test > /tmp/test.log 2>&1 || code=$?
+        time bazel --output_user_root=$BZ_ROOT --host_jvm_args=-Xmx3g $BZ_RC test --keep_going --jobs=$(nproc) --local_test_jobs=4 --test_timeout=900 --test_env=RUST_TEST_THREADS=8 --test_env=PER_TEST_TIMEOUT=300 --run_under=$PWD/tooling/bazel-proto/per_test_runner.py --test_output=summary --test_summary=short --build_tests_only -- //crates/... //services/... //tooling/... -//tooling/xtask/crates/xtask_workflows:xtask_workflows_bin_test > /tmp/test.log 2>&1 || code=$?
         grep -E '^(ERROR|FATAL|FAIL:)|TIMEOUT' /tmp/test.log | head -40 | cut -c1-200
         grep -E '^INFO: (Elapsed|[0-9,]+ processes)|^Executed' /tmp/test.log | cut -c1-200
         echo "cached test targets: $(grep -cE '\(cached\) PASSED' /tmp/test.log || true)"
@@ -112,7 +112,9 @@ jobs:
         exit $code
     - name: disk use
       if: always()
-      run: du -sh /home/runner/.cache/bazel /nix 2>/dev/null; df -h /home/runner | tail -1
+      run: |
+        du -sh /home/runner/bazel-root /nix 2>/dev/null || true
+        df -h /home/runner | tail -1
     - name: Teardown Nix
       if: always()
       uses: './.github/actions/teardown-nix'
