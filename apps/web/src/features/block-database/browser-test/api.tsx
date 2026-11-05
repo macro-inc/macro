@@ -1,14 +1,19 @@
 import '@app/index.css';
 import type { OpResult } from '@core/database-sql/generated/types';
+import type { CardPosition } from '@service-storage/generated/schemas/cardPosition';
 import { QueryClient, QueryClientProvider } from '@tanstack/solid-query';
-import { errAsync, okAsync, ResultAsync } from 'neverthrow';
+import { err, errAsync, okAsync, ResultAsync } from 'neverthrow';
 import { createSignal } from 'solid-js';
 import { render } from 'solid-js/web';
 import { DatabaseTitle } from '../../database/components/database-title';
 import { DatabaseProvider } from '../../database/context/database';
 import type { DatabaseApi, DatabaseTableSchema } from '../../database/core/api';
 import type { DatabaseRow } from '../../database/core/table';
-import type { DatabaseViewState } from '../../database/core/view-state';
+import type {
+  CardMoved,
+  DatabaseViewState,
+} from '../../database/core/view-state';
+import type { DatabaseOpFailure } from '../../database/core/write-failure';
 import { DatabaseRecords } from '../../database/views/database-records';
 
 const tableId = '00000000-0000-0000-0000-000000000001';
@@ -17,6 +22,20 @@ const statusId = '00000000-0000-0000-0000-000000000003';
 const optionId = '00000000-0000-0000-0000-000000000004';
 
 function ApiFixture() {
+  const boardHost = new URLSearchParams(location.search).get('boardHost');
+  const [positions, setPositions] = createSignal<CardPosition[]>([
+    {
+      row: '00000000-0000-0000-0000-000000000010',
+      lane: { kind: 'option', id: optionId },
+      position: '8180',
+    },
+    {
+      row: '00000000-0000-0000-0000-000000000011',
+      lane: { kind: 'option', id: optionId },
+      position: '80',
+    },
+  ]);
+  const [refuseMove, setRefuseMove] = createSignal<() => void>();
   const [name, setName] = createSignal('Untitled database');
   let editTitle: (() => void) | undefined;
   const [editable, setEditable] = createSignal(true);
@@ -49,7 +68,18 @@ function ApiFixture() {
         dataType: 'SELECT_STRING',
         isMultiSelect: false,
         writable: true,
-        options: [{ id: optionId, label: 'Open', color: null }],
+        options: [
+          { id: optionId, label: 'Open', color: null },
+          ...(boardHost
+            ? [
+                {
+                  id: '00000000-0000-0000-0000-000000000005',
+                  label: 'Negotiation',
+                  color: null,
+                },
+              ]
+            : []),
+        ],
       },
     ],
   };
@@ -185,7 +215,7 @@ function ApiFixture() {
       }
     >
       <main class="flex h-screen flex-col bg-panel text-ink">
-        <div class="flex gap-4 p-4">
+        <div class="flex flex-wrap gap-4 p-4">
           <DatabaseTitle
             name={name()}
             canEdit={editable()}
@@ -216,6 +246,16 @@ function ApiFixture() {
             Show board
           </button>
           <output aria-label="API writes">{writes()}</output>
+          {boardHost && (
+            <>
+              <output aria-label="Saved positions" class="sr-only">
+                {JSON.stringify(positions())}
+              </output>
+              <button disabled={!refuseMove()} onClick={() => refuseMove()?.()}>
+                Refuse move
+              </button>
+            </>
+          )}
           <button
             type="button"
             onMouseDown={(event) => event.preventDefault()}
@@ -233,6 +273,34 @@ function ApiFixture() {
           <DatabaseRecords
             view={view()}
             stored={false}
+            boardPositions={
+              boardHost
+                ? {
+                    state: () => ({ kind: 'ready', positions: positions() }),
+                    setPositions:
+                      boardHost === 'setter' ? setPositions : undefined,
+                    move: () =>
+                      new ResultAsync<CardMoved, DatabaseOpFailure>(
+                        new Promise((resolve) => {
+                          setRefuseMove(
+                            () => () =>
+                              resolve(
+                                err({
+                                  kind: 'ops',
+                                  error: {
+                                    code: 'INVALID_OP',
+                                    refusal: null,
+                                    message:
+                                      'Fill in Amount before entering Negotiation.',
+                                  },
+                                })
+                              )
+                          );
+                        })
+                      ),
+                  }
+                : undefined
+            }
             onViewChange={(change) =>
               setView((view) => ({ ...view, ...change }))
             }

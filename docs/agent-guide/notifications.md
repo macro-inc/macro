@@ -1,5 +1,117 @@
 # Notifications
 
+## Notifications view — `/app/notifications`
+
+Behind `enable-unified-notifications` (with GraphQL Soup), the bell below Home
+on the outer rail (`g i`) opens one list of everything that needs you, newest
+first. The flag is on in dev and comes from PostHog elsewhere;
+`VITE_ENABLE_UNIFIED_NOTIFICATIONS` overrides it locally. With the flag off the
+route redirects to Home once flags load, and `g i` stays on Home; with it on,
+Home keeps `g h`.
+
+Each card is one row of the server's notification inbox
+(`user.notificationInbox`): an email thread, a channel's top-level messages, one
+top-level message with everything about it (its replies, mentions and reactions,
+once there is more than one thing), an entity's comments, a task assignment, a
+pull request, a calendar event, an access request or grant, or an agent session.
+A top-level message that mentions you has its own card, with its thread; an
+entity's comments stay on one card even when one mentions you. The server decides
+all of this (`crates/notification_inbox/src/domain/rows.rs`), so live updates and
+reads stack the same way. A card shows who it is from (an avatar, an initial for a
+sender known only by name such as an email's, or the kind of notification for a
+reminder), with a badge on the avatar's corner saying what kind it is, in the theme's color for
+the entity it is on, as on that entity's icon elsewhere (Channel,
+Message, Mention, Reply, Reaction, Email, Comment, Invite, Access, Agent, Task, Pull
+request, Event or Reminder; a stack's newest notification decides, except that a
+mention stays one). It is as tall as it has something to say: who did it (for example
+**&lt;first name&gt; assigned you a task**), with an unread dot; what it is about;
+and up to two lines of what was said. An email has all three (sender, subject,
+snippet), a message in a channel has no middle line, and a task has no last one.
+Several notifications on a row make a stack, with paper edges: it names
+who, what they share (the top-level message when a notification carries it, the
+channel, session, document or thread), and the newest line, with its sender when
+there are several people.
+Choosing a stack opens it and leaves it folded; only its caret unfolds it: the card
+stays exactly as it was, its notifications spread into small cards below it, inset
+evenly where its paper edges sat, and every other card dims until you close it. Hovering or moving to a dimmed
+card brings it back. Each small card opens that notification:
+its message or reply, its comment, or an agent's turn. A channel invite and an
+email have no message of their own, so they open the channel or the thread.
+A stack stays open as new notifications land. The time always shows; on hover Mark done takes its place, and nothing else moves. The author is
+the row's actor: a Macro user by first name, an agent by its bot name, or
+**Macro**; a row from outside Macro names its email sender, and GitHub rows
+keep the GitHub login. A row type, author kind, or button this build doesn't
+know yet shows as a plain card with no author and no button.
+Date dividers split the list into Home's sections (**Last hour**, **This
+morning**, **Yesterday**, and so on), by each row's newest notification; `j`/`k`
+skip them.
+
+Click a row or press Enter to preview it beside the list, opened at the
+notification's message, thread, or comment, under a **Notifications >**
+breadcrumb that clears the preview. Previewing marks the row seen, including
+notifications the row hides, and drops its unread dot. With a preview open, `j`/`k` move it along the
+list and through unfolded notifications; `l` or the right arrow unfolds the focused
+stack and the left arrow folds it from anywhere inside it. Opening a notification
+marks its whole row seen, and `e` on one marks its whole stack done. Choosing what's
+shown again re-aims it. Calendar events and projects
+open in their own views instead. Shift-click or the alternate key opens a new
+split. Hover a row and choose **Mark done**, or press `e`, to complete that row
+only: the channel thread stays when the channel's top-level row is done, and an
+open preview moves to the next row. A toast offers **Undo**, as does
+`⌘Z`/`Ctrl+Z`. A new notification in a done row brings it back. An empty inbox
+reads **You’re all caught up**; with nothing chosen the pane reads **No
+notification selected**.
+
+Rows carry the buttons the server lists for them under their text. An access request offers **Approve** (grants the level asked
+for) and **Deny**; a request to join an event you shared offers **Accept** and
+**Decline**. Deciding disables the buttons until it finishes, shows a toast
+(**Access granted**, **Access request denied**, **Added to the event**,
+**Join request declined**), and removes the row; a failed decision leaves the
+row and says so. An agent waiting for you offers **Answer** and a granted
+access request **Open**; both open the row as choosing it does. A pull request
+whose review was requested offers **Review**, which opens the pull request on
+GitHub and marks the row seen.
+
+**All** and **Unread** under the header switch the list (`1` and `2`, or Tab, also
+switch), and the choice is kept per user across reloads. A row you read under
+Unread, or a stack you're going through, stays until you next switch or reload.
+With nothing unread, Unread shows **You're all caught up**.
+
+**Filter notifications** (funnel, or `f`) offers **Type** checkboxes that start
+checked: Mentions, Replies, Messages, Comments, Email, Tasks, Pull requests,
+Calendar, Access requests, and Agents. Unchecking a type hides its rows (Mentions
+covers both channel and comment mentions, Replies both channel and comment
+threads). The trigger counts hidden types, and **Reset filters** shows them all
+again without changing All or Unread. Choices persist per user across reloads.
+Hiding every type shows **Every kind of notification is hidden** with Reset
+filters; types that hide every row show **No notifications match these filters**. The gear beside
+the filter opens **Settings → Notifications**, which decides what is delivered
+at all (including push and email).
+
+On touch devices the dock's bell (**Notifications**) opens this view with the
+flag on, as the list alone under the floating controls Home, Email, Tasks and Drive
+use: the filter drawer (Type), then All and Unread pills. Cards keep the same anatomy with 44px targets
+and inline row buttons; at phone width they have a larger avatar and slightly larger
+text and sit further apart; a read card there loses its fill, fades its avatar and
+mutes its text, so unread cards stand out. A tablet keeps the desktop's sizes. Tapping a card or an unfolded notification opens it
+full-screen in place, tapping a stack's caret unfolds it, a left swipe marks it
+done (with the same Undo), and pulling down refreshes. Hover controls and the preview pane are desktop-only. The
+dock keeps the bell active while the view shows.
+
+The list updates live, without a reload, and a live change never remounts a card:
+list items are one object per row id and each card reads its row's latest data
+(`primitives/inbox-date-headers.ts`). Scrolled down, a card landing above what
+you're reading doesn't move it.
+
+Verify with two accounts and the inbox left open: two top-level messages in a
+channel stack on it; two reactions to your message, or a reaction and a reply, stack
+on that message and leave the channel's card; comments in different threads of a
+document share one card. Each appears within a second with no reload. Unfold a stack
+with its caret and choose each notification: the preview moves to that message or
+comment, and stays there as new ones land. Marking one
+done leaves the others, Undo restores it in place, and a new notification in a done
+row brings it back with only what's new.
+
 ## Reading items
 
 Opening or previewing an item clears the unread dot immediately, before its
@@ -239,6 +351,7 @@ sounds on, it shows a volume slider and one row per type (Messages, Mentions,
 Thread replies, Email, Meetings & reminders, Tasks, AI & agents, Everything
 else), each with its own on/off switch, sound picker, and play button. Picking
 a sound previews it. Email, AI & agents, and Everything else start off.
+Channel join requests use Everything else, alongside sharing and invitations.
 
 Sounds are synthesized with Web Audio (`features/notification-sounds`); there
 are no audio files. Event types map to rows in `core/categories.ts`; a new

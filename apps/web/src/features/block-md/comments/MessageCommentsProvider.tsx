@@ -166,7 +166,6 @@ export const MessageCommentsProvider: VoidComponent<{
     setCommentState('highlightedCommentId', v);
   const setActiveMarkIds = activeMarkIdsSignal.set;
   const canEdit = permissions.canEdit;
-  const canComment = permissions.canComment;
   const userId = useUserId();
   const patchThread = usePatchThreadMutation();
   // Pending commands, not a comment projection: metadata for an old root may
@@ -236,11 +235,9 @@ export const MessageCommentsProvider: VoidComponent<{
           if (node && element) updateMarkPresentation(node, element, markId);
         }
       });
-      // Deleting one's own comment also includes removing its persisted mark.
-      if (
-        state.deleted_at &&
-        (canEdit() || (canComment() && state.user_id === userId()))
-      )
+      // Only an editor's session writes the document, so it removes the
+      // persisted mark, including for comments deleted while it was closed.
+      if (state.deleted_at && canEdit())
         editor.dispatchCommand(DELETE_COMMENT_COMMAND, [markId, true]);
     }
   };

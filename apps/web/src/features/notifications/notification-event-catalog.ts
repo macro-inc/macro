@@ -73,6 +73,11 @@ export const NOTIFICATION_EVENT_GROUPS: readonly NotificationEventGroup[] = [
         label: 'Message reactions',
         description: 'When someone reacts to one of your messages',
       },
+      {
+        type: 'channel_access_requested',
+        label: 'Requests to join',
+        description: 'When someone asks to join a channel you belong to',
+      },
     ],
   },
   {

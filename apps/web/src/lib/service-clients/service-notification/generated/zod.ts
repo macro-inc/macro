@@ -2227,6 +2227,44 @@ export const listTypedNotificationsResponse = zod
                     .object({
                       content: zod
                         .object({
+                          channelName: zod.string().optional(),
+                          channelType: zod.enum([
+                            'public',
+                            'private',
+                            'directMessage',
+                            'team',
+                          ]),
+                        })
+                        .describe(
+                          'Common metadata for notifications on channels'
+                        )
+                        .and(
+                          zod.object({
+                            requestId: zod
+                              .uuid()
+                              .describe(
+                                "The attempt to join, which is also this notification's id."
+                              ),
+                            senderProfilePictureUrl: zod
+                              .string()
+                              .nullish()
+                              .describe(
+                                'Optional requester profile picture URL.'
+                              ),
+                          })
+                        )
+                        .describe(
+                          'A person asked to join a channel the recipient participates in.'
+                        ),
+                      tag: zod.enum(['channel_access_requested']),
+                    })
+                    .describe(
+                      'Someone asked to join a channel the user participates in.'
+                    ),
+                  zod
+                    .object({
+                      content: zod
+                        .object({
                           outcome: zod
                             .enum(['succeeded', 'failed'])
                             .describe(
@@ -4325,6 +4363,44 @@ export const bulkGetTypedNotificationsByEventItemIdsResponse = zod
                     .object({
                       content: zod
                         .object({
+                          channelName: zod.string().optional(),
+                          channelType: zod.enum([
+                            'public',
+                            'private',
+                            'directMessage',
+                            'team',
+                          ]),
+                        })
+                        .describe(
+                          'Common metadata for notifications on channels'
+                        )
+                        .and(
+                          zod.object({
+                            requestId: zod
+                              .uuid()
+                              .describe(
+                                "The attempt to join, which is also this notification's id."
+                              ),
+                            senderProfilePictureUrl: zod
+                              .string()
+                              .nullish()
+                              .describe(
+                                'Optional requester profile picture URL.'
+                              ),
+                          })
+                        )
+                        .describe(
+                          'A person asked to join a channel the recipient participates in.'
+                        ),
+                      tag: zod.enum(['channel_access_requested']),
+                    })
+                    .describe(
+                      'Someone asked to join a channel the user participates in.'
+                    ),
+                  zod
+                    .object({
+                      content: zod
+                        .object({
                           outcome: zod
                             .enum(['succeeded', 'failed'])
                             .describe(
@@ -6417,6 +6493,44 @@ export const getTypedNotificationsByEventItemIdResponse = zod
                     .object({
                       content: zod
                         .object({
+                          channelName: zod.string().optional(),
+                          channelType: zod.enum([
+                            'public',
+                            'private',
+                            'directMessage',
+                            'team',
+                          ]),
+                        })
+                        .describe(
+                          'Common metadata for notifications on channels'
+                        )
+                        .and(
+                          zod.object({
+                            requestId: zod
+                              .uuid()
+                              .describe(
+                                "The attempt to join, which is also this notification's id."
+                              ),
+                            senderProfilePictureUrl: zod
+                              .string()
+                              .nullish()
+                              .describe(
+                                'Optional requester profile picture URL.'
+                              ),
+                          })
+                        )
+                        .describe(
+                          'A person asked to join a channel the recipient participates in.'
+                        ),
+                      tag: zod.enum(['channel_access_requested']),
+                    })
+                    .describe(
+                      'Someone asked to join a channel the user participates in.'
+                    ),
+                  zod
+                    .object({
+                      content: zod
+                        .object({
                           outcome: zod
                             .enum(['succeeded', 'failed'])
                             .describe(
@@ -8406,6 +8520,40 @@ export const getTypedNotificationByIdResponse = zod
             })
             .describe(
               'A channel member asked to be added as a guest of an event the\nuser shared with the channel.'
+            ),
+          zod
+            .object({
+              content: zod
+                .object({
+                  channelName: zod.string().optional(),
+                  channelType: zod.enum([
+                    'public',
+                    'private',
+                    'directMessage',
+                    'team',
+                  ]),
+                })
+                .describe('Common metadata for notifications on channels')
+                .and(
+                  zod.object({
+                    requestId: zod
+                      .uuid()
+                      .describe(
+                        "The attempt to join, which is also this notification's id."
+                      ),
+                    senderProfilePictureUrl: zod
+                      .string()
+                      .nullish()
+                      .describe('Optional requester profile picture URL.'),
+                  })
+                )
+                .describe(
+                  'A person asked to join a channel the recipient participates in.'
+                ),
+              tag: zod.enum(['channel_access_requested']),
+            })
+            .describe(
+              'Someone asked to join a channel the user participates in.'
             ),
           zod
             .object({

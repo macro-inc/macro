@@ -94,6 +94,7 @@ use crate::{
                         CommentedOnDocumentMetadata,
                         model_notifications::EntityAccessRequestedMetadata,
                         model_notifications::EntityAccessGrantedMetadata,
+                        model_notifications::ChannelAccessRequestedMetadata,
                         model_notifications::RequestedAccessLevel,
                         GithubPrNotificationCommon,
                         GithubPrStatusChanged,

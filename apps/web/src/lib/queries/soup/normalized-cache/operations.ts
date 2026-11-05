@@ -745,6 +745,9 @@ export function removeSearchEntities(
  * `created` marks an entity that did not exist a moment ago, so it sorts first
  * in newest-first lists. It is inserted into the REST lists whose filters admit
  * it, without refetching any list, in either transport.
+ *
+ * `notified` marks a new notification about the entity, which a mounted
+ * `notified_at` list must show even if the entity isn't cached yet.
  */
 export async function refetchSoupEntity(
   entityId: string,
@@ -754,6 +757,7 @@ export async function refetchSoupEntity(
     ownTouch?: boolean;
     refreshGraphql?: boolean;
     created?: boolean;
+    notified?: boolean;
   }
 ): Promise<void> {
   if (options?.refreshGraphql) {
@@ -762,10 +766,11 @@ export async function refetchSoupEntity(
 
   // GraphQL lists never read this cache, so a miss means no REST list shows
   // the entity. Own-touch inserts still land because Home's touched_by_me
-  // feed stays on REST.
+  // feed stays on REST, and notified ones because notified_at lists do.
   if (
     !options?.ownTouch &&
     !options?.created &&
+    !(options?.notified && mountedNotifiedLists().length > 0) &&
     isFeatureEnabled(enableGraphqlSoup) &&
     !hasSoupEntity(entityId)
   ) {
@@ -807,8 +812,40 @@ export async function refetchSoupEntity(
       } else {
         invalidateAllSoup();
       }
+      if (options?.notified) {
+        fireAndForget(
+          rereadNotifiedListsAfterFirstRead(),
+          'soup-normalized-cache'
+        );
+      }
     }
   }
+}
+
+/** Lists on screen ordered by `notified_at`, which only REST serves. */
+function mountedNotifiedLists() {
+  return queryClient
+    .getQueryCache()
+    .findAll({ queryKey: soupKeys.astItems._def, type: 'active' })
+    .filter((query) => JSON.stringify(query.queryKey).includes('notified_at'));
+}
+
+/**
+ * A list's first read has no pages to insert into, and invalidating reuses it
+ * rather than restarting it, so its response can predate a new notification.
+ * Read each of those lists again once its own first read settles.
+ */
+async function rereadNotifiedListsAfterFirstRead(): Promise<void> {
+  const firstReads = mountedNotifiedLists().filter(
+    (query) =>
+      query.state.data === undefined && query.state.fetchStatus === 'fetching'
+  );
+  await Promise.allSettled(
+    firstReads.map(async (query) => {
+      await Promise.allSettled([query.promise]);
+      queryClient.invalidateQueries({ queryKey: query.queryKey, exact: true });
+    })
+  );
 }
 
 /**

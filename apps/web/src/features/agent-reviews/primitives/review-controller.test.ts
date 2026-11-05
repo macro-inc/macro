@@ -108,6 +108,67 @@ describe('persisted review decisions', () => {
     await Promise.resolve();
     expect(controller.stale()).toBe(true);
   });
+  it('a poll returning its own in-flight save does not mark the review stale', async () => {
+    const [source, update] = createSignal<EmailReview>({
+      ...initial,
+      revision: 1,
+      presentedAt: 100,
+    });
+    let commit!: (record: Review) => void;
+    let started!: () => void;
+    const saving = new Promise<void>((resolve) => {
+      started = resolve;
+    });
+    const actions = {
+      reload: async (): Promise<Review> => source(),
+      decide: vi.fn(
+        () =>
+          new Promise<Review>((resolve) => {
+            commit = resolve;
+            started();
+          })
+      ),
+    };
+    const controller = createRoot((dispose) => {
+      cleanups.push(dispose);
+      return createReviewController(source, actions);
+    });
+    const edited: EmailReview = {
+      ...source(),
+      revision: 2,
+      items: [
+        {
+          ...initial.items[0],
+          draft: {
+            subject: 'Ready?',
+            body: 'Yes',
+            to: [{ email: 'a@example.com' }],
+          },
+        },
+        initial.items[1],
+      ],
+    };
+    controller.edit('one', { kind: 'email', draft: edited.items[0].draft });
+    const flushed = controller.flush();
+    await saving;
+
+    update(edited);
+    expect(controller.stale()).toBe(false);
+
+    commit(edited);
+    expect(await flushed).toBe(true);
+    expect(controller.stale()).toBe(false);
+    expect(controller.record().revision).toBe(2);
+
+    update({
+      ...edited,
+      revision: 3,
+      items: edited.items.map((item) => ({ ...item, status: 'dismissed' })),
+    });
+    await Promise.resolve();
+    expect(controller.stale()).toBe(false);
+    expect(controller.record().items[0].status).toBe('dismissed');
+  });
   it('saves the latest edits before sending all, using the acknowledged revision', async () => {
     const { controller, actions } = setup();
     controller.edit('one', {

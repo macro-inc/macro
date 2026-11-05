@@ -72,10 +72,7 @@ try {
   const notes = await renderSdkDocs(root, rendered);
   const pages = await readMarkdownPages(join(rendered, 'markdown'));
   const docs = packageEntityDocs(pages, entityDirectories, notes);
-  await artifact(
-    'documentation.json',
-    `${JSON.stringify(docs, null, 2)}\n`
-  );
+  await artifact('documentation.json', `${JSON.stringify(docs, null, 2)}\n`);
 } finally {
   await rm(rendered, { recursive: true, force: true });
 }
@@ -120,7 +117,4 @@ for (const [service, directory] of Object.entries({
         .trim();
   }
 }
-await artifact(
-  'operations.json',
-  `${JSON.stringify(operations, null, 2)}\n`
-);
+await artifact('operations.json', `${JSON.stringify(operations, null, 2)}\n`);

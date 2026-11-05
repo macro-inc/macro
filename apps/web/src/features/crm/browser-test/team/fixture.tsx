@@ -57,14 +57,16 @@ function Detail(props: { id: string }) {
             hidden={record().hidden}
             canManage={role() !== 'member'}
             pending={mutation.isPending}
-            onChange={(hidden, onSuccess) => {
+            onChange={(hidden, onSuccess, onError) => {
               setError('');
               mutation.mutate(
                 { contactId: record().id, hidden },
                 {
                   onSuccess,
-                  onError: () =>
-                    setError('Could not update contact visibility'),
+                  onError: () => {
+                    onError();
+                    setError('Could not update contact visibility');
+                  },
                 }
               );
             }}
@@ -111,7 +113,9 @@ function Fixture() {
           </Button>
         </nav>
         <Suspense fallback={<p>Loading</p>}>
-          <Show when={contactId()}>{(id) => <Detail id={id()} />}</Show>
+          <Show when={contactId()} keyed>
+            {(id) => <Detail id={id} />}
+          </Show>
           <Show when={!contactId() || keepTeam()}>
             <Team open={setContactId} />
           </Show>

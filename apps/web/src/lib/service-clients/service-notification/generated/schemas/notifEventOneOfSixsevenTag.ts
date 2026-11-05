@@ -10,5 +10,5 @@ export type NotifEventOneOfSixsevenTag =
 
 // eslint-disable-next-line @typescript-eslint/no-redeclare
 export const NotifEventOneOfSixsevenTag = {
-  manual: 'manual',
+  routine_run_finished: 'routine_run_finished',
 } as const;

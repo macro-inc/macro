@@ -86,6 +86,7 @@ import { batch, createSignal, untrack } from 'solid-js';
 import { match } from 'ts-pattern';
 import { delegateChannelNotificationRefresh } from '../../queries/channel/notification-refresh';
 import { soupOptimisticResolvers } from '../../queries/optimistic-resolvers';
+import { resolveCrmExternalWriteTypes } from '../../queries/soup/graphql/external-write-scope';
 import { createCacheRecovery } from './cache-recovery';
 import { emailCacheDeletionKeys } from './email-cache-deletions';
 import { emailThreadSortTs } from './email-thread-sort';
@@ -863,6 +864,7 @@ export function getGraphqlSoupClient(): Client {
             shouldRetryMutation: shouldRetryGraphqlMutation,
             mutationQueueTelemetry,
             delegateRevalidation: delegateChannelNotificationRefresh,
+            externalWriteTypes: resolveCrmExternalWriteTypes,
           }),
           notificationReceiptExchange(publishNotificationPatch),
           graphqlSoupSubscriptionExchange(graphqlWsClient),
@@ -1363,6 +1365,21 @@ function mapGraphqlNotificationMetadata(
               metadata.channelMessageReactionSenderProfilePictureUrl,
           },
         }) satisfies NotifEventMember<'channel_message_reaction'>
+    )
+    .with(
+      { __typename: 'GraphqlChannelAccessRequestedMetadata' },
+      (metadata) =>
+        ({
+          tag: 'channel_access_requested',
+          content: {
+            requestId: metadata.channelAccessRequestedRequestId,
+            channelType:
+              metadata.channelAccessRequestedChannelType.toLowerCase() as ChannelType,
+            channelName: metadata.channelAccessRequestedChannelName,
+            senderProfilePictureUrl:
+              metadata.channelAccessRequestedSenderProfilePictureUrl,
+          },
+        }) satisfies NotifEventMember<'channel_access_requested'>
     )
     .with(
       { __typename: 'GraphqlChannelReplyMetadata' },

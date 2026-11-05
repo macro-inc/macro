@@ -4,16 +4,15 @@
  * notification_service
  * OpenAPI spec version: 0.1.0
  */
-import type { ManualMetadata } from './manualMetadata';
+
 import type { NotifEventOneOfSixsevenTag } from './notifEventOneOfSixsevenTag';
+import type { RoutineRunFinishedMetadata } from './routineRunFinishedMetadata';
 
 /**
- * Someone, usually agent code through the SDK, sent the user a
-notification they wrote.
+ * One of the user's routines finished a run, successfully or not.
  */
 export type NotifEventOneOfSixseven = {
-  /** Someone, usually agent code through the SDK, sent the user a
-notification they wrote. */
-  content: ManualMetadata;
+  /** One of the user's routines finished a run, successfully or not. */
+  content: RoutineRunFinishedMetadata;
   tag: NotifEventOneOfSixsevenTag;
 };
