@@ -28,6 +28,8 @@ export default {
   removeTeamAgent: 'Remove agent',
   invite: 'Invite',
   invitePerson: 'Invite a person',
+  invitePersonDescription: 'Send an email invitation to your team.',
+  inviteAgentDescription: 'Create a teammate with its own computer.',
   inviteAgent: 'Invite agent',
   inviteAnAgent: 'Invite an agent',
   inviteOptions: 'Invite options',

@@ -5,10 +5,10 @@ test('an unhealthy agent can recover without provisioning retry', async ({
 }) => {
   await page.goto('/?members&unhealthy');
   await expect(page.getByText('Unhealthy', { exact: true })).toBeVisible();
-  await expect(
-    page.getByText('Brain connection unavailable', { exact: true })
-  ).toBeVisible();
   await page.getByRole('button', { name: 'More', exact: true }).first().click();
+  await expect(page.getByRole('note')).toHaveText(
+    'Brain connection unavailable'
+  );
   await expect(
     page.getByRole('menuitem', { name: 'Retry', exact: true })
   ).toHaveCount(0);
@@ -76,10 +76,13 @@ test('shows agent computer status and supports retry and removal through the row
   await page.goto('/?members');
   await expect(page.getByText('Agent', { exact: true })).toHaveCount(3);
   await expect(page.getByText('Starting computer (2/5)')).toHaveCount(0);
-  await expect(page.getByText('Creating computer (2/5)')).toBeVisible();
+  await expect(
+    page.getByRole('progressbar', { name: 'Agent setup' })
+  ).toHaveAttribute('aria-valuenow', '2');
+  await expect(page.getByText('Billed', { exact: true })).toHaveCount(0);
   await expect(
     page.getByText('Included for Macro', { exact: true })
-  ).toBeVisible();
+  ).toHaveCount(0);
   const menus = page.getByRole('button', { name: 'More', exact: true });
   await menus.nth(2).click();
   await page.getByRole('menuitem', { name: 'Retry', exact: true }).click();
@@ -98,3 +101,69 @@ test('shows agent computer status and supports retry and removal through the row
   );
   expect(overflow).toBe(false);
 });
+
+test('invitation menu supports keyboard navigation, dismissal and focus return', async ({
+  page,
+}) => {
+  await page.goto('/?members');
+  const options = page.getByRole('button', {
+    name: 'Invite options',
+    exact: true,
+  });
+  await options.focus();
+  await page.keyboard.press('Enter');
+  const person = page.getByRole('menuitem', {
+    name: 'Invite a person',
+    exact: true,
+  });
+  const agent = page.getByRole('menuitem', {
+    name: 'Invite an agent',
+    exact: true,
+  });
+  await expect(person).toBeFocused();
+  await page.keyboard.press('ArrowDown');
+  await expect(agent).toBeFocused();
+  await page.keyboard.press('Enter');
+  await expect(
+    page.getByRole('status').filter({ hasText: 'Invitation:' })
+  ).toContainText('Invitation: agent');
+  await expect(options).toBeFocused();
+  await options.press('Enter');
+  await page.keyboard.press('Escape');
+  await expect(person).toHaveCount(0);
+  await expect(options).toBeFocused();
+});
+
+for (const dismissal of ['Cancel', 'Escape']) {
+  test(`restores menu trigger focus after ${dismissal} on its agent dialog`, async ({
+    page,
+  }) => {
+    await page.goto('/?menu-dialog');
+    const options = page.getByRole('button', {
+      name: 'Invite options',
+      exact: true,
+    });
+    await options.focus();
+    await page.keyboard.press('Enter');
+    await expect(
+      page.getByRole('menuitem', { name: 'Invite a person', exact: true })
+    ).toBeFocused();
+    await page.keyboard.press('ArrowDown');
+    await expect(
+      page.getByRole('menuitem', { name: 'Invite an agent', exact: true })
+    ).toBeFocused();
+    await page.keyboard.press('Enter');
+    const dialog = page.getByRole('dialog', {
+      name: 'Invite agent',
+      exact: true,
+    });
+    await expect(dialog).toBeVisible();
+    if (dismissal === 'Cancel') {
+      await page.getByRole('button', { name: 'Cancel', exact: true }).click();
+    } else {
+      await page.keyboard.press('Escape');
+    }
+    await expect(dialog).toHaveCount(0);
+    await expect(options).toBeFocused();
+  });
+}

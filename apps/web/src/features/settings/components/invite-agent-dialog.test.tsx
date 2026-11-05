@@ -7,9 +7,36 @@ import {
 } from '@solidjs/testing-library';
 import { QueryClientProvider } from '@tanstack/solid-query';
 import { ok } from 'neverthrow';
-import { DEV } from 'solid-js';
-import { afterEach, expect, it, vi } from 'vitest';
+import { createSignal, DEV } from 'solid-js';
+import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 
+const flagMock = vi.hoisted(() => ({
+  read: () => ({ enabled: true, loading: false }),
+}));
+const portraitMocks = vi.hoisted(() => ({
+  upload: vi.fn(),
+  generate: vi.fn(),
+}));
+const [flag, setFlag] = createSignal({ enabled: true, loading: false });
+vi.mock('@app/lib/analytics/posthog', () => ({
+  useFeatureFlag: () => () => flagMock.read(),
+}));
+beforeEach(() => {
+  vi.clearAllMocks();
+  portraitMocks.upload.mockResolvedValue(
+    'https://example.com/uploaded-portrait.png'
+  );
+  portraitMocks.generate.mockResolvedValue(
+    'https://example.com/generated-portrait.png'
+  );
+  setFlag({ enabled: true, loading: false });
+  flagMock.read = flag;
+});
+
+vi.mock('@queries/agents/avatar', () => ({
+  generateAgentAvatar: portraitMocks.generate,
+  useUploadAgentAvatarMutation: () => ({ mutateAsync: portraitMocks.upload }),
+}));
 vi.mock('@service-auth/client', () => ({
   authServiceClient: {
     getTeamAgentSizes: vi.fn(),
@@ -33,13 +60,65 @@ const quote = {
   interval: 'month' as const,
 };
 
+beforeEach(() => {
+  vi.stubGlobal(
+    'ResizeObserver',
+    class {
+      observe() {}
+      unobserve() {}
+      disconnect() {}
+    }
+  );
+  vi.stubGlobal('scrollTo', vi.fn());
+});
 afterEach(() => {
   cleanup();
   queryClient.clear();
   vi.restoreAllMocks();
+  vi.unstubAllGlobals();
 });
 
-it('bounds reactive updates while typing and only requests a quote when size changes', async () => {
+it('keeps a cold invitation pending until rollout resolves, then loads it only when enabled', async () => {
+  setFlag({ enabled: false, loading: true });
+  const close = vi.fn();
+  vi.mocked(authServiceClient.getTeamAgentSizes).mockResolvedValue(
+    ok({ sizes: [] })
+  );
+  vi.mocked(authServiceClient.quoteTeamAgent).mockResolvedValue(ok(quote));
+  render(() => (
+    <QueryClientProvider client={queryClient}>
+      <InviteAgentDialog teamId="team-1" open onClose={close} />
+    </QueryClientProvider>
+  ));
+  expect(screen.getByRole('status').textContent).toContain(
+    'Loading agent features'
+  );
+  expect(authServiceClient.getTeamAgentSizes).not.toHaveBeenCalled();
+  expect(authServiceClient.quoteTeamAgent).not.toHaveBeenCalled();
+  expect(close).not.toHaveBeenCalled();
+  setFlag({ enabled: true, loading: false });
+  await screen.findByRole('dialog');
+  expect(authServiceClient.getTeamAgentSizes).toHaveBeenCalledTimes(1);
+  expect(authServiceClient.quoteTeamAgent).toHaveBeenCalledTimes(3);
+  setFlag({ enabled: false, loading: false });
+  expect(screen.queryByRole('dialog')).toBeNull();
+  expect(close).not.toHaveBeenCalled();
+});
+
+it('does not load an invitation when the rollout resolves off', () => {
+  setFlag({ enabled: false, loading: true });
+  render(() => (
+    <QueryClientProvider client={queryClient}>
+      <InviteAgentDialog teamId="team-1" open onClose={() => {}} />
+    </QueryClientProvider>
+  ));
+  setFlag({ enabled: false, loading: false });
+  expect(screen.queryByRole('dialog')).toBeNull();
+  expect(authServiceClient.getTeamAgentSizes).not.toHaveBeenCalled();
+  expect(authServiceClient.quoteTeamAgent).not.toHaveBeenCalled();
+});
+
+it('bounds reactive updates while typing with quotes loaded for all sizes', async () => {
   queryClient.clear();
   vi.mocked(authServiceClient.getTeamAgentSizes).mockResolvedValue(
     ok({
@@ -56,9 +135,7 @@ it('bounds reactive updates while typing and only requests a quote when size cha
       <InviteAgentDialog teamId="team-1" open onClose={() => {}} />
     </QueryClientProvider>
   ));
-  await waitFor(() =>
-    expect(screen.getByText('4 vCPUs · 8 GB RAM · 100 GB disk')).toBeTruthy()
-  );
+  await waitFor(() => expect(screen.getByText('100 GB disk')).toBeTruthy());
   await waitFor(() => expect(queryClient.isFetching()).toBe(0));
 
   const updates = vi.fn();
@@ -70,7 +147,6 @@ it('bounds reactive updates while typing and only requests a quote when size cha
     screen.getByLabelText('Name'),
     screen.getByLabelText('Role / job description'),
     screen.getByLabelText('Personality'),
-    screen.getByLabelText('Avatar URL (optional)'),
   ];
   let queryUpdates = 0;
   const unsubscribe = queryClient.getQueryCache().subscribe((event) => {
@@ -87,13 +163,13 @@ it('bounds reactive updates while typing and only requests a quote when size cha
     expect(updates.mock.calls.length).toBeLessThanOrEqual(100);
     expect(queryUpdates).toBe(0);
     expect(authServiceClient.getTeamAgentSizes).toHaveBeenCalledTimes(1);
-    expect(authServiceClient.quoteTeamAgent).toHaveBeenCalledTimes(1);
+    expect(authServiceClient.quoteTeamAgent).toHaveBeenCalledTimes(3);
 
     fireEvent.click(screen.getByRole('radio', { name: /large/i }));
     await waitFor(() =>
-      expect(authServiceClient.quoteTeamAgent).toHaveBeenCalledTimes(2)
+      expect(authServiceClient.quoteTeamAgent).toHaveBeenCalledTimes(4)
     );
-    expect(authServiceClient.quoteTeamAgent).toHaveBeenLastCalledWith('large');
+    expect(authServiceClient.quoteTeamAgent).toHaveBeenCalledWith('large');
     expect(authServiceClient.getTeamAgentSizes).toHaveBeenCalledTimes(1);
   } finally {
     DEV.hooks.afterUpdate = previousUpdate;

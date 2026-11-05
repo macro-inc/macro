@@ -10,11 +10,22 @@ import {
   screen,
   waitFor,
 } from '@solidjs/testing-library';
-import { createSignal } from 'solid-js';
-import { afterEach, describe, expect, it, vi } from 'vitest';
+import { createSignal, Show } from 'solid-js';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { type AgentInviteSource, InviteAgentForm } from './invite-agent-form';
 import { AgentStatusPill, TeamAgentMenu } from './team-agent-row';
 
+beforeEach(() => {
+  vi.stubGlobal(
+    'ResizeObserver',
+    class {
+      observe() {}
+      unobserve() {}
+      disconnect() {}
+    }
+  );
+  vi.stubGlobal('scrollTo', vi.fn());
+});
 afterEach(cleanup);
 const quote: TeamAgentQuote = {
   included: false,
@@ -76,8 +87,8 @@ describe('agent invite purchase', () => {
         })}
       />
     ));
-    expect(screen.getByText('2 vCPUs · 8 GB RAM · 80 GB disk')).toBeTruthy();
-    expect(screen.getByText('8 vCPUs · 32 GB RAM · 320 GB disk')).toBeTruthy();
+    expect(screen.getByText('80 GB disk')).toBeTruthy();
+    expect(screen.getByText('320 GB disk')).toBeTruthy();
     fireEvent.click(screen.getByLabelText('XL'));
     fill();
     expect(screen.getByText('$150.00')).toBeTruthy();
@@ -210,123 +221,28 @@ const agent: TeamAgent = {
   payment: 'paid',
   setup: { step: 'booting', position: 3, total: 5 },
 };
-it.each(['paid', 'comped'] as const)(
-  'updates %s setup to running and failed with the reason and retry action',
-  (payment) => {
-    const [value, setValue] = createSignal<TeamAgent>({ ...agent, payment });
-    const retry = vi.fn();
-    render(() => <AgentStatusPill agent={value()} onRetry={retry} />);
-    expect(screen.getByRole('status').textContent).toContain(
-      'Starting computer (3/5)'
-    );
-    setValue({ ...agent, status: 'running' });
-    expect(screen.getByRole('status').textContent).toContain('Running');
-    expect(screen.queryByText('Starting computer (3/5)')).toBeNull();
-    setValue({
-      ...agent,
-      status: 'failed',
-      retryable: true,
-      payment,
-      statusReason: 'Computer disconnected',
-    });
-    expect(screen.getByRole('status').textContent).toContain(
-      'Computer disconnected'
-    );
-    fireEvent.click(screen.getByRole('button', { name: 'Retry' }));
-    expect(retry).toHaveBeenCalledTimes(1);
-  }
-);
-
-it.each(['paid', 'comped'] as const)(
-  'withdraws provisioning retry when a %s agent becomes unhealthy and recovers without retry',
-  (payment) => {
-    const [value, setValue] = createSignal<TeamAgent>({
-      ...agent,
-      status: 'failed',
-      retryable: true,
-      payment,
-    });
-    const retry = vi.fn();
-    render(() => <AgentStatusPill agent={value()} onRetry={retry} />);
-    const previousRetry = screen.getByRole('button', { name: 'Retry' });
-    setValue({
-      ...value(),
-      status: 'unhealthy',
-      statusReason: 'Brain connection unavailable',
-    });
-    expect(screen.getByRole('status').textContent).toContain('Unhealthy');
-    expect(screen.getByRole('status').textContent).toContain(
-      'Brain connection unavailable'
-    );
-    expect(screen.queryByRole('button', { name: 'Retry' })).toBeNull();
-    fireEvent.click(previousRetry);
-    expect(retry).not.toHaveBeenCalled();
-    setValue({ ...value(), status: 'running', statusReason: null });
-    expect(screen.getByRole('status').textContent).toContain('Running');
-    expect(screen.queryByText('Brain connection unavailable')).toBeNull();
-    expect(screen.queryByRole('button', { name: 'Retry' })).toBeNull();
-    expect(retry).not.toHaveBeenCalled();
-  }
-);
-
-it('keeps a payment failure reason visible without offering provisioning retry', () => {
-  const retry = vi.fn();
-  render(() => (
-    <AgentStatusPill
-      agent={{
-        ...agent,
-        status: 'failed',
-        statusReason: 'payment failed',
-        retryable: false,
-        payment: 'unbilled',
-      }}
-      onRetry={retry}
-    />
-  ));
-  expect(screen.getByRole('status').textContent).toContain('payment failed');
-  expect(screen.getByText('Payment failed / not billed')).toBeTruthy();
-  expect(screen.queryByRole('button', { name: 'Retry' })).toBeNull();
-  expect(retry).not.toHaveBeenCalled();
-});
-
-it('shows payment progress and withdraws Retry when the server revokes it', () => {
-  const [value, setValue] = createSignal<TeamAgent>({
-    ...agent,
-    status: 'failed',
-    retryable: true,
-    payment: 'paid',
-  });
-  const retry = vi.fn();
-  render(() => <AgentStatusPill agent={value()} onRetry={retry} />);
-  expect(screen.getByRole('button', { name: 'Retry' })).toBeTruthy();
+it('updates setup progress to health status without adding billing labels or row actions', () => {
+  const [value, setValue] = createSignal<TeamAgent>(agent);
+  render(() => <AgentStatusPill agent={value()} />);
+  expect(screen.getByRole('progressbar').getAttribute('aria-valuenow')).toBe(
+    '3'
+  );
+  setValue({ ...agent, setup: { step: 'connecting', position: 4, total: 5 } });
+  expect(screen.getByRole('progressbar').getAttribute('aria-valuenow')).toBe(
+    '4'
+  );
+  setValue({ ...agent, status: 'running' });
+  expect(screen.queryByRole('progressbar')).toBeNull();
+  expect(screen.getByRole('status').textContent).toBe('Running');
   setValue({
     ...agent,
-    status: 'provisioning',
-    retryable: false,
-    setup: { step: 'paying', position: 1, total: 5 },
-    payment: 'pending',
+    status: 'unhealthy',
+    statusReason: 'Connection unavailable',
   });
-  expect(screen.queryByRole('button', { name: 'Retry' })).toBeNull();
-  expect(screen.getByRole('status').textContent).toContain(
-    'Confirming payment'
-  );
-  expect(retry).not.toHaveBeenCalled();
-});
-
-it('labels a paid provisioning failure as billed and keeps unreadable payment unlabeled', () => {
-  const [value, setValue] = createSignal<TeamAgent>({
-    ...agent,
-    payment: 'paid',
-    status: 'failed',
-    retryable: true,
-  });
-  render(() => <AgentStatusPill agent={value()} onRetry={() => {}} />);
-  expect(screen.getByText('Billed')).toBeTruthy();
-  expect(screen.getByRole('button', { name: 'Retry' })).toBeTruthy();
-  setValue({ ...agent, payment: null, status: 'failed', retryable: false });
-  expect(screen.queryByText('Billed')).toBeNull();
-  expect(screen.queryByText('Payment failed / not billed')).toBeNull();
-  expect(screen.queryByRole('button', { name: 'Retry' })).toBeNull();
+  expect(screen.getByRole('status').textContent).toBe('Unhealthy');
+  setValue({ ...agent, status: 'failed', payment: 'comped', retryable: true });
+  expect(screen.getByRole('status').textContent).toBe('Failed');
+  expect(screen.queryByRole('button')).toBeNull();
 });
 
 it('blocks removal during pending payment and permits clean removal after an unbilled failure', async () => {
@@ -373,9 +289,7 @@ it('keeps catalog specs visible without a subscription and directs admins to bil
       })}
     />
   ));
-  expect(screen.getAllByText('4 vCPUs · 16 GB RAM · 100 GB disk')).toHaveLength(
-    3
-  );
+  expect(screen.getAllByText('100 GB disk')).toHaveLength(3);
   expect(screen.getByText(/Your team needs an active plan/)).toBeTruthy();
   expect(
     screen.getByRole('link', { name: 'Go to billing' }).getAttribute('href')
@@ -532,3 +446,71 @@ it.each([true, false])(
     await waitFor(() => expect(close).toHaveBeenCalledTimes(1));
   }
 );
+
+it('does not close a new invitation when an old create finishes after rollout revocation', async () => {
+  let finish: (() => void) | undefined;
+  const created = new Promise<void>((resolve) => {
+    finish = resolve;
+  });
+  const create = vi.fn(() => created);
+  const close = vi.fn();
+  const [enabled, setEnabled] = createSignal(true);
+  render(() => (
+    <Show when={enabled()}>
+      <InviteAgentForm
+        teamId="team-1"
+        open
+        onClose={close}
+        size="standard"
+        setSize={() => {}}
+        source={source({ create })}
+      />
+    </Show>
+  ));
+  fill();
+  fireEvent.click(screen.getByRole('button', { name: 'Confirm and invite' }));
+  await waitFor(() => expect(create).toHaveBeenCalledTimes(1));
+  setEnabled(false);
+  setEnabled(true);
+  fireEvent.input(screen.getByLabelText('Name'), {
+    target: { value: 'New invitation' },
+  });
+  finish?.();
+  await created;
+  await Promise.resolve();
+  await Promise.resolve();
+  expect(close).not.toHaveBeenCalled();
+  expect(screen.getByRole('dialog')).toBeTruthy();
+  expect((screen.getByLabelText('Name') as HTMLInputElement).value).toBe(
+    'New invitation'
+  );
+});
+
+it('enforces the server character limits before reviewing a draft, including Unicode names', () => {
+  render(() => (
+    <InviteAgentForm
+      teamId="team-1"
+      open
+      onClose={() => {}}
+      size="standard"
+      setSize={() => {}}
+      source={source()}
+    />
+  ));
+  const name = screen.getByLabelText('Name');
+  const role = screen.getByLabelText('Role / job description');
+  const personality = screen.getByLabelText('Personality');
+  fireEvent.input(name, { target: { value: '🙂'.repeat(64) } });
+  fireEvent.input(role, { target: { value: 'r'.repeat(4000) } });
+  fireEvent.input(personality, { target: { value: 'p'.repeat(4000) } });
+  const review = screen.getByRole('button', { name: 'Review price' });
+  expect(review.hasAttribute('disabled')).toBe(false);
+  fireEvent.input(name, { target: { value: 'n'.repeat(65) } });
+  expect(review.hasAttribute('disabled')).toBe(true);
+  fireEvent.input(name, { target: { value: 'Assistant' } });
+  fireEvent.input(role, { target: { value: 'r'.repeat(4001) } });
+  expect(review.hasAttribute('disabled')).toBe(true);
+  fireEvent.input(role, { target: { value: 'Engineer' } });
+  fireEvent.input(personality, { target: { value: 'p'.repeat(4001) } });
+  expect(review.hasAttribute('disabled')).toBe(true);
+});

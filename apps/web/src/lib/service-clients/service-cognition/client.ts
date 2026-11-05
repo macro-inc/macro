@@ -15,6 +15,10 @@ import {
   type AI_USAGE_LIMIT_ERROR,
   aiUsageErrorResponseHandler,
 } from '../ai-usage-limit';
+import type {
+  GenerateImageRequest,
+  GenerateImageResponse,
+} from './generated/schemas';
 import type { AddServerRequest } from './generated/schemas/addServerRequest';
 import type { CreateChatRequest } from './generated/schemas/createChatRequest';
 import type { DatabaseQueryAnswer } from './generated/schemas/databaseQueryAnswer';
@@ -556,6 +560,17 @@ export const cognitionApiServiceClient = {
   async databaseQuery(args: DatabaseQueryRequest) {
     return fetchWithToken<DatabaseQueryAnswer, typeof AI_USAGE_LIMIT_ERROR>(
       `${dcsHost}/database-query`,
+      {
+        method: 'POST',
+        body: JSON.stringify(args),
+        errorResponseHandler: aiUsageErrorResponseHandler,
+      }
+    );
+  },
+
+  async generateImage(args: GenerateImageRequest) {
+    return fetchWithToken<GenerateImageResponse, typeof AI_USAGE_LIMIT_ERROR>(
+      `${dcsHost}/images/generate`,
       {
         method: 'POST',
         body: JSON.stringify(args),

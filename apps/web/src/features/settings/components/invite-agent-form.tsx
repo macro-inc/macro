@@ -1,7 +1,6 @@
 import { startUiOperation } from '@app/observability/ui-operation';
-import { MobileDrawer } from '@components/app/mobile/MobileDrawer';
-import { isMobile } from '@core/mobile/isMobile';
 import { ThrownResultError } from '@core/util/result';
+import XIcon from '@icon/system/regular/x.svg';
 import { type Span, Telemetry } from '@macro-inc/observability';
 import type {
   ComputerSize,
@@ -9,18 +8,22 @@ import type {
   CreateTeamAgent,
   TeamAgentQuote,
 } from '@service-auth/generated/schemas';
-import { ActionDialogShell, Button, Dialog, RadioGroup, TextField } from '@ui';
+import { Button, Dialog, Panel, RadioGroup, TextField } from '@ui';
 import {
   type Accessor,
   createMemo,
   createSignal,
   For,
   type JSX,
+  onCleanup,
   Show,
 } from 'solid-js';
+import { formatBillingAmount } from '../core/format-billing-amount';
+import { AgentPortrait, type AgentPortraitSource } from './agent-portrait';
 
 export type AgentInviteSource = {
   quote: Accessor<TeamAgentQuote | undefined>;
+  quoteForSize?(size: ComputerSize): TeamAgentQuote | undefined;
   specsForSize(size: ComputerSize): ComputerSizeSpec | undefined;
   needsSubscription: Accessor<boolean>;
   quoteLoading: Accessor<boolean>;
@@ -37,58 +40,44 @@ function InviteSurface(props: {
   actions: JSX.Element;
   children: JSX.Element;
 }) {
+  // This controlled dialog opens from a header action outside Dialog.Trigger.
   const opener = document.activeElement;
-  const restoreFocus = (event: Event) => {
-    event.preventDefault();
-    if (opener instanceof HTMLElement && opener.isConnected) opener.focus();
-  };
   return (
-    <Show
-      when={isMobile()}
-      fallback={
-        <Dialog
-          open={props.open}
-          onOpenChange={(open) => !open && props.close()}
-          position="center"
-          class="w-120"
-          onCloseAutoFocus={restoreFocus}
-        >
-          <ActionDialogShell>
-            <ActionDialogShell.Body>
-              <Dialog.Title class="text-lg font-semibold mb-4">
-                {props.title}
-              </Dialog.Title>
-              {props.children}
-            </ActionDialogShell.Body>
-            <ActionDialogShell.Footer>{props.actions}</ActionDialogShell.Footer>
-          </ActionDialogShell>
-        </Dialog>
-      }
+    <Dialog
+      open={props.open}
+      onOpenChange={(open) => !open && props.close()}
+      onCloseAutoFocus={(event) => {
+        if (opener instanceof HTMLElement && opener.isConnected) {
+          event.preventDefault();
+          opener.focus();
+        }
+      }}
     >
-      <MobileDrawer
-        open={props.open}
-        onOpenChange={(open) => !open && props.close()}
-        side="bottom"
-        restoreFocus
-        onFinalFocus={restoreFocus}
+      <Panel
+        depth={2}
+        class="max-h-[min(75dvh,calc(100dvh-var(--virtual-keyboard-height,0px)-var(--safe-top,0px)-48px))] text-ink rounded-xl"
       >
-        <MobileDrawer.Portal>
-          <MobileDrawer.Overlay />
-          <MobileDrawer.Content maxHeight={95}>
-            <MobileDrawer.Handle />
-            <MobileDrawer.Title class="px-5 pb-3 text-lg font-semibold">
-              {props.title}
-            </MobileDrawer.Title>
-            <div class="shrink-0 flex justify-end gap-2 px-5 pb-3">
-              {props.actions}
-            </div>
-            <MobileDrawer.ScrollBody>
-              <div class="space-y-5 px-5 pb-6">{props.children}</div>
-            </MobileDrawer.ScrollBody>
-          </MobileDrawer.Content>
-        </MobileDrawer.Portal>
-      </MobileDrawer>
-    </Show>
+        <Panel.Header class="px-2 gap-1">
+          <Dialog.CloseButton
+            as={Button}
+            variant="ghost"
+            size="icon-sm"
+            aria-label="Close invitation"
+          >
+            <XIcon class="size-3.5 touch:size-6 shrink-0 pointer-events-none" />
+          </Dialog.CloseButton>
+          <Dialog.Title as="span" class="text-sm font-medium p-0 m-0">
+            {props.title}
+          </Dialog.Title>
+        </Panel.Header>
+        <Panel.Body scroll class="p-5">
+          {props.children}
+        </Panel.Body>
+        <Panel.Footer class="flex justify-end gap-2 px-5 py-3">
+          {props.actions}
+        </Panel.Footer>
+      </Panel>
+    </Dialog>
   );
 }
 
@@ -100,11 +89,17 @@ export function InviteAgentForm(props: {
   size: ComputerSize;
   setSize(size: ComputerSize): void;
   source: AgentInviteSource;
+  portrait?: AgentPortraitSource;
 }) {
+  let disposed = false;
+  onCleanup(() => {
+    disposed = true;
+  });
   const [name, setName] = createSignal('');
   const [role, setRole] = createSignal('');
   const [personality, setPersonality] = createSignal('');
   const [avatar, setAvatar] = createSignal('');
+  const [portraitPending, setPortraitPending] = createSignal(false);
   const [review, setReview] = createSignal(false);
   const [submitting, setSubmitting] = createSignal(false);
   const [submitted, setSubmitted] = createSignal(false);
@@ -120,19 +115,17 @@ export function InviteAgentForm(props: {
     return quote ? { ...quote } : undefined;
   });
   const [failureMessage, setFailureMessage] = createSignal<string>();
-  const avatarValid = () => {
-    if (!avatar().trim()) return true;
-    try {
-      return new URL(avatar().trim()).protocol === 'https:';
-    } catch {
-      return false;
-    }
-  };
+  const nameTooLong = () => Array.from(name().trim()).length > 64;
+  const roleTooLong = () => Array.from(role().trim()).length > 4000;
+  const personalityTooLong = () =>
+    Array.from(personality().trim()).length > 4000;
   const valid = () =>
     !!name().trim() &&
+    !nameTooLong() &&
     !!role().trim() &&
+    !roleTooLong() &&
     !!personality().trim() &&
-    avatarValid();
+    !personalityTooLong();
   const busy = () => submitting() || props.source.pending();
   const close = () => {
     if (!busy()) props.onClose();
@@ -183,9 +176,11 @@ export function InviteAgentForm(props: {
           throw error;
         }
       });
+      if (disposed) return;
       setSubmitted(true);
       props.onClose();
     } catch (error) {
+      if (disposed) return;
       if (error instanceof ThrownResultError) {
         setQuoteChanged(
           error.errors.some((reason) => reason.code === 'quote_changed')
@@ -200,14 +195,39 @@ export function InviteAgentForm(props: {
       }
       setCreateFailed(true);
     } finally {
-      setSubmitting(false);
+      if (!disposed) setSubmitting(false);
     }
   };
   const price = (amount: number, quote: TeamAgentQuote) =>
-    new Intl.NumberFormat(undefined, {
-      style: 'currency',
-      currency: quote.currency,
-    }).format(amount / 100);
+    formatBillingAmount(amount, quote.currency);
+  function IdentityFields() {
+    return (
+      <div class="space-y-4">
+        <TextField
+          value={name()}
+          onChange={setName}
+          validationState={nameTooLong() ? 'invalid' : 'valid'}
+        >
+          <TextField.Label>Name</TextField.Label>
+          <TextField.Input maxLength={128} required />
+          <TextField.ErrorMessage>
+            Use 64 characters or fewer.
+          </TextField.ErrorMessage>
+        </TextField>
+        <TextField
+          value={role()}
+          onChange={setRole}
+          validationState={roleTooLong() ? 'invalid' : 'valid'}
+        >
+          <TextField.Label>Role / job description</TextField.Label>
+          <TextField.TextArea maxLength={8000} required />
+          <TextField.ErrorMessage>
+            Use 4,000 characters or fewer.
+          </TextField.ErrorMessage>
+        </TextField>
+      </div>
+    );
+  }
   return (
     <InviteSurface
       open={props.open}
@@ -227,7 +247,11 @@ export function InviteAgentForm(props: {
             fallback={
               <Button
                 variant="primary"
-                disabled={!valid() || props.source.needsSubscription()}
+                disabled={
+                  !valid() ||
+                  portraitPending() ||
+                  props.source.needsSubscription()
+                }
                 onClick={(event) => {
                   const operation = startUiOperation(
                     'team-agent.review-price',
@@ -335,17 +359,34 @@ export function InviteAgentForm(props: {
         }
       >
         <div class="space-y-4">
-          <TextField value={name()} onChange={setName}>
-            <TextField.Label>Name</TextField.Label>
-            <TextField.Input maxLength={100} required />
-          </TextField>
-          <TextField value={role()} onChange={setRole}>
-            <TextField.Label>Role / job description</TextField.Label>
-            <TextField.TextArea required />
-          </TextField>
-          <TextField value={personality()} onChange={setPersonality}>
+          <p class="text-sm text-ink-muted">
+            Give your new teammate a role and a computer.
+          </p>
+          <Show when={props.portrait} fallback={<IdentityFields />}>
+            {(source) => (
+              <AgentPortrait
+                name={name()}
+                role={role()}
+                personality={personality()}
+                source={source()}
+                avatar={avatar()}
+                onChange={setAvatar}
+                onPendingChange={setPortraitPending}
+              >
+                <IdentityFields />
+              </AgentPortrait>
+            )}
+          </Show>
+          <TextField
+            value={personality()}
+            onChange={setPersonality}
+            validationState={personalityTooLong() ? 'invalid' : 'valid'}
+          >
             <TextField.Label>Personality</TextField.Label>
-            <TextField.TextArea required />
+            <TextField.TextArea maxLength={8000} required />
+            <TextField.ErrorMessage>
+              Use 4,000 characters or fewer.
+            </TextField.ErrorMessage>
           </TextField>
           <RadioGroup
             value={props.size}
@@ -358,20 +399,47 @@ export function InviteAgentForm(props: {
             <RadioGroup.Label>Computer size</RadioGroup.Label>
             <For each={['standard', 'large', 'xl'] as const}>
               {(size) => (
-                <RadioGroup.Item value={size} class="flex items-center gap-2">
-                  <RadioGroup.ItemControl />
-                  <RadioGroup.ItemLabel class="capitalize">
-                    {size === 'xl' ? 'XL' : size}
-                  </RadioGroup.ItemLabel>
-                  <RadioGroup.ItemDescription class="text-xs text-ink-muted">
+                <RadioGroup.Item
+                  value={size}
+                  class="grid grid-cols-[auto_minmax(0,1fr)] gap-x-3 gap-y-1 rounded-xl border border-edge-muted p-3 data-checked:border-accent"
+                >
+                  <RadioGroup.ItemControl class="self-center" />
+                  <div class="flex items-baseline justify-between gap-2 min-w-0">
+                    <RadioGroup.ItemLabel class="capitalize text-sm font-medium">
+                      {size === 'xl' ? 'XL' : size}
+                    </RadioGroup.ItemLabel>
+                    <Show when={props.source.quoteForSize?.(size)}>
+                      {(quote) => (
+                        <span class="shrink-0 text-xs tabular-nums text-ink-muted">
+                          {quote().included
+                            ? 'Included'
+                            : `${price(quote().computer, quote())}/${quote().interval}`}
+                        </span>
+                      )}
+                    </Show>
+                  </div>
+                  <RadioGroup.ItemDescription class="col-start-2 flex flex-wrap gap-x-1.5 gap-y-1 text-xs text-ink-muted">
                     <Show
                       when={props.source.specsForSize(size)}
                       fallback="Specifications unavailable"
                     >
-                      {(quote) => (
+                      {(spec) => (
                         <>
-                          {quote().vcpus} vCPUs · {quote().memoryGb} GB RAM ·{' '}
-                          {quote().diskGb} GB disk
+                          <span class="whitespace-nowrap">
+                            {spec().vcpus} vCPUs
+                          </span>
+                          <span class="whitespace-nowrap">
+                            <span aria-hidden="true" class="mr-1.5">
+                              ·
+                            </span>
+                            {spec().memoryGb} GB RAM
+                          </span>
+                          <span class="whitespace-nowrap">
+                            <span aria-hidden="true" class="mr-1.5">
+                              ·
+                            </span>
+                            {spec().diskGb} GB disk
+                          </span>
                         </>
                       )}
                     </Show>
@@ -380,17 +448,6 @@ export function InviteAgentForm(props: {
               )}
             </For>
           </RadioGroup>
-          <TextField
-            value={avatar()}
-            onChange={setAvatar}
-            validationState={avatarValid() ? 'valid' : 'invalid'}
-          >
-            <TextField.Label>Avatar URL (optional)</TextField.Label>
-            <TextField.Input type="url" placeholder="https://…" />
-            <TextField.ErrorMessage>
-              Enter an HTTPS image URL.
-            </TextField.ErrorMessage>
-          </TextField>
         </div>
       </Show>
     </InviteSurface>
