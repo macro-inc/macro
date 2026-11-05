@@ -16,6 +16,8 @@
 .tutorial-video-close svg { width: 16px; height: 16px; }
 .tutorial-video-stage { position: relative; display: flex; flex: 1; min-height: 0; align-items: center; justify-content: center; margin: 0 8px 8px; overflow: hidden; border-radius: 12px; background: #000; }
 .tutorial-video-stage video { display: block; width: 100%; max-height: 100%; object-fit: contain; outline: none; }
+/* Play hands focus to the video; show it for keyboards, inside the stage's rounded clip. */
+.tutorial-video-stage video:focus-visible { outline: 2px solid #fff; outline-offset: -4px; }
 .tutorial-video-scrim { position: absolute; inset: 0; border: 0; padding: 0; background: #00000073; }
 
 /* The app's play pill: play disc, divider, presenter, and the video's length. */
