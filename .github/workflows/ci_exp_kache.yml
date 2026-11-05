@@ -76,7 +76,7 @@ jobs:
       run: |
         set -euo pipefail
         dir=/home/runner/.cache/kache/bin/$KACHE_VERSION
-        if [ ! -x "$dir/kache" ]; then
+        if [ ! -x "$dir/kache-engine" ]; then
           tmp="$(mktemp -d)"
           base="https://github.com/kunobi-ninja/kache/releases/download/$KACHE_VERSION/kache-x86_64-unknown-linux-musl.tar.gz"
           curl -fsSL "$base" -o "$tmp/kache.tgz"
@@ -84,7 +84,7 @@ jobs:
           echo "$expected  $tmp/kache.tgz" | sha256sum --check -
           mkdir -p "$dir"
           tar -xzf "$tmp/kache.tgz" -C "$tmp"
-          find "$tmp" -type f -name kache -exec install -m 755 {} "$dir/kache" \;
+          find "$tmp" -type f \( -name kache -o -name 'kache-*' \) ! -name '*.tgz' -exec install -m 755 {} "$dir/" \;
         fi
         {
           echo "RUSTC_WRAPPER=$dir/kache"
