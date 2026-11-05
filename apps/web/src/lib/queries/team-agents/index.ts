@@ -36,8 +36,14 @@ export function teamAgentQuoteQueryOptions(teamId: string, size: ComputerSize) {
   });
 }
 
-export function useTeamAgentsQuery(teamId: Accessor<string>) {
-  return useQuery(() => teamAgentsQueryOptions(teamId()));
+export function useTeamAgentsQuery(
+  teamId: Accessor<string>,
+  enabled: Accessor<boolean>
+) {
+  return useQuery(() => ({
+    ...teamAgentsQueryOptions(teamId()),
+    enabled: enabled(),
+  }));
 }
 
 export function useTeamAgentQuoteQuery(
@@ -65,10 +71,17 @@ export async function invalidateTeamAgents(teamId: string) {
 export function useCreateTeamAgentMutation() {
   return useMutation(() => ({
     retry: false,
-    mutationFn: ({ request }: { teamId: string; request: CreateTeamAgent }) =>
-      Telemetry.span('team-agent.invite', () =>
-        throwOnErr(() => authServiceClient.createTeamAgent(request))
-      ),
+    mutationFn: ({
+      teamId,
+      request,
+    }: {
+      teamId: string;
+      request: CreateTeamAgent;
+    }) =>
+      Telemetry.span('team-agent.invite', (span) => {
+        span.setAttr('team.id', teamId);
+        return throwOnErr(() => authServiceClient.createTeamAgent(request));
+      }),
     onSuccess: (agent, { teamId }) => {
       queryClient.setQueryData<TeamAgents>(
         teamAgentKeys.list(teamId).queryKey,
@@ -89,10 +102,12 @@ export function useCreateTeamAgentMutation() {
 export function useDeleteTeamAgentMutation() {
   return useMutation(() => ({
     retry: false,
-    mutationFn: ({ userId }: { teamId: string; userId: string }) =>
-      Telemetry.span('team-agent.remove', () =>
-        throwOnErr(() => authServiceClient.deleteTeamAgent(userId))
-      ),
+    mutationFn: ({ teamId, userId }: { teamId: string; userId: string }) =>
+      Telemetry.span('team-agent.remove', (span) => {
+        span.setAttr('team.id', teamId);
+        span.setAttr('agent.id', userId);
+        return throwOnErr(() => authServiceClient.deleteTeamAgent(userId));
+      }),
     onSettled: (_data, _error, { teamId }) => invalidateTeamAgents(teamId),
   }));
 }

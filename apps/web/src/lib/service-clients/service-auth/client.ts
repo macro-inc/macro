@@ -25,6 +25,8 @@ import type {
 import { fetchWithAuth as _fetchWithAuth } from './fetch';
 import type {
   CheckoutSessionV2Response,
+  ComputerSize,
+  CreateTeamAgent,
   CursorApiKeyStatus,
   CursorModelsResponse,
   EmailConnectionProviders,
@@ -45,6 +47,9 @@ import type {
   SetGithubPullRequestDraftResponse,
   SetGithubPullRequestStateRequest,
   SetGithubPullRequestStateResponse,
+  TeamAgent,
+  TeamAgentQuote,
+  TeamAgents,
   TrialEligibility,
   UserQuota,
 } from './generated/schemas';
@@ -1367,24 +1372,23 @@ export const authServiceClient = {
   },
 
   listTeamAgents() {
-    return fetchWithAuth<import('./generated/schemas').TeamAgents>(
-      `${authHost}/team_agents`,
-      { method: 'GET' }
-    );
+    return fetchWithAuth<TeamAgents>(`${authHost}/team_agents`, {
+      method: 'GET',
+    });
   },
 
-  quoteTeamAgent(size: import('./generated/schemas').ComputerSize) {
-    return fetchWithAuth<import('./generated/schemas').TeamAgentQuote>(
+  quoteTeamAgent(size: ComputerSize) {
+    return fetchWithAuth<TeamAgentQuote>(
       `${authHost}/team_agents/quote?size=${size}`,
       { method: 'GET' }
     );
   },
 
-  createTeamAgent(request: import('./generated/schemas').CreateTeamAgent) {
-    return fetchWithAuth<import('./generated/schemas').TeamAgent>(
-      `${authHost}/team_agents`,
-      { method: 'POST', body: JSON.stringify(request) }
-    );
+  createTeamAgent(request: CreateTeamAgent) {
+    return fetchWithAuth<TeamAgent>(`${authHost}/team_agents`, {
+      method: 'POST',
+      body: JSON.stringify(request),
+    });
   },
 
   deleteTeamAgent(userId: string) {

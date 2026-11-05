@@ -25,6 +25,7 @@ export default {
   delete: 'Delete',
   rename: 'Rename',
   more: 'More',
+  removeTeamAgent: 'Remove agent',
   search: 'Search',
   selectItem: 'Select item',
   contactsAndCompanies: 'Contacts & Companies',

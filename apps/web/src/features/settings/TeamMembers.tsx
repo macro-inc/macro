@@ -1,9 +1,13 @@
 import { ListSkeleton } from '@app/components/view-shell/ListSkeleton';
 import { SearchBar } from '@app/components/view-shell/SearchBar';
 import { useFeatureFlag } from '@app/lib/analytics/posthog';
+import { usePending } from '@app/observability/flow';
 import { AgentTag } from '@core/component/AgentTag';
 import { UserIcon } from '@core/component/UserIcon';
-import { enableAiUsageBilling } from '@core/constant/featureFlags';
+import {
+  enableAiUsageBilling,
+  enableTeamAgents,
+} from '@core/constant/featureFlags';
 import { useUserId } from '@core/context/user';
 import {
   getDisplayName,
@@ -12,6 +16,7 @@ import {
   tryMacroId,
 } from '@core/user';
 import { debouncedDependent } from '@core/util/debounce';
+import { fireAndForget } from '@core/util/fireAndForget';
 import { fuzzyFilter } from '@core/util/fuzzy';
 import CaretDownIcon from '@icon/system/regular/caret-down.svg';
 import CheckIcon from '@icon/system/regular/check.svg';
@@ -20,6 +25,7 @@ import TrashIcon from '@icon/system/regular/trash.svg';
 import type { CollectionNode } from '@kobalte/core';
 import { Select } from '@kobalte/core/select';
 import { useAiBillingSummaryQuery } from '@queries/auth';
+import { queryReadyGate } from '@queries/gate';
 import {
   useDeleteTeamInviteMutation,
   useResendTeamInviteMutation,
@@ -34,13 +40,27 @@ import {
   useToggleAutoJoinDomainMutation,
   useToggleNonAdminInvitesMutation,
 } from '@queries/team/teams';
+import {
+  useDeleteTeamAgentMutation,
+  useTeamAgentsQuery,
+} from '@queries/team-agents';
 import type { PaidPlan } from '@service-auth/ai-billing-types';
+import type { TeamAgent } from '@service-auth/generated/schemas';
 import type { Team as TeamSummary } from '@service-auth/generated/schemas/team';
 import type { TeamInviteDetails } from '@service-auth/generated/schemas/teamInviteDetails';
 import type { TeamMember } from '@service-auth/generated/schemas/teamMember';
 import { TeamRole } from '@service-auth/generated/schemas/teamRole';
 import { Button, ConfirmDialog, ToggleSwitch, Tooltip } from '@ui';
-import { createMemo, createSignal, For, mapArray, Show } from 'solid-js';
+import {
+  createMemo,
+  createSignal,
+  For,
+  mapArray,
+  Show,
+  Suspense,
+} from 'solid-js';
+import { InviteAgentDialog } from './components/invite-agent-dialog';
+import { TeamAgentRow } from './components/team-agent-row';
 import { TeamInviteRow } from './components/team-invite-row';
 import { TeamSeatPlanSelect } from './components/team-seat-plan-select';
 import {
@@ -257,6 +277,20 @@ export function TeamMembers(props: { team: TeamSummary }) {
     allowNonAdminInvites,
   } = useTeamViewer(() => props.team);
   const invitesQuery = useTeamInvitesQuery(() => props.team.id);
+  const agentFlag = useFeatureFlag(enableTeamAgents);
+  const canManageAgents = () => isAdminOrOwner() && !!agentFlag().enabled;
+  const agentsQuery = useTeamAgentsQuery(() => props.team.id, canManageAgents);
+  usePending(
+    'team-agent.roster',
+    () => canManageAgents() && agentsQuery.isLoading
+  );
+  const agents = () =>
+    canManageAgents() && queryReadyGate(agentsQuery)
+      ? agentsQuery.data.agents
+      : [];
+  const [inviteAgentOpen, setInviteAgentOpen] = createSignal(false);
+  const [removeAgent, setRemoveAgent] = createSignal<TeamAgent>();
+  const deleteAgent = useDeleteTeamAgentMutation();
 
   const deleteInviteMutation = useDeleteTeamInviteMutation();
   const resendInviteMutation = useResendTeamInviteMutation();
@@ -274,11 +308,15 @@ export function TeamMembers(props: { team: TeamSummary }) {
 
   const members = createMemo(() => {
     const unsorted = teamQuery.data?.members ?? [];
-    return [...unsorted].sort((a, b) => {
-      const roleCompare = (roleOrder[a.role] ?? 3) - (roleOrder[b.role] ?? 3);
-      if (roleCompare !== 0) return roleCompare;
-      return a.user_id.localeCompare(b.user_id);
-    });
+    return [...unsorted]
+      .filter(
+        (member) => !agents().some((agent) => agent.userId === member.user_id)
+      )
+      .sort((a, b) => {
+        const roleCompare = (roleOrder[a.role] ?? 3) - (roleOrder[b.role] ?? 3);
+        if (roleCompare !== 0) return roleCompare;
+        return a.user_id.localeCompare(b.user_id);
+      });
   });
 
   const [memberQuery, setMemberQuery] = createSignal('');
@@ -302,7 +340,7 @@ export function TeamMembers(props: { team: TeamSummary }) {
   });
 
   // Only worth showing the filter once the list is long enough to scan.
-  const showMemberSearch = () => members().length > 5;
+  const showMemberSearch = () => members().length + agents().length > 5;
 
   const filteredMembers = createMemo(() => {
     const q = debouncedMemberQuery().trim().toLowerCase();
@@ -388,20 +426,30 @@ export function TeamMembers(props: { team: TeamSummary }) {
         actions={
           // Members can invite unless the team has restricted inviting
           // to admins; removals stay admin-only.
-          <Show
-            when={canInviteToTeam(currentUserRole(), allowNonAdminInvites())}
-          >
-            {/* Inverted (black on light, white on dark) so inviting is the
-                page's primary action. */}
-            <Button
-              variant="primary"
-              class="text-[15px]"
-              onClick={() => setShowInviteModal(true)}
+          <div class="flex flex-wrap gap-2">
+            <Show when={canManageAgents()}>
+              <Button
+                variant="secondary"
+                onClick={() => setInviteAgentOpen(true)}
+              >
+                Invite agent
+              </Button>
+            </Show>
+            <Show
+              when={canInviteToTeam(currentUserRole(), allowNonAdminInvites())}
             >
-              <PlusIcon class="size-4" />
-              Invite
-            </Button>
-          </Show>
+              {/* Inverted (black on light, white on dark) so inviting is the
+                page's primary action. */}
+              <Button
+                variant="primary"
+                class="text-[15px]"
+                onClick={() => setShowInviteModal(true)}
+              >
+                <PlusIcon class="size-4" />
+                Invite
+              </Button>
+            </Show>
+          </div>
         }
       >
         <SettingsSection>
@@ -512,6 +560,93 @@ export function TeamMembers(props: { team: TeamSummary }) {
             </Show>
           </Show>
         </SettingsSection>
+
+        <Show when={canManageAgents()}>
+          <SettingsSection title="Agent teammates">
+            <Suspense fallback={<p role="status">Loading agents…</p>}>
+              <Show when={agentsQuery.isPending && !agentsQuery.isError}>
+                <p role="status">Loading agents…</p>
+              </Show>
+              <Show when={agentsQuery.isError}>
+                <div role="alert" class="text-sm text-failure">
+                  Couldn't refresh agents.{' '}
+                  <Button
+                    variant="ghost"
+                    onClick={() =>
+                      fireAndForget(agentsQuery.refetch(), 'team-agents.retry')
+                    }
+                  >
+                    Try again
+                  </Button>
+                </div>
+              </Show>
+              <SettingsCard>
+                <For
+                  each={agents().filter(
+                    (agent) =>
+                      !memberQuery().trim() ||
+                      `${agent.name} ${agent.email}`
+                        .toLowerCase()
+                        .includes(memberQuery().trim().toLowerCase())
+                  )}
+                >
+                  {(agent) => (
+                    <TeamAgentRow
+                      agent={agent}
+                      retrying={agentsQuery.isFetching}
+                      onRetry={() =>
+                        fireAndForget(
+                          agentsQuery.refetch(),
+                          'team-agents.retry'
+                        )
+                      }
+                      onRemove={() => setRemoveAgent(agent)}
+                    />
+                  )}
+                </For>
+                <Show when={!agentsQuery.isPending && agents().length === 0}>
+                  <p class="p-4 text-sm text-ink-muted">
+                    No agent teammates yet.
+                  </p>
+                </Show>
+              </SettingsCard>
+            </Suspense>
+          </SettingsSection>
+          <InviteAgentDialog
+            teamId={props.team.id}
+            open={inviteAgentOpen()}
+            onClose={() => setInviteAgentOpen(false)}
+          />
+          <ConfirmDialog
+            open={!!removeAgent()}
+            onOpenChange={(open) => !open && setRemoveAgent(undefined)}
+            title="Remove agent"
+            confirmLabel="Remove agent"
+            tone="danger"
+            pending={deleteAgent.isPending}
+            onConfirm={() => {
+              const agent = removeAgent();
+              if (!agent || deleteAgent.isPending || !canManageAgents()) return;
+              deleteAgent.mutate(
+                { teamId: props.team.id, userId: agent.userId },
+                { onSuccess: () => setRemoveAgent(undefined) }
+              );
+            }}
+            body={
+              <>
+                <p>
+                  Remove {removeAgent()?.name}? This releases its computer and
+                  seat and permanently deletes its repository.
+                </p>
+                <Show when={deleteAgent.isError}>
+                  <p role="alert" class="text-failure">
+                    Couldn't remove the agent. Try again.
+                  </p>
+                </Show>
+              </>
+            }
+          />
+        </Show>
 
         <Show
           when={
