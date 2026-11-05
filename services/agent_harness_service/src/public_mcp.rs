@@ -75,6 +75,11 @@ pub async fn router(
         .host_str()
         .context("public MCP URL has no host")?
         .to_owned();
+    let service_host = macro_service_urls::McpServiceUrl::new()?
+        .parse_url()?
+        .host_str()
+        .context("MCP service URL has no host")?
+        .to_owned();
     // Built once: the factory runs per request in stateless mode.
     let tools = ai_tools::tools_for(ai_tools::AiHost::Mcp).toolset;
     let code_mode = code_mode.map(|code_mode| {
@@ -101,18 +106,7 @@ pub async fn router(
             })
         },
         Arc::new(LocalSessionManager::default()),
-        {
-            let mut config = StreamableHttpServerConfig::default().with_allowed_hosts([
-                mcp_public_host.clone(),
-                "localhost".into(),
-                "127.0.0.1".into(),
-                "gateway.macro.com".into(),
-                "dev-gateway.macro.com".into(),
-            ]);
-            config.stateful_mode = false;
-            config.json_response = true;
-            config
-        },
+        server_config(mcp_public_host, service_host),
     );
 
     background_tasks.spawn(backfill);
@@ -276,4 +270,19 @@ fn build_redirect_uri_policy(config: &Config) -> RedirectUriPolicy {
         Some(hosts) => RedirectUriPolicy::new(hosts.split(',')),
         None => RedirectUriPolicy::new(DEFAULT_MCP_ALLOWED_REDIRECT_HOSTS),
     }
+}
+
+/// Public and typed service origins share this authenticated MCP transport.
+fn server_config(public_host: String, service_host: String) -> StreamableHttpServerConfig {
+    let mut config = StreamableHttpServerConfig::default().with_allowed_hosts([
+        public_host,
+        service_host,
+        "localhost".into(),
+        "127.0.0.1".into(),
+        "gateway.macro.com".into(),
+        "dev-gateway.macro.com".into(),
+    ]);
+    config.stateful_mode = false;
+    config.json_response = true;
+    config
 }

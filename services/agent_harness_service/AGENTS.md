@@ -35,7 +35,8 @@ Pulumi stacks; they do not host extra agent processes.
   the runtime with the latest one). Requests pass through unchanged with
   `ANTHROPIC_API_KEY`; only `anthropic-version`/`anthropic-beta` are
   forwarded. Models are a const allowlist (`ALLOWED_MODELS`, each mapped to
-  its `ai_pricing` id). `messages` is admitted as `AiFeature::AgentSession`
+  its `ai_pricing` id, including the image’s bundled Claude Code Opus 4.8 and Sonnet 4.6
+  defaults). `messages` is admitted as `AiFeature::AgentSession`
   for the session owner, and its `usage` (SSE `message_start`/`message_delta`
   or the JSON body) goes to the process's settling recorder, which charges
   only under `ENABLE_AI_USAGE_BILLING`. Span: `anthropic_gateway.messages`.
@@ -206,6 +207,12 @@ listener failure shuts down the process so ECS can replace the task.
 - The public MCP server is stateless, so tool calls carry no `clientInfo`; the
   client is identified per call by its `User-Agent` / `x-anthropic-client`
   headers and per session by `$mcp_initialize`.
+
+Local MCP uses both configured egress addresses in the in-process catalog;
+the public MCP transport permits its typed service hostname as well as its
+public hostname. Internal MCP also permits the configured local computer egress
+bridge hostname, preserving Host validation for other origins.
+
 
 ## Related
 

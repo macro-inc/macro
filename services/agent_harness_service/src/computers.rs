@@ -108,15 +108,7 @@ pub async fn operator(
         other => anyhow::bail!("COMPUTERS_FLEET must be incus or docker, not {other:?}"),
     };
 
-    let service_url_overrides: BTreeMap<String, String> =
-        match config.computers_service_url_overrides.as_deref() {
-            Some(json) => serde_json::from_str(json)
-                .context("COMPUTERS_SERVICE_URL_OVERRIDES must be a JSON object of strings")?,
-            None => BTreeMap::new(),
-        };
-    if !service_url_overrides.is_empty() && !matches!(config.environment, Environment::Local) {
-        anyhow::bail!("COMPUTERS_SERVICE_URL_OVERRIDES is for local stacks only");
-    }
+    let service_url_overrides = service_url_overrides(config)?;
 
     let operator = ComputerOperator::start(
         PgComputerRepo::new(pool.clone()),
@@ -130,6 +122,20 @@ pub async fn operator(
     .await
     .map_err(|error| anyhow::anyhow!("computer operator failed to start: {error}"))?;
     Ok(Some(Arc::new(operator)))
+}
+
+pub(super) fn service_url_overrides(config: &Config) -> anyhow::Result<BTreeMap<String, String>> {
+    let service_url_overrides: BTreeMap<String, String> =
+        match config.computers_service_url_overrides.as_deref() {
+            Some(json) => serde_json::from_str(json)
+                .context("COMPUTERS_SERVICE_URL_OVERRIDES must be a JSON object of strings")?,
+            None => BTreeMap::new(),
+        };
+    if !service_url_overrides.is_empty() && !matches!(config.environment, Environment::Local) {
+        anyhow::bail!("COMPUTERS_SERVICE_URL_OVERRIDES is for local stacks only");
+    }
+
+    Ok(service_url_overrides)
 }
 
 fn required(value: &Option<String>, name: &str) -> anyhow::Result<String> {
