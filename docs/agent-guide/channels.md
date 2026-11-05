@@ -567,7 +567,7 @@ for the user to confirm a composer card). For an event with attendees the bot is
 ask for confirmation in the thread first, since Google sends the invitations the moment the
 event is created — no invitation goes out from the initial request. It cannot draft or send
 email at all. A bot or agent reply posted for a person shares, as that person, the linked items
-(chips or attachments) that the replying bot created for them while answering: those with a
+(chips, attachments, or forms presented as cards in the reply's steps) that the replying bot created for them while answering: those with a
 `created` activity row by that bot on the person's behalf since the person's latest message in
 the thread before the reply, or, for a bot message that starts its own thread (a poll card
 posted top-level), their latest message in the channel. Forms and databases an agent creates
@@ -751,8 +751,10 @@ names who is being waited on. Once answered, the area shows the agent's passage 
 A prompt the agent read out of a channel or document thread opens no review card at all:
 the reply writes the whole email or calendar event into the thread and asks whether to go
 ahead, and a reply in that same thread approving it ("yes, send it" / "go ahead") is the
-confirmation - the agent then sends or creates directly (`SendConfirmedEmail`,
-`CreateConfirmedCalendarEvent`), with no session visit needed. Being asked to send or
+confirmation - the agent then sends or creates directly (`SendConfirmedEmail` and
+`CreateConfirmedCalendarEvent`, or in code mode `macro.email.sendConfirmed`,
+`EmailMessage.forwardConfirmed`, `EmailDraft.send` and `macro.calendar.createConfirmed`),
+with no session visit needed. Being asked to send or
 schedule something only produces the draft; nothing goes out before that approving reply.
 Images made with `GenerateImage` are saved to static file service. The bot embeds
 the returned URL as a Markdown image in its channel reply; generated images have

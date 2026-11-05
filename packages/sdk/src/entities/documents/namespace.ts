@@ -9,6 +9,13 @@ import { User } from '../users/user';
 import { Document } from './document';
 import { SystemSkill } from './system-skill';
 
+/** A file's content: its bytes, or text stored as UTF-8. */
+export type FileContent = Uint8Array<ArrayBuffer> | ArrayBuffer | Blob | string;
+
+function toBlob(content: FileContent): Blob {
+  return content instanceof Blob ? content : new Blob([content]);
+}
+
 /**
  * @routing Use when writing, creating, reading or editing a document of any kind, such as a brief, notes, a spec, a canvas, a spreadsheet or a deck; not databases, tasks or email.
  *
@@ -71,7 +78,45 @@ export class DocumentNamespace {
     };
   }
 
-  /** Reserve a binary document and return upload instructions. Upload content before saving. */
+  /**
+   * Upload a file as a new document, up to 25 MiB: generated output such as a
+   * CSV, a rendered PDF or an image, or bytes read with `Document.bytes()`.
+   * Use `create` for Markdown you want to edit in Macro.
+   *
+   * `name` is the filename with its extension, which sets the file type
+   * (`report.pdf`, `data.csv`). `content` is the file's bytes, or a string
+   * stored as UTF-8 text. Uploading into `project` needs edit access to it.
+   * The document is ready to read and attach when this resolves; its preview
+   * and search indexing finish shortly after.
+   *
+   * @example Upload a generated CSV and share it in a channel.
+   * ```js
+   * const rows = [['name', 'amount'], ['Acme', 1200]];
+   * const file = await macro.documents.upload({
+   *   name: 'invoices.csv',
+   *   content: rows.map((row) => row.join(',')).join('\n'),
+   * });
+   * await channel.send('Invoices attached.', { documents: [file] });
+   * ```
+   */
+  async upload(options: {
+    name: string;
+    content: FileContent;
+    project?: Project;
+  }): Promise<Document> {
+    const { documentId } = unwrap(
+      await this.client.storage.uploadFile({
+        query: { fileName: options.name, projectId: options.project?.id },
+        body: toBlob(options.content),
+      }),
+    );
+    return Document.byId(this.client, documentId);
+  }
+
+  /**
+   * Reserve a binary document and return a presigned URL to PUT its content
+   * to. The URL is outside the hosts code mode can reach; use `upload` there.
+   */
   async createUpload(options: {
     name: string;
     sha: string;

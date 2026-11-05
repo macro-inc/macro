@@ -688,6 +688,11 @@ where
                     .collect::<Result<Vec<_>, _>>()
                     .map_err(|error| async_graphql::Error::new(error.to_string()));
             }
+            // The viewer reopens and refetches; this is how often it has to.
+            tracing::warn!(
+                agent.session.id = %session_id,
+                "closing an agent session log subscription that fell behind"
+            );
             yield Err(async_graphql::Error::new(
                 "agent session log subscription closed after falling behind",
             ));

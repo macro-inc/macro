@@ -155,6 +155,22 @@ fn coding_dispatch_is_available_to_every_host_but_not_internal_subagents() {
 }
 
 #[test]
+fn code_mode_runs_confirmed_actions_through_the_sdk_instead_of_the_tools() {
+    let tools = tools_for_agent_code_mode();
+    let prompt = tools.prompt.to_string();
+    for name in ["SendConfirmedEmail", "CreateConfirmedCalendarEvent"] {
+        assert!(!tools.toolset.tools.contains_key(name), "{name}");
+        assert!(
+            !tools.deferred.iter().any(|tool| tool.name == name),
+            "{name}"
+        );
+        assert!(!prompt.contains(name), "{name}");
+    }
+    assert!(prompt.contains("macro.email.sendConfirmed"));
+    assert!(prompt.contains("macro.calendar.createConfirmed"));
+}
+
+#[test]
 fn code_mode_starts_agents_through_the_sdk_instead_of_dispatch_tools() {
     let tools = tools_for_agent_code_mode();
     let prompt = tools.prompt.to_string();
@@ -175,6 +191,26 @@ fn code_mode_starts_agents_through_the_sdk_instead_of_dispatch_tools() {
             .to_string()
             .contains("createManaged")
     );
+}
+
+#[test]
+fn code_mode_manages_bots_through_the_sdk_but_keeps_the_credential_card() {
+    let tools = tools_for_agent_code_mode();
+    for name in [
+        "ListBots",
+        "CreateBot",
+        "ConfigureBot",
+        "DeleteBot",
+        "GetBotWebhooks",
+        "ManageBotChannelAccess",
+    ] {
+        assert!(!tools.toolset.tools.contains_key(name), "{name}");
+        assert!(
+            !tools.deferred.iter().any(|tool| tool.name == name),
+            "{name}"
+        );
+    }
+    assert!(tools.toolset.tools.contains_key("IssueBotCredential"));
 }
 
 #[test]
@@ -689,6 +725,8 @@ fn code_mode_retains_direct_lifecycles_and_hides_sdk_methods_from_lazy_discovery
         "NameSearch",
         "ListEntities",
         "ContentSearch",
+        "DiscoverConnectors",
+        "ConnectMcpServer",
     ] {
         assert!(standard.toolset.tools.contains_key(name), "{name}");
         assert!(sdk.tools.contains_key(name), "{name}");
@@ -711,7 +749,6 @@ fn code_mode_retains_direct_lifecycles_and_hides_sdk_methods_from_lazy_discovery
         "Subagent",
         "SearchTools",
         "LoadTools",
-        "DiscoverConnectors",
         "BashCodeExecution",
         "TextEditorCodeExecution",
     ] {

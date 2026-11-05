@@ -23,6 +23,10 @@ export const CallsCallDetail = lazyNamed(
   () => import('@app/features/calls-view/views/call-detail'),
   'CallsCallDetail'
 );
+export const NotificationsCalendarRouteView = lazyNamed(
+  () => import('@app/features/notifications-inbox/route-views'),
+  'NotificationsCalendarRouteView'
+);
 export const NotificationsRouteView = lazyNamed(
   () => import('@app/features/notifications-inbox/route-views'),
   'NotificationsRouteView'
@@ -102,10 +106,6 @@ export const ReviewsPrDetailRouteView = lazyNamed(
 export const ReviewsRouteView = lazyNamed(
   () => import('@app/features/reviews-view/route-views'),
   'ReviewsRouteView'
-);
-export const RoutineCreateRouteView = lazyNamed(
-  () => import('@app/features/routines/route-views'),
-  'RoutineCreateRouteView'
 );
 export const SettingsRouteView = lazyNamed(
   () => import('@app/features/settings/route-views'),

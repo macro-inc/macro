@@ -167,7 +167,7 @@ fn generated_code() -> Job {
         .add_env(("RUSTFLAGS", "-C link-arg=-fuse-ld=mold"))
         .add_step(checkout("Checkout Repo", false))
         .add_step(steps::mount_web_cache_volume(true))
-        .add_step(steps::setup_nix())
+        .add_step(steps::setup_nix_with_seed())
         .add_step(
             steps::setup_reqs_web("Setup Prereqs", false)
                 .timeout_minutes(vars::DEV_SHELL_TIMEOUT_MINUTES),

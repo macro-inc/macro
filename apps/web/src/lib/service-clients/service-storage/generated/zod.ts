@@ -756,6 +756,78 @@ export const createAnchorResponse = zod
   );
 
 /**
+ * @summary Handler for `GET /bots`: the bots the caller can manage.
+ */
+export const listBotsResponseItem = zod
+  .object({
+    avatar_url: zod.string().nullish().describe('Optional avatar URL.'),
+    created_at: zod.iso.datetime({}).describe('Creation timestamp.'),
+    created_by: zod.string().nullish().describe('User that created this bot.'),
+    deleted_at: zod.iso
+      .datetime({})
+      .nullish()
+      .describe('Soft-delete timestamp.'),
+    description: zod.string().nullish().describe('Optional description.'),
+    handle: zod.string().describe('Stable handle.'),
+    has_agent: zod
+      .boolean()
+      .describe(
+        'Whether this bot runs as an AI agent: mentions and DMs start an agent session.'
+      ),
+    id: zod.string(),
+    kind: zod.enum(['owned', 'system']).describe('Bot kind.'),
+    name: zod.string().describe('Display name.'),
+    owner: zod
+      .union([
+        zod.null(),
+        zod
+          .union([
+            zod
+              .object({
+                type: zod.enum(['user']),
+                user_id: zod.string().describe('Owner user id.'),
+              })
+              .describe('User-owned bot.'),
+            zod
+              .object({
+                team_id: zod.uuid().describe('Owner team id.'),
+                type: zod.enum(['team']),
+              })
+              .describe('Team-owned bot.'),
+          ])
+          .describe('Bot owner.'),
+      ])
+      .optional(),
+    updated_at: zod.iso.datetime({}).describe('Update timestamp.'),
+  })
+  .describe('Bot row.\n\nClients deserialize this, so both derives are used.');
+export const listBotsResponse = zod.array(listBotsResponseItem);
+
+/**
+ * @summary Handler for `POST /bots`.
+ */
+export const createBotBody = zod
+  .object({
+    avatar_url: zod.string().nullish().describe('Optional avatar URL.'),
+    description: zod.string().nullish().describe('Optional description.'),
+    handle: zod.string().describe('Stable handle.'),
+    has_agent: zod
+      .boolean()
+      .nullish()
+      .describe(
+        'Whether this bot runs as an AI agent: mentions and DMs start an agent session. Defaults to false.'
+      ),
+    name: zod.string().describe('Display name.'),
+    team_id: zod
+      .uuid()
+      .nullish()
+      .describe(
+        'Team owner. The caller must be a team administrator or owner. Omit for a user-owned bot.'
+      ),
+  })
+  .describe('Request to create a bot.');
+
+/**
  * @summary Handler for `GET /bots/me`.
  */
 export const getSelfBotResponse = zod
@@ -859,6 +931,130 @@ export const getBotOwnerProfilesResponse = zod.array(
 );
 
 /**
+ * @summary Handler for `GET /bots/{bot_id}`.
+ */
+export const getBotParams = zod.object({
+  bot_id: zod.string().describe('Bot ID'),
+});
+
+export const getBotResponse = zod
+  .object({
+    avatar_url: zod.string().nullish().describe('Optional avatar URL.'),
+    created_at: zod.iso.datetime({}).describe('Creation timestamp.'),
+    created_by: zod.string().nullish().describe('User that created this bot.'),
+    deleted_at: zod.iso
+      .datetime({})
+      .nullish()
+      .describe('Soft-delete timestamp.'),
+    description: zod.string().nullish().describe('Optional description.'),
+    handle: zod.string().describe('Stable handle.'),
+    has_agent: zod
+      .boolean()
+      .describe(
+        'Whether this bot runs as an AI agent: mentions and DMs start an agent session.'
+      ),
+    id: zod.string(),
+    kind: zod.enum(['owned', 'system']).describe('Bot kind.'),
+    name: zod.string().describe('Display name.'),
+    owner: zod
+      .union([
+        zod.null(),
+        zod
+          .union([
+            zod
+              .object({
+                type: zod.enum(['user']),
+                user_id: zod.string().describe('Owner user id.'),
+              })
+              .describe('User-owned bot.'),
+            zod
+              .object({
+                team_id: zod.uuid().describe('Owner team id.'),
+                type: zod.enum(['team']),
+              })
+              .describe('Team-owned bot.'),
+          ])
+          .describe('Bot owner.'),
+      ])
+      .optional(),
+    updated_at: zod.iso.datetime({}).describe('Update timestamp.'),
+  })
+  .describe('Bot row.\n\nClients deserialize this, so both derives are used.');
+
+/**
+ * @summary Handler for `DELETE /bots/{bot_id}`.
+ */
+export const deleteBotParams = zod.object({
+  bot_id: zod.string().describe('Bot ID'),
+});
+
+/**
+ * @summary Handler for `PATCH /bots/{bot_id}`.
+ */
+export const patchBotParams = zod.object({
+  bot_id: zod.string().describe('Bot ID'),
+});
+
+export const patchBotBody = zod
+  .object({
+    avatar_url: zod.string().nullish().describe('Optional avatar URL.'),
+    description: zod.string().nullish().describe('Optional description.'),
+    handle: zod.string().nullish().describe('Stable handle.'),
+    has_agent: zod
+      .boolean()
+      .nullish()
+      .describe(
+        'Whether this bot runs as an AI agent: mentions and DMs start an agent session. Omit to leave unchanged.'
+      ),
+    name: zod.string().nullish().describe('Display name.'),
+  })
+  .describe('Request to patch a bot.');
+
+export const patchBotResponse = zod
+  .object({
+    avatar_url: zod.string().nullish().describe('Optional avatar URL.'),
+    created_at: zod.iso.datetime({}).describe('Creation timestamp.'),
+    created_by: zod.string().nullish().describe('User that created this bot.'),
+    deleted_at: zod.iso
+      .datetime({})
+      .nullish()
+      .describe('Soft-delete timestamp.'),
+    description: zod.string().nullish().describe('Optional description.'),
+    handle: zod.string().describe('Stable handle.'),
+    has_agent: zod
+      .boolean()
+      .describe(
+        'Whether this bot runs as an AI agent: mentions and DMs start an agent session.'
+      ),
+    id: zod.string(),
+    kind: zod.enum(['owned', 'system']).describe('Bot kind.'),
+    name: zod.string().describe('Display name.'),
+    owner: zod
+      .union([
+        zod.null(),
+        zod
+          .union([
+            zod
+              .object({
+                type: zod.enum(['user']),
+                user_id: zod.string().describe('Owner user id.'),
+              })
+              .describe('User-owned bot.'),
+            zod
+              .object({
+                team_id: zod.uuid().describe('Owner team id.'),
+                type: zod.enum(['team']),
+              })
+              .describe('Team-owned bot.'),
+          ])
+          .describe('Bot owner.'),
+      ])
+      .optional(),
+    updated_at: zod.iso.datetime({}).describe('Update timestamp.'),
+  })
+  .describe('Bot row.\n\nClients deserialize this, so both derives are used.');
+
+/**
  * @summary Handler for `GET /bots/{bot_id}/channels`.
  */
 export const listBotChannelsParams = zod.object({
@@ -885,6 +1081,65 @@ export const listBotChannelsResponse = zod.array(listBotChannelsResponseItem);
 export const removeBotFromChannelByBotParams = zod.object({
   bot_id: zod.string().describe('Bot ID'),
   channel_id: zod.uuid().describe('Channel ID'),
+});
+
+/**
+ * @summary Handler for `GET /bots/{bot_id}/tokens`.
+ */
+export const listBotTokensParams = zod.object({
+  bot_id: zod.string().describe('Bot ID'),
+});
+
+export const listBotTokensResponseItem = zod
+  .object({
+    bot_id: zod.string(),
+    created_at: zod.iso.datetime({}).describe('Creation timestamp.'),
+    expires_at: zod.iso
+      .datetime({})
+      .nullish()
+      .describe('Expiration timestamp.'),
+    id: zod.uuid().describe('Token id.'),
+    label: zod.string().nullish().describe('Optional token label.'),
+    last_used_at: zod.iso
+      .datetime({})
+      .nullish()
+      .describe('Last successful use.'),
+    revoked_at: zod.iso
+      .datetime({})
+      .nullish()
+      .describe('Revocation timestamp.'),
+    token_prefix: zod
+      .string()
+      .describe(
+        'Display prefix of the bearer token. The raw secret is never stored here.'
+      ),
+  })
+  .describe('Bot token metadata.');
+export const listBotTokensResponse = zod.array(listBotTokensResponseItem);
+
+/**
+ * @summary Handler for `POST /bots/{bot_id}/tokens`.
+ */
+export const createBotTokenParams = zod.object({
+  bot_id: zod.string().describe('Bot ID'),
+});
+
+export const createBotTokenBody = zod
+  .object({
+    expires_at: zod.iso
+      .datetime({})
+      .nullish()
+      .describe('Optional expiration timestamp.'),
+    label: zod.string().nullish().describe('Token label.'),
+  })
+  .describe('Request to create a bot token.');
+
+/**
+ * @summary Handler for `DELETE /bots/{bot_id}/tokens/{token_id}`.
+ */
+export const revokeBotTokenParams = zod.object({
+  bot_id: zod.string().describe('Bot ID'),
+  token_id: zod.uuid().describe('Token ID'),
 });
 
 /**
@@ -4102,6 +4357,71 @@ export const getChannelAttachmentsResponse = zod
   .describe('Paginated response of channel attachments.');
 
 /**
+ * @summary Handler for `GET /channels/{channel_id}/bots`.
+ */
+export const listChannelBotsParams = zod.object({
+  channel_id: zod.uuid().describe('Channel ID'),
+});
+
+export const listChannelBotsResponseItem = zod
+  .object({
+    avatar_url: zod.string().nullish().describe('Optional avatar URL.'),
+    created_at: zod.iso.datetime({}).describe('Creation timestamp.'),
+    created_by: zod.string().nullish().describe('User that created this bot.'),
+    deleted_at: zod.iso
+      .datetime({})
+      .nullish()
+      .describe('Soft-delete timestamp.'),
+    description: zod.string().nullish().describe('Optional description.'),
+    handle: zod.string().describe('Stable handle.'),
+    has_agent: zod
+      .boolean()
+      .describe(
+        'Whether this bot runs as an AI agent: mentions and DMs start an agent session.'
+      ),
+    id: zod.string(),
+    kind: zod.enum(['owned', 'system']).describe('Bot kind.'),
+    name: zod.string().describe('Display name.'),
+    owner: zod
+      .union([
+        zod.null(),
+        zod
+          .union([
+            zod
+              .object({
+                type: zod.enum(['user']),
+                user_id: zod.string().describe('Owner user id.'),
+              })
+              .describe('User-owned bot.'),
+            zod
+              .object({
+                team_id: zod.uuid().describe('Owner team id.'),
+                type: zod.enum(['team']),
+              })
+              .describe('Team-owned bot.'),
+          ])
+          .describe('Bot owner.'),
+      ])
+      .optional(),
+    updated_at: zod.iso.datetime({}).describe('Update timestamp.'),
+  })
+  .describe('Bot row.\n\nClients deserialize this, so both derives are used.');
+export const listChannelBotsResponse = zod.array(listChannelBotsResponseItem);
+
+/**
+ * @summary Handler for `POST /channels/{channel_id}/bots`.
+ */
+export const addChannelBotParams = zod.object({
+  channel_id: zod.uuid().describe('Channel ID'),
+});
+
+export const addChannelBotBody = zod
+  .object({
+    bot_id: zod.string(),
+  })
+  .describe('Request to add a bot to a channel.');
+
+/**
  * @summary Handler for `POST /channels/{channel_id}/bots/scoped`.
  */
 export const createChannelScopedBotParams = zod.object({
@@ -5351,12 +5671,19 @@ export const listCrmPipelinesResponseItem = zod
       .uuid()
       .describe('Entity identity, used with `CrmPipeline` access receipts.'),
     name: zod.string().describe('Pipeline display name.'),
-    primaryColumnId: zod.uuid().describe('Protected primary column.'),
-    recordType: zod
-      .enum(['company', 'contact'])
+    primaryColumnId: zod
+      .uuid()
       .describe(
-        'Which CRM entity each row references. Fixed when a pipeline is created.'
+        "A tracked pipeline's protected record reference. A generic pipeline's\nName, which names no column once someone deletes it."
       ),
+    recordType: zod.union([
+      zod.null(),
+      zod
+        .enum(['company', 'contact'])
+        .describe(
+          'Which CRM entity each row references. Fixed when a pipeline is created.'
+        ),
+    ]),
     sharing: zod
       .enum(['private', 'team'])
       .describe(
@@ -5396,10 +5723,15 @@ export const createCrmPipelineBody = zod
   .object({
     name: zod.string().describe('Pipeline name.'),
     recordType: zod
-      .enum(['company', 'contact'])
-      .describe(
-        'Which CRM entity each row references. Fixed when a pipeline is created.'
-      ),
+      .union([
+        zod.null(),
+        zod
+          .enum(['company', 'contact'])
+          .describe(
+            'Which CRM entity each row references. Fixed when a pipeline is created.'
+          ),
+      ])
+      .optional(),
     sharing: zod
       .enum(['private', 'team'])
       .optional()
@@ -5408,7 +5740,7 @@ export const createCrmPipelineBody = zod
       ),
   })
   .describe(
-    'Request to create an empty pipeline with the standard CRM columns.'
+    'Request to create an empty pipeline: the standard CRM columns for a tracked\nrecord, or one Name column, like a new database, for a generic pipeline.'
   );
 
 export const createCrmPipelineResponse = zod
@@ -5419,12 +5751,19 @@ export const createCrmPipelineResponse = zod
       .uuid()
       .describe('Entity identity, used with `CrmPipeline` access receipts.'),
     name: zod.string().describe('Pipeline display name.'),
-    primaryColumnId: zod.uuid().describe('Protected primary column.'),
-    recordType: zod
-      .enum(['company', 'contact'])
+    primaryColumnId: zod
+      .uuid()
       .describe(
-        'Which CRM entity each row references. Fixed when a pipeline is created.'
+        "A tracked pipeline's protected record reference. A generic pipeline's\nName, which names no column once someone deletes it."
       ),
+    recordType: zod.union([
+      zod.null(),
+      zod
+        .enum(['company', 'contact'])
+        .describe(
+          'Which CRM entity each row references. Fixed when a pipeline is created.'
+        ),
+    ]),
     sharing: zod
       .enum(['private', 'team'])
       .describe(
@@ -5471,12 +5810,19 @@ export const getCrmPipelineResponse = zod
       .uuid()
       .describe('Entity identity, used with `CrmPipeline` access receipts.'),
     name: zod.string().describe('Pipeline display name.'),
-    primaryColumnId: zod.uuid().describe('Protected primary column.'),
-    recordType: zod
-      .enum(['company', 'contact'])
+    primaryColumnId: zod
+      .uuid()
       .describe(
-        'Which CRM entity each row references. Fixed when a pipeline is created.'
+        "A tracked pipeline's protected record reference. A generic pipeline's\nName, which names no column once someone deletes it."
       ),
+    recordType: zod.union([
+      zod.null(),
+      zod
+        .enum(['company', 'contact'])
+        .describe(
+          'Which CRM entity each row references. Fixed when a pipeline is created.'
+        ),
+    ]),
     sharing: zod
       .enum(['private', 'team'])
       .describe(
@@ -18506,6 +18852,37 @@ export const getSystemSkillsHandlerResponse = zod
       .describe('Every system skill, in display order.'),
   })
   .describe('Response listing the built-in system skills.');
+
+/**
+ * The body is the raw file content. Preview generation and indexing may
+finish after the response.
+ * @summary Upload a file's bytes as a new document, up to 25 MiB.
+ */
+export const uploadFileQueryParams = zod.object({
+  fileName: zod
+    .string()
+    .describe(
+      'Filename including its extension, such as `report.pdf`; the extension\nsets the file type. No directory components.'
+    ),
+  projectId: zod
+    .uuid()
+    .optional()
+    .describe(
+      'Destination project. Requires edit access; omit for top-level files.'
+    ),
+});
+
+export const uploadFileResponseSizeBytesMin = 0;
+
+export const uploadFileResponse = zod
+  .object({
+    documentId: zod.string().describe('The new document.'),
+    sizeBytes: zod
+      .number()
+      .min(uploadFileResponseSizeBytesMin)
+      .describe('Number of bytes stored.'),
+  })
+  .describe('The document created from the uploaded bytes.');
 
 /**
  * Returns document metadata, user access level, and view location.

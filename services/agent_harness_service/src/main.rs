@@ -24,6 +24,8 @@ mod permission_policy;
 mod preview;
 mod public_mcp;
 mod pull_request_archive;
+mod routine_code;
+mod routine_drafts;
 mod routine_sessions;
 mod runtime_commands;
 mod scheduling;
@@ -179,6 +181,9 @@ use runtime_commands::consume_runtime_commands;
 struct AgentHarnessConsumerGroup;
 
 const RUNTIME_COMMAND_CONSUMER_ATTEMPTS: usize = 5;
+/// Routine code programs the harness runs at once. Steps beyond it wait for a
+/// slot before their credential is minted, so they never queue in the executor.
+const ROUTINE_CODE_SLOTS: usize = 4;
 
 impl GroupName for AgentHarnessConsumerGroup {
     const GROUP_NAME: &'static str = "agent-harness-service";
@@ -636,26 +641,6 @@ async fn run() -> anyhow::Result<()> {
     .await
     .context("failed to compose cognition APIs")?;
     let cognition_router = cognition_runtime.router.clone();
-    let service_shutdown = tokio_util::sync::CancellationToken::new();
-    let (http_listening, http_ready) = tokio::sync::watch::channel(false);
-    let scheduling_runtime = scheduling::build(
-        scheduling::config::Config::from_env()?,
-        pool.clone(),
-        std::net::SocketAddr::from(([127, 0, 0, 1], config.port)),
-        http_ready,
-        Arc::clone(&notifications),
-    )
-    .await?;
-    let scheduling_router = scheduling_runtime.router.clone();
-    let preview_router = preview::build(
-        macro_config::ConfigLoader::load::<preview::config::Config>()?,
-        config.database_url.as_ref(),
-        pool.clone(),
-        service_shutdown.clone(),
-        event_broker_tracker.clone(),
-    )
-    .await
-    .map_err(|error| anyhow::anyhow!("{error}"))?;
     let code_scratch = tempfile::tempdir()?;
     let code_runner = match &config.deno_binary {
         Some(binary) => {
@@ -677,16 +662,82 @@ async fn run() -> anyhow::Result<()> {
                     ..Default::default()
                 },
             )?;
+            // Routines get their own budget too, below the host's priority and
+            // with a CPU limit, so unattended code can't crowd out sessions.
+            let routines = code_execution::domain::ExecutionService::new(
+                Arc::clone(&runner),
+                code_execution::domain::Limits {
+                    max_running: ROUTINE_CODE_SLOTS,
+                    max_queued: 16,
+                    max_cpu: Some(std::time::Duration::from_secs(10)),
+                    background: true,
+                    ..Default::default()
+                },
+            )?;
+            let checker = code_execution::outbound::deno::check::DenoChecker::new(
+                binary.into(),
+                code_scratch.path().join("checks"),
+                2,
+                code_execution::domain::Limits::default().max_source_bytes,
+            )
+            .await
+            .map_err(|error| anyhow::anyhow!("invalid Deno type checker: {error}"))?;
             Some((
                 code_execution::domain::ExecutionService::new(
                     runner,
                     code_execution::domain::Limits::default(),
                 )?,
                 public,
+                routines,
+                Arc::new(checker),
             ))
         }
         None => None,
     };
+    // Routine code steps run as their owner on the routines' executor.
+    let routine_code = match &code_runner {
+        Some((_, _, routines, checker)) => Some(
+            routine_code::SdkRoutineCode::new(
+                Arc::new(routines.clone()),
+                Arc::clone(checker) as Arc<dyn code_execution::domain::ProgramChecker>,
+                MacroApiTokenSigner::new(
+                    pool.clone(),
+                    config.macro_api_token_issuer.as_ref(),
+                    config.macro_api_token_private_secret_key.as_ref(),
+                ),
+                code_mode::sdk_hosts()?,
+                Arc::clone(&recorder),
+                tool_context.cognition_tool_context.service.clone(),
+                Arc::new(routine_code::CalendarTimeZones(Arc::clone(
+                    &tool_context.calendar_tool_context.occurrences,
+                ))),
+            )
+            .with_slots(ROUTINE_CODE_SLOTS),
+        ),
+        None => None,
+    };
+    let service_shutdown = tokio_util::sync::CancellationToken::new();
+    let (http_listening, http_ready) = tokio::sync::watch::channel(false);
+    let scheduling_runtime = scheduling::build(
+        scheduling::config::Config::from_env()?,
+        pool.clone(),
+        std::net::SocketAddr::from(([127, 0, 0, 1], config.port)),
+        routine_code,
+        routine_drafts::ModelDrafts::new(Arc::clone(&recorder)),
+        http_ready,
+        Arc::clone(&notifications),
+    )
+    .await?;
+    let scheduling_router = scheduling_runtime.router.clone();
+    let preview_router = preview::build(
+        macro_config::ConfigLoader::load::<preview::config::Config>()?,
+        config.database_url.as_ref(),
+        pool.clone(),
+        service_shutdown.clone(),
+        event_broker_tracker.clone(),
+    )
+    .await
+    .map_err(|error| anyhow::anyhow!("{error}"))?;
     // One flag client for every per-user agent rollout.
     let feature_flags = config
         .posthog_api_key
@@ -713,7 +764,7 @@ async fn run() -> anyhow::Result<()> {
             _ => None,
         };
     let public_code_mode = match (&code_runner, &code_mode_selector) {
-        (Some((_, public)), Some(selector)) => Some(public_mcp::PublicCodeMode {
+        (Some((_, public, _, _)), Some(selector)) => Some(public_mcp::PublicCodeMode {
             service: Arc::new(agent_code_mode::domain::UserCodeModeService::new(
                 Arc::new(public.clone()),
                 Arc::new(code_mode::UserRunCredentials {
@@ -760,10 +811,34 @@ async fn run() -> anyhow::Result<()> {
             Arc::clone(&tool_approvals),
         ),
     );
-    let code_executor = code_runner.as_ref().map(|(runner, _)| {
+    let code_executor = code_runner.as_ref().map(|(runner, _, _, _)| {
         Arc::new(runner.clone()) as Arc<dyn code_execution::domain::ProgramExecutor>
     });
     let code_mode_enabled = code_executor.is_some();
+    let execution_store: Arc<dyn agent_code_mode::domain::ExecutionStore> = Arc::new(
+        agent_code_mode::outbound::postgres::PgExecutionStore::new(pool.clone()),
+    );
+    let execution_turns: Arc<dyn agent_code_mode::domain::ExecutionTurns> = Arc::new(
+        agent_code_mode::outbound::turns::SessionTurns(session_repo.clone()),
+    );
+    // A running execution reaches the apps its session's agent was given,
+    // through the same egress credential resolution as the agent's own calls.
+    let connected_apps = agent_code_mode::domain::connected_apps::ConnectedAppService::new(
+        Arc::clone(&execution_store),
+        Arc::clone(&execution_turns),
+        Arc::new(code_mode::connected_apps::SessionConnectedApps {
+            egress: Arc::clone(&egress),
+            provisioner: EgressProvisioner::new(
+                Arc::clone(&mcp_connections),
+                Arc::clone(&mcp_servers),
+                egress_base_url.clone(),
+            ),
+            sessions: session_repo.clone(),
+            gate: owner_tool_gate.clone(),
+            connectors: tool_context.connector_tool_context.clone(),
+            mcp_servers: tool_context.mcp_server_tool_context.clone(),
+        }),
+    );
     let code_mode: Arc<dyn agent_code_mode::domain::SessionCodeMode> =
         Arc::new(agent_code_mode::domain::CodeModeService::new(
             code_executor,
@@ -776,12 +851,8 @@ async fn run() -> anyhow::Result<()> {
                 gate: owner_tool_gate.clone(),
                 hosts: code_mode::sdk_hosts()?,
             }),
-            Arc::new(agent_code_mode::outbound::postgres::PgExecutionStore::new(
-                pool.clone(),
-            )),
-            Arc::new(agent_code_mode::outbound::turns::SessionTurns(
-                session_repo.clone(),
-            )),
+            execution_store,
+            execution_turns,
         ));
     let session_metadata_realtime = WorkRegistrationRealtime::new(
         ConnectionGatewayAgentSessionRealtime::new(
@@ -1724,6 +1795,7 @@ async fn run() -> anyhow::Result<()> {
         agent_code_mode::inbound::axum_router::CodeExecutionRouterState::new(
             code_mode,
             reviews,
+            connected_apps,
             entity_access.clone(),
             MacroAuthorizationState::new(Arc::new(authorization_service.clone())),
         ),
@@ -2259,8 +2331,8 @@ async fn run() -> anyhow::Result<()> {
     typing_heartbeat.abort();
     recovery.abort();
     runtime_commands.abort();
-    if let Some((sessions, public)) = &code_runner {
-        tokio::join!(sessions.shutdown(), public.shutdown());
+    if let Some((sessions, public, routines, _)) = &code_runner {
+        tokio::join!(sessions.shutdown(), public.shutdown(), routines.shutdown());
     }
     let stop_failures = container_shutdown.shutdown_all().await;
     if stop_failures > 0 {

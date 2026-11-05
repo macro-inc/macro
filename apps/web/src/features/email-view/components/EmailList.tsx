@@ -863,13 +863,11 @@ export function EmailList(props: EmailListProps) {
                                       metaEnd={
                                         <EmailFocusScore
                                           entity={entityRow().entity}
-                                          sort={state.focusSort}
                                         />
                                       }
                                       previewLeading={
                                         <EmailFocusPreviewLeading
                                           entity={entityRow().entity}
-                                          sort={state.focusSort}
                                         />
                                       }
                                       scheduleStatus={
