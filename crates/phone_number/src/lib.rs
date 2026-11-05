@@ -67,12 +67,6 @@ impl fmt::Display for PhoneNumber {
     }
 }
 
-impl AsRef<str> for PhoneNumber {
-    fn as_ref(&self) -> &str {
-        &self.0
-    }
-}
-
 impl From<PhoneNumber> for String {
     fn from(number: PhoneNumber) -> Self {
         number.0
