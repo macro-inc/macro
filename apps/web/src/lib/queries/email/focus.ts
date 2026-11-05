@@ -43,9 +43,12 @@ export function mapEmailFocus(data: EmailFocusQuery): EmailEntity[] {
     threads.push({
       ...entity,
       focus: {
+        category: thread.focus.category,
         importance: thread.focus.importance,
         needsReply: thread.focus.needsReply,
         needsFollowUp: thread.focus.needsFollowUp,
+        importanceTrend: thread.focus.importanceTrend,
+        dueOn: thread.focus.dueOn,
       },
     });
   }

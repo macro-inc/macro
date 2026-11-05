@@ -58,6 +58,7 @@ import {
   type SoupEntityRef,
   soupEntityRefKey,
 } from './entity-input';
+import { crmExternalWriteTypes } from './external-write-scope';
 import { isCachedMailView } from './mail-view';
 import {
   usePendingGraphqlSoupDeleteKeys,
@@ -385,6 +386,11 @@ export function createSoupLiveQuery(
       query: queryDocument(),
       client: getGraphqlSoupClient(),
       initialPageParam: null,
+      context: {
+        externalCacheWriteTypes: crmExternalWriteTypes(
+          networkInput()?.initial?.filters
+        ),
+      },
       variables: (cursor) => {
         const input = inputForCursor(cursor);
         if (!input) {

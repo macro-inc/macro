@@ -26,7 +26,9 @@ export function TeamInviteRow(props: {
   const handleCopyLink = async () => {
     try {
       await navigator.clipboard.writeText(
-        `${getWebOrigin()}/app/team-invite?id=${props.invite.id}`
+        props.invite.is_agent
+          ? `${getWebOrigin()}/app/signup/agent?team_invite=${props.invite.id}`
+          : `${getWebOrigin()}/app/team-invite?id=${props.invite.id}`
       );
     } catch (err) {
       console.error('Failed to copy to clipboard', err);

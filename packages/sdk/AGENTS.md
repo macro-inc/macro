@@ -12,7 +12,11 @@ enforced by the ordinary backend APIs.
 - `documents.createCanvas()` creates shared content before returning a Document handle;
   it requires no browser open or upload.
 - `src/entities/entity.ts`: lazy detail reads, mutation invalidation and safe JSON.
-- `src/entities/workspace/namespace.ts`: filtered activity pages and iteration.
+- `src/entities/workspace/namespace.ts`: filtered activity pages and iteration,
+  agent sessions included.
+- `src/entities/search/namespace.ts`: `macro.search`, one unified search across
+  every kind of item with the direct search tools' filters (types, exact match,
+  tags, inbox, agent session transcripts), returning typed handles.
 - `src/entities/routines/`, `agents/`, `harnesses/`: automation and agent hosts.
 - `users.search(nameOrEmail)` searches existing Macro contacts with batched auth
   names and returns seeded User handles; it is not a global directory. Empty
@@ -33,6 +37,10 @@ enforced by the ordinary backend APIs.
   `POST /images/generate`, admitted against the user's AI allowance) returns a
   sized `GeneratedImage`; `StaticImage` handles attach to `channel.send(text,
   { images })` and `thread.reply` as `static/image` attachments.
+- `src/entities/web/`: `macro.web.search()` / `macro.web.fetch()` (cognition
+  `POST /web/search`, `/web/fetch`, Tavily via `crates/web_search`), admitted and
+  metered against the user's AI allowance; code mode hides the `WebSearch` /
+  `WebFetch` tools in their favour.
 - `services.ts`, `openapi-ts.config.ts`: generated service contract inputs.
 
 ## Boundaries
@@ -61,6 +69,12 @@ the existing gateway prefixes.
 
 ## Gotchas
 
+- Every entity's namespace class carries one `@routing` sentence ("Use when …;
+  not …") that agents route on, and may carry an `@agent` block: how that area
+  of Macro works, for agents only. Both are stripped from the public
+  reference, and code-mode generation fails without the routing sentence. Put
+  an area's rules there, never in `crates/prompt`; cross-namespace search
+  guidance lives on `SearchNamespace` in `search/namespace.ts`.
 - Code mode puts each relevant entity's index in the agent turn, at most 48
   KiB: a method's signature and the first sentence of its doc, cut at 160
   characters. Anything else reaches an agent only through `ReadCodeDocs`, which
@@ -84,11 +98,10 @@ the existing gateway prefixes.
   bun run generate`; do not copy deployed schemas over a local API change.
 - Run `bun run generate` to regenerate SDK clients and normalize whitespace-only
   lines; do not hand-edit generated output to satisfy whitespace checks.
-- Regenerate `../sdk-docs/reference` after SDK source or generated type changes;
-  run that package's checks because web CI verifies the reference is current.
-  Also run `bun packages/code-mode-sdk/scripts/generate.ts` from the root and
-  commit `crates/agent_code_mode/src/domain/documentation.json`; CI's Typecheck
-  fails when it is stale.
+- The SDK reference (`../sdk-docs`) and the code-mode bundle and documentation
+  (`crates/code_mode_assets`) are generated from this source at build time and
+  never committed; run `bun run test` in `../sdk-docs` and `../code-mode-sdk`
+  after changing public API or comments.
 - `generated/agent-fold/` is not from OpenAPI: `cargo run -p agent_fold --bin
   export_types` writes it, and `foldedLog()` casts the opaque wire schema to it.
 - System events project separately in fold metadata and never appear as user
@@ -116,6 +129,9 @@ the existing gateway prefixes.
   that as `false`. A 204 from `GET /team` (no team) parses as an empty
   object, not `undefined`.
 - Keep access-request resolution snapshots: resolved requests leave pending lists.
+- `CrmPipeline.stageRequirements()` and `setStageRequirements()` use pipeline
+  column and option handles; `PipelineColumn.options()` supplies stable options.
+  Stage requirements are enforced on every pipeline operation batch.
 - Pipeline schema reads share the parent's cache; successful op batches clear it.
 - Email sends and other writes against hosted data are real actions; use mocks
   for automated SDK mutation tests.

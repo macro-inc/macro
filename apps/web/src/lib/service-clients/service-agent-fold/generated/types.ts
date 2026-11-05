@@ -799,7 +799,12 @@ export type FailureNoticeKind =
    *  The provider ended the run in failure; its own page for the run is
    *  where any detail it kept lives.
    */
-  | 'provider_run_failed';
+  | 'provider_run_failed'
+  /**
+   *  The runtime accepted the prompt but never handed it to the agent;
+   *  the fix is to send it again.
+   */
+  | 'prompt_not_delivered';
 
 /**
  *  Every filter, each over one field of one kind of item. Id lists match any
@@ -974,6 +979,12 @@ export type FoldedMessage = FoldedMessage_Serialize | FoldedMessage_Deserialize;
 export type FoldedMessage_Deserialize = {
   /**  Session that scopes this message id. */
   agentSessionId: string;
+  /**
+   *  The message's identity within its session, `<turn>:<author kind>`
+   *  (`3:agent`): stable across streaming updates, rebases, and pending
+   *  flipping off, so a reader can key and reconcile rows by it.
+   */
+  key: string;
   /**  The turn within the session, assigned in log order from zero. */
   turn: number;
   /**  Who produced the message. */
@@ -1016,6 +1027,12 @@ export type FoldedMessage_Deserialize = {
 export type FoldedMessage_Serialize = {
   /**  Session that scopes this message id. */
   agentSessionId: string;
+  /**
+   *  The message's identity within its session, `<turn>:<author kind>`
+   *  (`3:agent`): stable across streaming updates, rebases, and pending
+   *  flipping off, so a reader can key and reconcile rows by it.
+   */
+  key: string;
   /**  The turn within the session, assigned in log order from zero. */
   turn: number;
   /**  Who produced the message. */
@@ -2527,6 +2544,17 @@ export type ReviewSettlement_Serialize =
   /**  The decided actions' confirmed results. */
   | ReviewOutcome_Serialize;
 
+/**
+ *  A review's saved record moved to `revision`: presented, edited, decided,
+ *  or an item's action finished.
+ */
+export type ReviewUpdatedNotification = {
+  /**  The review that changed. */
+  reviewId: string;
+  /**  Its saved revision after the change. */
+  revision: number;
+};
+
 /**  A run of a reply's parts that reads as one unit. */
 export type Segment = Segment_Serialize | Segment_Deserialize;
 
@@ -2637,6 +2665,11 @@ export type SessionMetadata =
 export type SessionMetadata_Deserialize = {
   /**  System events, projected independently of the conversation messages. */
   notifications: SessionNotification_Deserialize[];
+  /**
+   *  The newest saved revision of each review the log announced, in the
+   *  order they were first announced.
+   */
+  reviewRevisions: ReviewUpdatedNotification[];
   /**  The last notification turn whose entire answer was suppressed. */
   noopTurn: number | null;
   /**  The agent that produced the log. See [`Harness`]. */
@@ -2689,6 +2722,11 @@ export type SessionMetadata_Deserialize = {
 export type SessionMetadata_Serialize = {
   /**  System events, projected independently of the conversation messages. */
   notifications: SessionNotification_Serialize[];
+  /**
+   *  The newest saved revision of each review the log announced, in the
+   *  order they were first announced.
+   */
+  reviewRevisions: ReviewUpdatedNotification[];
   /**  The last notification turn whose entire answer was suppressed. */
   noopTurn: number | null;
   /**  The agent that produced the log. See [`Harness`]. */

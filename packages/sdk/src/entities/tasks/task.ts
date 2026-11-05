@@ -4,7 +4,7 @@ import type { MacroClient } from '../../utils/client';
 import { Document } from '../documents/document';
 import type { Initiative } from '../initiatives/initiative';
 import type { Project } from '../projects/project';
-import { entitySearch } from '../search';
+import { entitySearch } from '../search/options';
 import type { Team } from '../teams/team';
 import { User } from '../users/user';
 

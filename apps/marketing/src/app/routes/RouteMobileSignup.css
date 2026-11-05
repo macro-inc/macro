@@ -95,3 +95,11 @@
   .mobile-signup-card-title { font-size: 36px; }
   .mobile-signup-card-subtitle { font-size: 15px; }
 }
+
+.mobile-signup-agent-link {
+  margin-top: 16px;
+  font-size: 13px;
+  text-align: center;
+  text-decoration: underline;
+  opacity: 0.7;
+}

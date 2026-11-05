@@ -63,7 +63,13 @@ const thread = (timestamps: Partial<FocusThread>) =>
     labels: [],
     properties: [],
     notifications: [],
-    focus: { importance: 70, needsReply: false, needsFollowUp: true },
+    focus: {
+      category: 'TEAM',
+      importance: 70,
+      needsReply: false,
+      needsFollowUp: true,
+      importanceTrend: 'UP',
+    },
     ...timestamps,
   }) as unknown as FocusThread;
 
@@ -73,6 +79,16 @@ const mapped = (timestamps: Partial<FocusThread>) =>
   } as EmailFocusQuery)[0];
 
 describe('mapEmailFocus', () => {
+  it('carries the classification onto the row', () => {
+    expect(mapped({})?.focus).toEqual({
+      category: 'TEAM',
+      importance: 70,
+      needsReply: false,
+      needsFollowUp: true,
+      importanceTrend: 'UP',
+    });
+  });
+
   it('dates a thread the owner replied to last by that reply', () => {
     const row = mapped({
       latestInboundMessageTs: '2026-10-05T10:00:00+00:00',

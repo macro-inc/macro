@@ -47,6 +47,7 @@ agent_api_keys = { path = "../../crates/agent_api_keys" }
 ai_projections = { path = "../../crates/ai_projections", features = ["agent"] }
 ai_tools = { path = "../../crates/ai_tools" }
 ai_toolset = { path = "../../crates/ai_toolset" }
+calendar_events = { path = "../../crates/calendar_events", features = ["postgres"] }
 ai_usage = { path = "../../crates/ai_usage" }
 analytics_client = { path = "../../crates/analytics_client" }
 anyhow = { workspace = true }
@@ -90,7 +91,7 @@ document_sub_type = { path = "../../crates/document_sub_type" }
 documents = { path = "../../crates/documents", features = ["ai_tools", "attachment", "outbound", "ports"] }
 doppleganger = { workspace = true }
 doppler-config = { workspace = true }
-email = { path = "../../crates/email", features = ["attachment", "outbound"] }
+email = { path = "../../crates/email", features = ["attachment", "outbound", "sqs"] }
 email_service_client = { path = "../../crates/email_service_client" }
 entity_access = { path = "../../crates/entity_access", features = ["inbound", "outbound"] }
 entity_access_db_utils = { path = "../../crates/entity_access_db_utils" }
@@ -163,6 +164,7 @@ prompt = { path = "../../crates/prompt" }
 properties = { path = "../../crates/properties", default-features = false, features = ["outbound"] }
 rdkafka = { workspace = true }
 readonly_pool = { path = "../../crates/readonly_pool" }
+rate_limit = { path = "../../crates/rate_limit" }
 redis = { workspace = true, features = ["aio", "streams", "tokio-comp", "tokio-rustls-comp"] }
 regex = { workspace = true }
 reqwest = { workspace = true }
@@ -202,6 +204,7 @@ url = { workspace = true }
 utoipa = { workspace = true, features = ["axum_extras", "chrono"] }
 utoipa-swagger-ui = { workspace = true, features = ["axum"] }
 uuid = { workspace = true }
+web_search = { path = "../../crates/web_search", features = ["axum"] }
 workspace-hack = { version = "0.1", path = "../../crates/workspace-hack" }
 
 [dev-dependencies]

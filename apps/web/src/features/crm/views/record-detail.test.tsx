@@ -34,6 +34,7 @@ const taskContext = vi.hoisted(() => ({
 }));
 vi.mock('../context/crm-context', () => ({
   useCrmContext: () => ({
+    createNavigation: () => ({ openWithSplit: vi.fn() }),
     listsEnabled: () => () => false,
     pipelinesEnabled: () => () => false,
     isTeamAdmin: () => () => false,
@@ -64,6 +65,10 @@ vi.mock('@components/app/side-panel', () => ({
   },
 }));
 vi.mock('@core/component/EntityIcon', () => ({ EntityIcon: () => null }));
+vi.mock('./record-header-actions', () => ({ RecordHeaderActions: () => null }));
+vi.mock('./record-details-section', () => ({
+  RecordDetailsSection: () => null,
+}));
 vi.mock('./copy-link-button', () => ({ CrmCopyLinkButton: () => null }));
 vi.mock('../components/record-tabs', () => ({
   RecordTabs: (props: { onChange(section: CrmRecordSection): void }) => (

@@ -135,6 +135,15 @@ The detail's `limits` supplies allowed MIME types, bytes and the edit window.
 The owner may stop syncing (details → **Syncing**, groups and direct chats) with
 `DELETE /external-chats/<id>`; history remains readable.
 
+Any viewer, including one who can't reply, can make a task from a message:
+**Task** in the row's hover toolbar, or **Create task** in the touch action
+drawer, opens the task composer titled with the first 70 characters of the
+text (mentions as `@<name>`; Macro users mentioned at either end are left out
+and preselected as assignees) and a mention of the chat as its content. The
+mention opens the chat, not the message. The task has no **Source**: the
+properties service's entity references don't include external chats. Pending,
+deleted and system rows have no task action.
+
 After adding, earlier messages (up to 500 messages or 90 days) come from the
 owner's phone only when they press Import. While a chat is
 `waiting_for_phone`, its owner sees a bar under the chat header ("Open

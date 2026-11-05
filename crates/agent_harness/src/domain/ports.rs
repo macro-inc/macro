@@ -117,8 +117,9 @@ pub trait HarnessBindings: Send + Sync + 'static {
 
 /// Loads facts for the domain to resolve a bot's permission policy.
 ///
-/// Resolved at attach time like [`HarnessBindings`], so changing the agent's
-/// setting takes effect on its existing sessions the next time they attach.
+/// Resolved at attach time and again before every turn, so changing the
+/// agent's setting or its harness's bypass consent takes effect on its live
+/// sessions from their next prompt.
 pub trait PermissionPolicySource: Send + Sync + 'static {
     /// The persona choice and harness limit for `bot` right now.
     fn permission_policy(
@@ -130,8 +131,8 @@ pub trait PermissionPolicySource: Send + Sync + 'static {
 /// Loads a persona's choice of whether it is a coding agent.
 ///
 /// Read when a turn is announced or its reply resolved, like
-/// [`PermissionPolicySource`] is read on attach, so changing the agent's
-/// setting takes effect on its next turn. The domain applies the choice
+/// [`PermissionPolicySource`] is read before each turn, so changing the
+/// agent's setting takes effect on its next turn. The domain applies the choice
 /// with [`crate::domain::model::is_coding_agent`].
 pub trait CodingAgentSource: Send + Sync + 'static {
     /// The persona's setting for `bot`; `None` only for a fixed system bot,
@@ -183,9 +184,9 @@ pub trait MessagePromptContext: Send + Sync + 'static {
 
 /// Composes an agent prompt from raw markdown and trusted session context.
 pub trait AgentPromptComposer: Send + Sync + 'static {
-    /// Return the markdown that should be delivered to the agent runtime.
-    /// With no instructions, people, or trigger, the prompt is sanitized
-    /// without adding a private context node.
+    /// Return the markdown that should be delivered to the agent runtime:
+    /// the sanitized prompt behind a private context node that states the
+    /// current time and whatever instructions, people, and trigger it has.
     fn compose(
         &self,
         prompt_markdown: &str,
@@ -193,6 +194,17 @@ pub trait AgentPromptComposer: Send + Sync + 'static {
         people: Option<&super::model::PromptPeople>,
         trigger: Option<&trigger_context::TriggerContext>,
     ) -> impl Future<Output = Result<String>> + Send;
+}
+
+/// The time zone a user keeps time in, so a prompt can state the current
+/// time the way its reader does.
+pub trait UserTimeZones: Send + Sync + 'static {
+    /// The user's IANA time zone; `None` when it is unknown. Best effort: a
+    /// failed lookup is `None`.
+    fn time_zone(
+        &self,
+        user: &MacroUserIdStr<'static>,
+    ) -> impl Future<Output = Option<String>> + Send;
 }
 
 /// Who a prompt names, made able to open the session it is for.

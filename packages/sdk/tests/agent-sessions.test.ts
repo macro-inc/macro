@@ -530,6 +530,7 @@ describe('AgentSession', () => {
     const messages: FoldedMessage[] = [
       {
         agentSessionId: sessionId,
+        key: '0:agent',
         turn: 0,
         author: { kind: 'agent' },
         requestId: null,

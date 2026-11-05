@@ -208,9 +208,8 @@ edit.post('/', zValidator('json', EditBody), async (c) => {
         setTimeout(resolve, ms / presence.multiplier())
       );
 
-    const { usage, ops, session, clarification } = await Telemetry.span(
-      'edit.session',
-      async (span) => {
+    const { usage, ops, session, clarification, revision } =
+      await Telemetry.span('edit.session', async (span) => {
         span.setAttr('document.id', documentId);
         span.setAttr('edit.mode', mode);
         span.setAttr('edit.interpret', interpret);
@@ -247,8 +246,7 @@ edit.post('/', zValidator('json', EditBody), async (c) => {
         } finally {
           span.setAttr('model.fallbacks', modelFallbacks);
         }
-      }
-    );
+      });
 
     const db = c.env.TRACES_DB;
     if (db) {
@@ -270,6 +268,7 @@ edit.post('/', zValidator('json', EditBody), async (c) => {
       ops,
       trace: debug ? renderTraceMarkdown(session) : undefined,
       clarification,
+      revision,
     });
   } catch (err) {
     if (!(err instanceof Error)) throw new Error(String(err));

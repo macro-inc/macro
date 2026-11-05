@@ -1,6 +1,7 @@
 import type { EntityData } from '@entity';
 import { createRoot, createSignal } from 'solid-js';
 import { beforeEach, describe, expect, it, onTestFinished, vi } from 'vitest';
+import { buildEntityData } from '../../entity/utils/buildEntityData';
 
 const mocks = vi.hoisted(() => ({
   openBulkEditModal: vi.fn(),
@@ -486,8 +487,66 @@ describe('makeDeleteAction.canExecute', () => {
     );
   });
 
-  it('refuses channels and channel rows outright', () => {
-    expect(canExecute(entity('channel'))).toBe(false);
+  it('allows channel owners and admins of the channels exact team', () => {
+    const action = makeDeleteAction({
+      userId: () => ME,
+      isTeamAdmin: (teamId) => teamId === 'team-a',
+    });
+    const blockChannel = buildEntityData({
+      id: 'team-channel',
+      name: 'Team channel',
+      blockName: 'channel',
+      channelType: 'team',
+      teamId: 'team-a',
+      ownerId: 'macro|other@example.com',
+    });
+    expect(blockChannel && action.canExecute(blockChannel)).toBe(true);
+    for (const channelType of [
+      'private',
+      'public',
+      'team',
+      'direct_message',
+    ] as const) {
+      expect(action.canExecute(entity('channel', { channelType }))).toBe(true);
+      expect(
+        action.canExecute(
+          entity('channel', {
+            channelType,
+            teamId: 'team-a',
+            ownerId: 'macro|other@example.com',
+          })
+        )
+      ).toBe(channelType === 'team');
+    }
+    expect(
+      action.canExecute(
+        entity('channel', {
+          channelType: 'team',
+          teamId: 'team-b',
+          ownerId: 'macro|other@example.com',
+        })
+      )
+    ).toBe(false);
+    expect(
+      action.canExecute(
+        entity('channel', {
+          channelType: 'team',
+          ownerId: 'macro|other@example.com',
+        })
+      )
+    ).toBe(false);
+    expect(
+      canExecute(
+        entity('channel', {
+          channelType: 'team',
+          teamId: 'team-a',
+          ownerId: 'macro|other@example.com',
+        })
+      )
+    ).toBe(false);
+  });
+
+  it('refuses channel message and thread rows', () => {
     expect(canExecute(entity('channel_message'))).toBe(false);
     expect(canExecute(entity('channel_thread'))).toBe(false);
   });

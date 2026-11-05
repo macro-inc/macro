@@ -204,6 +204,7 @@ pub fn covered_by_code_sdk(name: &str, user_tool: bool) -> bool {
             name,
             "ReadContent"
                 | "ReadMetadata"
+                | "EditDocument"
                 | "RenameDocument"
                 | "MoveToProject"
                 | "MoveToTrash"
@@ -253,6 +254,14 @@ pub fn covered_by_code_sdk(name: &str, user_tool: bool) -> bool {
                 | "CreateSkill"
                 | "Decide"
                 | "GenerateObject"
+                // macro.search, macro.workspace and macro.chats.
+                | "ContentSearch"
+                | "NameSearch"
+                | "ListEntities"
+                | "ReadChat"
+                // macro.web.search() and macro.web.fetch().
+                | "WebSearch"
+                | "WebFetch"
                 // macro.agents.list() and macro.agentSessions.createManaged.
                 | "ListCodingAgents"
                 | "DispatchCodingAgent"

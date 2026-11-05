@@ -25,6 +25,19 @@ swaps the user token for a short-lived document token against the document
 service, builds the sync-service WebSocket URL from it, and hands everything to
 `runEditSession` (`src/run-edit.ts`).
 
+The 200 response carries the ops, usage and any clarification, plus
+`revision`: base64 of the Loro oplog version once the sync service acknowledged
+every update, as sync-service encodes revisions (entry order varies, so compare
+decoded versions); with `propagate: false` it is the version the edit started
+from. Unacknowledged updates answer 502.
+
+Cancelling the request stops the edit, with no rollback. Every op and typing
+step propagates as it lands, and the sync socket closes on abort, so the
+document keeps what was sent before the abort. Nothing is applied afterwards: the
+queue checks the signal before each op and each animation step. An op that was
+being typed can be left partway, since typing is several steps and `setText`
+removes the old text before typing the new. The response is 499, never 200.
+
 ## Joining the document
 
 `runEditSession` is the main entrypoint that our edit endpoint calls to start an
@@ -280,6 +293,14 @@ columns, booking policy and sharing remain with their owning domain services.
 No authoring snapshots or execution records are retained separately. Each tool
 invocation is independent; after a timeout, inspect the current form before
 issuing another mutation.
+
+### Canvas artifacts
+
+The optional `artifacts` body field says the user has the `enable-canvas-artifacts`
+rollout. It adds `artifact-prompt.md` to the system prompt and to ReadCanvas as
+`artifactGuide`, shows artifact source when items are named, and allows the artifact
+SDK operations. Without it those operations fail before committing, and renders show
+artifact titles only. See [Canvas architecture](../../docs/architecture/canvas.md#artifacts).
 
 ### Canvas direct path and performance
 

@@ -4,6 +4,7 @@ import ArrowLeftIcon from '@icon/system/regular/arrow-left.svg';
 import ArrowRightIcon from '@icon/system/regular/arrow-right.svg';
 import ImageIcon from '@icon/system/regular/image.svg';
 import PencilIcon from '@icon/system/regular/pencil-simple.svg';
+import UserPlusIcon from '@icon/system/regular/user-plus.svg';
 import { cn, Tooltip } from '@ui';
 import { Show } from 'solid-js';
 import { Dynamic } from 'solid-js/web';
@@ -19,6 +20,7 @@ const ACTIVITY_ICONS = {
   participant_added: ArrowRightIcon,
   participant_removed: ArrowLeftIcon,
   call_ended: PhoneIcon,
+  access_requested: UserPlusIcon,
   unknown: PencilIcon,
 } satisfies Record<SystemActivity['action']['kind'], typeof PencilIcon>;
 

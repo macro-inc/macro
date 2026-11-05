@@ -1,3 +1,5 @@
+import { ARTIFACT_HTML_MAX_LENGTH } from '@macro-inc/graphics';
+import { ARTIFACT_LIBRARY_ENTRY_MAX_LENGTH } from '@macro-inc/graphics/loro';
 import { z } from 'zod';
 
 const coordinate = z.number().finite().min(-1_000_000).max(1_000_000);
@@ -48,6 +50,12 @@ const endpoint = z
       .optional(),
   })
   .strict();
+
+const artifactHtml = z.string().max(ARTIFACT_HTML_MAX_LENGTH);
+const artifactTitle = z.string().max(200);
+const designSize = z.number().positive().max(10_000);
+const libraryName = z.string().regex(/^[A-Za-z0-9_-]{1,64}$/);
+const librarySource = z.string().max(ARTIFACT_LIBRARY_ENTRY_MAX_LENGTH);
 
 export const canvasOpSchema = z.discriminatedUnion('kind', [
   z
@@ -134,6 +142,65 @@ export const canvasOpSchema = z.discriminatedUnion('kind', [
       position: z.enum(['front', 'back', 'forward', 'backward']),
     })
     .strict(),
+  z
+    .object({
+      kind: z.literal('createArtifact'),
+      id,
+      x: coordinate,
+      y: coordinate,
+      title: artifactTitle,
+      html: artifactHtml,
+      width: size.optional(),
+      height: size.optional(),
+      designWidth: designSize.optional(),
+      designHeight: designSize.optional(),
+    })
+    .strict(),
+  z
+    .object({
+      kind: z.literal('artifactSource'),
+      id,
+      title: artifactTitle.optional(),
+      html: artifactHtml.optional(),
+      designWidth: designSize.optional(),
+      designHeight: designSize.optional(),
+    })
+    .strict(),
+  z
+    .object({
+      kind: z.literal('artifactEdit'),
+      id,
+      find: artifactHtml.min(1),
+      replace: artifactHtml,
+    })
+    .strict(),
+  z
+    .object({
+      kind: z.literal('defineStyle'),
+      name: libraryName,
+      css: librarySource.nullable(),
+    })
+    .strict(),
+  z
+    .object({
+      kind: z.literal('defineComponent'),
+      name: libraryName,
+      html: librarySource.nullable(),
+    })
+    .strict(),
+  z.object({ kind: z.literal('presentOrder'), ids }).strict(),
 ]);
 export const canvasOpsSchema = z.array(canvasOpSchema).max(100);
 export type CanvasOp = z.infer<typeof canvasOpSchema>;
+
+/** Operations that need the artifacts rollout. Generic ones such as move also
+ * work on an existing artifact, so that every client can tidy a shared canvas. */
+const ARTIFACT_OPS: ReadonlySet<CanvasOp['kind']> = new Set([
+  'createArtifact',
+  'artifactSource',
+  'artifactEdit',
+  'defineStyle',
+  'defineComponent',
+  'presentOrder',
+]);
+export const isArtifactOp = (op: CanvasOp) => ARTIFACT_OPS.has(op.kind);
