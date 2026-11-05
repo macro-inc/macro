@@ -13,8 +13,8 @@ export default {
   mailTitle: 'Learn how to use Macro Mail',
   mailBlock: 'Macro Mail',
   mailSnippet:
-    'Every account in one inbox, plus sharing to channels, tasks and routines',
-  mailLength: '1:27',
+    'Every account in one inbox, plus channels, tasks, routines and agents',
+  mailLength: '1:42',
   crmTitle: 'Learn how to use Macro CRM',
   crmBlock: 'Macro CRM',
   crmSnippet:
