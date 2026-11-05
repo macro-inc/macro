@@ -174,22 +174,42 @@ struct CookieRewrites {
 /// other stack on the same hostname. Give each instance a name prefix in the
 /// browser, and only ever show a service its own cookies under their real name.
 /// The prefix is keyed on the instance name, which stays put when a port base
-/// moves. `__Host-` stays first because browsers enforce it as a name prefix.
+/// moves, and goes after `__Host-` / `__Secure-`, which browsers enforce as
+/// name prefixes. Instance names are `[a-z0-9_-]`, so they need no escaping.
+///
+/// Requests forward only this instance's cookies. Everything else is dropped:
+/// other instances' cookies, nameless ones, and bare names, which come from
+/// older stacks, a service's own host port, or the app's JavaScript (the
+/// `login` hint, analytics). No service reads a cookie it didn't set, and a
+/// bare copy would otherwise shadow the stack's own (cookie jars keep the last
+/// cookie of a name).
 fn cookie_rewrites(instance: &Instance) -> CookieRewrites {
     let namespace = format!("macro-{}--", instance.name());
     CookieRewrites {
         set_cookie: vec![
-            HeaderRewrite::new("^([^_=][^=]*)=", format!("{namespace}$1=")),
-            HeaderRewrite::new("^__Host-", format!("__Host-{namespace}")),
+            // Every named cookie; a nameless one (no `=` before `;`) can't be
+            // prefixed and no service sets one.
+            HeaderRewrite::new("^([^=;]*)=", format!("{namespace}$1=")),
+            HeaderRewrite::new(
+                format!("^{namespace}__Host-"),
+                format!("__Host-{namespace}"),
+            ),
+            HeaderRewrite::new(
+                format!("^{namespace}__Secure-"),
+                format!("__Secure-{namespace}"),
+            ),
         ],
         cookie: vec![
-            // Tokens from before namespacing, or set directly on a service's
-            // host port: they cannot be attributed to any one instance.
-            HeaderRewrite::new("()(^|; )local-macro-[^=]*=[^;]*", "$1"),
-            HeaderRewrite::new(format!("(^|; ){namespace}"), "$1"),
-            HeaderRewrite::new(format!("__Host-{namespace}"), "__Host-"),
-            // Whatever is still namespaced belongs to another instance.
-            HeaderRewrite::new("()(^|; )(__Host-)?macro-[a-z0-9_-]+--[^=]*=[^;]*", "$1"),
+            // Give every cookie one `; ` in front: browsers join with `; `,
+            // other clients may not.
+            HeaderRewrite::new(";[ \\t]*", "; "),
+            HeaderRewrite::new("^[ \\t]*", "; "),
+            // Mark this instance's cookies with `;!`, which no cookie name or
+            // value can contain, dropping the prefix.
+            HeaderRewrite::new(format!("; (__Host-|__Secure-)?{namespace}"), ";!$1"),
+            // Drop every unmarked cookie, then unmark.
+            HeaderRewrite::new("(); [^;]*", "$1"),
+            HeaderRewrite::new(";!", "; "),
             HeaderRewrite::new("()^; ", "$1"),
         ],
     }
