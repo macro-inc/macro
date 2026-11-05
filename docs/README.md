@@ -21,3 +21,6 @@ Agent guidance per SDK area: [`@routing` and `@agent`](architecture/agent-sdk-gu
 
 Bots: [building a bot](guides/bots.md) (set one up in the app, then search and
 post from the TypeScript SDK).
+
+SDK build artifacts: [proposal](design/sdk-build-artifacts.md) to generate Deno
+bundles, agent catalogs and the public reference during builds.
