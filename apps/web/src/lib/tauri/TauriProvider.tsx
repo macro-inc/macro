@@ -36,6 +36,10 @@ import {
 import { useTauriNavigationEffect } from './navigation';
 import { MaybePushNotificationRegistration } from './PushNotification';
 import { ShareTargetProvider } from './ShareTargetProvider';
+import {
+  createWaitingForWifiPrompt,
+  WaitingForWifiUpdateDialog,
+} from './WaitingForWifiUpdateDialog';
 
 export type BundleUpdateStatus =
   | { status: 'Idle' }
@@ -89,6 +93,11 @@ function TauriProvider(props: { children: JSX.Element }) {
   useAndroidBack();
   const [bundleUpdateStatus, setBundleUpdateStatus] =
     createSignal<BundleUpdateStatus>({ status: 'Idle' });
+  const waitingForWifiPrompt = createWaitingForWifiPrompt(bundleUpdateStatus);
+  function receiveBundleUpdateStatus(status: BundleUpdateStatus) {
+    setBundleUpdateStatus(status);
+    waitingForWifiPrompt.observe(status);
+  }
   const [
     nativeAppUpdateRequiredDialogOpen,
     setNativeAppUpdateRequiredDialogOpen,
@@ -132,7 +141,7 @@ function TauriProvider(props: { children: JSX.Element }) {
     const unlistenPromise = listen<BundleUpdateStatus>(
       'bundle-update-status',
       (ev) => {
-        setBundleUpdateStatus(ev.payload);
+        receiveBundleUpdateStatus(ev.payload);
       }
     );
     if (LOADED_BUNDLE_BUILD !== undefined) {
@@ -146,7 +155,7 @@ function TauriProvider(props: { children: JSX.Element }) {
     // Fetch current status since events emitted before the listener registered are missed
     invoke<BundleUpdateStatus>('get_bundle_update_status')
       .then((status) => {
-        setBundleUpdateStatus(status);
+        receiveBundleUpdateStatus(status);
       })
       .catch((error) => Telemetry.error(error, { surface: 'bundle-update' }));
     onCleanup(() => {
@@ -200,6 +209,10 @@ function TauriProvider(props: { children: JSX.Element }) {
           </div>
         </Surface>
       </Dialog>
+      <WaitingForWifiUpdateDialog
+        prompt={waitingForWifiPrompt}
+        status={bundleUpdateStatus()}
+      />
       <NativeAppUpdateRequiredDialog
         open={nativeAppUpdateRequiredDialogOpen()}
         onClose={() => setNativeAppUpdateRequiredDialogOpen(false)}
