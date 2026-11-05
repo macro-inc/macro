@@ -5,7 +5,7 @@ language: tsx
 severity: error
 message: Don't filter or sort a fetched list in TypeScript. Make it a query input the server evaluates, and the cache evaluates locally.
 note: |-
-  Rule FE-70 in .agents/rules/web/data.md. A list filtered after fetching pages
+  Rule FE-71 in .agents/rules/web/data.md. A list filtered after fetching pages
   through rows the reader never sees: an Unread tab over a mostly-read inbox
   loaded 20+ pages to fill one screen. Add the filter, scope or sort to the
   GraphQL input (docs/guides/add-graphql-field.md), and for Soup lists pass it
@@ -13,7 +13,7 @@ note: |-
   The rule sees the common shapes only: `.filter`/`.sort`/`.toSorted` on
   `x.data…`, a list source's `rows()`/`items()`, a local bound to one of those,
   a parameter typed as a generated `…Fragment[]`, and query `select` options.
-  A justified exception (see FE-70) takes a suppression with its reason on the
+  A justified exception (see FE-71) takes a suppression with its reason on the
   line above:
     // ast-grep-ignore: tsx-no-client-list-filter -- <why the server can't or needn't>
   In a ternary branch put it at the end of the branch's line instead

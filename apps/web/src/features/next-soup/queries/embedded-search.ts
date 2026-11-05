@@ -60,9 +60,9 @@ export function createEmbeddedSearchSource(options: {
         ? []
         : browsing()
           ? queryReadyGate(browse) && !browse.isPlaceholderData
-            ? browse.data.entities.filter(matches()) // ast-grep-ignore: ts-no-client-list-filter -- predates FE-70: browse rows: drops unsupported types and excluded subtypes, then applies the type predicate; make it a query input.
+            ? browse.data.entities.filter(matches()) // ast-grep-ignore: ts-no-client-list-filter -- predates FE-71: browse rows: drops unsupported types and excluded subtypes, then applies the type predicate; make it a query input.
             : []
-          : search.data().filter(matches()), // ast-grep-ignore: ts-no-client-list-filter -- predates FE-70: search hits: drops CRM and foreign entities and excluded subtypes, then applies the type predicate; make it a query input.
+          : search.data().filter(matches()), // ast-grep-ignore: ts-no-client-list-filter -- predates FE-71: search hits: drops CRM and foreign entities and excluded subtypes, then applies the type predicate; make it a query input.
     loading: () =>
       enabled() &&
       (browsing() ? browse.isPending || browse.isFetching : search.isLoading()),

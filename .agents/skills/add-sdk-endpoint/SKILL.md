@@ -54,7 +54,7 @@ To skip: add the method name, alphabetically, to `<camelService>Excluded` in
    - every generated call goes through `unwrap()`
    - cursor lists → `paginate()` → `AsyncGenerator`; search → `entitySearch(...)`
    - a list's filters, scopes and sort are options passed to the endpoint;
-     never fetch and filter the results in the SDK (FE-70 in the web data rule)
+     never fetch and filter the results in the SDK (FE-71 in the web data rule)
    - camelCase + `undefined` on the SDK side even when the wire is snake_case/nullable
    - TSDoc every public member. No `any`.
    - an entity with its own page in the app gets `webUrl()`, built from

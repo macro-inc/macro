@@ -61,7 +61,7 @@ export function createInboxList(
     if (loaded === undefined) {
       return error ? { t: 'error' } : { t: 'loading' };
     }
-    // ast-grep-ignore: ts-no-client-list-filter -- predates FE-70: unread tab: keeps `unseen` rows plus rows read in place; make it a query input.
+    // ast-grep-ignore: ts-no-client-list-filter -- predates FE-71: unread tab: keeps `unseen` rows plus rows read in place; make it a query input.
     const rows = loaded.filter(include);
     if (rows.length === 0 && !feed.hasMore()) {
       return error

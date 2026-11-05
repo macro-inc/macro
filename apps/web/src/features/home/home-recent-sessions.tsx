@@ -55,7 +55,7 @@ const RECENT_CHATS_ARGS: SoupItemsQueryArgs = {
 export function useRecentChatSessions(limit = DEFAULT_LIMIT) {
   const query = useSoupItemsQuery(() => RECENT_CHATS_ARGS);
   return () =>
-    // ast-grep-ignore: tsx-no-client-list-filter -- predates FE-70: keeps chats, drops unnamed chats, then slices to 3; make it a query input.
+    // ast-grep-ignore: tsx-no-client-list-filter -- predates FE-71: keeps chats, drops unnamed chats, then slices to 3; make it a query input.
     (query.data ?? [])
       .filter((entity) => entity.type === 'chat')
       .filter((chat) => chat.name)

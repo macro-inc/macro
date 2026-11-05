@@ -363,7 +363,7 @@ mirrored by the cache's local grouping projection; never add a side cache in
 feature code to cover a remount.
 A list's filters, scopes and sorting work the same way: query inputs the
 server evaluates and the cache mirrors, never TypeScript filters over fetched
-rows (FE-70 in [data.md](../../.agents/rules/web/data.md)).
+rows (FE-71 in [data.md](../../.agents/rules/web/data.md)).
 Project identity chips use cache-first reads and the shared `GraphqlUser.initiative`
 entity resolver to reuse complete authorized records from project lists or details.
 Keep cold row metadata reads non-suspending so virtual scrolling never detaches

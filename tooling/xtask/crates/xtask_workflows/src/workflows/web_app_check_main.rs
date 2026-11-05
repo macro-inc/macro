@@ -531,7 +531,7 @@ fn run_biome() -> Step<Run> {
 }
 
 /// Runs the browser-floor, native media permission and fetched-list filter
-/// (FE-70) ast-grep rules here because Conventions, which runs every ast-grep
+/// (FE-71) ast-grep rules here because Conventions, which runs every ast-grep
 /// rule, is not a required check.
 fn check_platform_rules() -> Step<Run> {
     Step::new("Check Required ast-grep Rules").run(

@@ -69,7 +69,7 @@ export function createMyActivityState(
   const feedQuery = () => (scope() === 'team' ? teamQuery : mineQuery);
   const groups = createMemo(() =>
     groupEventsByDay(
-      // ast-grep-ignore: ts-no-client-list-filter -- predates FE-70: drops feed events whose entity type is behind an off flag (databases, forms); make it a query input.
+      // ast-grep-ignore: ts-no-client-list-filter -- predates FE-71: drops feed events whose entity type is behind an off flag (databases, forms); make it a query input.
       (feedQuery().data ?? []).filter((event) =>
         context.entityTypeShown(event.entityType)
       )

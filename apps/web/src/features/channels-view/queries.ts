@@ -332,7 +332,7 @@ function useChannelsDataSource(
 
     const channels = filterChannelsForScope(
       scope,
-      // ast-grep-ignore: ts-no-client-list-filter -- predates FE-70: narrows to channels, then `filterChannelsForScope`; re-sorts with `sortChannels`; make it a query input.
+      // ast-grep-ignore: ts-no-client-list-filter -- predates FE-71: narrows to channels, then `filterChannelsForScope`; re-sorts with `sortChannels`; make it a query input.
       (query.data?.entities ?? []).filter(isChannelEntity)
     );
 
