@@ -34,6 +34,7 @@ def run(**overrides):
         "status": "completed",
         "conclusion": "success",
         "created_at": at(0, 10),
+        "updated_at": at(5),
         "pull_requests": [{"number": 7}],
         **overrides,
     }
@@ -192,14 +193,26 @@ class PushEvent(unittest.TestCase):
 
 
 class SameTriggerRuns(unittest.TestCase):
-    def test_runs_started_apart_within_the_gap_are_one_group(self):
-        runs = [run(), run(id=2, created_at=at(4, 11))]
+    def test_runs_overlapping_are_one_group(self):
+        runs = [run(), run(id=2, created_at=at(4, 11), updated_at=at(9))]
         self.assertEqual(collect.same_trigger_runs(runs, runs[1]), (runs, 0))
 
-    def test_a_later_edit_is_its_own_group(self):
-        first, later = run(), run(id=2, created_at=at(40))
+    def test_run_joining_late_extends_the_group(self):
+        runs = [
+            run(),
+            run(id=2, created_at=at(4), updated_at=at(9)),
+            run(id=3, created_at=at(8), updated_at=at(10)),
+        ]
+        self.assertEqual(collect.same_trigger_runs(runs, runs[2]), (runs, 0))
+
+    def test_edit_after_everything_finished_is_its_own_group(self):
+        first, later = run(updated_at=at(1)), run(id=2, created_at=at(2), updated_at=at(3))
         self.assertEqual(collect.same_trigger_runs([later, first], first), ([first], 0))
         self.assertEqual(collect.same_trigger_runs([later, first], later), ([later], 1))
+
+    def test_run_still_going_keeps_the_group_open(self):
+        first, later = run(status="in_progress"), run(id=2, created_at=at(40))
+        self.assertEqual(collect.same_trigger_runs([first, later], later), ([first, later], 0))
 
     def test_a_run_outside_the_checks_has_no_group(self):
         self.assertEqual(collect.same_trigger_runs([run()], run(id=9)), ([], 0))

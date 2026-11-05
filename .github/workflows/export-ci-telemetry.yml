@@ -149,9 +149,6 @@ jobs:
         # Stop before the exporter's own traces start failing for lack of API budget.
         MIN_RATE_REMAINING = 100
         MAX_FILE_PAGES = 3
-        # GitHub has started a push's workflows up to 241 s apart. Anything later came from
-        # something else on the same head: a PR edit, a label, or leaving draft.
-        SAME_TRIGGER_GAP_SECONDS = 600
         # Roll-up jobs finish last by design, so they never say what held a push up.
         ROLL_UP_JOB = re.compile(r"status[ -]check", re.IGNORECASE)
         # Loki refuses a line this far behind its stream's newest one.
@@ -338,14 +335,21 @@ jobs:
 
 
         def same_trigger_runs(runs, run):
-            """The runs started together with this one, and how many such groups came before."""
-            groups = []
+            """The runs started together with this one, and how many such groups came before.
+
+            A run that starts after everything on the head has finished wasn't part of that
+            wait: it came from a PR edit, a label or leaving draft.
+            """
+            groups, group_end = [], None
             for candidate in sorted(runs, key=lambda entry: parse_time(entry["created_at"])):
                 created = parse_time(candidate["created_at"])
-                if groups and seconds(parse_time(groups[-1][-1]["created_at"]), created) <= SAME_TRIGGER_GAP_SECONDS:
+                end = parse_time(candidate["updated_at"]) if candidate["status"] == "completed" else datetime.datetime.max.replace(tzinfo=datetime.timezone.utc)
+                if groups and created <= group_end:
                     groups[-1].append(candidate)
+                    group_end = max(group_end, end)
                 else:
                     groups.append([candidate])
+                    group_end = end
             for index, group in enumerate(groups):
                 if any(candidate["id"] == run["id"] for candidate in group):
                     return group, index
