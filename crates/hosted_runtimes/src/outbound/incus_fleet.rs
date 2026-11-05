@@ -8,6 +8,7 @@
 use std::collections::BTreeMap;
 use std::time::Duration;
 
+use chrono::{DateTime, Utc};
 use incus_client::generated::types;
 use incus_client::{
     ImageReference, ImageSource, IncusClient, IncusEndpoint, IncusError, InstanceInfo, InstanceKind,
@@ -15,12 +16,16 @@ use incus_client::{
 use uuid::Uuid;
 
 use crate::domain::enrollment::{Enrollment, INCUS_ENROLLMENT_KEY};
-use crate::domain::models::{Computer, HostRegistration};
-use crate::domain::ports::{Fleet, FleetError, InstanceStatus};
+use crate::domain::models::{Computer, ControlPlaneId, HostRegistration};
+use crate::domain::ports::{Fleet, FleetError, FleetInstance, InstanceStatus};
 use crate::domain::size::ComputerSize;
 
 #[cfg(test)]
 mod test;
+
+/// Instance config key carrying the control-plane owner.
+pub const CONTROL_PLANE_KEY: &str = "user.macro.control_plane";
+const CREATED_AT_KEY: &str = "user.macro.created_at";
 
 /// Instance config key carrying the computer id.
 pub const COMPUTER_ID_KEY: &str = "user.macro.computer_id";
@@ -33,6 +38,7 @@ const BYTES_PER_GIB: u64 = 1024 * 1024 * 1024;
 /// The Incus host and what computers are created from.
 #[derive(Debug, Clone)]
 pub struct IncusFleetConfig {
+    pub control_plane_id: ControlPlaneId,
     pub endpoint: IncusEndpoint,
     /// Usually the local alias `macro-box`.
     pub image: ImageSource,
@@ -51,10 +57,12 @@ impl IncusFleetConfig {
     pub fn macro_box(
         endpoint: IncusEndpoint,
         host_name: String,
+        control_plane_id: ControlPlaneId,
         reserve_gb: u32,
         oversell_factor: u32,
     ) -> Self {
         Self {
+            control_plane_id,
             endpoint,
             image: ImageSource {
                 reference: ImageReference::Alias("macro-box".to_owned()),
@@ -135,6 +143,10 @@ impl FleetError for IncusFleetError {
 impl Fleet for IncusFleet {
     type Err = IncusFleetError;
 
+    fn control_plane_id(&self) -> &ControlPlaneId {
+        &self.config.control_plane_id
+    }
+
     #[tracing::instrument(name = "incus_fleet.create", skip_all, fields(computer_id = %computer.id, start), err)]
     async fn create(
         &self,
@@ -152,8 +164,13 @@ impl Fleet for IncusFleet {
                     .await?;
             }
             None => {
-                let body =
-                    instance_body(&self.config, computer.id, computer.size, &enrollment_json);
+                let body = instance_body(
+                    &self.config,
+                    computer.id,
+                    computer.size,
+                    &enrollment_json,
+                    Utc::now(),
+                );
                 let started = self
                     .client
                     .api()
@@ -288,9 +305,9 @@ impl Fleet for IncusFleet {
     }
 
     #[tracing::instrument(name = "incus_fleet.instances", skip(self), err)]
-    async fn instances(&self) -> Result<Vec<(Uuid, InstanceStatus)>, IncusFleetError> {
+    async fn instances(&self) -> Result<Vec<FleetInstance>, IncusFleetError> {
         let instances = self.client.list_instances().await?;
-        computer_instances(&instances)
+        computer_instances(&instances, &self.config.control_plane_id)
     }
 
     #[tracing::instrument(name = "incus_fleet.host", skip(self), err)]
@@ -319,12 +336,19 @@ pub fn instance_name(computer_id: Uuid) -> String {
 
 /// The instance config: identity, enrollment and limits.
 fn instance_config(
+    control_plane_id: &ControlPlaneId,
+    created_at: DateTime<Utc>,
     computer_id: Uuid,
     size: ComputerSize,
     enrollment_json: &str,
 ) -> BTreeMap<String, String> {
     BTreeMap::from([
         (COMPUTER_ID_KEY.to_owned(), computer_id.to_string()),
+        (
+            CONTROL_PLANE_KEY.to_owned(),
+            control_plane_id.as_str().to_owned(),
+        ),
+        (CREATED_AT_KEY.to_owned(), created_at.to_rfc3339()),
         (INCUS_ENROLLMENT_KEY.to_owned(), enrollment_json.to_owned()),
         ("limits.cpu".to_owned(), size.vcpus().to_string()),
         (
@@ -357,6 +381,7 @@ fn instance_body(
     computer_id: Uuid,
     size: ComputerSize,
     enrollment_json: &str,
+    created_at: DateTime<Utc>,
 ) -> types::InstancesPost {
     let (alias, fingerprint) = match &config.image.reference {
         ImageReference::Alias(alias) => (Some(alias.clone()), None),
@@ -377,6 +402,8 @@ fn instance_body(
         )),
         profiles: Some(vec![config.profile.clone()]),
         config: Some(types::ConfigMap(instance_config(
+            &config.control_plane_id,
+            created_at,
             computer_id,
             size,
             enrollment_json,
@@ -416,9 +443,14 @@ fn observed_status(instance: &InstanceInfo) -> Result<InstanceStatus, IncusFleet
 /// The instances that belong to computers; others on the host are ignored.
 fn computer_instances(
     instances: &[InstanceInfo],
-) -> Result<Vec<(Uuid, InstanceStatus)>, IncusFleetError> {
+    control_plane_id: &ControlPlaneId,
+) -> Result<Vec<FleetInstance>, IncusFleetError> {
     instances
         .iter()
+        .filter(|instance| {
+            instance.config.get(CONTROL_PLANE_KEY).map(String::as_str)
+                == Some(control_plane_id.as_str())
+        })
         .filter_map(|instance| {
             instance
                 .config
@@ -431,7 +463,16 @@ fn computer_instances(
                     name: instance.name.clone(),
                     value: value.clone(),
                 })?;
-            Ok((computer_id, observed_status(instance)?))
+            Ok(FleetInstance {
+                computer_id,
+                status: observed_status(instance)?,
+                control_plane_id: control_plane_id.clone(),
+                created_at: instance
+                    .config
+                    .get(CREATED_AT_KEY)
+                    .and_then(|value| DateTime::parse_from_rfc3339(value).ok())
+                    .map(|at| at.with_timezone(&Utc)),
+            })
         })
         .collect()
 }

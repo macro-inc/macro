@@ -5,8 +5,8 @@
 use uuid::Uuid;
 
 use crate::domain::enrollment::Enrollment;
-use crate::domain::models::{Computer, HostRegistration};
-use crate::domain::ports::{Fleet, FleetError, InstanceStatus};
+use crate::domain::models::{Computer, ControlPlaneId, HostRegistration};
+use crate::domain::ports::{Fleet, FleetError, FleetInstance};
 use crate::outbound::docker_fleet::{DockerFleet, DockerFleetError};
 use crate::outbound::incus_fleet::{IncusFleet, IncusFleetError};
 
@@ -35,6 +35,13 @@ impl FleetError for ConfiguredFleetError {
 
 impl Fleet for ConfiguredFleet {
     type Err = ConfiguredFleetError;
+
+    fn control_plane_id(&self) -> &ControlPlaneId {
+        match self {
+            Self::Incus(fleet) => fleet.control_plane_id(),
+            Self::Docker(fleet) => fleet.control_plane_id(),
+        }
+    }
 
     async fn create(
         &self,
@@ -111,7 +118,7 @@ impl Fleet for ConfiguredFleet {
         }
     }
 
-    async fn instances(&self) -> Result<Vec<(Uuid, InstanceStatus)>, Self::Err> {
+    async fn instances(&self) -> Result<Vec<FleetInstance>, Self::Err> {
         match self {
             Self::Incus(fleet) => Ok(fleet.instances().await?),
             Self::Docker(fleet) => Ok(fleet.instances().await?),

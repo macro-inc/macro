@@ -20,7 +20,7 @@ use chrono::{DateTime, Utc};
 use harness_id::HarnessId;
 use harnesses::domain::models::CreateHostedPairing;
 use harnesses::domain::ports::{HarnessError, HarnessService};
-use hosted_runtimes::domain::models::{Computer, EnrollmentDefaults};
+use hosted_runtimes::domain::models::{Computer, ControlPlaneId, EnrollmentDefaults};
 use hosted_runtimes::domain::operator::{ComputerOperator, SessionActivity};
 use hosted_runtimes::domain::ports::{Harnesses, HostedPairing};
 use hosted_runtimes::domain::service::SystemClock;
@@ -57,6 +57,10 @@ pub async fn operator(
     let Some(kind) = config.computers_fleet.as_deref() else {
         return Ok(None);
     };
+    let control_plane_id = ControlPlaneId::parse(required(
+        &config.computers_control_plane_id,
+        "COMPUTERS_CONTROL_PLANE_ID",
+    )?)?;
     let host_name = required(&config.computers_host_name, "COMPUTERS_HOST_NAME")?;
 
     let fleet = match kind {
@@ -78,6 +82,7 @@ pub async fn operator(
                     )?,
                 },
                 host_name,
+                control_plane_id,
                 config.computers_host_reserve_gb,
                 config.computers_oversell_factor,
             ))
@@ -86,6 +91,7 @@ pub async fn operator(
         "docker" => ConfiguredFleet::Docker(
             DockerFleet::new(
                 DockerFleetConfig {
+                    control_plane_id,
                     image: config.computers_image.clone(),
                     network: required(
                         &config.computers_docker_network,

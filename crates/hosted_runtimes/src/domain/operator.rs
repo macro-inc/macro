@@ -11,7 +11,7 @@ use crate::domain::enrollment::Enrollment;
 use crate::domain::lifecycle::{Effect, EffectWorker, Event, HostId, Phase};
 use crate::domain::models::{Computer, EnrollmentDefaults};
 use crate::domain::ports::{
-    ComputerRepo, Fleet, FleetError, Harnesses, InstanceStatus, PendingEffect,
+    ComputerRepo, Fleet, FleetError, FleetInstance, Harnesses, InstanceStatus, PendingEffect,
 };
 use crate::domain::service::{Clock, ComputerError};
 
@@ -22,6 +22,8 @@ mod test;
 pub const IDLE_AFTER: Duration = Duration::minutes(10);
 /// A fleet effect is retried this many times before the computer fails.
 pub const MAX_EFFECT_ATTEMPTS: u32 = 5;
+/// Minimum guest age before orphan deletion, to avoid racing creation.
+pub const ORPHAN_GRACE: Duration = Duration::minutes(10);
 const EFFECT_BATCH: u32 = 16;
 const TIMER_BATCH: u32 = 64;
 /// How long a leased effect stays hidden from other workers.
@@ -312,21 +314,23 @@ where
 
     /// Compare the fleet with the rows: a missing or stopped instance of an
     /// awake computer is a crash; a missing cold or failed guest is recreated.
-    /// An instance without a computer is removed.
+    /// Only owned orphans older than the grace period are removed.
     #[tracing::instrument(skip(self), err)]
     pub async fn reconcile(&self) -> Result<(), ComputerError> {
         let host = self.host_id().await?;
-        let instances: HashMap<Uuid, InstanceStatus> = self
+        let instances: HashMap<Uuid, FleetInstance> = self
             .fleet
             .instances()
             .await
             .map_err(internal)?
             .into_iter()
+            .filter(|instance| &instance.control_plane_id == self.fleet.control_plane_id())
+            .map(|instance| (instance.computer_id, instance))
             .collect();
         let expected = self.repo.instances_expected(host).await.map_err(internal)?;
 
         for computer in &expected {
-            let observed = instances.get(&computer.id).copied();
+            let observed = instances.get(&computer.id).map(|instance| instance.status);
             let crashed = match computer.state.phase {
                 Phase::Running { .. } | Phase::Booting { .. } => {
                     observed.is_none() || observed == Some(InstanceStatus::Stopped)
@@ -356,7 +360,13 @@ where
             }
         }
 
-        for orphan in instances.keys() {
+        for (orphan, instance) in &instances {
+            if instance
+                .created_at
+                .is_none_or(|at| at >= self.clock.now() - ORPHAN_GRACE)
+            {
+                continue;
+            }
             let known = expected.iter().any(|computer| computer.id == *orphan);
             if !known
                 && self
@@ -366,7 +376,7 @@ where
                     .map_err(internal)?
                     .is_none_or(is_gone)
             {
-                tracing::warn!(computer_id = %orphan, "destroying an instance with no computer");
+                tracing::warn!(computer_id = %orphan, control_plane_id = self.fleet.control_plane_id().as_str(), "destroying an instance with no computer");
                 self.fleet.destroy(*orphan).await.map_err(internal)?;
             }
         }

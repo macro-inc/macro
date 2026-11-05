@@ -27,6 +27,7 @@ fn docker_computers_dial_the_stack_in_network() {
         .display()
         .to_string();
     assert_eq!(env["COMPUTERS_FLEET"], "docker");
+    assert_eq!(env["COMPUTERS_CONTROL_PLANE_ID"], "local-computers");
     assert_eq!(env["COMPUTERS_HOST_NAME"], "local-docker");
     assert_eq!(env["COMPUTERS_IMAGE"], "macro-box:latest");
     assert_eq!(env["COMPUTERS_DOCKER_NETWORK"], "macro-computers_services");
@@ -74,6 +75,7 @@ fn incus_computers_dial_tailnet_ips_without_compose_dns() {
         .unwrap();
 
     assert_eq!(env["COMPUTERS_FLEET"], "incus");
+    assert_eq!(env["COMPUTERS_CONTROL_PLANE_ID"], "local-computers");
     assert_eq!(env["COMPUTERS_HOST_NAME"], "runtime-dev-1");
     assert_eq!(env["COMPUTERS_IMAGE"], "macro-box");
     assert_eq!(env["COMPUTERS_INCUS_URL"], "https://100.101.102.103:8443");

@@ -4,6 +4,7 @@ const COMPUTER_ID: Uuid = Uuid::from_u128(0x0190_0000_0000_7000_8000_0000_0000_0
 
 fn config() -> DockerFleetConfig {
     DockerFleetConfig {
+        control_plane_id: ControlPlaneId::parse("test-a".to_owned()).unwrap(),
         image: "macro-box:latest".to_owned(),
         network: "macro_services".to_owned(),
         enrollment_dir: PathBuf::from("/var/lib/macro/enrollments"),
@@ -17,6 +18,8 @@ fn config() -> DockerFleetConfig {
 #[test]
 fn create_runs_systemd_with_the_enrollment_directory_mounted_read_only() {
     let spec = CreateSpec {
+        control_plane_id: ControlPlaneId::parse("test-a".to_owned()).unwrap(),
+        created_at: "2026-11-05T10:00:00Z".parse().unwrap(),
         image: "macro-box:latest".to_owned(),
         network: "macro_services".to_owned(),
         computer_id: COMPUTER_ID,
@@ -37,6 +40,10 @@ fn create_runs_systemd_with_the_enrollment_directory_mounted_read_only() {
             "macro-computer-01900000-0000-7000-8000-000000000001",
             "--label",
             "macro.computer_id=01900000-0000-7000-8000-000000000001",
+            "--label",
+            "macro.control_plane=test-a",
+            "--label",
+            "macro.created_at=2026-11-05T10:00:00+00:00",
             "--network",
             "macro_services",
             "--memory",
@@ -98,7 +105,10 @@ fn state_lookup_includes_stopped_containers() {
 #[test]
 fn listing_prints_the_computer_id_label_and_state() {
     assert_eq!(
-        list_args("macro_services"),
+        list_args(
+            "macro_services",
+            &ControlPlaneId::parse("test-a".to_owned()).unwrap()
+        ),
         [
             "ps",
             "--all",
@@ -106,8 +116,10 @@ fn listing_prints_the_computer_id_label_and_state() {
             "label=macro.computer_id",
             "--filter",
             "network=macro_services",
+            "--filter",
+            "label=macro.control_plane=test-a",
             "--format",
-            "{{.Label \"macro.computer_id\"}} {{.State}}",
+            "{{.Label \"macro.computer_id\"}}\t{{.State}}\t{{.Label \"macro.control_plane\"}}\t{{.Label \"macro.created_at\"}}",
         ]
     );
 }
@@ -146,6 +158,8 @@ async fn listing_cannot_expose_another_fleets_containers_to_reconciliation() {
                 network.to_owned(),
                 "--label".to_owned(),
                 format!("{COMPUTER_ID_LABEL}={id}"),
+                "--label".to_owned(),
+                "macro.control_plane=test-a".to_owned(),
                 "macro-box:latest".to_owned(),
             ],
         )
@@ -163,46 +177,60 @@ async fn listing_cannot_expose_another_fleets_containers_to_reconciliation() {
     .unwrap();
     let listed = fleet.instances().await.unwrap();
 
-    assert!(listed.contains(&(own, InstanceStatus::Stopped)));
-    assert!(!listed.iter().any(|(id, _)| *id == other));
+    assert!(
+        listed
+            .iter()
+            .any(|instance| instance.computer_id == own
+                && instance.status == InstanceStatus::Stopped)
+    );
+    assert!(!listed.iter().any(|instance| instance.computer_id == other));
 }
 
 #[test]
 fn listing_maps_docker_states_to_instance_statuses() {
-    let output = "01900000-0000-7000-8000-000000000001 running\n\
-                  01900000-0000-7000-8000-000000000002 paused\n\
-                  01900000-0000-7000-8000-000000000003 exited\n\
-                  01900000-0000-7000-8000-000000000004 created\n";
+    let output = "01900000-0000-7000-8000-000000000001\trunning\ttest-a\t2026-11-05T10:00:00Z\n\
+                  01900000-0000-7000-8000-000000000002\tpaused\ttest-a\t2026-11-05T10:00:00Z\n\
+                  01900000-0000-7000-8000-000000000003\texited\ttest-a\t2026-11-05T10:00:00Z\n\
+                  01900000-0000-7000-8000-000000000004\tcreated\ttest-a\t2026-11-05T10:00:00Z\n";
 
     assert_eq!(
-        parse_instances(output).unwrap(),
+        parse_instances(output, &ControlPlaneId::parse("test-a".to_owned()).unwrap()).unwrap(),
         [
-            (
-                Uuid::from_u128(0x0190_0000_0000_7000_8000_0000_0000_0001),
-                InstanceStatus::Running
-            ),
-            (
-                Uuid::from_u128(0x0190_0000_0000_7000_8000_0000_0000_0002),
-                InstanceStatus::Frozen
-            ),
-            (
-                Uuid::from_u128(0x0190_0000_0000_7000_8000_0000_0000_0003),
-                InstanceStatus::Stopped
-            ),
-            (
-                Uuid::from_u128(0x0190_0000_0000_7000_8000_0000_0000_0004),
-                InstanceStatus::Stopped
-            ),
+            FleetInstance {
+                computer_id: Uuid::from_u128(0x0190_0000_0000_7000_8000_0000_0000_0001),
+                status: InstanceStatus::Running,
+                control_plane_id: ControlPlaneId::parse("test-a".to_owned()).unwrap(),
+                created_at: Some("2026-11-05T10:00:00Z".parse().unwrap()),
+            },
+            FleetInstance {
+                computer_id: Uuid::from_u128(0x0190_0000_0000_7000_8000_0000_0000_0002),
+                status: InstanceStatus::Frozen,
+                control_plane_id: ControlPlaneId::parse("test-a".to_owned()).unwrap(),
+                created_at: Some("2026-11-05T10:00:00Z".parse().unwrap()),
+            },
+            FleetInstance {
+                computer_id: Uuid::from_u128(0x0190_0000_0000_7000_8000_0000_0000_0003),
+                status: InstanceStatus::Stopped,
+                control_plane_id: ControlPlaneId::parse("test-a".to_owned()).unwrap(),
+                created_at: Some("2026-11-05T10:00:00Z".parse().unwrap()),
+            },
+            FleetInstance {
+                computer_id: Uuid::from_u128(0x0190_0000_0000_7000_8000_0000_0000_0004),
+                status: InstanceStatus::Stopped,
+                control_plane_id: ControlPlaneId::parse("test-a".to_owned()).unwrap(),
+                created_at: Some("2026-11-05T10:00:00Z".parse().unwrap()),
+            },
         ]
     );
 }
 
 #[test]
 fn listing_rejects_an_unknown_state() {
-    let output = "01900000-0000-7000-8000-000000000001 hibernating\n";
+    let output =
+        "01900000-0000-7000-8000-000000000001\thibernating\ttest-a\t2026-11-05T10:00:00Z\n";
 
     assert!(matches!(
-        parse_instances(output),
+        parse_instances(output, &ControlPlaneId::parse("test-a".to_owned()).unwrap()),
         Err(DockerFleetError::Malformed(_))
     ));
 }
@@ -258,4 +286,18 @@ fn only_a_missing_container_is_classified_as_lost() {
             .is_missing()
         );
     }
+}
+
+#[test]
+fn listing_ignores_foreign_and_unlabelled_instances() {
+    let output = "not-ours\tunknown\ttest-b\tinvalid\nlegacy\tunknown\t\t\n01900000-0000-7000-8000-000000000001\trunning\ttest-a\tinvalid\n";
+    assert_eq!(
+        parse_instances(output, &ControlPlaneId::parse("test-a".to_owned()).unwrap()).unwrap(),
+        vec![FleetInstance {
+            computer_id: COMPUTER_ID,
+            status: InstanceStatus::Running,
+            control_plane_id: ControlPlaneId::parse("test-a".to_owned()).unwrap(),
+            created_at: None,
+        }]
+    );
 }

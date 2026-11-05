@@ -40,9 +40,21 @@ fn instance_names_start_with_a_letter_and_fit_a_hostname_label() {
 
 #[test]
 fn a_large_computer_gets_its_limits_disk_and_state_room() {
-    let config = IncusFleetConfig::macro_box(endpoint(), "runtime-dev-1".to_owned(), 4, 3);
+    let config = IncusFleetConfig::macro_box(
+        endpoint(),
+        "runtime-dev-1".to_owned(),
+        ControlPlaneId::parse("test-a".to_owned()).unwrap(),
+        4,
+        3,
+    );
 
-    let body = instance_body(&config, COMPUTER_ID, ComputerSize::Large, r#"{"x":1}"#);
+    let body = instance_body(
+        &config,
+        COMPUTER_ID,
+        ComputerSize::Large,
+        r#"{"x":1}"#,
+        "2026-11-05T10:00:00Z".parse().unwrap(),
+    );
 
     assert_eq!(
         serde_json::to_value(&body).unwrap(),
@@ -55,6 +67,8 @@ fn a_large_computer_gets_its_limits_disk_and_state_room() {
                 "limits.memory": "16GiB",
                 "user.macro.computer_id": "01900000-0000-7000-8000-000000000001",
                 "user.macro.enrollment": "{\"x\":1}",
+                "user.macro.control_plane": "test-a",
+                "user.macro.created_at": "2026-11-05T10:00:00+00:00",
             },
             "devices": {
                 "root": {
@@ -83,10 +97,22 @@ fn a_remote_image_names_its_server_and_protocol() {
                 protocol: ImageProtocol::Simplestreams,
             }),
         },
-        ..IncusFleetConfig::macro_box(endpoint(), "runtime-dev-1".to_owned(), 4, 3)
+        ..IncusFleetConfig::macro_box(
+            endpoint(),
+            "runtime-dev-1".to_owned(),
+            ControlPlaneId::parse("test-a".to_owned()).unwrap(),
+            4,
+            3,
+        )
     };
 
-    let body = instance_body(&config, COMPUTER_ID, ComputerSize::Standard, "{}");
+    let body = instance_body(
+        &config,
+        COMPUTER_ID,
+        ComputerSize::Standard,
+        "{}",
+        "2026-11-05T10:00:00Z".parse().unwrap(),
+    );
 
     assert_eq!(
         serde_json::to_value(body.source).unwrap(),
@@ -105,26 +131,35 @@ fn listing_keeps_only_computer_instances_and_maps_their_status() {
         instance(
             "mc-01900000000070008000000000000001",
             incus_client::InstanceStatus::Running,
-            &[(
-                "user.macro.computer_id",
-                "01900000-0000-7000-8000-000000000001",
-            )],
+            &[
+                ("user.macro.control_plane", "test-a"),
+                (
+                    "user.macro.computer_id",
+                    "01900000-0000-7000-8000-000000000001",
+                ),
+            ],
         ),
         instance(
             "mc-01900000000070008000000000000002",
             incus_client::InstanceStatus::Freezing,
-            &[(
-                "user.macro.computer_id",
-                "01900000-0000-7000-8000-000000000002",
-            )],
+            &[
+                ("user.macro.control_plane", "test-a"),
+                (
+                    "user.macro.computer_id",
+                    "01900000-0000-7000-8000-000000000002",
+                ),
+            ],
         ),
         instance(
             "mc-01900000000070008000000000000003",
             incus_client::InstanceStatus::Error,
-            &[(
-                "user.macro.computer_id",
-                "01900000-0000-7000-8000-000000000003",
-            )],
+            &[
+                ("user.macro.control_plane", "test-a"),
+                (
+                    "user.macro.computer_id",
+                    "01900000-0000-7000-8000-000000000003",
+                ),
+            ],
         ),
         instance(
             "operator-scratch",
@@ -134,20 +169,30 @@ fn listing_keeps_only_computer_instances_and_maps_their_status() {
     ];
 
     assert_eq!(
-        computer_instances(&instances).unwrap(),
+        computer_instances(
+            &instances,
+            &ControlPlaneId::parse("test-a".to_owned()).unwrap()
+        )
+        .unwrap(),
         [
-            (
-                Uuid::from_u128(0x0190_0000_0000_7000_8000_0000_0000_0001),
-                InstanceStatus::Running
-            ),
-            (
-                Uuid::from_u128(0x0190_0000_0000_7000_8000_0000_0000_0002),
-                InstanceStatus::Frozen
-            ),
-            (
-                Uuid::from_u128(0x0190_0000_0000_7000_8000_0000_0000_0003),
-                InstanceStatus::Stopped
-            ),
+            FleetInstance {
+                computer_id: Uuid::from_u128(0x0190_0000_0000_7000_8000_0000_0000_0001),
+                status: InstanceStatus::Running,
+                control_plane_id: ControlPlaneId::parse("test-a".to_owned()).unwrap(),
+                created_at: None,
+            },
+            FleetInstance {
+                computer_id: Uuid::from_u128(0x0190_0000_0000_7000_8000_0000_0000_0002),
+                status: InstanceStatus::Frozen,
+                control_plane_id: ControlPlaneId::parse("test-a".to_owned()).unwrap(),
+                created_at: None,
+            },
+            FleetInstance {
+                computer_id: Uuid::from_u128(0x0190_0000_0000_7000_8000_0000_0000_0003),
+                status: InstanceStatus::Stopped,
+                control_plane_id: ControlPlaneId::parse("test-a".to_owned()).unwrap(),
+                created_at: None,
+            },
         ]
     );
 }
@@ -157,11 +202,17 @@ fn listing_rejects_a_computer_id_that_is_not_a_uuid() {
     let instances = [instance(
         "mc-bad",
         incus_client::InstanceStatus::Stopped,
-        &[("user.macro.computer_id", "not-a-uuid")],
+        &[
+            ("user.macro.control_plane", "test-a"),
+            ("user.macro.computer_id", "not-a-uuid"),
+        ],
     )];
 
     assert!(matches!(
-        computer_instances(&instances),
+        computer_instances(
+            &instances,
+            &ControlPlaneId::parse("test-a".to_owned()).unwrap()
+        ),
         Err(IncusFleetError::BadComputerId { .. })
     ));
 }
@@ -197,5 +248,58 @@ fn not_found_is_lost_but_a_host_failure_is_not() {
             message: "Unavailable".to_owned(),
         })
         .is_missing()
+    );
+}
+
+#[test]
+fn listing_ignores_foreign_and_unlabelled_computers_before_parsing_them() {
+    let instances = [
+        InstanceInfo {
+            name: "mc-foreign".to_owned(),
+            status: incus_client::InstanceStatus::Running,
+            kind: InstanceKind::VirtualMachine,
+            stateful: false,
+            config: BTreeMap::from([
+                ("user.macro.control_plane".to_owned(), "test-b".to_owned()),
+                ("user.macro.computer_id".to_owned(), "not-ours".to_owned()),
+            ]),
+        },
+        InstanceInfo {
+            name: "mc-legacy".to_owned(),
+            status: incus_client::InstanceStatus::Running,
+            kind: InstanceKind::VirtualMachine,
+            stateful: false,
+            config: BTreeMap::from([("user.macro.computer_id".to_owned(), "not-ours".to_owned())]),
+        },
+        InstanceInfo {
+            name: "mc-own".to_owned(),
+            status: incus_client::InstanceStatus::Running,
+            kind: InstanceKind::VirtualMachine,
+            stateful: false,
+            config: BTreeMap::from([
+                ("user.macro.control_plane".to_owned(), "test-a".to_owned()),
+                (
+                    "user.macro.computer_id".to_owned(),
+                    "01900000-0000-7000-8000-000000000001".to_owned(),
+                ),
+                (
+                    "user.macro.created_at".to_owned(),
+                    "2026-11-05T10:00:00Z".to_owned(),
+                ),
+            ]),
+        },
+    ];
+    assert_eq!(
+        computer_instances(
+            &instances,
+            &ControlPlaneId::parse("test-a".to_owned()).unwrap()
+        )
+        .unwrap(),
+        vec![FleetInstance {
+            computer_id: COMPUTER_ID,
+            status: InstanceStatus::Running,
+            control_plane_id: ControlPlaneId::parse("test-a".to_owned()).unwrap(),
+            created_at: Some("2026-11-05T10:00:00Z".parse().unwrap()),
+        }]
     );
 }

@@ -4,6 +4,7 @@
 //! ```sh
 //! cargo run -p hosted_runtimes --example incus_fleet_smoke -- \
 //!   --url https://localhost:18443 \
+//!   --control-plane-id smoke \
 //!   --client-cert ~/.config/macro-computers/dev-client.crt \
 //!   --client-key ~/.config/macro-computers/dev-client.key \
 //!   --server-cert runtime-dev-1-server.crt
@@ -19,7 +20,7 @@ use chrono::Utc;
 use clap::Parser;
 use hosted_runtimes::domain::enrollment::Enrollment;
 use hosted_runtimes::domain::lifecycle::ComputerState;
-use hosted_runtimes::domain::models::Computer;
+use hosted_runtimes::domain::models::{Computer, ControlPlaneId};
 use hosted_runtimes::domain::ports::Fleet;
 use hosted_runtimes::domain::size::ComputerSize;
 use hosted_runtimes::outbound::incus_fleet::{IncusFleet, IncusFleetConfig, instance_name};
@@ -30,6 +31,8 @@ use uuid::Uuid;
 struct Args {
     #[arg(long)]
     url: String,
+    #[arg(long)]
+    control_plane_id: String,
     #[arg(long)]
     client_cert: PathBuf,
     #[arg(long)]
@@ -64,7 +67,13 @@ async fn main() -> Result<(), rootcause::Report> {
             }),
         },
         profile: args.profile,
-        ..IncusFleetConfig::macro_box(endpoint, "smoke".to_owned(), 4, 3)
+        ..IncusFleetConfig::macro_box(
+            endpoint,
+            "smoke".to_owned(),
+            ControlPlaneId::parse(args.control_plane_id)?,
+            4,
+            3,
+        )
     };
     let fleet = IncusFleet::new(config)?;
 
@@ -102,7 +111,7 @@ async fn main() -> Result<(), rootcause::Report> {
         .instances()
         .await?
         .into_iter()
-        .filter(|(instance, _)| *instance == id)
+        .filter(|instance| instance.computer_id == id)
         .collect();
     println!("left after destroy: {left:?}");
     result
@@ -150,8 +159,8 @@ async fn print_status(fleet: &IncusFleet, id: Uuid) -> Result<(), rootcause::Rep
         .instances()
         .await?
         .into_iter()
-        .find(|(instance, _)| *instance == id)
-        .map(|(_, status)| status);
+        .find(|instance| instance.computer_id == id)
+        .map(|instance| instance.status);
     println!("  -> {status:?}");
     Ok(())
 }

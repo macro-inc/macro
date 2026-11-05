@@ -17,15 +17,20 @@ use std::os::unix::fs::PermissionsExt;
 use std::path::{Path, PathBuf};
 use std::process::Stdio;
 
+use chrono::{DateTime, Utc};
 use macro_env::Environment;
 use uuid::Uuid;
 
 use crate::domain::enrollment::Enrollment;
-use crate::domain::models::{Computer, HostRegistration};
-use crate::domain::ports::{Fleet, FleetError, InstanceStatus};
+use crate::domain::models::{Computer, ControlPlaneId, HostRegistration};
+use crate::domain::ports::{Fleet, FleetError, FleetInstance, InstanceStatus};
 
 #[cfg(test)]
 mod test;
+
+/// Label carrying the control-plane owner.
+pub const CONTROL_PLANE_LABEL: &str = "macro.control_plane";
+const CREATED_AT_LABEL: &str = "macro.created_at";
 
 /// Label every computer container carries, valued with its computer id.
 pub const COMPUTER_ID_LABEL: &str = "macro.computer_id";
@@ -38,6 +43,7 @@ const ENROLLMENT_FILE: &str = "enrollment.json";
 /// What the Docker fleet runs and how it reports its host.
 #[derive(Debug, Clone)]
 pub struct DockerFleetConfig {
+    pub control_plane_id: ControlPlaneId,
     /// The computer image, e.g. `macro-box:latest` (`nix build .#macro-box-docker`).
     pub image: String,
     /// The local stack's Docker network, so computers reach its services by name.
@@ -151,6 +157,10 @@ impl FleetError for DockerFleetError {
 impl Fleet for DockerFleet {
     type Err = DockerFleetError;
 
+    fn control_plane_id(&self) -> &ControlPlaneId {
+        &self.config.control_plane_id
+    }
+
     #[tracing::instrument(name = "docker_fleet.create", skip_all, fields(computer_id = %computer.id, start), err)]
     async fn create(
         &self,
@@ -165,6 +175,8 @@ impl Fleet for DockerFleet {
                 image: self.config.image.clone(),
                 network: self.config.network.clone(),
                 computer_id: computer.id,
+                control_plane_id: self.config.control_plane_id.clone(),
+                created_at: Utc::now(),
                 memory_gb: computer.size.memory_gb(),
                 vcpus: computer.size.vcpus(),
                 enrollment_dir: dir,
@@ -291,9 +303,13 @@ impl Fleet for DockerFleet {
     }
 
     #[tracing::instrument(name = "docker_fleet.instances", skip(self), err)]
-    async fn instances(&self) -> Result<Vec<(Uuid, InstanceStatus)>, DockerFleetError> {
-        let output = docker("ps", &list_args(&self.config.network)).await?;
-        parse_instances(&output)
+    async fn instances(&self) -> Result<Vec<FleetInstance>, DockerFleetError> {
+        let output = docker(
+            "ps",
+            &list_args(&self.config.network, &self.config.control_plane_id),
+        )
+        .await?;
+        parse_instances(&output, &self.config.control_plane_id)
     }
 
     async fn host(&self) -> Result<HostRegistration, DockerFleetError> {
@@ -346,6 +362,8 @@ impl ContainerState {
 /// What `docker create` needs for one computer.
 #[derive(Debug, Clone, PartialEq, Eq)]
 struct CreateSpec {
+    control_plane_id: ControlPlaneId,
+    created_at: DateTime<Utc>,
     image: String,
     network: String,
     computer_id: Uuid,
@@ -370,6 +388,10 @@ fn create_args(spec: &CreateSpec) -> Vec<String> {
         container_name(spec.computer_id),
         "--label".to_owned(),
         format!("{COMPUTER_ID_LABEL}={}", spec.computer_id),
+        "--label".to_owned(),
+        format!("{CONTROL_PLANE_LABEL}={}", spec.control_plane_id.as_str()),
+        "--label".to_owned(),
+        format!("{CREATED_AT_LABEL}={}", spec.created_at.to_rfc3339()),
         "--network".to_owned(),
         spec.network.clone(),
         "--memory".to_owned(),
@@ -417,7 +439,7 @@ fn state_args(computer_id: Uuid) -> Vec<String> {
     ]
 }
 
-fn list_args(network: &str) -> Vec<String> {
+fn list_args(network: &str, control_plane_id: &ControlPlaneId) -> Vec<String> {
     vec![
         "ps".to_owned(),
         "--all".to_owned(),
@@ -425,24 +447,43 @@ fn list_args(network: &str) -> Vec<String> {
         format!("label={COMPUTER_ID_LABEL}"),
         "--filter".to_owned(),
         format!("network={network}"),
+        "--filter".to_owned(),
+        format!("label={CONTROL_PLANE_LABEL}={}", control_plane_id.as_str()),
         "--format".to_owned(),
-        format!("{{{{.Label \"{COMPUTER_ID_LABEL}\"}}}} {{{{.State}}}}"),
+        format!(
+            "{{{{.Label \"{COMPUTER_ID_LABEL}\"}}}}\t{{{{.State}}}}\t{{{{.Label \"{CONTROL_PLANE_LABEL}\"}}}}\t{{{{.Label \"{CREATED_AT_LABEL}\"}}}}"
+        ),
     ]
 }
 
-/// Lines of `<computer id> <state>` from [`list_args`].
-fn parse_instances(output: &str) -> Result<Vec<(Uuid, InstanceStatus)>, DockerFleetError> {
+/// Tab-separated identity, state, owner and creation timestamp from listing.
+fn parse_instances(
+    output: &str,
+    control_plane_id: &ControlPlaneId,
+) -> Result<Vec<FleetInstance>, DockerFleetError> {
     output
         .lines()
-        .map(str::trim)
         .filter(|line| !line.is_empty())
-        .map(|line| {
-            let (id, state) = line
-                .split_once(' ')
-                .ok_or_else(|| DockerFleetError::Malformed(format!("ps line {line:?}")))?;
-            let id = Uuid::parse_str(id)
-                .map_err(|_| DockerFleetError::Malformed(format!("computer id {id:?}")))?;
-            Ok((id, ContainerState::parse(state)?.status()))
+        .filter_map(|line| {
+            let fields: Vec<_> = line.split('\t').collect();
+            match fields.as_slice() {
+                [_, _, owner, _] if *owner != control_plane_id.as_str() => None,
+                [id, state, _, created_at] => Some((|| {
+                    let computer_id = Uuid::parse_str(id)
+                        .map_err(|_| DockerFleetError::Malformed(format!("computer id {id:?}")))?;
+                    Ok(FleetInstance {
+                        computer_id,
+                        status: ContainerState::parse(state)?.status(),
+                        control_plane_id: control_plane_id.clone(),
+                        created_at: DateTime::parse_from_rfc3339(created_at)
+                            .ok()
+                            .map(|at| at.with_timezone(&Utc)),
+                    })
+                })()),
+                _ => Some(Err(DockerFleetError::Malformed(format!(
+                    "ps line {line:?}"
+                )))),
+            }
         })
         .collect()
 }

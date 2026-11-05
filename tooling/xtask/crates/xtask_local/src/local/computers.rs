@@ -162,6 +162,10 @@ impl Computers {
             .collect::<Result<BTreeMap<_, _>>>()?;
         Ok(BTreeMap::from([
             ("COMPUTERS_FLEET".into(), "docker".into()),
+            (
+                "COMPUTERS_CONTROL_PLANE_ID".into(),
+                format!("local-{}", self.instance.name()),
+            ),
             ("COMPUTERS_HOST_NAME".into(), DOCKER_HOST_NAME.into()),
             ("COMPUTERS_IMAGE".into(), DOCKER_IMAGE.into()),
             (
@@ -203,6 +207,10 @@ impl Computers {
             .collect::<Result<BTreeMap<_, _>>>()?;
         Ok(BTreeMap::from([
             ("COMPUTERS_FLEET".into(), "incus".into()),
+            (
+                "COMPUTERS_CONTROL_PLANE_ID".into(),
+                format!("local-{}", self.instance.name()),
+            ),
             ("COMPUTERS_HOST_NAME".into(), INCUS_HOST_NAME.into()),
             ("COMPUTERS_IMAGE".into(), INCUS_IMAGE.into()),
             ("COMPUTERS_INCUS_URL".into(), network.url()),

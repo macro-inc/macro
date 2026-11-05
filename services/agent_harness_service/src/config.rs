@@ -148,6 +148,8 @@ pub struct Config {
     /// Which fleet runs Macro computers: `incus` or `docker` (local only).
     /// Unset runs no computer control plane here.
     pub computers_fleet: Option<String>,
+    /// Stable fleet owner; required whenever COMPUTERS_FLEET is set.
+    pub computers_control_plane_id: Option<String>,
     /// Name of the computer host this control plane drives.
     pub computers_host_name: Option<String>,
     /// Base image computers are created from (Incus alias or Docker image).
