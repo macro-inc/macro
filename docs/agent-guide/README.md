@@ -31,6 +31,7 @@ verified live against a local stack (`just run_local`).
 | [onboarding.md](onboarding.md) | Onboarding resume links, bypass, and setup plan |
 | [setup-cards.md](setup-cards.md) | Sidebar import and setup cards, the connector import dialog, and permanent dismissal |
 | [canvas.md](canvas.md) | Canvas colors and link paste |
+| [artifacts.md](artifacts.md) | Agent-published HTML artifacts: the view, scenes, versions and restore, placing them on a canvas |
 | [soup-live-updates.md](soup-live-updates.md) | Live updates in flat Soup lists |
 | [ui-conventions.md](ui-conventions.md) | Shared UI behavior: list loading, top bars, dialog actions, user cards, information panels |
 | [browser-technique.md](browser-technique.md) | Generic chrome-devtools MCP lessons learned on this app |

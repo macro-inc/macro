@@ -10,6 +10,7 @@ import type { ParentProps } from 'solid-js';
 const blockNamesWithLocations = [
   'pdf',
   'canvas',
+  'artifact',
   'channel',
   'md',
   'task',

@@ -458,7 +458,8 @@ navigate; Enter selects and Escape closes. Scrolled results
 keep the same inset as the menu padding. The media picker includes a dashed drop
 area and Add files button for local images/videos.
 Insertion keeps the world position captured when the menu opened, even under
-pan/zoom. New embed insertion and preview-to-embed conversion are unavailable.
+pan/zoom. New embed insertion (artifacts aside) and preview-to-embed conversion are
+unavailable.
 Existing embeds can be converted to previews in the inspector. Double-click an
 existing embed or choose Interact to enter; Done, Escape, or a click elsewhere on
 this canvas returns input to the outer canvas. Resizing changes the editor viewport.
@@ -480,8 +481,13 @@ Canvas Next document. The core stores only the document reference,
 box size, and optional `display` (`preview`/`embed`). Active focus, selection inside
 the embed, its editor state, and network services never enter graphics core.
 Native clipboard events, pointer/wheel events and shortcuts remain owned by the
-active embed. Full embeds currently support `md` and `canvas`; other files retain
-preview cards. Recursive Canvas Next embedding remains gated by the referenced
+active embed. Full embeds currently support `md`, `canvas` and `artifact`; other
+files retain preview cards. An artifact embed is not a block: it mounts the
+artifact's sandboxed frame (`block-artifact/views/artifact-canvas.tsx`, loaded
+lazily) with the node's `subpath` as the scene id, follows the current version,
+and renders live for viewers too. Artifacts (behind `enable-artifacts`) are the
+one kind inserted as embeds: the Reference picker asks for a scene, and the
+inspector switches it. Recursive Canvas Next embedding remains gated by the referenced
 document's own format and feature availability.
 
 Known prototype limit: the embedded legacy canvas still converts pointer coordinates
