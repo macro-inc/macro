@@ -1,7 +1,7 @@
 import MacroLogo from '@icon/macro-logo.svg';
 import { type JSX, type ParentProps, Show } from 'solid-js';
-import { DemoInteractionBoundary } from '../DemoInteractionBoundary';
 import type { TutorialVideoId } from '../../core/tutorial-videos';
+import { DemoInteractionBoundary } from '../DemoInteractionBoundary';
 import { FeaturePage, FeaturePageCta } from '../FeaturePage';
 import { TutorialVideoDialog } from '../TutorialVideoDialog';
 import '../email/email-hero.css';

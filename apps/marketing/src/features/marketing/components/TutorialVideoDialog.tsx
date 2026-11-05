@@ -1,6 +1,6 @@
 import { Dialog } from '@kobalte/core/dialog';
-import Play from '@phosphor-fill/play-fill.svg';
 import X from '@phosphor/x.svg';
+import Play from '@phosphor-fill/play-fill.svg';
 import { createSignal, Show } from 'solid-js';
 import { analytics } from '../../../app/utils/utilAnalytic';
 import presenterPhoto from '../../../assets/people/tutorial-presenter.jpg';
@@ -56,12 +56,17 @@ export function TutorialVideoDialog(props: { tutorial: TutorialVideoId }) {
     if (value) track('opened');
   };
 
-  const play = () => {
+  const play = async () => {
     if (!video) return;
     setStarted(true);
     // The pill unmounts, so the video takes focus and keeps Space working.
     video.focus();
-    video.play().catch(() => setStarted(false));
+    try {
+      await video.play();
+    } catch {
+      // Playback was refused; bring the play pill back.
+      setStarted(false);
+    }
   };
 
   const recordPlay = () => {

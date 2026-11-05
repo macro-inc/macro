@@ -20,10 +20,18 @@ beforeEach(() => {
     return Promise.resolve();
   });
   HTMLMediaElement.prototype.play = play;
+  vi.spyOn(window, 'scrollTo').mockImplementation(() => {});
+  // JSDOM has no default animation-name; presence detection expects `none`.
+  const styles = document.createElement('style');
+  styles.textContent = '* { animation-name: none; }';
+  styles.id = 'test-animation-default';
+  document.head.append(styles);
 });
 
 afterEach(() => {
   cleanup();
+  document.getElementById('test-animation-default')?.remove();
+  vi.restoreAllMocks();
   vi.clearAllMocks();
 });
 
@@ -53,9 +61,7 @@ it('opens the video paused and plays only from the play pill', async () => {
   );
 
   expect(play).toHaveBeenCalledOnce();
-  expect(
-    screen.queryByRole('button', { name: /^Play Learn how/ })
-  ).toBeNull();
+  expect(screen.queryByRole('button', { name: /^Play Learn how/ })).toBeNull();
   expect(analytics.track).toHaveBeenCalledWith(
     'tutorial_video',
     expect.objectContaining({ tutorial: 'macro-mail', action: 'played' })
@@ -65,13 +71,11 @@ it('opens the video paused and plays only from the play pill', async () => {
 it('closes on Escape and returns focus to Watch demo', async () => {
   render(() => <TutorialVideoDialog tutorial="tasks" />);
   const trigger = await openDialog();
+  const close = screen.getByRole('button', { name: 'Close video' });
+  await waitFor(() => expect(document.activeElement).toBe(close));
 
-  fireEvent.keyDown(document.activeElement ?? document.body, {
-    key: 'Escape',
-  });
+  fireEvent.keyDown(close, { key: 'Escape' });
 
-  await waitFor(() =>
-    expect(screen.queryByRole('dialog')).toBeNull()
-  );
+  await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull());
   await waitFor(() => expect(document.activeElement).toBe(trigger));
 });

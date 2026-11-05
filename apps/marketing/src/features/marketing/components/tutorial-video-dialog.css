@@ -1,4 +1,5 @@
-.tutorial-video-trigger { --nav-ink: var(--color-ink); --nav-edge: color-mix(in srgb, var(--color-ink) 13%, transparent); gap: 10px; }
+/* Outranks the site-wide button color and size in app/main/index.css. */
+.feature-page .tutorial-video-trigger { --nav-ink: var(--color-ink); --nav-edge: color-mix(in srgb, var(--color-ink) 13%, transparent); gap: 10px; color: var(--nav-ink); }
 .tutorial-video-trigger svg { flex-shrink: 0; width: 16px; height: 16px; }
 .tutorial-video-trigger-length { color: var(--color-ink-subtle); font-variant-numeric: tabular-nums; }
 .tutorial-video-trigger-length::before { content: '·'; margin-right: 10px; }
@@ -9,7 +10,7 @@
 .tutorial-video-dialog { position: fixed; z-index: 10001; inset: 0; margin: auto; zoom: calc(1 / var(--site-scale, 1)); width: 80vw; height: 80dvh; display: flex; flex-direction: column; overflow: hidden; isolation: isolate; border: 1px solid var(--color-edge-muted); border-radius: 16px; background: var(--color-dialog); color: var(--color-ink); box-shadow: 0 32px 120px #0008; outline: none; font-family: 'Inter Variable', Inter, sans-serif; animation: tutorial-video-open 280ms cubic-bezier(.2,.8,.2,1); }
 .tutorial-video-titlebar { display: flex; align-items: center; gap: 8px; flex-shrink: 0; height: 48px; padding: 0 8px 0 16px; }
 .tutorial-video-titlebar h2 { flex: 1; min-width: 0; margin: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font: 500 14px/1.4 'Inter Variable', Inter, sans-serif; color: var(--color-ink); }
-.tutorial-video-close { display: grid; place-items: center; width: 32px; height: 32px; padding: 8px; border: 0; border-radius: 8px; background: transparent; color: var(--color-ink-muted); }
+.tutorial-video-dialog .tutorial-video-close { display: grid; place-items: center; width: 32px; height: 32px; padding: 8px; border: 0; border-radius: 8px; background: transparent; color: var(--color-ink-muted); }
 .tutorial-video-close:hover { background: color-mix(in srgb, var(--color-ink) 8%, transparent); color: var(--color-ink); }
 .tutorial-video-close:focus-visible { outline: 2px solid var(--color-ink); outline-offset: 2px; }
 .tutorial-video-close svg { width: 16px; height: 16px; }
@@ -18,7 +19,7 @@
 .tutorial-video-scrim { position: absolute; inset: 0; border: 0; padding: 0; background: #00000073; }
 
 /* The app's play pill: play disc, divider, presenter, and the video's length. */
-.tutorial-video-play { position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); display: flex; align-items: center; gap: 12px; height: 64px; padding: 8px 24px 8px 8px; border: 1px solid #ffffff1f; border-radius: 999px; background: rgb(20 20 20 / .85); color: #fff; white-space: nowrap; box-shadow: 0 25px 50px -12px #00000040; outline: none; transition: background-color 140ms ease; }
+.tutorial-video-dialog .tutorial-video-play { position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); display: flex; align-items: center; gap: 12px; height: 64px; padding: 8px 24px 8px 8px; border: 1px solid #ffffff1f; border-radius: 999px; background: rgb(20 20 20 / .85); color: #fff; white-space: nowrap; box-shadow: 0 25px 50px -12px #00000040; outline: none; transition: background-color 140ms ease; }
 .tutorial-video-play:focus-visible { outline: 2px solid #fff; outline-offset: 2px; }
 .tutorial-video-disc { flex-shrink: 0; width: 48px; height: 48px; transition: transform 140ms ease; }
 .tutorial-video-divider { flex-shrink: 0; width: 1px; height: 60%; background: #ffffff26; }
@@ -40,7 +41,7 @@
   .tutorial-video-titlebar { height: 44px; padding-left: 12px; }
   .tutorial-video-titlebar h2 { font-size: 13px; }
   .tutorial-video-stage { aspect-ratio: 16 / 9; flex: none; margin: 0 4px 4px; border-radius: 10px; }
-  .tutorial-video-play { height: 48px; gap: 8px; padding: 4px 16px 4px 4px; }
+  .tutorial-video-dialog .tutorial-video-play { height: 48px; gap: 8px; padding: 4px 16px 4px 4px; }
   .tutorial-video-disc { width: 40px; height: 40px; }
   .tutorial-video-play img { width: 36px; height: 36px; }
   .tutorial-video-byline > :first-child { font-size: 14px; }
