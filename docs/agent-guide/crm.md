@@ -5,8 +5,9 @@
 On desktop, the local sidebar uses the same navigation primitives as Email and Tasks.
 Its **New** menu creates a **Company**, a **Contact**, or a **Pipeline** (Pipeline
 only when pipelines are enabled; disabled until the team's CRM is enabled). The
-**Records** section lists **Companies**, **People**, **Tasks**, **Email**, **Notes**,
-and **Calls**, in that order; Pipelines and Lists follow.
+**Records** section lists **Companies**, **People**, **Sales Tasks**, **Sales Email**,
+**Sales Notes**, and **Sales Calls**, in that order; Pipelines and
+Lists follow. Record-detail tabs keep their unprefixed names.
 There are no built-in company views or Board/List layout. Companies and People
 are plain soup lists with the shared pagination. Existing personal/team saved
 views stay in the toolbar's Views menu.
@@ -16,7 +17,7 @@ dot, including desktop preview activation, keyboard opening, and phone navigatio
 The read is saved in the background; a failed request restores the dot so opening
 it again can retry. Marking read does not mark the notification done.
 
-**Rollout:** Tasks, Email, Notes and Calls require PostHog `enable-crm-activity`
+**Rollout:** Sales Tasks, Sales Email, Sales Notes and Sales Calls require PostHog `enable-crm-activity`
 (off by default; local override: `VITE_ENABLE_CRM_ACTIVITY=true`). CRM also uses
 this flag to decide whether to supply its task-composer preset, and with
 `enable-crm` to show the Customer / Contact pill when creating any task. With it off, only Companies and People
@@ -43,14 +44,14 @@ captured entry state within the current account session, including an open
 pipeline or record. Direct links and new-split actions keep their requested
 destination; reload and account changes clear the remembered location.
 
-The activity tabs show CRM-linked content, not the whole app: Tasks and
-Calls require a Companies or Contacts reference; Notes are linked Markdown
-documents (excluding tasks, snippets, and skills); Email is your own mailbox's
+The activity tabs show CRM-linked content, not the whole app: Sales Tasks and
+Sales Calls require a Companies or Contacts reference; Sales Notes are linked Markdown
+documents (excluding tasks, snippets, and skills); Sales Email is your own mailbox's
 threads with CRM company domains or contact addresses. Lists page as you scroll.
 Empty CRM scope never falls back to all content. Activity loads directly with a
 server-resolved scope; it does not fetch every company and contact first. Hidden
 companies and contacts stay excluded even for admins. A loading failure offers
-**Try again**. Tasks has **New task**, which opens the task composer. Choose a CRM
+**Try again**. Sales Tasks has **New task**, which opens the task composer. Choose a CRM
 association with its **Customer / Contact** pill when creating a task from this feed.
 Opening Task through the global Create menu while Customers is focused uses the
 same preset. With an embedded company or contact detail open, global Create
@@ -76,13 +77,13 @@ the remainder. Email matches still determine feed membership, but an address
 or domain match without a stored property does not add a display pill. The row
 uses shared property previews rather than a separate association lookup.
 Verify these interactions at desktop and phone widths.
-Sidebar Tasks use the normal Tasks filters (status, priority, assignee, creator,
+Sales Tasks use the normal Tasks filters (status, priority, assignee, creator,
 and tags), sorting and grouping, with list/board/Gantt layouts when enabled. Touch
 uses the normal list and filter drawer. The default is open tasks grouped by date.
-Email exposes the normal read/done, attachment, calendar and tag filters. Notes has
-creator/tag filters and Calls has audience/tag filters. Email, Notes and Calls support
+Sales Email exposes the normal read/done, attachment, calendar and tag filters. Sales
+Notes has creator/tag filters and Sales Calls has audience/tag filters. All three support
 last-updated/created/viewed sorting, newest/oldest direction, and date/none grouping.
-Email defaults to last-update date groups; Notes and Calls start ungrouped. Date
+Sales Email defaults to last-update date groups; Sales Notes and Sales Calls start ungrouped. Date
 headings use the selected sort field and viewer-local time. Filter controls share one
 desktop header; touch puts filters, sorting and grouping in a drawer beside search.
 Each activity keeps its own settings, independent of the normal app views.
@@ -134,7 +135,7 @@ and expand into the shared Email/Tasks search bar. Command-F expands and focuses
 the field; Close or Escape clears the query and returns to the icon.
 
 On touch devices, CRM uses the same scrollable pill tabs as Tasks in the top
-header: Companies, People, Tasks, Email, Notes, Calls, available pipelines, and
+header: Companies, People, Sales Tasks, Sales Email, Sales Notes, Sales Calls, available pipelines, and
 enabled lists. Swipe the
 strip horizontally to reach every destination; the selected tab stays visible.
 The tabs remain available inside pipelines, with no hamburger button. Company
