@@ -40,3 +40,20 @@ export function postAuthTarget(input: {
   }
   return { t: 'navigate', to: redirect ?? '/' };
 }
+
+/**
+ * The desktop sign-in callback, carrying the page's `redirect`. Desktop SSO
+ * returns through a pinned `macro:///login` deep link rather than the page
+ * sign-in started on, so the deep link would otherwise be lost; the auth
+ * service keeps the query and appends the session code.
+ */
+export function desktopAuthCallbackUrl(
+  callbackUrl: string,
+  redirect: unknown
+): string {
+  const next = sanitizeNext(redirect);
+  if (!next) return callbackUrl;
+  const url = new URL(callbackUrl);
+  url.searchParams.set('redirect', next);
+  return url.toString();
+}

@@ -1,5 +1,9 @@
 import { describe, expect, it } from 'vitest';
-import { AGENT_SETUP_PATH, postAuthTarget } from './post-auth-target';
+import {
+  AGENT_SETUP_PATH,
+  desktopAuthCallbackUrl,
+  postAuthTarget,
+} from './post-auth-target';
 
 const newUser = {
   tutorialComplete: false,
@@ -86,4 +90,24 @@ describe('postAuthTarget', () => {
       })
     ).toEqual({ t: 'navigate', to: AGENT_SETUP_PATH });
   });
+});
+
+describe('desktopAuthCallbackUrl', () => {
+  it('carries a safe redirect on the desktop callback', () => {
+    const url = new URL(
+      desktopAuthCallbackUrl('macro:///login', '/team-invite?id=abc')
+    );
+    expect(url.protocol).toBe('macro:');
+    expect(url.pathname).toBe('/login');
+    expect(url.searchParams.get('redirect')).toBe('/team-invite?id=abc');
+  });
+
+  it.each<[unknown]>([[null], ['https://evil.example'], ['//evil.example']])(
+    'leaves the callback alone for %o',
+    (redirect) => {
+      expect(desktopAuthCallbackUrl('macro:///login', redirect)).toBe(
+        'macro:///login'
+      );
+    }
+  );
 });
