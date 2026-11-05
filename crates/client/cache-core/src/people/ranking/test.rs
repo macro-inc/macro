@@ -60,6 +60,39 @@ fn foreign_viewer_keys_never_rank_as_personal_membership() {
 }
 
 #[test]
+fn stack_key_comparison_preserves_canonical_identity_and_exact_key_bytes() {
+    let request = request("");
+    let user = "macro|person@example.com";
+    let valid = contact_key(&request.scope.identity, user);
+    let record = Record {
+        fields: [
+            (
+                "userId".into(),
+                CacheValue::String("macro|PERSON@example.com".into()),
+            ),
+            (
+                "email".into(),
+                CacheValue::String("PERSON@example.com".into()),
+            ),
+            ("name".into(), CacheValue::String("Person".into())),
+        ]
+        .into(),
+    };
+    for key in [
+        valid.clone(),
+        contact_key("macro|other@example.com", user),
+        EntityKey(format!("GraphqlContact:{}", valid.id().unwrap().to_uppercase()).into()),
+        EntityKey(format!("graphqlcontact:{}", valid.id().unwrap()).into()),
+        EntityKey(format!("{valid}:extra").into()),
+        EntityKey(valid.id().unwrap().to_owned().into()),
+    ] {
+        let mut ranker = PeopleRanker::new(&request, Uuid::from_u128(2)).unwrap();
+        ranker.push(&key, &record);
+        assert_eq!(!ranker.best.is_empty(), key == valid, "{key}");
+    }
+}
+
+#[test]
 fn automated_mailboxes_do_not_consume_the_result_limit() {
     let request = request("");
     let mut ranker = PeopleRanker::new(&request, Uuid::from_u128(2)).unwrap();

@@ -46,6 +46,42 @@ fn recipient_tiers_match_the_browser_contract() {
 }
 
 #[test]
+fn automated_marker_fast_rejection_preserves_all_forms_and_prefixes() {
+    for separator in ["", ".", "_", "-"] {
+        for suffix in ["", ".tag"] {
+            assert!(is_automated_recipient_local_part(&format!(
+                "team.no{separator}reply{suffix}"
+            )));
+            for second in ["", ".", "_", "-"] {
+                assert!(is_automated_recipient_local_part(&format!(
+                    "team.do{separator}not{second}reply{suffix}"
+                )));
+            }
+        }
+    }
+    for local in [
+        "notifications",
+        "notifications+tag",
+        "mailer-daemon",
+        "postmaster",
+        "bounce-tag",
+    ] {
+        assert!(is_automated_recipient_local_part(local), "{local}");
+    }
+    for local in [
+        "person000125",
+        "ordinary",
+        "reply",
+        "no--reply",
+        "do..notreply",
+        "postmasterperson",
+        "notificationsperson",
+    ] {
+        assert!(!is_automated_recipient_local_part(local), "{local}");
+    }
+}
+
+#[test]
 fn automated_mailboxes_match_browser_fixtures() {
     for line in include_str!("automated-recipient-fixtures.tsv")
         .lines()

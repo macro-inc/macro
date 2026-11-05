@@ -73,7 +73,7 @@ pub enum TursoStorageOpenOutcome {
     OpenedNew,
 }
 
-const CREATE_SCHEMA: [&str; 28] = [
+const CREATE_SCHEMA: [&str; 29] = [
     "CREATE TABLE meta (key TEXT PRIMARY KEY, value TEXT NOT NULL)",
     "CREATE TABLE records (__typename TEXT NOT NULL, id TEXT NOT NULL, value BLOB NOT NULL, PRIMARY KEY (__typename, id))",
     "CREATE TABLE search_documents (profile TEXT NOT NULL, __typename TEXT NOT NULL, id TEXT NOT NULL, bucket TEXT NOT NULL, search_text TEXT NOT NULL, timestamp_ms INTEGER NOT NULL, source_hash TEXT NOT NULL, PRIMARY KEY (profile, __typename, id))",
@@ -102,6 +102,7 @@ const CREATE_SCHEMA: [&str; 28] = [
     "CREATE INDEX optimistic_exact_facts_lookup_idx ON optimistic_exact_facts(attribute, value, document_id)",
     "CREATE INDEX optimistic_integer_facts_lookup_idx ON optimistic_integer_facts(attribute, value, document_id)",
     "CREATE INDEX optimistic_sort_facts_lookup_idx ON optimistic_sort_facts(attribute, value, document_id)",
+    contact_search::CREATE_INDEX,
 ];
 const RECORD_GET: &str = "SELECT value FROM records WHERE __typename = ?1 AND id = ?2";
 const RECORD_UPSERT: &str = "INSERT INTO records (__typename, id, value) VALUES (?1, ?2, ?3) ON CONFLICT (__typename, id) DO UPDATE SET value = excluded.value";
@@ -1117,7 +1118,7 @@ impl Storage for TursoStorage {
     ) -> Result<(), Self::Error> {
         self.require_healthy()?;
         let (sql, values) = search::statement_with_base(
-            include_str!("storage/contact_search.sql"),
+            contact_search::LOAD,
             SearchProfile::QuickAccessV1,
             "person",
             query,
@@ -3807,7 +3808,7 @@ fn validate_frozen_schema(connection: &Arc<Connection>) -> Result<(), TursoStora
         OPTIMISTIC_UNCERTAIN_ATTRIBUTE_COLUMNS,
     )?;
     validate_table_indexes(connection, "meta", &[(0, "key")])?;
-    validate_table_indexes(connection, "records", &[(0, "__typename"), (1, "id")])?;
+    contact_search::validate_indexes(connection)?;
     validate_search_indexes(connection)?;
     validate_mutation_queue_indexes(connection)?;
     validate_table_indexes(connection, "optimistic_layers", &[])?;
@@ -3906,6 +3907,7 @@ fn validate_allowed_schema_objects(connection: &Arc<Connection>) -> Result<(), T
         "optimistic_integer_facts_lookup_idx",
         "optimistic_sort_facts_lookup_idx",
         "search_documents_browse_idx",
+        contact_search::INDEX,
         "sort_facts_lookup_idx",
     ];
     let expected = expected
@@ -4274,8 +4276,18 @@ fn validate_table_indexes(
     let Some(row) = rows.first() else {
         return Ok(());
     };
+    if required_i64(row, 0).ok() != Some(0) {
+        return Err(compatibility());
+    }
+    validate_primary_index(connection, row, expected_key_columns)
+}
+
+fn validate_primary_index(
+    connection: &Arc<Connection>,
+    row: &[Value],
+    expected_key_columns: &[(i64, &str)],
+) -> Result<(), TursoStorageError> {
     if row.len() != 5
-        || required_i64(row, 0).ok() != Some(0)
         || required_i64(row, 2).ok() != Some(1)
         || required_text(row, 3).ok().as_deref() != Some("pk")
         || required_i64(row, 4).ok() != Some(0)
@@ -5307,6 +5319,7 @@ mod alternatives;
 mod bounded_selection;
 mod calendar;
 mod conjunction;
+mod contact_search;
 mod integrity;
 mod mutation_retry;
 mod page_retention;

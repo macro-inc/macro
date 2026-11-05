@@ -20,5 +20,6 @@ contact search and the client cache. Keep matching behavior consistent across th
 
 - Keep this dependency-free and WASM-safe; do not pull backend infrastructure or
   workspace-hack into the client cache through this crate.
+- Keep automated-mailbox prefix rules independent of the mandatory `reply` substring fast rejection for marker rules; preserve every marker/separator form and literal substring semantics.
 - Inputs to `subsequence_score` are normalized by the caller. SQL wildcards are
   ordinary characters here; SQL adapters escape their bound patterns separately.

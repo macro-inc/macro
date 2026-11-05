@@ -50,6 +50,7 @@ fn string<'a>(record: &'a Record, key: &str) -> Option<&'a str> {
 pub(crate) struct PeopleRanker<'a> {
     request: &'a PeopleSearch,
     epoch: Uuid,
+    contact_namespace: Uuid,
     query: String,
     excluded: HashSet<&'a str>,
     best: BinaryHeap<Ranked>,
@@ -74,6 +75,10 @@ impl<'a> PeopleRanker<'a> {
         Ok(Self {
             request,
             epoch,
+            contact_namespace: Uuid::new_v5(
+                &Uuid::NAMESPACE_OID,
+                request.scope.identity.as_bytes(),
+            ),
             query: normalize_text(&request.query),
             excluded: request.excluded.iter().map(|id| id.as_ref()).collect(),
             best: BinaryHeap::with_capacity(request.limit + 1),
@@ -106,7 +111,11 @@ impl<'a> PeopleRanker<'a> {
             return;
         }
         let user = user_id.as_ref();
-        if contact_key(&self.request.scope.identity, user).as_ref() != key.as_ref() {
+        let id = Uuid::new_v5(&self.contact_namespace, user.as_bytes());
+        let mut encoded = Uuid::encode_buffer();
+        if key.as_ref().strip_prefix("GraphqlContact:")
+            != Some(id.hyphenated().encode_lower(&mut encoded))
+        {
             return;
         }
         let Some(email) = string(record, "email") else {

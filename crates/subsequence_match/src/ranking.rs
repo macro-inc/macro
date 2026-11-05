@@ -150,6 +150,8 @@ pub fn is_automated_recipient_local_part(local: &str) -> bool {
         "do-not_reply",
         "do-not-reply",
     ];
+    // Every marker contains "reply". Reject ordinary addresses before constructing
+    // all 20 substring searchers, without skipping the independent prefix rules.
     PREFIXES.iter().any(|prefix| {
         local.strip_prefix(prefix).is_some_and(|suffix| {
             suffix.is_empty()
@@ -158,7 +160,7 @@ pub fn is_automated_recipient_local_part(local: &str) -> bool {
                     .first()
                     .is_some_and(|first| matches!(first, b'+' | b'.' | b'_' | b'-'))
         })
-    }) || MARKERS.iter().any(|marker| local.contains(marker))
+    }) || (local.contains("reply") && MARKERS.iter().any(|marker| local.contains(marker)))
 }
 
 /// Fixed blend weights for one surface, rather than a request's result corpus.
