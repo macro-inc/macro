@@ -8,9 +8,10 @@ async function overflow(card: Locator) {
 
 test.beforeEach(async ({ page }) => {
   await page.goto('/invitation.html');
-  await expect(
-    page.getByTestId('pane-google').locator('section')
-  ).toBeVisible();
+  // A cold Vite server takes more than the default 5s to serve the app CSS.
+  await expect(page.getByTestId('pane-google').locator('section')).toBeVisible({
+    timeout: 20_000,
+  });
 });
 
 for (const pane of PANES) {
