@@ -133,4 +133,7 @@ loaded 20+ pages to fill one screen, and its counts and empty states were wrong.
     parameters typed as generated `…Fragment[]`, and query `select` options;
     review the shapes it can't see (props, memos). Sites that predate the rule
     carry `// ast-grep-ignore: ts-no-client-list-filter -- predates FE-70 …`;
-    fixing one removes its comment.
+    fixing one removes its comment. ast-grep honours the comment alone on the
+    line above the match or on the match's own line; in a ternary branch, put
+    it at the end of the branch's line (as `/* … */` when that line ends in
+    `(`), since Biome moves a leading comment onto the `?` line.

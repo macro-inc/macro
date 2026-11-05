@@ -16,6 +16,8 @@ note: |-
   A justified exception (see FE-70) takes a suppression with its reason on the
   line above:
     // ast-grep-ignore: ts-no-client-list-filter -- <why the server can't or needn't>
+  In a ternary branch put it at the end of the branch's line instead
+  (Biome moves a leading comment where ast-grep doesn't see it).
 files:
   - apps/web/src/**
   - packages/*/src/**
