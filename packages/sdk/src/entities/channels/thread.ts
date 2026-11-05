@@ -1,7 +1,6 @@
 import { type RichMessage, toBody } from '../../mentions';
 import { unwrap } from '../../utils';
 import type { MacroClient } from '../../utils/client';
-import type { Document } from '../documents/document';
 import type { StaticImage } from '../images/image';
 import { Channel } from './channel';
 import { Message } from './message';
@@ -56,15 +55,18 @@ export class Thread {
    * @param body - Plain text, or a rich body composed with {@link msg}.
    * @param opts.images - Static images to attach, such as one from
    *   `macro.images.generate()`.
-   * @param opts.documents - Macro documents to attach as file chips, such as
-   *   a file from `macro.documents.upload()`.
    * @returns The created reply.
    */
   async reply(
     body: string | RichMessage,
-    opts?: { images?: StaticImage[]; documents?: Document[] },
+    opts?: { images?: StaticImage[] },
   ): Promise<Message> {
-    const id = await postToChannel(this.client, this, toBody(body), opts);
+    const id = await postToChannel(
+      this.client,
+      this,
+      toBody(body),
+      opts?.images,
+    );
     return Message.byId(this.client, this.channelId, id);
   }
 }

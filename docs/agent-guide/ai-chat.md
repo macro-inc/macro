@@ -268,13 +268,6 @@ Use `CreateDocument` for generated text and native Macro spreadsheets. Agents wi
 code execution should construct the base64 argument from the original bytes;
 the tool cannot access an agent's local path or download a URL.
 
-Code mode hides `UploadFile`. Its programs call `macro.documents.upload({ name,
-content, project })`, which sends the raw bytes to the storage host's
-`POST /documents/upload` under the same limit and folder rule, read a stored
-file (including an email attachment's `toDocument()`) with `Document.bytes()`,
-and attach documents to messages with `channel.send(text, { documents })`. The
-sandbox reaches only Macro hosts, so presigned upload URLs fail there.
-
 The tool row displays the filename and, on success, **Uploaded**. Expand it to
 open the created document and see the uploaded byte count. Success means the
 bytes reached storage; previews, DOCX conversion, Markdown initialization, and

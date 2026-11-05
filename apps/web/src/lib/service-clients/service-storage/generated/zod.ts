@@ -18534,37 +18534,6 @@ export const getSystemSkillsHandlerResponse = zod
   .describe('Response listing the built-in system skills.');
 
 /**
- * The body is the raw file content. Preview generation and indexing may
-finish after the response.
- * @summary Upload a file's bytes as a new document, up to 25 MiB.
- */
-export const uploadFileQueryParams = zod.object({
-  fileName: zod
-    .string()
-    .describe(
-      'Filename including its extension, such as `report.pdf`; the extension\nsets the file type. No directory components.'
-    ),
-  projectId: zod
-    .uuid()
-    .optional()
-    .describe(
-      'Destination project. Requires edit access; omit for top-level files.'
-    ),
-});
-
-export const uploadFileResponseSizeBytesMin = 0;
-
-export const uploadFileResponse = zod
-  .object({
-    documentId: zod.string().describe('The new document.'),
-    sizeBytes: zod
-      .number()
-      .min(uploadFileResponseSizeBytesMin)
-      .describe('Number of bytes stored.'),
-  })
-  .describe('The document created from the uploaded bytes.');
-
-/**
  * Returns document metadata, user access level, and view location.
  * @summary Handler for `GET /documents/{document_id}`.
  */
