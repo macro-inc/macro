@@ -49,12 +49,10 @@ pub async fn seed<S: Storage>(storage: &mut S, count: usize) {
             .put_batch(
                 (start..(start + 500).min(count))
                     .map(|index| {
-                        let id = format!("00000000-0000-7000-8000-{index:012}");
                         let user = format!("macro|p{index:06}@example.com");
-                        (
-                            EntityKey::entity("GraphqlContact", &[&id]),
-                            contact(&user, &id),
-                        )
+                        let key = contact_key(&user);
+                        let record = contact(&user, key.id().unwrap());
+                        (key, record)
                     })
                     .collect(),
             )
@@ -84,6 +82,7 @@ pub async fn seed<S: Storage>(storage: &mut S, count: usize) {
 pub async fn assert_policy<S: Storage>(storage: S) -> S {
     let mut engine = Engine::new(storage);
     let scope = HydrationScope {
+        contact_fence: None,
         identity: VIEWER.into(),
         storage_generation: engine.current_storage_generation().await.unwrap(),
     };

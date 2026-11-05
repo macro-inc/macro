@@ -14,7 +14,10 @@ async fn people_abi_preserves_scope_publication_and_winning_identity() {
         user.as_bytes(),
     )
     .to_string();
-    let scope = serde_json::json!({"storageGeneration":generation,"identity":viewer});
+    let mut scope = serde_json::json!({"storageGeneration":generation,"identity":viewer});
+    let snapshot: serde_json::Value =
+        from_js(resolved(engine.contact_snapshot(js(serde_json::json!({"scope":scope})))).await);
+    scope["contactFence"] = snapshot["fence"].clone();
     let epoch = uuid::Uuid::now_v7().to_string();
     let missing: serde_json::Value =
         from_js(resolved(engine.people_context(js(scope.clone()))).await);
@@ -62,6 +65,18 @@ async fn people_abi_preserves_scope_publication_and_winning_identity() {
         page["people"][0]["recordKey"],
         format!("GraphqlContact:{contact}")
     );
+    let snapshot: serde_json::Value = from_js(
+        resolved(engine.contact_snapshot(js(
+            serde_json::json!({"scope":scope,"scan":{"after":null,"limit":500}}),
+        )))
+        .await,
+    );
+    assert_eq!(snapshot["ids"], serde_json::json!([user]));
+    let removal: serde_json::Value = from_js(resolved(engine.contact_reconcile(js(serde_json::json!({"scope":scope,"fence":snapshot["fence"],"viewer":viewer,"requested":snapshot["ids"],"present":[]})))).await);
+    assert_eq!(removal["revisionAdvanced"], true);
+    let answer: serde_json::Value =
+        from_js(resolved(engine.people_read_sql(js(sql.clone()))).await);
+    assert_eq!(answer["outcome"]["rows"], serde_json::json!([]));
     resolved(engine.clear()).await;
     assert!(
         JsFuture::from(engine.people_read_sql(js(sql)))

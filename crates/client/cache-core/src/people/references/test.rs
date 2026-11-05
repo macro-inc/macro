@@ -4,6 +4,7 @@ use crate::people::contact_key;
 fn request(labels: &[&str], matching: ReferenceMatchMode) -> PeopleReferenceRequest {
     PeopleReferenceRequest {
         scope: HydrationScope {
+            contact_fence: None,
             storage_generation: Uuid::from_u128(1),
             identity: "macro|viewer@example.com".into(),
         },

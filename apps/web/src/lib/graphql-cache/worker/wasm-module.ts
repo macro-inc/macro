@@ -1,4 +1,7 @@
 import type {
+  ContactReconcile,
+  ContactSnapshot,
+  ContactSnapshotRequest,
   PeopleContextState,
   PeopleContextUpdate,
   PeopleReferenceRequest,
@@ -115,6 +118,8 @@ export interface CacheEngine {
   search(
     request: SearchCacheArgs & { nowMs: number }
   ): Promise<SearchCachePage>;
+  contactSnapshot?(request: ContactSnapshotRequest): Promise<ContactSnapshot>;
+  contactReconcile?(request: ContactReconcile): Promise<WriteResult>;
   peopleReadSql?(request: PeopleSqlRequest): Promise<PeopleSqlResult>;
   peopleResolveReferences?(
     request: PeopleReferenceRequest

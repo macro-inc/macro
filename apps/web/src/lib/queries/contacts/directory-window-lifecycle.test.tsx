@@ -1,5 +1,6 @@
 import { createNoopCacheHost } from '@graphql-cache/host/noop-host';
 import type { CacheChangeListener, CacheHost } from '@graphql-cache/host/types';
+import { unsupportedContactSync } from '@graphql-cache/people/test-support';
 import { parseCacheRevision } from '@graphql-cache/protocol';
 import { cleanup, render } from '@solidjs/testing-library';
 import {
@@ -146,6 +147,7 @@ it('recovers an initially unavailable offline picker after context publication',
       return () => {};
     },
     people: {
+      ...unsupportedContactSync,
       readSql: async () => ({ kind: 'unsupported' }),
       resolveReferences: async () => ({ kind: 'unsupported' }),
       search,

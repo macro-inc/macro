@@ -269,6 +269,44 @@ pub async fn graphql_cache_people_search(
     engine_handle(&state)?.people_search(request).await
 }
 
+/// Read one bounded contact membership window without exposing names.
+#[tauri::command]
+#[tracing::instrument(skip_all, fields(upstream_traceparent = people_trace_correlation(traceparent.as_deref())))]
+pub async fn graphql_cache_contact_snapshot(
+    state: State<'_, CacheState>,
+    request: cache_core::people::sync::ContactSnapshotRequest,
+    traceparent: Option<String>,
+) -> Result<cache_core::people::sync::ContactSnapshot, String> {
+    engine_handle(&state)?.contact_snapshot(request).await
+}
+
+/// Apply authoritative requested-ID omissions, never omissions from a page scan.
+#[tauri::command]
+#[tracing::instrument(skip_all, fields(upstream_traceparent = people_trace_correlation(traceparent.as_deref())))]
+pub async fn graphql_cache_contact_reconcile<R: Runtime>(
+    app: AppHandle<R>,
+    state: State<'_, CacheState>,
+    request: cache_core::people::sync::ContactReconcile,
+    traceparent: Option<String>,
+) -> Result<WriteResultWire, String> {
+    let result = engine_handle(&state)?.contact_reconcile(request).await?;
+    emit_ops_affected(
+        &app,
+        &result.affected_ops,
+        &result.changed,
+        result.field_changes.as_ref(),
+    );
+    if result.revision_advanced {
+        emit_cache_changed_with_search_changes(
+            &app,
+            &result.revision,
+            result.reset,
+            result.search_changed_buckets.as_ref(),
+        );
+    }
+    Ok(result)
+}
+
 /// Execute a read in local storage; query text and people are never traced.
 #[tauri::command]
 #[tracing::instrument(skip_all, fields(upstream_traceparent = people_trace_correlation(traceparent.as_deref())))]

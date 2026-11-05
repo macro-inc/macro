@@ -1,4 +1,6 @@
 import type { CacheHost } from '@graphql-cache/host/types';
+import { createPeopleCache } from '@graphql-cache/people/host';
+import { unsupportedPeopleTransport } from '@graphql-cache/people/test-support';
 import { INITIAL_CACHE_REVISION } from '@graphql-cache/protocol';
 import { beforeEach, expect, it, vi } from 'vitest';
 import {
@@ -20,6 +22,15 @@ const scope = {
   identity: 'macro|viewer@example.com',
   storageGeneration: '00000000-0000-4000-8000-000000000001',
 };
+const people = createPeopleCache({
+  ...unsupportedPeopleTransport,
+  snapshot: async () => ({
+    fence: scope.storageGeneration,
+    ids: [],
+    nextCursor: null,
+    incomplete: false,
+  }),
+});
 const data = {
   user: {
     id: scope.identity,
@@ -57,7 +68,7 @@ it('fetches only a bounded page and admits it under the original scope before re
       return commit.promise;
     });
   const result = hydrateGraphqlContacts(
-    { hydrateQuery },
+    { hydrateQuery, people },
     scope,
     null,
     new AbortController().signal
@@ -66,7 +77,7 @@ it('fetches only a bounded page and admits it under the original scope before re
   expect(network.query.mock.calls[0][0]).not.toContain('@cacheOnly');
   expect(network.query.mock.calls[0][1]).toEqual({ limit: 500, after: null });
   expect(hydrateQuery.mock.calls[0][0]).toMatchObject({
-    hydrationScope: scope,
+    hydrationScope: { ...scope, contactFence: scope.storageGeneration },
     identity: scope.identity,
     data,
   });
@@ -81,7 +92,7 @@ it('does not write a late network response after its caller is disposed', async 
   const hydrateQuery = vi.fn<CacheHost['hydrateQuery']>();
   const controller = new AbortController();
   const result = hydrateGraphqlContacts(
-    { hydrateQuery },
+    { hydrateQuery, people },
     scope,
     null,
     controller.signal
@@ -123,7 +134,7 @@ it('does not turn a rejected cache admission into a successful checkpoint', asyn
     .mockRejectedValue(new Error('cache hydration scope changed'));
   await expect(
     hydrateGraphqlContacts(
-      { hydrateQuery },
+      { hydrateQuery, people },
       scope,
       'after',
       new AbortController().signal

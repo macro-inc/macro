@@ -1,5 +1,6 @@
 import { createNoopCacheHost } from '@graphql-cache/host/noop-host';
 import type { CacheChangeListener, CacheHost } from '@graphql-cache/host/types';
+import { unsupportedContactSync } from '@graphql-cache/people/test-support';
 import { parseCacheRevision } from '@graphql-cache/protocol';
 import { cleanup, render } from '@solidjs/testing-library';
 import { QueryClient, QueryClientProvider } from '@tanstack/solid-query';
@@ -160,6 +161,7 @@ it.each(['completion', 'context'] as const)(
       },
       people: {
         readSql: async () => ({ kind: 'unsupported' }),
+        ...unsupportedContactSync,
         context: async () =>
           ready ? { kind: 'ready', epoch: GENERATION } : { kind: 'missing' },
         resolveReferences: async () => ({ kind: 'unsupported' }),
@@ -232,6 +234,7 @@ it('does not refetch after a readiness probe completes past disposal', async () 
     disabled: false,
     people: {
       readSql: async () => ({ kind: 'unsupported' }),
+      ...unsupportedContactSync,
       context: async () => {
         entered.resolve();
         await ready.promise;

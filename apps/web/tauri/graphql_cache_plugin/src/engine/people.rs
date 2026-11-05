@@ -9,6 +9,32 @@ use cache_core::{
 };
 
 impl EngineHandle {
+    /// Capture contact-write admission and a bounded optional cached-ID page.
+    pub async fn contact_snapshot(
+        &self,
+        request: cache_core::people::sync::ContactSnapshotRequest,
+    ) -> Result<cache_core::people::sync::ContactSnapshot, String> {
+        self.inner
+            .lock()
+            .await
+            .engine
+            .contact_snapshot(&request)
+            .await
+            .map_err(|error| error.to_string())
+    }
+    /// Remove only requested nonmembers, guarded against intervening authority.
+    pub async fn contact_reconcile(
+        &self,
+        request: cache_core::people::sync::ContactReconcile,
+    ) -> Result<WriteResultWire, String> {
+        let mut state = self.inner.lock().await;
+        let EngineState { engine, ops, .. } = &mut *state;
+        let result = engine
+            .reconcile_contacts(&request)
+            .await
+            .map_err(|error| error.to_string())?;
+        Ok(wire_write_result(ops, result))
+    }
     /// Execute bounded local SQL without allowing account rebinding or remote fallback.
     pub async fn people_read_sql(
         &self,

@@ -12,6 +12,9 @@ pub struct HydrationScope {
     pub storage_generation: Uuid,
     /// Expected authenticated response identity, not a record identifier.
     pub identity: String,
+    /// Captured before a contact fetch. Missing fences cannot write contacts.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub contact_fence: Option<Uuid>,
 }
 
 impl<S: Storage> Engine<S> {
@@ -34,14 +37,7 @@ impl<S: Storage> Engine<S> {
         {
             return Err(EngineError::StaleHydrationScope);
         }
-        self.hydrate_query_with_projections(
-            write.query,
-            write.operation_name,
-            write.variables,
-            write.data,
-            write.identity,
-            projections,
-        )
-        .await
+        self.hydrate_query_fenced(write, projections, scope.contact_fence)
+            .await
     }
 }

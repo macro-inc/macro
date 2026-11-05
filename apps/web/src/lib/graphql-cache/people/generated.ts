@@ -18,6 +18,60 @@ export const MAX_PEOPLE_SQL_BYTES = 524288;
 
 export const MAX_PEOPLE_SQL_INPUT_BYTES = 262144;
 
+export const ContactReconcileSchema = z
+  .object({
+    fence: z.string().uuid(),
+    present: z.array(z.string()).max(500),
+    requested: z.array(z.string()).max(500),
+    scope: z
+      .object({
+        contactFence: z.union([z.string().uuid(), z.null()]).optional(),
+        identity: z.string(),
+        storageGeneration: z.string().uuid(),
+      })
+      .strict(),
+    viewer: z.string(),
+  })
+  .strict();
+
+export type ContactReconcile = z.infer<typeof ContactReconcileSchema>;
+
+export const ContactSnapshotSchema = z.object({
+  fence: z.string().uuid(),
+  ids: z.array(z.string()).max(500),
+  incomplete: z.boolean(),
+  nextCursor: z.union([z.string(), z.null()]).optional(),
+});
+
+export type ContactSnapshot = z.infer<typeof ContactSnapshotSchema>;
+
+export const ContactSnapshotRequestSchema = z
+  .object({
+    scan: z
+      .union([
+        z
+          .object({
+            after: z.union([z.string(), z.null()]).optional(),
+            limit: z.number().int().gte(1).lte(500),
+          })
+          .strict(),
+        z.null(),
+      ])
+      .optional(),
+    scope: z
+      .object({
+        contactFence: z.union([z.string().uuid(), z.null()]).optional(),
+        identity: z.string(),
+        storageGeneration: z.string().uuid(),
+      })
+      .strict(),
+  })
+  .strict();
+
+export type ContactSnapshotRequest = z.infer<
+  typeof ContactSnapshotRequestSchema
+>;
+
 export const PeopleContextStateSchema = z.union([
   z.object({ kind: z.literal('missing') }),
   z.object({ epoch: z.string().uuid(), kind: z.literal('building') }),
@@ -73,7 +127,11 @@ export const PeopleContextUpdateSchema = z
     ]),
     epoch: z.string().uuid(),
     scope: z
-      .object({ identity: z.string(), storageGeneration: z.string().uuid() })
+      .object({
+        contactFence: z.union([z.string().uuid(), z.null()]).optional(),
+        identity: z.string(),
+        storageGeneration: z.string().uuid(),
+      })
       .strict(),
   })
   .strict();
@@ -90,7 +148,11 @@ export const PeopleReferenceRequestSchema = z
       z.literal('anyName'),
     ]),
     scope: z
-      .object({ identity: z.string(), storageGeneration: z.string().uuid() })
+      .object({
+        contactFence: z.union([z.string().uuid(), z.null()]).optional(),
+        identity: z.string(),
+        storageGeneration: z.string().uuid(),
+      })
       .strict(),
   })
   .strict();
@@ -126,7 +188,11 @@ export const PeopleReferenceResultSchema = z.union([
 export type PeopleReferenceResult = z.infer<typeof PeopleReferenceResultSchema>;
 
 export const PeopleScopeSchema = z
-  .object({ identity: z.string(), storageGeneration: z.string().uuid() })
+  .object({
+    contactFence: z.union([z.string().uuid(), z.null()]).optional(),
+    identity: z.string(),
+    storageGeneration: z.string().uuid(),
+  })
   .strict();
 
 export type PeopleScope = z.infer<typeof PeopleScopeSchema>;
@@ -145,7 +211,11 @@ export const PeopleSearchSchema = z
     nowMs: z.number().int(),
     query: z.string(),
     scope: z
-      .object({ identity: z.string(), storageGeneration: z.string().uuid() })
+      .object({
+        contactFence: z.union([z.string().uuid(), z.null()]).optional(),
+        identity: z.string(),
+        storageGeneration: z.string().uuid(),
+      })
       .strict(),
     senderDomain: z.union([z.string(), z.null()]).optional(),
   })
@@ -201,7 +271,11 @@ export const PeopleSqlRequestSchema = z
         .strict(),
     ]),
     scope: z
-      .object({ identity: z.string(), storageGeneration: z.string().uuid() })
+      .object({
+        contactFence: z.union([z.string().uuid(), z.null()]).optional(),
+        identity: z.string(),
+        storageGeneration: z.string().uuid(),
+      })
       .strict(),
   })
   .strict();

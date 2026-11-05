@@ -185,6 +185,7 @@ export function createTauriCacheHost(options: TauriHostOptions): CacheHost {
   let watchUnavailable = false;
   let peopleUnavailable = false;
   let peopleSqlUnavailable = false;
+  let contactSyncUnavailable = false;
   let referencesUnavailable = false;
   let scopedHydrationSupported: Promise<boolean> | undefined;
   // Native binaries before the calendar range index answer `unsupported`, so
@@ -440,6 +441,37 @@ export function createTauriCacheHost(options: TauriHostOptions): CacheHost {
     clientId,
     liveQueries: true,
     people: createPeopleCache({
+      async snapshot(args, traceparent) {
+        await ready;
+        if (contactSyncUnavailable) return { kind: 'unsupported' };
+        try {
+          return await request('graphql_cache_contact_snapshot', {
+            request: args,
+            traceparent,
+          });
+        } catch (error) {
+          if (!isMissingCommand(error, 'graphql_cache_contact_snapshot'))
+            throw error;
+          contactSyncUnavailable = true;
+          return { kind: 'unsupported' };
+        }
+      },
+      async reconcile(args, traceparent) {
+        await ready;
+        if (contactSyncUnavailable) return { kind: 'unsupported' };
+        try {
+          const result = await request<WriteResult>(
+            'graphql_cache_contact_reconcile',
+            { request: args, traceparent }
+          );
+          return result.revision;
+        } catch (error) {
+          if (!isMissingCommand(error, 'graphql_cache_contact_reconcile'))
+            throw error;
+          contactSyncUnavailable = true;
+          return { kind: 'unsupported' };
+        }
+      },
       async readSql(args, traceparent) {
         await ready;
         if (peopleSqlUnavailable) return { kind: 'unsupported' };

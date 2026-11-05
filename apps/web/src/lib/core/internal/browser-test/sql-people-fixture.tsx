@@ -2,8 +2,10 @@ import { fireAndForget } from '@core/util/fireAndForget';
 import { createRetirableCacheHost } from '@graphql-cache/host/retirable-host';
 import type { CacheHost } from '@graphql-cache/host/types';
 import { createWorkerCacheHost } from '@graphql-cache/host/worker-host';
+import { captureContactWriteScope } from '@graphql-cache/people/sync';
 import { runContactBackfill } from '@queries/contacts/backfill';
 import { contactRecordKey } from '@queries/contacts/contact-key';
+import { reconcileContactPage } from '@queries/contacts/reconcile';
 import { createDatabaseSqlQuery } from '@queries/database-sql/create-database-sql-query';
 import { readLocalSql } from '@queries/database-sql/local-read';
 import * as Effect from 'effect/Effect';
@@ -25,8 +27,34 @@ export function SqlPeopleFixture() {
         await Effect.runPromise(
           runContactBackfill(viewer, host, {
             pageDelayMs: 0,
+            reconcilePage: (cache, scope, after, signal) =>
+              reconcileContactPage(
+                cache,
+                scope,
+                after,
+                signal,
+                async (ids) => ({
+                  user: {
+                    id: viewer,
+                    contactsByUserIds: ids.map((userId) => ({
+                      id: contactRecordKey(viewer, userId).slice(
+                        'GraphqlContact:'.length
+                      ),
+                      userId,
+                      email: userId.slice(6),
+                      name: null,
+                    })),
+                  },
+                })
+              ),
             fetchPage: async (cache, scope, after, signal) => {
               signal.throwIfAborted();
+              const guarded = await captureContactWriteScope(
+                cache,
+                scope,
+                signal
+              );
+              if (!guarded) throw new Error('Missing contact write fence');
               const start = after === null ? 0 : Number(after);
               const end = Math.min(start + 500, 1001);
               const nodes = Array.from({ length: end - start }, (_, offset) => {
@@ -55,7 +83,7 @@ export function SqlPeopleFixture() {
                   '{ user { id contacts(limit: 500) { nodes { __typename id userId name email } nextCursor } } }',
                 data: { user: { id: viewer, contacts: { nodes, nextCursor } } },
                 identity: viewer,
-                hydrationScope: scope,
+                hydrationScope: guarded,
               });
               return { user: { id: viewer, contacts: { nextCursor } } };
             },

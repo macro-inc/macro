@@ -1,3 +1,5 @@
+import { createPeopleCache } from '@graphql-cache/people/host';
+import { unsupportedPeopleTransport } from '@graphql-cache/people/test-support';
 import { INITIAL_CACHE_REVISION } from '@graphql-cache/protocol';
 import { hydrateGraphqlContacts } from '@service-storage/graphql-contacts';
 import { render } from '@solidjs/testing-library';
@@ -11,16 +13,32 @@ import {
   subscribeContactCheckpoint,
   useContactBackfill,
 } from './backfill';
+import type { reconcileContactPage } from './reconcile';
 
 vi.mock('@service-storage/graphql-contacts', () => ({
   hydrateGraphqlContacts: vi.fn(),
+  fetchContactDirectoryByIds: vi.fn(),
 }));
 
 const GENERATION = '00000000-0000-4000-8000-000000000001';
 const REPLACEMENT = '00000000-0000-4000-8000-000000000002';
 const viewer = 'macro|viewer@example.com';
+const [account, setAccount] = createSignal({ userId: viewer, session: 0 });
+vi.mock('../auth/use-query-account', () => ({
+  useQueryAccount: () => account,
+}));
 function host() {
   return {
+    people: createPeopleCache({
+      ...unsupportedPeopleTransport,
+      snapshot: async () => ({
+        fence: GENERATION,
+        ids: [],
+        nextCursor: null,
+        incomplete: false,
+      }),
+      reconcile: async () => INITIAL_CACHE_REVISION,
+    }),
     currentStorageGeneration: vi.fn(async () => GENERATION),
     search: vi.fn(async () => ({
       projectionVersion: 5,
@@ -39,6 +57,7 @@ const page = (cursor: string | null) => ({
 
 beforeEach(() => {
   localStorage.clear();
+  setAccount({ userId: viewer, session: 0 });
 });
 
 it('persists only successful progress, resumes failures, and accepts empty pages with a cursor', async () => {
@@ -113,7 +132,7 @@ it('publishes completion only after acknowledgement and persisted checkpoint, wi
     stop();
     window.dispatchEvent(
       new StorageEvent('storage', {
-        key: `graphql-contacts-backfill:v1:${viewer}`,
+        key: `graphql-contacts-backfill:v2:${viewer}`,
         newValue: JSON.stringify(loadContactCheckpoint(viewer, GENERATION)),
       })
     );
@@ -197,7 +216,7 @@ it('coalesces invalidations and refreshes names hourly without graph events', as
   }
 });
 
-it.each(['account', 'generation', 'dispose'])(
+it.each(['account', 'session', 'generation', 'dispose'])(
   'aborts the mounted runner on %s changes',
   async (change) => {
     const cache = host();
@@ -224,6 +243,7 @@ it.each(['account', 'generation', 'dispose'])(
     });
     await started.promise;
     if (change === 'account') setUser(undefined);
+    else if (change === 'session') setAccount({ userId: viewer, session: 1 });
     else if (change === 'generation') setGeneration(1);
     else mounted.unmount();
     await aborted.promise;
@@ -259,8 +279,113 @@ it('interrupts an uncancellable fetch without saving its late cursor', async () 
   });
 });
 
-it('a 100k-directory scan consumes 200 sequential page projections without accumulating payloads', async () => {
+it('does not complete at hydration end, and resumes failed verification without rehydrating', async () => {
+  const cache = host();
+  const fetchPage = vi
+    .fn<typeof hydrateGraphqlContacts>()
+    .mockResolvedValue(page(null));
+  const reconcilePage = vi
+    .fn<typeof reconcileContactPage>()
+    .mockResolvedValueOnce({ nextCursor: 'row-500', incomplete: false })
+    .mockRejectedValueOnce(new Error('offline'));
+  await expect(
+    Effect.runPromise(
+      runContactBackfill(viewer, cache, {
+        fetchPage,
+        reconcilePage,
+        pageDelayMs: 0,
+      })
+    )
+  ).rejects.toThrow();
+  expect(loadContactCheckpoint(viewer, GENERATION)).toMatchObject({
+    phase: 'verify',
+    nextCursor: 'row-500',
+    completedAt: null,
+  });
+  reconcilePage.mockResolvedValueOnce({ nextCursor: null, incomplete: false });
+  await Effect.runPromise(
+    runContactBackfill(viewer, cache, {
+      fetchPage,
+      reconcilePage,
+      pageDelayMs: 0,
+    })
+  );
+  expect(fetchPage).toHaveBeenCalledOnce();
+  expect(reconcilePage.mock.calls.map((call) => call[2])).toEqual([
+    null,
+    'row-500',
+    'row-500',
+  ]);
+  expect(loadContactCheckpoint(viewer, GENERATION).completedAt).not.toBeNull();
+});
+
+it('does not publish completeness when any local verification window is malformed', async () => {
+  const fetchPage = vi
+    .fn<typeof hydrateGraphqlContacts>()
+    .mockResolvedValue(page(null));
+  const reconcilePage = vi
+    .fn<typeof reconcileContactPage>()
+    .mockResolvedValueOnce({ nextCursor: 'next', incomplete: true })
+    .mockResolvedValueOnce({ nextCursor: null, incomplete: false });
+  const result = await Effect.runPromise(
+    runContactBackfill(viewer, host(), {
+      fetchPage,
+      reconcilePage,
+      pageDelayMs: 0,
+    })
+  );
+  expect(result.kind).toBe('partial');
+  expect(loadContactCheckpoint(viewer, GENERATION).completedAt).toBeNull();
+});
+
+it('cancels a late verification acknowledgement without advancing its checkpoint', async () => {
+  const entered = Promise.withResolvers<void>();
+  const pending = Promise.withResolvers<{
+    nextCursor: string | null;
+    incomplete: boolean;
+  }>();
+  const fetchPage = vi
+    .fn<typeof hydrateGraphqlContacts>()
+    .mockResolvedValue(page(null));
+  const reconcilePage = vi
+    .fn<typeof reconcileContactPage>()
+    .mockImplementation(() => {
+      entered.resolve();
+      return pending.promise;
+    });
+  const fiber = Effect.runFork(
+    runContactBackfill(viewer, host(), {
+      fetchPage,
+      reconcilePage,
+      pageDelayMs: 0,
+    })
+  );
+  await entered.promise;
+  await Effect.runPromise(Fiber.interrupt(fiber));
+  expect(reconcilePage.mock.calls[0][3].aborted).toBe(true);
+  pending.resolve({ nextCursor: 'late', incomplete: false });
+  await pending.promise;
+  expect(loadContactCheckpoint(viewer, GENERATION)).toMatchObject({
+    phase: 'verify',
+    nextCursor: null,
+    completedAt: null,
+  });
+});
+
+it('a 100k-directory scan consumes bounded hydration and verification windows without accumulating payloads', async () => {
   let pages = 0;
+  let verified = 0;
+  const reconcilePage = vi.fn<typeof reconcileContactPage>(
+    async (_host, _scope, after) => {
+      expect(after).toBe(verified ? `verify-${verified}` : null);
+      expect(loadContactCheckpoint(viewer, GENERATION).completedAt).toBeNull();
+      verified++;
+      return {
+        nextCursor: verified === 200 ? null : `verify-${verified}`,
+        incomplete: false,
+      };
+    }
+  );
   const fetchPage = vi
     .fn<typeof hydrateGraphqlContacts>()
     .mockImplementation(async (_host, _scope, after) => {
@@ -269,11 +394,16 @@ it('a 100k-directory scan consumes 200 sequential page projections without accum
       return page(pages === 200 ? null : `page-${pages}`);
     });
   await Effect.runPromise(
-    runContactBackfill(viewer, host(), { fetchPage, pageDelayMs: 0 })
+    runContactBackfill(viewer, host(), {
+      fetchPage,
+      reconcilePage,
+      pageDelayMs: 0,
+    })
   );
   expect(pages).toBe(200);
+  expect(verified).toBe(200);
   expect(loadContactCheckpoint(viewer, GENERATION).pages).toBe(200);
   expect(
-    localStorage.getItem(`graphql-contacts-backfill:v1:${viewer}`)!.length
+    localStorage.getItem(`graphql-contacts-backfill:v2:${viewer}`)!.length
   ).toBeLessThan(300);
 });

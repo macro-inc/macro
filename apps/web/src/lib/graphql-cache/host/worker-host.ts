@@ -1349,6 +1349,10 @@ export function createWorkerCacheHost(options: WorkerHostOptions): CacheHost {
     clientId,
     liveQueries: true,
     people: createPeopleCache({
+      snapshot: (request, traceparent) =>
+        initializedRequest({ kind: 'contact-snapshot', request, traceparent }),
+      reconcile: (request, traceparent) =>
+        initializedRequest({ kind: 'contact-reconcile', request, traceparent }),
       readSql: (request, traceparent) =>
         initializedRequest({ kind: 'people-sql', request, traceparent }),
       resolveReferences: (request, traceparent) =>

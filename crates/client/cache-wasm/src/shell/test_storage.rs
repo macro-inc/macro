@@ -67,6 +67,15 @@ impl BrowserStorage {
 impl Storage for BrowserStorage {
     type Error = TursoStorageError;
 
+    async fn scan_contact_records(
+        &self,
+        after: Option<&str>,
+        limit: usize,
+        visit: impl FnMut(&EntityKey<'_>, &Record),
+    ) -> Result<Option<String>, Self::Error> {
+        self.inner.scan_contact_records(after, limit, visit).await
+    }
+
     async fn read_people_sql(
         &self,
         viewer: &str,

@@ -22,6 +22,9 @@ pub fn schemas() -> serde_json::Value {
             "PeopleReferenceResult": schemars::schema_for!(PeopleReferenceResult),
             "PeopleSqlRequest": schemars::schema_for!(sql::PeopleSqlRequest),
             "PeopleSqlResult": schemars::schema_for!(sql::PeopleSqlResult),
+            "ContactSnapshotRequest": schemars::schema_for!(sync::ContactSnapshotRequest),
+            "ContactSnapshot": schemars::schema_for!(sync::ContactSnapshot),
+            "ContactReconcile": schemars::schema_for!(sync::ContactReconcile),
         }
     })
 }

@@ -1,5 +1,6 @@
 import { createNoopCacheHost } from '@graphql-cache/host/noop-host';
 import type { PeopleCache } from '@graphql-cache/people/host';
+import { unsupportedContactSync } from '@graphql-cache/people/test-support';
 import { render } from '@solidjs/testing-library';
 import { QueryClient, QueryClientProvider } from '@tanstack/solid-query';
 import { createEffect, createSignal } from 'solid-js';
@@ -50,6 +51,7 @@ it('replaces ranked windows, forwards queries, excludes inboxes and retains no q
       data: { user: { id: viewer } },
     }),
     people: {
+      ...unsupportedContactSync,
       readSql: vi
         .fn<PeopleCache['readSql']>()
         .mockResolvedValue({ kind: 'unsupported' }),

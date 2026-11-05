@@ -1,4 +1,6 @@
 import type { CacheHost } from '@graphql-cache/host/types';
+import { createPeopleCache } from '@graphql-cache/people/host';
+import { unsupportedPeopleTransport } from '@graphql-cache/people/test-support';
 import { INITIAL_CACHE_REVISION } from '@graphql-cache/protocol';
 import type { fetchContactDirectoryByIds } from '@service-storage/graphql-contacts';
 import { CombinedError } from '@urql/core';
@@ -32,6 +34,15 @@ function contact(userId: string) {
 function host() {
   return {
     clientId: 'fixture',
+    people: createPeopleCache({
+      ...unsupportedPeopleTransport,
+      snapshot: async () => ({
+        fence: GENERATION,
+        ids: [],
+        nextCursor: null,
+        incomplete: false,
+      }),
+    }),
     currentStorageGeneration: vi.fn(async () => GENERATION),
     readQuery: vi
       .fn<CacheHost['readQuery']>()
@@ -160,7 +171,11 @@ it('preserves requested ordering and warms only the bounded lookup under its ori
   expect(result.users.map((user) => user.id)).toEqual([OTHER, PERSON]);
   expect(cache.hydrateQuery).toHaveBeenCalledWith(
     expect.objectContaining({
-      hydrationScope: { identity: VIEWER, storageGeneration: GENERATION },
+      hydrationScope: {
+        identity: VIEWER,
+        storageGeneration: GENERATION,
+        contactFence: GENERATION,
+      },
       variables: { userIds: [OTHER, PERSON] },
     })
   );

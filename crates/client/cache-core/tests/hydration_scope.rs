@@ -4,10 +4,6 @@ use cache_core::value::EntityKey;
 use pollster::block_on;
 use serde_json::json;
 
-const DOCUMENT: &str = include_str!(
-    "../../../../apps/web/src/lib/service-clients/service-storage/graphql/contacts.graphql"
-);
-
 #[test]
 fn guarded_hydration_binds_fresh_storage_and_survives_engine_replacement() {
     block_on(async {
@@ -15,12 +11,13 @@ fn guarded_hydration_binds_fresh_storage_and_survives_engine_replacement() {
         let scope = HydrationScope {
             storage_generation: engine.current_storage_generation().await.unwrap(),
             identity: "viewer".into(),
+            contact_fence: None,
         };
-        let variables = json!({"limit": 500, "after": null});
-        let data = json!({"user": {"id": "viewer", "contacts": {"nodes": [{"id":"contact", "userId":"macro|person@example.com", "email":"person@example.com", "name":null}], "nextCursor": "next"}}});
+        let variables = json!({});
+        let data = json!({"user": {"id": "viewer"}});
         let write = NetworkWrite {
-            query: DOCUMENT,
-            operation_name: Some("ContactDirectoryBackfill"),
+            query: "{ user { id } }",
+            operation_name: None,
             variables: variables.as_object().unwrap(),
             data: &data,
             identity: Some("viewer"),
@@ -40,10 +37,7 @@ fn guarded_hydration_binds_fresh_storage_and_survives_engine_replacement() {
             .await
             .unwrap();
         assert!(!duplicate.write_result.revision_advanced);
-        assert_eq!(
-            duplicate.data.unwrap()["user"]["contacts"],
-            json!({"nextCursor": "next"})
-        );
+        assert_eq!(duplicate.data.unwrap()["user"], json!({"id": "viewer"}));
         assert_eq!(
             reopened.current_storage_generation().await.unwrap(),
             scope.storage_generation
@@ -58,6 +52,7 @@ fn late_responses_never_repopulate_cleared_storage() {
         let scope = HydrationScope {
             storage_generation: engine.current_storage_generation().await.unwrap(),
             identity: "viewer".into(),
+            contact_fence: None,
         };
         engine.clear().await.unwrap();
         // Admission precedes even parsing, and does not recreate missing metadata.
@@ -119,6 +114,7 @@ fn response_and_bound_account_must_both_match_the_captured_scope() {
             let scope = HydrationScope {
                 storage_generation: generation,
                 identity: expected.into(),
+                contact_fence: None,
             };
             let write = NetworkWrite {
                 query: "obsolete invalid query",

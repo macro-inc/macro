@@ -59,7 +59,7 @@ wasm-bindgen shell exposing `cache-core` + `cache-turso` + `turso-opfs` as a
 - Email send persistence and cancellation belong to the frontend email journal, not the normalized cache or its mutation queue.
 
 - Search uses the shared core's bounded ranker over streamed Turso matches; browser parity coverage lives in `cache-turso/tests/web.rs`.
-- Hydration forwards an optional shared-core `HydrationScope`; stale pages reject before persistence without changing identity. `shell/test/hydration_scope.rs` covers the real browser ABI. Coordinator protocol 16 also carries local people SQL without dropping hydration/person-policy scopes. Missing SQL or reference support is independent of existing person search support; neither may fall back to directory enumeration or remote query execution.
+- Hydration forwards an optional shared-core `HydrationScope`; stale pages reject before persistence without changing identity. `shell/test/hydration_scope.rs` covers the real browser ABI. Coordinator protocol 17 also carries contact snapshots/reconciliation and local people SQL without dropping hydration/person-policy scopes. Missing sync, SQL or reference support is independent of existing person search support; none may fall back to directory enumeration, unguarded contact writes or remote SQL. `contactSnapshot` captures admission before fetching; `contactReconcile` publishes ordinary committed invalidations for removals. Contact hydration must forward `HydrationScope.contactFence` unchanged.
 - The engine is guarded by an async mutex so overlapping JS calls serialize
   instead of causing reentrancy — don't bypass it with a second entry point.
 - Compiles to an empty shell off-wasm specifically so plain `cargo test` across

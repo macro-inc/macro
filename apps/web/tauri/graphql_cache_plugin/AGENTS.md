@@ -28,7 +28,8 @@ From the repository root:
 
 ## Gotchas
 
-- Hold the engine lock across scoped hydration's generation/identity check and
+- `graphql_cache_contact_snapshot` and `graphql_cache_contact_reconcile` reuse the existing engine and exact-lookup backfill lane; return only bounded IDs/scalar progress and publish committed invalidations after removals. Older binaries must explicitly refuse this capability without disabling context/search.
+- Hold the engine lock across scoped hydration's generation/identity/contact-fence check and
   write. A stale background response must not clear or rebind the current account.
 - OTA JS cannot add native policy: scoped hydration requires projection 5 and
   the distinct `graphql_cache_hydrate_scoped` command. Never fall back to the

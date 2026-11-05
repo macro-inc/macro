@@ -1,4 +1,5 @@
-use cache_core::engine::Engine;
+use cache_core::engine::{Engine, HydrationScope, NetworkWrite};
+use cache_core::people::sync::ContactSnapshotRequest;
 use cache_core::record_selection::RecordSelection;
 use cache_core::search::{QUICK_ACCESS_PROJECTION_VERSION, SearchProfile, SearchRequest};
 use cache_core::store::Storage;
@@ -14,7 +15,22 @@ const PAGE_SIZE: usize = 500;
 
 /// Persist bounded pages without retaining a directory-sized fixture in the test.
 pub async fn hydrate_contacts<S: Storage>(engine: &mut Engine<S>, pages: usize) {
+    let mut scope = HydrationScope {
+        identity: VIEWER.into(),
+        storage_generation: engine.current_storage_generation().await.unwrap(),
+        contact_fence: None,
+    };
     for page in 0..pages {
+        scope.contact_fence = Some(
+            engine
+                .contact_snapshot(&ContactSnapshotRequest {
+                    scope: scope.clone(),
+                    scan: None,
+                })
+                .await
+                .unwrap()
+                .fence,
+        );
         let nodes: Vec<_> = (page * PAGE_SIZE..(page + 1) * PAGE_SIZE)
             .map(|index| {
                 json!({
@@ -33,12 +49,16 @@ pub async fn hydrate_contacts<S: Storage>(engine: &mut Engine<S>, pages: usize) 
         let data =
             json!({"user": {"id": VIEWER, "contacts": {"nodes": nodes, "nextCursor": next}}});
         let result = engine
-            .hydrate_query(
-                DOCUMENT,
-                Some("ContactDirectoryBackfill"),
-                variables.as_object().unwrap(),
-                &data,
-                Some(VIEWER),
+            .hydrate_query_in_scope(
+                NetworkWrite {
+                    query: DOCUMENT,
+                    operation_name: Some("ContactDirectoryBackfill"),
+                    variables: variables.as_object().unwrap(),
+                    data: &data,
+                    identity: Some(VIEWER),
+                },
+                &scope,
+                vec![],
             )
             .await
             .unwrap();
@@ -144,16 +164,46 @@ pub async fn assert_contact_search<S: Storage>(engine: &mut Engine<S>, total: us
 pub async fn assert_account_reset<S: Storage>(engine: &mut Engine<S>) {
     let old_generation = engine.current_storage_generation().await.unwrap();
     let viewer = "macro|other@example.com";
+    engine
+        .write_query(
+            None,
+            "{ user { id } }",
+            None,
+            &serde_json::Map::new(),
+            &json!({"user":{"id":viewer}}),
+            Some(viewer),
+        )
+        .await
+        .unwrap();
+    let mut scope = HydrationScope {
+        identity: viewer.into(),
+        storage_generation: engine.current_storage_generation().await.unwrap(),
+        contact_fence: None,
+    };
+    scope.contact_fence = Some(
+        engine
+            .contact_snapshot(&ContactSnapshotRequest {
+                scope: scope.clone(),
+                scan: None,
+            })
+            .await
+            .unwrap()
+            .fence,
+    );
     let data = json!({"user": {"id": viewer, "contacts": {"nodes": [{"id": "other-contact", "userId": "macro|other@example.com", "email": "other@example.com", "name": "Other"}], "nextCursor": null}}});
     engine
-        .hydrate_query(
-            DOCUMENT,
-            Some("ContactDirectoryBackfill"),
-            json!({"limit": PAGE_SIZE, "after": null})
-                .as_object()
-                .unwrap(),
-            &data,
-            Some(viewer),
+        .hydrate_query_in_scope(
+            NetworkWrite {
+                query: DOCUMENT,
+                operation_name: Some("ContactDirectoryBackfill"),
+                variables: json!({"limit": PAGE_SIZE, "after": null})
+                    .as_object()
+                    .unwrap(),
+                data: &data,
+                identity: Some(viewer),
+            },
+            &scope,
+            vec![],
         )
         .await
         .unwrap();

@@ -48,6 +48,7 @@ fn spawn_handle() -> EngineHandle {
 fn scoped_native_hydration_rejects_late_pages_after_clear() {
     let handle = spawn_handle();
     let scope = HydrationScope {
+        contact_fence: None,
         storage_generation: block_on(handle.current_storage_generation())
             .unwrap()
             .parse()

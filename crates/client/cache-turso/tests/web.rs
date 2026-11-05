@@ -13,12 +13,36 @@ use wasm_bindgen_test::*;
 
 wasm_bindgen_test_configure!(run_in_dedicated_worker);
 
+#[path = "common/contact_sync.rs"]
+mod contact_sync;
 #[path = "common/contacts.rs"]
 mod contacts;
 #[path = "common/people.rs"]
 mod people;
 #[path = "common/people_sql.rs"]
 mod people_sql;
+
+#[wasm_bindgen_test(async)]
+async fn authoritative_contact_removal_is_scoped_and_fenced_over_opfs() {
+    let owner = OpfsOwner::acquire("cache-contact-sync.db")
+        .await
+        .unwrap()
+        .recovery_wipe()
+        .await
+        .unwrap();
+    let OpenResult::Ready(session) = owner.open().await.unwrap() else {
+        panic!("fresh storage");
+    };
+    let storage =
+        TursoStorage::from_opfs_session(session.connect().unwrap(), "contact-sync").unwrap();
+    let storage = contact_sync::contract(storage).await;
+    healthy_close(storage.try_close().unwrap())
+        .preserve()
+        .unwrap()
+        .release()
+        .await
+        .unwrap();
+}
 
 #[wasm_bindgen_test(async)]
 async fn local_people_sql_executes_over_opfs() {
@@ -36,6 +60,7 @@ async fn local_people_sql_executes_over_opfs() {
     let mut engine = Engine::with_capacity(storage, 16);
     let scope = people_sql::seed(&mut engine, 1_000).await;
     let engine = people_sql::contract(engine, &scope, 1_000).await;
+    let engine = contact_sync::verify(engine, &scope, 1_000).await;
     healthy_close(engine.into_storage().try_close().unwrap())
         .preserve()
         .unwrap()

@@ -11,7 +11,8 @@ fn native_person_policy_preserves_scope_and_publication() {
         let viewer = "macro|viewer@example.com";
         let user = "macro|person@example.com";
         let contact = "8b6318fd-4063-5ddb-90c2-83a401b63538";
-        let scope = HydrationScope {
+        let mut scope = HydrationScope {
+            contact_fence: None,
             storage_generation: handle
                 .current_storage_generation()
                 .await
@@ -23,6 +24,16 @@ fn native_person_policy_preserves_scope_and_publication() {
         assert_eq!(
             handle.people_context(scope.clone()).await.unwrap(),
             ContextState::Missing
+        );
+        scope.contact_fence = Some(
+            handle
+                .contact_snapshot(cache_core::people::sync::ContactSnapshotRequest {
+                    scope: scope.clone(),
+                    scan: None,
+                })
+                .await
+                .unwrap()
+                .fence,
         );
         handle.hydrate_query(
             "{ user { id contacts(limit: 1) { nodes { __typename id userId name email } nextCursor } } }".into(),
@@ -115,6 +126,32 @@ fn native_person_policy_preserves_scope_and_publication() {
             people[0].record_key.0.to_string(),
             format!("GraphqlContact:{contact}")
         );
+        let snapshot = handle
+            .contact_snapshot(cache_core::people::sync::ContactSnapshotRequest {
+                scope: scope.clone(),
+                scan: Some(cache_core::people::sync::ContactScan {
+                    after: None,
+                    limit: 500,
+                }),
+            })
+            .await
+            .unwrap();
+        assert_eq!(snapshot.ids.len(), 1);
+        let removal = handle
+            .contact_reconcile(cache_core::people::sync::ContactReconcile {
+                scope: scope.clone(),
+                fence: snapshot.fence,
+                viewer: viewer.into(),
+                requested: snapshot.ids,
+                present: vec![],
+            })
+            .await
+            .unwrap();
+        assert!(removal.revision_advanced);
+        assert_eq!(removal.changed.len(), 1);
+        let answer =
+            serde_json::to_value(handle.people_read_sql(sql.clone()).await.unwrap()).unwrap();
+        assert_eq!(answer["outcome"]["rows"], serde_json::json!([]));
         handle.clear().await.unwrap();
         assert_eq!(
             handle.people_read_sql(sql).await.err().as_deref(),

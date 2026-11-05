@@ -1,4 +1,5 @@
 //! Account-fenced local facts and streamed before-limit person ranking.
+mod sync;
 use super::*;
 use crate::people::{
     self, ContextAction, ContextState, ContextUpdate, MAX_PEOPLE_BATCH, PeopleError,

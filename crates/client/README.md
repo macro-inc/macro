@@ -304,8 +304,16 @@ suite hydrate the real client operation, reopen, search, materialize bounded
 fragments with target `userId` intact, and reset account identity. The background
 runner now shares Soup's leadership and commits pages through `HydrationScope`:
 expected/response identity and durable generation must still match under the
-engine lock. Legacy unscoped foreground behavior is unchanged. UI migration and
-removal reconciliation remain in the [contacts plan](../../docs/design/disk-backed-contacts.md).
+engine lock. Contact writes additionally capture a single-owner engine admission
+fence before fetching. Accepted responses consume it even when values are identical;
+old hydration cannot resurrect verified removals, and old absence evidence cannot
+delete a newer positive observation. Unfenced network/optimistic contact writes reject.
+The same backfill then verifies existing membership in bounded raw-key windows using
+the existing exact lookup. Only successful requested-ID omissions permit deletion;
+scan omissions do not. Checkpoint v2 tracks hydration/verification and completes
+only after an exhaustive, non-malformed verification pass. Context-only stubs,
+explicit selections and shared name labels do not establish membership. See the
+[contacts plan](../../docs/design/disk-backed-contacts.md) for remaining acceptance.
 
 ### Context-aware person ranking
 

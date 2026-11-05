@@ -5,6 +5,7 @@ import {
   isPeopleReferenceRequest,
   type PeopleReferenceRequest,
 } from './protocol';
+import { unsupportedContactSync } from './test-support';
 
 const REQUEST: PeopleReferenceRequest = {
   scope: {
@@ -54,6 +55,7 @@ it('requires one bounded evidence group per label and preserves scope failures',
     matches: [{ complete: true, people: [person] }],
   };
   const transport = {
+    ...unsupportedContactSync,
     readSql: vi.fn().mockResolvedValue({ kind: 'unsupported' }),
     resolveReferences: vi.fn().mockResolvedValue(response),
     context: vi.fn(),
