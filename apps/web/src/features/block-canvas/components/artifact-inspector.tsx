@@ -3,6 +3,7 @@ import {
   type ArtifactContent,
   type ArtifactItem,
 } from '@macro-inc/graphics';
+import { Button, Input } from '@ui';
 import { InspectorField } from './inspector-field';
 import { InspectorSection } from './inspector-section';
 
@@ -17,8 +18,8 @@ export function ArtifactInspector(props: {
   return (
     <InspectorSection title="Artifact">
       <InspectorField label="Title">
-        <input
-          class="w-full rounded border border-edge-muted bg-panel px-2 py-1 text-xs text-ink outline-none focus:border-edge-focus"
+        <Input
+          size="sm"
           aria-label="Artifact title"
           value={props.item.geometry.title}
           onChange={(event) =>
@@ -38,31 +39,27 @@ export function ArtifactInspector(props: {
           }
         />
       </InspectorField>
-      <button
-        type="button"
-        class="w-full rounded px-2 py-1 text-xs text-accent hover:bg-hover"
-        onClick={props.onPresent}
-      >
+      <Button variant="ghost" size="sm" onClick={props.onPresent}>
         Present
-      </button>
+      </Button>
       <InspectorField label={`Presented ${props.position} of ${props.count}`}>
         <div class="flex gap-1">
-          <button
-            type="button"
-            class="flex-1 rounded px-2 py-1 text-xs text-accent hover:bg-hover disabled:text-ink-muted"
+          <Button
+            variant="ghost"
+            size="sm"
             disabled={props.position <= 1}
             onClick={() => props.onMove(-1)}
           >
             Earlier
-          </button>
-          <button
-            type="button"
-            class="flex-1 rounded px-2 py-1 text-xs text-accent hover:bg-hover disabled:text-ink-muted"
+          </Button>
+          <Button
+            variant="ghost"
+            size="sm"
             disabled={props.position >= props.count}
             onClick={() => props.onMove(1)}
           >
             Later
-          </button>
+          </Button>
         </div>
       </InspectorField>
     </InspectorSection>

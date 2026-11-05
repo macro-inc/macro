@@ -99,10 +99,12 @@ export function CanvasNextEditor(props: {
     <ArtifactLibraryContext.Provider
       value={{
         library: artifactLibrary,
-        edit:
-          backend && props.canEdit && !props.isEmbedded
+        // Read when used, so a change of access while open takes effect.
+        get edit() {
+          return backend && props.canEdit && !props.isEmbedded
             ? backend.artifactLibrary.edit
-            : undefined,
+            : undefined;
+        },
       }}
     >
       <StaticMarkdownContext>

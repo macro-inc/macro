@@ -35,6 +35,7 @@ export function artifactThemeTokens(element: Element): Record<string, string> {
   );
 }
 
+<<<<<<< HEAD
 /**
  * Focus inside a frame keeps keys from the host, so the host cannot exit or step
  * through a presentation. Forward the few it needs, unless the artifact handled
@@ -50,7 +51,12 @@ const KEY_BRIDGE = `addEventListener('keydown', function (event) {
 });`;
 
 /** Bounds cycles and fan-out between components that use each other. */
+=======
+/** Bound cycles and fan-out between components. Expansion runs on the host's main
+ * thread, and a peer can store entries past the authoring limit. */
+>>>>>>> eric/canvas-artifact-library
 const MAX_COMPONENT_EXPANSIONS = 500;
+const MAX_EXPANDED_LENGTH = 2_000_000;
 
 const entry = (
   entries: Readonly<Record<string, string>>,
@@ -65,20 +71,29 @@ const entry = (
  */
 function expandLibrary(parsed: Document, library: ArtifactLibrary) {
   let expansions = 0;
+  let expandedLength = 0;
   for (;;) {
     const use = parsed.querySelector('macro-component');
     if (!use) break;
 
+    const source = entry(library.components, use.getAttribute('name'));
     expansions += 1;
-    const source =
-      expansions <= MAX_COMPONENT_EXPANSIONS
-        ? entry(library.components, use.getAttribute('name'))
-        : undefined;
+    expandedLength += source?.length ?? 0;
+    if (
+      expansions > MAX_COMPONENT_EXPANSIONS ||
+      expandedLength > MAX_EXPANDED_LENGTH
+    )
+      break;
+
     const template = parsed.createElement('template');
     template.innerHTML = source ?? '<slot></slot>';
     template.content.querySelector('slot')?.replaceWith(...use.childNodes);
     use.replaceWith(template.content);
   }
+
+  // Past the budget, keep what the remaining uses wrap without expanding them.
+  for (const use of parsed.querySelectorAll('macro-component'))
+    use.replaceWith(...use.childNodes);
 
   for (const use of parsed.querySelectorAll('macro-style')) {
     const source = entry(library.styles, use.getAttribute('name'));
