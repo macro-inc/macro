@@ -39,7 +39,7 @@ export default {
   chatBlock: 'Macro Chat',
   chatSnippet:
     'Mention anything, turn messages into tasks, inline replies and a real inbox',
-  chatLength: '1:33',
+  chatLength: '1:30',
   callsTitle: 'Learn how to use Macro Calls',
   callsBlock: 'Macro Calls',
   callsSnippet:
