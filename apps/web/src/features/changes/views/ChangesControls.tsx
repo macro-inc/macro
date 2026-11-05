@@ -6,6 +6,7 @@
 
 import { HeaderActionGroup } from '@components/app/HeaderActionGroup';
 import { createSignal, Show } from 'solid-js';
+import { ScreenToggle } from '../../computer-screen/views/screen-toggle';
 import { ChangesReadyCard } from '../components/ChangesReadyCard';
 import { ChangesToggleButton } from '../components/ChangesToggleButton';
 import { ReviewNotesChip } from '../components/ReviewNotesChip';
@@ -16,15 +17,18 @@ export function ChangesToggle() {
   if (!controller) return null;
   const { available, layout } = controller;
   return (
-    <Show when={available()}>
-      <HeaderActionGroup label="Changes view">
-        <ChangesToggleButton
-          grouped
-          open={layout.changesVisible()}
-          onToggle={layout.toggle}
-        />
-      </HeaderActionGroup>
-    </Show>
+    <>
+      <ScreenToggle />
+      <Show when={available()}>
+        <HeaderActionGroup label="Changes view">
+          <ChangesToggleButton
+            grouped
+            open={layout.changesVisible()}
+            onToggle={layout.toggle}
+          />
+        </HeaderActionGroup>
+      </Show>
+    </>
   );
 }
 

@@ -1812,6 +1812,20 @@ The display choice survives reload and copying; expansion still references the
 same session and does not invoke a bot. Compact mentions do not load transcripts.
 Existing announcement chips remain locked to the turn they announced.
 
+### Watching a computer screen
+
+A session whose registered harness reports the `screen` capability offers
+**Screen** beside **Changes**. It opens a resizable pane beside the transcript;
+on phones and narrow panes it fills the pane. **Close screen** returns to the
+transcript. Watching is the default: pointer and keyboard events are disabled.
+On desktop, session editors can press **Take control**, which reconnects with
+control enabled. **Stop controlling** reconnects in watch mode. Losing edit
+access also returns to watch mode; touch devices always remain watch-only.
+The service separately enforces harness permissions. A failed connection shows
+an inline error and **Retry**. Closing the pane disconnects the screen stream.
+The pane connects to `GET /harnesses/{harness_id}/screen` on the agent harness
+service, adding `?control=true` only for control.
+
 ### Reviewing a linked GitHub pull request
 
 Sessions with a linked GitHub pull request capture that PR's diff when each

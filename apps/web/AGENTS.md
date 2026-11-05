@@ -1038,6 +1038,24 @@ Reuse the responsive import review for Notion, Linear and Jira; scope report
 queries and cancellation to the saved draft source. Issue tracker handoffs
 call the reviewed workspace tools, and show separate task/project totals.
 
+### Computer screen and Claude access
+
+`features/computer-screen` owns the noVNC pane, watch/control connection
+lifecycle, and `screen` search namespace (`s0.screen.pane=split`). Session hosts
+compose `AgentComputerScreen` around their Changes split and register
+`screenSearch.namespace`; `ChangesToggle` places its Screen toggle beside Changes.
+Resolve a session's computer through its bot's current harness binding, matching
+the backend's `session_harness` lookup; require `capabilities.screen`. Keep
+noVNC lazy-loaded, refresh socket auth like the sync router, default to view-only,
+and reconnect when control changes. Touch devices remain watch-only.
+Settings computer rows compose `ComputerClaudeAccess`; managers fetch
+`claude-mode`, while other members read the harness list's `claude_mode`.
+The backend also requires management rights for Claude account changes.
+Focused tests: `bun run test src/features/computer-screen src/features/settings/computers/views/computer-claude-access.test.tsx`.
+For a backend-free visual check, run
+`bunx vite --config src/features/computer-screen/browser-test/vite.config.ts`;
+it renders the real panes and Claude form over scripted transports.
+
 ### Agent backend hosting
 
 Cognition, routines, preview control, and MCP share `agent_harness_service`.
