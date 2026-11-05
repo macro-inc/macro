@@ -44,3 +44,9 @@ A single host phase (`docked`, `closing`, or `overlay`) controls mounting.
 Breakpoint transitions own host changes; pin changes only animate the active
 host and do not cancel a pending narrow exit.
 Reduced-motion and browsers without WAAPI switch hosts immediately.
+
+A view whose aside is its entity list (Chat, Notifications) passes `asideList`.
+Narrow, it bypasses the overlay: the list fills the shell over an inert Main
+until `open`, then Main fills it and `ViewNavigationControls` shows Back,
+calling `onBack`, in place of Show navigation. Collapse controls and `Cmd+.` are
+off there; wide layouts are unchanged.
