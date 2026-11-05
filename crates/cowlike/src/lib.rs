@@ -92,4 +92,6 @@ where
         }
     }
 }
-// ci-speed gen-base 1
+
+/// Timing probe.
+pub const CI_SPEED_GEN_BASE: u32 = 1;
