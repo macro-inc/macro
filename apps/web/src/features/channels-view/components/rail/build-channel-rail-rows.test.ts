@@ -610,6 +610,17 @@ it.each([true, false])(
     );
     const grouped = groupChannelRailSections(rows);
 
+    expect([...grouped.keys()]).toEqual([
+      'favorites',
+      'direct_messages',
+      'team_channels',
+      'label:manual',
+      'label:smart',
+      'channels',
+    ]);
+    expect(grouped.get('team_channels')?.rows.map((row) => row.id)).toEqual([
+      'status:team_channels',
+    ]);
     expect(grouped.get('channels')?.rows.map((row) => row.id)).toEqual([
       'channel:public',
       'channel:private',

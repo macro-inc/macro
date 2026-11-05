@@ -65,6 +65,15 @@ describe('publicationMessage', () => {
         detail,
         publicationError: {
           kind: 'layout',
+          problem: { kind: 'conditionNamesLaterColumn', column: 'column' },
+        },
+      })
+    ).toBe('“Name” must come before the section shown depending on it.');
+    expect(
+      publicationMessage({
+        detail,
+        publicationError: {
+          kind: 'layout',
           problem: { kind: 'unknownColumn', column: 'deleted-column' },
         },
       })

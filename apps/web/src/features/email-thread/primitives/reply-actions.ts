@@ -18,6 +18,12 @@ export function openEmailReplyComposerForMessage(args: {
   const messageId = args.message.db_id;
   if (!messageId) return false;
 
+  const permissions = args.ctx.permissions();
+  if (!permissions.canReply) return false;
+  // A forward re-sends the message's attachments, which only the inbox holding
+  // them can do; recipients of a shared thread reply instead.
+  if (args.replyType === 'forward' && !permissions.isOwner) return false;
+
   // The reply type and focus land through the reply request: the mounted
   // composer's effect applies them to its own (seed-keyed) form instance.
   // Writing to the form registry from here would target the wrong entry —

@@ -173,6 +173,7 @@ function SectionHeading(props: { group: 'favorites' | ChannelsGroup }) {
     if (props.group === 'channels') {
       return t('channelSections.allChannels');
     }
+
     return t(`channelSections.${props.group}`);
   };
 
@@ -372,9 +373,11 @@ function BrowseSection(props: {
       ],
       () => {
         if (!outerScroll()) return;
+
         const frame = requestAnimationFrame(() => {
           let element: HTMLElement | undefined = scrollRoot();
           let offset = 0;
+
           while (element && element !== props.outerScrollRoot) {
             offset += element.offsetTop;
             element =
@@ -382,6 +385,7 @@ function BrowseSection(props: {
                 ? element.offsetParent
                 : undefined;
           }
+
           setStartMargin(offset);
         });
         onCleanup(() => cancelAnimationFrame(frame));
@@ -413,9 +417,11 @@ function BrowseSection(props: {
 
   const label = () => {
     const row = heading();
+
     if (row.kind === 'section' && row.group === 'channels') {
       return t('channelSections.allChannels');
     }
+
     return row.kind === 'label'
       ? row.label.name
       : t(`channelSections.${row.group}`);
@@ -509,6 +515,7 @@ function BrowseSection(props: {
       maxHeight={props.maxHeight}
       dropEdge={props.sectionReorder.dropEdge(props.sectionKey)}
       dragging={props.sectionReorder.isDragging(props.sectionKey)}
+      outerScrollRoot={props.outerScrollRoot}
       itemCount={itemCount()}
       onResizingChange={setResizing}
       rootRef={(element) => {

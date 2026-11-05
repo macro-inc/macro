@@ -359,6 +359,35 @@ reminder dispatch, team availability, and provider/Postgres persistence.
   removing a source whose typed `event_type` is out of office raises it, since
   every sync of a removed meeting's attendees reaches their teammates' calendars
   and the hint blanks their overlay.
+- The Outlook sync (`src/domain/outlook.rs`) refreshes a page's events one
+  at a time, first pending id first, and retries that id after any error, so
+  one error blocks the calendar. An event the adapter cannot normalize is not
+  an error: it comes back as `OutlookEventRefresh::Unreadable` with the Graph
+  property it rejected, and the sync skips it, as Google never shows an event
+  it cannot normalize. The event is absent: a copy stored before is retired
+  (`OutlookCalendarProgress::Unreadable`), since without the calendar error
+  Google shows beside its old copy a stale copy would look current, but its
+  page membership stays so later tombstones resolve. The round still finishes
+  as a clean sync. The warning `skipping an Outlook event Macro cannot read`
+  and the `calendar.outlook_sync` span carry `calendar_id`,
+  `provider_event_id` and `rejected_field`. Discovery does not fail on a
+  mailbox time zone Macro cannot map to IANA either: `OutlookDiscovery`
+  stores the account's calendars with no `time_zone`, which every reader
+  treats as unknown, as it does a Google calendar's zone it cannot read
+  (reminders and automatic declines anchor all-day dates at UTC, team
+  availability reports the zone missing). The warning `ignoring an Outlook
+  mailbox time zone Macro cannot map` and the span carry `unmapped_time_zone`.
+- A calendar's sync error reaches calendar caches only as an `UpsertCalendar`
+  change-log entry, since they read the calendar list once and then follow
+  the log. Google and Outlook log one when the shown error
+  (`visible_calendar_sync_error_tx`, past
+  `CALENDAR_SYNC_FAILURE_BADGE_THRESHOLD` failures) appears or is reworded
+  (`failure_changes_sync_error_badge`) and when the round that clears it
+  commits, never on a routine round (Outlook polls every two minutes).
+  Neither nudges open clients for it, so a tab sees it on its next delta.
+  Outlook logged none before November 2026;
+  `20261105002046_log_outlook_calendars_for_their_sync_error.sql` logs every
+  visible Outlook calendar once so caches that missed a change refetch it.
 - A sync of a `ready`, already synced account stays `ready`, on Google as on
   Outlook, including after a re-grant that kept calendar access, whose sync tokens
   survive. Any other state is catching up and marks it `syncing`: a first import,

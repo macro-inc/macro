@@ -66,15 +66,6 @@ export function MacroToolCall(props: {
       return input.url;
     }
     if (
-      (props.common.label === 'WebSearch' ||
-        props.common.label === 'WebFetch') &&
-      input &&
-      'input' in input &&
-      typeof input.input === 'string'
-    ) {
-      return input.input;
-    }
-    if (
       (props.common.label === 'SearchSkills' ||
         props.common.label === 'NameSearch') &&
       input &&
@@ -177,22 +168,7 @@ function resultSummary(response: ToolResponse | undefined): string | undefined {
   if ('items' in data && Array.isArray(data.items)) {
     return `${data.items.length} ${data.items.length === 1 ? 'item' : 'items'}`;
   }
-  if (
-    isResponse(response, 'WebSearch') &&
-    Array.isArray(response.data.content)
-  ) {
-    const count = response.data.content.length;
-    return `${count} ${count === 1 ? 'result' : 'results'}`;
-  }
   return undefined;
-}
-
-/** The generated NamedTool type does not correlate its name and data unions. */
-function isResponse<Name extends ToolName>(
-  response: ToolResponse | undefined,
-  name: Name
-): response is NamedTool<Name, 'response'> {
-  return response?.name === name;
 }
 
 function responseError(response: ToolResponse | undefined): string | undefined {
@@ -203,18 +179,6 @@ function responseError(response: ToolResponse | undefined): string | undefined {
     return 'message' in data && typeof data.message === 'string'
       ? data.message || 'The tool did not succeed.'
       : 'The tool did not succeed.';
-  }
-  if (
-    isResponse(response, 'WebFetch') &&
-    response.data.content.type === 'web_fetch_tool_result_error'
-  ) {
-    return response.data.content.error_code;
-  }
-  if (
-    isResponse(response, 'WebSearch') &&
-    !Array.isArray(response.data.content)
-  ) {
-    return response.data.content.error_code;
   }
   return undefined;
 }

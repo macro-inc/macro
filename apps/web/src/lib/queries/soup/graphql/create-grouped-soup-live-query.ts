@@ -30,6 +30,7 @@ import {
 import { registerGroupedSoupContinuation } from '../grouped/graphql-operation-registry';
 import { registerGraphqlSoupRevalidations } from './active-queries';
 import { createPredicateQuery } from './create-predicate-query';
+import { crmExternalWriteTypes } from './external-write-scope';
 import {
   mergeGroupedSoupBins,
   projectLocalGroupedSoup,
@@ -90,6 +91,11 @@ export function createGroupedSoupLiveQuery(
     const common = {
       query: GroupSoupDocument,
       client: getGraphqlSoupClient(),
+      context: {
+        externalCacheWriteTypes: crmExternalWriteTypes(
+          queryInput?.initial?.filters
+        ),
+      },
       requestPolicy: queryOptions.networkPaused
         ? ('cache-only' as const)
         : ('cache-and-network' as const),
@@ -163,6 +169,11 @@ export function createGroupedSoupLiveQuery(
         query: GroupSoupDocument,
         client: getGraphqlSoupClient(),
         initialPageParam: cursor,
+        context: {
+          externalCacheWriteTypes: crmExternalWriteTypes(
+            initial.initial?.filters
+          ),
+        },
         variables: (cursor) => {
           const pageInput = continuationInput(cursor);
           registerGroupedSoupContinuation(initial, pageInput);

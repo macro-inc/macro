@@ -477,6 +477,13 @@ the shimmer.
   **Add connections** opens Discover; **Manage connections** opens Connected.
   Disabled connections remain available to manage. A partial loading failure
   offers Retry without hiding uploads, references, or skills.
+- Skills have a one-line **When to use** description ("Use when …; not …"),
+  required in the skill composer (`C K`) under the name and editable under
+  the title of an open skill (saves on blur or Enter; an invalid line shows
+  an error below it). Owners with the `auto-skills` flag get up to two of
+  their skills loaded on their own when a session request matches a
+  description; the session view shows nothing for it, and the
+  `agent.skill_selection` span says what loaded.
 - Empty conversation greetings use Roboto Slab with the Macro mark to the left,
   at weight 390 with softened ink in light mode and 315 in dark mode, including the Chat and Code
   starting headings, legacy Home, and the conversation preview empty state.
@@ -2402,6 +2409,13 @@ draft before starting any sends/creates, and waits for attachments still
 uploading in the active email.
 Invalid drafts remain editable; navigation opens the first draft needing attention.
 
+Each saved change to a review (presentation, edits, decisions, finished sends)
+logs a `_macro/review_updated` frame in its session, so in the session view the
+card refetches only when a newer revision is announced and statuses set by the
+agent or another editor appear in place. Cards shown outside the session view
+(DM and channel activity) still poll while the review is preparing or has
+pending drafts. A fetch that returns the card's own in-flight save is not a
+conflict and leaves the editor focused.
 A revision conflict or uncertain request shows **Reload saved review**. Reload
 reads the saved version and discards the local edit; it never retries an external
 send automatically. If the outcome is unknown, check the inbox/calendar before
@@ -2425,6 +2439,9 @@ navigation and page reload,
 that a single draft has no stack controls, that a batch's picker finds drafts,
 that chat remains usable, and that another account cannot submit. Sending an email or
 creating an event is a real action, including from a local app connected to dev.
+The backend-free browser regression for polling, announced revisions,
+presentation, and typing during a save is `bunx playwright test --config src/features/email-compose/browser-test/playwright.app.config.ts agent-review`
+(from `apps/web`).
 ## Agent reasoning effort
 
 Open the model selector and hover a model to choose its reasoning effort in the

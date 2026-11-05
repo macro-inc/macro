@@ -72,6 +72,9 @@ fn service(repo: FakeUserRepo) -> EmailServiceImpl<FakeUserRepo, (), (), (), (),
         macro_event_broker: (),
         sent_undo_delay_secs: 0,
         sender_provider: Arc::new(crate::domain::senders::UnavailableEmailSenderProvider),
+        shared_thread_replies: Arc::new(
+            crate::domain::shared_thread_replies::NoSharedThreadReplies,
+        ),
     }
 }
 

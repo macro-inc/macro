@@ -45,6 +45,7 @@ import type { BoardPositions } from '../database/views/database-board-view';
 import { DatabaseRecords } from '../database/views/database-records';
 import type { DatabaseRecordsActions } from '../database/views/database-records-view';
 import { CrmListSkeleton } from './components/list-state';
+import { StageRequirementsDialog } from './components/stage-requirements-dialog';
 import type { Pipeline } from './core/pipeline';
 import { createPipelineApi } from './queries/pipeline-data';
 import {
@@ -53,6 +54,7 @@ import {
   usePipelinePositionsQuery,
   usePipelineTableQuery,
 } from './queries/pipeline-views';
+import { useStageRequirements } from './queries/stage-requirements';
 import { AddPipelineRecordDialog } from './views/add-pipeline-record';
 
 /** Pipelines supply their own identity and owner to the existing share dialog. */
@@ -245,6 +247,11 @@ function PipelineToolbar(props: {
   pipelineActions?: JSX.Element;
 }) {
   const database = useDatabase();
+  const requirements = useStageRequirements(
+    { storage: storageServiceClient, client: useQueryClient() },
+    props.pipeline.id
+  );
+  const [configuring, setConfiguring] = createSignal(false);
   const columns = () => database.data.rows.columns();
   // A column added with a board shows once the table is read again.
   const refreshColumns = () => {
@@ -308,6 +315,25 @@ function PipelineToolbar(props: {
       actions={
         <>
           <Show when={props.canEdit}>
+            <Button
+              variant="secondary"
+              disabled={!queryReadyGate(requirements.query)}
+              onClick={() => setConfiguring(true)}
+            >
+              Stage requirements
+            </Button>
+            <Show when={configuring()}>
+              <StageRequirementsDialog
+                columns={columns()}
+                rules={
+                  queryReadyGate(requirements.query)
+                    ? requirements.query.data
+                    : []
+                }
+                onSave={requirements.save}
+                onClose={() => setConfiguring(false)}
+              />
+            </Show>
             <Button variant="secondary" onClick={() => props.onCompose({})}>
               <PlusIcon class="size-4" />
               {props.pipeline.recordType === 'company'
@@ -321,6 +347,16 @@ function PipelineToolbar(props: {
                 pipeline={props.pipeline}
                 columns={columns()}
                 initialValues={initialValues}
+                requirements={
+                  queryReadyGate(requirements.query)
+                    ? requirements.query.data
+                    : undefined
+                }
+                requirementsLoading={requirements.query.isPending}
+                requirementsError={
+                  !queryReadyGate(requirements.query) &&
+                  requirements.query.isError
+                }
                 onCreate={props.actions.createRow}
                 onClose={() => props.onCompose(undefined)}
                 renderTextEditor={(editor) => (
