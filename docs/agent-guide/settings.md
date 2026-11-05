@@ -228,10 +228,12 @@ With the `enable-team-agents` rollout enabled, team admins and owners see
 **Invite agent** in **Team → Members**. This creates an agent account and buys
 its computer together. The existing email invitation flow remains available.
 
-If the team has no active subscription, the dialog keeps specifications visible
+For billed teams without an active subscription, the dialog keeps specifications visible
 and explains that an active team plan is required. **Go to billing** opens
 `/app/settings/billing`; the team owner can activate a plan there. An invitation
-cannot be confirmed until the team has an active subscription.
+cannot be confirmed until the team has an active subscription. Teams whose server
+quote marks the agent as included can invite without a subscription; their review
+shows **Included for Macro**, with no currency charge.
 
 1. Choose **Invite agent**. Enter a **Name**, **Role / job description**, and
    **Personality**. Choose **Standard**, **Large**, or **XL** using the quoted
@@ -241,17 +243,24 @@ cannot be confirmed until the team has an active subscription.
 2. Choose **Review price**. Review the server's **Agent seat**, **Computer**,
    and **Total per month/year**, in its quoted currency. **Back** preserves
    the draft. A loading or failed quote disables confirmation; **Try again**
-   refreshes the quote.
+   refreshes the quote. The quote shown in a review stays fixed across background
+   refreshes; confirmation includes its billing eligibility. If eligibility
+   changes before creation, the server refuses the invitation before purchase
+   and asks you to review again. **Back** refreshes the quote and preserves the
+   draft so you can review the new terms. Typing changes only the draft; it never refreshes quotes
+   or catalog specifications. Changing computer size requests its quote.
 3. Choose **Confirm and invite** once. The controls stay disabled while the
    request is pending. On success the dialog closes and the roster refreshes.
    If confirmation fails, check the roster before starting another invitation:
-   the response may have been lost after the purchase completed.
+   the response may have been lost after the purchase completed. A repository
+   creation failure instead shows the server's actionable reason and
+   **Nothing was charged**; no purchase has started in that case.
 4. Under **Agent teammates**, the row shows an **Agent** chip and setup or
    health status. The roster polls every three seconds while any agent is
    provisioning, then every thirty seconds while the page is visible and the
    roster is nonempty. Running and failed rows keep refreshing so transient
    health failures can recover without a manual refresh.
-5. **Retry** appears only when `retryable=true` and payment is **paid**. It
+5. **Retry** appears only when `retryable=true` and payment is **paid** or **comped**. It
    re-drives failed provisioning on the same computer, preserving the agent's
    workspace and billing. Retry is disabled while the request runs. Failures
    refresh the status and keep an inline error if retry is still available;
@@ -262,6 +271,8 @@ cannot be confirmed until the team has an active subscription.
    - **Unbilled** shows **Payment failed / not billed**, retains the
      **payment failed** reason, and offers no Retry. Use **More → Remove agent**
      for clean removal, then invite another agent if needed.
+   - **Comped** shows **Included for Macro** and permits provisioning Retry
+     without a charge; removal releases the computer without billing changes.
    - **Paid** shows **Billed**. **More → Remove agent** releases the computer
      and removes its billed seat and computer from the subscription.
    - An unreadable payment state makes no billing claim.

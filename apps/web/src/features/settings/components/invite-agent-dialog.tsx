@@ -1,4 +1,4 @@
-import { usePending } from '@app/observability/flow';
+import { TraceFlow, usePending } from '@app/observability/flow';
 import { fireAndForget } from '@core/util/fireAndForget';
 import { thrownResultErrorHasCode } from '@core/util/result';
 import { queryReadyGate } from '@queries/gate';
@@ -20,16 +20,20 @@ function ConnectedInviteAgentForm(props: { teamId: string; onClose(): void }) {
     () => true
   );
   const create = useCreateTeamAgentMutation();
+  usePending('team-agent.sizes', () => sizes.isLoading);
   usePending('team-agent.quote', () => quote.isLoading);
   return (
     <InviteAgentForm
       open
+      teamId={props.teamId}
       onClose={props.onClose}
       size={size()}
       setSize={setSize}
       source={{
         specsForSize: (value) =>
-          sizes.data?.sizes.find((spec) => spec.size === value),
+          queryReadyGate(sizes)
+            ? sizes.data.sizes.find((spec) => spec.size === value)
+            : undefined,
         needsSubscription: () =>
           thrownResultErrorHasCode(quote.error, 'no_subscription'),
         quote: () => (queryReadyGate(quote) ? quote.data : undefined),
@@ -39,9 +43,8 @@ function ConnectedInviteAgentForm(props: { teamId: string; onClose(): void }) {
           fireAndForget(quote.refetch(), 'team-agent.quote.retry');
         },
         pending: () => create.isPending,
-        error: () => create.isError,
-        create: (request) =>
-          create.mutateAsync({ teamId: props.teamId, request }),
+        create: (request, parentSpan) =>
+          create.mutateAsync({ teamId: props.teamId, request, parentSpan }),
       }}
     />
   );
@@ -55,10 +58,15 @@ export function InviteAgentDialog(props: {
   return (
     <Show when={props.open}>
       <Suspense fallback={<p role="status">Loading invitation…</p>}>
-        <ConnectedInviteAgentForm
-          teamId={props.teamId}
-          onClose={props.onClose}
-        />
+        <TraceFlow
+          name="team-agent.invite.open"
+          attributes={{ 'team.id': props.teamId, 'computer.size': 'standard' }}
+        >
+          <ConnectedInviteAgentForm
+            teamId={props.teamId}
+            onClose={props.onClose}
+          />
+        </TraceFlow>
       </Suspense>
     </Show>
   );

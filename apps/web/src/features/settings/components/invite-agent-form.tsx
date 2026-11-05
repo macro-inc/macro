@@ -1,5 +1,8 @@
+import { startUiOperation } from '@app/observability/ui-operation';
 import { MobileDrawer } from '@components/app/mobile/MobileDrawer';
 import { isMobile } from '@core/mobile/isMobile';
+import { ThrownResultError } from '@core/util/result';
+import { type Span, Telemetry } from '@macro-inc/observability';
 import type {
   ComputerSize,
   ComputerSizeSpec,
@@ -7,7 +10,14 @@ import type {
   TeamAgentQuote,
 } from '@service-auth/generated/schemas';
 import { ActionDialogShell, Button, Dialog, RadioGroup, TextField } from '@ui';
-import { type Accessor, createSignal, For, type JSX, Show } from 'solid-js';
+import {
+  type Accessor,
+  createMemo,
+  createSignal,
+  For,
+  type JSX,
+  Show,
+} from 'solid-js';
 
 export type AgentInviteSource = {
   quote: Accessor<TeamAgentQuote | undefined>;
@@ -17,8 +27,7 @@ export type AgentInviteSource = {
   quoteError: Accessor<boolean>;
   reloadQuote(): void;
   pending: Accessor<boolean>;
-  error: Accessor<boolean>;
-  create(request: CreateTeamAgent): Promise<unknown>;
+  create(request: CreateTeamAgent, parentSpan?: Span): Promise<unknown>;
 };
 
 function InviteSurface(props: {
@@ -86,6 +95,7 @@ function InviteSurface(props: {
 /** Shared form and purchase policy, supplied by the host's query adapter. */
 export function InviteAgentForm(props: {
   open: boolean;
+  teamId: string;
   onClose(): void;
   size: ComputerSize;
   setSize(size: ComputerSize): void;
@@ -99,6 +109,17 @@ export function InviteAgentForm(props: {
   const [submitting, setSubmitting] = createSignal(false);
   const [submitted, setSubmitted] = createSignal(false);
   const [createFailed, setCreateFailed] = createSignal(false);
+  const [quoteChanged, setQuoteChanged] = createSignal(false);
+  // Freeze the first quote shown in this review until Back, including across refetches.
+  const reviewedQuote = createMemo<TeamAgentQuote | undefined>((previous) => {
+    if (!review()) return undefined;
+    if (previous) return previous;
+    if (props.source.quoteLoading() || props.source.quoteError())
+      return undefined;
+    const quote = props.source.quote();
+    return quote ? { ...quote } : undefined;
+  });
+  const [failureMessage, setFailureMessage] = createSignal<string>();
   const avatarValid = () => {
     if (!avatar().trim()) return true;
     try {
@@ -116,7 +137,16 @@ export function InviteAgentForm(props: {
   const close = () => {
     if (!busy()) props.onClose();
   };
+  const back = () => {
+    setReview(false);
+    if (!quoteChanged()) return;
+    setQuoteChanged(false);
+    setCreateFailed(false);
+    setFailureMessage(undefined);
+    props.source.reloadQuote();
+  };
   const confirm = async () => {
+    const quote = reviewedQuote();
     if (
       props.source.needsSubscription() ||
       createFailed() ||
@@ -124,24 +154,50 @@ export function InviteAgentForm(props: {
       submitted() ||
       !review() ||
       !valid() ||
-      !props.source.quote() ||
+      !quote ||
       props.source.quoteLoading() ||
       props.source.quoteError()
     )
       return;
     setSubmitting(true);
     setCreateFailed(false);
+    setFailureMessage(undefined);
     try {
-      await props.source.create({
-        name: name().trim(),
-        jobDescription: role().trim(),
-        personality: personality().trim(),
-        size: props.size,
-        avatarUrl: avatar().trim() || undefined,
+      await Telemetry.span('team-agent.invite.submit', async (span) => {
+        span.setAttr('team.id', props.teamId);
+        span.setAttr('computer.size', props.size);
+        try {
+          return await props.source.create(
+            {
+              name: name().trim(),
+              jobDescription: role().trim(),
+              personality: personality().trim(),
+              size: props.size,
+              expectedIncluded: quote.included,
+              avatarUrl: avatar().trim() || undefined,
+            },
+            span
+          );
+        } catch (error) {
+          span.error('Agent invitation failed');
+          throw error;
+        }
       });
       setSubmitted(true);
       props.onClose();
-    } catch {
+    } catch (error) {
+      if (error instanceof ThrownResultError) {
+        setQuoteChanged(
+          error.errors.some((reason) => reason.code === 'quote_changed')
+        );
+        setFailureMessage(
+          error.errors.find(
+            (reason) =>
+              reason.code === 'repository_creation_failed' ||
+              reason.code === 'quote_changed'
+          )?.message
+        );
+      }
       setCreateFailed(true);
     } finally {
       setSubmitting(false);
@@ -162,7 +218,7 @@ export function InviteAgentForm(props: {
           <Button
             variant="ghost"
             disabled={busy()}
-            onClick={() => (review() ? setReview(false) : close())}
+            onClick={() => (review() ? back() : close())}
           >
             {review() ? 'Back' : 'Cancel'}
           </Button>
@@ -172,7 +228,20 @@ export function InviteAgentForm(props: {
               <Button
                 variant="primary"
                 disabled={!valid() || props.source.needsSubscription()}
-                onClick={() => setReview(true)}
+                onClick={(event) => {
+                  const operation = startUiOperation(
+                    'team-agent.review-price',
+                    {
+                      event,
+                      attributes: {
+                        'team.id': props.teamId,
+                        'computer.size': props.size,
+                      },
+                    }
+                  );
+                  setReview(true);
+                  operation.afterPaint();
+                }}
               >
                 Review price
               </Button>
@@ -185,7 +254,7 @@ export function InviteAgentForm(props: {
                 busy() ||
                 createFailed() ||
                 submitted() ||
-                !props.source.quote() ||
+                !reviewedQuote() ||
                 props.source.quoteLoading() ||
                 props.source.quoteError()
               }
@@ -231,9 +300,12 @@ export function InviteAgentForm(props: {
                 </Button>
               </div>
             </Show>
-            <Show when={props.source.quote()}>
+            <Show when={reviewedQuote()}>
               {(quote) => (
-                <>
+                <Show
+                  when={!quote().included}
+                  fallback={<p class="font-semibold">Included for Macro</p>}
+                >
                   <dl class="grid grid-cols-2 gap-3">
                     <dt>Agent seat</dt>
                     <dd class="text-right">{price(quote().seat, quote())}</dd>
@@ -250,13 +322,13 @@ export function InviteAgentForm(props: {
                     The seat and computer are added to your team's subscription
                     together.
                   </p>
-                </>
+                </Show>
               )}
             </Show>
-            <Show when={createFailed() || props.source.error()}>
+            <Show when={createFailed()}>
               <p role="alert">
-                Couldn't confirm the invitation. Check the members list before
-                trying again.
+                {failureMessage() ||
+                  "Couldn't confirm the invitation. Check the members list before trying again."}
               </p>
             </Show>
           </div>

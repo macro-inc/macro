@@ -1227,5 +1227,15 @@ of posting, multi-paragraph anchors, saved ranges, and cancellation during posti
   [entity collection fixture](src/features/entity/browser-test/README.md).
 
 Fetch agent invitation specifications from `/team_agents/sizes` independently of
-pricing. Handle quote `no_subscription` conflicts with an active-plan explanation
-and a button to `/app/settings/billing`; keep purchase disabled.
+pricing; keep draft edits out of query inputs and preserve mounted fields while
+typing. Exercise the adapter and form with
+`bun run test src/features/settings/components/invite-agent-dialog.test.tsx src/features/settings/components/invite-agent-form.test.tsx src/lib/queries/team-agents`
+and the desktop/phone/tablet suite at
+`src/features/settings/browser-test/team-agents/playwright.config.ts`.
+Handle quote `no_subscription` conflicts with an active-plan explanation and a
+button to `/app/settings/billing`; keep purchase disabled. Render included
+quotes as **Included for Macro**. Freeze review terms and submit the reviewed
+`included` value as `expectedIncluded`; a `quote_changed` refusal requires a
+fresh review before retrying. Show only typed `repository_creation_failed`
+server reasons as pre-purchase failures; other create failures keep the
+roster-check warning.

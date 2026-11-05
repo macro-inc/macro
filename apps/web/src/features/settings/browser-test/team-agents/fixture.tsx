@@ -1,3 +1,4 @@
+import { ThrownResultError } from '@core/util/result';
 import '@fontsource-variable/inter';
 import '../../../../index.css';
 import type {
@@ -25,10 +26,20 @@ const [requests, setRequests] = createSignal(0);
 const [failed, setFailed] = createSignal(
   new URLSearchParams(location.search).has('quote-error')
 );
+const [included, setIncluded] = createSignal(
+  new URLSearchParams(location.search).has('included')
+);
+let changeEligibility = new URLSearchParams(location.search).has(
+  'quote-changed'
+);
+const repositoryFailure = new URLSearchParams(location.search).has(
+  'repository-failure'
+);
 const quote = (value: ComputerSize = size()): TeamAgentQuote => ({
-  seat: 2000,
-  computer: value === 'standard' ? 3000 : 6000,
-  total: value === 'standard' ? 5000 : 8000,
+  included: included(),
+  seat: included() ? 0 : 2000,
+  computer: included() ? 0 : value === 'standard' ? 3000 : 6000,
+  total: included() ? 0 : value === 'standard' ? 5000 : 8000,
   currency: 'usd',
   vcpus: value === 'standard' ? 2 : 4,
   memoryGb: value === 'standard' ? 8 : 16,
@@ -107,20 +118,43 @@ render(
       </Show>
       <Show when={open()}>
         <InviteAgentForm
+          teamId="team-1"
           open
           onClose={() => setOpen(false)}
           size={size()}
           setSize={setSize}
           source={{
             specsForSize: (value) => ({ ...quote(value), size: value }),
-            needsSubscription: () => noSubscription,
-            quote: () => (failed() || noSubscription ? undefined : quote()),
+            needsSubscription: () => noSubscription && !included(),
+            quote: () =>
+              failed() || (noSubscription && !included()) ? undefined : quote(),
             quoteLoading: () => false,
-            quoteError: () => failed() || noSubscription,
+            quoteError: () => failed() || (noSubscription && !included()),
             reloadQuote: () => setFailed(false),
             pending: () => false,
-            error: () => false,
-            create: async () => {
+            create: async (request) => {
+              if (changeEligibility) {
+                changeEligibility = false;
+                setIncluded(!included());
+              }
+              if (request.expectedIncluded !== included()) {
+                throw new ThrownResultError([
+                  {
+                    code: 'quote_changed',
+                    message:
+                      'The quote changed. Review the price again. Nothing was charged.',
+                  },
+                ]);
+              }
+              if (repositoryFailure) {
+                throw new ThrownResultError([
+                  {
+                    code: 'repository_creation_failed',
+                    message:
+                      'The workspace repository could not be created. Nothing was charged.',
+                  },
+                ]);
+              }
               setRequests((count) => count + 1);
             },
           }}

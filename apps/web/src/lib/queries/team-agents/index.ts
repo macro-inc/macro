@@ -1,5 +1,5 @@
 import { throwOnErr } from '@core/util/result';
-import { Telemetry } from '@macro-inc/observability';
+import { type Span, Telemetry } from '@macro-inc/observability';
 import { authServiceClient } from '@service-auth/client';
 import type {
   ComputerSize,
@@ -35,7 +35,15 @@ export function teamAgentsQueryOptions(teamId: string) {
 export function teamAgentSizesQueryOptions(teamId: string) {
   return queryOptions({
     queryKey: teamAgentKeys.sizes(teamId).queryKey,
-    queryFn: () => throwOnErr(() => authServiceClient.getTeamAgentSizes()),
+    queryFn: () =>
+      Telemetry.span('team-agent.sizes.load', (span) => {
+        span.setAttr('team.id', teamId);
+        return throwOnErr(async () => {
+          const result = await authServiceClient.getTeamAgentSizes();
+          if (result.isErr()) span.error('Agent size catalog request failed');
+          return result;
+        });
+      }),
     staleTime: Infinity,
   });
 }
@@ -47,7 +55,16 @@ export function useTeamAgentSizesQuery(teamId: Accessor<string>) {
 export function teamAgentQuoteQueryOptions(teamId: string, size: ComputerSize) {
   return queryOptions({
     queryKey: teamAgentKeys.quote(teamId, size).queryKey,
-    queryFn: () => throwOnErr(() => authServiceClient.quoteTeamAgent(size)),
+    queryFn: () =>
+      Telemetry.span('team-agent.quote.load', (span) => {
+        span.setAttr('team.id', teamId);
+        span.setAttr('computer.size', size);
+        return throwOnErr(async () => {
+          const result = await authServiceClient.quoteTeamAgent(size);
+          if (result.isErr()) span.error('Agent price quote request failed');
+          return result;
+        });
+      }),
     staleTime: 0,
     retry: false,
   });
@@ -91,14 +108,24 @@ export function useCreateTeamAgentMutation() {
     mutationFn: ({
       teamId,
       request,
+      parentSpan,
     }: {
       teamId: string;
       request: CreateTeamAgent;
-    }) =>
-      Telemetry.span('team-agent.invite', (span) => {
-        span.setAttr('team.id', teamId);
-        return throwOnErr(() => authServiceClient.createTeamAgent(request));
-      }),
+      parentSpan?: Span;
+    }) => {
+      const create = () =>
+        Telemetry.span('team-agent.invite', (span) => {
+          span.setAttr('team.id', teamId);
+          span.setAttr('computer.size', request.size);
+          return throwOnErr(async () => {
+            const result = await authServiceClient.createTeamAgent(request);
+            if (result.isErr()) span.error('Agent invitation request failed');
+            return result;
+          });
+        });
+      return parentSpan ? parentSpan.run(create) : create();
+    },
     onSuccess: (agent, { teamId }) => {
       queryClient.setQueryData<TeamAgents>(
         teamAgentKeys.list(teamId).queryKey,

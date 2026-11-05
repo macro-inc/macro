@@ -1,3 +1,4 @@
+import { ThrownResultError } from '@core/util/result';
 import type {
   TeamAgent,
   TeamAgentQuote,
@@ -16,6 +17,7 @@ import { AgentStatusPill, TeamAgentMenu } from './team-agent-row';
 
 afterEach(cleanup);
 const quote: TeamAgentQuote = {
+  included: false,
   seat: 2000,
   computer: 4000,
   total: 6000,
@@ -45,7 +47,6 @@ function source(overrides: Partial<AgentInviteSource> = {}): AgentInviteSource {
     quoteLoading: () => false,
     quoteError: () => false,
     pending: () => false,
-    error: () => false,
     reloadQuote: vi.fn(),
     create: vi.fn().mockResolvedValue(undefined),
     ...overrides,
@@ -64,6 +65,7 @@ describe('agent invite purchase', () => {
     };
     render(() => (
       <InviteAgentForm
+        teamId="team-1"
         open
         onClose={() => {}}
         size={size()}
@@ -92,6 +94,7 @@ describe('agent invite purchase', () => {
     const close = vi.fn();
     render(() => (
       <InviteAgentForm
+        teamId="team-1"
         open
         onClose={close}
         size="large"
@@ -117,13 +120,17 @@ describe('agent invite purchase', () => {
     fireEvent.click(confirm);
     fireEvent.click(confirm);
     expect(create).toHaveBeenCalledTimes(1);
-    expect(create).toHaveBeenCalledWith({
-      name: 'Assistant',
-      jobDescription: 'Maintain projects',
-      personality: 'Concise',
-      size: 'large',
-      avatarUrl: undefined,
-    });
+    expect(create).toHaveBeenCalledWith(
+      {
+        name: 'Assistant',
+        jobDescription: 'Maintain projects',
+        personality: 'Concise',
+        size: 'large',
+        expectedIncluded: false,
+        avatarUrl: undefined,
+      },
+      expect.objectContaining({ run: expect.any(Function) })
+    );
     expect(close).not.toHaveBeenCalled();
     finish?.();
     await waitFor(() => expect(close).toHaveBeenCalledTimes(1));
@@ -134,6 +141,7 @@ describe('agent invite purchase', () => {
     const reload = vi.fn(() => setError(false));
     render(() => (
       <InviteAgentForm
+        teamId="team-1"
         open
         onClose={() => {}}
         size="standard"
@@ -164,6 +172,7 @@ describe('agent invite purchase', () => {
     const create = vi.fn().mockRejectedValue(new Error('Connection lost'));
     render(() => (
       <InviteAgentForm
+        teamId="team-1"
         open
         onClose={() => {}}
         size="standard"
@@ -201,29 +210,32 @@ const agent: TeamAgent = {
   payment: 'paid',
   setup: { step: 'booting', position: 3, total: 5 },
 };
-it('updates setup to running and failed with the reason and retry action', () => {
-  const [value, setValue] = createSignal(agent);
-  const retry = vi.fn();
-  render(() => <AgentStatusPill agent={value()} onRetry={retry} />);
-  expect(screen.getByRole('status').textContent).toContain(
-    'Starting computer (3/5)'
-  );
-  setValue({ ...agent, status: 'running' });
-  expect(screen.getByRole('status').textContent).toContain('Running');
-  expect(screen.queryByText('Starting computer (3/5)')).toBeNull();
-  setValue({
-    ...agent,
-    status: 'failed',
-    retryable: true,
-    payment: 'paid',
-    statusReason: 'Computer disconnected',
-  });
-  expect(screen.getByRole('status').textContent).toContain(
-    'Computer disconnected'
-  );
-  fireEvent.click(screen.getByRole('button', { name: 'Retry' }));
-  expect(retry).toHaveBeenCalledTimes(1);
-});
+it.each(['paid', 'comped'] as const)(
+  'updates %s setup to running and failed with the reason and retry action',
+  (payment) => {
+    const [value, setValue] = createSignal<TeamAgent>({ ...agent, payment });
+    const retry = vi.fn();
+    render(() => <AgentStatusPill agent={value()} onRetry={retry} />);
+    expect(screen.getByRole('status').textContent).toContain(
+      'Starting computer (3/5)'
+    );
+    setValue({ ...agent, status: 'running' });
+    expect(screen.getByRole('status').textContent).toContain('Running');
+    expect(screen.queryByText('Starting computer (3/5)')).toBeNull();
+    setValue({
+      ...agent,
+      status: 'failed',
+      retryable: true,
+      payment,
+      statusReason: 'Computer disconnected',
+    });
+    expect(screen.getByRole('status').textContent).toContain(
+      'Computer disconnected'
+    );
+    fireEvent.click(screen.getByRole('button', { name: 'Retry' }));
+    expect(retry).toHaveBeenCalledTimes(1);
+  }
+);
 
 it('keeps a payment failure reason visible without offering provisioning retry', () => {
   const retry = vi.fn();
@@ -316,6 +328,7 @@ it('keeps catalog specs visible without a subscription and directs admins to bil
   const create = vi.fn();
   render(() => (
     <InviteAgentForm
+      teamId="team-1"
       open
       onClose={() => {}}
       size="standard"
@@ -344,3 +357,146 @@ it('keeps catalog specs visible without a subscription and directs admins to bil
   expect(screen.queryByText(/Couldn't load the price/)).toBeNull();
   expect(create).not.toHaveBeenCalled();
 });
+
+it('reviews an included quote without presenting a currency charge', async () => {
+  const create = vi.fn().mockResolvedValue(undefined);
+  render(() => (
+    <InviteAgentForm
+      teamId="team-1"
+      open
+      onClose={() => {}}
+      size="standard"
+      setSize={() => {}}
+      source={source({
+        quote: () => ({
+          ...quote,
+          included: true,
+          seat: 0,
+          computer: 0,
+          total: 0,
+        }),
+        create,
+      })}
+    />
+  ));
+  fill();
+  expect(screen.getByText('Included for Macro')).toBeTruthy();
+  expect(screen.queryByText(/Total per/)).toBeNull();
+  expect(screen.queryByText(/\$0\.00/)).toBeNull();
+  fireEvent.click(screen.getByRole('button', { name: 'Confirm and invite' }));
+  await waitFor(() => expect(create).toHaveBeenCalledTimes(1));
+});
+
+it.each([
+  [
+    'repository_creation_failed',
+    'The workspace repository service is missing git. Nothing was charged.',
+    true,
+  ],
+  [
+    'repository_creation_failed',
+    'The workspace repository could not be created. Nothing was charged.',
+    true,
+  ],
+  ['provider_failed', 'An unsafe provider detail', false],
+])(
+  'only shows the guaranteed pre-purchase server reason for %s',
+  async (code, message, visible) => {
+    const create = vi
+      .fn()
+      .mockRejectedValue(new ThrownResultError([{ code, message }]));
+    render(() => (
+      <InviteAgentForm
+        teamId="team-1"
+        open
+        onClose={() => {}}
+        size="standard"
+        setSize={() => {}}
+        source={source({ create })}
+      />
+    ));
+    fill();
+    fireEvent.click(screen.getByRole('button', { name: 'Confirm and invite' }));
+    await waitFor(() => expect(screen.getByRole('alert')).toBeTruthy());
+    expect(screen.getByRole('alert').textContent).toBe(
+      visible
+        ? message
+        : "Couldn't confirm the invitation. Check the members list before trying again."
+    );
+    expect(
+      screen
+        .getByRole('button', { name: 'Confirm and invite' })
+        .hasAttribute('disabled')
+    ).toBe(true);
+  }
+);
+
+it.each([true, false])(
+  'keeps reviewed billing consent when included=%s changes and requires a new review',
+  async (included) => {
+    const [currentQuote, setCurrentQuote] = createSignal({
+      ...quote,
+      included,
+      total: included ? 0 : quote.total,
+    });
+    const reloadQuote = vi.fn();
+    const close = vi.fn();
+    const create = vi
+      .fn()
+      .mockRejectedValueOnce(
+        new ThrownResultError([
+          {
+            code: 'quote_changed',
+            message:
+              'The quote changed. Review the price again. Nothing was charged.',
+          },
+        ])
+      )
+      .mockResolvedValueOnce(undefined);
+    render(() => (
+      <InviteAgentForm
+        teamId="team-1"
+        open
+        onClose={close}
+        size="large"
+        setSize={() => {}}
+        source={source({ quote: currentQuote, create, reloadQuote })}
+      />
+    ));
+    fill();
+    setCurrentQuote({
+      ...quote,
+      included: !included,
+      total: included ? quote.total : 0,
+    });
+    expect(!!screen.queryByText('Included for Macro')).toBe(included);
+    fireEvent.click(screen.getByRole('button', { name: 'Confirm and invite' }));
+    await waitFor(() =>
+      expect(screen.getByRole('alert').textContent).toBe(
+        'The quote changed. Review the price again. Nothing was charged.'
+      )
+    );
+    expect(create).toHaveBeenNthCalledWith(
+      1,
+      expect.objectContaining({ expectedIncluded: included }),
+      expect.anything()
+    );
+    expect(close).not.toHaveBeenCalled();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Back' }));
+    expect(reloadQuote).toHaveBeenCalledTimes(1);
+    expect((screen.getByLabelText('Name') as HTMLInputElement).value).toBe(
+      'Assistant'
+    );
+    fireEvent.click(screen.getByRole('button', { name: 'Review price' }));
+    expect(!!screen.queryByText('Included for Macro')).toBe(!included);
+    fireEvent.click(screen.getByRole('button', { name: 'Confirm and invite' }));
+    await waitFor(() => expect(create).toHaveBeenCalledTimes(2));
+    expect(create).toHaveBeenNthCalledWith(
+      2,
+      expect.objectContaining({ expectedIncluded: !included }),
+      expect.anything()
+    );
+    await waitFor(() => expect(close).toHaveBeenCalledTimes(1));
+  }
+);

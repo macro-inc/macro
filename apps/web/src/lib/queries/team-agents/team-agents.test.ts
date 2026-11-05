@@ -22,6 +22,7 @@ import {
 describe('team agents queries', () => {
   it('scopes quotes by team and size and reads the server total', async () => {
     const quote = {
+      included: false,
       seat: 2000,
       computer: 3000,
       total: 5000,

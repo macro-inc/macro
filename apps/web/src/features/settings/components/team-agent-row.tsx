@@ -23,10 +23,11 @@ export function AgentStatusPill(props: {
     match(props.agent.payment)
       .with('pending', () => 'Confirming payment')
       .with('unbilled', () => 'Payment failed / not billed')
-      .with('paid', null, undefined, () => computerStatus())
+      .with('paid', 'comped', null, undefined, () => computerStatus())
       .exhaustive(() => computerStatus());
   const canRetry = () =>
-    props.agent.retryable && props.agent.payment === 'paid';
+    props.agent.retryable &&
+    (props.agent.payment === 'paid' || props.agent.payment === 'comped');
   const step = () =>
     match(props.agent.setup?.step)
       .with('paying', () => 'Confirming payment')
@@ -47,6 +48,9 @@ export function AgentStatusPill(props: {
       >
         {status()}
       </span>
+      <Show when={props.agent.payment === 'comped'}>
+        <span class="text-ink-muted">Included for Macro</span>
+      </Show>
       <Show when={props.agent.payment === 'paid'}>
         <span class="text-ink-muted">Billed</span>
       </Show>

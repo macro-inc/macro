@@ -96,6 +96,22 @@ account backends do not currently consume trace-context query parameters, so
 upgrade server spans are not yet joined to this browser trace. Verify browser
 phases separately rather than assuming end-to-end upgrade correlation.
 
+## Agent invitations
+
+Opening **Settings → Members → Invite agent** starts
+`team-agent.invite.open`, with `team-agent.sizes` and `team-agent.quote` loading
+phases. Requests run under `team-agent.sizes.load` and `team-agent.quote.load`;
+cache hits need no request. Changing size loads only that size's quote; typing
+never refetches. **Review price** measures `team-agent.review-price` through the
+next paint. Confirmation starts `team-agent.invite.submit` and its
+`team-agent.invite` mutation child. The parent span is passed explicitly through
+the mutation's asynchronous dispatch, and authenticated HTTP requests carry
+`traceparent` through token lookup to the backend.
+
+Search by `team.id` and `computer.size`; no draft names, role descriptions,
+personality, or avatar URLs are recorded. Included and paid invitations share
+the flow. Failed requests mark their spans as errors.
+
 ## Call joining
 
 Click **Start call** on `/app/meet/new` or **Join call** on a shared meeting's
