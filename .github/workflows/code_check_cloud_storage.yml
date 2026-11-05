@@ -406,19 +406,20 @@ jobs:
     - name: Teardown Nix
       if: always()
       uses: './.github/actions/teardown-nix'
-  test-d0j8:
-    name: test-d0j8
+  test-lt4:
+    name: test-lt4
     timeout-minutes: 60
     needs:
     - path-check
     if: needs.path-check.outputs.should_run == 'true' && github.event.pull_request.draft == false && needs.path-check.outputs.rust_packages != 'none' && needs.path-check.outputs.skip_tests != 'true'
-    runs-on: namespace-profile-linux-rust-ci;overrides.cache-tag=ci-speed-rt-d0j8
+    runs-on: namespace-profile-linux-rust-ci;overrides.cache-tag=ci-speed-rt-lt4
     env:
       RUST_PACKAGES: ${{ needs.path-check.outputs.rust_packages }}
       NEXTEST_TEST_THREADS: '32'
-      CARGO_BUILD_JOBS: '8'
-      CARGO_PROFILE_DEV_DEBUG: 0
-      CARGO_PROFILE_TEST_DEBUG: 0
+      CARGO_BUILD_JOBS: '4'
+      MOLD_JOBS: '1'
+      CARGO_PROFILE_DEV_DEBUG: line-tables-only
+      CARGO_PROFILE_TEST_DEBUG: line-tables-only
       RUSTFLAGS: '-Dwarnings -C link-arg=-fuse-ld=mold'
       SCCACHE_IDLE_TIMEOUT: '0'
     services:
@@ -462,7 +463,7 @@ jobs:
         set -euo pipefail
         env_file="$(mktemp "$RUNNER_TEMP/namespace-sccache.XXXXXX")"
         trap 'rm -f "$env_file"' EXIT
-        if nsc cache sccache setup --cache_name ci-speed-rt-d0j8 > "$env_file"; then
+        if nsc cache sccache setup --cache_name ci-speed-rt-lt4 > "$env_file"; then
           # Register credential values as masked BEFORE exporting: GitHub only
           # masks `secrets.*`, so without this SCCACHE_WEBDAV_TOKEN — a broad,
           # ~24h Namespace workspace token (registry + cache write) — printed
@@ -596,7 +597,7 @@ jobs:
     needs:
     - path-check
     - test-base
-    - test-d0j8
+    - test-lt4
     - graphql-schema-compat
     if: always()
     name: Cloud Storage Status Check
@@ -606,13 +607,13 @@ jobs:
       run: |
         echo "path-check: ${{ needs.path-check.result }}"
         echo "test-base: ${{ needs.test-base.result }}"
-        echo "test-d0j8: ${{ needs.test-d0j8.result }}"
+        echo "test-lt4: ${{ needs.test-lt4.result }}"
         echo "graphql-schema-compat: ${{ needs.graphql-schema-compat.result }}"
 
         # Fail if any job failed (skipped and success are both OK)
         if [[ "${{ needs.path-check.result }}" == "failure" ]] || \
            [[ "${{ needs.test-base.result }}" == "failure" ]] || \
-           [[ "${{ needs.test-d0j8.result }}" == "failure" ]] || \
+           [[ "${{ needs.test-lt4.result }}" == "failure" ]] || \
            [[ "${{ needs.graphql-schema-compat.result }}" == "failure" ]]; then
           echo "❌ One or more jobs failed"
           exit 1
