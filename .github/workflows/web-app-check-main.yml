@@ -423,13 +423,13 @@ jobs:
     - name: Interface Language Browser Tests
       if: needs.path-check.outputs.i18n_changed == 'true'
       run: |-
-        bunx playwright install-deps chromium
+        env -u LD_LIBRARY_PATH bunx playwright install-deps chromium
         just test-i18n-browser
       working-directory: apps/web
     - name: Database Grid Browser Tests
       if: needs.path-check.outputs.database_grid_changed == 'true'
       run: |-
-        bunx playwright install-deps chromium
+        env -u LD_LIBRARY_PATH bunx playwright install-deps chromium
         just test-database-browser
       working-directory: apps/web
     - name: Teardown Nix

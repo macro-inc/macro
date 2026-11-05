@@ -477,7 +477,7 @@ fn run_signup_browser_tests() -> Step<Run> {
 /// them Chromium draws each character as a box and long labels look clipped.
 fn run_i18n_browser_tests() -> Step<Run> {
     Step::new("Interface Language Browser Tests")
-        .run("bunx playwright install-deps chromium\njust test-i18n-browser")
+        .run("env -u LD_LIBRARY_PATH bunx playwright install-deps chromium\njust test-i18n-browser")
         .if_condition(Expression::new(
             "needs.path-check.outputs.i18n_changed == 'true'",
         ))
@@ -488,7 +488,7 @@ fn run_i18n_browser_tests() -> Step<Run> {
 /// database grid changes.
 fn run_database_browser_tests() -> Step<Run> {
     Step::new("Database Grid Browser Tests")
-        .run("bunx playwright install-deps chromium\njust test-database-browser")
+        .run("env -u LD_LIBRARY_PATH bunx playwright install-deps chromium\njust test-database-browser")
         .if_condition(Expression::new(
             "needs.path-check.outputs.database_grid_changed == 'true'",
         ))
