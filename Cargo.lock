@@ -2315,6 +2315,7 @@ dependencies = [
  "tower-cookies",
  "tower-http",
  "tracing",
+ "tracing-subscriber",
  "upstream_error",
  "url",
  "urlencoding",
@@ -12441,8 +12442,10 @@ version = "0.1.0"
 dependencies = [
  "anyhow",
  "email_validator",
+ "macro_env_var",
  "macro_redis",
  "redis",
+ "tokio",
  "workspace-hack",
 ]
 

@@ -212,6 +212,7 @@ cool_asserts = "2"
 macro_auth = { path = "../../crates/macro_auth", features = ["testing"] }
 macro_db_migrator = { path = "../../crates/macro_db_migrator" }
 serde_urlencoded = { workspace = true }
+tracing-subscriber = { workspace = true }
 wiremock = { workspace = true }
 
 [package.metadata.cargo-machete]
