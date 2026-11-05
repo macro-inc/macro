@@ -7,13 +7,16 @@
   services.tailscale.openFirewall = false;
   macro.computers = {
     controlPlaneAddress = "100.116.73.13";
-    # Default stack plus the four service offsets in each named port window.
+    # Default stack plus six service offsets, including agent git and the
+    # computer gateway, in each named port window.
     # Custom --port-base values need an explicit addition here.
     controlPlanePorts = [
       8080
       8086
       8101
       8102
+      8111
+      8112
     ]
     ++ lib.concatMap (
       bucket:
@@ -22,6 +25,8 @@
         15
         26
         27
+        33
+        34
       ]
     ) (lib.range 0 119);
   };
