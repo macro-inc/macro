@@ -36,8 +36,8 @@ vi.mock('@app/features/next-soup/soup-view/search-controllers', () => ({
 vi.mock('@core/component/Toast/Toast', () => ({
   toast: { failure: vi.fn(), alert: vi.fn() },
 }));
-vi.mock('@queries/channel/get-or-create-dm', () => ({
-  useGetOrCreateDirectMessageMutation: () => ({ mutateAsync: mocks.dm }),
+vi.mock('@core/util/open-direct-message', () => ({
+  useOpenDirectMessage: () => mocks.dm,
 }));
 vi.mock('@core/constant/allBlocks', () => ({
   itemToBlockName: (item: { type: string }) =>

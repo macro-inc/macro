@@ -42,6 +42,9 @@ Pulumi stacks; they do not host extra agent processes.
   `src/cognition/service/integration_analytics.rs` sends PostHog
   `integration_connected` / `integration_disconnected` for native MCP servers
   and Pipedream apps, from the router hooks wired in `src/cognition/server.rs`.
+- `crates/web_search` owns `POST /web/search` and `/web/fetch` (mounted in
+  `src/cognition/api.rs`, rate limited per user through cognition's Redis) and the
+  `WebSearch`/`WebFetch` tools; `TAVILY_API_KEY` comes from Doppler `shared_ai`.
 - `crates/universal_input` owns Command K's authenticated `/universal_input/classify`
   and `/universal_input/extract` routes, mounted directly by `src/api.rs`. The root
   composes staged search type/field extraction and Clairic content extraction

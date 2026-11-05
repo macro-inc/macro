@@ -53,8 +53,6 @@ export default {
     projectBadge: 'Projekt',
     newProject: 'Neues Projekt',
     contentAlreadyOpen: 'Inhalt bereits geöffnet',
-    unableToOpenConversation:
-      'Unterhaltung konnte nicht geöffnet werden. Bitte erneut versuchen.',
     mobileSearchPlaceholder: 'Suchen…',
     closeSearch: 'Suche schließen',
     searchFullTextFor: 'Volltextsuche nach „{{query}}“',
