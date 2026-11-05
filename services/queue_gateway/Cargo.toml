@@ -15,6 +15,7 @@ kafka_util = { path = "../../crates/kafka_util" }
 macro_config = { path = "../../crates/macro_config" }
 macro_entrypoint = { path = "../../crates/macro_entrypoint" }
 macro_env = { path = "../../crates/macro_env" }
+macro_tower_layers = { path = "../../crates/macro_tower_layers" }
 md-5 = { workspace = true }
 rdkafka = { workspace = true }
 rootcause = { workspace = true }

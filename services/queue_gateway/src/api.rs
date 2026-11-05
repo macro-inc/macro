@@ -15,6 +15,7 @@ use axum::{
     response::{IntoResponse, Response},
     routing::get,
 };
+use macro_tower_layers::MacroRequestIdAndTracingLayer;
 use md5::{Digest, Md5};
 use rootcause::Report;
 use serde_json::{Map, Value, json};
@@ -30,6 +31,8 @@ const REGION: &str = "us-east-1";
 const TARGET_PREFIX: &str = "AmazonSQS.";
 const NO_QUEUE: &str = "com.amazonaws.sqs#QueueDoesNotExist";
 const INVALID: &str = "com.amazonaws.sqs#InvalidAddress";
+/// Above the longest SQS long poll, so a quiet poll does not log as slow.
+const SLOW_REQUEST: Duration = Duration::from_secs(25);
 /// How often a long poll looks again, for messages that become due or visible.
 const LONG_POLL_RECHECK: Duration = Duration::from_millis(500);
 
@@ -37,6 +40,7 @@ pub fn router(queues: Arc<Queues>) -> Router {
     Router::new()
         .route("/health", get(|| async { StatusCode::OK }))
         .fallback(handle)
+        .layer(MacroRequestIdAndTracingLayer::new(SLOW_REQUEST).into_inner())
         .with_state(queues)
 }
 
@@ -94,7 +98,10 @@ async fn handle(
         .and_then(|host| host.to_str().ok())
         .unwrap_or("localhost")
         .to_owned();
-    let response = dispatch(&queues, &action, &request, &host).await?;
+    let traceparent = headers
+        .get("traceparent")
+        .and_then(|value| value.to_str().ok());
+    let response = dispatch(&queues, &action, &request, &host, traceparent).await?;
     Ok(amz_json(StatusCode::OK, &response))
 }
 
@@ -103,6 +110,7 @@ async fn dispatch(
     action: &str,
     request: &Value,
     host: &str,
+    traceparent: Option<&str>,
 ) -> Result<Value, ApiError> {
     match action {
         "CreateQueue" => Ok(create_queue(queues, request, host).await?),
@@ -137,9 +145,9 @@ async fn dispatch(
         "SendMessage" => {
             let name = named(request)?;
             let queue = existing(queues, &name).await?;
-            send(queues, &queue, &name, request).await
+            send(queues, &queue, &name, request, traceparent).await
         }
-        "SendMessageBatch" => send_batch(queues, request).await,
+        "SendMessageBatch" => send_batch(queues, request, traceparent).await,
         "ReceiveMessage" => receive(queues, request).await,
         "DeleteMessage" => {
             let queue = addressed(queues, request).await?;
@@ -313,6 +321,7 @@ async fn send_one(
     queue: &Queue,
     name: &str,
     entry: &Value,
+    traceparent: Option<&str>,
 ) -> Result<Value, Report> {
     let body = entry["MessageBody"].as_str().unwrap_or_default().to_owned();
     let settings = queue.state.lock().await.settings.clone();
@@ -339,6 +348,7 @@ async fn send_one(
                 .cloned(),
             group: entry["MessageGroupId"].as_str().map(str::to_owned),
             dedup,
+            traceparent: traceparent.map(str::to_owned),
             sent_ms: now,
             not_before_ms: now + delay * 1000,
         };
@@ -352,8 +362,9 @@ async fn send(
     queue: &Queue,
     name: &str,
     request: &Value,
+    traceparent: Option<&str>,
 ) -> Result<Value, ApiError> {
-    Ok(send_one(queues, queue, name, request).await?)
+    Ok(send_one(queues, queue, name, request, traceparent).await?)
 }
 
 /// Runs a batch's entries, reporting each in the shape SQS batch calls use.
@@ -369,14 +380,18 @@ fn batch_failure(id: &str, message: String) -> Value {
     json!({ "Id": id, "SenderFault": false, "Code": "InternalError", "Message": message })
 }
 
-async fn send_batch(queues: &Queues, request: &Value) -> Result<Value, ApiError> {
+async fn send_batch(
+    queues: &Queues,
+    request: &Value,
+    traceparent: Option<&str>,
+) -> Result<Value, ApiError> {
     let name = named(request)?;
     let queue = existing(queues, &name).await?;
     let mut succeeded = Vec::new();
     let mut failed = Vec::new();
     for entry in batch_entries(request) {
         let id = entry["Id"].as_str().unwrap_or_default().to_owned();
-        match send_one(queues, &queue, &name, &entry).await {
+        match send_one(queues, &queue, &name, &entry, traceparent).await {
             Ok(mut sent) => {
                 sent["Id"] = json!(id);
                 succeeded.push(sent);
@@ -434,6 +449,14 @@ async fn receive(queues: &Queues, request: &Value) -> Result<Value, ApiError> {
         let deliveries = queue.state.lock().await.receive(max, visibility, now_ms());
         if !deliveries.is_empty() || Instant::now() >= deadline {
             tracing::Span::current().record("received", deliveries.len());
+            for delivery in &deliveries {
+                tracing::info!(
+                    message_id = delivery.envelope.message_id,
+                    receive_count = delivery.receive_count,
+                    upstream_traceparent = delivery.envelope.traceparent,
+                    "delivered a message"
+                );
+            }
             let messages: Vec<Value> = deliveries.iter().map(delivery_json).collect();
             return Ok(if messages.is_empty() {
                 json!({})

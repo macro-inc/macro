@@ -11867,6 +11867,7 @@
       "crates/macro_entrypoint",
       "crates/macro_env",
       "crates/macro_env_var",
+      "crates/macro_tower_layers",
       "crates/remote_env_var",
       "crates/workspace-hack",
       "services/queue_gateway"

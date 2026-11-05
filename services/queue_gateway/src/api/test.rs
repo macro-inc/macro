@@ -63,6 +63,7 @@ fn a_delivery_reports_what_receivers_read() {
             attributes: Some(json!({ "kind": { "DataType": "String", "StringValue": "x" } })),
             group: Some("g".to_owned()),
             dedup: None,
+            traceparent: None,
             sent_ms: 5,
             not_before_ms: 0,
         },

@@ -19,7 +19,7 @@ const KAFKA_RETRY: Duration = Duration::from_secs(2);
 #[tokio::main]
 async fn main() -> Result<(), Report> {
     let config = Config::from_env()?;
-    MacroEntrypoint::new(config.environment).init();
+    let entrypoint = MacroEntrypoint::new(config.environment).init();
 
     // Started with Kafka, in the same sync wave, so it may not be up yet.
     let queues = loop {
@@ -37,5 +37,6 @@ async fn main() -> Result<(), Report> {
     axum::serve(listener, api::router(queues))
         .with_graceful_shutdown(shutdown_signal())
         .await?;
+    entrypoint.shutdown();
     Ok(())
 }

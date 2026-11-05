@@ -9,6 +9,7 @@ fn envelope(id: &str) -> Envelope {
         attributes: None,
         group: None,
         dedup: None,
+        traceparent: None,
         sent_ms: T0,
         not_before_ms: 0,
     }

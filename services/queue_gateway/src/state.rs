@@ -25,6 +25,10 @@ pub struct Envelope {
     pub group: Option<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub dedup: Option<String>,
+    /// The sender's W3C trace context. SQS clients do not carry one to receivers, so the
+    /// gateway records it on delivery to keep the flow findable.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub traceparent: Option<String>,
     pub sent_ms: u64,
     /// Not delivered before this time (`DelaySeconds`).
     pub not_before_ms: u64,

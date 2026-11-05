@@ -36,6 +36,9 @@ was in flight, which is SQS's at-least-once contract.
 
 ## Gotchas
 
+- SQS clients carry no trace context to receivers. Each message keeps its sender's
+  `traceparent`, logged as `upstream_traceparent` when delivered, so a flow is findable
+  across the queue even though it is two traces.
 - `ApproximateReceiveCount` resets on restart, because it lives in memory, so a poison
   message can get extra attempts before reaching its dead-letter queue.
 - Request signatures are not verified: the gateway is reachable only inside its

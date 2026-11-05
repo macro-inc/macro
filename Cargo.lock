@@ -16001,6 +16001,7 @@ dependencies = [
  "macro_config",
  "macro_entrypoint",
  "macro_env",
+ "macro_tower_layers",
  "md-5 0.10.6",
  "rdkafka",
  "rootcause",
