@@ -385,6 +385,13 @@ pub async fn build(
     .with_design_files(Arc::new(document_files.clone()))
     .with_photoshop_files(Arc::new(document_files.clone()))
     .with_illustrator_files(Arc::new(document_files));
+    let document_tool_context = match ai_tools::canvas_artifacts_rollout(
+        config.posthog_api_key.value(),
+        config.posthog_host.value(),
+    )? {
+        Some(rollout) => document_tool_context.with_canvas_artifacts(rollout),
+        None => document_tool_context,
+    };
 
     tracing::info!("initialized document tool context");
 
@@ -546,7 +553,7 @@ pub async fn build(
                 .with_enforcement(config.enable_ai_usage_enforcement),
             ),
             ai_billing.clone(),
-            ai_billing::outbound::HttpSettlementTrigger::new(auth_service_client),
+            ai_billing::outbound::HttpSettlementTrigger::new(auth_service_client.clone()),
             config.enable_ai_usage_billing,
         ));
 
@@ -580,15 +587,21 @@ pub async fn build(
     )
     .context("invalid MCP credentials encryption key")?;
     let granola_signing_key = *mcp_encryption_key.as_bytes();
-    let mcp_server_repo =
-        mcp_client::outbound::pg_server_repo::PgServerRepo::new(db.clone(), mcp_encryption_key);
+    let mcp_server_repo = mcp_client::outbound::NativeServerStore::new(
+        mcp_client::outbound::pg_server_repo::PgServerRepo::new(db.clone(), mcp_encryption_key),
+        Some(Arc::new(
+            mcp_client::outbound::auth_service_github_tokens::AuthServiceGithubTokens::new(
+                (*auth_service_client).clone(),
+            ),
+        )),
+    );
 
     // The Pipedream MCP stack, fully separate from the native one above
     // (own endpoints, own table, own toolset). Without credentials its
     // endpoints answer 501 and its toolsets come up empty. Connect-flow
     // webhooks need both URI and secret; a half-set pair is ignored so we
     // never mint a callback we cannot serve.
-    let pipedream_client: ai_tools::ToolPipedreamConnection = match (
+    let pipedream_client: Option<Arc<pipedream_mcp::outbound::api::PipedreamClient>> = match (
         config.pipedream_client_id.value(),
         config.pipedream_client_secret.value(),
         config.pipedream_project_id.value(),
@@ -658,6 +671,23 @@ pub async fn build(
             None
         }
     };
+    // Macro Connect beside Pipedream: a user the `macro-connect` rollout is
+    // on for is on Connect alone; everyone else stays on Pipedream.
+    let connect_adapter = ai_tools::connect_adapter(config.connect_customer_key.value())?;
+    let rollout = ai_tools::macro_connect_rollout(
+        config.posthog_api_key.value(),
+        config.posthog_host.value(),
+    )?;
+    let connectors: ai_tools::ToolPipedreamConnection = pipedream_client.as_ref().map(|client| {
+        let backends = pipedream_mcp::outbound::dispatch::ConnectorBackends::new(
+            client.clone(),
+            connect_adapter.clone(),
+        );
+        Arc::new(match &rollout {
+            Some(rollout) => backends.with_rollout(rollout.clone()),
+            None => backends,
+        })
+    });
     let pipedream_repo =
         pipedream_mcp::outbound::pg_connection_repo::PgConnectionRepo::new(db.clone());
     let granola_sync: Option<Arc<dyn granola_sync::domain::service::SyncService>> =
@@ -692,7 +722,7 @@ pub async fn build(
     let mcp_selector: Arc<ai_tools::ToolMcpSelector> = Arc::new(mcp_select::McpToolSelector::new(
         Arc::new(mcp_server_repo.clone()),
         Arc::new(pipedream_repo.clone()),
-        Arc::new(pipedream_client.clone()),
+        Arc::new(connectors.clone()),
     ));
 
     // Nudges the user's connected clients when import rows flip, so setup
@@ -700,14 +730,6 @@ pub async fn build(
     // poll (see import::outbound::gateway_notifier).
     let import_notify = import::outbound::gateway_notifier::gateway_import_notify(
         channels_connection_gateway.clone(),
-    );
-
-    let project_tool_context = ai_tools::build_project_tool_context(
-        db.clone(),
-        macro_event_broker.clone(),
-        entity_access_service.clone(),
-        document_tool_context.service.clone(),
-        user_email_service.clone(),
     );
 
     let initiative_tool_context = ai_tools::build_initiative_tool_context(
@@ -727,6 +749,14 @@ pub async fn build(
             ),
         ),
         ai_tools::MaybeToolEventBroker::Real(macro_event_broker.clone()),
+    );
+    let project_tool_context = ai_tools::build_project_tool_context(
+        db.clone(),
+        macro_event_broker.clone(),
+        entity_access_service.clone(),
+        document_tool_context.service.clone(),
+        user_email_service.clone(),
+        databases_tool_context.service.clone(),
     );
 
     let entity_creator = ai_tools::ToolEntityCreator {
@@ -755,20 +785,20 @@ pub async fn build(
             Arc::new(
                 import_linear::outbound::client::PipedreamLinearConnections::new(
                     Arc::new(pipedream_repo.clone()),
-                    pipedream_client.clone(),
+                    connectors.clone(),
                 ),
             ),
             Arc::new(
                 import_jira::outbound::client::PipedreamJiraConnections::new(
                     Arc::new(pipedream_repo.clone()),
-                    pipedream_client.clone(),
+                    connectors.clone(),
                 ),
             ),
         )
         .with_notion_connections(Arc::new(
             import_notion::outbound::pipedream::PipedreamNotionConnections::new(
                 Arc::new(pipedream_repo.clone()),
-                pipedream_client.clone(),
+                connectors.clone(),
             ),
         ))
         .with_admission(admission.clone())
@@ -825,10 +855,18 @@ pub async fn build(
         ai_tools::FormsToolConfig {
             app_origin: macro_service_urls::AppServiceUrl::new()?.to_string(),
             editing_worker_url: config.ai_editing_worker_url.clone(),
+            static_files: static_file_service_client::StaticFileServiceClient::new(
+                internal_api_key.clone(),
+                macro_service_urls::StaticFileServiceUrl::new()?.to_string(),
+            ),
         },
     );
 
     let tool_service_context = ai_tools::ToolServiceContext {
+        memory_tool_context: ai_tools::memory::build_memory_tool_context(
+            db.clone(),
+            recorder.clone(),
+        ),
         cognition_tool_context: ai_tools::build_cognition_tool_context()?,
         connector_tool_context: ai_tools::build_connector_tool_context(db.clone(), None, None),
         search_service_client: search_service_client.clone(),
@@ -913,6 +951,7 @@ pub async fn build(
         ),
         schedule_tool_context: ai_tools::build_routine_tool_context()?,
         anthropic_tool_context: ai_tools::build_anthropic_tool_context(),
+        web_search_provider: ai_tools::build_web_search_provider_from_env(),
         admission,
         recorder,
         usage_context: ai_usage::UsageContext::system(ai_usage::AiFeature::Chat),
@@ -923,11 +962,9 @@ pub async fn build(
         Arc::new(all_tools.prompt.to_string());
 
     // Build memory service
-    let memory_repo = memory::outbound::pg_memory_repo::PgMemoryRepo::new(db.clone());
-    let memory_service = Arc::new(memory::domain::service::MemoryServiceImpl::new(
-        memory_repo,
+    let memory_service = Arc::new(ai_tools::memory::build_memory_service(
+        db.clone(),
         tool_service_context.clone(),
-        all_tools,
     ));
 
     tracing::info!("initialized memory service");
@@ -1068,7 +1105,7 @@ pub async fn build(
         );
     let pipedream_state = pipedream_mcp::inbound::PipedreamRouterState::new(
         pipedream_repo,
-        pipedream_client,
+        connectors,
         authorization_state.clone(),
     )
     .with_auth_completed_hook(pipedream_auth_hook)
@@ -1081,6 +1118,13 @@ pub async fn build(
         cancellation.clone(),
         event_broker_tracker.clone(),
     );
+    if !matches!(config.environment, Environment::Local) {
+        memory::schedule::start(
+            memory_service.clone(),
+            &event_broker_tracker,
+            cancellation.clone(),
+        )?;
+    }
     let router = api::build_router(ApiContext {
         db: db.clone(),
         email_service_client_external,
@@ -1117,6 +1161,11 @@ pub async fn build(
         ai_stream_registry: service::ai_stream_registry::AiStreamRegistry::new(
             redis_client.clone(),
         ),
+        web_rate_limiter: rate_limit::RateLimitServiceImpl {
+            repo: rate_limit::RedisRateLimitAdapter {
+                redis: (*redis_client).clone(),
+            },
+        },
         mcp_state,
         pipedream_state,
         granola_sync,

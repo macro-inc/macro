@@ -101,6 +101,7 @@ async fn authenticated_mcp_runs_javascript_and_persists_source_and_result(pool: 
             cognition: None,
             reviews: Arc::new(std::sync::OnceLock::new()),
             gate: Arc::new(agent_inmem::domain::tool_gate::UngatedNativeTools),
+            app_url: "https://macro.com".into(),
         },
     );
     assert_eq!(
@@ -294,7 +295,7 @@ async fn authenticated_mcp_runs_javascript_and_persists_source_and_result(pool: 
     let running = tokio::spawn(async move {
         rpc(app, Some("session-secret"), "tools/call", json!({"name": "ExecuteCode", "arguments": {
             "acting_as": "owner", "turn_id": "00000000-0000-0000-0000-000000000003", "execution_id": cancelled_id,
-            "source": "export async function main() { await new Promise(r => setTimeout(r, 10000)); return {data:true,reviews:[]}; }"
+            "source": "export function main() { while (true) {} }"
         }})).await
     });
     tokio::time::timeout(std::time::Duration::from_secs(5), async {

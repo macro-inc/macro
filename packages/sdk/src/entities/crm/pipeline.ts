@@ -1,8 +1,10 @@
 import type {
   AccessiblePipeline,
+  CardPosition,
   ColumnDetail,
   CreatePipeline,
   DatabaseOp,
+  DatabaseView as DatabaseViewRecord,
   OpBatch,
   StorageRow,
   StorageRowsQuery,
@@ -11,12 +13,20 @@ import type {
 import { Lazy, MacroNotFoundError, paginate, unwrap } from '../../utils';
 import type { MacroClient } from '../../utils/client';
 import { MacroEntity } from '../entity';
+import { PropertyOption } from '../properties/property-option';
 import {
   type SharePermissionOptions,
   sharePermissionBody,
 } from '../sharing/permissions';
 import { Team } from '../teams/team';
 import { User } from '../users/user';
+
+/** Required fields for one option of a pipeline stage column. */
+export type PipelineStageRequirement = {
+  stageColumn: PipelineColumn;
+  stage: PropertyOption;
+  requiredFields: PipelineColumn[];
+};
 
 /** A CRM pipeline with its own sharing boundary and backing table. */
 export class CrmPipeline extends MacroEntity<AccessiblePipeline> {
@@ -105,9 +115,92 @@ export class CrmPipeline extends MacroEntity<AccessiblePipeline> {
     );
   }
 
+  /** Read stage rules with column and option handles that survive renames. */
+  async stageRequirements(): Promise<PipelineStageRequirement[]> {
+    const rules = unwrap(
+      await this.client.storage.getCrmPipelineStageRequirements({
+        path: { id: this.id },
+      }),
+    );
+    // Rules are read fresh; resolve their identities against a fresh schema too.
+    this.tableDetail.clear();
+    const table = await this.table();
+    const detail = await this.tableRecord();
+    const column = (id: string) => {
+      const record = detail.columns.find((entry) => entry.column.id === id);
+      if (!record)
+        throw new MacroNotFoundError(
+          'A required field was deleted; reload the pipeline',
+        );
+      return PipelineColumn.from(this.client, table, record);
+    };
+    return rules.map((rule) => {
+      const record = detail.columns.find(
+        (entry) => entry.column.id === rule.stageColumnId,
+      );
+      const option = record?.definition.property_options.find(
+        (entry) => entry.id === rule.stageId,
+      );
+      if (!record || !option)
+        throw new MacroNotFoundError(
+          'A required stage was deleted; reload the pipeline',
+        );
+      return {
+        stageColumn: column(rule.stageColumnId),
+        stage: PropertyOption.from(
+          this.client,
+          record.definition.definition.id,
+          option,
+        ),
+        requiredFields: rule.requiredColumnIds.map(column),
+      };
+    });
+  }
+
+  /** Require fields when entering a stage; an empty list removes that stage's rule. */
+  async setStageRequirements(
+    stageColumn: PipelineColumn,
+    stage: PropertyOption,
+    requiredFields: PipelineColumn[],
+  ): Promise<void> {
+    if (
+      [stageColumn, ...requiredFields].some(
+        (column) => column.table.pipeline.id !== this.id,
+      )
+    )
+      throw new Error('Fields belong to another pipeline');
+    this.tableDetail.clear();
+    const column = (await this.tableRecord()).columns.find(
+      (entry) => entry.column.id === stageColumn.id,
+    );
+    if (!column || column.definition.definition.id !== stage.definitionId)
+      throw new Error('The stage option belongs to another field');
+    await this.mutate((client) =>
+      client.storage.setCrmPipelineStageRequirement({
+        path: { id: this.id },
+        body: {
+          stageColumnId: stageColumn.id,
+          stageId: stage.id,
+          requiredColumnIds: requiredFields.map((field) => field.id),
+        },
+      }),
+    );
+  }
+
   /** Read the backing table through the pipeline's authorization boundary. */
   async table(): Promise<PipelineTable> {
     return PipelineTable.from(this.client, this, await this.tableRecord());
+  }
+
+  /** Saved card order through this pipeline's authorization boundary. */
+  async viewPositions(view: PipelineView): Promise<CardPosition[]> {
+    if (view.table.pipeline.id !== this.id)
+      throw new Error('View belongs to another pipeline');
+    return unwrap(
+      await this.client.storage.getCrmPipelineViewPositions({
+        path: { id: this.id, view: view.id },
+      }),
+    );
   }
 
   /** @internal Cached table snapshot shared by all pipeline table handles. */
@@ -215,6 +308,13 @@ export class PipelineTable extends MacroEntity<TableDetail> {
     );
   }
 
+  /** Stored views in display order. */
+  async views(): Promise<PipelineView[]> {
+    return (await this.pipeline.tableRecord()).views.map((view) =>
+      PipelineView.byId(this, view.id),
+    );
+  }
+
   /** Table version for optimistic operation batches. */
   async version(): Promise<number> {
     return (await this.pipeline.tableRecord()).table.version;
@@ -228,6 +328,51 @@ export class PipelineTable extends MacroEntity<TableDetail> {
   /** Rows from the authorized pipeline surface. */
   rows(): AsyncGenerator<PipelineRow> {
     return this.pipeline.rows();
+  }
+}
+
+/** A view owned and authorized by its CRM pipeline. */
+export class PipelineView {
+  private constructor(
+    /** The pipeline table this view shows. */
+    readonly table: PipelineTable,
+    /** View identity within the pipeline. */
+    readonly id: string,
+  ) {}
+
+  /** A handle to a stored view within a pipeline table. */
+  static byId(table: PipelineTable, id: string): PipelineView {
+    return new PipelineView(table, id);
+  }
+
+  /** The current view definition from the pipeline's shared schema cache. */
+  async detail(): Promise<DatabaseViewRecord> {
+    const found = (await this.table.pipeline.tableRecord()).views.find(
+      (view) => view.id === this.id,
+    );
+    if (!found)
+      throw new MacroNotFoundError(
+        `view ${this.id} is not on table ${this.table.id}`,
+      );
+    return found;
+  }
+
+  /**
+   * Read only cards with saved positions; unplaced cards are omitted.
+   * A saved lane may be stale after a row's grouping value changes outside a
+   * card move. Compare each lane with the row's current grouping before using it.
+   */
+  positions(): Promise<CardPosition[]> {
+    return this.table.pipeline.viewPositions(this);
+  }
+
+  /** Serialize identity without an authenticated client. */
+  toJSON(): { id: string; tableId: string; pipelineId: string } {
+    return {
+      id: this.id,
+      tableId: this.table.id,
+      pipelineId: this.table.pipeline.id,
+    };
   }
 }
 
@@ -318,6 +463,14 @@ export class PipelineColumn extends MacroEntity<ColumnDetail> {
     if (!record)
       throw new MacroNotFoundError(`Pipeline column ${this.id} is unavailable`);
     return record;
+  }
+
+  /** Selectable options, including stable stage identities for requirement rules. */
+  async options(): Promise<PropertyOption[]> {
+    const column = await this.fetch();
+    return column.definition.property_options.map((option) =>
+      PropertyOption.from(this.client, column.definition.definition.id, option),
+    );
   }
 
   /** Whether the caller can write this column. */

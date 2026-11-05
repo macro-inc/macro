@@ -14,13 +14,14 @@ use axum::{
 use macro_authorization::{InternalOnly, MacroAuthorizationExtractor};
 use rand::Rng;
 
+use crate::service::user::agent_signup::AGENT_SIGNUP_DATA_KEY;
 use crate::service::user::create_user::create_user;
 use crate::service::user::support_channel_welcome::{
     AuthorizedSupportChannelMessages, post_support_channel_welcome,
 };
 use crate::{
     api::{
-        context::{ApiContext, AuthorizationService},
+        context::{ApiContext, AuthorizationService, TeamsServiceType},
         signup_policy::signup_forbidden_response,
     },
     rate_limit_config::RATE_LIMIT_CONFIG,
@@ -93,6 +94,26 @@ fn identity_provider_name(user: &FusionAuthWebhookUser) -> (Option<String>, Opti
         },
         None => (None, None),
     }
+}
+
+/// Whether the signup request asked for an agent. Only `/login/passwordless`
+/// writes this metadata.
+fn signup_requested_agent(user: &FusionAuthWebhookUser) -> bool {
+    user.data
+        .as_ref()
+        .and_then(|data| data.get(AGENT_SIGNUP_DATA_KEY))
+        .and_then(serde_json::Value::as_bool)
+        .unwrap_or(false)
+}
+
+async fn has_pending_agent_invite(
+    teams_service: &TeamsServiceType,
+    email: &str,
+) -> anyhow::Result<bool> {
+    let user_id = MacroUserIdStr::try_from_email(email)?;
+    let invites = teams_service.get_user_invites(&user_id).await?;
+
+    Ok(invites.iter().any(|invite| invite.is_agent))
 }
 
 /// FusionAuth create user webhook
@@ -255,12 +276,14 @@ async fn create_user_webhook_complete(
         ip_address = %req.event.info.ip_address,
         user_id = tracing::field::Empty,
         organization_id = tracing::field::Empty,
+        is_agent = tracing::field::Empty,
     ),
     err
 )]
 async fn create_user_webhook(ctx: &ApiContext, req: FusionAuthUserWebhook) -> anyhow::Result<()> {
     let ip_address = req.event.info.ip_address;
     let email = req.event.user.email.to_lowercase();
+    let requested_agent = signup_requested_agent(&req.event.user);
     let (first_name, last_name) = identity_provider_name(&req.event.user);
     let username = req.event.user.username.unwrap_or(email.clone());
     let fusionauth_user_id = req.event.user.id;
@@ -268,11 +291,9 @@ async fn create_user_webhook(ctx: &ApiContext, req: FusionAuthUserWebhook) -> an
     // FusionAuth's own email validation is more permissive than ours (e.g. it allows
     // single quotes). The user.create event is transactional (AbsoluteMajority), so
     // returning an error here aborts the FusionAuth user creation entirely.
-    let parsed_email = match Email::parse_from_str(&email) {
-        Ok(email) => email,
-        Err(e) => anyhow::bail!("email is not a valid macro email: {e}"),
-    };
-    let support_channel_name = support_channel_name(&parsed_email);
+    if let Err(e) = Email::parse_from_str(&email) {
+        anyhow::bail!("email is not a valid macro email: {e}");
+    }
 
     // rate limit check for user creation
     let rate_limit = ctx
@@ -315,6 +336,9 @@ async fn create_user_webhook(ctx: &ApiContext, req: FusionAuthUserWebhook) -> an
         anyhow::bail!("cannot login through secondary account link");
     }
 
+    let is_agent = requested_agent || has_pending_agent_invite(&ctx.teams_service, &email).await?;
+    tracing::Span::current().record("is_agent", is_agent);
+
     tracing::info!(
         has_first_name = first_name.is_some(),
         has_last_name = last_name.is_some(),
@@ -328,6 +352,7 @@ async fn create_user_webhook(ctx: &ApiContext, req: FusionAuthUserWebhook) -> an
         req.event.user.verified,
         &ctx.db,
         &ctx.stripe_client,
+        is_agent,
     )
     .await?;
 
@@ -393,11 +418,17 @@ async fn create_user_webhook(ctx: &ApiContext, req: FusionAuthUserWebhook) -> an
                     serde_json::json!({
                         "verified": verified,
                         "hasOrganization": has_organization,
+                        "isAgent": is_agent,
                     }),
                 )
                 .await
                 .inspect(|_| tracing::info!("tracked PostHog sign_up event"))
                 .inspect_err(|e| tracing::warn!(error=?e, "failed to track PostHog sign_up event"));
+
+            // Ad platforms optimize toward people who sign up.
+            if is_agent {
+                return;
+            }
 
             let user_data = MetaUserData {
                 email: Some(email),
@@ -429,36 +460,6 @@ async fn create_user_webhook(ctx: &ApiContext, req: FusionAuthUserWebhook) -> an
                 .inspect_err(|e| {
                     tracing::warn!(error=?e, "failed to track Meta CompleteRegistration");
                 });
-        }
-        .in_current_span()
-    });
-
-    // Tell Loops the account now exists. This upserts the contact into our
-    // marketing audience, triggers the welcome sequence, and is the exit
-    // condition for the mobile-lead nurture sequence — so a lead who converts
-    // stops being asked to sign up. Fire-and-forget: a Loops failure must never
-    // block user creation.
-    tokio::spawn({
-        let loops_client = ctx.loops_client.clone();
-        let email = loops_client::normalize_email(&email);
-        let user_id = user_id.clone();
-        async move {
-            let _ = loops_client
-                .send_event(
-                    &email,
-                    "user_registered",
-                    &serde_json::json!({
-                        "signupStage": "registered",
-                        "hasAccount": true,
-                        "source": "macro-signup",
-                    }),
-                    Some(&format!("user-registered-{user_id}")),
-                )
-                .await
-                .inspect(|_| tracing::info!("sent Loops user_registered event"))
-                .inspect_err(
-                    |e| tracing::error!(error=?e, "failed to send Loops user_registered event"),
-                );
         }
         .in_current_span()
     });
@@ -505,6 +506,64 @@ async fn create_user_webhook(ctx: &ApiContext, req: FusionAuthUserWebhook) -> an
                     tracing::error!(error=?e, "failed to auto-join user to team by email domain");
                 }
             }
+        }
+        .in_current_span()
+    });
+
+    // Agents get an SDK token instead: no marketing sequence, sample content,
+    // or support channel.
+    if !is_agent {
+        spawn_human_signup_content(ctx, &user_id, &email);
+    }
+
+    // Allow to fail silently
+    let _ = ctx
+        .macro_cache_client
+        .increment_create_user_hourly_rate_limit(&ip_address)
+        .await
+        .inspect_err(|e| tracing::error!(error=?e, "unable to increment create user rate limit"));
+
+    Ok(())
+}
+
+/// Marketing and sample content for a person's new account. Fire-and-forget:
+/// none of it may block signing in.
+fn spawn_human_signup_content(ctx: &ApiContext, user_id: &str, email: &str) {
+    let support_channel_name = match Email::parse_from_str(email) {
+        Ok(email) => support_channel_name(&email),
+        Err(e) => {
+            tracing::error!(error=?e, "unable to parse email for support channel");
+            return;
+        }
+    };
+    let user_id = user_id.to_string();
+
+    // Tell Loops the account now exists. This upserts the contact into our
+    // marketing audience, triggers the welcome sequence, and is the exit
+    // condition for the mobile-lead nurture sequence — so a lead who converts
+    // stops being asked to sign up. Fire-and-forget: a Loops failure must never
+    // block user creation.
+    tokio::spawn({
+        let loops_client = ctx.loops_client.clone();
+        let email = loops_client::normalize_email(email);
+        let user_id = user_id.clone();
+        async move {
+            let _ = loops_client
+                .send_event(
+                    &email,
+                    "user_registered",
+                    &serde_json::json!({
+                        "signupStage": "registered",
+                        "hasAccount": true,
+                        "source": "macro-signup",
+                    }),
+                    Some(&format!("user-registered-{user_id}")),
+                )
+                .await
+                .inspect(|_| tracing::info!("sent Loops user_registered event"))
+                .inspect_err(
+                    |e| tracing::error!(error=?e, "failed to send Loops user_registered event"),
+                );
         }
         .in_current_span()
     });
@@ -591,15 +650,33 @@ async fn create_user_webhook(ctx: &ApiContext, req: FusionAuthUserWebhook) -> an
         }
         .in_current_span()
     });
+}
 
-    // Allow to fail silently
-    let _ = ctx
-        .macro_cache_client
-        .increment_create_user_hourly_rate_limit(&ip_address)
+/// Someone asked to sign in to this address as a person: undo an agent flag
+/// nobody has proven, and give them the content a person's signup skips. A
+/// failure here must not block signing in.
+pub(in crate::api) async fn revert_unconfirmed_agent(ctx: &ApiContext, user_id: &str, email: &str) {
+    match macro_db_client::user::revert_unconfirmed_agent::revert_unconfirmed_agent(&ctx.db, email)
         .await
-        .inspect_err(|e| tracing::error!(error=?e, "unable to increment create user rate limit"));
+    {
+        Ok(true) => {
+            tracing::warn!(user_id, "reverted unconfirmed agent account to a person");
+            spawn_human_signup_content(ctx, user_id, email);
+        }
+        Ok(false) => {}
+        Err(e) => tracing::error!(error=?e, user_id, "unable to revert unconfirmed agent account"),
+    }
+}
 
-    Ok(())
+/// A new account signed up with an identity provider from the agent signup
+/// page. FusionAuth creates the account before the sign-in returns, and its
+/// webhook cannot see the sign-in's state, so the flag is set here. A failure
+/// here must not block signing in.
+pub(in crate::api) async fn mark_sso_signup_as_agent(ctx: &ApiContext, user_id: &str, email: &str) {
+    match macro_db_client::user::mark_agent::mark_agent(&ctx.db, email).await {
+        Ok(()) => tracing::info!(user_id, "marked new SSO account as an agent"),
+        Err(e) => tracing::error!(error=?e, user_id, "unable to mark new SSO account as an agent"),
+    }
 }
 
 /// Seed the starter documents with retries.

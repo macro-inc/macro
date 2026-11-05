@@ -72,12 +72,12 @@ const harnessMocks = vi.hoisted(() => ({
     isError: false,
   },
   deleteHarness: vi.fn(),
+  patchHarness: vi.fn(),
   approve: vi.fn(),
   pairing: {
     data: {
       code: 'KX7M-4QHD',
       requested_name: 'Dev laptop',
-      requested_scope: null,
       host: 'erics-mbp.local',
       created_at: '2026-08-27T12:00:00Z',
       expires_at: new Date(Date.now() + 10 * 60_000).toISOString(),
@@ -112,6 +112,10 @@ vi.mock('@queries/harnesses/harnesses', () => ({
   useHarnessesQuery: () => harnessMocks.query,
   useDeleteHarnessMutation: () => ({
     mutateAsync: harnessMocks.deleteHarness,
+    isPending: false,
+  }),
+  usePatchHarnessMutation: () => ({
+    mutateAsync: harnessMocks.patchHarness,
     isPending: false,
   }),
   useHarnessPairingQuery: (code: () => string | undefined) => ({
@@ -157,6 +161,7 @@ vi.mock('@core/component/Toast/Toast', () => ({
 
 const REGISTERED_HARNESS = {
   id: '3f1c9d2e-8a4b-4c5d-9e6f-1a2b3c4d5e6f',
+  allow_permission_bypass: false,
   kind: 'macrod',
   name: 'Dev box',
   owner: { type: 'team', team_id: 'team-1' },
@@ -370,7 +375,7 @@ describe('Harness', () => {
 
     expect(screen.queryByText('No paired runtimes yet')).toBeNull();
     expect(
-      screen.queryByRole('heading', { name: 'Paired runtimes' })
+      screen.queryByRole('heading', { name: 'Connected runtimes' })
     ).toBeNull();
     expect(
       screen.queryByRole('button', { name: 'Enter pairing code' })
@@ -400,6 +405,9 @@ describe('Harness', () => {
 
     render(() => <Harness />);
 
+    expect(
+      screen.getByRole('heading', { name: 'Connected runtimes' })
+    ).toBeTruthy();
     expect(screen.getByText('Dev box')).toBeTruthy();
     expect(screen.getByText('Team')).toBeTruthy();
     expect(screen.getByRole('img', { name: 'Connected' })).toBeTruthy();
@@ -407,11 +415,32 @@ describe('Harness', () => {
     expect(screen.queryByText('Never connected')).toBeNull();
   });
 
-  it('shows a disconnected private harness that never connected', () => {
+  it('lists an offline runtime below the connected ones', () => {
+    const offline = {
+      ...REGISTERED_HARNESS,
+      id: 'harness-offline',
+      name: 'Old laptop',
+      owner: { type: 'user' as const, user_id: 'macro|user@example.com' },
+      connected: false,
+      last_connected_at: null,
+    };
+    harnessMocks.query.data = [offline, REGISTERED_HARNESS];
+
+    render(() => <Harness />);
+
+    expect(screen.getByText('Private')).toBeTruthy();
+    expect(screen.getByRole('img', { name: 'Offline' })).toBeTruthy();
+    expect(screen.getByText('Never connected')).toBeTruthy();
+    const names = screen
+      .getAllByText(/Dev box|Old laptop/)
+      .map((node) => node.textContent);
+    expect(names).toEqual(['Dev box', 'Old laptop']);
+  });
+
+  it('hides the section when every runtime is offline', () => {
     harnessMocks.query.data = [
       {
         ...REGISTERED_HARNESS,
-        owner: { type: 'user', user_id: 'macro|user@example.com' },
         connected: false,
         last_connected_at: null,
       },
@@ -419,9 +448,10 @@ describe('Harness', () => {
 
     render(() => <Harness />);
 
-    expect(screen.getByText('Private')).toBeTruthy();
-    expect(screen.getByRole('img', { name: 'Disconnected' })).toBeTruthy();
-    expect(screen.getByText('Never connected')).toBeTruthy();
+    expect(
+      screen.queryByRole('heading', { name: 'Connected runtimes' })
+    ).toBeNull();
+    expect(screen.queryByText('Dev box')).toBeNull();
   });
 
   it('confirms before removing a harness', async () => {
@@ -446,6 +476,68 @@ describe('Harness', () => {
         harnessId: REGISTERED_HARNESS.id,
       });
       expect(mocks.toastSuccess).toHaveBeenCalledWith('Runtime removed');
+      expect(screen.queryByRole('dialog')).toBeNull();
+    });
+  });
+
+  it('allows permission bypass on a paired runtime after confirming', async () => {
+    harnessMocks.query.data = [REGISTERED_HARNESS];
+
+    render(() => <Harness />);
+    const toggle = screen.getByRole('switch', {
+      name: 'Allow bypassing permission requests',
+    });
+    expect(toggle).toHaveProperty('checked', false);
+    expect(
+      screen.getByText('Every agent on this runtime must ask for permission.')
+    ).toBeTruthy();
+    fireEvent.click(toggle);
+
+    await waitFor(() =>
+      expect(harnessMocks.patchHarness).toHaveBeenCalledWith({
+        harnessId: REGISTERED_HARNESS.id,
+        allowPermissionBypass: true,
+      })
+    );
+  });
+
+  it('withdraws permission bypass without confirming', async () => {
+    const { confirmDialog } = await import('@ui');
+    harnessMocks.query.data = [
+      { ...REGISTERED_HARNESS, allow_permission_bypass: true },
+    ];
+
+    render(() => <Harness />);
+    fireEvent.click(
+      screen.getByRole('switch', {
+        name: 'Allow bypassing permission requests',
+      })
+    );
+
+    await waitFor(() =>
+      expect(harnessMocks.patchHarness).toHaveBeenCalledWith({
+        harnessId: REGISTERED_HARNESS.id,
+        allowPermissionBypass: false,
+      })
+    );
+    expect(confirmDialog).not.toHaveBeenCalled();
+  });
+
+  it('renames a paired runtime', async () => {
+    harnessMocks.query.data = [REGISTERED_HARNESS];
+
+    render(() => <Harness />);
+    fireEvent.click(screen.getByRole('button', { name: 'Rename' }));
+    const dialog = screen.getByRole('dialog');
+    const input = within(dialog).getByLabelText('Name');
+    fireEvent.input(input, { target: { value: '  Studio  ' } });
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Save' }));
+
+    await waitFor(() => {
+      expect(harnessMocks.patchHarness).toHaveBeenCalledWith({
+        harnessId: REGISTERED_HARNESS.id,
+        name: 'Studio',
+      });
       expect(screen.queryByRole('dialog')).toBeNull();
     });
   });

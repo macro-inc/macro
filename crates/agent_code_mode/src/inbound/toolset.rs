@@ -73,12 +73,12 @@ enum CodeHost {
 #[serde(deny_unknown_fields)]
 #[schemars(
     title = "ExecuteCode",
-    description = concat!(
+    description = format!(
+        "{}\n{}\n{}\nPresentView schema; execution.views.present(view) takes its view property:\n{}\n",
         include_str!("toolset/session/execute_code.md"),
-        "\n",
         include_str!("toolset/shared/program.md"),
-        "\n",
-        include_str!("toolset/shared/runtime.md")
+        include_str!("toolset/shared/runtime.md"),
+        dynamic_ui::present_view_schema(),
     )
 )]
 pub struct ExecuteCode {
@@ -234,14 +234,15 @@ pub enum CodeGuideTopic {
     Ai,
     /// Local Handlebars rendering.
     Templates,
-    /// Worked examples, including email triage and structured extraction.
+    /// Worked examples: check-then-create in one execution, email triage, extraction.
     Examples,
 }
 
 impl CodeGuideTopic {
     fn markdown(self) -> &'static str {
         match self {
-            Self::Search => include_str!("toolset/guides/search.md"),
+            // The search guide is the `core` entity's `@agent` guidance.
+            Self::Search => crate::domain::search_guide(),
             Self::Ai => include_str!("toolset/guides/ai.md"),
             Self::Templates => include_str!("toolset/guides/templates.md"),
             Self::Examples => include_str!("../../SKILL.md"),
@@ -380,6 +381,7 @@ impl DescribeCodeTools {
                 .iter()
                 .map(|doc| CodeToolDescription {
                     index: None,
+                    guide: None,
                     ..doc.clone()
                 })
                 .collect()

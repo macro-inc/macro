@@ -6,8 +6,10 @@ mod chat_reply;
 mod coding_preferences;
 mod external_mcp;
 mod external_replies;
+mod followers;
 mod notifications;
 mod owned_purge;
+mod permission_refresh;
 mod presentation;
 mod quota;
 mod user_cleanup;
@@ -304,6 +306,18 @@ impl crate::domain::ports::HarnessBindings for MirrorBindings {
     async fn harness_for(&self, bot: BotId) -> anyhow::Result<Option<harness_id::HarnessId>> {
         Ok(Some(harness_for_bot(bot)))
     }
+
+    /// Mirrored too: an ACP session id that is a session's own id names it.
+    async fn sessions_on_harness(
+        &self,
+        _harness: harness_id::HarnessId,
+        acp_sessions: &[agent_client_protocol::schema::v1::SessionId],
+    ) -> anyhow::Result<Vec<AgentSessionId>> {
+        Ok(acp_sessions
+            .iter()
+            .filter_map(|acp| acp.to_string().parse().ok())
+            .collect())
+    }
 }
 
 /// No agent has said anything about permissions: every bot runs under its
@@ -374,6 +388,10 @@ impl agent_session::domain::ports::SessionTurnObserver for SignallingTurnObserve
             id,
             reason,
         );
+    }
+
+    fn runtime_closed(&self, id: AgentSessionId) {
+        agent_session::domain::ports::SessionTurnObserver::runtime_closed(&self.harness, id);
     }
 }
 
@@ -4596,6 +4614,7 @@ async fn codex_channel_mention_provisions_egress_without_advertising_mcp() {
     assert!(request.mcp_servers.is_empty());
 }
 
+mod reattach;
 mod reopen;
 
 /// The owner's reachable repositories, as the GitHub App would list them.
@@ -4701,6 +4720,124 @@ async fn a_chosen_model_is_selected_on_a_runtime_that_does_not_read_the_row() {
     assert_eq!(request["value"], "openai/gpt-5.6");
 }
 
+/// A persisted persona's model and instructions apply unless the create
+/// names its own. The caller's pick is the session's from the row onwards.
+#[tokio::test]
+async fn a_managed_persona_profile_applies_unless_overridden() {
+    let (service, repo, containers, _, _) = harness();
+    let open = service.open_managed_session(OpenManagedSession {
+        id: None,
+        repo_url: None,
+        repo_branch: None,
+        owner: model_owner::Owner::User(sender()),
+        instructions: Some("Prefer small diffs.".to_owned()),
+        model: Some("claude-4.5-sonnet-thinking".to_owned()),
+        prompt: None,
+        profile: Some(agent_session::domain::ports::SelectedManagedPersona {
+            bot_id: BotId::TEST_B,
+            profile: Some(agent_session::domain::ports::ManagedAgentProfile {
+                model: "persona-model".to_owned(),
+                harness: "in-memory".to_owned(),
+                instructions: "persona instructions".to_owned(),
+                mcp_servers: AgentMcpServers::OwnerConnections,
+            }),
+        }),
+        source: agent_session::domain::model::SessionSource::User,
+        visibility: agent_session::domain::model::SessionVisibility::Listed,
+    });
+    let drive = async {
+        while containers.spawned() == 0 {
+            tokio::task::yield_now().await;
+        }
+        let container = containers.container(session_of(&containers)).unwrap();
+        complete_session_handshake(&container).await;
+    };
+    let (opened, _) = tokio::join!(open, drive);
+    let session = repo.get(opened.unwrap().id).await.unwrap();
+    assert_eq!(session.bot_id, BotId::TEST_B);
+    assert_eq!(session.harness, "in-memory");
+    assert_eq!(session.model, "claude-4.5-sonnet-thinking");
+    assert_eq!(session.instructions.as_deref(), Some("Prefer small diffs."));
+}
+
+#[tokio::test]
+async fn a_managed_persona_profile_is_used_when_nothing_overrides_it() {
+    let (service, repo, containers, _, _) = harness();
+    let open = service.open_managed_session(OpenManagedSession {
+        id: None,
+        repo_url: None,
+        repo_branch: None,
+        owner: model_owner::Owner::User(sender()),
+        instructions: None,
+        model: None,
+        prompt: None,
+        profile: Some(agent_session::domain::ports::SelectedManagedPersona {
+            bot_id: BotId::TEST_B,
+            profile: Some(agent_session::domain::ports::ManagedAgentProfile {
+                model: "persona-model".to_owned(),
+                harness: "in-memory".to_owned(),
+                instructions: "persona instructions".to_owned(),
+                mcp_servers: AgentMcpServers::OwnerConnections,
+            }),
+        }),
+        source: agent_session::domain::model::SessionSource::User,
+        visibility: agent_session::domain::model::SessionVisibility::Listed,
+    });
+    let drive = async {
+        while containers.spawned() == 0 {
+            tokio::task::yield_now().await;
+        }
+        let container = containers.container(session_of(&containers)).unwrap();
+        complete_session_handshake(&container).await;
+    };
+    let (opened, _) = tokio::join!(open, drive);
+    let session = repo.get(opened.unwrap().id).await.unwrap();
+    assert_eq!(session.bot_id, BotId::TEST_B);
+    assert_eq!(session.harness, "in-memory");
+    assert_eq!(session.model, "persona-model");
+    assert_eq!(
+        session.instructions.as_deref(),
+        Some("persona instructions")
+    );
+}
+
+/// `repoUrl` without a persona used to 422: the default sandboxed coder
+/// does not honor a repository. An explicit repository is a Cursor session.
+#[tokio::test]
+async fn a_repository_without_a_persona_opens_as_cursor() {
+    let (service, repo, containers, _, _) = harness();
+    let service = service.with_repositories(Arc::new(SelectedRepositories::urls(&[
+        "https://github.com/macro-inc/macro",
+    ])));
+    let open = service.open_managed_session(OpenManagedSession {
+        id: None,
+        repo_url: Some("https://github.com/macro-inc/macro".into()),
+        repo_branch: None,
+        owner: model_owner::Owner::User(sender()),
+        instructions: None,
+        model: None,
+        prompt: None,
+        profile: None,
+        source: agent_session::domain::model::SessionSource::User,
+        visibility: agent_session::domain::model::SessionVisibility::Listed,
+    });
+    let drive = async {
+        while containers.spawned() == 0 {
+            tokio::task::yield_now().await;
+        }
+        let container = containers.container(session_of(&containers)).unwrap();
+        complete_session_handshake(&container).await;
+    };
+    let (opened, _) = tokio::join!(open, drive);
+    let session = repo.get(opened.unwrap().id).await.unwrap();
+    assert_eq!(session.bot_id, bot_id::CURSOR_BOT_ID);
+    assert_eq!(session.harness, "cursor");
+    assert_eq!(
+        session.repo_url.as_deref(),
+        Some("https://github.com/macro-inc/macro")
+    );
+}
+
 /// The agents-view create path names the Cursor bot with no persisted
 /// profile. The deployment default harness is the sandboxed coder's
 /// `opencode`; Cursor sessions must not inherit it.
@@ -4733,6 +4870,29 @@ async fn a_cursor_managed_session_is_always_stamped_cursor() {
     let session = repo.get(opened.unwrap().id).await.unwrap();
     assert_eq!(session.bot_id, bot_id::CURSOR_BOT_ID);
     assert_eq!(session.harness, "cursor");
+}
+
+/// A repository goes only to a Cursor persona; one chosen explicitly that
+/// cannot take it is told so, by the field's wire name, before anything is
+/// provisioned.
+#[tokio::test]
+async fn a_repository_for_a_persona_that_cannot_take_one_is_refused_by_name() {
+    let (service, _, containers, _, _) = harness();
+    let mut request = explicit_cursor_request();
+    request.repo_branch = None;
+    request.profile = Some(agent_session::domain::ports::SelectedManagedPersona {
+        bot_id: bot_id::CODEX_BOT_ID,
+        profile: None,
+    });
+    let result = service.open_managed_session(request).await;
+    let Err(agent_session::domain::error::AgentSessionError::InvalidRepositorySelection(reason)) =
+        result
+    else {
+        panic!("expected a repository refusal, got {result:?}");
+    };
+    assert!(reason.contains("repoUrl"), "{reason}");
+    assert!(reason.contains("Cursor"), "{reason}");
+    assert_eq!(containers.spawned(), 0);
 }
 
 fn explicit_cursor_request() -> OpenManagedSession {

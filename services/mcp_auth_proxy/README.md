@@ -28,45 +28,86 @@ with `Referrer-Policy: no-referrer`, so FusionAuth sees no client origin and
 third-party clients need no entry in the FusionAuth origin list. Whether a
 client may sign in is decided only by its redirect URI.
 
+## How a user signs in
+
+`/authorize` sends the browser straight to Google through FusionAuth. Clients on
+`SIGN_IN_CHOICE_HOSTS` (ChatGPT) get a small chooser first: Google, or
+FusionAuth's own login page, where an account with a password can sign in.
+OpenAI's reviewers need that path, because a shared Google account trips
+Google's challenges. The chooser stores nothing; each link is the same
+`/authorize` request with `sign_in` added.
+
 ## Which redirect URIs are usable
 
 Dynamic client registration is open, because MCP clients require it. That means
 the registered redirect URIs of a client prove nothing about who registered it:
-anyone can register a client whose callback they control. So a client's
-registration is not the only check on where a code may go — a deployment-level
-policy decides which destinations are usable at all, and a registration can only
-narrow that set further.
+anyone can register a client whose callback they control. FusionAuth also signs
+in a user with an existing session without asking anything, so without another
+check, anyone could register their own callback and send a Macro user a link
+that silently hands them that user's code. A deployment-level policy
+(`domain/redirect_uri.rs`) therefore sorts every redirect URI into one of three
+groups, and a registration can only narrow what it allows:
 
-A redirect URI is usable when it is either:
-
-- `http` on a loopback host (`localhost`, `127.0.0.1`, `[::1]`), on any port.
-  RFC 8252 section 7.3. A code sent here reaches a listener on the resource
-  owner's own machine, so it cannot leave the user who authorized it.
-- `https` on a host listed in `MCP_ALLOWED_REDIRECT_HOSTS`, matched exactly.
-  When that variable is unset the list falls back to
-  `DEFAULT_MCP_ALLOWED_REDIRECT_HOSTS` in `services/agent_harness_service/src/public_mcp.rs`,
-  which holds the browser-based MCP clients Macro supports. Subdomains of a
-  listed host are not themselves trusted.
+- **Trusted, delivered directly.** `http` on a loopback host (`localhost`,
+  `127.0.0.1`, `[::1]`), on any port (RFC 8252 section 7.3): a code sent there
+  reaches a listener on the resource owner's own machine. Or `https` on a host
+  listed in `MCP_ALLOWED_REDIRECT_HOSTS`, matched exactly; when that variable is
+  unset the list falls back to `DEFAULT_MCP_ALLOWED_REDIRECT_HOSTS` in
+  `services/agent_harness_service/src/public_mcp.rs`, which holds the
+  browser-based MCP clients Macro has vetted. Subdomains of a listed host are
+  not themselves trusted.
+- **Delivered after consent.** `https` on any other host, such as a self-hosted
+  MCP gateway. `/authorize` shows the consent screen described below before
+  sending the user to sign in.
+- **Refused.** Every other scheme, `http` off loopback, and any URI carrying a
+  fragment or credentials in its authority.
 
 Loopback hosts are interchangeable for this policy, but not for a registration:
 a client that registered `http://localhost:6274/...` cannot have a code sent to
 `http://127.0.0.1:6274/...`.
 
-A new third-party HTTPS client therefore needs exactly one change: its callback
-host added to `DEFAULT_MCP_ALLOWED_REDIRECT_HOSTS` (or the deployment's
-`MCP_ALLOWED_REDIRECT_HOSTS`). It needs no FusionAuth origin. Registering through
-DCR alone is not enough, on purpose: FusionAuth signs in a user with an existing
-session without showing a consent screen, so if any registered HTTPS host were
-usable, anyone could register their own callback and send a Macro user a link
-that hands them that user's code.
-
-A redirect URI carrying a fragment or credentials in its authority is refused
-regardless of host.
+A new third-party HTTPS client needs no change at all: its users approve it on
+the consent screen. Adding its callback host to the trusted list only skips that
+screen, so reserve it for clients Macro has vetted. It needs no FusionAuth origin
+either way.
 
 Both endpoints that take a redirect URI apply the policy: `/register` refuses to
-store one it does not permit, and `/authorize` re-applies the policy before
-comparing against the registration, so narrowing the host list takes effect for
-clients that registered under a wider one.
+store one it refuses, and `/authorize` re-applies it before comparing against
+the registration, so narrowing the policy takes effect for clients that
+registered under a wider one.
+
+## Consent and browser binding
+
+`GET /authorize` for a redirect URI that needs consent renders a page naming the
+host the code will go to (punycode for internationalized names, so a lookalike
+cannot pass for the host it imitates) and the client's self-reported name,
+marked as unverified, with control, bidirectional and zero-width characters
+removed and its length capped. Nothing is stored until the user answers.
+**Allow** posts the form back to `POST /authorize`, which starts sign-in;
+**Cancel** shows a closing page and redirects nowhere, so the broker never
+becomes a redirector to a host the user just refused.
+
+Two checks keep a flow tied to the person approving it, using one random secret
+in the `__Host-macro_mcp_oauth` cookie (`Secure`, `HttpOnly`, `SameSite=Lax`),
+which `/authorize` sets on every flow (`domain/browser_binding.rs`):
+
+- **The consent form only counts from the browser that was shown it.** It
+  carries a token derived from the cookie's secret, compared in constant time.
+  A cross-site post carries no `SameSite=Lax` cookie, a page on another origin
+  cannot read the token, and a `Sec-Fetch-Site` other than `same-origin` is
+  refused outright, so no other page can approve on the user's behalf. The page
+  sets `frame-ancestors 'none'` and `X-Frame-Options: DENY`, so it cannot be
+  framed for clickjacking, and loads and runs nothing.
+- **Only the browser that started a flow can finish it.** The pending
+  authorization stores a digest of the secret, and `/oauth/callback` refuses a
+  callback whose cookie does not match. Without this, someone could approve
+  their own flow and send a victim the FusionAuth sign-in URL it produced; the
+  victim's existing session would complete it silently and deliver the victim's
+  code to the starter's client. The binding applies to trusted clients too.
+
+A pending authorization written by a build before the binding has no digest; the
+callback accepts one only when its redirect URI is trusted, which is all that
+build could have stored.
 
 ## Which client a grant belongs to
 

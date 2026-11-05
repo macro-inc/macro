@@ -24,8 +24,12 @@ jobs:
     - name: Mount Namespace cache volume
       uses: namespacelabs/nscloud-cache-action@15799a6b54e5765f85b2aac25b3f0df43ed571c0
       with:
-        cache: rust
-        path: /nix
+        path: |-
+          /nix
+          ./target
+          /home/runner/.cargo/registry
+          /home/runner/.cargo/git
+          /home/runner/.cargo/.global-cache
       continue-on-error: true
     - name: Setup Nix
       uses: './.github/actions/setup-nix'
@@ -60,6 +64,11 @@ jobs:
             esac
           done < "$env_file"
           cat "$env_file" >> "$GITHUB_ENV"
+          # The server checks the WebDAV backend before it reports ready, and the
+          # client's default 10s wait can run out. This limit has no env var.
+          sccache_conf="$RUNNER_TEMP/sccache.toml"
+          echo 'server_startup_timeout_ms = 60000' > "$sccache_conf"
+          echo "SCCACHE_CONF=$sccache_conf" >> "$GITHUB_ENV"
           # Force the next compiler invocation to start a server with the new remote
           # backend even if a setup hook happened to launch one already.
           sccache --stop-server >/dev/null 2>&1 || true
@@ -86,6 +95,8 @@ jobs:
   macos:
     name: macrod update (macos)
     runs-on: nscloud-macos-sequoia-arm64-6x14
+    env:
+      CARGO_PROFILE_DEV_DEBUG: '0'
     steps:
     - name: Checkout
       uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
@@ -113,6 +124,8 @@ jobs:
   windows:
     name: macrod update (windows)
     runs-on: nscloud-windows-2022-amd64-8x16
+    env:
+      CARGO_PROFILE_DEV_DEBUG: '0'
     steps:
     - name: Checkout
       uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
@@ -135,4 +148,11 @@ jobs:
       shell: pwsh
     - name: Self-update end to end
       run: '& ./crates/coding_agent_worker/e2e/windows_update_test.ps1 -Releases "$env:RUNNER_TEMP/releases" -V1 v2000.1.1.1 -V2 v2000.1.1.2'
+      shell: pwsh
+    - name: Setup Node
+      uses: actions/setup-node@v4
+      with:
+        node-version: '24'
+    - name: Claude Code from npm
+      run: '& ./crates/coding_agent_worker/e2e/windows_claude_code_test.ps1 -Releases "$env:RUNNER_TEMP/releases" -Version v2000.1.1.2'
       shell: pwsh

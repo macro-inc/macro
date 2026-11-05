@@ -41,7 +41,21 @@ impl<R, T: MailboxTokenSource, L: ProviderRateLimiter> MailboxApiService<R, T, L
         self.tokens
             .access_token(mailbox, freshness)
             .await
-            .map_err(super::map_token_error)
+            .map_err(|error| match error {
+                // No provider request was made, which callers report apart
+                // from provider failures.
+                TokenError::Transient { message } => {
+                    EmailApiError::CredentialsUnavailable { message }
+                }
+                error => super::map_token_error(error),
+            })
+    }
+}
+
+impl<R: MailboxRequestCount, T, L> MailboxApiService<R, T, L> {
+    /// Requests the mailbox's gate admitted in its current sync generation.
+    pub async fn admitted_requests(&self, mailbox: MailboxAccess) -> Option<u64> {
+        self.repository.admitted_requests(mailbox).await
     }
 }
 

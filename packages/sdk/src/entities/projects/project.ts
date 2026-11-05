@@ -5,7 +5,7 @@ import type {
 import { unwrap } from '../../utils';
 import type { MacroClient } from '../../utils/client';
 import { PropertiedEntity } from '../entity';
-import { entitySearch } from '../search';
+import { entitySearch } from '../search/options';
 import { EntityAccess } from '../sharing/access';
 
 type ProjectDetail = GetProjectHandlerResponses[200]['data']['projectMetadata'];
@@ -49,6 +49,16 @@ export class Project extends PropertiedEntity<ProjectDetail> {
       }),
     );
     return data.projectMetadata;
+  }
+
+  /** The project's URL in the Macro web app; hand it to users as the link. */
+  webUrl(): string {
+    return `${this.client.webAppUrl}/app/project/${this.id}`;
+  }
+
+  /** Identity, loaded detail and {@link webUrl}, so serialized handles carry their link. */
+  override toJSON() {
+    return { ...super.toJSON(), url: this.webUrl() };
   }
 
   /** A handle to a project by id. Details load on first access. */

@@ -59,6 +59,13 @@ export type TeamConfigSource = {
   isError: Accessor<boolean>;
   update: CrmMutation<TeamCrmConfigPatch>;
 };
+/** The domains a team keeps out of email sync. */
+export type BlockedDomainsSource = {
+  domains: Accessor<string[]>;
+  isPending: Accessor<boolean>;
+  isError: Accessor<boolean>;
+  setBlocked: CrmMutation<{ domain: string; blocked: boolean }>;
+};
 export type CrmCapabilities = {
   role: Accessor<CrmTeamRole | undefined>;
   permissions: Accessor<CrmPermissions>;

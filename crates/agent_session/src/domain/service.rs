@@ -78,7 +78,7 @@ use super::ports::{
 };
 use super::retitle::ConversationDigest;
 use super::session::actors::{ActorInput, SessionActor, SessionCommand, SessionMessage, Stepped};
-use super::session::{CloseReason, Input, StopReason as SessionStopReason};
+use super::session::{CloseReason, Input, PermissionPolicy, StopReason as SessionStopReason};
 use crate::domain::events::{AgentSessionLifecycleEvent, SessionRenamedMetadata};
 
 /// Buffered not-yet-accepted commands per session actor.
@@ -212,11 +212,30 @@ pub trait AgentSessionService: Send + Sync + 'static {
         message: ToServerMessage,
     ) -> impl Future<Output = Result<()>> + Send;
 
+    /// Append a frame nothing projects session state from - no turn,
+    /// status, or model - and push it to the session's viewers, without the
+    /// whole-log fold [`record_frame`](Self::record_frame) runs first. What a
+    /// review writes on every save. Any replica may call this; the frame is
+    /// ordered by when it is stored.
+    fn record_unprojected_frame(
+        &self,
+        id: AgentSessionId,
+        message: ToServerMessage,
+    ) -> impl Future<Output = Result<()>> + Send;
+
     /// Record who prompted the turn `id` is about to run, before it runs.
     fn set_turn_prompter(
         &self,
         id: AgentSessionId,
         prompter: &TurnPrompter,
+    ) -> impl Future<Output = Result<()>> + Send;
+
+    /// Record that `user` prompted the session `id` directly, from the
+    /// session itself, so a hidden session lists for them.
+    fn add_follower(
+        &self,
+        id: AgentSessionId,
+        user: &MacroUserIdStr<'static>,
     ) -> impl Future<Output = Result<()>> + Send;
 
     /// Read the persisted identity of the current turn during recovery.
@@ -247,7 +266,7 @@ pub trait AgentSessionService: Send + Sync + 'static {
     fn set_archived(
         &self,
         access: &EntityAccessReceipt<OwnerAccessLevel>,
-        is_archived: bool,
+        archived: bool,
     ) -> impl Future<Output = Result<()>> + Send;
 
     /// A bounded batch of sessions owned by this user, including inactive sessions.
@@ -326,6 +345,15 @@ pub trait AgentSessionService: Send + Sync + 'static {
         &self,
         id: AgentSessionId,
         servers: Vec<McpServer>,
+    ) -> impl Future<Output = Result<()>> + Send;
+
+    /// Answer the agent's permission requests under `policy` from now on, on
+    /// the session's live connection on this instance. A session attached
+    /// nowhere here needs nothing: its next attach takes a fresh policy.
+    fn set_permission_policy(
+        &self,
+        id: AgentSessionId,
+        policy: PermissionPolicy,
     ) -> impl Future<Output = Result<()>> + Send;
 
     /// The session an incoming channel context routes to, if any.
@@ -827,7 +855,7 @@ where
         if !session.owner_id.is_user(&actor) {
             return Err(AgentSessionError::Forbidden);
         }
-        if session.is_archived {
+        if session.is_archived() {
             return Err(AgentSessionError::Archived(id));
         }
         let entries = AgentSessionLogRepo::list_by_session(&self.repo, id).await?;
@@ -850,7 +878,7 @@ where
     ) -> Result<()> {
         let name = validate_agent_session_name(name)?;
         let id = owner_access_session_id(access, "rename")?;
-        if self.repo.get(id).await?.is_archived {
+        if self.repo.get(id).await?.is_archived() {
             return Err(AgentSessionError::Archived(id));
         }
         self.repo.set_name(id, name).await?;
@@ -871,16 +899,16 @@ where
     async fn set_archived(
         &self,
         access: &EntityAccessReceipt<OwnerAccessLevel>,
-        is_archived: bool,
+        archived: bool,
     ) -> Result<()> {
         let id = owner_access_session_id(access, "archive")?;
         // Every message in a conversation's channel goes to its current
         // session, and an archived session takes none. Starting fresh is how
         // a conversation retires one; the sessions it left behind archive.
-        if is_archived && self.repo.is_current_conversation_session(id).await? {
+        if archived && self.repo.is_current_conversation_session(id).await? {
             return Err(AgentSessionError::AnswersConversation(id));
         }
-        self.repo.set_archived(id, is_archived).await?;
+        self.repo.set_archived(id, archived).await?;
         self.realtime
             .publish_updated(id)
             .await
@@ -905,6 +933,10 @@ where
 
     async fn set_turn_prompter(&self, id: AgentSessionId, prompter: &TurnPrompter) -> Result<()> {
         self.repo.set_turn_prompter(id, prompter).await
+    }
+
+    async fn add_follower(&self, id: AgentSessionId, user: &MacroUserIdStr<'static>) -> Result<()> {
+        self.repo.add_follower(id, user).await
     }
 
     async fn turn_prompter(&self, id: AgentSessionId) -> Result<Option<TurnPrompter>> {
@@ -1080,6 +1112,51 @@ where
         .unwrap_or(Err(AgentSessionError::LogTimedOut(id)))
     }
 
+    #[tracing::instrument(
+        name = "agent.session.record_unprojected_frame",
+        err,
+        skip(self, message),
+        fields(agent.session.id = %id),
+    )]
+    async fn record_unprojected_frame(
+        &self,
+        id: AgentSessionId,
+        message: ToServerMessage,
+    ) -> Result<()> {
+        tokio::time::timeout(SESSION_PERSIST_TIMEOUT, async {
+            let stored = self
+                .repo
+                .create_projected(
+                    AgentSessionLog {
+                        agent_session_id: id,
+                        user_id: None,
+                        content: Message::ToServer(message),
+                        logged_at: None,
+                    },
+                    None,
+                    None,
+                    None,
+                )
+                .await?;
+            // Best effort, as for every other frame: it is already durable,
+            // so a viewer who misses it reads it on the next log fetch.
+            if let Err(error) = self
+                .realtime
+                .publish(LogAppended {
+                    turn_state: None,
+                    agent_session_id: id,
+                    entries: vec![stored],
+                })
+                .await
+            {
+                tracing::error!(error = ?error, %id, "failed to stream an agent session frame");
+            }
+            Ok(())
+        })
+        .await
+        .unwrap_or(Err(AgentSessionError::LogTimedOut(id)))
+    }
+
     async fn attach_session<Connector>(
         &self,
         id: AgentSessionId,
@@ -1133,7 +1210,7 @@ where
         action: AgentAction,
         action_id: AgentActionId,
     ) -> Result<()> {
-        if self.repo.get(id).await?.is_archived {
+        if self.repo.get(id).await?.is_archived() {
             return Err(AgentSessionError::Archived(id));
         }
         let initial_prompt = initial_prompt_for_rename(&self.folds, id, &action).await;
@@ -1174,6 +1251,24 @@ where
         };
         commands
             .send(SessionMessage::ReplaceMcpServers(servers))
+            .await
+            .map_err(|_| AgentSessionError::Disconnected(id))
+    }
+
+    async fn set_permission_policy(
+        &self,
+        id: AgentSessionId,
+        policy: PermissionPolicy,
+    ) -> Result<()> {
+        let Some(commands) = self
+            .active
+            .get(&id)
+            .and_then(|active| active.commands.clone())
+        else {
+            return Ok(());
+        };
+        commands
+            .send(SessionMessage::SetPermissionPolicy(policy))
             .await
             .map_err(|_| AgentSessionError::Disconnected(id))
     }
@@ -1439,6 +1534,10 @@ where
 
     fn session_stopped(&self, id: AgentSessionId, reason: SessionStopReason) {
         self.observer.session_stopped(id, reason);
+    }
+
+    fn runtime_closed(&self, id: AgentSessionId) {
+        self.observer.runtime_closed(id);
     }
 }
 
@@ -2047,6 +2146,10 @@ where
         self.repo.set_turn_prompter(id, prompter).await
     }
 
+    async fn add_follower(&self, id: AgentSessionId, user: &MacroUserIdStr<'static>) -> Result<()> {
+        self.repo.add_follower(id, user).await
+    }
+
     async fn turn_prompter(&self, id: AgentSessionId) -> Result<Option<TurnPrompter>> {
         self.repo.turn_prompter(id).await
     }
@@ -2114,8 +2217,8 @@ where
         self.repo.set_name(id, name).await
     }
 
-    async fn set_archived(&self, id: AgentSessionId, is_archived: bool) -> Result<()> {
-        self.repo.set_archived(id, is_archived).await
+    async fn set_archived(&self, id: AgentSessionId, archived: bool) -> Result<()> {
+        self.repo.set_archived(id, archived).await
     }
 
     async fn is_current_conversation_session(&self, id: AgentSessionId) -> Result<bool> {

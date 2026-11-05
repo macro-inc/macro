@@ -174,6 +174,7 @@ async fn a_pending_authorization_is_taken_once(pool: PgPool) {
                 code_challenge: "challenge".to_owned(),
                 client_state: "state".to_owned(),
                 client_redirect_uri: "http://127.0.0.1:51000/oauth/callback".to_owned(),
+                browser_binding_digest: Some("binding-digest".to_owned()),
             },
         )
         .await
@@ -185,6 +186,10 @@ async fn a_pending_authorization_is_taken_once(pool: PgPool) {
         .expect("take")
         .expect("pending");
     assert_eq!(pending.client_state, "state");
+    assert_eq!(
+        pending.browser_binding_digest.as_deref(),
+        Some("binding-digest")
+    );
     assert!(store.take_pending("session").await.expect("take").is_none());
 }
 

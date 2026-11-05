@@ -34,6 +34,7 @@ import BellSimpleIcon from '@icon/system/regular/bell-simple.svg?component-solid
 import CalendarBlankIcon from '@icon/system/regular/calendar-blank.svg?component-solid';
 import ChatTeardropIcon from '@icon/system/regular/chat-teardrop.svg?component-solid';
 import ChatTextIcon from '@icon/system/regular/chat-text.svg?component-solid';
+import ClockIcon from '@icon/system/regular/clock-clockwise.svg?component-solid';
 import FilesIcon from '@icon/system/regular/files.svg';
 import GitMergeIcon from '@icon/system/regular/git-merge.svg';
 import GitPullRequestIcon from '@icon/system/regular/git-pull-request.svg';
@@ -254,6 +255,7 @@ const tagBubbleIcon = (tag: NotificationTag) =>
       'entity_access_requested',
       'entity_access_granted',
       'channel_invite',
+      'channel_access_requested',
       'invite_to_team',
       () => () => <UserPlusIcon class={AVATAR_GLYPH_CLASS} />
     )
@@ -266,6 +268,9 @@ const tagBubbleIcon = (tag: NotificationTag) =>
     ))
     .with('agent_session_mentioned', () => () => (
       <AtIcon class={AVATAR_GLYPH_CLASS} />
+    ))
+    .with('routine_run_finished', () => () => (
+      <ClockIcon class={AVATAR_GLYPH_CLASS} />
     ))
     .with('reminder', () => () => <BellSimpleIcon class={AVATAR_GLYPH_CLASS} />)
     .with('calendar_event_reminder', () => () => (

@@ -2,7 +2,8 @@ mod access_request;
 mod calendar_join_request;
 mod channel_push;
 pub use access_request::{
-    EntityAccessGrantedMetadata, EntityAccessRequestedMetadata, RequestedAccessLevel,
+    ChannelAccessRequestedMetadata, EntityAccessGrantedMetadata, EntityAccessRequestedMetadata,
+    RequestedAccessLevel,
 };
 pub use calendar_join_request::CalendarEventJoinRequestMetadata;
 use chrono::{DateTime, NaiveDate, Utc};
@@ -1896,9 +1897,12 @@ impl Notification for AgentSessionMentionedMetadata {
     const TYPE_NAME: &'static str = "agent_session_mentioned";
 }
 
-/// The first `AGENT_EXCERPT_MAX_CHARS` of an agent's prose, on one line.
+/// The first `AGENT_EXCERPT_MAX_CHARS` of an agent's prose, on one line, with
+/// its Macro mention tags replaced by the names they show, as channel alerts
+/// do for messages.
 fn agent_excerpt(text: &str) -> String {
-    let flat = text.split_whitespace().collect::<Vec<_>>().join(" ");
+    let plain = PlainTextFormatter::format_xml_text(ParsedXmlText::parse_lenient(text)).0;
+    let flat = plain.split_whitespace().collect::<Vec<_>>().join(" ");
     if flat.chars().count() <= AGENT_EXCERPT_MAX_CHARS {
         return flat;
     }
@@ -1919,10 +1923,12 @@ impl NotificationTitle for AgentSessionSettledMetadata {
         &self,
         _sender_id: Option<MacroUserIdStr<'_>>,
     ) -> Result<String, rootcause::Report> {
-        Ok(match self.excerpt.as_deref().map(str::trim) {
-            Some(excerpt) if !excerpt.is_empty() => agent_excerpt(excerpt),
-            _ => self.session.session_name.clone(),
-        })
+        Ok(self
+            .excerpt
+            .as_deref()
+            .map(agent_excerpt)
+            .filter(|excerpt| !excerpt.is_empty())
+            .unwrap_or_else(|| self.session.session_name.clone()))
     }
 }
 
@@ -2081,5 +2087,56 @@ impl NotificationExtIos for ExternalChatMessageMetadata {
         notification_id: Uuid,
     ) -> Option<APNSPushNotification<Self::NotifData>> {
         alert_apns(self, sender_id, notification_id, None).ok()
+    }
+}
+
+/// How a routine run ended, as its notification reports it.
+#[derive(Serialize, Deserialize, Debug, Clone, Copy, PartialEq, Eq, ToSchema)]
+#[serde(rename_all = "snake_case")]
+pub enum RoutineRunOutcome {
+    /// The run did its work.
+    Succeeded,
+    /// The run failed or was cut short.
+    Failed,
+}
+
+/// One of the recipient's routines finished a run. Every run notifies,
+/// whether it succeeded or failed.
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq, ToSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct RoutineRunFinishedMetadata {
+    /// The routine that ran.
+    pub routine_id: Uuid,
+    /// The routine's name when it ran.
+    pub routine_name: String,
+    /// How the run ended.
+    pub outcome: RoutineRunOutcome,
+}
+
+impl Notification for RoutineRunFinishedMetadata {
+    const TYPE_NAME: &'static str = "routine_run_finished";
+}
+
+impl NotificationTitle for RoutineRunFinishedMetadata {
+    fn format_title(
+        &self,
+        _sender_id: Option<MacroUserIdStr<'_>>,
+    ) -> Result<String, rootcause::Report> {
+        Ok(match self.outcome {
+            RoutineRunOutcome::Succeeded => format!("{} finished", self.routine_name),
+            RoutineRunOutcome::Failed => format!("{} failed", self.routine_name),
+        })
+    }
+
+    fn format_body(
+        &self,
+        _sender_id: Option<MacroUserIdStr<'_>>,
+    ) -> Result<String, rootcause::Report> {
+        Ok(match self.outcome {
+            RoutineRunOutcome::Succeeded => "A routine run finished.".to_string(),
+            RoutineRunOutcome::Failed => {
+                "A routine run failed. Open its history to see why.".to_string()
+            }
+        })
     }
 }

@@ -352,7 +352,8 @@ fragment SoupEntityCoreFields on GraphqlSoupEntity {
 # the session reports a committed change: see AgentSessionRow.
 fragment SoupAgentSessionFields on GraphqlSoupAgentSession {
 	sessionName: name
-	isArchived
+	archivedBy
+	archivedAt
 	ownerId
 	botId
 	harness
@@ -605,6 +606,12 @@ fragment SoupNotificationNavigationMetadataFields on GraphqlNotifEvent {
 		channelMessageReactionChannelName: channelName
 		channelMessageReactionSenderProfilePictureUrl: senderProfilePictureUrl
 	}
+	... on GraphqlChannelAccessRequestedMetadata {
+		channelAccessRequestedRequestId: requestId
+		channelAccessRequestedChannelType: channelType
+		channelAccessRequestedChannelName: channelName
+		channelAccessRequestedSenderProfilePictureUrl: senderProfilePictureUrl
+	}
 	... on GraphqlChannelReplyMetadata {
 		channelReplyThreadId: threadId
 		channelReplyMessageId: messageId
@@ -626,6 +633,11 @@ fragment SoupNotificationNavigationMetadataFields on GraphqlNotifEvent {
 	}
 	... on GraphqlInboxReauthRequiredMetadata {
 		inboxReauthRequiredEmailAddress: emailAddress
+	}
+	... on GraphqlRoutineRunFinishedMetadata {
+		routineRunFinishedRoutineId: routineId
+		routineRunFinishedRoutineName: routineName
+		routineRunFinishedSucceeded: succeeded
 	}
 	... on GraphqlInviteToTeamMetadata {
 		inviteToTeamTeamName: teamName

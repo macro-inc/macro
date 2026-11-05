@@ -52,6 +52,7 @@ import type {
 } from '@service-agent-harness/generated/schemas';
 import { subscribeGraphqlSoupReconnected } from '@service-storage/graphql-soup';
 import { CombinedError } from '@urql/core';
+import { err, ok, type Result } from 'neverthrow';
 import { v7 as uuidv7 } from 'uuid';
 import {
   type LoadFailure,
@@ -173,14 +174,22 @@ export class AgentSession {
   /**
    * The shared instance for `id`, created on first acquisition. Every
    * acquisition needs a matching {@link release}; the last one closes the
-   * machine and drops the subscriptions.
+   * machine and drops the subscriptions. `hold` keeps a session open for a
+   * later view without being one, so it is not traced as an open.
    */
-  static acquire(id: string): AgentSession {
+  static acquire(id: string, purpose: 'view' | 'hold' = 'view'): AgentSession {
     const open = AgentSession.open.get(id);
     const session = open ?? new AgentSession(id);
     AgentSession.open.set(id, session);
     session.references += 1;
+    if (purpose === 'hold') return session;
     traceAcquire(id, open === undefined, session.references);
+    // A surface opening a session that is already folded waits for nothing;
+    // its render is measured from now, not from the load long ago.
+    if (session.loaded) {
+      session.trace = new SessionLoadTrace(id);
+      session.trace.end('reused');
+    }
     return session;
   }
 
@@ -241,7 +250,8 @@ export class AgentSession {
   private readonly unsubscribeSocket: () => void;
   private readonly unsubscribeUpdated: () => void;
   private readonly unsubscribeReconnected: () => void;
-  private syncing = false;
+  /** The refetch in flight; it loops while another is requested. */
+  private syncRun?: Promise<void>;
   private resyncRequested = false;
   private resyncRetry = 0;
   private resyncTimer?: ReturnType<typeof setTimeout>;
@@ -263,6 +273,11 @@ export class AgentSession {
   private turn: TurnState = 'idle';
   /** Prompts issued here still waiting for their first output. */
   private readonly prompts = new Set<PromptTrace>();
+
+  /** The fetched log is folded and live rows go straight in. */
+  get loaded(): boolean {
+    return this.ready && !this.loadFailed;
+  }
 
   private setTurn(turn: TurnState | undefined): void {
     const next = turn ?? 'idle';
@@ -354,6 +369,19 @@ export class AgentSession {
    * afresh. The old watch is stopped first: its rows belong to a load that
    * is no longer the one in flight.
    */
+  /**
+   * Read the session row again, for a surface reopening a session that was
+   * held open since an earlier view: the fold is current, the row may not
+   * be. A refusal forgets the cached log, as a load's does.
+   */
+  async readRow(): Promise<Result<AgentSessionResponse, 'denied' | 'failed'>> {
+    const row = await agentHarnessServiceClient.get(this.id);
+    if (row.isOk()) return ok(row.value);
+    if (!accessDenied(row.error)) return err('failed');
+    this.forgetCached();
+    return err('denied');
+  }
+
   private reissueReads(): void {
     this.watch.stop();
     this.watch = this.openWatch();
@@ -826,19 +854,45 @@ export class AgentSession {
   }
 
   /**
+   * Refetch the log and fold it, resolving once a fetch that started after
+   * this call has been folded. For a caller that has waited on a row the
+   * live feed should have delivered: the log itself settles the question.
+   * A failed fetch resolves too, leaving the fold as it was.
+   */
+  refresh(): Promise<void> {
+    return this.resync();
+  }
+
+  /**
    * A reopened socket is a new socket session: rows may have been missed
    * while it was down. Refetch, and let the machine reconcile the overlap
    * and settle any speculation the log confirmed meanwhile.
    */
-  private async resync(retrying = false): Promise<void> {
-    if (this.closed) return;
+  private resync(retrying = false): Promise<void> {
+    if (this.closed) return Promise.resolve();
     if (!retrying) {
       clearTimeout(this.resyncTimer);
       this.resyncRetry = 0;
     }
     this.resyncRequested = true;
-    if (!this.ready || this.syncing) return;
-    this.syncing = true;
+    // The run in flight fetches again before it ends.
+    if (this.syncRun) return this.syncRun;
+    if (!this.ready) return this.afterLoad();
+    this.syncRun = this.runResync();
+    return this.syncRun;
+  }
+
+  /** The load in flight starts a run after its snapshot; a failed one never does. */
+  private async afterLoad(): Promise<void> {
+    try {
+      await this.loading;
+    } catch {
+      return;
+    }
+    await this.syncRun;
+  }
+
+  private async runResync(): Promise<void> {
     this.ready = false;
     let failed = false;
     try {
@@ -863,9 +917,9 @@ export class AgentSession {
       // A snapshot may predate frames received during its fetch. Replay those
       // frames after it, retaining speculation and the fold's overlap deduping.
       await this.drainBuffered();
-      this.syncing = false;
+      this.syncRun = undefined;
       if (!this.closed && this.resyncRequested) {
-        fireAndForget(this.resync(true), 'agent-session');
+        await this.resync(true);
       } else if (!this.closed && failed) {
         const delay = RESYNC_RETRY_DELAYS_MS[this.resyncRetry++];
         if (delay !== undefined)
@@ -921,7 +975,23 @@ export class AgentSession {
         prompt.observe(events, delivery);
         if (prompt.ended) this.prompts.delete(prompt);
       }
+      const projectionStartedAt = performance.now();
       for (const listener of this.listeners) listener(events);
+      if (snapshot) {
+        this.trace.projected(
+          projectionStartedAt,
+          events.reduce(
+            (count, event) =>
+              count +
+              (event.kind === 'metadata'
+                ? 0
+                : event.kind === 'replace'
+                  ? event.messages.length
+                  : 1),
+            0
+          )
+        );
+      }
     });
     // A failed push must not poison the chain for every input after it.
     this.chain = run.catch((error: unknown) => {

@@ -1,5 +1,5 @@
 import { type InferType, SyncDirection } from '@loro-mirror/core';
-import type { Attributes } from '@macro-inc/observability';
+import type { Attributes, Span } from '@macro-inc/observability';
 import { Mutex } from 'async-mutex';
 import type { VersionVector } from 'loro-crdt';
 import type { ResultAsync } from 'neverthrow';
@@ -55,6 +55,7 @@ export type SyncSources = {
 
 export type SyncEngineParams<S extends GenericRootSchema, D> = {
   loroManager: SyncEngineManager<S>;
+  parentSpan?: Span;
   awareness: Awareness<D>;
   syncs: SyncSources;
   bindings: EngineBindings<S>;
@@ -73,6 +74,7 @@ export class SyncEngine<S extends GenericRootSchema, D> {
     return this._isRunning;
   }
 
+  private readonly parentSpan?: Span;
   private readonly loroManager: SyncEngineManager<S>;
   private readonly awareness: Awareness<D>;
   private readonly syncs: SyncSources;
@@ -97,6 +99,7 @@ export class SyncEngine<S extends GenericRootSchema, D> {
 
   constructor({
     loroManager,
+    parentSpan,
     awareness,
     syncs,
     bindings,
@@ -106,6 +109,7 @@ export class SyncEngine<S extends GenericRootSchema, D> {
     makeChatter = () => noopChatter(),
   }: SyncEngineParams<S, D>) {
     this.loroManager = loroManager;
+    this.parentSpan = parentSpan;
     this.awareness = awareness;
     this.syncs = syncs;
     this.bindings = bindings;
@@ -232,16 +236,23 @@ export class SyncEngine<S extends GenericRootSchema, D> {
     }
     const generation = this.lifecycleGeneration;
 
-    await this.syncLock.runExclusive(async () => {
-      if (generation !== this.lifecycleGeneration) return;
+    const replaced = await this.syncLock.runExclusive(async () => {
+      if (generation !== this.lifecycleGeneration) return false;
       this.log('info', 'engine.reset: starting');
+      // The snapshot replaces this document, and this peer's unsent edits
+      // can't be merged into it locally afterwards; deliver them first so the
+      // server's snapshot holds them. Any the server doesn't acknowledge stay
+      // in the WAL for later delivery (the canvas replays them onto the
+      // replacement).
+      await this.flushUnsentEdits();
+      if (generation !== this.lifecycleGeneration) return false;
       const snapshot = await (snapshotThunk ?? this.defaultSnapshotThunk)();
-      if (generation !== this.lifecycleGeneration) return;
+      if (generation !== this.lifecycleGeneration) return false;
       if (snapshot.isErr()) {
         this.log('error', 'engine.reset: failed to get snapshot', {
           err: String(snapshot.error),
         });
-        return;
+        return false;
       }
 
       const resetResult = await this.loroManager.reset(snapshot.value);
@@ -249,12 +260,30 @@ export class SyncEngine<S extends GenericRootSchema, D> {
         this.log('error', 'engine.reset: loro manager reset failed', {
           err: JSON.stringify(resetResult.error),
         });
-        return;
+        return false;
       }
+      if (generation !== this.lifecycleGeneration) return false;
+      if (!wasRunning) return true;
+
+      // The binding still shows the replaced document, and local edits sync
+      // its whole state. Restart and hand it the new state under this lock,
+      // so nothing the restart triggers can write the stale one back first.
+      this.start();
+      const state = this.loroManager.state?.state;
+      if (state) this.bindings.onRemoteState(state);
+      return true;
     });
 
-    if (wasRunning && generation === this.lifecycleGeneration) {
+    if (!replaced && wasRunning && generation === this.lifecycleGeneration) {
       this.start();
+    }
+  }
+
+  private async flushUnsentEdits(): Promise<void> {
+    try {
+      await this.syncs.wal.flushPending();
+    } catch {
+      // The WAL reports its own failures.
     }
   }
 
@@ -432,7 +461,12 @@ export class SyncEngine<S extends GenericRootSchema, D> {
     // The catch-up flow: "give me everything after the version I hold".
     // The span shows the anchor version, what came back, and whether it
     // applied — the trail for "client was stale and (never) reconciled".
-    const span = telemetrySpan(this.syncs.live.documentId, 'doc.sync.catchup');
+    const span = telemetrySpan(
+      this.syncs.live.documentId,
+      'doc.sync.catchup',
+      undefined,
+      this.parentSpan
+    );
     span.setAttr('since.version', vvAttr(since));
     span.setAttr('attempt', attempt);
     this.log('debug', `engine: requestUpdatesSince (attempt ${attempt})`);

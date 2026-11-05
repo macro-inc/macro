@@ -321,14 +321,16 @@ impl InflightAuthStore for PostgresAuthStore {
         sqlx::query!(
             r#"
             INSERT INTO mcp_oauth_pending_authorizations
-                (session_id, client_id, code_challenge, client_state, client_redirect_uri, expires_at)
-            VALUES ($1, $2, $3, $4, $5, $6)
+                (session_id, client_id, code_challenge, client_state, client_redirect_uri,
+                 browser_binding_digest, expires_at)
+            VALUES ($1, $2, $3, $4, $5, $6, $7)
             "#,
             session_id,
             pending.client_id,
             pending.code_challenge,
             pending.client_state,
             pending.client_redirect_uri,
+            pending.browser_binding_digest,
             expires_at(PENDING_AUTH_TTL)?,
         )
         .execute(&self.pool)
@@ -344,7 +346,8 @@ impl InflightAuthStore for PostgresAuthStore {
             r#"
             DELETE FROM mcp_oauth_pending_authorizations
             WHERE session_id = $1
-            RETURNING client_id, code_challenge, client_state, client_redirect_uri, expires_at
+            RETURNING client_id, code_challenge, client_state, client_redirect_uri,
+                browser_binding_digest, expires_at
             "#,
             session_id,
         )
@@ -358,6 +361,7 @@ impl InflightAuthStore for PostgresAuthStore {
                 code_challenge: row.code_challenge,
                 client_state: row.client_state,
                 client_redirect_uri: row.client_redirect_uri,
+                browser_binding_digest: row.browser_binding_digest,
             }))
     }
 

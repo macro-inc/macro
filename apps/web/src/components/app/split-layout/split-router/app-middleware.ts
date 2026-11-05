@@ -17,6 +17,7 @@ import {
 } from '@app/features/drive-view/primitives/drive-route';
 import { driveDocumentBlockType } from '@app/features/drive-view/primitives/drive-route-schema';
 import { driveSearch } from '@app/features/drive-view/primitives/drive-search';
+import { composeDraftSearch } from '@app/features/email-compose/compose-route-draft';
 import { URL_PARAMS as EMAIL_URL_PARAMS } from '@app/features/email-thread/core/location';
 import { EMAIL_DETAIL_SEARCH_NAMESPACE } from '@app/features/email-view/email-route';
 import {
@@ -123,6 +124,11 @@ function redirectLegacyRoutes(
     .with({ type: 'component', id: CALENDAR_VIEW_ID }, () =>
       calendarPath(getPreferredCalendarPeriodView())
     )
+    // Desktop writes a new email beside the Email list; touch keeps the
+    // full-screen composer.
+    .with({ type: 'component', id: 'email-compose' }, () =>
+      isTouch ? undefined : '/mail/new'
+    )
     .with({ type: 'component' }, ({ id }) =>
       routes.byId.has(`view-${id}`) ? `/${id}` : undefined
     )
@@ -216,6 +222,11 @@ function migrateLegacySearch({
     .with('mail-thread', () => ({
       namespace: EMAIL_DETAIL_SEARCH_NAMESPACE,
       fields: [[EMAIL_URL_PARAMS.messageId, 'messageId']] as const,
+    }))
+    // A `component/email-compose?to=` link names its recipients.
+    .with('mail-compose', () => ({
+      namespace: composeDraftSearch.namespace,
+      fields: [['to', 'to']] as const,
     }))
     .when(
       (id) => id === 'channels-channel' || homeChannel,

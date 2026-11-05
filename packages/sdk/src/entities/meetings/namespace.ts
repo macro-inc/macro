@@ -3,7 +3,11 @@ import { unwrap } from '../../utils';
 import type { MacroClient } from '../../utils/client';
 import { Meeting } from './meeting';
 
-/** Meeting schedules and invitation lookup. */
+/**
+ * Meeting schedules and invitation lookup.
+ *
+ * @routing Use when managing a recurring meeting series' schedule, invitations or sharing link; not finding a time, calendar events or booking links.
+ */
 export class MeetingNamespace {
   constructor(private readonly client: MacroClient) {}
 

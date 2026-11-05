@@ -12,6 +12,8 @@ export interface InitiativeSummary {
 /**
  * Initiatives in the caller's workspace; find one by name with one
  * `summaries()` call, not `name()` on each listed handle (one request each).
+ *
+ * @routing Use when grouping tasks and members into initiatives or reading an initiative's tasks; not a single task.
  */
 export class InitiativeNamespace {
   constructor(private readonly client: MacroClient) {}

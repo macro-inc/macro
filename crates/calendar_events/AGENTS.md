@@ -15,8 +15,6 @@ reminder dispatch, team availability, and provider/Postgres persistence.
 - `src/domain/capabilities.rs`: Google's organizer-set `GuestPolicy` and the
   `ViewerCapabilities` every read surface exposes as `viewerCan`.
 - `src/domain/team_availability.rs` + `src/domain/team.rs`: team sharing/availability.
-- `src/domain/notes.rs`, `src/outbound/pg_notes.rs`, `src/inbound/notes_router.rs`:
-  occurrence-scoped markdown links and optional team view access (feature `notes`).
 - `src/outbound/google.rs`, `src/outbound/pg.rs`: Google Calendar and Postgres adapters.
 - `src/outbound/pg/outlook.rs`: durable Outlook synchronization; preserve
   provider-specific coverage on discovery.
@@ -52,17 +50,9 @@ reminder dispatch, team availability, and provider/Postgres persistence.
 ## Checks
 
 - `cargo test -p calendar_events` (`SQLX_OFFLINE` unset).
-- `cargo test -p calendar_events --features notes,postgres` covers meeting-note
-  policy and its document-access integration against a migrated local MacroDB.
 
 ## Gotchas
 
-- Keep note links separate from sync-owned occurrence rows; require a live
-  occurrence and corroborated inbox copies for inherited view access. A document
-  owner can unlink after losing meeting access. Document readers can discover
-  only links whose meeting details they can currently see; owners also retain
-  unavailable links for revocation. See
-  [meeting-note access](../../docs/architecture/calendar-meeting-notes.md).
 - `CalendarEvent` is the stable Macro entity; external calendars and email
   invitations are sources feeding it, and recurrence instances are queryable
   occurrence projections, not separate events — don't model them as new entities.
@@ -236,8 +226,7 @@ reminder dispatch, team availability, and provider/Postgres persistence.
   `ReadCalendarEvent` (`src/inbound/toolset/read_calendar_event.rs`), which goes
   through `mention_previews`: the hover card's visibility and fields. A preview
   that falls back to a channel share loses its Macro call there, in the
-  repository so that meeting-note references (`reference_previews`) get the
-  same, and before the description cap, since the join line closes the
+  repository and before the description cap, since the join line closes the
   description. Whoever resolves to their own copy keeps it: the card's Join
   button reads the link from the preview. Only the generated Macro call goes;
   join text a provider wrote into the body, as a Teams invitation's, stays, as
@@ -346,6 +335,16 @@ reminder dispatch, team availability, and provider/Postgres persistence.
   plain sentence for an event that is not the user's: `ReadCalendarEvent` and
   `NameSearch` both give it, because models follow it more reliably than the
   fields behind it.
+- A series Google split off another without moving it in time has the id
+  `<parent>_R<first start>`, a UID of its own and the parent's `created`; a
+  split that moved it gets an unrelated id. A change to a `_R` series' recurrence
+  answers with a new event, new id and UID at `sequence` + 1, and leaves the old
+  id, and every later `_R` slice of that parent, a cancelled tombstone Google
+  refuses to patch (`badRequest`). The entity follows the UID, so the echo lands
+  on a new entity: `delete_copy` retires the old id's source in the same request,
+  or the old entity keeps every occurrence until the tombstone syncs, and
+  `truncate_recurring_event` reads a tombstone as gone, so a delete from a copy
+  or later slice that has not synced yet retires it too.
 - Copies of one meeting pair by `calendar_meeting_uid(ical_uid)`, not the raw
   UID: Exchange gives a meeting it imports from an invitation its own UID that
   wraps the original after `vCal-Uid`, and the SQL function unwraps it, so an
@@ -360,6 +359,35 @@ reminder dispatch, team availability, and provider/Postgres persistence.
   removing a source whose typed `event_type` is out of office raises it, since
   every sync of a removed meeting's attendees reaches their teammates' calendars
   and the hint blanks their overlay.
+- The Outlook sync (`src/domain/outlook.rs`) refreshes a page's events one
+  at a time, first pending id first, and retries that id after any error, so
+  one error blocks the calendar. An event the adapter cannot normalize is not
+  an error: it comes back as `OutlookEventRefresh::Unreadable` with the Graph
+  property it rejected, and the sync skips it, as Google never shows an event
+  it cannot normalize. The event is absent: a copy stored before is retired
+  (`OutlookCalendarProgress::Unreadable`), since without the calendar error
+  Google shows beside its old copy a stale copy would look current, but its
+  page membership stays so later tombstones resolve. The round still finishes
+  as a clean sync. The warning `skipping an Outlook event Macro cannot read`
+  and the `calendar.outlook_sync` span carry `calendar_id`,
+  `provider_event_id` and `rejected_field`. Discovery does not fail on a
+  mailbox time zone Macro cannot map to IANA either: `OutlookDiscovery`
+  stores the account's calendars with no `time_zone`, which every reader
+  treats as unknown, as it does a Google calendar's zone it cannot read
+  (reminders and automatic declines anchor all-day dates at UTC, team
+  availability reports the zone missing). The warning `ignoring an Outlook
+  mailbox time zone Macro cannot map` and the span carry `unmapped_time_zone`.
+- A calendar's sync error reaches calendar caches only as an `UpsertCalendar`
+  change-log entry, since they read the calendar list once and then follow
+  the log. Google and Outlook log one when the shown error
+  (`visible_calendar_sync_error_tx`, past
+  `CALENDAR_SYNC_FAILURE_BADGE_THRESHOLD` failures) appears or is reworded
+  (`failure_changes_sync_error_badge`) and when the round that clears it
+  commits, never on a routine round (Outlook polls every two minutes).
+  Neither nudges open clients for it, so a tab sees it on its next delta.
+  Outlook logged none before November 2026;
+  `20261105002046_log_outlook_calendars_for_their_sync_error.sql` logs every
+  visible Outlook calendar once so caches that missed a change refetch it.
 - A sync of a `ready`, already synced account stays `ready`, on Google as on
   Outlook, including after a re-grant that kept calendar access, whose sync tokens
   survive. Any other state is catching up and marks it `syncing`: a first import,

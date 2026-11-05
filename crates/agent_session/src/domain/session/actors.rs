@@ -71,6 +71,8 @@ pub(crate) enum SessionMessage {
     Action(SessionCommand),
     /// Hand the agent these MCP servers from now on.
     ReplaceMcpServers(Vec<McpServer>),
+    /// Answer the agent's permission requests this way from now on.
+    SetPermissionPolicy(PermissionPolicy),
 }
 
 /// An actor-owned operation or an input to the runtime protocol machine.
@@ -120,7 +122,8 @@ pub(crate) struct SessionActor<Connector: AgentConnector, Logs> {
     handshake_span: Option<tracing::Span>,
     handshake_deadline: Instant,
     /// Told when the machine reports a turn over, so the harness can dispatch
-    /// its next queued prompt.
+    /// its next queued prompt, and when the runtime reports its session
+    /// deliberately closed.
     turn_observer: Arc<dyn SessionTurnObserver>,
     /// GenAI spans for the turns and tool calls this connection carries, fed
     /// every frame the effects below send or log. See [`super::telemetry`].
@@ -264,6 +267,7 @@ where
                     return ActorInput::PresentTool { presentation, completed };
                 },
                 Some(SessionMessage::ReplaceMcpServers(servers)) => Input::ReplaceMcpServers(servers),
+                Some(SessionMessage::SetPermissionPolicy(policy)) => Input::SetPermissionPolicy(policy),
                 Some(SessionMessage::Action(SessionCommand { user_id, action, action_id, completed, span, enqueued_at })) => {
                     span.record(
                         "agent.command.queue_wait_ms",
@@ -319,7 +323,14 @@ where
                 let result = self
                     .logs
                     .present_tool(self.machine.id(), session_id, presentation)
-                    .await;
+                    .await
+                    .inspect_err(|error| {
+                        tracing::error!(
+                            error = ?error,
+                            id = %self.machine.id(),
+                            "agent session failed to persist a tool presentation"
+                        );
+                    });
                 let failed = result.is_err();
                 let _ = completed.send(result);
                 if failed {
@@ -504,6 +515,11 @@ where
                         .await
                         .unwrap_or_else(|_| Err(AgentSessionError::LogTimedOut(self.machine.id())));
                     if let Err(error) = result {
+                        tracing::error!(
+                            error = ?error,
+                            id = %self.machine.id(),
+                            "agent session failed to persist its shared initialization"
+                        );
                         self.fail_remaining_completions(&mut effects, error);
                         effects.extend(self.machine.handle(Input::Closed(CloseReason::LogFailed)));
                     }
@@ -551,6 +567,18 @@ where
                             .record("otel.status_description", tracing::field::display(error));
                     }
                     let _ = token.completed.send(result);
+                }
+                Effect::RuntimeClosed => {
+                    let _closed = tracing::info_span!(
+                        "agent.session.runtime_closed",
+                        agent.session.id = %self.machine.id(),
+                    )
+                    .entered();
+                    tracing::info!(
+                        id = %self.machine.id(),
+                        "agent session runtime was deliberately closed"
+                    );
+                    self.turn_observer.runtime_closed(self.machine.id());
                 }
                 Effect::Stop { reason } => {
                     self.telemetry.on_stopped(&reason);
@@ -800,7 +828,8 @@ where
                 | Effect::Log { .. }
                 | Effect::EstablishInitialization { .. }
                 | Effect::PersistAcpSession { .. }
-                | Effect::Initialized { .. } => {}
+                | Effect::Initialized { .. }
+                | Effect::RuntimeClosed => {}
             }
         }
         if let Some(stop) = stop {

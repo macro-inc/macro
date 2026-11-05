@@ -250,6 +250,8 @@ export async function createSnippet(
 
 type CreateSkillArgs = {
   title?: string;
+  /** When to use the skill, in one line starting "Use when". */
+  description: string;
   content?: string;
   projectId?: string;
   /** UI surface the creation originated from, for analytics. */
@@ -263,12 +265,13 @@ type CreateSkillArgs = {
  * referenced in an AI input.
  */
 export async function createSkill(
-  args?: CreateSkillArgs
+  args: CreateSkillArgs
 ): Promise<string | undefined> {
   const result = await storageServiceClient.createSkill({
-    skillName: args?.title ?? '',
-    markdown: args?.content ?? '',
-    projectId: args?.projectId,
+    skillName: args.title ?? '',
+    description: args.description,
+    markdown: args.content ?? '',
+    projectId: args.projectId,
   });
 
   fireAndForget(invalidateUserQuota(), 'create-entity');
@@ -280,7 +283,7 @@ export async function createSkill(
   setPreviewOnCreate({
     itemId: documentId,
     itemType: 'document',
-    name: args?.title ?? '',
+    name: args.title ?? '',
     fileType: 'md',
     subType: { type: 'skill' },
   });
@@ -289,8 +292,8 @@ export async function createSkill(
   analytics.track('create_entity', {
     entityType: 'skill',
     entityId: documentId,
-    projectId: args?.projectId,
-    source: args?.source,
+    projectId: args.projectId,
+    source: args.source,
   });
 
   return documentId;

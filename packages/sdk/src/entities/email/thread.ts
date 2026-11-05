@@ -13,7 +13,7 @@ import type { Calendar } from '../calendar/calendar';
 import { CalendarEvent } from '../calendar/event';
 import { PropertiedEntity } from '../entity';
 import { Project } from '../projects/project';
-import { entitySearch } from '../search';
+import { entitySearch } from '../search/options';
 import { EntityAccess } from '../sharing/access';
 import {
   type SharePermissionOptions,
@@ -177,6 +177,16 @@ export class EmailThread extends PropertiedEntity<ThreadDetail> {
       }),
     );
     return thread;
+  }
+
+  /** The thread's URL in the Macro web app; hand it to users as the link. */
+  webUrl(): string {
+    return `${this.client.webAppUrl}/app/mail/${this.id}`;
+  }
+
+  /** Identity, loaded detail and {@link webUrl}, so serialized handles carry their link. */
+  override toJSON() {
+    return { ...super.toJSON(), url: this.webUrl() };
   }
 
   /** A handle to a thread by id. Details load on first access. */

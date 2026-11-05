@@ -8,6 +8,7 @@ mod test;
 
 pub mod live_query;
 pub mod watch_query;
+mod window_observation;
 
 use crate::calendar::{CalendarError, EVENT_TYPENAME};
 use crate::denormalize::{DenormalizeError, ReadOutcome, ReadPlans, ReadSession, RecordSource};
@@ -357,6 +358,7 @@ const DOCUMENT_CACHE_CAPACITY: usize = 128;
 pub struct Engine<S: Storage> {
     schema: std::sync::Arc<crate::meta::Schema>,
     live_queries: live_query::LiveQueries,
+    window_observations: window_observation::WindowObservations,
     query_watches: watch_query::QueryWatches,
     storage: S,
     revision: CacheRevision,
@@ -390,6 +392,7 @@ impl<S: Storage> Engine<S> {
         Engine {
             schema,
             live_queries: live_query::LiveQueries::default(),
+            window_observations: window_observation::WindowObservations::default(),
             query_watches: watch_query::QueryWatches::default(),
             storage,
             revision: CacheRevision::ZERO,
@@ -946,7 +949,8 @@ impl<S: Storage> Engine<S> {
         selection: &RecordSelection,
         keys: &[EntityKey<'static>],
     ) -> Result<Revisioned<Vec<SelectedRecord>>, EngineError<S::Error>> {
-        let (records, _) = self.read_records_tracked(selection, keys).await?;
+        let (records, dependencies) = self.read_records_tracked(selection, keys).await?;
+        self.bind_window_dependencies(keys, &dependencies);
         Ok(self.revisioned(records))
     }
 
@@ -2938,6 +2942,7 @@ impl<S: Storage> Engine<S> {
         self.ensure_revision_can_advance()?;
         self.hot.clear();
         self.live_queries = live_query::LiveQueries::default();
+        self.window_observations = window_observation::WindowObservations::default();
         self.query_watches = watch_query::QueryWatches::default();
         self.docs.clear();
         self.optimistic.clear();
@@ -3018,6 +3023,7 @@ impl<S: Storage> Engine<S> {
         self.storage.clear().await.map_err(EngineError::Storage)?;
         self.hot.clear();
         self.live_queries = live_query::LiveQueries::default();
+        self.window_observations = window_observation::WindowObservations::default();
         self.query_watches = watch_query::QueryWatches::default();
         self.optimistic.clear();
         self.optimistic_hydrated = true;

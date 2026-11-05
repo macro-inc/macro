@@ -5,6 +5,11 @@ export type ClientOptions = {
 };
 
 /**
+ * A color as `#rrggbb`, kept in lowercase.
+ */
+export type AccentColor = string;
+
+/**
  * Ordered from least to most access top -> bottom
  */
 export type AccessLevel = 'view' | 'comment' | 'edit' | 'owner';
@@ -317,6 +322,11 @@ export type AgentMcpServers = {
 export type AgentPullRequestState = 'open' | 'draft' | 'closed' | 'merged';
 
 /**
+ * Who or what archived an agent session.
+ */
+export type AgentSessionArchiveCause = 'user' | 'pull_request_merged' | 'runtime_closed';
+
+/**
  * Filters for agent sessions.
  */
 export type AgentSessionFilters = {
@@ -446,6 +456,21 @@ export type AgentTyping = {
  * What a typing agent is doing.
  */
 export type AgentTypingPhase = 'thinking' | 'writing' | 'working' | 'waiting';
+
+/**
+ * Public admission error payload. Handlers with additional fields can reuse the
+ * domain error's code and message and [`admission_status`].
+ */
+export type AiAdmissionErrorBody = {
+    /**
+     * Stable denial or unavailability code.
+     */
+    code: string;
+    /**
+     * Human-readable explanation, without internal billing diagnostics.
+     */
+    error: string;
+};
 
 export type Anchor = PdfAnchor;
 
@@ -1217,6 +1242,11 @@ export type Awareness = {
  */
 export type AwarenessRelay = {
     /**
+     * Whether the viewer's grant lets them edit; a viewer who cannot is
+     * shown as viewing.
+     */
+    canEdit: boolean;
+    /**
      * The database the viewer is in.
      */
     databaseId: string;
@@ -1379,7 +1409,7 @@ export type Bot = {
      */
     handle: string;
     /**
-     * Whether mentioning this bot opens a sandboxed coding-agent session.
+     * Whether this bot runs as an AI agent: mentions and DMs start an agent session.
      */
     has_agent: boolean;
     /**
@@ -2626,6 +2656,81 @@ export type Channel = {
 };
 
 /**
+ * A participant's answer to a pending request.
+ */
+export type ChannelAccessDecision = 'approve' | 'deny';
+
+/**
+ * One attempt to join a channel. Attempts are never reused, so each timeline
+ * entry keeps showing the outcome of the attempt it announced.
+ */
+export type ChannelAccessRequest = {
+    /**
+     * Channel the requester asked to join.
+     */
+    channel_id: string;
+    /**
+     * When the requester asked.
+     */
+    created_at: string;
+    /**
+     * Attempt id.
+     */
+    id: string;
+    /**
+     * Person asking to join.
+     */
+    requester_id: MacroUserIdStr;
+    /**
+     * When the attempt stopped being pending.
+     */
+    resolved_at?: string | null;
+    resolved_by?: null | MacroUserIdStr;
+    /**
+     * Current outcome.
+     */
+    status: ChannelAccessRequestStatus;
+};
+
+/**
+ * A requester's view of their access to a channel they cannot read.
+ */
+export type ChannelAccessRequestState = {
+    /**
+     * Whether this channel accepts requests.
+     */
+    can_request: boolean;
+    request?: null | ChannelAccessRequest;
+    /**
+     * Earliest time the caller may ask again, while they must wait.
+     */
+    retry_after?: string | null;
+};
+
+/**
+ * Outcome of one attempt to join.
+ */
+export type ChannelAccessRequestStatus = 'pending' | 'approved' | 'denied' | 'cancelled';
+
+/**
+ * Metadata for [`ChannelTopicEvent::AccessRequested`].
+ */
+export type ChannelAccessRequestedMetadata = {
+    /**
+     * Channel the requester asked to join.
+     */
+    channel_id: string;
+    /**
+     * The attempt; channel participants read its current outcome by id.
+     */
+    request_id: string;
+    /**
+     * Person asking to join.
+     */
+    requester_id: MacroUserIdStr;
+};
+
+/**
  * Metadata for [`ChannelTopicEvent::Created`].
  */
 export type ChannelCreatedMetadata = {
@@ -2763,7 +2868,7 @@ export type ChannelLabel = {
      */
     teamId?: string | null;
     /**
-     * When the label was last renamed or reordered.
+     * When the label's name, rule, scope, or order last changed.
      */
     updatedAt: string;
 };
@@ -2780,6 +2885,11 @@ export type ChannelLabelRule = {
 };
 
 /**
+ * Requested label namespace. Omission retains the deployed automatic selection.
+ */
+export type ChannelLabelScopeSelection = 'personal' | 'team';
+
+/**
  * The authorized scope's labels in manual order.
  */
 export type ChannelLabelsList = {
@@ -2787,6 +2897,10 @@ export type ChannelLabelsList = {
      * Every label of the scope, whether or not the caller sees channels in it.
      */
     labels: Array<ChannelLabel>;
+    /**
+     * Resolved label namespace.
+     */
+    scope: ChannelLabelScopeSelection;
     /**
      * Team scope, or `None` for private labels.
      */
@@ -3030,6 +3144,12 @@ export type ChannelTopicEvent = {
      * Participants were removed from a channel (admin removal or self-leave).
      */
     metadata: ChannelParticipantRemovedMetadata;
+} | {
+    event_type: 'channel.access_requested';
+    /**
+     * Someone outside a channel asked to join it.
+     */
+    metadata: ChannelAccessRequestedMetadata;
 };
 
 /**
@@ -3905,7 +4025,7 @@ export type CreateBotRequest = {
      */
     handle: string;
     /**
-     * Whether mentioning this bot opens a sandboxed coding-agent session. Defaults to false.
+     * Whether this bot runs as an AI agent: mentions and DMs start an agent session. Defaults to false.
      */
     has_agent?: boolean | null;
     /**
@@ -4038,7 +4158,7 @@ export type CreateChannelScopedBotRequest = {
      */
     handle: string;
     /**
-     * Whether mentioning this bot opens a sandboxed coding-agent session. Defaults to false.
+     * Whether this bot runs as an AI agent: mentions and DMs start an agent session. Defaults to false.
      */
     has_agent?: boolean | null;
     /**
@@ -4082,11 +4202,12 @@ export type CreateChannelScopedBotResponse = {
  */
 export type CreateCrmCompanyRequest = {
     /**
-     * The company's email domain, e.g. "acme.com". Must be a bare
+     * Optional company domain, e.g. "acme.com". Omit for a name-only
+     * company. When supplied, must be a bare
      * domain (no scheme, path, or email) and not a generic email
      * provider domain.
      */
-    domain: string;
+    domain?: string | null;
     /**
      * Display name for the company. Team-scoped: overrides the
      * domain-directory name on every read path.
@@ -4099,10 +4220,26 @@ export type CreateCrmCompanyRequest = {
  */
 export type CreateCrmContactRequest = {
     /**
-     * The contact's email address, e.g. "jane@acme.com". Its domain
-     * must be one of the company's domains (400 otherwise).
+     * The contact's email address, including personal email providers.
+     * It need not match a company domain. Optional: omit it to add the
+     * contact by name only.
      */
-    email: string;
+    email?: string | null;
+    /**
+     * Display name for the contact.
+     */
+    name: string;
+};
+
+/**
+ * Request body for `POST /crm/contacts`.
+ */
+export type CreateCrmTeamContactRequest = {
+    /**
+     * The contact's email address, of any domain. Optional: omit it to
+     * add the contact by name only.
+     */
+    email?: string | null;
     /**
      * Display name for the contact.
      */
@@ -4400,10 +4537,6 @@ export type CreateMeetingRequest = {
  */
 export type CreatePairingRequest = {
     /**
-     * Daemon operator consent ceiling. Omitted by older clients; web approval decides.
-     */
-    allow_permission_bypass?: boolean | null;
-    /**
      * Display-only description of the machine, e.g. `eric@macbook / darwin`.
      */
     host?: string | null;
@@ -4411,7 +4544,6 @@ export type CreatePairingRequest = {
      * Requested harness display name (typically the machine's hostname).
      */
     name: string;
-    scope?: null | RequestedHarnessScope;
 };
 
 /**
@@ -4460,6 +4592,12 @@ export type CreateProjectResponse = {
  * AI input.
  */
 export type CreateSkillRequest = {
+    /**
+     * When to use the skill, in one line starting "Use when", e.g. "Use when
+     * drafting release notes; not changelog entries". Agents choose skills
+     * for a request by it.
+     */
+    description: string;
     /**
      * Markdown source text. Defaults to an empty skill document.
      */
@@ -4784,6 +4922,20 @@ export type CrmAssociation = {
 } | 'activity';
 
 /**
+ * A domain the team keeps out of email sync.
+ */
+export type CrmBlockedDomainResponse = {
+    /**
+     * When it was added.
+     */
+    created_at: string;
+    /**
+     * The blocked domain, lowercase.
+     */
+    domain: string;
+};
+
+/**
  * The crm company filters used to narrow which CRM companies appear in soup.
  */
 export type CrmCompanyFilters = {
@@ -4863,17 +5015,19 @@ export type CrmCompanyResponse = {
  */
 export type CrmContactResponse = {
     /**
-     * The id of the company the contact belongs to.
+     * The id of the company the contact belongs to; absent for a
+     * contact without a company.
      */
-    companyId: string;
+    companyId?: string | null;
     /**
      * When the contact record was created.
      */
     createdAt: string;
     /**
-     * The contact's email address.
+     * The contact's email address; absent for contacts added by name
+     * alone.
      */
-    email: string;
+    email?: string | null;
     /**
      * Earliest known interaction with this contact.
      */
@@ -5000,6 +5154,11 @@ export type CrmTeamSettingsResponse = {
      */
     edit_stages_role: CrmPermissionRole;
     /**
+     * Whether email sync keeps personal-provider addresses (gmail.com
+     * etc.) out of the CRM.
+     */
+    exclude_personal_emails: boolean;
+    /**
      * System stage option id to team stage option id for seeded stages.
      */
     legacy_stage_ids: {
@@ -5059,6 +5218,10 @@ export type Database = {
      * Owning user.
      */
     owner_id: string;
+    /**
+     * The folder it is filed in; `null` at the root.
+     */
+    project_id: string | null;
     /**
      * Set when trashed.
      */
@@ -5345,6 +5508,75 @@ export type DirectAccess = {
      * Recipient.
      */
     userId: string;
+};
+
+/**
+ * The edit failed after it started, so it may have partly applied. Read the
+ * document before retrying.
+ */
+export type DocumentAiEditFailed = {
+    /**
+     * Always `edit_failed`.
+     */
+    error: DocumentAiEditFailedCode;
+    /**
+     * What to do next; the cause is logged, never returned.
+     */
+    message: string;
+};
+
+/**
+ * Error code of an edit that failed after it started.
+ */
+export type DocumentAiEditFailedCode = 'edit_failed';
+
+/**
+ * The editor could not do the edit; nothing changed.
+ */
+export type DocumentAiEditRefused = {
+    /**
+     * Always `edit_refused`.
+     */
+    error: DocumentAiEditRefusedCode;
+    /**
+     * Why, in the editor's words: what it needs to know or cannot do.
+     */
+    reason: string;
+};
+
+/**
+ * Error code of an edit the editor refused.
+ */
+export type DocumentAiEditRefusedCode = 'edit_refused';
+
+/**
+ * What to change, in words.
+ */
+export type DocumentAiEditRequest = {
+    /**
+     * Run the single-model fast pipeline, for one small, contained edit.
+     */
+    fast?: boolean;
+    /**
+     * Natural-language instructions. Name the section or quote the text to
+     * change, describe the outcome, and say what must stay as it is.
+     */
+    instructions: string;
+};
+
+/**
+ * A completed edit by instructions.
+ */
+export type DocumentAiEdited = {
+    /**
+     * What the editor needs to know to finish, when it applied part of the
+     * edit and stopped; the applied part stays.
+     */
+    clarification?: string | null;
+    /**
+     * The document's version after the edit, as sync-service encodes it.
+     */
+    revision: string;
 };
 
 /**
@@ -6016,6 +6248,16 @@ export type DocumentUpdatedMetadata = {
      * Whether share permissions were updated.
      */
     share_permission_updated: boolean;
+};
+
+/**
+ * Request body for duplicating a database.
+ */
+export type DuplicateDatabaseRequest = {
+    /**
+     * The copy's name; left out, "<name> copy".
+     */
+    name?: string | null;
 };
 
 export type EditAnchorRequest = EditPdfAnchorRequest & {
@@ -7732,9 +7974,19 @@ export type ForeignEntityFilters = {
  */
 export type Form = {
     /**
+     * Whether nobody, the owner included, can see who gave which response.
+     * Who responded is kept apart from the responses, only so nobody
+     * responds twice. Fixed once anyone has responded.
+     */
+    anonymous: boolean;
+    /**
      * Who may respond.
      */
     audience: Audience;
+    /**
+     * Its logo, cover image and accent color.
+     */
+    branding: FormBranding;
     /**
      * When it stops taking responses, if it does.
      */
@@ -7775,10 +8027,19 @@ export type Form = {
      */
     ownerId: string;
     /**
+     * The folder it is filed in; `null` at the root.
+     */
+    projectId: string | null;
+    /**
      * The person column each signed-in submission names its respondent in;
-     * `null` once deleted.
+     * `null` once deleted, and on a form created anonymous. An anonymous
+     * form never writes it.
      */
     respondentColumnId: string | null;
+    /**
+     * Whether people with View may read individual response rows.
+     */
+    responsesVisible: boolean;
     /**
      * Whether its owner closed it.
      */
@@ -7802,10 +8063,26 @@ export type Form = {
 };
 
 /**
- * The caller's level on a form: view responds, edit changes questions and
- * reads responses, owner also sets the audience, closes and trashes it.
+ * The caller's level on a form: view responds (and reads responses when
+ * they are shared), edit changes questions and reads responses, owner
+ * also sets the audience, closes and trashes it.
  */
 export type FormAccess = 'view' | 'edit' | 'owner';
+
+/**
+ * A form's logo, cover image and accent color, each unset by default.
+ */
+export type FormBranding = {
+    accentColor: null | AccentColor;
+    /**
+     * The static file shown as a banner across the top of the page.
+     */
+    coverFileId: string | null;
+    /**
+     * The static file shown as the logo above the title.
+     */
+    logoFileId: string | null;
+};
 
 /**
  * A ready collaborative form and the result of publishing its latest draft.
@@ -7848,7 +8125,7 @@ export type FormDetail = {
 /**
  * What went wrong with a forms request.
  */
-export type FormErrorCode = 'tableAlreadyHasForm' | 'notFound' | 'forbidden' | 'ownerOnly' | 'signInRequired' | 'closed' | 'tableGone' | 'alreadyResponded' | 'noResponse' | 'unknownQuestion' | 'repeatedAnswer' | 'missingAnswer' | 'invalidAnswer' | 'widgetMismatch' | 'fileUploadNeedsSignIn' | 'invalidLayout' | 'invalidName' | 'invalidSharing' | 'tallyHidden' | 'conflict' | 'internal';
+export type FormErrorCode = 'tableAlreadyHasForm' | 'notFound' | 'forbidden' | 'ownerOnly' | 'signInRequired' | 'closed' | 'tableGone' | 'alreadyResponded' | 'noResponse' | 'anonymousResponseFinal' | 'unknownQuestion' | 'repeatedAnswer' | 'missingAnswer' | 'invalidAnswer' | 'widgetMismatch' | 'fileUploadNeedsSignIn' | 'invalidLayout' | 'invalidName' | 'invalidSharing' | 'tallyHidden' | 'invalidBranding' | 'conflict' | 'internal';
 
 /**
  * Why a forms request was refused or failed.
@@ -7992,6 +8269,13 @@ export type FormSection = {
      */
     questions: Array<QuestionLayout>;
     /**
+     * When to show it: the rules answers of earlier shown sections must
+     * pass, naming only their columns. A section whose rules fail is
+     * skipped: its questions are not required and their answers are
+     * not written. Absent, it is always shown.
+     */
+    showWhen?: FilterGroup;
+    /**
      * Its title; may be empty.
      */
     title: string;
@@ -8055,6 +8339,12 @@ export type FormSectionDetail = {
      */
     questions: Array<FormQuestionDetail>;
     /**
+     * When to show it, from earlier shown sections' answers; absent,
+     * it is always shown. Sent to every caller so a respondent's page
+     * can skip it.
+     */
+    showWhen?: FilterGroup;
+    /**
      * Its title.
      */
     title: string;
@@ -8104,6 +8394,11 @@ export type FormSectionDetail = {
  * Where a new form's responses go.
  */
 export type FormSource = {
+    /**
+     * Make the form anonymous from the start: its table gets no
+     * Respondent column.
+     */
+    anonymous?: boolean;
     /**
      * Keep the form, and the database made for it, out of Drive, as
      * for a channel poll.
@@ -9769,6 +10064,18 @@ export type LayoutProblem = {
      */
     reason: string;
 } | {
+    /**
+     * The column.
+     */
+    column: string;
+    kind: 'conditionNamesLaterColumn';
+} | {
+    kind: 'conditionRule';
+    /**
+     * Why.
+     */
+    reason: string;
+} | {
     kind: 'textTooLong';
     /**
      * The longest allowed.
@@ -10699,8 +11006,7 @@ export type MessageTopicEvent = {
 };
 
 /**
- * A signed-in respondent's own response, with its answers as the row
- * holds them now.
+ * A signed-in respondent's own response.
  */
 export type MyResponse = {
     /**
@@ -10709,14 +11015,17 @@ export type MyResponse = {
      */
     answers: Array<Answer>;
     /**
-     * The form's booking step, while the saved row still passes the form's
-     * current required questions and gates.
+     * The form's booking step, while the saved row still passes the
+     * form's current required questions and gates.
      */
     booking?: UnlockedBooking;
+    kind: 'saved';
     /**
      * The ledger entry.
      */
     response: FormResponse;
+} | {
+    kind: 'anonymous';
 };
 
 /**
@@ -11089,14 +11398,9 @@ export type PairingDetails = {
      */
     host?: string | null;
     /**
-     * Daemon operator consent ceiling; false forbids bypass at approval.
-     */
-    requested_allow_permission_bypass?: boolean | null;
-    /**
      * Harness display name the daemon asked for.
      */
     requested_name: string;
-    requested_scope?: null | RequestedHarnessScope;
 };
 
 /**
@@ -11141,7 +11445,7 @@ export type PatchBotRequest = {
      */
     handle?: string | null;
     /**
-     * Whether mentioning this bot opens a sandboxed coding-agent session. Omit to leave unchanged.
+     * Whether this bot runs as an AI agent: mentions and DMs start an agent session. Omit to leave unchanged.
      */
     has_agent?: boolean | null;
     /**
@@ -11169,6 +11473,21 @@ export type PatchChannelRequest = {
      * converts a team channel to a private channel.
      */
     convert_to_team_channel?: boolean | null;
+};
+
+/**
+ * Request to change a registered harness. Omitted fields stay as they are.
+ */
+export type PatchHarnessRequest = {
+    /**
+     * Whether agents may bypass ACP permission requests on this harness.
+     * Live sessions pick the change up at their next turn.
+     */
+    allow_permission_bypass?: boolean | null;
+    /**
+     * New display name.
+     */
+    name?: string | null;
 };
 
 /**
@@ -11978,7 +12297,7 @@ export type RemoveParticipantsRequest = {
 };
 
 /**
- * Request body for renaming a label.
+ * Request body for updating a label's name, smart rule, or sharing scope.
  */
 export type RenameChannelLabelRequest = {
     /**
@@ -11986,6 +12305,7 @@ export type RenameChannelLabelRequest = {
      */
     name: string;
     rule?: null | ChannelLabelRule;
+    targetScope?: null | ChannelLabelScopeSelection;
 };
 
 /**
@@ -12053,14 +12373,6 @@ export type RequestAccess = {
 export type RequestStatus = 'pending' | 'granted' | 'denied' | 'cancelled';
 
 /**
- * The ownership scope a daemon's config asks for.
- *
- * Advisory, not binding: the approving user confirms it in the dialog, which
- * arrives preselected to this. Approval is what actually sets ownership.
- */
-export type RequestedHarnessScope = 'private' | 'team';
-
-/**
  * A layout as an op asks for it: a board or timeline may leave its title
  * out.
  */
@@ -12119,6 +12431,16 @@ export type RequestedLayout = {
      * title it has, and a new timeline takes the table's first column.
      */
     title?: string;
+};
+
+/**
+ * Body of a participant's answer.
+ */
+export type ResolveChannelAccessRequest = {
+    /**
+     * The answer.
+     */
+    decision: ChannelAccessDecision;
 };
 
 /**
@@ -12798,6 +13120,17 @@ export type SetPropertyValue = {
 };
 
 /**
+ * Request body for setting a skill's routing description.
+ */
+export type SetSkillDescriptionRequest = {
+    /**
+     * When to use the skill, in one line starting "Use when", at most 300
+     * characters.
+     */
+    description: string;
+};
+
+/**
  * SHA-256 encoded as exactly 64 lowercase hexadecimal characters.
  */
 export type Sha256Digest = string;
@@ -12894,6 +13227,17 @@ export type SimpleMention = {
      * Mentioned entity type.
      */
     entity_type: string;
+};
+
+/**
+ * A skill's routing description.
+ */
+export type SkillDescriptionBody = {
+    /**
+     * When to use the skill, in one line starting "Use when". Absent for a
+     * skill created before descriptions existed.
+     */
+    description?: string | null;
 };
 
 /**
@@ -13001,6 +13345,11 @@ export type SoupAgentSessionSoupPropertiesField = {
     properties: Array<SoupProperty>;
 } & {
     /**
+     * When the session was archived, or `None` while it is active.
+     */
+    archivedAt?: string | null;
+    archivedBy?: null | AgentSessionArchiveCause;
+    /**
      * The bot running this session
      */
     botId: string;
@@ -13016,10 +13365,6 @@ export type SoupAgentSessionSoupPropertiesField = {
      * The agent session uuid
      */
     id: string;
-    /**
-     * Whether the session is archived and read-only.
-     */
-    isArchived: boolean;
     /**
      * The user-facing name of the session
      */
@@ -13614,21 +13959,21 @@ export type SoupCrmContactSoupPropertiesField = {
     properties: Array<SoupProperty>;
 } & {
     /**
-     * Parent company ID.
+     * Parent company ID; `None` for a contact without a company.
      */
-    companyId: string;
+    companyId?: string | null;
     /**
-     * Parent company's display name.
+     * Parent company's display name; `None` without a company.
      */
-    companyName: string;
+    companyName?: string | null;
     /**
      * Record creation time.
      */
     createdAt: string;
     /**
-     * Full email address.
+     * Full email address; `None` for a contact added by name alone.
      */
-    email: string;
+    email?: string | null;
     /**
      * Earliest interaction for this team record.
      */
@@ -14566,6 +14911,24 @@ export type SqlStatement = {
 };
 
 /**
+ * Fields required when a deal enters a particular option of a stage column.
+ */
+export type StageRequirement = {
+    /**
+     * Fields that must be present. Empty removes the rule for this stage.
+     */
+    requiredColumnIds: Array<string>;
+    /**
+     * Single-select column identifying the stage, independent of its name.
+     */
+    stageColumnId: string;
+    /**
+     * Stable option identity; renaming the stage preserves the rule.
+     */
+    stageId: string;
+};
+
+/**
  * Starter result. A missing database means the user already started or removed it.
  */
 export type StarterDatabase = {
@@ -15036,6 +15399,13 @@ export type TallyBucket = {
      * The value.
      */
     value: TallyValue;
+    /**
+     * Who chose it, as Macro user ids in submission order: present only
+     * for the form's editors, or its viewers when it shares its responses,
+     * and never when it hides respondents. Rows no signed-in respondent
+     * submitted count without a voter.
+     */
+    voters?: Array<string> | null;
 };
 
 /**
@@ -15849,6 +16219,11 @@ export type UpdateCrmTeamSettingsRequest = {
     default_team_view_id?: string | null;
     delete_records_role?: null | CrmPermissionRole;
     edit_stages_role?: null | CrmPermissionRole;
+    /**
+     * Whether email sync keeps personal-provider addresses out of the
+     * CRM. Admin/owner only.
+     */
+    exclude_personal_emails?: boolean | null;
     move_closed_deals_role?: null | CrmPermissionRole;
     /**
      * Replacement team-views array (whole-blob, last write wins).
@@ -15857,11 +16232,20 @@ export type UpdateCrmTeamSettingsRequest = {
 };
 
 /**
- * A change to a form's facts; what is left out stays. The description and
- * confirmation message take edit, the rest owner. A form is renamed
+ * A change to a form's facts; what is left out stays. The description,
+ * confirmation message and branding take edit, the rest owner. A form is renamed
  * through the entity mutation router.
  */
 export type UpdateForm = {
+    /**
+     * A new accent color, or `null` for the default.
+     */
+    accentColor?: string | null;
+    /**
+     * Whether nobody can see who gave which response; refused once anyone
+     * has responded.
+     */
+    anonymous?: boolean;
     /**
      * Who may respond from now on.
      */
@@ -15875,9 +16259,21 @@ export type UpdateForm = {
      */
     confirmationMessage?: string;
     /**
+     * A new cover image, or `null` to remove it.
+     */
+    coverFileId?: string | null;
+    /**
      * Its new description.
      */
     description?: string;
+    /**
+     * A new logo, or `null` to remove it.
+     */
+    logoFileId?: string | null;
+    /**
+     * Whether people with View may read individual response rows.
+     */
+    responsesVisible?: boolean;
     /**
      * Open or close it.
      */
@@ -18240,7 +18636,12 @@ export type IngestTranscriptResponses = {
 export type ListChannelLabelsData = {
     body?: never;
     path?: never;
-    query?: never;
+    query?: {
+        /**
+         * `personal` selects private labels; `team` requires team membership.
+         */
+        scope?: ChannelLabelScopeSelection;
+    };
     url: '/channel-labels';
 };
 
@@ -18261,7 +18662,12 @@ export type ListChannelLabelsResponse = ListChannelLabelsResponses[keyof ListCha
 export type CreateChannelLabelData = {
     body: CreateChannelLabelRequest;
     path?: never;
-    query?: never;
+    query?: {
+        /**
+         * `personal` selects private labels; `team` requires team membership.
+         */
+        scope?: ChannelLabelScopeSelection;
+    };
     url: '/channel-labels';
 };
 
@@ -18290,7 +18696,12 @@ export type SetChannelLabelData = {
          */
         channel_id: string;
     };
-    query?: never;
+    query?: {
+        /**
+         * `personal` selects private labels; `team` requires team membership.
+         */
+        scope?: ChannelLabelScopeSelection;
+    };
     url: '/channel-labels/channels/{channel_id}';
 };
 
@@ -18313,7 +18724,12 @@ export type SetChannelLabelResponse = SetChannelLabelResponses[keyof SetChannelL
 export type PreviewSmartTagData = {
     body: ChannelLabelRule;
     path?: never;
-    query?: never;
+    query?: {
+        /**
+         * `personal` selects private labels; `team` requires team membership.
+         */
+        scope?: ChannelLabelScopeSelection;
+    };
     url: '/channel-labels/preview';
 };
 
@@ -18340,7 +18756,12 @@ export type DeleteChannelLabelData = {
          */
         label_id: string;
     };
-    query?: never;
+    query?: {
+        /**
+         * `personal` selects private labels; `team` requires team membership.
+         */
+        scope?: ChannelLabelScopeSelection;
+    };
     url: '/channel-labels/{label_id}';
 };
 
@@ -18367,7 +18788,12 @@ export type RenameChannelLabelData = {
          */
         label_id: string;
     };
-    query?: never;
+    query?: {
+        /**
+         * `personal` selects private labels; `team` requires team membership.
+         */
+        scope?: ChannelLabelScopeSelection;
+    };
     url: '/channel-labels/{label_id}';
 };
 
@@ -18704,6 +19130,145 @@ export type PatchChannelResponses = {
 };
 
 export type PatchChannelResponse = PatchChannelResponses[keyof PatchChannelResponses];
+
+export type CancelChannelAccessRequestData = {
+    body?: never;
+    path: {
+        /**
+         * Channel ID
+         */
+        channel_id: string;
+    };
+    query?: never;
+    url: '/channels/{channel_id}/access-requests/mine';
+};
+
+export type CancelChannelAccessRequestErrors = {
+    401: ErrorResponse;
+    500: ErrorResponse;
+};
+
+export type CancelChannelAccessRequestError = CancelChannelAccessRequestErrors[keyof CancelChannelAccessRequestErrors];
+
+export type CancelChannelAccessRequestResponses = {
+    200: unknown;
+};
+
+export type GetMyChannelAccessRequestData = {
+    body?: never;
+    path: {
+        /**
+         * Channel ID
+         */
+        channel_id: string;
+    };
+    query?: never;
+    url: '/channels/{channel_id}/access-requests/mine';
+};
+
+export type GetMyChannelAccessRequestErrors = {
+    401: ErrorResponse;
+    404: ErrorResponse;
+    500: ErrorResponse;
+};
+
+export type GetMyChannelAccessRequestError = GetMyChannelAccessRequestErrors[keyof GetMyChannelAccessRequestErrors];
+
+export type GetMyChannelAccessRequestResponses = {
+    200: ChannelAccessRequestState;
+};
+
+export type GetMyChannelAccessRequestResponse = GetMyChannelAccessRequestResponses[keyof GetMyChannelAccessRequestResponses];
+
+export type RequestChannelAccessData = {
+    body?: never;
+    path: {
+        /**
+         * Channel ID
+         */
+        channel_id: string;
+    };
+    query?: never;
+    url: '/channels/{channel_id}/access-requests/mine';
+};
+
+export type RequestChannelAccessErrors = {
+    400: ErrorResponse;
+    401: ErrorResponse;
+    404: ErrorResponse;
+    429: ErrorResponse;
+    500: ErrorResponse;
+};
+
+export type RequestChannelAccessError = RequestChannelAccessErrors[keyof RequestChannelAccessErrors];
+
+export type RequestChannelAccessResponses = {
+    200: ChannelAccessRequest;
+};
+
+export type RequestChannelAccessResponse = RequestChannelAccessResponses[keyof RequestChannelAccessResponses];
+
+export type GetChannelAccessRequestData = {
+    body?: never;
+    path: {
+        /**
+         * Channel ID
+         */
+        channel_id: string;
+        /**
+         * Access request ID
+         */
+        request_id: string;
+    };
+    query?: never;
+    url: '/channels/{channel_id}/access-requests/{request_id}';
+};
+
+export type GetChannelAccessRequestErrors = {
+    401: ErrorResponse;
+    404: ErrorResponse;
+    500: ErrorResponse;
+};
+
+export type GetChannelAccessRequestError = GetChannelAccessRequestErrors[keyof GetChannelAccessRequestErrors];
+
+export type GetChannelAccessRequestResponses = {
+    200: ChannelAccessRequest;
+};
+
+export type GetChannelAccessRequestResponse = GetChannelAccessRequestResponses[keyof GetChannelAccessRequestResponses];
+
+export type ResolveChannelAccessRequestData = {
+    body: ResolveChannelAccessRequest;
+    path: {
+        /**
+         * Channel ID
+         */
+        channel_id: string;
+        /**
+         * Access request ID
+         */
+        request_id: string;
+    };
+    query?: never;
+    url: '/channels/{channel_id}/access-requests/{request_id}/resolve';
+};
+
+export type ResolveChannelAccessRequestErrors = {
+    401: ErrorResponse;
+    403: ErrorResponse;
+    404: ErrorResponse;
+    409: ErrorResponse;
+    500: ErrorResponse;
+};
+
+export type ResolveChannelAccessRequestError = ResolveChannelAccessRequestErrors[keyof ResolveChannelAccessRequestErrors];
+
+export type ResolveChannelAccessRequestResponses = {
+    200: ChannelAccessRequest;
+};
+
+export type ResolveChannelAccessRequestResponse = ResolveChannelAccessRequestResponses[keyof ResolveChannelAccessRequestResponses];
 
 export type GetChannelAttachmentsData = {
     body?: never;
@@ -19176,6 +19741,80 @@ export type GetChannelsResponses = {
 
 export type GetChannelsResponse = GetChannelsResponses[keyof GetChannelsResponses];
 
+export type ListCrmBlockedDomainsData = {
+    body?: never;
+    path?: never;
+    query?: never;
+    url: '/crm/blocked-domains';
+};
+
+export type ListCrmBlockedDomainsErrors = {
+    401: ErrorResponse;
+    500: ErrorResponse;
+};
+
+export type ListCrmBlockedDomainsError = ListCrmBlockedDomainsErrors[keyof ListCrmBlockedDomainsErrors];
+
+export type ListCrmBlockedDomainsResponses = {
+    200: Array<CrmBlockedDomainResponse>;
+};
+
+export type ListCrmBlockedDomainsResponse = ListCrmBlockedDomainsResponses[keyof ListCrmBlockedDomainsResponses];
+
+export type UnblockCrmDomainData = {
+    body?: never;
+    path: {
+        /**
+         * A bare domain like acme.com
+         */
+        domain: string;
+    };
+    query?: never;
+    url: '/crm/blocked-domains/{domain}';
+};
+
+export type UnblockCrmDomainErrors = {
+    400: ErrorResponse;
+    401: ErrorResponse;
+    403: ErrorResponse;
+    500: ErrorResponse;
+};
+
+export type UnblockCrmDomainError = UnblockCrmDomainErrors[keyof UnblockCrmDomainErrors];
+
+export type UnblockCrmDomainResponses = {
+    204: void;
+};
+
+export type UnblockCrmDomainResponse = UnblockCrmDomainResponses[keyof UnblockCrmDomainResponses];
+
+export type BlockCrmDomainData = {
+    body?: never;
+    path: {
+        /**
+         * A bare domain like acme.com
+         */
+        domain: string;
+    };
+    query?: never;
+    url: '/crm/blocked-domains/{domain}';
+};
+
+export type BlockCrmDomainErrors = {
+    400: ErrorResponse;
+    401: ErrorResponse;
+    403: ErrorResponse;
+    500: ErrorResponse;
+};
+
+export type BlockCrmDomainError = BlockCrmDomainErrors[keyof BlockCrmDomainErrors];
+
+export type BlockCrmDomainResponses = {
+    204: void;
+};
+
+export type BlockCrmDomainResponse = BlockCrmDomainResponses[keyof BlockCrmDomainResponses];
+
 export type CreateCrmCompanyData = {
     body: CreateCrmCompanyRequest;
     path?: never;
@@ -19393,6 +20032,29 @@ export type SearchContactsResponses = {
 
 export type SearchContactsResponse2 = SearchContactsResponses[keyof SearchContactsResponses];
 
+export type CreateCrmTeamContactData = {
+    body: CreateCrmTeamContactRequest;
+    path?: never;
+    query?: never;
+    url: '/crm/contacts';
+};
+
+export type CreateCrmTeamContactErrors = {
+    400: ErrorResponse;
+    401: ErrorResponse;
+    403: ErrorResponse;
+    409: ErrorResponse;
+    500: ErrorResponse;
+};
+
+export type CreateCrmTeamContactError = CreateCrmTeamContactErrors[keyof CreateCrmTeamContactErrors];
+
+export type CreateCrmTeamContactResponses = {
+    200: CrmContactResponse;
+};
+
+export type CreateCrmTeamContactResponse = CreateCrmTeamContactResponses[keyof CreateCrmTeamContactResponses];
+
 export type GetContactByEmailData = {
     body?: never;
     path?: never;
@@ -19406,6 +20068,9 @@ export type GetContactByEmailData = {
 };
 
 export type GetContactByEmailErrors = {
+    /**
+     * Invalid email or multiple visible contacts match; choose a contact ID.
+     */
     400: ErrorResponse;
     401: ErrorResponse;
     500: ErrorResponse;
@@ -19652,6 +20317,36 @@ export type ShareCrmPipelineResponses = {
 
 export type ShareCrmPipelineResponse = ShareCrmPipelineResponses[keyof ShareCrmPipelineResponses];
 
+export type GetCrmPipelineStageRequirementsData = {
+    body?: never;
+    path: {
+        id: string;
+    };
+    query?: never;
+    url: '/crm/pipelines/{id}/stage-requirements';
+};
+
+export type GetCrmPipelineStageRequirementsResponses = {
+    200: Array<StageRequirement>;
+};
+
+export type GetCrmPipelineStageRequirementsResponse = GetCrmPipelineStageRequirementsResponses[keyof GetCrmPipelineStageRequirementsResponses];
+
+export type SetCrmPipelineStageRequirementData = {
+    body: StageRequirement;
+    path: {
+        id: string;
+    };
+    query?: never;
+    url: '/crm/pipelines/{id}/stage-requirements';
+};
+
+export type SetCrmPipelineStageRequirementResponses = {
+    204: void;
+};
+
+export type SetCrmPipelineStageRequirementResponse = SetCrmPipelineStageRequirementResponses[keyof SetCrmPipelineStageRequirementResponses];
+
 export type GetCrmPipelineTableData = {
     body?: never;
     path: {
@@ -19681,6 +20376,22 @@ export type TrashCrmPipelineResponses = {
 };
 
 export type TrashCrmPipelineResponse = TrashCrmPipelineResponses[keyof TrashCrmPipelineResponses];
+
+export type GetCrmPipelineViewPositionsData = {
+    body?: never;
+    path: {
+        id: string;
+        view: string;
+    };
+    query?: never;
+    url: '/crm/pipelines/{id}/views/{view}/positions';
+};
+
+export type GetCrmPipelineViewPositionsResponses = {
+    200: Array<CardPosition>;
+};
+
+export type GetCrmPipelineViewPositionsResponse = GetCrmPipelineViewPositionsResponses[keyof GetCrmPipelineViewPositionsResponses];
 
 export type GetCrmTeamSettingsData = {
     body?: never;
@@ -20075,6 +20786,31 @@ export type UndoDatabaseChangeResponses = {
 };
 
 export type UndoDatabaseChangeResponse = UndoDatabaseChangeResponses[keyof UndoDatabaseChangeResponses];
+
+export type DuplicateDatabaseData = {
+    body: DuplicateDatabaseRequest;
+    path: {
+        id: string;
+    };
+    query?: never;
+    url: '/databases/{id}/duplicate';
+};
+
+export type DuplicateDatabaseErrors = {
+    400: ErrorResponse;
+    401: ErrorResponse;
+    403: ErrorResponse;
+    404: ErrorResponse;
+    500: ErrorResponse;
+};
+
+export type DuplicateDatabaseError = DuplicateDatabaseErrors[keyof DuplicateDatabaseErrors];
+
+export type DuplicateDatabaseResponses = {
+    201: Database;
+};
+
+export type DuplicateDatabaseResponse = DuplicateDatabaseResponses[keyof DuplicateDatabaseResponses];
 
 export type ImportDatabaseTableData = {
     body: ImportTable;
@@ -20730,6 +21466,9 @@ export type CreateSkillHandlerData = {
 };
 
 export type CreateSkillHandlerErrors = {
+    /**
+     * The description is blank, longer than one line or 300 characters, or does not start "Use when"
+     */
     400: ErrorResponse;
     401: ErrorResponse;
     500: ErrorResponse;
@@ -21192,6 +21931,65 @@ export type SaveDocumentHandlerResponses = {
 
 export type SaveDocumentHandlerResponse = SaveDocumentHandlerResponses[keyof SaveDocumentHandlerResponses];
 
+export type EditDocumentWithAiData = {
+    body: DocumentAiEditRequest;
+    path: {
+        /**
+         * Document identity
+         */
+        document_id: string;
+    };
+    query?: never;
+    url: '/documents/{document_id}/ai-edit';
+};
+
+export type EditDocumentWithAiErrors = {
+    /**
+     * Not a markdown document, or empty instructions
+     */
+    400: ErrorResponse;
+    /**
+     * Authentication required
+     */
+    401: unknown;
+    /**
+     * AI allowance exhausted
+     */
+    402: AiAdmissionErrorBody;
+    /**
+     * Document edit access denied
+     */
+    403: unknown;
+    /**
+     * Document not found
+     */
+    404: unknown;
+    /**
+     * The editor could not do the edit; nothing changed
+     */
+    422: DocumentAiEditRefused;
+    /**
+     * The edit could not start
+     */
+    500: ErrorResponse;
+    /**
+     * The edit failed and may have partly applied
+     */
+    502: DocumentAiEditFailed;
+    /**
+     * AI usage validation unavailable; retry later
+     */
+    503: AiAdmissionErrorBody;
+};
+
+export type EditDocumentWithAiError = EditDocumentWithAiErrors[keyof EditDocumentWithAiErrors];
+
+export type EditDocumentWithAiResponses = {
+    200: DocumentAiEdited;
+};
+
+export type EditDocumentWithAiResponse = EditDocumentWithAiResponses[keyof EditDocumentWithAiResponses];
+
 export type GetDocumentBranchNameData = {
     body?: never;
     path: {
@@ -21539,6 +22337,62 @@ export type SimpleSaveResponses = {
 };
 
 export type SimpleSaveResponse = SimpleSaveResponses[keyof SimpleSaveResponses];
+
+export type GetSkillDescriptionData = {
+    body?: never;
+    path: {
+        /**
+         * Skill document ID
+         */
+        document_id: string;
+    };
+    query?: never;
+    url: '/documents/{document_id}/skill_description';
+};
+
+export type GetSkillDescriptionErrors = {
+    401: ErrorResponse;
+    404: ErrorResponse;
+    500: ErrorResponse;
+};
+
+export type GetSkillDescriptionError = GetSkillDescriptionErrors[keyof GetSkillDescriptionErrors];
+
+export type GetSkillDescriptionResponses = {
+    200: SkillDescriptionBody;
+};
+
+export type GetSkillDescriptionResponse = GetSkillDescriptionResponses[keyof GetSkillDescriptionResponses];
+
+export type SetSkillDescriptionData = {
+    body: SetSkillDescriptionRequest;
+    path: {
+        /**
+         * Skill document ID
+         */
+        document_id: string;
+    };
+    query?: never;
+    url: '/documents/{document_id}/skill_description';
+};
+
+export type SetSkillDescriptionErrors = {
+    /**
+     * The document is not a skill, or the description is invalid
+     */
+    400: ErrorResponse;
+    401: ErrorResponse;
+    404: ErrorResponse;
+    500: ErrorResponse;
+};
+
+export type SetSkillDescriptionError = SetSkillDescriptionErrors[keyof SetSkillDescriptionErrors];
+
+export type SetSkillDescriptionResponses = {
+    200: SkillDescriptionBody;
+};
+
+export type SetSkillDescriptionResponse = SetSkillDescriptionResponses[keyof SetSkillDescriptionResponses];
 
 export type GetDocumentTeamShareData = {
     body?: never;
@@ -23023,6 +23877,33 @@ export type DeleteHarnessResponses = {
 };
 
 export type DeleteHarnessResponse = DeleteHarnessResponses[keyof DeleteHarnessResponses];
+
+export type PatchHarnessData = {
+    body: PatchHarnessRequest;
+    path: {
+        /**
+         * Harness ID
+         */
+        harness_id: HarnessId;
+    };
+    query?: never;
+    url: '/harnesses/{harness_id}';
+};
+
+export type PatchHarnessErrors = {
+    400: ErrorResponse;
+    401: ErrorResponse;
+    404: ErrorResponse;
+    500: ErrorResponse;
+};
+
+export type PatchHarnessError = PatchHarnessErrors[keyof PatchHarnessErrors];
+
+export type PatchHarnessResponses = {
+    200: Harness;
+};
+
+export type PatchHarnessResponse = PatchHarnessResponses[keyof PatchHarnessResponses];
 
 export type HealthHandlerData = {
     body?: never;

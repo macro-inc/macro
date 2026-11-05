@@ -7,7 +7,7 @@ use std::sync::Arc;
 
 use axum::{
     Json, Router,
-    extract::{FromRef, Path, State},
+    extract::{FromRef, Path, Query, State},
     http::StatusCode,
     response::IntoResponse,
     routing::{delete, get, patch, post, put},
@@ -25,8 +25,8 @@ use uuid::Uuid;
 
 use crate::domain::{
     models::{
-        ChannelLabel, ChannelLabelRule, ChannelLabelsError, ChannelLabelsList,
-        ChannelLabelsReceipt, NewChannelLabel, SmartTagPreview,
+        ChannelLabel, ChannelLabelRule, ChannelLabelScopeSelection, ChannelLabelsError,
+        ChannelLabelsList, ChannelLabelsReceipt, NewChannelLabel, SmartTagPreview,
     },
     ports::ChannelLabelsService,
 };
@@ -86,7 +86,7 @@ impl<S, Eas, Auth> FromRef<ChannelLabelsRouterState<S, Eas, Auth>>
 /// Routes:
 /// - `GET /` — list the caller's shared or private labels.
 /// - `POST /` — create a label, optionally moving channels into it.
-/// - `PATCH /{label_id}` — rename a label.
+/// - `PATCH /{label_id}` — rename or transfer a label.
 /// - `DELETE /{label_id}` — delete a label.
 /// - `PUT /channels/{channel_id}` — move a channel into or out of a label.
 pub fn channel_labels_router<S, Eas, Auth, T>(
@@ -117,6 +117,14 @@ where
         .with_state(state)
 }
 
+/// Optional scope shared by every label endpoint.
+#[derive(Debug, Default, Deserialize, utoipa::IntoParams)]
+#[into_params(parameter_in = Query)]
+pub struct ChannelLabelScopeQuery {
+    /// `personal` selects private labels; `team` requires team membership.
+    pub scope: Option<ChannelLabelScopeSelection>,
+}
+
 /// Request body for creating a label.
 #[derive(Debug, Deserialize, utoipa::ToSchema)]
 #[serde(rename_all = "camelCase")]
@@ -131,7 +139,7 @@ pub struct CreateChannelLabelRequest {
     pub channel_ids: Vec<Uuid>,
 }
 
-/// Request body for renaming a label.
+/// Request body for updating a label's name, smart rule, or sharing scope.
 #[derive(Debug, Deserialize, utoipa::ToSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct RenameChannelLabelRequest {
@@ -140,6 +148,9 @@ pub struct RenameChannelLabelRequest {
     /// Automatic name-matching rule; omitted for manual labels or a name-only rename.
     #[serde(default)]
     pub rule: Option<ChannelLabelRule>,
+    /// Destination namespace; omitted to preserve the current scope.
+    #[serde(default)]
+    pub target_scope: Option<ChannelLabelScopeSelection>,
 }
 
 /// Request body for moving a channel between labels.
@@ -173,6 +184,7 @@ pub struct ChannelLabelChannelPathParams {
     tag = "channel_labels",
     operation_id = "list_channel_labels",
     path = "/channel-labels",
+    params(ChannelLabelScopeQuery),
     responses(
         (status = 200, body = ChannelLabelsList),
         (status = 401, body = ErrorResponse),
@@ -185,6 +197,7 @@ pub async fn list_channel_labels_handler<S, Eas, Auth>(
     State(state): State<ChannelLabelsRouterState<S, Eas, Auth>>,
     access: OptionalMacroUserTeamExtractorV2<MemberTeamRole, Eas, Auth>,
     user: MacroAuthorizationExtractor<Auth, UserOnly>,
+    Query(scope): Query<ChannelLabelScopeQuery>,
 ) -> Result<Json<ChannelLabelsList>, ChannelLabelsError>
 where
     S: ChannelLabelsService,
@@ -194,9 +207,11 @@ where
     let receipt = ChannelLabelsReceipt::from_access(
         user.authorization.macro_user_id,
         access.entity_access_receipt,
+        scope.scope,
     )?;
     let labels = state.service.list_labels(&receipt).await?;
     Ok(Json(ChannelLabelsList {
+        scope: receipt.scope().selection(),
         team_id: receipt.scope().team_id(),
         labels,
     }))
@@ -208,6 +223,7 @@ where
     tag = "channel_labels",
     operation_id = "create_channel_label",
     path = "/channel-labels",
+    params(ChannelLabelScopeQuery),
     request_body = CreateChannelLabelRequest,
     responses(
         (status = 200, body = ChannelLabel),
@@ -224,6 +240,7 @@ pub async fn create_channel_label_handler<S, Eas, Auth>(
     State(state): State<ChannelLabelsRouterState<S, Eas, Auth>>,
     access: OptionalMacroUserTeamExtractorV2<MemberTeamRole, Eas, Auth>,
     user: MacroAuthorizationExtractor<Auth, UserOnly>,
+    Query(scope): Query<ChannelLabelScopeQuery>,
     Json(req): Json<CreateChannelLabelRequest>,
 ) -> Result<Json<ChannelLabel>, ChannelLabelsError>
 where
@@ -234,6 +251,7 @@ where
     let receipt = ChannelLabelsReceipt::from_access(
         user.authorization.macro_user_id,
         access.entity_access_receipt,
+        scope.scope,
     )?;
     let label = state
         .service
@@ -249,13 +267,13 @@ where
     Ok(Json(label))
 }
 
-/// Rename a label of the caller's authorized scope.
+/// Update a label, optionally moving it to another authorized scope.
 #[utoipa::path(
     patch,
     tag = "channel_labels",
     operation_id = "rename_channel_label",
     path = "/channel-labels/{label_id}",
-    params(ChannelLabelPathParams),
+    params(ChannelLabelPathParams, ChannelLabelScopeQuery),
     request_body = RenameChannelLabelRequest,
     responses(
         (status = 200, body = ChannelLabel),
@@ -272,6 +290,7 @@ pub async fn rename_channel_label_handler<S, Eas, Auth>(
     State(state): State<ChannelLabelsRouterState<S, Eas, Auth>>,
     access: OptionalMacroUserTeamExtractorV2<MemberTeamRole, Eas, Auth>,
     user: MacroAuthorizationExtractor<Auth, UserOnly>,
+    Query(scope): Query<ChannelLabelScopeQuery>,
     Path(params): Path<ChannelLabelPathParams>,
     Json(req): Json<RenameChannelLabelRequest>,
 ) -> Result<Json<ChannelLabel>, ChannelLabelsError>
@@ -280,13 +299,28 @@ where
     Eas: EntityAccessService,
     Auth: MacroAuthorizationService,
 {
-    let receipt = ChannelLabelsReceipt::from_access(
-        user.authorization.macro_user_id,
-        access.entity_access_receipt,
-    )?;
+    let actor = user.authorization.macro_user_id;
+    let target = req
+        .target_scope
+        .map(|selection| {
+            ChannelLabelsReceipt::from_access(
+                actor.clone(),
+                access.entity_access_receipt.clone(),
+                Some(selection),
+            )
+        })
+        .transpose()?;
+    let receipt =
+        ChannelLabelsReceipt::from_access(actor, access.entity_access_receipt, scope.scope)?;
     let label = state
         .service
-        .rename_label(&receipt, params.label_id, req.name, req.rule)
+        .update_label(
+            &receipt,
+            target.as_ref(),
+            params.label_id,
+            req.name,
+            req.rule,
+        )
         .await?;
     Ok(Json(label))
 }
@@ -297,7 +331,7 @@ where
     tag = "channel_labels",
     operation_id = "delete_channel_label",
     path = "/channel-labels/{label_id}",
-    params(ChannelLabelPathParams),
+    params(ChannelLabelPathParams, ChannelLabelScopeQuery),
     responses(
         (status = 204),
         (status = 401, body = ErrorResponse),
@@ -311,6 +345,7 @@ pub async fn delete_channel_label_handler<S, Eas, Auth>(
     State(state): State<ChannelLabelsRouterState<S, Eas, Auth>>,
     access: OptionalMacroUserTeamExtractorV2<MemberTeamRole, Eas, Auth>,
     user: MacroAuthorizationExtractor<Auth, UserOnly>,
+    Query(scope): Query<ChannelLabelScopeQuery>,
     Path(params): Path<ChannelLabelPathParams>,
 ) -> Result<StatusCode, ChannelLabelsError>
 where
@@ -321,6 +356,7 @@ where
     let receipt = ChannelLabelsReceipt::from_access(
         user.authorization.macro_user_id,
         access.entity_access_receipt,
+        scope.scope,
     )?;
     state
         .service
@@ -335,7 +371,7 @@ where
     tag = "channel_labels",
     operation_id = "set_channel_label",
     path = "/channel-labels/channels/{channel_id}",
-    params(ChannelLabelChannelPathParams),
+    params(ChannelLabelChannelPathParams, ChannelLabelScopeQuery),
     request_body = SetChannelLabelRequest,
     responses(
         (status = 204),
@@ -351,6 +387,7 @@ pub async fn set_channel_label_handler<S, Eas, Auth>(
     State(state): State<ChannelLabelsRouterState<S, Eas, Auth>>,
     access: OptionalMacroUserTeamExtractorV2<MemberTeamRole, Eas, Auth>,
     user: MacroAuthorizationExtractor<Auth, UserOnly>,
+    Query(scope): Query<ChannelLabelScopeQuery>,
     Path(params): Path<ChannelLabelChannelPathParams>,
     Json(req): Json<SetChannelLabelRequest>,
 ) -> Result<StatusCode, ChannelLabelsError>
@@ -362,6 +399,7 @@ where
     let receipt = ChannelLabelsReceipt::from_access(
         user.authorization.macro_user_id,
         access.entity_access_receipt,
+        scope.scope,
     )?;
     state
         .service
@@ -376,6 +414,7 @@ where
     tag = "channel_labels",
     operation_id = "preview_smart_tag",
     path = "/channel-labels/preview",
+    params(ChannelLabelScopeQuery),
     request_body = ChannelLabelRule,
     responses(
         (status = 200, body = SmartTagPreview),
@@ -390,6 +429,7 @@ pub async fn preview_smart_tag_handler<S, Eas, Auth>(
     State(state): State<ChannelLabelsRouterState<S, Eas, Auth>>,
     access: OptionalMacroUserTeamExtractorV2<MemberTeamRole, Eas, Auth>,
     user: MacroAuthorizationExtractor<Auth, UserOnly>,
+    Query(scope): Query<ChannelLabelScopeQuery>,
     Json(rule): Json<ChannelLabelRule>,
 ) -> Result<Json<SmartTagPreview>, ChannelLabelsError>
 where
@@ -400,6 +440,7 @@ where
     let receipt = ChannelLabelsReceipt::from_access(
         user.authorization.macro_user_id,
         access.entity_access_receipt,
+        scope.scope,
     )?;
     Ok(Json(state.service.preview_smart_tag(&receipt, rule).await?))
 }

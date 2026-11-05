@@ -6,6 +6,12 @@ Sidebar `Search` button → `/app/search` with a focused query box. Results
 (including a `Featured Results` group) filter live as you type; no Enter needed. `Ctrl+K` is
 usually faster for jump-to-entity; `/` opens workspace search when no editor is focused.
 
+Routines are found by name in a typed `Ctrl+K` **All** query, in touch Search's
+**All** name results, and in the desktop Search page's `Featured Results`. They
+come from the routines list (Quick Access `routine` bucket), not the search
+service, and open the routine in the Agents workspace. They stay out of the
+empty recency list and out of Home, Drive and Tasks searches.
+
 Desktop filter chips use one compact control size for values, match mode, and
 clear actions. Labels and controls stay vertically centered inside a frame that
 grows to fit them, rather than clipping taller segments.
@@ -21,8 +27,15 @@ independently of view tabs, mailbox selections, and saved facets. Commands and
 creation shortcuts are excluded. Empty queries show recent entities.
 Typed **All** and **People** name searches also find known teammates before their
 first DM, with or without CRM. Existing one-to-one DMs replace person rows while
-preserving name/email matches; selecting a person opens their DM. Verify both
+preserving name/email matches; selecting a person opens their DM, which the
+first message creates when there isn't one yet. Verify both
 categories with a teammate who has no conversation or CRM record.
+Name search here, in Command K, and in the Chat sidebar finds a conversation by
+its participants in any order, separated by spaces or commas, with name prefixes
+allowed. A query naming exactly its participants ranks it right after exact
+names, above a larger group holding the same people. In Command K and mobile
+name search, a person's first name alone also counts as exact for their DM or
+person row.
 On phones, name-result icons and avatars are scaled to 150% (16px artwork
 becomes 24px), preserving row height and text alignment.
 
@@ -48,7 +61,7 @@ the build-time `VITE_ENABLE_GRAPHQL_SOUP=true` override; see the
 
 Category/mode changes keep the same input mounted and focused. Return inserts
 a newline and keeps the keyboard open; the Search bar expands with the text.
-When **enable-universal-input** is on, three words or 24 characters reveal
+When **enable-universal-input** is on, 34 characters (regardless of word count) reveal
 Universal Input's suggested form above the bar. The editor stays mounted while
 classification and extraction update the form. Shorter edits keep the form until
 the input is cleared. While the card is active, the normal search results and top
@@ -71,8 +84,8 @@ scroll position. Opening a result does not promote it within that saved list,
 even when its last-viewed time changes. Swiping back, pressing the native Back control, or using browser Back
 returns to those results without focusing the input or reopening the keyboard.
 Name-result ordering and scroll anchors identify a one-to-one DM by its other
-participant, so a person keeps their place when opening them creates a conversation
-with a new channel ID. Group conversations keep their own channel identity.
+participant, so a person keeps their place when their first message creates a
+conversation with a new channel ID. Group conversations keep their own channel identity.
 Native Search captures lightweight state when covered so deeper navigation can
 unmount it. History saves the query/category/mode, an account-scoped item ID and
 offset within that row, a fallback pixel offset, and at most 200 ordering IDs per
@@ -96,8 +109,8 @@ from a historical snapshot. A later search
 cannot overwrite an earlier entry. **Close search** ends the
 session; opening Search from the dock starts in All/name mode. Mobile search state
 does not modify desktop search state. The dock search row has no Ask AI button.
-If a person’s conversation lookup fails, search stays open with its query and
-category intact so the result can be retried.
+If opening a person fails, search stays open with its query and category intact
+so the result can be retried.
 
 Verify sender-only `teo` matches with one- and two-character prefixes, then switch
 categories with the keyboard up. In both name and full-text modes, scroll several
@@ -109,8 +122,8 @@ Open a result from midway through the list and confirm it keeps its original
 position after Back, both when Search stays mounted and after deeper navigation
 evicts it. Refresh row metadata and append pages; existing rows must keep their order.
 Include a person without a DM: open them from midway through All/People results,
-then go Back and confirm that person's new DM is still in the same place and opens
-the existing conversation on a second selection. Repeat with the DM arriving after
+send them a message, then go Back and confirm that person's new DM is
+still in the same place and opens the existing conversation on a second selection. Repeat with the DM arriving after
 Search unmounts, and verify group DMs stay separate.
 Switch accounts with a scrolled Search entry still mounted, then remount that
 entry: neither path should retain the previous account's rows or scroll offset.

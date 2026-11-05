@@ -222,9 +222,9 @@ export function SiteHeader(props: { hideOpenApp?: boolean }) {
             href="/app/signup"
             onClick={routePhoneToMobileSignup}
           >
-            <span class="site-nav-open-label">Open app</span>
+            <span class="site-nav-open-label">Sign Up</span>
             <span class="site-nav-open-footer" aria-hidden="true">
-              <span>Open app</span>
+              <span>Sign Up</span>
               <svg
                 width="28"
                 height="28"

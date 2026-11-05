@@ -1,0 +1,64 @@
+import { fileURLToPath } from 'node:url';
+import tailwind from '@tailwindcss/vite';
+import { defineConfig } from 'vite';
+import solidPlugin from 'vite-plugin-solid';
+import solidSvg from 'vite-plugin-solid-svg';
+import tsconfigPaths from 'vite-tsconfig-paths';
+
+const directory = fileURLToPath(new URL('.', import.meta.url));
+const webDirectory = fileURLToPath(new URL('../../../../../', import.meta.url));
+const workspaceDirectory = fileURLToPath(
+  new URL('../../../../../../../', import.meta.url)
+);
+
+export default defineConfig({
+  root: directory,
+  cacheDir: `${directory}/.vite`,
+  plugins: [
+    solidPlugin(),
+    solidSvg({ defaultAsComponent: true }),
+    tsconfigPaths({ projects: [`${webDirectory}/tsconfig.json`] }),
+    tailwind(),
+  ],
+  resolve: {
+    dedupe: ['solid-js'],
+    alias: [
+      {
+        find: /^.*service-storage\/graphql-soup$/,
+        replacement: `${directory}/graphql-preview.ts`,
+      },
+      {
+        find: /^.*\/optimistic-deletions$/,
+        replacement: `${directory}/graphql-preview.ts`,
+      },
+      {
+        find: /^.*normalized-cache-exchange$/,
+        replacement: `${directory}/graphql-preview.ts`,
+      },
+      {
+        find: /^@app\/observability\/flow$/,
+        replacement: `${directory}/graphql-preview.ts`,
+      },
+      ...[
+        '@service-storage/client',
+        '@service-storage/crm-contacts',
+        '@service-storage/crm-visibility',
+        '@app/lib/analytics',
+      ].map((find) => ({
+        find,
+        replacement: `${directory}/preview-adapters.ts`,
+      })),
+      { find: /^@entity$/, replacement: `${directory}/entity-preview.ts` },
+      {
+        find: /^@app\/components\/view-shell$/,
+        replacement: `${webDirectory}/src/components/view-shell/SearchBar.tsx`,
+      },
+    ],
+  },
+  build: { target: 'esnext' },
+  server: {
+    host: '127.0.0.1',
+    strictPort: true,
+    fs: { allow: [workspaceDirectory] },
+  },
+});

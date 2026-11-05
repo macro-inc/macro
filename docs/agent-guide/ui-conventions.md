@@ -48,6 +48,15 @@ Button API and composition details live in the
 [shared primitive contract](../../.agents/rules/web/ui-primitives.md#button-and-buttongroup).
 Inline calendar-invitation text actions remove the transparent border to keep alignment.
 
+## Responsive workspace navigation
+
+At the narrow breakpoint, docked ViewShell navigation closes over 140ms while
+Main expands to its narrow layout. The sidebar remains inert through the closing
+animation, then unmounts. Show navigation opens the dismissible overlay instead;
+required navigation opens that overlay immediately. Returning to wide restores
+the saved docked state without changing the sidebar preference. Reduced-motion
+settings and missing animation support skip the closing animation.
+
 ## Canonical desktop surfaces
 
 Use `not-touch:elevated` for existing desktop control surfaces other than Button
@@ -66,6 +75,12 @@ In light mode a fine outline vanishes against near-white content, so controls
 draw a full 1px frame edge, menus keep the glass cast shadow, and
 `ComposerSurface` (composers and settings cards) keeps the wide `composer-shadow`
 halo. Touch surfaces retain their existing shadows.
+
+Kanban boards advance one relative `Layer`: lanes use `bg-inset` and cards use
+`bg-surface`. Light themes add a subtle `border-edge-frame` and medium shadow;
+dark themes keep transparent card borders and the small resting shadow. Drag
+previews retain the source's resolved background and surface tokens so cards and
+whole lanes keep their appearance outside the board's layer context.
 
 Desktop view tabs share one flat rounded track, with a small inset and a fully
 rounded selected pill. Use borders and selected fills without raised edges,

@@ -17,6 +17,7 @@ const body = z
   .object({
     documentId: z.string().uuid(),
     documentToken: z.string().min(1).max(10000),
+    artifacts: z.boolean().optional(),
     request: z.discriminatedUnion('action', [
       z
         .object({
@@ -64,7 +65,7 @@ const body = z
 const app = new Hono<{ Bindings: Bindings }>();
 app.use('*', bodyLimit({ maxSize: 1024 * 1024 }));
 app.post('/', zValidator('json', body), async (c) => {
-  const { documentId, documentToken, request } = c.req.valid('json');
+  const { documentId, documentToken, artifacts, request } = c.req.valid('json');
   // Comment tokens can connect and send some updates. Do not let them edit a scene.
   // A forged edit claim still fails signature verification on initial sync, before the model starts.
   if (
@@ -81,6 +82,7 @@ app.post('/', zValidator('json', body), async (c) => {
       await Telemetry.span('canvas.ai.session', async (span) => {
         span.setAttr('document.id', documentId);
         span.setAttr('edit.action', request.action);
+        span.setAttr('canvas.artifacts', !!artifacts);
         // The sync service verifies the scoped token and enforces edit permission on writes.
         const url = new URL(
           `${c.env.SYNC_WS_BASE}/document/${documentId}/connect`
@@ -121,7 +123,9 @@ app.post('/', zValidator('json', body), async (c) => {
               operationsApplied: 0,
               summary: 'Read the current canvas.',
               usage: [],
-            })
+            }),
+            undefined,
+            artifacts
           );
         const renderer = createCanvasRenderer(c.env);
         if (request.action === 'render')
@@ -137,7 +141,9 @@ app.post('/', zValidator('json', body), async (c) => {
               operationsApplied: 0,
               summary: 'Rendered an immutable Canvas snapshot.',
               usage: [],
-            })
+            }),
+            undefined,
+            artifacts
           );
         if (request.action === 'apply')
           return withCanvasSession(
@@ -145,7 +151,8 @@ app.post('/', zValidator('json', body), async (c) => {
             signal,
             (session) =>
               applyCanvasCode(session, request, renderer.measure, signal),
-            request.editorName
+            request.editorName,
+            artifacts
           );
         const model = buildModels(
           getEnv(c.env),
@@ -164,6 +171,7 @@ app.post('/', zValidator('json', body), async (c) => {
           signal,
           request.editorName,
           {
+            artifacts,
             render: renderer,
             measure: renderer.measure,
             createSource: () =>

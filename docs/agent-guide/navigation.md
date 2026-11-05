@@ -8,23 +8,35 @@ Windows, Linux, and mobile layouts do not add this space.
 On macOS, Back and Forward arrows beside the traffic lights navigate the active
 split's history. Each arrow is
 disabled when its direction has no entry. Sidebar controls remain inside each
-workspace. The top-right split icon opens another Home split, even
-when Home is already open, and is disabled when there is no room for a new split.
-Its tooltip is “New Split” and displays the registered new-split shortcut (`\`).
+workspace. The top-right split icon opens another Home split to the right of
+the active split, even when Home is already open, and is disabled when that
+split has no room to divide. Its tooltip is “New split” and displays the
+registered new-split shortcut (`\`). The icon before it, “New split below”
+(`|`), opens Home stacked below the active split.
 
 ## Desktop tabs (macOS, `enable-desktop-tabs` flag)
 
 The title bar's center holds browser-style tabs; each tab is a whole split
-layout. Only the active tab's layout is mounted — switching tabs swaps every
-split through the router, preserving each split's back/forward history and
-running unsaved-changes guards. A tab holding more than one split shows a
+layout. Tabs you have visited stay mounted in the background: switching back
+is instant and keeps scroll, selection, and editor state, each split keeps
+its back/forward history, and stacked splits come back stacked at the sizes
+they had. Background tabs are hidden, inert, and skip
+rendering; past five, the least recently used unmount and reload when next
+opened. Closing the active tab runs its unsaved-changes guards. A tab holding more than one split shows a
 split icon with the count. The strip's `+` button (and `Cmd+T`) opens a tab on
 Home; the `X` or a middle click closes one (the last tab cannot close;
-`Shift+Cmd+W` closes the active tab); `Ctrl+Tab` / `Ctrl+Shift+Tab` cycle.
+`Shift+Cmd+W` closes the active tab); `Ctrl+Tab` / `Ctrl+Shift+Tab` cycle, as do
+`Shift+Cmd+→` / `Shift+Cmd+←` outside text fields (where they select text).
+Labels truncate at about 288px.
 Cmd+click (Ctrl elsewhere) on anything that navigates opens the destination in
 a background tab; adding Shift also switches to it. Tabs are not draggable.
 Tabs persist per user and restore on launch. In the browser and on other
 platforms the strip does not render.
+
+An inline preview in a background tab stays open there, so selecting its entity
+from another tab switches to that tab with the entity showing. A tab that opens
+onto an entity another tab already holds shows its list instead, without moving
+you or showing a toast.
 
 Reference captures (browser fixture with the desktop gates forced):
 [a three-split tab beside a second tab](media/desktop-tabs/three-split-tab.png)
@@ -43,6 +55,8 @@ failure in the same build, the rail's update button (a toast on touch layouts)
 offers the reload; the offer reloads a hidden tab by itself only if that build's
 one automatic reload is unspent. A failed route chunk can still end on the
 root error screen, which hides the offer.
+The sidebar update button and its automatically opened popover are desktop-only,
+even when the sidebar is shown on a touch device.
 
 ## External links in the native app
 
@@ -211,6 +225,7 @@ successfully rather than hashing the empty JavaScript placeholder.
 | `/app/companies/pipeline/<uuid>` | Customers on a pipeline; `/<company-or-contact>/<uuid>` after it opens a record from the pipeline. `/app/pipeline/<uuid>` redirects here |
 | `/app/companies/<company-or-contact>/<uuid>/<tasks-emails-calls-or-databases>/<item-id>` | Customers with the selected item inline; the section determines its type, with no redundant typed URL fallback. The same suffix works under a pipeline; workspace activity and record Files/overview notes retain type metadata |
 | `/app/activity` | Activity heatmap + feed |
+| `/app/notifications` | Unified Notifications view (`enable-unified-notifications`); redirects to Home when the flag is off |
 | `/app/calendar/<month-or-week-or-day>` | Calendar; the focused event, its occurrence, and the locator range use `sN.calendar.*` |
 | `/app/calendar` | Redirects to `/app/calendar/<month-or-week-or-day>` at the remembered period (Day on phones and Week on desktop by default), keeping an `eventId` |
 | `/app/scheduling` | Scheduling workspace: booking links, availability, bookings, insights, and booking page |
@@ -232,6 +247,7 @@ successfully rather than hashing the empty JavaScript placeholder.
 
 Each `~`-separated part of an app URL is a split (`/app/home/~/drive`). The
 pages outside the app (`/app/login`, `/app/welcome`, `/app/signup`,
+`/app/signup/agent`, `/app/agent-setup`,
 `/app/onboarding`, `/app/setup`, the invite pages, `/app/meet/...` and
 `/app/task-slug/...`) render without the split layout and take one part only.
 `/app/login/~/home` and URLs nothing matches, such as `/app/garbage`, are
@@ -290,9 +306,24 @@ Command and create-menu headers have 20px horizontal and 12px vertical padding.
 
 Splits: the app is a tiling window manager. Active light-theme panes are white;
 inactive desktop panes are slightly darker than the active pane across themes,
-while retaining the theme hue. Public variable-length routes use
+while retaining the theme hue. Any split can be divided beside or stacked:
+the split menu (right-click a split's header) offers **New split left**,
+**right**, **above**, and **below**, each splitting that split and disabled
+when it lacks room (400px wide, 240px tall per split). `\` (or Cmd+\ while
+typing) opens Home to the right of the active split, so in a stack only the
+active split divides; `|` (Shift+\, or Shift+Cmd+\ while typing) stacks Home
+below it. A new split beside others along the same axis takes an equal share.
+Option+Shift-click (Alt+Shift elsewhere) on anything that
+Shift-clicks into a new split opens it below the split it came from. Closing a
+stacked split gives its space to its neighbours; **Swap split left/right**
+trades places with the previous or next split in reading order, and the tiles
+keep their sizes. Public variable-length routes use
 `~` as the boundary between panes
-(`/app/drive/folder/<uuid>/~/mail`). Legacy fixed `type/id`
+(`/app/drive/folder/<uuid>/~/mail`). Panes are listed top to bottom, left to
+right, and a `layout` key records stacking when there is any:
+`/app/home/~/drive/~/mail?layout=r2pc2pp` is Home beside Drive over Mail
+(`p` a pane, `r<n>` side by side, `c<n>` stacked). Without the key the panes
+sit side by side; sizes are not in the URL. Legacy fixed `type/id`
 pane routes remain accepted. Known app-view URLs under `/app/component/` redirect
 to their canonical paths above; legacy composers keep their existing paths. Split-specific view state uses positionally
 namespaced query parameters such as `s0.drive.sort=created_at`. Route identity
@@ -428,12 +459,17 @@ the main title when hidden, with separate preferences per block type.
 
 Desktop splits, including a single split in the browser or native app, appear as
 individually bordered panels with 8px corners and 6px top, right, and bottom
-insets and 6px resizable gaps. The leftmost panel sits flush against the app rail,
-which has no right divider. Touch layouts keep their existing presentation.
+insets and 6px resizable gaps between them, side by side and stacked. The
+leftmost panels sit flush against the app rail, which has no right divider.
+Touch layouts keep their existing presentation.
 
 Split focus mode (`Shift+Esc`) floats the active split in a rounded, bordered
 panel over the same glass scrim as dialogs. Click the scrim or use the shortcut
 again to restore the split layout.
+
+On desktop, when navigation replaces a pane's content, keyboard focus moves into the active
+pane. If the destination editor or input focuses itself, it keeps focus. A
+focused search or other input outside the panes remains focused while it is open.
 
 Image lightboxes, channel media viewers, sharing, and onboarding dialogs use
 the standard glass scrim. Scroll-edge indicators fade smoothly toward content
@@ -476,6 +512,11 @@ Showing Scheduling removes its duplicate from More; the choice survives reload.
 Activity appears in Customize sidebar only when the `enable-activity-feed` flag
 is on and, like Scheduling, starts hidden in More (also for existing preferences)
 until enabled on the rail.
+Notifications (bell, `g i`) appears directly below Home only when the
+`enable-unified-notifications` flag is on, and is shown on the rail by default.
+`g i` reaches Home while it is off; with it on, Home answers only `g h`. Its
+unread dot follows Home's unread dot.
+
 External (plug icon, `g x`) appears on the rail only with the
 `enable-whatsapp-linked` flag; it starts shown and can be hidden like other apps.
 
@@ -485,8 +526,8 @@ External (plug icon, `g x`) appears on the rail only with the
   global search. Hold Shift while selecting `Search everything` to open it in a
   new split, including when Search is already active. This left-click menu shares
   its surface and item styling with the sidebar right-click menus.
-- Nav: `Home`, `Drive`, `Email`, `Chat`, `Tasks`, `Calendar`,
-  `Agents`, `Customers`. Calendar and Customers appear only when
+- Nav: `Home`, `Notifications`, `Drive`, `Email`, `Chat`, `Tasks`, `Calendar`,
+  `Agents`, `Customers`. Notifications, Calendar and Customers appear only when
   their features are enabled. Calendar shows a next-meeting badge (`Now`, or
   minutes under an hour away) unless **Next meeting countdown** is off in
   **Settings → Calendar**.
@@ -606,8 +647,11 @@ controls use the rounded, bordered button groups from the email thread toolbar;
 New and Search have their own rounded, bordered backgrounds. Search starts as an
 icon and expands into a compact field when clicked or opened with Cmd/Ctrl+F.
 Closing it clears the query and returns to the icon. The action stays specific to
-the view: Home returns to its starting pane, Email composes mail, Chat offers a
-channel or direct message, and Calendar offers an event or call. Tasks offers
+the view: Home returns to its starting pane and Email composes mail. With
+`enable-chat-sidebar-sections` enabled, Chat opens one picker for existing
+conversations, new channels, and direct messages; when disabled, Chat offers
+separate channel and direct-message creation actions.
+Calendar offers an event or call. Tasks offers
 **Task**, **Project** (when enabled), and **Tag** in both the Tasks and Projects
 lists. Customers offers Company, Contact, and enabled Pipeline creation. Reviews
 uses the general creation menu. Agents keeps New above its Chat/Code mode tabs.
@@ -629,7 +673,9 @@ opens Home. Excluded background panels do not count toward close eligibility.
 These buttons and Home items activate on primary-button
 press; keyboard activation remains supported. Home, Chat, Email,
 Tasks, and other views using the shared inner
-sidebar layout default to 256px; manually resized Chat widths remain saved.
+sidebar layout default to 256px. Each view type saves a manually resized width
+(`asidePreferenceKey`) and restores it after reloads, view switches, and in
+other splits.
 
 After dragging a view's inner sidebar divider (or using its arrow keys), resizing
 the containing split preserves the chosen sidebar width while space permits.
@@ -644,6 +690,16 @@ final position on release. Check a rapid drag followed by immediate release,
 dragging at non-default zoom, and closing a split during a drag; later pointer
 movement must not keep resizing the removed split. Arrow keys still resize
 immediately, with Shift selecting the larger step.
+
+A view's narrow/wide layout reads its width when it mounts, then applies later
+split or window resizes on the next animation frame. Opening Home in either a
+wide or narrow split must settle immediately, without sliding or growing its
+content from zero width. Later split resizes still animate sidebar closure.
+Open a channel beside Home, drag the split gutter across the narrow breakpoint,
+and resize the window: the console should show no `ResizeObserver loop completed with
+undelivered notifications` errors, and the sidebar should switch between docked
+and overlay as the split crosses the breakpoint. Drive and other `virtua` lists
+can still report it from the virtualizer's own observer.
 
 Email, Tasks, and Agents use the same sidebar rows, including favorites, tags,
 inboxes, and recent agent chats: 32px high on desktop and 44px on touch devices,
@@ -733,9 +789,10 @@ edited, so a provider failure cannot silently broaden the search.
 
 Click a result or message snippet to open its actual location, or use **Up/Down**
 and then **Enter**. Keyboard selection scrolls into view while the editor keeps
-focus. **Shift+Enter** always inserts a newline in the Command K main input,
-including before Universal Input activates and when Shift is released before
-Enter; neither key release opens the selected result. Multiline input hides the
+focus. **Shift+Enter** inserts a newline in the composer's main input, including
+when Shift is released before Enter; neither key release opens the selected
+result. Before Universal Input activates, Shift+Enter in the Command K search
+input opens the selected result in a new split. Multiline input hides the
 Macro logo and removes its reserved spacing so text uses the full width. **Escape** exits
 result navigation; a second Escape closes the menu. The content type selector
 uses the shared styled dropdown with a selection checkmark and platform-specific
@@ -779,7 +836,9 @@ shows the absolute date, time, timezone, calendar, and invitees. For example,
 “Call John at 3pm tomorrow” becomes a one-hour event at 3 PM tomorrow with no
 invitation; inviting John requires an explicit invitation request or guest edit.
 Bare hours use a reasonable default (1–7 PM, 8–11 AM, 12 noon). For example,
-“call with Julia tomorrow at 7” becomes 7 PM tomorrow for one hour. An assumption
+“call with Julia tomorrow at 7” becomes 7 PM tomorrow for one hour. A time with
+no day is its next occurrence: “sync at 3pm” is 3 PM today, or tomorrow once 3 PM
+has passed, and a task deadline “by 3pm” resolves the same way. An assumption
 cue beneath the date/time range draws attention to the inferred AM/PM; editing the start
 time removes that cue. The temporal model identifies clock facts, explicit AM/PM and day parts;
 Rust resolves them, marks assumed AM/PM, validates timestamps and supplies
@@ -830,6 +889,11 @@ favorites use the participant's avatar when available and the entity icon
 otherwise. Cached pictures remain visible when a background picture query
 rejects with an error; an omitted or unavailable channel preview uses the
 fallback icon.
+
+Favorites in Chat, Tasks, Drive, and Reviews show an accent dot while their entity
+has unread notifications. Chat favorites use the same unread state as the regular
+channel rows in both sidebar designs. Reading or completing those notifications
+clears the dot; a failed read restores it.
 
 With the GraphQL local cache enabled, cached favorites remain visible when offline
 or when a background refresh fails. Toggle and reorder success while offline means
@@ -971,7 +1035,13 @@ hides during search, when a page supplies its own reply or compose controls
 (including the full-screen new-email composer, whose send actions sit in its
 header), or when an editable field outside Ask AI is focused on a touch device. The AI draft
 is preserved when the row returns.
-The New button also hides while the software keyboard is open.
+The New button also hides while the software keyboard is open or a live call
+view is in the foreground. Leaving the call view restores the current page's
+action, even if the call continues in the background.
+Active phone calls hide the bottom dock but retain the channel header island.
+Their Back button returns to the app while the call continues; tablets keep app
+chrome. Phone media controls sit below the video and hide when idle without
+resizing it; the header islands remain visible.
 After closing mobile search with the keyboard open or leaving a focused editor,
 verify that the current view’s New action returns once the keyboard closes.
 Removing the focused editor must not leave the action hidden on subsequent views.
@@ -1004,7 +1074,12 @@ its page under Settings → Bots. An agent's avatar beside its channel messages
 opens the same card. Touch devices have no hover, so tapping the mention
 or the picture opens that same card as a bottom sheet; any action there runs and
 dismisses the sheet. Desktop keeps click-to-DM on the picture itself, which touch
-drops in favour of the card's DM action.
+drops in favour of the card's DM action. DM, the picture click, channel and call
+participants, and people in Cmd+K open the existing DM. Without one they open
+the DM anyway, as an empty DM under a temporary `pending-dm-` id that nothing on
+the server knows; the first message creates the DM and replaces it, so opening
+someone never adds an empty DM to either person's list. See
+[Empty direct messages](channels.md#empty-direct-messages).
 
 `Create` button (top-left) opens a menu of: Email E, Routine U, Agent A, Skill K,
 Document D, Task T, Project P, Snippet S, Message M, Channel G, Call C, Canvas N, Folder F, Code O.
@@ -1060,6 +1135,8 @@ lists them on Home and in Agents like the owner's own sessions. The setting
 applies to runs that start after it changes. A run that finishes normally sends
 no notification; a failed or cut-short run, a question the agent asks, a held tool
 approval, and people the routine's prompt mentions still notify.
+The prompt's `@` menu also lists agents. Mentioning one only names it for the
+routine: it doesn't start the agent or notify anyone.
 
 **Create → Routine** (U) and **Create Routine** open the same popover host as task
 and project creation. Enter a name and instructions, then choose a model or agent
@@ -1077,19 +1154,23 @@ natural date search (**tomorrow 9am**, **in 2 hours**) and an inline calendar wi
 time controls. Click **Add trigger** to confirm. Click a saved chip to edit it;
 **Done** applies changes and **Cancel** leaves it unchanged. The panel floats over
 the composer without moving it. Recurring schedules retain their time zones;
-one-off times use the browser’s local time.
+one-off times use the browser’s local time. A one-off saves a `once` trigger
+(`{type: 'once', at}`, the same one agents create through the SDK to check back
+later), runs within about a second of its time, runs as soon as it is saved when
+the time has passed, and then shows **Completed**; its chip reads **Once at**
+the time.
 
 The event menu groups Macro activity triggers by surface:
 
 - **Channels:** **Channel created**, **Message sent in channel**, and **@ mentioned in channel**.
 - **Documents:** **Document created** and **Document deleted**. Tasks are separate.
-- **Tasks:** **Task created**, **Status changed**, **Priority changed**, and **Any property changed**.
+- **Tasks:** **Task created**, **Status changed**, **Priority changed**, **Assignees changed**, **Due date changed**, **Project changed**, **Effort changed**, and **Any property changed**. Under **Changes to**, choose the values that start the routine, such as **Completed**, or leave **Any status**. A value counts only when the change adds it. Tags aren't properties and have no trigger.
 - **Email:** **New email received** in the routine owner's inbox, excluding spam, trash, drafts, and historical imports.
 - **Calls:** **Call started**, for calls the routine owner starts (receives the call and who has joined so far); and **Call ended**, for channel calls and meetings the owner joined (receives participants and transcript, cut short for long calls).
 - **GitHub:** presets for **Workflow failed**, **Workflow finished**, **Pull request opened**, **Pull request merged**, **Review requested**, **Review submitted**, **Issue opened**, **Comment added**, **Code pushed**, **Release published**, and **Any GitHub event**, from repositories Macro's GitHub app reaches for the routine owner. Until the owner connects GitHub, the group shows **Connect GitHub** instead.
 
-For messages, mentions, deletion, and task changes, choose specific accessible
-channels/documents/tasks or any accessible item in the same panel. Creation
+For messages, mentions, deletion, and task changes, use **Applies to** in the
+same panel to choose any accessible item or specific channels/documents/tasks. Creation
 triggers cover newly created accessible items; email covers the owner's inbox;
 **Call started** shows **Calls you start** and **Call ended** shows **Calls you
 join** — neither has an item picker. Calls the owner did not start never trigger
@@ -1244,19 +1325,21 @@ Opens a dialog with a focused `Search...` textbox and bubble-style category radi
 the top hit. Also exposes commands: `Create`, `Change theme`, `MCP setup`. Keys: Tab cycles
 category, Esc closes. The category strip and footer have transparent backgrounds.
 
-With PostHog **enable-universal-input** enabled, typing at least **3 words or 24
-characters** turns the menu into the shared Universal Input composer. The current
+With PostHog **enable-universal-input** enabled, typing at least **34 characters**
+(word count does not matter) turns the menu into the shared Universal Input composer. The current
 text and insertion point transfer to its rich input in the same header row, with
 the same type size and padding. There is no additional title. The Macro logo hides
 when the rich input wraps or contains multiple lines, then returns on one line;
 its reserved space is removed so text uses the full input width. Classification and field
 extraction run while typing continues. For example, “dinner with julia tomorrow
-at 9pm” reveals an event; users can change the type and edit fields before acting.
+at 9:30pm” reveals an event; users can change the type and edit fields before acting.
 Shorter edits keep the composer open; clearing the input returns to ordinary
 Command K search. IME composition finishes before the transition. This applies to
 ordinary search, including a selected category; nested command scopes, entity
 actions, and the onboarding sandbox retain their existing behavior.
-In composer mode, Enter inserts a newline and Cmd/Ctrl+Enter performs the displayed
+Before the composer opens, Shift+Enter opens the selected result in a new split
+(the footer shows the hint when a split fits). In composer mode, Enter and
+Shift+Enter insert a newline and Cmd/Ctrl+Enter performs the displayed
 action; Tab moves through form controls. Escape closes the menu (or first leaves
 active inline search navigation). Successful actions close the menu and open their
 result when available; errors keep the form available for correction. Command K
@@ -1310,15 +1393,17 @@ its requested cache buckets, so a document-only category must not read the email
 catalog. Switching categories still discovers previously unopened buckets;
 renames, subtype moves, DM priority, and stable tie ordering remain unchanged.
 
-With CRM enabled, normal `@` menus include CRM contacts under **People** in
-documents, channels, discussions, and composers. Contact search loads paged
+With CRM enabled, normal `@` menus include companies and contacts under
+**Contacts & Companies** in documents, channels, discussions, and composers.
+**People** contains only Macro users and groups. Contact search loads paged
 GraphQL results from all accessible CRM-enabled teams, excludes hidden contacts
-and companies, and collapses duplicate full email addresses case-insensitively.
-The most recently active visible team record represents each email. An eligible
-Macro user with the same email takes precedence and keeps normal user-mention
-notifications. External contacts insert a link to their original CRM record;
-they do not invite or notify that email address. Assignee and other user-only
-pickers continue to list Macro users only.
+and companies, and
+collapses duplicate full email addresses case-insensitively. The most recently
+active visible team record represents each email. Picking a CRM contact inserts
+a link to that original CRM record, even if a Macro user shares its email; it
+does not invite or notify that email address. Assignee and other user-only
+pickers continue to list Macro users only. Mobile keeps a single list, with
+only Macro users and groups pinned ahead of ranked entity results.
 
 Typed Cmd+K **People** and **All** queries find known Macro users, including
 teammates supplied by the contacts service, before their first DM and without a
@@ -1360,7 +1445,7 @@ still order results within each group; other result types keep their positions.
 Verify this in both People and All with a recent CRM contact and a matching DM last
 viewed more than 30 days ago, including when server contacts arrive after the DM.
 Other contacts show their email and open the contact page; Enter and
-click open in place; Shift+Enter inserts a newline in the query. A server match that arrives after
+click open in place, Shift+Enter in a new split. A server match that arrives after
 typing takes the default selection from the Search for… row. Global Search does not
 list CRM contacts; Search for… from People still opens the Channels search. Verify
 a contact outside the cached rows, an email-only query, rapid query changes (rows
@@ -1420,6 +1505,8 @@ restart rules still apply.
 ## Keyboard model (from the in-app guide; verified partially)
 
 - `Ctrl/Cmd+K` — jump to anything by name.
+  Selecting a destination focuses its split or editor after the menu closes.
+  Clicking through lists and moving Back/Forward leaves editor focus alone.
 - `?` — the focused view's shortcuts, read from its registered keys (hidden
   navigation keys and `g` sequences included); `?` again closes it. Only the
   key opens it: the command menu does not list it, since run from there it
@@ -1454,8 +1541,10 @@ A pending Cursor model catalog shows `Loading models…` beside a disabled model
 picker; a failed catalog shows an inline error. The rest of settings stays usable.
 Settings → Agents → Agents ends with **Coding sessions**: a **Default repository**
 select saved per user on this device (see the AI chat guide), then per-user **Create
-tasks** and **Open pull requests** switches, both off by default. Each saves on
-toggle and reverts with a toast if the save fails.
+tasks** and **Open pull requests** switches, then **Auto-archive**: **When its
+pull requests merge** and **When its machine session closes** switches. The
+switches are off by default; each saves on toggle and reverts with a toast if the
+save fails.
 
 Home does not bind Delete or Backspace to deleting list items. These keys remain
 available to the open editor (for example, clearing a selected spreadsheet range).

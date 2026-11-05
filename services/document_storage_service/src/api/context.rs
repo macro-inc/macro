@@ -36,9 +36,10 @@ use channels::{
     outbound::{
         connection_gateway_realtime::ConnectionGatewayChannelRealtimePublisher,
         contacts_dispatcher::ContactsChannelDispatcher,
-        notification_sender::NotificationChannelSender,
+        notification_sender::{NotificationChannelSender, NotificationReaderCompletion},
         pg_channel_reference_share_permissions::PgChannelReferenceSharePermissions,
-        pg_channels_repo::PgChannelsRepo, pg_side_effect_context::PgChannelSideEffectContext,
+        pg_channels_repo::PgChannelsRepo,
+        pg_side_effect_context::PgChannelSideEffectContext,
     },
 };
 use connection::{
@@ -492,7 +493,13 @@ pub(crate) type DssChannelService = ChannelServiceImpl<
         ChannelSideEffectService<
             PgChannelSideEffectContext,
             ConnectionGatewayChannelRealtimePublisher,
-            NotificationChannelSender<NotificationIngressType>,
+            NotificationChannelSender<
+                NotificationIngressType,
+                NotificationReaderCompletion<
+                    ai_tools::ToolNotificationService,
+                    notification::outbound::withdrawal::PgNotificationWithdrawal,
+                >,
+            >,
             ContactsChannelDispatcher<SqsContactsIngress<SqsContactsQueue>>,
             DssEventBroker,
         >,
@@ -936,10 +943,12 @@ pub(crate) struct ApiContext {
     pub initiative_state: DssInitiativeState,
     pub graphql_crm_context: graphql_crm::CrmGraphqlContext,
     pub graphql_initiative_context: graphql_initiative::InitiativeGraphqlContext,
+    pub graphql_database_rows_context: graphql_databases::DatabaseRowsGraphqlContext,
     pub graphql_scheduled_action_context: graphql_scheduled_action::ScheduledActionGraphqlContext,
     pub graphql_calendar_context: graphql_calendar::CalendarGraphqlContext,
     pub graphql_calendar_mutation_context: graphql_calendar::CalendarGraphqlMutationContext,
     pub graphql_work_feed_context: complete_graph::WorkFeedGraphqlContext,
+    pub graphql_notification_inbox_context: complete_graph::NotificationInboxGraphqlContext,
     pub graphql_initiative_entity_loader: graphql_initiative::InitiativeEntityLoader,
     pub graphql_agent_session_entity_loader: graphql_soup::AgentSessionEntityLoader,
     /// Focus reads for the GraphQL `emailFocus` list and thread `focus` field.

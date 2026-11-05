@@ -503,7 +503,7 @@ fn task_changes_match_specific_and_any_property_selectors() {
                     .unwrap();
             assert!(!other_task.accepts(&event));
             let stored = serde_json::to_value(&event).unwrap();
-            assert_eq!(stored.as_object().unwrap().len(), 4);
+            assert_eq!(stored.as_object().unwrap().len(), 5);
             assert_eq!(
                 serde_json::from_value::<EventReference>(stored).unwrap(),
                 event
@@ -795,4 +795,213 @@ fn github_deliveries_normalize_with_their_payload_and_reject_odd_names() {
         incoming("Not-An-Event").normalize(),
         Err(EventRejection::UnsupportedEvent)
     );
+}
+
+#[test]
+fn once_fires_at_its_time_and_never_after() {
+    let trigger: ActionTrigger =
+        serde_json::from_value(json!({"type": "once", "at": "2040-01-01T10:00:02Z"})).unwrap();
+    assert_eq!(
+        serde_json::to_value(&trigger).unwrap(),
+        json!({"type": "once", "at": "2040-01-01T10:00:02Z"})
+    );
+    let at = "2040-01-01T10:00:02Z".parse::<DateTime<Utc>>().unwrap();
+    let before = "2040-01-01T10:00:00Z".parse::<DateTime<Utc>>().unwrap();
+    let after = "2040-01-01T10:00:03Z".parse::<DateTime<Utc>>().unwrap();
+    assert!(trigger.has_schedule());
+    assert_eq!(trigger.next_run_after(before), Some(at));
+    assert_eq!(trigger.next_run_after(at), None);
+    assert_eq!(trigger.next_run_after(after), None);
+    assert_eq!(trigger.first_run_at(before, |_| false), Some(at));
+    // A time that has already passed when saved is due now, unless it ran.
+    assert_eq!(trigger.first_run_at(after, |_| false), Some(at));
+    assert_eq!(trigger.first_run_at(after, |_| true), None);
+    assert!(
+        serde_json::from_value::<ActionTrigger>(json!({"type": "once", "at": "tomorrow"})).is_err()
+    );
+    assert!(serde_json::from_value::<ActionTrigger>(json!({"type": "once"})).is_err());
+}
+
+#[test]
+fn once_inside_multiple_runs_before_later_schedules_and_then_yields_to_them() {
+    let trigger: ActionTrigger = serde_json::from_value(json!({
+        "type": "multiple",
+        "triggers": [
+            {"type": "cron", "schedule": "0 0 17 * * *", "timezone": "UTC"},
+            {"type": "once", "at": "2040-01-01T10:00:02Z"},
+            {"type": "events", "filters": [{"events": ["document.created"]}]}
+        ]
+    }))
+    .unwrap();
+    let before = "2040-01-01T10:00:00Z".parse::<DateTime<Utc>>().unwrap();
+    let after = "2040-01-01T10:00:03Z".parse::<DateTime<Utc>>().unwrap();
+    assert_eq!(
+        trigger.next_run_after(before).unwrap().to_rfc3339(),
+        "2040-01-01T10:00:02+00:00"
+    );
+    assert_eq!(
+        trigger.next_run_after(after).unwrap().to_rfc3339(),
+        "2040-01-01T17:00:00+00:00"
+    );
+    assert_eq!(
+        trigger.first_run_at(after, |_| false).unwrap().to_rfc3339(),
+        "2040-01-01T10:00:02+00:00"
+    );
+    assert!(trigger.event_filters().is_some());
+}
+
+const COMPLETED: &str = "00000001-0000-0000-0002-000000000004";
+const IN_PROGRESS: &str = "00000001-0000-0000-0002-000000000002";
+
+fn status_changed(value: &str, previous: &str) -> EventReference {
+    let mut data = property_metadata();
+    data["value"] = json!({"type": "SelectOption", "value": [value]});
+    data["previous_value"] = json!({"type": "SelectOption", "value": [previous]});
+    property_event("entity_property.updated", data)
+        .normalize()
+        .unwrap()
+}
+
+fn property_filter(events: Value, definition: Uuid, values: Value) -> EventFilter {
+    serde_json::from_value(json!({
+        "events": events,
+        "property": {"definitionId": definition, "values": values}
+    }))
+    .unwrap()
+}
+
+#[test]
+fn property_selector_matches_the_value_a_change_adds() {
+    let completed = property_filter(
+        json!(["task.status_changed"]),
+        SystemPropertyKey::STATUS_UUID,
+        json!([COMPLETED]),
+    );
+    assert!(completed.accepts(&status_changed(COMPLETED, IN_PROGRESS)));
+    assert!(!completed.accepts(&status_changed(IN_PROGRESS, COMPLETED)));
+
+    let any_status = property_filter(
+        json!(["task.status_changed"]),
+        SystemPropertyKey::STATUS_UUID,
+        json!([]),
+    );
+    assert!(any_status.accepts(&status_changed(IN_PROGRESS, COMPLETED)));
+
+    let priority = property_filter(
+        json!(["task.property_changed"]),
+        SystemPropertyKey::PRIORITY_UUID,
+        json!([]),
+    );
+    assert!(!priority.accepts(&status_changed(COMPLETED, IN_PROGRESS)));
+}
+
+#[test]
+fn property_selector_matches_only_people_newly_assigned() {
+    let alice = "macro|alice@example.com";
+    let bob = "macro|bob@example.com";
+    let assignees = |ids: &[&str]| {
+        let references: Vec<Value> = ids
+            .iter()
+            .map(|id| json!({"entity_id": id, "entity_type": "USER"}))
+            .collect();
+        json!({"type": "EntityReference", "value": references})
+    };
+    let mut data = property_metadata();
+    data["property_definition_id"] = json!(SystemPropertyKey::ASSIGNEES_UUID);
+    data["value"] = assignees(&[alice, bob]);
+    data["previous_value"] = assignees(&[alice]);
+    let event = property_event("entity_property.updated", data)
+        .normalize()
+        .unwrap();
+
+    let watching = |person: &str| {
+        property_filter(
+            json!(["task.property_changed"]),
+            SystemPropertyKey::ASSIGNEES_UUID,
+            json!([person]),
+        )
+    };
+    assert!(watching(bob).accepts(&event));
+    assert!(!watching(alice).accepts(&event));
+}
+
+#[test]
+fn property_selector_rejects_events_that_cannot_report_its_property() {
+    let parse = |events: Value, definition: Uuid| {
+        serde_json::from_value::<EventFilter>(json!({
+            "events": events,
+            "property": {"definitionId": definition}
+        }))
+    };
+    assert!(
+        parse(
+            json!(["task.status_changed"]),
+            SystemPropertyKey::STATUS_UUID
+        )
+        .is_ok()
+    );
+    assert!(
+        parse(
+            json!(["task.property_changed"]),
+            SystemPropertyKey::STATUS_UUID
+        )
+        .is_ok()
+    );
+    assert!(
+        parse(
+            json!(["task.priority_changed"]),
+            SystemPropertyKey::STATUS_UUID
+        )
+        .is_err()
+    );
+    assert!(parse(json!(["task.created"]), SystemPropertyKey::STATUS_UUID).is_err());
+    assert!(parse(json!(["document.created"]), SystemPropertyKey::STATUS_UUID).is_err());
+}
+
+#[test]
+fn property_change_survives_storage_only_for_routines_that_test_it() {
+    let event = status_changed(COMPLETED, IN_PROGRESS);
+    let stored: EventReference =
+        serde_json::from_value(serde_json::to_value(&event).unwrap()).unwrap();
+    assert_eq!(stored, event);
+
+    let testing = EventFilters::try_from(vec![property_filter(
+        json!(["task.status_changed"]),
+        SystemPropertyKey::STATUS_UUID,
+        json!([COMPLETED]),
+    )])
+    .unwrap();
+    assert_eq!(testing.run_event(&event), event);
+
+    let plain = EventFilters::try_from(vec![
+        EventFilter::new(vec![EventName::TaskStatusChanged], None).unwrap(),
+    ])
+    .unwrap();
+    let kept = serde_json::to_value(plain.run_event(&event)).unwrap();
+    assert!(kept.get("property_change").is_none());
+}
+
+#[test]
+fn a_condition_applies_only_to_the_filter_whose_property_value_matched() {
+    let filter = |value: &str, condition: Option<&str>| {
+        serde_json::from_value::<EventFilter>(json!({
+            "events": ["task.status_changed"],
+            "property": {"definitionId": SystemPropertyKey::STATUS_UUID, "values": [value]},
+            "condition": condition
+        }))
+        .unwrap()
+    };
+    let filters = EventFilters::try_from(vec![
+        filter(COMPLETED, None),
+        filter(IN_PROGRESS, Some("Is this a bug report?")),
+    ])
+    .unwrap();
+    assert_eq!(
+        filters.condition_requirement(&status_changed(COMPLETED, IN_PROGRESS)),
+        ConditionRequirement::Unconditional
+    );
+    assert!(matches!(
+        filters.condition_requirement(&status_changed(IN_PROGRESS, COMPLETED)),
+        ConditionRequirement::AnyOf(_)
+    ));
 }

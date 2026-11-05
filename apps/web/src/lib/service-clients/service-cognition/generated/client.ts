@@ -14,6 +14,7 @@ import type {
   ChatMessageError,
   CompleteOnboardingRequest,
   CreateChatRequest,
+  CreatePipedreamMcpTokenBody,
   DatabaseQueryAnswer,
   DatabaseQueryRequest,
   DecisionErrorBody,
@@ -44,6 +45,7 @@ import type {
   PatchChatRequest,
   PipedreamCatalogResponse,
   PipedreamCompleteRequest,
+  PipedreamConnectCompleteRequest,
   PipedreamConnectionResponse,
   PipedreamOverlayResponse,
   PipedreamRecoverRequest,
@@ -71,6 +73,11 @@ import type {
   UpsertProjectionRequest,
   UsageRequest,
   UsageSummary,
+  WebErrorBody,
+  WebFetch,
+  WebFetchResponse,
+  WebSearch,
+  WebSearchResponse,
 } from './schemas';
 
 /**
@@ -2244,9 +2251,8 @@ export const startMcpAuth = async (
 };
 
 /**
- * Returns the current memory if one exists. If the memory is stale or missing,
-a background generation is triggered and the endpoint returns the stale
-memory (200) or 404 if none exists yet.
+ * Compose stored private preferences, latest activity, and current team profiles.
+Enrolls the caller for daily refresh; generation never runs on this request.
  * @summary Get the authenticated user's latest memory.
  */
 export type getMemoryHandlerResponse200 = {
@@ -2620,6 +2626,80 @@ export const completePipedreamMcpConnection = async (
 };
 
 /**
+ * Answers 404 until Connect lists an active connection for this user and
+app, so the frontend can poll it while the consent window is open.
+ * @summary Record an app the user connected through Macro Connect.
+ */
+export type completePipedreamMcpConnectResponse200 = {
+  data: PipedreamConnectionResponse;
+  status: 200;
+};
+
+export type completePipedreamMcpConnectResponse401 = {
+  data: string;
+  status: 401;
+};
+
+export type completePipedreamMcpConnectResponse404 = {
+  data: ErrorResponse;
+  status: 404;
+};
+
+export type completePipedreamMcpConnectResponse500 = {
+  data: ErrorResponse;
+  status: 500;
+};
+
+export type completePipedreamMcpConnectResponse501 = {
+  data: ErrorResponse;
+  status: 501;
+};
+
+export type completePipedreamMcpConnectResponseSuccess =
+  completePipedreamMcpConnectResponse200 & {
+    headers: Headers;
+  };
+export type completePipedreamMcpConnectResponseError = (
+  | completePipedreamMcpConnectResponse401
+  | completePipedreamMcpConnectResponse404
+  | completePipedreamMcpConnectResponse500
+  | completePipedreamMcpConnectResponse501
+) & {
+  headers: Headers;
+};
+
+export type completePipedreamMcpConnectResponse =
+  | completePipedreamMcpConnectResponseSuccess
+  | completePipedreamMcpConnectResponseError;
+
+export const getCompletePipedreamMcpConnectUrl = () => {
+  return `/pipedream/mcp/connect/complete`;
+};
+
+export const completePipedreamMcpConnect = async (
+  pipedreamConnectCompleteRequest: PipedreamConnectCompleteRequest,
+  options?: RequestInit
+): Promise<completePipedreamMcpConnectResponse> => {
+  const res = await fetch(getCompletePipedreamMcpConnectUrl(), {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(pipedreamConnectCompleteRequest),
+  });
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+
+  const data: completePipedreamMcpConnectResponse['data'] = body
+    ? JSON.parse(body)
+    : {};
+  return {
+    data,
+    status: res.status,
+    headers: res.headers,
+  } as completePipedreamMcpConnectResponse;
+};
+
+/**
  * @summary List the MCP apps connected by the authenticated user.
  */
 export type listPipedreamMcpConnectionsResponse200 = {
@@ -2956,9 +3036,12 @@ export const recoverPipedreamMcpConnection = async (
 };
 
 /**
- * The frontend opens Pipedream's hosted Connect UI with this token; the
-user picks (or is deep-linked into) an app and authorizes it there.
- * @summary Create a short-lived Pipedream Connect token for the authenticated user.
+ * By default, a short-lived Pipedream Connect token: the frontend opens
+Pipedream's hosted Connect UI with it, and the user picks (or is
+deep-linked into) an app and authorizes it there. When the body names an
+app Macro Connect serves and the `macro-connect` rollout is on for the
+user, a Connect URL instead.
+ * @summary Start a connect flow for the authenticated user.
  */
 export type createPipedreamMcpTokenResponse200 = {
   data: PipedreamTokenResponse;
@@ -3001,11 +3084,14 @@ export const getCreatePipedreamMcpTokenUrl = () => {
 };
 
 export const createPipedreamMcpToken = async (
+  createPipedreamMcpTokenBody: CreatePipedreamMcpTokenBody,
   options?: RequestInit
 ): Promise<createPipedreamMcpTokenResponse> => {
   const res = await fetch(getCreatePipedreamMcpTokenUrl(), {
     ...options,
     method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(createPipedreamMcpTokenBody),
   });
 
   const body = [204, 205, 304].includes(res.status) ? null : await res.text();
@@ -3288,4 +3374,172 @@ export const structuredCompletion = async (
     status: res.status,
     headers: res.headers,
   } as structuredCompletionResponse;
+};
+
+/**
+ * @summary Read one public web page as Markdown. Charged to the acting user's AI allowance.
+ */
+export type fetchWebPageResponse200 = {
+  data: WebFetchResponse;
+  status: 200;
+};
+
+export type fetchWebPageResponse400 = {
+  data: WebErrorBody;
+  status: 400;
+};
+
+export type fetchWebPageResponse401 = {
+  data: void;
+  status: 401;
+};
+
+export type fetchWebPageResponse402 = {
+  data: WebErrorBody;
+  status: 402;
+};
+
+export type fetchWebPageResponse422 = {
+  data: WebErrorBody;
+  status: 422;
+};
+
+export type fetchWebPageResponse429 = {
+  data: void;
+  status: 429;
+};
+
+export type fetchWebPageResponse502 = {
+  data: WebErrorBody;
+  status: 502;
+};
+
+export type fetchWebPageResponse503 = {
+  data: WebErrorBody;
+  status: 503;
+};
+
+export type fetchWebPageResponseSuccess = fetchWebPageResponse200 & {
+  headers: Headers;
+};
+export type fetchWebPageResponseError = (
+  | fetchWebPageResponse400
+  | fetchWebPageResponse401
+  | fetchWebPageResponse402
+  | fetchWebPageResponse422
+  | fetchWebPageResponse429
+  | fetchWebPageResponse502
+  | fetchWebPageResponse503
+) & {
+  headers: Headers;
+};
+
+export type fetchWebPageResponse =
+  | fetchWebPageResponseSuccess
+  | fetchWebPageResponseError;
+
+export const getFetchWebPageUrl = () => {
+  return `/web/fetch`;
+};
+
+export const fetchWebPage = async (
+  webFetch: WebFetch,
+  options?: RequestInit
+): Promise<fetchWebPageResponse> => {
+  const res = await fetch(getFetchWebPageUrl(), {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(webFetch),
+  });
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+
+  const data: fetchWebPageResponse['data'] = body ? JSON.parse(body) : {};
+  return {
+    data,
+    status: res.status,
+    headers: res.headers,
+  } as fetchWebPageResponse;
+};
+
+/**
+ * @summary Search the public web. Charged to the acting user's AI allowance.
+ */
+export type searchWebResponse200 = {
+  data: WebSearchResponse;
+  status: 200;
+};
+
+export type searchWebResponse400 = {
+  data: WebErrorBody;
+  status: 400;
+};
+
+export type searchWebResponse401 = {
+  data: void;
+  status: 401;
+};
+
+export type searchWebResponse402 = {
+  data: WebErrorBody;
+  status: 402;
+};
+
+export type searchWebResponse429 = {
+  data: void;
+  status: 429;
+};
+
+export type searchWebResponse502 = {
+  data: WebErrorBody;
+  status: 502;
+};
+
+export type searchWebResponse503 = {
+  data: WebErrorBody;
+  status: 503;
+};
+
+export type searchWebResponseSuccess = searchWebResponse200 & {
+  headers: Headers;
+};
+export type searchWebResponseError = (
+  | searchWebResponse400
+  | searchWebResponse401
+  | searchWebResponse402
+  | searchWebResponse429
+  | searchWebResponse502
+  | searchWebResponse503
+) & {
+  headers: Headers;
+};
+
+export type searchWebResponse =
+  | searchWebResponseSuccess
+  | searchWebResponseError;
+
+export const getSearchWebUrl = () => {
+  return `/web/search`;
+};
+
+export const searchWeb = async (
+  webSearch: WebSearch,
+  options?: RequestInit
+): Promise<searchWebResponse> => {
+  const res = await fetch(getSearchWebUrl(), {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(webSearch),
+  });
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+
+  const data: searchWebResponse['data'] = body ? JSON.parse(body) : {};
+  return {
+    data,
+    status: res.status,
+    headers: res.headers,
+  } as searchWebResponse;
 };

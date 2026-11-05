@@ -21,6 +21,7 @@ import { Button, cn, Panel } from '@ui';
 import { createEffect, createSignal, Show, Suspense } from 'solid-js';
 import { createMutable } from 'solid-js/store';
 import { Dynamic } from 'solid-js/web';
+import { createPriorityCollapseController } from '../../../priority-collapse/PriorityCollapseOverflowSensor';
 import { splitBackInterceptor } from '../back-interceptor';
 import {
   type SplitBottomPanelRegistration,
@@ -34,7 +35,6 @@ import { shouldShowSplitCloseButton } from '../layoutUtils';
 import { registerSplitHotkeys } from '../registerSplitHotkeys';
 import { createOwnedSlots } from '../utils/createOwnedSlots';
 import { createSplitAutofocus } from '../utils/createSplitAutofocus';
-import { createPriorityCollapseController } from './PriorityCollapseOverflowSensor';
 import { SplitDrawerGroup } from './SplitDrawerContext';
 import { SplitHeader } from './SplitHeader';
 import { SplitToolbar } from './SplitToolbar';

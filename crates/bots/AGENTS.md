@@ -42,6 +42,8 @@ for bot mutations that channel bots, agent triggers, and memory build on.
 
 ## Gotchas
 
+- Agent create/update/patch must persist `has_agent = true` atomically with
+  configuration writes; mention dispatch gates on this flag for every harness.
 - Kafka events key on the bot's bare UUID (no `bot|` prefix); `bot.updated`
   metadata describes the requested PATCH, not a full snapshot — an omitted
   field serializes as `null` (see `README.md`).
@@ -49,3 +51,5 @@ for bot mutations that channel bots, agent triggers, and memory build on.
 ## Related
 
 - Rules: `.agents/rules/rust/architecture.md`, `.agents/rules/observability.md`
+- Docs: [`docs/guides/bots.md`](../../docs/guides/bots.md) (setting up a bot
+  in the app and using it from the SDK)

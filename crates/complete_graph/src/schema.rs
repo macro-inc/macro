@@ -47,6 +47,10 @@ use graphql_notification::{
     NoOpNotificationMutationService, NoOpSoupNotificationEdgeReader, NotificationMutationRoot,
     NotificationMutationService, NotificationSubscriptionRoot, SoupNotificationEdgeReader,
 };
+use graphql_notification_inbox::{
+    GraphqlNotificationInboxPage, NotificationInboxInput, NotificationInboxMutationRoot,
+    NotificationInboxSubscriptionRoot, resolve_notification_inbox,
+};
 use graphql_permission::{EntityPermissionEdgeReader, NoOpEntityPermissionEdgeReader};
 use graphql_properties::{
     EntityPropertyReader, EntityPropertyWriter, GraphqlPropertyDefinition,
@@ -107,6 +111,7 @@ pub struct CompleteMutationRoot<
     InitiativeMutationRoot<E>,
     CalendarMutationRoot,
     WorkFeedMutationRoot<E>,
+    NotificationInboxMutationRoot<E>,
     SavedViewMutationRoot,
 );
 
@@ -134,19 +139,21 @@ impl<
             InitiativeMutationRoot::<E>::default(),
             CalendarMutationRoot,
             WorkFeedMutationRoot::<E>::default(),
+            NotificationInboxMutationRoot::<E>::default(),
             SavedViewMutationRoot,
         )
     }
 }
 
 /// Root subscription object combining realtime Soup, notification,
-/// activity, and work feed adapters.
+/// activity, work feed and notification inbox adapters.
 #[derive(MergedSubscription)]
 pub struct CompleteSubscriptionRoot<R, NS, AS, Auth, St, NR, PR, ER, FR, AR, AcR>(
     SoupSubscriptionRoot<R, Auth, St, NR, PR, ER, FR, AR, AcR>,
     NotificationSubscriptionRoot<NS>,
     ActivitySubscriptionRoot<AS>,
     WorkFeedSubscriptionRoot<SoupEdges<NR, PR, ER, FR, AR, AcR>>,
+    NotificationInboxSubscriptionRoot<SoupEdges<NR, PR, ER, FR, AR, AcR>>,
 )
 where
     R: SoupRealtimeSubscriptionService,
@@ -461,6 +468,7 @@ where
             NotificationSubscriptionRoot::new(notification_subscription_service),
             ActivitySubscriptionRoot::new(activity_subscription_service),
             WorkFeedSubscriptionRoot::default(),
+            NotificationInboxSubscriptionRoot::default(),
         ),
     )
     .finish()
@@ -727,6 +735,18 @@ where
         async_graphql::ID(self.user_id.to_string())
     }
 
+    /// A page filtered and ordered across the entire authorized table.
+    async fn database_view_rows(
+        &self,
+        ctx: &Context<'_>,
+        database_id: ID,
+        input: graphql_databases::DatabaseViewRowsInput,
+    ) -> async_graphql::Result<
+        graphql_databases::DatabaseViewRowsPage<SoupEdges<NR, PR, ER, FR, AR, AcR>>,
+    > {
+        graphql_databases::resolve_database_view_rows(ctx, database_id, input).await
+    }
+
     /// One initiative accessible to the authenticated viewer.
     async fn initiative(
         &self,
@@ -871,6 +891,24 @@ where
         .await
     }
 
+    /// A page of the authenticated user's notifications inbox, newest group
+    /// first: their pending notifications grouped by the entity they are
+    /// filed under and cut into rows, one per conversation thread, channel
+    /// top level, email thread, task, request or agent session.
+    async fn notification_inbox(
+        &self,
+        ctx: &Context<'_>,
+        input: Option<NotificationInboxInput>,
+    ) -> async_graphql::Result<GraphqlNotificationInboxPage<SoupEdges<NR, PR, ER, FR, AR, AcR>>>
+    {
+        resolve_notification_inbox::<SoupEdges<NR, PR, ER, FR, AR, AcR>>(
+            ctx,
+            self.user_id.clone(),
+            input.unwrap_or_default(),
+        )
+        .await
+    }
+
     /// Authenticated user email catalog fields supplied by `graphql_email`.
     #[graphql(flatten)]
     async fn email(&self, ctx: &Context<'_>) -> async_graphql::Result<GraphqlEmailQuery<E>> {
@@ -926,10 +964,10 @@ where
         .await
     }
 
-    /// The viewer's Focus: signal threads in their own inboxes worth their
-    /// attention, highest priority first (importance, halved for every 2 days
-    /// since the latest inbound mail), with mail in the last `days` days
-    /// (default 30, at most 90). Each thread's `focus` field explains why.
+    /// The viewer's Focus: threads in their own inboxes worth their attention,
+    /// newest first by latest message time in either direction, with mail in
+    /// the last `days` days (default 30, at most 90). Each thread carries a
+    /// `focus` field that explains why.
     async fn email_focus(
         &self,
         ctx: &Context<'_>,

@@ -32,7 +32,9 @@ export type LoadOutcome =
   /** The fetch or the fold failed. */
   | 'failed'
   /** Still unsettled at {@link STALL_THRESHOLD_MS} — reported, not concluded. */
-  | 'stalled';
+  | 'stalled'
+  /** Already loaded when acquired, so nothing was fetched or folded. */
+  | 'reused';
 
 /** Why a load ended `failed`, bounded so failures group. */
 export type LoadFailure =
@@ -93,6 +95,8 @@ export type LoadStage =
   | 'log_fetch'
   /** The fetched log was folded; the surface can show the truth. */
   | 'fold'
+  /** Snapshot events were projected into the surface's stores. */
+  | 'projection'
   /** A surface painted the cached transcript. */
   | 'warm_render'
   /** A surface painted the fetched transcript. */
@@ -232,6 +236,12 @@ export class SessionLoadTrace {
     this.stage('fold', foldStartedAt);
   }
 
+  /** Listener projection is synchronous work inside the historical fold stage. */
+  projected(startedAt: number, messages: number): void {
+    if (this.#ended) return;
+    this.stage('projection', startedAt, { projection_messages: messages });
+  }
+
   /**
    * The read was refused and tried again, because this tab had created the
    * session moments earlier and the refusal reads as a create that has not
@@ -342,7 +352,7 @@ export class SessionLoadTrace {
       this.#set('agent.session.load.failure', this.#failure ?? 'unknown');
     }
     // Nothing will paint for a load that did not land.
-    if (outcome !== 'loaded') this.#frames?.stop();
+    if (outcome !== 'loaded' && outcome !== 'reused') this.#frames?.stop();
     try {
       performance.measure('agent.session.load', {
         start: this.#startedAt,

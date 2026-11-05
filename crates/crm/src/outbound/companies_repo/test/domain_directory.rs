@@ -144,7 +144,7 @@ async fn manual_company_is_enriched_later_and_keeps_team_names(pool: PgPool) -> 
         .create_company(
             &CrmTeamReceipt::<MemberTeamRole>::dangerously_internal(team_a),
             "Acme (ours)",
-            "acme.com",
+            Some("acme.com"),
         )
         .await?;
     let unnamed = insert_company(&pool, team_b, true, &["acme.com"]).await?;

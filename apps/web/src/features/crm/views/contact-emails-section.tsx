@@ -16,7 +16,7 @@ import { RecordItemList } from './record-item-list';
 import { useContactEmailsQuery } from './use-crm';
 
 export function ContactEmailsSection(props: { contact?: CrmContactResponse }) {
-  const email = () => props.contact?.email;
+  const email = () => props.contact?.email ?? undefined;
   const [search, setSearch] = createSignal('');
   const crm = useCrmContext();
   const [view, setView] = createSignal<EmailView>('team');
@@ -30,7 +30,7 @@ export function ContactEmailsSection(props: { contact?: CrmContactResponse }) {
       onSearchChange={setSearch}
       createAction={{
         label: 'New email',
-        onClick: () => crm.openEmailComposer(props.contact?.email),
+        onClick: () => crm.openEmailComposer(email()),
       }}
       actions={
         <RecordSectionFilters
@@ -79,7 +79,7 @@ export function ContactEmailsSection(props: { contact?: CrmContactResponse }) {
             description="Email this contact to start a conversation."
             action={{
               label: 'New email',
-              onClick: () => crm.openEmailComposer(props.contact?.email),
+              onClick: () => crm.openEmailComposer(email()),
             }}
           />
         }

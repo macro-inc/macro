@@ -1,4 +1,11 @@
 export default {
+  notSpam: 'Not spam',
+  restoreEmail: 'Restore',
+  toastEmailRestoreRequested: 'Restore requested',
+  toastEmailRestoreFailed: {
+    one: 'Could not restore {{count}} email. Try again.',
+    other: 'Could not restore {{count}} emails. Try again.',
+  },
   // Action labels shared by the entity menus, file menu, command menu and
   // project/folder menus.
   markDone: 'Mark Done',
@@ -18,6 +25,13 @@ export default {
   addToFavorites: 'Add to favorites',
   archive: 'Archive',
   unarchive: 'Unarchive',
+  // An agent session's auto-archive overrides.
+  archiveWhenPullRequestsMerge: 'Archive when PRs merge',
+  archiveWhenSessionCloses: 'Archive when session closes',
+  autoArchiveUseDefaultOn: 'Use default (On)',
+  autoArchiveUseDefaultOff: 'Use default (Off)',
+  autoArchiveOn: 'On',
+  autoArchiveOff: 'Off',
   openOnGitHub: 'Open on GitHub',
   viewItemsWithTag: 'View all items with tag',
   editTag: 'Edit tag',
@@ -30,6 +44,8 @@ export default {
   addToProject: 'Add to project…',
   openProjectNamed: 'Open project {{name}}',
   changeProject: 'Change project',
+  openSourceNamed: 'Open source {{name}}',
+  changeSource: 'Change source',
   moveToFolder: 'Move to folder',
   removeFromFolder: 'Remove from folder',
   duplicate: 'Duplicate',
@@ -39,6 +55,10 @@ export default {
   markDoneCommand: 'Mark done',
   markReadCommand: 'Mark read',
   markUnreadCommand: 'Mark unread',
+  discardDraftCommand: {
+    one: 'Discard draft',
+    other: 'Discard drafts',
+  },
   copyLinkCommand: 'Copy link',
   copyBranchNameCommand: 'Copy branch name',
   copyId: 'Copy ID',
@@ -46,6 +66,7 @@ export default {
   downloadDocx: 'Download',
   downloadEml: 'Download .eml',
   downloadEmlFailed: 'Failed to download email. Please try again.',
+  createEvent: 'Create event',
   senderToSignal: 'Sender → Signal',
   senderToNoise: 'Sender → Noise',
   blockSender: 'Block Sender',
@@ -80,6 +101,10 @@ export default {
   undo: 'Undo',
 
   // Toasts.
+  toastChannelAccessRequestFailed: 'Could not send your request to join',
+  toastChannelAccessWithdrawalFailed: 'Could not withdraw your request',
+  toastChannelAccessResolveFailed: 'Could not answer this request',
+  toastAutoArchiveFailed: 'Could not update auto-archive',
   toastCopied: 'Copied',
   toastCopiedCount: {
     one: 'Copied {{count}} item',
@@ -101,6 +126,11 @@ export default {
     other: 'Deleted {{count}} items',
   },
   toastDeleteFailed: 'Failed to delete',
+  toastDiscardedDrafts: {
+    one: 'Draft discarded',
+    other: '{{count}} drafts discarded',
+  },
+  toastDiscardDraftFailed: 'Failed to discard draft',
   toastAddedToFavorites: 'Added to favorites',
   toastAddedCountToFavorites: {
     one: 'Added {{count}} item to favorites',

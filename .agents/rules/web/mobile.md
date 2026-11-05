@@ -56,6 +56,10 @@ read their code, and follow that pattern rather than inventing a new one.
 - Phone drawers have a handle and no X; drag, backdrop, or Escape dismiss,
   and focus returns to the opener. No submenus at phone width: drill in
   place with a back row.
+- A sheet takes focus itself when it opens, so no row opens wearing a focus
+  ring; only a first tab stop that is a text field keeps it. Name another
+  target with `initialFocusEl` or `onInitialFocus`, never an autofocus of your
+  own.
 - Actions that must stay in reach while a sheet scrolls sit in its pinned
   chrome between the handle and `MobileDrawer.ScrollBody`, never in a sticky
   band inside the scroll. A touch popover split exposes that slot as
@@ -135,7 +139,7 @@ read their code, and follow that pattern rather than inventing a new one.
   ignores taps outside islands). Bottom chrome goes through `FloatRegion` or
   `FloatRegionOrInline` with `px-(--mobile-chrome-gutter)` and
   `pointer-events-auto`. Style it with `island` / `glass`, size it with the
-  px `--mobile-chrome-*` tokens (not rem), and pass Button a `depth`.
+  px `--mobile-chrome-*` tokens (not rem), and use Button's size and finish props.
 - Mark selection with `ink`, never `accent`: a selected pill is `bg-ink
   text-surface`, a selected dock button or drawer row stays at full ink while
   its siblings dim (`text-ink-extra-muted`, `aria-current="page"`). Keep the

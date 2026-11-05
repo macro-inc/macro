@@ -1,3 +1,4 @@
+import { fireAndForget } from '@core/util/fireAndForget';
 import type { OptimisticResponse } from '@graphql-cache/exchange/optimistic';
 import type { CacheHost } from '@graphql-cache/host/types';
 import { createLiveQuery } from '@graphql-cache/solid/create-live-query';
@@ -14,8 +15,15 @@ import {
   mapInitiativeDetail,
   mapInitiativeIdentity,
 } from '@service-storage/initiative';
-import { type Client, type DocumentInput, stringifyDocument } from '@urql/core';
-import { type Accessor, createMemo } from 'solid-js';
+import {
+  type Client,
+  createRequest,
+  type DocumentInput,
+  getOperationName,
+  type RequestPolicy,
+  stringifyDocument,
+} from '@urql/core';
+import { type Accessor, createEffect, createMemo, untrack } from 'solid-js';
 import type { ProjectIdentity } from '../core/project';
 import { toProjectDetail } from './project-model';
 import { projectProperties } from './project-properties';
@@ -78,31 +86,83 @@ function createAuthorizedProjectQuery<
   client: () => Client,
   userId: Accessor<string | undefined>,
   projectId: Accessor<string>,
-  enabled: Accessor<boolean>
+  enabled: Accessor<boolean>,
+  requestPolicy: RequestPolicy = 'cache-and-network'
 ) {
-  const active = () => enabled() && Boolean(userId() && projectId());
-  const authorization = createQueryAuthorization(() =>
-    JSON.stringify([userId(), projectId()])
+  const operationName = getOperationName(
+    createRequest(document, { initiativeId: '' }).query
   );
+  const currentClient = createMemo(client);
+  const currentViewer = createMemo(userId);
+  const currentProject = createMemo(projectId);
+  const readEnabled = createMemo(enabled);
+  const scope = createMemo(() => ({
+    client: currentClient(),
+    viewerId: currentViewer(),
+    projectId: currentProject(),
+    active: readEnabled() && Boolean(currentViewer() && currentProject()),
+  }));
+  const active = () => scope().active;
+  const authorization = createMemo(() => {
+    const current = scope();
+    const key = JSON.stringify([
+      operationName,
+      current.viewerId,
+      current.projectId,
+    ]);
+    return createQueryAuthorization(() => key, current.client);
+  });
   const query = createLiveQuery(
     document,
-    () => (active() ? { initiativeId: projectId() } : undefined),
-    () => ({
-      client: client(),
-      requestPolicy: 'cache-and-network',
-      keepPreviousData: false,
-      onResult: authorization.onResult,
-      select: (data) => ({ viewerId: data.user.id, value: select(data) }),
-    })
+    () => (active() ? { initiativeId: scope().projectId } : undefined),
+    () => {
+      const current = scope();
+      const auth = authorization();
+      return {
+        client: current.client,
+        requestPolicy: untrack(() =>
+          auth.error() ? 'network-only' : requestPolicy
+        ),
+        context: auth.requestContext(),
+        keepPreviousData: false,
+        onResult: (result) => {
+          if (result.data && result.data.user.id !== current.viewerId) return;
+          auth.onResult(result);
+        },
+        select: (data) => ({ viewerId: data.user.id, value: select(data) }),
+      };
+    }
   );
+  const refetch: typeof query.refetch = (options = {}) =>
+    query.refetch({
+      ...options,
+      context: { ...options.context, ...authorization().requestContext() },
+    });
   registerProjectRevalidation(client, active, () =>
-    query.refetch({ requestPolicy: 'cache-and-network' })
+    refetch({ requestPolicy: 'cache-and-network' })
   );
+  let recoveredScope: ReturnType<typeof scope> | undefined;
+  createEffect(() => {
+    const current = scope();
+    const result = query.data;
+    if (
+      !current.active ||
+      !result ||
+      result.viewerId === current.viewerId ||
+      recoveredScope === current
+    )
+      return;
+    recoveredScope = current;
+    fireAndForget(
+      refetch({ requestPolicy: 'network-only' }),
+      'project-identity.viewer-recovery'
+    );
+  });
   const data = createMemo(() => {
     const result = query.data;
     if (
       !active() ||
-      authorization.error() ||
+      authorization().error() ||
       !result ||
       result.viewerId !== userId()
     )
@@ -114,23 +174,27 @@ function createAuthorizedProjectQuery<
       return data();
     },
     get error() {
-      return active() ? (authorization.error() ?? query.error) : null;
+      return active() ? (authorization().error() ?? query.error) : null;
     },
     get isSuccess() {
       return (
         active() &&
-        !authorization.error() &&
+        !authorization().error() &&
         query.isSuccess &&
         query.data?.viewerId === userId()
       );
     },
     get isPending() {
-      return !active() || query.isPending;
+      return (
+        !active() ||
+        query.isPending ||
+        (query.isFetching && query.data?.viewerId !== scope().viewerId)
+      );
     },
     get isError() {
-      return active() && Boolean(authorization.error() || query.isError);
+      return active() && Boolean(authorization().error() || query.isError);
     },
-    refetch: query.refetch,
+    refetch,
   };
 }
 
@@ -171,7 +235,8 @@ export function createProjectIdentityQuery(
     client,
     userId,
     projectId,
-    enabled
+    enabled,
+    'cache-first'
   );
 }
 

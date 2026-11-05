@@ -6,7 +6,8 @@ export default {
   openCategory: 'Open category',
   openCategoryNamed: 'Open {{category}}',
   createNewSplit: 'Create new split',
-  toggleSettings: 'Toggle settings',
+  createNewSplitBelow: 'Create new split below',
+  toggleSettings: 'Go to Settings',
   account: 'Account',
   logout: 'Logout',
   mcpSetup: 'MCP setup',
@@ -31,4 +32,5 @@ export default {
   goForward: 'Go forward',
   focusSplitRight: 'Focus split right',
   focusSplitLeft: 'Focus split left',
+  createEventFromEmail: 'Create event from email',
 };
