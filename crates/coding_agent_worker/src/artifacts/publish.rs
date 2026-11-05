@@ -11,7 +11,7 @@ use base64::engine::general_purpose::STANDARD as BASE64;
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 
-use super::files::{INDEX, LocalFile};
+use super::files::LocalFile;
 
 #[cfg(test)]
 pub(crate) mod test;
@@ -74,6 +74,8 @@ pub(crate) enum PublishError {
         status: reqwest::StatusCode,
         body: String,
     },
+    #[error("Macro created the artifact without publishing its files")]
+    NoVersion,
     #[error("Macro asked for {0}, which is not among the files being published")]
     UnknownUpload(String),
 }
@@ -141,7 +143,8 @@ struct VersionRequest<'a> {
 #[derive(Deserialize)]
 struct Artifact {
     document_id: String,
-    current: ArtifactVersion,
+    /// `None` until a version is published.
+    current: Option<ArtifactVersion>,
 }
 
 #[derive(Deserialize)]
@@ -220,33 +223,27 @@ impl Egress {
                     },
                 )
                 .await?;
+            let current = created.current.ok_or(PublishError::NoVersion)?;
             return Ok(Published {
                 artifact_id: created.document_id,
-                version: created.current.number,
-                scenes: created.current.scenes,
+                version: current.number,
+                scenes: current.scenes,
                 uploaded: publication.files.len(),
                 reused: 0,
             });
         }
 
-        // Too big for one request, and uploads need an artifact to belong
-        // to: create it with its index page, then publish everything as the
-        // version after.
-        let index = publication
-            .files
-            .iter()
-            .filter(|file| file.path == INDEX)
-            .map(inline)
-            .collect();
+        // Too big for one request: create the artifact with no version,
+        // upload into it, then publish version 1 (base 0: nothing published).
         let created: Artifact = self
             .post(
                 "create the artifact",
                 "",
                 &CreateRequest {
                     name,
-                    files: index,
+                    files: Vec::new(),
                     scenes: &[],
-                    message: publication.message.as_deref(),
+                    message: None,
                 },
             )
             .await?;
@@ -255,7 +252,7 @@ impl Egress {
             &publication.files,
             Some(&scenes),
             publication.message.as_deref(),
-            Some(created.current.number),
+            Some(0),
         )
         .await
     }
@@ -271,8 +268,11 @@ impl Egress {
         let scenes = match scenes {
             Some(scenes) => scenes.to_vec(),
             None => {
-                let current: Artifact = self.get("read the artifact", &format!("/{id}")).await?;
-                current.current.scenes
+                let artifact: Artifact = self.get("read the artifact", &format!("/{id}")).await?;
+                artifact
+                    .current
+                    .map(|current| current.scenes)
+                    .unwrap_or_default()
             }
         };
 

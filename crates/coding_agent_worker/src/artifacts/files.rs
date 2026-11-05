@@ -19,7 +19,7 @@ pub(crate) const MAX_VERSION_BYTES: u64 = 64 * 1024 * 1024;
 const MAX_PATH_CHARS: usize = 512;
 
 /// The page every artifact opens on.
-pub(crate) const INDEX: &str = "index.html";
+const INDEX: &str = "index.html";
 
 /// One file of an artifact, read and hashed.
 #[derive(Debug, Clone, PartialEq, Eq)]

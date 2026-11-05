@@ -374,10 +374,10 @@ async fn a_conflict_reaches_the_agent_with_macros_explanation() {
     );
 }
 
-/// A version too big for one request is created with its index page, then
-/// published in full as the next version.
+/// A version too big for one request is created without one, uploaded
+/// into, and published as version 1.
 #[tokio::test]
-async fn a_large_new_artifact_is_created_then_published_through_uploads() {
+async fn a_large_new_artifact_is_created_empty_then_published_through_uploads() {
     let index = file("index.html", "text/html", b"<video src=intro.mp4>");
     let video = file("intro.mp4", "video/mp4", &vec![0; 14 * 1024 * 1024]);
     let poster = file("poster.png", "image/png", &vec![1; 7 * 1024 * 1024]);
@@ -392,22 +392,22 @@ async fn a_large_new_artifact_is_created_then_published_through_uploads() {
                 "document_id": ID,
                 "name": "Intro",
                 "owner": "macro|teammate@macro.com",
-                "current": {
-                    "number": 1,
-                    "files": [],
-                    "scenes": [],
-                    "created_by": "macro|teammate@macro.com",
-                    "created_at": "2026-11-04T00:00:00Z"
-                }
+                "current": null
             }),
         ),
         (
             format!("POST /artifacts/{ID}/uploads"),
             StatusCode::OK,
             json!({"uploads": [
+                {"sha256": index.sha256, "url": format!("{base}/bucket/{}", index.sha256), "headers": {}},
                 {"sha256": video.sha256, "url": video_url, "headers": {}},
                 {"sha256": poster.sha256, "url": poster_url, "headers": {}}
             ]}),
+        ),
+        (
+            format!("PUT /bucket/{}", index.sha256),
+            StatusCode::OK,
+            json!({}),
         ),
         (
             format!("PUT /bucket/{}", video.sha256),
@@ -423,7 +423,7 @@ async fn a_large_new_artifact_is_created_then_published_through_uploads() {
             format!("POST /artifacts/{ID}/versions"),
             StatusCode::CREATED,
             json!({
-                "number": 2,
+                "number": 1,
                 "files": [],
                 "scenes": [],
                 "created_by": "macro|teammate@macro.com",
@@ -439,26 +439,21 @@ async fn a_large_new_artifact_is_created_then_published_through_uploads() {
             artifact_id: None,
             name: Some("Intro".to_owned()),
             scenes: None,
-            message: None,
+            message: Some("First cut".to_owned()),
             base_version: None,
         })
         .await
         .expect("published");
 
-    assert_eq!(published.version, 2);
+    assert_eq!(published.version, 1);
+    assert_eq!((published.uploaded, published.reused), (3, 0));
     let received = stand_in.received();
-    let created = received[0].json();
     assert_eq!(
-        created["files"],
-        json!([{
-            "path": "index.html",
-            "content_type": "text/html",
-            "sha256": index.sha256,
-            "content_base64": "PHZpZGVvIHNyYz1pbnRyby5tcDQ+"
-        }])
+        received[0].json(),
+        json!({"name": "Intro", "files": [], "scenes": []})
     );
-    assert_eq!(received[2].body.len(), 14 * 1024 * 1024);
-    assert_eq!(received[3].body.len(), 7 * 1024 * 1024);
-    assert_eq!(received[4].json()["base_version"], json!(1));
-    assert_eq!((published.uploaded, published.reused), (2, 1));
+    assert_eq!(received[3].body.len(), 14 * 1024 * 1024);
+    assert_eq!(received[4].body.len(), 7 * 1024 * 1024);
+    assert_eq!(received[5].json()["base_version"], json!(0));
+    assert_eq!(received[5].json()["message"], json!("First cut"));
 }
