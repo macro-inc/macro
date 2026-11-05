@@ -11,7 +11,7 @@ if [ -z "${RUSTC_WRAPPER:-}" ]; then
 fi
 
 bins=()
-cargo_args=(build --locked --all-features)
+cargo_args=(build --locked --all-features --config 'profile.dev.package."*".debug=false')
 while IFS= read -r bin; do
   if [ -z "$bin" ]; then
     continue

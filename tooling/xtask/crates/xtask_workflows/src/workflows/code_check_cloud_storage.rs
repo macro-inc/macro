@@ -132,7 +132,9 @@ fn doppler_config() -> Job {
             "needs.path-check.outputs.should_run == 'true' && github.event.pull_request.draft == false && needs.path-check.outputs.doppler_candidates == 'true'",
         ))
         .runs_on(runners::Runner::RustCi.with_cache_tag(vars::CI_CACHE_TAG))
-        .map(with_check_env)
+        // The test job's flags, so this build reuses what that job compiles.
+        .add_env(("RUSTFLAGS", "-Dwarnings -C link-arg=-fuse-ld=mold"))
+        .add_env(("SQLX_OFFLINE", "true"))
         .add_step(steps::checkout(false, false).add_with(("fetch-depth", 2)))
         // Before the dev shell: its LD_LIBRARY_PATH points the runner's
         // git-remote-https at Nix's glibc, which aborts `git fetch`.

@@ -373,8 +373,7 @@ jobs:
     if: needs.path-check.outputs.should_run == 'true' && github.event.pull_request.draft == false && needs.path-check.outputs.doppler_candidates == 'true'
     runs-on: namespace-profile-linux-rust-ci;overrides.cache-tag=sccache-ci
     env:
-      RUSTFLAGS: '-Dwarnings -Dclippy::disallowed_methods -C link-arg=-fuse-ld=mold'
-      RUSTDOCFLAGS: '-Dwarnings'
+      RUSTFLAGS: '-Dwarnings -C link-arg=-fuse-ld=mold'
       SQLX_OFFLINE: 'true'
     steps:
     - name: Checkout
@@ -495,7 +494,7 @@ jobs:
         fi
 
         bins=()
-        cargo_args=(build --locked --all-features)
+        cargo_args=(build --locked --all-features --config 'profile.dev.package."*".debug=false')
         while IFS= read -r bin; do
           if [ -z "$bin" ]; then
             continue
