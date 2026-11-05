@@ -168,7 +168,7 @@ async fn build_auth_proxy(
     let mcp_public_url = public_url.to_string();
     let mcp_oauth_redirect_uri = format!("{mcp_public_url}/oauth/callback");
     let email_codes = AuthServiceEmailCodes::new(
-        &macro_service_urls::AuthServiceUrl::new()?.to_string(),
+        &macro_service_urls::AuthServiceUrl::new()?,
         mcp_oauth_redirect_uri.clone(),
     )
     .context("failed to initialize MCP email sign-in")?;
