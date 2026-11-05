@@ -86,15 +86,15 @@ services:
   search:
     build:
       context: ../infra/local/opensearch
-    image: macro-local-opensearch:dev
+    # `cargo x` stacks replace this tag with one keyed by the Dockerfile's
+    # content (`gen_compose::opensearch_image`), so a changed image is rebuilt.
+    image: macro-local-opensearch:core-icu
     environment:
       cluster.name: search 
       discovery.type: single-node
       node.name: search
-      plugins.security.disabled: true
       bootstrap.memory_lock: true
       OPENSEARCH_JAVA_OPTS: "-Xms512m -Xmx512m" # Set min and max JVM heap sizes to at least 50% of system RAM
-      OPENSEARCH_INITIAL_ADMIN_PASSWORD: "yourStrongPassword123!"
     healthcheck:
       interval: 10s
       retries: 80

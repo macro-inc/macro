@@ -32,7 +32,7 @@ fn fusionauth_kickstart_is_privately_relabelled_and_replaces_inherited_mounts() 
     for name in [None, Some("selinux-test")] {
         let instance = Instance::derive(name, None).unwrap();
         let mut services = IndexMap::new();
-        add_local_infra(&mut services, &instance, false);
+        add_local_infra(&mut services, &instance, false).unwrap();
         let compose = dct::Compose {
             services: dct::Services(services),
             ..Default::default()
@@ -102,4 +102,21 @@ fn relay_image_tag_follows_its_dockerfile() {
     assert_ne!(tag, sdk_webhook_relay_image(b"FROM alpine\nRUN b\n"));
     assert_eq!(tag, sdk_webhook_relay_image(b"FROM alpine\nRUN a\n"));
     assert!(tag.starts_with("macro-sdk-webhook-relay:"));
+}
+
+/// Every instance runs OpenSearch under a tag keyed by its Dockerfile, so a
+/// changed image is built rather than an old one reused under a fixed tag.
+#[test]
+fn every_instance_runs_the_content_tagged_opensearch_image() {
+    let image = opensearch_image().unwrap();
+    let tag = image.strip_prefix("macro-local-opensearch:").unwrap();
+    assert_eq!(tag.len(), 12);
+    assert!(tag.bytes().all(|b| b.is_ascii_hexdigit()));
+    for name in [None, Some("opensearch-tag-test")] {
+        let instance = Instance::derive(name, None).unwrap();
+        let mut services = IndexMap::new();
+        add_local_infra(&mut services, &instance, false).unwrap();
+        let search = services["search"].as_ref().unwrap();
+        assert_eq!(search.image.as_deref(), Some(image.as_str()));
+    }
 }

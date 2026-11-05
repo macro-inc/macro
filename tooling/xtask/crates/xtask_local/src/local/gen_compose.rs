@@ -111,7 +111,7 @@ pub fn generate(
     // The rest of the local infra (FusionAuth, Mailpit, per-instance Postgres/
     // Redis/OpenSearch port remaps) only for the self-contained local stacks.
     if mode.spec().runs_local_infra {
-        add_local_infra(&mut services, instance, static_frontend);
+        add_local_infra(&mut services, instance, static_frontend)?;
         add_sdk_webhook_relay(&mut services, instance)?;
     }
     // Live Gmail sync: forward watch notifications from the instance's own
@@ -351,7 +351,7 @@ fn add_local_infra(
     services: &mut IndexMap<String, Option<dct::Service>>,
     instance: &Instance,
     static_frontend: bool,
-) {
+) -> Result<()> {
     // This per-instance directory belongs only to FusionAuth. Private SELinux
     // relabeling keeps the kickstart readable without sharing its container label.
     let mut fusionauth = dct::Service {
@@ -441,6 +441,15 @@ fn add_local_infra(
         // (an empty `ports:` can't be expressed in the typed model — it needs the
         // `!override []` merge tag).
     }
+
+    // Every instance, the default one included, runs the content-tagged image.
+    if let Some(search) = services
+        .entry("search".to_string())
+        .or_insert_with(|| Some(dct::Service::default()))
+    {
+        search.image = Some(opensearch_image()?);
+    }
+    Ok(())
 }
 
 /// Emit the Compose merge tags the typed schema can't represent:
@@ -625,6 +634,18 @@ fn net_aliases(pairs: &[(&str, &[&str])]) -> dct::Networks {
             })
             .collect(),
     ))
+}
+
+/// The local OpenSearch image, tagged by its Dockerfile's content. Compose
+/// builds an image only when its tag is missing, so under a fixed tag a changed
+/// Dockerfile would never reach a machine that built the old one.
+pub fn opensearch_image() -> Result<String> {
+    let dockerfile = super::repo_root().join("infra/local/opensearch/Dockerfile");
+    let bytes =
+        std::fs::read(&dockerfile).with_context(|| format!("reading {}", dockerfile.display()))?;
+    let digest = sha2::Sha256::digest(&bytes);
+    let tag: String = digest.iter().take(6).map(|b| format!("{b:02x}")).collect();
+    Ok(format!("macro-local-opensearch:{tag}"))
 }
 
 fn ports_only(ports: Vec<String>) -> dct::Service {
