@@ -124,23 +124,22 @@ pub fn port(yaml: &str, dropped: &[&str]) -> Result<String> {
             };
             if steps.iter().any(|step| uses(step, "dorny/paths-filter")) {
                 for step in steps.iter_mut() {
-                    let input = if uses(step, "dorny/paths-filter") {
-                        Some(("token", Value::from("")))
+                    let (key, value) = if uses(step, "dorny/paths-filter") {
+                        ("token", "")
                     } else if uses(step, "actions/checkout") {
-                        Some(("fetch-depth", Value::from("0")))
+                        ("fetch-depth", "0")
                     } else {
-                        None
+                        continue;
                     };
-                    if let (Some((key, value)), Some(with)) = (
-                        input,
-                        step.as_mapping_mut().map(|step| {
+                    if let Some(with) = step
+                        .as_mapping_mut()
+                        .map(|step| {
                             step.entry(Value::from("with"))
                                 .or_insert_with(|| Value::Mapping(Default::default()))
-                        }),
-                    ) {
-                        if let Some(with) = with.as_mapping_mut() {
-                            with.insert(Value::from(key), value);
-                        }
+                        })
+                        .and_then(Value::as_mapping_mut)
+                    {
+                        with.insert(Value::from(key), Value::from(value));
                     }
                 }
             }
@@ -186,6 +185,7 @@ jobs:
         let paths = &ported["jobs"]["paths"]["steps"];
         assert_eq!(paths[1]["with"]["fetch-depth"], "0");
         assert_eq!(paths[2]["with"]["token"], "");
+        assert!(paths[0].get("with").is_none());
         assert!(ported["on"]["pull_request"].get("types").is_none());
         assert!(ported["on"]["pull_request"].get("branches").is_some());
     }

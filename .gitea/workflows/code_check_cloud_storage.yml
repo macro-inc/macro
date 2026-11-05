@@ -24,7 +24,6 @@ jobs:
     steps:
     - name: Put Cargo on PATH
       run: echo "$HOME/.cargo/bin" >> "$GITHUB_PATH"
-      with: {}
     - name: Checkout
       uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
       with:
@@ -117,7 +116,6 @@ jobs:
         printf '%s\n' "$compare_rev" > /tmp/base-revision
         git diff --name-only --no-renames "$compare_rev" "$GITHUB_SHA" > /tmp/changed-files
       shell: bash
-      with: {}
     - id: nextest-filter
       name: compute nextest package filter
       if: steps.filter.outputs.should_run == 'true'
@@ -228,7 +226,6 @@ jobs:
       shell: bash
       env:
         FILTER_CACHE_DIR: /home/runner/.cache/macro-nextest-filter
-      with: {}
   check:
     needs:
     - path-check
