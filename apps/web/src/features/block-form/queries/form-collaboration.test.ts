@@ -793,6 +793,65 @@ describe('form collaboration session', () => {
     malformed.dispose();
   });
 
+  it('reads a section’s nested condition, and refuses a malformed one', async () => {
+    const FOLLOW_UP = '0199b000-0000-7000-8000-000000000006';
+    const followUp = {
+      kind: 'questions',
+      id: FOLLOW_UP,
+      title: 'Follow-up',
+      description: '',
+      showWhen: {
+        conjunction: 'and',
+        conditions: [
+          {
+            kind: 'group',
+            conjunction: 'or',
+            conditions: [
+              {
+                kind: 'condition',
+                column: NAME_COLUMN,
+                test: { kind: 'presence', operator: 'isNotEmpty' },
+              },
+            ],
+          },
+        ],
+      },
+      questions: [],
+    };
+    const valid = open(
+      new FakeSurface({ sections: [...contactForm.sections, followUp] }),
+      'valid'
+    );
+    await ready(valid);
+    expect(valid.session.layout()).toEqual({
+      sections: [...contactForm.sections, followUp],
+    });
+    valid.dispose();
+
+    const malformed = open(
+      new FakeSurface({
+        sections: [
+          ...contactForm.sections,
+          {
+            ...followUp,
+            showWhen: {
+              conjunction: 'and',
+              conditions: [{ kind: 'group', conjunction: 'xor' }],
+            },
+          },
+        ],
+      }),
+      'malformed'
+    );
+    expect(
+      await until(malformed.session.state, (state) => state.kind === 'error')
+    ).toEqual({
+      kind: 'error',
+      message: 'This form was edited by a newer version of Macro.',
+    });
+    malformed.dispose();
+  });
+
   it('fails to open when the server cannot prepare the form, without connecting', async () => {
     const surface = new FakeSurface(contactForm);
     let initializations = 0;

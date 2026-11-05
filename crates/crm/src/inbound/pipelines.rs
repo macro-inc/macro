@@ -1,5 +1,6 @@
 //! Thin HTTP adapters for pipeline creation, navigation, sharing and lifecycle.
 
+use crate::domain::pipelines::requirements::StageRequirement;
 use crate::domain::{
     auth::CrmTeamReceipt,
     pipelines::{
@@ -82,6 +83,10 @@ where
             get(rows::<P, E, A>).post(query_rows::<P, E, A>),
         )
         .route("/{id}/ops", post(apply_ops::<P, E, A>))
+        .route(
+            "/{id}/stage-requirements",
+            get(stage_requirements::<P, E, A>).put(set_stage_requirement::<P, E, A>),
+        )
         .route("/{id}/name", put(rename::<P, E, A>))
         .route("/{id}/sharing", put(share::<P, E, A>))
         .route(
@@ -268,6 +273,49 @@ pub async fn apply_ops<P: PipelineService, E: EntityAccessService, A: MacroAutho
             )
             .await?,
     ))
+}
+
+/// Read requirements by stable stage and field identities.
+#[utoipa::path(get, path = "/crm/pipelines/{id}/stage-requirements", operation_id = "get_crm_pipeline_stage_requirements",
+    params(("id" = Uuid, Path)), responses((status = 200, body = Vec<StageRequirement>)))]
+pub async fn stage_requirements<
+    P: PipelineService,
+    E: EntityAccessService,
+    A: MacroAuthorizationService,
+>(
+    auth: MacroAuthorizationExtractor<A, UserOrInternal>,
+    State(state): State<PipelineRouterState<P, E, A>>,
+    Path(id): Path<Uuid>,
+) -> Result<Json<Vec<StageRequirement>>, PipelineError> {
+    Ok(Json(
+        state
+            .service
+            .stage_requirements(receipt::<ViewAccessLevel, _, _>(&*state.access, auth, id).await?)
+            .await?,
+    ))
+}
+
+/// Replace the required fields for one stage. An empty list removes its rule.
+#[utoipa::path(put, path = "/crm/pipelines/{id}/stage-requirements", operation_id = "set_crm_pipeline_stage_requirement", request_body = StageRequirement,
+    params(("id" = Uuid, Path)), responses((status = 204)))]
+pub async fn set_stage_requirement<
+    P: PipelineService,
+    E: EntityAccessService,
+    A: MacroAuthorizationService,
+>(
+    auth: MacroAuthorizationExtractor<A, UserOrInternal>,
+    State(state): State<PipelineRouterState<P, E, A>>,
+    Path(id): Path<Uuid>,
+    Json(rule): Json<StageRequirement>,
+) -> Result<StatusCode, PipelineError> {
+    state
+        .service
+        .set_stage_requirement(
+            receipt::<EditAccessLevel, _, _>(&*state.access, auth, id).await?,
+            rule,
+        )
+        .await?;
+    Ok(StatusCode::NO_CONTENT)
 }
 
 /// Rename input.

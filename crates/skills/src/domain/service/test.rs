@@ -98,6 +98,7 @@ fn skill(id: u128, name: &str, updated_at_secs: Option<i64>) -> SkillSummary {
     SkillSummary {
         document_id: uuid::Uuid::from_u128(id),
         name: name.to_string(),
+        description: None,
         updated_at: updated_at_secs.map(|secs| Utc.timestamp_opt(secs, 0).unwrap()),
     }
 }
@@ -150,6 +151,7 @@ async fn search_includes_matching_system_skills() {
         vec![SkillSummary {
             document_id: system_skills::catch_me_up::SKILL.id(),
             name: "Catch Me Up".to_string(),
+            description: None,
             updated_at: None,
         }]
     );
@@ -308,6 +310,18 @@ impl SkillReader for FakeReader {
         self.document
             .clone()
             .ok_or_else(|| SkillError::ReadFailed(anyhow::anyhow!("missing document")))
+    }
+
+    /// Skill 1 alone has a description.
+    async fn descriptions(
+        &self,
+        document_ids: &[uuid::Uuid],
+    ) -> Result<std::collections::HashMap<uuid::Uuid, String>, SkillError> {
+        Ok(document_ids
+            .iter()
+            .filter(|id| **id == uuid::Uuid::from_u128(1))
+            .map(|id| (*id, "Use when reviewing code; not writing it".to_string()))
+            .collect())
     }
 
     async fn markdown(
@@ -472,4 +486,52 @@ async fn discovery_and_reading_work_through_json_tool_dispatch() {
             .await
             .is_err()
     );
+}
+
+#[tokio::test]
+async fn listings_carry_the_descriptions_skills_have() {
+    let service = || {
+        discovery_service(
+            FakeSearcher::unused(),
+            FakeLister::returning(vec![
+                skill(1, "review", Some(100)),
+                skill(2, "notes", Some(200)),
+            ]),
+        )
+    };
+
+    let listed = service().list_skills(&user()).await.unwrap();
+    let routable = service().list_routable_skills(&user()).await.unwrap();
+
+    for results in [&listed, &routable] {
+        let described = results
+            .iter()
+            .find(|skill| skill.document_id == uuid::Uuid::from_u128(1))
+            .unwrap();
+        assert_eq!(
+            described.description.as_deref(),
+            Some("Use when reviewing code; not writing it")
+        );
+        let undescribed = results
+            .iter()
+            .find(|skill| skill.document_id == uuid::Uuid::from_u128(2))
+            .unwrap();
+        assert_eq!(undescribed.description, None);
+    }
+}
+
+#[tokio::test]
+async fn only_the_users_skills_are_routable_newest_first() {
+    let service = discovery_service(
+        FakeSearcher::unused(),
+        FakeLister::returning(vec![
+            skill(1, "older", Some(100)),
+            skill(2, "newer", Some(300)),
+        ]),
+    );
+
+    let routable = service.list_routable_skills(&user()).await.unwrap();
+
+    let names: Vec<&str> = routable.iter().map(|skill| skill.name.as_str()).collect();
+    assert_eq!(names, ["newer", "older"]);
 }

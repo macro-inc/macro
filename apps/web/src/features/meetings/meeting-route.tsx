@@ -85,6 +85,7 @@ export function MeetingRouteContent(props: {
       participants={participantState()}
       onCallStateChange={props.onCallStateChange}
       onLeave={props.onLeave}
+      onBack={() => navigate('/app')}
       mediaAccess={browserMeetingMedia}
       initialBackground={call.backgroundEffect()}
       readBackgroundImage={readBackgroundImage}
@@ -128,10 +129,11 @@ export function MeetingRouteContent(props: {
           }),
         disconnect: call.meetingSession.disconnect,
       }}
-      renderCall={(onLeave, name, credentials) => (
+      renderCall={(onLeave, name, credentials, copyButton) => (
         <CallOverlay
           onLeave={onLeave}
           localName={name()}
+          footerLeading={copyButton}
           showChat={
             authenticated() === true ||
             (authenticated() === false && !!credentials())

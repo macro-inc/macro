@@ -1,7 +1,15 @@
 //! Company/contact pipelines: CRM policy over reusable database storage.
 
+mod references;
+mod sharing;
+use sharing::{requested_channel_grants, share_permission};
+pub mod requirements;
+use references::primary_references;
+
 #[cfg(test)]
 mod test;
+
+use requirements::StageRequirement;
 
 use super::{auth::CrmTeamReceipt, stages::StageDefinitionStore};
 use bot_id::BotId;
@@ -210,6 +218,22 @@ pub trait PipelineRepo: Send + Sync + 'static {
         &self,
         id: Uuid,
     ) -> impl Future<Output = Result<Option<Self::Guard>, Self::Error>> + Send;
+    /// Serialize policy changes and row writes for one live pipeline.
+    fn lock_write(
+        &self,
+        id: Uuid,
+    ) -> impl Future<Output = Result<Option<Self::Guard>, Self::Error>> + Send;
+    /// Read stage rules, keyed by stable column and option identities.
+    fn stage_requirements(
+        &self,
+        id: Uuid,
+    ) -> impl Future<Output = Result<Vec<StageRequirement>, Self::Error>> + Send;
+    /// Replace the required fields for one stage; an empty list removes its rule.
+    fn set_stage_requirement(
+        &self,
+        id: Uuid,
+        rule: &StageRequirement,
+    ) -> impl Future<Output = Result<(), Self::Error>> + Send;
     /// Rename pipeline metadata.
     fn rename(&self, id: Uuid, name: &str) -> impl Future<Output = Result<(), Self::Error>> + Send;
     /// Update pipeline lifecycle metadata.
@@ -329,6 +353,17 @@ pub trait PipelineService: Send + Sync + 'static {
         acting_bot: Option<BotId>,
         batch: OpBatch,
     ) -> impl Future<Output = Result<AppliedOps, PipelineError>> + Send;
+    /// Read the rules visible to anyone with pipeline read access.
+    fn stage_requirements(
+        &self,
+        receipt: EntityAccessReceipt<ViewAccessLevel>,
+    ) -> impl Future<Output = Result<Vec<StageRequirement>, PipelineError>> + Send;
+    /// Set required fields for one stage with pipeline edit access.
+    fn set_stage_requirement(
+        &self,
+        receipt: EntityAccessReceipt<EditAccessLevel>,
+        rule: StageRequirement,
+    ) -> impl Future<Output = Result<(), PipelineError>> + Send;
     /// Rename pipeline metadata.
     fn rename(
         &self,
@@ -391,58 +426,6 @@ fn name(input: &str) -> Result<String, PipelineError> {
         ));
     }
     Ok(input.to_string())
-}
-
-/// Most channel grants one request may change.
-const MAX_CHANNEL_GRANTS_PER_UPDATE: usize = 100;
-
-/// The channel grants of a sharing request. Pipelines have no share link, and
-/// team access changes only through [`PipelineService::share`].
-fn requested_channel_grants(
-    request: UpdateSharePermissionRequestV2,
-) -> Result<Vec<UpdateChannelSharePermission>, PipelineError> {
-    if request.link_share.is_some()
-        || request.link_share_access_level.is_some()
-        || request.team_share_access_level.is_some()
-    {
-        return Err(PipelineError::Invalid(
-            "Share a pipeline with people and channels; only its owner changes team access",
-        ));
-    }
-    let grants = request.channel_share_permissions.unwrap_or_default();
-    if grants.len() > MAX_CHANNEL_GRANTS_PER_UPDATE {
-        return Err(PipelineError::Invalid(
-            "Share with at most 100 channels at a time",
-        ));
-    }
-    let mut channels = std::collections::HashSet::new();
-    for grant in &grants {
-        if !channels.insert(&grant.channel_id)
-            || Uuid::parse_str(&grant.channel_id).is_err()
-            || grant.access_level == Some(AccessLevel::Owner)
-            || (grant.operation != UpdateOperation::Remove && grant.access_level.is_none())
-        {
-            return Err(PipelineError::Invalid(
-                "Give each channel once, with view, comment or edit access",
-            ));
-        }
-    }
-    Ok(grants)
-}
-
-fn share_permission(
-    pipeline: &Pipeline,
-    channels: Vec<ChannelSharePermission>,
-) -> SharePermissionV2 {
-    SharePermissionV2 {
-        id: pipeline.id.to_string(),
-        owner: pipeline.user_id.clone(),
-        link_share: None,
-        link_share_access_level: None,
-        team_share_access_level: (pipeline.sharing == PipelineSharing::Team)
-            .then_some(AccessLevel::Edit),
-        channel_share_permissions: Some(channels),
-    }
 }
 
 impl<R: PipelineRepo, D, A, S> PipelineServiceImpl<R, D, A, S> {
@@ -732,6 +715,51 @@ where
         Ok(AccessiblePipeline { pipeline, grant })
     }
 
+    async fn stage_requirements(
+        &self,
+        receipt: EntityAccessReceipt<ViewAccessLevel>,
+    ) -> Result<Vec<StageRequirement>, PipelineError> {
+        let pipeline = self.pipeline(&receipt).await?;
+        let _guard = self
+            .repo
+            .lock_live(pipeline.id)
+            .await
+            .map_err(storage)?
+            .ok_or(PipelineError::NotFound)?;
+        self.repo
+            .stage_requirements(pipeline.id)
+            .await
+            .map_err(storage)
+    }
+
+    #[tracing::instrument(skip_all, fields(pipeline_id = tracing::field::Empty, stage_column_id = %rule.stage_column_id, stage_id = %rule.stage_id), err)]
+    async fn set_stage_requirement(
+        &self,
+        receipt: EntityAccessReceipt<EditAccessLevel>,
+        rule: StageRequirement,
+    ) -> Result<(), PipelineError> {
+        let pipeline = self.pipeline(&receipt).await?;
+        tracing::Span::current().record("pipeline_id", pipeline.id.to_string());
+        let _guard = self
+            .repo
+            .lock_write(pipeline.id)
+            .await
+            .map_err(storage)?
+            .ok_or(PipelineError::NotFound)?;
+        let table = self
+            .databases
+            .storage_tables(pipeline.database_id)
+            .await?
+            .into_iter()
+            .find(|table| table.table.id == pipeline.table_id)
+            .ok_or(PipelineError::NotFound)?;
+        requirements::validate_rule(&table, &rule)?;
+        self.repo
+            .set_stage_requirement(pipeline.id, &rule)
+            .await
+            .map_err(storage)
+    }
+
     async fn rename(
         &self,
         receipt: EntityAccessReceipt<EditAccessLevel>,
@@ -926,7 +954,7 @@ where
         &self,
         receipt: EntityAccessReceipt<EditAccessLevel>,
         acting_bot: Option<BotId>,
-        batch: OpBatch,
+        mut batch: OpBatch,
     ) -> Result<AppliedOps, PipelineError> {
         use models_databases::{DatabaseOp, TableChange};
         let pipeline = self.pipeline(&receipt).await?;
@@ -969,71 +997,15 @@ where
         }
         let _guard = self
             .repo
-            .lock_live(pipeline.id)
+            .lock_write(pipeline.id)
             .await
             .map_err(storage)?
             .ok_or(PipelineError::NotFound)?;
+        self.validate_stage_requirements(&pipeline, &mut batch)
+            .await?;
         Ok(self
             .databases
             .apply_storage_ops(pipeline.database_id, viewer, batch)
             .await?)
     }
-}
-
-/// Distinct primary records explicitly written by this batch. Other cells and
-/// unchanged references do not require the editor to reselect the record.
-fn primary_references(
-    pipeline: &Pipeline,
-    batch: &OpBatch,
-) -> Result<std::collections::BTreeSet<Uuid>, PipelineError> {
-    use models_databases::{CellValue, CellWrite, DatabaseOp, RowChanges, RowsChange};
-    let mut references = std::collections::BTreeSet::new();
-    for op in &batch.ops {
-        let cells: Vec<&CellWrite> = match op {
-            DatabaseOp::Rows {
-                change: RowsChange::Insert { rows },
-                ..
-            } => rows.iter().flatten().collect(),
-            DatabaseOp::Rows {
-                change:
-                    RowsChange::Update {
-                        changes: RowChanges::Uniform { cells, .. },
-                    },
-                ..
-            } => cells.iter().collect(),
-            DatabaseOp::Rows {
-                change:
-                    RowsChange::Update {
-                        changes: RowChanges::PerRow { rows },
-                    },
-                ..
-            } => rows.iter().flat_map(|row| &row.cells).collect(),
-            _ => continue,
-        };
-        for cell in cells {
-            if cell.column != pipeline.primary_column_id {
-                continue;
-            }
-            if let CellValue::Entities(values) = &cell.value {
-                for value in values {
-                    let expected = match pipeline.record_type {
-                        PipelineRecordType::Company => models_databases::EntityKind::Company,
-                        PipelineRecordType::Contact => models_databases::EntityKind::Contact,
-                    };
-                    if value.entity_type != expected {
-                        return Err(PipelineError::Invalid(
-                            "Choose the required CRM record type",
-                        ));
-                    }
-                    references.insert(
-                        value
-                            .entity_id
-                            .parse()
-                            .map_err(|_| PipelineError::Invalid("Choose a valid CRM record"))?,
-                    );
-                }
-            }
-        }
-    }
-    Ok(references)
 }

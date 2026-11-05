@@ -1551,8 +1551,49 @@ test('a shared viewer can read without connecting WhatsApp', async ({
   await expect(
     page.getByRole('button', { name: 'Edit', exact: true })
   ).toHaveCount(0);
+  // Making a task needs only read access.
+  await page.locator('[data-message-id="message-1"]').hover();
+  await expect(
+    page.getByRole('button', { name: 'Task', exact: true })
+  ).toBeVisible();
   expect(state.outgoing).toEqual([]);
   expect(unexpected).toEqual([]);
+});
+
+test.describe('phone task', () => {
+  test.use({
+    viewport: { width: 390, height: 844 },
+    isMobile: true,
+    hasTouch: true,
+  });
+  test('a shared viewer makes a task from the action drawer', async ({
+    page,
+  }) => {
+    const state = server();
+    state.canSend = false;
+    const unexpected = await mount(page, state, `?chat=${CHAT_ID}`);
+    const row = page.locator('[data-message-id="message-1"]');
+    await expect(row).toBeVisible();
+    const box = await row.boundingBox();
+    if (!box) throw new Error('message row has no box');
+    const touch = {
+      identifier: 1,
+      clientX: box.x + box.width / 2,
+      clientY: box.y + box.height / 2,
+    };
+    await row.dispatchEvent('touchstart', {
+      touches: [touch],
+      changedTouches: [touch],
+    });
+    await expect(
+      page.getByRole('button', { name: 'Create task', exact: true })
+    ).toBeVisible();
+    await row.dispatchEvent('touchend', {
+      touches: [],
+      changedTouches: [touch],
+    });
+    expect(unexpected).toEqual([]);
+  });
 });
 
 for (const mobile of [false, true]) {

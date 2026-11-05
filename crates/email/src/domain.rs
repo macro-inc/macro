@@ -25,6 +25,7 @@ pub mod person_profiles;
 #[cfg(feature = "ports")]
 pub mod read_receipts;
 pub mod senders;
+pub mod shared_thread_replies;
 
 #[cfg(feature = "ports")]
 pub mod assembler;

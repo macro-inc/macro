@@ -303,6 +303,9 @@ pub(crate) fn normalized_channel_event(
         ChannelTopicEvent::ParticipantRemoved(metadata) => {
             ("channel.participant_removed", metadata.channel_id)
         }
+        ChannelTopicEvent::AccessRequested(metadata) => {
+            ("channel.access_requested", metadata.channel_id)
+        }
     };
     let entity_id = channel_id.to_string();
 

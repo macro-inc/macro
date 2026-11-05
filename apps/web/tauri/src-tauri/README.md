@@ -29,6 +29,18 @@ its existing `android_mobile_plugin` export commands. Older iOS installations
 retain Web Share until the next native release; see
 [the bridge guide](../file_export_plugin/AGENTS.md).
 
+## Desktop pasted files
+
+The Tauri HTTP plugin copies an upload body into the renderer, so a large
+pasted file (a video copied in Finder) crashed the desktop app. A desktop
+paste carrying a file of 16 MB or more calls `stage_desktop_pasteboard_files`
+(`src/desktop/pasteboard.rs`): on macOS it reads the pasteboard's file URLs,
+clones each file into the pasteboard staging directory, and hashes it, as the
+iOS pasteboard plugin stages images. The web client tags the pasted `File`s
+with the staged token, keeps them for local previews, and uploads through
+`upload_staged_file_to_presigned_url`. Other desktop platforms stage nothing
+and keep the browser upload. This needs a desktop native release.
+
 ## Desktop app icons
 
 Only desktop icons carry the ALPHA badge; iOS and Android icons are unbadged.
@@ -81,6 +93,20 @@ process terminated (for example, memory pressure versus a crash); device
 crash/termination reports are needed for that distinction. Native counters
 require a full app release, while the frontend remains compatible with older
 binaries.
+
+An update reload normally lands while the page is hidden, which is harmless for
+a list and fatal for anything the page is waiting on. A native auth sheet is the
+sharp case: leaving the app for a sign-in code hides the page, the reload drops
+the JavaScript awaiting the sheet, and the finished sign-in has nowhere to go.
+`holdAutomaticReload` covers this work on the page and sends
+`set_bundle_reload_hold` here, because the mobile foreground handler applies a
+completed bundle without asking the page. `apply_update` then answers `Held` and
+the bundle stays pending until the next hide or foreground after the release.
+Each document sends its hold state on mount, so a hold whose owner died cannot
+block updates until the next launch. Desktop has no foreground handler to hold
+and does not call the command. Mobile requires it, so the mobile native floors
+must reach a binary that has it; below that floor no bundle applies, so no
+update reload can land on a sheet.
 
 `frontend_instance_id` is generated once per document and attached to every
 PostHog event (including automatic exceptions/pageviews) and OTel resource.

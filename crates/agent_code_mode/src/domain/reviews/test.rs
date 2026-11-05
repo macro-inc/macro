@@ -123,6 +123,8 @@ struct Actions {
     calls: Mutex<Vec<String>>,
     actors: Mutex<Vec<String>>,
     presentations: Mutex<Vec<ReviewId>>,
+    announcements: Mutex<Vec<(ReviewId, i64)>>,
+    announced: tokio::sync::Notify,
     views: Mutex<Vec<(AgentSessionId, PresentedView)>>,
     fail_presentation: AtomicBool,
     block_actions: AtomicBool,
@@ -203,6 +205,14 @@ impl ReviewActions for Actions {
         }
         Ok(())
     }
+    async fn announce_update(&self, record: &ReviewRecord) -> Result<(), CodeModeError> {
+        self.announcements
+            .lock()
+            .unwrap()
+            .push((record.id, record.revision));
+        self.announced.notify_waiters();
+        Ok(())
+    }
     async fn present_view(
         &self,
         owner: &MacroUserIdStr<'static>,
@@ -236,6 +246,8 @@ impl Fixture {
             calls: Mutex::default(),
             actors: Mutex::default(),
             presentations: Mutex::default(),
+            announcements: Mutex::default(),
+            announced: tokio::sync::Notify::new(),
             views: Mutex::default(),
             fail_presentation: AtomicBool::new(false),
             block_actions: AtomicBool::new(false),
@@ -379,6 +391,81 @@ async fn owner_receipt_execution_and_archive_are_enforced_before_creation() {
         Err(CodeModeError::Forbidden)
     ));
     assert!(f.store.0.lock().unwrap().is_empty());
+}
+#[tokio::test]
+async fn every_saved_change_is_announced_with_its_revision_and_refused_ones_are_not() {
+    let f = Fixture::new();
+    let row = f
+        .create(vec![
+            json!({"subject":"x", "body":"Hello", "to":[{"email":"ada@example.com"}]}),
+        ])
+        .await;
+    let item = row.items.states()[0].id;
+    let edited = f
+        .service
+        .decide(
+            &f.edit(),
+            &f.actions.owner,
+            row.id,
+            ReviewDecision::Edit {
+                revision: row.revision,
+                item,
+                draft: Box::new(
+                    serde_json::from_value(json!({"kind":"email", "draft": {"subject":"edited", "body":"Hello", "to":[{"email":"ada@example.com"}]}}))
+                        .unwrap(),
+                ),
+            },
+        )
+        .await
+        .unwrap();
+    assert!(matches!(
+        f.service
+            .decide(
+                &f.edit(),
+                &f.actions.owner,
+                row.id,
+                ReviewDecision::Dismiss {
+                    revision: row.revision,
+                    items: vec![],
+                },
+            )
+            .await,
+        Err(CodeModeError::Conflict)
+    ));
+    f.service
+        .decide(
+            &f.edit(),
+            &f.actions.owner,
+            row.id,
+            ReviewDecision::Submit {
+                revision: edited.revision,
+                items: vec![],
+            },
+        )
+        .await
+        .unwrap();
+    // The send's own save is announced after it lands.
+    let announcements = tokio::time::timeout(std::time::Duration::from_secs(3), async {
+        loop {
+            let announced = f.actions.announced.notified();
+            tokio::pin!(announced);
+            announced.as_mut().enable();
+            let announcements = f.actions.announcements.lock().unwrap().clone();
+            if announcements.len() == 4 {
+                return announcements;
+            }
+            announced.await;
+        }
+    })
+    .await
+    .expect("the send was announced");
+
+    // Presented, edited, claimed for sending, and sent; the stale dismiss
+    // saved nothing.
+    assert_eq!(
+        announcements,
+        vec![(row.id, 1), (row.id, 2), (row.id, 3), (row.id, 4)]
+    );
 }
 #[tokio::test]
 async fn double_submit_claims_before_work_and_never_repeats_an_action() {

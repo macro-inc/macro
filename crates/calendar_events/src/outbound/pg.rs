@@ -2003,9 +2003,9 @@ impl CalendarRepository for PgCalendarRepository {
         // Clients see a calendar's error only once it crosses the badge
         // threshold, so only a newly shown or reworded badge is a change.
         let mut log = ChangeLogBatch::default();
-        let badged_after =
-            failures.is_some_and(|failures| failures >= CALENDAR_SYNC_FAILURE_BADGE_THRESHOLD);
-        if badged_after && badged_before.as_deref() != Some(message) {
+        if failures.is_some_and(|failures| {
+            failure_changes_sync_error_badge(badged_before.as_deref(), failures, message)
+        }) {
             log.record(
                 key.email_link_id,
                 CalendarChangeOp::UpsertCalendar(calendar_id),
@@ -3174,6 +3174,16 @@ async fn visible_calendar_sync_error_tx(
         row.last_sync_error
             .filter(|_| row.consecutive_sync_failures >= CALENDAR_SYNC_FAILURE_BADGE_THRESHOLD)
     }))
+}
+
+/// Whether a failure stored as `message`, leaving `failures` in a row, newly
+/// shows or rewords the badge that `shown_before` held.
+fn failure_changes_sync_error_badge(
+    shown_before: Option<&str>,
+    failures: i32,
+    message: &str,
+) -> bool {
+    failures >= CALENDAR_SYNC_FAILURE_BADGE_THRESHOLD && shown_before != Some(message)
 }
 
 fn stored_google_calendar(

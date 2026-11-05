@@ -43,6 +43,8 @@ enum NavigationOutput<'a> {
 pub struct NavigatePayload<'a> {
     pub path: &'a str,
     pub query: &'a str,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub fragment: Option<&'a str>,
 }
 
 #[derive(Clone, Copy, Debug)]
@@ -248,6 +250,7 @@ impl MacroNavigationPlugin {
                     NavigatePayload {
                         path: scheme.path(),
                         query: scheme.query().unwrap_or_default(),
+                        fragment: scheme.fragment(),
                     },
                 )
                 .log_and_consume();

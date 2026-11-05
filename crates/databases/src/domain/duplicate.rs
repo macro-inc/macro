@@ -27,11 +27,14 @@ pub trait DatabaseDuplicateRepo: Send + Sync + 'static {
 /// Duplicate use case; view access to the source is enough.
 pub trait DatabaseDuplicateService: Send + Sync + 'static {
     /// Copy the receipt's database for `owner`, named `name`, or "<name>
-    /// copy" without one.
+    /// copy" without one. `acting_bot` is the agent duplicating it for the
+    /// owner, `None` when the owner acts; only the creation's attribution
+    /// reads it.
     fn duplicate_database(
         &self,
         receipt: EntityAccessReceipt<ViewAccessLevel>,
         owner: macro_user_id::user_id::MacroUserIdStr<'static>,
+        acting_bot: Option<bot_id::BotId>,
         name: Option<String>,
     ) -> impl Future<Output = Result<Database, DatabaseError>> + Send;
 }

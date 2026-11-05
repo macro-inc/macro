@@ -30,6 +30,7 @@ export function EmailUserTooltip(props: EmailUserTooltipProps) {
       placement="bottom"
       open={open()}
       onOpenChange={setOpen}
+      isolateClicks
       triggerAs="span"
       triggerClass={props.triggerClass}
       trigger={props.children}
