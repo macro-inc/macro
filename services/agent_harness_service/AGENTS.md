@@ -42,6 +42,11 @@ Pulumi stacks; they do not host extra agent processes.
   `src/cognition/service/integration_analytics.rs` sends PostHog
   `integration_connected` / `integration_disconnected` for native MCP servers
   and Pipedream apps, from the router hooks wired in `src/cognition/server.rs`.
+  Granola and Dialpad call sync (`crates/granola_sync`, `crates/dialpad_sync`)
+  are built in `server.rs`: each mounts an unauthenticated signed-webhook route
+  in `api.rs` and runs one worker, and Dialpad also mounts its authenticated
+  connection routes. Dialpad sync runs only when `CONNECT_CUSTOMER_KEY` is set;
+  both seal webhook signing secrets under the MCP credentials key.
 - `crates/universal_input` owns Command K's authenticated `/universal_input/classify`
   and `/universal_input/extract` routes, mounted directly by `src/api.rs`. The root
   composes staged search type/field extraction and Clairic content extraction
