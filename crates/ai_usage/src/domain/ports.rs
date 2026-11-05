@@ -96,6 +96,15 @@ pub fn normalize_model_id(model: &str) -> &str {
     }
 }
 
+/// The provider segment of a routing id (`fireworks` in `fireworks/kimi-k3`),
+/// or `None` for a bare id, whose provider the caller did not say.
+pub fn model_provider(model: &str) -> Option<&str> {
+    match model.split_once('/') {
+        Some((provider, bare)) if !provider.is_empty() && !bare.is_empty() => Some(provider),
+        _ => None,
+    }
+}
+
 /// The billable quantity for one AI invocation.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum UsageAmount {

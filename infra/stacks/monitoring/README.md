@@ -42,8 +42,8 @@ and has two services, each with its pair of webhooks declared in `goalert.ts`:
 Paging monitors: the app-down synthetic, ALB non-200 responses and low healthy
 hosts, Lambda error count, web-app source errors, macro-cache memory, RDS high
 CPU, RDS storage, RDS proxy connections, the three SES reputation monitors, the
-GraphQL soup DSS 5xx and DB connections monitors, and macrodb blocked
-connections. `error-logs-overall` notifies without paging because it crosses
+GraphQL soup DSS 5xx and DB connections monitors, macrodb blocked
+connections, and the AI provider account monitor. `error-logs-overall` notifies without paging because it crosses
 its thresholds many times a day.
 
 ## Prod threshold monitors
@@ -254,6 +254,24 @@ minutes) need review against live baselines before production cleanup.
 These signals do not acknowledge delivery through PostgreSQL NOTIFY or WebSockets.
 See [the rollout runbook](../../../docs/runbooks/notification-retention.md) for
 limitations and the post-deploy verification gates.
+
+## AI provider coverage
+
+`monitors/ai-providers.ts` adds **four monitors, one dashboard, two log-based
+metrics and one span-based metric** for Macro's AI provider accounts. Its
+header lists every log and span field it reads; [the
+runbook](../../../docs/runbooks/ai-providers.md) covers each alert.
+
+- A provider refusing Macro's key as suspended or out of credit pages from the
+  Rust services' `ai provider account unavailable` log, and notifies from the
+  AI editing worker's `ai.provider_account_unavailable` span.
+- Month-to-date priced spend, from the `ai usage priced` log, warns at 50% and
+  80% of a provider's monthly cap and alerts at 100%. `MONTHLY_CAPS` lists only
+  documented caps: Fireworks ($30). The spend monitors use a calendar-month
+  cumulative window (`current_1mo`).
+
+Deploy the services that emit those logs and the span before these; until then
+the metrics are empty and the monitors do not alert.
 
 ## Outlook sync coverage
 

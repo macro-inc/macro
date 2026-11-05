@@ -36,6 +36,7 @@ backfill = [
 default = ["backfill"]
 
 [dependencies]
+genai_telemetry = { path = "../genai_telemetry" }
 rootcause = { workspace = true }
 agent = { path = "../agent" }
 ai_usage = { path = "../ai_usage" }
