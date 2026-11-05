@@ -1,5 +1,21 @@
 use super::*;
+use crate::local::instance::Instance;
 use crate::local::{inventory, repo_root};
+
+fn test_instance() -> Instance {
+    Instance::derive(Some("agent-a"), Some(41_000)).unwrap()
+}
+
+/// Apply rewrites exactly as Caddy does: each one, in order, over the whole
+/// value. Go and Rust regexes agree on this syntax and on `$1` expansion.
+fn apply(rewrites: &[HeaderRewrite], header: &str) -> String {
+    rewrites.iter().fold(header.to_string(), |value, rewrite| {
+        regex::Regex::new(&rewrite.find)
+            .unwrap()
+            .replace_all(&value, rewrite.replace.as_str())
+            .into_owned()
+    })
+}
 
 #[test]
 fn vite_routes_cover_every_backend_prefix_and_no_frontend_routes() {
@@ -31,7 +47,7 @@ fn vite_routes_cover_every_backend_prefix_and_no_frontend_routes() {
 /// the guarantee that replaces the old hand-maintained route list.
 #[test]
 fn generates_a_route_for_every_prefixed_service() {
-    let caddy = caddyfile(Mode::Local, false);
+    let caddy = caddyfile(&test_instance(), Mode::Local, false);
     for svc in inventory::RUST_SERVICES {
         let Some(prefix) = svc.path_prefix else {
             continue;
@@ -52,7 +68,7 @@ fn generates_a_route_for_every_prefixed_service() {
 /// Local-only prefixed services fan out to the shared-dev gateway (no strip).
 #[test]
 fn dev_fans_local_only_prefixes_to_the_gateway() {
-    let caddy = caddyfile(Mode::Dev, false);
+    let caddy = caddyfile(&test_instance(), Mode::Dev, false);
     for svc in inventory::RUST_SERVICES {
         let Some(prefix) = svc.path_prefix else {
             continue;
@@ -95,7 +111,7 @@ fn dev_fans_local_only_prefixes_to_the_gateway() {
 /// services use `handle_path`.
 #[test]
 fn websocket_services_use_a_matcher() {
-    let caddy = caddyfile(Mode::Local, false);
+    let caddy = caddyfile(&test_instance(), Mode::Local, false);
     // connection-gateway is the inventoried WebSocket service.
     assert!(caddy.contains("@connection_gateway path /connection-gateway /connection-gateway/*"));
     assert!(caddy.contains("uri strip_prefix /connection-gateway"));
@@ -107,19 +123,19 @@ fn websocket_services_use_a_matcher() {
 /// (PostHog and OTLP traces/logs), un-stripped, on its own :8098 port.
 #[test]
 fn analytics_proxy_route_is_present() {
-    let caddy = caddyfile(Mode::Local, false);
+    let caddy = caddyfile(&test_instance(), Mode::Local, false);
     assert!(caddy.contains("handle /i/* {"));
     assert!(caddy.contains("reverse_proxy analytics-proxy:8098"));
 }
 
 #[test]
 fn document_content_services_are_available_through_the_proxy() {
-    let caddy = caddyfile(Mode::Local, false);
+    let caddy = caddyfile(&test_instance(), Mode::Local, false);
 
     assert!(caddy.contains("uri strip_prefix /sync"));
     assert!(caddy.contains("reverse_proxy sync-service:8787"));
     assert!(caddy.contains("header_up Origin http://localhost:3000"));
-    assert!(!caddyfile(Mode::Dev, false).contains("header_up Origin"));
+    assert!(!caddyfile(&test_instance(), Mode::Dev, false).contains("header_up Origin"));
     assert!(caddy.contains("handle_path /lexical/*"));
     assert!(caddy.contains("reverse_proxy lexical-service:8096"));
     assert!(caddy.contains("handle_path /ai-editing/*"));
@@ -130,15 +146,17 @@ fn document_content_services_are_available_through_the_proxy() {
 /// fan-out locally, the dev-pointed service in dev.
 #[test]
 fn static_file_block_is_mode_specific() {
-    let local = caddyfile(Mode::Local, false);
+    let local = caddyfile(&test_instance(), Mode::Local, false);
     assert!(local.contains("/static-file-storage"));
     // A route at site scope sorts after the Vite catch-all handle and loops.
     assert!(local.contains("handle_path /static-file/*"));
     assert!(!local.contains("route /static-file/*"));
-    assert!(caddyfile(Mode::Dev, false).contains("handle_path /static-file/*"));
-    assert!(!caddyfile(Mode::Dev, false).contains("/static-file-storage"));
+    assert!(caddyfile(&test_instance(), Mode::Dev, false).contains("handle_path /static-file/*"));
+    assert!(!caddyfile(&test_instance(), Mode::Dev, false).contains("/static-file-storage"));
     assert!(local.contains("handle_path /local-storage/*"));
-    assert!(!caddyfile(Mode::Dev, false).contains("handle_path /local-storage/*"));
+    assert!(
+        !caddyfile(&test_instance(), Mode::Dev, false).contains("handle_path /local-storage/*")
+    );
 }
 
 /// Drift gate across the Rust↔TypeScript seam: every proxied service's prefix
@@ -170,14 +188,14 @@ fn frontend_wires_every_inventory_prefix() {
 /// forwards frontend requests to Vite instead of serving a bundle.
 #[test]
 fn static_frontend_block_is_opt_in() {
-    let headless = caddyfile(Mode::Local, true);
+    let headless = caddyfile(&test_instance(), Mode::Local, true);
     assert!(headless.contains("handle_path /app/* {"));
     assert!(headless.contains("root * /srv/frontend"));
     assert!(headless.contains("try_files {path} /index.html"));
     assert!(headless.contains("redir / \"/app/?{query}\" 302"));
     assert!(headless.contains("handle /mailpit/*"));
 
-    let attached = caddyfile(Mode::Local, false);
+    let attached = caddyfile(&test_instance(), Mode::Local, false);
     assert!(!attached.contains("/srv/frontend"));
     assert!(attached.contains("reverse_proxy host.docker.internal:{$VITE_PORT}"));
     assert!(attached.contains(&format!(
@@ -189,7 +207,7 @@ fn static_frontend_block_is_opt_in() {
     assert!(!attached.contains("redir / /app/ 302"));
     assert!(!attached.contains("handle /mailpit/*"));
 
-    let headless_dev = caddyfile(Mode::Dev, true);
+    let headless_dev = caddyfile(&test_instance(), Mode::Dev, true);
     assert!(!headless_dev.contains("handle /mailpit/*"));
 }
 
@@ -197,14 +215,14 @@ fn static_frontend_block_is_opt_in() {
 #[test]
 fn vite_connection_limit_is_scoped_to_frontend() {
     for mode in [Mode::Local, Mode::Dev] {
-        let attached = caddyfile(mode, false);
+        let attached = caddyfile(&test_instance(), mode, false);
         assert_eq!(attached.matches("max_conns_per_host").count(), 1);
         let (backend_routes, frontend_route) = attached
             .split_once("reverse_proxy host.docker.internal:{$VITE_PORT} {")
             .expect("attached frontend must proxy to Vite");
         assert!(!backend_routes.contains("max_conns_per_host"));
         assert!(frontend_route.contains("transport http {\n                max_conns_per_host 16"));
-        assert!(!caddyfile(mode, true).contains("max_conns_per_host"));
+        assert!(!caddyfile(&test_instance(), mode, true).contains("max_conns_per_host"));
     }
 }
 
@@ -213,7 +231,7 @@ fn vite_connection_limit_is_scoped_to_frontend() {
 /// CORS, because it fans out to the shared-dev gateway.
 #[test]
 fn local_proxy_uses_tls_and_wildcard_cors() {
-    let local = caddyfile(Mode::Local, false);
+    let local = caddyfile(&test_instance(), Mode::Local, false);
     assert!(local.contains("tls /etc/caddy/certs/server.pem /etc/caddy/certs/server-key.pem"));
     // Keep main's internal certificates for the separate preview listener.
     assert!(local.contains("auto_https disable_redirects"));
@@ -230,7 +248,7 @@ fn local_proxy_uses_tls_and_wildcard_cors() {
         "deferred -Access-Control-* deletes strip the CORS headers this overlay sets"
     );
 
-    let dev = caddyfile(Mode::Dev, false);
+    let dev = caddyfile(&test_instance(), Mode::Dev, false);
     assert!(dev.contains("tls /etc/caddy/certs/server.pem /etc/caddy/certs/server-key.pem"));
     assert!(!dev.contains("@cors header Origin *"));
     assert!(!dev.contains("@cors_preflight"));
@@ -246,4 +264,95 @@ fn proxy_origin_is_https() {
         "checked-in CA is missing at {}",
         ca_pem().display()
     );
+}
+
+/// The bug: cookies ignore ports, so logging into one stack replaced the tokens
+/// of every other stack on that hostname, and each stack was sent the others'.
+#[test]
+fn stacks_never_see_each_others_cookies() {
+    let a = cookie_rewrites(&Instance::derive(Some("agent-a"), Some(41_000)).unwrap());
+    let b = cookie_rewrites(&Instance::derive(Some("agent-b"), Some(41_100)).unwrap());
+    let set_cookie = "local-macro-access-token=tok; Path=/; Secure; HttpOnly; SameSite=None";
+
+    // Same service response, different names in the shared jar.
+    let in_jar_a = apply(&a.set_cookie, set_cookie);
+    let in_jar_b = apply(&b.set_cookie, set_cookie);
+    assert_eq!(
+        in_jar_a,
+        "macro-agent-a--local-macro-access-token=tok; Path=/; Secure; HttpOnly; SameSite=None"
+    );
+    assert_eq!(
+        in_jar_b,
+        "macro-agent-b--local-macro-access-token=tok; Path=/; Secure; HttpOnly; SameSite=None"
+    );
+
+    let jar = "macro-agent-a--local-macro-access-token=from-a; \
+               macro-agent-a--local-macro-refresh-token=refresh-a; \
+               macro-agent-b--local-macro-access-token=from-b; login=true";
+    assert_eq!(
+        apply(&a.cookie, jar),
+        "local-macro-access-token=from-a; local-macro-refresh-token=refresh-a; login=true"
+    );
+    assert_eq!(
+        apply(&b.cookie, jar),
+        "local-macro-access-token=from-b; login=true"
+    );
+}
+
+#[test]
+fn a_stack_signed_out_of_its_own_session_sends_no_foreign_token() {
+    let a = cookie_rewrites(&Instance::derive(Some("agent-a"), Some(41_000)).unwrap());
+
+    for (jar, reaches_service) in [
+        ("macro-agent-b--local-macro-access-token=from-b", ""),
+        (
+            "macro-agent-b--local-macro-access-token=from-b; login=true",
+            "login=true",
+        ),
+        // Tokens from before namespacing belong to no particular instance.
+        ("local-macro-access-token=old; login=true", "login=true"),
+        ("login=true; local-macro-refresh-token=old", "login=true"),
+        // A longer instance name that starts with this one is still foreign.
+        ("macro-agent-a-2--local-macro-access-token=other", ""),
+    ] {
+        assert_eq!(apply(&a.cookie, jar), reaches_service, "jar: {jar}");
+    }
+}
+
+/// Browsers reject a `__Host-` cookie unless the name starts with that prefix.
+#[test]
+fn host_prefixed_cookies_keep_their_prefix_in_the_browser() {
+    let a = cookie_rewrites(&Instance::derive(Some("agent-a"), Some(41_000)).unwrap());
+
+    assert_eq!(
+        apply(&a.set_cookie, "__Host-macro_mcp_oauth=bind; Path=/; Secure"),
+        "__Host-macro-agent-a--macro_mcp_oauth=bind; Path=/; Secure"
+    );
+    assert_eq!(
+        apply(
+            &a.cookie,
+            "__Host-macro-agent-a--macro_mcp_oauth=bind; __Host-macro-agent-b--macro_mcp_oauth=other"
+        ),
+        "__Host-macro_mcp_oauth=bind"
+    );
+}
+
+/// Caddy treats an empty replacement as "set the header to the pattern", which
+/// would overwrite the Cookie header with a regex.
+#[test]
+fn no_cookie_rewrite_has_an_empty_replacement() {
+    let rewrites = cookie_rewrites(&test_instance());
+    for rewrite in rewrites.set_cookie.iter().chain(&rewrites.cookie) {
+        assert!(!rewrite.replace.is_empty(), "{}", rewrite.find);
+    }
+}
+
+#[test]
+fn only_local_stacks_namespace_cookies() {
+    let local = caddyfile(&test_instance(), Mode::Local, true);
+    assert!(local.contains("request_header Cookie \"(^|; )macro-agent-a--\" \"$1\""));
+    assert!(local.contains("Set-Cookie \"^__Host-\" \"__Host-macro-agent-a--\""));
+
+    // `run_dev` shares cookies with the dev gateway's own services.
+    assert!(!caddyfile(&test_instance(), Mode::Dev, true).contains("Set-Cookie"));
 }
