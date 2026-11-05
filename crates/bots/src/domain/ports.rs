@@ -20,8 +20,7 @@ pub trait BotRepo: Send + Sync + 'static {
     /// Repository error.
     type Err: Into<anyhow::Error> + Send;
 
-    /// Create an owned agent and its selected channel memberships atomically,
-    /// with `has_agent` enabled.
+    /// Create an owned agent and its selected channel memberships atomically.
     fn create_agent(
         &self,
         owner: BotOwner,
@@ -29,8 +28,7 @@ pub trait BotRepo: Send + Sync + 'static {
         req: CreateAgentRequest,
     ) -> impl Future<Output = Result<Agent, Self::Err>> + Send;
 
-    /// Replace an owned agent and its selected channel memberships atomically,
-    /// enabling `has_agent` even if it was previously disabled.
+    /// Replace an owned agent and its selected channel memberships atomically.
     /// The direct agent conversations it takes part in are not among them and
     /// are left as they are.
     fn update_agent(

@@ -30,7 +30,7 @@ export interface Bot {
   description?: BotDescription;
   /** Stable handle. */
   handle: string;
-  /** Whether this bot runs as an AI agent: mentions and DMs start an agent session. */
+  /** Whether mentioning this bot opens a sandboxed coding-agent session. */
   has_agent: boolean;
   /** Bot id. */
   id: BotId;

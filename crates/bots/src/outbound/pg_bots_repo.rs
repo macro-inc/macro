@@ -455,7 +455,6 @@ impl BotRepo for PgBotsRepo {
                 handle = $5,
                 description = $6,
                 avatar_url = $7,
-                has_agent = true,
                 updated_at = now()
             WHERE id = $1
               AND deleted_at IS NULL
