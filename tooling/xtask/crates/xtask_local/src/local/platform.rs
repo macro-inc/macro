@@ -508,6 +508,8 @@ fn e2e(args: &E2eArgs) -> Result<()> {
             .display()
             .to_string(),
     );
+    // Playwright waits for its Vite server over plain HTTP.
+    test_env.insert("MACRO_DEV_HTTPS".into(), "false".into());
     if matches!(args.suite, E2eSuite::Rust | E2eSuite::All) {
         super::e2e::run_rust(&test_env, &args.test_args)?;
     }
