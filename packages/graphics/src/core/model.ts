@@ -1,5 +1,6 @@
 import type { Matrix } from './affine';
 import type { SortKey } from './ordering';
+import type { ArtifactGeometry } from './shapes/artifact';
 import type { ConnectorGeometry } from './shapes/connector';
 import type { EllipseGeometry } from './shapes/ellipse';
 import type { DocumentGeometry, MediaGeometry } from './shapes/embedded';
@@ -31,6 +32,7 @@ export type ShapeGeometryMap = {
   image: MediaGeometry;
   video: MediaGeometry;
   document: DocumentGeometry;
+  artifact: ArtifactGeometry;
 };
 export type ShapeKind = keyof ShapeGeometryMap;
 export type Appearance = Readonly<{

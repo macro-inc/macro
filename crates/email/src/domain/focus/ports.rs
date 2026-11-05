@@ -56,8 +56,9 @@ pub trait FocusStore: Send + Sync + 'static {
 
     /// Classifications of the owner's threads among `thread_ids`, as they stand
     /// at `now`: who wrote last settles the labels, a thread whose owner has been
-    /// awaiting a reply since at or before `waiting_before` is in Focus, and one a
-    /// calendar change still holds is in Focus as Calendar.
+    /// awaiting a reply since at or before `waiting_before` is in Focus, one a
+    /// calendar change still holds is in Focus as Calendar, and importance has moved
+    /// at its stored rate since the classified message, until newer mail stops it.
     fn focus_for_threads(
         &self,
         owner: &MacroUserIdStr<'static>,
