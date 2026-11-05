@@ -9,7 +9,7 @@ use nom::{
     multi::{many_till, many0},
     sequence::{delimited, preceded, terminated},
 };
-use serde::Deserialize;
+use serde::{Deserialize, de::IgnoredAny};
 use std::{
     borrow::Cow,
     fmt::{Formatter, Write},
@@ -113,8 +113,60 @@ impl<'de> XmlTaggedParsed<'de> for ParsedDateMention<'de> {
 #[serde(rename_all = "camelCase")]
 #[non_exhaustive]
 pub struct ParsedDocumentMention<'a> {
-    #[serde(borrow)]
+    /// A cached label; agents leave it empty or omit it, since the app shows
+    /// the live name.
+    #[serde(borrow, default)]
     pub document_name: Cow<'a, str>,
+    #[serde(borrow, default)]
+    pub block_name: Cow<'a, str>,
+    #[serde(default)]
+    pub block_params: Option<ParsedDocumentMentionParams>,
+}
+
+#[derive(Debug, Deserialize)]
+#[non_exhaustive]
+pub struct ParsedDocumentMentionParams {
+    /// Set when a channel mention points at one message in the channel.
+    #[serde(default)]
+    pub channel_message_id: Option<IgnoredAny>,
+}
+
+impl ParsedDocumentMention<'_> {
+    /// What the mention points at, as a lowercase noun, for text that cannot
+    /// show the live name.
+    pub fn kind(&self) -> &'static str {
+        let is_message = self
+            .block_params
+            .as_ref()
+            .is_some_and(|params| params.channel_message_id.is_some());
+
+        match self.block_name.as_ref() {
+            "channel" if is_message => "message",
+            "channel" => "channel",
+            "md" | "write" | "pdf" | "code" | "canvas" | "spreadsheet" | "csv" | "pptx" | "psd"
+            | "fig" | "ai" | "unknown" => "document",
+            "task" => "task",
+            "email" => "email",
+            "calendar" => "event",
+            "database" => "database",
+            "form" => "form",
+            "initiative" => "project",
+            "project" => "folder",
+            "company" => "company",
+            "contact" => "contact",
+            "pipeline" => "pipeline",
+            "call" => "call",
+            "chat" => "chat",
+            "agent" => "agent session",
+            "pr" => "pull request",
+            "image" => "image",
+            "video" => "video",
+            "skill" => "skill",
+            "snippet" => "snippet",
+            "routine" | "automation" => "routine",
+            _ => "item",
+        }
+    }
 }
 
 impl<'de> XmlTaggedParsed<'de> for ParsedDocumentMention<'de> {
@@ -496,7 +548,12 @@ impl XmlFormatter for PlainTextFormatter {
         write!(f, "{}", link.text)
     }
 
+    /// A nameless mention reads as its kind in angle brackets, e.g. `<task>`.
+    /// The brackets are literal text: HTML consumers must escape them.
     fn format_doc(doc: &ParsedDocumentMention<'_>, f: &mut Formatter<'_>) -> std::fmt::Result {
+        if doc.document_name.trim().is_empty() {
+            return write!(f, "<{}>", doc.kind());
+        }
         write!(f, "{}", doc.document_name)
     }
 
