@@ -9,3 +9,6 @@ pub mod lowercased;
 pub mod user_id;
 
 pub use cowlike;
+
+#[doc(hidden)]
+pub const CI_INTEGRATE_NONCE: &str = "1f641083a15d4deabeb5dfee47506f4e";
