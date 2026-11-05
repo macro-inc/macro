@@ -5,7 +5,6 @@ export default {
   closeVideo: 'Close video',
   supportQuestion: 'Have questions about {{block}}?',
   supportChannel: 'Talk to us in your support channel.',
-  supportEmail: 'Email our support team.',
   mailTitle: 'Learn how to use Macro Mail',
   mailBlock: 'Macro Mail',
   mailSnippet:

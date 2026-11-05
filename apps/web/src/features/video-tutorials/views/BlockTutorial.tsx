@@ -16,21 +16,23 @@ import {
 
 /**
  * "Have questions about Macro CRM? Talk to us in your support channel." under
- * the video. Mounts with the open dialog, so the channel list is read only
- * then. Following it closes the dialog.
+ * the video, when the person has a support channel. Mounts with the open
+ * dialog, so the channel list is read only then. Following it closes the
+ * dialog.
  */
 function SupportLip(props: { block: string; onFollow: () => void }) {
   const support = createSupportLink();
   return (
-    <Show when={support.ready()}>
-      <TutorialSupportLip
-        block={props.block}
-        hasChannel={support.hasChannel()}
-        onSelect={() => {
-          props.onFollow();
-          support.open();
-        }}
-      />
+    <Show when={support.channelId()}>
+      {(channelId) => (
+        <TutorialSupportLip
+          block={props.block}
+          onSelect={() => {
+            props.onFollow();
+            support.open(channelId());
+          }}
+        />
+      )}
     </Show>
   );
 }

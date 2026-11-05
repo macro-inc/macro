@@ -1,4 +1,3 @@
-import { registerExternalUrlInterceptor } from '@core/util/url';
 import type { ApiChannelWithLatest } from '@service-storage/channel-list-types';
 import {
   cleanup,
@@ -155,28 +154,25 @@ describe('support link under the video', () => {
     await waitFor(() => expect(dialogClosed()).toBe(true));
   });
 
-  it('emails support when the person has no support channel', async () => {
-    const opened: string[] = [];
-    const unregister = registerExternalUrlInterceptor((url) => {
-      opened.push(url);
-      return true;
-    });
-    try {
-      render(() => <TutorialRow tutorial="mail" />);
-      fireEvent.click(row()!);
-      await screen.findByRole('dialog');
-      screen.getByText('Have questions about Macro Mail?');
+  it('leaves the lip out when the person owns no support channel', async () => {
+    // A Macro team member is in customers' support channels but owns none.
+    channelList.channels = [
+      {
+        id: 'customer-support',
+        name: 'Macro Support x grace',
+        owner_id: 'macro|grace@acme.test',
+      },
+    ];
+    render(() => <TutorialRow tutorial="mail" />);
+    fireEvent.click(row()!);
+    await screen.findByRole('dialog');
 
-      fireEvent.click(
-        screen.getByRole('button', { name: 'Email our support team.' })
-      );
-
-      expect(opened).toEqual(['mailto:support@macro.com']);
-      expect(openWithSplit).not.toHaveBeenCalled();
-      await waitFor(() => expect(dialogClosed()).toBe(true));
-    } finally {
-      unregister();
-    }
+    expect(screen.queryByText('Have questions about Macro Mail?')).toBeNull();
+    expect(
+      screen.queryByRole('button', {
+        name: 'Talk to us in your support channel.',
+      })
+    ).toBeNull();
   });
 });
 

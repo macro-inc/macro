@@ -3,11 +3,10 @@
  * team, owned by them and named `Macro Support x <email local part>`
  * (`support_channel_name` in the authentication service's create-user
  * webhook). Nothing else marks it, so it is found by that name and owner.
+ * Macro team members belong to many customers' support channels; owning one
+ * is the only sign that it was created for this person.
  */
 const SUPPORT_CHANNEL_NAME_PREFIX = 'Macro Support x ';
-
-/** The address the app's other "contact us" links write to. */
-export const SUPPORT_EMAIL_URL = 'mailto:support@macro.com';
 
 type ChannelSummary = {
   id: string;
