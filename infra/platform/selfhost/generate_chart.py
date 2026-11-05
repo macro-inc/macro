@@ -182,12 +182,22 @@ def main():
         + "\n"
     )
     (out / "templates" / "NOTES.txt").write_text(
+        "This chart is a preview and is not safe for production: see the chart README.\n"
         "Macro is starting at https://{{ .Values.host }}/app/\n"
         "It needs the `macro-env` Secret and the `fusionauth-kickstart` Secret in this\n"
         "namespace first; see the chart README.\n"
     )
     (out / "README.md").write_text(
         "# Macro\n\n"
+        "**Preview: not safe for production or real data.** It installs and runs, and\n"
+        "these are still development defaults:\n\n"
+        "- The bundled Postgres, FusionAuth, and ExtendDB passwords are fixed values in\n"
+        "  the manifests. Use external databases, or keep this on a private network.\n"
+        "- Key management is `local-kms`, which stores its keys unprotected on its volume.\n"
+        "- Postgres, Kafka, and OpenSearch run one replica each, with no failover or\n"
+        "  backup.\n"
+        "- Images are debug builds, and FusionAuth runs in development mode.\n"
+        "- Mailpit captures all mail instead of sending it.\n\n"
         "Requirements: Kubernetes 1.30+, a default StorageClass, an ingress controller,\n"
         "and two Secrets in the release namespace: `macro-env` (the environment every\n"
         "service loads) and `fusionauth-kickstart` (`kickstart.json`).\n\n"

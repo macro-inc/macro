@@ -406,7 +406,11 @@ Not built yet:
   `upload_extractor_lambda_trigger`).
 - The rest of phase 7: publishing the images and chart per release, a generator for
   the Secrets a self-hoster must supply, a production-sized install, and a run on a
-  stock cluster such as kind.
+  stock cluster such as kind. **The chart is a preview, not safe for real data**, and
+  says so in its README: bundled databases use fixed passwords from the manifests, it
+  ships `local-kms` despite the rule above (OpenBao needs a KMS adapter first), mail
+  goes to Mailpit, and images are debug builds. Generated credentials per release are
+  the next step, and they would also remove the fixed passwords from every instance.
 - Release images from crane. Every image today wraps a host-built debug binary with
   debug info stripped.
 - Mirroring from GitHub automatically, which needs a credential decision.
