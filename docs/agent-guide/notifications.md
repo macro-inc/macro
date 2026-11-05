@@ -289,8 +289,9 @@ the a11y tree (ignore them when parsing snapshots).
 
 Toasts with supporting details show their actions below the description. Without
 supporting details, a single action sits beside the short title. Undo and navigation
-actions use consistent icons: navigation arrows follow their labels, while Undo
-and recovery icons lead. Dismiss and Not now remain text-only. Desktop Undo and navigation toasts replace
+actions use icons only when useful: Undo and recovery icons lead, Open split has
+a trailing split icon, and Open/View actions stay text-only. Dismiss and Not now
+remain text-only. Desktop Undo and navigation toasts replace
 **Dismiss** with a close icon on the right. On phones, swipe left or right to
 dismiss. Closing the toast does not perform Undo or change its expiry. Optional
 setup prompts use **Not now** instead of **Dismiss**, with the same remembered

@@ -2,7 +2,6 @@ import './toast.css';
 import { t } from '@app/lib/i18n';
 import { isMobile } from '@core/mobile/isMobile';
 import CheckIcon from '@icon/system/bold/check-bold.svg';
-import ArrowRightIcon from '@icon/system/regular/arrow-right.svg';
 import ExclamationIcon from '@icon/system/regular/exclamation-mark.svg';
 import WarningIcon from '@icon/system/regular/warning.svg';
 import XIcon from '@icon/system/regular/x.svg';
@@ -47,7 +46,7 @@ interface ToastAction {
   icon?: Component<{ class?: string }>;
   /** Directional actions place their icon after the label. */
   trailingIcon?: boolean;
-  variant?: 'primary' | 'secondary';
+  variant?: 'primary' | 'secondary' | 'danger';
   onClick: () => void;
 }
 
@@ -246,13 +245,17 @@ function ActionButtons(props: {
             variant={action.variant ?? 'primary'}
             class="max-w-full"
           >
-            <Dynamic
-              component={action.icon ?? ArrowRightIcon}
-              class={cn(
-                'size-4 shrink-0',
-                (action.trailingIcon ?? !action.icon) && 'order-last'
+            <Show when={action.icon}>
+              {(Icon) => (
+                <Dynamic
+                  component={Icon()}
+                  class={cn(
+                    'size-4 shrink-0',
+                    action.trailingIcon && 'order-last'
+                  )}
+                />
               )}
-            />
+            </Show>
             <span class="min-w-0 whitespace-normal break-words">
               {action.label}
             </span>

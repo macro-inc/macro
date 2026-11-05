@@ -23,7 +23,6 @@ import { fireAndForget } from '@core/util/fireAndForget';
 import { interceptMailtoLinks } from '@core/util/interceptMailtoLinks';
 import { handleFileFolderDrop } from '@core/util/upload';
 import ArrowCounterClockwise from '@icon/system/regular/arrow-counter-clockwise.svg?component-solid';
-import ArrowSquareOut from '@icon/system/regular/arrow-square-out.svg?component-solid';
 import ExclamationIcon from '@icon/system/regular/exclamation-mark.svg?component-solid';
 import { Telemetry } from '@macro-inc/observability';
 import { queryClient } from '@queries/client';
@@ -187,11 +186,10 @@ export function createEmailComposeContext(
       dismissStyle: hasUndo || hasNavigation ? ('icon' as const) : undefined,
       actionLayout: hasUndo ? ('inline' as const) : undefined,
       actions: options?.actions?.map(({ kind, ...action }) => {
-        if (kind === 'save') return action;
+        if (kind === 'save' || kind === 'open') return action;
         return {
           ...action,
-          icon: kind === 'open' ? ArrowSquareOut : ArrowCounterClockwise,
-          trailingIcon: kind === 'open',
+          icon: ArrowCounterClockwise,
         };
       }),
     };

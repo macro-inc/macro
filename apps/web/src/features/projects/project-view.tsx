@@ -6,7 +6,6 @@ import { useSplitPanelOrThrow } from '@components/app/split-layout/layoutUtils';
 import { SplitPanel } from '@components/app/split-panel';
 import { toast } from '@core/component/Toast/Toast';
 import { fireAndForget } from '@core/util/fireAndForget';
-import ArrowSquareOutIcon from '@icon/system/regular/arrow-square-out.svg';
 import SplitIcon from '@icon/system/regular/square-half.svg';
 import { createEffect, onMount } from 'solid-js';
 import type { ProjectDetail } from './core/project';
@@ -108,8 +107,6 @@ async function settleProjectSubmission(
       },
       {
         label: t('entityActions.open'),
-        icon: ArrowSquareOutIcon,
-        trailingIcon: true,
         onClick: () => open(false),
       },
     ],

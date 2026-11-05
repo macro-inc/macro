@@ -3,7 +3,6 @@ import { toast } from '@core/component/Toast/Toast';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import { fireAndForget } from '@core/util/fireAndForget';
 import { buildSimpleEntityUrl } from '@core/util/url';
-import ArrowSquareOutIcon from '@icon/system/regular/arrow-square-out.svg';
 import SplitIcon from '@icon/system/regular/square-half.svg';
 import type { TaskComposerHost } from './task-composer';
 
@@ -33,8 +32,6 @@ export function showTaskCreatedToast(
         : []),
       {
         label: t('entityActions.open'),
-        icon: ArrowSquareOutIcon,
-        trailingIcon: true,
         onClick: () => open(false),
       },
     ],

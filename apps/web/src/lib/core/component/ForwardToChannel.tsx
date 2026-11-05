@@ -19,7 +19,6 @@ import { useSendMessageToPeople } from '@core/util/channels';
 import { getDestinationFromOptions } from '@core/util/destination';
 import { fireAndForget } from '@core/util/fireAndForget';
 import { chatRuleset, uploadFile } from '@core/util/upload';
-import ArrowSquareOutIcon from '@icon/system/regular/arrow-square-out.svg';
 import CheckIcon from '@icon/system/regular/check.svg?component-solid';
 import PaperPlaneTilt from '@icon/system/regular/paper-plane-tilt.svg';
 import { type Span, Telemetry } from '@macro-inc/observability';
@@ -526,8 +525,6 @@ export function ForwardToChannel(props: ForwardToChannelProps) {
             actions: [
               {
                 label: 'View in channel',
-                icon: ArrowSquareOutIcon,
-                trailingIcon: true,
                 onClick: result.navigateToChannel,
               },
             ],

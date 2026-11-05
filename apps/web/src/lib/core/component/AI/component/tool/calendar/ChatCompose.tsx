@@ -13,7 +13,6 @@ import { useChatContext } from '@core/component/AI/context';
 import type { AssistantMessagePart } from '@core/component/AI/types';
 import { toast } from '@core/component/Toast/Toast';
 import { fireAndForget } from '@core/util/fireAndForget';
-import ArrowSquareOutIcon from '@icon/system/regular/arrow-square-out.svg';
 import { invalidateCalendarOccurrences } from '@queries/calendar/occurrences';
 import { useChatQuery } from '@queries/chat';
 import { cognitionApiServiceClient } from '@service-cognition/client';
@@ -209,8 +208,6 @@ export function CalendarChatCompose(props: CalendarChatComposeProps) {
         actions: [
           {
             label: t('entityActions.open'),
-            icon: ArrowSquareOutIcon,
-            trailingIcon: true,
             onClick: () => openToolCalendarEvent(event),
           },
         ],

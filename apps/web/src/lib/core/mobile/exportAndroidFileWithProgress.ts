@@ -29,10 +29,15 @@ export async function exportAndroidFileWithProgress(
         return `Preparing file… ${Math.round(progress() * 100)}%`;
       },
       actions: [
-        { label: 'Cancel', icon: XIcon, onClick: () => controller.abort() },
+        {
+          label: 'Cancel',
+          icon: XIcon,
+          variant: 'danger',
+          onClick: () => controller.abort(),
+        },
       ],
     },
-    { persistent: true }
+    { persistent: true, showCloseButton: false }
   );
   try {
     return await exportAndroidFile(blob, name, action, {

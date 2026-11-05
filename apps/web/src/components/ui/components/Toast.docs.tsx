@@ -702,7 +702,7 @@ export default defineDoc({
       'Use Not now for optional setup prompts; keep Dismiss for recovery prompts.',
       'Omit the close icon on mobile; retain swipe dismissal in either direction.',
       'Place actions below descriptions; use actionLayout inline only for multiple actions without a description.',
-      'Use the same 16px icon for the same action in every toast.',
+      'Use consistent 16px icons where meaningful; keep Open/View and generic forward actions text-only.',
       'Use the existing toast service so queueing, timing, and dismissal stay consistent.',
       'Use the shared Spinner for loading; keep the progress bar for known progress.',
     ],

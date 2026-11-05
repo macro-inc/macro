@@ -3,7 +3,6 @@ import '../../../index.css';
 import { toast } from '@core/component/Toast/Toast';
 import { ToastRegion } from '@core/component/Toast/ToastRegion';
 import ArrowCounterClockwise from '@icon/system/regular/arrow-counter-clockwise.svg?component-solid';
-import ArrowSquareOut from '@icon/system/regular/arrow-square-out.svg?component-solid';
 import PaperclipIcon from '@icon/system/regular/paperclip.svg';
 import TextAa from '@icon/system/regular/text-aa.svg';
 import TrashIcon from '@icon/system/regular/trash.svg';
@@ -163,8 +162,6 @@ function Fixture() {
         },
         {
           label: 'View message',
-          icon: ArrowSquareOut,
-          trailingIcon: true,
           onClick: dismissThen(() => setView('compose')),
         },
       ],

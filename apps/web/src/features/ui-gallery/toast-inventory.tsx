@@ -2,7 +2,6 @@ import { t } from '@app/lib/i18n';
 import { type ToastContent, ToastType } from '@core/component/Toast/Toast';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import ArrowCounterClockwise from '@icon/system/regular/arrow-counter-clockwise.svg';
-import ArrowSquareOutIcon from '@icon/system/regular/arrow-square-out.svg';
 import Bell from '@icon/system/regular/bell.svg';
 import ExclamationIcon from '@icon/system/regular/exclamation-mark.svg';
 import FolderIcon from '@icon/system/regular/folder.svg';
@@ -400,8 +399,6 @@ export const TOAST_INVENTORY: ToastInventoryEntry[] = [
         { label: 'Undo', icon: ArrowCounterClockwise, onClick: dismiss },
         {
           label: 'View message',
-          icon: ArrowSquareOutIcon,
-          trailingIcon: true,
           onClick: dismiss,
         },
       ],
@@ -421,8 +418,6 @@ export const TOAST_INVENTORY: ToastInventoryEntry[] = [
       actions: [
         {
           label: 'View message',
-          icon: ArrowSquareOutIcon,
-          trailingIcon: true,
           onClick: dismiss,
         },
       ],
@@ -452,8 +447,6 @@ export const TOAST_INVENTORY: ToastInventoryEntry[] = [
           : []),
         {
           label: t('entityActions.open'),
-          icon: ArrowSquareOutIcon,
-          trailingIcon: true,
           onClick: dismiss,
         },
       ],
@@ -479,8 +472,6 @@ export const TOAST_INVENTORY: ToastInventoryEntry[] = [
         },
         {
           label: t('entityActions.open'),
-          icon: ArrowSquareOutIcon,
-          trailingIcon: true,
           onClick: dismiss,
         },
       ],
@@ -507,8 +498,6 @@ export const TOAST_INVENTORY: ToastInventoryEntry[] = [
         },
         {
           label: t('entityActions.open'),
-          icon: ArrowSquareOutIcon,
-          trailingIcon: true,
           onClick: dismiss,
         },
       ],
@@ -528,8 +517,6 @@ export const TOAST_INVENTORY: ToastInventoryEntry[] = [
         actions: [
           {
             label: t('entityActions.open'),
-            icon: ArrowSquareOutIcon,
-            trailingIcon: true,
             onClick: dismiss,
           },
         ],
@@ -550,8 +537,6 @@ export const TOAST_INVENTORY: ToastInventoryEntry[] = [
         actions: [
           {
             label: t('entityActions.open'),
-            icon: ArrowSquareOutIcon,
-            trailingIcon: true,
             onClick: dismiss,
           },
         ],
@@ -571,8 +556,6 @@ export const TOAST_INVENTORY: ToastInventoryEntry[] = [
       actions: [
         {
           label: 'View in channel',
-          icon: ArrowSquareOutIcon,
-          trailingIcon: true,
           onClick: dismiss,
         },
       ],
@@ -591,8 +574,6 @@ export const TOAST_INVENTORY: ToastInventoryEntry[] = [
       actions: [
         {
           label: t('entityActions.open'),
-          icon: ArrowSquareOutIcon,
-          trailingIcon: true,
           onClick: dismiss,
         },
       ],
@@ -623,8 +604,6 @@ export const TOAST_INVENTORY: ToastInventoryEntry[] = [
           : []),
         {
           label: t('entityActions.open'),
-          icon: ArrowSquareOutIcon,
-          trailingIcon: true,
           onClick: dismiss,
         },
       ],
@@ -643,8 +622,6 @@ export const TOAST_INVENTORY: ToastInventoryEntry[] = [
       actions: [
         {
           label: t('entityActions.open'),
-          icon: ArrowSquareOutIcon,
-          trailingIcon: true,
           onClick: dismiss,
         },
       ],
@@ -866,9 +843,12 @@ export const TOAST_INVENTORY: ToastInventoryEntry[] = [
       'A file over 1 MB is being transferred to the native file chooser.',
     behavior: 'Persistent until completion · Android only',
     create: (dismiss) => ({
+      showCloseButton: false,
       custom: {
         title: 'Preparing file… 45%',
-        actions: [{ label: 'Cancel', icon: XIcon, onClick: dismiss }],
+        actions: [
+          { label: 'Cancel', icon: XIcon, variant: 'danger', onClick: dismiss },
+        ],
       },
     }),
   },
