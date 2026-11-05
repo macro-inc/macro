@@ -259,6 +259,12 @@ button on the focused tile to restore the grid. If that participant leaves, the 
 returns automatically. Focus changes keep the existing video tracks mounted.
 A talking participant has an accent-colored border above their video or avatar.
 
+While someone shares their screen, **Maximize screen share** at the share's
+top-right hides the participant strip so the share fills the call area, and
+**Show participants** brings it back. Video tiles stay mounted and audio keeps
+playing. The choice lasts while the call view is open, so a later share also
+opens maximized; check it on desktop and at phone width, and when the share stops.
+
 Open **Chat** and **Participants** from the button beside the media controls.
 The sidebar and phone drawer share a compact grouped section switcher at the top.
 **Participants** shows the live attendee count and a scrollable roster, including
