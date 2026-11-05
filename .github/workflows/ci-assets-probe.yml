@@ -1,0 +1,68 @@
+# Experiment only: code-mode assets on a cache miss, with and without node_modules in
+# the remote cache. Each job changes the SDK differently, so each misses the assets entry.
+name: CI Assets Probe
+
+on:
+  pull_request:
+
+concurrency:
+  group: ci-assets-probe-${{ github.event.pull_request.number }}
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  prime:
+    runs-on: namespace-profile-linux-large-build;overrides.cache-tag=ci-assets-probe-p-${{ github.run_id }}-${{ github.run_attempt }}
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
+        with:
+          persist-credentials: 'false'
+      - uses: namespacelabs/nscloud-cache-action@15799a6b54e5765f85b2aac25b3f0df43ed571c0
+        with:
+          path: |-
+            /nix
+        continue-on-error: true
+      - uses: './.github/actions/setup-nix'
+      - uses: './.github/actions/setup-nix-dev-shell'
+      - name: Credentials
+        run: nsc cache sccache setup --cache_name ci-assets-probe | grep -E '^SCCACHE_WEBDAV_(ENDPOINT|TOKEN)=' >> "$GITHUB_ENV"
+      - name: Save node_modules
+        run: bash tooling/xtask/crates/xtask_workflows/src/workflows/scripts/code_mode_assets.sh
+      - name: Assets
+        run: echo "$CODE_MODE_ASSETS_DIR"
+
+  arms:
+    needs: prime
+    strategy:
+      fail-fast: false
+      max-parallel: 2
+      matrix:
+        arm: [control, modules]
+        run: [1, 2, 3, 4, 5]
+    runs-on: namespace-profile-linux-large-build;overrides.cache-tag=ci-assets-probe-${{ matrix.arm }}-${{ github.run_id }}-${{ github.run_attempt }}-${{ matrix.run }}
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
+        with:
+          persist-credentials: 'false'
+      - uses: namespacelabs/nscloud-cache-action@15799a6b54e5765f85b2aac25b3f0df43ed571c0
+        with:
+          path: |-
+            /nix
+        continue-on-error: true
+      - uses: './.github/actions/setup-nix'
+      - uses: './.github/actions/setup-nix-dev-shell'
+      - name: Credentials
+        run: nsc cache sccache setup --cache_name ci-assets-probe | grep -E '^SCCACHE_WEBDAV_(ENDPOINT|TOKEN)=' >> "$GITHUB_ENV"
+      - name: Change the SDK
+        run: printf '// probe ${{ github.run_id }} ${{ matrix.arm }} ${{ matrix.run }}\n' >> packages/sdk/src/config.ts
+      - name: Build code-mode assets
+        run: |
+          if [ "${{ matrix.arm }}" = control ]; then
+            bash .ci-assets-control.sh
+          else
+            bash tooling/xtask/crates/xtask_workflows/src/workflows/scripts/code_mode_assets.sh
+          fi
+      - name: Assets exist
+        run: ls "$CODE_MODE_ASSETS_DIR" | head -3
