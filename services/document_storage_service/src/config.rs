@@ -6,12 +6,17 @@ pub use macro_env::Environment;
 use macro_env_var::{env_vars, maybe_env_vars};
 use secretsmanager_client::LocalOrRemoteSecret;
 
+#[cfg(test)]
+mod test;
+
 pub const DEFAULT_PRESIGNED_URL_EXPIRY_SECONDS: u64 = 900; // 15 minutes
 /// Allow long recordings to play and seek without the signed URL expiring mid-session.
 pub const CALL_RECORDING_PRESIGNED_URL_EXPIRY_SECONDS: u64 = 6 * 60 * 60;
 pub const DEFAULT_PRESIGNED_URL_BROWSER_CACHE_EXPIRY_SECONDS: u64 = 840; // remember that this is just a suggestion to the client browser 
 
 env_vars! {
+    /// PostHog project key for backend feature flags.
+    pub struct PosthogApiKey;
     pub struct DatabaseUrl;
     pub struct DatabaseUrlReadonly;
     pub struct DocumentStorageBucket;
@@ -83,9 +88,6 @@ maybe_env_vars! {
     /// Optional Meta test event code — routes events to Meta's test events
     /// view instead of production tracking.
     pub struct MetaTestEventCode;
-    /// PostHog project key for backend feature flags. Without it, flagged
-    /// features stay off.
-    pub struct PosthogApiKey;
     /// PostHog host; defaults to the project's US region.
     pub struct PosthogHost;
 }
@@ -94,7 +96,7 @@ maybe_env_vars! {
 #[derive(macro_config::MacroConfig)]
 #[serde(rename_all = "SCREAMING_SNAKE_CASE")]
 pub struct Config {
-    /// PostHog API key (optional)
+    /// Required PostHog project key for backend feature flags.
     pub posthog_api_key: PosthogApiKey,
     /// PostHog host (optional)
     pub posthog_host: PosthogHost,

@@ -225,8 +225,9 @@ stale client cannot write to a chat nobody will see.
 `enable-call-channel-thread`, through `crates/feature_flags`, evaluated for the caller when
 the call is created and targeted by team in PostHog. The stored type then applies to everyone
 on that call, so people on one call cannot end up in different discussions. There is no client
-flag. `document_storage_service` wires `PostHogFeatureFlags` when its optional `POSTHOG_API_KEY`
-is set; without it every call stays `call_chat`.
+flag. `document_storage_service` requires `POSTHOG_API_KEY` at startup and always wires
+`PostHogFeatureFlags`. Evaluation has a 300 ms timeout; a failed load keeps that call
+`call_chat` for its lifetime. Joining an existing call does not evaluate the flag again.
 
 ## Frontend
 
@@ -306,9 +307,11 @@ message targets cover it. `buildCallMessageLink` stays for `CallChat`.
 Everything ships together, with the flag at 0%, so no call becomes `channel_thread` until the client
 that reads `discussion` has reached people.
 
-1. Merge and deploy. All calls are still `call_chat`.
-2. Wait for the web bundle to reach clients.
-3. Set `POSTHOG_API_KEY` in `document_storage_service`'s Doppler configs.
+1. Provision `POSTHOG_API_KEY` in `cloud-storage-service`'s Doppler `dev` and `prd`
+   configs and `local/lcl_personal` before deployment. `--no-doppler` uses a boot
+   placeholder, which cannot enable remote flags.
+2. Merge and deploy. All calls are still `call_chat` while the flag is at 0%.
+3. Wait for the web bundle to reach clients.
 4. Enable `enable-call-channel-thread` in dev, then by team.
 5. Clean up: remove the flag and `CallEnded` handling once no past-call row needs it. `CallChat`,
    `GuestCallChat` and `CallChatHistory` remain for calls with no channel and past calls.

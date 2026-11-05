@@ -1349,8 +1349,8 @@ editing, and other work outside the SDK.
 
 To verify locally, run Claude Code against the stack's MCP with
 `tooling/scripts/claude-local-mcp.sh --instance <name> --email <email>`. It mints
-a local token for an existing user and passes only the Macro MCP. Local Doppler
-has no PostHog keys: add `POSTHOG_API_KEY` and `POSTHOG_HOST` to the instance's
+a local token for an existing user and passes only the Macro MCP. To control flag
+responses, override `POSTHOG_API_KEY` and `POSTHOG_HOST` in the instance's
 `local.generated.env` before services start, pointing at a stand-in `/flags/`
 server on the `macro-<name>_services` network, and compare a flagged and an
 unflagged user's `tools/list`.
