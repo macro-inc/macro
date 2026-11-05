@@ -247,3 +247,39 @@ test('a rejected proposal leaves the healthy generation listening without a rest
   assert.equal(stops, 0);
   await supervisor.stop();
 });
+
+test('an unhealthy but live last-good generation is restarted with overlapping intake', async () => {
+  let starts = 0;
+  let stops = 0;
+  let healthy = true;
+  let now = 0;
+  const supervisor = new Supervisor({
+    head: async () => 'good',
+    snapshot: async (commit) => commit,
+    check: async () => {},
+    launch: async () => {
+      starts++;
+      return {
+        activate: async () => {},
+        healthy: async () => healthy,
+        exited: () => false,
+        stop: async () => {
+          stops++;
+        },
+      };
+    },
+    reject: async () => {},
+    save: async () => {},
+    now: () => now,
+    probationMs: 1,
+  });
+  await supervisor.tick();
+  now = 1;
+  await supervisor.tick();
+  healthy = false;
+  now = 2;
+  await supervisor.tick();
+  assert.equal(starts, 2);
+  assert.equal(stops, 1);
+  await supervisor.stop();
+});

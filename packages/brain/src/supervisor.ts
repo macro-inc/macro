@@ -340,7 +340,10 @@ export class Supervisor {
       throw new Error(`initial brain ${reason}; no last-known-good commit`);
     // A failed check or preparation never interrupts the healthy generation.
     const keepRunning =
-      this.active === this.good && this.running && !this.running.exited();
+      commit !== this.active &&
+      this.active === this.good &&
+      this.running &&
+      !this.running.exited();
     const replacement = keepRunning
       ? undefined
       : await this.deps.launch(await this.deps.snapshot(this.good));
