@@ -767,6 +767,50 @@ The Codex section and its auth/config requests were exercised in Chromium with
 mocked backend responses on 2026-09-15. Provider login and a full deployed Macro
 session were not exercised by that UI check.
 
+### Macro computers
+
+Macro computers are hosted machines a team buys for its agents, billed on
+the team subscription. They sit in `Runtimes`, behind the
+`enable-macro-computers` flag (on in dev), and need a team: without one the
+page shows nothing about them. Every team member sees the **Macro computers**
+list; only team admins and owners see the buying card and the row controls.
+
+To buy one as a team admin:
+
+1. Open `/app/settings/runtimes` (mobile: Settings sheet → Runtimes).
+2. Under **Get a Macro computer**, pick a size radio (**Standard**, **Large**,
+   **XL**); each shows vCPU, memory, disk and its price per interval. A
+   sold-out size is disabled and offers **Notify me**, which turns into
+   "We'll let you know".
+3. Press **Continue**. The dialog (a drawer on phones) titled
+   **Buy a <size> Macro computer?** states the exact price and that it is
+   added to the team subscription today with a prorated charge. **Name
+   (optional)** names the computer.
+4. Press **Buy for <price>**. Failures stay in the dialog: sold out (409),
+   payment declined (402), or a subscription that can't add computers (422).
+   On success the dialog closes with "Computer purchased. Setting it up now."
+
+The new row reads **Setting up** with its step (confirming payment, creating,
+starting up, connecting; "step N of 5") and the list polls every 3 seconds
+while any computer is setting up, waking or stopping. Once ready a row shows
+its size, status (**Ready**, **Asleep**, **Waking**, **Stopping**,
+**Stopped**, **Failed**), "Claude: Macro credits", and the runtime it
+registered as with a connection dot; that runtime's row under **Connected
+runtimes** carries a **Macro computer** badge and no Remove. Admin controls
+on each row:
+
+- **Power** switch: on/off, available when Ready, Asleep or Stopped.
+- **Cancel at period end**: billing stops at the period end, shown as
+  "Cancels <date>"; **Keep computer** undoes it until then. After the period
+  a canceled computer shows "Disk deleted <date>".
+- **Release now**: a dialog explains the computer and its disk are destroyed
+  now with no refund; **Release now** stays disabled until the computer's
+  exact name is typed.
+
+Team **Billing** lists the same computers under **Macro computers** with size,
+status, cancel date and price per interval. Signing in with a member's own
+Claude account is not built yet; the row only shows Macro credits.
+
 ### GitHub reconnect recovery
 
 When GitHub reports that reauthentication is required, reconnect starts OAuth
