@@ -240,9 +240,10 @@ just seed-scenario apply --file seed/scenarios/team-perms.json
 ```
 
 `apply` creates a FusionAuth account for each persona. It prints a login link per
-persona, for example `http://alice.localhost:3000/app/login?email=alice@seed.macro.local`.
+persona, for example `https://alice.localhost:8090/app/login?email=alice@seed.macro.local`.
 Open each link in a plain browser tab. Each persona hostname has its own cookie
-jar. You can drive several personas side by side against one stack.
+jar. You can drive several personas side by side against one stack, whether it
+is attached or headless.
 
 Useful commands:
 
@@ -435,6 +436,23 @@ The generated files for an instance live here:
 infra/local/generated/<instance>
 ```
 
+Instances on one machine do not share sessions, even though browsers ignore the
+port when they scope cookies. The HTTPS proxy stores each instance's cookies
+under its own prefix (`macro-<instance>--local-macro-access-token`) and shows a
+service only that instance's cookies, under their real names, so services and the
+app behave as usual on `localhost`, the machine hostname, a tailnet name, or a
+tunnel. It drops the prefix-less `local-macro-*` tokens that older stacks and
+direct service ports set, because no instance can claim them. That includes the
+SSO callback on the auth service's own port, so SSO against a local stack hands
+the app a session code, which it redeems through the proxy.
+localStorage and IndexedDB were already separate, since they key on the port.
+
+An existing stack keeps its data. `just stack update` recreates its proxy with
+these rules; sign in once more afterwards. A client that calls the proxy with a
+hard-coded cookie name should send `Authorization: Bearer` instead or use the
+prefixed name. FusionAuth's own cookies stay unprefixed, as its port is published
+directly; they only hold its hosted-login session, not your Macro session.
+
 ### Access a remote dev server through one URL
 
 `just local` (the `run_local` alias) and `run_dev` call `hostname`, add that
@@ -514,7 +532,7 @@ just status_local --instance test
 The default instance (no `--instance`) always uses the fixed ports. If one is
 taken, its start fails before the build and names the ports.
 
-The seeded persona login links embed the frontend port. If an instance's window
+The seeded persona login links embed the proxy port. If an instance's window
 moves, run `just seed-scenario apply` again to get links that match.
 
 ## What the Stack Rebuilds
