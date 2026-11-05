@@ -314,8 +314,12 @@ jobs:
     - name: Mount Namespace cache volume
       uses: namespacelabs/nscloud-cache-action@15799a6b54e5765f85b2aac25b3f0df43ed571c0
       with:
-        cache: rust
-        path: /nix
+        path: |-
+          /nix
+          ./target
+          /home/runner/.cargo/registry
+          /home/runner/.cargo/git
+          /home/runner/.cargo/.global-cache
       continue-on-error: true
     - name: Setup Nix
       uses: './.github/actions/setup-nix'
@@ -528,8 +532,12 @@ jobs:
     - name: Mount Namespace cache volume
       uses: namespacelabs/nscloud-cache-action@15799a6b54e5765f85b2aac25b3f0df43ed571c0
       with:
-        cache: rust
-        path: /nix
+        path: |-
+          /nix
+          ./target
+          /home/runner/.cargo/registry
+          /home/runner/.cargo/git
+          /home/runner/.cargo/.global-cache
       continue-on-error: true
     - name: Setup Nix
       uses: './.github/actions/setup-nix'
@@ -692,12 +700,12 @@ jobs:
           POSTGRES_DB: macrodb
         ports:
         - '5432:5432'
-        options: '--health-cmd pg_isready --health-interval 10s --health-timeout 5s --health-retries 5 --shm-size 1g -v /dev/shm/pgdata:/var/lib/postgresql/data'
+        options: '--health-cmd pg_isready --health-interval 1s --health-start-period 30s --health-timeout 5s --health-retries 5 --shm-size 1g -v /dev/shm/pgdata:/var/lib/postgresql/data'
       redis:
         image: redis:7
         ports:
         - '6379:6379'
-        options: '--health-cmd "redis-cli ping" --health-interval 10s --health-timeout 5s --health-retries 5'
+        options: '--health-cmd "redis-cli ping" --health-interval 1s --health-start-period 30s --health-timeout 5s --health-retries 5'
     steps:
     - name: Checkout
       uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
@@ -707,8 +715,12 @@ jobs:
     - name: Mount Namespace cache volume
       uses: namespacelabs/nscloud-cache-action@15799a6b54e5765f85b2aac25b3f0df43ed571c0
       with:
-        cache: rust
-        path: /nix
+        path: |-
+          /nix
+          ./target
+          /home/runner/.cargo/registry
+          /home/runner/.cargo/git
+          /home/runner/.cargo/.global-cache
       continue-on-error: true
     - name: Setup Nix
       uses: './.github/actions/setup-nix'
@@ -840,8 +852,20 @@ jobs:
         # line numbers in our own code.
         common=(
           --config 'profile.dev.package."*".debug=false'
-          --all-features --no-tests=pass --test-threads "$NEXTEST_TEST_THREADS"
+          --all-features --no-tests=pass
         )
+
+        # The Deno tests are ignored by default because they need the pinned runtime. They
+        # run from this same script so cargo sees identical flags and selection and reuses
+        # what the first run compiled. Only tests in packages this PR selected can match.
+        if [ "${NEXTEST_RUN_DENO_TESTS:-}" = "true" ]; then
+          common+=(
+            --run-ignored only --test-threads 2
+            -E 'package(code_execution) or (package(agent_harness_service) and test(authenticated_mcp_runs_javascript_and_persists_source_and_result))'
+          )
+        else
+          common+=(--test-threads "$NEXTEST_TEST_THREADS")
+        fi
 
         if [ "$RUST_PACKAGES" = "all" ]; then
           cargo nextest run --workspace --exclude sync_service --lib --bins --tests "${common[@]}"
@@ -866,9 +890,62 @@ jobs:
         deno-version: '2.9.6'
     - name: Test Deno sandbox and authenticated SDK execution
       if: env.RUST_PACKAGES == 'all' || contains(env.RUST_PACKAGES, 'code_execution') || contains(env.RUST_PACKAGES, 'agent_code_mode') || contains(env.RUST_PACKAGES, 'agent_harness_service')
-      run: |-
-        cargo test --locked -p code_execution -- --ignored --test-threads=2
-        cargo test --locked -p agent_harness_service authenticated_mcp_runs_javascript_and_persists_source_and_result -- --ignored
+      run: |
+        set -euo pipefail
+
+        # --no-tests=pass: a package filter can legitimately select a crate with no
+        # tests; treat that as success, not nextest's default error.
+        # sync-service is not part of this suite, and its storage backends are mutually
+        # exclusive under --all-features.
+        #
+        # Package selection uses `cargo nextest run -p`, not `--workspace -E rdeps(...)`.
+        # The filterset only decides which tests *run* after a workspace build; `-p`
+        # is what keeps an unrelated crate's test binary from being compiled.
+        #
+        # `--lib --bins --tests` is safe with `--workspace` (cargo skips packages that
+        # lack a given target type) but fails with `-p` when any selected package has
+        # no lib — xtask binaries such as xtask_nextest_filter / xtask_workflows.
+        # Unconstrained `-p` still runs that package's tests.
+
+        : "${RUST_PACKAGES:?RUST_PACKAGES is required}"
+        # Dependencies build without debug info, which cuts compile, link and disk cost.
+        # Workspace crates keep CARGO_PROFILE_*_DEBUG=limited, so backtraces still carry
+        # line numbers in our own code.
+        common=(
+          --config 'profile.dev.package."*".debug=false'
+          --all-features --no-tests=pass
+        )
+
+        # The Deno tests are ignored by default because they need the pinned runtime. They
+        # run from this same script so cargo sees identical flags and selection and reuses
+        # what the first run compiled. Only tests in packages this PR selected can match.
+        if [ "${NEXTEST_RUN_DENO_TESTS:-}" = "true" ]; then
+          common+=(
+            --run-ignored only --test-threads 2
+            -E 'package(code_execution) or (package(agent_harness_service) and test(authenticated_mcp_runs_javascript_and_persists_source_and_result))'
+          )
+        else
+          common+=(--test-threads "$NEXTEST_TEST_THREADS")
+        fi
+
+        if [ "$RUST_PACKAGES" = "all" ]; then
+          cargo nextest run --workspace --exclude sync_service --lib --bins --tests "${common[@]}"
+          exit 0
+        fi
+
+        pkg_args=()
+        for package in $RUST_PACKAGES; do
+          [ "$package" = "sync_service" ] || pkg_args+=(-p "$package")
+        done
+
+        if [ "${#pkg_args[@]}" -eq 0 ]; then
+          echo "No packages in the test suite were affected"
+          exit 0
+        fi
+
+        cargo nextest run "${common[@]}" "${pkg_args[@]}"
+      env:
+        NEXTEST_RUN_DENO_TESTS: 'true'
     - name: show sccache stats
       if: always()
       run: sccache --show-stats || true

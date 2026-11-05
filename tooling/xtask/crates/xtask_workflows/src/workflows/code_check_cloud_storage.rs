@@ -225,7 +225,8 @@ fn setup_execution_runtime() -> Step<gh_workflow::Use> {
 /// Exercise the real permission boundary and authenticated SDK execution in CI.
 fn test_execution_runtime() -> Step<Run> {
     Step::new("Test Deno sandbox and authenticated SDK execution")
-        .run("cargo test --locked -p code_execution -- --ignored --test-threads=2\ncargo test --locked -p agent_harness_service authenticated_mcp_runs_javascript_and_persists_source_and_result -- --ignored")
+        .run(include_str!("scripts/run_tests.sh"))
+        .add_env(("NEXTEST_RUN_DENO_TESTS", "true"))
         .if_condition(Expression::new(
             "env.RUST_PACKAGES == 'all' || contains(env.RUST_PACKAGES, 'code_execution') || contains(env.RUST_PACKAGES, 'agent_code_mode') || contains(env.RUST_PACKAGES, 'agent_harness_service')",
         ))
@@ -390,8 +391,8 @@ fn postgres_service() -> Container {
         )
         .ports(vec![Port::Name("5432:5432".to_string())])
         .options(
-            "--health-cmd pg_isready --health-interval 10s --health-timeout 5s \
-             --health-retries 5 --shm-size 1g \
+            "--health-cmd pg_isready --health-interval 1s --health-start-period 30s \
+             --health-timeout 5s --health-retries 5 --shm-size 1g \
              -v /dev/shm/pgdata:/var/lib/postgresql/data",
         )
 }
@@ -402,7 +403,7 @@ fn redis_service() -> Container {
         .image("redis:7")
         .ports(vec![Port::Name("6379:6379".to_string())])
         .options(
-            "--health-cmd \"redis-cli ping\" --health-interval 10s \
+            "--health-cmd \"redis-cli ping\" --health-interval 1s --health-start-period 30s \
              --health-timeout 5s --health-retries 5",
         )
 }
