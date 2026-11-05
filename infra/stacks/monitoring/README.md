@@ -112,8 +112,9 @@ The gate is that preview:
   (critical 2 GB → 250 MB, warning 3 GB → 500 MB) so 2 GiB instances stop
   alerting at their normal level.
 - **Already-deployed monitors update their `message`** (GoAlert handles instead
-  of the channel), and the GraphQL soup volume, gateway connections and task
-  count monitors their `query` and thresholds.
+  of the channel), and the GraphQL soup volume, websocket upgrade, gateway
+  connections and task count monitors their `query` and thresholds (volume
+  and websocket upgrades also gain recovery thresholds).
 - **90 resources to create**: 70 monitors (31 prod threshold and anomaly, 19 GraphQL soup, 9
   notification retention, 10 WhatsApp session, 1 native call push), 2 webhooks,
   7 log-based metrics, 3 span-based metrics and 1 APM retention filter (6, 3
