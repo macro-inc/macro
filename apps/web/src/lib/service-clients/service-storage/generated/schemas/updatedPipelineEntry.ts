@@ -5,7 +5,7 @@
  * OpenAPI spec version: 0.1.0
  */
 import type { EntryFieldChange } from './entryFieldChange';
-import type { EntryRecord } from './entryRecord';
+import type { UpdatedPipelineEntryRecord } from './updatedPipelineEntryRecord';
 
 /**
  * An updated entry.
@@ -15,6 +15,5 @@ export interface UpdatedPipelineEntry {
   changes: EntryFieldChange[];
   /** The entry. */
   entryId: string;
-  /** The company or contact it tracks. */
-  record: EntryRecord;
+  record?: UpdatedPipelineEntryRecord;
 }

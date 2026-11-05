@@ -4,9 +4,8 @@
  * document_storage_service
  * OpenAPI spec version: 0.1.0
  */
-
-import type { EntryRecord } from './entryRecord';
 import type { PipelineEntryFields } from './pipelineEntryFields';
+import type { PipelineEntryRecord } from './pipelineEntryRecord';
 
 /**
  * One pipeline entry.
@@ -16,6 +15,5 @@ export interface PipelineEntry {
   entryId: string;
   /** Its other fields that hold a value, by name. */
   fields: PipelineEntryFields;
-  /** The company or contact it tracks. */
-  record: EntryRecord;
+  record?: PipelineEntryRecord;
 }

@@ -7,7 +7,7 @@
 import type { PipelineFieldSummary } from './pipelineFieldSummary';
 
 export type PipelineFieldsAllOf = {
-  /** Its fields in column order; the first names the tracked record. */
+  /** Its fields in column order; a tracked pipeline's first names its record. */
   fields: PipelineFieldSummary[];
   /** Its table's version when read. */
   version: number;

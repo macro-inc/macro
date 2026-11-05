@@ -10,7 +10,8 @@ import type { NewEntryEmail } from './newEntryEmail';
 import type { NewEntryRecordId } from './newEntryRecordId';
 
 /**
- * One entry to add: exactly one of `recordId` or `email`.
+ * One entry to add: at most one of `recordId` or `email`. A tracked
+pipeline's entry names its record; a generic pipeline's names none.
  */
 export interface NewEntry {
   /** A contact's email: that contact, or in a company pipeline its company. */

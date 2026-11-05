@@ -6044,20 +6044,25 @@ export const searchCrmPipelineEntriesResponseItem = zod
               )
               .describe('Its other fields that hold a value, by name.'),
             record: zod
-              .object({
-                detail: zod
-                  .string()
-                  .nullish()
-                  .describe("A company's domain or a contact's email."),
-                id: zod.uuid().describe('The CRM company or contact id.'),
-                name: zod
-                  .string()
-                  .nullish()
-                  .describe(
-                    'Its name; missing when the caller cannot see the record.'
-                  ),
-              })
-              .describe('The company or contact an entry tracks.'),
+              .union([
+                zod.null(),
+                zod
+                  .object({
+                    detail: zod
+                      .string()
+                      .nullish()
+                      .describe("A company's domain or a contact's email."),
+                    id: zod.uuid().describe('The CRM company or contact id.'),
+                    name: zod
+                      .string()
+                      .nullish()
+                      .describe(
+                        'Its name; missing when the caller cannot see the record.'
+                      ),
+                  })
+                  .describe('The company or contact an entry tracks.'),
+              ])
+              .optional(),
           })
           .describe('One pipeline entry.')
       )
@@ -6072,12 +6077,19 @@ export const searchCrmPipelineEntriesResponseItem = zod
             'Entity identity, used with `CrmPipeline` access receipts.'
           ),
         name: zod.string().describe('Pipeline display name.'),
-        primaryColumnId: zod.uuid().describe('Protected primary column.'),
-        recordType: zod
-          .enum(['company', 'contact'])
+        primaryColumnId: zod
+          .uuid()
           .describe(
-            'Which CRM entity each row references. Fixed when a pipeline is created.'
+            "A tracked pipeline's protected record reference. A generic pipeline's\nName, which names no column once someone deletes it."
           ),
+        recordType: zod.union([
+          zod.null(),
+          zod
+            .enum(['company', 'contact'])
+            .describe(
+              'Which CRM entity each row references. Fixed when a pipeline is created.'
+            ),
+        ]),
         sharing: zod
           .enum(['private', 'team'])
           .describe(
@@ -6205,20 +6217,25 @@ export const listCrmRecordPipelineEntriesResponseItem = zod
               )
               .describe('Its other fields that hold a value, by name.'),
             record: zod
-              .object({
-                detail: zod
-                  .string()
-                  .nullish()
-                  .describe("A company's domain or a contact's email."),
-                id: zod.uuid().describe('The CRM company or contact id.'),
-                name: zod
-                  .string()
-                  .nullish()
-                  .describe(
-                    'Its name; missing when the caller cannot see the record.'
-                  ),
-              })
-              .describe('The company or contact an entry tracks.'),
+              .union([
+                zod.null(),
+                zod
+                  .object({
+                    detail: zod
+                      .string()
+                      .nullish()
+                      .describe("A company's domain or a contact's email."),
+                    id: zod.uuid().describe('The CRM company or contact id.'),
+                    name: zod
+                      .string()
+                      .nullish()
+                      .describe(
+                        'Its name; missing when the caller cannot see the record.'
+                      ),
+                  })
+                  .describe('The company or contact an entry tracks.'),
+              ])
+              .optional(),
           })
           .describe('One pipeline entry.')
       )
@@ -6233,12 +6250,19 @@ export const listCrmRecordPipelineEntriesResponseItem = zod
             'Entity identity, used with `CrmPipeline` access receipts.'
           ),
         name: zod.string().describe('Pipeline display name.'),
-        primaryColumnId: zod.uuid().describe('Protected primary column.'),
-        recordType: zod
-          .enum(['company', 'contact'])
+        primaryColumnId: zod
+          .uuid()
           .describe(
-            'Which CRM entity each row references. Fixed when a pipeline is created.'
+            "A tracked pipeline's protected record reference. A generic pipeline's\nName, which names no column once someone deletes it."
           ),
+        recordType: zod.union([
+          zod.null(),
+          zod
+            .enum(['company', 'contact'])
+            .describe(
+              'Which CRM entity each row references. Fixed when a pipeline is created.'
+            ),
+        ]),
         sharing: zod
           .enum(['private', 'team'])
           .describe(
@@ -6476,12 +6500,19 @@ export const editCrmPipelineResponse = zod
       .uuid()
       .describe('Entity identity, used with `CrmPipeline` access receipts.'),
     name: zod.string().describe('Pipeline display name.'),
-    primaryColumnId: zod.uuid().describe('Protected primary column.'),
-    recordType: zod
-      .enum(['company', 'contact'])
+    primaryColumnId: zod
+      .uuid()
       .describe(
-        'Which CRM entity each row references. Fixed when a pipeline is created.'
+        "A tracked pipeline's protected record reference. A generic pipeline's\nName, which names no column once someone deletes it."
       ),
+    recordType: zod.union([
+      zod.null(),
+      zod
+        .enum(['company', 'contact'])
+        .describe(
+          'Which CRM entity each row references. Fixed when a pipeline is created.'
+        ),
+    ]),
     sharing: zod
       .enum(['private', 'team'])
       .describe(
@@ -6555,7 +6586,7 @@ export const editCrmPipelineResponse = zod
             .describe('One field of a pipeline, named as people see it.')
         )
         .describe(
-          'Its fields in column order; the first names the tracked record.'
+          "Its fields in column order; a tracked pipeline's first names its record."
         ),
       version: zod.number().describe("Its table's version when read."),
     })
@@ -6563,9 +6594,9 @@ export const editCrmPipelineResponse = zod
   .describe('A pipeline with its fields.');
 
 /**
- * @summary Add companies or contacts as entries, filling fields by name. A record
-already in the pipeline is returned in `alreadyPresent` instead, unless
-`allowDuplicates`.
+ * @summary Add entries, filling fields by name: companies or contacts in a tracked
+pipeline, free-form rows in a generic one. A record already in the
+pipeline is returned in `alreadyPresent` instead, unless `allowDuplicates`.
  */
 export const addCrmPipelineEntriesParams = zod.object({
   id: zod.uuid(),
@@ -6618,7 +6649,9 @@ export const addCrmPipelineEntriesBody = zod
               .optional()
               .describe('Fields to fill in.'),
           })
-          .describe('One entry to add: exactly one of `recordId` or `email`.')
+          .describe(
+            "One entry to add: at most one of `recordId` or `email`. A tracked\npipeline's entry names its record; a generic pipeline's names none."
+          )
       )
       .describe('The records to add, each with its starting fields.'),
   })
@@ -6705,20 +6738,25 @@ export const addCrmPipelineEntriesResponse = zod
               )
               .describe('Its other fields that hold a value, by name.'),
             record: zod
-              .object({
-                detail: zod
-                  .string()
-                  .nullish()
-                  .describe("A company's domain or a contact's email."),
-                id: zod.uuid().describe('The CRM company or contact id.'),
-                name: zod
-                  .string()
-                  .nullish()
-                  .describe(
-                    'Its name; missing when the caller cannot see the record.'
-                  ),
-              })
-              .describe('The company or contact an entry tracks.'),
+              .union([
+                zod.null(),
+                zod
+                  .object({
+                    detail: zod
+                      .string()
+                      .nullish()
+                      .describe("A company's domain or a contact's email."),
+                    id: zod.uuid().describe('The CRM company or contact id.'),
+                    name: zod
+                      .string()
+                      .nullish()
+                      .describe(
+                        'Its name; missing when the caller cannot see the record.'
+                      ),
+                  })
+                  .describe('The company or contact an entry tracks.'),
+              ])
+              .optional(),
           })
           .describe('One pipeline entry.')
       )
@@ -6802,20 +6840,25 @@ export const addCrmPipelineEntriesResponse = zod
               )
               .describe('Its other fields that hold a value, by name.'),
             record: zod
-              .object({
-                detail: zod
-                  .string()
-                  .nullish()
-                  .describe("A company's domain or a contact's email."),
-                id: zod.uuid().describe('The CRM company or contact id.'),
-                name: zod
-                  .string()
-                  .nullish()
-                  .describe(
-                    'Its name; missing when the caller cannot see the record.'
-                  ),
-              })
-              .describe('The company or contact an entry tracks.'),
+              .union([
+                zod.null(),
+                zod
+                  .object({
+                    detail: zod
+                      .string()
+                      .nullish()
+                      .describe("A company's domain or a contact's email."),
+                    id: zod.uuid().describe('The CRM company or contact id.'),
+                    name: zod
+                      .string()
+                      .nullish()
+                      .describe(
+                        'Its name; missing when the caller cannot see the record.'
+                      ),
+                  })
+                  .describe('The company or contact an entry tracks.'),
+              ])
+              .optional(),
           })
           .describe('One pipeline entry.')
       )
@@ -7062,20 +7105,25 @@ export const updateCrmPipelineEntriesResponse = zod
               .describe('The fields set, as they were and are.'),
             entryId: zod.uuid().describe('The entry.'),
             record: zod
-              .object({
-                detail: zod
-                  .string()
-                  .nullish()
-                  .describe("A company's domain or a contact's email."),
-                id: zod.uuid().describe('The CRM company or contact id.'),
-                name: zod
-                  .string()
-                  .nullish()
-                  .describe(
-                    'Its name; missing when the caller cannot see the record.'
-                  ),
-              })
-              .describe('The company or contact an entry tracks.'),
+              .union([
+                zod.null(),
+                zod
+                  .object({
+                    detail: zod
+                      .string()
+                      .nullish()
+                      .describe("A company's domain or a contact's email."),
+                    id: zod.uuid().describe('The CRM company or contact id.'),
+                    name: zod
+                      .string()
+                      .nullish()
+                      .describe(
+                        'Its name; missing when the caller cannot see the record.'
+                      ),
+                  })
+                  .describe('The company or contact an entry tracks.'),
+              ])
+              .optional(),
           })
           .describe('An updated entry.')
       )
@@ -7272,20 +7320,25 @@ export const findCrmPipelineEntriesResponse = zod
               )
               .describe('Its other fields that hold a value, by name.'),
             record: zod
-              .object({
-                detail: zod
-                  .string()
-                  .nullish()
-                  .describe("A company's domain or a contact's email."),
-                id: zod.uuid().describe('The CRM company or contact id.'),
-                name: zod
-                  .string()
-                  .nullish()
-                  .describe(
-                    'Its name; missing when the caller cannot see the record.'
-                  ),
-              })
-              .describe('The company or contact an entry tracks.'),
+              .union([
+                zod.null(),
+                zod
+                  .object({
+                    detail: zod
+                      .string()
+                      .nullish()
+                      .describe("A company's domain or a contact's email."),
+                    id: zod.uuid().describe('The CRM company or contact id.'),
+                    name: zod
+                      .string()
+                      .nullish()
+                      .describe(
+                        'Its name; missing when the caller cannot see the record.'
+                      ),
+                  })
+                  .describe('The company or contact an entry tracks.'),
+              ])
+              .optional(),
           })
           .describe('One pipeline entry.')
       )
@@ -7304,12 +7357,19 @@ export const findCrmPipelineEntriesResponse = zod
             'Entity identity, used with `CrmPipeline` access receipts.'
           ),
         name: zod.string().describe('Pipeline display name.'),
-        primaryColumnId: zod.uuid().describe('Protected primary column.'),
-        recordType: zod
-          .enum(['company', 'contact'])
+        primaryColumnId: zod
+          .uuid()
           .describe(
-            'Which CRM entity each row references. Fixed when a pipeline is created.'
+            "A tracked pipeline's protected record reference. A generic pipeline's\nName, which names no column once someone deletes it."
           ),
+        recordType: zod.union([
+          zod.null(),
+          zod
+            .enum(['company', 'contact'])
+            .describe(
+              'Which CRM entity each row references. Fixed when a pipeline is created.'
+            ),
+        ]),
         sharing: zod
           .enum(['private', 'team'])
           .describe(
@@ -7385,7 +7445,7 @@ export const findCrmPipelineEntriesResponse = zod
                 .describe('One field of a pipeline, named as people see it.')
             )
             .describe(
-              'Its fields in column order; the first names the tracked record.'
+              "Its fields in column order; a tracked pipeline's first names its record."
             ),
           version: zod.number().describe("Its table's version when read."),
         })
@@ -7503,20 +7563,25 @@ export const removeCrmPipelineEntriesResponse = zod
               )
               .describe('Its other fields that hold a value, by name.'),
             record: zod
-              .object({
-                detail: zod
-                  .string()
-                  .nullish()
-                  .describe("A company's domain or a contact's email."),
-                id: zod.uuid().describe('The CRM company or contact id.'),
-                name: zod
-                  .string()
-                  .nullish()
-                  .describe(
-                    'Its name; missing when the caller cannot see the record.'
-                  ),
-              })
-              .describe('The company or contact an entry tracks.'),
+              .union([
+                zod.null(),
+                zod
+                  .object({
+                    detail: zod
+                      .string()
+                      .nullish()
+                      .describe("A company's domain or a contact's email."),
+                    id: zod.uuid().describe('The CRM company or contact id.'),
+                    name: zod
+                      .string()
+                      .nullish()
+                      .describe(
+                        'Its name; missing when the caller cannot see the record.'
+                      ),
+                  })
+                  .describe('The company or contact an entry tracks.'),
+              ])
+              .optional(),
           })
           .describe('One pipeline entry.')
       )

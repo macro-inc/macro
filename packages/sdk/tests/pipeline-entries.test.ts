@@ -137,7 +137,7 @@ test('entries are written and read by field name and handle, never by column id'
   const [entry] = added.added;
   expect(entry).toBeInstanceOf(PipelineEntry);
   expect(entry?.record).toBeInstanceOf(Company);
-  expect(entry?.record.id).toBe('acme');
+  expect(entry?.record?.id).toBe('acme');
   expect(entry?.fields.Stage).toEqual({ type: 'labels', value: ['Demo'] });
   expect(added.alreadyPresent[0]?.recordName).toBe('Globex');
   expect(added.version).toBe(4);
@@ -209,6 +209,13 @@ test('entries are written and read by field name and handle, never by column id'
     'company',
     acmeEntry,
   );
+  const row = PipelineEntry.from(macro._client, pipeline, null, {
+    entryId: 'row',
+    record: null,
+    fields: { Name: { type: 'text', value: 'Site' } },
+  });
+  expect(row.record).toBeUndefined();
+  expect(row.toJSON().record).toBeUndefined();
   await expect(pipeline.removeRecords([elsewhere])).rejects.toThrow(
     'Entry belongs to another pipeline',
   );
