@@ -530,7 +530,7 @@ jobs:
           exit 0
         fi
 
-        cargo nextest run "${common[@]}" "${pkg_args[@]}"
+        cargo nextest run --no-fail-fast "${common[@]}" "${pkg_args[@]}"
     - name: Set up code execution runtime
       if: env.RUST_PACKAGES == 'all' || contains(env.RUST_PACKAGES, 'code_execution') || contains(env.RUST_PACKAGES, 'agent_code_mode') || contains(env.RUST_PACKAGES, 'agent_harness_service')
       uses: denoland/setup-deno@22d081ff2d3a40755e97629de92e3bcbfa7cf2ed
@@ -591,7 +591,7 @@ jobs:
           exit 0
         fi
 
-        cargo nextest run "${common[@]}" "${pkg_args[@]}"
+        cargo nextest run --no-fail-fast "${common[@]}" "${pkg_args[@]}"
       env:
         NEXTEST_RUN_DENO_TESTS: 'true'
     - name: show sccache stats
