@@ -176,7 +176,6 @@ export function ItemDndProvider(props: { children: JSXElement }) {
   window.addEventListener('keydown', handleKeyDown);
   window.addEventListener('keyup', handleKeyUp);
   window.addEventListener('pointermove', handlePointerMove, { capture: true });
-  window.addEventListener('pointercancel', handlePointerEnd, { capture: true });
   window.addEventListener('mousemove', handleMouseMove, { capture: true });
   window.addEventListener('mouseup', handlePointerEnd, { capture: true });
 
@@ -184,9 +183,6 @@ export function ItemDndProvider(props: { children: JSXElement }) {
     window.removeEventListener('keydown', handleKeyDown);
     window.removeEventListener('keyup', handleKeyUp);
     window.removeEventListener('pointermove', handlePointerMove, {
-      capture: true,
-    });
-    window.removeEventListener('pointercancel', handlePointerEnd, {
       capture: true,
     });
     window.removeEventListener('mousemove', handleMouseMove, {

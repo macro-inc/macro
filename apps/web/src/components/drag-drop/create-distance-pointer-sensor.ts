@@ -64,9 +64,7 @@ export function createDistancePointerSensor(
     window.addEventListener('pointercancel', cancelOnPointerCancel, true);
     document.addEventListener('visibilitychange', cancelWhenHidden);
     window.addEventListener('blur', cancelOnBlur);
-    if (options.manual) {
-      document.addEventListener('keydown', cancelOnEscape, true);
-    }
+    document.addEventListener('keydown', cancelOnEscape, true);
     if (options.activationDelay !== undefined) activateAfterDelay();
   };
 
@@ -130,7 +128,7 @@ export function createDistancePointerSensor(
   };
   const cancelOnBlur = () => cancel(true);
   const cancelOnPointerCancel = (event: PointerEvent) => {
-    if (event.pointerType && event.pointerType !== 'mouse') return;
+    if (event.pointerType === 'touch') return;
     cancel(true);
   };
   const cancelWhenHidden = () => {

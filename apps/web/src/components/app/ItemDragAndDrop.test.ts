@@ -55,6 +55,7 @@ function setup() {
     view,
     row: row!,
     state: context![0],
+    detectCollisions: () => context![1].detectCollisions(),
     opened,
     dropped,
   };
@@ -69,7 +70,13 @@ afterEach(() => {
 });
 
 describe('workspace drag recovery', () => {
-  it.each(['blur', 'pointercancel', 'hidden', 'released button'] as const)(
+  it.each([
+    'blur',
+    'pointercancel',
+    'pen cancellation',
+    'hidden',
+    'released button',
+  ] as const)(
     'releases an interrupted drag after %s without committing a drop',
     (interruption) => {
       const { row, state, opened, dropped } = setup();
@@ -85,8 +92,15 @@ describe('workspace drag recovery', () => {
 
       if (interruption === 'blur') {
         fireEvent(window, new Event('blur'));
-      } else if (interruption === 'pointercancel') {
-        fireEvent.pointerCancel(row);
+      } else if (
+        interruption === 'pointercancel' ||
+        interruption === 'pen cancellation'
+      ) {
+        const event = new Event('pointercancel', { bubbles: true });
+        Object.defineProperty(event, 'pointerType', {
+          value: interruption === 'pen cancellation' ? 'pen' : 'mouse',
+        });
+        fireEvent(row, event);
       } else if (interruption === 'hidden') {
         vi.spyOn(document, 'visibilityState', 'get').mockReturnValue('hidden');
         fireEvent(document, new Event('visibilitychange'));
@@ -130,6 +144,68 @@ describe('workspace drag recovery', () => {
     }
   );
 
+  it.each(['pending', 'moving', 'stationary hold'] as const)(
+    'cancels a %s gesture with Escape without saving or restarting it',
+    (phase) => {
+      vi.useFakeTimers();
+      const { row, state, dropped } = setup();
+      fireEvent.mouseDown(row, {
+        button: 0,
+        buttons: 1,
+        clientX: 10,
+        clientY: 10,
+      });
+      if (phase === 'moving') {
+        fireEvent.mouseMove(document, { buttons: 1, clientX: 30, clientY: 10 });
+      } else if (phase === 'stationary hold') {
+        vi.advanceTimersByTime(250);
+      }
+
+      fireEvent.keyDown(document, { key: 'Escape' });
+      vi.advanceTimersByTime(1000);
+      fireEvent.mouseMove(document, { buttons: 1, clientX: 50, clientY: 10 });
+      expect(state.active.draggable).toBeNull();
+      if (phase === 'pending') {
+        expect(dropped).not.toHaveBeenCalled();
+      } else {
+        expect(state.active.sensor).not.toBeNull();
+        expect(dropped).toHaveBeenCalledExactlyOnceWith(
+          expect.objectContaining({ droppable: null })
+        );
+      }
+
+      fireEvent.mouseUp(row, { button: 0 });
+      expect(state.active.sensor).toBeNull();
+      fireEvent.mouseDown(row, { button: 0, buttons: 1 });
+      vi.advanceTimersByTime(250);
+      expect(state.active.draggable?.id).toBe('channel');
+    }
+  );
+
+  it('keeps an active mouse drag when an unrelated touch is canceled', async () => {
+    const { row, state, dropped, detectCollisions } = setup();
+    fireEvent.mouseDown(row, {
+      button: 0,
+      buttons: 1,
+      clientX: 10,
+      clientY: 10,
+    });
+    fireEvent.mouseMove(document, { buttons: 1, clientX: 30, clientY: 10 });
+    const event = new Event('pointercancel', { bubbles: true });
+    Object.defineProperty(event, 'pointerType', { value: 'touch' });
+    fireEvent(document, event);
+    await Promise.resolve();
+    detectCollisions();
+
+    expect(state.active.draggable?.id).toBe('channel');
+    expect(dropped).not.toHaveBeenCalled();
+    fireEvent.mouseUp(row, { button: 0 });
+    expect(dropped).toHaveBeenCalledExactlyOnceWith(
+      expect.objectContaining({
+        droppable: expect.objectContaining({ id: 'target' }),
+      })
+    );
+  });
   it('preserves short clicks and hold activation', () => {
     vi.useFakeTimers();
     const { row, state, opened, dropped } = setup();
