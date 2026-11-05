@@ -1,9 +1,28 @@
-# Name-focused contact search — investigation, not implemented
+# Name-focused contact search — approved, implementation in progress
 
 The current contact search is memory-bounded, but broad subsequence reads still
 score most of the directory. This proposal changes the interactive **people search
 contract**, not ordinary document/title search, SQL capability, membership authority,
-or exact-reference ambiguity evidence. It needs approval before implementation.
+or exact-reference ambiguity evidence. The matching/recent-first contract is approved.
+
+## Implementation checkpoint
+
+- [x] Shared name-only exact/word-prefix/literal-contains matcher, with existing
+  Unicode lowercase/whitespace normalization (no newly introduced accent folding).
+- [x] Explicit identity/complete-address classification and stable timestamp/user-ID
+  BLOB ordering, independent of rebuilt index-document IDs.
+- [x] Bounded word facts with an explicit overflow marker, default ranks and sparse
+  epoch-scoped activity/DM/inbox facts in the existing owned predicate projection.
+- [x] Fact-delta persistence and bounded derived-version rebuild preserving records,
+  pending writes and storage generation; context changes do not rewrite name words.
+- [ ] Indexed hybrid reader, before-limit exclusions and query-dependent DM alias
+  handling, and scope/projection/context-safe continuations.
+- [ ] Coordinated browser/native/server-fallback policy cutover, preventing consumer
+  re-ranking from replacing the new ordering; exact-reference APIs remain separate.
+- [ ] Full browser/native/OPFS correctness and fresh 1k/100k performance comparison.
+
+**Active picker behavior is not switched by this foundation.** Host policy version 4
+remains in use until reader and consumer integration can change together.
 
 ## Recommendation
 
@@ -49,8 +68,8 @@ ordering**, so a common query can stop once it has the correct first 50 results.
 
 ## Disposable native Turso prototype
 
-Artifacts: `/tmp/contacts-name-search/`. No application code, schema, user cache or
-backend was changed. A fresh synthetic database uses the same pinned Turso revision
+Artifacts: `/tmp/contacts-name-search/`. That pre-approval experiment changed no
+application code, schema, user cache or backend. A fresh synthetic database uses the same pinned Turso revision
 and existing generic index shapes (`index_documents`, `exact_facts`, `integer_facts`),
 with normalized contact blobs and the current covering record index.
 
@@ -133,4 +152,5 @@ array. A naive longest-token seed was inferior to a more selective posting range
 
 No FTS extension, external service, additional contacts database or in-memory
 contact catalog is required by this direction. Name semantics and recent-first
-ordering are the product decisions; the final storage design still needs validation.
+ordering are approved; the integrated reader and its final storage behavior still
+need validation.

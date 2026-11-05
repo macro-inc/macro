@@ -18,7 +18,7 @@ provider ([linked devices](architecture/whatsapp-linked-devices.md)) and the
 Document sync: [DSS sync router](architecture/sync-router.md).
 
 Contacts: [disk-backed directory implementation plan](design/disk-backed-contacts.md),
-[name-focused search proposal](design/contact-name-search-proposal.md) (not implemented).
+[approved name-focused search design](design/contact-name-search-proposal.md) (implementation in progress).
 
 Agent guidance per SDK area: [`@routing` and `@agent`](architecture/agent-sdk-guidance.md).
 

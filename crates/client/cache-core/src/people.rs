@@ -1,5 +1,6 @@
 //! Bounded, context-aware person ranking. Local facts never establish directory membership.
 
+pub mod name_search;
 pub mod sql;
 pub mod sync;
 

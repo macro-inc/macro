@@ -49,7 +49,8 @@ fn viewer(connection: &Arc<Connection>) -> Result<Option<String>, TursoStorageEr
 
 fn stamp(viewer: Option<&str>) -> String {
     format!(
-        "1:{}",
+        "{}:{}",
+        projection::VERSION,
         viewer
             .map(projection::partition)
             .unwrap_or_else(|| "unbound".into())
@@ -158,15 +159,74 @@ pub(super) fn write(
         }
         let keys = projected.keys().cloned().collect::<Vec<_>>();
         let previous = load_projection_states(connection, &keys)?;
-        // Ranking-context patches do not change SQL facts. Avoid rewriting six
-        // facts per contact while background publication holds the engine lock.
+        // Name/SQL facts and sparse context ranks share this owned document,
+        // but activity changes must not rewrite the name-word posting list.
         for ((key, next), previous) in projected.into_iter().zip(previous) {
             if next != previous {
-                write_projection_state(connection, &key, next.as_ref())?;
+                write_delta(connection, &key, previous.as_ref(), next.as_ref())?;
             }
         }
     }
     Ok(())
+}
+
+fn write_delta(
+    connection: &Arc<Connection>,
+    key: &PredicateRecordKey,
+    previous: Option<&ProjectionState>,
+    next: Option<&ProjectionState>,
+) -> Result<(), TursoStorageError> {
+    if let (Some(ProjectionState::Complete(old)), Some(ProjectionState::Complete(next))) =
+        (previous, next)
+        && old.record_key == next.record_key
+        && old.profile == next.profile
+        && old.partition == next.partition
+        && old.integer_facts == next.integer_facts
+        && old.sort_facts == next.sort_facts
+    {
+        next.validate().map_err(|_| invariant())?;
+        let ids = driver::query(connection, INDEX_DOCUMENT_ID, vec![text(key.as_str())])?;
+        let [row] = ids.as_slice() else {
+            return Err(invariant());
+        };
+        let id = required_i64(row, 0)?;
+        // Both documents are canonicalized by projection/loading. Bound work to
+        // their facts and preserve the document ID, unrelated facts and indexes.
+        for fact in &old.exact_facts {
+            if next.exact_facts.binary_search(fact).is_err() {
+                require_changed(
+                    driver::execute(
+                        connection,
+                        "DELETE FROM exact_facts WHERE document_id = ? AND attribute = ? AND value = ?",
+                        vec![
+                            Value::from_i64(id),
+                            text(fact.attribute.as_str()),
+                            Value::from_blob(fact.value.as_bytes().to_vec()),
+                        ],
+                    )?,
+                    1,
+                )?;
+            }
+        }
+        for fact in &next.exact_facts {
+            if old.exact_facts.binary_search(fact).is_err() {
+                require_changed(
+                    driver::execute(
+                        connection,
+                        EXACT_FACT_INSERT,
+                        vec![
+                            Value::from_i64(id),
+                            text(fact.attribute.as_str()),
+                            Value::from_blob(fact.value.as_bytes().to_vec()),
+                        ],
+                    )?,
+                    1,
+                )?;
+            }
+        }
+        return Ok(());
+    }
+    write_projection_state(connection, key, next)
 }
 
 pub(super) fn delete(

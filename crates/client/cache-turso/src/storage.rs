@@ -4835,7 +4835,8 @@ fn prepare_records(
                         .fields
                         .iter()
                         .filter(|(field, _)| {
-                            cache_core::people::sql::projection::FIELDS.contains(&field.as_str())
+                            cache_core::people::sql::projection::INPUT_FIELDS
+                                .contains(&field.as_str())
                         })
                         .map(|(field, value)| (field.clone(), value.clone()))
                         .collect(),

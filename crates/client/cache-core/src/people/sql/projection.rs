@@ -15,8 +15,18 @@ use uuid::Uuid;
 
 /// Predicate profile owned by local people SQL.
 pub const PROFILE: &str = "people-sql-v1";
+/// Disposable fact layout; changing it rebuilds only this owned profile.
+pub const VERSION: u32 = 2;
 /// Fields required from a normalized contact; local ranking facts are unrelated.
 pub const FIELDS: &[&str] = &["userId", "email", "name"];
+/// Fields copied by storage for this projection. Private context is an input to
+/// ranking facts only; it is deliberately absent from membership's `FIELDS` gate.
+pub const INPUT_FIELDS: &[&str] = &[
+    FIELDS[0],
+    FIELDS[1],
+    FIELDS[2],
+    crate::people::CONTEXT_FIELD,
+];
 
 /// Opaque account partition, bound by the engine rather than supplied in SQL.
 pub fn partition(viewer: &str) -> String {
@@ -98,6 +108,9 @@ pub fn project(
             value,
         });
     }
+    exact_facts.extend(crate::people::name_search::projection::derive(
+        &user, name, record,
+    )?);
     let mut document = IndexDocument {
         record_key,
         profile,
