@@ -121,7 +121,10 @@ export class DocumentNamespace {
     return Document.create(this.client, opts);
   }
 
-  /** Create a native Canvas with shared content ready for reading and editing. */
+  /**
+   * Create a native Canvas with shared content ready for reading and editing;
+   * work on it with `document.canvas()`.
+   */
   async createCanvas(opts: {
     name: string;
     project?: Project;

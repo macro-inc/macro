@@ -36,6 +36,7 @@ import {
   editWithInstructions,
 } from './ai-edit';
 import { DocumentAnchor } from './anchor';
+import { Canvas } from './canvas';
 import { Comment } from './comment';
 import { DocumentVersion } from './version';
 
@@ -412,6 +413,15 @@ export class Document
     options: DocumentEditOptions = {},
   ): Promise<DocumentEditResult> {
     return editWithInstructions(this.client, this, instructions, options);
+  }
+
+  /**
+   * This document as a canvas, to read, edit and render its live scene; never
+   * use `content()` or `edit()` on a canvas. Calls on it fail when the
+   * document is not a native canvas.
+   */
+  canvas(): Canvas {
+    return new Canvas(this.client, this);
   }
 
   /** Rename the document. */

@@ -307,6 +307,24 @@ export {
   EditOutcomeUnknownError,
 } from './entities/documents/ai-edit';
 export { DocumentAnchor } from './entities/documents/anchor';
+export {
+  Canvas,
+  type CanvasApplyOptions,
+  type CanvasApplyResult,
+  type CanvasBounds,
+  type CanvasEditOptions,
+  CanvasEditRejectedError,
+  type CanvasEditResult,
+  CanvasRenderImage,
+  type CanvasRenderObject,
+  type CanvasRenderOptions,
+  CanvasRevisionConflictError,
+  type CanvasScene,
+  type CanvasSceneItem,
+  type CanvasSceneOptions,
+  type CanvasTextLayout,
+  type CanvasUnavailable,
+} from './entities/documents/canvas';
 export { DocumentVersion } from './entities/documents/version';
 export {
   DraftAttachment,

@@ -10,7 +10,10 @@ enforced by the ordinary backend APIs.
 
 - `src/macro.ts`: public exports and namespace registration.
 - `documents.createCanvas()` creates shared content before returning a Document handle;
-  it requires no browser open or upload.
+  it requires no browser open or upload. `document.canvas()` (`entities/documents/canvas.ts`)
+  reads (`scene`), edits (`apply` code against a revision, `edit` by instructions) and
+  renders the live scene over DSS `/documents/{id}/canvas/*`; `render` returns a
+  `StaticImage` the server stored, since static file storage rejects API keys.
 - `src/entities/entity.ts`: lazy detail reads, mutation invalidation and safe JSON.
 - `src/entities/workspace/namespace.ts`: filtered activity pages and iteration.
 - `src/entities/routines/`, `agents/`, `harnesses/`: automation and agent hosts.
