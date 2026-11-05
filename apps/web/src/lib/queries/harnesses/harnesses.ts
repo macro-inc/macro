@@ -105,7 +105,7 @@ export function useApproveOwnHarnessPairingMutation() {
   return useMutation(() => ({
     gcTime: 0,
     // Approved as a private runtime that prompts; setup turns bypass on
-    // through the runtime's web setting when the user chose Full Access.
+    // through the runtime's web setting when the user chose Full access in setup.
     mutationFn: async (code: string) =>
       await throwOnErr(() =>
         storageServiceClient.approveHarnessPairing({

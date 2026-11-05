@@ -4537,10 +4537,6 @@ export type CreateMeetingRequest = {
  */
 export type CreatePairingRequest = {
     /**
-     * Daemon operator consent ceiling. Omitted by older clients; web approval decides.
-     */
-    allow_permission_bypass?: boolean | null;
-    /**
      * Display-only description of the machine, e.g. `eric@macbook / darwin`.
      */
     host?: string | null;
@@ -4548,7 +4544,6 @@ export type CreatePairingRequest = {
      * Requested harness display name (typically the machine's hostname).
      */
     name: string;
-    scope?: null | RequestedHarnessScope;
 };
 
 /**
@@ -11403,14 +11398,9 @@ export type PairingDetails = {
      */
     host?: string | null;
     /**
-     * Daemon operator consent ceiling; false forbids bypass at approval.
-     */
-    requested_allow_permission_bypass?: boolean | null;
-    /**
      * Harness display name the daemon asked for.
      */
     requested_name: string;
-    requested_scope?: null | RequestedHarnessScope;
 };
 
 /**
@@ -12381,14 +12371,6 @@ export type RequestAccess = {
  * Durable outcome; reading a notification never changes it.
  */
 export type RequestStatus = 'pending' | 'granted' | 'denied' | 'cancelled';
-
-/**
- * The ownership scope a daemon's config asks for.
- *
- * Advisory, not binding: the approving user confirms it in the dialog, which
- * arrives preselected to this. Approval is what actually sets ownership.
- */
-export type RequestedHarnessScope = 'private' | 'team';
 
 /**
  * A layout as an op asks for it: a board or timeline may leave its title

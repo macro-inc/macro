@@ -143,5 +143,7 @@ or start `macrod` with `MACROD_NO_UPDATE=1` set. `macrod` then only changes when
 - **Your agent is missing from Quickstart:** check that it is installed and its command is available in the terminal where you launch `macrod`. For a different ACP agent, use **Custom command**.
 - **Your code is invalid or expired:** start a new pairing from the terminal and enter the new code. The code in the screenshot is only an example.
 - **Your runtime is offline:** check that your computer is awake, `macrod` is running, and it can reach Macro. Check the terminal's **Logs** tab for errors.
+- **`macrod` says your config sets `[identity]` or a `scope` in `[credentials]`:** delete those lines from `~/.macrod/macrod.toml`. The runtime's name, access, and permission bypass are set in **Settings → Runtimes**.
+- **`macrod` asks you to pair again after an update:** it reads only `~/.macrod/macrod.toml`. If you started an older `macrod` from a project folder, move the `macrod.toml` from that folder to `~/.macrod/`.
 
 To learn more about using agents in your workspace, see [Agents](/product/agents).

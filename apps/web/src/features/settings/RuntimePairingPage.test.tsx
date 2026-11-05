@@ -17,8 +17,6 @@ const mocks = vi.hoisted(() => ({
     data: {
       code: 'KX7M-4QHD',
       requested_name: 'Dev laptop',
-      requested_scope: null,
-      requested_allow_permission_bypass: null as boolean | null,
       host: 'erics-mbp.local',
       created_at: '2026-08-27T12:00:00Z',
       expires_at: new Date(Date.now() + 10 * 60_000).toISOString(),
@@ -70,7 +68,6 @@ beforeAll(() => {
 beforeEach(() => {
   vi.clearAllMocks();
   mocks.pairing.isError = false;
-  mocks.pairing.data.requested_allow_permission_bypass = null;
   mocks.approve.mockResolvedValue({ id: 'harness-1' });
   mocks.currentTeam = { team: { id: 'team-1' } };
 });
@@ -222,27 +219,4 @@ it('warns before opting a harness into permission bypass', async () => {
       expect.objectContaining({ allowPermissionBypass: true })
     )
   );
-});
-
-it('decides bypass on the web whatever an older daemon requested', async () => {
-  for (const requested of [true, false]) {
-    mocks.approve.mockClear();
-    mocks.pairing.data.requested_allow_permission_bypass = requested;
-    const { unmount } = render(() => (
-      <RuntimePairingPage initialCode="KX7M-4QHD" onClose={() => {}} />
-    ));
-    const checkbox = screen.getByRole('checkbox', {
-      name: 'Allow bypassing permission requests',
-    });
-    expect(checkbox).toHaveProperty('checked', false);
-    expect(checkbox.hasAttribute('disabled')).toBe(false);
-    fireEvent.click(checkbox);
-    fireEvent.click(screen.getByRole('button', { name: 'Approve' }));
-    await waitFor(() =>
-      expect(mocks.approve).toHaveBeenCalledWith(
-        expect.objectContaining({ allowPermissionBypass: true })
-      )
-    );
-    unmount();
-  }
 });

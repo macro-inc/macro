@@ -28081,12 +28081,6 @@ it, and creation is throttled in the domain service.
  */
 export const createHarnessPairingBody = zod
   .object({
-    allow_permission_bypass: zod
-      .boolean()
-      .nullish()
-      .describe(
-        'Daemon operator consent ceiling. Omitted by older clients; web approval decides.'
-      ),
     host: zod
       .string()
       .nullish()
@@ -28098,16 +28092,6 @@ export const createHarnessPairingBody = zod
       .describe(
         "Requested harness display name (typically the machine's hostname)."
       ),
-    scope: zod
-      .union([
-        zod.null(),
-        zod
-          .enum(['private', 'team'])
-          .describe(
-            "The ownership scope a daemon's config asks for.\n\nAdvisory, not binding: the approving user confirms it in the dialog, which\narrives preselected to this. Approval is what actually sets ownership."
-          ),
-      ])
-      .optional(),
   })
   .describe(
     'Request to open a pairing: the daemon asks for a code the user approves.\n\nThe daemon serializes this, so both derives are used.'
@@ -28129,25 +28113,9 @@ export const getHarnessPairingResponse = zod
       .string()
       .nullish()
       .describe('Display-only description of the machine.'),
-    requested_allow_permission_bypass: zod
-      .boolean()
-      .nullish()
-      .describe(
-        'Daemon operator consent ceiling; false forbids bypass at approval.'
-      ),
     requested_name: zod
       .string()
       .describe('Harness display name the daemon asked for.'),
-    requested_scope: zod
-      .union([
-        zod.null(),
-        zod
-          .enum(['private', 'team'])
-          .describe(
-            "The ownership scope a daemon's config asks for.\n\nAdvisory, not binding: the approving user confirms it in the dialog, which\narrives preselected to this. Approval is what actually sets ownership."
-          ),
-      ])
-      .optional(),
   })
   .describe('A pending pairing, as shown to the approving user.');
 
