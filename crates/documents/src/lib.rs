@@ -22,7 +22,3 @@ pub mod inbound;
     feature = "document_create_adapters"
 ))]
 pub mod outbound;
-
-#[doc(hidden)]
-#[allow(dead_code)]
-const CI_SEL2_NONCE: &str = "382826df6c994578a8c7742277d1e828";
