@@ -992,6 +992,12 @@ impl Adapter {
         } else {
             None
         };
+        let mut mcp_servers = session.mcp_servers.clone();
+        if source.is_some() {
+            // The agent runs in a worktree herdr makes, not the session's
+            // cwd; macrod's server publishes from wherever the agent runs.
+            crate::artifacts::unroot(&mut mcp_servers);
+        }
 
         let model = lock(&session.model).clone();
         let mut args = Vec::new();
@@ -1017,7 +1023,7 @@ impl Adapter {
             if let Some(mode) = &self.options.permission_mode {
                 args.extend(["--permission-mode".to_owned(), mode.clone()]);
             }
-            if let Some(config) = self.write_mcp_config(session)? {
+            if let Some(config) = self.write_mcp_config(session, &mcp_servers)? {
                 args.extend([
                     "--mcp-config".to_owned(),
                     config.to_string_lossy().into_owned(),
@@ -1025,12 +1031,10 @@ impl Adapter {
             }
         }
         let mut environment = None;
-        if kind == TuiAgent::Codex && !session.mcp_servers.is_empty() {
-            let prepared = super::mcp::codex(
-                &self.store.0.join("mcp").join(&session.id),
-                &session.mcp_servers,
-            )
-            .map_err(|error| RpcError::internal(error.to_string()))?;
+        if kind == TuiAgent::Codex && !mcp_servers.is_empty() {
+            let prepared =
+                super::mcp::codex(&self.store.0.join("mcp").join(&session.id), &mcp_servers)
+                    .map_err(|error| RpcError::internal(error.to_string()))?;
             args.extend(prepared.args);
             environment = Some(prepared.environment);
         }
@@ -1075,8 +1079,12 @@ impl Adapter {
 
     /// Hand Claude Code the MCP servers Macro gave the session, in a file
     /// only this user can read: the entries carry session credentials.
-    fn write_mcp_config(&self, session: &Session) -> Result<Option<PathBuf>, RpcError> {
-        let servers = claude_mcp_servers(&session.mcp_servers);
+    fn write_mcp_config(
+        &self,
+        session: &Session,
+        mcp_servers: &[Value],
+    ) -> Result<Option<PathBuf>, RpcError> {
+        let servers = claude_mcp_servers(mcp_servers);
         if servers.is_empty() {
             return Ok(None);
         }

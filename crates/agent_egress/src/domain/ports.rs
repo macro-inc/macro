@@ -12,8 +12,8 @@ use agent_runtime_protocol::domain::tool_approval::ToolApprovalStatus;
 use crate::domain::approval::{StandingApproval, ToolApproval, ToolApprovalId};
 use crate::domain::error::EgressError;
 use crate::domain::model::{
-    AgentSessionId, McpDestination, McpResolution, ProxyRequest, ProxyResponse, RepoSlug,
-    SessionGrant, SessionToken, UpstreamCall,
+    AgentSessionId, ArtifactEndpoint, McpDestination, McpResolution, ProxyRequest, ProxyResponse,
+    RepoSlug, SessionGrant, SessionToken, UpstreamCall,
 };
 use macro_user_id::user_id::MacroUserIdStr;
 
@@ -78,6 +78,23 @@ pub trait GithubTokens: Send + Sync {
         owner: &MacroUserIdStr<'static>,
         repo: &RepoSlug,
     ) -> impl Future<Output = Result<UpstreamCall, EgressError>> + Send;
+}
+
+/// Address one of Macro's artifact endpoints as a Macro user.
+///
+/// Object-safe because the composition root supplies an
+/// `Arc<dyn ArtifactCalls>`, and a proxy built without one serves no
+/// artifact route.
+#[async_trait::async_trait]
+pub trait ArtifactCalls: Send + Sync {
+    /// The upstream for `endpoint`, with a credential that acts as `user`
+    /// and nobody else, attributed to `agent`.
+    async fn resolve(
+        &self,
+        user: &MacroUserIdStr<'static>,
+        agent: bot_id::BotId,
+        endpoint: ArtifactEndpoint,
+    ) -> Result<UpstreamCall, EgressError>;
 }
 
 /// Execute a request and stream the answer back.
