@@ -226,7 +226,9 @@ fn setup_execution_runtime() -> Step<gh_workflow::Use> {
         ))
 }
 
-/// Exercise the real permission boundary and authenticated SDK execution in CI.
+/// Exercise the real permission boundary, authenticated SDK execution, and
+/// routine code (the step contract, starters and examples) against the SDK
+/// in CI.
 fn test_execution_runtime() -> Step<Run> {
     Step::new("Test Deno sandbox and authenticated SDK execution")
         .run(include_str!("scripts/run_tests.sh"))

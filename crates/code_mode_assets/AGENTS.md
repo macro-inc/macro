@@ -3,7 +3,9 @@
 ## What it is
 
 Agent code mode's generated assets: the public SDK and Handlebars bundled for
-Deno, the agent SDK documentation catalog, and the SDK operation labels. They are
+Deno, the agent SDK documentation catalog, the SDK operation catalog (label,
+method, path and whether it writes), and the SDK's TypeScript declarations
+routine code is type-checked against. They are
 built from `packages/sdk` when this crate compiles and are never committed.
 
 ## How it works

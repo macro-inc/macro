@@ -17,6 +17,8 @@ interface ImportMetaEnv {
   readonly VITE_PERF_LOG?: string;
   readonly VITE_ENABLE_REMINDERS?: string;
   readonly VITE_ENABLE_ROUTINE_SHARING?: string;
+  readonly VITE_ENABLE_ROUTINE_STARTER_TEMPLATES?: string;
+  readonly VITE_ENABLE_ROUTINE_CODE_STEPS?: string;
   readonly VITE_ENABLE_CHAT_SIDEBAR_SECTIONS?: string;
   readonly VITE_DISABLE_BROWSER_TURSO_CACHE?: string;
   readonly VITE_ENABLE_WHATSAPP_LINKED?: string;

@@ -23,13 +23,14 @@ common=(
   --all-features --no-tests=pass
 )
 
-# The Deno tests are ignored by default because they need the pinned runtime. They
+# The Deno tests (code execution, authenticated SDK runs and routine code checks)
+# are ignored by default because they need the pinned runtime. They
 # run from this same script so cargo sees identical flags and selection and reuses
 # what the first run compiled. Only tests in packages this PR selected can match.
 if [ "${NEXTEST_RUN_DENO_TESTS:-}" = "true" ]; then
   common+=(
     --run-ignored only --test-threads 2
-    -E 'package(code_execution) or (package(agent_harness_service) and test(authenticated_mcp_runs_javascript_and_persists_source_and_result))'
+    -E 'package(code_execution) or (package(agent_harness_service) and (test(authenticated_mcp_runs_javascript_and_persists_source_and_result) or test(routine_code::)))'
   )
 else
   common+=(--test-threads "$NEXTEST_TEST_THREADS")

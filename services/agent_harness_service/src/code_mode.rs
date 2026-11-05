@@ -41,6 +41,7 @@ impl ExecutionCredentials for RunCredentials {
             hosts: self.hosts.clone(),
             session_id: Some(identity.session.as_uuid()),
             execution_id: Some(identity.execution.as_uuid()),
+            unattended: None,
         })
     }
 }
@@ -89,12 +90,13 @@ impl UserExecutionCredentials for UserRunCredentials {
             hosts: self.hosts.clone(),
             session_id: None,
             execution_id: None,
+            unattended: None,
         })
     }
 }
 
 /// The current trace context, for the SDK to forward on authenticated requests.
-fn trace_headers() -> BTreeMap<String, String> {
+pub(crate) fn trace_headers() -> BTreeMap<String, String> {
     let mut headers = axum::http::HeaderMap::new();
     macro_tower_layers::inject_trace_headers(&mut headers);
     headers

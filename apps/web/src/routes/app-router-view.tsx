@@ -59,6 +59,7 @@ import {
   MailRouteView,
   MeetingRouter,
   NotFound,
+  NotificationsCalendarRouteView,
   NotificationsRouteView,
   PrDetailRouteView,
   ProjectDetailRouteView,
@@ -66,7 +67,6 @@ import {
   RecentRouteView,
   ReviewsPrDetailRouteView,
   ReviewsRouteView,
-  RoutineCreateRouteView,
   SearchRouteView,
   SettingsRouteView,
   TasksDetailRouteView,
@@ -150,6 +150,7 @@ import {
   meetRoute,
   mobileEmailSignupRoute,
   notFoundRoute,
+  notificationsCalendarRoute,
   notificationsRoute,
   onboardingRoute,
   prDetailRoute,
@@ -339,7 +340,8 @@ export function AppRouterView() {
         <Route definition={settingsRoute} component={SettingsRouteView} />
         <Route
           definition={routineCreateRoute}
-          component={RoutineCreateRouteView}
+          component={AgentsRouteView}
+          loading={AgentsViewSkeleton}
         />
         <Route
           definition={routineDetailRoute}
@@ -390,7 +392,12 @@ export function AppRouterView() {
         <Route
           definition={notificationsRoute}
           component={NotificationsRouteView}
-        />
+        >
+          <Route
+            definition={notificationsCalendarRoute}
+            component={NotificationsCalendarRouteView}
+          />
+        </Route>
         <Route
           definition={agentsViewRoute}
           component={AgentsRouteView}

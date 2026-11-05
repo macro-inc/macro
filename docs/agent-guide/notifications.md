@@ -53,8 +53,10 @@ notifications the row hides, and drops its unread dot. With a preview open, `j`/
 list and through unfolded notifications; `l` or the right arrow unfolds the focused
 stack and the left arrow folds it from anywhere inside it. Opening a notification
 marks its whole row seen, and `e` on one marks its whole stack done. Choosing what's
-shown again re-aims it. Calendar events and projects
-open in their own views instead. Shift-click or the alternate key opens a new
+shown again re-aims it. A calendar event or join request opens the Calendar
+beside the list at the event, at `/app/notifications/calendar/<period>` with the
+event in `sN.calendar.*`, under the same breadcrumb; the list keeps its place.
+Projects open in their own view instead. Shift-click or the alternate key opens a new
 split. Hover a row and choose **Mark done**, or press `e`, to complete that row
 only: the channel thread stays when the channel's top-level row is done, and an
 open preview moves to the next row. A toast offers **Undo**, as does
