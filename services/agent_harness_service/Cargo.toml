@@ -194,6 +194,7 @@ strum = { workspace = true }
 sync_service_client = { path = "../../crates/sync_service_client" }
 system_properties = { path = "../../crates/system_properties" }
 teams = { path = "../../crates/teams", default-features = false, features = ["outbound", "ports"] }
+team_agents = { path = "../../crates/team_agents", features = ["outbound"] }
 tempfile = { workspace = true }
 thiserror = { workspace = true }
 time = { workspace = true }

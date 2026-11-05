@@ -22,7 +22,7 @@ use harnesses::domain::models::CreateHostedPairing;
 use harnesses::domain::ports::{HarnessError, HarnessService};
 use hosted_runtimes::domain::models::{Computer, EnrollmentDefaults};
 use hosted_runtimes::domain::operator::{ComputerOperator, SessionActivity};
-use hosted_runtimes::domain::ports::{Harnesses, HostedPairing};
+use hosted_runtimes::domain::ports::{Fleet, Harnesses, HostedPairing, InstanceStatus};
 use hosted_runtimes::domain::service::SystemClock;
 use hosted_runtimes::outbound::configured_fleet::ConfiguredFleet;
 use hosted_runtimes::outbound::docker_fleet::{DockerFleet, DockerFleetConfig};
@@ -45,7 +45,70 @@ const IDLE_TICK: Duration = Duration::from_secs(60);
 /// connects to another replica still gets it.
 const PARK_LIMIT: Duration = Duration::from_secs(120);
 
-pub type Operator = ComputerOperator<PgComputerRepo, ConfiguredFleet, HostedHarnesses, SystemClock>;
+type FleetOperator =
+    ComputerOperator<PgComputerRepo, ConfiguredFleet, HostedHarnesses, SystemClock>;
+
+/// Shares fleet observation with the gateway without changing the operator's
+/// lifecycle or effect execution contract.
+pub struct Operator {
+    inner: FleetOperator,
+    observer: ConfiguredFleet,
+    effects_completed: tokio::sync::watch::Sender<()>,
+}
+
+impl std::ops::Deref for Operator {
+    type Target = FleetOperator;
+
+    fn deref(&self) -> &Self::Target {
+        &self.inner
+    }
+}
+
+impl Operator {
+    /// Queue the normal wake event and wait for the fleet to finish unfreezing.
+    /// A Running database phase alone does not mean its Unfreeze effect ran.
+    #[tracing::instrument(skip(self), err)]
+    pub async fn wake_brain(&self, harness_id: Uuid, computer_id: Uuid) -> anyhow::Result<()> {
+        // Subscribe before enqueueing or inspecting so completion cannot be lost.
+        let mut completed = self.effects_completed.subscribe();
+        self.prompt_arrived(harness_id).await?;
+        tokio::time::timeout(Duration::from_secs(30), async {
+            loop {
+                if self.instance_status(computer_id).await? == Some(InstanceStatus::Running) {
+                    return Ok::<(), anyhow::Error>(());
+                }
+                completed
+                    .changed()
+                    .await
+                    .context("computer effects worker stopped")?;
+            }
+        })
+        .await
+        .context("computer did not finish waking")?
+    }
+
+    /// Observe the machine as well as its optimistic database lifecycle phase.
+    pub async fn instance_status(
+        &self,
+        computer_id: Uuid,
+    ) -> anyhow::Result<Option<InstanceStatus>> {
+        Ok(self
+            .observer
+            .instances()
+            .await?
+            .into_iter()
+            .find_map(|(id, status)| (id == computer_id).then_some(status)))
+    }
+
+    /// Notify gateway waiters after the existing worker finishes its pass.
+    pub async fn run_fleet_effects(
+        &self,
+    ) -> Result<usize, hosted_runtimes::domain::service::ComputerError> {
+        let result = self.inner.run_fleet_effects().await;
+        self.effects_completed.send_replace(());
+        result
+    }
+}
 
 /// Build the operator from explicit config, or `None` when this deployment
 /// runs no computers (`COMPUTERS_FLEET` unset).
@@ -110,6 +173,10 @@ pub async fn operator(
 
     let service_url_overrides = service_url_overrides(config)?;
 
+    let observer = match &fleet {
+        ConfiguredFleet::Incus(fleet) => ConfiguredFleet::Incus(fleet.clone()),
+        ConfiguredFleet::Docker(fleet) => ConfiguredFleet::Docker(fleet.clone()),
+    };
     let operator = ComputerOperator::start(
         PgComputerRepo::new(pool.clone()),
         fleet,
@@ -121,7 +188,11 @@ pub async fn operator(
     )
     .await
     .map_err(|error| anyhow::anyhow!("computer operator failed to start: {error}"))?;
-    Ok(Some(Arc::new(operator)))
+    Ok(Some(Arc::new(Operator {
+        inner: operator,
+        observer,
+        effects_completed: tokio::sync::watch::channel(()).0,
+    })))
 }
 
 pub(super) fn service_url_overrides(config: &Config) -> anyhow::Result<BTreeMap<String, String>> {

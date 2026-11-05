@@ -120,6 +120,8 @@ delete for team admins. Never in prompts, files or the config drive.
   Stripe update.
 - Config drive values reach the persona's service as an environment file.
 - The image runs one extra systemd service per persona under its own OS user.
-- Gateway: `ANTHROPIC_BASE_URL` plus a per-session token for Claude access
-  (Macro credits).
+- Gateway: `ANTHROPIC_BASE_URL=<egress>/brain/anthropic` and the agent's own
+  revocable API key as `ANTHROPIC_AUTH_TOKEN` (Macro credits), gated by its
+  team's Running computer; Frozen wake finishes first. See the
+  [gateway contract](../../crates/hosted_runtimes/AGENTS.md).
 - Computer status and macrod presence, readable by team admins.

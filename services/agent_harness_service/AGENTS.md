@@ -44,6 +44,14 @@ Pulumi stacks; they do not host extra agent processes.
   timers, reconciliation and idle sleep, reports macrod presence, and wakes
   sleeping computers before forwarding prompts. `COMPUTERS_FLEET` selects
   `incus` or local-only `docker`; unset disables the control plane.
+- `src/brain_gateway.rs` supplies computer facts and the same prompt-wake path
+  to the standalone-brain Anthropic gateway authorization boundary in
+  `team_agents::domain::gateway`. `/brain/anthropic/v1/messages` and
+  `/brain/anthropic/v1/messages/count_tokens` accept only a revocable API key
+  for a registered agent on its current team with a Running computer (Frozen
+  computers are woken). These routes share the session gateway's model allowlist,
+  budgets, forwarding and meter; `ai_usage.user_id` is the agent and `entity` is
+  its team. See `hosted_runtimes/AGENTS.md` Contracts for the credential contract.
 - `src/computer_screen.rs` + `src/computer_screen/`: Macro computer routes.
   `POST /harnesses/{id}/claude-sign-in` → `{url}`,
   `POST /harnesses/{id}/claude-sign-in/complete` `{code}` → `{signedIn}`,

@@ -11,6 +11,7 @@ mod agent_runtime_directory;
 mod anthropic_gateway;
 mod api;
 mod bots_directory;
+mod brain_gateway;
 mod code_mode;
 mod coding_agent;
 mod coding_agents;
@@ -804,13 +805,6 @@ async fn run() -> anyhow::Result<()> {
                 session_tasks.clone(),
             ),
         );
-    let anthropic_gateway = anthropic_gateway::router(anthropic_gateway::GatewayState::new(
-        Arc::new(session_repo.clone()),
-        admission.clone(),
-        recorder.clone(),
-        anthropic_gateway::ANTHROPIC_API_URL,
-        &config.anthropic_api_key,
-    )?);
     // The MCP connector feeds the harness, while review presentation needs that
     // harness. Fill this startup-only cell before any HTTP or agent work is served.
     let reviews_cell = Arc::new(std::sync::OnceLock::new());
@@ -1240,6 +1234,29 @@ async fn run() -> anyhow::Result<()> {
         )),
     )
     .await?;
+    let brain_access = team_agents::domain::gateway::BrainGatewayAuthorizer::new(
+        team_agents::outbound::brain_gateway_directory::BrainGatewayDirectoryAdapter::new(
+            macro_authorization::PgUserApiKeyAuthorizer::new(
+                macro_authorization::PgUserApiKeyAuthorizationRepo::new(pool.clone()),
+            ),
+            team_agents::outbound::pg_team_agents_repo::PgTeamAgentsRepo::new(pool.clone()),
+            teams::outbound::team_repo::TeamRepositoryImpl::new(pool.clone()),
+        ),
+        brain_gateway::GatewayComputers::new(
+            hosted_runtimes::outbound::pg::PgComputerRepo::new(pool.clone()),
+            computer_operator.clone(),
+        ),
+    );
+    let anthropic_gateway = anthropic_gateway::router(
+        anthropic_gateway::GatewayState::new(
+            Arc::new(session_repo.clone()),
+            admission.clone(),
+            recorder.clone(),
+            anthropic_gateway::ANTHROPIC_API_URL,
+            &config.anthropic_api_key,
+        )?
+        .with_brains(Arc::new(brain_access)),
+    );
     let parked_commands = Arc::new(computers::ParkedCommands::default());
     let command_forwarder = Arc::new(RedisCommandForwarder::new(redis.clone()));
     let runtimes = RuntimeRegistry::with_presence(

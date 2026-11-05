@@ -11,6 +11,8 @@ use tower::ServiceExt;
 
 use super::*;
 
+mod brain;
+
 const UPSTREAM_SSE: &str = "event: message_start\n\
 data: {\"type\":\"message_start\",\"message\":{\"id\":\"msg_1\",\"type\":\"message\",\"role\":\"assistant\",\"model\":\"claude-sonnet-5\",\"content\":[],\"usage\":{\"input_tokens\":25,\"cache_creation_input_tokens\":100,\"cache_read_input_tokens\":4000,\"output_tokens\":1}}}\n\
 \n\

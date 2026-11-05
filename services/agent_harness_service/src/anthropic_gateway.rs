@@ -15,7 +15,7 @@ use agent_session::domain::{
 use ai_billing::{AiAdmissionError, AiAdmissionService};
 use ai_usage::{AiFeature, UsageContext, UsageRecorder};
 use axum::{
-    Json, Router,
+    Extension, Json, Router,
     body::{Body, to_bytes},
     extract::{Request, State},
     http::{HeaderMap, HeaderName, HeaderValue, StatusCode, header},
@@ -26,7 +26,14 @@ use axum_extra::headers::{Authorization, HeaderMapExt, authorization::Bearer};
 use futures::StreamExt;
 use tracing::{Instrument, Span, field::Empty};
 
+use team_agents::domain::{
+    gateway::{BrainGatewayAccess, BrainGatewayError},
+    models::Credential,
+};
 use usage::{SseUsage, TokenUsage};
+
+#[derive(Clone)]
+struct BrainRequest;
 
 mod usage;
 
@@ -76,6 +83,7 @@ pub(super) struct GatewayState<Sessions> {
     upstream_url: String,
     /// `None` when the service has no Anthropic key; every request is refused.
     api_key: Option<HeaderValue>,
+    brains: Option<Arc<dyn BrainGatewayAccess>>,
 }
 
 impl<Sessions> GatewayState<Sessions> {
@@ -103,12 +111,26 @@ impl<Sessions> GatewayState<Sessions> {
                 .build()?,
             upstream_url: upstream_url.trim_end_matches('/').to_owned(),
             api_key,
+            brains: None,
         })
+    }
+
+    pub(super) fn with_brains(mut self, brains: Arc<dyn BrainGatewayAccess>) -> Self {
+        self.brains = Some(brains);
+        self
     }
 }
 
 /// The gateway's routes, mounted at the listener root.
 pub(super) fn router<Sessions: AgentSessionRepo>(state: GatewayState<Sessions>) -> Router {
+    let brains = Router::new()
+        .route("/brain/anthropic/v1/messages", post(messages::<Sessions>))
+        .route(
+            "/brain/anthropic/v1/messages/count_tokens",
+            post(count_tokens::<Sessions>),
+        )
+        .route("/brain/anthropic/{*rest}", any(unsupported))
+        .layer(Extension(BrainRequest));
     Router::new()
         .route("/anthropic/v1/messages", post(messages::<Sessions>))
         .route(
@@ -116,6 +138,7 @@ pub(super) fn router<Sessions: AgentSessionRepo>(state: GatewayState<Sessions>) 
             post(count_tokens::<Sessions>),
         )
         .route("/anthropic/{*rest}", any(unsupported))
+        .merge(brains)
         .with_state(Arc::new(state))
 }
 
@@ -143,6 +166,9 @@ async fn messages<Sessions: AgentSessionRepo>(
         agent.session.id = Empty,
         agent.bot.id = Empty,
         agent.harness = Empty,
+        agent.user.id = Empty,
+        agent.team.id = Empty,
+        agent.computer.id = Empty,
         gen_ai.request.model = Empty,
         anthropic_gateway.stream = Empty,
         anthropic_gateway.outcome = Empty,
@@ -165,6 +191,9 @@ async fn count_tokens<Sessions: AgentSessionRepo>(
         agent.session.id = Empty,
         agent.bot.id = Empty,
         agent.harness = Empty,
+        agent.user.id = Empty,
+        agent.team.id = Empty,
+        agent.computer.id = Empty,
         gen_ai.request.model = Empty,
         anthropic_gateway.outcome = Empty,
         http.response.status_code = Empty,
@@ -218,12 +247,35 @@ async fn forward<Sessions: AgentSessionRepo>(
     endpoint: Endpoint,
     span: &Span,
 ) -> Result<Response, Rejection> {
+    let brain_request = request.extensions().get::<BrainRequest>().is_some();
     let (parts, body) = request.into_parts();
-
-    let session = authenticate(state.sessions.as_ref(), &parts.headers).await?;
-    span.record("agent.session.id", tracing::field::display(session.id));
-    span.record("agent.bot.id", tracing::field::display(session.bot_id));
-    span.record("agent.harness", session.harness.as_str());
+    let (session, brain) = if brain_request {
+        let bearer = parts
+            .headers
+            .typed_get::<Authorization<Bearer>>()
+            .ok_or_else(|| Rejection::from_brain(BrainGatewayError::Unauthorized))?;
+        let access = state
+            .brains
+            .as_ref()
+            .ok_or_else(|| Rejection::from_brain(BrainGatewayError::Unavailable))?;
+        let identity = access
+            .authorize(&Credential::new(bearer.token().to_string()))
+            .await
+            .map_err(Rejection::from_brain)?;
+        span.record("agent.user.id", tracing::field::display(&identity.user_id));
+        span.record("agent.team.id", tracing::field::display(identity.team_id));
+        span.record(
+            "agent.computer.id",
+            tracing::field::display(identity.computer_id),
+        );
+        (None, Some(identity))
+    } else {
+        let session = authenticate(state.sessions.as_ref(), &parts.headers).await?;
+        span.record("agent.session.id", tracing::field::display(session.id));
+        span.record("agent.bot.id", tracing::field::display(session.bot_id));
+        span.record("agent.harness", session.harness.as_str());
+        (Some(session), None)
+    };
 
     let body = to_bytes(body, MAX_REQUEST_BYTES)
         .await
@@ -236,10 +288,21 @@ async fn forward<Sessions: AgentSessionRepo>(
         priced_model(&shape.model).ok_or_else(|| Rejection::model_not_allowed(&shape.model))?;
 
     let api_key = state.api_key.as_ref().ok_or(Rejection::NOT_CONFIGURED)?;
-    let owner = session
-        .owner_user()
-        .map_err(|_| Rejection::permission("this session's owner cannot spend Macro credits"))?
-        .clone();
+    let (owner, entity) = match brain {
+        Some(brain) => (brain.user_id, Some(brain.team_id)),
+        None => {
+            let session = session.ok_or(Rejection::UNAUTHENTICATED)?;
+            (
+                session
+                    .owner_user()
+                    .map_err(|_| {
+                        Rejection::permission("this session's owner cannot spend Macro credits")
+                    })?
+                    .clone(),
+                Some(session.id.as_uuid()),
+            )
+        }
+    };
     if endpoint == Endpoint::Messages {
         state
             .admission
@@ -277,8 +340,7 @@ async fn forward<Sessions: AgentSessionRepo>(
 
     let meter = (endpoint == Endpoint::Messages).then(|| UsageMeter {
         recorder: state.recorder.clone(),
-        context: UsageContext::new(AiFeature::AgentSession, owner)
-            .with_entity(Some(session.id.as_uuid())),
+        context: UsageContext::new(AiFeature::AgentSession, owner).with_entity(entity),
         model: priced_model,
         usage: TokenUsage::default(),
         span: span.clone(),
@@ -424,6 +486,22 @@ struct Rejection {
 }
 
 impl Rejection {
+    fn from_brain(error: BrainGatewayError) -> Self {
+        Self {
+            status: match error {
+                BrainGatewayError::Unauthorized => StatusCode::UNAUTHORIZED,
+                BrainGatewayError::Forbidden => StatusCode::FORBIDDEN,
+                BrainGatewayError::Unavailable => StatusCode::SERVICE_UNAVAILABLE,
+            },
+            kind: match error {
+                BrainGatewayError::Unauthorized => "authentication_error",
+                BrainGatewayError::Forbidden => "permission_error",
+                BrainGatewayError::Unavailable => "api_error",
+            },
+            outcome: "brain_authorization_failed",
+            message: error.to_string().into(),
+        }
+    }
     const UNAUTHENTICATED: Self = Self {
         status: StatusCode::UNAUTHORIZED,
         kind: "authentication_error",

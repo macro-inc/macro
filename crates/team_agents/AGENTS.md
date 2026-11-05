@@ -110,3 +110,13 @@ payment-confirmation event, or Stripe update is attempted. If recovering the
 computer ID also fails, the retained failed agent has no computer link and retry
 returns 409 until that link is reconciled. If saving the agent-computer link fails
 after a successful purchase, the retained account is also marked failed.
+
+## Standalone brain gateway
+
+`domain/gateway.rs` owns API-key eligibility, agent membership and computer
+ownership policy. The outbound directory validates revocable user keys and reads
+agent/team facts through the existing domain ports. Only a registered team agent
+with its own Running computer may use `/brain/anthropic`; Frozen wake must finish
+before authorization succeeds. Ordinary user keys never qualify. The harness
+service shares session admission, model allowlisting and metering, attributing
+usage to the agent and its current team.

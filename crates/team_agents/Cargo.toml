@@ -15,6 +15,7 @@ inbound = [
   "entity_access/inbound",
 ]
 outbound = [
+  "dep:macro_authorization",
   "dep:agent_git",
   "dep:agent_secrets",
   "dep:hosted_runtimes",

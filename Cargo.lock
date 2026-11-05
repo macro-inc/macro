@@ -752,6 +752,7 @@ dependencies = [
  "strum 0.27.2",
  "sync_service_client",
  "system_properties",
+ "team_agents",
  "teams",
  "tempfile",
  "thiserror 2.0.18",

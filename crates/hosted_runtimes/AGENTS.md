@@ -71,6 +71,17 @@ lifecycle, capacity, purchase/billing orchestration and the fleet ports.
 - Persona computers are never idle-frozen; they run until powered off or canceled.
 - **Gateway**: computers call Claude via `ANTHROPIC_BASE_URL=<agent harness service>/anthropic`
   with a per-session token; see `services/agent_harness_service/AGENTS.md`.
+  Standalone brains use `<egress>/brain/anthropic` and their revocable agent
+  user API key as `ANTHROPIC_AUTH_TOKEN`. This additive route accepts only a
+  registered team-agent key whose sole current team owns its Running computer;
+  Frozen computers use the existing prompt-wake path and wait for the fleet to
+  observe Running before forwarding. Stopped, released, missing and other non-running computers are rejected, as are ordinary
+  user keys. The session-token route is unchanged. Both paths share the model
+  allowlist, `AiFeature::AgentSession` admission/budgets, forwarding and usage
+  meter. Brain `ai_usage` rows identify the agent in `user_id` and its team in
+  `entity`; the existing single-team membership constraint and shared entitlement
+  resolver charge that team's allowance. The first-party API key is an auth
+  credential, never a provider BYOK key or a reason to exempt usage from billing.
 
 ## Scope
 
