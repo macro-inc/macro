@@ -185,7 +185,19 @@ async fn serve<Service: AgentGitService>(
 ) -> Response {
     let agent_user_id = match parse_repository(repository) {
         Ok(agent_user_id) => agent_user_id,
-        Err(error) => return AgentGitHttpError(error).into_response(),
+        Err(error) => {
+            tracing::Span::current().record("otel.status_code", "ERROR");
+            let reason = match &error {
+                AgentGitError::NotFound => "not_found",
+                AgentGitError::InvalidToken => "invalid_token",
+                AgentGitError::Forbidden(_) => "forbidden",
+                AgentGitError::RepoTooLarge { .. } => "repo_too_large",
+                AgentGitError::PushRateLimited => "rate_limited",
+                _ => "internal",
+            };
+            tracing::Span::current().record("git.rejected_reason", reason);
+            return AgentGitHttpError(error).into_response();
+        }
     };
 
     let request = GitRequest {
@@ -198,7 +210,19 @@ async fn serve<Service: AgentGitService>(
 
     let response = match service.serve_git(credential, &agent_user_id, request).await {
         Ok(response) => response,
-        Err(error) => return AgentGitHttpError(error).into_response(),
+        Err(error) => {
+            tracing::Span::current().record("otel.status_code", "ERROR");
+            let reason = match &error {
+                AgentGitError::NotFound => "not_found",
+                AgentGitError::InvalidToken => "invalid_token",
+                AgentGitError::Forbidden(_) => "forbidden",
+                AgentGitError::RepoTooLarge { .. } => "repo_too_large",
+                AgentGitError::PushRateLimited => "rate_limited",
+                _ => "internal",
+            };
+            tracing::Span::current().record("git.rejected_reason", reason);
+            return AgentGitHttpError(error).into_response();
+        }
     };
 
     let mut built = Response::new(Body::from_stream(response.body));
@@ -222,7 +246,7 @@ struct InfoRefsQuery {
     service: Option<String>,
 }
 
-#[tracing::instrument(skip_all, fields(repository = %repository))]
+#[tracing::instrument(skip_all, fields(repo_id = %macro_user_id::telemetry_id(repository.trim_end_matches(REPO_SUFFIX)), git.rejected_reason, otel.status_code))]
 async fn info_refs<Service: AgentGitService, Auth: MacroAuthorizationService>(
     State(state): State<AgentGitRouterState<Service, Auth>>,
     Path(repository): Path<String>,
@@ -248,7 +272,7 @@ async fn info_refs<Service: AgentGitService, Auth: MacroAuthorizationService>(
     .await
 }
 
-#[tracing::instrument(skip_all, fields(repository = %repository))]
+#[tracing::instrument(skip_all, fields(repo_id = %macro_user_id::telemetry_id(repository.trim_end_matches(REPO_SUFFIX)), git.rejected_reason, otel.status_code))]
 async fn upload_pack<Service: AgentGitService, Auth: MacroAuthorizationService>(
     State(state): State<AgentGitRouterState<Service, Auth>>,
     Path(repository): Path<String>,
@@ -267,7 +291,7 @@ async fn upload_pack<Service: AgentGitService, Auth: MacroAuthorizationService>(
     .await
 }
 
-#[tracing::instrument(skip_all, fields(repository = %repository))]
+#[tracing::instrument(skip_all, fields(repo_id = %macro_user_id::telemetry_id(repository.trim_end_matches(REPO_SUFFIX)), git.rejected_reason, otel.status_code))]
 async fn receive_pack<Service: AgentGitService, Auth: MacroAuthorizationService>(
     State(state): State<AgentGitRouterState<Service, Auth>>,
     Path(repository): Path<String>,
@@ -347,7 +371,7 @@ async fn ensure_repo<Service: AgentGitService, Auth: MacroAuthorizationService>(
     }))
 }
 
-#[tracing::instrument(skip_all, fields(agent_user_id = %agent_user_id), err)]
+#[tracing::instrument(skip_all, fields(agent_user_id = %macro_user_id::telemetry_id(agent_user_id.as_ref())), err)]
 async fn delete_repo<Service: AgentGitService, Auth: MacroAuthorizationService>(
     State(state): State<AgentGitRouterState<Service, Auth>>,
     _internal: MacroAuthorizationExtractor<Auth, InternalOnly>,

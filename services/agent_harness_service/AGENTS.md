@@ -232,3 +232,6 @@ bridge hostname, preserving Host validation for other origins.
 ## Related
 
 - Rules: `.agents/rules/rust/architecture.md`, `.agents/rules/config-and-service-urls.md`
+
+The Anthropic brain gateway records hashed agent identity, team/computer IDs,
+validated model, numeric tokens/status and explicit admission category.

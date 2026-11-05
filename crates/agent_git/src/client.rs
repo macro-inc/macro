@@ -79,7 +79,7 @@ impl AgentGitClient {
 
     /// Create the agent's repo, or re-key it (same team). The token in the
     /// response is the only copy; earlier tokens stop working.
-    #[tracing::instrument(skip(self, seed), err)]
+    #[tracing::instrument(skip_all, err)]
     pub async fn create_repo(
         &self,
         agent_user_id: MacroUserIdStr<'static>,
@@ -103,7 +103,7 @@ impl AgentGitClient {
     }
 
     /// Recover the repo without replacing its live token.
-    #[tracing::instrument(skip_all, fields(%agent_user_id, %team_id), err)]
+    #[tracing::instrument(skip_all, fields(agent_user_id = %macro_user_id::telemetry_id(agent_user_id.as_ref()), %team_id), err)]
     pub async fn ensure_repo(
         &self,
         agent_user_id: MacroUserIdStr<'static>,
@@ -130,7 +130,7 @@ impl AgentGitClient {
     }
 
     /// Delete the agent's repo. Idempotent.
-    #[tracing::instrument(skip(self), err)]
+    #[tracing::instrument(skip_all, err)]
     pub async fn delete_repo(
         &self,
         agent_user_id: &MacroUserIdStr<'_>,

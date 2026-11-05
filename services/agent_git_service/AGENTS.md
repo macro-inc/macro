@@ -31,3 +31,6 @@ Composition root for `crates/agent_git`: hosts each agent's workspace repo
 
 - Recovery uses `POST /internal/repos/ensure` with the saved bootstrap token;
   repeating `POST /internal/repos` intentionally re-keys a repo.
+
+HTTP tracing adopts incoming W3C context through
+`macro_tower_layers::MakeSpanWithRemoteParent`, including internal repo calls.

@@ -172,6 +172,7 @@ async fn messages<Sessions: AgentSessionRepo>(
         gen_ai.request.model = Empty,
         anthropic_gateway.stream = Empty,
         anthropic_gateway.outcome = Empty,
+        anthropic_gateway.admission = Empty,
         http.response.status_code = Empty,
         gen_ai.usage.input_tokens = Empty,
         gen_ai.usage.output_tokens = Empty,
@@ -196,6 +197,7 @@ async fn count_tokens<Sessions: AgentSessionRepo>(
         agent.computer.id = Empty,
         gen_ai.request.model = Empty,
         anthropic_gateway.outcome = Empty,
+        anthropic_gateway.admission = Empty,
         http.response.status_code = Empty,
         otel.status_code = Empty,
     );
@@ -226,7 +228,10 @@ async fn respond<Sessions: AgentSessionRepo>(
         Ok(response) => response,
         Err(rejection) => {
             span.record("anthropic_gateway.outcome", rejection.outcome);
-            span.record("http.response.status_code", rejection.status.as_u16());
+            span.record(
+                "http.response.status_code",
+                i64::from(rejection.status.as_u16()),
+            );
             if rejection.status.is_server_error() {
                 span.record("otel.status_code", "ERROR");
             }
@@ -262,7 +267,10 @@ async fn forward<Sessions: AgentSessionRepo>(
             .authorize(&Credential::new(bearer.token().to_string()))
             .await
             .map_err(Rejection::from_brain)?;
-        span.record("agent.user.id", tracing::field::display(&identity.user_id));
+        span.record(
+            "agent.user.id",
+            tracing::field::display(macro_user_id::telemetry_id(identity.user_id.as_ref())),
+        );
         span.record("agent.team.id", tracing::field::display(identity.team_id));
         span.record(
             "agent.computer.id",
@@ -283,9 +291,9 @@ async fn forward<Sessions: AgentSessionRepo>(
     let shape: RequestShape = serde_json::from_slice(&body).map_err(|_| {
         Rejection::invalid_request("request body must be a JSON object with a `model`")
     })?;
-    span.record("gen_ai.request.model", shape.model.as_str());
     let priced_model =
         priced_model(&shape.model).ok_or_else(|| Rejection::model_not_allowed(&shape.model))?;
+    span.record("gen_ai.request.model", shape.model.as_str());
 
     let api_key = state.api_key.as_ref().ok_or(Rejection::NOT_CONFIGURED)?;
     let (owner, entity) = match brain {
@@ -308,7 +316,11 @@ async fn forward<Sessions: AgentSessionRepo>(
             .admission
             .admit(&owner, AiFeature::AgentSession)
             .await
-            .map_err(Rejection::from_admission)?;
+            .map_err(|error| {
+                span.record("anthropic_gateway.admission", "denied");
+                Rejection::from_admission(error)
+            })?;
+        span.record("anthropic_gateway.admission", "accepted");
     }
 
     let upstream = state
@@ -322,7 +334,7 @@ async fn forward<Sessions: AgentSessionRepo>(
         .map_err(|_| Rejection::UPSTREAM_UNREACHABLE)?;
 
     let status = upstream.status();
-    span.record("http.response.status_code", status.as_u16());
+    span.record("http.response.status_code", i64::from(status.as_u16()));
     if status.is_success() {
         span.record("anthropic_gateway.outcome", "forwarded");
     } else {
@@ -457,12 +469,22 @@ struct UsageMeter {
 impl Drop for UsageMeter {
     fn drop(&mut self) {
         let usage = self.usage;
-        self.span.record("gen_ai.usage.input_tokens", usage.input);
-        self.span.record("gen_ai.usage.output_tokens", usage.output);
-        self.span
-            .record("anthropic_gateway.cache_read_tokens", usage.cache_read);
-        self.span
-            .record("anthropic_gateway.cache_write_tokens", usage.cache_write);
+        self.span.record(
+            "gen_ai.usage.input_tokens",
+            i64::try_from(usage.input).unwrap_or(i64::MAX),
+        );
+        self.span.record(
+            "gen_ai.usage.output_tokens",
+            i64::try_from(usage.output).unwrap_or(i64::MAX),
+        );
+        self.span.record(
+            "anthropic_gateway.cache_read_tokens",
+            i64::try_from(usage.cache_read).unwrap_or(i64::MAX),
+        );
+        self.span.record(
+            "anthropic_gateway.cache_write_tokens",
+            i64::try_from(usage.cache_write).unwrap_or(i64::MAX),
+        );
         if usage.is_empty() {
             return;
         }

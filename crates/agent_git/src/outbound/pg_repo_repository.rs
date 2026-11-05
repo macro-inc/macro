@@ -37,7 +37,7 @@ impl PgRepoRepository {
 impl RepoRepository for PgRepoRepository {
     type Err = PgRepoRepositoryError;
 
-    #[tracing::instrument(skip(self), err)]
+    #[tracing::instrument(skip_all, err)]
     async fn find_repo(
         &self,
         agent_user_id: &MacroUserIdStr<'_>,
@@ -70,7 +70,7 @@ impl RepoRepository for PgRepoRepository {
         }))
     }
 
-    #[tracing::instrument(skip(self, token_hash), err)]
+    #[tracing::instrument(skip_all, err)]
     async fn upsert_repo(
         &self,
         agent_user_id: &MacroUserIdStr<'_>,
@@ -96,7 +96,7 @@ impl RepoRepository for PgRepoRepository {
         Ok(stored.is_some())
     }
 
-    #[tracing::instrument(skip(self, token_hash), err)]
+    #[tracing::instrument(skip_all, err)]
     async fn insert_repo_if_missing(
         &self,
         agent_user_id: &MacroUserIdStr<'_>,
@@ -115,7 +115,7 @@ impl RepoRepository for PgRepoRepository {
         Ok(())
     }
 
-    #[tracing::instrument(skip(self), err)]
+    #[tracing::instrument(skip_all, err)]
     async fn record_push(
         &self,
         agent_user_id: &MacroUserIdStr<'_>,
@@ -139,7 +139,7 @@ impl RepoRepository for PgRepoRepository {
         Ok(())
     }
 
-    #[tracing::instrument(skip(self), err)]
+    #[tracing::instrument(skip_all, err)]
     async fn delete_repo(
         &self,
         agent_user_id: &MacroUserIdStr<'_>,

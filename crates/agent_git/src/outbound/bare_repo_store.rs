@@ -154,7 +154,7 @@ fn directory_size_bytes(path: &Path) -> std::io::Result<u64> {
 impl RepoStore for BareRepoStore {
     type Err = BareRepoStoreError;
 
-    #[tracing::instrument(skip(self, files), err)]
+    #[tracing::instrument(skip_all, err)]
     async fn create_repo(
         &self,
         agent_user_id: &MacroUserIdStr<'_>,
@@ -218,7 +218,7 @@ impl RepoStore for BareRepoStore {
         cleaned
     }
 
-    #[tracing::instrument(skip(self), err)]
+    #[tracing::instrument(skip_all, err)]
     async fn delete_repo(
         &self,
         agent_user_id: &MacroUserIdStr<'_>,
@@ -247,7 +247,7 @@ impl RepoStore for BareRepoStore {
             .map_err(io_error("remove retired repo", &tombstone))
     }
 
-    #[tracing::instrument(skip(self), err)]
+    #[tracing::instrument(skip_all, err)]
     async fn repo_size_bytes(
         &self,
         agent_user_id: &MacroUserIdStr<'_>,

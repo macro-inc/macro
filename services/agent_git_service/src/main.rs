@@ -106,7 +106,15 @@ async fn run() -> Result<(), rootcause::Report> {
         .merge(routes.clone())
         .nest(GATEWAY_PATH_PREFIX, routes)
         .layer(macro_cors::cors_layer())
-        .layer(TraceLayer::new_for_http());
+        .layer(
+            TraceLayer::new_for_http()
+                .make_span_with(macro_tower_layers::MakeSpanWithRemoteParent)
+                .on_request(())
+                .on_response(macro_tower_layers::CustomOnResponse::new_with_threshold(
+                    std::time::Duration::from_millis(200),
+                ))
+                .on_failure(macro_tower_layers::CustomOnFailure),
+        );
 
     let listener = tokio::net::TcpListener::bind(("0.0.0.0", PORT)).await?;
     tracing::info!(port = PORT, "agent git service listening");

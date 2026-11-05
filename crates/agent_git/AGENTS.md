@@ -72,3 +72,7 @@ both full and per-service filtered Nix sources, including `brain.lock`.
 - The single service task serializes create, ensure and delete across their full
   database and filesystem mutations so recovery cannot publish storage after a
   concurrent deletion completes.
+
+`agent_git.transfer` retains its span through request/response streaming and
+backend exit, records byte counts and fixed failure categories, and uses the
+SHA-256 repository identity. Never export CGI stderr or raw repository paths.

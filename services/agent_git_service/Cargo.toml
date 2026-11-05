@@ -14,6 +14,7 @@ name = "agent_git_service_doppler_config"
 path = "src/doppler_config.rs"
 
 [dependencies]
+macro_tower_layers = { path = "../../crates/macro_tower_layers" }
 agent_git = { path = "../../crates/agent_git" }
 aws-sdk-secretsmanager = { workspace = true }
 axum = { workspace = true }

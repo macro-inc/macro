@@ -5,6 +5,7 @@ use std::process::Stdio;
 use futures::StreamExt;
 use tokio::io::{AsyncBufReadExt, AsyncReadExt, AsyncWriteExt, BufReader};
 use tokio_util::io::ReaderStream;
+use tracing::Instrument;
 
 use crate::domain::models::{
     AuthorizedRepo, GitAccess, GitEndpoint, GitRequest, GitResponse, GitService,
@@ -90,7 +91,7 @@ fn parse_cgi_headers(block: &[u8]) -> Result<(u16, Vec<(String, String)>), GitHt
 impl GitBackend for GitHttpBackend {
     type Err = GitHttpBackendError;
 
-    #[tracing::instrument(skip(self, request), fields(endpoint = ?request.endpoint), err)]
+    #[tracing::instrument(name = "agent_git.transfer", skip_all, fields(repo_id = %macro_user_id::telemetry_id(repo.agent_user_id().as_ref()), endpoint = ?request.endpoint, git.request.bytes = 0_i64, git.response.bytes = 0_i64, git.rejected_reason, otel.status_code), err)]
     async fn serve(
         &self,
         repo: &AuthorizedRepo,
@@ -139,33 +140,60 @@ impl GitBackend for GitHttpBackend {
 
         // Pumps end with the request: body exhausted, failed, or git exited.
         let mut body = request.body;
-        tokio::spawn(async move {
-            while let Some(chunk) = body.next().await {
-                let written = match chunk {
-                    Ok(chunk) => stdin.write_all(&chunk).await,
-                    Err(error) => Err(error),
-                };
+        let input_span = tracing::Span::current();
+        tokio::spawn(
+            async move {
+                let mut bytes = 0_i64;
+                while let Some(chunk) = body.next().await {
+                    let written = match chunk {
+                        Ok(chunk) => {
+                            bytes = bytes
+                                .saturating_add(i64::try_from(chunk.len()).unwrap_or(i64::MAX));
+                            tracing::Span::current().record("git.request.bytes", bytes);
+                            stdin.write_all(&chunk).await
+                        }
+                        Err(error) => Err(error),
+                    };
 
-                if let Err(error) = written {
-                    tracing::warn!(error = %error, "git request body stopped");
-                    return;
+                    if let Err(error) = written {
+                        tracing::Span::current().record("otel.status_code", "ERROR");
+                        tracing::Span::current()
+                            .record("git.rejected_reason", "request_body_failed");
+                        tracing::warn!(error = %error, "git request body stopped");
+                        return;
+                    }
                 }
             }
-        });
-        tokio::spawn(async move {
-            let mut output = String::new();
-            if stderr.read_to_string(&mut output).await.is_ok() && !output.is_empty() {
-                tracing::warn!(stderr = %output, "git http-backend stderr");
-            }
-
-            match child.wait().await {
-                Ok(status) if !status.success() => {
-                    tracing::warn!(%status, "git http-backend exited unsuccessfully");
+            .instrument(input_span),
+        );
+        let process_span = tracing::Span::current();
+        tokio::spawn(
+            async move {
+                let mut output = String::new();
+                if stderr.read_to_string(&mut output).await.is_ok() && !output.is_empty() {
+                    tracing::warn!(
+                        stderr_bytes = output.len() as i64,
+                        "git http-backend stderr"
+                    );
                 }
-                Ok(_) => {}
-                Err(error) => tracing::warn!(error = %error, "git http-backend wait failed"),
+
+                match child.wait().await {
+                    Ok(status) if !status.success() => {
+                        tracing::Span::current().record("otel.status_code", "ERROR");
+                        tracing::Span::current().record("git.rejected_reason", "backend_exit");
+                        tracing::warn!(%status, "git http-backend exited unsuccessfully");
+                    }
+                    Ok(_) => {}
+                    Err(error) => {
+                        tracing::Span::current().record("otel.status_code", "ERROR");
+                        tracing::Span::current()
+                            .record("git.rejected_reason", "backend_wait_failed");
+                        tracing::warn!(error = %error, "git http-backend wait failed");
+                    }
+                }
             }
-        });
+            .instrument(process_span),
+        );
 
         let mut reader = BufReader::new(stdout);
         let mut block = Vec::new();
@@ -190,10 +218,29 @@ impl GitBackend for GitHttpBackend {
 
         let (status, headers) = parse_cgi_headers(&block)?;
 
+        if status >= 400 {
+            tracing::Span::current().record("otel.status_code", "ERROR");
+            tracing::Span::current().record("git.rejected_reason", "backend_http_error");
+        }
+        let response_span = tracing::Span::current();
+        let mut bytes = 0_i64;
         Ok(GitResponse {
             status,
             headers,
-            body: Box::pin(ReaderStream::new(reader)),
+            body: Box::pin(ReaderStream::new(reader).map(move |chunk| {
+                match &chunk {
+                    Ok(chunk) => {
+                        bytes =
+                            bytes.saturating_add(i64::try_from(chunk.len()).unwrap_or(i64::MAX));
+                        response_span.record("git.response.bytes", bytes);
+                    }
+                    Err(_) => {
+                        response_span.record("otel.status_code", "ERROR");
+                        response_span.record("git.rejected_reason", "response_body_failed");
+                    }
+                }
+                chunk
+            })),
         })
     }
 }

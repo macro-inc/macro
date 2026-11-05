@@ -482,6 +482,7 @@ dependencies = [
  "macro_env",
  "macro_env_var",
  "macro_service_urls",
+ "macro_tower_layers",
  "rootcause",
  "secretsmanager_client",
  "serde",
