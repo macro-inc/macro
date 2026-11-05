@@ -72,7 +72,8 @@ pub const PORTED: &[Ported] = &[
 /// are what these workflows want. Each job first puts Cargo's bin directory on
 /// PATH, which hosted runners do and the job image does not. `dorny/paths-filter`
 /// gets no token, so it diffs with git instead of asking GitHub's API, and its job
-/// checks out full history for that.
+/// checks out full history for that. Checkouts keep their credentials, because the
+/// mirror is private and some jobs fetch from it later.
 pub fn port(yaml: &str, dropped: &[&str]) -> Result<String> {
     let mut root: Value = serde_yaml::from_str(yaml).context("parsing workflow")?;
     if let Some(pull_request) = root
@@ -122,6 +123,13 @@ pub fn port(yaml: &str, dropped: &[&str]) -> Result<String> {
                     .and_then(Value::as_str)
                     .is_some_and(|uses| uses.starts_with(action))
             };
+            for step in steps.iter_mut() {
+                if uses(step, "actions/checkout") {
+                    if let Some(with) = step.get_mut("with").and_then(Value::as_mapping_mut) {
+                        with.remove("persist-credentials");
+                    }
+                }
+            }
             if steps.iter().any(|step| uses(step, "dorny/paths-filter")) {
                 for step in steps.iter_mut() {
                     let (key, value) = if uses(step, "dorny/paths-filter") {
@@ -168,6 +176,8 @@ jobs:
     runs-on: ubuntu-latest
     steps:
     - uses: actions/checkout@abc
+      with:
+        persist-credentials: 'false'
     - uses: dorny/paths-filter@abc
   ios:
     runs-on: nscloud-macos-sequoia-arm64-6x14
@@ -184,6 +194,7 @@ jobs:
         assert!(ported["jobs"].get("ios").is_none());
         let paths = &ported["jobs"]["paths"]["steps"];
         assert_eq!(paths[1]["with"]["fetch-depth"], "0");
+        assert!(paths[1]["with"].get("persist-credentials").is_none());
         assert_eq!(paths[2]["with"]["token"], "");
         assert!(paths[0].get("with").is_none());
         assert!(ported["on"]["pull_request"].get("types").is_none());
