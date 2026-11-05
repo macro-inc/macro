@@ -1046,6 +1046,7 @@
           zip
           cargo-info
           cargo-udeps
+          cargo-shear
           cargo-tauri
           cargo-lambda
           cargo-zigbuild
