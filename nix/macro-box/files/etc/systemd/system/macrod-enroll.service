@@ -9,6 +9,7 @@ ConditionPathExists=!/var/lib/macrod/enrolled
 [Service]
 Type=oneshot
 RemainAfterExit=yes
+Environment=HOME=/home/macro
 # MACRO_ENROLL_FROM: `incus` on VMs, `file:/run/macro/enrollment.json` in Docker.
 EnvironmentFile=/etc/macro/enroll.env
 ExecStartPre=/usr/lib/macro-box/check-enrollment-source

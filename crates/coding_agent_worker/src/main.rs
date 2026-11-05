@@ -100,6 +100,9 @@ enum Command {
     /// app: no terminal panel, state changes as JSON lines on stdout, and
     /// shutdown on SIGTERM, Ctrl-C, or stdin closing.
     Service {
+        /// Keep running when stdin closes, for system service managers.
+        #[arg(long)]
+        ignore_stdin_eof: bool,
         /// Config file; defaults to `~/.macrod/macrod.toml`, created when the
         /// setup flags are given.
         #[arg(long)]
@@ -184,6 +187,7 @@ async fn main() -> ExitCode {
     }
     match args.command {
         Some(Command::Service {
+            ignore_stdin_eof,
             config,
             agent,
             workspace,
@@ -196,6 +200,7 @@ async fn main() -> ExitCode {
                 .with_writer(std::io::stderr)
                 .init();
             return match service::run(service::ServiceOptions {
+                ignore_stdin_eof,
                 config,
                 agent,
                 workspace,

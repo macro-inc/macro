@@ -14,6 +14,8 @@ the local ACP process (Claude Code, Codex, ...), and drives native
   `config.example.toml`, `default.macrod.toml`).
 - `src/daemon.rs` + `src/runtime.rs`: the serving core — persistent harness
   service connection, ACP process bridge, start/stop/restart on re-pair.
+- Pass `macrod service --ignore-stdin-eof` under system service managers;
+  embedded services keep the default shutdown when their parent's stdin closes.
 - `src/self_knowledge.rs`: the `<macrod-runtime>` section the bridge
   (`src/harness.rs`) prefixes to each new session's first prompt — macrod
   version, workspace, forwarded MCP servers, permission bypass, listing only

@@ -41,6 +41,7 @@ and a Docker image (the dev-only DockerFleet).
   users and units, then touch `/var/lib/macrod/enrolled`.
 - `macrod.service` runs `macrod service` as `macro` (Claude Code refuses
   permission bypass as root), workspace `/home/macro/work`.
+- Its `--ignore-stdin-eof` keeps systemd's closed stdin from stopping the daemon.
 - Persona users get `/etc/skel`: the default skills and the chrome-devtools
   MCP entry in `~/.claude.json`. `/etc/macro/personas/` is root-only (0700).
 - User services for `macro` (lingering): `macro-display` (Xtigervnc `:0`,
@@ -73,6 +74,9 @@ Smoke test: `incus launch macro-box t --vm --profile macro-box`, then
 
 ## Checks
 
+- Inside a running guest as root, run `bash tests/enrollment-agent-detection.sh`
+  (copy it from this directory); it discovers Claude using the enrollment unit's
+  environment in a fresh system service.
 - After `packages.txt` changes: `nix/macro-box/lock.sh`, then rebuild both outputs.
 - `nix build .#macro-box-incus .#macro-box-docker`, then the Docker smoke
   test above without the enrollment mount: `macrod-enroll` must fail with the
@@ -80,6 +84,8 @@ Smoke test: `incus launch macro-box t --vm --profile macro-box`, then
 
 ## Gotchas
 
+- Set enrollment's `HOME` to `/home/macro` so agent discovery works in a root
+  system service and records adapter paths usable by the unprivileged daemon.
 - import-tree imports every `.nix` file under `nix/`; helpers start with `_`.
 - Keep `files/etc/macro/enroll.env` tracked despite the global `*.env` ignore;
   it contains the non-secret Incus enrollment source required at VM boot.

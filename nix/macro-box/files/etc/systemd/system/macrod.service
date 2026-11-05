@@ -10,7 +10,7 @@ User=macro
 Group=macro
 Environment=HOME=/home/macro
 WorkingDirectory=/home/macro/work
-ExecStart=/usr/local/bin/macrod service --config /home/macro/.macrod/macrod.toml --workspace /home/macro/work
+ExecStart=/usr/local/bin/macrod service --ignore-stdin-eof --config /home/macro/.macrod/macrod.toml --workspace /home/macro/work
 Restart=always
 RestartSec=5
 

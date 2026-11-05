@@ -4,7 +4,8 @@
 //! `macrod service` is the contract between them: setup flags configure
 //! `macrod.toml` without a TUI, state changes stream to stdout as one JSON
 //! object per line, and the process shuts down on SIGTERM, Ctrl-C, or stdin
-//! closing (the embedder exited). `macrod detect-agents` and `macrod inspect`
+//! closing (the embedder exited), unless `--ignore-stdin-eof` is set for a
+//! system service. `macrod detect-agents` and `macrod inspect`
 //! are the matching one-shot queries.
 
 use std::path::{Path, PathBuf};
@@ -52,6 +53,8 @@ impl From<ServiceScope> for IdentityScope {
 
 /// Everything `macrod service` accepts.
 pub struct ServiceOptions {
+    /// Keep running without an embedder holding stdin open.
+    pub ignore_stdin_eof: bool,
     /// Config file; absent uses [`default_config_path`].
     pub config: Option<PathBuf>,
     /// Agent preset id from `detect-agents` to configure.
@@ -145,9 +148,9 @@ fn fatal_root_message(message: &str) -> String {
         .to_owned()
 }
 
-/// Run headless until SIGTERM, Ctrl-C, or stdin closes.
+/// Run headless until signaled or the monitored stdin closes.
 pub async fn run(options: ServiceOptions) -> rootcause::Result<()> {
-    let shutdown = shutdown_requested();
+    let shutdown = shutdown_requested(options.ignore_stdin_eof);
     tokio::pin!(shutdown);
 
     let daemon = tokio::select! {
@@ -340,17 +343,8 @@ pub(crate) fn installed_agent(id: &str) -> rootcause::Result<DetectedAgent> {
 
 /// Resolve when the embedder or operator asks the service to stop: SIGTERM,
 /// Ctrl-C, or stdin reaching EOF (the embedding process exited).
-async fn shutdown_requested() {
-    let stdin_eof = async {
-        let mut stdin = tokio::io::stdin();
-        let mut buffer = [0u8; 256];
-        loop {
-            match stdin.read(&mut buffer).await {
-                Ok(0) | Err(_) => break,
-                Ok(_) => {}
-            }
-        }
-    };
+async fn shutdown_requested(ignore_stdin_eof: bool) {
+    let stdin_eof = stdin_closed(tokio::io::stdin(), ignore_stdin_eof);
     #[cfg(unix)]
     {
         let mut terminate =
@@ -366,6 +360,19 @@ async fn shutdown_requested() {
     tokio::select! {
         _ = tokio::signal::ctrl_c() => {}
         () = stdin_eof => {}
+    }
+}
+
+async fn stdin_closed(mut stdin: impl tokio::io::AsyncRead + Unpin, ignore_eof: bool) {
+    if ignore_eof {
+        std::future::pending::<()>().await;
+    }
+    let mut buffer = [0u8; 256];
+    loop {
+        match stdin.read(&mut buffer).await {
+            Ok(0) | Err(_) => break,
+            Ok(_) => {}
+        }
     }
 }
 
@@ -426,6 +433,7 @@ struct Inspection {
 /// Inspect the config at `path` (or the default location) as a JSON document.
 pub fn inspect_json(config: Option<PathBuf>) -> rootcause::Result<String> {
     let path = config_path(&ServiceOptions {
+        ignore_stdin_eof: false,
         config,
         agent: None,
         workspace: None,

@@ -4,6 +4,7 @@ use harness_id::HarnessId;
 
 fn setup_options(workspace: &Path) -> ServiceOptions {
     ServiceOptions {
+        ignore_stdin_eof: false,
         config: None,
         agent: Some("custom".to_owned()),
         workspace: Some(workspace.to_owned()),
@@ -11,6 +12,34 @@ fn setup_options(workspace: &Path) -> ServiceOptions {
         scope: Some(ServiceScope::Team),
         allow_permission_bypass: Some(true),
     }
+}
+
+#[tokio::test]
+async fn closing_stdin_stops_an_embedded_service() {
+    use std::future::Future as _;
+    use std::task::Poll;
+
+    let (reader, writer) = tokio::io::duplex(1);
+    drop(writer);
+    let closed = stdin_closed(reader, false);
+    tokio::pin!(closed);
+
+    let state = std::future::poll_fn(|cx| Poll::Ready(closed.as_mut().poll(cx))).await;
+    assert!(state.is_ready());
+}
+
+#[tokio::test]
+async fn closing_stdin_does_not_stop_a_managed_system_service() {
+    use std::future::Future as _;
+    use std::task::Poll;
+
+    let (reader, writer) = tokio::io::duplex(1);
+    drop(writer);
+    let closed = stdin_closed(reader, true);
+    tokio::pin!(closed);
+
+    let state = std::future::poll_fn(|cx| Poll::Ready(closed.as_mut().poll(cx))).await;
+    assert!(state.is_pending());
 }
 
 #[test]
@@ -57,6 +86,7 @@ fn reconfigures_without_dropping_credentials() {
     configure(
         &path,
         &ServiceOptions {
+            ignore_stdin_eof: false,
             config: None,
             agent: None,
             workspace: Some(moved.clone()),
@@ -84,6 +114,7 @@ fn creating_a_config_requires_an_agent() {
     let error = configure(
         &path,
         &ServiceOptions {
+            ignore_stdin_eof: false,
             config: None,
             agent: None,
             workspace: Some(directory.path().to_owned()),

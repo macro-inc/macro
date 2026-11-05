@@ -340,6 +340,7 @@ fn write_config(
     crate::service::configure(
         &options.config,
         &ServiceOptions {
+            ignore_stdin_eof: false,
             config: Some(options.config.clone()),
             agent: None,
             workspace: Some(options.workspace.clone()),
