@@ -3,11 +3,17 @@
 use std::env;
 use std::fs;
 use std::io;
-use std::path::Path;
+use std::path::{Path, PathBuf};
 
 fn main() -> io::Result<()> {
-    let manifest = env::var("CARGO_MANIFEST_DIR").map_err(io::Error::other)?;
-    let root = Path::new(&manifest).join("../../packages/brain/template");
+    let manifest = PathBuf::from(
+        env::var_os("CARGO_MANIFEST_DIR")
+            .ok_or_else(|| io::Error::other("Cargo did not set CARGO_MANIFEST_DIR"))?,
+    );
+    let output = PathBuf::from(
+        env::var_os("OUT_DIR").ok_or_else(|| io::Error::other("Cargo did not set OUT_DIR"))?,
+    );
+    let root = manifest.join("../../packages/brain/template");
     let mut files = Vec::new();
     collect(&root, &root, &mut files)?;
     files.sort();
@@ -19,10 +25,7 @@ fn main() -> io::Result<()> {
         ));
     }
     source.push_str("]\n");
-    fs::write(
-        Path::new(&env::var("OUT_DIR").map_err(io::Error::other)?).join("workspace_template.rs"),
-        source,
-    )?;
+    fs::write(output.join("workspace_template.rs"), source)?;
     Ok(())
 }
 
