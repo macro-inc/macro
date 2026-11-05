@@ -1,12 +1,17 @@
 //! FusionAuth adapter for the MCP OAuth broker.
 
+#[cfg(test)]
+mod test;
+
 use anyhow::Context;
+use fusionauth::error::FusionAuthClientError;
 use std::sync::Arc;
 use tracing::Instrument;
+use upstream_error::UpstreamFailure;
 
 use crate::domain::{
     models::{RefreshToken, SignInMethod, UpstreamTokens},
-    ports::{OAuthProvider, UpstreamRevocationFuture, UpstreamTokensFuture},
+    ports::{OAuthProvider, UpstreamGrantError, UpstreamRevocationFuture, UpstreamTokensFuture},
 };
 
 /// FusionAuth-backed OAuth provider for the MCP auth proxy.
@@ -30,6 +35,27 @@ impl FusionAuthOAuthProvider {
             client: Arc::new(client),
             google_idp_id,
         })
+    }
+}
+
+/// Sorts a FusionAuth token endpoint failure into the broker's outcomes: a
+/// grant FusionAuth refused, an outage, or a fault of ours.
+fn grant_error(error: FusionAuthClientError) -> UpstreamGrantError {
+    match error {
+        FusionAuthClientError::OAuth2TokenRefused(refusal) if refusal.is_invalid_grant() => {
+            UpstreamGrantError::InvalidGrant {
+                detail: refusal.to_string(),
+            }
+        }
+        FusionAuthClientError::Upstream {
+            failure: UpstreamFailure::Unavailable,
+            ..
+        } => UpstreamGrantError::Unavailable { retry_after: None },
+        FusionAuthClientError::Upstream {
+            failure: UpstreamFailure::RateLimited { retry_after },
+            ..
+        } => UpstreamGrantError::Unavailable { retry_after },
+        error => UpstreamGrantError::Failed(anyhow::Error::from(error)),
     }
 }
 
@@ -60,7 +86,7 @@ impl OAuthProvider for FusionAuthOAuthProvider {
                     .client
                     .complete_authorization_code_grant(code)
                     .await
-                    .map_err(anyhow::Error::from)?;
+                    .map_err(grant_error)?;
 
                 Ok(UpstreamTokens {
                     access_token: grant.access_token.into(),
@@ -83,7 +109,7 @@ impl OAuthProvider for FusionAuthOAuthProvider {
                     .client
                     .complete_refresh_token_grant(refresh_token.as_str())
                     .await
-                    .map_err(anyhow::Error::from)?;
+                    .map_err(grant_error)?;
 
                 Ok(UpstreamTokens {
                     access_token: grant.access_token.into(),
