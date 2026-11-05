@@ -87,7 +87,7 @@ jobs:
           find "$tmp" -type f \( -name kache -o -name 'kache-*' \) ! -name '*.tgz' -exec install -m 755 {} "$dir/" \;
         fi
         {
-          echo "RUSTC_WRAPPER=$dir/kache"
+          echo "KACHE_BIN=$dir/kache"
           echo "KACHE_CACHE_DIR=/home/runner/.cache/kache/store"
           echo "KACHE_MAX_SIZE=30GiB"
           echo "KACHE_RUNTIME_DIR=$RUNNER_TEMP/kache"
@@ -120,13 +120,16 @@ jobs:
     - name: run tests
       run: |
         set -euo pipefail
+        # The dev shell's environment file resets RUSTC_WRAPPER in every step.
+        if [ -n "${KACHE_BIN:-}" ]; then export RUSTC_WRAPPER="$KACHE_BIN"; fi
+        echo "RUSTC_WRAPPER=$RUSTC_WRAPPER"
         args=(); for p in $(cat tooling/kache-proto/packages.txt); do args+=(-p "$p"); done
         time cargo nextest run --config 'profile.dev.package."*".debug=false' --all-features --no-tests=pass --test-threads "$NEXTEST_TEST_THREADS" "${args[@]}" 2>&1 | grep -vE '^\s*(PASS|Compiling|Checking|Downloaded|Downloading)' | tail -30 | cut -c1-240
         exit "${PIPESTATUS[0]}"
     - name: cache stats
       if: always()
       run: |
-        if [ -n "${RUSTC_WRAPPER:-}" ]; then "$RUSTC_WRAPPER" --show-stats 2>/dev/null || "$RUSTC_WRAPPER" stats 2>/dev/null || true; fi
+        if [ -n "${KACHE_BIN:-}" ]; then "$KACHE_BIN" stats 2>&1 | tail -25 | cut -c1-120 || true; else sccache --show-stats || true; fi
         du -sh /home/runner/.cache/kache 2>/dev/null || true
     - name: Teardown Nix
       if: always()
