@@ -216,12 +216,15 @@
           runHook preBuild
           export HOME="$TMPDIR/home"
           mkdir -p "$HOME"
+          echo "T0 $(date +%s.%N)"
           for project in . packages/sdk packages/sdk-docs packages/code-mode-sdk; do
             if [ -d "${jsNodeModules}/$project/node_modules" ]; then
               cp -a "${jsNodeModules}/$project/node_modules" "$project/"
             fi
           done
+          echo "T1 $(date +%s.%N)"
           bun packages/code-mode-sdk/scripts/generate.ts "$out"
+          echo "T2 $(date +%s.%N)"
           runHook postBuild
         '';
         dontInstall = true;
