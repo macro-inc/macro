@@ -227,19 +227,6 @@ impl CallState {
     ];
 }
 
-/// Whether the external party called in or was called.
-#[derive(
-    Debug, Clone, Copy, PartialEq, Eq, Deserialize, Serialize, strum::AsRefStr, strum::EnumString,
-)]
-#[serde(rename_all = "snake_case")]
-#[strum(serialize_all = "snake_case", ascii_case_insensitive)]
-pub enum Direction {
-    /// The external party called the Dialpad user.
-    Inbound,
-    /// The Dialpad user called the external party.
-    Outbound,
-}
-
 /// The Dialpad user (or department) on Macro's side of a call.
 #[derive(Debug, Clone, Default, Deserialize, Serialize)]
 pub struct Target {
@@ -260,9 +247,6 @@ pub struct Target {
 /// The external party, matching `external_number`. `email` is often empty.
 #[derive(Debug, Clone, Default, Deserialize, Serialize)]
 pub struct Contact {
-    /// Dialpad's contact id; may be a URL, or sent as a number.
-    #[serde(default, deserialize_with = "lenient::text")]
-    pub id: Option<String>,
     /// Display name; Dialpad uses the number when it has none.
     #[serde(default)]
     pub name: Option<String>,
@@ -284,10 +268,6 @@ pub struct CallEvent {
     pub call_id: DialpadId,
     /// The state this event reports.
     pub state: CallState,
-    /// Who placed the call; `None` when Dialpad sends a direction Macro
-    /// does not know.
-    #[serde(default, deserialize_with = "lenient::direction")]
-    pub direction: Option<Direction>,
     /// When Dialpad began handling the call.
     #[serde(default, deserialize_with = "lenient::millis")]
     pub date_started: Option<i64>,
@@ -312,9 +292,6 @@ pub struct CallEvent {
     /// The Dialpad user or department on Macro's side.
     #[serde(default)]
     pub target: Option<Target>,
-    /// The first call of a transferred call's chain.
-    #[serde(default)]
-    pub master_call_id: Option<DialpadId>,
     /// Link to the call in Dialpad, for company members.
     #[serde(default)]
     pub company_call_review_share_link: Option<String>,
@@ -329,28 +306,8 @@ pub struct CallEvent {
 
 /// Decoders for fields Dialpad sends in more than one shape.
 mod lenient {
-    use super::Direction;
     use serde::{Deserialize, Deserializer, de::Error};
     use serde_json::Value;
-
-    pub fn direction<'de, D: Deserializer<'de>>(
-        deserializer: D,
-    ) -> Result<Option<Direction>, D::Error> {
-        Ok(Option::<Value>::deserialize(deserializer)?
-            .as_ref()
-            .and_then(Value::as_str)
-            .and_then(|direction| direction.parse().ok()))
-    }
-
-    /// A string or a number, as text.
-    pub fn text<'de, D: Deserializer<'de>>(deserializer: D) -> Result<Option<String>, D::Error> {
-        match Option::<Value>::deserialize(deserializer)? {
-            None | Some(Value::Null) => Ok(None),
-            Some(Value::String(text)) => Ok(Some(text)),
-            Some(Value::Number(number)) => Ok(Some(number.to_string())),
-            Some(_) => Err(D::Error::custom("expected a string or a number")),
-        }
-    }
 
     /// Unix milliseconds as a number or a numeric string; blank is absent.
     pub fn millis<'de, D: Deserializer<'de>>(deserializer: D) -> Result<Option<i64>, D::Error> {

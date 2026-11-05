@@ -178,7 +178,6 @@ fn sparse_events_merge_field_by_field_and_the_newest_value_wins() {
             "hangup",
             1_746_469_071_000,
             json!({
-                "direction": "inbound",
                 "date_started": 1_746_469_000_000_i64,
                 "date_connected": 1_746_469_010_000_i64,
                 "date_ended": 1_746_469_070_000_i64,
@@ -228,7 +227,6 @@ fn sparse_events_merge_field_by_field_and_the_newest_value_wins() {
         call.source.external_url.as_deref(),
         Some("https://dialpad.com/shared/call/abc")
     );
-    assert_eq!(call.source.metadata["direction"], "inbound");
     let [rep, caller] = call.participants.as_slice() else {
         panic!("expected the rep and the caller");
     };

@@ -51,20 +51,17 @@ fn details(events: &[CallEvent]) -> Option<CallEvent> {
 
 /// Every detail field `imported_call` reads must be merged here.
 fn merge_details(details: &mut CallEvent, newer: &CallEvent) {
-    keep_newer(&mut details.direction, &newer.direction);
     keep_newer(&mut details.date_started, &newer.date_started);
     keep_newer(&mut details.date_connected, &newer.date_connected);
     keep_newer(&mut details.date_ended, &newer.date_ended);
     keep_newer_text(&mut details.external_number, &newer.external_number);
     keep_newer_text(&mut details.internal_number, &newer.internal_number);
-    keep_newer(&mut details.master_call_id, &newer.master_call_id);
     keep_newer_text(
         &mut details.company_call_review_share_link,
         &newer.company_call_review_share_link,
     );
     if let Some(newer) = &newer.contact {
         let contact = details.contact.get_or_insert_with(Contact::default);
-        keep_newer_text(&mut contact.id, &newer.id);
         keep_newer_text(&mut contact.name, &newer.name);
         keep_newer_text(&mut contact.email, &newer.email);
         keep_newer_text(&mut contact.phone, &newer.phone);
@@ -141,7 +138,7 @@ pub fn imported_call(
             .or(details.internal_number.as_deref())
             .and_then(PhoneNumber::parse)
             .map(String::from),
-        external_id: target.id.map(|id| ExternalCallId(format!("user:{id}"))),
+        external_id: None,
         attendance: vec![],
     };
     let caller_phone = contact
@@ -159,8 +156,7 @@ pub fn imported_call(
         display_name: caller_name.clone(),
         email: non_empty(contact.email.as_deref()),
         phone: caller_phone.clone().map(String::from),
-        external_id: non_empty(contact.id.as_deref())
-            .map(|id| ExternalCallId(format!("contact:{id}"))),
+        external_id: None,
         attendance: vec![],
     };
     let has_caller =
@@ -195,18 +191,6 @@ pub fn imported_call(
     let mut metadata = serde_json::Map::new();
     metadata.insert("summary".into(), json!(summary));
     metadata.insert("sourceTitle".into(), json!(title));
-    metadata.insert(
-        "direction".into(),
-        json!(
-            details
-                .direction
-                .map(|direction| direction.as_ref().to_owned())
-        ),
-    );
-    metadata.insert(
-        "masterCallId".into(),
-        json!(details.master_call_id.map(|id| id.to_string())),
-    );
     Some(ImportedCall {
         title: Some(title),
         started_at: Some(started_at),
