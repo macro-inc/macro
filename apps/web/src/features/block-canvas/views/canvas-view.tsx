@@ -39,6 +39,7 @@ import {
 } from 'solid-js';
 import type { CanvasClipboard } from '../clipboard';
 import { ArtifactInspector } from '../components/artifact-inspector';
+import { ArtifactLibraryInspector } from '../components/artifact-library-inspector';
 import { ConnectorInspector } from '../components/connector-inspector';
 import type { CanvasEmbedViewProps } from '../components/embed-view';
 import { EraserTrail } from '../components/eraser-trail';
@@ -46,6 +47,7 @@ import { MediaUploadPreviews } from '../components/media-upload-previews';
 import { SelectionLayoutInspector } from '../components/selection-layout-inspector';
 import { StyleInspector } from '../components/style-inspector';
 import { TextInspector } from '../components/text-inspector';
+import { useArtifactLibrary } from '../context/artifact-library';
 import { setDocumentDisplayCommand } from '../core/document-display';
 import {
   selectionLayoutCommand,
@@ -116,6 +118,7 @@ export function CanvasView(props: {
     return item?.type === 'artifact' ? item : undefined;
   };
   const artifactsFlag = useFeatureFlag(enableCanvasArtifacts);
+  const artifacts = useArtifactLibrary();
   const selectedImage = () => {
     const item = selectedItem();
     return item?.type === 'image' ? item : undefined;
@@ -448,15 +451,25 @@ export function CanvasView(props: {
                   </Show>
                   <Show when={artifactsFlag().enabled && selectedArtifact()}>
                     {(artifact) => (
-                      <ArtifactInspector
-                        item={artifact()}
-                        onChange={(content) =>
-                          editor.execute(setArtifactCommand, {
-                            id: artifact().id,
-                            content,
-                          })
-                        }
-                      />
+                      <>
+                        <ArtifactInspector
+                          item={artifact()}
+                          onChange={(content) =>
+                            editor.execute(setArtifactCommand, {
+                              id: artifact().id,
+                              content,
+                            })
+                          }
+                        />
+                        <Show when={artifacts.edit}>
+                          {(edit) => (
+                            <ArtifactLibraryInspector
+                              library={artifacts.library()}
+                              onEdit={edit()}
+                            />
+                          )}
+                        </Show>
+                      </>
                     )}
                   </Show>
                   <Show when={selectedImage()}>

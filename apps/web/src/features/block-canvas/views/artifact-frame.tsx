@@ -7,6 +7,7 @@ import {
   onMount,
   Show,
 } from 'solid-js';
+import { useArtifactLibrary } from '../context/artifact-library';
 import {
   ARTIFACT_SANDBOX,
   artifactThemeTokens,
@@ -29,6 +30,7 @@ export function ArtifactFrame(props: {
   eager?: boolean;
 }) {
   let host!: HTMLDivElement;
+  const artifacts = useArtifactLibrary();
   const [size, setSize] = createSignal({ width: 0, height: 0 });
   const [visible, setVisible] = createSignal(!!props.eager);
   const [generation, setGeneration] = createSignal(0);
@@ -45,6 +47,7 @@ export function ArtifactFrame(props: {
     composeArtifactDocument(
       props.html,
       artifactThemeTokens(document.documentElement),
+      artifacts.library(),
       loadToken
     )
   );
