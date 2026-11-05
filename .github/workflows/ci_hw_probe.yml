@@ -1,0 +1,22 @@
+name: ci hw probe
+on:
+  pull_request:
+    branches: [main]
+    paths: ['.github/workflows/ci_hw_probe.yml', '.github/ci-hw-probe.sh']
+jobs:
+  probe:
+    strategy:
+      fail-fast: false
+      matrix:
+        profile: [namespace-profile-linux-small, namespace-profile-linux-rust-ci, namespace-profile-linux-mid, namespace-profile-linux-large-build]
+        n: [1, 2, 3, 4, 5]
+    runs-on: ${{ matrix.profile }}
+    timeout-minutes: 20
+    steps:
+    - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
+      with:
+        fetch-depth: 1
+    - name: toolchain
+      run: rustup show active-toolchain || rustup toolchain install
+    - name: probe
+      run: bash .github/ci-hw-probe.sh
