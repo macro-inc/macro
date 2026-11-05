@@ -77,9 +77,10 @@ draw a full 1px frame edge, menus keep the glass cast shadow, and
 halo. Touch surfaces retain their existing shadows.
 
 Kanban boards advance one relative `Layer`: lanes use `bg-inset` and cards use
-`bg-surface`, without visible card borders. Drag previews retain the source's
-resolved background and surface tokens so cards and whole lanes keep their
-appearance outside the board's layer context.
+`bg-surface`. Light themes add a subtle `border-edge-frame` and medium shadow;
+dark themes keep transparent card borders and the small resting shadow. Drag
+previews retain the source's resolved background and surface tokens so cards and
+whole lanes keep their appearance outside the board's layer context.
 
 Desktop view tabs share one flat rounded track, with a small inset and a fully
 rounded selected pill. Use borders and selected fills without raised edges,
