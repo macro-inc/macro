@@ -120,6 +120,20 @@ fn generated_credentials_replace_every_development_value() {
 }
 
 #[test]
+fn a_private_file_is_owner_only_and_never_overwrites() {
+    use std::os::unix::fs::PermissionsExt;
+    let path = std::env::temp_dir().join(format!("platform-private-{}", std::process::id()));
+    write_private(&path, "first").unwrap();
+    assert_eq!(
+        std::fs::metadata(&path).unwrap().permissions().mode() & 0o777,
+        0o600
+    );
+    assert!(write_private(&path, "second").is_err());
+    assert_eq!(std::fs::read_to_string(&path).unwrap(), "first");
+    std::fs::remove_file(&path).unwrap();
+}
+
+#[test]
 fn an_existing_instance_keeps_its_development_credentials() {
     let credentials = Credentials::development();
     let mut env = BTreeMap::from([(

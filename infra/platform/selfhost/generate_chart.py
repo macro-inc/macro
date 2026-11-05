@@ -17,6 +17,12 @@ import sys
 
 INSTANCE = "selfhost"
 TLS = "__MACRO_TLS__"
+WAIT_IMAGE = "__MACRO_WAIT_IMAGE__"
+# Created as provisioning's last step (`job_provision` in xtask_local's platform.rs).
+WAIT_FOR_PROVISIONING = (
+    "until psql -h postgres -U user -d platform_provisioned -c 'select 1' >/dev/null 2>&1; "
+    "do sleep 2; done"
+)
 HOST = "selfhost.localhost"
 IMAGE = re.compile(r"[a-z0-9.:-]+/macro/([a-zA-Z0-9_.-]+):([a-z0-9]+)")
 RAW = re.compile(r'"__TPL__(.*?)__LPT__"')
@@ -51,6 +57,23 @@ def scrub_metadata(metadata):
         labels["macro.com/instance"] = "{{ .Release.Name }}"
 
 
+def wait_for_provisioning():
+    """Keeps a service from crash-looping, and backing off, until it can start."""
+    return {
+        "name": "wait-for-provisioning",
+        "image": WAIT_IMAGE,
+        "command": ["/bin/sh", "-c", WAIT_FOR_PROVISIONING],
+        "env": [
+            {
+                "name": "PGPASSWORD",
+                "valueFrom": {
+                    "secretKeyRef": {"name": "macro-env", "key": "PLATFORM_POSTGRES_PASSWORD"}
+                },
+            }
+        ],
+    }
+
+
 def rewrite_pod(template, component):
     scrub_metadata(template["metadata"])
     for container in template["spec"]["containers"]:
@@ -73,6 +96,9 @@ def template_item(item):
         spec["replicas"] = tpl(
             f'index .Values.replicas "{component}" | default 1'
         )
+        # The data plane starts first: provisioning needs it.
+        if item["metadata"].get("labels", {}).get("macro.com/tier") == "app":
+            spec["template"]["spec"]["initContainers"] = [wait_for_provisioning()]
         rewrite_pod(spec["template"], component)
     elif kind == "Job":
         # Job specs are immutable; every upgrade provisions under a new name.
@@ -107,6 +133,10 @@ def render_document(component, item):
         lambda m: "{{ .Values.image.registry }}/" + m.group(1)
         + ':{{ index .Values.image.tags "' + component + '" }}',
         text,
+    )
+    text = text.replace(
+        WAIT_IMAGE,
+        '{{ .Values.image.registry }}/postgres:{{ index .Values.image.tags "postgres" }}',
     )
     text = text.replace(
         f'"{TLS}"',
@@ -184,8 +214,7 @@ def main():
     (out / "templates" / "NOTES.txt").write_text(
         "This chart is a preview and is not safe for production: see the chart README.\n"
         "Macro is starting at https://{{ .Values.host }}/app/\n"
-        "A first install takes around ten minutes. Services restart until provisioning\n"
-        "finishes, so CrashLoopBackOff is expected until then.\n"
+        "Services wait in `wait-for-provisioning` until the provisioning Job finishes.\n"
         "It needs the `macro-env` Secret and the `fusionauth-kickstart` Secret in this\n"
         "namespace first; see the chart README.\n"
     )
@@ -196,18 +225,20 @@ def main():
         "- Key management is `local-kms`, which stores its keys unprotected on its volume.\n"
         "- Postgres, Kafka, and OpenSearch run one replica each, with no failover or\n"
         "  backup.\n"
-        "- API tokens and signed URLs use fixed development keys unless you replace\n"
-        "  them in `macro-env`.\n"
+        "- Signed URLs use placeholder CloudFront keys unless you replace them in\n"
+        "  `macro-env`.\n"
         "- FusionAuth runs in development mode.\n"
         "- Mailpit captures all mail instead of sending it.\n\n"
         "Requirements: Kubernetes 1.30+, a default StorageClass, an ingress controller,\n"
         "and two Secrets in the release namespace: `macro-env` (the environment every\n"
         "service loads) and `fusionauth-kickstart` (`kickstart.json`).\n\n"
-        "`macro-env` also holds the bundled databases' passwords, which you choose:\n"
-        "`PLATFORM_POSTGRES_PASSWORD` (matching the password in `DATABASE_URL`),\n"
-        "`PLATFORM_FUSIONAUTH_DB_ROOT_PASSWORD`, `PLATFORM_FUSIONAUTH_DB_PASSWORD`, and\n"
-        "`PLATFORM_EXTENDDB_PASSWORD`. They take effect when each database is first\n"
-        "created. Generate your own; never reuse an example.\n\n"
+        "Generate both with fresh credentials, then apply them before installing:\n\n"
+        "    cargo x platform secrets --host macro.example.com --namespace macro \\\n"
+        "      --out macro-secrets.json\n"
+        "    kubectl apply -f macro-secrets.json\n\n"
+        "Keep that file safe and out of git. Databases keep the passwords they are first\n"
+        "created with, so it cannot be regenerated for a release that has data.\n"
+        "Third-party integrations are stubbed in `macro-env` until you fill them in.\n\n"
         "Components that can be disabled through `disabledComponents`:\n\n"
         + "".join(f"- `{c}`\n" for c in sorted(components))
     )

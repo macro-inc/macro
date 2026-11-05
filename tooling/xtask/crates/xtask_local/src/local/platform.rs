@@ -67,6 +67,8 @@ pub enum PlatformCmd {
     Mirror,
     /// Build the self-host Helm chart from an instance's last build.
     Chart(ChartArgs),
+    /// Generate the Secrets a self-hosted release needs, with fresh credentials.
+    Secrets(SecretsArgs),
     /// Regenerate the checked-in edge Caddyfile from the service inventory.
     Caddyfile,
     /// Seed an instance and run the local E2E suites against it.
@@ -95,6 +97,19 @@ pub struct UpArgs {
     /// Stream subprocess output and show per-step timings.
     #[arg(long, short)]
     pub verbose: bool,
+}
+
+#[derive(Args, Clone)]
+pub struct SecretsArgs {
+    /// The host the release is served at, such as `macro.example.com`.
+    #[arg(long)]
+    pub host: String,
+    /// The namespace the release installs into.
+    #[arg(long)]
+    pub namespace: String,
+    /// Where to write the manifest. It holds credentials: keep it out of git.
+    #[arg(long)]
+    pub out: PathBuf,
 }
 
 #[derive(Args, Clone)]
@@ -158,6 +173,7 @@ pub fn run(cmd: PlatformCmd) -> Result<()> {
         PlatformCmd::Cluster => cluster(&Stage::from_env_cli(false)),
         PlatformCmd::Mirror => gitops::mirror(&Stage::from_env_cli(false)),
         PlatformCmd::Chart(args) => chart(&args),
+        PlatformCmd::Secrets(args) => selfhost_secrets(&args),
         PlatformCmd::Caddyfile => {
             let path = repo_root().join(CADDYFILE);
             std::fs::write(&path, caddyfile())?;
@@ -508,19 +524,7 @@ fn up(args: &UpArgs) -> Result<()> {
     };
     state.credentials = Some(credentials.clone());
     let kickstart_json = credentials.apply_to_kickstart(&kickstart_json)?;
-    let mut shared_env = queue_urls(shared_env);
-    credentials.apply_to_env(&mut shared_env);
-    shared_env.insert(
-        macro_queues::LOCAL_QUEUE_BASE_URL_ENV_VAR.into(),
-        super::resources::queue_url("")
-            .trim_end_matches('/')
-            .to_owned(),
-    );
-    shared_env.insert("AWS_ACCESS_KEY_ID".into(), aws_key.access_key_id.clone());
-    shared_env.insert(
-        "AWS_SECRET_ACCESS_KEY".into(),
-        aws_key.secret_access_key.clone(),
-    );
+    let shared_env = finish_shared_env(shared_env, &credentials, &aws_key);
     if !args.no_build || state.binaries.is_empty() {
         let bins: Vec<&str> = rust_workloads()
             .into_values()
@@ -640,6 +644,28 @@ fn dev(args: &DevArgs) -> Result<()> {
     let revision = gitops::publish(&stage, &instance_env(&name), Path::new(&built.manifests))?;
     gitops::refresh(&name.namespace())?;
     gitops::wait_synced(&stage, &name.namespace(), &revision)
+}
+
+/// The steps every instance's shared environment gets, wherever it runs.
+fn finish_shared_env(
+    env: BTreeMap<String, String>,
+    credentials: &Credentials,
+    aws_key: &localstack::AwsKey,
+) -> BTreeMap<String, String> {
+    let mut env = queue_urls(env);
+    credentials.apply_to_env(&mut env);
+    env.insert(
+        macro_queues::LOCAL_QUEUE_BASE_URL_ENV_VAR.into(),
+        super::resources::queue_url("")
+            .trim_end_matches('/')
+            .to_owned(),
+    );
+    env.insert("AWS_ACCESS_KEY_ID".into(), aws_key.access_key_id.clone());
+    env.insert(
+        "AWS_SECRET_ACCESS_KEY".into(),
+        aws_key.secret_access_key.clone(),
+    );
+    env
 }
 
 /// Where `up` leaves the instance's resolved env for host-side tooling.
@@ -769,6 +795,117 @@ fn chart(args: &ChartArgs) -> Result<()> {
     std::fs::create_dir_all(out.parent().context("chart path has no parent")?)?;
     std::os::unix::fs::symlink(&built, &out)?;
     stage.note(&format!("chart: {}", out.display()));
+    Ok(())
+}
+
+/// Writes `macro-env` and `fusionauth-kickstart` for a self-hosted release. Everything
+/// is generated here: it reads no Doppler config and no other instance's values, and
+/// third-party integrations stay stubbed until the operator fills them in.
+fn selfhost_secrets(args: &SecretsArgs) -> Result<()> {
+    ensure!(
+        !args.out.exists(),
+        "{} exists; regenerating would change credentials a running release depends on",
+        args.out.display()
+    );
+    let name = InstanceName::parse("selfhost")?;
+    let instance = name.local_instance()?;
+    let origin = format!("https://{}", args.host);
+    let env = env_layer::resolve(
+        Mode::Local,
+        &instance,
+        true,
+        None,
+        true,
+        Tunnels::default(),
+        false,
+    )?;
+    let rewrites = origin_rewrites(&instance, &origin)?;
+    let rewritten: BTreeMap<String, String> = env
+        .merged
+        .iter()
+        .map(|(k, v)| (k.clone(), rewrite(v, &rewrites)))
+        .collect();
+    fusionauth::write_kickstart_for_origins(&instance, std::slice::from_ref(&origin), None, None)?;
+    let kickstart_json =
+        std::fs::read_to_string(gen_compose::kickstart_dir(&instance).join("kickstart.json"))?;
+    let credentials = Credentials::generate()?;
+    let kickstart_json = credentials.apply_to_kickstart(&kickstart_json)?;
+    let (access_key_id, secret_access_key) = generate_aws_key()?;
+    let aws_key = localstack::AwsKey {
+        access_key_id,
+        secret_access_key,
+    };
+    let mut shared_env = finish_shared_env(rewritten, &credentials, &aws_key);
+    let (public_key, private_key) = generate_api_token_keys()?;
+    shared_env.insert("MACRO_API_TOKEN_PUBLIC_KEY".into(), public_key);
+    shared_env.insert("MACRO_API_TOKEN_PRIVATE_SECRET_KEY".into(), private_key);
+    let manifest = json!({
+        "apiVersion": "v1",
+        "kind": "List",
+        "items": [
+            secret(&args.namespace, "macro-env", "Opaque", &shared_env),
+            secret(
+                &args.namespace,
+                "fusionauth-kickstart",
+                "Opaque",
+                &BTreeMap::from([("kickstart.json".to_owned(), kickstart_json)]),
+            ),
+        ],
+    });
+    write_private(&args.out, &serde_json::to_string_pretty(&manifest)?)?;
+    println!(
+        "wrote {}: apply it with kubectl before helm install, and keep it out of git",
+        args.out.display()
+    );
+    Ok(())
+}
+
+/// A fresh RS256 pair for Macro API tokens: (public PEM, private PEM).
+fn generate_api_token_keys() -> Result<(String, String)> {
+    let private = Command::new("openssl")
+        .args([
+            "genpkey",
+            "-algorithm",
+            "RSA",
+            "-pkeyopt",
+            "rsa_keygen_bits:2048",
+        ])
+        .output()
+        .context("running openssl genpkey")?;
+    ensure!(private.status.success(), "openssl genpkey failed");
+    let mut public = Command::new("openssl")
+        .args(["pkey", "-pubout"])
+        .stdin(Stdio::piped())
+        .stdout(Stdio::piped())
+        .spawn()
+        .context("running openssl pkey")?;
+    {
+        use std::io::Write;
+        public
+            .stdin
+            .take()
+            .context("openssl stdin")?
+            .write_all(&private.stdout)?;
+    }
+    let public = public.wait_with_output()?;
+    ensure!(public.status.success(), "openssl pkey failed");
+    Ok((
+        String::from_utf8(public.stdout)?,
+        String::from_utf8(private.stdout)?,
+    ))
+}
+
+/// Writes a file only its owner can read, from the moment it exists.
+fn write_private(path: &Path, contents: &str) -> Result<()> {
+    use std::io::Write;
+    use std::os::unix::fs::OpenOptionsExt;
+    let mut file = std::fs::OpenOptions::new()
+        .write(true)
+        .create_new(true)
+        .mode(0o600)
+        .open(path)
+        .with_context(|| format!("creating {}", path.display()))?;
+    file.write_all(contents.as_bytes())?;
     Ok(())
 }
 
@@ -1560,6 +1697,12 @@ fn job_provision() -> Result<()> {
             )
         })?;
     }
+    // Last, so its existence means provisioning finished. The self-host chart's services
+    // wait for it; they have no sync waves to order them.
+    let marker = job_env("DATABASE_URL")?.replace("/macrodb", "/platform_provisioned");
+    retrying("provisioning marker", || {
+        run_checked(Command::new("sqlx").args(["database", "create", "--database-url", &marker]))
+    })?;
     Ok(())
 }
 

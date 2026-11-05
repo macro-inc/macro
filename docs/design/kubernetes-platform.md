@@ -373,9 +373,10 @@ Built and exercised on the local cluster (`infra/platform`, `cargo x platform`):
 - **Phase 7, in part:** `cargo x platform chart --release` builds the Helm chart and
   release images from an instance's manifests. A plain `helm install` on a stock kind
   cluster, with no Argo CD, forge, or ingress in the path, provisioned itself, served the
-  app, and delivered a login email to Mailpit. It takes about 11 minutes to settle: the
-  chart has no sync waves, so services restart until provisioning finishes, and backoff
-  adds to the wait.
+  app, and delivered a login email to Mailpit. `cargo x platform secrets` generates the
+  Secrets it needs, with fresh credentials and no Doppler values. Services wait in an
+  init container for a marker provisioning creates last, since the chart has no sync
+  waves.
 - **Generated credentials:** a new instance bootstraps from nothing with its own, reaches
   sign-up, and rejects the old development values.
 - **Rust E2E suite:** 16 pass, on queues in Kafka and with generated credentials. One assertion in
@@ -409,12 +410,11 @@ Not built yet:
   `search_upload_handler`, `image_optimizer`, `call_recording_preview_handler`,
   `dataloss_prevention_handler`, `email_suppression_handler`,
   `upload_extractor_lambda_trigger`).
-- The rest of phase 7: publishing the images and chart per release, a generator for
-  the Secrets a self-hoster must supply, and a production-sized install. **The chart is a preview, not safe for real data**, and
+- The rest of phase 7: publishing the images and chart per release, and a
+  production-sized install. **The chart is a preview, not safe for real data**, and
   says so in its README: it ships `local-kms` despite the rule above (OpenBao needs a KMS
   adapter first), mail goes to Mailpit, Kafka and OpenSearch have no authentication
-  inside the namespace, and the API-token and CloudFront signing keys are still the
-  fixed development keys.
+  inside the namespace, and signed URLs use placeholder CloudFront keys.
 - Release images on our own instances, which still wrap host-built debug binaries with
   debug info stripped, for the fast loop.
 - Mirroring from GitHub automatically, which needs a credential decision.

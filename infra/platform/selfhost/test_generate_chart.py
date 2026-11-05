@@ -55,6 +55,24 @@ class Chart(unittest.TestCase):
         self.assertNotIn("macro-selfhost", text)
         self.assertTrue(text.startswith('---\n{{- if not (has "email-service"'))
 
+    def test_services_wait_for_provisioning_and_the_data_plane_does_not(self):
+        def tiered(tier):
+            item = deployment()
+            item["metadata"]["labels"]["macro.com/tier"] = tier
+            return g.template_item(item)[1]["spec"]["template"]["spec"]
+
+        self.assertEqual(tiered("app")["initContainers"][0]["name"], "wait-for-provisioning")
+        self.assertNotIn("initContainers", tiered("infra"))
+        rendered = self.render(
+            {**deployment(), "metadata": {**deployment()["metadata"], "labels": {
+                **deployment()["metadata"]["labels"], "macro.com/tier": "app"}}}
+        )
+        self.assertIn(
+            '{{ .Values.image.registry }}/postgres:{{ index .Values.image.tags "postgres" }}',
+            rendered,
+        )
+        self.assertNotIn(g.WAIT_IMAGE, rendered)
+
     def test_workloads_sharing_an_image_name_keep_their_own_builds(self):
         def workload(name, tag):
             item = deployment()
