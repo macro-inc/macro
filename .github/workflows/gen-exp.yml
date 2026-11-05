@@ -180,7 +180,7 @@ jobs:
               for i in 0 1 2 3 4 5 6 7; do (
                 src="$url.shard$i"
                 [ "$mode" = poison ] && [ "$i" = 3 ] && src="$SCCACHE_WEBDAV_ENDPOINT/gen-incremental/poison.shard3"
-                cache_request "$src" -o "$dir/$i" || : > "$dir/bad"
+                d0=$(date +%s%N); cache_request "$src" -w "shard$i http=%{http_code} ip=%{remote_ip} ver=%{http_version} ttfb=%{time_starttransfer} total=%{time_total} mbps=%{speed_download}\n" -o "$dir/$i" || : > "$dir/bad"
                 want=$(sed -n "s/^shard$i //p" "$RUNNER_TEMP/manifest/manifest.txt"); have=$(sha256sum "$dir/$i" 2>/dev/null | cut -d' ' -f1)
                 [ -n "$want" ] && [ "$want" = "$have" ] || { echo "shard$i hash mismatch"; : > "$dir/bad"; }
               ) & done; wait
