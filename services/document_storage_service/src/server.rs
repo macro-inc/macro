@@ -878,26 +878,22 @@ async fn run_server() -> anyhow::Result<()> {
     let call_service_builder = call_service_builder.with_voip_push_sender(voip_sender);
 
     let call_root_poster = call::outbound::channel_threads::LateCallRootPoster::default();
-    let mut call_service_builder = call_service_builder
+    let call_service_builder = call_service_builder
         .with_voice_repo(PgVoiceRepo::new(db.clone()))
         .with_event_broker(macro_event_broker.clone());
-    match config.posthog_api_key.value() {
-        Some(key) => {
-            let flags = feature_flags::outbound::posthog::PostHogFeatureFlags::new(
-                config.posthog_host.value().unwrap_or(DEFAULT_POSTHOG_HOST),
-                key.to_owned(),
-                Duration::from_secs(3),
-            )
-            .map_err(|error| anyhow::anyhow!("invalid feature flag configuration: {error}"))?;
-            call_service_builder = call_service_builder.with_channel_threads(Arc::new(
-                call::outbound::channel_threads::FlaggedChannelThreads::new(
-                    flags,
-                    call_root_poster.clone(),
-                ),
-            ));
-        }
-        None => tracing::info!("call channel threads disabled: POSTHOG_API_KEY not set"),
-    }
+    let flags = feature_flags::outbound::posthog::PostHogFeatureFlags::new(
+        config.posthog_host.value().unwrap_or(DEFAULT_POSTHOG_HOST),
+        config.posthog_api_key.as_ref().to_owned(),
+        // Flag evaluation is on the call-start path; fall back promptly.
+        Duration::from_millis(300),
+    )
+    .map_err(|error| anyhow::anyhow!("invalid feature flag configuration: {error}"))?;
+    let call_service_builder = call_service_builder.with_channel_threads(Arc::new(
+        call::outbound::channel_threads::FlaggedChannelThreads::new(
+            flags,
+            call_root_poster.clone(),
+        ),
+    ));
     let call_service = Arc::new(call_service_builder);
 
     consumer_tracker.spawn({
