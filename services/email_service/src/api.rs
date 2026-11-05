@@ -27,7 +27,7 @@ mod test;
 
 const GATEWAY_PATH_PREFIX: &str = "/email";
 
-pub async fn setup_and_serve(state: ApiContext) -> anyhow::Result<()> {
+pub(crate) async fn setup_and_serve(state: ApiContext) -> anyhow::Result<()> {
     let env = state.config.environment;
     let port = state.config.port;
     let traced_api = api_router(state.clone()).with_state(state).layer(

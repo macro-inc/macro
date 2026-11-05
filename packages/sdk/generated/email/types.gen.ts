@@ -937,7 +937,7 @@ export type CalendarMutationApiError = {
 /**
  * Machine-readable failure category for calendar mutations.
  */
-export type CalendarMutationErrorCode = 'not_found' | 'occurrence_not_found' | 'read_only' | 'no_writable_calendar' | 'not_attendee' | 'not_organizer' | 'guests_cannot_invite' | 'guest_list_hidden' | 'guests_cannot_modify' | 'already_on_calendar' | 'join_request_open' | 'copy_refused' | 'snapshot' | 'invalid_input' | 'reauth_required' | 'provider_rejected' | 'retryable' | 'persist_failed' | 'macro_call_failed' | 'copy_choice_required';
+export type CalendarMutationErrorCode = 'not_found' | 'occurrence_not_found' | 'read_only' | 'no_writable_calendar' | 'not_attendee' | 'not_organizer' | 'guests_cannot_invite' | 'guest_list_hidden' | 'guests_cannot_modify' | 'already_on_calendar' | 'join_request_open' | 'copy_refused' | 'snapshot' | 'invalid_input' | 'reauth_required' | 'provider_rejected' | 'retryable' | 'persist_failed' | 'macro_call_failed' | 'copy_choice_required' | 'confirmation_required';
 
 /**
  * A materialized recurrence instance optimized for range queries.
@@ -2479,6 +2479,12 @@ export type UpsertScheduledRequest = {
      * The time to send the message (ISO 8601 format).
      */
     send_time: string;
+    /**
+     * The user's own reply approving this send, quoted verbatim. Required
+     * from an agent's program, which is refused without it; ignored for a
+     * person in the app, whose Send Later is their confirmation.
+     */
+    user_confirmation?: string | null;
 };
 
 export type UpsertScheduledResponse = {
@@ -3506,6 +3512,10 @@ export type SendMessageData = {
 
 export type SendMessageErrors = {
     400: ErrorResponse;
+    /**
+     * An agent's program asked to send; it must go through a review or a confirmed send
+     */
+    403: ErrorResponse;
     404: ErrorResponse;
     500: ErrorResponse;
 };

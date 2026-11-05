@@ -11,7 +11,7 @@
     ·
     <a href="https://docs.macro.com">Docs</a>
     ·
-    <a href="https://macro.com/app/book/6de4003c-15e4-549f-b5a9-0e930bbf56e4/demo">Book demo</a>
+    <a href="https://macro.com/app/book/6de4003c-15e4-549f-b5a9-0e930bbf56e4/macro-demo">Book demo</a>
     ·
     <a href="https://macro.com">Website</a>
     ·
@@ -195,7 +195,7 @@ Your coding agents can use Macro too. Point Claude Code, Codex, or any MCP clien
 claude mcp add --transport http macro https://mcp-server.macro.com/mcp
 ```
 
-See [Agents docs](https://docs.macro.com/product/agents), [MCP setup](https://docs.macro.com/AI/mcp/overview), and [agent recipes](https://docs.macro.com/AI/recipes).
+See [MCP setup](https://docs.macro.com/AI/mcp/overview) for what they can do once connected.
 
 <br />
 
@@ -237,7 +237,7 @@ We built a thoughtful Calendar in Macro so you can manage your week right next t
 
 **One inbox.** Emails, channel messages, task assignments, @mentions, and agent responses all land in one place. Keyboard-first throughout.
 
-Deeper reading: [key concepts](https://docs.macro.com/concepts/blocks) covers blocks, mentions, properties, and permissions; the [FAQ](https://docs.macro.com/faq) covers comparisons, licensing, and self-hosting.
+Deeper reading: [mentions](https://docs.macro.com/concepts/mentions), [properties](https://docs.macro.com/concepts/properties), and [permissions](https://docs.macro.com/permissions); the [FAQ](https://docs.macro.com/faq) covers comparisons, licensing, and self-hosting.
 
 <br />
 

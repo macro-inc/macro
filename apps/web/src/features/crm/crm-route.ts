@@ -53,7 +53,7 @@ export type CrmRecordParams = z.infer<typeof crmRecordParams>;
 
 /** A CRM-linked item keeps its source record trail and display name in history. */
 export const crmItemParams = z.object({
-  itemType: z.enum(['document', 'email', 'call', 'database']),
+  itemType: z.enum(['document', 'email', 'call']),
   itemId: z.string().min(1),
   itemFileType: z.string().optional(),
   itemSubType: z.enum(['task', 'snippet', 'skill']).optional(),
@@ -65,13 +65,12 @@ const CRM_SECTION_ITEM_TYPES = {
   tasks: { itemType: 'document', itemFileType: 'md', itemSubType: 'task' },
   emails: { itemType: 'email' },
   calls: { itemType: 'call' },
-  databases: { itemType: 'database' },
 } as const;
 
 /** Typed record sections supply all renderer metadata without extra URL segments. */
 export const crmRecordItemParams = crmRecordParams
   .extend({
-    section: z.enum(['tasks', 'emails', 'calls', 'databases']),
+    section: z.enum(['tasks', 'emails', 'calls']),
     itemId: crmItemParams.shape.itemId,
   })
   .transform((params) => ({
@@ -122,6 +121,56 @@ export function crmRecordReference({
   recordId,
 }: CrmRecordParams): SplitReference | undefined {
   return uuidRouteReference(recordId, recordType);
+}
+
+export const CRM_RETIRED_DATABASES_ROUTE_IDS = {
+  database: 'companies-retired-database',
+  pipelineDatabase: 'companies-pipeline-retired-database',
+  record: 'companies-retired-record-databases',
+  pipelineRecord: 'companies-pipeline-retired-record-databases',
+} as const;
+
+export function isCrmRetiredDatabasesRoute(routeId: string) {
+  return Object.values<string>(CRM_RETIRED_DATABASES_ROUTE_IDS).includes(
+    routeId
+  );
+}
+
+/** Links to the retired Customers Databases views, kept so they still open. */
+export const crmRetiredDatabaseParams = z.object({
+  databaseId: z.string().min(1),
+});
+
+export const crmRetiredRecordDatabasesParams = z.object({
+  recordType: crmRecordParams.shape.recordType,
+  recordId: crmRecordParams.shape.recordId,
+  databaseId: z.string().min(1).optional(),
+});
+
+/**
+ * Where a retired Databases link now goes: a database to the database, and a
+ * record's Databases section to the record.
+ */
+export function retiredCrmDatabasesPath({
+  pipelineId,
+  recordType,
+  recordId,
+  databaseId,
+}: {
+  pipelineId?: unknown;
+  recordType?: unknown;
+  recordId?: unknown;
+  databaseId?: unknown;
+}): string | undefined {
+  if (typeof databaseId === 'string')
+    return `/database/${encodeURIComponent(databaseId)}`;
+  if (typeof recordType !== 'string' || typeof recordId !== 'string')
+    return undefined;
+  const source =
+    typeof pipelineId === 'string'
+      ? `/companies/pipeline/${encodeURIComponent(pipelineId)}`
+      : '/companies';
+  return `${source}/${recordType}/${encodeURIComponent(recordId)}`;
 }
 
 /** A pipeline link references the pipeline, not a place within it. */

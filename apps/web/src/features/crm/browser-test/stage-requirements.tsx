@@ -17,7 +17,6 @@ const unused = (): never => {
 };
 const context: CrmContext = {
   createPipelines: unused,
-  createDatabases: unused,
   openCreateItem: unused,
   openEmailComposer: unused,
   PipelineEditor: unused,

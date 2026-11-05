@@ -1,4 +1,13 @@
 export default {
+  pipelineTrack: 'Track',
+  pipelineTrackChoice: 'Track {{choice}}',
+  pipelineTrackCompanies: 'Companies',
+  pipelineTrackContacts: 'Contacts',
+  pipelineTrackGeneric: 'Generic',
+  addEntry: 'Add entry',
+  customerContact: 'Customer / Contact',
+  searchCustomerContact: 'Search customers and contacts...',
+  noCustomerContactFound: 'No customers or contacts found',
   stageRequirements: 'Stage requirements',
   stageRequirementsDescription:
     'Choose fields that must be filled before a deal enters a stage.',

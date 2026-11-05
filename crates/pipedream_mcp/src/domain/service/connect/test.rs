@@ -306,7 +306,7 @@ async fn completing_rejects_unknown_accounts() {
 }
 
 #[tokio::test]
-async fn reconnecting_keeps_name_and_enabled_state_but_swaps_the_account() {
+async fn reconnecting_keeps_the_name_turns_the_app_on_and_swaps_the_account() {
     let store = FakeStore::default();
     store
         .save(&PipedreamConnection {
@@ -339,7 +339,10 @@ async fn reconnecting_keeps_name_and_enabled_state_but_swaps_the_account() {
 
     assert_eq!(record.server_name, "My Linear", "explicit name preserved");
     assert_eq!(record.account_id, "apn_new");
-    assert!(!record.enabled, "user's disabled state preserved");
+    assert!(
+        record.enabled,
+        "connecting again turns a disabled app back on"
+    );
 }
 
 #[tokio::test]
@@ -678,7 +681,10 @@ async fn completing_through_connect_revokes_the_pipedream_grant_it_replaces() {
     .unwrap();
 
     assert_eq!(record.server_name, "My Linear");
-    assert!(!record.enabled);
+    assert!(
+        record.enabled,
+        "connecting again turns a disabled app back on"
+    );
     assert_eq!(record.provider, ConnectionProvider::Connect);
     assert_eq!(*pd.deleted.lock().unwrap(), vec!["apn_1".to_owned()]);
 }

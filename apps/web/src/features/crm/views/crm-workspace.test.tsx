@@ -374,7 +374,6 @@ it('omits pipelines and lists when those features are disabled', () => {
     'Email',
     'Notes',
     'Calls',
-    'Databases',
     'Sequences',
   ]);
 });
@@ -382,7 +381,7 @@ it('omits pipelines and lists when those features are disabled', () => {
 it('opens each CRM activity feed instead of the company list', () => {
   const { activeTab } = setup();
   const tabs = within(screen.getByRole('navigation', { name: 'CRM views' }));
-  for (const label of ['Tasks', 'Email', 'Notes', 'Calls', 'Databases']) {
+  for (const label of ['Tasks', 'Email', 'Notes', 'Calls']) {
     fireEvent.click(tabs.getByRole('button', { name: label }));
     expect(activeTab()).toBe(label.toLowerCase());
     expect(screen.getByText(`${label.toLowerCase()} feed`)).toBeTruthy();

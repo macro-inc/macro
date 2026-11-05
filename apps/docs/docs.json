@@ -41,8 +41,8 @@
         "pages": [
           "product/search",
           "product/unified-memory",
-          "product/projects",
-          "product/tagging"
+          "product/tagging",
+          "product/sharing"
         ]
       },
       {
@@ -57,12 +57,20 @@
               "product/docs",
               "product/spreadsheets",
               "product/canvas",
-              "product/snippets"
+              "product/snippets",
+              "product/databases"
             ]
           },
           "product/email",
           "product/channels",
-          "product/tasks",
+          {
+            "group": "Tasks",
+            "icon": "square-check",
+            "root": "product/tasks",
+            "pages": [
+              "product/projects"
+            ]
+          },
           {
             "group": "Calendar",
             "icon": "calendar",
@@ -73,7 +81,7 @@
           },
           {
             "group": "Agents",
-            "icon": "wand-magic-sparkles",
+            "icon": "sparkle",
             "root": "product/agents",
             "pages": [
               "product/routines",
@@ -81,13 +89,13 @@
             ]
           },
           "product/crm",
-          "product/calls"
+          "product/calls",
+          "product/reviews"
         ]
       },
       {
         "group": "Key Concepts",
         "pages": [
-          "concepts/blocks",
           "concepts/mentions",
           "concepts/properties",
           "permissions"
@@ -96,7 +104,6 @@
       {
         "group": "Agents",
         "pages": [
-          "AI/recipes",
           "AI/bring-your-own",
           "AI/cursor",
           "AI/mcp/overview",
@@ -329,6 +336,14 @@
     {
       "source": "/product/folders",
       "destination": "/product/drive"
+    },
+    {
+      "source": "/concepts/blocks",
+      "destination": "/concepts/mentions"
+    },
+    {
+      "source": "/AI/recipes",
+      "destination": "/product/agents"
     }
   ],
   "navbar": {

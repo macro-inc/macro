@@ -15,7 +15,7 @@ jobs:
     runs-on: namespace-profile-linux-tiny-no-cache
     outputs:
       should_run: ${{ steps.filter.outputs.should_run }}
-      codegen_changed: ${{ steps.filter.outputs.codegen_changed }}
+      codegen_changed: ${{ steps.codegen.outputs.codegen_changed }}
       web_artifact_changed: ${{ steps.filter.outputs.web_artifact_changed }}
       i18n_changed: ${{ steps.filter.outputs.i18n_changed }}
       database_grid_changed: ${{ steps.filter.outputs.database_grid_changed }}
@@ -71,11 +71,7 @@ jobs:
             - 'Cargo.toml'
             - 'Cargo.lock'
             - 'rust-toolchain.toml'
-          codegen_changed:
-            - 'crates/**/*.rs'
-            - 'services/**/*.rs'
-            - 'Cargo.toml'
-            - 'Cargo.lock'
+          codegen_inputs:
             - 'apps/web/scripts/generate-api-schema.ts'
             - 'apps/web/scripts/services.ts'
             - 'packages/sdk/**'
@@ -93,6 +89,38 @@ jobs:
             - 'apps/web/src/features/calendar-view/**'
             - 'apps/web/src/features/calendar/**'
             - 'apps/web/src/lib/queries/calendar/**'
+    - id: codegen
+      name: Detect schema changes
+      run: |
+        set -euo pipefail
+        result() {
+          echo "$1"
+          echo "codegen_changed=$2" >> "$GITHUB_OUTPUT"
+          exit 0
+        }
+        [ "$CODEGEN_INPUTS" = true ] && result "A generator input changed." true
+        # The merge commit's first parent is the main this merge result was
+        # built on; a fresh fetch of main could be newer.
+        base=$(git cat-file -p HEAD | sed -n 's/^parent //p' | sed -n 1p)
+        [ -n "$base" ] || result "No base commit to compare with." true
+        git fetch -q --depth=1 origin "$base"
+        names='utoipa|ToSchema|IntoParams|specta|schemars|JsonSchema'
+        # Every grep here reads all its input. One that stopped at its first
+        # match would close the pipe, and pipefail reads the writer's SIGPIPE as
+        # no match.
+        if git diff "$base" HEAD -- Cargo.toml Cargo.lock | grep -E "^[-+].*($names)"; then
+          result "A schema crate's version changed." true
+        fi
+        while IFS= read -r file; do
+          for revision in HEAD "$base"; do
+            if git show "$revision:$file" 2>/dev/null | grep -E "$names" > /dev/null; then
+              result "$file names a schema item." true
+            fi
+          done
+        done < <(git diff --name-only --no-renames "$base" HEAD -- 'crates/*.rs' 'services/*.rs')
+        result "No changed Rust file names a schema item." false
+      env:
+        CODEGEN_INPUTS: ${{ steps.filter.outputs.codegen_inputs }}
   android-native-check:
     name: Android Native Check
     runs-on: namespace-profile-linux-tiny-no-cache
@@ -370,6 +398,8 @@ jobs:
       continue-on-error: true
     - name: Setup Nix
       uses: './.github/actions/setup-nix'
+      with:
+        seed-cache: sccache-ci
     - name: Setup Prereqs
       uses: './.github/actions/setup-reqs-web'
       timeout-minutes: 15

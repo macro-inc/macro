@@ -23,7 +23,7 @@ import type {
   CrmDisplayOptions,
   CrmListColumnId,
 } from '../core/display-options';
-import type { CrmSoupActivityTab } from '../core/navigation';
+import type { CrmActivityTab } from '../core/navigation';
 import type { Pipeline } from '../core/pipeline';
 import type { CrmRecordScope, CrmTaskRecord } from '../core/record';
 import type {
@@ -98,21 +98,19 @@ export type CrmContext = {
   ): ItemListSource;
   /** Paged CRM-wide activity, limited to associated records. */
   createActivity(
-    tab: Accessor<CrmSoupActivityTab>,
+    tab: Accessor<CrmActivityTab>,
     options?: Accessor<CrmActivityViewState>
   ): ItemListSource;
-  /** Databases containing CRM-linked rows; undefined selects the workspace scope. */
-  createDatabases(scope: Accessor<CrmRecordScope | undefined>): ItemListSource;
-  openCreateItem(kind: 'notes' | 'calls' | 'databases'): void;
+  openCreateItem(kind: 'notes' | 'calls'): void;
   openEmailComposer(recipient?: string): void;
   createActivityState(
-    tab: CrmSoupActivityTab
+    tab: CrmActivityTab
   ): readonly [
     Store<CrmActivityViewState>,
     SetStoreFunction<CrmActivityViewState>,
   ];
   createActivityFilters(
-    tab: CrmSoupActivityTab,
+    tab: CrmActivityTab,
     state: Store<CrmActivityViewState>,
     setState: SetStoreFunction<CrmActivityViewState>
   ): ActivityFilters;

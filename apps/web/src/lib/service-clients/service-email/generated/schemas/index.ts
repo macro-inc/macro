@@ -481,6 +481,7 @@ export * from './upsertEmailFilterResponse';
 export * from './upsertScheduledMessageParams';
 export * from './upsertScheduledRequest';
 export * from './upsertScheduledRequestIncludeSignature';
+export * from './upsertScheduledRequestUserConfirmation';
 export * from './upsertScheduledResponse';
 export * from './userProvider';
 export * from './value';
