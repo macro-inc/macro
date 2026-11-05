@@ -18,6 +18,8 @@ mod retry;
 
 pub type Result<T> = std::result::Result<T, error::OpensearchClientError>;
 
+use std::time::Duration;
+
 use opensearch::{
     OpenSearch,
     auth::Credentials,
@@ -28,6 +30,11 @@ use opensearch::{
     },
     indices::{IndicesCreateParts, IndicesExistsParts},
 };
+
+/// Bounds a request on a connection that stopped answering. Delete-by-query
+/// across a large mailbox legitimately runs for minutes, so this sits well
+/// above the slowest such request.
+const REQUEST_TIMEOUT: Duration = Duration::from_secs(300);
 
 #[derive(Clone, Debug)]
 pub struct OpensearchClient {
@@ -54,6 +61,7 @@ impl OpensearchClient {
             .auth(credentials)
             .disable_proxy()
             .cert_validation(cert_validation)
+            .timeout(REQUEST_TIMEOUT)
             .build()?;
         let client = OpenSearch::new(transport);
         Ok(Self { inner: client })
